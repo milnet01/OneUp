@@ -177,6 +177,159 @@ check_absent "no mutation during check" "BUG: mutated"       "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: a FAILED firmware update is reported as fail, not success, and does NOT reboot"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in *needs-rebooting*) exit 0 ;; *) exit 0 ;; esac
+EOF
+cat > "$d/fwupdmgr" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  refresh)     exit 0 ;;
+  get-updates) exit 0 ;;   # updates ARE available...
+  update)      exit 1 ;;   # ...but the flash fails (device unplugged / ESP unmounted)
+  *)           exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper" "$d/fwupdmgr"
+out=$(run_engine "$d" --steps=firmware)
+check        "firmware failure marked fail"     "@@STEP_END@@|firmware|fail" "$out"
+check        "no reboot after firmware failure" "@@REBOOT@@|no"  "$out"
+check_absent "no false reboot on fw failure"    "@@REBOOT@@|yes" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: a SUCCESSFUL firmware update advises a reboot"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in *needs-rebooting*) exit 0 ;; *) exit 0 ;; esac
+EOF
+cat > "$d/fwupdmgr" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  refresh)     exit 0 ;;
+  get-updates) exit 0 ;;
+  update)      exit 0 ;;   # flash succeeds
+  *)           exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper" "$d/fwupdmgr"
+out=$(run_engine "$d" --steps=firmware)
+check "firmware success marked ok"    "@@STEP_END@@|firmware|ok" "$out"
+check "reboot advised after firmware" "@@REBOOT@@|yes" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: a failed early step still lets a later step run; the run ends in errors"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)    echo "Download (curl) error - could not resolve host"; exit 1 ;;
+  *needs-rebooting*) exit 0 ;;
+  *clean*)           exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system,cache)
+check "system step failed"         "@@STEP_END@@|system|fail" "$out"
+check "cache step still ran after" "@@STEP_END@@|cache|ok"    "$out"
+check "run reports errors overall" "@@DONE@@|errors"          "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: a non-English locale still detects an up-to-date system (LC_ALL pinned)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*) exit 0 ;;
+  *dup*|*update*)
+    # Real zypper translates this line; the engine must pin LC_ALL=C so parsing stays reliable.
+    if [[ "$LC_ALL" == "C" ]]; then echo "Nothing to do."; else echo "Nichts zu tun."; fi
+    exit 0 ;;
+  *needs-rebooting*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check        "up-to-date detected under non-English locale" "@@STEP_END@@|system|ok|already up to date" "$out"
+check_absent "no false 'packages updated' claim"            "@@STEP_END@@|system|ok|packages updated"   "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: empty or unknown --steps is rejected, not silently reported as a clean run"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"; chmod +x "$d/zypper"
+run_engine "$d" --steps=      >/dev/null 2>&1; rc_empty=$?
+run_engine "$d" --steps=bogus >/dev/null 2>&1; rc_bogus=$?
+out=$(run_engine "$d" --steps=bogus 2>&1)
+if [[ $rc_empty -ne 0 ]]; then echo "  ok   - empty --steps exits non-zero"; PASS=$((PASS+1));
+else echo "  FAIL - empty --steps exits non-zero (rc=$rc_empty)"; FAIL=$((FAIL+1)); fi
+if [[ $rc_bogus -ne 0 ]]; then echo "  ok   - unknown --steps exits non-zero"; PASS=$((PASS+1));
+else echo "  FAIL - unknown --steps exits non-zero (rc=$rc_bogus)"; FAIL=$((FAIL+1)); fi
+check_absent "no @@DONE@@|ok on an empty step set" "@@DONE@@|ok" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: needs-rebooting returning a NON-102 non-zero (e.g. lock held) does NOT advise reboot"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)    echo "3 packages to upgrade."; exit 0 ;;
+  *needs-rebooting*) exit 7 ;;   # a different failure (e.g. lock held), NOT 102
+  *ps\ -sss*|*"ps -sss"*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check        "no reboot on non-102 needs-rebooting" "@@REBOOT@@|no"  "$out"
+check_absent "no false reboot=yes on non-102"       "@@REBOOT@@|yes" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: orphans step removes unneeded packages and reports the count"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *packages*--unneeded*) printf 'S|Repo|Name|Ver|Arch\n-+-+-+-+-\ni|r|foo|1|x\ni|r|bar|1|x\n'; exit 0 ;;
+  *packages*--orphaned*) exit 0 ;;
+  *remove*)              exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=orphans)
+check "orphan autoremove reports count" "@@STEP_END@@|orphans|ok|removed 2 package(s)" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: a FAILED orphan removal is marked fail, not success (it deletes packages)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *packages*--unneeded*) printf 'S|Repo|Name|Ver|Arch\n-+-+-+-+-\ni|r|foo|1|x\n'; exit 0 ;;
+  *packages*--orphaned*) exit 0 ;;
+  *remove*)              echo "removal failed"; exit 1 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=orphans)
+check "failed orphan removal marked fail" "@@STEP_END@@|orphans|fail" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo
 echo "======================================"
 echo "  Passed: $PASS   Failed: $FAIL"

@@ -84,6 +84,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 #   @@REPO@@|warn|reason                 (pre-flight: repo health issue)
 #   @@HINT@@|plain-English failure hint
 #   @@SERVICES@@|svc1 svc2 …             (services to restart instead of rebooting)
+#   @@INSTALLED@@|count|sys_changed|fw_changed   (yes/no flags for the summary)
 #   @@REBOOT@@|yes|no
 #   @@DONE@@|ok|errors
 # ---------------------------------------------------------------------------
@@ -109,6 +110,14 @@ for k in system flatpak firmware orphans cache; do
 done
 TOTAL=${#RUN_KEYS[@]}
 STEP_INDEX=0
+
+# Reject an empty or all-unknown step set outright: running nothing and then
+# reporting a clean "@@DONE@@|ok" would hide a --steps typo (e.g. --steps=sytem).
+if (( TOTAL == 0 )); then
+    echo "No valid update steps selected (got --steps=\"$STEPS\")." >&2
+    echo "Valid steps: $ALL_STEPS" >&2
+    exit 2
+fi
 
 # Per-step outcome tracking for the final summary.
 declare -A RESULT   # key -> ok|skip|fail
@@ -195,11 +204,21 @@ sudo_init() {
     fi
     # Detached from our stdout/stderr so it never pollutes the log stream (and so
     # a consumer capturing our output isn't held open by the keep-alive's sleep).
-    ( while true; do sudo -n -v 2>/dev/null || break; sleep 50; done ) >/dev/null 2>&1 &
+    # Keep refreshing even if one validation momentarily fails (a transient PAM/cache
+    # blip): a single miss must not permanently stop the keeper mid-run. cleanup kills
+    # this loop when the script exits, so it never outlives the run.
+    ( while true; do sudo -n -v 2>/dev/null || true; sleep 50; done ) >/dev/null 2>&1 &
     SUDO_KEEPALIVE=$!
 }
 cleanup() { [[ -n "$SUDO_KEEPALIVE" ]] && kill "$SUDO_KEEPALIVE" 2>/dev/null; }
+# EXIT runs cleanup on any exit (killing the keep-alive so it can't outlive the run).
+# The signal traps must ALSO exit: a plain `trap cleanup INT` would run cleanup and
+# then resume after the interrupted command, plowing on through the remaining
+# privileged steps the user just tried to cancel. Exiting fires the EXIT trap, so
+# cleanup still runs. 130 = 128+SIGINT, 143 = 128+SIGTERM (conventional exit codes).
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
 
 # ---------------------------------------------------------------------------
 # Free the zypper lock. The desktop's background updater (PackageKit) grabs the
@@ -286,12 +305,16 @@ if step_selected system; then
     # Capture the transaction output so we can tell whether anything actually
     # changed (for the summary and the reboot advice), while still streaming it.
     SYS_LOG=$(mktemp)
+    # Pin LC_ALL=C on the transaction whose output we parse below: the "Nothing to
+    # do." / "N packages to upgrade" strings are translated on a non-English system,
+    # and matching the English text keeps the change-detection reliable everywhere.
+    # (`sudo env VAR=…` sets it in the child cleanly, regardless of sudoers env rules.)
     if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
-        sudo zypper --non-interactive update 2>&1 | tee "$SYS_LOG"
+        sudo env LC_ALL=C zypper --non-interactive update 2>&1 | tee "$SYS_LOG"
     else
         # Tumbleweed: --allow-vendor-change lets Packman codec packages update
         # cleanly; without it the upgrade stalls on vendor conflicts.
-        sudo zypper --non-interactive dup --allow-vendor-change 2>&1 | tee "$SYS_LOG"
+        sudo env LC_ALL=C zypper --non-interactive dup --allow-vendor-change 2>&1 | tee "$SYS_LOG"
     fi
     [[ ${PIPESTATUS[0]} -eq 0 ]] || ok=false
     # Only interpret the transaction output when the step actually SUCCEEDED. A
@@ -346,7 +369,7 @@ if step_selected flatpak; then
         echo "Cleaning up unused Flatpak runtimes..."
         flatpak uninstall --user --unused -y || true
         sudo flatpak uninstall --system --unused -y || true
-        $ok && end_step flatpak ok || end_step flatpak fail "a flatpak update failed"
+        if $ok; then end_step flatpak ok; else end_step flatpak fail "a flatpak update failed"; fi
     else
         echo "Flatpak is not installed. Skipping."
         end_step flatpak skip "not installed"
@@ -361,9 +384,14 @@ if step_selected firmware; then
     if command -v fwupdmgr &>/dev/null; then
         fwupdmgr refresh || true
         if fwupdmgr get-updates &>/dev/null; then
-            fwupdmgr update -y || true
-            FW_CHANGED=true
-            end_step firmware ok "updates applied"
+            # Only claim success (and later advise a reboot) if the flash actually
+            # succeeded — a failed update must not report "applied" or force a reboot.
+            if fwupdmgr update -y; then
+                FW_CHANGED=true
+                end_step firmware ok "updates applied"
+            else
+                end_step firmware fail "firmware update failed"
+            fi
         else
             echo "No firmware updates available."
             end_step firmware ok "up to date"
