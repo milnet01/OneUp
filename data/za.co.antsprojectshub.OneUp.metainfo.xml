@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>za.co.antsprojectshub.OneUp</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>OneUp</name>
+  <summary>Update openSUSE packages, Flatpaks and firmware from one window</summary>
+  <description>
+    <p>
+      OneUp is a one-click update dashboard for openSUSE (Tumbleweed and Leap). It
+      wraps the correct command-line update steps behind a simple panel, so you do
+      not have to remember them or juggle several tools:
+    </p>
+    <ul>
+      <li>System packages — zypper dup --allow-vendor-change on Tumbleweed, zypper update on Leap</li>
+      <li>Flatpak apps — user and system scope, with unused runtimes pruned</li>
+      <li>Device firmware — via fwupd</li>
+      <li>Housekeeping — a safe clean-up of leftover dependency packages and the download cache</li>
+    </ul>
+    <p>
+      Each step is a toggle, so you choose what runs. OneUp itself never runs as
+      root — it asks for your password once through the desktop's standard prompt
+      and streams a live log of everything it does.
+    </p>
+  </description>
+  <launchable type="desktop-id">za.co.antsprojectshub.OneUp.desktop</launchable>
+  <categories>
+    <category>System</category>
+    <category>Settings</category>
+  </categories>
+  <keywords>
+    <keyword>update</keyword>
+    <keyword>zypper</keyword>
+    <keyword>flatpak</keyword>
+    <keyword>firmware</keyword>
+    <keyword>openSUSE</keyword>
+  </keywords>
+  <url type="homepage">https://github.com/milnet01/OneUp</url>
+  <url type="bugtracker">https://github.com/milnet01/OneUp/issues</url>
+  <developer id="za.co.antsprojectshub">
+    <name>Anthony Schemel</name>
+  </developer>
+  <screenshots>
+    <screenshot type="default">
+      <caption>The OneUp panel with all update tasks toggled on</caption>
+      <image>https://raw.githubusercontent.com/milnet01/OneUp/main/screenshots/oneup.png</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.0.0" date="2026-07-21">
+      <description>
+        <p>First public release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

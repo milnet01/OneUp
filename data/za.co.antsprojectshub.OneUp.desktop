@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=OneUp
+GenericName=System Updater
+Comment=Update openSUSE packages, Flatpaks and firmware from one window
+Exec=oneup
+Icon=za.co.antsprojectshub.OneUp
+Terminal=false
+Categories=System;PackageManager;Settings;
+Keywords=update;upgrade;zypper;flatpak;firmware;patch;openSUSE;
+StartupNotify=true
