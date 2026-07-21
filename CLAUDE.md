@@ -17,12 +17,24 @@ python3 updater.py                      # launch the GUI (needs PySide6 / Qt 6)
 ./update_system.sh --steps=system,cache # run only selected steps
 ./update_system.sh --check --notify     # read-only "updates available?" pass (no root)
 tests/run-tests.sh                      # full test suite; non-zero exit on any failure
+./local-CI.sh                           # local CI gates (tests/lint/validation/version-lockstep) — ~1s; run before every push
+./local-CI.sh --full                    # also run the AppImage build (needs a good connection; 10-min timeout)
 ```
 
 There is no build step for development — it's a Python script plus a Bash script. `python3
 updater.py` from the checkout runs the live code directly. The tests take no arguments and
 run every scenario; to focus on one, comment out the others in `tests/run-tests.sh` (there
 is no per-test selector).
+
+**Always run `./local-CI.sh` (green) before pushing.** It gates on the same test suite
+GitHub CI runs, plus extra checks CI doesn't (lint, desktop/AppStream validation, and a
+six-site **version-lockstep** check) — all in ~1 second. The **AppImage build** is opt-in
+(`--full`): `appimagetool` downloads its runtime from GitHub each run and can stall on a
+slow/filtered link, and GitHub CI builds + verifies the AppImage on every tag push anyway, so
+the local build is a convenience (wrapped in a 10-min timeout). A `githooks/pre-push` hook
+runs the fast gates automatically; enable it per clone with `git config core.hooksPath
+githooks`. Keep `local-CI.sh` and `.github/workflows/release.yml` in sync — add a new gate to
+both.
 
 ## Architecture: a thin GUI driving a privileged engine
 

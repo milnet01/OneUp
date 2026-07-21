@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#
+# Pre-push hook: run the local CI gates before any push is allowed. A non-zero exit
+# aborts the push, so a failing test / lint / version-lockstep never reaches GitHub.
+#
+# It runs the FAST gates only (tests + lint + packaging validation + version
+# lockstep — seconds). The AppImage build is NOT run here: it downloads
+# appimagetool's runtime from GitHub each time and can stall on a slow/filtered
+# link, and GitHub CI builds + verifies the AppImage itself on every tag push. To
+# check the build locally when you have a good connection: ./local-CI.sh --full
+#
+# Enable once per clone:  git config core.hooksPath githooks
+set -uo pipefail
+root=$(git rev-parse --show-toplevel)
+
+echo "pre-push: running local CI gates…"
+if ! bash "$root/local-CI.sh"; then
+    echo "pre-push: local CI failed — push aborted. (Override with 'git push --no-verify' only if you are certain.)" >&2
+    exit 1
+fi
