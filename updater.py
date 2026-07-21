@@ -889,6 +889,19 @@ for (var i = 0; i < clients.length; i++) {{
         # Release the process object on a start failure too (finished never fires here).
         self.proc.deleteLater()
 
+    def _notify_when_away(self, body: str, urgency: str = "normal"):
+        """Fire a desktop notification for a finished run, but only when the window
+        isn't focused — you started an update and tabbed away, so tell you it's done.
+        Best-effort: skipped if notify-send is absent (like the engine's own hint)."""
+        if self.isActiveWindow() or not shutil.which("notify-send"):
+            return
+        try:
+            subprocess.Popen(  # noqa: S603,S607 — fixed argv, no shell.
+                ["notify-send", "-a", APP_NAME, "-i", APP_ID, "-u", urgency, APP_NAME, body],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
+
     def on_finished(self, exit_code: int, _status):
         # Flush any final line the engine emitted without a trailing newline before
         # computing the summary, so a last marker can't be silently dropped.
@@ -910,6 +923,8 @@ for (var i = 0; i < clients.length; i++) {{
             self.status.setText(
                 f"{total} update(s) available — turn on what you want and hit Run."
                 if total else "Everything is up to date. 🎉")
+            self._notify_when_away(
+                f"{total} update(s) available." if total else "Everything is up to date.")
             self._check_mode = False
             return
 
@@ -959,6 +974,11 @@ for (var i = 0; i < clients.length; i++) {{
             self.retry_btn.setVisible(True)
         if not ok:
             self._show_log(True)
+
+        # Tell the user a run they walked away from has finished.
+        self._notify_when_away(
+            f"All done — {installed}." if ok else "Finished — some steps had errors.",
+            urgency="normal" if ok else "critical")
 
     # ---- actions ----------------------------------------------------------
     def restart_now(self):

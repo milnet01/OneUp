@@ -18,6 +18,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -28,6 +29,17 @@ _SANDBOX = tempfile.mkdtemp(prefix="oneup-guitest-")
 os.environ["HOME"] = _SANDBOX
 os.environ["XDG_CONFIG_HOME"] = os.path.join(_SANDBOX, "config")
 os.environ["XDG_STATE_HOME"] = os.path.join(_SANDBOX, "state")
+
+# A mock notify-send on PATH: records its calls to a file so the test can assert a
+# finished run notifies, without firing a real desktop notification on the machine.
+_BIN = os.path.join(_SANDBOX, "bin")
+os.makedirs(_BIN, exist_ok=True)
+_NOTIFY_LOG = os.path.join(_SANDBOX, "notify.log")
+_notify_mock = os.path.join(_BIN, "notify-send")
+with open(_notify_mock, "w") as _f:
+    _f.write(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> {_NOTIFY_LOG}\n')
+os.chmod(_notify_mock, 0o755)
+os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
     from PySide6.QtCore import QProcess
@@ -58,6 +70,16 @@ def check(name: str, cond: bool):
     else:
         print(f"  FAIL - {name}")
         FAIL += 1
+
+
+def _wait_for_notify(timeout: float = 2.0) -> bool:
+    """Poll for the mock notify-send to record a call (Popen is asynchronous)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if os.path.exists(_NOTIFY_LOG) and os.path.getsize(_NOTIFY_LOG) > 0:
+            return True
+        time.sleep(0.02)
+    return False
 
 
 def main() -> int:
@@ -109,6 +131,9 @@ def main() -> int:
     check("reboot banner shown after a real install", w.reboot_banner.isVisibleTo(w))
     check("rollback offered after a system change", w.rollback_btn.isVisibleTo(w))
     check("retry offered after a failed step", w.retry_btn.isVisibleTo(w))
+    # The window is never shown (not active), so a finished run notifies. The mock
+    # notify-send on PATH records the call; Popen is async, so poll briefly.
+    check("finished run fires a desktop notification", _wait_for_notify())
 
     # --- 4. A package-only change offers services, not a reboot ----------------
     w = updater.Updater()

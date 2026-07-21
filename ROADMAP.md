@@ -64,11 +64,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: feature.
   Source: suggestion 2026-07-21.
 
-- 📋 [ONEUP-0010] **Fire a desktop notification when a manual (foreground) run finishes.**
+- ✅ [ONEUP-0010] **Fire a desktop notification when a manual (foreground) run finishes.**
   Today only the weekly --check notifies. On on_finished, send a notify-send summary (done / N installed / errors) so a foreground run you walked away from still tells you when it's done.
   **Layman:** Get a notification when an update you started finishes, in case you tabbed away.
   Kind: enhancement.
   Source: suggestion 2026-07-21.
+  Resolved (2026-07-21): added Updater._notify_when_away(), fired from both branches of on_finished (real run: "All done — …" / "Finished — some steps had errors", critical urgency on error; --check: availability summary). Gated on `not self.isActiveWindow()` so it only pops when you've switched away, and best-effort (skipped if notify-send is absent, like the engine). gui-smoke.py grew a mock notify-send on PATH and asserts a finished run notifies (24 checks).
 
 - 📋 [ONEUP-0011] **Add openSUSE Leap as an OBS build target.**
   OneUp supports Leap (engine uses `zypper update` on Leap). Add openSUSE_Leap_15.6 under the project's Repositories in the OBS web UI so Leap users can `zypper install oneup`. Update packaging/obs/README.md + README install repo URL note.

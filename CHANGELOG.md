@@ -8,6 +8,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **A desktop notification when an update you started finishes — so a run you walked away from still tells you it's done (only pops up when the window isn't focused).**
+
 - **The current version is shown in the window title and header.**
 
 - **Flatpak reports how many apps it updated (counted before the update, like the check does).**
