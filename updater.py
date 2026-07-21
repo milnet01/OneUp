@@ -51,7 +51,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
-    QWidget,
 )
 
 APP_ID = "za.co.antsprojectshub.OneUp"
@@ -588,8 +587,8 @@ for (var i = 0; i < clients.length; i++) {{
         try:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".js",
                                              prefix="oneup_center_", delete=False) as f:
+                script_path = f.name   # capture before write so a write error still cleans up
                 f.write(kwin_js)
-                script_path = f.name
             base = ["dbus-send", "--session", "--dest=org.kde.KWin",
                     "--print-reply", "/Scripting"]
             subprocess.run(base + ["org.kde.kwin.Scripting.loadScript",
@@ -616,14 +615,24 @@ for (var i = 0; i < clients.length; i++) {{
 
     @staticmethod
     def _autocheck_command() -> str:
-        """A stable command that re-launches OneUp in headless --check mode."""
+        """A stable command that re-launches OneUp in headless --check mode.
+        Each path is quoted (for spaces) and any '%' is doubled: systemd treats '%'
+        as a specifier prefix inside ExecStart= even within quotes, so an unescaped
+        '%' in an install path would silently corrupt or fail the unit."""
+        def _arg(p) -> str:
+            # systemd does C-unescaping plus env-var ($FOO) and specifier (%x) expansion
+            # inside double quotes, so escape all four — backslash first, then quote,
+            # then dollar and percent — before wrapping the path in quotes.
+            s = str(p).replace("\\", "\\\\").replace('"', '\\"')
+            s = s.replace("$", "$$").replace("%", "%%")
+            return '"' + s + '"'
         appimage = os.environ.get("APPIMAGE")
         if appimage:
-            return f'"{appimage}" --check'
+            return f"{_arg(appimage)} --check"
         launcher = shutil.which("oneup")
         if launcher:
-            return f'"{launcher}" --check'
-        return f'"{sys.executable}" "{Path(__file__).resolve()}" --check'
+            return f"{_arg(launcher)} --check"
+        return f"{_arg(sys.executable)} {_arg(Path(__file__).resolve())} --check"
 
     def _autocheck_enabled(self) -> bool:
         r = subprocess.run(["systemctl", "--user", "is-enabled", "oneup-check.timer"],
@@ -772,7 +781,11 @@ for (var i = 0; i < clients.length; i++) {{
         self.proc.start("bash", args)
 
     def on_output(self):
-        self._buf += bytes(self.proc.readAllStandardOutput()).decode(errors="replace")
+        chunk = bytes(self.proc.readAllStandardOutput()).decode(errors="replace")
+        # Normalise carriage returns to newlines on the ACCUMULATED buffer (so a CRLF
+        # straddling two read chunks doesn't become a spurious blank line) — this keeps
+        # a tool's \r progress output from prepending text to a marker and hiding it.
+        self._buf = (self._buf + chunk).replace("\r\n", "\n").replace("\r", "\n")
         while "\n" in self._buf:
             line, self._buf = self._buf.split("\n", 1)
             self.handle_line(line)
@@ -787,15 +800,26 @@ for (var i = 0; i < clients.length; i++) {{
         try:
             tag, rest = line[2:].split("@@|", 1)
         except ValueError:
+            # A line that starts with @@ but isn't a real marker (e.g. a diff hunk
+            # header "@@ -1,4 +1,4 @@") is ordinary output — log it, don't drop it.
+            self.log.appendPlainText(line)
             return
         parts = rest.split("|")
         if tag == "STEP_BEGIN":
+            # Guard the fixed 4-field unpack + int(): the engine's output is merged
+            # stdout+stderr, so a marker line can be spliced by interleaved text. A
+            # malformed STEP_BEGIN must never throw out of the QProcess read slot —
+            # that would abort parsing and drop the run's later markers.
+            if len(parts) < 4 or not parts[1].isdigit():
+                return
             _key, index, total, label = parts[0], parts[1], parts[2], parts[3]
             self.status.setText(f"{label}…")
             self.bar.setFormat(f"{label}  (step {index} of {total})")
             self.bar.setValue(int(index) - 1)
         elif tag == "STEP_END":
-            self.bar.setValue(self.bar.value() + 1)
+            # Clamp: a duplicate/orphaned STEP_END (markers can be spliced) must not
+            # push the bar past the run's total step count.
+            self.bar.setValue(min(self.bar.value() + 1, self._total))
             if len(parts) >= 2 and parts[1] == "fail":
                 self._failed_steps.append(parts[0])
         elif tag == "CHECK":
@@ -818,13 +842,36 @@ for (var i = 0; i < clients.length; i++) {{
             self._hints.append(rest.strip())
         elif tag == "REBOOT":
             self._reboot = parts[0] == "yes"
+        elif tag in ("DISK", "REPO"):
+            # Pre-flight warnings (low disk / duplicate repos). Surface immediately so
+            # the advertised warning is visible during the run, not buried in the log.
+            if tag == "DISK" and len(parts) >= 3:
+                msg = f"Low disk space on {parts[1]} — only {parts[2]} free. Updating may fail."
+            elif tag == "REPO":
+                msg = "Duplicate repository URLs detected — a common cause of update conflicts."
+            else:
+                msg = "Pre-flight warning — see the log for details."
+            self.warn_label.setText("⚠  " + msg)
+            self.warn_banner.setVisible(True)
+        # @@DONE@@ is intentionally not handled here — the run's overall result comes
+        # from the process exit code in on_finished (the two always agree).
 
     def on_error(self, _err):
         self.status.setText("Could not start the update script.")
         self.bar.setRange(0, 1)
         self.set_controls_enabled(True)
+        # Release the process object on a start failure too (finished never fires here).
+        self.proc.deleteLater()
 
     def on_finished(self, exit_code: int, _status):
+        # Flush any final line the engine emitted without a trailing newline before
+        # computing the summary, so a last marker can't be silently dropped.
+        if self._buf.strip():
+            self.handle_line(self._buf)
+        self._buf = ""
+        # Release the finished process so QProcess instances don't accumulate on the
+        # window across a long session (each run parents a new one to self).
+        self.proc.deleteLater()
         ok = exit_code == 0
         self.set_controls_enabled(True)
 
@@ -895,7 +942,13 @@ for (var i = 0; i < clients.length; i++) {{
             QProcess.startDetached("systemctl", ["reboot"])
 
     def restart_services(self):
-        svcs = self._services.split()
+        # _services is sourced from an @@SERVICES@@ marker on the merged output stream,
+        # so keep only well-formed unit names: a spliced token (e.g. a leading-dash
+        # option) must not reach the root `systemctl` as an argument. Mirrors the
+        # snapshot-id guard in rollback().
+        svcs = [s for s in self._services.split()
+                if not s.startswith("-")
+                and re.fullmatch(r"[A-Za-z0-9:@._\\-]+\.[a-z]+", s)]
         if not svcs:
             return
         if QMessageBox.question(
@@ -905,7 +958,11 @@ for (var i = 0; i < clients.length; i++) {{
             self.services_banner.setVisible(False)
 
     def rollback(self):
-        if not self._snapshot:
+        # _snapshot is taken verbatim from an @@SNAPSHOT@@ marker on the merged output
+        # stream, so validate it is a bare snapshot number before it reaches the root
+        # shell below — a spliced non-numeric payload must never be interpolated into
+        # the pkexec command line. (isdigit() also covers the empty/unset case.)
+        if not self._snapshot.isdigit():
             return
         answer = QMessageBox.warning(
             self, "Roll back this update?",
@@ -937,7 +994,10 @@ for (var i = 0; i < clients.length; i++) {{
                 self.appupdate_label.setText(
                     f"A newer OneUp ({tag}) is available — you have {APP_VERSION}.")
                 self.appupdate_banner.setVisible(True)
-        except (ValueError, KeyError):
+        except (ValueError, KeyError, AttributeError, TypeError):
+            # ValueError/KeyError: bad JSON / missing key; AttributeError/TypeError:
+            # a non-object JSON body (list, string, null) has no .get(). A flaky
+            # update check must never throw out of this network slot.
             pass
         finally:
             reply.deleteLater()
