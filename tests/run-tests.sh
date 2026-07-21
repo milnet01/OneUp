@@ -425,6 +425,8 @@ out=$(run_engine "$d" --steps=system)
 # count | sys_changed(yes/no) | fw_changed(yes/no)
 check_re "INSTALLED marker has count|yes-no|yes-no" \
          '@@INSTALLED@@\|[0-9]+\|(yes|no)\|(yes|no)$' "$out"
+check_re "TIMING marker emitted with a numeric duration" \
+         '@@TIMING@@\|system\|[0-9]+$' "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

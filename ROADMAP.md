@@ -52,11 +52,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: suggestion 2026-07-21.
   Resolved (2026-07-21): added tests/gui-smoke.py — constructs Updater() under QT_QPA_PLATFORM=offscreen and drives handle_line/handle_marker/on_finished with representative marker sequences (STEP_BEGIN/STEP_END across ok/skip/fail, CHECK, INSTALLED, SNAPSHOT, SERVICES, REBOOT, DISK, a malformed '@@ diff' line, plain log). Asserts row badges, the reboot/services/rollback/retry banner logic, and the --check summary path; 23 checks. Hermetic (HOME/XDG redirected to a tempdir so save_last_run can't touch real state); exits 77 = skip when PySide6 is absent. Wired into local-CI.sh (skip-aware) and .github/workflows/release.yml (installs PySide6 + Qt offscreen libs; exit 77 tolerated, a real failure blocks the tag).
 
-- 📋 [ONEUP-0008] **Show per-step timing and what changed on each task row.**
+- ✅ [ONEUP-0008] **Show per-step timing and what changed on each task row.**
   The engine already tracks SECS per step and the package count. Surface e.g. 'took 42s · 3 packages' on the row or an expandable detail, so a run reads more clearly. Consider a marker or reuse STEP_END detail + a TIMING marker.
   **Layman:** See how long each task took and a bit more detail about what it did.
   Kind: ux.
   Source: suggestion 2026-07-21.
+  Resolved (2026-07-21): engine emits a new additive @@TIMING@@|key|seconds marker from end_step (SECS was already tracked; STEP_END's status|detail contract untouched). GUI TaskRow keeps outcome and timing apart (_badge_text/_timing, re-rendered together as "3 installed · 42s") so a duplicate/spliced marker can't stack; handle_marker gained a TIMING branch and a _format_duration helper (<1s / 42s / 1m 5s). Tests: engine asserts @@TIMING@@|system|<n>; GUI asserts the combined badge + _format_duration. Marker documented in update_system.sh header + CLAUDE.md list. Engine 38→39, GUI 26→29.
 
 - ✅ [ONEUP-0009] **Add an About dialog (version, license, GitHub/OBS links, check-for-update).**
   Now that the version is shown, add a small About dialog reachable from the header — APP_VERSION, MIT licence, links to the GitHub repo + OBS package, and a manual 'check for updates' button (reuses _check_app_update).

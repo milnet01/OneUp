@@ -104,6 +104,7 @@ def main() -> int:
     w = updater.Updater()
     for line in ("@@STEP_BEGIN@@|system|1|3|Updating system packages",
                  "@@STEP_END@@|system|ok|3 packages updated",
+                 "@@TIMING@@|system|42",
                  "@@STEP_END@@|flatpak|ok|up to date",
                  "@@STEP_END@@|firmware|skip|fwupd not installed",
                  "@@STEP_END@@|orphans|fail|autoremove failed",
@@ -113,7 +114,11 @@ def main() -> int:
                  "@@DISK@@|warn|/|512 MiB"):
         w.handle_line(line)
 
-    check("system row badge = '3 installed'", w.rows["system"].badge.text() == "3 installed")
+    check("system row badge shows outcome + timing",
+          w.rows["system"].badge.text() == "3 installed  ·  42s")
+    check("_format_duration formats seconds", updater.Updater._format_duration(42) == "42s")
+    check("_format_duration formats minutes", updater.Updater._format_duration(65) == "1m 5s")
+    check("_format_duration handles sub-second", updater.Updater._format_duration(0) == "<1s")
     check("flatpak row badge = 'Up to date'", w.rows["flatpak"].badge.text() == "Up to date")
     check("firmware skip badge = 'Not installed'", w.rows["firmware"].badge.text() == "Not installed")
     check("orphans fail badge = 'Failed'", w.rows["orphans"].badge.text() == "Failed")

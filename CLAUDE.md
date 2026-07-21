@@ -54,9 +54,10 @@ They communicate through a **line-based marker protocol**: the engine prints
 progress bars, badges, and banners. Non-marker lines are plain log output. The markers are
 the contract between the two files — **changing a marker's name or field layout in one file
 means updating the parser in the other, and the assertions in `tests/run-tests.sh`.**
-Current markers: `STEP_BEGIN`, `STEP_END`, `SNAPSHOT`, `CHECK`, `DISK`, `REPO`, `HINT`,
-`SERVICES`, `INSTALLED`, `REBOOT`, `DONE`. (`INSTALLED|count|sys_changed|fw_changed` carries
-the change summary the GUI uses to decide the reboot/rollback banners.)
+Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `SNAPSHOT`, `CHECK`, `DISK`, `REPO`,
+`HINT`, `SERVICES`, `INSTALLED`, `REBOOT`, `DONE`. (`INSTALLED|count|sys_changed|fw_changed`
+carries the change summary the GUI uses to decide the reboot/rollback banners;
+`TIMING|key|seconds` carries each step's duration, appended to its row badge.)
 
 Step keys (the run order, shared by both files): `system, flatpak, firmware, orphans, cache`.
 In `updater.py` they live in the `TASKS` list; in `update_system.sh` in the `LABEL` map.

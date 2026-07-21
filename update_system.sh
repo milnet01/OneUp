@@ -83,6 +83,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 # Progress-marker helpers (consumed by the GUI; benign in a terminal).
 #   @@STEP_BEGIN@@|key|index|total|Human label
 #   @@STEP_END@@|key|ok|skip|fail|detail
+#   @@TIMING@@|key|seconds               (how long the step took)
 #   @@SNAPSHOT@@|id
 #   @@CHECK@@|key|count|label            (--check mode: updates available)
 #   @@DISK@@|warn|mount|free             (pre-flight: low disk space)
@@ -154,6 +155,9 @@ end_step() {
     DETAIL[$key]="$detail"
     [[ "$status" == "fail" ]] && ERRORS=$((ERRORS + 1))
     marker STEP_END "$key|$status|$detail"
+    # How long the step took, so the GUI can show 'took 42s' on the row. Separate
+    # from STEP_END so the existing status|detail contract is untouched.
+    marker TIMING "$key|${SECS[$key]}"
 }
 
 # ---------------------------------------------------------------------------

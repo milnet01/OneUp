@@ -322,6 +322,8 @@ class TaskRow(QFrame):
         self.badge = QLabel("")
         self.badge.setObjectName("Badge")
         self.badge.setVisible(False)
+        self._badge_text = ""   # the outcome ("3 installed"); timing is appended
+        self._timing = ""       # "42s" — kept apart so a repeated marker can't stack
 
         inner = QFrame()
         inner.setObjectName("RowCard")
@@ -337,10 +339,22 @@ class TaskRow(QFrame):
         outer.addWidget(inner)
 
     def set_badge(self, text: str):
-        self.badge.setText(text)
-        self.badge.setVisible(True)
+        self._badge_text = text
+        self._render_badge()
+
+    def set_timing(self, text: str):
+        """Append how long the step took, e.g. '3 installed · 42s'."""
+        self._timing = text
+        self._render_badge()
+
+    def _render_badge(self):
+        parts = [p for p in (self._badge_text, self._timing) if p]
+        self.badge.setText("  ·  ".join(parts))
+        self.badge.setVisible(bool(parts))
 
     def clear_badge(self):
+        self._badge_text = ""
+        self._timing = ""
         self.badge.setVisible(False)
 
 
@@ -821,6 +835,15 @@ for (var i = 0; i < clients.length; i++) {{
             return "Updated"
         return "Done"
 
+    @staticmethod
+    def _format_duration(secs: int) -> str:
+        """A compact human duration: '<1s', '42s', '1m 5s'."""
+        if secs < 1:
+            return "<1s"
+        if secs < 60:
+            return f"{secs}s"
+        return f"{secs // 60}m {secs % 60}s"
+
     def handle_marker(self, line: str):
         try:
             tag, rest = line[2:].split("@@|", 1)
@@ -855,6 +878,13 @@ for (var i = 0; i < clients.length; i++) {{
                 row.set_badge(self._step_badge(status, detail))
             if status == "fail":
                 self._failed_steps.append(key)
+        elif tag == "TIMING":
+            # How long the step took, appended to its row badge ("3 installed · 42s").
+            key = parts[0]
+            secs = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+            row = self.rows.get(key)
+            if row:
+                row.set_timing(self._format_duration(secs))
         elif tag == "CHECK":
             key, count = parts[0], (parts[1] if len(parts) > 1 else "0")
             if key == "TOTAL":
