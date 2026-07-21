@@ -38,7 +38,7 @@ fi
 
 # --- Python syntax ----------------------------------------------------------
 step "Python compile (updater.py)"
-if python3 -m py_compile updater.py; then ok "py_compile updater.py"; else bad "py_compile updater.py"; fi
+if python3 -m py_compile updater.py bump.py; then ok "py_compile updater.py bump.py"; else bad "py_compile"; fi
 
 # --- lint (best-effort) -----------------------------------------------------
 step "Lint"
@@ -46,7 +46,7 @@ if command -v shellcheck >/dev/null 2>&1; then
     # SC2001 is a documented false positive (sed used deliberately for per-line
     # munging) — see .ants_review_falsepos.jsonl.
     if shellcheck -e SC2001 update_system.sh tests/run-tests.sh \
-            packaging/appimage/build-appimage.sh local-CI.sh githooks/pre-push; then
+            packaging/appimage/build-appimage.sh local-CI.sh release.sh githooks/pre-push; then
         ok "shellcheck"; else bad "shellcheck"; fi
 else skip "shellcheck" "not installed"; fi
 if command -v ruff >/dev/null 2>&1; then

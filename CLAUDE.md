@@ -107,7 +107,11 @@ under `data/` all use it.
 6. the newest `## [x.y.z]` heading (and its link at the bottom) in `CHANGELOG.md`
 
 `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/); the metainfo
-`<release>` notes should mirror its entries. On a release, update all six together.
+`<release>` notes should mirror its entries. **Don't hand-edit the six sites** — run
+`./bump.py X.Y.Z` (it rewrites all six, deriving the spec/metainfo notes from the CHANGELOG
+`## [Unreleased]` bullets), or `./release.sh X.Y.Z` for the whole release: bump → `./local-CI.sh`
+→ commit + tag + push to GitHub (builds the AppImage) → update the OBS package via `osc`
+(rebuilds the `zypper` RPM). `local-CI.sh`'s version-lockstep gate fails a push if any site drifts.
 
 Dependency policy (CI actions, runtimes, PySide6, base images) is a standing rule — see
 `docs/standards/dependencies.md`, which also carries the known-incompatibility ledger.

@@ -37,12 +37,30 @@ services mean you do **not** need `osc service manualrun`.)*
 
 ## Each release
 
+Easiest: the repo's one-command release script (from the repo root):
+
+```bash
+./release.sh X.Y.Z      # bump all six version sites, gate, tag+push to GitHub,
+                        # then update THIS OBS package via osc (which rebuilds)
+```
+
+It bumps the versions (`./bump.py`), runs `./local-CI.sh`, pushes the tag (GitHub
+builds the AppImage), and — through your configured `osc` — commits the new
+`_service`/`oneup.spec` here, retriggering the RPM build. Nothing to click.
+
+**By hand (web UI)**, if you'd rather not use `osc`:
+
 1. Push the new tag to GitHub (e.g. `v1.0.1`) so the source exists.
-2. In `_service`, bump **`revision`** (the new tag) and **`versionformat`** to match,
-   and re-upload `_service`. `set_version` (build-time) then syncs the spec's
-   `Version:` to the tag automatically, so the tarball and spec versions can't drift.
-3. Re-upload `oneup.spec` too if its `%changelog` changed (keeps rpmlint quiet).
-4. Trigger a rebuild (it rebuilds on a new `_service`/`oneup.spec` automatically).
+2. In `_service`, bump `revision` (the new tag) **and** `versionformat`, and
+   re-upload `_service` (+ `oneup.spec` if its `%changelog` changed).
+   `set_version` syncs the spec's `Version:` to the tag automatically.
+3. **Trigger Services** → it rebuilds.
+
+**Fully hands-off (optional):** OBS can rebuild on its own whenever you push a tag,
+via its GitHub token + webhook ("SCM/CI workflow") integration — no local `osc`, no
+re-upload. It's a one-time setup (an OBS token, a repo webhook, and building this
+package from the git checkout instead of an uploaded `_service`); see the OBS docs
+on *token/workflow integration*. Ask to have it wired up.
 
 ## Notes
 
