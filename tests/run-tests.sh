@@ -101,6 +101,27 @@ check_absent  "no false reboot=yes"               "@@REBOOT@@|yes" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: a refresh failure but a successful dup is success, not a failed step"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)         exit 1 ;;                                    # repo refresh FAILS
+  *dup*|*update*)    echo "3 packages to upgrade."; exit 0 ;;      # but the upgrade SUCCEEDS
+  *needs-rebooting*) exit 0 ;;
+  *ps\ -sss*|*"ps -sss"*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check        "dup success recorded ok despite refresh fail" "@@STEP_END@@|system|ok" "$out"
+check_absent "not recorded as a failed step"                "@@STEP_END@@|system|fail" "$out"
+check        "real change detected (installed, sys_changed)" "@@INSTALLED@@|3|yes" "$out"
+check        "stale-metadata note surfaced as a hint"        "@@HINT@@" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: kernel/core change (needs-rebooting=102) DOES advise a reboot"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'

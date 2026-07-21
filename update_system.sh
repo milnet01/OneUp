@@ -319,8 +319,14 @@ echo "########################################################"
 # ---------------------------------------------------------------------------
 if step_selected system; then
     begin_step system
-    ok=true
-    sudo zypper --non-interactive refresh || ok=false
+    # The transaction below (dup/update) — NOT the refresh — decides whether the
+    # step succeeded. A repo refresh can fail transiently (one mirror timing out)
+    # while zypper still upgrades cleanly from cached metadata; failing the whole
+    # step then would deny a working update and drop the reboot/service advice for
+    # changes that really landed. So track refresh separately and, if it failed but
+    # the upgrade succeeded, surface a non-fatal "used cached metadata" note.
+    refresh_ok=true
+    sudo zypper --non-interactive refresh || refresh_ok=false
     # Capture the transaction output so we can tell whether anything actually
     # changed (for the summary and the reboot advice), while still streaming it.
     SYS_LOG=$(mktemp)
@@ -328,6 +334,9 @@ if step_selected system; then
     # do." / "N packages to upgrade" strings are translated on a non-English system,
     # and matching the English text keeps the change-detection reliable everywhere.
     # (`sudo env VAR=…` sets it in the child cleanly, regardless of sudoers env rules.)
+    # ok is set BEFORE the transaction so the PIPESTATUS check reads the upgrade's
+    # own exit code — an assignment between the pipe and the check would clobber it.
+    ok=true
     if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
         sudo env LC_ALL=C zypper --non-interactive update 2>&1 | tee "$SYS_LOG"
     else
@@ -341,6 +350,13 @@ if step_selected system; then
     # as "packages changed" would falsely trip the reboot advice — the step failed,
     # nothing was installed.
     if $ok; then
+        if ! $refresh_ok; then
+            # The upgrade worked, but off possibly-stale metadata — tell the user so
+            # a genuinely-newer package isn't silently missed until the next run.
+            note="Couldn't refresh one or more repositories — upgraded from cached metadata. A future run should refresh cleanly."
+            echo "  Note: $note"
+            marker HINT "$note"
+        fi
         if grep -q "Nothing to do." "$SYS_LOG"; then
             SYS_COUNT=0
             end_step system ok "already up to date"

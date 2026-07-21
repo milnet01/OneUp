@@ -32,11 +32,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: chore.
   Source: dependency-standard 2026-07-21.
 
-- 📋 [ONEUP-0005] **Decide refresh-failure semantics for the system step (dup on stale metadata).**
+- ✅ [ONEUP-0005] **Decide refresh-failure semantics for the system step (dup on stale metadata).**
   update_system.sh: when `zypper refresh` fails, `ok=false` but `dup` still runs; a dup that then succeeds is recorded fail with SYS_CHANGED unset, so real changes get no reboot/service advice. Errs on the SAFE side (never a false reboot), hence deferred. Options: abort the step before dup when refresh failed, or evaluate change-detection on the dup exit code independently of the refresh result. Pick one and add a test.
   **Layman:** If the repo refresh fails but the upgrade still installs things, the app currently says the step failed and skips the reboot advice.
   Kind: enhancement.
   Source: indie-review-2026-07-21 loop2 engine-lane LOW.
+  Resolved (2026-07-21): chose option (b) — the dup/update transaction's exit code decides step success, not the refresh. refresh is now tracked in a separate refresh_ok; a failed refresh with a successful upgrade records the step ok, keeps SYS_CHANGED/reboot/rollback advice, and emits a non-fatal "upgraded from cached metadata" @@HINT@@. Rejected (a) abort-before-dup: it would deny a working update over a transiently flaky mirror. Red/green: added a refresh-fail-but-dup-succeeds test (4 asserts, red before). Caught + fixed a PIPESTATUS-clobber I introduced (an `ok=true` assignment must sit BEFORE the dup pipe, not between the pipe and the exit-code check) — that had broken the two existing dup-failure tests; suite green at 43/43.
 
 - ✅ [ONEUP-0006] **Add a version-lockstep guard (bump recipe or CI grep) for the six version sites.**
   No .claude/bump.json (the /bump skill expects one) and no CI check that APP_VERSION, spec Version:+%changelog, _service versionformat+revision, metainfo <release>, and CHANGELOG all agree. A forgotten APP_VERSION would make the self-update check nag every user. Add a bump.json recipe with a post-check, or a tiny CI grep asserting all six agree.

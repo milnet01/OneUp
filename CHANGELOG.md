@@ -26,6 +26,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A failed repository refresh no longer marks a successful system upgrade as failed.**
+  The system step's success now follows the upgrade transaction itself,
+  not the preceding repo refresh — so an upgrade that installs packages
+  from cached metadata is reported as done (with reboot/rollback advice),
+  and a refresh that couldn't reach a mirror is surfaced as a note rather
+  than a false failure.
+
 - **The sudo keep-alive no longer leaves a short-lived background process behind when a run ends or is cancelled.**
   The keep-alive loop now runs in its own process group and is torn
   down as a group, so its idle `sleep` can't be orphaned (reparented to
