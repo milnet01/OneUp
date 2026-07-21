@@ -330,6 +330,29 @@ check "failed orphan removal marked fail" "@@STEP_END@@|orphans|fail" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: flatpak reports how many apps were updated"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/flatpak" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *remote-ls*--updates*--user*)   printf 'org.x.App\norg.y.App\n'; exit 0 ;;  # 2 user
+  *remote-ls*--updates*--system*) printf 'org.z.App\n'; exit 0 ;;             # 1 system
+  *) exit 0 ;;                                                                # update/uninstall
+esac
+EOF
+chmod +x "$d/flatpak"
+out=$(run_engine "$d" --steps=flatpak)
+check "flatpak reports updated count" "@@STEP_END@@|flatpak|ok|3 app(s) updated" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: flatpak with nothing to update reports 'up to date'"
+d=$(mktemp -d); setup_common "$d"   # its flatpak mock prints nothing -> 0 updates
+out=$(run_engine "$d" --steps=flatpak)
+check "flatpak up to date when no updates" "@@STEP_END@@|flatpak|ok|up to date" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo
 echo "======================================"
 echo "  Passed: $PASS   Failed: $FAIL"

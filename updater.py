@@ -347,7 +347,7 @@ class TaskRow(QFrame):
 class Updater(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(APP_NAME)
+        self.setWindowTitle(f"{APP_NAME} {APP_VERSION}")
         self.setMinimumWidth(560)
         self.settings = QSettings("OneUp", "OneUp")
         self.proc: QProcess | None = None
@@ -381,7 +381,7 @@ class Updater(QMainWindow):
         # Header: title + tagline on the left; weekly-check + recenter on the right.
         header = QLabel(APP_NAME)
         header.setObjectName("Header")
-        tagline = QLabel("Keep openSUSE, Flatpak and firmware up to date")
+        tagline = QLabel(f"Keep openSUSE, Flatpak and firmware up to date  ·  v{APP_VERSION}")
         tagline.setObjectName("Tagline")
         titleblock = QVBoxLayout()
         titleblock.setSpacing(2)
@@ -796,6 +796,24 @@ for (var i = 0; i < clients.length; i++) {{
             return
         self.log.appendPlainText(line)
 
+    @staticmethod
+    def _step_badge(status: str, detail: str) -> str:
+        """A short per-row badge for a finished step, from its @@STEP_END@@ status +
+        detail — e.g. '3 installed', 'Up to date', 'Updated', 'Failed', 'Skipped'."""
+        if status == "fail":
+            return "Failed"
+        if status == "skip":
+            return "Not installed" if "not installed" in detail.lower() else "Skipped"
+        d = detail.lower()
+        if any(w in d for w in ("up to date", "already", "nothing")):
+            return "Up to date"
+        m = re.search(r"\d+", detail)
+        if m:
+            return f"{m.group()} removed" if "remov" in d else f"{m.group()} installed"
+        if any(w in d for w in ("applied", "updated", "update")):
+            return "Updated"
+        return "Done"
+
     def handle_marker(self, line: str):
         try:
             tag, rest = line[2:].split("@@|", 1)
@@ -820,8 +838,16 @@ for (var i = 0; i < clients.length; i++) {{
             # Clamp: a duplicate/orphaned STEP_END (markers can be spliced) must not
             # push the bar past the run's total step count.
             self.bar.setValue(min(self.bar.value() + 1, self._total))
-            if len(parts) >= 2 and parts[1] == "fail":
-                self._failed_steps.append(parts[0])
+            key = parts[0]
+            status = parts[1] if len(parts) >= 2 else ""
+            detail = parts[2] if len(parts) >= 3 else ""
+            # Badge the task row with what actually happened (mirrors the "N available"
+            # badge --check shows, but for a real run: "3 installed", "Up to date", …).
+            row = self.rows.get(key)
+            if row:
+                row.set_badge(self._step_badge(status, detail))
+            if status == "fail":
+                self._failed_steps.append(key)
         elif tag == "CHECK":
             key, count = parts[0], (parts[1] if len(parts) > 1 else "0")
             if key == "TOTAL":

@@ -364,12 +364,24 @@ if step_selected flatpak; then
     begin_step flatpak
     if command -v flatpak &>/dev/null; then
         ok=true
+        # Count what will update first (same read-only check --check uses), so the
+        # summary and GUI can report how many apps were updated, not just "done".
+        flat_count=$(( $(flatpak remote-ls --updates --user 2>/dev/null | wc -l) \
+                     + $(flatpak remote-ls --updates --system 2>/dev/null | wc -l) ))
         flatpak update --user -y || ok=false
         sudo flatpak update --system -y || ok=false
         echo "Cleaning up unused Flatpak runtimes..."
         flatpak uninstall --user --unused -y || true
         sudo flatpak uninstall --system --unused -y || true
-        if $ok; then end_step flatpak ok; else end_step flatpak fail "a flatpak update failed"; fi
+        if $ok; then
+            if (( flat_count > 0 )); then
+                end_step flatpak ok "$flat_count app(s) updated"
+            else
+                end_step flatpak ok "up to date"
+            fi
+        else
+            end_step flatpak fail "a flatpak update failed"
+        fi
     else
         echo "Flatpak is not installed. Skipping."
         end_step flatpak skip "not installed"

@@ -4,6 +4,16 @@ All notable changes to OneUp are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and OneUp uses
 [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **The current version is shown in the window title and header.**
+
+- **Flatpak reports how many apps it updated (counted before the update, like the check does).**
+
+- **Each task row now shows what happened after a real update — e.g. "3 installed", "Up to date", "Updated", "Failed" — not just after a check.**
+
 ## [1.0.1] - 2026-07-21
 
 ### Added
