@@ -43,7 +43,7 @@ os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
     from PySide6.QtCore import QProcess, QTimer
-    from PySide6.QtWidgets import QApplication, QMessageBox, QPushButton
+    from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton
 except ImportError as exc:  # PySide6 absent — skip, don't fail the suite.
     print(f"  SKIP - PySide6 not installed ({exc})")
     sys.exit(77)
@@ -208,9 +208,24 @@ def main() -> int:
 
     dlg = updater.RepoManagerDialog(None, repos)
     check("manager builds a row per repository", len(dlg._rows) == 3)
+    check("repos dialog is wide enough not to clip URLs", dlg.minimumWidth() >= 720)
     # Only the two repos sharing a URL get a Remove button.
     remove_btns = [b for b in dlg.findChildren(QPushButton) if b.text() == "Remove"]
     check("only duplicate rows get a Remove action", len(remove_btns) == 2)
+
+    # Each row carries a plain-English description of what the repo is for.
+    row_labels = [b.text() for b in dlg.findChildren(QLabel)]
+    check("manager row shows a repo description",
+          any("Main openSUSE" in t for t in row_labels))
+    P = updater._repo_purpose
+    check("purpose: debug detected before oss",
+          "Debug symbols" in P({"alias": "x-debug-oss", "name": "D", "url": "u", "enabled": False}))
+    check("purpose: non-oss detected before oss",
+          "Non-open-source" in P({"alias": "repo-non-oss", "name": "N", "url": "u", "enabled": True}))
+    check("purpose: main oss collection",
+          "Main openSUSE" in P({"alias": "repo-oss", "name": "O", "url": "u", "enabled": True}))
+    check("purpose: unknown repo falls back",
+          P({"alias": "zzz", "name": "Z", "url": "http://ex/", "enabled": True}) == "Software package repository.")
 
     # No change -> empty command; a disable + a remove -> one validated pkexec call.
     check("no changes yields an empty apply command", dlg._build_apply_command() == [])

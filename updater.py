@@ -35,6 +35,7 @@ from PySide6.QtCore import (
     QRectF,
     QSettings,
     Qt,
+    QTimer,
     QUrl,
 )
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter
@@ -388,6 +389,37 @@ def _parse_repos(text: str) -> list[dict]:
     return repos
 
 
+def _repo_purpose(repo: dict) -> str:
+    """A one-line, plain-English guess at what a repository is for. openSUSE repos
+    carry no description field, so this maps well-known naming patterns (alias / name
+    / URL); an unrecognised repo falls back to a generic line. Order matters — the
+    narrower patterns (debug, source) come before the broad ones (oss)."""
+    hay = f"{repo['alias']} {repo['name']} {repo['url']}".lower()
+    if "debug" in hay:
+        return "Debug symbols — for diagnosing crashes. Usually left off."
+    if "source" in hay or "/src" in hay:
+        return "Source-code packages — for building software yourself. Usually left off."
+    if "packman" in hay:
+        return "Packman — extra multimedia codecs and media apps."
+    if "nvidia" in hay:
+        return "NVIDIA graphics drivers."
+    if "packages.microsoft.com" in hay or "vscode" in hay:
+        return "Microsoft — e.g. Visual Studio Code."
+    if "dl.google.com" in hay or "google-chrome" in hay:
+        return "Google Chrome browser."
+    if "brave" in hay:
+        return "Brave browser."
+    if "non-oss" in hay or "nonoss" in hay:
+        return "Non-open-source packages — some drivers, firmware and codecs."
+    if "update" in hay:
+        return "Official security and bug-fix updates."
+    if "home:" in hay or "/repositories/" in hay:
+        return "Community package repository (openSUSE Build Service)."
+    if "oss" in hay or "repo-main" in hay or "-main" in hay:
+        return "Main openSUSE package collection."
+    return "Software package repository."
+
+
 def read_repos() -> list[dict]:
     """Read the system's repositories (read-only — no root needed)."""
     if not shutil.which("zypper"):
@@ -410,9 +442,18 @@ class RepoManagerDialog(QDialog):
     def __init__(self, parent, repos: list[dict]):
         super().__init__(parent)
         self.setWindowTitle("Repositories")
-        self.setMinimumWidth(540)
+        self.setMinimumWidth(720)   # wide enough that repo URLs aren't cut off
         self._rows: list[dict] = []   # {repo, switch, remove(bool), frame}
         self._proc: QProcess | None = None
+
+        # Remember the size the user last left this dialog at (position is always
+        # re-centred over the main window in showEvent).
+        self._settings = QSettings("OneUp", "OneUp")
+        geo = self._settings.value("repos_geometry")
+        if geo is not None:
+            self.restoreGeometry(geo)
+        else:
+            self.resize(780, 560)
 
         # A URL used by more than one repository is the duplicate we can clean up.
         url_counts = Counter(r["url"] for r in repos if r["url"])
@@ -461,9 +502,14 @@ class RepoManagerDialog(QDialog):
         text.setSpacing(1)
         name = QLabel(("⚠  " if is_dup else "") + repo["name"])
         name.setObjectName("TaskName")
+        # A plain-English line describing what the repo is for, then its URL (dim).
+        purpose = QLabel(_repo_purpose(repo))
+        purpose.setWordWrap(True)
         url = QLabel(repo["url"])
         url.setObjectName("TaskDesc")
+        url.setWordWrap(True)
         text.addWidget(name)
+        text.addWidget(purpose)
         text.addWidget(url)
         lay.addLayout(text, 1)
 
@@ -538,6 +584,21 @@ class RepoManagerDialog(QDialog):
             QMessageBox.warning(self, "Repositories",
                                 "Couldn't apply the changes — they may have been cancelled.")
             self.apply_btn.setEnabled(True)
+
+    def showEvent(self, event):
+        # Centre over the main window each time it opens (size is restored from
+        # settings; only the position is re-centred).
+        super().showEvent(event)
+        parent = self.parent()
+        if parent:
+            fg = self.frameGeometry()
+            fg.moveCenter(parent.frameGeometry().center())
+            self.move(fg.topLeft())
+
+    def done(self, result: int):
+        # done() is the funnel for Apply/Close/× — persist the size on the way out.
+        self._settings.setValue("repos_geometry", self.saveGeometry())
+        super().done(result)
 
 
 class Updater(QMainWindow):
@@ -1300,9 +1361,18 @@ for (var i = 0; i < clients.length; i++) {{
             lbl.setOpenExternalLinks(True)  # let the links open in the browser.
         check_btn = box.addButton("Check for updates", QMessageBox.ActionRole)
         box.addButton(QMessageBox.Close)
+        # Centre over the main window once it's laid out (a QMessageBox sizes to its
+        # content on show, so we re-position from inside the event loop).
+        QTimer.singleShot(0, lambda: self._center_child(box))
         box.exec()
         if box.clickedButton() is check_btn:
             self._check_app_update(manual=True)
+
+    def _center_child(self, widget):
+        """Move a child popup so its centre sits over the main window's centre."""
+        fg = widget.frameGeometry()
+        fg.moveCenter(self.frameGeometry().center())
+        widget.move(fg.topLeft())
 
     # ---- self-update check ------------------------------------------------
     def _check_app_update(self, manual: bool = False):

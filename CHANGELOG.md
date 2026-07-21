@@ -8,6 +8,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Each repository in the Repositories manager now shows a plain-English line describing what it's for.**
+
 - **A Repositories manager (from the header) to turn software repositories on/off with switches and remove ones that duplicate another repo's URL — the duplicate-repo warning now opens it.**
   Listing is read-only (no admin rights); flipping switches or removing a
   duplicate is applied together with a single administrator prompt. Repo
@@ -26,6 +28,8 @@ All notable changes to OneUp are documented here. The format follows
 - **Each task row now shows what happened after a real update — e.g. "3 installed", "Up to date", "Updated", "Failed" — not just after a check.**
 
 ### Changed
+
+- **The Repositories manager is wider so repo URLs aren't clipped and remembers its size; the About and Repositories popups now open centered over the main window.**
 
 - **The duplicate-repository warning now names the offending URL and tells you how to remove it, instead of a generic "duplicates detected" message.**
 
