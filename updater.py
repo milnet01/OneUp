@@ -911,7 +911,14 @@ for (var i = 0; i < clients.length; i++) {{
             if tag == "DISK" and len(parts) >= 3:
                 msg = f"Low disk space on {parts[1]} — only {parts[2]} free. Updating may fail."
             elif tag == "REPO":
-                msg = "Duplicate repository URLs detected — a common cause of update conflicts."
+                # parts: warn|duplicate|<space-joined urls>. Name the culprit(s) so the
+                # warning is actionable instead of sending the user hunting in the log.
+                urls = parts[2].strip() if len(parts) >= 3 else ""
+                if urls:
+                    msg = (f"Duplicate repository URL(s): {urls} — remove the extra with "
+                           "'sudo zypper removerepo <alias>'.")
+                else:
+                    msg = "Duplicate repository URLs detected — a common cause of update conflicts."
             else:
                 msg = "Pre-flight warning — see the log for details."
             self.warn_label.setText("⚠  " + msg)

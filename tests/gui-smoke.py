@@ -130,6 +130,14 @@ def main() -> int:
     # isVisibleTo(window): the banner's own visibility, independent of the never-shown window.
     check("disk warning banner shown", w.warn_banner.isVisibleTo(w))
 
+    # A REPO marker names the duplicate URL in the banner (not a generic message).
+    w2 = updater.Updater()
+    w2.handle_line("@@REPO@@|warn|duplicate|http://x.example/repo")
+    check("repo warning names the duplicate URL",
+          "http://x.example/repo" in w2.warn_label.text())
+    check("repo warning gives the removerepo hint",
+          "removerepo" in w2.warn_label.text())
+
     # --- 3. on_finished promotes the accumulated state into the right banners ---
     w.proc = QProcess(w)   # on_finished releases self.proc; give it a real one.
     w.on_finished(0, QProcess.ExitStatus.NormalExit)

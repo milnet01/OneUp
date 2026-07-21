@@ -22,6 +22,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The duplicate-repository warning now names the offending URL and tells you how to remove it, instead of a generic "duplicates detected" message.**
+
 - **The update engine now runs under bash strict mode (set -uo pipefail) so unset variables and mid-pipeline failures surface immediately instead of silently.**
 
 ### Fixed

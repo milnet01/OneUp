@@ -451,6 +451,25 @@ check_re "TIMING marker emitted with a numeric duration" \
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: a duplicate repository URL is named in the @@REPO@@ marker"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *"lr -u"*)         printf '# | Alias | Name | Enabled | GPG | Refresh | URI\n1 | a | A | Yes | Yes | Yes | http://x.example/repo\n2 | b | B | Yes | Yes | Yes | http://x.example/repo\n'; exit 0 ;;
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)    echo "Nothing to do."; exit 0 ;;
+  *needs-rebooting*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check "REPO marker names the duplicate URL" \
+      "@@REPO@@|warn|duplicate|http://x.example/repo" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo
 echo "======================================"
 echo "  Passed: $PASS   Failed: $FAIL"

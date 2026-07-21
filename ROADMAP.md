@@ -94,3 +94,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: in-session-2026-07-21 (self-caught after ONEUP-0001, commit 675cf47).
   Resolved (2026-07-21): root cause was `declare -a RUN_KEYS` (no =()) — under `set -u` an array declared but never assigned counts as unset, so ${#RUN_KEYS[@]} aborted with exit 1 before the TOTAL==0 guard. Fixed with `declare -a RUN_KEYS=()`. Tightened tests/run-tests.sh to assert exit == 2 AND the 'No valid update steps selected' message for both --steps= and --steps=bogus (was -ne 0, which masked the exit-1 regression). Red/green verified: 4 assertions fail without the fix, 34/34 pass with it.
+
+- ✅ [ONEUP-0014] **Name the duplicate repository in the pre-flight warning.**
+  The engine already computes the duplicate URL(s) ($dupe) but the @@REPO@@ marker only carries a generic "duplicate" flag, so the GUI banner can't name the culprit and "Show details" merely expands the full run log (the URL is printed at the top, during pre-flight, and scrolled off). Pass the URL(s) through the marker (@@REPO@@|warn|duplicate|<urls>) and show them in the banner with the removerepo hint.
+  **Layman:** When OneUp warns about a duplicate repo, it should say which one — right now "Show details" just shows the log and you can't tell what to fix.
+  Kind: enhancement.
+  Source: user-report-2026-07-21 (screenshot: generic warning, Show details unhelpful).
+  Resolved (2026-07-21): engine flattens the computed duplicate URL(s) and passes them through the marker (@@REPO@@|warn|duplicate|<space-joined urls>); the GUI banner now reads "Duplicate repository URL(s): <url> — remove the extra with 'sudo zypper removerepo <alias>'." instead of a generic message. Tests: engine asserts the marker carries the URL; GUI asserts the banner names the URL + the removerepo hint. Engine 43→44, GUI 29→31.

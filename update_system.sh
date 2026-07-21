@@ -303,7 +303,10 @@ if step_selected system; then
     if [[ -n "$dupe" ]]; then
         echo "  ! Duplicate repository URL(s) detected — a common cause of conflicts:"
         echo "$dupe" | sed 's/^/      /'
-        marker REPO "warn|duplicate"
+        # Pass the actual URL(s) to the GUI so its banner can name the culprit
+        # (URLs never contain spaces, so a space-join survives the single marker line).
+        dupe_flat=$(echo "$dupe" | tr '\n' ' ' | sed 's/ *$//')
+        marker REPO "warn|duplicate|$dupe_flat"
     fi
 fi
 
