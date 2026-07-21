@@ -193,7 +193,9 @@ sudo_init() {
         echo "Authentication failed or cancelled — aborting." >&2
         exit 1
     fi
-    ( while true; do sudo -n -v 2>/dev/null || break; sleep 50; done ) &
+    # Detached from our stdout/stderr so it never pollutes the log stream (and so
+    # a consumer capturing our output isn't held open by the keep-alive's sleep).
+    ( while true; do sudo -n -v 2>/dev/null || break; sleep 50; done ) >/dev/null 2>&1 &
     SUDO_KEEPALIVE=$!
 }
 cleanup() { [[ -n "$SUDO_KEEPALIVE" ]] && kill "$SUDO_KEEPALIVE" 2>/dev/null; }
@@ -431,12 +433,13 @@ if command -v zypper &>/dev/null; then
     zypper needs-rebooting &>/dev/null
     [[ $? -eq 102 ]] && { REBOOT="yes"; REBOOT_REASON="core packages or the kernel were updated"; }
 fi
-if [[ "$REBOOT" == "no" ]] && { $SYS_CHANGED || $FW_CHANGED; }; then
-    # User preference: reboot whenever anything was installed, so every running
-    # program picks up the newest libraries.
+if [[ "$REBOOT" == "no" ]] && $FW_CHANGED; then
+    # Firmware changes generally need a reboot to take effect.
     REBOOT="yes"
-    REBOOT_REASON="updates were installed — reboot so everything uses the latest libraries"
+    REBOOT_REASON="firmware was updated"
 fi
+# Package-only changes (no kernel/core-lib bump, no firmware) do NOT force a
+# reboot — the service-restart step below offers the lighter alternative.
 marker INSTALLED "${SYS_COUNT}|$($SYS_CHANGED && echo yes || echo no)|$($FW_CHANGED && echo yes || echo no)"
 marker REBOOT "$REBOOT"
 
