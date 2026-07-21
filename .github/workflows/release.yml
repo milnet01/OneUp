@@ -1,0 +1,32 @@
+name: Release
+
+# Build the single-file AppImage and attach it to the GitHub release whenever a
+# version tag (v1.0.0, v1.1.0, …) is pushed.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  appimage:
+    runs-on: ubuntu-22.04   # build on an older glibc so the AppImage runs widely
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install FUSE (needed to pack the AppImage)
+        run: sudo apt-get update && sudo apt-get install -y libfuse2
+
+      - name: Build AppImage
+        run: bash packaging/appimage/build-appimage.sh
+
+      - name: Attach AppImage to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: OneUp-x86_64.AppImage
+          generate_release_notes: true

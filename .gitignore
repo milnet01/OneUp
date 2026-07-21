@@ -2,11 +2,15 @@
 __pycache__/
 *.py[cod]
 
-# Flatpak build artefacts
+# Build artefacts (AppImage / PyInstaller / Flatpak / RPM)
 .flatpak-builder/
 build-dir/
 repo/
 *.flatpak
+*.AppImage
+dist/
+build/
+*.spec.bak
 
 # Editor / OS cruft
 *~

@@ -58,7 +58,13 @@ APP_ID = "za.co.antsprojectshub.OneUp"
 APP_NAME = "OneUp"
 APP_VERSION = "1.0.0"
 REPO_SLUG = "milnet01/OneUp"
-HERE = Path(__file__).resolve().parent
+
+# Where our bundled files (update_system.sh, the icon) live. Normally next to
+# this module; inside a PyInstaller/AppImage bundle they are unpacked to _MEIPASS.
+if getattr(sys, "frozen", False):
+    HERE = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+else:
+    HERE = Path(__file__).resolve().parent
 
 
 def _find_engine() -> Path:
