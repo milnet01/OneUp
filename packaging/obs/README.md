@@ -9,9 +9,9 @@ OBS builds the RPM on openSUSE's infrastructure and hosts a repo so anyone can
 
 ```bash
 # Create your package (once):
-osc meta pkg -e home:milnet01 oneup      # opens an editor; save to create it
-osc checkout home:milnet01 oneup
-cd home:milnet01/oneup
+osc meta pkg -e home:milnet oneup      # opens an editor; save to create it
+osc checkout home:milnet oneup
+cd home:milnet/oneup
 ```
 
 ## Each release
@@ -31,11 +31,13 @@ Add openSUSE Tumbleweed (and Leap, if you want) as build targets in the web UI
 under **Repositories**. Once green, enable the download repo and share:
 
 ```
-https://download.opensuse.org/repositories/home:/milnet01/openSUSE_Tumbleweed/
+https://download.opensuse.org/repositories/home:/milnet/openSUSE_Tumbleweed/
 ```
 
 ## Notes
 
 - `oneup.spec` is `BuildArch: noarch`, so one build serves every architecture.
-- Bump `Version:` in the spec and the `versionformat` in `_service` together for
-  each release (keep them in step with `CHANGELOG.md`).
+- Bump `Version:` **and** the `%changelog` stanza in the spec, and the `versionformat`
+  **and** `revision` (the new release tag, e.g. `v1.0.1`) in `_service`, together for each
+  release — keep them in step with `CHANGELOG.md`. `revision` is a tag, not `main`, so an
+  `osc service manualrun` can't repackage post-release commits under the old version.

@@ -13,11 +13,11 @@ jobs:
   appimage:
     runs-on: ubuntu-22.04   # build on an older glibc so the AppImage runs widely
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install FUSE (needed to pack the AppImage)
         run: sudo apt-get update && sudo apt-get install -y libfuse2
@@ -26,7 +26,7 @@ jobs:
         run: bash packaging/appimage/build-appimage.sh
 
       - name: Attach AppImage to the release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: OneUp-x86_64.AppImage
           generate_release_notes: true

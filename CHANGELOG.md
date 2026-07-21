@@ -4,6 +4,57 @@ All notable changes to OneUp are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and OneUp uses
 [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Added a dependency policy standard with a known-incompatibility ledger (docs/standards/dependencies.md).**
+
+### Changed
+
+- **RPM now requires sudo (the engine can't run any step without it); the launcher uses the packaged data path.**
+
+- **RPM recommends snapper (the rollback feature depends on it); desktop and AppStream categories aligned.**
+
+- **CI actions bumped to latest (checkout v7, setup-python v7, action-gh-release v3); Python build pinned to 3.13.**
+
+### Fixed
+
+- **"Restart services" now validates unit names before running them as root.**
+  Service names come from the engine's output stream; only well-formed unit names are passed to the root systemctl, mirroring the rollback snapshot-id guard.
+
+- **Corrected the OBS packaging guide to the home:milnet project (was home:milnet01).**
+
+- **The weekly-check unit now also escapes $, backslash and quotes in the executable path (not just %).**
+
+- **The sudo keep-alive survives a transient authentication blip instead of stopping for the rest of the run.**
+
+- **Rollback validates the snapshot id before running it as root.**
+  The snapshot number is checked to be numeric before it reaches the pkexec command, so a malformed value on the output stream can't be interpolated into a root shell command.
+
+- **Ctrl-C (or SIGTERM) now cancels a run instead of cleaning up and continuing through the remaining steps.**
+  The interrupt/terminate traps now exit the script, so an aborted run no longer plows on through flatpak/firmware/orphan-removal/cache after you cancel.
+
+- **The self-update check tolerates a non-object JSON reply without throwing.**
+
+- **The weekly-check systemd unit escapes '%' in the executable path so a '%' in the install path can't silently break the timer.**
+
+- **An empty or unknown --steps value is rejected instead of reporting a clean run that did nothing.**
+
+- **The sudo keep-alive is cleaned up on Ctrl-C / SIGTERM, not just normal exit.**
+  trap now covers INT/TERM/HUP so an interrupted run can't leak a background loop that keeps root credentials warm.
+
+- **Up-to-date detection is reliable on non-English systems (zypper output pinned to LC_ALL=C).**
+
+- **Low-disk and duplicate-repo pre-flight warnings now surface in the GUI.**
+  The engine emitted @@DISK@@/@@REPO@@ markers that the GUI had no handler for, so the advertised warning never appeared; both are now shown live.
+
+- **Malformed progress markers can no longer throw out of the GUI's read slot.**
+  A STEP_BEGIN line spliced by interleaved output raised an unhandled IndexError/ValueError that dropped the run's later markers; the field parse is now guarded.
+
+- **Firmware step no longer reports success or forces a reboot when the flash actually failed.**
+  fwupdmgr update failures were masked by `|| true` and always recorded as "updates applied" with a reboot nag; the step now gates success and the reboot advice on the real exit code.
+
 ## [1.0.0] - 2026-07-21
 
 First public release — one-click updates for openSUSE system packages, Flatpaks

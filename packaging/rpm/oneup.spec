@@ -13,10 +13,14 @@ BuildArch:      noarch
 # optional — OneUp skips steps for tools that are not installed.
 Requires:       python3-pyside6
 Requires:       zypper
+# The engine performs every privileged step via sudo; without it the app installs
+# but no update can run.
+Requires:       sudo
 Recommends:     flatpak
 Recommends:     fwupd
 Recommends:     libnotify-tools
 Recommends:     ksshaskpass
+Recommends:     snapper
 
 %description
 OneUp is a small Qt dashboard that updates openSUSE system packages, Flatpaks
@@ -42,7 +46,7 @@ install -Dm0755 update_system.sh  %{buildroot}%{_datadir}/oneup/update_system.sh
 install -dm0755 %{buildroot}%{_bindir}
 cat > %{buildroot}%{_bindir}/oneup <<'EOF'
 #!/bin/sh
-exec python3 /usr/share/oneup/updater.py "$@"
+exec python3 %{_datadir}/oneup/updater.py "$@"
 EOF
 chmod 0755 %{buildroot}%{_bindir}/oneup
 
