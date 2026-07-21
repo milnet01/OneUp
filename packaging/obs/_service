@@ -1,8 +1,10 @@
 <services>
-  <!-- Pull the source straight from GitHub and roll a versioned tarball that
-       oneup.spec's Source0 expects. Run `osc service manualrun` locally, or let
-       OBS run it server-side. -->
-  <service name="obs_scm" mode="manual">
+  <!-- Fetch the source from GitHub and roll the versioned tarball oneup.spec's
+       Source0 expects — entirely at BUILD TIME on the OBS servers, so no local
+       `osc service manualrun` is needed (upload this file + oneup.spec and build).
+       set_version syncs the spec's Version: to the tag, so the tarball and spec
+       versions can't drift. -->
+  <service name="obs_scm" mode="buildtime">
     <param name="scm">git</param>
     <param name="url">https://github.com/milnet01/OneUp.git</param>
     <param name="revision">v1.0.1</param>
@@ -14,5 +16,5 @@
     <param name="file">*.tar</param>
     <param name="compression">gz</param>
   </service>
-  <service name="set_version" mode="manual"/>
+  <service name="set_version" mode="buildtime"/>
 </services>
