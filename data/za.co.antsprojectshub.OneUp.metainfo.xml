@@ -48,6 +48,17 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.0.1" date="2026-07-21">
+      <description>
+        <p>Audit and independent-review fixes.</p>
+        <ul>
+          <li>Firmware updates no longer report success or force a reboot when the flash failed.</li>
+          <li>Cancelling a run now stops it instead of continuing through the remaining steps.</li>
+          <li>Reliable "already up to date" detection on non-English systems.</li>
+          <li>Hardened the rollback and service-restart actions, and several packaging fixes.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.0" date="2026-07-21">
       <description>
         <p>First public release.</p>

@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.0.0
+Version:        1.0.1
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -68,5 +68,9 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Tue Jul 21 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.0.1-0
+- Audit + independent-review fixes: firmware no longer reports success/forces a
+  reboot on a failed flash; Ctrl-C aborts a run; locale-robust update detection;
+  rollback and service-restart input validation; and packaging/dependency fixes.
 * Tue Jul 21 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.0.0-0
 - First release.
