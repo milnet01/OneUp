@@ -16,6 +16,8 @@ Requires:       zypper
 # The engine performs every privileged step via sudo; without it the app installs
 # but no update can run.
 Requires:       sudo
+# Owns /usr/share/icons/hicolor/... so the installed SVG's parent dirs are packaged.
+Requires:       hicolor-icon-theme
 Recommends:     flatpak
 Recommends:     fwupd
 Recommends:     libnotify-tools
