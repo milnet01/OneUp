@@ -4,7 +4,10 @@ All notable changes to OneUp are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and OneUp uses
 [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0] - 2026-07-21
+
+First public release — one-click updates for openSUSE system packages, Flatpaks
+and firmware, plus leftover-package and cache cleanup.
 
 ### Added
 - **Check for updates** — a read-only pass that reports how many updates are
@@ -34,9 +37,4 @@ All notable changes to OneUp are documented here. The format follows
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-## [1.0.0] - 2026-07-21
-- First public release: one-click updates for openSUSE system packages,
-  Flatpaks and firmware, plus leftover-package and cache cleanup.
-
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/milnet01/OneUp/releases/tag/v1.0.0
