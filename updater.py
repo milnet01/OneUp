@@ -7,17 +7,24 @@ it with a --steps list, reads that script's @@MARKER@@ progress lines to drive t
 progress bar and per-step status, and shows the rest of the output in a log pane.
 Each task has a phone-style on/off switch (green = on, red = off) instead of a
 checkbox.
+
+Run headless as `oneup --check` (or `updater.py --check`) to perform a read-only
+"updates available?" check and a desktop notification, with no window — this is
+what the optional weekly systemd-user timer calls.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from string import Template
 
 from PySide6.QtCore import (
     Property,
@@ -27,8 +34,10 @@ from PySide6.QtCore import (
     QRectF,
     QSettings,
     Qt,
+    QUrl,
 )
-from PySide6.QtGui import QColor, QIcon, QPainter
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
@@ -47,13 +56,15 @@ from PySide6.QtWidgets import (
 
 APP_ID = "za.co.antsprojectshub.OneUp"
 APP_NAME = "OneUp"
+APP_VERSION = "1.0.0"
+REPO_SLUG = "milnet01/OneUp"
 HERE = Path(__file__).resolve().parent
 
 
 def _find_engine() -> Path:
-    """Locate update_system.sh. It normally sits next to this file (git checkout
-    or Flatpak install); fall back to the legacy ~/Documents path so an existing
-    hand-installed setup keeps working."""
+    """Locate update_system.sh. It normally sits next to this file (git checkout,
+    RPM or AppImage install); fall back to the legacy ~/Documents path so an
+    existing hand-installed setup keeps working."""
     for candidate in (HERE / "update_system.sh",
                       Path.home() / "Documents" / "update_system.sh"):
         if candidate.exists():
@@ -64,6 +75,7 @@ def _find_engine() -> Path:
 ENGINE = _find_engine()
 STATE_DIR = Path.home() / ".local" / "state" / "oneup"
 HISTORY = STATE_DIR / "history.json"
+LOG_DIR = STATE_DIR / "logs"
 
 # key, title, one-line description. Order = run order.
 TASKS = [
@@ -78,96 +90,158 @@ GREEN = QColor("#2ecc71")
 RED = QColor("#e74c3c")
 
 # ---------------------------------------------------------------------------
-# Theme — a dark "instrument panel". The signature is the azure→cyan gradient
-# (echoing the app icon) used as a ring around the window and as a hover-lit
-# border on each task card. Everything else stays quiet so the borders carry
-# the personality. Selectors are keyed to object names so system dialogs
-# (QMessageBox etc.) keep the desktop's native look.
+# Theme — a gradient-ringed "instrument panel" that follows the desktop's
+# light/dark preference. The signature azure→cyan accent (echoing the app icon)
+# stays constant; only the neutral surfaces swap between the two palettes below.
+# The stylesheet is a $-template so the swap is a plain dict substitution with no
+# brace-escaping. Selectors are keyed to object names so system dialogs keep the
+# desktop's native look.
 # ---------------------------------------------------------------------------
 ACCENT = "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)"
-THEME = f"""
-* {{ font-family: "Inter", "Noto Sans", "Segoe UI", "Cantarell", sans-serif; }}
-QMainWindow {{ background: #0f1216; }}
+BTN_ACCENT = "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4aa3ff, stop:1 #2f6fe0)"
 
-#Frame {{ border-radius: 16px; background: {ACCENT}; }}
-#Card  {{ border-radius: 14px; background: #12161c; }}
+_QSS = Template(r"""
+* { font-family: "Inter", "Noto Sans", "Segoe UI", "Cantarell", sans-serif; }
+QMainWindow { background: $win; }
 
-QLabel#Header  {{ font-size: 21px; font-weight: 700; color: #f4f7fb; }}
-QLabel#Tagline {{ font-size: 12px; color: #8b95a5; }}
+#Frame { border-radius: 16px; background: $accent; }
+#Card  { border-radius: 14px; background: $card; }
 
-#RowBorder {{
+QLabel#Header  { font-size: 21px; font-weight: 700; color: $header; }
+QLabel#Tagline { font-size: 12px; color: $tag; }
+
+#RowBorder {
     border-radius: 12px;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
         stop:0 rgba(74,163,255,0.65), stop:1 rgba(34,211,238,0.50));
-}}
-#RowBorder:hover {{
+}
+#RowBorder:hover {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
         stop:0 rgba(104,184,255,1.0), stop:1 rgba(58,228,250,0.85));
-}}
-#RowCard {{ border-radius: 11px; background: #1a1f27; }}
-#RowBorder:hover #RowCard {{ background: #1e242e; }}
-QLabel#TaskName {{ font-size: 14px; font-weight: 600; color: #eef2f8; }}
-QLabel#TaskDesc {{ font-size: 12px; color: #a7b0be; }}
+}
+#RowCard { border-radius: 11px; background: $rowcard; }
+#RowBorder:hover #RowCard { background: $rowhov; }
+QLabel#TaskName { font-size: 14px; font-weight: 600; color: $tname; }
+QLabel#TaskDesc { font-size: 12px; color: $tdesc; }
+QLabel#Badge {
+    background: $badgebg; color: $badgefg; border-radius: 9px;
+    padding: 2px 9px; font-size: 11px; font-weight: 600;
+}
 
-QPushButton#RunBtn {{
+QPushButton#RunBtn {
     font-size: 14px; font-weight: 700; color: #ffffff; border: none;
-    border-radius: 11px; padding: 12px 18px;
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4aa3ff, stop:1 #2f6fe0);
-}}
-QPushButton#RunBtn:hover {{
+    border-radius: 11px; padding: 12px 18px; background: $btn_accent;
+}
+QPushButton#RunBtn:hover {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
-}}
-QPushButton#RunBtn:pressed {{
+}
+QPushButton#RunBtn:pressed {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3d90ec, stop:1 #2560c8);
-}}
-QPushButton#RunBtn:disabled {{ color: #aeb7c4; background: #262b34; }}
+}
+QPushButton#RunBtn:disabled { color: $disfg; background: $disbg; }
 
-QPushButton#GhostBtn {{
-    color: #c7d0dd; font-weight: 600; background: transparent;
-    border: 1px solid #38414f; border-radius: 8px; padding: 5px 13px;
-}}
-QPushButton#GhostBtn:hover {{ border-color: #4aa3ff; color: #eaf1fb; }}
+QPushButton#GhostBtn {
+    color: $ghostfg; font-weight: 600; background: transparent;
+    border: 1px solid $ghostbd; border-radius: 8px; padding: 8px 14px;
+}
+QPushButton#GhostBtn:hover { border-color: #4aa3ff; color: #4aa3ff; }
+QPushButton#GhostBtn:checked { border-color: #4aa3ff; color: #4aa3ff; }
+QPushButton#GhostBtn:disabled { color: $disfg; border-color: $disbg; }
 
-QPushButton#LinkBtn {{
-    color: #7fb2ff; font-weight: 600; text-align: left;
+QPushButton#LinkBtn {
+    color: #4aa3ff; font-weight: 600; text-align: left;
     background: transparent; border: none; padding: 4px 2px;
-}}
-QPushButton#LinkBtn:hover {{ color: #a9ccff; }}
+}
+QPushButton#LinkBtn:hover { color: #6fb6ff; }
 
-QLabel#Status  {{ font-size: 12px; color: #c3ccd9; }}
-QLabel#LastRun {{ font-size: 12px; color: #828d9d; }}
+QLabel#Status  { font-size: 12px; color: $status; }
+QLabel#LastRun { font-size: 12px; color: $lastrun; }
 
-QProgressBar {{
-    border: none; border-radius: 9px; background: #0c0f13;
-    min-height: 20px; text-align: center; color: #dbe3ee; font-size: 12px;
-}}
-QProgressBar::chunk {{ border-radius: 9px; background: {ACCENT}; }}
+QProgressBar {
+    border: none; border-radius: 9px; background: $progbg;
+    min-height: 20px; text-align: center; color: $status; font-size: 12px;
+}
+QProgressBar::chunk { border-radius: 9px; background: $accent; }
 
-QPlainTextEdit#Log {{
-    background: #0b0e12; color: #cdd6e2;
-    border: 1px solid #262d38; border-radius: 10px; padding: 6px;
+QPlainTextEdit#Log {
+    background: $logbg; color: $logfg;
+    border: 1px solid $logbd; border-radius: 10px; padding: 6px;
     font-family: "JetBrains Mono", "Fira Code", "Noto Sans Mono", monospace; font-size: 11px;
-}}
+}
 
-#RebootBanner {{
+#RebootBanner {
     border: 1px solid #e0553f; border-radius: 10px;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
         stop:0 rgba(231,76,60,0.22), stop:1 rgba(231,76,60,0.05));
-}}
-QLabel#RebootText {{ color: #ffb4a6; font-weight: 600; border: none; background: transparent; }}
-QPushButton#RestartBtn {{
+}
+QPushButton#RestartBtn {
     color: #ffffff; font-weight: 700; border: none; border-radius: 8px; padding: 7px 15px;
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ef6a55, stop:1 #d6412a);
-}}
-QPushButton#RestartBtn:hover {{
+}
+QPushButton#RestartBtn:hover {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f47c68, stop:1 #e04a32);
-}}
+}
 
-QToolTip {{
-    background: #1a1f27; color: #e9edf3; border: 1px solid #4aa3ff;
+#InfoBanner {
+    border: 1px solid rgba(74,163,255,0.55); border-radius: 10px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 rgba(74,163,255,0.20), stop:1 rgba(34,211,238,0.05));
+}
+#WarnBanner {
+    border: 1px solid rgba(233,178,63,0.6); border-radius: 10px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 rgba(233,178,63,0.20), stop:1 rgba(233,178,63,0.04));
+}
+QLabel#BannerText { color: $header; font-weight: 600; border: none; background: transparent; }
+QPushButton#BannerBtn {
+    color: #ffffff; font-weight: 700; border: none; border-radius: 8px; padding: 7px 15px;
+    background: $btn_accent;
+}
+QPushButton#BannerBtn:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
+}
+
+QToolTip {
+    background: $tip; color: $tipfg; border: 1px solid #4aa3ff;
     border-radius: 4px; padding: 4px 6px;
-}}
-"""
+}
+""")
+
+_DARK = dict(
+    win="#0f1216", card="#12161c", header="#f4f7fb", tag="#8b95a5",
+    rowcard="#1a1f27", rowhov="#1e242e", tname="#eef2f8", tdesc="#a7b0be",
+    badgebg="#20304a", badgefg="#cfe0ff", logbg="#0b0e12", logfg="#cdd6e2",
+    logbd="#262d38", status="#c3ccd9", lastrun="#828d9d", progbg="#0c0f13",
+    ghostbd="#38414f", ghostfg="#c7d0dd", disbg="#262b34", disfg="#aeb7c4",
+    tip="#1a1f27", tipfg="#e9edf3",
+)
+_LIGHT = dict(
+    win="#eef1f5", card="#ffffff", header="#1b2027", tag="#5c6673",
+    rowcard="#f4f6f9", rowhov="#eaeef3", tname="#1b2027", tdesc="#5c6673",
+    badgebg="#dbe8ff", badgefg="#1f4e9c", logbg="#f6f8fa", logfg="#2a2f36",
+    logbd="#d5dbe2", status="#3a424d", lastrun="#8a94a2", progbg="#dfe4ea",
+    ghostbd="#c4ccd6", ghostfg="#3a424d", disbg="#d5dbe2", disfg="#9aa3ad",
+    tip="#ffffff", tipfg="#1b2027",
+)
+
+
+def build_theme(dark: bool) -> str:
+    palette = dict(_DARK if dark else _LIGHT)
+    palette["accent"] = ACCENT
+    palette["btn_accent"] = BTN_ACCENT
+    return _QSS.substitute(palette)
+
+
+def current_is_dark(app: QApplication) -> bool:
+    """Follow the desktop's colour scheme (Qt 6.5+); default to dark if unknown."""
+    try:
+        return app.styleHints().colorScheme() != Qt.ColorScheme.Light
+    except Exception:
+        return True
+
+
+def _version_tuple(v: str) -> list[int]:
+    return [int(x) for x in re.findall(r"\d+", v)] or [0]
 
 
 class ToggleSwitch(QAbstractButton):
@@ -221,7 +295,8 @@ class ToggleSwitch(QAbstractButton):
 
 class TaskRow(QFrame):
     """One task, drawn as a card with a hover-lit gradient border: the 1px
-    outer frame shows the accent gradient, an inner card sits 1px inside it."""
+    outer frame shows the accent gradient, an inner card sits 1px inside it. A
+    badge on the right shows how many updates a --check found."""
 
     def __init__(self, title: str, description: str):
         super().__init__()
@@ -239,33 +314,52 @@ class TaskRow(QFrame):
         text.addWidget(name)
         text.addWidget(desc)
 
+        self.badge = QLabel("")
+        self.badge.setObjectName("Badge")
+        self.badge.setVisible(False)
+
         inner = QFrame()
         inner.setObjectName("RowCard")
         row = QHBoxLayout(inner)
         row.setContentsMargins(15, 12, 15, 12)
-        row.setSpacing(12)
+        row.setSpacing(10)
         row.addLayout(text, 1)
+        row.addWidget(self.badge, 0, Qt.AlignVCenter)
         row.addWidget(self.switch, 0, Qt.AlignVCenter)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(1, 1, 1, 1)  # 1px gradient border
         outer.addWidget(inner)
 
+    def set_badge(self, text: str):
+        self.badge.setText(text)
+        self.badge.setVisible(True)
+
+    def clear_badge(self):
+        self.badge.setVisible(False)
+
 
 class Updater(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(APP_NAME)
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(560)
         self.settings = QSettings("OneUp", "OneUp")
         self.proc: QProcess | None = None
         self._buf = ""
         self._total = 0
+        self._check_mode = False
         self._reboot = False
         self._installed_count = ""   # system packages changed, as reported by the engine
         self._sys_changed = False
+        self._failed_steps: list[str] = []
+        self._services = ""
+        self._snapshot = ""
+        self._hints: list[str] = []
+        self._log_path: Path | None = None
+        self._latest_tag = ""
 
-        # Gradient ring: a 2px accent border (outer #Frame) around the dark card.
+        # Gradient ring: a 2px accent border (outer #Frame) around the card.
         outer_frame = QFrame()
         outer_frame.setObjectName("Frame")
         self.setCentralWidget(outer_frame)
@@ -279,7 +373,7 @@ class Updater(QMainWindow):
         root.setContentsMargins(20, 18, 20, 18)
         root.setSpacing(12)
 
-        # Header: title + tagline on the left, Recenter on the right.
+        # Header: title + tagline on the left; weekly-check + recenter on the right.
         header = QLabel(APP_NAME)
         header.setObjectName("Header")
         tagline = QLabel("Keep openSUSE, Flatpak and firmware up to date")
@@ -289,6 +383,15 @@ class Updater(QMainWindow):
         titleblock.addWidget(header)
         titleblock.addWidget(tagline)
 
+        self.auto_btn = QPushButton()
+        self.auto_btn.setObjectName("GhostBtn")
+        self.auto_btn.setCheckable(True)
+        self.auto_btn.setCursor(Qt.PointingHandCursor)
+        self.auto_btn.setToolTip("Check weekly in the background and notify you when updates are ready")
+        self.auto_btn.setChecked(self._autocheck_enabled())
+        self._refresh_autocheck_label()
+        self.auto_btn.toggled.connect(self.on_autocheck_toggled)
+
         self.recenter_btn = QPushButton("Recenter")
         self.recenter_btn.setObjectName("GhostBtn")
         self.recenter_btn.setCursor(Qt.PointingHandCursor)
@@ -297,6 +400,7 @@ class Updater(QMainWindow):
 
         header_row = QHBoxLayout()
         header_row.addLayout(titleblock, 1)
+        header_row.addWidget(self.auto_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.recenter_btn, 0, Qt.AlignTop)
         root.addLayout(header_row)
         root.addSpacing(2)
@@ -310,13 +414,32 @@ class Updater(QMainWindow):
 
         root.addSpacing(4)
 
-        # Primary action.
+        # Action row: Check (secondary) + Run (primary).
+        self.check_btn = QPushButton("Check for updates")
+        self.check_btn.setObjectName("GhostBtn")
+        self.check_btn.setCursor(Qt.PointingHandCursor)
+        self.check_btn.setToolTip("See what would update — installs nothing")
+        self.check_btn.clicked.connect(self.start_check)
+
         self.run_btn = QPushButton("Run selected updates")
         self.run_btn.setObjectName("RunBtn")
         self.run_btn.setMinimumHeight(44)
         self.run_btn.setCursor(Qt.PointingHandCursor)
         self.run_btn.clicked.connect(self.start_run)
-        root.addWidget(self.run_btn)
+
+        actions = QHBoxLayout()
+        actions.setSpacing(10)
+        actions.addWidget(self.check_btn, 0)
+        actions.addWidget(self.run_btn, 1)
+        root.addLayout(actions)
+
+        # Retry-failed (hidden until a run has failures).
+        self.retry_btn = QPushButton("Retry failed steps")
+        self.retry_btn.setObjectName("GhostBtn")
+        self.retry_btn.setCursor(Qt.PointingHandCursor)
+        self.retry_btn.clicked.connect(self.retry_failed)
+        self.retry_btn.setVisible(False)
+        root.addWidget(self.retry_btn)
 
         # Progress + current step.
         self.status = QLabel("Ready.")
@@ -328,29 +451,45 @@ class Updater(QMainWindow):
         self.bar.setValue(0)
         root.addWidget(self.bar)
 
-        # Reboot banner (hidden until needed).
-        self.reboot_banner = QFrame()
-        self.reboot_banner.setObjectName("RebootBanner")
-        rb = QHBoxLayout(self.reboot_banner)
-        rb.setContentsMargins(14, 10, 12, 10)
-        self.reboot_label = QLabel("⚠  A restart is recommended to finish updating.")
-        self.reboot_label.setObjectName("RebootText")
-        self.reboot_label.setWordWrap(True)
-        self.restart_btn = QPushButton("Restart now")
-        self.restart_btn.setObjectName("RestartBtn")
-        self.restart_btn.setCursor(Qt.PointingHandCursor)
-        self.restart_btn.clicked.connect(self.restart_now)
-        rb.addWidget(self.reboot_label, 1)
-        rb.addWidget(self.restart_btn, 0)
-        self.reboot_banner.setVisible(False)
+        # Banners (all hidden until needed).
+        self.reboot_banner, self.reboot_label, self.restart_btn = self._make_banner(
+            "RebootBanner", "RestartBtn", "Restart now", self.restart_now)
         root.addWidget(self.reboot_banner)
 
-        # Collapsible log pane.
+        self.services_banner, self.services_label, self.services_btn = self._make_banner(
+            "InfoBanner", "BannerBtn", "Restart services", self.restart_services)
+        root.addWidget(self.services_banner)
+
+        self.warn_banner, self.warn_label, self.warn_btn = self._make_banner(
+            "WarnBanner", "BannerBtn", "Show details", self._show_log)
+        root.addWidget(self.warn_banner)
+
+        self.appupdate_banner, self.appupdate_label, self.appupdate_btn = self._make_banner(
+            "InfoBanner", "BannerBtn", "View release", self._open_release)
+        root.addWidget(self.appupdate_banner)
+
+        # Rollback link (shown after the system actually changed).
+        self.rollback_btn = QPushButton("Roll back this update…")
+        self.rollback_btn.setObjectName("LinkBtn")
+        self.rollback_btn.setCursor(Qt.PointingHandCursor)
+        self.rollback_btn.clicked.connect(self.rollback)
+        self.rollback_btn.setVisible(False)
+        root.addWidget(self.rollback_btn)
+
+        # Log controls: show/hide on the left, open-file on the right.
         self.log_toggle = QPushButton("Show details ▸")
         self.log_toggle.setObjectName("LinkBtn")
         self.log_toggle.setCursor(Qt.PointingHandCursor)
         self.log_toggle.clicked.connect(self.toggle_log)
-        root.addWidget(self.log_toggle)
+        self.openlog_btn = QPushButton("Open log file")
+        self.openlog_btn.setObjectName("LinkBtn")
+        self.openlog_btn.setCursor(Qt.PointingHandCursor)
+        self.openlog_btn.clicked.connect(self.open_log)
+        logrow = QHBoxLayout()
+        logrow.addWidget(self.log_toggle, 0)
+        logrow.addStretch(1)
+        logrow.addWidget(self.openlog_btn, 0)
+        root.addLayout(logrow)
 
         self.log = QPlainTextEdit()
         self.log.setObjectName("Log")
@@ -375,6 +514,27 @@ class Updater(QMainWindow):
         geo = self.settings.value("geometry")
         if geo is not None:
             self.restoreGeometry(geo)
+
+        # Non-blocking: is there a newer OneUp release?
+        self._check_app_update()
+
+    # ---- banner helper ----------------------------------------------------
+    def _make_banner(self, frame_obj: str, btn_obj: str, btn_text: str, slot):
+        fr = QFrame()
+        fr.setObjectName(frame_obj)
+        lay = QHBoxLayout(fr)
+        lay.setContentsMargins(14, 10, 12, 10)
+        lbl = QLabel("")
+        lbl.setObjectName("BannerText")
+        lbl.setWordWrap(True)
+        btn = QPushButton(btn_text)
+        btn.setObjectName(btn_obj)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.clicked.connect(slot)
+        lay.addWidget(lbl, 1)
+        lay.addWidget(btn, 0)
+        fr.setVisible(False)
+        return fr, lbl, btn
 
     # ---- window geometry --------------------------------------------------
     def closeEvent(self, event):
@@ -418,10 +578,10 @@ for (var i = 0; i < clients.length; i++) {{
 }}
 """
         script_path = None
-        name = "system_updater_center"
+        name = "oneup_center"
         try:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".js",
-                                             prefix="su_center_", delete=False) as f:
+                                             prefix="oneup_center_", delete=False) as f:
                 f.write(kwin_js)
                 script_path = f.name
             base = ["dbus-send", "--session", "--dest=org.kde.KWin",
@@ -443,6 +603,62 @@ for (var i = 0; i < clients.length; i++) {{
                 except OSError:
                     pass
 
+    # ---- weekly auto-check (systemd user timer) ---------------------------
+    @staticmethod
+    def _user_units_dir() -> Path:
+        return Path.home() / ".config" / "systemd" / "user"
+
+    @staticmethod
+    def _autocheck_command() -> str:
+        """A stable command that re-launches OneUp in headless --check mode."""
+        appimage = os.environ.get("APPIMAGE")
+        if appimage:
+            return f'"{appimage}" --check'
+        launcher = shutil.which("oneup")
+        if launcher:
+            return f'"{launcher}" --check'
+        return f'"{sys.executable}" "{Path(__file__).resolve()}" --check'
+
+    def _autocheck_enabled(self) -> bool:
+        r = subprocess.run(["systemctl", "--user", "is-enabled", "oneup-check.timer"],
+                           capture_output=True, text=True)
+        return r.stdout.strip() == "enabled"
+
+    def _refresh_autocheck_label(self):
+        on = self.auto_btn.isChecked()
+        self.auto_btn.setText("Weekly check: on" if on else "Weekly check: off")
+
+    def on_autocheck_toggled(self, on: bool):
+        units = self._user_units_dir()
+        try:
+            if on:
+                units.mkdir(parents=True, exist_ok=True)
+                (units / "oneup-check.service").write_text(
+                    "[Unit]\nDescription=OneUp weekly update check\n\n"
+                    "[Service]\nType=oneshot\n"
+                    f"ExecStart={self._autocheck_command()}\n"
+                )
+                (units / "oneup-check.timer").write_text(
+                    "[Unit]\nDescription=OneUp weekly update check\n\n"
+                    "[Timer]\nOnCalendar=weekly\nPersistent=true\n\n"
+                    "[Install]\nWantedBy=timers.target\n"
+                )
+                subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+                subprocess.run(["systemctl", "--user", "enable", "--now",
+                                "oneup-check.timer"], check=False)
+            else:
+                subprocess.run(["systemctl", "--user", "disable", "--now",
+                                "oneup-check.timer"], check=False)
+                for name in ("oneup-check.timer", "oneup-check.service"):
+                    try:
+                        (units / name).unlink()
+                    except OSError:
+                        pass
+                subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+        except OSError as exc:
+            QMessageBox.warning(self, "Could not change the schedule", str(exc))
+        self._refresh_autocheck_label()
+
     # ---- last-run history -------------------------------------------------
     def refresh_last_run(self):
         try:
@@ -461,50 +677,93 @@ for (var i = 0; i < clients.length; i++) {{
 
     # ---- log pane ---------------------------------------------------------
     def toggle_log(self):
-        show = not self.log.isVisible()
+        self._show_log(not self.log.isVisible())
+
+    def _show_log(self, show: bool = True):
         self.log.setVisible(show)
         self.log_toggle.setText("Hide details ▾" if show else "Show details ▸")
         self.settings.setValue("log_shown", show)
 
-    # ---- run --------------------------------------------------------------
+    def open_log(self):
+        if self._log_path and self._log_path.exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._log_path)))
+        else:
+            QMessageBox.information(self, "No log yet",
+                                    "Run an update or a check first — then the log opens here.")
+
+    # ---- run / check ------------------------------------------------------
     def selected_steps(self) -> list[str]:
         return [key for key, _t, _d in TASKS if self.rows[key].switch.isChecked()]
 
     def set_controls_enabled(self, enabled: bool):
         self.run_btn.setEnabled(enabled)
+        self.check_btn.setEnabled(enabled)
         for r in self.rows.values():
             r.switch.setEnabled(enabled)
 
+    def start_check(self):
+        self._launch(self.selected_steps(), check=True)
+
     def start_run(self):
-        steps = self.selected_steps()
+        self._launch(self.selected_steps(), check=False)
+
+    def retry_failed(self):
+        if self._failed_steps:
+            self._launch(list(self._failed_steps), check=False)
+
+    def _launch(self, steps: list[str], check: bool):
         if not steps:
             QMessageBox.information(self, "Nothing selected",
-                                    "Turn on at least one task before running.")
+                                    "Turn on at least one task first.")
             return
         if not ENGINE.exists():
             QMessageBox.critical(self, "Engine missing",
                                  f"Could not find the update script at:\n{ENGINE}")
             return
 
-        self.reboot_banner.setVisible(False)
+        # Reset per-run state and any banners/badges from a previous run.
+        self._check_mode = check
         self._reboot = False
         self._installed_count = ""
         self._sys_changed = False
+        self._failed_steps = []
+        self._services = ""
+        self._snapshot = ""
+        self._hints = []
         self._buf = ""
         self._total = len(steps)
+        for b in (self.reboot_banner, self.services_banner, self.warn_banner):
+            b.setVisible(False)
+        self.retry_btn.setVisible(False)
+        self.rollback_btn.setVisible(False)
+        for r in self.rows.values():
+            r.clear_badge()
         self.log.clear()
-        self.bar.setRange(0, self._total)
-        self.bar.setValue(0)
-        self.bar.setFormat("Starting…")
-        self.status.setText("Authenticating… (approve the password popup)")
+
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        self._log_path = LOG_DIR / (f"{stamp}.check.log" if check else f"{stamp}.log")
+
+        if check:
+            self.bar.setRange(0, 0)  # indeterminate
+            self.bar.setFormat("Checking…")
+            self.status.setText("Checking for available updates…")
+        else:
+            self.bar.setRange(0, self._total)
+            self.bar.setValue(0)
+            self.bar.setFormat("Starting…")
+            self.status.setText("Authenticating… (approve the password popup)")
         self.set_controls_enabled(False)
 
+        args = [str(ENGINE), f"--steps={','.join(steps)}", f"--log={self._log_path}"]
+        if check:
+            args.append("--check")
         self.proc = QProcess(self)
         self.proc.setProcessChannelMode(QProcess.MergedChannels)
         self.proc.readyReadStandardOutput.connect(self.on_output)
         self.proc.finished.connect(self.on_finished)
         self.proc.errorOccurred.connect(self.on_error)
-        self.proc.start("bash", [str(ENGINE), f"--steps={','.join(steps)}"])
+        self.proc.start("bash", args)
 
     def on_output(self):
         self._buf += bytes(self.proc.readAllStandardOutput()).decode(errors="replace")
@@ -531,25 +790,53 @@ for (var i = 0; i < clients.length; i++) {{
             self.bar.setValue(int(index) - 1)
         elif tag == "STEP_END":
             self.bar.setValue(self.bar.value() + 1)
+            if len(parts) >= 2 and parts[1] == "fail":
+                self._failed_steps.append(parts[0])
+        elif tag == "CHECK":
+            key, count = parts[0], (parts[1] if len(parts) > 1 else "0")
+            if key == "TOTAL":
+                self._installed_count = count
+            else:
+                row = self.rows.get(key)
+                if row:
+                    n = int(count) if count.isdigit() else 0
+                    row.set_badge(f"{n} available" if n > 0 else "up to date")
         elif tag == "INSTALLED":
-            # parts: count | sys_changed(yes/no) | fw_changed(yes/no)
             self._installed_count = parts[0]
             self._sys_changed = len(parts) > 1 and parts[1] == "yes"
+        elif tag == "SNAPSHOT":
+            self._snapshot = parts[0]
+        elif tag == "SERVICES":
+            self._services = rest.strip()
+        elif tag == "HINT":
+            self._hints.append(rest.strip())
         elif tag == "REBOOT":
             self._reboot = parts[0] == "yes"
-        elif tag == "DONE":
-            self._done_status = parts[0]
 
     def on_error(self, _err):
         self.status.setText("Could not start the update script.")
+        self.bar.setRange(0, 1)
         self.set_controls_enabled(True)
 
     def on_finished(self, exit_code: int, _status):
-        self.bar.setValue(self._total)
         ok = exit_code == 0
+        self.set_controls_enabled(True)
+
+        if self._check_mode:
+            self.bar.setRange(0, 1)
+            self.bar.setValue(1)
+            self.bar.setFormat("Check complete")
+            n = self._installed_count
+            total = int(n) if n.isdigit() else 0
+            self.status.setText(
+                f"{total} update(s) available — turn on what you want and hit Run."
+                if total else "Everything is up to date. 🎉")
+            self._check_mode = False
+            return
+
+        self.bar.setValue(self._total)
         self.bar.setFormat("Finished" if ok else "Finished with errors")
 
-        # Describe whether anything was installed (drives reboot advice).
         n = self._installed_count
         if n and n not in ("", "0"):
             installed = f"{n} update(s) installed"
@@ -559,39 +846,104 @@ for (var i = 0; i < clients.length; i++) {{
             installed = "already up to date"
         else:
             installed = "finished"
-        if ok:
-            self.status.setText(f"All done — {installed}.")
-        else:
-            self.status.setText("Finished — some steps had errors (see details).")
-
+        self.status.setText(f"All done — {installed}." if ok
+                            else "Finished — some steps had errors (see details).")
         self.save_last_run("OK" if ok else "errors")
-        self.set_controls_enabled(True)
+
+        # Reboot vs the lighter "just restart these services" path.
         if self._reboot:
             if n and n not in ("", "0"):
                 self.reboot_label.setText(
-                    f"⚠  {n} update(s) installed — restart so everything uses the latest libraries."
-                )
+                    f"⚠  {n} update(s) installed — restart so everything uses the latest libraries.")
             else:
                 self.reboot_label.setText(
                     "⚠  Updates were installed — a restart is recommended so everything "
-                    "uses the latest libraries."
-                )
+                    "uses the latest libraries.")
             self.reboot_banner.setVisible(True)
-        if not ok:
-            self.log.setVisible(True)
-            self.log_toggle.setText("Hide details ▾")
+        elif self._services:
+            count = len(self._services.split())
+            self.services_label.setText(
+                f"No reboot needed — but {count} service(s) should restart to use the new libraries.")
+            self.services_btn.setToolTip(self._services)
+            self.services_banner.setVisible(True)
 
+        # Rollback offer once the system actually changed.
+        if self._sys_changed and self._snapshot:
+            self.rollback_btn.setVisible(True)
+
+        # Surface the first plain-English failure hint, if any.
+        if self._hints:
+            self.warn_label.setText("⚠  " + self._hints[0])
+            self.warn_banner.setVisible(True)
+
+        if self._failed_steps:
+            self.retry_btn.setVisible(True)
+        if not ok:
+            self._show_log(True)
+
+    # ---- actions ----------------------------------------------------------
     def restart_now(self):
         if QMessageBox.question(self, "Restart now?",
                                 "Save your work first. Restart the computer now?") \
                 == QMessageBox.Yes:
             QProcess.startDetached("systemctl", ["reboot"])
 
+    def restart_services(self):
+        svcs = self._services.split()
+        if not svcs:
+            return
+        if QMessageBox.question(
+                self, "Restart services?",
+                "Restart these services now?\n\n" + ", ".join(svcs)) == QMessageBox.Yes:
+            QProcess.startDetached("pkexec", ["systemctl", "restart", *svcs])
+            self.services_banner.setVisible(False)
+
+    def rollback(self):
+        if not self._snapshot:
+            return
+        answer = QMessageBox.warning(
+            self, "Roll back this update?",
+            "This restores the system to the snapshot taken before the update "
+            f"(#{self._snapshot}) and then REBOOTS. Anything changed since the "
+            "update will be lost.\n\nContinue?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer == QMessageBox.Yes:
+            QProcess.startDetached(
+                "pkexec", ["sh", "-c",
+                           f"snapper rollback {self._snapshot} && systemctl reboot"])
+
+    # ---- self-update check ------------------------------------------------
+    def _check_app_update(self):
+        self._nam = QNetworkAccessManager(self)
+        req = QNetworkRequest(QUrl(f"https://api.github.com/repos/{REPO_SLUG}/releases/latest"))
+        req.setRawHeader(b"Accept", b"application/vnd.github+json")
+        self._nam.finished.connect(self._on_app_update_reply)
+        self._nam.get(req)
+
+    def _on_app_update_reply(self, reply: QNetworkReply):
+        try:
+            if reply.error() != QNetworkReply.NetworkError.NoError:
+                return
+            data = json.loads(bytes(reply.readAll()).decode(errors="replace"))
+            tag = str(data.get("tag_name", "")).lstrip("vV")
+            if tag and _version_tuple(tag) > _version_tuple(APP_VERSION):
+                self._latest_tag = tag
+                self.appupdate_label.setText(
+                    f"A newer OneUp ({tag}) is available — you have {APP_VERSION}.")
+                self.appupdate_banner.setVisible(True)
+        except (ValueError, KeyError):
+            pass
+        finally:
+            reply.deleteLater()
+
+    def _open_release(self):
+        QDesktopServices.openUrl(QUrl(f"https://github.com/{REPO_SLUG}/releases/latest"))
+
 
 def _app_icon() -> QIcon:
     """Prefer the installed theme icon (set once the .desktop/icon are in place,
-    and inside the Flatpak); fall back to the bundled asset when running straight
-    from a git checkout."""
+    and inside a package); fall back to the bundled asset when running from a
+    git checkout."""
     icon = QIcon.fromTheme(APP_ID)
     if icon.isNull():
         asset = HERE / "data" / f"{APP_ID}.svg"
@@ -600,11 +952,32 @@ def _app_icon() -> QIcon:
     return icon
 
 
+def _headless_check() -> int:
+    """`oneup --check`: run the engine's read-only check + notification, no GUI.
+    This is what the optional weekly systemd-user timer invokes."""
+    if not ENGINE.exists():
+        print(f"OneUp: update script not found at {ENGINE}", file=sys.stderr)
+        return 1
+    return subprocess.run(["bash", str(ENGINE), "--check", "--notify"]).returncode
+
+
 def main():
+    if "--check" in sys.argv[1:]:
+        sys.exit(_headless_check())
+
     app = QApplication([])
     app.setApplicationName(APP_NAME)
     app.setDesktopFileName(APP_ID)  # ties the window to its .desktop/icon
-    app.setStyleSheet(THEME)
+
+    def apply_theme():
+        app.setStyleSheet(build_theme(current_is_dark(app)))
+
+    apply_theme()
+    try:  # re-theme live when the desktop switches light/dark (Qt 6.5+)
+        app.styleHints().colorSchemeChanged.connect(lambda *_: apply_theme())
+    except (AttributeError, TypeError):
+        pass
+
     icon = _app_icon()
     if not icon.isNull():
         app.setWindowIcon(icon)
