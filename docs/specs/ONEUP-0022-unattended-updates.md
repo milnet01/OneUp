@@ -93,7 +93,8 @@ prompt + keep-alive, exactly as today).
 ("Updates available"). Extend it to also fire **at the end of a full run** with the outcome,
 reusing the existing `notify_send` helper (update_system.sh:115–117) and the run summary the
 engine already computes — `SYS_COUNT` (the installed-package count, read for the summary at
-~740), the `SYS_CHANGED` / `FW_CHANGED` booleans, and `ERRORS` (~683–766):
+~740), the `SYS_CHANGED` / `FW_CHANGED` booleans, and `ERRORS` (defined ~150, tallied for the
+summary ~750):
 
 - something installed → `notify_send "Update complete" "<n> packages installed…"`
 - nothing to do → `notify_send "Already up to date" "…"`
@@ -132,11 +133,16 @@ engine already computes — `SYS_COUNT` (the installed-package count, read for t
   switch; it always installs the update timer only after a **fresh** `--auth-status` settle
   confirms passwordless is on. The reflected switch is used solely to pick the *entry branch*
   (whether a grant dialog is needed), not to authorize the install:
-  - `on_autoupdate_toggled(on=True)`: set the one-shot `self._pending_autoupdate = True` latch,
-    **disable the auto-update toggle for the duration of the async op** (as `_run_auth` disables
-    `auth_btn` at updater.py:1148 — this closes the mirror race where a user un-clicks mid-probe
-    and the settle then forces the toggle back on; it is re-enabled in the settle). Then branch
-    on the reflected switch:
+  - `on_autoupdate_toggled(on=True)`: **first** guard `if not ENGINE.exists()` — revert the
+    toggle to off via a `blockSignals` set and `return` **before** any latch/disable (mirrors
+    `on_auth_toggled`'s up-front guard at updater.py:1117–1119). This matters because with the
+    engine absent the async chain hits `_query_auth_status`'s early return (updater.py:1099–1100)
+    and **no settle ever fires** — so if the toggle had already been disabled and latched, it
+    would be stuck disabled forever. With the engine present: set the one-shot
+    `self._pending_autoupdate = True` latch, **disable the auto-update toggle for the duration
+    of the async op** (as `_run_auth` disables `auth_btn` at updater.py:1148 — this closes the
+    mirror race where a user un-clicks mid-probe and the settle then forces the toggle back on;
+    it is re-enabled in the settle). Then branch on the reflected switch:
     - reflected **off** → show the combined-enable dialog. It **presents the same passwordless
       security caveat** ONEUP-0023 shows (the "effectively passwordless administrator access …
       only on a computer you trust" text at updater.py:1125–1133), led by a line explaining
@@ -154,17 +160,22 @@ engine already computes — `SYS_COUNT` (the installed-package count, read for t
   - **The settle (`_on_auth_status_finished`) is the single install gate.** After it updates
     the passwordless switch and re-enables the auto-update toggle, **if `_pending_autoupdate`
     is set** it consumes the latch (clearing it unconditionally, so a startup or dialog-open
-    probe that carries no latch is a no-op here): install the update timer + set the
-    auto-update toggle on **iff** the just-settled state is passwordless-on; otherwise (popup
-    cancelled, `visudo` rejected, grant or probe failed) leave auto-update off and surface the
-    grant's `@@HINT@@`/note. The install gates on the **settled real state**, so it is correct
-    regardless of which probe the re-entry guard (updater.py:1101–1103) let run.
+    probe that carries no latch is a no-op here): if the just-settled state is passwordless-on,
+    install the update timer via `_install_user_timer` and set the auto-update toggle on **iff
+    that install reports the timer `enabled`** (the same success check the failure table's
+    OSError / `systemctl enable` rows rely on); if passwordless came back off (popup cancelled,
+    `visudo` rejected, grant/probe failed) **or** the install failed, leave auto-update off and
+    surface the grant's `@@HINT@@` / the install warning. The install gates on the **settled
+    real state**, so it is correct regardless of which probe the re-entry guard
+    (updater.py:1101–1103) let run.
 - **Coupling (rule 3 — revoke).** Hooked to the revoke **action** (the `on=False` branch of
   `on_auth_toggled`), not to the toggle signal — the programmatic `blockSignals` set used to
   reflect probed state must not trip it. When the user revokes passwordless, if the
   auto-update timer is enabled, remove it and reflect the auto-update switch as off via a
-  `blockSignals` set (no re-fire of `on_autoupdate_toggled`), with a one-line note. Removal
-  is a local systemd-user operation, independent of the revoke process's own outcome.
+  `blockSignals` set (no re-fire of `on_autoupdate_toggled`), with a one-line note. It also
+  clears any set `_pending_autoupdate` latch, so a revoke that interleaves with an in-flight
+  enable can't leave a stale latch a later settle would re-consume. Removal is a local
+  systemd-user operation, independent of the revoke process's own outcome.
 
 ## Correctness invariants
 
@@ -186,7 +197,7 @@ auto-update toggle **off** and tell the user why — never a silent half-state.
 
 | Situation | Behaviour |
 |-----------|-----------|
-| Engine binary missing (`ENGINE.exists()` false) | Auto-update can't be enabled; toggle reverts to off (as `_query_auth_status` returns early when the engine is absent, updater.py:1100). |
+| Engine binary missing (`ENGINE.exists()` false) | `on_autoupdate_toggled(on=True)`'s up-front guard reverts the toggle to off and returns before any latch/disable (mirrors `on_auth_toggled` at updater.py:1117–1119) — so the toggle is never left stuck disabled by an async chain that would hit `_query_auth_status`'s early return (updater.py:1099–1100) and fire no settle. |
 | Combined-enable dialog cancelled | Both stay off; no grant started, no latch set. |
 | Passwordless popup cancelled / `visudo` rejects / grant process fails | Re-probe reports passwordless **off**; the pending-enable latch resolves to "leave auto-update off" and surfaces the grant's `@@HINT@@`. |
 | `_install_user_timer` raises `OSError` (can't write `~/.config/systemd/user`) | Caught and shown via `QMessageBox.warning`, then the toggle is reverted to off. **New logic:** the existing `on_autocheck_toggled` catches `OSError` and warns but does *not* revert its toggle (updater.py:1078–1080); auto-update adds the explicit revert so it never shows on after a failed install. |
@@ -228,7 +239,7 @@ auto-update toggle **off** and tell the user why — never a silent half-state.
 ## Open questions & deliberate non-changes
 
 - **Weekly-check's toggle is not hardened here.** `on_autocheck_toggled` neither reverts its
-  toggle on an `OSError` nor verifies its `systemctl enable` succeeded (updater.py:1066–1080).
+  toggle on an `OSError` nor verifies its `systemctl enable` succeeded (updater.py:1051–1080).
   Auto-update adds both for itself; weekly-check keeps its current behaviour. Whether to
   back-port the same robustness to weekly-check is a **separate** item, not folded into this
   feature (it would change shipped behaviour of an unrelated toggle). Flag for the user.
