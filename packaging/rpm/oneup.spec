@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.0.1
+Version:        1.1.0
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -74,6 +74,20 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Tue Jul 21 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.1.0-0
+- Each repository in the Repositories manager now shows a plain-English line describing what it's for.
+- A Repositories manager (from the header) to turn software repositories on/off with switches and remove ones that duplicate another repo's URL — the duplicate-repo warning now opens it.
+- Each task row now shows how long the step took next to what it did — e.g. "3 installed · 42s".
+- An "About" window (from the header) showing the version, MIT licence, GitHub and openSUSE package links, and a manual "check for updates" button that reports the result either way.
+- A desktop notification when an update you started finishes — so a run you walked away from still tells you it's done (only pops up when the window isn't focused).
+- The current version is shown in the window title and header.
+- Flatpak reports how many apps it updated (counted before the update, like the check does).
+- Each task row now shows what happened after a real update — e.g. "3 installed", "Up to date", "Updated", "Failed" — not just after a check.
+- The Repositories manager is wider so repo URLs aren't clipped and remembers its size; the About and Repositories popups now open centered over the main window.
+- The duplicate-repository warning now names the offending URL and tells you how to remove it, instead of a generic "duplicates detected" message.
+- The update engine now runs under bash strict mode (set -uo pipefail) so unset variables and mid-pipeline failures surface immediately instead of silently.
+- A failed repository refresh no longer marks a successful system upgrade as failed.
+- The sudo keep-alive no longer leaves a short-lived background process behind when a run ends or is cancelled.
 * Tue Jul 21 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.0.1-0
 - Audit + independent-review fixes: firmware no longer reports success/forces a
   reboot on a failed flash; Ctrl-C aborts a run; locale-robust update detection;

@@ -8,9 +8,9 @@
   <service name="obs_scm">
     <param name="scm">git</param>
     <param name="url">https://github.com/milnet01/OneUp.git</param>
-    <param name="revision">v1.0.1</param>
+    <param name="revision">v1.1.0</param>
     <param name="filename">oneup</param>
-    <param name="versionformat">1.0.1</param>
+    <param name="versionformat">1.1.0</param>
   </service>
   <service name="tar" mode="buildtime"/>
   <service name="recompress" mode="buildtime">

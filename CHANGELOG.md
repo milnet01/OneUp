@@ -4,7 +4,7 @@ All notable changes to OneUp are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and OneUp uses
 [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] - 2026-07-21
 
 ### Added
 
@@ -133,5 +133,6 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
+[1.1.0]: https://github.com/milnet01/OneUp/releases/tag/v1.1.0
 [1.0.1]: https://github.com/milnet01/OneUp/releases/tag/v1.0.1
 [1.0.0]: https://github.com/milnet01/OneUp/releases/tag/v1.0.0
