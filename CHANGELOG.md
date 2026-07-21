@@ -4,6 +4,17 @@ All notable changes to OneUp are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and OneUp uses
 [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **You can now preview exactly what an update will change before running it.**
+  The read-only "Check" lists the packages that will change (name, old → new
+  version) in an expandable panel on each task, and the system task gains a
+  "Show download size" link that fetches the total download size on demand.
+  The instant check stays password-free; only the size link asks for
+  authentication.
+
 ## [1.1.0] - 2026-07-21
 
 ### Added
@@ -133,6 +144,7 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.1.0...HEAD
 [1.1.0]: https://github.com/milnet01/OneUp/releases/tag/v1.1.0
 [1.0.1]: https://github.com/milnet01/OneUp/releases/tag/v1.0.1
 [1.0.0]: https://github.com/milnet01/OneUp/releases/tag/v1.0.0

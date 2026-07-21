@@ -203,6 +203,39 @@ out=$(run_engine "$d" --check --steps=system,flatpak)
 check        "system update count = 2"  "@@CHECK@@|system|2" "$out"
 check        "total marker present"     "@@CHECK@@|TOTAL"    "$out"
 check_absent "no mutation during check" "BUG: mutated"       "$out"
+# --check also emits a per-package detail line (name|from|to) for the GUI preview.
+check        "system detail item a 1->2" "@@CHECK_ITEM@@|system|a|1|2"       "$out"
+check        "system detail item b 1->2" "@@CHECK_ITEM@@|system|b|1|2"       "$out"
+check        "flatpak detail item"       "@@CHECK_ITEM@@|flatpak|org.x.App|" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: --size=system reports the solver's download size and never really updates"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+# The dry-run reports a size; a real (non-dry-run) transaction would be a bug.
+if [[ "$*" == *dup* && "$*" == *--dry-run* ]]; then
+  echo "2 packages to upgrade."
+  echo "Overall download size: 1.3 GiB. Already cached: 0 B. After the operation, additional 45.0 MiB will be used."
+  exit 0
+fi
+[[ "$*" == *dup* || "$*" == *update* ]] && { echo "BUG: real transaction in --size" >&2; exit 99; }
+exit 0
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --size=system)
+check        "size marker carries the figure" "@@SIZE@@|system|1.3 GiB" "$out"
+check_absent "size mode never really updates"  "BUG: real transaction"  "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: --size with nothing to fetch reports 0 B (a definite answer, not a failure)"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\n[[ "$*" == *--dry-run* ]] && { echo "Nothing to do."; exit 0; }\nexit 0\n' > "$d/zypper"
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --size=system)
+check "no-op size reports 0 B" "@@SIZE@@|system|0 B" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

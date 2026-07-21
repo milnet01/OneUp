@@ -37,6 +37,7 @@ from PySide6.QtCore import (
     Qt,
     QTimer,
     QUrl,
+    Signal,
 )
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
@@ -54,6 +55,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -137,6 +139,16 @@ QLabel#Badge {
     background: $badgebg; color: $badgefg; border-radius: 9px;
     padding: 2px 9px; font-size: 11px; font-weight: 600;
 }
+QToolButton#Disclose {
+    background: transparent; border: none; padding: 0px;
+}
+#RowDetails { background: transparent; }
+QLabel#DetailList {
+    color: $tdesc; background: $logbg; border-radius: 8px; padding: 6px 8px;
+    font-family: "JetBrains Mono", "Fira Code", "Noto Sans Mono", monospace; font-size: 11px;
+}
+QScrollArea#DetailScroll { border: none; background: transparent; }
+QLabel#SizeResult { color: $tname; font-size: 12px; font-weight: 600; }
 
 QPushButton#RunBtn {
     font-size: 14px; font-weight: 700; color: #ffffff; border: none;
@@ -306,10 +318,16 @@ class ToggleSwitch(QAbstractButton):
 class TaskRow(QFrame):
     """One task, drawn as a card with a hover-lit gradient border: the 1px
     outer frame shows the accent gradient, an inner card sits 1px inside it. A
-    badge on the right shows how many updates a --check found."""
+    badge on the right shows how many updates a --check found; an expandable
+    panel below lists the exact packages that will change (fed by the engine's
+    @@CHECK_ITEM@@ markers), with a "Show download size" link on the system row."""
 
-    def __init__(self, title: str, description: str):
+    # Emitted when the user clicks "Show download size"; carries the step key.
+    size_requested = Signal(str)
+
+    def __init__(self, key: str, title: str, description: str):
         super().__init__()
+        self.key = key
         self.setObjectName("RowBorder")
         self.switch = ToggleSwitch()
 
@@ -330,6 +348,15 @@ class TaskRow(QFrame):
         self._badge_text = ""   # the outcome ("3 installed"); timing is appended
         self._timing = ""       # "42s" — kept apart so a repeated marker can't stack
 
+        # Disclosure arrow: revealed only once there are detail items to show.
+        self.disclosure = QToolButton()
+        self.disclosure.setObjectName("Disclose")
+        self.disclosure.setArrowType(Qt.ArrowType.RightArrow)
+        self.disclosure.setCheckable(True)
+        self.disclosure.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.disclosure.setVisible(False)
+        self.disclosure.toggled.connect(self._on_disclosure)
+
         inner = QFrame()
         inner.setObjectName("RowCard")
         row = QHBoxLayout(inner)
@@ -337,11 +364,83 @@ class TaskRow(QFrame):
         row.setSpacing(10)
         row.addLayout(text, 1)
         row.addWidget(self.badge, 0, Qt.AlignVCenter)
+        row.addWidget(self.disclosure, 0, Qt.AlignVCenter)
         row.addWidget(self.switch, 0, Qt.AlignVCenter)
+
+        # Collapsible detail panel: the changed-package list, plus (system only)
+        # a link that fetches the exact download size on demand.
+        self._items: list[str] = []
+        self.details = QFrame()
+        self.details.setObjectName("RowDetails")
+        self.details.setVisible(False)
+        dcol = QVBoxLayout(self.details)
+        dcol.setContentsMargins(16, 0, 16, 12)
+        dcol.setSpacing(8)
+
+        self._items_label = QLabel("")
+        self._items_label.setObjectName("DetailList")
+        self._items_label.setTextFormat(Qt.TextFormat.PlainText)
+        scroll = QScrollArea()
+        scroll.setObjectName("DetailScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setMaximumHeight(180)
+        scroll.setWidget(self._items_label)
+        dcol.addWidget(scroll)
+
+        self.size_btn = QPushButton("Show download size")
+        self.size_btn.setObjectName("LinkBtn")
+        self.size_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.size_btn.clicked.connect(lambda: self.size_requested.emit(self.key))
+        self.size_result = QLabel("")
+        self.size_result.setObjectName("SizeResult")
+        self.size_result.setVisible(False)
+        self._has_size = False  # explicit — survives the panel being collapsed
+        if key == "system":
+            srow = QHBoxLayout()
+            srow.setSpacing(10)
+            srow.addWidget(self.size_btn, 0)
+            srow.addWidget(self.size_result, 0)
+            srow.addStretch(1)
+            dcol.addLayout(srow)
+        else:
+            self.size_btn.setVisible(False)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(1, 1, 1, 1)  # 1px gradient border
+        outer.setSpacing(0)
         outer.addWidget(inner)
+        outer.addWidget(self.details)
+
+    def _on_disclosure(self, on: bool):
+        self.details.setVisible(on)
+        self.disclosure.setArrowType(
+            Qt.ArrowType.DownArrow if on else Qt.ArrowType.RightArrow)
+
+    def add_detail_item(self, name: str, frm: str, to: str):
+        """Append one changed package to the panel (name  old → new)."""
+        line = f"{name:<32}  {frm}  →  {to}" if (frm or to) else name
+        self._items.append(line)
+        self._items_label.setText("\n".join(self._items))
+        self.disclosure.setVisible(True)
+
+    def set_size_result(self, text: str):
+        """Show the download-size figure and retire the "Show download size" link."""
+        self.size_btn.setVisible(False)
+        self.size_result.setText(text)
+        self.size_result.setVisible(True)
+        self._has_size = True
+
+    def size_pending(self):
+        self.size_btn.setEnabled(False)
+        self.size_btn.setText("Calculating…")
+
+    def size_failed(self):
+        """Re-arm the link so the user can retry after a failed size fetch."""
+        self.size_btn.setEnabled(True)
+        self.size_btn.setText("Show download size")
+
+    def has_size(self) -> bool:
+        return self._has_size
 
     def set_badge(self, text: str):
         self._badge_text = text
@@ -361,6 +460,21 @@ class TaskRow(QFrame):
         self._badge_text = ""
         self._timing = ""
         self.badge.setVisible(False)
+
+    def clear_details(self):
+        """Reset the expandable panel between runs."""
+        self._items = []
+        self._items_label.setText("")
+        self.disclosure.setChecked(False)
+        self.disclosure.setVisible(False)
+        self.details.setVisible(False)
+        self.size_result.setVisible(False)
+        self.size_result.setText("")
+        self._has_size = False
+        if self.key == "system":
+            self.size_btn.setVisible(True)
+            self.size_btn.setEnabled(True)
+            self.size_btn.setText("Show download size")
 
 
 # --- repository listing / management ---------------------------------------
@@ -685,7 +799,8 @@ class Updater(QMainWindow):
         # Task rows — each a gradient-bordered card.
         self.rows: dict[str, TaskRow] = {}
         for key, title, desc in TASKS:
-            r = TaskRow(title, desc)
+            r = TaskRow(key, title, desc)
+            r.size_requested.connect(self.request_size)
             self.rows[key] = r
             root.addWidget(r)
 
@@ -1017,6 +1132,55 @@ for (var i = 0; i < clients.length; i++) {{
         if self._failed_steps:
             self._launch(list(self._failed_steps), check=False)
 
+    def request_size(self, key: str):
+        """Fetch the exact download size for a step on demand (system only). Runs
+        the engine's --size mode, which authenticates and does a `zypper dup
+        --dry-run`, so it stays out of the password-free --check path."""
+        if key != "system" or not ENGINE.exists():
+            return
+        row = self.rows.get(key)
+        if not row:
+            return
+        proc = getattr(self, "_size_proc", None)
+        if proc is not None and proc.state() != QProcess.NotRunning:
+            return  # a fetch is already in flight
+        row.size_pending()
+        self._size_buf = ""
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        size_log = LOG_DIR / f"{stamp}.size.log"
+        p = QProcess(self)
+        p.setProcessChannelMode(QProcess.MergedChannels)
+        p.readyReadStandardOutput.connect(self._on_size_output)
+        p.finished.connect(self._on_size_finished)
+        self._size_proc = p
+        p.start("bash", [str(ENGINE), f"--size={key}", f"--log={size_log}"])
+
+    def _on_size_output(self):
+        chunk = bytes(self._size_proc.readAllStandardOutput()).decode(errors="replace")
+        self._size_buf = (self._size_buf + chunk).replace("\r\n", "\n").replace("\r", "\n")
+        while "\n" in self._size_buf:
+            line, self._size_buf = self._size_buf.split("\n", 1)
+            if line.startswith("@@SIZE@@|"):
+                parts = line[len("@@SIZE@@|"):].split("|")
+                if len(parts) >= 2:
+                    row = self.rows.get(parts[0])
+                    if row:
+                        row.set_size_result(f"↓ {parts[1]} to download")
+            elif not line.startswith("@@"):
+                self.log.appendPlainText(line)
+
+    def _on_size_finished(self, exit_code: int, _status):
+        row = self.rows.get("system")
+        if not row or row.has_size():
+            return
+        # No SIZE marker arrived. Exit 0 = solver found nothing to fetch; non-zero
+        # = auth cancelled or an error, so re-arm the link for a retry.
+        if exit_code == 0:
+            row.set_size_result("Nothing to download")
+        else:
+            row.size_failed()
+
     def _launch(self, steps: list[str], check: bool):
         if not steps:
             QMessageBox.information(self, "Nothing selected",
@@ -1048,6 +1212,7 @@ for (var i = 0; i < clients.length; i++) {{
         self.rollback_btn.setVisible(False)
         for r in self.rows.values():
             r.clear_badge()
+            r.clear_details()
         self.log.clear()
 
         LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -1168,6 +1333,14 @@ for (var i = 0; i < clients.length; i++) {{
                 if row:
                     n = int(count) if count.isdigit() else 0
                     row.set_badge(f"{n} available" if n > 0 else "up to date")
+        elif tag == "CHECK_ITEM":
+            # One changed package for the expandable preview: key|name|from|to.
+            if len(parts) >= 2:
+                row = self.rows.get(parts[0])
+                if row:
+                    frm = parts[2] if len(parts) > 2 else ""
+                    to = parts[3] if len(parts) > 3 else ""
+                    row.add_detail_item(parts[1], frm, to)
         elif tag == "INSTALLED":
             self._installed_count = parts[0]
             self._sys_changed = len(parts) > 1 and parts[1] == "yes"

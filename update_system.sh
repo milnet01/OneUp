@@ -35,6 +35,7 @@ LOG_DIR="$HOME/Documents/update-logs"
 LOG_FILE=""
 CHECK_ONLY=false   # --check: report what WOULD update, install nothing, no root
 NOTIFY=false       # --notify: fire a desktop notification if updates are found
+SIZE_STEP=""       # --size=<step>: on-demand exact download size (needs root)
 
 usage() {
     cat <<EOF
@@ -62,6 +63,7 @@ for arg in "$@"; do
         --steps=*) STEPS="${arg#*=}" ;;
         --log=*)   LOG_FILE="${arg#*=}" ;;
         --check)   CHECK_ONLY=true ;;
+        --size=*)  SIZE_STEP="${arg#*=}" ;;
         --notify)  NOTIFY=true ;;
         --help|-h) usage; exit 0 ;;
         *) echo "Unknown option: $arg" >&2; usage >&2; exit 2 ;;
@@ -86,6 +88,8 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 #   @@TIMING@@|key|seconds               (how long the step took)
 #   @@SNAPSHOT@@|id
 #   @@CHECK@@|key|count|label            (--check mode: updates available)
+#   @@CHECK_ITEM@@|key|name|from|to      (--check mode: one changed package)
+#   @@SIZE@@|key|download                (--size mode: total download size)
 #   @@DISK@@|warn|mount|free             (pre-flight: low disk space)
 #   @@REPO@@|warn|reason                 (pre-flight: repo health issue)
 #   @@HINT@@|plain-English failure hint
@@ -169,17 +173,37 @@ run_check() {
     echo "Checking for available updates (read-only)…"
     local total=0 n
     if step_selected system; then
+        # Read the upgrade list once: the count AND the per-package detail (name,
+        # current → available version) the GUI shows in its expandable preview both
+        # come from it. LC_ALL=C keeps the column layout parseable on any locale.
+        local updates
+        updates=$(LC_ALL=C zypper --no-refresh --non-interactive list-updates 2>/dev/null)
         # Upgradable packages have a 'v' in zypper's status column.
-        n=$(zypper --no-refresh --non-interactive list-updates 2>/dev/null \
-            | grep -cE '^v[[:space:]]*\|')
+        n=$(grep -cE '^v[[:space:]]*\|' <<<"$updates")
         marker CHECK "system|$n|system package(s)"
+        # Columns: S | Repository | Name | Current | Available | Arch. Trim each
+        # field and emit one CHECK_ITEM per package (one awk pass, no per-line fork).
+        while IFS='|' read -r name cur avail; do
+            [[ -n "$name" ]] && marker CHECK_ITEM "system|$name|$cur|$avail"
+        done < <(awk -F'|' '/^v[[:space:]]*\|/ {
+                    for (i=3;i<=5;i++) gsub(/^[ \t]+|[ \t]+$/,"",$i); print $3"|"$4"|"$5 }' \
+                 <<<"$updates")
         echo "  System packages: $n update(s)"
         (( total += n ))
     fi
     if step_selected flatpak && command -v flatpak &>/dev/null; then
-        n=$(( $(flatpak remote-ls --updates --user 2>/dev/null | wc -l) \
-            + $(flatpak remote-ls --updates --system 2>/dev/null | wc -l) ))
+        # --columns pins the output to app-id + version so both the count and the
+        # per-app detail parse the same way regardless of flatpak's default columns.
+        local flatpaks
+        flatpaks=$(
+            flatpak remote-ls --updates --user --columns=application,version 2>/dev/null
+            flatpak remote-ls --updates --system --columns=application,version 2>/dev/null
+        )
+        n=$(grep -c '[^[:space:]]' <<<"$flatpaks")
         marker CHECK "flatpak|$n|Flatpak app(s)"
+        while read -r app ver _rest; do
+            [[ -n "$app" ]] && marker CHECK_ITEM "flatpak|$app||$ver"
+        done <<<"$flatpaks"
         echo "  Flatpak apps: $n update(s)"
         (( total += n ))
     fi
@@ -196,6 +220,45 @@ run_check() {
             "$total update(s) ready to install. Open OneUp to update."
     fi
     marker DONE "ok"
+}
+
+# ---------------------------------------------------------------------------
+# --size=<step>: on-demand exact download size for one step, for the GUI's "Show
+# download size" link. Unlike --check this NEEDS root — it asks the solver (a
+# --dry-run of the real transaction) for the total, which zypper won't compute
+# unprivileged. Kept separate so the rootless weekly --check stays password-free.
+# Mirrors the system step's command so the figure matches what a real run fetches.
+# ---------------------------------------------------------------------------
+run_size() {
+    local step="$1" out size
+    if [[ "$step" != "system" ]]; then
+        echo "Download-size preview is only available for the system step." >&2
+        return 2
+    fi
+    sudo_init
+    release_zypper_lock
+    echo "Calculating download size (dry run)…"
+    if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
+        out=$(sudo env LC_ALL=C zypper --non-interactive update --dry-run 2>&1)
+    else
+        out=$(sudo env LC_ALL=C zypper --non-interactive dup --allow-vendor-change --dry-run 2>&1)
+    fi
+    # zypper prints e.g. "Overall download size: 1.3 GiB. Already cached: 0 B."
+    # Capture the number+unit (LC_ALL=C above pins '.' as the decimal point, so the
+    # value can't run into the trailing sentence).
+    size=$(sed -n 's/.*Overall download size: \([0-9.]\+ [A-Za-z]\+\).*/\1/p' \
+        <<<"$out" | head -n1)
+    if [[ -n "$size" ]]; then
+        marker SIZE "system|$size"
+        echo "  Download size: $size"
+        marker DONE "ok"
+    else
+        # No size line = nothing to fetch (up to date / all cached). Report zero so
+        # the GUI shows a definitive answer rather than treating it as a failure.
+        marker SIZE "system|0 B"
+        echo "  Download size: nothing to fetch."
+        marker DONE "ok"
+    fi
 }
 
 if $CHECK_ONLY; then
@@ -253,6 +316,14 @@ release_zypper_lock() {
         sudo systemctl stop packagekit 2>/dev/null || true
     fi
 }
+
+# --size=<step>: report the download size and exit, never falling through into a
+# real update. Placed here so run_size can reuse sudo_init/release_zypper_lock,
+# both of which are now defined.
+if [[ -n "$SIZE_STEP" ]]; then
+    run_size "$SIZE_STEP"
+    exit $?
+fi
 
 # Firmware uses polkit for its own elevation; every other root step reuses the
 # cached sudo credential, so we only bootstrap when a sudo step is selected.

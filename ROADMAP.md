@@ -115,3 +115,46 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Follow-up tweaks to the Repositories popup so it's easier to read and use.
   Kind: ux.
   Source: user-request-2026-07-21 (follow-ups to ONEUP-0015).
+
+- ✅ [ONEUP-0017] **Preview what will change (package list + download size) before running.**
+  Extend the read-only Check pass to parse `zypper dup --dry-run` (and flatpak/fwupd equivalents) and surface the package list, version deltas and total download size in an expandable panel per task. Reuses the existing CHECK marker plumbing.
+  **Layman:** Before you hit Update, see the actual packages that will change (old to new version) and the total download size, not just a count.
+  Kind: feature.
+  Source: user-request-2026-07-21.
+  Resolved (2026-07-21): --check now emits @@CHECK_ITEM@@ per changed package (name, old→new version), shown in an expandable per-task panel; system row has an on-demand "Show download size" link that runs the new --size=system engine mode (authenticates, parses zypper dup --dry-run). Rootless list stays password-free.
+
+- 📋 [ONEUP-0018] **Add a system-tray icon that goes 'ready' when updates are waiting.**
+  QSystemTrayIcon reflecting the weekly background check result; right-click menu to run now / open the window / dismiss. Tolerate desktops without a tray.
+  **Layman:** A small icon near the clock that quietly turns amber when updates are waiting, with right-click run/launch, instead of relying on catching a weekly popup.
+  Kind: feature.
+  Source: user-request-2026-07-21.
+
+- 📋 [ONEUP-0019] **Call out kernel and graphics-driver updates by name in the reboot advice.**
+  Detect kernel / DKMS / graphics-driver packages in the installed set and pass a reason string through the REBOOT/INSTALLED marker so the banner can name them.
+  **Layman:** When a reboot is advised, say why in plain English - e.g. a new kernel and your NVIDIA driver were installed - instead of a generic 'reboot advised'.
+  Kind: enhancement.
+  Source: user-request-2026-07-21.
+
+- 📋 [ONEUP-0020] **Let the user pick which snapshot to roll back to, not just the last one.**
+  Enumerate recent Snapper snapshots (snapper list) in a dialog; roll back to the chosen one. Builds on the existing rollback path.
+  **Layman:** List recent restore points with dates so you can undo a problem that started two updates ago, not only the most recent run.
+  Kind: feature.
+  Source: user-request-2026-07-21.
+
+- 📋 [ONEUP-0021] **Warn when Btrfs snapshots are eating the disk, and offer to thin them.**
+  Measure /.snapshots usage in the pre-flight/DISK check; when high, surface a HINT and offer a guarded snapper cleanup. Extends the existing disk-space warning.
+  **Layman:** Snapshots quietly fill the disk on Tumbleweed; warn when they are using a lot of space and offer a one-click cleanup - like the existing low-disk warning.
+  Kind: feature.
+  Source: user-request-2026-07-21.
+
+- 📋 [ONEUP-0022] **Add an optional unattended (scheduled full-update) mode, off by default.**
+  Systemd timer that runs the engine (not just --check) on a schedule, reusing the snapshot/rollback safety. Off by default; opt-in from the GUI alongside the weekly-check toggle.
+  **Layman:** A true set-and-forget option: run the whole update on a schedule with the existing snapshot + rollback safety net, for people who never want to think about it.
+  Kind: feature.
+  Source: user-request-2026-07-21.
+
+- 📋 [ONEUP-0023] **Add an opt-in "remember my authorization" mode (no password stored).**
+  Deliberately does NOT store the sudo password (encrypting a password the app must itself decrypt is obfuscation, not security, and a stored root password breaks OneUp's 'GUI never touches root' design). Instead install a scoped, revocable sudoers drop-in (/etc/sudoers.d/oneup) that lets the user run OneUp's update commands (zypper, snapper, systemctl stop packagekit) without a password. Toggle on = install the drop-in (validated with visudo -c) after one authenticating prompt; toggle off = remove it. This is also the mechanism the unattended-updates mode (ONEUP-0022) needs. Consider session-only vs permanent scoping.
+  **Layman:** An opt-in setting so OneUp stops asking for your password every time - the operating system remembers the decision, not the password. Off by default; leave it off and it prompts as it does now. Turn it off to revoke instantly.
+  Kind: feature.
+  Source: user-request-2026-07-21.

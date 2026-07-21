@@ -54,8 +54,10 @@ They communicate through a **line-based marker protocol**: the engine prints
 progress bars, badges, and banners. Non-marker lines are plain log output. The markers are
 the contract between the two files — **changing a marker's name or field layout in one file
 means updating the parser in the other, and the assertions in `tests/run-tests.sh`.**
-Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `SNAPSHOT`, `CHECK`, `DISK`, `REPO`,
-`HINT`, `SERVICES`, `INSTALLED`, `REBOOT`, `DONE`. (`INSTALLED|count|sys_changed|fw_changed`
+Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `SNAPSHOT`, `CHECK`, `CHECK_ITEM`,
+`SIZE`, `DISK`, `REPO`, `HINT`, `SERVICES`, `INSTALLED`, `REBOOT`, `DONE`.
+(`CHECK_ITEM|key|name|from|to` carries one changed package for the `--check` preview
+panel; `SIZE|key|download` carries the on-demand download-size figure from `--size=<step>`.) (`INSTALLED|count|sys_changed|fw_changed`
 carries the change summary the GUI uses to decide the reboot/rollback banners;
 `TIMING|key|seconds` carries each step's duration, appended to its row badge.)
 
