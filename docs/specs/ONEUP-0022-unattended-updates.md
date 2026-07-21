@@ -93,8 +93,8 @@ prompt + keep-alive, exactly as today).
 ("Updates available"). Extend it to also fire **at the end of a full run** with the outcome,
 reusing the existing `notify_send` helper (update_system.sh:115–117) and the run summary the
 engine already computes — `SYS_COUNT` (the installed-package count, read for the summary at
-~740), the `SYS_CHANGED` / `FW_CHANGED` booleans, and `ERRORS` (defined ~150, tallied for the
-summary ~750):
+~740), the `SYS_CHANGED` / `FW_CHANGED` booleans, and `ERRORS` (defined ~150, read for the
+summary ~751):
 
 - something installed → `notify_send "Update complete" "<n> packages installed…"`
 - nothing to do → `notify_send "Already up to date" "…"`
@@ -139,7 +139,8 @@ summary ~750):
     engine absent the async chain hits `_query_auth_status`'s early return (updater.py:1099–1100)
     and **no settle ever fires** — so if the toggle had already been disabled and latched, it
     would be stuck disabled forever. With the engine present: set the one-shot
-    `self._pending_autoupdate = True` latch, **disable the auto-update toggle for the duration
+    `self._pending_autoupdate = True` latch (initialised to `False` in `Updater.__init__`, so
+    the first settle never hits an `AttributeError`), **disable the auto-update toggle for the duration
     of the async op** (as `_run_auth` disables `auth_btn` at updater.py:1148 — this closes the
     mirror race where a user un-clicks mid-probe and the settle then forces the toggle back on;
     it is re-enabled in the settle). Then branch on the reflected switch:
