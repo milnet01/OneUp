@@ -38,8 +38,11 @@ toggles move into a **Settings** popup:
 
 - **Header** loses the two toggle buttons and gains a single **⚙ Settings** button.
   Final header: `Settings · Repositories · Recenter · About` (4 controls). The window
-  minimum width, raised to 720 for five controls in ONEUP-0023, drops back to 560.
-- **`SettingsDialog(QDialog)`** — modeled on `RepoManagerDialog`: created lazily, re-centred
+  minimum width (currently 720, sized for five header controls — updater.py:723) drops back
+  to 560 now that the header carries four.
+- **`SettingsDialog(QDialog)`** (distinct from the existing `self.settings` `QSettings`
+  handle and the "Settings" header button) — modeled on `RepoManagerDialog`: created lazily,
+  re-centred
   over the main window on show. Three rows, each a one-line plain-English description plus a
   toggle:
   - **Weekly check** — the existing `oneup-check.*` timer toggle (behaviour unchanged).
@@ -78,20 +81,39 @@ no-op without `notify-send` present (as it is today).
 - **New timer pair** `oneup-update.{service,timer}`: `OnCalendar=weekly`, `Persistent=true`,
   `Type=oneshot`, `ExecStart=<headless command> --update`. `--update` runs the engine full
   (all steps) with `--notify`.
-- **New headless entrypoint.** `main()` gains `--update` alongside `--check`:
-  `_headless_update()` runs `bash <engine> --notify` (all steps) and returns its exit code —
-  twin of `_headless_check()`.
+- **New headless entrypoint.** `--update` is a **GUI-only** flag consumed by `updater.py`'s
+  `main()` (twin of `--check`); it is **never passed to the engine**. `main()` dispatches it
+  to `_headless_update()`, which runs `bash <engine> --notify` (no `--update`) — all steps,
+  since the engine's default `STEPS` is every step — and returns the engine's exit code. The
+  engine's arg parser rejects unknown flags with `exit 2` (update_system.sh:79), so the
+  `--update` token must not reach it.
 - **Auto-update state** is read like weekly-check: `systemctl --user is-enabled
   oneup-update.timer`.
-- **Coupling (rule 2 — enable):** `on_autoupdate_toggled(on=True)` first checks the real
-  passwordless state (the engine `--auth-status` probe already used by ONEUP-0023). If
-  passwordless is **off**, show one dialog ("Automatic updates need Passwordless…"); on
-  approval, run the passwordless grant, and on its success install the update timer; on
-  cancel, revert the auto-update toggle to off. If passwordless is already **on**, install
-  the timer directly.
-- **Coupling (rule 3 — revoke):** in the passwordless-off path of `on_auth_toggled`
-  (revoke), if the auto-update timer is enabled, remove it and reflect the auto-update
-  toggle as off, with a one-line note.
+- **Coupling (rule 2 — enable).** The passwordless grant is **asynchronous and gives no
+  synchronous success return** — `_run_auth` starts a `QProcess`; `_on_auth_finished`
+  re-probes via `_query_auth_status`, whose result settles later in
+  `_on_auth_status_finished` (updater.py:1144–1168). A cancelled `ksshaskpass` popup and a
+  successful grant both flow through that same re-probe. So the enable flow cannot "install
+  the timer on grant success" inline; it must chain on the async settle:
+  - `on_autoupdate_toggled(on=True)`: read the **reflected** passwordless state — the
+    dialog's passwordless switch, which its open-time `--auth-status` probe already set.
+    (No new synchronous state read is invented; the switch is the current truth.)
+  - If passwordless is **already on** → install the update timer directly (synchronous, like
+    weekly-check).
+  - If passwordless is **off** → show one dialog ("Automatic updates need Passwordless…").
+    On **cancel**, revert the auto-update toggle to off, no further action. On **approval**,
+    set a one-shot `self._pending_autoupdate = True` latch and start the passwordless grant.
+  - The settle point (`_on_auth_status_finished`) checks the latch: if set **and**
+    passwordless is now **on**, install the update timer and set the auto-update toggle on;
+    if set and passwordless came back **off** (popup cancelled, `visudo` rejected, grant
+    failed), leave auto-update off and surface the same `@@HINT@@`/note the grant already
+    shows. Clear the latch either way.
+- **Coupling (rule 3 — revoke).** Hooked to the revoke **action** (the `on=False` branch of
+  `on_auth_toggled`), not to the toggle signal — the programmatic `blockSignals` set used to
+  reflect probed state must not trip it. When the user revokes passwordless, if the
+  auto-update timer is enabled, remove it and reflect the auto-update switch as off via a
+  `blockSignals` set (no re-fire of `on_autoupdate_toggled`), with a one-line note. Removal
+  is a local systemd-user operation, independent of the revoke process's own outcome.
 
 ## Correctness invariants
 
@@ -105,6 +127,21 @@ no-op without `notify-send` present (as it is today).
   off at next boot.
 - **Marker contract untouched.** No engine marker is added, renamed, or re-laid-out, so
   `CLAUDE.md`'s marker list and the parser need no change.
+
+## Failure modes
+
+Every path that does not end in a working, passwordless-backed timer must leave the
+auto-update toggle **off** and tell the user why — never a silent half-state.
+
+| Situation | Behaviour |
+|-----------|-----------|
+| Engine binary missing (`ENGINE.exists()` false) | Auto-update can't be enabled; toggle reverts to off (mirrors `_query_auth_status` returning early at updater.py:1101). |
+| Combined-enable dialog cancelled | Both stay off; no grant started, no latch set. |
+| Passwordless popup cancelled / `visudo` rejects / grant process fails | Re-probe reports passwordless **off**; the pending-enable latch resolves to "leave auto-update off" and surfaces the grant's `@@HINT@@`. |
+| `_install_user_timer` raises `OSError` (can't write `~/.config/systemd/user`) | Caught and shown via `QMessageBox.warning`, mirroring `on_autocheck_toggled`'s existing handler (updater.py:1078); auto-update toggle reverts to off. |
+| `systemctl --user enable` non-zero | Timer files exist but aren't active; treated as install failure — toggle reverts to off (same `check=False` + state re-read pattern as weekly-check). |
+| Revoke of passwordless while auto-update on | Auto-update timer removed regardless of the revoke process's outcome (removal is a local systemd-user op); auto-update switch reflected off with a note. |
+| Unattended run itself fails at 2am | Engine records the failure, continues remaining steps, and the end-of-run `--notify` fires "Update failed — see log" (no new behaviour — same engine path as a manual run). |
 
 ## Tests
 
