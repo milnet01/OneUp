@@ -19,6 +19,24 @@ is watching to answer it. An unattended run can therefore only succeed when the 
 sudoers drop-in from ONEUP-0023 is active. This is a technical constraint, not a preference,
 and it drives the two coupling rules below.
 
+**A gap this feature must close first.** The drop-in makes the engine's *per-command* calls
+passwordless — `sudo zypper …`, `sudo snapper …`, `sudo flatpak …`, `sudo systemctl stop
+packagekit` all match the scoped `NOPASSWD` rule. But the engine's up-front bootstrap
+`sudo_init` (update_system.sh:285–290) runs `sudo -A … -v` — a credential *validation*, not
+one of those commands. `sudo -v` is governed by sudoers' `verifypw` option, whose **default
+is `all`**: a password is skipped only when *every* one of the user's sudoers entries is
+`NOPASSWD`. A normal user also has a password-required `%wheel` entry, so `sudo -v` prompts —
+which aborts a headless run at update_system.sh:288, and even makes a *manual* run under
+passwordless still prompt once. So the engine needs a change (below) to skip `sudo_init`'s
+interactive validate when the drop-in is active; this both unblocks the unattended run and
+completes ONEUP-0023's prompt-free promise for the GUI path.
+
+**Firmware is the exception.** `fwupdmgr` elevates through **polkit**, not sudo
+(update_system.sh:440, 617–623), so the sudoers drop-in does not cover it. Under an
+unattended run the firmware step may be unable to authorize and will **fail cleanly** — the
+run continues and the notification reports it. The four sudo-backed steps (system, flatpak,
+orphans, cache) carry the bulk of the value and do run passwordless.
+
 ## Scope decisions (agreed with the user)
 
 1. **Schedule granularity:** weekly only — one toggle, `OnCalendar=weekly`,
@@ -57,16 +75,30 @@ lays the controls out and is created once, so the buttons live in it permanently
 
 ## Engine change (`update_system.sh`)
 
-Today `--notify` fires only in `--check` mode ("Updates available"). Extend it to also fire
-**at the end of a full run** with the outcome, reusing the existing `notify_send` helper and
-the run summary the engine already computes:
+Two changes, both additive; no new markers, no new step keys, no change to the marker
+contract.
+
+**1. Skip the interactive bootstrap when passwordless is active.** `sudo_init` currently
+always runs `sudo -A … -v` + starts a keep-alive loop (update_system.sh:285–303). Add a
+guard at the top: probe the drop-in with the **same non-interactive scoped check the engine
+already uses** for `--auth-status` — `sudo -k -n "$(command -v zypper)" --version` (line 416)
+— and if it succeeds, `return 0` immediately (no interactive `-v`, no keep-alive). Every
+privileged command the engine issues is individually `NOPASSWD`, so no cached credential is
+needed. This is correct whether or not `sudo -v` would have prompted: when the drop-in is
+active, skipping the validate is at worst harmless and at best the thing that makes a headless
+run possible. When the drop-in is **absent**, `sudo_init` is unchanged (one interactive
+prompt + keep-alive, exactly as today).
+
+**2. Notify at the end of a full run.** Today `--notify` fires only in `--check` mode
+("Updates available"). Extend it to also fire **at the end of a full run** with the outcome,
+reusing the existing `notify_send` helper (update_system.sh:115–117) and the run summary the
+engine already computes (`SYS_CHANGED` / `FW_CHANGED` / `ERRORS`, ~683–766):
 
 - something installed → `notify_send "Update complete" "<n> packages installed…"`
 - nothing to do → `notify_send "Already up to date" "…"`
 - one or more steps failed → `notify_send "Update failed" "See the log: <path>"`
 
-No new markers, no new step keys, no change to the marker contract. `--notify` remains a
-no-op without `notify-send` present (as it is today).
+`--notify` remains a no-op without `notify-send` present (as it is today).
 
 ## GUI change (`updater.py`)
 
@@ -90,19 +122,21 @@ no-op without `notify-send` present (as it is today).
 - **Auto-update state** is read like weekly-check: `systemctl --user is-enabled
   oneup-update.timer`.
 - **Coupling (rule 2 — enable).** The passwordless grant is **asynchronous and gives no
-  synchronous success return** — `_run_auth` starts a `QProcess`; `_on_auth_finished`
-  re-probes via `_query_auth_status`, whose result settles later in
-  `_on_auth_status_finished` (updater.py:1144–1168). A cancelled `ksshaskpass` popup and a
-  successful grant both flow through that same re-probe. So the enable flow cannot "install
-  the timer on grant success" inline; it must chain on the async settle:
+  synchronous success return** — `_run_auth` (updater.py:1144) starts a `QProcess`;
+  `_on_auth_finished` (1158) re-probes via `_query_auth_status`, whose result settles later
+  in `_on_auth_status_finished` (1112). A cancelled `ksshaskpass` popup and a successful
+  grant both flow through that same re-probe. So the enable flow cannot "install the timer on
+  grant success" inline; it must chain on the async settle:
   - `on_autoupdate_toggled(on=True)`: read the **reflected** passwordless state — the
     dialog's passwordless switch, which its open-time `--auth-status` probe already set.
     (No new synchronous state read is invented; the switch is the current truth.)
   - If passwordless is **already on** → install the update timer directly (synchronous, like
     weekly-check).
   - If passwordless is **off** → show one dialog ("Automatic updates need Passwordless…").
-    On **cancel**, revert the auto-update toggle to off, no further action. On **approval**,
-    set a one-shot `self._pending_autoupdate = True` latch and start the passwordless grant.
+    On **cancel**, revert the auto-update toggle to off via a `blockSignals` set (as
+    `_set_auth_checked` does at updater.py:1089–1091, so the revert doesn't re-fire
+    `on_autoupdate_toggled`), no further action. On **approval**, set a one-shot
+    `self._pending_autoupdate = True` latch and start the passwordless grant.
   - The settle point (`_on_auth_status_finished`) checks the latch: if set **and**
     passwordless is now **on**, install the update timer and set the auto-update toggle on;
     if set and passwordless came back **off** (popup cancelled, `visudo` rejected, grant
@@ -135,11 +169,11 @@ auto-update toggle **off** and tell the user why — never a silent half-state.
 
 | Situation | Behaviour |
 |-----------|-----------|
-| Engine binary missing (`ENGINE.exists()` false) | Auto-update can't be enabled; toggle reverts to off (mirrors `_query_auth_status` returning early at updater.py:1101). |
+| Engine binary missing (`ENGINE.exists()` false) | Auto-update can't be enabled; toggle reverts to off (as `_query_auth_status` returns early when the engine is absent, updater.py:1100). |
 | Combined-enable dialog cancelled | Both stay off; no grant started, no latch set. |
 | Passwordless popup cancelled / `visudo` rejects / grant process fails | Re-probe reports passwordless **off**; the pending-enable latch resolves to "leave auto-update off" and surfaces the grant's `@@HINT@@`. |
-| `_install_user_timer` raises `OSError` (can't write `~/.config/systemd/user`) | Caught and shown via `QMessageBox.warning`, mirroring `on_autocheck_toggled`'s existing handler (updater.py:1078); auto-update toggle reverts to off. |
-| `systemctl --user enable` non-zero | Timer files exist but aren't active; treated as install failure — toggle reverts to off (same `check=False` + state re-read pattern as weekly-check). |
+| `_install_user_timer` raises `OSError` (can't write `~/.config/systemd/user`) | Caught and shown via `QMessageBox.warning`, then the toggle is reverted to off. **New logic:** the existing `on_autocheck_toggled` catches `OSError` and warns but does *not* revert its toggle (updater.py:1078–1080); auto-update adds the explicit revert so it never shows on after a failed install. |
+| `systemctl --user enable` non-zero | The `subprocess.run(..., check=False)` calls don't raise, so after install `_install_user_timer` **re-probes** with `systemctl --user is-enabled oneup-update.timer` and returns that boolean; a non-`enabled` result reverts the toggle to off. (This explicit post-op re-probe is new; weekly-check does not currently verify its enable — see Open questions.) |
 | Revoke of passwordless while auto-update on | Auto-update timer removed regardless of the revoke process's outcome (removal is a local systemd-user op); auto-update switch reflected off with a note. |
 | Unattended run itself fails at 2am | Engine records the failure, continues remaining steps, and the end-of-run `--notify` fires "Update failed — see log" (no new behaviour — same engine path as a manual run). |
 
@@ -148,6 +182,11 @@ auto-update toggle **off** and tell the user why — never a silent half-state.
 - **Engine (`tests/run-tests.sh`):** a full run with `--notify` and a mock `notify-send`
   asserts one notification fires with the outcome text (installed / up-to-date / failed
   variants). `--check --notify` behaviour is unchanged (existing tests stay green).
+- **Engine — passwordless bootstrap skip:** with a mock `sudo` where `-k -n zypper --version`
+  **succeeds** (drop-in active), a full run completes and issues **no interactive `sudo -A …
+  -v`** (the mock exits non-zero if `-A` is ever invoked); with the probe **failing**
+  (drop-in absent), the run still performs the one interactive `sudo -A … -v` as today. This
+  is the regression that proves an unattended run can authenticate.
 - **GUI smoke (`tests/gui-smoke.py`):** Auto-update defaults off; enabling it with
   passwordless off triggers the combined-enable path (stubbed) and does not install the
   timer on cancel; turning passwordless off with auto-update on clears the auto-update
@@ -162,8 +201,21 @@ auto-update toggle **off** and tell the user why — never a silent half-state.
 - `ROADMAP.md`: flip ONEUP-0022 to shipped with a resolution note once landed.
 - No version bump here — versioning is a separate release step (`./bump.py`).
 
+## Open questions & deliberate non-changes
+
+- **Weekly-check's toggle is not hardened here.** `on_autocheck_toggled` neither reverts its
+  toggle on an `OSError` nor verifies its `systemctl enable` succeeded (updater.py:1066–1080).
+  Auto-update adds both for itself; weekly-check keeps its current behaviour. Whether to
+  back-port the same robustness to weekly-check is a **separate** item, not folded into this
+  feature (it would change shipped behaviour of an unrelated toggle). Flag for the user.
+- **`sudo_init` change touches the manual path too.** Skipping the interactive validate when
+  the drop-in is active also means a *manual* GUI/terminal run under passwordless no longer
+  prompts at bootstrap — the intended completion of ONEUP-0023, but it is a behaviour change
+  to the manual path, so an existing engine test must confirm the non-passwordless manual run
+  is untouched.
+
 ## Out of scope
 
 - Daily / time-of-day scheduling (deferred).
 - A first-run "your first automatic update is due <date>" preview.
-- Any change to how manual runs behave.
+- Any change to the *content* of a manual run (the steps it runs, its markers, its output).
