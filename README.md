@@ -64,6 +64,20 @@ needed, and a run history.
 
 ## Install & run
 
+### openSUSE repository — recommended (auto-updates)
+
+On Tumbleweed, add the repo once and install — OneUp then updates along with the
+rest of your system:
+
+```bash
+sudo zypper addrepo https://download.opensuse.org/repositories/home:/milnet/openSUSE_Tumbleweed/home:milnet.repo
+sudo zypper refresh
+sudo zypper install oneup
+```
+
+Built on the [openSUSE Build Service](https://build.opensuse.org/package/show/home:milnet/oneup)
+and also searchable on [software.opensuse.org](https://software.opensuse.org/package/oneup).
+
 ### AppImage — one file, nothing to install
 
 Grab `OneUp-x86_64.AppImage` from the
@@ -80,11 +94,11 @@ Needs `libfuse2` to run (`sudo zypper install libfuse2`), like any AppImage.
 ### RPM — for `zypper` users
 
 ```bash
-sudo zypper install ./oneup-1.0.0-0.noarch.rpm     # pulls in python3-pyside6
+sudo zypper install ./oneup-*.noarch.rpm     # pulls in python3-pyside6, zypper, sudo…
 oneup
 ```
 
-Or, once it's on OBS (see `packaging/obs/`): `sudo zypper install oneup`.
+Prefer automatic updates? Use the **repository** method above instead.
 
 ### From source
 
