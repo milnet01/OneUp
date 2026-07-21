@@ -23,6 +23,16 @@ jobs:
       - name: Run engine tests
         run: bash tests/run-tests.sh
 
+      # Headless GUI smoke test (offscreen Qt). Mirrors local-CI.sh. A real
+      # assertion failure blocks the release; exit 77 (PySide6/Qt unavailable) is
+      # treated as a skip so an environment quirk can't hold up a tag.
+      - name: GUI smoke test (offscreen)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
+          python -m pip install --quiet PySide6
+          python tests/gui-smoke.py || { rc=$?; [ "$rc" -eq 77 ] && echo "PySide6 unavailable — skipped"; [ "$rc" -eq 77 ] || exit "$rc"; }
+
       - name: Install FUSE (needed to pack the AppImage)
         run: sudo apt-get update && sudo apt-get install -y libfuse2
 

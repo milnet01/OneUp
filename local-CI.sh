@@ -36,6 +36,21 @@ else
     bad "tests/run-tests.sh"; tail -25 /tmp/local-ci-tests.log
 fi
 
+# --- headless GUI smoke test ------------------------------------------------
+# Constructs the PySide6 window offscreen and feeds it engine markers. Exit 77
+# means PySide6 isn't installed here — a skip, not a failure (matches the
+# engine's skip-cleanly-for-absent-tools convention).
+step "GUI smoke test (offscreen)"
+python3 tests/gui-smoke.py >/tmp/local-ci-gui.log 2>&1
+rc=$?
+if [[ $rc -eq 0 ]]; then
+    ok "tests/gui-smoke.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' /tmp/local-ci-gui.log | tail -1)"
+elif [[ $rc -eq 77 ]]; then
+    skip "tests/gui-smoke.py" "PySide6 not installed"
+else
+    bad "tests/gui-smoke.py"; tail -25 /tmp/local-ci-gui.log
+fi
+
 # --- Python syntax ----------------------------------------------------------
 step "Python compile (updater.py)"
 if python3 -m py_compile updater.py bump.py; then ok "py_compile updater.py bump.py"; else bad "py_compile"; fi
