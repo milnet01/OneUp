@@ -62,22 +62,39 @@ builds the AppImage), and — through your configured `osc` — commits the new
 `_service`/`oneup.spec`, which rebuilds the RPM). So the common path is **already
 automated** — you don't need a webhook to get an OBS rebuild on release.
 
-A GitHub → OBS **webhook** only adds value if you want a **bare `git push --tags`**
-(bypassing `release.sh`) to rebuild OBS too. The repo ships the workflow config for
-it at [`.obs/workflows.yml`](../../.obs/workflows.yml) (inert until you complete the
-setup below). It's a one-time wiring:
+A GitHub → OBS **webhook** only adds value if you want a **bare `git push`**
+(bypassing `release.sh`) to poke OBS too. The repo ships the workflow config for it
+at [`.obs/workflows.yml`](../../.obs/workflows.yml) (inert until you complete the
+setup below). It's a one-time wiring — verified 2026-07-21 (home:milnet, token id
+11691):
 
-1. **Create a workflow token on OBS.** Web UI: **Your Account → Tokens → Create
-   Token → *Workflow*** (or `osc token --create --operation workflow --scm-token`).
-   Copy the token secret.
-2. **Add a webhook on GitHub.** Repo **Settings → Webhooks → Add webhook**:
-   - Payload URL: `https://build.opensuse.org/trigger/workflow?id=<TOKEN_ID>`
-   - Content type: `application/json`
-   - Secret: the token secret from step 1
-   - Events: **just the push event** (which carries tag pushes).
-3. **Push a version tag** and watch OBS: the `rebuild_on_tag` workflow in
-   `.obs/workflows.yml` fires `trigger_services`, so OBS re-clones the tag and
-   rebuilds. Verify the build result shows the new version before relying on it.
+1. **Create the OBS workflow token.** OBS web UI: **Your Profile → Tokens → Create
+   Token**, then:
+   - **Type:** `workflow`
+   - **Description:** anything, e.g. `OneUp — rebuild on GitHub push`
+   - **SCM Token:** a **GitHub Personal Access Token** — OBS uses it to talk back to
+     the repo. Create one at GitHub → **Settings → Developer settings → Personal
+     access tokens → Tokens (classic)** with the **`public_repo`** scope (OneUp is
+     public), and paste it here.
+   - **Path for Workflows Configuration File:** `.obs/workflows.yml` (the default —
+     leave it; it's read from the ref that triggered the build).
+   - **URL to Workflows Configuration File:** leave **blank** (a URL, if given,
+     overrides the path).
+
+   On save, OBS shows the token's **Id**, its **Secret** (shown once — save it), and
+   a **trigger URL** like `https://build.opensuse.org/trigger/workflow?id=<ID>`.
+2. **Add the webhook on GitHub.** Repo **Settings → Webhooks → Add webhook**:
+   - **Payload URL:** the token's trigger URL from step 1.
+   - **Content type:** `application/json`
+   - **Secret:** the OBS token **Secret** from step 1 (OBS verifies the payload's
+     HMAC signature with it).
+   - **Events:** *Just the push event* (tag pushes arrive as push events).
+
+   A green "Last delivery was successful" on the webhook's ping means OBS accepted
+   the connection.
+3. **Push** and watch OBS: the `rebuild_on_tag` workflow in `.obs/workflows.yml`
+   fires `trigger_services`, so OBS re-runs the package's services. Verify the build
+   result before relying on it.
 
 > **Caveat (read `.obs/workflows.yml`'s header):** `trigger_services` rebuilds
 > whatever `_service` pins as `<revision>`. `release.sh` keeps that revision in
