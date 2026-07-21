@@ -19,6 +19,11 @@
 #   * Progress markers (lines starting with @@) are for the GUI to parse; in a
 #     terminal they are harmless one-liners.
 
+# Strict mode: -u catches unset-variable typos; -o pipefail surfaces a failure on
+# the left of a pipe. NOT -e — the design deliberately continues past a failed step
+# (via `|| ok=false`) so the end-of-run summary and cache cleanup still happen.
+set -uo pipefail
+
 ASKPASS=/usr/libexec/ssh/ksshaskpass
 
 # ---------------------------------------------------------------------------
