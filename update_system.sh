@@ -28,21 +28,27 @@ ALL_STEPS="system,flatpak,firmware,orphans,cache"
 STEPS="$ALL_STEPS"
 LOG_DIR="$HOME/Documents/update-logs"
 LOG_FILE=""
+CHECK_ONLY=false   # --check: report what WOULD update, install nothing, no root
+NOTIFY=false       # --notify: fire a desktop notification if updates are found
 
 usage() {
     cat <<EOF
 System Updater engine
 
-Usage: $(basename "$0") [--steps=LIST] [--log=FILE] [--help]
+Usage: $(basename "$0") [--steps=LIST] [--check] [--notify] [--log=FILE] [--help]
 
   --steps=LIST   Comma-separated steps to run. Default: all.
                  Available: system, flatpak, firmware, orphans, cache
+  --check        Read-only: report how many updates are available and exit.
+                 Runs WITHOUT root, so it is safe for an unattended timer.
+  --notify       With --check, raise a desktop notification when updates exist.
   --log=FILE     Write the run log here. Default: $LOG_DIR/<timestamp>.log
   --help         Show this help.
 
 Examples:
   $(basename "$0")                       # update everything
   $(basename "$0") --steps=system,cache  # only system packages + cache clean
+  $(basename "$0") --check --notify      # background "updates available?" check
 EOF
 }
 
@@ -50,6 +56,8 @@ for arg in "$@"; do
     case "$arg" in
         --steps=*) STEPS="${arg#*=}" ;;
         --log=*)   LOG_FILE="${arg#*=}" ;;
+        --check)   CHECK_ONLY=true ;;
+        --notify)  NOTIFY=true ;;
         --help|-h) usage; exit 0 ;;
         *) echo "Unknown option: $arg" >&2; usage >&2; exit 2 ;;
     esac
@@ -71,10 +79,18 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 #   @@STEP_BEGIN@@|key|index|total|Human label
 #   @@STEP_END@@|key|ok|skip|fail|detail
 #   @@SNAPSHOT@@|id
+#   @@CHECK@@|key|count|label            (--check mode: updates available)
+#   @@SERVICES@@|svc1 svc2 …             (services to restart instead of rebooting)
 #   @@REBOOT@@|yes|no
 #   @@DONE@@|ok|errors
 # ---------------------------------------------------------------------------
 marker() { printf '@@%s@@|%s\n' "$1" "$2"; }
+
+# Fire a desktop notification (best-effort; silently skipped if unavailable).
+notify_send() {  # title, body
+    command -v notify-send &>/dev/null \
+        && notify-send -a "OneUp" -i za.co.antsprojectshub.OneUp "$1" "$2" 2>/dev/null || true
+}
 
 # Ordered list of the steps we will actually run, and a human label for each.
 declare -a RUN_KEYS
@@ -119,6 +135,49 @@ end_step() {
     [[ "$status" == "fail" ]] && ERRORS=$((ERRORS + 1))
     marker STEP_END "$key|$status|$detail"
 }
+
+# ---------------------------------------------------------------------------
+# --check: read-only "what would update?" pass. Deliberately avoids root (and a
+# password popup) so an unattended timer can run it; it reads cached repo
+# metadata, which the system keeps reasonably fresh, and installs nothing.
+# ---------------------------------------------------------------------------
+run_check() {
+    echo "Checking for available updates (read-only)…"
+    local total=0 n
+    if step_selected system; then
+        # Upgradable packages have a 'v' in zypper's status column.
+        n=$(zypper --no-refresh --non-interactive list-updates 2>/dev/null \
+            | grep -cE '^v[[:space:]]*\|')
+        marker CHECK "system|$n|system package(s)"
+        echo "  System packages: $n update(s)"
+        (( total += n ))
+    fi
+    if step_selected flatpak && command -v flatpak &>/dev/null; then
+        n=$(( $(flatpak remote-ls --updates --user 2>/dev/null | wc -l) \
+            + $(flatpak remote-ls --updates --system 2>/dev/null | wc -l) ))
+        marker CHECK "flatpak|$n|Flatpak app(s)"
+        echo "  Flatpak apps: $n update(s)"
+        (( total += n ))
+    fi
+    if step_selected firmware && command -v fwupdmgr &>/dev/null; then
+        if fwupdmgr get-updates &>/dev/null; then n=1; else n=0; fi
+        marker CHECK "firmware|$n|firmware update(s)"
+        echo "  Firmware: $( ((n > 0)) && echo available || echo up to date)"
+        (( total += n ))
+    fi
+    marker CHECK "TOTAL|$total|updates available"
+    echo "  Total: $total update(s) available."
+    if $NOTIFY && (( total > 0 )); then
+        notify_send "Updates available" \
+            "$total update(s) ready to install. Open OneUp to update."
+    fi
+    marker DONE "ok"
+}
+
+if $CHECK_ONLY; then
+    run_check
+    exit 0
+fi
 
 # ---------------------------------------------------------------------------
 # One-time privilege bootstrap: a single labelled KDE password popup, then a
@@ -335,6 +394,17 @@ marker INSTALLED "${SYS_COUNT}|$($SYS_CHANGED && echo yes || echo no)|$($FW_CHAN
 marker REBOOT "$REBOOT"
 
 # ---------------------------------------------------------------------------
+# Services running against replaced libraries. `zypper ps -sss` prints just the
+# affected systemd service names. When a full reboot is NOT required, restarting
+# these lets the user pick up the new libraries without rebooting.
+# ---------------------------------------------------------------------------
+SERVICES=""
+if $SYS_CHANGED && [[ "$REBOOT" == "no" ]] && command -v zypper &>/dev/null; then
+    SERVICES=$(sudo zypper ps -sss 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+    [[ -n "$SERVICES" ]] && marker SERVICES "$SERVICES"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo
@@ -377,6 +447,10 @@ fi
 if [[ "$REBOOT" == "yes" ]]; then
     echo
     echo "  ! A REBOOT is recommended — $REBOOT_REASON."
+elif [[ -n "$SERVICES" ]]; then
+    echo
+    echo "  ! No reboot needed, but these services should restart to use the new"
+    echo "    libraries:  $SERVICES"
 fi
 echo "  Log saved: $LOG_FILE"
 echo "=========================================="
