@@ -9,6 +9,10 @@ URL:            https://github.com/milnet01/OneUp
 Source0:        oneup-%{version}.tar.gz
 BuildArch:      noarch
 
+# Installed at build time so the icon's /usr/share/icons/hicolor/... parent dirs
+# are owned during the file-list check (also required at runtime, below).
+BuildRequires:  hicolor-icon-theme
+
 # The GUI needs Qt for Python; the engine calls zypper. Everything else is
 # optional — OneUp skips steps for tools that are not installed.
 Requires:       python3-pyside6
