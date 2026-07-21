@@ -102,7 +102,10 @@ notify_send() {  # title, body
 }
 
 # Ordered list of the steps we will actually run, and a human label for each.
-declare -a RUN_KEYS
+# The =() is load-bearing: under `set -u` an array declared but never assigned
+# (empty --steps → no elements appended) counts as unset, so ${#RUN_KEYS[@]}
+# would abort with "unbound variable" before the TOTAL==0 guard could report it.
+declare -a RUN_KEYS=()
 declare -A LABEL=(
     [system]="Updating system packages"
     [flatpak]="Updating Flatpak apps"

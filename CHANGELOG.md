@@ -14,6 +14,10 @@ All notable changes to OneUp are documented here. The format follows
 
 - **Each task row now shows what happened after a real update — e.g. "3 installed", "Up to date", "Updated", "Failed" — not just after a check.**
 
+### Changed
+
+- **The update engine now runs under bash strict mode (set -uo pipefail) so unset variables and mid-pipeline failures surface immediately instead of silently.**
+
 ## [1.0.1] - 2026-07-21
 
 ### Added

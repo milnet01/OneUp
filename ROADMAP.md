@@ -5,11 +5,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
 ## Backlog
 
-- 📋 [ONEUP-0001] **Add `set -uo pipefail` strict mode to update_system.sh.**
+- ✅ [ONEUP-0001] **Add `set -uo pipefail` strict mode to update_system.sh.**
   Deferred from the audit: -e must NOT be added (it fights the deliberate `|| ok=false` continue-on-failure design). Add `-uo pipefail` only, after auditing every expansion is `:-`/`:+` guarded (REBOOT, SERVICES, SYS_COUNT, etc.), and run the full tests/run-tests.sh suite to confirm no pipeline regressions.
   **Layman:** Make the update script fail fast on typos/unset variables instead of silently continuing.
   Kind: refactor.
   Source: indie-review-2026-07-21 engine-lane LOW.
+  Resolved (2026-07-21): `set -uo pipefail` added to update_system.sh (commit 675cf47). The empty/unknown --steps regression it introduced was fixed under ONEUP-0013 (declare -a RUN_KEYS=()). Full suite green at 34/34.
 
 - ✅ [ONEUP-0002] **Add a CI test gate that runs tests/run-tests.sh before the release build.**
   Only release.yml exists and it builds the AppImage on a v* tag without running the suite. Add a push/PR workflow (or a step before the build job) that runs tests/run-tests.sh. Note the §6 CI-minutes policy when choosing triggers.
@@ -42,3 +43,46 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: chore.
   Source: indie-review-2026-07-21 loop2 packaging-lane LOW.
   Resolved (2026-07-21): local-CI.sh includes a version-lockstep gate that fails if any of the six version sites disagree (run pre-push via githooks/pre-push).
+
+- 📋 [ONEUP-0007] **Add a headless GUI smoke test (QT_QPA_PLATFORM=offscreen).**
+  updater.py has zero automated coverage. Add a test that runs Qt offscreen, constructs Updater(), and feeds representative @@MARKER@@ lines through handle_marker (STEP_BEGIN/STEP_END/CHECK/INSTALLED/REBOOT/SERVICES/DISK/REPO/HINT + a malformed line) asserting no exception and expected state (badges, banners). Wire into local-CI.sh.
+  **Layman:** Automatically catch crashes in the app window that the current checks can't see.
+  Kind: test.
+  Source: suggestion 2026-07-21.
+
+- 📋 [ONEUP-0008] **Show per-step timing and what changed on each task row.**
+  The engine already tracks SECS per step and the package count. Surface e.g. 'took 42s · 3 packages' on the row or an expandable detail, so a run reads more clearly. Consider a marker or reuse STEP_END detail + a TIMING marker.
+  **Layman:** See how long each task took and a bit more detail about what it did.
+  Kind: ux.
+  Source: suggestion 2026-07-21.
+
+- 📋 [ONEUP-0009] **Add an About dialog (version, license, GitHub/OBS links, check-for-update).**
+  Now that the version is shown, add a small About dialog reachable from the header — APP_VERSION, MIT licence, links to the GitHub repo + OBS package, and a manual 'check for updates' button (reuses _check_app_update).
+  **Layman:** A small 'About OneUp' window with the version, licence and links.
+  Kind: feature.
+  Source: suggestion 2026-07-21.
+
+- 📋 [ONEUP-0010] **Fire a desktop notification when a manual (foreground) run finishes.**
+  Today only the weekly --check notifies. On on_finished, send a notify-send summary (done / N installed / errors) so a foreground run you walked away from still tells you when it's done.
+  **Layman:** Get a notification when an update you started finishes, in case you tabbed away.
+  Kind: enhancement.
+  Source: suggestion 2026-07-21.
+
+- 📋 [ONEUP-0011] **Add openSUSE Leap as an OBS build target.**
+  OneUp supports Leap (engine uses `zypper update` on Leap). Add openSUSE_Leap_15.6 under the project's Repositories in the OBS web UI so Leap users can `zypper install oneup`. Update packaging/obs/README.md + README install repo URL note.
+  **Layman:** Publish the zypper package for Leap users too, not just Tumbleweed.
+  Kind: package.
+  Source: suggestion 2026-07-21.
+
+- 📋 [ONEUP-0012] **Wire up the fully hands-off OBS rebuild (token + webhook / SCM-CI).**
+  Set up OBS's GitHub token + webhook (or .obs/workflows.yml) so a pushed tag triggers a rebuild from the git checkout, removing release.sh's osc step and the manual _service re-upload. One-time OBS account setup (token + repo webhook); needs building from git rather than an uploaded _service. See packaging/obs/README.md 'fully hands-off' note.
+  **Layman:** Make OBS rebuild the package on its own whenever a new version tag is pushed — no local osc, no re-upload.
+  Kind: enhancement.
+  Source: suggestion 2026-07-21.
+
+- ✅ [ONEUP-0013] **Fix set -uo pipefail regression on the empty/unknown --steps path.**
+  After adding `set -uo pipefail` (ONEUP-0001, commit 675cf47), `update_system.sh --steps=` (or an all-unknown list) exits 1 on an unset variable BEFORE the intended `exit 2` guard, so the 'No valid update steps selected' message is suppressed. The empty-steps test only asserts a non-zero exit, so it masked the change (exit 1 still passes). FIX: find the empty-RUN_KEYS/unbound expansion (likely an empty-array reference under -u between building RUN_KEYS and the TOTAL==0 guard), and TIGHTEN tests/run-tests.sh to assert exit code == 2 AND the 'No valid' message, for both --steps= and --steps=bogus. Reproduce: `bash update_system.sh --steps= --log=/tmp/x.log; echo $?` -> currently 1, want 2 with the message. Verify normal runs still 32/32.
+  **Layman:** A mistyped or empty --steps now fails less helpfully than intended.
+  Kind: fix.
+  Source: in-session-2026-07-21 (self-caught after ONEUP-0001, commit 675cf47).
+  Resolved (2026-07-21): root cause was `declare -a RUN_KEYS` (no =()) — under `set -u` an array declared but never assigned counts as unset, so ${#RUN_KEYS[@]} aborted with exit 1 before the TOTAL==0 guard. Fixed with `declare -a RUN_KEYS=()`. Tightened tests/run-tests.sh to assert exit == 2 AND the 'No valid update steps selected' message for both --steps= and --steps=bogus (was -ne 0, which masked the exit-1 regression). Red/green verified: 4 assertions fail without the fix, 34/34 pass with it.

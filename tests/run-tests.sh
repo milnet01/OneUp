@@ -266,14 +266,18 @@ rm -rf "$d"
 echo "TEST: empty or unknown --steps is rejected, not silently reported as a clean run"
 d=$(mktemp -d); setup_common "$d"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"; chmod +x "$d/zypper"
-run_engine "$d" --steps=      >/dev/null 2>&1; rc_empty=$?
-run_engine "$d" --steps=bogus >/dev/null 2>&1; rc_bogus=$?
-out=$(run_engine "$d" --steps=bogus 2>&1)
-if [[ $rc_empty -ne 0 ]]; then echo "  ok   - empty --steps exits non-zero"; PASS=$((PASS+1));
-else echo "  FAIL - empty --steps exits non-zero (rc=$rc_empty)"; FAIL=$((FAIL+1)); fi
-if [[ $rc_bogus -ne 0 ]]; then echo "  ok   - unknown --steps exits non-zero"; PASS=$((PASS+1));
-else echo "  FAIL - unknown --steps exits non-zero (rc=$rc_bogus)"; FAIL=$((FAIL+1)); fi
-check_absent "no @@DONE@@|ok on an empty step set" "@@DONE@@|ok" "$out"
+# Assert the exact exit 2, not merely "non-zero": a bare `set -u` abort exits 1
+# before the guard runs, which still passes a -ne 0 check but suppresses the
+# helpful message. Pin exit == 2 AND the message so that regression is caught.
+out_empty=$(run_engine "$d" --steps=      2>&1); rc_empty=$?
+out_bogus=$(run_engine "$d" --steps=bogus 2>&1); rc_bogus=$?
+if [[ $rc_empty -eq 2 ]]; then echo "  ok   - empty --steps exits 2"; PASS=$((PASS+1));
+else echo "  FAIL - empty --steps exits 2 (rc=$rc_empty)"; FAIL=$((FAIL+1)); fi
+if [[ $rc_bogus -eq 2 ]]; then echo "  ok   - unknown --steps exits 2"; PASS=$((PASS+1));
+else echo "  FAIL - unknown --steps exits 2 (rc=$rc_bogus)"; FAIL=$((FAIL+1)); fi
+check "empty --steps explains the rejection"   "No valid update steps selected" "$out_empty"
+check "unknown --steps explains the rejection" "No valid update steps selected" "$out_bogus"
+check_absent "no @@DONE@@|ok on an empty step set" "@@DONE@@|ok" "$out_bogus"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
