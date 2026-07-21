@@ -3,8 +3,9 @@
 OBS builds the RPM on openSUSE's infrastructure and hosts a repo so anyone can
 `zypper install oneup` and get updates automatically. You need a free
 [build.opensuse.org](https://build.opensuse.org) account. Everything below can be
-done in the **web UI** — no local `osc` client required, because `_service` fetches
-and packs the source **at build time** on OBS's servers.
+done in the **web UI** — no local `osc` client required. `_service` fetches the
+source **server-side** on OBS (which has network) and packs it **at build time**,
+so you never run `osc service manualrun`.
 
 > Account note: the OBS project is **`home:milnet`** (your OBS username). The
 > GitHub source lives under **`milnet01`** (your GitHub username) — that's what
@@ -19,10 +20,12 @@ and packs the source **at build time** on OBS's servers.
    - `packaging/obs/_service`
 3. Add a build target: **project** `home:milnet` → **Repositories** →
    **Add from a distribution** → **openSUSE Tumbleweed** (and Leap if you want).
+4. On the package page → **Trigger Services** (runs `obs_scm` server-side to fetch
+   the tag; it also runs automatically when you upload/change `_service`).
 
-That's it — OBS runs the build-time services (clone GitHub → tar → recompress →
-`set_version`), builds the RPM, and shows the result under **Build Results**. Once
-green, the repo is live:
+That's it — OBS clones the tag server-side, packs it (tar → recompress →
+`set_version`) and builds the RPM at build time, showing the result under **Build
+Results**. Once green, the repo is live:
 
 ```
 https://download.opensuse.org/repositories/home:/milnet/openSUSE_Tumbleweed/
@@ -44,6 +47,7 @@ services mean you do **not** need `osc service manualrun`.)*
 ## Notes
 
 - `oneup.spec` is `BuildArch: noarch`, so one build serves every architecture.
-- All services run `mode="buildtime"`, so the whole fetch→pack→build happens
-  server-side in the build VM — nothing is committed to the package but the two
-  text files above.
+- `obs_scm` runs server-side (it needs network to clone GitHub, which the isolated
+  build VM doesn't have); `tar`/`recompress`/`set_version` run at build time off the
+  committed source archive. If a build fails with *"no .obsinfo file found"*, the
+  server-side fetch hasn't run yet — hit **Trigger Services** and rebuild.
