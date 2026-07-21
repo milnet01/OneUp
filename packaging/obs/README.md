@@ -56,11 +56,56 @@ builds the AppImage), and — through your configured `osc` — commits the new
    `set_version` syncs the spec's `Version:` to the tag automatically.
 3. **Trigger Services** → it rebuilds.
 
-**Fully hands-off (optional):** OBS can rebuild on its own whenever you push a tag,
-via its GitHub token + webhook ("SCM/CI workflow") integration — no local `osc`, no
-re-upload. It's a one-time setup (an OBS token, a repo webhook, and building this
-package from the git checkout instead of an uploaded `_service`); see the OBS docs
-on *token/workflow integration*. Ask to have it wired up.
+## Fully hands-off OBS rebuild (optional)
+
+`./release.sh` already retriggers the OBS build (its `osc` step commits the new
+`_service`/`oneup.spec`, which rebuilds the RPM). So the common path is **already
+automated** — you don't need a webhook to get an OBS rebuild on release.
+
+A GitHub → OBS **webhook** only adds value if you want a **bare `git push --tags`**
+(bypassing `release.sh`) to rebuild OBS too. The repo ships the workflow config for
+it at [`.obs/workflows.yml`](../../.obs/workflows.yml) (inert until you complete the
+setup below). It's a one-time wiring:
+
+1. **Create a workflow token on OBS.** Web UI: **Your Account → Tokens → Create
+   Token → *Workflow*** (or `osc token --create --operation workflow --scm-token`).
+   Copy the token secret.
+2. **Add a webhook on GitHub.** Repo **Settings → Webhooks → Add webhook**:
+   - Payload URL: `https://build.opensuse.org/trigger/workflow?id=<TOKEN_ID>`
+   - Content type: `application/json`
+   - Secret: the token secret from step 1
+   - Events: **just the push event** (which carries tag pushes).
+3. **Push a version tag** and watch OBS: the `rebuild_on_tag` workflow in
+   `.obs/workflows.yml` fires `trigger_services`, so OBS re-clones the tag and
+   rebuilds. Verify the build result shows the new version before relying on it.
+
+> **Caveat (read `.obs/workflows.yml`'s header):** `trigger_services` rebuilds
+> whatever `_service` pins as `<revision>`. `release.sh` keeps that revision in
+> lockstep with the tag, so they agree. If you push tags **by hand**, bump
+> `_service`'s `<revision>` in the same push, or convert the OBS package to build
+> **directly from the git ref** (OBS's SCM-linked model) so any tag just works —
+> a bigger one-time restructure, worth it only if you routinely tag without
+> `release.sh`.
+
+## Adding openSUSE Leap as a build target
+
+OneUp already supports Leap at runtime — the engine runs `zypper update` on Leap
+and `zypper dup` on Tumbleweed — so serving Leap is just adding a second OBS build
+target. In the OBS web UI:
+
+1. Open the package's **project** `home:milnet` → **Repositories** →
+   **Add from a distribution** → pick the current **openSUSE Leap** (e.g.
+   `openSUSE_Leap_15.6`) → **Add**.
+2. OBS rebuilds the same `noarch` RPM against Leap automatically. Once green, the
+   Leap repo is live alongside Tumbleweed:
+   `https://download.opensuse.org/repositories/home:/milnet/openSUSE_Leap_15.6/`.
+
+**One thing to verify:** the RPM `Requires: python3-pyside6`. That package is in
+Tumbleweed's repos; on Leap it may be older or absent depending on the release. If
+the Leap build's install check fails on `python3-pyside6` (or a Leap user hits an
+unresolvable dependency), point Leap users at the **AppImage** instead — it bundles
+its own Qt/PySide6 and doesn't depend on the distro's Python at all. Check with
+`zypper info python3-pyside6` on a Leap box before advertising the Leap RPM.
 
 ## Notes
 

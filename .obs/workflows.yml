@@ -1,0 +1,29 @@
+# OBS SCM/CI workflow — the hands-off alternative to ./release.sh's osc step.
+#
+# When activated (see packaging/obs/README.md § "Fully hands-off OBS rebuild"),
+# pushing a version tag to GitHub tells the openSUSE Build Service to rebuild the
+# RPM on its own — no local `osc`, no "Trigger Services" click.
+#
+# Until the one-time setup exists on OBS (a workflow token) and GitHub (a webhook
+# pointing at OBS with that token), this file does nothing — it's inert scaffolding,
+# safe to keep in the repo.
+#
+# IMPORTANT — which build model this assumes:
+#   `trigger_services` re-runs the EXISTING home:milnet/oneup package's _service
+#   (obs_scm), which clones whatever <revision> the committed _service pins. For a
+#   tag push to rebuild the RIGHT version, that <revision> must already point at the
+#   pushed tag. ./release.sh keeps _service's revision in lockstep with the tag, so
+#   the two agree. If you ever push a tag BY HAND (bypassing release.sh), bump
+#   _service's <revision> in the same push or OBS will rebuild the previous tag.
+#
+#   For a package that builds DIRECTLY from the git ref (no pinned _service, so any
+#   tag just works), OBS's SCM-linked model is required instead — a bigger one-time
+#   restructure. See the README section above for the trade-off.
+
+rebuild_on_tag:
+  steps:
+    - trigger_services:
+        project: home:milnet
+        package: oneup
+  filters:
+    event: tag_push
