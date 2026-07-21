@@ -69,6 +69,14 @@ check_absent() {  # name, forbidden-substring, haystack
         echo "  ok   - $name"; PASS=$((PASS+1))
     fi
 }
+check_re() {  # name, extended-regex, haystack
+    local name="$1" re="$2" hay="$3"
+    if grep -qE -- "$re" <<<"$hay"; then
+        echo "  ok   - $name"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - $name (no match: $re)"; FAIL=$((FAIL+1))
+    fi
+}
 
 # ---------------------------------------------------------------------------
 echo "TEST: up-to-date system does NOT advise a reboot (the original bug)"
@@ -354,6 +362,69 @@ echo "TEST: flatpak with nothing to update reports 'up to date'"
 d=$(mktemp -d); setup_common "$d"   # its flatpak mock prints nothing -> 0 updates
 out=$(run_engine "$d" --steps=flatpak)
 check "flatpak up to date when no updates" "@@STEP_END@@|flatpak|ok|up to date" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: --check performs NO privileged auth (never invokes sudo)"
+d=$(mktemp -d); setup_common "$d"
+# A sudo mock that fails loudly if called at all: --check must be root-free.
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+echo "BUG: sudo invoked during --check" >&2
+exit 99
+EOF
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$*" == *list-updates* ]] && { printf 'S|R|N|C|A|X\nv|r|a|1|2|x\n'; exit 0; }
+exit 0
+EOF
+chmod +x "$d/sudo" "$d/zypper"
+out=$(run_engine "$d" --check --steps=system,orphans,cache)
+check_absent "check mode never calls sudo"   "BUG: sudo invoked" "$out"
+check_absent "check mode records no auth fail" "Authentication failed" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: the sudo keep-alive leaves no orphaned process when a run ends"
+d=$(mktemp -d); setup_common "$d"
+# A dup that takes ~1s so the keep-alive is mid `sleep 50` when the run finishes
+# and cleanup fires — the exact moment a plain `kill <subshell>` (rather than a
+# process-group kill) would orphan the sleep, reparented to init for up to 50s.
+printf '#!/usr/bin/env bash\ncase "$*" in *refresh*) exit 0;; *dup*|*update*) sleep 1; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
+chmod +x "$d/zypper"
+# Diff the set of `sleep 50` processes (the keep-alive's idle) across the run:
+# anything new that survives is an orphan cleanup failed to reap. -xf matches the
+# full command line exactly, so this harness's own long argv can't false-match.
+ka_before=$(pgrep -xf 'sleep 50' | sort)
+run_engine "$d" --steps=system >/dev/null 2>&1
+sleep 0.4   # let the process-group kill propagate
+ka_after=$(pgrep -xf 'sleep 50' | sort)
+ka_leaked=$(comm -13 <(echo "$ka_before") <(echo "$ka_after") | grep -v '^$' || true)
+if [[ -z "$ka_leaked" ]]; then
+    echo "  ok   - no orphaned keep-alive after the run"; PASS=$((PASS+1))
+else
+    echo "  FAIL - keep-alive orphaned a process: $ka_leaked"; FAIL=$((FAIL+1))
+    echo "$ka_leaked" | xargs -r kill 2>/dev/null
+fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: @@INSTALLED@@ keeps its positional 3-field layout the GUI depends on"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)    echo "2 packages to upgrade."; exit 0 ;;
+  *needs-rebooting*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+# count | sys_changed(yes/no) | fw_changed(yes/no)
+check_re "INSTALLED marker has count|yes-no|yes-no" \
+         '@@INSTALLED@@\|[0-9]+\|(yes|no)\|(yes|no)$' "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

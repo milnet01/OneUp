@@ -18,6 +18,13 @@ All notable changes to OneUp are documented here. The format follows
 
 - **The update engine now runs under bash strict mode (set -uo pipefail) so unset variables and mid-pipeline failures surface immediately instead of silently.**
 
+### Fixed
+
+- **The sudo keep-alive no longer leaves a short-lived background process behind when a run ends or is cancelled.**
+  The keep-alive loop now runs in its own process group and is torn
+  down as a group, so its idle `sleep` can't be orphaned (reparented to
+  init for up to ~50s) after the run finishes.
+
 ## [1.0.1] - 2026-07-21
 
 ### Added

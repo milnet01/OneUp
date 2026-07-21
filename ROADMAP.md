@@ -19,11 +19,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: indie-review-2026-07-21 packaging-lane INFO.
   Resolved (2026-07-21): release.yml now runs tests/run-tests.sh before the AppImage build, and local-CI.sh runs the same suite pre-push.
 
-- 📋 [ONEUP-0003] **Close remaining engine test-coverage gaps from the indie review.**
+- ✅ [ONEUP-0003] **Close remaining engine test-coverage gaps from the indie review.**
   Not covered yet: orphans step (autoremove + report-only orphan count); --check performs NO privileged auth (sudo-sentinel test); keep-alive cleanup on SIGINT/SIGTERM leaves no orphan process; needs-rebooting returning a non-102 non-zero (e.g. lock held) must NOT advise reboot; @@INSTALLED@@ field layout pinned positionally by the GUI. (Firmware fail/success, continue-on-failure, empty-steps, and locale were added in the 2026-07-21 audit.)
   **Layman:** A few update behaviours still have no automated test.
   Kind: test.
   Source: indie-review-2026-07-21 engine-lane.
+  Resolved (2026-07-21): added three engine tests — (1) --check invokes sudo zero times (sentinel sudo mock exits 99 if called); (2) the sudo keep-alive leaves no orphaned process after a run (before/after `pgrep -xf 'sleep 50'` diff); (3) @@INSTALLED@@ keeps its positional count|yes/no|yes/no layout. Writing (2) surfaced a real orphan leak: cleanup did `kill <subshell>` which orphaned the loop's `sleep 50` (reparented to init ~50s). Fixed by running the keep-alive under setsid in its own process group and tearing it down with `kill -- -PGID`. Red/green verified. Orphans/non-102/firmware/locale/continue-on-fail were already covered by the 2026-07-21 audit. Suite 32→38.
 
 - 📋 [ONEUP-0004] **Re-test Python 3.14 for the AppImage build when PySide6 ships 3.14 wheels.**
   release.yml pins python-version 3.13 (not 3.14) pending confirmation that PySide6 publishes 3.14 wheels — see docs/standards/dependencies.md ledger. When newer wheels exist, bump and delete the ledger row.

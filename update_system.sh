@@ -215,10 +215,17 @@ sudo_init() {
     # Keep refreshing even if one validation momentarily fails (a transient PAM/cache
     # blip): a single miss must not permanently stop the keeper mid-run. cleanup kills
     # this loop when the script exits, so it never outlives the run.
-    ( while true; do sudo -n -v 2>/dev/null || true; sleep 50; done ) >/dev/null 2>&1 &
+    #
+    # setsid puts the loop in its own process group so cleanup can kill the WHOLE
+    # group (kill -- -PGID): a plain `kill $subshell` leaves the inner `sleep 50`
+    # orphaned (reparented to init, lingering up to 50s) after a cancelled run.
+    setsid bash -c 'while true; do sudo -n -v 2>/dev/null || true; sleep 50; done' \
+        >/dev/null 2>&1 &
     SUDO_KEEPALIVE=$!
 }
-cleanup() { [[ -n "$SUDO_KEEPALIVE" ]] && kill "$SUDO_KEEPALIVE" 2>/dev/null; }
+# Negative PID targets the keep-alive's process group (the loop shell + its sleep),
+# so nothing survives the run. See sudo_init for why setsid makes this a lone group.
+cleanup() { [[ -n "$SUDO_KEEPALIVE" ]] && kill -- "-$SUDO_KEEPALIVE" 2>/dev/null; }
 # EXIT runs cleanup on any exit (killing the keep-alive so it can't outlive the run).
 # The signal traps must ALSO exit: a plain `trap cleanup INT` would run cleanup and
 # then resume after the interrupted command, plowing on through the remaining
