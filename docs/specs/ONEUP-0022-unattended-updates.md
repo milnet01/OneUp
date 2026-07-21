@@ -26,7 +26,7 @@ packagekit` all match the scoped `NOPASSWD` rule. But the engine's up-front boot
 one of those commands. `sudo -v` is governed by sudoers' `verifypw` option, whose **default
 is `all`**: a password is skipped only when *every* one of the user's sudoers entries is
 `NOPASSWD`. A normal user also has a password-required `%wheel` entry, so `sudo -v` prompts —
-which aborts a headless run at update_system.sh:288, and even makes a *manual* run under
+which aborts a headless run at update_system.sh:288–289, and even makes a *manual* run under
 passwordless still prompt once. So the engine needs a change (below) to skip `sudo_init`'s
 interactive validate when the drop-in is active; this both unblocks the unattended run and
 completes ONEUP-0023's prompt-free promise for the GUI path.
@@ -56,8 +56,8 @@ toggles move into a **Settings** popup:
 
 - **Header** loses the two toggle buttons and gains a single **⚙ Settings** button.
   Final header: `Settings · Repositories · Recenter · About` (4 controls). The window
-  minimum width (currently 720, sized for five header controls — updater.py:723) drops back
-  to 560 now that the header carries four.
+  minimum width (currently `setMinimumWidth(720)` at updater.py:724, sized for five header
+  controls) drops back to 560 now that the header carries four.
 - **`SettingsDialog(QDialog)`** (distinct from the existing `self.settings` `QSettings`
   handle and the "Settings" header button) — modeled on `RepoManagerDialog`: created lazily,
   re-centred
@@ -92,7 +92,8 @@ prompt + keep-alive, exactly as today).
 **2. Notify at the end of a full run.** Today `--notify` fires only in `--check` mode
 ("Updates available"). Extend it to also fire **at the end of a full run** with the outcome,
 reusing the existing `notify_send` helper (update_system.sh:115–117) and the run summary the
-engine already computes (`SYS_CHANGED` / `FW_CHANGED` / `ERRORS`, ~683–766):
+engine already computes — `SYS_COUNT` (the installed-package count, ~740–745), the
+`SYS_CHANGED` / `FW_CHANGED` booleans, and `ERRORS` (~683–766):
 
 - something installed → `notify_send "Update complete" "<n> packages installed…"`
 - nothing to do → `notify_send "Already up to date" "…"`
@@ -124,24 +125,31 @@ engine already computes (`SYS_CHANGED` / `FW_CHANGED` / `ERRORS`, ~683–766):
 - **Coupling (rule 2 — enable).** The passwordless grant is **asynchronous and gives no
   synchronous success return** — `_run_auth` (updater.py:1144) starts a `QProcess`;
   `_on_auth_finished` (1158) re-probes via `_query_auth_status`, whose result settles later
-  in `_on_auth_status_finished` (1112). A cancelled `ksshaskpass` popup and a successful
-  grant both flow through that same re-probe. So the enable flow cannot "install the timer on
-  grant success" inline; it must chain on the async settle:
-  - `on_autoupdate_toggled(on=True)`: read the **reflected** passwordless state — the
-    dialog's passwordless switch, which its open-time `--auth-status` probe already set.
-    (No new synchronous state read is invented; the switch is the current truth.)
-  - If passwordless is **already on** → install the update timer directly (synchronous, like
-    weekly-check).
-  - If passwordless is **off** → show one dialog ("Automatic updates need Passwordless…").
-    On **cancel**, revert the auto-update toggle to off via a `blockSignals` set (as
-    `_set_auth_checked` does at updater.py:1089–1091, so the revert doesn't re-fire
-    `on_autoupdate_toggled`), no further action. On **approval**, set a one-shot
-    `self._pending_autoupdate = True` latch and start the passwordless grant.
-  - The settle point (`_on_auth_status_finished`) checks the latch: if set **and**
-    passwordless is now **on**, install the update timer and set the auto-update toggle on;
-    if set and passwordless came back **off** (popup cancelled, `visudo` rejected, grant
-    failed), leave auto-update off and surface the same `@@HINT@@`/note the grant already
-    shows. Clear the latch either way.
+  in `_on_auth_status_finished` (1112). The open-time state on the dialog's passwordless
+  switch is also set by an **async** probe (`_query_auth_status` → `_on_auth_status_finished`,
+  1094–1113), so the switch can be **stale** — not yet settled, or out of date after an
+  external `sudo` change. The install decision must therefore **never** trust the reflected
+  switch; it always installs the update timer only after a **fresh** `--auth-status` settle
+  confirms passwordless is on. The reflected switch is used solely to pick the *entry branch*
+  (whether a grant dialog is needed), not to authorize the install:
+  - `on_autoupdate_toggled(on=True)`: set the one-shot `self._pending_autoupdate = True` latch,
+    then branch on the reflected switch:
+    - reflected **off** → show one dialog ("Automatic updates need Passwordless…"). On
+      **cancel**, clear the latch and revert the auto-update toggle to off via a `blockSignals`
+      set (as `_set_auth_checked` does at updater.py:1089–1091, so the revert doesn't re-fire
+      `on_autoupdate_toggled`). On **approval**, start the passwordless grant (`_run_auth`,
+      which re-probes on finish).
+    - reflected **on** → start a fresh `--auth-status` probe (`_query_auth_status`) — **no**
+      direct install — so a stale-on switch can't install a timer the drop-in won't back.
+  - **The settle (`_on_auth_status_finished`) is the single install gate.** After it updates
+    the passwordless switch, **if `_pending_autoupdate` is set** it consumes the latch
+    (clearing it unconditionally, so a startup or dialog-open probe that carries no latch is a
+    no-op here): install the update timer + set the auto-update toggle on **iff** the just-
+    settled state is passwordless-on; otherwise (popup cancelled, `visudo` rejected, grant or
+    probe failed) leave auto-update off and surface the grant's `@@HINT@@`/note. The latch is
+    only ever set by this enable entry immediately before the probe/grant it triggers, and
+    `_query_auth_status` already guards against a concurrent probe (updater.py:1101–1103), so
+    the next settle is the one this flow initiated.
 - **Coupling (rule 3 — revoke).** Hooked to the revoke **action** (the `on=False` branch of
   `on_auth_toggled`), not to the toggle signal — the programmatic `blockSignals` set used to
   reflect probed state must not trip it. When the user revokes passwordless, if the
@@ -187,11 +195,18 @@ auto-update toggle **off** and tell the user why — never a silent half-state.
   -v`** (the mock exits non-zero if `-A` is ever invoked); with the probe **failing**
   (drop-in absent), the run still performs the one interactive `sudo -A … -v` as today. This
   is the regression that proves an unattended run can authenticate.
-- **GUI smoke (`tests/gui-smoke.py`):** Auto-update defaults off; enabling it with
-  passwordless off triggers the combined-enable path (stubbed) and does not install the
-  timer on cancel; turning passwordless off with auto-update on clears the auto-update
-  toggle. Existing weekly-check and passwordless assertions stay green (their handlers are
-  unchanged).
+- **GUI smoke (`tests/gui-smoke.py`):** the header exposes the **Settings** button and the
+  `SettingsDialog` hosts the three toggles (weekly check, passwordless, auto-update).
+  Auto-update defaults off; enabling it with passwordless off triggers the combined-enable
+  path (stubbed) and does not install the timer on cancel; a stubbed settle with
+  passwordless-**off** while the pending latch is set does **not** install the timer (the
+  stale-switch race guard); turning passwordless off with auto-update on clears the
+  auto-update toggle. Existing weekly-check and passwordless assertions stay green (their
+  handlers are unchanged).
+- **On-box acceptance (manual, not CI):** after `--grant-auth` on the real machine, a manual
+  full run completes with **zero** password prompts (confirming the `sudo_init` skip and the
+  `verifypw=all` reasoning hold against the live sudoers), and `--revoke-auth` restores the
+  single prompt.
 
 ## Docs & release
 
