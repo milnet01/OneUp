@@ -239,6 +239,94 @@ check "no-op size reports 0 B" "@@SIZE@@|system|0 B" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: --grant-auth installs a scoped, password-free sudoers drop-in (stores no password)"
+d=$(mktemp -d); setup_common "$d"
+# The status probe runs `zypper --version`; keep other calls quiet.
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == "--version" ]] && { echo "zypper 1.14.0"; exit 0; }
+exit 0
+EOF
+# Engine validates the rule with `visudo -cf` before installing; accept iff it
+# carries our NOPASSWD alias (so a malformed rule would be rejected, as on a real box).
+cat > "$d/visudo" <<'EOF'
+#!/usr/bin/env bash
+f="${!#}"; grep -q "NOPASSWD:" "$f" && exit 0 || exit 1
+EOF
+# `sudo install -o root -g root -m 0440 src dst` — we aren't root in the test, so
+# drop the ownership/mode flags and just copy src→dst.
+cat > "$d/install" <<'EOF'
+#!/usr/bin/env bash
+args=(); while [[ $# -gt 0 ]]; do case "$1" in -o|-g|-m) shift 2;; *) args+=("$1"); shift;; esac; done
+cp "${args[0]}" "${args[1]}"
+EOF
+chmod +x "$d/zypper" "$d/visudo" "$d/install"
+authfile="$d/oneup-sudoers"
+out=$(ONEUP_AUTH_FILE="$authfile" run_engine "$d" --grant-auth)
+rule=$(cat "$authfile" 2>/dev/null)
+check "grant reports authorization on"                    "@@AUTH@@|on"      "$out"
+check "drop-in is password-free (NOPASSWD)"               "NOPASSWD:"        "$rule"
+check "drop-in scopes zypper"                             "$d/zypper"        "$rule"
+check "drop-in scopes only 'systemctl stop packagekit'"  "stop packagekit"  "$rule"
+check "drop-in covers the 'env LC_ALL=C zypper' wrapper"  "LC_ALL=C zypper"  "$rule"
+# Bonus: if a real visudo is on the box, prove the generated rule is truly valid
+# (not just accepted by the mock). Absolute paths dodge the mock visudo in $PATH.
+# Skipped silently where visudo isn't installed.
+realvisudo=""; for c in /usr/sbin/visudo /sbin/visudo /usr/bin/visudo; do [[ -x "$c" ]] && { realvisudo="$c"; break; }; done
+if [[ -n "$realvisudo" ]]; then
+    if "$realvisudo" -cf "$authfile" >/dev/null 2>&1; then
+        echo "  ok   - generated drop-in passes real visudo -cf"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - generated drop-in rejected by real visudo -cf"; FAIL=$((FAIL+1))
+    fi
+fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: --revoke-auth removes the drop-in and reports off"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"; chmod +x "$d/zypper"
+authfile="$d/oneup-sudoers"; printf 'placeholder\n' > "$authfile"
+out=$(ONEUP_AUTH_FILE="$authfile" run_engine "$d" --revoke-auth)
+check "revoke reports authorization off" "@@AUTH@@|off" "$out"
+if [[ -e "$authfile" ]]; then
+    echo "  FAIL - revoke left the drop-in behind"; FAIL=$((FAIL+1))
+else
+    echo "  ok   - revoke deleted the drop-in"; PASS=$((PASS+1))
+fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: --auth-status reflects the drop-in and can't be fooled by a cached credential"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == "--version" ]] && { echo v; exit 0; }
+exit 0
+EOF
+chmod +x "$d/zypper"
+# A drop-in-aware sudo: `-n` (non-interactive) succeeds only when the drop-in exists,
+# modelling a real NOPASSWD rule — so the probe reads the true state, not the cache.
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+nonint=false
+while [[ $# -gt 0 ]]; do case "$1" in -n) nonint=true; shift;; -A|-v|-k|-E) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
+[[ $# -eq 0 ]] && exit 0
+if $nonint && [[ -n "${ONEUP_AUTH_FILE:-}" && ! -e "$ONEUP_AUTH_FILE" ]]; then
+    echo "sudo: a password is required" >&2; exit 1
+fi
+exec "$@"
+EOF
+chmod +x "$d/sudo"
+authfile="$d/oneup-sudoers"
+out=$(ONEUP_AUTH_FILE="$authfile" run_engine "$d" --auth-status)
+check "status is off when no drop-in exists" "@@AUTH@@|off" "$out"
+printf 'placeholder\n' > "$authfile"
+out=$(ONEUP_AUTH_FILE="$authfile" run_engine "$d" --auth-status)
+check "status is on when the drop-in exists" "@@AUTH@@|on" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: a FAILED firmware update is reported as fail, not success, and does NOT reboot"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'

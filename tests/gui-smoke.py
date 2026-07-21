@@ -130,6 +130,23 @@ def main() -> int:
     # isVisibleTo(window): the banner's own visibility, independent of the never-shown window.
     check("disk warning banner shown", w.warn_banner.isVisibleTo(w))
 
+    # --- passwordless-authorization toggle (opt-in) ----------------------------
+    check("auth toggle defaults to off", w.auth_btn.text() == "Passwordless: off")
+    w._set_auth_checked(True)
+    check("auth toggle reflects 'on' without firing grant",
+          w.auth_btn.isChecked() and w.auth_btn.text() == "Passwordless: on")
+    w._set_auth_checked(False)
+    check("auth toggle reflects 'off'",
+          not w.auth_btn.isChecked() and w.auth_btn.text() == "Passwordless: off")
+
+    class _StubProc:  # stands in for the finished QProcess, returns canned stdout
+        def __init__(self, text): self._b = text.encode()
+        def readAllStandardOutput(self): return self._b
+    w._on_auth_status_finished(_StubProc("log noise\n@@AUTH@@|on\n"))
+    check("status marker 'on' turns the toggle on", w.auth_btn.isChecked())
+    w._on_auth_status_finished(_StubProc("@@AUTH@@|off\n"))
+    check("status marker 'off' turns the toggle off", not w.auth_btn.isChecked())
+
     # A REPO marker names the duplicate URL and flips the banner button to the
     # repo manager.
     w2 = updater.Updater()

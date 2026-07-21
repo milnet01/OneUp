@@ -36,6 +36,8 @@ LOG_FILE=""
 CHECK_ONLY=false   # --check: report what WOULD update, install nothing, no root
 NOTIFY=false       # --notify: fire a desktop notification if updates are found
 SIZE_STEP=""       # --size=<step>: on-demand exact download size (needs root)
+AUTH_ACTION=""     # --grant-auth / --revoke-auth / --auth-status: manage the
+                   # opt-in "remember my authorization" sudoers drop-in.
 
 usage() {
     cat <<EOF
@@ -48,6 +50,11 @@ Usage: $(basename "$0") [--steps=LIST] [--check] [--notify] [--log=FILE] [--help
   --check        Read-only: report how many updates are available and exit.
                  Runs WITHOUT root, so it is safe for an unattended timer.
   --notify       With --check, raise a desktop notification when updates exist.
+  --grant-auth   Opt in to passwordless updates: install a scoped sudoers rule
+                 so OneUp's update commands run without a password (stores no
+                 password). Asks for your password once to set it up.
+  --revoke-auth  Remove that rule — updates prompt for a password again.
+  --auth-status  Print whether the passwordless rule is active (@@AUTH@@|on/off).
   --log=FILE     Write the run log here. Default: $LOG_DIR/<timestamp>.log
   --help         Show this help.
 
@@ -64,6 +71,9 @@ for arg in "$@"; do
         --log=*)   LOG_FILE="${arg#*=}" ;;
         --check)   CHECK_ONLY=true ;;
         --size=*)  SIZE_STEP="${arg#*=}" ;;
+        --grant-auth)  AUTH_ACTION="grant" ;;
+        --revoke-auth) AUTH_ACTION="revoke" ;;
+        --auth-status) AUTH_ACTION="status" ;;
         --notify)  NOTIFY=true ;;
         --help|-h) usage; exit 0 ;;
         *) echo "Unknown option: $arg" >&2; usage >&2; exit 2 ;;
@@ -90,6 +100,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 #   @@CHECK@@|key|count|label            (--check mode: updates available)
 #   @@CHECK_ITEM@@|key|name|from|to      (--check mode: one changed package)
 #   @@SIZE@@|key|download                (--size mode: total download size)
+#   @@AUTH@@|on|off                      (passwordless-authorization state)
 #   @@DISK@@|warn|mount|free             (pre-flight: low disk space)
 #   @@REPO@@|warn|reason                 (pre-flight: repo health issue)
 #   @@HINT@@|plain-English failure hint
@@ -316,6 +327,107 @@ release_zypper_lock() {
         sudo systemctl stop packagekit 2>/dev/null || true
     fi
 }
+
+# ---------------------------------------------------------------------------
+# Opt-in "remember my authorization" mode (ONEUP-0023). Deliberately stores NO
+# password — encrypting a password the app must itself decrypt is obfuscation,
+# and a stored root password would break OneUp's "GUI never touches root" design.
+# Instead we install a scoped, revocable sudoers drop-in so the OS remembers the
+# *decision* (for OneUp's update commands only), not the password. Toggle off =
+# delete the file = instant, complete revoke.
+#
+# This is effectively passwordless root for those commands (zypper can run
+# arbitrary code via package scripts), which is why it is opt-in, off by default,
+# and the GUI shows an explicit warning before enabling it.
+#
+# Overridable so the test suite points it at a throwaway path, never real /etc.
+AUTH_FILE="${ONEUP_AUTH_FILE:-/etc/sudoers.d/oneup}"
+
+# Build the drop-in text from the binaries actually present on THIS machine
+# (command -v, not a hardcoded /usr/bin) so each rule matches the exact path sudo
+# will resolve. zypper is required; the rest are optional (skipped if absent).
+build_auth_rule() {
+    local user zypper cmd cmds=()
+    user=$(id -un)
+    zypper=$(command -v zypper) || return 1
+    cmds+=("$zypper")                                   # any zypper subcommand
+    cmd=$(command -v snapper)   && cmds+=("$cmd")        # snapper create/list
+    cmd=$(command -v flatpak)   && cmds+=("$cmd")        # flatpak update/uninstall
+    cmd=$(command -v systemctl) && cmds+=("$cmd stop packagekit")
+    # The engine pins the locale via `sudo env LC_ALL=C zypper …`. sudo resolves the
+    # command (env) to a path but matches the REST of the argv literally, so this
+    # pattern's second word must be the bare `zypper` the engine typed, not its path.
+    cmd=$(command -v env)       && cmds+=("$cmd LC_ALL=C zypper *")
+    local joined
+    printf -v joined '%s, ' "${cmds[@]}"
+    cat <<EOF
+# Installed by OneUp's "remember my authorization" setting — stores NO password.
+# Lets $user run OneUp's update commands as root without a password prompt.
+# Delete this file (or turn the setting off in OneUp) to revoke immediately.
+Cmnd_Alias ONEUP_UPDATE = ${joined%, }
+$user ALL=(root) NOPASSWD: ONEUP_UPDATE
+EOF
+}
+
+grant_auth() {
+    local tmp
+    tmp=$(mktemp) || { marker HINT "Could not create a temporary file."; return 1; }
+    if ! build_auth_rule > "$tmp"; then
+        rm -f "$tmp"
+        marker HINT "zypper was not found, so passwordless authorization can't be set up."
+        return 1
+    fi
+    sudo_init
+    # Validate the generated rule in isolation BEFORE it can affect the live policy:
+    # a syntactically broken file under /etc/sudoers.d can lock you out of sudo.
+    if ! sudo visudo -cf "$tmp" >/dev/null 2>&1; then
+        rm -f "$tmp"
+        marker HINT "The generated authorization rule failed validation — nothing was changed."
+        return 1
+    fi
+    # install(1) atomically places it root-owned and 0440, the mode sudo requires.
+    if ! sudo install -o root -g root -m 0440 "$tmp" "$AUTH_FILE"; then
+        rm -f "$tmp"
+        marker HINT "Could not write the authorization rule ($AUTH_FILE)."
+        return 1
+    fi
+    rm -f "$tmp"
+    echo "Passwordless authorization for OneUp's update commands is now enabled."
+    marker AUTH "on"
+}
+
+revoke_auth() {
+    sudo_init
+    if sudo rm -f "$AUTH_FILE"; then
+        echo "Passwordless authorization has been revoked."
+        marker AUTH "off"
+    else
+        marker HINT "Could not remove the authorization rule ($AUTH_FILE)."
+        return 1
+    fi
+}
+
+auth_status() {
+    local zypper
+    zypper=$(command -v zypper) || { marker AUTH "off"; return 0; }
+    # `-k` ignores any cached credential (so a recent run can't false-positive) and
+    # `-n` refuses to prompt, so this harmless `zypper --version` runs as root ONLY
+    # when the NOPASSWD drop-in is active. No root file-read needed (it's root-only).
+    if sudo -k -n "$zypper" --version >/dev/null 2>&1; then
+        marker AUTH "on"
+    else
+        marker AUTH "off"
+    fi
+}
+
+if [[ -n "$AUTH_ACTION" ]]; then
+    case "$AUTH_ACTION" in
+        grant)  grant_auth ;;
+        revoke) revoke_auth ;;
+        status) auth_status ;;
+    esac
+    exit $?
+fi
 
 # --size=<step>: report the download size and exit, never falling through into a
 # real update. Placed here so run_size can reuse sudo_init/release_zypper_lock,

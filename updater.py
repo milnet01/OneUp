@@ -719,7 +719,9 @@ class Updater(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} {APP_VERSION}")
-        self.setMinimumWidth(560)
+        # Wide enough that the five header controls (weekly check, passwordless,
+        # repositories, recenter, about) never crowd out the title/tagline.
+        self.setMinimumWidth(720)
         self.settings = QSettings("OneUp", "OneUp")
         self.proc: QProcess | None = None
         self._buf = ""
@@ -769,6 +771,18 @@ class Updater(QMainWindow):
         self._refresh_autocheck_label()
         self.auto_btn.toggled.connect(self.on_autocheck_toggled)
 
+        # Opt-in "remember my authorization": stop prompting for the password on
+        # every update. Off by default; the real state is probed from the engine
+        # after the window is built (_query_auth_status).
+        self.auth_btn = QPushButton()
+        self.auth_btn.setObjectName("GhostBtn")
+        self.auth_btn.setCheckable(True)
+        self.auth_btn.setCursor(Qt.PointingHandCursor)
+        self.auth_btn.setToolTip("Stop asking for your password on every update "
+                                 "(opt-in; can be switched off to revoke instantly)")
+        self._refresh_auth_label()
+        self.auth_btn.toggled.connect(self.on_auth_toggled)
+
         self.recenter_btn = QPushButton("Recenter")
         self.recenter_btn.setObjectName("GhostBtn")
         self.recenter_btn.setCursor(Qt.PointingHandCursor)
@@ -790,6 +804,7 @@ class Updater(QMainWindow):
         header_row = QHBoxLayout()
         header_row.addLayout(titleblock, 1)
         header_row.addWidget(self.auto_btn, 0, Qt.AlignTop)
+        header_row.addWidget(self.auth_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.repos_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.recenter_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.about_btn, 0, Qt.AlignTop)
@@ -909,6 +924,9 @@ class Updater(QMainWindow):
 
         # Non-blocking: is there a newer OneUp release?
         self._check_app_update()
+
+        # Non-blocking: reflect whether passwordless authorization is active.
+        self._query_auth_status()
 
     # ---- banner helper ----------------------------------------------------
     def _make_banner(self, frame_obj: str, btn_obj: str, btn_text: str, slot):
@@ -1060,6 +1078,94 @@ for (var i = 0; i < clients.length; i++) {{
         except OSError as exc:
             QMessageBox.warning(self, "Could not change the schedule", str(exc))
         self._refresh_autocheck_label()
+
+    # ---- passwordless authorization (opt-in, ONEUP-0023) ------------------
+    def _refresh_auth_label(self):
+        on = self.auth_btn.isChecked()
+        self.auth_btn.setText("Passwordless: on" if on else "Passwordless: off")
+
+    def _set_auth_checked(self, on: bool):
+        """Reflect the real state on the toggle WITHOUT re-triggering grant/revoke."""
+        self.auth_btn.blockSignals(True)
+        self.auth_btn.setChecked(on)
+        self.auth_btn.blockSignals(False)
+        self._refresh_auth_label()
+
+    def _query_auth_status(self):
+        """Probe the engine for whether the drop-in is active and set the toggle to
+        match — so it always shows the truth, not a saved preference (which could
+        drift if the rule were removed outside OneUp). Output is tiny, so it's read
+        once on finish (no incremental slot that could fire after teardown)."""
+        if not ENGINE.exists():
+            return
+        p = getattr(self, "_authstat_proc", None)
+        if p is not None and p.state() != QProcess.NotRunning:
+            return
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        p = QProcess(self)
+        p.setProcessChannelMode(QProcess.MergedChannels)
+        p.finished.connect(lambda _c, _s, pr=p: self._on_auth_status_finished(pr))
+        self._authstat_proc = p
+        p.start("bash", [str(ENGINE), "--auth-status", f"--log={LOG_DIR / f'{stamp}.auth.log'}"])
+
+    def _on_auth_status_finished(self, proc: QProcess):
+        out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
+        self._set_auth_checked("@@AUTH@@|on" in out)
+
+    def on_auth_toggled(self, on: bool):
+        if not ENGINE.exists():
+            self._set_auth_checked(False)
+            return
+        if on:
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Warning)
+            box.setWindowTitle("Skip the password prompt for updates?")
+            box.setText("Let OneUp run updates without asking for your password?")
+            box.setInformativeText(
+                "OneUp will add a system rule so its update commands — zypper, "
+                "Flatpak, firmware and snapshots — can run without a password.\n\n"
+                "Your password is never stored. The system only remembers the "
+                "decision, and only for these specific commands.\n\n"
+                "Because updates run as administrator, this is effectively "
+                "passwordless administrator access on this machine — enable it "
+                "only on a computer you trust and control. You can switch it off "
+                "at any time to revoke it instantly.")
+            box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+            box.button(QMessageBox.Ok).setText("Enable")
+            box.setDefaultButton(QMessageBox.Cancel)
+            if box.exec() != QMessageBox.Ok:
+                self._set_auth_checked(False)   # user backed out
+                return
+            self._run_auth("--grant-auth", "Setting up… (approve the password popup)")
+        else:
+            self._run_auth("--revoke-auth", "Revoking authorization…")
+
+    def _run_auth(self, action: str, status_text: str):
+        p = getattr(self, "_authchg_proc", None)
+        if p is not None and p.state() != QProcess.NotRunning:
+            return
+        self.auth_btn.setEnabled(False)
+        self.status.setText(status_text)
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        p = QProcess(self)
+        p.setProcessChannelMode(QProcess.MergedChannels)
+        p.finished.connect(lambda _c, _s, pr=p: self._on_auth_finished(pr))
+        self._authchg_proc = p
+        p.start("bash", [str(ENGINE), action, f"--log={LOG_DIR / f'{stamp}.auth.log'}"])
+
+    def _on_auth_finished(self, proc: QProcess):
+        out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
+        self.auth_btn.setEnabled(True)
+        self.status.setText("Ready.")
+        for line in out.splitlines():
+            if line.startswith("@@HINT@@|"):
+                QMessageBox.warning(self, "Couldn't change the setting",
+                                    line.split("|", 1)[1])
+        # Re-probe the real state rather than trusting the toggle: a cancelled
+        # password prompt or a failure must leave the switch showing the truth.
+        self._query_auth_status()
 
     # ---- last-run history -------------------------------------------------
     def refresh_last_run(self):

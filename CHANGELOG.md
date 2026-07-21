@@ -8,6 +8,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **An opt-in "Passwordless" setting so OneUp stops asking for your password on every update.**
+  It stores no password — the operating system remembers the *decision* (a
+  scoped, revocable rule covering only OneUp's update commands), not the
+  password. It's off by default; turning it on asks for your password once to
+  set it up, and turning it off removes the rule instantly. OneUp shows a clear
+  warning first, because letting updates run without a password is effectively
+  passwordless administrator access on that machine.
+
 - **You can now preview exactly what an update will change before running it.**
   The read-only "Check" lists the packages that will change (name, old → new
   version) in an expandable panel on each task, and the system task gains a

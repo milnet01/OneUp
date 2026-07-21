@@ -42,6 +42,10 @@ OneUp can:
 - **Restart just the affected services** instead of rebooting, when a full reboot
   isn't actually required.
 - **Roll back** to the snapshot it took before the update, in one click.
+- **Skip the password prompt** — optionally (off by default). A "Passwordless"
+  toggle stops OneUp asking for your password on every update. It stores **no
+  password**: the system just remembers the decision for OneUp's update commands,
+  and switching it off revokes it instantly.
 - **Explain failures** in plain English, warn about low disk space or duplicate
   repos before starting, and follow your desktop's **light/dark** theme.
 
