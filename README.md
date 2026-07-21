@@ -34,8 +34,19 @@ documentation recommends. It's the knowledge, not the GUI, that's the point.
 | **Leftover packages** | Safely autoremoves unneeded dependencies; *reports* (never auto-removes) hand-installed orphans |
 | **Package cache** | `zypper clean --all` to reclaim disk space |
 
-Each task is a toggle — turn off what you don't want. There's a live log, a
-one-click **Restart** button when a reboot is genuinely needed, and a run history.
+Each task is a toggle — turn off what you don't want. On top of running updates,
+OneUp can:
+
+- **Check for updates** read-only (see the count per task before installing).
+- **Check weekly in the background** and notify you when updates are ready.
+- **Restart just the affected services** instead of rebooting, when a full reboot
+  isn't actually required.
+- **Roll back** to the snapshot it took before the update, in one click.
+- **Explain failures** in plain English, warn about low disk space or duplicate
+  repos before starting, and follow your desktop's **light/dark** theme.
+
+There's a live log, a one-click **Restart** button when a reboot is genuinely
+needed, and a run history.
 
 ## Design notes
 
@@ -53,22 +64,39 @@ one-click **Restart** button when a reboot is genuinely needed, and a run histor
 
 ## Install & run
 
-### From source (any openSUSE with KDE / Qt)
+### AppImage — one file, nothing to install
 
-Requires Python 3 and PySide6:
+Grab `OneUp-x86_64.AppImage` from the
+[latest release](https://github.com/milnet01/OneUp/releases/latest), make it
+executable, and run it. Everything (Python + Qt) is bundled inside:
 
 ```bash
-sudo zypper install python3-PySide6
+chmod +x OneUp-x86_64.AppImage
+./OneUp-x86_64.AppImage
+```
+
+Needs `libfuse2` to run (`sudo zypper install libfuse2`), like any AppImage.
+
+### RPM — for `zypper` users
+
+```bash
+sudo zypper install ./oneup-1.0.0-0.noarch.rpm     # pulls in python3-pyside6
+oneup
+```
+
+Or, once it's on OBS (see `packaging/obs/`): `sudo zypper install oneup`.
+
+### From source
+
+```bash
+sudo zypper install python3-pyside6
 git clone https://github.com/milnet01/OneUp.git
 cd OneUp
 python3 updater.py
 ```
 
-### As a Flatpak
-
-A Flatpak manifest lives in `flatpak/`. See that folder's notes for building and
-installing locally. *(Flatpak packaging of a host-system updater has some
-sandbox-permission caveats — documented there.)*
+Build your own AppImage or RPM from `packaging/appimage/build-appimage.sh` and
+`packaging/rpm/oneup.spec`.
 
 ## Requirements
 

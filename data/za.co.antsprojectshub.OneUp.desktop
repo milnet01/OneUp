@@ -6,6 +6,6 @@ Comment=Update openSUSE packages, Flatpaks and firmware from one window
 Exec=oneup
 Icon=za.co.antsprojectshub.OneUp
 Terminal=false
-Categories=System;PackageManager;Settings;
+Categories=System;PackageManager;
 Keywords=update;upgrade;zypper;flatpak;firmware;patch;openSUSE;
 StartupNotify=true
