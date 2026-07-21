@@ -42,8 +42,8 @@ os.chmod(_notify_mock, 0o755)
 os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
-    from PySide6.QtCore import QProcess
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtCore import QProcess, QTimer
+    from PySide6.QtWidgets import QApplication, QMessageBox
 except ImportError as exc:  # PySide6 absent — skip, don't fail the suite.
     print(f"  SKIP - PySide6 not installed ({exc})")
     sys.exit(77)
@@ -159,6 +159,21 @@ def main() -> int:
     w.proc = QProcess(w)
     w.on_finished(0, QProcess.ExitStatus.NormalExit)
     check("check: no reboot banner", not w.reboot_banner.isVisibleTo(w))
+
+    # --- 6. the About dialog opens and closes without error --------------------
+    w = updater.Updater()
+    check("About button exists in the header", hasattr(w, "about_btn"))
+    # show_about() runs a modal exec(); schedule a close so the test doesn't block.
+    def _dismiss_about():
+        for tl in app.topLevelWidgets():
+            if isinstance(tl, QMessageBox) and tl.isVisible():
+                tl.done(0)
+    QTimer.singleShot(50, _dismiss_about)
+    try:
+        w.show_about()
+        check("About dialog opens and dismisses cleanly", True)
+    except Exception as exc:  # noqa: BLE001
+        check(f"About dialog opens and dismisses cleanly ({exc})", False)
 
     print()
     print("======================================")

@@ -58,11 +58,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: ux.
   Source: suggestion 2026-07-21.
 
-- 📋 [ONEUP-0009] **Add an About dialog (version, license, GitHub/OBS links, check-for-update).**
+- ✅ [ONEUP-0009] **Add an About dialog (version, license, GitHub/OBS links, check-for-update).**
   Now that the version is shown, add a small About dialog reachable from the header — APP_VERSION, MIT licence, links to the GitHub repo + OBS package, and a manual 'check for updates' button (reuses _check_app_update).
   **Layman:** A small 'About OneUp' window with the version, licence and links.
   Kind: feature.
   Source: suggestion 2026-07-21.
+  Resolved (2026-07-21): added an "About" GhostBtn to the header opening show_about() — a QMessageBox with the icon, APP_NAME + version, MIT licence, clickable GitHub + OBS links (openExternalLinks), and a "Check for updates" button. Reuses _check_app_update, now with a manual flag: the manual path reports the result either way (up-to-date / newer available / couldn't reach GitHub) while the automatic startup check stays silent unless a newer release exists. gui-smoke.py opens+auto-dismisses the modal (QTimer) to prove it doesn't crash; 26 checks.
 
 - ✅ [ONEUP-0010] **Fire a desktop notification when a manual (foreground) run finishes.**
   Today only the weekly --check notifies. On on_finished, send a notify-send summary (done / N installed / errors) so a foreground run you walked away from still tells you when it's done.

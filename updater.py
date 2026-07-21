@@ -403,10 +403,17 @@ class Updater(QMainWindow):
         self.recenter_btn.setToolTip("Move the window back to the centre of the screen")
         self.recenter_btn.clicked.connect(self.recenter)
 
+        self.about_btn = QPushButton("About")
+        self.about_btn.setObjectName("GhostBtn")
+        self.about_btn.setCursor(Qt.PointingHandCursor)
+        self.about_btn.setToolTip("Version, licence, links and a manual update check")
+        self.about_btn.clicked.connect(self.show_about)
+
         header_row = QHBoxLayout()
         header_row.addLayout(titleblock, 1)
         header_row.addWidget(self.auto_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.recenter_btn, 0, Qt.AlignTop)
+        header_row.addWidget(self.about_btn, 0, Qt.AlignTop)
         root.addLayout(header_row)
         root.addSpacing(2)
 
@@ -1021,8 +1028,35 @@ for (var i = 0; i < clients.length; i++) {{
                 "pkexec", ["sh", "-c",
                            f"snapper rollback {self._snapshot} && systemctl reboot"])
 
+    # ---- About dialog -----------------------------------------------------
+    def show_about(self):
+        """A small About window: version, licence, links, and a manual update check."""
+        box = QMessageBox(self)
+        box.setWindowTitle(f"About {APP_NAME}")
+        icon = _app_icon()
+        if not icon.isNull():
+            box.setIconPixmap(icon.pixmap(64, 64))
+        box.setTextFormat(Qt.RichText)
+        box.setText(f"<b>{APP_NAME} {APP_VERSION}</b>")
+        box.setInformativeText(
+            "One-click updates for openSUSE — system packages, Flatpaks, firmware, "
+            "leftover-package removal and cache cleanup.<br><br>"
+            "Released under the <b>MIT Licence</b>.<br><br>"
+            f'<a href="https://github.com/{REPO_SLUG}">GitHub repository</a> &nbsp;·&nbsp; '
+            '<a href="https://software.opensuse.org/package/oneup">openSUSE package (OBS)</a>')
+        for lbl in box.findChildren(QLabel):
+            lbl.setOpenExternalLinks(True)  # let the links open in the browser.
+        check_btn = box.addButton("Check for updates", QMessageBox.ActionRole)
+        box.addButton(QMessageBox.Close)
+        box.exec()
+        if box.clickedButton() is check_btn:
+            self._check_app_update(manual=True)
+
     # ---- self-update check ------------------------------------------------
-    def _check_app_update(self):
+    def _check_app_update(self, manual: bool = False):
+        # manual=True (the About dialog's button) reports the result either way;
+        # the automatic startup check stays silent unless a newer release exists.
+        self._manual_update_check = manual
         self._nam = QNetworkAccessManager(self)
         req = QNetworkRequest(QUrl(f"https://api.github.com/repos/{REPO_SLUG}/releases/latest"))
         req.setRawHeader(b"Accept", b"application/vnd.github+json")
@@ -1030,8 +1064,12 @@ for (var i = 0; i < clients.length; i++) {{
         self._nam.get(req)
 
     def _on_app_update_reply(self, reply: QNetworkReply):
+        manual = getattr(self, "_manual_update_check", False)
         try:
             if reply.error() != QNetworkReply.NetworkError.NoError:
+                if manual:
+                    QMessageBox.warning(self, "Check for updates",
+                                        "Couldn't reach GitHub to check for a newer OneUp.")
                 return
             data = json.loads(bytes(reply.readAll()).decode(errors="replace"))
             tag = str(data.get("tag_name", "")).lstrip("vV")
@@ -1040,11 +1078,20 @@ for (var i = 0; i < clients.length; i++) {{
                 self.appupdate_label.setText(
                     f"A newer OneUp ({tag}) is available — you have {APP_VERSION}.")
                 self.appupdate_banner.setVisible(True)
+                if manual:
+                    QMessageBox.information(self, "Check for updates",
+                                            f"A newer OneUp ({tag}) is available — "
+                                            f"you have {APP_VERSION}.")
+            elif manual:
+                QMessageBox.information(self, "Check for updates",
+                                        f"You're on the latest version ({APP_VERSION}).")
         except (ValueError, KeyError, AttributeError, TypeError):
             # ValueError/KeyError: bad JSON / missing key; AttributeError/TypeError:
             # a non-object JSON body (list, string, null) has no .get(). A flaky
             # update check must never throw out of this network slot.
-            pass
+            if manual:
+                QMessageBox.warning(self, "Check for updates",
+                                    "Couldn't read GitHub's reply while checking for updates.")
         finally:
             reply.deleteLater()
 
