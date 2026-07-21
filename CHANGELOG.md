@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **A Repositories manager (from the header) to turn software repositories on/off with switches and remove ones that duplicate another repo's URL — the duplicate-repo warning now opens it.**
+  Listing is read-only (no admin rights); flipping switches or removing a
+  duplicate is applied together with a single administrator prompt. Repo
+  names are validated before they reach the privileged command.
+
 - **Each task row now shows how long the step took next to what it did — e.g. "3 installed · 42s".**
 
 - **An "About" window (from the header) showing the version, MIT licence, GitHub and openSUSE package links, and a manual "check for updates" button that reports the result either way.**

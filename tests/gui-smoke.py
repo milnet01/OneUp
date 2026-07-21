@@ -43,7 +43,7 @@ os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
     from PySide6.QtCore import QProcess, QTimer
-    from PySide6.QtWidgets import QApplication, QMessageBox
+    from PySide6.QtWidgets import QApplication, QMessageBox, QPushButton
 except ImportError as exc:  # PySide6 absent — skip, don't fail the suite.
     print(f"  SKIP - PySide6 not installed ({exc})")
     sys.exit(77)
@@ -130,13 +130,15 @@ def main() -> int:
     # isVisibleTo(window): the banner's own visibility, independent of the never-shown window.
     check("disk warning banner shown", w.warn_banner.isVisibleTo(w))
 
-    # A REPO marker names the duplicate URL in the banner (not a generic message).
+    # A REPO marker names the duplicate URL and flips the banner button to the
+    # repo manager.
     w2 = updater.Updater()
     w2.handle_line("@@REPO@@|warn|duplicate|http://x.example/repo")
     check("repo warning names the duplicate URL",
           "http://x.example/repo" in w2.warn_label.text())
-    check("repo warning gives the removerepo hint",
-          "removerepo" in w2.warn_label.text())
+    check("repo warning arms the repo-manager action", w2._warn_repo_dup is True)
+    check("repo warning button becomes 'Manage repositories…'",
+          w2.warn_btn.text() == "Manage repositories…")
 
     # --- 3. on_finished promotes the accumulated state into the right banners ---
     w.proc = QProcess(w)   # on_finished releases self.proc; give it a real one.
@@ -187,6 +189,46 @@ def main() -> int:
         check("About dialog opens and dismisses cleanly", True)
     except Exception as exc:  # noqa: BLE001
         check(f"About dialog opens and dismisses cleanly ({exc})", False)
+
+    # --- 7. the Repositories manager: parse, duplicate flag, apply command ------
+    check("Repositories button exists in the header", hasattr(w, "repos_btn"))
+
+    sample = (
+        "Repository priorities in effect:\n"
+        "#  | Alias      | Name      | Enabled | GPG Check | Refresh | URI\n"
+        "---+------------+-----------+---------+-----------+---------+----------\n"
+        " 1 | oss        | Main OSS  | Yes     | (r ) Yes  | Yes     | http://d.o/oss/\n"
+        " 2 | debug      | Debug     | No      | ----      | ----    | http://d.o/debug/\n"
+        " 3 | debug-dup  | Debug 2   | No      | ----      | ----    | http://d.o/debug/\n"
+    )
+    repos = updater._parse_repos(sample)
+    check("parse reads all repositories", len(repos) == 3)
+    check("parse reads the enabled flag", repos[0]["enabled"] is True and repos[1]["enabled"] is False)
+    check("parse reads the URL", repos[0]["url"] == "http://d.o/oss/")
+
+    dlg = updater.RepoManagerDialog(None, repos)
+    check("manager builds a row per repository", len(dlg._rows) == 3)
+    # Only the two repos sharing a URL get a Remove button.
+    remove_btns = [b for b in dlg.findChildren(QPushButton) if b.text() == "Remove"]
+    check("only duplicate rows get a Remove action", len(remove_btns) == 2)
+
+    # No change -> empty command; a disable + a remove -> one validated pkexec call.
+    check("no changes yields an empty apply command", dlg._build_apply_command() == [])
+    dlg._rows[0]["switch"].setChecked(False)   # disable oss
+    dlg._rows[2]["remove"] = True              # remove the duplicate
+    cmd = dlg._build_apply_command()
+    check("apply command is a single pkexec invocation",
+          bool(cmd) and cmd[0] == "pkexec" and cmd[1] == "sh")
+    check("apply disables the toggled repo", "modifyrepo --disable oss" in cmd[3])
+    check("apply removes the duplicate", "removerepo debug-dup" in cmd[3])
+
+    # An unsafe alias must never reach the root shell.
+    unsafe = [{"alias": "evil; rm -rf /", "name": "x", "enabled": False, "url": "u"},
+              {"alias": "y", "name": "y", "enabled": False, "url": "u"}]
+    dlg_bad = updater.RepoManagerDialog(None, unsafe)
+    dlg_bad._rows[0]["switch"].setChecked(True)
+    check("an unsafe repo alias refuses to build a command",
+          dlg_bad._build_apply_command() is None)
 
     print()
     print("======================================")

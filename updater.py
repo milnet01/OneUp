@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from string import Template
@@ -41,6 +42,7 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequ
 from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
+    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -49,8 +51,10 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
+    QWidget,
 )
 
 APP_ID = "za.co.antsprojectshub.OneUp"
@@ -358,6 +362,184 @@ class TaskRow(QFrame):
         self.badge.setVisible(False)
 
 
+# --- repository listing / management ---------------------------------------
+# Repo aliases are the identifiers passed to a root `zypper modifyrepo/removerepo`;
+# validate them against this before they reach a shell (defence in depth, mirroring
+# the rollback snapshot-id and service-name guards).
+_ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
+
+
+def _parse_repos(text: str) -> list[dict]:
+    """Parse `zypper lr -u` table output into [{alias, name, enabled, url}].
+    Rows look like '# | Alias | Name | Enabled | GPG Check | Refresh | URI'; the
+    header, separator, and the priority preamble are skipped (their first column
+    isn't a number)."""
+    repos = []
+    for line in text.splitlines():
+        cols = [c.strip() for c in line.split("|")]
+        if len(cols) < 7 or not cols[0].isdigit():
+            continue
+        repos.append({
+            "alias": cols[1],
+            "name": cols[2] or cols[1],
+            "enabled": cols[3][:1].lower() == "y",
+            "url": cols[-1],
+        })
+    return repos
+
+
+def read_repos() -> list[dict]:
+    """Read the system's repositories (read-only — no root needed)."""
+    if not shutil.which("zypper"):
+        return []
+    try:
+        out = subprocess.run(  # noqa: S603,S607 — fixed argv, no shell.
+            ["zypper", "--non-interactive", "lr", "-u"],
+            capture_output=True, text=True, timeout=15,
+            env={**os.environ, "LC_ALL": "C"},  # pin the 'Yes'/'No' + column text
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return _parse_repos(out)
+
+
+class RepoManagerDialog(QDialog):
+    """Turn repositories on/off, and remove ones whose URL duplicates another's.
+    Listing is read-only; applying the changes needs one admin (pkexec) prompt."""
+
+    def __init__(self, parent, repos: list[dict]):
+        super().__init__(parent)
+        self.setWindowTitle("Repositories")
+        self.setMinimumWidth(540)
+        self._rows: list[dict] = []   # {repo, switch, remove(bool), frame}
+        self._proc: QProcess | None = None
+
+        # A URL used by more than one repository is the duplicate we can clean up.
+        url_counts = Counter(r["url"] for r in repos if r["url"])
+
+        root = QVBoxLayout(self)
+        intro = QLabel(
+            "Turn repositories on or off. ⚠ marks a URL used by more than one "
+            "repository — a common cause of update conflicts; you can remove the "
+            "extra copy. Nothing changes until you press Apply.")
+        intro.setWordWrap(True)
+        root.addWidget(intro)
+
+        inner = QWidget()
+        lst = QVBoxLayout(inner)
+        lst.setSpacing(6)
+        for repo in repos:
+            is_dup = bool(repo["url"]) and url_counts[repo["url"]] > 1
+            lst.addWidget(self._make_row(repo, is_dup))
+        lst.addStretch(1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(inner)
+        scroll.setMinimumHeight(280)
+        root.addWidget(scroll, 1)
+
+        btns = QHBoxLayout()
+        btns.addStretch(1)
+        self.apply_btn = QPushButton("Apply changes")
+        self.apply_btn.setObjectName("RunBtn")
+        self.apply_btn.clicked.connect(self._apply)
+        close_btn = QPushButton("Close")
+        close_btn.setObjectName("GhostBtn")
+        close_btn.clicked.connect(self.reject)
+        btns.addWidget(self.apply_btn)
+        btns.addWidget(close_btn)
+        root.addLayout(btns)
+
+    def _make_row(self, repo: dict, is_dup: bool) -> QFrame:
+        fr = QFrame()
+        fr.setObjectName("RowBorder")
+        lay = QHBoxLayout(fr)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(10)
+
+        text = QVBoxLayout()
+        text.setSpacing(1)
+        name = QLabel(("⚠  " if is_dup else "") + repo["name"])
+        name.setObjectName("TaskName")
+        url = QLabel(repo["url"])
+        url.setObjectName("TaskDesc")
+        text.addWidget(name)
+        text.addWidget(url)
+        lay.addLayout(text, 1)
+
+        entry: dict = {"repo": repo, "remove": False, "frame": fr}
+        if is_dup:
+            rm = QPushButton("Remove")
+            rm.setObjectName("LinkBtn")
+            rm.setCursor(Qt.PointingHandCursor)
+            rm.clicked.connect(lambda _=False, e=entry: self._mark_removed(e))
+            lay.addWidget(rm, 0)
+        switch = ToggleSwitch()
+        switch.setChecked(repo["enabled"])
+        lay.addWidget(switch, 0, Qt.AlignVCenter)
+        entry["switch"] = switch
+        self._rows.append(entry)
+        return fr
+
+    def _mark_removed(self, entry: dict):
+        entry["remove"] = True
+        entry["frame"].setEnabled(False)   # grey it out; excluded from the toggle diff
+
+    def _build_apply_command(self) -> list[str] | None:
+        """The single pkexec command that applies every change, [] if there's
+        nothing to do, or None if an alias fails validation (so it never reaches a
+        root shell)."""
+        enable, disable, remove = [], [], []
+        for e in self._rows:
+            alias = e["repo"]["alias"]
+            if e["remove"]:
+                remove.append(alias)
+            elif e["switch"].isChecked() != e["repo"]["enabled"]:
+                (enable if e["switch"].isChecked() else disable).append(alias)
+        changes = enable + disable + remove
+        if not changes:
+            return []
+        if any(not _ALIAS_RE.fullmatch(a) for a in changes):
+            return None
+        parts = []
+        if disable:
+            parts.append("zypper --non-interactive modifyrepo --disable " + " ".join(disable))
+        if enable:
+            parts.append("zypper --non-interactive modifyrepo --enable " + " ".join(enable))
+        if remove:
+            parts.append("zypper --non-interactive removerepo " + " ".join(remove))
+        return ["pkexec", "sh", "-c", " && ".join(parts)]
+
+    def _apply(self):
+        cmd = self._build_apply_command()
+        if cmd == []:
+            self.accept()
+            return
+        if cmd is None:
+            QMessageBox.warning(self, "Repositories",
+                                "A repository name looked unsafe — nothing was changed.")
+            return
+        if QMessageBox.question(
+                self, "Apply repository changes",
+                "OneUp will apply your repository changes. This needs administrator "
+                "rights and is reversible.\n\nApply now?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
+        self.apply_btn.setEnabled(False)
+        self._proc = QProcess(self)
+        self._proc.finished.connect(self._on_applied)
+        self._proc.start(cmd[0], cmd[1:])
+
+    def _on_applied(self, code: int, _status):
+        if code == 0:
+            QMessageBox.information(self, "Repositories", "Repository changes applied.")
+            self.accept()
+        else:
+            QMessageBox.warning(self, "Repositories",
+                                "Couldn't apply the changes — they may have been cancelled.")
+            self.apply_btn.setEnabled(True)
+
+
 class Updater(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -377,6 +559,7 @@ class Updater(QMainWindow):
         self._hints: list[str] = []
         self._log_path: Path | None = None
         self._latest_tag = ""
+        self._warn_repo_dup = False   # is the current warning a duplicate-repo one?
 
         # Gradient ring: a 2px accent border (outer #Frame) around the card.
         outer_frame = QFrame()
@@ -417,6 +600,12 @@ class Updater(QMainWindow):
         self.recenter_btn.setToolTip("Move the window back to the centre of the screen")
         self.recenter_btn.clicked.connect(self.recenter)
 
+        self.repos_btn = QPushButton("Repositories")
+        self.repos_btn.setObjectName("GhostBtn")
+        self.repos_btn.setCursor(Qt.PointingHandCursor)
+        self.repos_btn.setToolTip("Turn software repositories on/off and clean up duplicates")
+        self.repos_btn.clicked.connect(self.open_repos)
+
         self.about_btn = QPushButton("About")
         self.about_btn.setObjectName("GhostBtn")
         self.about_btn.setCursor(Qt.PointingHandCursor)
@@ -426,6 +615,7 @@ class Updater(QMainWindow):
         header_row = QHBoxLayout()
         header_row.addLayout(titleblock, 1)
         header_row.addWidget(self.auto_btn, 0, Qt.AlignTop)
+        header_row.addWidget(self.repos_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.recenter_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.about_btn, 0, Qt.AlignTop)
         root.addLayout(header_row)
@@ -487,7 +677,7 @@ class Updater(QMainWindow):
         root.addWidget(self.services_banner)
 
         self.warn_banner, self.warn_label, self.warn_btn = self._make_banner(
-            "WarnBanner", "BannerBtn", "Show details", self._show_log)
+            "WarnBanner", "BannerBtn", "Show details", self._warn_action)
         root.addWidget(self.warn_banner)
 
         self.appupdate_banner, self.appupdate_label, self.appupdate_btn = self._make_banner(
@@ -711,6 +901,25 @@ for (var i = 0; i < clients.length; i++) {{
         )
         self.refresh_last_run()
 
+    # ---- repositories -----------------------------------------------------
+    def open_repos(self):
+        """Open the repository manager (on/off switches + duplicate cleanup)."""
+        repos = read_repos()
+        if not repos:
+            QMessageBox.information(
+                self, "Repositories",
+                "Couldn't read the repository list. Is zypper available?")
+            return
+        RepoManagerDialog(self, repos).exec()
+
+    def _warn_action(self):
+        """The warning banner's button does one of two things depending on the
+        warning: open the repo manager for a duplicate, else show the log."""
+        if self._warn_repo_dup:
+            self.open_repos()
+        else:
+            self._show_log()
+
     # ---- log pane ---------------------------------------------------------
     def toggle_log(self):
         self._show_log(not self.log.isVisible())
@@ -770,6 +979,10 @@ for (var i = 0; i < clients.length; i++) {{
         self._total = len(steps)
         for b in (self.reboot_banner, self.services_banner, self.warn_banner):
             b.setVisible(False)
+        # Reset the warning banner's button back to its default "Show details" role
+        # (a previous run may have switched it to the repo-manager action).
+        self._warn_repo_dup = False
+        self.warn_btn.setText("Show details")
         self.retry_btn.setVisible(False)
         self.rollback_btn.setVisible(False)
         for r in self.rows.values():
@@ -911,14 +1124,16 @@ for (var i = 0; i < clients.length; i++) {{
             if tag == "DISK" and len(parts) >= 3:
                 msg = f"Low disk space on {parts[1]} — only {parts[2]} free. Updating may fail."
             elif tag == "REPO":
-                # parts: warn|duplicate|<space-joined urls>. Name the culprit(s) so the
-                # warning is actionable instead of sending the user hunting in the log.
+                # parts: warn|duplicate|<space-joined urls>. Name the culprit(s) and
+                # point the banner's button at the repo manager to fix it in-app.
                 urls = parts[2].strip() if len(parts) >= 3 else ""
                 if urls:
-                    msg = (f"Duplicate repository URL(s): {urls} — remove the extra with "
-                           "'sudo zypper removerepo <alias>'.")
+                    msg = (f"Duplicate repository URL(s): {urls}. Open Repositories to "
+                           "turn off or remove the extra copy.")
                 else:
                     msg = "Duplicate repository URLs detected — a common cause of update conflicts."
+                self._warn_repo_dup = True
+                self.warn_btn.setText("Manage repositories…")
             else:
                 msg = "Pre-flight warning — see the log for details."
             self.warn_label.setText("⚠  " + msg)
