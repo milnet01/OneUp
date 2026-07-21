@@ -80,6 +80,9 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 #   @@STEP_END@@|key|ok|skip|fail|detail
 #   @@SNAPSHOT@@|id
 #   @@CHECK@@|key|count|label            (--check mode: updates available)
+#   @@DISK@@|warn|mount|free             (pre-flight: low disk space)
+#   @@REPO@@|warn|reason                 (pre-flight: repo health issue)
+#   @@HINT@@|plain-English failure hint
 #   @@SERVICES@@|svc1 svc2 …             (services to restart instead of rebooting)
 #   @@REBOOT@@|yes|no
 #   @@DONE@@|ok|errors
@@ -228,10 +231,39 @@ $needs_sudo && release_zypper_lock
 # records a rollback target.
 # ---------------------------------------------------------------------------
 if step_selected system && command -v snapper &>/dev/null; then
-    SNAP_ID=$(sudo snapper --no-headers list 2>/dev/null | tail -n 1 | awk '{print $1}')
+    # Create a clearly-labelled rollback point so the pre-update state is easy to
+    # find later. (Tumbleweed also auto-snapshots around zypper, but a named entry
+    # is unambiguous.) Fall back to reporting the newest snapshot if create fails.
+    SNAP_ID=$(sudo snapper create --description "OneUp pre-update $(date '+%Y-%m-%d %H:%M')" \
+        --cleanup-algorithm number --print-number 2>/dev/null)
+    [[ -z "$SNAP_ID" ]] && SNAP_ID=$(sudo snapper --no-headers list 2>/dev/null | tail -n1 | awk '{print $1}')
     if [[ -n "$SNAP_ID" ]]; then
-        echo "Pre-update snapshot on record: #$SNAP_ID  (roll back with: sudo snapper rollback $SNAP_ID)"
+        echo "Pre-update snapshot #$SNAP_ID recorded  (roll back with: sudo snapper rollback $SNAP_ID)"
         marker SNAPSHOT "$SNAP_ID"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Pre-flight checks (read-only): warn about low disk space and unhealthy repos
+# BEFORE changing anything, so a run can't die half-way through a transaction.
+# ---------------------------------------------------------------------------
+if step_selected system; then
+    # Disk: an interrupted transaction from a full disk is the worst failure mode.
+    for mp in / /var; do
+        avail=$(df -PB1 "$mp" 2>/dev/null | awk 'NR==2{print $4}')
+        if [[ -n "$avail" ]] && (( avail < 2 * 1024 * 1024 * 1024 )); then
+            human=$(numfmt --to=iec "$avail" 2>/dev/null || echo "${avail}B")
+            echo "  ! Low disk space on $mp: only $human free (recommend at least 2 GiB)."
+            marker DISK "warn|$mp|$human"
+        fi
+    done
+    # Repos: duplicate repository URLs are a frequent source of update conflicts.
+    dupe=$(zypper --non-interactive lr -u 2>/dev/null \
+        | awk -F'|' 'NF>=6{u=$NF; gsub(/ /,"",u); if(u!="" && u!="URI") c[u]++} END{for(k in c) if(c[k]>1) print k}')
+    if [[ -n "$dupe" ]]; then
+        echo "  ! Duplicate repository URL(s) detected — a common cause of conflicts:"
+        echo "$dupe" | sed 's/^/      /'
+        marker REPO "warn|duplicate"
     fi
 fi
 
@@ -280,6 +312,21 @@ if step_selected system; then
             fi
         fi
     else
+        # Turn the most common zypper failures into one plain-English line.
+        hint=""
+        if grep -qiE 'No space left|disk full' "$SYS_LOG"; then
+            hint="Ran out of disk space — free some room (clear the package cache, delete old snapshots) and retry."
+        elif grep -qiE 'signature|GPG|key.*(expired|reject)' "$SYS_LOG"; then
+            hint="A repository signing key looks wrong or expired — run: sudo zypper --gpg-auto-import-keys refresh, then retry."
+        elif grep -qiE 'Timeout|could not resolve|connection failed|Curl error|Download.*failed|Temporary failure' "$SYS_LOG"; then
+            hint="A download failed — check your internet connection, then retry."
+        elif grep -qiE 'conflict|nothing provides|not installable' "$SYS_LOG"; then
+            hint="A package conflict — often a third-party repo. Check the log; you may need to disable a conflicting repository."
+        fi
+        if [[ -n "$hint" ]]; then
+            echo "  Hint: $hint"
+            marker HINT "$hint"
+        fi
         end_step system fail "zypper reported an error"
     fi
     rm -f "$SYS_LOG"
