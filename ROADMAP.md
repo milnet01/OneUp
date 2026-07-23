@@ -194,3 +194,27 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Design OneUp so people who can't see well — or at all — can still use it: screen-reader support, large/scalable text and high-contrast options, and never relying on colour alone to convey status.
   Kind: accessibility.
   Source: user-request-2026-07-23.
+
+- 📋 [ONEUP-0029] **Report how much disk space the cache clean actually freed.**
+  Measure /var/cache/zypp (du) before and after `zypper clean --all` in update_system.sh (~line 813) and print/emit the delta. The cache step is the only task whose benefit the user can't currently see. Small, no risk. Natural lead-in to ONEUP-0021 (snapshot thinning).
+  **Layman:** After clearing the package cache, show 'Reclaimed 1.4 GiB' so the least-visible step has a visible payoff.
+  Kind: enhancement.
+  Source: in-session-2026-07-23.
+
+- 📋 [ONEUP-0030] **Show a 'last updated N days ago' nudge on launch.**
+  Derive from the existing run history in ~/.local/state/oneup/history.json. Surface 'Last updated N days ago' on the dashboard; amber-tint past ~2 weeks. Ties into the existing tray icon so a resident session nudges without a popup.
+  **Layman:** On opening OneUp, remind the user how long since their last update, and gently flag it once it's been a couple of weeks.
+  Kind: feature.
+  Source: in-session-2026-07-23.
+
+- 📋 [ONEUP-0031] **Add a one-click 'copy diagnostics for a bug report' button.**
+  Bundle the latest run log, OneUp version, openSUSE version, and enabled toggles onto the clipboard. Makes GitHub issues actionable for non-technical users without pointing them at ~/.local/state/oneup/logs.
+  **Layman:** One button that copies the run log plus version info to the clipboard, so filing a bug report doesn't mean hunting through hidden folders.
+  Kind: feature.
+  Source: in-session-2026-07-23.
+
+- 📋 [ONEUP-0032] **Wrap UI strings for translation (i18n groundwork).**
+  Wrap user-facing strings in updater.py with self.tr() and keep a Qt .ts/.qm workflow ready. openSUSE has a large European base. Doing it before the string count grows keeps the door open even if no second locale ships initially.
+  **Layman:** Prepare the app so its text can be translated into other languages later (German, etc.) — cheap to do now, expensive once the wording grows.
+  Kind: enhancement.
+  Source: in-session-2026-07-23.
