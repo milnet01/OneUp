@@ -1234,8 +1234,39 @@ for (var i = 0; i < clients.length; i++) {{
         self._refresh_autoupdate_label()
 
     def on_autoupdate_toggled(self, on: bool):
-        # Real coupling logic added in Task 5. Placeholder keeps the signal valid.
-        self._set_autoupdate_checked(on)
+        # Up-front engine guard MIRRORS on_auth_toggled: with the engine absent the
+        # async chain hits _query_auth_status's early return and NO settle ever fires,
+        # so we must revert-and-return BEFORE any latch/disable, or the toggle would be
+        # stuck disabled forever.
+        if not ENGINE.exists():
+            self._set_autoupdate_checked(False)
+            return
+        if on:
+            # The reflected passwordless switch is only used to pick the entry branch;
+            # the install itself always waits for a FRESH auth settle (never trusts the
+            # possibly-stale switch). Disable the toggle for the async op (closes the
+            # mirror race where the user un-clicks mid-probe); re-enabled in the settle.
+            self._pending_autoupdate = True
+            self.autoupdate_btn.setEnabled(False)
+            if self.auth_btn.isChecked():
+                # Looks on — verify with a fresh probe; the settle installs iff truly on.
+                self._query_auth_status()
+            else:
+                # Offer to enable BOTH at once, with the shared consent caveat.
+                if self._confirm_passwordless(
+                        lead="Automatic updates need OneUp to run without a password.\n\n"):
+                    self._run_auth("--grant-auth",
+                                   "Setting up… (approve the password popup)")
+                    # _run_auth -> _on_auth_finished -> _query_auth_status -> settle installs.
+                else:
+                    self._pending_autoupdate = False
+                    self.autoupdate_btn.setEnabled(True)
+                    self._set_autoupdate_checked(False)
+        else:
+            # User turns auto-update off: remove the timer, clear any stray latch.
+            self._remove_user_timer("oneup-update")
+            self._pending_autoupdate = False
+            self._refresh_autoupdate_label()
 
     # ---- passwordless authorization (opt-in, ONEUP-0023) ------------------
     def _refresh_auth_label(self):
@@ -1269,34 +1300,70 @@ for (var i = 0; i < clients.length; i++) {{
 
     def _on_auth_status_finished(self, proc: QProcess):
         out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
-        self._set_auth_checked("@@AUTH@@|on" in out)
+        is_on = "@@AUTH@@|on" in out
+        self._set_auth_checked(is_on)
+        # Re-enable the auto-update toggle if a pending enable had disabled it.
+        self.autoupdate_btn.setEnabled(True)
+        if self._pending_autoupdate:
+            self._pending_autoupdate = False        # consume unconditionally
+            if is_on:
+                enabled = self._install_user_timer(
+                    "oneup-update", "OneUp weekly automatic update", "--update")
+                self._set_autoupdate_checked(enabled)
+                if not enabled:
+                    QMessageBox.warning(
+                        self, "Could not enable automatic updates",
+                        "The weekly update timer could not be enabled.")
+            else:
+                # Passwordless came back off (popup cancelled / visudo rejected / failed).
+                # The grant's @@HINT@@ was already surfaced in _on_auth_finished.
+                self._set_autoupdate_checked(False)
+
+    def _confirm_passwordless(self, lead: str = "") -> bool:
+        """The ONEUP-0023 passwordless consent dialog. `lead` prepends a caller-
+        specific sentence (e.g. auto-update's reason) before the shared caveat, so
+        both call sites present the SAME security warning — never a shortened rewrite."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Skip the password prompt for updates?")
+        box.setText("Let OneUp run updates without asking for your password?")
+        box.setInformativeText(
+            lead +
+            "OneUp will add a system rule so its update commands — zypper, "
+            "Flatpak, firmware and snapshots — can run without a password.\n\n"
+            "Your password is never stored. The system only remembers the "
+            "decision, and only for these specific commands.\n\n"
+            "Because updates run as administrator, this is effectively "
+            "passwordless administrator access on this machine — enable it "
+            "only on a computer you trust and control. You can switch it off "
+            "at any time to revoke it instantly.")
+        box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+        box.button(QMessageBox.Ok).setText("Enable")
+        box.setDefaultButton(QMessageBox.Cancel)
+        return box.exec() == QMessageBox.Ok
 
     def on_auth_toggled(self, on: bool):
         if not ENGINE.exists():
             self._set_auth_checked(False)
             return
         if on:
-            box = QMessageBox(self)
-            box.setIcon(QMessageBox.Warning)
-            box.setWindowTitle("Skip the password prompt for updates?")
-            box.setText("Let OneUp run updates without asking for your password?")
-            box.setInformativeText(
-                "OneUp will add a system rule so its update commands — zypper, "
-                "Flatpak, firmware and snapshots — can run without a password.\n\n"
-                "Your password is never stored. The system only remembers the "
-                "decision, and only for these specific commands.\n\n"
-                "Because updates run as administrator, this is effectively "
-                "passwordless administrator access on this machine — enable it "
-                "only on a computer you trust and control. You can switch it off "
-                "at any time to revoke it instantly.")
-            box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
-            box.button(QMessageBox.Ok).setText("Enable")
-            box.setDefaultButton(QMessageBox.Cancel)
-            if box.exec() != QMessageBox.Ok:
+            if not self._confirm_passwordless():
                 self._set_auth_checked(False)   # user backed out
                 return
             self._run_auth("--grant-auth", "Setting up… (approve the password popup)")
         else:
+            # Coupling rule 3: a schedule can't outlive the passwordless rule it needs.
+            # Hooked to the revoke ACTION (not the toggle signal), so the programmatic
+            # blockSignals reflects can't trip it. Removal is a local systemd-user op,
+            # independent of the revoke process's own outcome.
+            if self._autoupdate_enabled():
+                self._remove_user_timer("oneup-update")
+                self._set_autoupdate_checked(False)
+                QMessageBox.information(
+                    self, "Automatic updates turned off",
+                    "Automatic weekly updates were switched off because they need "
+                    "the passwordless setting to run unattended.")
+            self._pending_autoupdate = False    # a revoke mid-enable can't leave a stale latch
             self._run_auth("--revoke-auth", "Revoking authorization…")
 
     def _run_auth(self, action: str, status_text: str):
@@ -1305,6 +1372,7 @@ for (var i = 0; i < clients.length; i++) {{
             return
         self.auth_btn.setEnabled(False)
         self.status.setText(status_text)
+        self._settings_status(status_text)
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         p = QProcess(self)
@@ -1317,6 +1385,7 @@ for (var i = 0; i < clients.length; i++) {{
         out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
         self.auth_btn.setEnabled(True)
         self.status.setText("Ready.")
+        self._settings_status("")
         for line in out.splitlines():
             if line.startswith("@@HINT@@|"):
                 QMessageBox.warning(self, "Couldn't change the setting",

@@ -212,6 +212,51 @@ def main() -> int:
     check("Settings dialog hosts the passwordless toggle", w.auth_btn in hosted)
     check("Settings dialog hosts the auto-update toggle", w.autoupdate_btn in hosted)
 
+    # --- coupling: auto-update never enables without passwordless ---------------
+    updater.QMessageBox.information = staticmethod(lambda *a, **k: 0)
+    updater.QMessageBox.warning = staticmethod(lambda *a, **k: 0)
+
+    # (a) enabling with passwordless OFF and cancelling the combined dialog installs nothing
+    w = updater.Updater()
+    installed_a = []
+    w._install_user_timer = lambda *a, **k: (installed_a.append(a) or True)
+    w._confirm_passwordless = lambda lead="": False          # user cancels
+    w._set_auth_checked(False)                               # passwordless off
+    w.on_autoupdate_toggled(True)
+    check("cancel combined-enable installs no update timer", not installed_a)
+    check("cancel combined-enable leaves auto-update off", not w.autoupdate_btn.isChecked())
+    check("cancel combined-enable clears the pending latch", w._pending_autoupdate is False)
+
+    # (b) a settle reporting passwordless OFF while a latch is pending must NOT install
+    w = updater.Updater()
+    installed_b = []
+    w._install_user_timer = lambda *a, **k: (installed_b.append(a) or True)
+    w._pending_autoupdate = True
+    w._on_auth_status_finished(_StubProc("@@AUTH@@|off\n"))
+    check("settle passwordless-off does not install the update timer (stale-switch guard)",
+          not installed_b)
+    check("settle passwordless-off consumes the latch", w._pending_autoupdate is False)
+
+    # (c) a settle reporting passwordless ON with a pending latch installs + turns on
+    w = updater.Updater()
+    installed_c = []
+    w._install_user_timer = lambda *a, **k: (installed_c.append(a) or True)
+    w._pending_autoupdate = True
+    w._on_auth_status_finished(_StubProc("@@AUTH@@|on\n"))
+    check("settle passwordless-on installs the update timer", bool(installed_c))
+    check("settle passwordless-on turns the auto-update toggle on", w.autoupdate_btn.isChecked())
+
+    # (d) revoking passwordless while auto-update is on clears the schedule
+    w = updater.Updater()
+    removed_d = []
+    w._autoupdate_enabled = lambda: True
+    w._remove_user_timer = lambda name: removed_d.append(name)
+    w._run_auth = lambda *a, **k: None                       # don't spawn a real process
+    w._set_autoupdate_checked(True)
+    w.on_auth_toggled(False)                                 # user revokes
+    check("revoke passwordless removes the update timer", "oneup-update" in removed_d)
+    check("revoke passwordless clears the auto-update toggle", not w.autoupdate_btn.isChecked())
+
     # --- 6. the About dialog opens and closes without error --------------------
     w = updater.Updater()
     check("About button exists in the header", hasattr(w, "about_btn"))
