@@ -52,7 +52,8 @@ Usage: $(basename "$0") [--steps=LIST] [--check] [--notify] [--log=FILE] [--help
                  Available: system, flatpak, firmware, orphans, cache
   --check        Read-only: report how many updates are available and exit.
                  Runs WITHOUT root, so it is safe for an unattended timer.
-  --notify       With --check, raise a desktop notification when updates exist.
+  --notify       Raise a desktop notification: with --check when updates exist,
+                 and at the end of a full run with the outcome.
   --grant-auth   Opt in to passwordless updates: install a scoped sudoers rule
                  so OneUp's update commands run without a password (stores no
                  password). Asks for your password once to set it up.

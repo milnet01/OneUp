@@ -200,6 +200,20 @@ def main() -> int:
     check("headless command quotes the executable path",
           updater.Updater._headless_command("--check").startswith('"'))
 
+    # Regression guard: the GUI-only --update token must NEVER be forwarded to the
+    # engine (it exits 2 on unknown flags, which would make the 2am weekly run
+    # silently fail). _headless_update() runs the engine with --notify only.
+    _captured = {}
+    _orig_run = updater.subprocess.run
+    updater.subprocess.run = lambda a, *args, **kw: (
+        _captured.update(argv=a) or type("R", (), {"returncode": 0})())
+    try:
+        updater._headless_update()
+    finally:
+        updater.subprocess.run = _orig_run
+    check("headless --update invokes the engine with --notify, not --update",
+          "--notify" in _captured.get("argv", []) and "--update" not in _captured.get("argv", []))
+
     # --- Settings popup groups the three background toggles --------------------
     w = updater.Updater()
     check("Settings button exists in the header", hasattr(w, "settings_btn"))
