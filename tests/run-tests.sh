@@ -870,6 +870,49 @@ unset MOCK_ZLOG MOCK_NLOG
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: --auto-skip-repos classifies a corrupt-metadata refresh failure as 'metadata' (M1)"
+d=$(mktemp -d); setup_common "$d"
+# See the credential-cached sudo mock note on the --skip-repo tests above — same reason.
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+while [[ $# -gt 0 ]]; do case "$1" in -A|-v|-k|-E|-n) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
+[[ $# -eq 0 ]] && exit 0
+exec "$@"
+EOF
+chmod +x "$d/sudo"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+cat > "$d/notify-send" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$MOCK_NLOG"
+EOF
+chmod +x "$d/notify-send"; export MOCK_NLOG="$d/notify.log"; : > "$MOCK_NLOG"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "zypper $*" >> "$MOCK_ZLOG"
+case "$*" in
+  *"lr -u"*)               printf '# | Alias | Name | Enabled | GPG | Refresh | URI\n1 | oss | O | Yes | Yes | Yes | http://o/\n2 | chrome | C | Yes | Yes | Yes | http://c/\n'; exit 0 ;;
+  *"modifyrepo --disable chrome"*) exit 0 ;;
+  *"modifyrepo --enable chrome"*)  exit 0 ;;
+  *"refresh chrome"*)      echo "Valid metadata not found for repository 'chrome'"; exit 1 ;;
+  *"refresh oss"*)         exit 0 ;;
+  *refresh*)               exit 0 ;;                                   # bulk refresh
+  *dup*|*update*)
+      if grep -q "modifyrepo --disable chrome" "$MOCK_ZLOG"; then echo "2 packages to upgrade."; exit 0   # retry after skip: OK
+      else echo "Valid metadata not found for repository 'chrome'"; exit 1; fi ;;                     # first attempt: blocked
+  *needs-rebooting*)       exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system --auto-skip-repos --notify)
+check        "metadata failure disables the culprit"       "modifyrepo --disable chrome" "$(cat "$MOCK_ZLOG")"
+check        "metadata failure classified as 'metadata'"   "@@REPO_SKIPPED@@|chrome|metadata" "$out"
+check        "metadata auto-skip upgrade then succeeds"    "@@STEP_END@@|system|ok" "$out"
+check_absent "metadata auto-skip never disables gpg checks" "--no-gpg-checks" "$(cat "$MOCK_ZLOG")"
+unset MOCK_ZLOG MOCK_NLOG
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: a manual repo-scoped failure OFFERS skip (no --auto-skip-repos), disables nothing"
 d=$(mktemp -d); setup_common "$d"
 export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"

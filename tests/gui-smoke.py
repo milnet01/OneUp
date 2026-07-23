@@ -570,7 +570,7 @@ def main() -> int:
         check("REPO_SKIPPED recorded", "google-chrome" in w._skipped_repos)
 
         w.handle_line("@@REMEDY@@|skip-repo|google-chrome")
-        check("skip-repo remedy stores the alias", w._remedy_skip == "google-chrome")
+        check("skip-repo remedy stores the alias", w._remedy_skips == ["google-chrome"])
         w._failed_steps = ["system"]
         w._hints = ["The 'google-chrome' repository failed — the rest can still update."]
         w.proc = QProcess(w)
@@ -628,15 +628,63 @@ def main() -> int:
     finally:
         updater.read_repos = _orig_read_repos
 
+    # --- ONEUP-0025 final-review fix: a skip remedy with NO accompanying hint
+    # (a corrupt-metadata source failure arms @@REMEDY@@|skip-repo but emits no
+    # @@HINT@@) must still surface the warn banner with a named skip action —
+    # not stay hidden with a dead-end remedy the user never sees. -------------
+    updater.read_repos = lambda: [{"alias": "chrome", "name": "Google Chrome",
+                                   "enabled": True, "url": "http://c/"}]
+    try:
+        w5 = updater.Updater()
+        w5.handle_line("@@REMEDY@@|skip-repo|chrome")
+        w5._failed_steps = ["system"]
+        # Deliberately do NOT seed w5._hints — this is the whole point of the test.
+        w5.proc = QProcess(w5)
+        w5.on_finished(1, QProcess.ExitStatus.NormalExit)
+        check("banner shows even with no HINT, only a skip remedy",
+              w5.warn_banner.isVisibleTo(w5))
+        check("fallback banner names the source and offers Skip",
+              "Google Chrome" in w5.warn_btn.text() and "Skip" in w5.warn_btn.text())
+    finally:
+        updater.read_repos = _orig_read_repos
+
+    # --- ONEUP-0025 final-review fix: two broken repos both offer their skip
+    # remedy (the engine emits one @@REMEDY@@|skip-repo per culprit, up to 2) —
+    # both must be collected and both re-run, not just the last one. ----------
+    updater.read_repos = lambda: [
+        {"alias": "chrome", "name": "Google Chrome", "enabled": True, "url": "http://c/"},
+        {"alias": "brave", "name": "Brave Browser", "enabled": True, "url": "http://b/"},
+    ]
+    try:
+        w6 = updater.Updater()
+        w6.handle_line("@@REMEDY@@|skip-repo|chrome")
+        w6.handle_line("@@REMEDY@@|skip-repo|brave")
+        check("both skip remedies are accumulated, not overwritten",
+              w6._remedy_skips == ["chrome", "brave"])
+        w6._failed_steps = ["system"]
+        w6.proc = QProcess(w6)
+        w6.on_finished(1, QProcess.ExitStatus.NormalExit)
+        check("banner offers a combined skip action for multiple sources",
+              "Skip 2 sources" in w6.warn_btn.text())
+
+        launched6 = {}
+        w6._launch = lambda steps, check=False, import_keys=False, skip_repos=None: (
+            launched6.update(steps=list(steps), skip=list(skip_repos or [])))
+        w6._skip_repo_and_retry()
+        check("skip action re-launches with BOTH aliases",
+              launched6.get("skip") == ["chrome", "brave"])
+    finally:
+        updater.read_repos = _orig_read_repos
+
     # A stale remedy from a prior run must never linger into the next one.
     _orig_qp_start = updater.QProcess.start
     updater.QProcess.start = lambda self, *a, **kw: None   # swallow the real engine launch
     try:
         w4 = updater.Updater()
-        w4._remedy_skip = "stale-alias"
+        w4._remedy_skips = ["stale-alias"]
         w4.warn_btn2.setVisible(True)
         w4._launch(["system"], check=False)
-        check("_launch resets a stale skip remedy", w4._remedy_skip is None)
+        check("_launch resets a stale skip remedy", w4._remedy_skips == [])
         check("_launch hides a stale second banner button",
               not w4.warn_btn2.isVisibleTo(w4.warn_banner))
     finally:

@@ -816,7 +816,7 @@ class Updater(QMainWindow):
         self._hint_command = ""   # a runnable command parsed from the shown hint, for Copy
         self._remedy_keys = False  # engine flagged a fixable signing-key error (@@REMEDY@@)
         self._skipped_repos: list[str] = []  # aliases set aside this run (@@REPO_SKIPPED@@)
-        self._remedy_skip: str | None = None  # alias to offer "Skip … & update the rest" for
+        self._remedy_skips: list[str] = []  # aliases to offer "Skip … & update the rest" for
         self._log_path: Path | None = None
         self._latest_tag = ""
         self._warn_repo_dup = False   # is the current warning a duplicate-repo one?
@@ -1808,7 +1808,7 @@ for (var i = 0; i < clients.length; i++) {{
         duplicate, else show the log. When both a skip and a key-import remedy are
         armed (an expired key), skip is primary here and import stays reachable via
         warn_btn2 (see on_finished)."""
-        if self._remedy_skip:
+        if self._remedy_skips:
             self._skip_repo_and_retry()
         elif self._remedy_keys:
             self._fix_keys_and_retry()
@@ -1854,13 +1854,13 @@ for (var i = 0; i < clients.length; i++) {{
         return alias
 
     def _skip_repo_and_retry(self):
-        """Re-run the failed steps with the flagged source set aside for this run
-        only — the engine re-enables it on exit (--skip-repo in update_system.sh)."""
-        alias = self._remedy_skip
-        if not alias:
+        """Re-run the failed steps with the flagged source(s) set aside for this run
+        only — the engine re-enables them on exit (--skip-repo in update_system.sh)."""
+        aliases = list(self._remedy_skips)
+        if not aliases:
             return
         steps = list(self._failed_steps) or ["system"]
-        self._launch(steps, check=False, skip_repos=[alias])
+        self._launch(steps, check=False, skip_repos=aliases)
 
     # ---- log pane ---------------------------------------------------------
     def toggle_log(self):
@@ -1993,7 +1993,7 @@ for (var i = 0; i < clients.length; i++) {{
         self.warn_btn.setText("Show details")
         self._hint_command = ""
         self._remedy_keys = False
-        self._remedy_skip = None
+        self._remedy_skips = []
         self.warn_copy_btn.setVisible(False)
         self.warn_btn2.setVisible(False)
         self.retry_btn.setVisible(False)
@@ -2153,7 +2153,7 @@ for (var i = 0; i < clients.length; i++) {{
             if parts and parts[0] == "import-keys":
                 self._remedy_keys = True
             elif parts and parts[0] == "skip-repo" and len(parts) >= 2:
-                self._remedy_skip = parts[1]
+                self._remedy_skips.append(parts[1])
         elif tag == "REBOOT":
             self._reboot = parts[0] == "yes"
         elif tag in ("DISK", "REPO"):
@@ -2263,19 +2263,35 @@ for (var i = 0; i < clients.length; i++) {{
             self.rollback_btn.setVisible(True)
 
         # Surface the first plain-English failure hint, if any (with a Copy button
-        # when it carries a command the app couldn't run for you).
-        if self._hints:
-            self._show_warning(self._hints[0])
+        # when it carries a command the app couldn't run for you) — OR, when a
+        # remedy is armed with no accompanying hint (a corrupt-metadata source
+        # failure arms @@REMEDY@@|skip-repo with no @@HINT@@), a GUI-built
+        # fallback naming the culprit(s) so the skip/import action is never a
+        # dead end behind an invisible banner.
+        if self._hints or self._remedy_skips or self._remedy_keys:
+            if self._hints:
+                self._show_warning(self._hints[0])
+            elif self._remedy_skips:
+                names = ", ".join(self._repo_display_name(a) for a in self._remedy_skips)
+                self._show_warning(
+                    f"{names} is failing — skip it and update everything else, "
+                    "or check the log.")
+            else:
+                self._show_warning("A repository signing key is out of date.")
             # When a one-click remedy is available, the banner button offers it
             # (behind a warned confirmation for the key import) rather than just
             # showing the log. A skip remedy takes the primary button; when a
             # key-import remedy is ALSO armed (an expired key: both a skip and a
             # real fix exist), it gets a genuine second button rather than being
             # dropped, since a single button can't offer two actions.
-            both_armed = bool(self._remedy_skip) and self._remedy_keys
-            if self._remedy_skip:
-                self.warn_btn.setText(
-                    f"Skip {self._repo_display_name(self._remedy_skip)} & update the rest")
+            both_armed = bool(self._remedy_skips) and self._remedy_keys
+            if self._remedy_skips:
+                if len(self._remedy_skips) == 1:
+                    self.warn_btn.setText(
+                        f"Skip {self._repo_display_name(self._remedy_skips[0])} & update the rest")
+                else:
+                    self.warn_btn.setText(
+                        f"Skip {len(self._remedy_skips)} sources & update the rest")
             elif self._remedy_keys:
                 self.warn_btn.setText("Import signing key & retry")
             if both_armed:
