@@ -813,6 +813,15 @@ class Updater(QMainWindow):
         self._warn_repo_dup = False   # is the current warning a duplicate-repo one?
         self._settings_dialog: SettingsDialog | None = None
         self._pending_autoupdate = False   # one-shot latch: an enable awaiting a fresh auth settle
+        self._tray = None
+        self._tray_timer = None
+        self._tray_total = 0
+        self._tray_checked_at = None
+        self._tray_hint_shown = False
+        self._local_server = None
+        self._traycheck_proc = None
+        self._traycheck_buf = ""
+        self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
 
         # Gradient ring: a 2px accent border (outer #Frame) around the card.
         outer_frame = QFrame()
@@ -1274,6 +1283,58 @@ for (var i = 0; i < clients.length; i++) {{
         self.showNormal()
         self.raise_()
         self.activateWindow()
+
+    @staticmethod
+    def _tray_check_args(log_path) -> list[str]:
+        # The read-only check, WITHOUT --notify: the ambient icon replaces the popup.
+        return [str(ENGINE), "--check", f"--log={log_path}"]
+
+    def _tray_check(self):
+        """Run the engine's read-only --check on its own QProcess and read only the
+        TOTAL marker — never disturbs the window's task rows / progress / run state."""
+        if not ENGINE.exists():
+            return
+        proc = self._traycheck_proc
+        if proc is not None and proc.state() != QProcess.NotRunning:
+            return  # a check is already in flight
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        self._traycheck_buf = ""
+        p = QProcess(self)
+        p.setProcessChannelMode(QProcess.MergedChannels)
+        p.readyReadStandardOutput.connect(self._on_traycheck_output)
+        p.finished.connect(self._on_traycheck_finished)
+        self._traycheck_proc = p
+        p.start("bash", self._tray_check_args(LOG_DIR / f"{stamp}.traycheck.log"))
+
+    def _on_traycheck_output(self):
+        chunk = bytes(self._traycheck_proc.readAllStandardOutput()).decode(errors="replace")
+        self._traycheck_buf = (self._traycheck_buf + chunk).replace("\r\n", "\n").replace("\r", "\n")
+        while "\n" in self._traycheck_buf:
+            line, self._traycheck_buf = self._traycheck_buf.split("\n", 1)
+            self._parse_tray_line(line)
+
+    def _parse_tray_line(self, line: str):
+        # Engine emits @@CHECK@@|TOTAL|<n>|updates available (three fields). Read field
+        # 1 like handle_marker does; a naive int(after-prefix) would choke on field 2.
+        if line.startswith("@@CHECK@@|"):
+            parts = line[len("@@CHECK@@|"):].split("|")
+            if len(parts) >= 2 and parts[0] == "TOTAL":
+                self._apply_tray_total(int(parts[1]) if parts[1].isdigit() else 0)
+
+    def _on_traycheck_finished(self, *args):
+        if self._traycheck_proc is not None:
+            self._traycheck_proc.deleteLater()   # don't accumulate over a long session
+            self._traycheck_proc = None
+
+    def _apply_tray_total(self, n: int):
+        self._tray_total = n
+        self._tray_checked_at = datetime.now()
+        if self._tray is None:
+            return
+        self._tray.setIcon(self._tray_icon(n > 0))
+        self._tray.setToolTip(
+            f"{APP_NAME} — {n} update(s) waiting" if n > 0 else f"{APP_NAME} — up to date")
 
     def _timer_enabled(self, timer: str) -> bool:
         r = subprocess.run(["systemctl", "--user", "is-enabled", timer],

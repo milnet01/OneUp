@@ -432,6 +432,18 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         check(f"_show_window runs without error ({exc})", False)
 
+    # (4) The periodic check is silent and parses the real THREE-field TOTAL line.
+    w = updater.Updater()
+    args = w._tray_check_args("/tmp/x.log")
+    check("tray check runs --check", "--check" in args)
+    check("tray check is silent (no --notify)", "--notify" not in args)
+    w._parse_tray_line("@@CHECK@@|TOTAL|3|updates available")
+    check("tray parses field 1 of the three-field TOTAL line", w._tray_total == 3)
+    w._parse_tray_line("@@CHECK@@|TOTAL|0|updates available")
+    check("tray parses zero updates as neutral", w._tray_total == 0)
+    w._parse_tray_line("@@STEP_BEGIN@@|system|1|3|x")   # non-CHECK line ignored
+    check("tray parser ignores non-TOTAL lines", w._tray_total == 0)
+
     print()
     print("======================================")
     print(f"  Passed: {PASS}   Failed: {FAIL}")
