@@ -1,6 +1,6 @@
 # ONEUP-0025 — Survive a single broken software source instead of failing the whole update
 
-**Status:** Draft → cold-eyes pending
+**Status:** Cold-eyes converged (2 loops — loop 1: 3 HIGH / 2 MED / 3 LOW fixed; loop 2: polish only, all citations verified). Ready to implement.
 **Roadmap:** ONEUP-0025 (🚧)
 **Kind:** feature (engine + GUI)
 
@@ -36,9 +36,10 @@ forces a manual terminal session to disable the repo by hand. There is currently
 - **Context-aware behaviour.**
   - **Manual run** (GUI "Update" button): OneUp *asks* — the warn banner offers
     **"Skip &lt;source&gt; & update the rest."** Nothing is disabled without a click.
-  - **Unattended run** (weekly/tray automatic update, nobody watching): OneUp
-    **auto-skips** the culprit, finishes the rest, and fires a desktop
-    notification naming what was skipped.
+  - **Unattended run** (the weekly automatic update, nobody watching — the
+    `oneup-update.timer` → `_headless_update`; the tray only does a *read-only*
+    check and never updates, so it never skips): OneUp **auto-skips** the culprit,
+    finishes the rest, and fires a desktop notification naming what was skipped.
 - **Never weaken security.** The signature check (`gpgcheck`) is never disabled and
   a bad signature is never forced. The source is *temporarily disabled* with
   zypper's own on/off switch and **always re-enabled** afterward.
@@ -68,7 +69,8 @@ config.
                        it reaches any privileged command.
 --auto-skip-repos      Unattended mode: on a repo-scoped failure, auto-detect the
                        culprit(s), skip up to MAX_SKIP_REPOS of them, and continue.
-                       Used only by the weekly/tray automatic path.
+                       Used only by the weekly automatic-update path
+                       (_headless_update).
 ```
 
 ### Repo enable/disable + guaranteed restore
@@ -81,9 +83,11 @@ config.
   is extended to re-enable each one. `cleanup()` runs via `trap cleanup EXIT`
   (`:331`); the `INT`/`TERM`/`HUP` traps (`:332-333`) call `exit`, which fires that
   same EXIT trap — so a cancel (Ctrl-C), crash, or normal exit all restore repo
-  state. Re-enabling runs `sudo zypper modifyrepo --enable` inside `cleanup()`; the
-  sudo credential is still warm from the run, and if a re-enable fails the
-  failure-mode below logs the exact command to fix it by hand.
+  state. Re-enabling runs `sudo -n zypper modifyrepo --enable` inside `cleanup()` (before
+  the keep-alive is killed); `-n` keeps it non-interactive, so on the rare
+  cold-credential exit it fails fast into the failure-mode below (which logs the
+  exact manual re-enable command) rather than raising a blocking `ksshaskpass`
+  popup inside the trap.
 - **Alias validation (bash).** Before any alias reaches a privileged `modifyrepo`,
   it is checked against `^[A-Za-z0-9][A-Za-z0-9:@._+-]*$` — the **identical**
   character class as the GUI's `_ALIAS_RE` (`updater.py:498`, applied with
@@ -117,7 +121,9 @@ and alias-precise:
 A "repo-scoped failure" worth probing = the `$SYS_LOG` matches
 `signature|GPG|key|metadata|Valid metadata not found|Curl|could not resolve|Download.*failed|Skipping repository`.
 Disk-full and package-conflict failures are **not** repo-scoped — they do not
-trigger probing (unchanged behaviour).
+trigger probing (unchanged behaviour). All of this probing/classification reads
+`$SYS_LOG`, so it must run **before** the existing `rm -f "$SYS_LOG"` at the end of
+the system step (`update_system.sh:615`).
 
 ### Failure-path flow (system step)
 
@@ -179,7 +185,7 @@ document the contract.
   (`:1887`) — so it is untouched.)
 - **`_headless_update()`** (unattended path, `tests/gui-smoke.py:205-215` proves it
   runs the engine with `--notify`) — add `--auto-skip-repos` to that engine argv,
-  so the weekly/tray automatic run auto-quarantines.
+  so the weekly automatic update auto-quarantines.
 - **`handle_marker`** (`updater.py:2022` — the interactive marker consumer):
   - `REPO_SKIPPED|alias|reason` → record the skipped source (for the log and the
     end-of-run summary). This is consumed **only on an interactive run**. The
@@ -192,7 +198,8 @@ document the contract.
     run finishes (`on_finished`) show the warn banner action **"Skip &lt;name&gt; &
     update the rest"**, where `<name>` is resolved from the alias via the existing
     `read_repos()` (fall back to the raw alias if lookup fails). Clicking it calls
-    `_launch(steps, skip_repos=[alias])`.
+    `_launch(steps, check=False, skip_repos=[alias])` (`check` is required — a skip
+    re-run is a real update, not a check).
 - **Both remedies can be armed at once** (expired key): the banner shows the
   primary **"Skip it"** action and keeps the existing **"Import signing key &
   retry"** path reachable. Exact two-action banner layout is a plan detail; the
@@ -253,6 +260,8 @@ document the contract.
   `modifyrepo --disable`, step fails.
 - manual repo-scoped failure (no `--auto-skip-repos`): `@@REMEDY@@|skip-repo`
   emitted, **no** `modifyrepo --disable`, step fails.
+- manual repo-scoped failure with **more than the cap** failing: systemic hint,
+  **no** `@@REMEDY@@|skip-repo` offered, no `modifyrepo --disable`, step fails.
 - unsafe alias refused (no privileged command built).
 - no run ever passes `--no-gpg-checks` (guard mock).
 - happy path: all repos healthy → no `modifyrepo`, no `refresh <alias>` probing.
