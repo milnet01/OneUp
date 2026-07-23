@@ -502,6 +502,39 @@ def main() -> int:
     check("failed install reverts start-at-boot", not w.startboot_btn.isChecked())
     check("failed install leaves the tray on", w.tray_btn.isChecked())
 
+    # (11) Close-to-tray: with a tray live, closeEvent hides (not quits) and hints once.
+    w = updater.Updater()
+    w._tray = object()                       # pretend resident
+    hints = []
+    w._notify_tray_hint = lambda: hints.append(True)
+    class _Evt:
+        def __init__(self): self.ignored = False
+        def ignore(self): self.ignored = True
+        def accept(self): pass
+    e1 = _Evt(); w.closeEvent(e1)
+    check("close-to-tray ignores the close event", e1.ignored)
+    check("close-to-tray hides the window", w.isHidden())
+    check("close-to-tray fires the hint once", hints == [True])
+    e2 = _Evt(); w.closeEvent(e2)
+    check("close-to-tray does not re-hint on a second close", hints == [True])
+
+    # (12) on_finished refreshes the tray: a successful run -> neutral; a check -> the count.
+    w = updater.Updater()
+    applied = []
+    w._apply_tray_total = lambda n: applied.append(n)
+    w.proc = QProcess(w)
+    w._installed_count = "2"
+    w.on_finished(0, QProcess.ExitStatus.NormalExit)     # a run
+    check("successful run sets the tray neutral", applied and applied[-1] == 0)
+    w = updater.Updater()
+    applied2 = []
+    w._apply_tray_total = lambda n: applied2.append(n)
+    w._check_mode = True
+    w._installed_count = "5"
+    w.proc = QProcess(w)
+    w.on_finished(0, QProcess.ExitStatus.NormalExit)     # a check
+    check("finished check pushes the count to the tray", applied2 and applied2[-1] == 5)
+
     print()
     print("======================================")
     print(f"  Passed: {PASS}   Failed: {FAIL}")

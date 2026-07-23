@@ -1128,7 +1128,29 @@ class Updater(QMainWindow):
     # ---- window geometry --------------------------------------------------
     def closeEvent(self, event):
         self.settings.setValue("geometry", self.saveGeometry())
+        if self._tray is not None:
+            # Resident: hide to the tray instead of quitting.
+            event.ignore()
+            self.hide()
+            if not self._tray_hint_shown:
+                self._tray_hint_shown = True
+                self._notify_tray_hint()
+            return
         super().closeEvent(event)
+
+    def _notify_tray_hint(self):
+        """A one-off 'still running in the tray' nudge. A DIRECT notify-send (keeps
+        _notify_when_away's which-guard but drops its isActiveWindow guard, which would
+        suppress it since the window is still active at close time)."""
+        if not shutil.which("notify-send"):
+            return
+        try:
+            subprocess.Popen(  # noqa: S603,S607 — fixed argv, no shell.
+                ["notify-send", "-a", APP_NAME, "-i", APP_ID, APP_NAME,
+                 "OneUp is still running in the tray — right-click the icon to quit."],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
 
     def recenter(self):
         # On Wayland an app is not allowed to move itself — the compositor owns
@@ -2135,6 +2157,7 @@ for (var i = 0; i < clients.length; i++) {{
                 if total else "Everything is up to date. 🎉")
             self._notify_when_away(
                 f"{total} update(s) available." if total else "Everything is up to date.")
+            self._apply_tray_total(total)
             self._check_mode = False
             return
 
@@ -2193,6 +2216,10 @@ for (var i = 0; i < clients.length; i++) {{
         self._notify_when_away(
             f"All done — {installed}." if ok else "Finished — some steps had errors.",
             urgency="normal" if ok else "critical")
+
+        # Keep the ambient tray icon honest: a clean run just installed updates.
+        if ok:
+            self._apply_tray_total(0)
 
     # ---- actions ----------------------------------------------------------
     def restart_now(self):
@@ -2347,6 +2374,18 @@ def _headless_update() -> int:
     return subprocess.run(["bash", str(ENGINE), "--notify"]).returncode
 
 
+def _raise_existing_instance() -> bool:
+    """True if a resident OneUp answered the socket (and was asked to show its window)."""
+    sock = QLocalSocket()
+    sock.connectToServer(f"OneUp-{os.getuid()}")
+    if sock.waitForConnected(300):
+        sock.write(b"1")
+        sock.waitForBytesWritten(300)
+        sock.disconnectFromServer()
+        return True
+    return False
+
+
 def main():
     if "--check" in sys.argv[1:]:
         sys.exit(_headless_check())
@@ -2366,13 +2405,24 @@ def main():
     except (AttributeError, TypeError):
         pass
 
+    argv = sys.argv[1:]
+    tray_wanted = (QSettings("OneUp", "OneUp").value("tray_enabled", False, type=bool)
+                   and QSystemTrayIcon.isSystemTrayAvailable())
+    if tray_wanted and _raise_existing_instance():
+        sys.exit(0)   # a resident copy is already running — it raised its window
+
     icon = _app_icon()
     if not icon.isNull():
         app.setWindowIcon(icon)
     win = Updater()
     if not icon.isNull():
         win.setWindowIcon(icon)
-    win.show()
+    if tray_wanted:
+        win._ensure_tray()                 # owns quit-behaviour, server, and the check timer
+        if "--tray" not in argv:
+            win.show()                     # autostart (--tray) starts hidden; a normal launch shows
+    else:
+        win.show()                         # no tray wanted/available (incl. --tray with no tray): degrade
     app.exec()
 
 
