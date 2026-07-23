@@ -147,11 +147,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: feature.
   Source: user-request-2026-07-21.
 
-- 📋 [ONEUP-0022] **Add an optional unattended (scheduled full-update) mode, off by default.**
+- ✅ [ONEUP-0022] **Add an optional unattended (scheduled full-update) mode, off by default.**
   Systemd timer that runs the engine (not just --check) on a schedule, reusing the snapshot/rollback safety. Off by default; opt-in from the GUI alongside the weekly-check toggle.
   **Layman:** A true set-and-forget option: run the whole update on a schedule with the existing snapshot + rollback safety net, for people who never want to think about it.
   Kind: feature.
   Source: user-request-2026-07-21.
+  Resolved (2026-07-23): weekly unattended full-update timer (oneup-update.{service,timer}, OnCalendar=weekly, Persistent=true), off by default, gated on ONEUP-0023 passwordless. Engine skips the interactive sudo -v bootstrap when the drop-in is active and notifies with the outcome at the end of a full run; GUI groups the three background toggles (weekly check, passwordless, automatic updates) behind a Settings popup and couples auto-update on/off to passwordless via a single async-settle install gate (timer can never be enabled while passwordless is off). Built subagent-driven from docs/plans/ONEUP-0022-unattended-updates.md; per-task + opus whole-branch review clean. Local CI green (75 engine + 81 GUI). Not yet released (separate bump).
 
 - ✅ [ONEUP-0023] **Add an opt-in "remember my authorization" mode (no password stored).**
   Deliberately does NOT store the sudo password (encrypting a password the app must itself decrypt is obfuscation, not security, and a stored root password breaks OneUp's 'GUI never touches root' design). Instead install a scoped, revocable sudoers drop-in (/etc/sudoers.d/oneup) that lets the user run OneUp's update commands (zypper, snapper, systemctl stop packagekit) without a password. Toggle on = install the drop-in (validated with visudo -c) after one authenticating prompt; toggle off = remove it. This is also the mechanism the unattended-updates mode (ONEUP-0022) needs. Consider session-only vs permanent scoping.
