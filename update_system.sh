@@ -41,6 +41,10 @@ AUTH_ACTION=""     # --grant-auth / --revoke-auth / --auth-status: manage the
 IMPORT_KEYS=false  # --import-keys: refresh with --gpg-auto-import-keys so a rotated
                    # or expired repo signing key is imported for the system upgrade.
                    # Opt-in per run (the GUI sets it only after a warned confirmation).
+SKIP_REPOS=()      # --skip-repo=<alias> (repeatable): sources to set aside this run
+AUTO_SKIP=false    # --auto-skip-repos: unattended auto-quarantine of a broken source
+DISABLED_REPOS=()  # aliases WE disabled this run; cleanup() re-enables every one
+MAX_SKIP_REPOS=2   # more than this failing at once = systemic, don't silently skip
 
 usage() {
     cat <<EOF
@@ -61,6 +65,10 @@ Usage: $(basename "$0") [--steps=LIST] [--check] [--notify] [--log=FILE] [--help
   --auth-status  Print whether the passwordless rule is active (@@AUTH@@|on/off).
   --import-keys  Refresh with --gpg-auto-import-keys so a rotated/expired repo
                  signing key is imported for the system upgrade (opt-in per run).
+  --skip-repo=ALIAS  Exclude this source from the run: disable it, upgrade the
+                 rest, re-enable it. Repeatable.
+  --auto-skip-repos  Unattended mode: on a repo-scoped failure, auto-detect and
+                 skip the culprit(s) (up to $MAX_SKIP_REPOS), then continue.
   --log=FILE     Write the run log here. Default: $LOG_DIR/<timestamp>.log
   --help         Show this help.
 
@@ -71,6 +79,7 @@ Examples:
 EOF
 }
 
+# shellcheck disable=SC2034 # AUTO_SKIP is read by the failure-path integration (ONEUP-0025 Task 3), not yet wired up
 for arg in "$@"; do
     case "$arg" in
         --steps=*) STEPS="${arg#*=}" ;;
@@ -81,6 +90,8 @@ for arg in "$@"; do
         --revoke-auth) AUTH_ACTION="revoke" ;;
         --auth-status) AUTH_ACTION="status" ;;
         --import-keys) IMPORT_KEYS=true ;;
+        --skip-repo=*)     SKIP_REPOS+=("${arg#*=}") ;;
+        --auto-skip-repos) AUTO_SKIP=true ;;
         --notify)  NOTIFY=true ;;
         --help|-h) usage; exit 0 ;;
         *) echo "Unknown option: $arg" >&2; usage >&2; exit 2 ;;
@@ -112,6 +123,8 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 #   @@REPO@@|warn|reason                 (pre-flight: repo health issue)
 #   @@HINT@@|plain-English failure hint
 #   @@REMEDY@@|import-keys               (a one-click GUI fix is available for this failure)
+#   @@REPO_SKIPPED@@|alias|reason        (a source was set aside this run)
+#   @@REMEDY@@|skip-repo|alias           (offer "Skip <source> & update the rest")
 #   @@SERVICES@@|svc1 svc2 …             (services to restart instead of rebooting)
 #   @@INSTALLED@@|count|sys_changed|fw_changed   (yes/no flags for the summary)
 #   @@REBOOT@@|yes|no
@@ -322,7 +335,18 @@ sudo_init() {
 }
 # Negative PID targets the keep-alive's process group (the loop shell + its sleep),
 # so nothing survives the run. See sudo_init for why setsid makes this a lone group.
-cleanup() { [[ -n "$SUDO_KEEPALIVE" ]] && kill -- "-$SUDO_KEEPALIVE" 2>/dev/null; }
+# Re-enable every repo we disabled BEFORE killing the keep-alive (sudo cred still
+# warm), non-interactively (-n) so a cold-credential exit logs the manual fix
+# instead of blocking on a ksshaskpass popup inside the trap.
+cleanup() {
+    local a
+    for a in "${DISABLED_REPOS[@]:-}"; do
+        [[ -z "$a" ]] && continue
+        sudo -n zypper --non-interactive modifyrepo --enable "$a" >/dev/null 2>&1 \
+            || echo "  ! Couldn't re-enable repository '$a' — run: sudo zypper modifyrepo --enable $a" >&2
+    done
+    [[ -n "$SUDO_KEEPALIVE" ]] && kill -- "-$SUDO_KEEPALIVE" 2>/dev/null
+}
 # EXIT runs cleanup on any exit (killing the keep-alive so it can't outlive the run).
 # The signal traps must ALSO exit: a plain `trap cleanup INT` would run cleanup and
 # then resume after the interrupted command, plowing on through the remaining
@@ -512,6 +536,32 @@ if step_selected system; then
     fi
 fi
 
+# ---------------------------------------------------------------------------
+# Repo resilience: set a broken source aside instead of failing the whole run.
+# ---------------------------------------------------------------------------
+valid_alias() { [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9:@._+-]*$ ]]; }
+
+disable_repo() {   # $1=alias $2=reason ; records + marks on success, fail-closed
+    local alias="$1" reason="$2"
+    valid_alias "$alias" || { echo "  Refusing unsafe repo alias: $alias" >&2; return 1; }
+    if sudo zypper --non-interactive modifyrepo --disable "$alias" >/dev/null 2>&1; then
+        DISABLED_REPOS+=("$alias"); marker REPO_SKIPPED "$alias|$reason"; return 0
+    fi
+    return 1
+}
+
+run_system_upgrade() {   # runs the transaction into $SYS_LOG (truncates it); sets global `ok`
+    ok=true
+    if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
+        sudo env LC_ALL=C zypper --non-interactive update 2>&1 | tee "$SYS_LOG"
+    else
+        # Tumbleweed: --allow-vendor-change lets Packman codec packages update
+        # cleanly; without it the upgrade stalls on vendor conflicts.
+        sudo env LC_ALL=C zypper --non-interactive dup --allow-vendor-change 2>&1 | tee "$SYS_LOG"
+    fi
+    [[ ${PIPESTATUS[0]} -eq 0 ]] || ok=false
+}
+
 echo
 echo "########################################################"
 echo "#            Starting System Update                    #"
@@ -524,6 +574,11 @@ echo "########################################################"
 # ---------------------------------------------------------------------------
 if step_selected system; then
     begin_step system
+    # Interactive "Skip & update the rest" re-run: set the named sources aside up front.
+    for alias in "${SKIP_REPOS[@]:-}"; do
+        [[ -z "$alias" ]] && continue
+        disable_repo "$alias" manual || true
+    done
     # The transaction below (dup/update) — NOT the refresh — decides whether the
     # step succeeded. A repo refresh can fail transiently (one mirror timing out)
     # while zypper still upgrades cleanly from cached metadata; failing the whole
@@ -548,17 +603,7 @@ if step_selected system; then
     # do." / "N packages to upgrade" strings are translated on a non-English system,
     # and matching the English text keeps the change-detection reliable everywhere.
     # (`sudo env VAR=…` sets it in the child cleanly, regardless of sudoers env rules.)
-    # ok is set BEFORE the transaction so the PIPESTATUS check reads the upgrade's
-    # own exit code — an assignment between the pipe and the check would clobber it.
-    ok=true
-    if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
-        sudo env LC_ALL=C zypper --non-interactive update 2>&1 | tee "$SYS_LOG"
-    else
-        # Tumbleweed: --allow-vendor-change lets Packman codec packages update
-        # cleanly; without it the upgrade stalls on vendor conflicts.
-        sudo env LC_ALL=C zypper --non-interactive dup --allow-vendor-change 2>&1 | tee "$SYS_LOG"
-    fi
-    [[ ${PIPESTATUS[0]} -eq 0 ]] || ok=false
+    run_system_upgrade
     # Only interpret the transaction output when the step actually SUCCEEDED. A
     # blocked/failed run has no "Nothing to do." line, so treating the else-branch
     # as "packages changed" would falsely trip the reboot advice — the step failed,

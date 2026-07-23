@@ -739,6 +739,87 @@ _notify_case "3 packages to upgrade." "Update complete"
 _notify_case "Nothing to do."         "Already up to date"
 _notify_case "boom"                   "Update failed" 1
 
+# ---------------------------------------------------------------------------
+echo "TEST: --skip-repo disables the named source, upgrades the rest, re-enables on exit"
+d=$(mktemp -d); setup_common "$d"
+# cleanup()'s restore deliberately re-enables via `sudo -n` (never blocks on a
+# popup inside the trap). setup_common's shared sudo mock always fails `-n` to
+# model "no passwordless drop-in yet" for the auth-status tests; here we model a
+# credential the earlier interactive `sudo -A … -v` already warmed, so `-n`
+# succeeds too — the real-world behaviour `-n` relies on.
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+while [[ $# -gt 0 ]]; do case "$1" in -A|-v|-k|-E|-n) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
+[[ $# -eq 0 ]] && exit 0
+exec "$@"
+EOF
+chmod +x "$d/sudo"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "zypper $*" >> "$MOCK_ZLOG"
+case "$*" in
+  *"modifyrepo --disable"*) exit 0 ;;
+  *"modifyrepo --enable"*)  exit 0 ;;
+  *refresh*)                exit 0 ;;
+  *dup*|*update*)           echo "3 packages to upgrade."; exit 0 ;;
+  *needs-rebooting*)        exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+out=$(run_engine "$d" --steps=system --skip-repo=google-chrome)
+check        "skip-repo disables the source"        "modifyrepo --disable google-chrome" "$(cat "$MOCK_ZLOG")"
+check        "skip-repo emits the REPO_SKIPPED mark" "@@REPO_SKIPPED@@|google-chrome|manual" "$out"
+check        "skip-repo upgrade still succeeds"      "@@STEP_END@@|system|ok" "$out"
+check        "skipped source re-enabled on exit"     "modifyrepo --enable google-chrome" "$(cat "$MOCK_ZLOG")"
+unset MOCK_ZLOG
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: an interrupted --skip-repo run still re-enables the source (trap restore)"
+d=$(mktemp -d); setup_common "$d"
+# See the credential-cached sudo mock note in the previous test — same reason.
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+while [[ $# -gt 0 ]]; do case "$1" in -A|-v|-k|-E|-n) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
+[[ $# -eq 0 ]] && exit 0
+exec "$@"
+EOF
+chmod +x "$d/sudo"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "zypper $*" >> "$MOCK_ZLOG"
+case "$*" in
+  *"modifyrepo --disable"*) exit 0 ;;
+  *"modifyrepo --enable"*)  exit 0 ;;
+  *refresh*)                exit 0 ;;
+  *dup*|*update*)           kill -TERM $PPID; sleep 5; exit 0 ;;   # die mid-upgrade
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+run_engine "$d" --steps=system --skip-repo=google-chrome >/dev/null 2>&1 || true
+check "interrupted run re-enabled the source" "modifyrepo --enable google-chrome" "$(cat "$MOCK_ZLOG")"
+unset MOCK_ZLOG
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: an unsafe repo alias is refused and never reaches a privileged command"
+d=$(mktemp -d); setup_common "$d"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "zypper $*" >> "$MOCK_ZLOG"
+case "$*" in *dup*|*update*) echo "Nothing to do."; exit 0;; *) exit 0;; esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system "--skip-repo=evil; rm -rf /")
+check_absent "unsafe alias never reaches modifyrepo" "modifyrepo --disable evil" "$(cat "$MOCK_ZLOG")"
+unset MOCK_ZLOG
+rm -rf "$d"
+
 echo
 echo "======================================"
 echo "  Passed: $PASS   Failed: $FAIL"
