@@ -168,3 +168,21 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** When the tray runs for weeks, each background check leaves a small log file; reuse one rolling log instead of piling up new ones.
   Kind: enhancement.
   Source: final-review-2026-07-23 ONEUP-0018.
+
+- 🚧 [ONEUP-0025] **Survive a single broken software source instead of failing the whole update.**
+  Context-aware: a manual run offers "Skip <source> & update the rest" in the warn banner; an unattended run (weekly/tray) auto-skips the culprit, finishes, and notifies. Never weakens the signature check — the source is temporarily disabled via zypper's on/off switch and always re-enabled (trap-restored). Safety cap: refuse to silently skip more than a couple of sources at once. New engine flag --skip-repo=<alias> (repeatable) + an unattended auto-skip mode + markers @@REPO_SKIPPED@@|alias|reason and @@REMEDY@@|skip-repo|alias. Keeps the existing import-keys remedy for a genuinely expired key. Alias validated before it reaches the privileged zypper modifyrepo call.
+  **Layman:** When one repository (e.g. Google Chrome) serves a bad signature or is unreachable, OneUp now sets just that source aside, updates everything else, and retries it next time — instead of the whole update failing.
+  Kind: feature.
+  Source: user-request-2026-07-23.
+
+- 📋 [ONEUP-0026] **Adopt a popup/dialog standard: theme-matched and always centered on the app.**
+  Write a short standard (docs/standards/) covering OneUp dialogs: (1) inherit the app palette so light/dark matches the main window; (2) always open centered over the parent window via the existing _center_child / showEvent-centring helper. Then bring the outlier into line: the signing-key import confirmation (a QMessageBox) currently opens at the compositor's default spot, not centered — route it through the same centring helper the About/Repositories popups use. Audit all dialogs for both properties. Reuses ONEUP-0016's _center_child machinery; no new mechanism.
+  **Layman:** Make every popup window look and behave consistently — matching the app's light/dark theme and always opening centered over the main window. Right now the About and Repositories popups center correctly, but the signing-key warning doesn't.
+  Kind: doc.
+  Source: user-request-2026-07-23.
+
+- 📋 [ONEUP-0027] **Offer additional themes beyond following the system light/dark scheme.**
+  Today OneUp follows the desktop light/dark palette and switches live. This item adds a small set of selectable themes (a Settings picker) layered on that. Should coordinate with ONEUP-0026 (dialog standard) so any new theme applies consistently across the main window AND all popups/dialogs. Design open: how many themes, whether "Follow system" stays the default, and where the picker lives.
+  **Layman:** Let people choose from a few built-in colour themes for OneUp, instead of only matching the desktop's light or dark setting.
+  Kind: feature.
+  Source: user-request-2026-07-23.
