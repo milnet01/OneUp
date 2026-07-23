@@ -8,6 +8,16 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **An optional "Automatic updates" setting that installs everything on a weekly schedule — off by default.**
+  When turned on, OneUp runs the full update once a week in the background, with
+  the same pre-update snapshot and one-click rollback a manual run gets. Because
+  an unattended run can't stop to ask for a password, it needs the "Passwordless"
+  setting: turning Automatic updates on offers to switch both on together, and
+  turning Passwordless off switches Automatic updates off too — so you're never
+  left with a schedule that would silently fail. The three background settings
+  (weekly check, passwordless, automatic updates) now live behind a single
+  **⚙ Settings** button in the header.
+
 - **An opt-in "Passwordless" setting so OneUp stops asking for your password on every update.**
   It stores no password — the operating system remembers the *decision* (a
   scoped, revocable rule covering only OneUp's update commands), not the

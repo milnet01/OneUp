@@ -39,6 +39,10 @@ OneUp can:
 
 - **Check for updates** read-only (see the count per task before installing).
 - **Check weekly in the background** and notify you when updates are ready.
+- **Update automatically every week** — optionally (off by default). An "Automatic
+  updates" setting runs the whole update on a weekly schedule in the background,
+  keeping the snapshot/rollback safety net. It needs the "Passwordless" setting, so
+  an unattended run doesn't stop to ask for a password.
 - **Restart just the affected services** instead of rebooting, when a full reboot
   isn't actually required.
 - **Roll back** to the snapshot it took before the update, in one click.
