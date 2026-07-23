@@ -1436,7 +1436,9 @@ for (var i = 0; i < clients.length; i++) {{
         if self._tray is not None or not self._tray_available:
             return
         self._tray = QSystemTrayIcon(self)
-        menu = QMenu()
+        # Parent the menu to self: setContextMenu does not reparent it, and an
+        # unparented QMenu can be garbage-collected out from under the tray icon.
+        menu = QMenu(self)
         menu.addAction("Check now", self._tray_check)
         menu.addAction("Update now", self._tray_update)
         menu.addAction("Open OneUp", self._show_window)
