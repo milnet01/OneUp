@@ -82,6 +82,12 @@ rather than shown.
 availability gate. When it is false, the two new Settings toggles are **disabled** with a
 "your desktop has no system tray" note, and no tray is created regardless of `tray_enabled`.
 
+A launch with `--tray` but `tray_enabled` **off** is not in the matrix because the coupling
+prevents it (turning boot on forces the tray on; turning the tray off removes autostart). The
+only way to reach it is a stale autostart file left by a failed `_remove_autostart` unlink; it
+is treated as tray-not-wanted (main()'s `tray_wanted` is false), so main() shows a normal window
+— degrading safely rather than starting a hidden, tray-less ghost.
+
 ## GUI change (`updater.py`) — components
 
 All changes are in `updater.py`. New Qt imports: `QSystemTrayIcon`, `QMenu` (QtWidgets);
@@ -107,15 +113,18 @@ gain a "(your desktop has no system tray)" suffix. The availability check happen
 Follow the established `_set_*_checked` / `_refresh_*_label` / `on_*_toggled` shape:
 
 - **`on_tray_toggled(on)`**
-  - `on=True`: persist `tray_enabled=True`; if the tray isn't built yet and a tray is
-    available, build + show it (`_ensure_tray()`); set `setQuitOnLastWindowClosed(False)`.
+  - `on=True`: persist `tray_enabled=True`; if a tray is available, call `_ensure_tray()` —
+    which owns **all** resident setup (icon, single-instance server, initial + periodic check,
+    and `setQuitOnLastWindowClosed(False)`); see §4. It is idempotent, so a redundant call is a
+    no-op.
   - `on=False`: persist `tray_enabled=False`; **also remove Start at boot** (call
     `_remove_autostart()` and reflect `startboot_btn` off via a `blockSignals` set, mirroring
-    `_set_autoupdate_checked` at updater.py:1229); tear down the tray icon
-    (`self._tray.hide()`, drop the reference); **stop `self._tray_timer`** (so the periodic
-    check stops shelling out once the feature is off); `setQuitOnLastWindowClosed(True)`; and if the
-    **window is currently hidden, `show()` it** (never leave the app invisible with no tray and
-    no way back).
+    `_set_autoupdate_checked` at updater.py:1229); then tear down everything `_ensure_tray()`
+    set up (the reverse of §4): **stop `self._tray_timer`** (so the periodic check stops
+    shelling out once the feature is off), **close the single-instance `QLocalServer`**
+    (residency is ending), hide the tray icon (`self._tray.hide()`, drop the reference),
+    `setQuitOnLastWindowClosed(True)`, and if the **window is currently hidden, `show()` it**
+    (never leave the app invisible with no tray and no way back).
 - **`on_startboot_toggled(on)`**
   - `on=True`: **first** ensure the tray is on — if `not tray_btn.isChecked()`, set it on
     (which runs `on_tray_toggled(True)`); then `_install_autostart()`. If the install fails
@@ -181,10 +190,22 @@ Autostart is a plain file drop — no `systemctl daemon-reload`, no enable step.
   via `QPainter` on a copy of the pixmap. No new asset files; works on any theme because the
   badge is drawn, not themed. When `_app_icon()` is null (unlikely), fall back to a plain
   drawn disc so the tray is never blank.
-- **`_ensure_tray()`** — build `QSystemTrayIcon(self)` once (guarded by `self._tray is None`
-  and `self._tray_available`), attach the context menu, connect `activated` so a left-click
-  (`QSystemTrayIcon.Trigger`) raises the window, set the initial (neutral) icon + tooltip,
-  and `show()` it.
+- **`_ensure_tray()` — the single "become resident" entry point.** Idempotent: guarded by
+  `self._tray is None` and `self._tray_available`, so calling it twice is a no-op. **Every** path
+  that makes OneUp resident — the autostart `--tray` launch, a normal launch with `tray_enabled`
+  on, and a mid-session Settings enable (`on_tray_toggled(True)`) — funnels through it, so all
+  resident-setup responsibilities live in exactly one place. It:
+  1. builds `QSystemTrayIcon(self)`, attaches the context menu, and connects `activated` so a
+     left-click (`QSystemTrayIcon.Trigger`) calls `_show_window()`;
+  2. sets the initial (neutral) icon + tooltip and `show()`s the icon;
+  3. **arms the single-instance `QLocalServer`** (§8) if it isn't already listening — so a later
+     second launch raises this copy instead of duplicating it, whether residency began at boot
+     or mid-session (this is the fix for "a Settings-enabled tray has no server");
+  4. **starts the periodic check** — an initial `_tray_check()` a few seconds out, plus the
+     `self._tray_timer` (§5) — so the amber-when-waiting behaviour actually fires for every
+     enable path, not just the autostart one;
+  5. **`setQuitOnLastWindowClosed(False)`** so hiding the window doesn't quit the app.
+  The matching teardown is `on_tray_toggled(on=False)` (§2), which reverses steps 1–5.
 - **Context menu** (`QMenu`): **Check now** → `_tray_check()`; **Update now** →
   `_tray_update()` (raise window + `start_run()`); **Open OneUp** → `_show_window()`;
   separator; **Quit** → `QApplication.quit()`.
@@ -207,7 +228,9 @@ window's task rows / progress bar / interactive-check state:
 
 - **`_tray_check()`** — no-op if `ENGINE` is missing or a tray-check is already in flight
   (guard a `self._traycheck_proc` like `_size_proc`). Start `bash <ENGINE> --check
-  --log=<LOG_DIR>/<stamp>.traycheck.log` with merged channels. **No `--notify`** (silent).
+  --log=<LOG_DIR>/<stamp>.traycheck.log` with merged channels, wiring
+  `readyReadStandardOutput`→`_on_traycheck_output` and `finished`→`_on_traycheck_finished`.
+  **No `--notify`** (silent).
 - **`_on_traycheck_output()`** — line-buffer like `_on_size_output` (updater.py:1535). The
   engine emits the **three-field** line `@@CHECK@@|TOTAL|<n>|updates available` (see
   `update_system.sh`'s `marker CHECK "TOTAL|$total|updates available"`), so parse it the way
@@ -216,10 +239,14 @@ window's task rows / progress bar / interactive-check state:
   `updates available` label). Do **not** do a naïve `int(<everything after the prefix>)` — that
   would choke on the third field. Call `_apply_tray_total(n)`; ignore every other line (do
   **not** append to the window log).
+- **`_on_traycheck_finished()`** — release the finished `QProcess` (`deleteLater()` + drop
+  `self._traycheck_proc`), mirroring `_on_size_finished` (updater.py:1549), so a weeks-long
+  resident session (~4 checks/day) doesn't accumulate dead QProcess objects on the window.
 - **`_apply_tray_total(n: int)`** — store `self._tray_total = n` and `self._tray_checked_at =
   now`; if the tray exists, set `_tray_icon(n > 0)` and the matching tooltip.
-- **Cadence:** a `QTimer` (`self._tray_timer`) started in tray setup: an initial check a few
-  seconds after launch (so login isn't slowed), then every `TRAY_CHECK_INTERVAL_MS` (6 hours;
+- **Cadence:** a `QTimer` (`self._tray_timer`) started by `_ensure_tray()` (§4, step 4): an
+  initial check a few seconds after launch (so login isn't slowed), then every
+  `TRAY_CHECK_INTERVAL_MS` (6 hours;
   a module constant, not a user setting — YAGNI). `--check` reads cached repo metadata
   (`zypper --no-refresh list-updates`), so a finer cadence would not surface fresher data.
 
@@ -253,34 +280,42 @@ since the window is still the active window at close time. **Else** unchanged (s
 - Keep `--check` / `--update` dispatch first (updater.py:2021–2024), unchanged.
 - After `QApplication([])`, decide tray intent: `tray_wanted = QSettings("OneUp","OneUp")
   .value("tray_enabled", False, type=bool)` **and** `QSystemTrayIcon.isSystemTrayAvailable()`.
-- If `tray_wanted`: `app.setQuitOnLastWindowClosed(False)`, build the window, call
-  `win._ensure_tray()` and start the periodic check; `show()` the window **only if `--tray`
-  is not present** (autostart starts hidden; a normal launch still shows it).
+- If `tray_wanted`: **first run the single-instance client check** (§8) — if another resident
+  copy answers, raise it and `sys.exit(0)`. Otherwise build the window and call
+  `win._ensure_tray()`, which owns the quit-behaviour, the single-instance server, and the
+  initial + periodic check (§4) — main() does **not** set `setQuitOnLastWindowClosed` or start
+  the timer separately. Then `show()` the window **only if `--tray` is not present** (autostart
+  starts hidden; a normal launch still shows it).
 - Else (no tray wanted/available): today's path — `win.show()`; if `--tray` was passed but no
   tray is available, still `show()` the window (degrade, never a silent no-op).
 
 ### 8. Single-instance guard (resident-app correctness)
 
 A resident tray copy means a second launch (app-menu click) must **raise the existing copy**,
-not spawn a second icon + second check timer. Minimal `QLocalServer`/`QLocalSocket` guard in
-`main()`:
+not spawn a second icon + second check timer. Minimal `QLocalServer`/`QLocalSocket` guard, split
+across the two natural owners:
 
-- Server name is per-user to avoid cross-user collisions: `f"OneUp-{os.getuid()}"`.
-- On startup, `QLocalSocket().connectToServer(name)`; if it connects within a short timeout,
-  the app is already running — write a one-byte token and `sys.exit(0)`. The running instance,
-  on `newConnection`, calls `win._show_window()`.
-- Otherwise become the server: `QLocalServer.removeServer(name)` (clears a stale socket left by
-  a crash), then `listen(name)`; connect `newConnection` to a slot that raises the window.
-- Guard is **only armed for a resident (tray) session** — a plain `oneup` run with the tray off
-  keeps today's behaviour (no server, multiple windows allowed), so nothing changes for
-  non-tray users. (A headless `--check`/`--update` never reaches this code.)
-- **Startup race (accepted):** two near-simultaneous cold launches can both fail
-  `connectToServer` and then both `listen()`; last writer wins and the loser keeps its own icon.
-  Harmless at this scale (a rare double-launch) and not worth extra locking — noted so the
-  implementer doesn't add a lock file chasing it.
-- **Server lifetime:** the `QLocalServer` lives for the process lifetime. After a mid-session
-  tray-off, `setQuitOnLastWindowClosed(True)` is restored, so closing the window quits the
-  process and the server dies with it — no single-instance lock outlives the session.
+- **Server name** is per-user to avoid cross-user collisions: `f"OneUp-{os.getuid()}"`.
+- **Client check — in `main()`, for any tray-wanted launch (before building the window):**
+  `QLocalSocket().connectToServer(name)`; if it connects within a short timeout, a resident copy
+  already exists — write a one-byte token and `sys.exit(0)`. The resident instance, on
+  `newConnection`, calls `win._show_window()`.
+- **Server — armed by `_ensure_tray()` (§4, step 3), not by main():**
+  `QLocalServer.removeServer(name)` (clears a stale socket left by a crash), then `listen(name)`;
+  connect `newConnection` to raise the window. Arming it inside `_ensure_tray()` — the **single**
+  point where OneUp becomes resident — means it covers **both** an autostart/normal-enabled launch
+  **and** a mid-session Settings enable; there is no resident state without a live server (this
+  closes the "Settings-enabled tray has no server, so a second launch duplicates" gap).
+- Guard touches **only resident sessions** — a plain `oneup` with the tray off never calls
+  `_ensure_tray()`, so it starts no server and keeps today's multi-window behaviour. (A headless
+  `--check`/`--update` never reaches this code.)
+- **Accepted races:** (a) two near-simultaneous cold launches can both fail `connectToServer`
+  then both `listen()`; last writer wins, the loser keeps its own icon. (b) two processes each
+  started tray-off that both enable the tray mid-session will each try to `listen()` on the same
+  name; the second fails and simply keeps its own icon. Both are rare double-launch corners,
+  harmless at this scale, not worth a lock file.
+- **Server lifetime:** the server is closed in the `on_tray_toggled(on=False)` teardown (§2) and
+  otherwise dies with the process on quit — no single-instance lock outlives residency.
 
 ## Correctness invariants
 
