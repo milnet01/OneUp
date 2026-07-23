@@ -79,7 +79,6 @@ Examples:
 EOF
 }
 
-# shellcheck disable=SC2034 # AUTO_SKIP is read by the failure-path integration (ONEUP-0025 Task 3), not yet wired up
 for arg in "$@"; do
     case "$arg" in
         --steps=*) STEPS="${arg#*=}" ;;
@@ -550,6 +549,29 @@ disable_repo() {   # $1=alias $2=reason ; records + marks on success, fail-close
     return 1
 }
 
+enabled_repo_aliases() {   # alias of each ENABLED repo (read-only; no root)
+    LC_ALL=C zypper --non-interactive lr -u 2>/dev/null | awk -F'|' '
+        { for (i=1;i<=NF;i++) gsub(/^ +| +$/,"",$i) }
+        $1 ~ /^[0-9]+$/ && tolower(substr($4,1,1))=="y" { print $2 }'
+}
+
+find_failing_repos() {     # "alias reason" per enabled repo that fails its own refresh
+    local alias out rc reason
+    while IFS= read -r alias; do
+        [[ -z "$alias" ]] && continue
+        out=$(sudo zypper --non-interactive refresh "$alias" 2>&1); rc=$?
+        (( rc == 0 )) && continue
+        if   grep -qiE 'signature|GPG|key' <<<"$out"; then reason=signature
+        elif grep -qiE 'metadata|Valid metadata not found' <<<"$out"; then reason=metadata
+        else reason=unreachable; fi
+        echo "$alias $reason"
+    done < <(enabled_repo_aliases)
+}
+
+repo_scoped_failure() {
+    grep -qiE 'signature|GPG|key|metadata|Valid metadata not found|Curl|could not resolve|Download.*failed|Skipping repository' "$SYS_LOG"
+}
+
 run_system_upgrade() {   # runs the transaction into $SYS_LOG (truncates it); sets global `ok`
     ok=true
     if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
@@ -604,6 +626,31 @@ if step_selected system; then
     # and matching the English text keeps the change-detection reliable everywhere.
     # (`sudo env VAR=…` sets it in the child cleanly, regardless of sudoers env rules.)
     run_system_upgrade
+    # Repo resilience: a repo-scoped failure (bad signature / unreachable / corrupt
+    # metadata on ONE source) need not sink the whole run. Only probe when we
+    # weren't already told which to skip (a --skip-repo run already named them —
+    # probing again would be pointless and would mask a genuinely different error)
+    # and the failure actually looks repo-scoped (disk-full/conflict are not).
+    systemic_repo_fail=false
+    if ! $ok && (( ${#SKIP_REPOS[@]} == 0 )) && repo_scoped_failure; then
+        mapfile -t failing < <(find_failing_repos)
+        if (( ${#failing[@]} > MAX_SKIP_REPOS )); then
+            systemic_repo_fail=true                       # too many at once → not one bad source
+        elif (( ${#failing[@]} > 0 )); then
+            if $AUTO_SKIP; then
+                for entry in "${failing[@]}"; do
+                    disable_repo "${entry%% *}" "${entry#* }" || true
+                done
+                # Retry on the healthy repos only if we actually managed to disable
+                # something — a disable that itself failed must not silently retry.
+                (( ${#DISABLED_REPOS[@]} > 0 )) && run_system_upgrade
+            else
+                # Interactive: ask, don't act. Offer "Skip <source> & update the
+                # rest" for each culprit; disable nothing on our own.
+                for entry in "${failing[@]}"; do marker REMEDY "skip-repo|${entry%% *}"; done
+            fi
+        fi
+    fi
     # Only interpret the transaction output when the step actually SUCCEEDED. A
     # blocked/failed run has no "Nothing to do." line, so treating the else-branch
     # as "packages changed" would falsely trip the reboot advice — the step failed,
@@ -630,10 +677,17 @@ if step_selected system; then
                 end_step system ok "packages updated"
             fi
         fi
+        if (( ${#DISABLED_REPOS[@]} > 0 )); then
+            note="Updated everything except: ${DISABLED_REPOS[*]} — set aside this run (temporary problem); OneUp will retry next time."
+            echo "  Note: $note"
+            marker HINT "$note"
+        fi
     else
         # Turn the most common zypper failures into one plain-English line.
         hint=""
-        if grep -qiE 'No space left|disk full' "$SYS_LOG"; then
+        if $systemic_repo_fail; then
+            hint="Several repositories are failing at once — likely a network or system problem, not a single bad source. Check your connection and retry."
+        elif grep -qiE 'No space left|disk full' "$SYS_LOG"; then
             hint="Ran out of disk space — free some room (clear the package cache, delete old snapshots) and retry."
         elif grep -qiE 'signature|GPG|key.*(expired|reject)' "$SYS_LOG"; then
             if $IMPORT_KEYS; then
@@ -849,14 +903,18 @@ fi
 # End-of-run desktop notification (full runs only; --check has its own at line ~229).
 # Fires for the unattended weekly timer so a 2am run still reports its outcome.
 if $NOTIFY; then
+    # Unattended auto-skip sets a source aside silently — the notification is the
+    # ONLY place a nobody's-watching run reports what it skipped, so name it here.
+    skip_note=""
+    (( ${#DISABLED_REPOS[@]} > 0 )) && skip_note=" (skipped: ${DISABLED_REPOS[*]} — will retry next time)"
     if ((ERRORS > 0)); then
         notify_send "Update failed" "One or more steps failed — see the log: $LOG_FILE"
     elif [[ -n "$SYS_COUNT" && "$SYS_COUNT" != "0" ]]; then
-        notify_send "Update complete" "$SYS_COUNT system package(s) installed."
+        notify_send "Update complete" "$SYS_COUNT system package(s) installed.$skip_note"
     elif $SYS_CHANGED || $FW_CHANGED; then
-        notify_send "Update complete" "Updates were installed."
+        notify_send "Update complete" "Updates were installed.$skip_note"
     else
-        notify_send "Already up to date" "No updates were needed."
+        notify_send "Already up to date" "No updates were needed.$skip_note"
     fi
 fi
 echo "  Log saved: $LOG_FILE"

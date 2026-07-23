@@ -820,6 +820,122 @@ check_absent "unsafe alias never reaches modifyrepo" "modifyrepo --disable evil"
 unset MOCK_ZLOG
 rm -rf "$d"
 
+# ---------------------------------------------------------------------------
+echo "TEST: --auto-skip-repos sets a broken source aside, upgrades the rest, reports ok + notifies"
+d=$(mktemp -d); setup_common "$d"
+# cleanup()'s restore re-enables via `sudo -n` (never blocks on a popup inside the
+# trap). setup_common's shared sudo mock always fails `-n` to model "no
+# passwordless drop-in yet" for the auth-status tests; here we model a credential
+# the earlier interactive `sudo -A … -v` already warmed, so `-n` succeeds too —
+# the real-world behaviour `-n` relies on (same override as the --skip-repo tests).
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+while [[ $# -gt 0 ]]; do case "$1" in -A|-v|-k|-E|-n) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
+[[ $# -eq 0 ]] && exit 0
+exec "$@"
+EOF
+chmod +x "$d/sudo"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+cat > "$d/notify-send" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$MOCK_NLOG"
+EOF
+chmod +x "$d/notify-send"; export MOCK_NLOG="$d/notify.log"; : > "$MOCK_NLOG"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "zypper $*" >> "$MOCK_ZLOG"
+case "$*" in
+  *"lr -u"*)               printf '# | Alias | Name | Enabled | GPG | Refresh | URI\n1 | oss | O | Yes | Yes | Yes | http://o/\n2 | chrome | C | Yes | Yes | Yes | http://c/\n'; exit 0 ;;
+  *"modifyrepo --disable chrome"*) exit 0 ;;
+  *"modifyrepo --enable chrome"*)  exit 0 ;;
+  *"refresh chrome"*)      echo "Signature verification failed for repository 'chrome'"; exit 1 ;;
+  *"refresh oss"*)         exit 0 ;;
+  *refresh*)               exit 0 ;;                                   # bulk refresh
+  *dup*|*update*)
+      if grep -q "modifyrepo --disable chrome" "$MOCK_ZLOG"; then echo "2 packages to upgrade."; exit 0   # retry after skip: OK
+      else echo "Signature verification failed for repository 'chrome'"; exit 1; fi ;;                     # first attempt: blocked
+  *needs-rebooting*)       exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system --auto-skip-repos --notify)
+check        "auto-skip disables the culprit"       "modifyrepo --disable chrome" "$(cat "$MOCK_ZLOG")"
+check        "auto-skip emits REPO_SKIPPED"          "@@REPO_SKIPPED@@|chrome|signature" "$out"
+check        "auto-skip upgrade then succeeds"       "@@STEP_END@@|system|ok" "$out"
+check        "auto-skip re-enables the culprit"      "modifyrepo --enable chrome" "$(cat "$MOCK_ZLOG")"
+check_re     "notify names the skipped source"       "chrome" "$(cat "$MOCK_NLOG")"
+check_absent "auto-skip never disables gpg checks"   "--no-gpg-checks" "$(cat "$MOCK_ZLOG")"
+unset MOCK_ZLOG MOCK_NLOG
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: a manual repo-scoped failure OFFERS skip (no --auto-skip-repos), disables nothing"
+d=$(mktemp -d); setup_common "$d"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "zypper $*" >> "$MOCK_ZLOG"
+case "$*" in
+  *"lr -u"*)          printf '# | Alias | Name | Enabled | GPG | Refresh | URI\n1 | oss | O | Yes | Yes | Yes | http://o/\n2 | chrome | C | Yes | Yes | Yes | http://c/\n'; exit 0 ;;
+  *"refresh chrome"*) echo "Signature verification failed for repository 'chrome' (key expired)"; exit 1 ;;
+  *"refresh oss"*)    exit 0 ;;
+  *refresh*)          exit 0 ;;
+  *dup*|*update*)     echo "Signature verification failed for repository 'chrome' (key expired)"; exit 1 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check        "manual failure offers skip for the culprit"   "@@REMEDY@@|skip-repo|chrome" "$out"
+check        "expired key ALSO offers the import remedy"     "@@REMEDY@@|import-keys" "$out"
+check        "manual failure fails the step"                 "@@STEP_END@@|system|fail" "$out"
+check_absent "manual failure disables nothing on its own"    "modifyrepo --disable" "$(cat "$MOCK_ZLOG")"
+unset MOCK_ZLOG
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: more than the cap failing = systemic; hint, no skipping"
+d=$(mktemp -d); setup_common "$d"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "zypper $*" >> "$MOCK_ZLOG"
+case "$*" in
+  *"lr -u"*)   printf '# | Alias | Name | Enabled | GPG | Refresh | URI\n1 | a | A | Yes | Yes | Yes | http://a/\n2 | b | B | Yes | Yes | Yes | http://b/\n3 | c | C | Yes | Yes | Yes | http://c/\n'; exit 0 ;;
+  *refresh\ a*|*refresh\ b*|*refresh\ c*) echo "could not resolve host"; exit 1 ;;
+  *refresh*)   exit 1 ;;
+  *dup*|*update*) echo "could not resolve host name"; exit 1 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system --auto-skip-repos)
+check        "systemic failure hints network/system"  "@@HINT@@|Several repositories are failing" "$out"
+check_absent "systemic failure disables nothing"      "modifyrepo --disable" "$(cat "$MOCK_ZLOG")"
+check        "systemic failure fails the step"         "@@STEP_END@@|system|fail" "$out"
+unset MOCK_ZLOG
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: a manual over-cap failure offers no skip"
+# (same lr -u as the systemic mock; run WITHOUT --auto-skip-repos)
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *"lr -u"*)   printf '# | Alias | Name | Enabled | GPG | Refresh | URI\n1 | a | A | Yes | Yes | Yes | http://a/\n2 | b | B | Yes | Yes | Yes | http://b/\n3 | c | C | Yes | Yes | Yes | http://c/\n'; exit 0 ;;
+  *refresh\ *) echo "could not resolve host"; exit 1 ;;
+  *refresh*)   exit 1 ;;
+  *dup*|*update*) echo "could not resolve host name"; exit 1 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check_absent "manual over-cap offers no skip" "@@REMEDY@@|skip-repo" "$out"
+rm -rf "$d"
+
 echo
 echo "======================================"
 echo "  Passed: $PASS   Failed: $FAIL"
