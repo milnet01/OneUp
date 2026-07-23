@@ -186,3 +186,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Let people choose from a few built-in colour themes for OneUp, instead of only matching the desktop's light or dark setting.
   Kind: feature.
   Source: user-request-2026-07-23.
+
+- 📋 [ONEUP-0028] **Make OneUp usable for blind, partially-sighted, and colour-blind users.**
+  Cover the three groups: (1) blind — full screen-reader (Orca/AT-SPI) support: accessible names/roles on every control, the live log and progress announced, focus order sane, no unlabelled icon-only buttons; (2) partially sighted — scalable/large text, honour the desktop font scale, a high-contrast option, keyboard operability throughout; (3) colour-blind — never signal state by colour alone (the amber tray icon, red/green step badges) — pair every colour cue with text/shape/icon. Coordinates with ONEUP-0026 (dialog standard) and ONEUP-0027 (themes: any theme must keep WCAG-AA contrast). Likely warrants its own spec + an audit pass with Orca.
+  **Layman:** Design OneUp so people who can't see well — or at all — can still use it: screen-reader support, large/scalable text and high-contrast options, and never relying on colour alone to convey status.
+  Kind: accessibility.
+  Source: user-request-2026-07-23.

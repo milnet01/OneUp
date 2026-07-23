@@ -77,26 +77,42 @@ config.
   (mirrors the Repo-manager's existing `modifyrepo --disable` usage, ONEUP-0015/16).
 - Re-enable: `sudo zypper --non-interactive modifyrepo --enable "<alias>"`.
 - **Guaranteed restore:** every alias the engine disables is recorded in a
-  `DISABLED_REPOS` list; the existing `cleanup()` trap (`update_system.sh:325`,
-  wired to `EXIT INT TERM HUP`) is extended to re-enable each one. So a
-  cancel (Ctrl-C), crash, or normal exit all leave repo state exactly as found.
+  `DISABLED_REPOS` list; the existing `cleanup()` function (`update_system.sh:325`)
+  is extended to re-enable each one. `cleanup()` runs via `trap cleanup EXIT`
+  (`:331`); the `INT`/`TERM`/`HUP` traps (`:332-333`) call `exit`, which fires that
+  same EXIT trap — so a cancel (Ctrl-C), crash, or normal exit all restore repo
+  state. Re-enabling runs `sudo zypper modifyrepo --enable` inside `cleanup()`; the
+  sudo credential is still warm from the run, and if a re-enable fails the
+  failure-mode below logs the exact command to fix it by hand.
 - **Alias validation (bash).** Before any alias reaches a privileged `modifyrepo`,
-  it is checked against `^[A-Za-z0-9][A-Za-z0-9._:-]*$` (mirrors the GUI's
-  `_build_apply_command` guard that refuses `evil; rm -rf /`). A non-matching
-  alias is refused and the repo is *not* skipped (fail-closed).
+  it is checked against `^[A-Za-z0-9][A-Za-z0-9:@._+-]*$` — the **identical**
+  character class as the GUI's `_ALIAS_RE` (`updater.py:498`, applied with
+  `.fullmatch()` in `_build_apply_command` at `:676`), which the Repo-manager
+  already uses to refuse `evil; rm -rf /`. Matching it exactly matters: a real
+  alias containing `@` or `+` must not be refused by the engine when the GUI would
+  accept it, or that source would never be set aside and the whole update would
+  still fail. A non-matching alias is refused and the repo is *not* skipped
+  (fail-closed).
 
 ### Identifying the culprit(s) — `find_failing_repos()`
 
 Only called on a repo-scoped failure (or in `--auto-skip-repos` mode). Deterministic
 and alias-precise:
 
-1. Enumerate **enabled** repos by alias via `LC_ALL=C zypper -x lr` (parse the
-   `alias="…"` of `enabled="1"` entries — same read-only `zypper lr` source
-   `read_repos()` already uses in the GUI).
+1. Enumerate **enabled** repos by alias from `LC_ALL=C zypper --non-interactive
+   lr -u` — the same table form the engine's pre-flight already parses
+   (`update_system.sh:503`) and the GUI's `_parse_repos` uses (`updater.py:501`):
+   split each row on `|`, keep rows whose first column is a number, take the Alias
+   column (2) for rows whose Enabled column (4) is `Yes`.
 2. Refresh each enabled repo individually:
    `sudo zypper --non-interactive refresh "<alias>"`. Aliases whose refresh exits
    non-zero are the failing set. (Per-repo refresh, not bulk-output parsing, so we
-   always hold the exact alias — the token `modifyrepo` needs.)
+   always hold the exact alias — the token `modifyrepo` needs.) **Classify each
+   failing alias's `reason`** for the marker by grepping its own refresh output:
+   `signature|GPG|key` → `signature`; `metadata|Valid metadata not found` →
+   `metadata`; `Curl|could not resolve|Download.*failed|Timeout` → `unreachable`;
+   anything else → `unreachable` (generic default). The `--skip-repo` path, where
+   the culprit is named by the user rather than probed, uses `reason=manual`.
 
 A "repo-scoped failure" worth probing = the `$SYS_LOG` matches
 `signature|GPG|key|metadata|Valid metadata not found|Curl|could not resolve|Download.*failed|Skipping repository`.
@@ -138,7 +154,8 @@ each alias, `modifyrepo --disable`, record in `DISABLED_REPOS`, run the normal f
 
 ```
 @@REPO_SKIPPED@@|alias|reason   A source was set aside this run. reason ∈
-                                {signature, unreachable, metadata, manual}.
+                                {signature, metadata, unreachable, manual},
+                                derived as in *Identifying the culprit(s)* above.
                                 Emitted once per skipped source. GUI logs it,
                                 and (unattended) the end-of-run notify names it.
 @@REMEDY@@|skip-repo|alias      Interactive: tell the GUI to offer
@@ -146,22 +163,31 @@ each alias, `modifyrepo --disable`, record in `DISABLED_REPOS`, run the normal f
 ```
 
 Both must be added to the marker catalogue in `update_system.sh`'s header comment
-(~line 79-116) **and** the `CLAUDE.md` "Current markers" list — the two files that
+(lines 103-119) **and** the `CLAUDE.md` "Current markers" list — the two files that
 document the contract.
 
 ## GUI changes (`updater.py`)
 
-- **`_launch(steps, check=False, import_keys=False, skip_repos=None)`** — add a
-  `skip_repos` list; append one `--skip-repo=<alias>` per entry to the engine argv.
-  (Current call-sites: `start_run`, `start_check`, `retry_failed`, `request_size`,
-  `_fix_keys_and_retry` — all keep working; `skip_repos` defaults to none.)
+- **`_launch(self, steps, check, import_keys=False, skip_repos=None)`** — the
+  current signature is `_launch(self, steps, check, import_keys=False)`
+  (`updater.py:1914`; `check` is a **required positional**, no default — keep it
+  that way). Add a trailing `skip_repos` list and append one `--skip-repo=<alias>`
+  per entry to the engine argv. The four current call-sites — `start_check`
+  (`:1856`), `start_run` (`:1859`), `retry_failed` (`:1863`), `_fix_keys_and_retry`
+  (`:1827`) — are unaffected (`skip_repos` defaults to none). (`request_size` is
+  **not** a `_launch` call-site — it drives its own `--size` `QProcess`
+  (`:1887`) — so it is untouched.)
 - **`_headless_update()`** (unattended path, `tests/gui-smoke.py:205-215` proves it
   runs the engine with `--notify`) — add `--auto-skip-repos` to that engine argv,
   so the weekly/tray automatic run auto-quarantines.
-- **`handle_marker` / `_parse_tray_line`:**
+- **`handle_marker`** (`updater.py:2022` — the interactive marker consumer):
   - `REPO_SKIPPED|alias|reason` → record the skipped source (for the log and the
-    end-of-run summary). In the tray/headless path the engine's own `--notify`
-    reports it; the GUI just logs.
+    end-of-run summary). This is consumed **only on an interactive run**. The
+    unattended path (`_headless_update`, `updater.py:2368`) runs the engine with
+    `--notify` and does **no** GUI marker parsing (it reads only the exit code), so
+    unattended reporting of a skipped source is entirely the engine's end-of-run
+    `--notify`. (`_parse_tray_line` is *not* involved — it only handles `@@CHECK@@`
+    on the read-only tray-check path, which never skips a repo.)
   - `REMEDY|skip-repo|alias` → arm a "skip" remedy: store the alias, and after the
     run finishes (`on_finished`) show the warn banner action **"Skip &lt;name&gt; &
     update the rest"**, where `<name>` is resolved from the alias via the existing
@@ -170,7 +196,10 @@ document the contract.
 - **Both remedies can be armed at once** (expired key): the banner shows the
   primary **"Skip it"** action and keeps the existing **"Import signing key &
   retry"** path reachable. Exact two-action banner layout is a plan detail; the
-  invariant is that both are offered when the engine emits both markers.
+  invariant is that both are offered when the engine emits both markers. (The
+  current warn banner is single-action — a `warn_btn` text-swap plus a separate
+  `warn_copy_btn`; showing both actions at once needs a genuine second action
+  button, not a text swap.)
 
 ## Correctness invariants (the tests must lock these in)
 
