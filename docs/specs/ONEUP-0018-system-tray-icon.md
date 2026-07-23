@@ -201,9 +201,9 @@ Autostart is a plain file drop — no `systemctl daemon-reload`, no enable step.
   3. **arms the single-instance `QLocalServer`** (§8) if it isn't already listening — so a later
      second launch raises this copy instead of duplicating it, whether residency began at boot
      or mid-session (this is the fix for "a Settings-enabled tray has no server");
-  4. **starts the periodic check** — an initial `_tray_check()` a few seconds out, plus the
-     `self._tray_timer` (§5) — so the amber-when-waiting behaviour actually fires for every
-     enable path, not just the autostart one;
+  4. **starts the periodic check** — the single `self._tray_timer` (§5), whose short first fire
+     runs the initial `_tray_check()` — so the amber-when-waiting behaviour actually fires for
+     every enable path, not just the autostart one;
   5. **`setQuitOnLastWindowClosed(False)`** so hiding the window doesn't quit the app.
   The matching teardown is `on_tray_toggled(on=False)` (§2), which reverses steps 1–5.
 - **Context menu** (`QMenu`): **Check now** → `_tray_check()`; **Update now** →
@@ -244,11 +244,14 @@ window's task rows / progress bar / interactive-check state:
   resident session (~4 checks/day) doesn't accumulate dead QProcess objects on the window.
 - **`_apply_tray_total(n: int)`** — store `self._tray_total = n` and `self._tray_checked_at =
   now`; if the tray exists, set `_tray_icon(n > 0)` and the matching tooltip.
-- **Cadence:** a `QTimer` (`self._tray_timer`) started by `_ensure_tray()` (§4, step 4): an
-  initial check a few seconds after launch (so login isn't slowed), then every
-  `TRAY_CHECK_INTERVAL_MS` (6 hours;
-  a module constant, not a user setting — YAGNI). `--check` reads cached repo metadata
-  (`zypper --no-refresh list-updates`), so a finer cadence would not surface fresher data.
+- **Cadence:** **one** `QTimer` (`self._tray_timer`) started by `_ensure_tray()` (§4, step 4).
+  Its first fire is short — `TRAY_INITIAL_DELAY_MS` (a few seconds, so login isn't slowed) — and
+  its `timeout` handler runs `_tray_check()` then resets the interval to `TRAY_CHECK_INTERVAL_MS`
+  (6 hours) for every fire thereafter. Both are module constants, not user settings (YAGNI).
+  Using the **one** timer for both the initial and recurring checks means the teardown's single
+  `self._tray_timer.stop()` (§2) cancels any pending initial check — no stray one-shot survives
+  tray-off. `--check` reads cached repo metadata (`zypper --no-refresh list-updates`), so a finer
+  cadence would not surface fresher data.
 
 **Keep the ambient icon consistent with in-window activity:** when the window's own flows learn
 a fresh total, refresh the tray too, so the icon doesn't lie while the window is open:
@@ -269,10 +272,13 @@ These hooks live in `on_finished` (updater.py:1785), which already branches on
 `closeEvent` (updater.py:1074) becomes: **if** the tray is live (`self._tray is not None`),
 save geometry, `event.ignore()`, `self.hide()`, and — **once per session** — fire a
 close-to-tray hint ("OneUp is still running in the tray — right-click the icon to quit."),
-gated by a `self._tray_hint_shown` flag. That hint is a **direct** `notify-send` (the same
-fixed-argv `Popen` pattern as `_notify_when_away` at updater.py:1778–1783) — **not** a call to
-`_notify_when_away` itself, whose `isActiveWindow()` guard (updater.py:1776) would suppress it,
-since the window is still the active window at close time. **Else** unchanged (save geometry +
+gated by a `self._tray_hint_shown` flag. That hint is a **direct** `notify-send` — the same
+fixed-argv `Popen` pattern as `_notify_when_away` (updater.py:1778–1783), keeping that method's
+`shutil.which("notify-send")` presence check (updater.py:1776) but dropping its `isActiveWindow()`
+half — **not** a call to `_notify_when_away` itself, whose active-window guard (updater.py:1776)
+would suppress it, since the window is still the active window at close time. (A missing
+`notify-send` is doubly safe: skipped by the `which` check and, failing that, swallowed by the
+pattern's `except OSError`.) **Else** unchanged (save geometry +
 `super().closeEvent(event)`; the app quits because a tray isn't holding it open).
 
 ### 7. `main()` wiring
@@ -379,6 +385,9 @@ build (the existing suite already monkeypatches `_install_user_timer` etc.):
   `@@CHECK@@|TOTAL|0|updates available` sets it 0 (neutral) — proving the parser reads field 1
   and tolerates the trailing label (a two-field fixture would hide the crash the real line
   causes). (Assert the state var, not the icon pixels.)
+- **Tray check is silent (no double-notify):** `_tray_check()` launches the engine with `--check`
+  and **without** `--notify` (inspect the started argv) — pins the "ambient icon does not
+  double-notify" invariant, the one promised behaviour that otherwise has no test.
 - **`OSError` on install reverts boot only:** stub `_install_autostart` to raise `OSError`;
   toggling `startboot_btn` on leaves `startboot_btn` off but leaves the tray on (the valid
   "resident, not at boot" state).
