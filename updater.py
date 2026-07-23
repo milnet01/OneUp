@@ -2273,9 +2273,14 @@ for (var i = 0; i < clients.length; i++) {{
                 self._show_warning(self._hints[0])
             elif self._remedy_skips:
                 names = ", ".join(self._repo_display_name(a) for a in self._remedy_skips)
-                self._show_warning(
-                    f"{names} is failing — skip it and update everything else, "
-                    "or check the log.")
+                if len(self._remedy_skips) == 1:
+                    self._show_warning(
+                        f"{names} is failing — skip it and update everything else, "
+                        "or check the log.")
+                else:
+                    self._show_warning(
+                        f"These sources are failing: {names} — skip them and update "
+                        "everything else, or check the log.")
             else:
                 self._show_warning("A repository signing key is out of date.")
             # When a one-click remedy is available, the banner button offers it
