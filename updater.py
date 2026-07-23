@@ -715,13 +715,71 @@ class RepoManagerDialog(QDialog):
         super().done(result)
 
 
+class SettingsDialog(QDialog):
+    """Groups OneUp's three background-behaviour toggles (weekly check,
+    passwordless, automatic updates) behind one popup, modelled on
+    RepoManagerDialog. The toggle buttons and their handlers stay owned by the
+    Updater window; this dialog only lays them out. It is created once, so the
+    buttons live here permanently after the first open."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowTitle("Settings")
+        self.setMinimumWidth(460)
+        root = QVBoxLayout(self)
+        intro = QLabel("Background behaviours. Each is off until you turn it on.")
+        intro.setWordWrap(True)
+        root.addWidget(intro)
+        root.addWidget(self._row(
+            "Check weekly in the background and notify you when updates are ready.",
+            parent.auto_btn))
+        root.addWidget(self._row(
+            "Skip the password prompt for OneUp's update commands (opt-in; you can "
+            "switch it off to revoke instantly).", parent.auth_btn))
+        root.addWidget(self._row(
+            "Install all updates automatically on a weekly schedule. Needs the "
+            "passwordless setting, and keeps the snapshot/rollback safety net.",
+            parent.autoupdate_btn))
+        self.status = QLabel("")
+        self.status.setObjectName("Tagline")
+        root.addWidget(self.status)
+        btns = QHBoxLayout()
+        btns.addStretch(1)
+        close_btn = QPushButton("Close")
+        close_btn.setObjectName("GhostBtn")
+        close_btn.clicked.connect(self.reject)
+        btns.addWidget(close_btn)
+        root.addLayout(btns)
+
+    def _row(self, description: str, button: QPushButton) -> QFrame:
+        fr = QFrame()
+        fr.setObjectName("RowBorder")
+        lay = QHBoxLayout(fr)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(10)
+        lbl = QLabel(description)
+        lbl.setWordWrap(True)
+        lay.addWidget(lbl, 1)
+        lay.addWidget(button, 0, Qt.AlignVCenter)
+        return fr
+
+    def showEvent(self, event):
+        # Centre over the main window each time it opens (mirrors RepoManagerDialog).
+        super().showEvent(event)
+        parent = self.parent()
+        if parent:
+            fg = self.frameGeometry()
+            fg.moveCenter(parent.frameGeometry().center())
+            self.move(fg.topLeft())
+
+
 class Updater(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} {APP_VERSION}")
-        # Wide enough that the five header controls (weekly check, passwordless,
-        # repositories, recenter, about) never crowd out the title/tagline.
-        self.setMinimumWidth(720)
+        # Four header controls (Settings · Repositories · Recenter · About); the
+        # three background toggles now live inside the Settings popup.
+        self.setMinimumWidth(560)
         self.settings = QSettings("OneUp", "OneUp")
         self.proc: QProcess | None = None
         self._buf = ""
@@ -739,6 +797,8 @@ class Updater(QMainWindow):
         self._log_path: Path | None = None
         self._latest_tag = ""
         self._warn_repo_dup = False   # is the current warning a duplicate-repo one?
+        self._settings_dialog: SettingsDialog | None = None
+        self._pending_autoupdate = False   # one-shot latch: an enable awaiting a fresh auth settle
 
         # Gradient ring: a 2px accent border (outer #Frame) around the card.
         outer_frame = QFrame()
@@ -785,6 +845,26 @@ class Updater(QMainWindow):
         self._refresh_auth_label()
         self.auth_btn.toggled.connect(self.on_auth_toggled)
 
+        # Automatic weekly updates (ONEUP-0022). Off by default; enabling it needs
+        # the passwordless rule (coupling enforced in on_autoupdate_toggled). Real
+        # state is read from the systemd-user timer.
+        self.autoupdate_btn = QPushButton()
+        self.autoupdate_btn.setObjectName("GhostBtn")
+        self.autoupdate_btn.setCheckable(True)
+        self.autoupdate_btn.setCursor(Qt.PointingHandCursor)
+        self.autoupdate_btn.setToolTip("Install all updates automatically every week "
+                                       "(needs Passwordless)")
+        self.autoupdate_btn.setChecked(self._autoupdate_enabled())
+        self._refresh_autoupdate_label()
+        self.autoupdate_btn.toggled.connect(self.on_autoupdate_toggled)
+
+        self.settings_btn = QPushButton("⚙ Settings")
+        self.settings_btn.setObjectName("GhostBtn")
+        self.settings_btn.setCursor(Qt.PointingHandCursor)
+        self.settings_btn.setToolTip("Background behaviours: weekly check, "
+                                     "passwordless, automatic updates")
+        self.settings_btn.clicked.connect(self.open_settings)
+
         self.recenter_btn = QPushButton("Recenter")
         self.recenter_btn.setObjectName("GhostBtn")
         self.recenter_btn.setCursor(Qt.PointingHandCursor)
@@ -805,8 +885,7 @@ class Updater(QMainWindow):
 
         header_row = QHBoxLayout()
         header_row.addLayout(titleblock, 1)
-        header_row.addWidget(self.auto_btn, 0, Qt.AlignTop)
-        header_row.addWidget(self.auth_btn, 0, Qt.AlignTop)
+        header_row.addWidget(self.settings_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.repos_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.recenter_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.about_btn, 0, Qt.AlignTop)
@@ -1142,6 +1221,22 @@ for (var i = 0; i < clients.length; i++) {{
             self._remove_user_timer("oneup-check")
         self._refresh_autocheck_label()
 
+    def _refresh_autoupdate_label(self):
+        on = self.autoupdate_btn.isChecked()
+        self.autoupdate_btn.setText(
+            "Automatic updates: on" if on else "Automatic updates: off")
+
+    def _set_autoupdate_checked(self, on: bool):
+        """Reflect the real state on the toggle WITHOUT re-firing on_autoupdate_toggled."""
+        self.autoupdate_btn.blockSignals(True)
+        self.autoupdate_btn.setChecked(on)
+        self.autoupdate_btn.blockSignals(False)
+        self._refresh_autoupdate_label()
+
+    def on_autoupdate_toggled(self, on: bool):
+        # Real coupling logic added in Task 5. Placeholder keeps the signal valid.
+        self._set_autoupdate_checked(on)
+
     # ---- passwordless authorization (opt-in, ONEUP-0023) ------------------
     def _refresh_auth_label(self):
         on = self.auth_btn.isChecked()
@@ -1256,6 +1351,20 @@ for (var i = 0; i < clients.length; i++) {{
                 "Couldn't read the repository list. Is zypper available?")
             return
         RepoManagerDialog(self, repos).exec()
+
+    # ---- settings popup -----------------------------------------------------
+    def open_settings(self):
+        """Open (or re-raise) the Settings popup — created once so the three
+        toggle buttons live in it permanently."""
+        if self._settings_dialog is None:
+            self._settings_dialog = SettingsDialog(self)
+        self._settings_dialog.show()
+        self._settings_dialog.raise_()
+        self._settings_dialog.activateWindow()
+
+    def _settings_status(self, text: str):
+        if self._settings_dialog is not None:
+            self._settings_dialog.status.setText(text)
 
     def _warn_action(self):
         """The warning banner's button adapts to the warning: offer the one-click

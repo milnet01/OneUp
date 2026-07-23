@@ -200,6 +200,18 @@ def main() -> int:
     check("headless command quotes the executable path",
           updater.Updater._headless_command("--check").startswith('"'))
 
+    # --- Settings popup groups the three background toggles --------------------
+    w = updater.Updater()
+    check("Settings button exists in the header", hasattr(w, "settings_btn"))
+    check("auto-update toggle defaults to off",
+          hasattr(w, "autoupdate_btn") and not w.autoupdate_btn.isChecked()
+          and w.autoupdate_btn.text() == "Automatic updates: off")
+    dlg = updater.SettingsDialog(w)
+    hosted = dlg.findChildren(QPushButton)
+    check("Settings dialog hosts the weekly-check toggle", w.auto_btn in hosted)
+    check("Settings dialog hosts the passwordless toggle", w.auth_btn in hosted)
+    check("Settings dialog hosts the auto-update toggle", w.autoupdate_btn in hosted)
+
     # --- 6. the About dialog opens and closes without error --------------------
     w = updater.Updater()
     check("About button exists in the header", hasattr(w, "about_btn"))
