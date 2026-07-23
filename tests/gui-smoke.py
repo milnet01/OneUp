@@ -559,6 +559,89 @@ def main() -> int:
     check("headless update still passes --notify, not --update",
           "--notify" in _cap.get("argv", []) and "--update" not in _cap.get("argv", []))
 
+    # --- ONEUP-0025: REPO_SKIPPED is recorded; skip-repo remedy arms a named
+    # banner action ("Skip <source> & update the rest") -------------------------
+    _orig_read_repos = updater.read_repos
+    updater.read_repos = lambda: [{"alias": "google-chrome", "name": "Google Chrome",
+                                   "enabled": True, "url": "http://c/"}]
+    try:
+        w = updater.Updater()
+        w.handle_line("@@REPO_SKIPPED@@|google-chrome|signature")
+        check("REPO_SKIPPED recorded", "google-chrome" in w._skipped_repos)
+
+        w.handle_line("@@REMEDY@@|skip-repo|google-chrome")
+        check("skip-repo remedy stores the alias", w._remedy_skip == "google-chrome")
+        w._failed_steps = ["system"]
+        w._hints = ["The 'google-chrome' repository failed — the rest can still update."]
+        w.proc = QProcess(w)
+        w.on_finished(1, QProcess.ExitStatus.NormalExit)
+        check("banner offers a NAMED skip action",
+              "Google Chrome" in w.warn_btn.text() and "Skip" in w.warn_btn.text())
+        check("second banner button stays hidden when only one remedy is armed",
+              not w.warn_btn2.isVisibleTo(w.warn_banner))
+
+        # Clicking it re-launches with skip_repos = the alias, re-running the
+        # failed steps.
+        launched = {}
+        w._launch = lambda steps, check=False, import_keys=False, skip_repos=None: (
+            launched.update(steps=list(steps), skip=list(skip_repos or [])))
+        w._skip_repo_and_retry()
+        check("skip action re-launches with the alias", launched.get("skip") == ["google-chrome"])
+        check("skip action re-runs the failed steps", launched.get("steps") == ["system"])
+
+        # --- expired key: BOTH remedies armed at once — skip stays primary, the
+        # key-import fix is reachable via a genuine second button --------------
+        w2 = updater.Updater()
+        w2.handle_line("@@REMEDY@@|skip-repo|google-chrome")
+        w2.handle_line("@@REMEDY@@|import-keys")
+        w2._failed_steps = ["system"]
+        w2._hints = ["A repository signing key is out of date."]
+        w2.proc = QProcess(w2)
+        w2.on_finished(1, QProcess.ExitStatus.NormalExit)
+        check("both remedies armed: primary button is the named skip action",
+              w2.warn_btn.text() == "Skip Google Chrome & update the rest")
+        check("both remedies armed: second button offers the key-import fix",
+              w2.warn_btn2.isVisibleTo(w2.warn_banner)
+              and w2.warn_btn2.text() == "Import signing key & retry")
+
+        # The second button still goes through the same warned confirmation as
+        # the single-remedy import-keys path (mirrors _fix_keys_and_retry's guard).
+        launched2 = {}
+        w2._launch = lambda steps, check=False, import_keys=False, skip_repos=None: (
+            launched2.update(steps=list(steps), import_keys=import_keys))
+        w2._confirm_key_import = lambda: True
+        w2.warn_btn2.click()
+        check("clicking the second button imports keys and retries",
+              launched2.get("import_keys") is True and "system" in launched2.get("steps", []))
+
+        # --- only import-keys armed: single-action path is unchanged, no 2nd btn -
+        w3 = updater.Updater()
+        w3.handle_line("@@REMEDY@@|import-keys")
+        w3._failed_steps = ["system"]
+        w3._hints = ["A repository signing key is out of date."]
+        w3.proc = QProcess(w3)
+        w3.on_finished(1, QProcess.ExitStatus.NormalExit)
+        check("import-keys only: warn button keeps the original single-action text",
+              w3.warn_btn.text() == "Import signing key & retry")
+        check("import-keys only: second banner button stays hidden",
+              not w3.warn_btn2.isVisibleTo(w3.warn_banner))
+    finally:
+        updater.read_repos = _orig_read_repos
+
+    # A stale remedy from a prior run must never linger into the next one.
+    _orig_qp_start = updater.QProcess.start
+    updater.QProcess.start = lambda self, *a, **kw: None   # swallow the real engine launch
+    try:
+        w4 = updater.Updater()
+        w4._remedy_skip = "stale-alias"
+        w4.warn_btn2.setVisible(True)
+        w4._launch(["system"], check=False)
+        check("_launch resets a stale skip remedy", w4._remedy_skip is None)
+        check("_launch hides a stale second banner button",
+              not w4.warn_btn2.isVisibleTo(w4.warn_banner))
+    finally:
+        updater.QProcess.start = _orig_qp_start
+
     print()
     print("======================================")
     print(f"  Passed: {PASS}   Failed: {FAIL}")

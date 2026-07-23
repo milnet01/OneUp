@@ -488,7 +488,7 @@ In `_headless_update()` add `--auto-skip-repos`:
 - Modify: `updater.py` (`handle_marker` ~2022; `on_finished` remedy handling ~2200-2215; the warn banner ~1010/1940)
 - Test: `tests/gui-smoke.py`
 
-- [ ] **Step 1: Write the failing tests** (`tests/gui-smoke.py`)
+- [x] **Step 1: Write the failing tests** (`tests/gui-smoke.py`)
 ```python
     # --- REPO_SKIPPED is recorded; skip-repo remedy arms a named banner action ----
     w = updater.Updater()
@@ -514,9 +514,9 @@ In `_headless_update()` add `--auto-skip-repos`:
     check("skip action re-runs the failed steps", launched.get("steps") == ["system"])
 ```
 
-- [ ] **Step 2: Run, confirm FAIL.**
+- [x] **Step 2: Run, confirm FAIL.**
 
-- [ ] **Step 3: Implement** (`updater.py`)
+- [x] **Step 3: Implement** (`updater.py`)
 - Init (in `__init__`): `self._skipped_repos = []` and `self._remedy_skip = None`.
 - In `handle_marker`, add:
 ```python
@@ -549,8 +549,8 @@ In `_headless_update()` add `--auto-skip-repos`:
 - In `on_finished` where remedies are surfaced (~2200-2215), when `self._remedy_skip` is set, show the warn banner with primary action text `f"Skip {self._repo_display_name(self._remedy_skip)} & update the rest"` wired to `_skip_repo_and_retry`. When BOTH `_remedy_skip` and `_remedy_keys` are set, the skip action is primary and the "Import signing key & retry" path stays reachable.
 > **Two-action banner:** the current banner drives a single action via `warn_btn`'s text/slot swap plus a separate `warn_copy_btn`. Offering skip *and* import-keys together needs a genuine second action button. Add one `warn_btn2` next to `warn_btn` (mirror `warn_copy_btn`'s construction and visibility toggling); show it only when both remedies are armed. Keep the single-action path unchanged when only one remedy is armed. Reset `_remedy_skip`/`_remedy_keys`/`warn_btn2` visibility at the start of each run (mirror how `_remedy_keys` is reset today).
 
-- [ ] **Step 4: Run the tests, confirm PASS.** Run the FULL gui-smoke suite.
-- [ ] **Step 5: Commit** — `git commit -m "ONEUP-0025: GUI skip-source banner action + REPO_SKIPPED logging"`
+- [x] **Step 4: Run the tests, confirm PASS.** Run the FULL gui-smoke suite.
+- [x] **Step 5: Commit** — `git commit -m "ONEUP-0025: GUI skip-source banner action + REPO_SKIPPED logging"`
 
 ---
 
