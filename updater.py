@@ -1336,6 +1336,86 @@ for (var i = 0; i < clients.length; i++) {{
         self._tray.setToolTip(
             f"{APP_NAME} — {n} update(s) waiting" if n > 0 else f"{APP_NAME} — up to date")
 
+    # ---- resident tray lifecycle (ONEUP-0018) -----------------------------
+    def _single_instance_name(self) -> str:
+        return f"OneUp-{os.getuid()}"
+
+    def _arm_single_instance(self):
+        """Listen so a later second launch raises THIS copy instead of duplicating.
+        Armed here — the single point where OneUp becomes resident — so it covers
+        both an autostart/normal-enabled launch and a mid-session Settings enable."""
+        if self._local_server is not None:
+            return
+        name = self._single_instance_name()
+        QLocalServer.removeServer(name)          # clear a stale socket from a crash
+        server = QLocalServer(self)
+        if server.listen(name):
+            server.newConnection.connect(self._on_single_instance_connection)
+            self._local_server = server
+
+    def _on_single_instance_connection(self):
+        conn = self._local_server.nextPendingConnection()
+        if conn is not None:
+            conn.close()
+        self._show_window()
+
+    def _close_single_instance(self):
+        if self._local_server is not None:
+            self._local_server.close()
+            self._local_server = None
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.Trigger:    # left-click
+            self._show_window()
+
+    def _on_tray_timer(self):
+        self._tray_check()
+        self._tray_timer.setInterval(TRAY_CHECK_INTERVAL_MS)  # short first fire, then 6h
+
+    def _tray_update(self):
+        self._show_window()
+        self.start_run()
+
+    def _ensure_tray(self):
+        """The single 'become resident' entry point — idempotent. Every path that makes
+        OneUp resident funnels through it, so all resident setup lives in one place."""
+        if self._tray is not None or not self._tray_available:
+            return
+        self._tray = QSystemTrayIcon(self)
+        menu = QMenu()
+        menu.addAction("Check now", self._tray_check)
+        menu.addAction("Update now", self._tray_update)
+        menu.addAction("Open OneUp", self._show_window)
+        menu.addSeparator()
+        menu.addAction("Quit", QApplication.quit)
+        self._tray.setContextMenu(menu)
+        self._tray.activated.connect(self._on_tray_activated)
+        self._tray.setIcon(self._tray_icon(self._tray_total > 0))
+        self._tray.setToolTip(
+            f"{APP_NAME} — not checked yet" if self._tray_checked_at is None
+            else f"{APP_NAME} — {self._tray_total} update(s) waiting" if self._tray_total > 0
+            else f"{APP_NAME} — up to date")
+        self._tray.show()
+        self._arm_single_instance()
+        self._tray_timer = QTimer(self)
+        self._tray_timer.timeout.connect(self._on_tray_timer)
+        self._tray_timer.start(TRAY_INITIAL_DELAY_MS)
+        QApplication.setQuitOnLastWindowClosed(False)
+
+    def _teardown_tray(self):
+        """Reverse every _ensure_tray step. Never leaves the app invisible + unquittable."""
+        if self._tray_timer is not None:
+            self._tray_timer.stop()
+            self._tray_timer = None
+        self._close_single_instance()
+        if self._tray is not None:
+            if isinstance(self._tray, QSystemTrayIcon):
+                self._tray.hide()
+            self._tray = None
+        QApplication.setQuitOnLastWindowClosed(True)
+        if self.isHidden():
+            self._show_window()
+
     def _timer_enabled(self, timer: str) -> bool:
         r = subprocess.run(["systemctl", "--user", "is-enabled", timer],
                            capture_output=True, text=True)

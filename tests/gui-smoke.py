@@ -444,6 +444,19 @@ def main() -> int:
     w._parse_tray_line("@@STEP_BEGIN@@|system|1|3|x")   # non-CHECK line ignored
     check("tray parser ignores non-TOTAL lines", w._tray_total == 0)
 
+    # (5) _ensure_tray no-ops when no system tray is available (offscreen CI case).
+    w = updater.Updater()
+    check("no system tray under offscreen Qt", w._tray_available is False)
+    w._ensure_tray()
+    check("_ensure_tray builds nothing without a tray", w._tray is None)
+    # Force the 'available' path with a stub tray so teardown logic is exercised.
+    w._tray = object()                 # pretend a tray exists
+    w._tray_timer = updater.QTimer(w)
+    w._tray_timer.start(999999)
+    w._teardown_tray()
+    check("teardown stops the timer", w._tray_timer is None)
+    check("teardown drops the tray reference", w._tray is None)
+
     print()
     print("======================================")
     print(f"  Passed: {PASS}   Failed: {FAIL}")
