@@ -388,6 +388,40 @@ def main() -> int:
     check("confirming imports keys and retries the failed steps",
           launched.get("import_keys") is True and "system" in launched.get("steps", []))
 
+    # --- ONEUP-0018: system-tray icon ------------------------------------------
+    # (1) Autostart Exec targets --tray and quotes the executable.
+    _orig_which = updater.shutil.which
+    updater.shutil.which = lambda name: None            # force the sys.executable branch
+    updater.os.environ.pop("APPIMAGE", None)
+    try:
+        exec_line = updater.Updater._autostart_exec()
+    finally:
+        updater.shutil.which = _orig_which
+    check("autostart Exec ends in --tray", exec_line.endswith(" --tray"))
+    check("autostart Exec double-quotes the executable", exec_line.startswith('"'))
+
+    # (2) install/remove round-trips a real file under the sandbox HOME.
+    w_tmp = updater.Updater()
+    check("start-at-boot starts disabled", w_tmp._startboot_enabled() is False)
+    ok_install = w_tmp._install_autostart()
+    check("install_autostart writes the file", ok_install and w_tmp._startboot_enabled())
+    body = w_tmp._autostart_path().read_text()
+    check("autostart file targets --tray", "--tray" in body and "[Desktop Entry]" in body)
+    w_tmp._remove_autostart()
+    check("remove_autostart deletes the file", not w_tmp._startboot_enabled())
+
+    _orig_exe = updater.sys.executable
+    updater.sys.executable = "/opt/o$ne%up/oneup"
+    updater.shutil.which = lambda name: None
+    updater.os.environ.pop("APPIMAGE", None)
+    try:
+        line = updater.Updater._autostart_exec()
+    finally:
+        updater.sys.executable = _orig_exe
+        updater.shutil.which = _orig_which
+    check("Exec escapes '$' as backslash-backslash-'$' (not $$ or bare $)", r"\\$" in line and "$$" not in line)
+    check("Exec escapes '%' as '%%'", "%%up" in line)
+
     print()
     print("======================================")
     print(f"  Passed: {PASS}   Failed: {FAIL}")

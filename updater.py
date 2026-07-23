@@ -39,8 +39,14 @@ from PySide6.QtCore import (
     QUrl,
     Signal,
 )
-from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPixmap
+from PySide6.QtNetwork import (
+    QLocalServer,
+    QLocalSocket,
+    QNetworkAccessManager,
+    QNetworkReply,
+    QNetworkRequest,
+)
 from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
@@ -49,12 +55,14 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSystemTrayIcon,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -88,6 +96,12 @@ ENGINE = _find_engine()
 STATE_DIR = Path.home() / ".local" / "state" / "oneup"
 HISTORY = STATE_DIR / "history.json"
 LOG_DIR = STATE_DIR / "logs"
+
+# Tray: one QTimer drives both the short initial check and the recurring one, so a
+# single .stop() on tray-off cancels everything (no stray one-shot survives).
+TRAY_INITIAL_DELAY_MS = 4000                 # first check ~4s after launch (don't slow login)
+TRAY_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000  # then every 6 hours
+TRAY_ATTENTION_COLOR = "#f5a623"             # amber "updates waiting" badge
 
 # key, title, one-line description. Order = run order.
 TASKS = [
@@ -1160,6 +1174,73 @@ for (var i = 0; i < clients.length; i++) {{
         if launcher:
             return f"{_arg(launcher)} {flag}"
         return f"{_arg(sys.executable)} {_arg(Path(__file__).resolve())} {flag}"
+
+    def _autostart_path(self) -> Path:
+        return Path.home() / ".config" / "autostart" / f"{APP_ID}-tray.desktop"
+
+    def _startboot_enabled(self) -> bool:
+        return self._autostart_path().exists()
+
+    @staticmethod
+    def _autostart_exec() -> str:
+        """Executable (same resolution as _headless_command) quoted for a freedesktop
+        Desktop Entry Exec key, then ' --tray'. This is NOT the systemd escaping:
+        per the Desktop Entry Spec, the string-value backslash-unescape runs before the
+        Exec quote-unescape, so a literal '$' in the file is '\\$', a literal backslash
+        is '\\\\', and a literal '%' (a field code) is '%%'."""
+        def _arg(p) -> str:
+            out = ['"']
+            for ch in str(p):
+                if ch == "%":
+                    out.append("%%")
+                elif ch == "\\":
+                    out.append("\\\\\\\\")   # four backslashes on disk
+                elif ch == "$":
+                    out.append("\\\\$")      # \\$ on disk (freedesktop-unambiguous)
+                elif ch == '"':
+                    out.append('\\"')
+                elif ch == "`":
+                    out.append("\\`")
+                else:
+                    out.append(ch)
+            out.append('"')
+            return "".join(out)
+
+        appimage = os.environ.get("APPIMAGE")
+        if appimage:
+            return f"{_arg(appimage)} --tray"
+        launcher = shutil.which("oneup")
+        if launcher:
+            return f"{_arg(launcher)} --tray"
+        return f"{_arg(sys.executable)} {_arg(Path(__file__).resolve())} --tray"
+
+    def _install_autostart(self) -> bool:
+        """Write the autostart .desktop entry; return True iff it lands on disk.
+        A plain file drop — no systemctl reload (unlike the update timers)."""
+        path = self._autostart_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                "[Desktop Entry]\n"
+                "Type=Application\n"
+                "Name=OneUp (tray)\n"
+                "Comment=OneUp update status in the system tray\n"
+                f"Exec={self._autostart_exec()}\n"
+                f"Icon={APP_ID}\n"
+                "Terminal=false\n"
+                "NoDisplay=true\n"
+                "X-GNOME-Autostart-enabled=true\n"
+            )
+        except OSError as exc:
+            QMessageBox.warning(self, "Could not change start-at-boot", str(exc))
+            return False
+        return path.exists()
+
+    def _remove_autostart(self):
+        try:
+            self._autostart_path().unlink()
+        except OSError:      # already gone — fine (mirrors _remove_user_timer)
+            pass
 
     def _timer_enabled(self, timer: str) -> bool:
         r = subprocess.run(["systemctl", "--user", "is-enabled", timer],
