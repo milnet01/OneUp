@@ -17,10 +17,15 @@ setup_common() {
     local d="$1"
     cat > "$d/sudo" <<'EOF'
 #!/usr/bin/env bash
-# Strip sudo's own options; a bare `sudo -v` (validate) just succeeds.
+# Strip sudo's own options; a bare `sudo -v` (validate) just succeeds. The `-n`
+# (non-interactive) scoped probe fails by default -- this mock models a box
+# WITHOUT the ONEUP-0023 passwordless drop-in installed, so sudo_init's guard
+# falls through to the normal interactive-validate + keep-alive path, same as
+# every scenario expected before that guard existed.
+for a in "$@"; do [[ "$a" == "-n" ]] && exit 1; done
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -A|-n|-v|-k|-E) shift ;;
+        -A|-v|-k|-E) shift ;;
         -p) shift 2 ;;
         --) shift; break ;;
         -*) shift ;;
@@ -324,6 +329,50 @@ check "status is off when no drop-in exists" "@@AUTH@@|off" "$out"
 printf 'placeholder\n' > "$authfile"
 out=$(ONEUP_AUTH_FILE="$authfile" run_engine "$d" --auth-status)
 check "status is on when the drop-in exists" "@@AUTH@@|on" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: with the passwordless drop-in active, a full run skips the interactive sudo -v"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == "--version" ]] && { echo v; exit 0; }
+case "$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)    echo "Nothing to do."; exit 0 ;;
+  *needs-rebooting*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+# Drop-in ACTIVE: the scoped `-n` probe succeeds, so the engine must NOT reach the
+# interactive `sudo -A … -v`. The mock aborts loudly (exit 99) if `-A` is ever passed.
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do [[ "$a" == "-A" ]] && { echo "BUG: interactive sudo -A invoked" >&2; exit 99; }; done
+while [[ $# -gt 0 ]]; do case "$1" in -n|-v|-k|-E) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
+[[ $# -eq 0 ]] && exit 0
+exec "$@"
+EOF
+chmod +x "$d/sudo"
+out=$(run_engine "$d" --steps=system,cache)
+check_absent "drop-in active: no interactive sudo -A -v" "BUG: interactive sudo -A invoked" "$out"
+
+# Drop-in ABSENT: the scoped `-n` probe fails, so the engine still performs the ONE
+# interactive validate exactly as today (marker printed by the mock when `-A` is seen).
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+nonint=false; interactive=false
+for a in "$@"; do [[ "$a" == "-n" ]] && nonint=true; [[ "$a" == "-A" ]] && interactive=true; done
+$nonint && exit 1                         # scoped probe fails -> drop-in absent
+$interactive && echo "INTERACTIVE_VALIDATE_RAN"
+while [[ $# -gt 0 ]]; do case "$1" in -n|-v|-k|-E) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
+[[ $# -eq 0 ]] && exit 0
+exec "$@"
+EOF
+chmod +x "$d/sudo"
+out=$(run_engine "$d" --steps=system,cache)
+check "drop-in absent: still performs the interactive validate" "INTERACTIVE_VALIDATE_RAN" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

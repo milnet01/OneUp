@@ -283,6 +283,17 @@ fi
 # ---------------------------------------------------------------------------
 SUDO_KEEPALIVE=""
 sudo_init() {
+    # If the ONEUP-0023 passwordless drop-in is active, every privileged command
+    # below is individually NOPASSWD, so no cached credential is needed — and the
+    # interactive `sudo -A … -v` here would prompt ANYWAY: sudo's `verifypw` defaults
+    # to `all`, so a bare `-v` validate is only password-free when EVERY one of the
+    # user's sudoers entries is NOPASSWD (a normal %wheel user's isn't). Skipping it
+    # is what lets a headless timer run authenticate. Same non-interactive scoped
+    # probe --auth-status uses (auth_status, ~line 416).
+    local _zypper
+    if _zypper=$(command -v zypper) && sudo -k -n "$_zypper" --version >/dev/null 2>&1; then
+        return 0
+    fi
     if ! SUDO_ASKPASS="$ASKPASS" sudo -A \
             -p "System Updater: authenticate to update the system" -v; then
         echo "Authentication failed or cancelled — aborting." >&2
