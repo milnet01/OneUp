@@ -48,6 +48,8 @@ OneUp can:
   an unattended run doesn't stop to ask for a password.
 - **Restart just the affected services** instead of rebooting, when a full reboot
   isn't actually required.
+- **Survive a single broken software source** instead of failing the whole update —
+  sets just that source aside, updates everything else, and retries it next time.
 - **Roll back** to the snapshot it took before the update, in one click.
 - **Skip the password prompt** — optionally (off by default). A "Passwordless"
   toggle stops OneUp asking for your password on every update. It stores **no

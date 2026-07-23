@@ -8,6 +8,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **OneUp now survives a single broken software source instead of failing the whole update.**
+  When one repository serves a bad signature or is unreachable, OneUp sets just that source
+  aside, updates everything else, and retries it next time. A manual run offers "Skip
+  &lt;source&gt; & update the rest"; an unattended run skips it automatically and tells you.
+  It never weakens the signature check — the source is only set aside, never forced.
+
 - **An optional system-tray icon that turns amber when updates are waiting.**
   Off by default. When on, OneUp keeps running quietly in the tray; the icon goes
   amber whenever a background check finds updates, and a right-click menu gives

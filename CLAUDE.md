@@ -55,14 +55,18 @@ progress bars, badges, and banners. Non-marker lines are plain log output. The m
 the contract between the two files — **changing a marker's name or field layout in one file
 means updating the parser in the other, and the assertions in `tests/run-tests.sh`.**
 Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `SNAPSHOT`, `CHECK`, `CHECK_ITEM`,
-`SIZE`, `AUTH`, `DISK`, `REPO`, `HINT`, `REMEDY`, `SERVICES`, `INSTALLED`, `REBOOT`, `DONE`.
+`SIZE`, `AUTH`, `DISK`, `REPO`, `REPO_SKIPPED`, `HINT`, `REMEDY`, `SERVICES`, `INSTALLED`,
+`REBOOT`, `DONE`.
 (`CHECK_ITEM|key|name|from|to` carries one changed package for the `--check` preview
 panel; `SIZE|key|download` carries the on-demand download-size figure from `--size=<step>`;
 `AUTH|on|off` reports whether the opt-in passwordless-authorization drop-in is active, for
 the engine's `--grant-auth` / `--revoke-auth` / `--auth-status` actions; `REMEDY|import-keys`
 signals a one-click GUI fix for a failure — a rotated/expired repo signing key — which the
 warn banner offers as "Import signing key & retry", re-running the engine with `--import-keys`
-after a warned confirmation.) (`INSTALLED|count|sys_changed|fw_changed`
+after a warned confirmation. `REPO_SKIPPED|alias|reason` reports a source set aside for this
+run — via the `--skip-repo=<alias>` flag (repeatable) or `--auto-skip-repos` unattended
+auto-detection — and `REMEDY|skip-repo|alias` offers the matching "Skip <source> & update the
+rest" retry.) (`INSTALLED|count|sys_changed|fw_changed`
 carries the change summary the GUI uses to decide the reboot/rollback banners;
 `TIMING|key|seconds` carries each step's duration, appended to its row badge.)
 
