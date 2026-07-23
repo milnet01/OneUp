@@ -8,6 +8,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **An optional system-tray icon that turns amber when updates are waiting.**
+  Off by default. When on, OneUp keeps running quietly in the tray; the icon goes
+  amber whenever a background check finds updates, and a right-click menu gives
+  Check now / Update now / Open OneUp / Quit. An optional "Start at boot" launches
+  it hidden at login. It checks every few hours using the same read-only,
+  password-free check as the weekly popup — so it stays quiet, replacing the popup
+  with an at-a-glance icon — and degrades cleanly on desktops without a system tray.
+
 - **An optional "Automatic updates" setting that installs everything on a weekly schedule — off by default.**
   When turned on, OneUp runs the full update once a week in the background, with
   the same pre-update snapshot and one-click rollback a manual run gets. Because

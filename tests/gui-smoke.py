@@ -511,6 +511,8 @@ def main() -> int:
         def __init__(self): self.ignored = False
         def ignore(self): self.ignored = True
         def accept(self): pass
+    w.show()   # show first so isHidden() below meaningfully proves closeEvent hid it
+    check("window is visible before the tray-close", not w.isHidden())
     e1 = _Evt(); w.closeEvent(e1)
     check("close-to-tray ignores the close event", e1.ignored)
     check("close-to-tray hides the window", w.isHidden())

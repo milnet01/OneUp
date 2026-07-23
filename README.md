@@ -39,6 +39,9 @@ OneUp can:
 
 - **Check for updates** read-only (see the count per task before installing).
 - **Check weekly in the background** and notify you when updates are ready.
+- **Sit quietly in the system tray** and turn amber when updates are waiting, so you
+  notice without catching a popup — with a right-click Check / Update / Open / Quit
+  menu. Optional (off by default), and can also start at login.
 - **Update automatically every week** — optionally (off by default). An "Automatic
   updates" setting runs the whole update on a weekly schedule in the background,
   keeping the snapshot/rollback safety net. It needs the "Passwordless" setting, so
