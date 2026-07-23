@@ -457,6 +457,51 @@ def main() -> int:
     check("teardown stops the timer", w._tray_timer is None)
     check("teardown drops the tray reference", w._tray is None)
 
+    # (6) Settings dialog hosts the two new toggles; both default off.
+    w = updater.Updater()
+    check("tray toggle defaults off", not w.tray_btn.isChecked() and w.tray_btn.text() == "Tray icon: off")
+    check("start-at-boot toggle defaults off",
+          not w.startboot_btn.isChecked() and w.startboot_btn.text() == "Start at boot: off")
+    dlg = updater.SettingsDialog(w)
+    hosted = dlg.findChildren(QPushButton)
+    check("Settings dialog hosts the tray toggle", w.tray_btn in hosted)
+    check("Settings dialog hosts the start-at-boot toggle", w.startboot_btn in hosted)
+
+    # (7) Coupling — enabling start-at-boot turns the tray on.
+    w = updater.Updater()
+    w._install_autostart = lambda: True
+    w._ensure_tray = lambda: None
+    w.on_startboot_toggled(True)
+    check("boot-on turns the tray on", w.tray_btn.isChecked())
+    check("boot-on persists tray_enabled", w.settings.value("tray_enabled", False, type=bool) is True)
+
+    # (8) Coupling — turning the tray off removes start-at-boot.
+    w = updater.Updater()
+    removed = []
+    w._remove_autostart = lambda: removed.append(True)
+    w._teardown_tray = lambda: None
+    w._set_startboot_checked(True)
+    w.on_tray_toggled(False)
+    check("tray-off removes autostart", removed == [True])
+    check("tray-off clears the start-at-boot toggle", not w.startboot_btn.isChecked())
+
+    # (9) Coupling — turning start-at-boot off leaves the tray on.
+    w = updater.Updater()
+    removed2 = []
+    w._remove_autostart = lambda: removed2.append(True)
+    w._set_tray_checked(True)
+    w.on_startboot_toggled(False)
+    check("boot-off removes autostart", removed2 == [True])
+    check("boot-off leaves the tray on", w.tray_btn.isChecked())
+
+    # (10) A failed autostart write reverts start-at-boot only (tray stays on).
+    w = updater.Updater()
+    w._install_autostart = lambda: False
+    w._ensure_tray = lambda: None
+    w.on_startboot_toggled(True)
+    check("failed install reverts start-at-boot", not w.startboot_btn.isChecked())
+    check("failed install leaves the tray on", w.tray_btn.isChecked())
+
     print()
     print("======================================")
     print(f"  Passed: {PASS}   Failed: {FAIL}")

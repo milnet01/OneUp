@@ -754,6 +754,13 @@ class SettingsDialog(QDialog):
             "Install all updates automatically on a weekly schedule. Needs the "
             "passwordless setting, and keeps the snapshot/rollback safety net.",
             parent.autoupdate_btn))
+        _tray_note = "" if parent._tray_available else "  (your desktop has no system tray)"
+        root.addWidget(self._row(
+            "Show a small icon near the clock that turns amber when updates are waiting."
+            + _tray_note, parent.tray_btn))
+        root.addWidget(self._row(
+            "Start OneUp automatically at login, hidden in the tray." + _tray_note,
+            parent.startboot_btn))
         self.status = QLabel("")
         self.status.setObjectName("Tagline")
         root.addWidget(self.status)
@@ -880,6 +887,31 @@ class Updater(QMainWindow):
         self.autoupdate_btn.setChecked(self._autoupdate_enabled())
         self._refresh_autoupdate_label()
         self.autoupdate_btn.toggled.connect(self.on_autoupdate_toggled)
+
+        # System-tray icon + start-at-boot (ONEUP-0018). Both off by default; disabled
+        # when the desktop has no tray. tray_enabled is a QSettings preference; start-at-boot
+        # reads the real autostart-file existence.
+        self.tray_btn = QPushButton()
+        self.tray_btn.setObjectName("GhostBtn")
+        self.tray_btn.setCheckable(True)
+        self.tray_btn.setCursor(Qt.PointingHandCursor)
+        self.tray_btn.setToolTip("Show a small tray icon that turns amber when updates are waiting")
+        self.tray_btn.setChecked(self.settings.value("tray_enabled", False, type=bool))
+        self._refresh_tray_label()
+        self.tray_btn.toggled.connect(self.on_tray_toggled)
+
+        self.startboot_btn = QPushButton()
+        self.startboot_btn.setObjectName("GhostBtn")
+        self.startboot_btn.setCheckable(True)
+        self.startboot_btn.setCursor(Qt.PointingHandCursor)
+        self.startboot_btn.setToolTip("Start OneUp automatically at login (needs the tray icon)")
+        self.startboot_btn.setChecked(self._startboot_enabled())
+        self._refresh_startboot_label()
+        self.startboot_btn.toggled.connect(self.on_startboot_toggled)
+
+        if not self._tray_available:
+            self.tray_btn.setEnabled(False)
+            self.startboot_btn.setEnabled(False)
 
         self.settings_btn = QPushButton("⚙ Settings")
         self.settings_btn.setObjectName("GhostBtn")
@@ -1522,6 +1554,49 @@ for (var i = 0; i < clients.length; i++) {{
             self._remove_user_timer("oneup-update")
             self._pending_autoupdate = False
             self._refresh_autoupdate_label()
+
+    # ---- system-tray icon + start-at-boot (ONEUP-0018) ---------------------
+    def _refresh_tray_label(self):
+        self.tray_btn.setText("Tray icon: on" if self.tray_btn.isChecked() else "Tray icon: off")
+
+    def _refresh_startboot_label(self):
+        self.startboot_btn.setText(
+            "Start at boot: on" if self.startboot_btn.isChecked() else "Start at boot: off")
+
+    def _set_tray_checked(self, on: bool):
+        self.tray_btn.blockSignals(True)
+        self.tray_btn.setChecked(on)
+        self.tray_btn.blockSignals(False)
+        self._refresh_tray_label()
+
+    def _set_startboot_checked(self, on: bool):
+        self.startboot_btn.blockSignals(True)
+        self.startboot_btn.setChecked(on)
+        self.startboot_btn.blockSignals(False)
+        self._refresh_startboot_label()
+
+    def on_tray_toggled(self, on: bool):
+        self.settings.setValue("tray_enabled", on)
+        if on:
+            if self._tray_available:
+                self._ensure_tray()
+        else:
+            # Turning the tray off also clears start-at-boot and fully ends residency.
+            self._remove_autostart()
+            self._set_startboot_checked(False)
+            self._teardown_tray()
+        self._refresh_tray_label()
+
+    def on_startboot_toggled(self, on: bool):
+        if on:
+            # Start-at-boot needs the tray on; enabling it turns the tray on first.
+            if not self.tray_btn.isChecked():
+                self.tray_btn.setChecked(True)   # fires on_tray_toggled(True) -> _ensure_tray
+            if not self._install_autostart():
+                self._set_startboot_checked(False)   # write failed; tray stays on (valid)
+        else:
+            self._remove_autostart()             # does NOT turn the tray off
+        self._refresh_startboot_label()
 
     # ---- passwordless authorization (opt-in, ONEUP-0023) ------------------
     def _refresh_auth_label(self):
