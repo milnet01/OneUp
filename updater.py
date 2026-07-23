@@ -1064,64 +1064,82 @@ for (var i = 0; i < clients.length; i++) {{
         return Path.home() / ".config" / "systemd" / "user"
 
     @staticmethod
-    def _autocheck_command() -> str:
-        """A stable command that re-launches OneUp in headless --check mode.
-        Each path is quoted (for spaces) and any '%' is doubled: systemd treats '%'
-        as a specifier prefix inside ExecStart= even within quotes, so an unescaped
-        '%' in an install path would silently corrupt or fail the unit."""
+    def _headless_command(flag: str) -> str:
+        """A stable command that re-launches OneUp headless with `flag`
+        (`--check` or `--update`). Each path is quoted (for spaces) and any '%',
+        '$', '"' or backslash is escaped: systemd does C-unescaping plus env-var
+        and specifier expansion inside double quotes, so an unescaped one in an
+        install path would silently corrupt the unit."""
         def _arg(p) -> str:
-            # systemd does C-unescaping plus env-var ($FOO) and specifier (%x) expansion
-            # inside double quotes, so escape all four — backslash first, then quote,
-            # then dollar and percent — before wrapping the path in quotes.
             s = str(p).replace("\\", "\\\\").replace('"', '\\"')
             s = s.replace("$", "$$").replace("%", "%%")
             return '"' + s + '"'
         appimage = os.environ.get("APPIMAGE")
         if appimage:
-            return f"{_arg(appimage)} --check"
+            return f"{_arg(appimage)} {flag}"
         launcher = shutil.which("oneup")
         if launcher:
-            return f"{_arg(launcher)} --check"
-        return f"{_arg(sys.executable)} {_arg(Path(__file__).resolve())} --check"
+            return f"{_arg(launcher)} {flag}"
+        return f"{_arg(sys.executable)} {_arg(Path(__file__).resolve())} {flag}"
 
-    def _autocheck_enabled(self) -> bool:
-        r = subprocess.run(["systemctl", "--user", "is-enabled", "oneup-check.timer"],
+    def _timer_enabled(self, timer: str) -> bool:
+        r = subprocess.run(["systemctl", "--user", "is-enabled", timer],
                            capture_output=True, text=True)
         return r.stdout.strip() == "enabled"
+
+    def _autocheck_enabled(self) -> bool:
+        return self._timer_enabled("oneup-check.timer")
+
+    def _autoupdate_enabled(self) -> bool:
+        return self._timer_enabled("oneup-update.timer")
+
+    def _install_user_timer(self, basename: str, description: str, exec_flag: str) -> bool:
+        """Write + enable a weekly systemd-user timer. Returns True iff it ends up
+        enabled (an OSError writing the unit, or a failed enable, returns False)."""
+        units = self._user_units_dir()
+        try:
+            units.mkdir(parents=True, exist_ok=True)
+            (units / f"{basename}.service").write_text(
+                f"[Unit]\nDescription={description}\n\n"
+                f"[Service]\nType=oneshot\n"
+                f"ExecStart={self._headless_command(exec_flag)}\n"
+            )
+            (units / f"{basename}.timer").write_text(
+                f"[Unit]\nDescription={description}\n\n"
+                "[Timer]\nOnCalendar=weekly\nPersistent=true\n\n"
+                "[Install]\nWantedBy=timers.target\n"
+            )
+            subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+            subprocess.run(["systemctl", "--user", "enable", "--now",
+                            f"{basename}.timer"], check=False)
+        except OSError as exc:
+            QMessageBox.warning(self, "Could not change the schedule", str(exc))
+            return False
+        return self._timer_enabled(f"{basename}.timer")
+
+    def _remove_user_timer(self, basename: str):
+        units = self._user_units_dir()
+        subprocess.run(["systemctl", "--user", "disable", "--now",
+                        f"{basename}.timer"], check=False)
+        for name in (f"{basename}.timer", f"{basename}.service"):
+            try:
+                (units / name).unlink()
+            except OSError:
+                pass
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
 
     def _refresh_autocheck_label(self):
         on = self.auto_btn.isChecked()
         self.auto_btn.setText("Weekly check: on" if on else "Weekly check: off")
 
     def on_autocheck_toggled(self, on: bool):
-        units = self._user_units_dir()
-        try:
-            if on:
-                units.mkdir(parents=True, exist_ok=True)
-                (units / "oneup-check.service").write_text(
-                    "[Unit]\nDescription=OneUp weekly update check\n\n"
-                    "[Service]\nType=oneshot\n"
-                    f"ExecStart={self._autocheck_command()}\n"
-                )
-                (units / "oneup-check.timer").write_text(
-                    "[Unit]\nDescription=OneUp weekly update check\n\n"
-                    "[Timer]\nOnCalendar=weekly\nPersistent=true\n\n"
-                    "[Install]\nWantedBy=timers.target\n"
-                )
-                subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
-                subprocess.run(["systemctl", "--user", "enable", "--now",
-                                "oneup-check.timer"], check=False)
-            else:
-                subprocess.run(["systemctl", "--user", "disable", "--now",
-                                "oneup-check.timer"], check=False)
-                for name in ("oneup-check.timer", "oneup-check.service"):
-                    try:
-                        (units / name).unlink()
-                    except OSError:
-                        pass
-                subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
-        except OSError as exc:
-            QMessageBox.warning(self, "Could not change the schedule", str(exc))
+        # Weekly-check behaviour is unchanged: install/remove and refresh the label.
+        # It deliberately does NOT revert its toggle on a failed install (see the
+        # ONEUP-0022 spec's "Open questions" — hardening weekly-check is a separate item).
+        if on:
+            self._install_user_timer("oneup-check", "OneUp weekly update check", "--check")
+        else:
+            self._remove_user_timer("oneup-check")
         self._refresh_autocheck_label()
 
     # ---- passwordless authorization (opt-in, ONEUP-0023) ------------------
@@ -1810,9 +1828,22 @@ def _headless_check() -> int:
     return subprocess.run(["bash", str(ENGINE), "--check", "--notify"]).returncode
 
 
+def _headless_update() -> int:
+    """`oneup --update`: run the FULL engine + its end-of-run notification, no GUI.
+    This is what the optional weekly systemd-user UPDATE timer invokes. `--update`
+    is a GUI-only token — the engine is run with just --notify (its default STEPS is
+    every step) and is NEVER handed --update (its arg parser would reject it)."""
+    if not ENGINE.exists():
+        print(f"OneUp: update script not found at {ENGINE}", file=sys.stderr)
+        return 1
+    return subprocess.run(["bash", str(ENGINE), "--notify"]).returncode
+
+
 def main():
     if "--check" in sys.argv[1:]:
         sys.exit(_headless_check())
+    if "--update" in sys.argv[1:]:
+        sys.exit(_headless_update())
 
     app = QApplication([])
     app.setApplicationName(APP_NAME)

@@ -192,6 +192,14 @@ def main() -> int:
     w.on_finished(0, QProcess.ExitStatus.NormalExit)
     check("check: no reboot banner", not w.reboot_banner.isVisibleTo(w))
 
+    # --- headless command builder shared by both timers ------------------------
+    check("headless --check command ends in --check",
+          updater.Updater._headless_command("--check").endswith("--check"))
+    check("headless --update command ends in --update",
+          updater.Updater._headless_command("--update").endswith("--update"))
+    check("headless command quotes the executable path",
+          updater.Updater._headless_command("--check").startswith('"'))
+
     # --- 6. the About dialog opens and closes without error --------------------
     w = updater.Updater()
     check("About button exists in the header", hasattr(w, "about_btn"))
