@@ -711,6 +711,35 @@ rm -rf "$d"
 
 # ---------------------------------------------------------------------------
 echo
+echo "TEST: a full run fires an end-of-run desktop notification with the outcome"
+_notify_case() {  # zypper-dup-output, expected-title, extra-step-mock(optional)
+    local dup_out="$1" want="$2"
+    local d; d=$(mktemp -d); setup_common "$d"
+    cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+[[ "\$1" == "--version" ]] && { echo v; exit 0; }
+case "\$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)    echo "$dup_out"; exit ${3:-0} ;;
+  *needs-rebooting*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+    chmod +x "$d/zypper"
+    cat > "$d/notify-send" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$d/notify.log"
+EOF
+    chmod +x "$d/notify-send"
+    run_engine "$d" --steps=system,cache --notify >/dev/null 2>&1
+    check "full run notifies: $want" "$want" "$(cat "$d/notify.log" 2>/dev/null)"
+    rm -rf "$d"
+}
+_notify_case "3 packages to upgrade." "Update complete"
+_notify_case "Nothing to do."         "Already up to date"
+_notify_case "boom"                   "Update failed" 1
+
+echo
 echo "======================================"
 echo "  Passed: $PASS   Failed: $FAIL"
 echo "======================================"

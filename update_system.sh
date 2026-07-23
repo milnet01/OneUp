@@ -799,6 +799,20 @@ elif [[ -n "$SERVICES" ]]; then
     echo "  ! No reboot needed, but these services should restart to use the new"
     echo "    libraries:  $SERVICES"
 fi
+
+# End-of-run desktop notification (full runs only; --check has its own at line ~229).
+# Fires for the unattended weekly timer so a 2am run still reports its outcome.
+if $NOTIFY; then
+    if ((ERRORS > 0)); then
+        notify_send "Update failed" "One or more steps failed — see the log: $LOG_FILE"
+    elif [[ -n "$SYS_COUNT" && "$SYS_COUNT" != "0" ]]; then
+        notify_send "Update complete" "$SYS_COUNT system package(s) installed."
+    elif $SYS_CHANGED || $FW_CHANGED; then
+        notify_send "Update complete" "Updates were installed."
+    else
+        notify_send "Already up to date" "No updates were needed."
+    fi
+fi
 echo "  Log saved: $LOG_FILE"
 echo "=========================================="
 
