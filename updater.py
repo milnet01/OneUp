@@ -1242,6 +1242,39 @@ for (var i = 0; i < clients.length; i++) {{
         except OSError:      # already gone — fine (mirrors _remove_user_timer)
             pass
 
+    def _tray_icon(self, attention: bool) -> QIcon:
+        """Compose the tray icon at runtime: the app icon, plus an amber badge when
+        updates are waiting. Drawn (not themed), so it reads on any desktop theme;
+        falls back to a plain disc if the app icon can't be found (never blank)."""
+        base = _app_icon()
+        if not base.isNull():
+            pm = base.pixmap(64, 64)
+        else:
+            pm = QPixmap(64, 64)
+            pm.fill(Qt.transparent)
+            p = QPainter(pm)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor("#888888"))
+            p.drawEllipse(8, 8, 48, 48)
+            p.end()
+        if attention:
+            p = QPainter(pm)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setPen(QColor("#ffffff"))
+            p.setBrush(QColor(TRAY_ATTENTION_COLOR))
+            d = 26
+            p.drawEllipse(pm.width() - d - 3, pm.height() - d - 3, d, d)
+            p.end()
+        return QIcon(pm)
+
+    def _show_window(self):
+        """Un-hide + best-effort raise. Un-hiding is reliable; the focus-raise is
+        subject to the same Wayland limitation the app documents for recenter."""
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
     def _timer_enabled(self, timer: str) -> bool:
         r = subprocess.run(["systemctl", "--user", "is-enabled", timer],
                            capture_output=True, text=True)

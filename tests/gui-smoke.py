@@ -422,6 +422,16 @@ def main() -> int:
     check("Exec escapes '$' as backslash-backslash-'$' (not $$ or bare $)", r"\\$" in line and "$$" not in line)
     check("Exec escapes '%' as '%%'", "%%up" in line)
 
+    # (3) The tray icon renders in both states and is never null.
+    w = updater.Updater()
+    check("neutral tray icon is non-null", not w._tray_icon(False).isNull())
+    check("attention tray icon is non-null", not w._tray_icon(True).isNull())
+    try:
+        w._show_window()   # must not throw under offscreen Qt
+        check("_show_window runs without error", True)
+    except Exception as exc:  # noqa: BLE001
+        check(f"_show_window runs without error ({exc})", False)
+
     print()
     print("======================================")
     print(f"  Passed: {PASS}   Failed: {FAIL}")
