@@ -174,6 +174,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** When one repository (e.g. Google Chrome) serves a bad signature or is unreachable, OneUp now sets just that source aside, updates everything else, and retries it next time — instead of the whole update failing.
   Kind: feature.
   Source: user-request-2026-07-23.
+  Spec written (docs/specs/ONEUP-0025-repo-resilience.md) and cold-eyes converged in 2 loops (loop 1: 3 HIGH / 2 MED / 3 LOW fixed — alias-regex divergence, false _launch call-site, lr-parse claim, reason-enum derivation, REPO_SKIPPED routing; loop 2: polish only, all citations verified accurate). Ready to implement on branch anthony/ONEUP-0025-repo-resilience.
 
 - 📋 [ONEUP-0026] **Adopt a popup/dialog standard: theme-matched and always centered on the app.**
   Write a short standard (docs/standards/) covering OneUp dialogs: (1) inherit the app palette so light/dark matches the main window; (2) always open centered over the parent window via the existing _center_child / showEvent-centring helper. Then bring the outlier into line: the signing-key import confirmation (a QMessageBox) currently opens at the compositor's default spot, not centered — route it through the same centring helper the About/Repositories popups use. Audit all dialogs for both properties. Reuses ONEUP-0016's _center_child machinery; no new mechanism.
