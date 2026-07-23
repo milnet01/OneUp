@@ -1911,7 +1911,23 @@ for (var i = 0; i < clients.length; i++) {{
         else:
             row.size_failed()
 
-    def _launch(self, steps: list[str], check: bool, import_keys: bool = False):
+    @staticmethod
+    def _engine_args(steps: list[str], check: bool = False, import_keys: bool = False,
+                      skip_repos: list[str] | None = None) -> list[str]:
+        """Build the engine argv for the stable flags (steps/check/import_keys), plus
+        one --skip-repo=<alias> per entry in skip_repos. `_launch` inserts --log=<path>
+        into the result at call time — this helper doesn't know about the log path."""
+        args = [str(ENGINE), f"--steps={','.join(steps)}"]
+        if check:
+            args.append("--check")
+        elif import_keys:
+            args.append("--import-keys")
+        for alias in (skip_repos or []):
+            args.append(f"--skip-repo={alias}")
+        return args
+
+    def _launch(self, steps: list[str], check: bool, import_keys: bool = False,
+                skip_repos: list[str] | None = None):
         if not steps:
             QMessageBox.information(self, "Nothing selected",
                                     "Turn on at least one task first.")
@@ -1963,12 +1979,8 @@ for (var i = 0; i < clients.length; i++) {{
             self.status.setText("Authenticating… (approve the password popup)")
         self.set_controls_enabled(False)
 
-        args = [str(ENGINE), f"--steps={','.join(steps)}", f"--log={self._log_path}"]
-        if check:
-            args.append("--check")
-        elif import_keys:
-            # Only after the user confirmed the trust decision in _fix_keys_and_retry.
-            args.append("--import-keys")
+        args = self._engine_args(steps, check, import_keys, skip_repos)
+        args.insert(2, f"--log={self._log_path}")  # after --steps, before --check/etc.
         self.proc = QProcess(self)
         self.proc.setProcessChannelMode(QProcess.MergedChannels)
         self.proc.readyReadStandardOutput.connect(self.on_output)
@@ -2369,11 +2381,13 @@ def _headless_update() -> int:
     """`oneup --update`: run the FULL engine + its end-of-run notification, no GUI.
     This is what the optional weekly systemd-user UPDATE timer invokes. `--update`
     is a GUI-only token — the engine is run with just --notify (its default STEPS is
-    every step) and is NEVER handed --update (its arg parser would reject it)."""
+    every step) and is NEVER handed --update (its arg parser would reject it).
+    Also passes --auto-skip-repos (additive): an unattended run should set a single
+    broken software source aside and finish the rest, not fail the whole update."""
     if not ENGINE.exists():
         print(f"OneUp: update script not found at {ENGINE}", file=sys.stderr)
         return 1
-    return subprocess.run(["bash", str(ENGINE), "--notify"]).returncode
+    return subprocess.run(["bash", str(ENGINE), "--notify", "--auto-skip-repos"]).returncode
 
 
 def _raise_existing_instance() -> bool:

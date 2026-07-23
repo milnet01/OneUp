@@ -537,6 +537,28 @@ def main() -> int:
     w.on_finished(0, QProcess.ExitStatus.NormalExit)     # a check
     check("finished check pushes the count to the tray", applied2 and applied2[-1] == 5)
 
+    # --- ONEUP-0025: repo resilience — skip_repos threads through to the engine ---
+    args = updater.Updater._engine_args(["system"], check=False, import_keys=False,
+                                        skip_repos=["google-chrome"])
+    check("skip_repos adds one --skip-repo per alias", "--skip-repo=google-chrome" in args)
+    check("no skip_repos → no --skip-repo flag",
+          "--skip-repo" not in " ".join(updater.Updater._engine_args(["system"], check=False)))
+
+    # Unattended update passes --auto-skip-repos, additively alongside --notify (and
+    # still never forwards the GUI-only --update token — mirrors the guard above).
+    _cap = {}
+    _orig = updater.subprocess.run
+    updater.subprocess.run = lambda a, *ar, **kw: (
+        _cap.update(argv=a) or type("R", (), {"returncode": 0})())
+    try:
+        updater._headless_update()
+    finally:
+        updater.subprocess.run = _orig
+    check("headless update auto-skips broken sources",
+          "--auto-skip-repos" in _cap.get("argv", []))
+    check("headless update still passes --notify, not --update",
+          "--notify" in _cap.get("argv", []) and "--update" not in _cap.get("argv", []))
+
     print()
     print("======================================")
     print(f"  Passed: {PASS}   Failed: {FAIL}")
