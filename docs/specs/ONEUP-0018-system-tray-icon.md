@@ -90,7 +90,7 @@ All changes are in `updater.py`. New Qt imports: `QSystemTrayIcon`, `QMenu` (QtW
 ### 1. Two new toggles in the Settings popup
 
 `SettingsDialog` (updater.py:718) currently lays out three `_row(...)` entries (weekly check,
-passwordless, automatic updates) at 730–743. Add two rows — **Show a tray icon** and
+passwordless, automatic updates) at updater.py:733–742. Add two rows — **Show a tray icon** and
 **Start at boot** — bound to two new buttons owned by the `Updater` window, created alongside
 the existing toggles in `__init__` (near updater.py:827–859) with the same recipe
 (`GhostBtn`, checkable, `PointingHandCursor`, `_refresh_*_label`, `toggled.connect(...)`):
@@ -112,7 +112,8 @@ Follow the established `_set_*_checked` / `_refresh_*_label` / `on_*_toggled` sh
   - `on=False`: persist `tray_enabled=False`; **also remove Start at boot** (call
     `_remove_autostart()` and reflect `startboot_btn` off via a `blockSignals` set, mirroring
     `_set_autoupdate_checked` at updater.py:1229); tear down the tray icon
-    (`self._tray.hide()`, drop the reference); `setQuitOnLastWindowClosed(True)`; and if the
+    (`self._tray.hide()`, drop the reference); **stop `self._tray_timer`** (so the periodic
+    check stops shelling out once the feature is off); `setQuitOnLastWindowClosed(True)`; and if the
     **window is currently hidden, `show()` it** (never leave the app invisible with no tray and
     no way back).
 - **`on_startboot_toggled(on)`**
@@ -158,13 +159,17 @@ verbatim for the `.desktop` line:
 
 - **`_autostart_exec() -> str`** — same executable resolution as `_headless_command`
   (`$APPIMAGE` → `oneup` on `PATH` → `sys.executable <script>`), but quoting each path for a
-  Desktop Entry: wrap in double quotes and backslash-escape `\`, `"`, `` ` ``, `$`; escape a
-  literal `%` as `%%`; **leave `$` un-doubled**. Append ` --tray`.
+  **Desktop Entry** `Exec` per the freedesktop Desktop Entry Spec's "The Exec key" section.
+  That section is explicit that the general string-value backslash-unescape (`\\`→`\`) is
+  applied **before** the Exec quote-unescape, so the byte-exact literals in the file are:
+  wrap the arg in double quotes; write a literal `$` as **`\\$`** (two backslashes then `$` —
+  the spec's stated "unambiguous" form), a literal backslash as `\\\\`, a literal `"` as `\\"`,
+  a backtick as `` \\` ``; and a literal `%` (a field code) as `%%`. Append ` --tray`.
   - **Worked example** (pin the exact bytes so the test below can assert them): a path
-    `/opt/o$ne%up/oneup` becomes `"/opt/o\$ne%%up/oneup"` — the `$` is `\$` (single backslash,
-    the form real `.desktop` files use), the `%` is `%%`, the whole arg is double-quoted.
-    Contrast `_headless_command`, which would emit `$$` and `%%` for the same path (systemd
-    form). Emitting the systemd form here would corrupt the autostart line.
+    `/opt/o$ne%up/oneup` becomes `"/opt/o\\$ne%%up/oneup"` — the `$` is `\\$` (the file's
+    string-unescape turns `\\`→`\`, then the Exec unquote turns `\$`→`$`), the `%` is `%%`, the
+    whole arg is double-quoted. Contrast `_headless_command`, which emits `$$` and `%%` for the
+    same path (systemd form). Emitting the systemd `$$` here would corrupt the autostart line.
 
 Autostart is a plain file drop — no `systemctl daemon-reload`, no enable step.
 
@@ -221,10 +226,16 @@ window's task rows / progress bar / interactive-check state:
 **Keep the ambient icon consistent with in-window activity:** when the window's own flows learn
 a fresh total, refresh the tray too, so the icon doesn't lie while the window is open:
 
-- After a window **Check** completes, `_apply_tray_total(int(self._installed_count or 0))`
-  (the CHECK/TOTAL count handled at updater.py:1709–1712).
-- After a successful full **run** finishes (`on_finished`, updater.py:1785), set the tray
-  neutral (updates were just installed → nothing waiting): `_apply_tray_total(0)`.
+These hooks live in `on_finished` (updater.py:1785), which already branches on
+`self._check_mode` (updater.py:1797):
+- **Check branch** (`_check_mode` true): `_apply_tray_total(int(self._installed_count) if
+  self._installed_count.isdigit() else 0)` — mirror the `.isdigit()` guard `on_finished` itself
+  uses at updater.py:1802 (`_installed_count` is a free-form string, so a bare `int(...)` can
+  raise). The count came from the CHECK/TOTAL handling at updater.py:1709–1712.
+- **Run branch** (`_check_mode` false) **and only when the run succeeded** (`ok`): set the tray
+  neutral (updates were just installed → nothing waiting): `_apply_tray_total(0)`. On a **failed**
+  run, do **not** touch the tray — its last known state stands (blanking it would falsely claim
+  "up to date" after a failure).
 
 ### 6. Close-to-tray
 
@@ -267,6 +278,9 @@ not spawn a second icon + second check timer. Minimal `QLocalServer`/`QLocalSock
   `connectToServer` and then both `listen()`; last writer wins and the loser keeps its own icon.
   Harmless at this scale (a rare double-launch) and not worth extra locking — noted so the
   implementer doesn't add a lock file chasing it.
+- **Server lifetime:** the `QLocalServer` lives for the process lifetime. After a mid-session
+  tray-off, `setQuitOnLastWindowClosed(True)` is restored, so closing the window quits the
+  process and the server dies with it — no single-instance lock outlives the session.
 
 ## Correctness invariants
 
@@ -274,8 +288,8 @@ not spawn a second icon + second check timer. Minimal `QLocalServer`/`QLocalSock
   marker contract in `CLAUDE.md`, the engine, and `tests/run-tests.sh` are untouched. The tray
   reads only the existing `@@CHECK@@|TOTAL|<n>|updates available` line.
 - **Tray is opt-in and reversible.** With `tray_enabled` false (default), `main()` and
-  `closeEvent` behave exactly as today. Turning the tray off tears down the icon, restores
-  quit-on-close, and removes any autostart entry.
+  `closeEvent` behave exactly as today. Turning the tray off tears down the icon, stops the
+  periodic check timer, restores quit-on-close, and removes any autostart entry.
 - **Never invisible + unquittable *by user action*.** Turning the tray off while the window is
   hidden re-shows the window. In tray mode the menu's **Quit** is always present. Graceful
   degradation shows the window when no tray exists. The one case outside user control — the
@@ -296,7 +310,7 @@ not spawn a second icon + second check timer. Minimal `QLocalServer`/`QLocalSock
 | Situation | Behaviour |
 |-----------|-----------|
 | No system tray on this desktop | `isSystemTrayAvailable()` false → both new toggles disabled with a note; no tray built; `--tray`/`tray_enabled` degrade to a normal shown window. |
-| `_install_autostart` raises `OSError` (can't write `~/.config/autostart`) | Caught, `QMessageBox.warning`, `startboot_btn` reverted to off (never shows on after a failed write) — mirrors the `_install_user_timer` OSError revert at updater.py:1194–1196. |
+| `_install_autostart` raises `OSError` (can't write `~/.config/autostart`) | Caught, `QMessageBox.warning`, `startboot_btn` reverted to off (never shows on after a failed write) — mirrors the `_install_user_timer` OSError catch/warn at updater.py:1194–1196 (the button revert is added by this handler). |
 | `ENGINE` missing when a tray check fires | `_tray_check()` early-returns (like `request_size` at updater.py:1515); icon stays at its last known state; tooltip unchanged. |
 | `--check` exits non-zero / emits no `TOTAL` | No `_apply_tray_total` call → icon unchanged (last known / neutral). No crash: the parser only acts on a well-formed `TOTAL` line. |
 | Second `oneup` launched while resident | Single-instance guard raises the existing window and the second process exits 0 — no duplicate tray icon. |
@@ -314,10 +328,11 @@ build (the existing suite already monkeypatches `_install_user_timer` etc.):
   writes `…/autostart/za.co.antsprojectshub.OneUp-tray.desktop` containing `--tray`;
   `_startboot_enabled()` is then true; `_remove_autostart()` deletes it and the flag goes false.
 - **Desktop-Entry Exec escaping:** `_autostart_exec()` on a path containing `%` and `$` yields
-  `%%` for `%` and the `$` **backslash-escaped as `\$`** — assert exactly `\$`, **not** a bare
-  `$` and **not** the systemd doubled `$$` — with the path double-quoted (per the §3 worked
-  example `"/opt/o\$ne%%up/oneup"`). This is the regression that locks the "not the systemd
-  escaping" rule; a bare-`$` assertion would rubber-stamp a wrong implementation.
+  `%%` for `%` and the `$` written as **`\\$`** (the freedesktop-unambiguous form) — assert
+  exactly `\\$`, **not** a bare `$`, **not** single-backslash `\$`, and **not** the systemd
+  doubled `$$` — with the path double-quoted (per the §3 worked example `"/opt/o\\$ne%%up/oneup"`).
+  This is the regression that locks the "not the systemd escaping" rule; any looser assertion
+  would rubber-stamp a wrong implementation.
 - **Settings dialog hosts both new toggles:** `tray_btn` and `startboot_btn` are in the
   `SettingsDialog`'s laid-out buttons; both default off.
 - **Coupling — enable boot turns tray on:** stub `_install_autostart` to succeed; toggling
