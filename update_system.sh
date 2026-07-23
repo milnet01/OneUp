@@ -38,6 +38,9 @@ NOTIFY=false       # --notify: fire a desktop notification if updates are found
 SIZE_STEP=""       # --size=<step>: on-demand exact download size (needs root)
 AUTH_ACTION=""     # --grant-auth / --revoke-auth / --auth-status: manage the
                    # opt-in "remember my authorization" sudoers drop-in.
+IMPORT_KEYS=false  # --import-keys: refresh with --gpg-auto-import-keys so a rotated
+                   # or expired repo signing key is imported for the system upgrade.
+                   # Opt-in per run (the GUI sets it only after a warned confirmation).
 
 usage() {
     cat <<EOF
@@ -55,6 +58,8 @@ Usage: $(basename "$0") [--steps=LIST] [--check] [--notify] [--log=FILE] [--help
                  password). Asks for your password once to set it up.
   --revoke-auth  Remove that rule — updates prompt for a password again.
   --auth-status  Print whether the passwordless rule is active (@@AUTH@@|on/off).
+  --import-keys  Refresh with --gpg-auto-import-keys so a rotated/expired repo
+                 signing key is imported for the system upgrade (opt-in per run).
   --log=FILE     Write the run log here. Default: $LOG_DIR/<timestamp>.log
   --help         Show this help.
 
@@ -74,6 +79,7 @@ for arg in "$@"; do
         --grant-auth)  AUTH_ACTION="grant" ;;
         --revoke-auth) AUTH_ACTION="revoke" ;;
         --auth-status) AUTH_ACTION="status" ;;
+        --import-keys) IMPORT_KEYS=true ;;
         --notify)  NOTIFY=true ;;
         --help|-h) usage; exit 0 ;;
         *) echo "Unknown option: $arg" >&2; usage >&2; exit 2 ;;
@@ -104,6 +110,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 #   @@DISK@@|warn|mount|free             (pre-flight: low disk space)
 #   @@REPO@@|warn|reason                 (pre-flight: repo health issue)
 #   @@HINT@@|plain-English failure hint
+#   @@REMEDY@@|import-keys               (a one-click GUI fix is available for this failure)
 #   @@SERVICES@@|svc1 svc2 …             (services to restart instead of rebooting)
 #   @@INSTALLED@@|count|sys_changed|fw_changed   (yes/no flags for the summary)
 #   @@REBOOT@@|yes|no
@@ -523,7 +530,16 @@ if step_selected system; then
     # changes that really landed. So track refresh separately and, if it failed but
     # the upgrade succeeded, surface a non-fatal "used cached metadata" note.
     refresh_ok=true
-    sudo zypper --non-interactive refresh || refresh_ok=false
+    if $IMPORT_KEYS; then
+        # The user approved importing repository signing keys (via the GUI's
+        # confirmation, or --import-keys on the CLI), so refresh WITH key import: a
+        # rotated/expired key is accepted for the repos they've chosen to trust. This
+        # is opt-in per run and never the default — a plain run stays strict and only
+        # advises the fix (emitting @@REMEDY@@ below for the GUI's one-click button).
+        sudo zypper --non-interactive --gpg-auto-import-keys refresh || refresh_ok=false
+    else
+        sudo zypper --non-interactive refresh || refresh_ok=false
+    fi
     # Capture the transaction output so we can tell whether anything actually
     # changed (for the summary and the reboot advice), while still streaming it.
     SYS_LOG=$(mktemp)
@@ -574,7 +590,16 @@ if step_selected system; then
         if grep -qiE 'No space left|disk full' "$SYS_LOG"; then
             hint="Ran out of disk space — free some room (clear the package cache, delete old snapshots) and retry."
         elif grep -qiE 'signature|GPG|key.*(expired|reject)' "$SYS_LOG"; then
-            hint="A repository signing key looks wrong or expired — run: sudo zypper --gpg-auto-import-keys refresh, then retry."
+            if $IMPORT_KEYS; then
+                # We already imported keys this run and it STILL failed — importing
+                # won't help, so don't offer the one-click remedy again.
+                hint="A repository signing key is still rejected even after importing keys — check the log for the offending repository, or run: sudo zypper --gpg-auto-import-keys refresh, then retry."
+            else
+                # A one-click fix exists: tell the GUI to offer "Import signing key &
+                # retry" (which re-runs with --import-keys after a warned confirmation).
+                marker REMEDY "import-keys"
+                hint="A repository signing key is out of date. Use \"Import signing key & retry\" to fix it, or run: sudo zypper --gpg-auto-import-keys refresh, then retry."
+            fi
         elif grep -qiE 'Timeout|could not resolve|connection failed|Curl error|Download.*failed|Temporary failure' "$SYS_LOG"; then
             hint="A download failed — check your internet connection, then retry."
         elif grep -qiE 'conflict|nothing provides|not installable' "$SYS_LOG"; then

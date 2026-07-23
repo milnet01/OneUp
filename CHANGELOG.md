@@ -23,6 +23,17 @@ All notable changes to OneUp are documented here. The format follows
   The instant check stays password-free; only the size link asks for
   authentication.
 
+- **When a repository's signing key is out of date, OneUp can now fix it for you — with a "Import signing key & retry" button, behind a clear confirmation.**
+  When the system upgrade is refused because a repository's signing key has
+  changed or expired, the warning now offers a one-click fix: OneUp imports the
+  repository's new key and re-runs the update. Because importing a key is a
+  trust decision, it first shows a plain-English confirmation explaining what's
+  happening and warning you to only do it for repositories you set up and trust.
+  A normal run never imports keys on its own — the fix only happens when you
+  approve it.
+
+- **When a step suggests a command OneUp couldn't run for you, the warning banner now has a "Copy command" button** so you can grab the exact command instead of retyping it.
+
 ## [1.1.0] - 2026-07-21
 
 ### Added

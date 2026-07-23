@@ -734,6 +734,8 @@ class Updater(QMainWindow):
         self._services = ""
         self._snapshot = ""
         self._hints: list[str] = []
+        self._hint_command = ""   # a runnable command parsed from the shown hint, for Copy
+        self._remedy_keys = False  # engine flagged a fixable signing-key error (@@REMEDY@@)
         self._log_path: Path | None = None
         self._latest_tag = ""
         self._warn_repo_dup = False   # is the current warning a duplicate-repo one?
@@ -869,6 +871,15 @@ class Updater(QMainWindow):
 
         self.warn_banner, self.warn_label, self.warn_btn = self._make_banner(
             "WarnBanner", "BannerBtn", "Show details", self._warn_action)
+        # A copy-the-suggested-command button, shown only when a hint carries a
+        # runnable command the app couldn't run for you — the copy-fallback.
+        self.warn_copy_btn = QPushButton("Copy command")
+        self.warn_copy_btn.setObjectName("LinkBtn")
+        self.warn_copy_btn.setCursor(Qt.PointingHandCursor)
+        self.warn_copy_btn.setToolTip("Copy the suggested command to the clipboard")
+        self.warn_copy_btn.clicked.connect(self._copy_hint_command)
+        self.warn_copy_btn.setVisible(False)
+        self.warn_banner.layout().insertWidget(1, self.warn_copy_btn)
         root.addWidget(self.warn_banner)
 
         self.appupdate_banner, self.appupdate_label, self.appupdate_btn = self._make_banner(
@@ -945,6 +956,40 @@ class Updater(QMainWindow):
         lay.addWidget(btn, 0)
         fr.setVisible(False)
         return fr, lbl, btn
+
+    @staticmethod
+    def _extract_command(hint: str) -> str:
+        """Pull a runnable command out of a failure hint of the form
+        '… run: <command>, then …'. Returns '' when the hint carries no command,
+        so the Copy button only appears when there's actually something to copy."""
+        marker = "run: "
+        i = hint.find(marker)
+        if i == -1:
+            return ""
+        rest = hint[i + len(marker):]
+        cut = len(rest)
+        for sep in (", then", ", or", ";"):   # the command ends at the first clause break
+            j = rest.find(sep)
+            if j != -1:
+                cut = min(cut, j)
+        return rest[:cut].strip().rstrip(".").strip()
+
+    def _show_warning(self, text: str):
+        """Show the warning banner with `text`, exposing a Copy button when the
+        text contains a runnable command."""
+        self.warn_label.setText("⚠  " + text)
+        cmd = self._extract_command(text)
+        self._hint_command = cmd
+        self.warn_copy_btn.setVisible(bool(cmd))
+        if cmd:
+            self.warn_copy_btn.setText("Copy command")
+        self.warn_banner.setVisible(True)
+
+    def _copy_hint_command(self):
+        if not self._hint_command:
+            return
+        QApplication.clipboard().setText(self._hint_command)
+        self.warn_copy_btn.setText("Copied ✓")
 
     # ---- window geometry --------------------------------------------------
     def closeEvent(self, event):
@@ -1195,12 +1240,41 @@ for (var i = 0; i < clients.length; i++) {{
         RepoManagerDialog(self, repos).exec()
 
     def _warn_action(self):
-        """The warning banner's button does one of two things depending on the
-        warning: open the repo manager for a duplicate, else show the log."""
-        if self._warn_repo_dup:
+        """The warning banner's button adapts to the warning: offer the one-click
+        signing-key fix, open the repo manager for a duplicate, else show the log."""
+        if self._remedy_keys:
+            self._fix_keys_and_retry()
+        elif self._warn_repo_dup:
             self.open_repos()
         else:
             self._show_log()
+
+    def _confirm_key_import(self) -> bool:
+        """Warn about the trust decision before importing a repository signing key,
+        and return whether the user approved."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Import the repository's signing key?")
+        box.setText("Import the new signing key and retry the update?")
+        box.setInformativeText(
+            "A repository's signing key has changed or expired, which is why the "
+            "update was refused.\n\n"
+            "To continue, OneUp will import the repository's new key and run the "
+            "update again. Importing a key means trusting it — only do this for "
+            "repositories you set up and trust. A key you don't recognise could let "
+            "unverified software be installed on your computer.")
+        box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+        box.button(QMessageBox.Ok).setText("Import && retry")
+        box.setDefaultButton(QMessageBox.Cancel)
+        return box.exec() == QMessageBox.Ok
+
+    def _fix_keys_and_retry(self):
+        """Re-run the failed update with signing-key import enabled, after the user
+        confirms the trust decision."""
+        if not self._confirm_key_import():
+            return
+        steps = list(self._failed_steps) or ["system"]
+        self._launch(steps, check=False, import_keys=True)
 
     # ---- log pane ---------------------------------------------------------
     def toggle_log(self):
@@ -1287,7 +1361,7 @@ for (var i = 0; i < clients.length; i++) {{
         else:
             row.size_failed()
 
-    def _launch(self, steps: list[str], check: bool):
+    def _launch(self, steps: list[str], check: bool, import_keys: bool = False):
         if not steps:
             QMessageBox.information(self, "Nothing selected",
                                     "Turn on at least one task first.")
@@ -1314,6 +1388,9 @@ for (var i = 0; i < clients.length; i++) {{
         # (a previous run may have switched it to the repo-manager action).
         self._warn_repo_dup = False
         self.warn_btn.setText("Show details")
+        self._hint_command = ""
+        self._remedy_keys = False
+        self.warn_copy_btn.setVisible(False)
         self.retry_btn.setVisible(False)
         self.rollback_btn.setVisible(False)
         for r in self.rows.values():
@@ -1339,6 +1416,9 @@ for (var i = 0; i < clients.length; i++) {{
         args = [str(ENGINE), f"--steps={','.join(steps)}", f"--log={self._log_path}"]
         if check:
             args.append("--check")
+        elif import_keys:
+            # Only after the user confirmed the trust decision in _fix_keys_and_retry.
+            args.append("--import-keys")
         self.proc = QProcess(self)
         self.proc.setProcessChannelMode(QProcess.MergedChannels)
         self.proc.readyReadStandardOutput.connect(self.on_output)
@@ -1456,6 +1536,12 @@ for (var i = 0; i < clients.length; i++) {{
             self._services = rest.strip()
         elif tag == "HINT":
             self._hints.append(rest.strip())
+        elif tag == "REMEDY":
+            # The engine says a one-click fix is available for this run's failure.
+            # Only "import-keys" today (a rotated/expired repo signing key). Armed
+            # here; the warn banner offers it in on_finished, behind a confirmation.
+            if parts and parts[0] == "import-keys":
+                self._remedy_keys = True
         elif tag == "REBOOT":
             self._reboot = parts[0] == "yes"
         elif tag in ("DISK", "REPO"):
@@ -1476,8 +1562,7 @@ for (var i = 0; i < clients.length; i++) {{
                 self.warn_btn.setText("Manage repositories…")
             else:
                 msg = "Pre-flight warning — see the log for details."
-            self.warn_label.setText("⚠  " + msg)
-            self.warn_banner.setVisible(True)
+            self._show_warning(msg)
         # @@DONE@@ is intentionally not handled here — the run's overall result comes
         # from the process exit code in on_finished (the two always agree).
 
@@ -1564,10 +1649,14 @@ for (var i = 0; i < clients.length; i++) {{
         if self._sys_changed and self._snapshot:
             self.rollback_btn.setVisible(True)
 
-        # Surface the first plain-English failure hint, if any.
+        # Surface the first plain-English failure hint, if any (with a Copy button
+        # when it carries a command the app couldn't run for you).
         if self._hints:
-            self.warn_label.setText("⚠  " + self._hints[0])
-            self.warn_banner.setVisible(True)
+            self._show_warning(self._hints[0])
+            # When a one-click remedy is available, the banner button offers it
+            # (behind a warned confirmation) rather than just showing the log.
+            if self._remedy_keys:
+                self.warn_btn.setText("Import signing key & retry")
 
         if self._failed_steps:
             self.retry_btn.setVisible(True)

@@ -640,6 +640,76 @@ check "REPO marker names the duplicate URL" \
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: a strict run offers the key-import remedy (does NOT import keys on its own)"
+d=$(mktemp -d); setup_common "$d"
+# A plain run must never pass --gpg-auto-import-keys; if it does, that's the bug
+# (silently trusting a new key). The upgrade fails on the rejected signing key.
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *gpg-auto-import-keys*) echo "BUG: imported keys without opt-in" >&2; exit 88 ;;
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)    echo "Signature verification failed for repository 'oss' (key expired)"; exit 1 ;;
+  *needs-rebooting*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system,cache)
+check_absent "strict run never imports keys unprompted" "BUG: imported keys without opt-in" "$out"
+check        "key error fails the system step"          "@@STEP_END@@|system|fail" "$out"
+check        "key error offers the one-click remedy"    "@@REMEDY@@|import-keys" "$out"
+check_re     "the hint carries a 'run:' command the GUI can copy" '@@HINT@@\|.*run: ' "$out"
+check        "the run continues to later steps after the key failure" "@@STEP_END@@|cache|ok" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: --import-keys imports the signing key and the upgrade then succeeds"
+d=$(mktemp -d); setup_common "$d"
+export MOCK_KEYDIR="$d"
+# `--gpg-auto-import-keys refresh` drops a flag file; the following dup then
+# succeeds — modelling a rotated/expired key that the import fixes.
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+keyflag="$MOCK_KEYDIR/keys-imported"
+case "$*" in
+  *gpg-auto-import-keys*refresh*) : > "$keyflag"; exit 0 ;;
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)
+      if [[ -e "$keyflag" ]]; then echo "3 packages to upgrade."; exit 0
+      else echo "Signature verification failed for repository 'oss' (key expired)"; exit 1; fi ;;
+  *needs-rebooting*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system --import-keys)
+check        "--import-keys recovers to a successful step" "@@STEP_END@@|system|ok" "$out"
+check_absent "successful import emits no remedy marker"    "@@REMEDY@@" "$out"
+unset MOCK_KEYDIR
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: --import-keys that still fails does not re-offer the remedy"
+d=$(mktemp -d); setup_common "$d"
+# Signature failure that importing does NOT clear (key still rejected).
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)    echo "Signature verification failed for repository 'oss' (key expired)"; exit 1 ;;
+  *needs-rebooting*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system --import-keys)
+check        "persistent key error still fails the system step" "@@STEP_END@@|system|fail" "$out"
+check_absent "no remedy re-offered once keys were already imported" "@@REMEDY@@" "$out"
+check_re     "the terminal hint still carries a copyable 'run:' command" '@@HINT@@\|.*run: ' "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo
 echo "======================================"
 echo "  Passed: $PASS   Failed: $FAIL"

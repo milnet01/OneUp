@@ -262,6 +262,53 @@ def main() -> int:
     check("an unsafe repo alias refuses to build a command",
           dlg_bad._build_apply_command() is None)
 
+    # --- failure-hint "Copy command" fallback ---------------------------------
+    E = updater.Updater._extract_command
+    check("extract_command pulls the runnable command",
+          E("A repository signing key is still rejected after an automatic import — "
+            "as a last resort run: sudo zypper --gpg-auto-import-keys refresh, then "
+            "retry, or check the log for the offending repo.")
+          == "sudo zypper --gpg-auto-import-keys refresh")
+    check("extract_command returns empty when there is no command",
+          E("A package conflict — check the log.") == "")
+    w = updater.Updater()
+    w._show_warning("Something failed — run: sudo zypper refresh, then retry.")
+    check("copy button appears when a hint carries a command",
+          w.warn_copy_btn.isVisibleTo(w.warn_banner)
+          and w._hint_command == "sudo zypper refresh")
+    w._show_warning("Low disk space — free some room and retry.")
+    check("copy button hidden when a hint carries no command",
+          not w.warn_copy_btn.isVisibleTo(w.warn_banner))
+    try:
+        w._show_warning("run: sudo zypper refresh, then retry.")
+        w._copy_hint_command()   # must not throw under offscreen Qt
+        check("copy command runs without error", True)
+    except Exception as exc:  # noqa: BLE001
+        check(f"copy command runs without error ({exc})", False)
+
+    # --- signing-key remedy: the app fixes it, but only after a warned confirm ---
+    w = updater.Updater()
+    w.handle_line("@@REMEDY@@|import-keys")
+    check("REMEDY marker arms the key-import remedy", w._remedy_keys is True)
+    w._failed_steps = ["system"]
+    w._hints = ['A repository signing key is out of date. Use "Import signing key & '
+                'retry" to fix it, or run: sudo zypper --gpg-auto-import-keys refresh.']
+    w.proc = QProcess(w)
+    w.on_finished(1, QProcess.ExitStatus.NormalExit)
+    check("warn button offers the key-import fix",
+          w.warn_btn.text() == "Import signing key & retry")
+
+    launched = {}
+    w._launch = lambda steps, check=False, import_keys=False: launched.update(
+        steps=list(steps), import_keys=import_keys)
+    w._confirm_key_import = lambda: False          # user cancels the trust confirmation
+    w._fix_keys_and_retry()
+    check("cancelling the key-import confirmation does not retry", not launched)
+    w._confirm_key_import = lambda: True           # user approves
+    w._fix_keys_and_retry()
+    check("confirming imports keys and retries the failed steps",
+          launched.get("import_keys") is True and "system" in launched.get("steps", []))
+
     print()
     print("======================================")
     print(f"  Passed: {PASS}   Failed: {FAIL}")
