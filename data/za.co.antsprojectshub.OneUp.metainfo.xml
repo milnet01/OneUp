@@ -48,6 +48,25 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.2.0" date="2026-07-24">
+      <description>
+        <p>Release 1.2.0.</p>
+        <ul>
+          <li>Add a one-click 'copy diagnostics for a bug report' button.</li>
+          <li>Report how much disk the cache clean reclaimed</li>
+          <li>OneUp now survives a single broken software source instead of failing the whole update.</li>
+          <li>An optional system-tray icon that turns amber when updates are waiting.</li>
+          <li>An optional "Automatic updates" setting that installs everything on a weekly schedule — off by default.</li>
+          <li>An opt-in "Passwordless" setting so OneUp stops asking for your password on every update.</li>
+          <li>You can now preview exactly what an update will change before running it.</li>
+          <li>When a repository's signing key is out of date, OneUp can now fix it for you — with a "Import signing key &amp; retry" button, behind a clear confirmation.</li>
+          <li>When a step suggests a command OneUp couldn't run for you, the warning banner now has a "Copy command" button</li>
+          <li>Show a 'last updated N days ago' nudge on launch.</li>
+          <li>Cap or roll the tray-check log files so a long resident session doesn't accumulate them.</li>
+          <li>Call out kernel and graphics-driver updates by name in the reboot advice.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-07-21">
       <description>
         <p>Release 1.1.0.</p>

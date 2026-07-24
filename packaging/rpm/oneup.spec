@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.1.0
+Version:        1.2.0
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -74,6 +74,19 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Fri Jul 24 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.2.0-0
+- Add a one-click 'copy diagnostics for a bug report' button.
+- Report how much disk the cache clean reclaimed
+- OneUp now survives a single broken software source instead of failing the whole update.
+- An optional system-tray icon that turns amber when updates are waiting.
+- An optional "Automatic updates" setting that installs everything on a weekly schedule — off by default.
+- An opt-in "Passwordless" setting so OneUp stops asking for your password on every update.
+- You can now preview exactly what an update will change before running it.
+- When a repository's signing key is out of date, OneUp can now fix it for you — with a "Import signing key & retry" button, behind a clear confirmation.
+- When a step suggests a command OneUp couldn't run for you, the warning banner now has a "Copy command" button
+- Show a 'last updated N days ago' nudge on launch.
+- Cap or roll the tray-check log files so a long resident session doesn't accumulate them.
+- Call out kernel and graphics-driver updates by name in the reboot advice.
 * Tue Jul 21 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.1.0-0
 - Each repository in the Repositories manager now shows a plain-English line describing what it's for.
 - A Repositories manager (from the header) to turn software repositories on/off with switches and remove ones that duplicate another repo's URL — the duplicate-repo warning now opens it.
