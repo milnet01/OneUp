@@ -8,6 +8,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The signing-key-import and passwordless-consent popups now open centered over the main window, matching the About and Repositories dialogs.** (ONEUP-0026)
+
 - **bump.py: advance the CHANGELOG [Unreleased] compare-link base to the new tag.** (ONEUP-0033)
   When cutting a release, the changelog's "Unreleased" comparison link kept pointing at the previous version instead of the one just released, so it showed the wrong range. The release tool now updates it automatically — and also leaves a fresh empty "Unreleased" heading for the next cycle instead of removing it — with a new `tests/bump-test.py` guarding both.
 

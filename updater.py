@@ -1801,6 +1801,8 @@ for (var i = 0; i < clients.length; i++) {{
         box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         box.button(QMessageBox.Ok).setText("Enable")
         box.setDefaultButton(QMessageBox.Cancel)
+        # Centre over the main window once laid out (mirrors show_about).
+        QTimer.singleShot(0, lambda: self._center_child(box))
         return box.exec() == QMessageBox.Ok
 
     def on_auth_toggled(self, on: bool):
@@ -1959,6 +1961,8 @@ for (var i = 0; i < clients.length; i++) {{
         box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
         box.button(QMessageBox.Ok).setText("Import && retry")
         box.setDefaultButton(QMessageBox.Cancel)
+        # Centre over the main window once laid out (mirrors show_about).
+        QTimer.singleShot(0, lambda: self._center_child(box))
         return box.exec() == QMessageBox.Ok
 
     def _fix_keys_and_retry(self):
