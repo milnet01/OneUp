@@ -66,6 +66,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **Show a 'last updated N days ago' nudge on launch.** (ONEUP-0030)
+  On opening OneUp, remind the user how long since their last update, and gently flag it once it's been a couple of weeks.
+
 - **Cap or roll the tray-check log files so a long resident session doesn't accumulate them.** (ONEUP-0024)
   When the tray runs for weeks, each background check leaves a small log file; reuse one rolling log instead of piling up new ones.
 

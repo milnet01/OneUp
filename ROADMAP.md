@@ -204,11 +204,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: in-session-2026-07-23.
   Resolved (2026-07-24): engine measures /var/cache/zypp before/after `zypper clean --all` and emits @@FREED@@|cache|<human>; GUI shows it as the cache row's "Reclaimed <size>" badge. New FREED marker documented in CLAUDE.md; engine + GUI-smoke tests cover the reclaim path and the already-empty (no-marker) case.
 
-- 📋 [ONEUP-0030] **Show a 'last updated N days ago' nudge on launch.**
+- ✅ [ONEUP-0030] **Show a 'last updated N days ago' nudge on launch.**
   Derive from the existing run history in ~/.local/state/oneup/history.json. Surface 'Last updated N days ago' on the dashboard; amber-tint past ~2 weeks. Ties into the existing tray icon so a resident session nudges without a popup.
   **Layman:** On opening OneUp, remind the user how long since their last update, and gently flag it once it's been a couple of weeks.
   Kind: feature.
   Source: in-session-2026-07-23.
+  Resolved (2026-07-24): refresh_last_run() now appends a relative day-count (today / yesterday / N days ago) to the existing 'Last run: …' line, and ambers the whole line via a dynamic stale property + QLabel#LastRun[stale="true"] QSS rule once a run is STALE_AFTER_DAYS (14) old. New per-theme `amber` palette token (brighter on dark #f5a623, darker on light #b5730a for 12px legibility). Counts any real run (OK or errors); --check never writes history so background checks don't reset the clock. Tray left unchanged per user choice (dashboard-line-only nudge). 8 new gui-smoke checks (today/yesterday/N-days/threshold-boundary/never). local-CI green: engine 108/0, GUI smoke 165/0.
 
 - ✅ [ONEUP-0031] **Add a one-click 'copy diagnostics for a bug report' button.**
   Bundle the latest run log, OneUp version, openSUSE version, and enabled toggles onto the clipboard. Makes GitHub issues actionable for non-technical users without pointing them at ~/.local/state/oneup/logs.

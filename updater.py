@@ -104,6 +104,10 @@ TRAY_INITIAL_DELAY_MS = 4000                 # first check ~4s after launch (don
 TRAY_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000  # then every 6 hours
 TRAY_ATTENTION_COLOR = "#f5a623"             # amber "updates waiting" badge
 
+# The last-run line turns amber once the last run is this old, nudging the user
+# that an update is overdue (ONEUP-0030).
+STALE_AFTER_DAYS = 14
+
 # key, title, one-line description. Order = run order.
 TASKS = [
     ("system", "System packages", "Refresh repositories and upgrade openSUSE (zypper dup)."),
@@ -259,6 +263,7 @@ QPushButton#LinkBtn:hover { color: #6fb6ff; }
 
 QLabel#Status  { font-size: 12px; color: $status; }
 QLabel#LastRun { font-size: 12px; color: $lastrun; }
+QLabel#LastRun[stale="true"] { color: $amber; }
 
 QProgressBar {
     border: none; border-radius: 9px; background: $progbg;
@@ -314,7 +319,7 @@ _DARK = dict(
     win="#0f1216", card="#12161c", header="#f4f7fb", tag="#8b95a5",
     rowcard="#1a1f27", rowhov="#1e242e", tname="#eef2f8", tdesc="#a7b0be",
     badgebg="#20304a", badgefg="#cfe0ff", logbg="#0b0e12", logfg="#cdd6e2",
-    logbd="#262d38", status="#c3ccd9", lastrun="#828d9d", progbg="#0c0f13",
+    logbd="#262d38", status="#c3ccd9", lastrun="#828d9d", amber="#f5a623", progbg="#0c0f13",
     ghostbd="#38414f", ghostfg="#c7d0dd", disbg="#262b34", disfg="#aeb7c4",
     tip="#1a1f27", tipfg="#e9edf3",
 )
@@ -322,7 +327,7 @@ _LIGHT = dict(
     win="#eef1f5", card="#ffffff", header="#1b2027", tag="#5c6673",
     rowcard="#f4f6f9", rowhov="#eaeef3", tname="#1b2027", tdesc="#5c6673",
     badgebg="#dbe8ff", badgefg="#1f4e9c", logbg="#f6f8fa", logfg="#2a2f36",
-    logbd="#d5dbe2", status="#3a424d", lastrun="#8a94a2", progbg="#dfe4ea",
+    logbd="#d5dbe2", status="#3a424d", lastrun="#8a94a2", amber="#b5730a", progbg="#dfe4ea",
     ghostbd="#c4ccd6", ghostfg="#3a424d", disbg="#d5dbe2", disfg="#9aa3ad",
     tip="#ffffff", tipfg="#1b2027",
 )
@@ -1852,12 +1857,23 @@ for (var i = 0; i < clients.length; i++) {{
 
     # ---- last-run history -------------------------------------------------
     def refresh_last_run(self):
+        stale = False
         try:
             data = json.loads(HISTORY.read_text())
-            when = datetime.fromisoformat(data["when"]).strftime("%d %b %Y, %H:%M")
-            self.last_run.setText(f"Last run: {when}  —  {data['status']}")
+            when = datetime.fromisoformat(data["when"])
+            days = (datetime.now().date() - when.date()).days
+            relative = ("today" if days <= 0 else
+                        "yesterday" if days == 1 else f"{days} days ago")
+            stale = days >= STALE_AFTER_DAYS
+            self.last_run.setText(
+                f"Last run: {when:%d %b %Y, %H:%M}  ·  {relative}  —  {data['status']}")
         except (OSError, ValueError, KeyError):
             self.last_run.setText("Last run: never")
+        # Amber the line once a run is overdue: flip the dynamic property and
+        # repolish so the QLabel#LastRun[stale="true"] stylesheet rule re-evaluates.
+        self.last_run.setProperty("stale", "true" if stale else "false")
+        self.last_run.style().unpolish(self.last_run)
+        self.last_run.style().polish(self.last_run)
 
     def save_last_run(self, status: str):
         STATE_DIR.mkdir(parents=True, exist_ok=True)

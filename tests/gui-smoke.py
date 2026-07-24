@@ -753,6 +753,43 @@ def main() -> int:
     check("diagnostics: clipboard receives the bundle",
           "OneUp diagnostics" in QApplication.clipboard().text())
 
+    # --- ONEUP-0030: "last updated N days ago" nudge on the dashboard --------
+    # refresh_last_run() derives a relative day-count from history.json and ambers
+    # the line (dynamic stale property) once a run is STALE_AFTER_DAYS old.
+    from datetime import timedelta
+    updater.STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+    def _seed_history(days_ago: int, status: str = "OK"):
+        when = updater.datetime.now() - timedelta(days=days_ago)
+        updater.HISTORY.write_text(updater.json.dumps(
+            {"when": when.isoformat(timespec="seconds"), "status": status}))
+
+    wN = updater.Updater()
+    _seed_history(0)
+    wN.refresh_last_run()
+    check("last-run nudge says 'today' for a same-day run", "today" in wN.last_run.text())
+    check("a fresh run is not flagged stale", wN.last_run.property("stale") == "false")
+
+    _seed_history(1)
+    wN.refresh_last_run()
+    check("last-run nudge says 'yesterday' for a one-day-old run",
+          "yesterday" in wN.last_run.text())
+
+    _seed_history(20)
+    wN.refresh_last_run()
+    check("last-run nudge counts the days for an older run", "20 days ago" in wN.last_run.text())
+    check("a run past the threshold is flagged stale", wN.last_run.property("stale") == "true")
+
+    _seed_history(updater.STALE_AFTER_DAYS - 1)
+    wN.refresh_last_run()
+    check("a run just under the threshold is not stale",
+          wN.last_run.property("stale") == "false")
+
+    updater.HISTORY.unlink()
+    wN.refresh_last_run()
+    check("no history shows 'Last run: never'", wN.last_run.text() == "Last run: never")
+    check("the 'never' state is not flagged stale", wN.last_run.property("stale") == "false")
+
     print()
     print("======================================")
     print(f"  Passed: {PASS}   Failed: {FAIL}")
