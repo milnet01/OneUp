@@ -78,6 +78,7 @@ def main() -> int:
 
         chg = (tmp / "CHANGELOG.md").read_text()
         check(f"## [{NEW}] - " in chg, f"[Unreleased] heading promoted to ## [{NEW}]")
+        check("## [Unreleased]" in chg, "fresh empty ## [Unreleased] heading left for the next cycle")
         check(f"[{NEW}]: https://github.com/milnet01/OneUp/releases/tag/v{NEW}" in chg,
               f"release link [{NEW}] added")
         # The ONEUP-0033 fix: the compare base must advance to the released tag.

@@ -83,10 +83,11 @@ def main():
     edit("data/za.co.antsprojectshub.OneUp.metainfo.xml",
          r'(<releases>\n\s*)(<release)', lambda mo: mo.group(1) + rel + mo.group(2))
 
-    # 6. CHANGELOG — promote [Unreleased] to the version, add the release link,
-    #    and advance the [Unreleased] compare base to the tag just cut (else it
-    #    keeps pointing at the previous release, showing a stale range — ONEUP-0033).
-    edit("CHANGELOG.md", r'## \[Unreleased\]', f'## [{ver}] - {today}')
+    # 6. CHANGELOG — promote [Unreleased] to the version (leaving a fresh empty
+    #    [Unreleased] on top for the next cycle, per Keep a Changelog), add the
+    #    release link, and advance the [Unreleased] compare base to the tag just
+    #    cut (else it keeps pointing at the previous release, a stale range — ONEUP-0033).
+    edit("CHANGELOG.md", r'## \[Unreleased\]', f'## [Unreleased]\n\n## [{ver}] - {today}')
     edit("CHANGELOG.md", r'(\n\[\d)',
          f'\n[{ver}]: https://github.com/{REPO}/releases/tag/v{ver}\\g<1>')
     edit("CHANGELOG.md", r'(\[Unreleased\]: \S+/compare/)v\d+\.\d+\.\d+(\.\.\.HEAD)',
