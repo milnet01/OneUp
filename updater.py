@@ -1365,15 +1365,23 @@ for (var i = 0; i < clients.length; i++) {{
         proc = self._traycheck_proc
         if proc is not None and proc.state() != QProcess.NotRunning:
             return  # a check is already in flight
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         self._traycheck_buf = ""
         p = QProcess(self)
         p.setProcessChannelMode(QProcess.MergedChannels)
         p.readyReadStandardOutput.connect(self._on_traycheck_output)
         p.finished.connect(self._on_traycheck_finished)
         self._traycheck_proc = p
-        p.start("bash", self._tray_check_args(LOG_DIR / f"{stamp}.traycheck.log"))
+        p.start("bash", self._tray_check_args(self._traycheck_log()))
+
+    def _traycheck_log(self):
+        """One rolling log for the silent tray check, truncated each run (ONEUP-0024).
+        A resident tray checks ~4x/day indefinitely; a per-run timestamped file would
+        pile up. The engine's `tee -a` starts from the truncated file, so reusing one
+        fixed name still overwrites (the output is silent, so no history is lost)."""
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        path = LOG_DIR / "traycheck.log"
+        path.write_text("")   # roll: overwrite the previous check's output
+        return path
 
     def _on_traycheck_output(self):
         chunk = bytes(self._traycheck_proc.readAllStandardOutput()).decode(errors="replace")

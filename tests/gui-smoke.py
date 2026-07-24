@@ -462,6 +462,13 @@ def main() -> int:
     check("tray parses zero updates as neutral", w._tray_total == 0)
     w._parse_tray_line("@@STEP_BEGIN@@|system|1|3|x")   # non-CHECK line ignored
     check("tray parser ignores non-TOTAL lines", w._tray_total == 0)
+    # (4b) The tray check reuses ONE rolling log, overwritten each run, so a resident
+    # session doesn't accumulate a new file ~4x/day (ONEUP-0024).
+    p1 = w._traycheck_log()
+    p1.write_text("stale output from a previous tray check\n")
+    p2 = w._traycheck_log()
+    check("tray check reuses one fixed log file", p1 == p2 and p2.name == "traycheck.log")
+    check("tray check rolls (truncates) the log each run", p2.read_text() == "")
 
     # (5) _ensure_tray no-ops when no system tray is available (offscreen CI case).
     w = updater.Updater()

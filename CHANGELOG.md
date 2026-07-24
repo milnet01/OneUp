@@ -63,6 +63,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **Cap or roll the tray-check log files so a long resident session doesn't accumulate them.** (ONEUP-0024)
+  When the tray runs for weeks, each background check leaves a small log file; reuse one rolling log instead of piling up new ones.
+
 - **Call out kernel and graphics-driver updates by name in the reboot advice.** (ONEUP-0019)
   When a reboot is advised, say why in plain English - e.g. a new kernel and your NVIDIA driver were installed - instead of a generic 'reboot advised'.
 
