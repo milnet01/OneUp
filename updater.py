@@ -55,6 +55,8 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -870,6 +872,69 @@ class SettingsDialog(QDialog):
             self.move(fg.topLeft())
 
 
+class RollbackDialog(QDialog):
+    """Pick which pre-update restore point to roll back to (ONEUP-0020).
+
+    Listing only — the destructive rollback itself is confirmed and run (via one
+    pkexec prompt) back in ``Updater.rollback``. Each ``snapshots`` entry is an
+    (id, date, description) tuple sourced from @@SNAPSHOT_ITEM@@ markers; the
+    engine already trimmed and ordered them oldest→newest, so we show them
+    newest-first and pre-select the pre-update snapshot."""
+
+    def __init__(self, parent, snapshots: list[tuple[str, str, str]], preselect_id: str):
+        super().__init__(parent)
+        self.setWindowTitle("Roll back this update")
+        self.setMinimumWidth(560)
+
+        root = QVBoxLayout(self)
+        intro = QLabel(
+            "Choose the restore point to return to. OneUp will restore the system "
+            "to that snapshot and then reboot — anything changed since then will be "
+            "lost. The point taken just before this update is selected for you.")
+        intro.setWordWrap(True)
+        root.addWidget(intro)
+
+        self.list = QListWidget()
+        for sid, date, desc in reversed(snapshots):
+            item = QListWidgetItem(f"{date}  —  {desc or 'snapshot'}   (#{sid})")
+            item.setData(Qt.UserRole, sid)
+            self.list.addItem(item)
+            if sid == preselect_id:
+                self.list.setCurrentItem(item)
+        if self.list.currentRow() < 0 and self.list.count():
+            self.list.setCurrentRow(0)   # newest, if the pre-update id wasn't listed
+        self.list.itemDoubleClicked.connect(lambda *_: self.accept())
+        root.addWidget(self.list, 1)
+
+        btns = QHBoxLayout()
+        btns.addStretch(1)
+        ok = QPushButton("Roll back & reboot")
+        ok.setObjectName("RunBtn")
+        ok.clicked.connect(self.accept)
+        cancel = QPushButton("Cancel")
+        cancel.setObjectName("GhostBtn")
+        cancel.clicked.connect(self.reject)
+        btns.addWidget(ok)
+        btns.addWidget(cancel)
+        root.addLayout(btns)
+
+    def selected_id(self) -> str:
+        """The chosen snapshot number, or "" if nothing valid is selected. Re-checks
+        isdigit() so a spliced non-numeric payload can never reach the root shell."""
+        item = self.list.currentItem()
+        sid = item.data(Qt.UserRole) if item else ""
+        return sid if isinstance(sid, str) and sid.isdigit() else ""
+
+    def showEvent(self, event):
+        # Centre over the main window each time it opens (dialog standard).
+        super().showEvent(event)
+        parent = self.parent()
+        if parent:
+            fg = self.frameGeometry()
+            fg.moveCenter(parent.frameGeometry().center())
+            self.move(fg.topLeft())
+
+
 class Updater(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -889,6 +954,7 @@ class Updater(QMainWindow):
         self._failed_steps: list[str] = []
         self._services = ""
         self._snapshot = ""
+        self._snapshots: list[tuple[str, str, str]] = []  # (id, date, desc) for the rollback picker
         self._hints: list[str] = []
         self._hint_command = ""   # a runnable command parsed from the shown hint, for Copy
         self._remedy_keys = False  # engine flagged a fixable signing-key error (@@REMEDY@@)
@@ -2176,6 +2242,7 @@ for (var i = 0; i < clients.length; i++) {{
         self._failed_steps = []
         self._services = ""
         self._snapshot = ""
+        self._snapshots = []
         self._hints = []
         self._skipped_repos = []
         self._buf = ""
@@ -2340,6 +2407,15 @@ for (var i = 0; i < clients.length; i++) {{
             self._sys_changed = len(parts) > 1 and parts[1] == "yes"
         elif tag == "SNAPSHOT":
             self._snapshot = parts[0]
+        elif tag == "SNAPSHOT_ITEM":
+            # One recent restore point for the rollback picker: id|date|description.
+            # Keep only well-formed numeric ids (the id is later interpolated into a
+            # root `snapper rollback`, so a spliced non-numeric payload must never
+            # be captured). Oldest→newest as the engine emits them.
+            if parts and parts[0].isdigit():
+                date = parts[1] if len(parts) > 1 else ""
+                desc = parts[2] if len(parts) > 2 else ""
+                self._snapshots.append((parts[0], date, desc))
         elif tag == "SERVICES":
             self._services = rest.strip()
         elif tag == "HINT":
@@ -2571,22 +2647,30 @@ for (var i = 0; i < clients.length; i++) {{
             self.services_banner.setVisible(False)
 
     def rollback(self):
-        # _snapshot is taken verbatim from an @@SNAPSHOT@@ marker on the merged output
-        # stream, so validate it is a bare snapshot number before it reaches the root
-        # shell below — a spliced non-numeric payload must never be interpolated into
-        # the pkexec command line. (isdigit() also covers the empty/unset case.)
-        if not self._snapshot.isdigit():
+        # The rollback target defaults to the pre-update snapshot, but when the
+        # engine enumerated recent restore points (@@SNAPSHOT_ITEM@@) the user can
+        # pick an older one — e.g. to undo a problem that started two updates ago
+        # (ONEUP-0020). Both the picker and the guard below re-check the id is a
+        # bare number: it is interpolated into a root shell, so a spliced
+        # non-numeric payload must never reach it. (isdigit() also covers empty.)
+        target = self._snapshot
+        if self._snapshots:
+            dlg = RollbackDialog(self, self._snapshots, self._snapshot)
+            if dlg.exec() != QDialog.Accepted:
+                return
+            target = dlg.selected_id()
+        if not target.isdigit():
             return
         answer = QMessageBox.warning(
             self, "Roll back this update?",
-            "This restores the system to the snapshot taken before the update "
-            f"(#{self._snapshot}) and then REBOOTS. Anything changed since the "
-            "update will be lost.\n\nContinue?",
+            f"This restores the system to restore point #{target} and then "
+            "REBOOTS. Anything changed since that snapshot will be lost."
+            "\n\nContinue?",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if answer == QMessageBox.Yes:
             QProcess.startDetached(
                 "pkexec", ["sh", "-c",
-                           f"snapper rollback {self._snapshot} && systemctl reboot"])
+                           f"snapper rollback {target} && systemctl reboot"])
 
     # ---- About dialog -----------------------------------------------------
     def show_about(self):

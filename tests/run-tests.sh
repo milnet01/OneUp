@@ -1134,6 +1134,42 @@ out=$(run_engine "$d" --thin-snapshots)
 check "thin with a stable count reports zero removed" "@@SNAPSHOTS@@|thinned|0" "$out"
 rm -rf "$d"
 
+# ---------------------------------------------------------------------------
+echo "TEST: engine enumerates recent snapshots for the rollback picker (ONEUP-0020)"
+d=$(mktemp -d); setup_common "$d"
+# `create --print-number` -> 100 (the pre-update point). The machine-readable CSV
+# `list --columns` call returns a header row + snapshots incl. #0 (the live
+# "current" pseudo-entry, which has no date and must be skipped).
+cat > "$d/snapper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$*" == *--print-number* ]] && { echo 100; exit 0; }
+if [[ "$*" == *--columns* ]]; then
+    echo "number,date,description"
+    echo "0,,current"
+    echo "98,2026-07-20 09:00:00,OneUp pre-update 2026-07-20 09:00"
+    echo "99,2026-07-22 09:00:00,zypp(zypper)"
+    echo "100,2026-07-24 09:00:00,OneUp pre-update 2026-07-24 09:00"
+    exit 0
+fi
+[[ "$1" == "--no-headers" ]] && { echo "100 | single"; exit 0; }
+exit 0
+EOF
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *dup*|*update*) echo "Nothing to do."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/snapper" "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check "picker lists the pre-update snapshot" \
+    "@@SNAPSHOT_ITEM@@|100|2026-07-24 09:00:00|OneUp pre-update 2026-07-24 09:00" "$out"
+check "picker lists an older snapshot" \
+    "@@SNAPSHOT_ITEM@@|98|2026-07-20 09:00:00|OneUp pre-update 2026-07-20 09:00" "$out"
+check_absent "picker skips snapshot 0 (the live 'current' entry)" "@@SNAPSHOT_ITEM@@|0|" "$out"
+rm -rf "$d"
+
 echo
 echo "======================================"
 echo "  Passed: $PASS   Failed: $FAIL"

@@ -8,6 +8,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Roll back to a chosen restore point, not just the last one** (ONEUP-0020)
+  The "Roll back this update" action now opens a picker listing recent Snapper
+  snapshots with their dates and descriptions, so you can undo a problem that
+  started an update or two ago — not only the most recent run. The point taken
+  just before the update is pre-selected.
+
 - **A pre-update warning when Btrfs snapshots pile up, with a one-click "Thin snapshots" button.** (ONEUP-0021)
   On Tumbleweed a snapshot pair is taken around every zypper transaction, so restore points quietly accumulate and can fill the root filesystem. OneUp's pre-flight now counts them and, once a lot have built up, shows a dismissible heads-up plus a "Thin snapshots…" button. Thinning runs snapper's own retention cleanup (`number`/`timeline`), which only drops snapshots the configured policy already considers expendable — the most recent rollback points are always kept — and reports how many were removed.
 

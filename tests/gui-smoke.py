@@ -42,7 +42,7 @@ os.chmod(_notify_mock, 0o755)
 os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
-    from PySide6.QtCore import QProcess, QTimer
+    from PySide6.QtCore import QProcess, Qt, QTimer
     from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton
 except ImportError as exc:  # PySide6 absent — skip, don't fail the suite.
     print(f"  SKIP - PySide6 not installed ({exc})")
@@ -171,6 +171,26 @@ def main() -> int:
     check("snapshot advisory button becomes 'Thin snapshots…'",
           w3.warn_btn.text() == "Thin snapshots…")
     check("snapshot advisory shows the warning banner", w3.warn_banner.isVisibleTo(w3))
+
+    # SNAPSHOT_ITEM markers feed the rollback picker (ONEUP-0020): well-formed ids
+    # are captured, a non-numeric id is dropped, and the dialog lists them
+    # newest-first with the pre-update snapshot pre-selected.
+    w4 = updater.Updater()
+    for line in ("@@SNAPSHOT@@|100",
+                 "@@SNAPSHOT_ITEM@@|98|2026-07-20 09:00:00|OneUp pre-update 2026-07-20 09:00",
+                 "@@SNAPSHOT_ITEM@@|99|2026-07-22 09:00:00|zypp(zypper)",
+                 "@@SNAPSHOT_ITEM@@|100|2026-07-24 09:00:00|OneUp pre-update 2026-07-24 09:00",
+                 "@@SNAPSHOT_ITEM@@|bogus|x|y"):
+        w4.handle_line(line)
+    check("rollback picker captures well-formed snapshots", len(w4._snapshots) == 3)
+    check("rollback picker drops a non-numeric snapshot id",
+          all(sid.isdigit() for sid, _, _ in w4._snapshots))
+    dlg = updater.RollbackDialog(w4, w4._snapshots, w4._snapshot)
+    check("picker lists the newest snapshot first", dlg.list.item(0).data(Qt.UserRole) == "100")
+    check("picker pre-selects the pre-update snapshot", dlg.selected_id() == "100")
+    dlg.list.setCurrentRow(dlg.list.count() - 1)   # choose the oldest listed
+    check("picker returns the chosen snapshot id", dlg.selected_id() == "98")
+    dlg.reject()
 
     # --- 3. on_finished promotes the accumulated state into the right banners ---
     w.proc = QProcess(w)   # on_finished releases self.proc; give it a real one.

@@ -54,7 +54,7 @@ They communicate through a **line-based marker protocol**: the engine prints
 progress bars, badges, and banners. Non-marker lines are plain log output. The markers are
 the contract between the two files — **changing a marker's name or field layout in one file
 means updating the parser in the other, and the assertions in `tests/run-tests.sh`.**
-Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `SNAPSHOT`, `SNAPSHOTS`, `CHECK`,
+Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `SNAPSHOT`, `SNAPSHOT_ITEM`, `SNAPSHOTS`, `CHECK`,
 `CHECK_ITEM`, `SIZE`, `FREED`, `AUTH`, `DISK`, `REPO`, `REPO_SKIPPED`, `HINT`, `REMEDY`,
 `SERVICES`, `INSTALLED`, `REBOOT`, `DONE`.
 (`CHECK_ITEM|key|name|from|to` carries one changed package for the `--check` preview
@@ -68,8 +68,14 @@ warn banner offers as "Import signing key & retry", re-running the engine with `
 after a warned confirmation. `REPO_SKIPPED|alias|reason` reports a source set aside for this
 run — via the `--skip-repo=<alias>` flag (repeatable) or `--auto-skip-repos` unattended
 auto-detection — and `REMEDY|skip-repo|alias` offers the matching "Skip <source> & update the
-rest" retry.) (Note the plural `SNAPSHOTS` marker is distinct from the singular `SNAPSHOT|id`
-rollback-target one: `SNAPSHOTS|warn|count` is a pre-flight advisory that a lot of Btrfs
+rest" retry.) (`SNAPSHOT_ITEM|id|date|description` enumerates one recent Btrfs restore point
+for the GUI's rollback **picker** — the engine emits up to the 12 newest (skipping snapshot 0,
+the live "current" entry) alongside the singular pre-update `SNAPSHOT|id`, so `Updater.rollback`
+can offer `RollbackDialog` to roll back to a chosen older snapshot, not just the last one
+(ONEUP-0020). The GUI validates the id is a bare number before it reaches the root `snapper
+rollback`; date/description are display-only.) (Note the plural `SNAPSHOTS` marker is distinct
+from the singular `SNAPSHOT|id` rollback-target one: `SNAPSHOTS|warn|count` is a pre-flight
+advisory that a lot of Btrfs
 restore points have piled up and may be using disk — the GUI's warn banner offers a "Thin
 snapshots…" button that re-runs the engine with `--thin-snapshots`; `SNAPSHOTS|thinned|removed`
 reports how many that guarded `snapper cleanup number/timeline` pass removed. Threshold:

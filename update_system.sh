@@ -121,6 +121,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 #   @@STEP_END@@|key|ok|skip|fail|detail
 #   @@TIMING@@|key|seconds               (how long the step took)
 #   @@SNAPSHOT@@|id
+#   @@SNAPSHOT_ITEM@@|id|date|description (rollback picker: one recent restore point)
 #   @@CHECK@@|key|count|label            (--check mode: updates available)
 #   @@CHECK_ITEM@@|key|name|from|to      (--check mode: one changed package)
 #   @@SIZE@@|key|download                (--size mode: total download size)
@@ -578,6 +579,23 @@ if step_selected system && command -v snapper &>/dev/null; then
         echo "Pre-update snapshot #$SNAP_ID recorded  (roll back with: sudo snapper rollback $SNAP_ID)"
         marker SNAPSHOT "$SNAP_ID"
     fi
+    # ONEUP-0020: enumerate the most recent restore points so the GUI's rollback
+    # dialog can offer a picker, not just the pre-update snapshot. Read-only.
+    # Machine-readable CSV keeps the date ISO-clean and quotes any comma in a
+    # description; we skip snapshot 0 (the live "current" pseudo-entry, which has
+    # no date and isn't a rollback target) and keep only the newest 12. Only the
+    # id is trusted downstream (the GUI re-validates it as a bare number before it
+    # reaches snapper); the date/description are display-only.
+    sudo snapper --machine-readable csv list --columns number,date,description 2>/dev/null \
+        | awk -F',' 'NR>1 && $1 ~ /^[0-9]+$/ && $1 != "0" && $2 != "" {
+              desc = $0; sub(/^[^,]*,[^,]*,/, "", desc)   # everything after the 2nd comma
+              gsub(/^"|"$/, "", desc); gsub(/\|/, "/", desc)
+              print $1 "|" $2 "|" desc
+          }' \
+        | tail -n 12 \
+        | while IFS='|' read -r snum sdate sdesc; do
+              marker SNAPSHOT_ITEM "$snum|$sdate|$sdesc"
+          done
 fi
 
 # ---------------------------------------------------------------------------

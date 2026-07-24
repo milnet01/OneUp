@@ -137,11 +137,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: user-request-2026-07-21.
   Resolved (2026-07-24): engine scans the system transaction log for kernel (kernel-default/preempt/…), graphics-driver (NVIDIA, Mesa, xf86-video-, libvulkan/libdrm) and DKMS/KMP module names and builds a plain-English reason phrase (reboot_reason_from_log). It rides through a new optional third field on the marker — @@REBOOT@@|yes|<reason> — with the no-reboot marker left byte-identical (@@REBOOT@@|no). The GUI names it in the reboot banner (NVIDIA casing preserved), falling back to the generic wording when absent. Reason is read while $SYS_LOG still exists (it is rm'd before the reboot check) and only ever NAMES a reboot the engine already earned — never invents one. Firmware-triggered reboots now surface their existing "firmware was updated" reason for free. Marker doc updated in CLAUDE.md; engine + GUI-smoke regression tests added (108 + 145 green), incl. an honesty guard that a reason-less 102 reboot does NOT falsely name a kernel.
 
-- 📋 [ONEUP-0020] **Let the user pick which snapshot to roll back to, not just the last one.**
+- ✅ [ONEUP-0020] **Let the user pick which snapshot to roll back to, not just the last one.**
   Enumerate recent Snapper snapshots (snapper list) in a dialog; roll back to the chosen one. Builds on the existing rollback path.
   **Layman:** List recent restore points with dates so you can undo a problem that started two updates ago, not only the most recent run.
   Kind: feature.
   Source: user-request-2026-07-21.
+  Resolved (2026-07-24): engine emits up to the 12 newest restore points as @@SNAPSHOT_ITEM@@|id|date|description (machine-readable CSV `snapper list`, skipping snapshot 0), alongside the existing pre-update @@SNAPSHOT@@. The GUI captures them into Updater._snapshots and Updater.rollback now opens RollbackDialog — a QListWidget picker (newest-first, pre-update snapshot pre-selected) — then confirms and runs `pkexec snapper rollback <chosen> && systemctl reboot`. The chosen id is re-validated as a bare number before it reaches the root shell. Falls back to the single pre-update snapshot when no items were enumerated (older engine / listing failed). Tests: run-tests.sh asserts the SNAPSHOT_ITEM emission + snapshot-0 skip; gui-smoke.py asserts capture, non-numeric-id drop, newest-first ordering, pre-select, and selected_id. Marker documented in update_system.sh header + CLAUDE.md. local-CI green (117 engine / 175 gui).
 
 - ✅ [ONEUP-0021] **Warn when Btrfs snapshots are eating the disk, and offer to thin them.**
   Measure /.snapshots usage in the pre-flight/DISK check; when high, surface a HINT and offer a guarded snapper cleanup. Extends the existing disk-space warning.
