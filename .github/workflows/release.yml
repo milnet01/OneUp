@@ -23,6 +23,10 @@ jobs:
       - name: Run engine tests
         run: bash tests/run-tests.sh
 
+      # Stdlib-only; asserts bump.py advances every version site (mirrors local-CI.sh).
+      - name: bump.py functional test
+        run: python tests/bump-test.py
+
       # Headless GUI smoke test (offscreen Qt). Mirrors local-CI.sh. A real
       # assertion failure blocks the release; exit 77 (PySide6/Qt unavailable) is
       # treated as a skip so an environment quirk can't hold up a tag.

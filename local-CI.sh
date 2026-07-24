@@ -55,6 +55,16 @@ fi
 step "Python compile (updater.py)"
 if python3 -m py_compile updater.py bump.py; then ok "py_compile updater.py bump.py"; else bad "py_compile"; fi
 
+# --- bump.py functional test ------------------------------------------------
+# Runs a real bump in a throwaway repo copy and asserts every version site
+# advances (incl. the CHANGELOG [Unreleased] compare base). Stdlib-only, exit 0/1.
+step "bump.py functional test"
+if python3 tests/bump-test.py >/tmp/local-ci-bump.log 2>&1; then
+    ok "tests/bump-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' /tmp/local-ci-bump.log | tail -1)"
+else
+    bad "tests/bump-test.py"; tail -25 /tmp/local-ci-bump.log
+fi
+
 # --- lint (best-effort) -----------------------------------------------------
 step "Lint"
 if command -v shellcheck >/dev/null 2>&1; then

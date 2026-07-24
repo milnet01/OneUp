@@ -4,6 +4,13 @@ All notable changes to OneUp are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and OneUp uses
 [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **bump.py: advance the CHANGELOG [Unreleased] compare-link base to the new tag.** (ONEUP-0033)
+  When cutting a release, the changelog's "Unreleased" comparison link kept pointing at the previous version instead of the one just released, so it showed the wrong range. The release tool now updates it automatically, and a new `tests/bump-test.py` guards it.
+
 ## [1.2.0] - 2026-07-24
 
 ### Added
@@ -204,7 +211,7 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.2.0...HEAD
 [1.2.0]: https://github.com/milnet01/OneUp/releases/tag/v1.2.0
 [1.1.0]: https://github.com/milnet01/OneUp/releases/tag/v1.1.0
 [1.0.1]: https://github.com/milnet01/OneUp/releases/tag/v1.0.1
