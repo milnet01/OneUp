@@ -2111,6 +2111,15 @@ for (var i = 0; i < clients.length; i++) {{
             row = self.rows.get(key)
             if row:
                 row.set_timing(self._format_duration(secs))
+        elif tag == "FREED":
+            # Disk the cache clean reclaimed, shown as the cache row's badge
+            # ("Reclaimed 1.4G  ·  <1s"). Emitted after STEP_END, so it replaces
+            # the generic "Done" badge the step-end set.
+            key = parts[0]
+            human = parts[1] if len(parts) > 1 else ""
+            row = self.rows.get(key)
+            if row and human:
+                row.set_badge(f"Reclaimed {human}")
         elif tag == "CHECK":
             key, count = parts[0], (parts[1] if len(parts) > 1 else "0")
             if key == "TOTAL":

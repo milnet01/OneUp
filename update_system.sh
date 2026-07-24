@@ -117,6 +117,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 #   @@CHECK@@|key|count|label            (--check mode: updates available)
 #   @@CHECK_ITEM@@|key|name|from|to      (--check mode: one changed package)
 #   @@SIZE@@|key|download                (--size mode: total download size)
+#   @@FREED@@|key|human                  (disk reclaimed by the cache clean)
 #   @@AUTH@@|on|off                      (passwordless-authorization state)
 #   @@DISK@@|warn|mount|free             (pre-flight: low disk space)
 #   @@REPO@@|warn|reason                 (pre-flight: repo health issue)
@@ -810,8 +811,22 @@ fi
 # ---------------------------------------------------------------------------
 if step_selected cache; then
     begin_step cache
+    # Measure the package cache before/after the clean so we can report what it
+    # freed — the cache step is otherwise the one task with no visible payoff.
+    # du needs root for some subdirs; this step's sudo credential is already warm.
+    cache_before=$(sudo du -sB1 /var/cache/zypp 2>/dev/null | awk '{print $1}')
     if sudo zypper --non-interactive clean --all; then
         end_step cache ok
+        cache_after=$(sudo du -sB1 /var/cache/zypp 2>/dev/null | awk '{print $1}')
+        # Only report a genuine reclamation — skip the marker when nothing shrank
+        # so the GUI never shows a misleading "Reclaimed 0B".
+        if [[ "$cache_before" =~ ^[0-9]+$ && "$cache_after" =~ ^[0-9]+$ ]] \
+           && (( cache_before > cache_after )); then
+            freed=$(numfmt --to=iec $(( cache_before - cache_after )) 2>/dev/null \
+                    || echo "$(( cache_before - cache_after ))B")
+            echo "  Reclaimed $freed from the package cache."
+            marker FREED "cache|$freed"
+        fi
     else
         end_step cache fail "clean failed"
     fi

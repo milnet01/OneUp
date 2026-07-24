@@ -108,6 +108,9 @@ def main() -> int:
                  "@@STEP_END@@|flatpak|ok|up to date",
                  "@@STEP_END@@|firmware|skip|fwupd not installed",
                  "@@STEP_END@@|orphans|fail|autoremove failed",
+                 "@@STEP_END@@|cache|ok",
+                 "@@FREED@@|cache|1.0G",
+                 "@@TIMING@@|cache|3",
                  "@@SNAPSHOT@@|42",
                  "@@INSTALLED@@|3|yes|no",
                  "@@REBOOT@@|yes",
@@ -122,6 +125,8 @@ def main() -> int:
     check("flatpak row badge = 'Up to date'", w.rows["flatpak"].badge.text() == "Up to date")
     check("firmware skip badge = 'Not installed'", w.rows["firmware"].badge.text() == "Not installed")
     check("orphans fail badge = 'Failed'", w.rows["orphans"].badge.text() == "Failed")
+    check("cache FREED badge shows reclaimed size + timing, overriding 'Done'",
+          w.rows["cache"].badge.text() == "Reclaimed 1.0G  ·  3s")
     check("failed step recorded", "orphans" in w._failed_steps)
     check("snapshot captured", w._snapshot == "42")
     check("installed count captured", w._installed_count == "3")

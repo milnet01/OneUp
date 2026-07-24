@@ -8,6 +8,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Report how much disk the cache clean reclaimed** (ONEUP-0029)
+  The cache step now measures /var/cache/zypp before and after `zypper clean --all` and shows the space it freed (e.g. "Reclaimed 1.4G") on the cache row, so the one task with no visible payoff finally has one. Nothing is shown when the cache was already empty.
+
 - **OneUp now survives a single broken software source instead of failing the whole update.**
   When one repository serves a bad signature or is unreachable, OneUp sets just that source
   aside, updates everything else, and retries it next time. A manual run offers "Skip

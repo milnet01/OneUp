@@ -55,10 +55,12 @@ progress bars, badges, and banners. Non-marker lines are plain log output. The m
 the contract between the two files — **changing a marker's name or field layout in one file
 means updating the parser in the other, and the assertions in `tests/run-tests.sh`.**
 Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `SNAPSHOT`, `CHECK`, `CHECK_ITEM`,
-`SIZE`, `AUTH`, `DISK`, `REPO`, `REPO_SKIPPED`, `HINT`, `REMEDY`, `SERVICES`, `INSTALLED`,
-`REBOOT`, `DONE`.
+`SIZE`, `FREED`, `AUTH`, `DISK`, `REPO`, `REPO_SKIPPED`, `HINT`, `REMEDY`, `SERVICES`,
+`INSTALLED`, `REBOOT`, `DONE`.
 (`CHECK_ITEM|key|name|from|to` carries one changed package for the `--check` preview
 panel; `SIZE|key|download` carries the on-demand download-size figure from `--size=<step>`;
+`FREED|cache|human` carries the disk the cache clean reclaimed (measured before/after
+`zypper clean --all`), which the GUI shows as the cache row's "Reclaimed 1.4G" badge;
 `AUTH|on|off` reports whether the opt-in passwordless-authorization drop-in is active, for
 the engine's `--grant-auth` / `--revoke-auth` / `--auth-status` actions; `REMEDY|import-keys`
 signals a one-click GUI fix for a failure — a rotated/expired repo signing key — which the

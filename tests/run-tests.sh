@@ -106,6 +106,61 @@ check_absent  "no false reboot=yes"               "@@REBOOT@@|yes" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: the cache clean reports the disk it reclaimed (@@FREED@@)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *clean*)           exit 0 ;;
+  *needs-rebooting*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+# Model the package cache shrinking across the clean: the first du (before)
+# reports 2 GiB, the second (after) 1 GiB, so the engine sees an exactly-1-GiB
+# delta (numfmt --to=iec rounds, so round values keep the assertion stable).
+# du is invoked via `sudo du`, and setup_common's sudo mock execs its args, so
+# this mock du (first in PATH) answers both measurements from a call counter.
+export MOCK_DUCOUNT="$d/ducount"; rm -f "$MOCK_DUCOUNT"
+cat > "$d/du" <<'EOF'
+#!/usr/bin/env bash
+n=$(cat "$MOCK_DUCOUNT" 2>/dev/null || echo 0)
+echo $((n + 1)) > "$MOCK_DUCOUNT"
+[[ "$n" -eq 0 ]] && printf '%s\t/var/cache/zypp\n' 2147483648 \
+                 || printf '%s\t/var/cache/zypp\n' 1073741824
+EOF
+chmod +x "$d/zypper" "$d/du"
+out=$(run_engine "$d" --steps=cache)
+check         "cache emits the FREED marker"      "@@FREED@@|cache|"     "$out"
+check         "FREED reports the reclaimed size"  "@@FREED@@|cache|1.0G" "$out"
+check         "cache prints a plain reclaimed line" "Reclaimed 1.0G"     "$out"
+unset MOCK_DUCOUNT
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: an already-empty cache reclaims nothing and emits no FREED marker"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *clean*)           exit 0 ;;
+  *needs-rebooting*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+# du reports the same size before and after, so the engine must stay silent
+# rather than claim a misleading "Reclaimed 0B".
+cat > "$d/du" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\t/var/cache/zypp\n' 104857600
+EOF
+chmod +x "$d/zypper" "$d/du"
+out=$(run_engine "$d" --steps=cache)
+check        "cache step still succeeds"          "@@STEP_END@@|cache|ok" "$out"
+check_absent "no FREED marker when nothing freed" "@@FREED@@"             "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: a refresh failure but a successful dup is success, not a failed step"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'
