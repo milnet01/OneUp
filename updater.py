@@ -807,6 +807,7 @@ class Updater(QMainWindow):
         self._total = 0
         self._check_mode = False
         self._reboot = False
+        self._reboot_reason = ""     # optional "why a reboot matters" phrase from the engine
         self._installed_count = ""   # system packages changed, as reported by the engine
         self._sys_changed = False
         self._failed_steps: list[str] = []
@@ -1976,6 +1977,7 @@ for (var i = 0; i < clients.length; i++) {{
         # Reset per-run state and any banners/badges from a previous run.
         self._check_mode = check
         self._reboot = False
+        self._reboot_reason = ""
         self._installed_count = ""
         self._sys_changed = False
         self._failed_steps = []
@@ -2165,6 +2167,9 @@ for (var i = 0; i < clients.length; i++) {{
                 self._remedy_skips.append(parts[1])
         elif tag == "REBOOT":
             self._reboot = parts[0] == "yes"
+            # Optional field: a plain-English reason naming what makes the reboot
+            # matter (a new kernel, graphics driver, …). Absent for a plain reboot.
+            self._reboot_reason = parts[1] if len(parts) > 1 else ""
         elif tag in ("DISK", "REPO"):
             # Pre-flight warnings (low disk / duplicate repos). Surface immediately so
             # the advertised warning is visible during the run, not buried in the log.
@@ -2252,7 +2257,14 @@ for (var i = 0; i < clients.length; i++) {{
 
         # Reboot vs the lighter "just restart these services" path.
         if self._reboot:
-            if n and n not in ("", "0"):
+            if self._reboot_reason:
+                # Name what triggered it, e.g. "A new kernel and your NVIDIA graphics
+                # driver were installed — restart …". Capitalise the first letter only
+                # (str.capitalize() would lower-case "NVIDIA").
+                r = self._reboot_reason
+                self.reboot_label.setText(
+                    f"⚠  {r[0].upper()}{r[1:]} — restart so everything uses the latest version.")
+            elif n and n not in ("", "0"):
                 self.reboot_label.setText(
                     f"⚠  {n} update(s) installed — restart so everything uses the latest libraries.")
             else:

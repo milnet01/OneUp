@@ -197,6 +197,35 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system)
 check "reboot advised on kernel change" "@@REBOOT@@|yes" "$out"
+# Honesty guard (ONEUP-0019): with no kernel/driver name in the transaction log,
+# the reason must fall back to the generic phrase and NOT invent "a new kernel".
+check_absent "no false kernel naming without evidence" "@@REBOOT@@|yes|a new kernel" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: reboot advice NAMES the kernel and graphics driver that triggered it (ONEUP-0019)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)
+    cat <<'LOG'
+The following 7 packages are going to be upgraded:
+  kernel-default kernel-default-devel Mesa Mesa-dri nvidia-video-G06 nvidia-gl-G06 glibc
+7 packages to upgrade.
+LOG
+    exit 0 ;;
+  *needs-rebooting*) exit 102 ;;           # reboot required
+  *ps*)              exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check "reboot still advised when named"      "@@REBOOT@@|yes"                       "$out"
+check "reboot reason names the kernel"       "@@REBOOT@@|yes|a new kernel"          "$out"
+check "reboot reason names NVIDIA driver"    "NVIDIA graphics driver"               "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

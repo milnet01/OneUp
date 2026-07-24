@@ -70,6 +70,11 @@ run — via the `--skip-repo=<alias>` flag (repeatable) or `--auto-skip-repos` u
 auto-detection — and `REMEDY|skip-repo|alias` offers the matching "Skip <source> & update the
 rest" retry.) (`INSTALLED|count|sys_changed|fw_changed`
 carries the change summary the GUI uses to decide the reboot/rollback banners;
+`REBOOT|yes|no[|reason]` carries an optional third field naming why a reboot is
+advised — e.g. `yes|a new kernel and your NVIDIA graphics driver were installed`,
+built by the engine from the system transaction log (kernel / graphics-driver /
+DKMS-module names); the GUI shows it verbatim in the reboot banner, falling back
+to the generic wording when the field is absent;
 `TIMING|key|seconds` carries each step's duration, appended to its row badge.)
 
 Step keys (the run order, shared by both files): `system, flatpak, firmware, orphans, cache`.

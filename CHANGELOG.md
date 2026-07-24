@@ -61,6 +61,11 @@ All notable changes to OneUp are documented here. The format follows
 
 - **When a step suggests a command OneUp couldn't run for you, the warning banner now has a "Copy command" button** so you can grab the exact command instead of retyping it.
 
+### Changed
+
+- **Call out kernel and graphics-driver updates by name in the reboot advice.** (ONEUP-0019)
+  When a reboot is advised, say why in plain English - e.g. a new kernel and your NVIDIA driver were installed - instead of a generic 'reboot advised'.
+
 ## [1.1.0] - 2026-07-21
 
 ### Added

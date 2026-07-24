@@ -130,11 +130,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: user-request-2026-07-21.
   Resolved (2026-07-23): shipped. Optional system-tray icon that turns amber when updates are waiting, with a Check now / Update now / Open OneUp / Quit right-click menu and an opt-in "Start at boot". The tray runs its OWN independent read-only --check every ~6h (silent — no --notify), superseding this bullet's "reflect the weekly check result" gloss and its "dismiss" menu wording. All in updater.py (no engine/marker change); a single _ensure_tray() owns all resident setup (icon, single-instance QLocalServer, check timer, quit-behaviour). Built via a 4-loop cold-eyes spec (docs/specs/ONEUP-0018-system-tray-icon.md), a 7-task subagent-driven TDD plan (docs/plans/ONEUP-0018-system-tray-icon.md) with per-task reviews, and a final whole-branch review whose one Important finding (an unparented QMenu that could be garbage-collected) was fixed. local-CI green: engine 75/0, gui-smoke 120/0.
 
-- 📋 [ONEUP-0019] **Call out kernel and graphics-driver updates by name in the reboot advice.**
+- ✅ [ONEUP-0019] **Call out kernel and graphics-driver updates by name in the reboot advice.**
   Detect kernel / DKMS / graphics-driver packages in the installed set and pass a reason string through the REBOOT/INSTALLED marker so the banner can name them.
   **Layman:** When a reboot is advised, say why in plain English - e.g. a new kernel and your NVIDIA driver were installed - instead of a generic 'reboot advised'.
   Kind: enhancement.
   Source: user-request-2026-07-21.
+  Resolved (2026-07-24): engine scans the system transaction log for kernel (kernel-default/preempt/…), graphics-driver (NVIDIA, Mesa, xf86-video-, libvulkan/libdrm) and DKMS/KMP module names and builds a plain-English reason phrase (reboot_reason_from_log). It rides through a new optional third field on the marker — @@REBOOT@@|yes|<reason> — with the no-reboot marker left byte-identical (@@REBOOT@@|no). The GUI names it in the reboot banner (NVIDIA casing preserved), falling back to the generic wording when absent. Reason is read while $SYS_LOG still exists (it is rm'd before the reboot check) and only ever NAMES a reboot the engine already earned — never invents one. Firmware-triggered reboots now surface their existing "firmware was updated" reason for free. Marker doc updated in CLAUDE.md; engine + GUI-smoke regression tests added (108 + 145 green), incl. an honesty guard that a reason-less 102 reboot does NOT falsely name a kernel.
 
 - 📋 [ONEUP-0020] **Let the user pick which snapshot to roll back to, not just the last one.**
   Enumerate recent Snapper snapshots (snapper list) in a dialog; roll back to the chosen one. Builds on the existing rollback path.

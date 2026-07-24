@@ -184,6 +184,20 @@ def main() -> int:
     check("services banner shown for a package-only change", w.services_banner.isVisibleTo(w))
     check("no reboot banner for a package-only change", not w.reboot_banner.isVisibleTo(w))
 
+    # --- 4b. A reason-bearing REBOOT marker names the culprit in the banner ----
+    w = updater.Updater()
+    for line in ("@@STEP_END@@|system|ok|7 packages updated",
+                 "@@INSTALLED@@|7|yes|no",
+                 "@@REBOOT@@|yes|a new kernel and your NVIDIA graphics driver were installed"):
+        w.handle_line(line)
+    check("reboot reason captured from the marker",
+          w._reboot_reason == "a new kernel and your NVIDIA graphics driver were installed")
+    w.proc = QProcess(w)
+    w.on_finished(0, QProcess.ExitStatus.NormalExit)
+    check("reboot banner names the kernel + driver, keeping NVIDIA casing",
+          "NVIDIA graphics driver" in w.reboot_label.text()
+          and w.reboot_label.text().lstrip("⚠ ").startswith("A new kernel"))
+
     # --- 5. --check mode summarises available updates without banners ----------
     w = updater.Updater()
     w._check_mode = True

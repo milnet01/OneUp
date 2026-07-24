@@ -127,10 +127,41 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 #   @@REMEDY@@|skip-repo|alias           (offer "Skip <source> & update the rest")
 #   @@SERVICES@@|svc1 svc2 …             (services to restart instead of rebooting)
 #   @@INSTALLED@@|count|sys_changed|fw_changed   (yes/no flags for the summary)
-#   @@REBOOT@@|yes|no
+#   @@REBOOT@@|yes|no[|reason]           (reason names why, e.g. "a new kernel … was installed")
 #   @@DONE@@|ok|errors
 # ---------------------------------------------------------------------------
 marker() { printf '@@%s@@|%s\n' "$1" "$2"; }
+
+# Build a plain-English phrase naming the components that make a reboot matter —
+# a new kernel, graphics drivers, or out-of-tree (DKMS/KMP) driver modules — by
+# scanning this run's system transaction log ($1). Echoes e.g. "a new kernel and
+# your NVIDIA graphics driver were installed", or nothing if no such component
+# was in the transaction. Purely cosmetic: it NAMES a reboot the engine already
+# decided to advise and never changes that decision, so it can only report what
+# was actually installed this run — it can never invent one.
+reboot_reason_from_log() {  # transaction-log path
+    local log="${1:-}"; [[ -f "$log" ]] || return 0
+    local -a parts=()
+    grep -qE '\bkernel-(default|preempt|rt|64kb|lpae|kvmsmall|vanilla)\b' "$log" \
+        && parts+=("a new kernel")
+    if grep -qiE '\bnvidia' "$log"; then
+        parts+=("your NVIDIA graphics driver")
+    elif grep -qE '\b(Mesa|xf86-video-|libvulkan|libdrm)' "$log"; then
+        parts+=("your graphics driver")
+    fi
+    # DKMS / kernel-module packages other than the NVIDIA one already named above.
+    if grep -E '(-kmp-|\bdkms\b)' "$log" 2>/dev/null | grep -qvi nvidia; then
+        parts+=("kernel driver modules")
+    fi
+    (( ${#parts[@]} )) || return 0
+    local phrase verb="were"; (( ${#parts[@]} == 1 )) && verb="was"
+    case ${#parts[@]} in           # at most three categories, so an explicit join is clearest
+        1) phrase="${parts[0]}" ;;
+        2) phrase="${parts[0]} and ${parts[1]}" ;;
+        *) phrase="${parts[0]}, ${parts[1]}, and ${parts[2]}" ;;
+    esac
+    echo "$phrase $verb installed"
+}
 
 # Fire a desktop notification (best-effort; silently skipped if unavailable).
 notify_send() {  # title, body
@@ -171,6 +202,7 @@ declare -A SECS     # key -> elapsed seconds
 ERRORS=0
 SYS_CHANGED=false   # did the system step actually install/upgrade anything?
 SYS_COUNT=""        # best-effort count of system packages changed
+SYS_REBOOT_DETAIL=""  # plain-English "why a reboot matters" phrase (kernel/driver names)
 FW_CHANGED=false    # did firmware updates get applied?
 
 begin_step() {
@@ -672,6 +704,9 @@ if step_selected system; then
             up=$(grep -oiE '[0-9]+ packages? to upgrade' "$SYS_LOG" | tail -1 | grep -oE '[0-9]+' | head -1)
             ins=$(grep -oiE '[0-9]+ to install' "$SYS_LOG" | tail -1 | grep -oE '[0-9]+' | head -1)
             SYS_COUNT=$(( ${up:-0} + ${ins:-0} ))
+            # Read the reboot-reason names now, while the transaction log still exists
+            # (it is rm'd at the end of this step, long before the reboot check below).
+            SYS_REBOOT_DETAIL=$(reboot_reason_from_log "$SYS_LOG")
             if (( SYS_COUNT > 0 )); then
                 end_step system ok "$SYS_COUNT package(s) updated"
             else
@@ -843,7 +878,13 @@ if command -v zypper &>/dev/null; then
     # OTHER non-zero code means the check itself failed (e.g. the lock was held) —
     # we must NOT read that as "reboot needed", or a blocked run nags forever.
     zypper needs-rebooting &>/dev/null
-    [[ $? -eq 102 ]] && { REBOOT="yes"; REBOOT_REASON="core packages or the kernel were updated"; }
+    if [[ $? -eq 102 ]]; then
+        REBOOT="yes"
+        # Prefer the specific "a new kernel / your NVIDIA driver … was installed"
+        # phrase gathered from this run's transaction log; fall back to a generic
+        # reason when the reboot is owed to core libraries we didn't name.
+        REBOOT_REASON="${SYS_REBOOT_DETAIL:-core system packages were updated}"
+    fi
 fi
 if [[ "$REBOOT" == "no" ]] && $FW_CHANGED; then
     # Firmware changes generally need a reboot to take effect.
@@ -853,7 +894,9 @@ fi
 # Package-only changes (no kernel/core-lib bump, no firmware) do NOT force a
 # reboot — the service-restart step below offers the lighter alternative.
 marker INSTALLED "${SYS_COUNT}|$($SYS_CHANGED && echo yes || echo no)|$($FW_CHANGED && echo yes || echo no)"
-marker REBOOT "$REBOOT"
+# Append the reason only when a reboot is advised, so the no-reboot marker stays
+# exactly "@@REBOOT@@|no" (the GUI and tests read the reason as an optional field).
+marker REBOOT "$REBOOT${REBOOT_REASON:+|$REBOOT_REASON}"
 
 # ---------------------------------------------------------------------------
 # Services running against replaced libraries. `zypper ps -sss` prints just the
