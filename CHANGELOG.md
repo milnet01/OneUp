@@ -8,6 +8,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Add a one-click 'copy diagnostics for a bug report' button.** (ONEUP-0031)
+  One button that copies the run log plus version info to the clipboard, so filing a bug report doesn't mean hunting through hidden folders.
+
 - **Report how much disk the cache clean reclaimed** (ONEUP-0029)
   The cache step now measures /var/cache/zypp before and after `zypper clean --all` and shows the space it freed (e.g. "Reclaimed 1.4G") on the cache row, so the one task with no visible payoff finally has one. Nothing is shown when the cache was already empty.
 

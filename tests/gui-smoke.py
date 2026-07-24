@@ -716,6 +716,43 @@ def main() -> int:
     finally:
         updater.QProcess.start = _orig_qp_start
 
+    # --- Diagnostics bundle for a bug report (ONEUP-0031) ------------------
+    _latest, _build = updater._latest_run_log, updater.build_diagnostics
+    with tempfile.TemporaryDirectory() as _ld:
+        _ldp = Path(_ld)
+        for _n, _age in (("2026-07-24_100000.log", 300),       # older real run
+                         ("2026-07-24_110000.check.log", 5),    # probe — ignore
+                         ("traycheck.log", 1),                  # tray — ignore
+                         ("2026-07-24_120000.log", 100)):       # newest real run
+            _p = _ldp / _n
+            _p.write_text("x")
+            _t = time.time() - _age
+            os.utime(_p, (_t, _t))
+        check("diagnostics: latest run log skips probes and traycheck",
+              _latest(_ldp) == _ldp / "2026-07-24_120000.log")
+        check("diagnostics: missing log dir returns None", _latest(_ldp / "gone") is None)
+
+    _rep = _build("1.1.0", "openSUSE Tumbleweed", ["system", "cache"],
+                  "run.log", "path /home/ants/x on host boxname",
+                  "2026-07-24 14:05", "/home/ants", "boxname")
+    check("diagnostics: enabled tasks marked on", "system ✓" in _rep and "cache ✓" in _rep)
+    check("diagnostics: disabled tasks marked off", "flatpak ✗" in _rep)
+    check("diagnostics: home path scrubbed to ~", "/home/ants" not in _rep and "~/x" in _rep)
+    check("diagnostics: hostname scrubbed", "boxname" not in _rep and "<host>" in _rep)
+    check("diagnostics: no-run placeholder shown",
+          "no update has been run yet" in _build("1", "x", [], None, None, "w", "", ""))
+    _big = "H" * 20 + "T" * (updater.DIAG_LOG_CAP + 3000)
+    _trim = _build("1", "x", [], "b.log", _big, "w", "", "")
+    check("diagnostics: oversized log trimmed to its tail",
+          "earlier output trimmed" in _trim and "H" * 20 not in _trim)
+
+    wD = updater.Updater()
+    wD.copy_diagnostics()
+    check("diagnostics: button flips to Copied after a copy",
+          wD.diag_btn.text() == "Copied ✓")
+    check("diagnostics: clipboard receives the bundle",
+          "OneUp diagnostics" in QApplication.clipboard().text())
+
     print()
     print("======================================")
     print(f"  Passed: {PASS}   Failed: {FAIL}")

@@ -210,11 +210,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: feature.
   Source: in-session-2026-07-23.
 
-- 📋 [ONEUP-0031] **Add a one-click 'copy diagnostics for a bug report' button.**
+- ✅ [ONEUP-0031] **Add a one-click 'copy diagnostics for a bug report' button.**
   Bundle the latest run log, OneUp version, openSUSE version, and enabled toggles onto the clipboard. Makes GitHub issues actionable for non-technical users without pointing them at ~/.local/state/oneup/logs.
   **Layman:** One button that copies the run log plus version info to the clipboard, so filing a bug report doesn't mean hunting through hidden folders.
   Kind: feature.
   Source: in-session-2026-07-23.
+  Resolved (2026-07-24): Added a 'Copy diagnostics' button to the Settings dialog (updater.py). It bundles the OneUp version, openSUSE PRETTY_NAME, the enabled/disabled tasks, and the most-recent real run log onto the clipboard, with a light scrub (home path -> ~, hostname -> <host>) so a public paste doesn't leak the username/machine. Oversized logs are trimmed to their last 200 KB (errors sit at the tail). GUI-only, no engine changes; /etc/os-release read directly. Logic split into pure helpers build_diagnostics / _latest_run_log with 10 new gui-smoke.py regression checks (157 pass). local-CI green.
 
 - 📋 [ONEUP-0032] **Wrap UI strings for translation (i18n groundwork).**
   Wrap user-facing strings in updater.py with self.tr() and keep a Qt .ts/.qm workflow ready. openSUSE has a large European base. Doing it before the string count grows keeps the door open even if no second locale ships initially.

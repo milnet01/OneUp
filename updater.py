@@ -19,6 +19,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -111,6 +112,72 @@ TASKS = [
     ("orphans", "Leftover packages", "Remove leftover dependency packages nothing needs."),
     ("cache", "Package cache", "Clear the downloaded-package cache to free disk space."),
 ]
+
+# Cap the log slice pasted into a bug report so a long `zypper dup` can't push a
+# multi-megabyte blob onto the clipboard. Errors sit near the end, so keep the tail.
+DIAG_LOG_CAP = 200 * 1024
+
+
+def _latest_run_log(log_dir: Path) -> Path | None:
+    """Newest real update-run log in log_dir, or None.
+
+    Run logs are named ``<timestamp>.log`` (one dot). The check/auth/size probes
+    add a middle segment (``.check.log``, ``.auth.log``, ``.size.log``) and the
+    tray writes a fixed ``traycheck.log`` — exclude both so this returns an
+    actual update run, not a probe.
+    """
+    try:
+        runs = [p for p in log_dir.glob("*.log")
+                if p.name.count(".") == 1 and p.name != "traycheck.log"]
+    except OSError:
+        return None
+    return max(runs, key=lambda p: p.stat().st_mtime, default=None)
+
+
+def _os_release_pretty() -> str:
+    """PRETTY_NAME from /etc/os-release (e.g. 'openSUSE Tumbleweed 20260723')."""
+    try:
+        for line in Path("/etc/os-release").read_text().splitlines():
+            if line.startswith("PRETTY_NAME="):
+                return line.partition("=")[2].strip().strip('"')
+    except OSError:
+        pass
+    return "unknown"
+
+
+def build_diagnostics(version: str, os_pretty: str, enabled: list[str],
+                      log_name: str | None, log_text: str | None,
+                      when: str, home: str, host: str) -> str:
+    """Assemble the clipboard bug-report bundle (pure — no I/O, no clock).
+
+    Scrubs the home path (-> ~) and hostname (-> <host>) across the whole
+    payload, log body included, so a public paste doesn't leak the username or
+    machine name. An oversized log is trimmed to its last DIAG_LOG_CAP chars.
+    """
+    tasks = "  ".join(f"{key} {'✓' if key in enabled else '✗'}"
+                      for key, _t, _d in TASKS)
+    out = [
+        "=== OneUp diagnostics ===",
+        f"OneUp:    {version}",
+        f"openSUSE: {os_pretty}",
+        f"Tasks:    {tasks}",
+        f"When:     {when}",
+        "",
+    ]
+    if log_text is None:
+        out.append("--- no update has been run yet ---")
+    else:
+        if len(log_text) > DIAG_LOG_CAP:
+            log_text = "[… earlier output trimmed …]\n" + log_text[-DIAG_LOG_CAP:]
+        out.append(f"--- latest run log ({log_name}) ---")
+        out.append(log_text)
+    report = "\n".join(out)
+    if home:
+        report = report.replace(home, "~")
+    if host:
+        report = report.replace(host, "<host>")
+    return report
+
 
 GREEN = QColor("#2ecc71")
 RED = QColor("#e74c3c")
@@ -761,6 +828,10 @@ class SettingsDialog(QDialog):
         root.addWidget(self._row(
             "Start OneUp automatically at login, hidden in the tray." + _tray_note,
             parent.startboot_btn))
+        root.addWidget(self._row(
+            "Copy a bug report — version info plus your latest update log — to the "
+            "clipboard, so filing an issue doesn't mean hunting through hidden folders.",
+            parent.diag_btn))
         self.status = QLabel("")
         self.status.setObjectName("Tagline")
         root.addWidget(self.status)
@@ -915,6 +986,15 @@ class Updater(QMainWindow):
         if not self._tray_available:
             self.tray_btn.setEnabled(False)
             self.startboot_btn.setEnabled(False)
+
+        # Laid out inside the Settings dialog (like the toggle buttons above), but
+        # owned here so it persists across dialog opens.
+        self.diag_btn = QPushButton("Copy diagnostics")
+        self.diag_btn.setObjectName("GhostBtn")
+        self.diag_btn.setCursor(Qt.PointingHandCursor)
+        self.diag_btn.setToolTip("Copy version info and your latest update log to "
+                                 "the clipboard, ready to paste into a bug report")
+        self.diag_btn.clicked.connect(self.copy_diagnostics)
 
         self.settings_btn = QPushButton("⚙ Settings")
         self.settings_btn.setObjectName("GhostBtn")
@@ -1803,6 +1883,7 @@ for (var i = 0; i < clients.length; i++) {{
         toggle buttons live in it permanently."""
         if self._settings_dialog is None:
             self._settings_dialog = SettingsDialog(self)
+        self.diag_btn.setText("Copy diagnostics")  # reset any lingering "Copied ✓"
         self._settings_dialog.show()
         self._settings_dialog.raise_()
         self._settings_dialog.activateWindow()
@@ -1810,6 +1891,25 @@ for (var i = 0; i < clients.length; i++) {{
     def _settings_status(self, text: str):
         if self._settings_dialog is not None:
             self._settings_dialog.status.setText(text)
+
+    def copy_diagnostics(self):
+        """Bundle version info + the latest run log onto the clipboard for a bug
+        report (the Settings dialog's 'Copy diagnostics' button)."""
+        log = _latest_run_log(LOG_DIR)
+        log_name = log_text = None
+        if log is not None:
+            log_name = log.name
+            try:
+                log_text = log.read_text(errors="replace")
+            except OSError as e:
+                log_text = f"(could not read {log.name}: {e})"
+        report = build_diagnostics(
+            APP_VERSION, _os_release_pretty(), self.selected_steps(),
+            log_name, log_text, datetime.now().strftime("%Y-%m-%d %H:%M"),
+            str(Path.home()), socket.gethostname())
+        QApplication.clipboard().setText(report)
+        self.diag_btn.setText("Copied ✓")
+        self._settings_status("Diagnostics copied — paste them into your bug report.")
 
     def _warn_action(self):
         """The warning banner's button adapts to the warning: offer to skip a broken
