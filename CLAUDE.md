@@ -54,9 +54,9 @@ They communicate through a **line-based marker protocol**: the engine prints
 progress bars, badges, and banners. Non-marker lines are plain log output. The markers are
 the contract between the two files — **changing a marker's name or field layout in one file
 means updating the parser in the other, and the assertions in `tests/run-tests.sh`.**
-Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `SNAPSHOT`, `CHECK`, `CHECK_ITEM`,
-`SIZE`, `FREED`, `AUTH`, `DISK`, `REPO`, `REPO_SKIPPED`, `HINT`, `REMEDY`, `SERVICES`,
-`INSTALLED`, `REBOOT`, `DONE`.
+Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `SNAPSHOT`, `SNAPSHOTS`, `CHECK`,
+`CHECK_ITEM`, `SIZE`, `FREED`, `AUTH`, `DISK`, `REPO`, `REPO_SKIPPED`, `HINT`, `REMEDY`,
+`SERVICES`, `INSTALLED`, `REBOOT`, `DONE`.
 (`CHECK_ITEM|key|name|from|to` carries one changed package for the `--check` preview
 panel; `SIZE|key|download` carries the on-demand download-size figure from `--size=<step>`;
 `FREED|cache|human` carries the disk the cache clean reclaimed (measured before/after
@@ -68,7 +68,12 @@ warn banner offers as "Import signing key & retry", re-running the engine with `
 after a warned confirmation. `REPO_SKIPPED|alias|reason` reports a source set aside for this
 run — via the `--skip-repo=<alias>` flag (repeatable) or `--auto-skip-repos` unattended
 auto-detection — and `REMEDY|skip-repo|alias` offers the matching "Skip <source> & update the
-rest" retry.) (`INSTALLED|count|sys_changed|fw_changed`
+rest" retry.) (Note the plural `SNAPSHOTS` marker is distinct from the singular `SNAPSHOT|id`
+rollback-target one: `SNAPSHOTS|warn|count` is a pre-flight advisory that a lot of Btrfs
+restore points have piled up and may be using disk — the GUI's warn banner offers a "Thin
+snapshots…" button that re-runs the engine with `--thin-snapshots`; `SNAPSHOTS|thinned|removed`
+reports how many that guarded `snapper cleanup number/timeline` pass removed. Threshold:
+`SNAP_WARN_COUNT` in the engine.) (`INSTALLED|count|sys_changed|fw_changed`
 carries the change summary the GUI uses to decide the reboot/rollback banners;
 `REBOOT|yes|no[|reason]` carries an optional third field naming why a reboot is
 advised — e.g. `yes|a new kernel and your NVIDIA graphics driver were installed`,

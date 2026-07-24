@@ -897,6 +897,9 @@ class Updater(QMainWindow):
         self._log_path: Path | None = None
         self._latest_tag = ""
         self._warn_repo_dup = False   # is the current warning a duplicate-repo one?
+        self._warn_snapshots = False  # pre-flight: many Btrfs snapshots may be using disk
+        self._snapshot_count = 0      # how many, for the banner text
+        self._run_active = False      # is a full update run in flight? (guards the thin action)
         self._settings_dialog: SettingsDialog | None = None
         self._pending_autoupdate = False   # one-shot latch: an enable awaiting a fresh auth settle
         self._tray = None
@@ -1941,6 +1944,8 @@ for (var i = 0; i < clients.length; i++) {{
             self._fix_keys_and_retry()
         elif self._warn_repo_dup:
             self.open_repos()
+        elif self._warn_snapshots:
+            self._thin_snapshots()
         else:
             self._show_log()
 
@@ -1990,6 +1995,66 @@ for (var i = 0; i < clients.length; i++) {{
             return
         steps = list(self._failed_steps) or ["system"]
         self._launch(steps, check=False, skip_repos=aliases)
+
+    def _thin_snapshots(self):
+        """Thin accumulated Btrfs snapshots via the engine's guarded snapper cleanup
+        (retention policy only — never a hand-picked delete), after the user confirms.
+        Runs as its own privileged engine process so the recent rollback points stay."""
+        p = getattr(self, "_thin_proc", None)
+        if p is not None and p.state() != QProcess.NotRunning:
+            return  # a thin is already in flight
+        if self._run_active:
+            QMessageBox.information(
+                self, "Update in progress",
+                "Let the current update finish, then thin the snapshots.")
+            return
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Question)
+        box.setWindowTitle("Thin old snapshots?")
+        box.setText("Remove older system restore points to free disk space?")
+        box.setInformativeText(
+            "OneUp will ask Btrfs's snapshot tool (snapper) to clear out the older "
+            "restore points its own retention policy considers expendable. Your most "
+            "recent restore points are kept, so you can still roll back a bad update.")
+        box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+        box.button(QMessageBox.Ok).setText("Thin snapshots")
+        box.setDefaultButton(QMessageBox.Cancel)
+        QTimer.singleShot(0, lambda: self._center_child(box))
+        if box.exec() != QMessageBox.Ok:
+            return
+        self.warn_btn.setEnabled(False)
+        self.status.setText("Thinning snapshots… (approve the password popup)")
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        p = QProcess(self)
+        p.setProcessChannelMode(QProcess.MergedChannels)
+        p.finished.connect(lambda _c, _s, pr=p: self._on_thin_finished(pr))
+        self._thin_proc = p
+        p.start("bash", [str(ENGINE), "--thin-snapshots",
+                         f"--log={LOG_DIR / f'{stamp}.thin.log'}"])
+
+    def _on_thin_finished(self, proc: QProcess):
+        """Report the outcome of a --thin-snapshots run and clear the advisory banner."""
+        out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
+        self.warn_btn.setEnabled(True)
+        removed = None
+        for line in out.splitlines():
+            if line.startswith("@@SNAPSHOTS@@|thinned|"):
+                n = line.split("|")[-1]
+                removed = int(n) if n.isdigit() else None
+            elif line.startswith("@@HINT@@|"):
+                QMessageBox.warning(self, "Couldn't thin snapshots", line.split("|", 1)[1])
+        if removed:
+            self.status.setText(f"Thinned {removed} old snapshot(s).")
+            self._warn_snapshots = False
+            self.warn_banner.setVisible(False)
+        elif removed == 0:
+            self.status.setText("No old snapshots needed thinning.")
+            self._warn_snapshots = False
+            self.warn_banner.setVisible(False)
+        else:
+            # No marker (auth cancelled / error): leave the banner so it can be retried.
+            self.status.setText("Ready.")
 
     # ---- log pane ---------------------------------------------------------
     def toggle_log(self):
@@ -2120,10 +2185,13 @@ for (var i = 0; i < clients.length; i++) {{
         # Reset the warning banner's button back to its default "Show details" role
         # (a previous run may have switched it to the repo-manager action).
         self._warn_repo_dup = False
+        self._warn_snapshots = False
         self.warn_btn.setText("Show details")
+        self.warn_btn.setEnabled(True)
         self._hint_command = ""
         self._remedy_keys = False
         self._remedy_skips = []
+        self._run_active = not check   # a real run guards the standalone thin action
         self.warn_copy_btn.setVisible(False)
         self.warn_btn2.setVisible(False)
         self.retry_btn.setVisible(False)
@@ -2298,6 +2366,18 @@ for (var i = 0; i < clients.length; i++) {{
             # Optional field: a plain-English reason naming what makes the reboot
             # matter (a new kernel, graphics driver, …). Absent for a plain reboot.
             self._reboot_reason = parts[1] if len(parts) > 1 else ""
+        elif tag == "SNAPSHOTS" and parts and parts[0] == "warn":
+            # Pre-flight: a lot of Btrfs restore points have piled up and may be using
+            # disk. Offer a one-click thin (snapper's own retention cleanup) via the
+            # warn banner. The "thinned|N" variant comes from the dedicated
+            # --thin-snapshots process and is read in _on_thin_finished, not here.
+            self._snapshot_count = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+            self._warn_snapshots = True
+            self.warn_btn.setText("Thin snapshots…")
+            self._show_warning(
+                f"{self._snapshot_count} system restore points (snapshots) are stored. "
+                "On Tumbleweed these build up with each update and can use a lot of disk "
+                "space — you can safely thin the older ones.")
         elif tag in ("DISK", "REPO"):
             # Pre-flight warnings (low disk / duplicate repos). Surface immediately so
             # the advertised warning is visible during the run, not buried in the log.
@@ -2346,6 +2426,7 @@ for (var i = 0; i < clients.length; i++) {{
         if self._buf.strip():
             self.handle_line(self._buf)
         self._buf = ""
+        self._run_active = False
         # Release the finished process so QProcess instances don't accumulate on the
         # window across a long session (each run parents a new one to self).
         self.proc.deleteLater()

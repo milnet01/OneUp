@@ -143,11 +143,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: feature.
   Source: user-request-2026-07-21.
 
-- 📋 [ONEUP-0021] **Warn when Btrfs snapshots are eating the disk, and offer to thin them.**
+- ✅ [ONEUP-0021] **Warn when Btrfs snapshots are eating the disk, and offer to thin them.**
   Measure /.snapshots usage in the pre-flight/DISK check; when high, surface a HINT and offer a guarded snapper cleanup. Extends the existing disk-space warning.
   **Layman:** Snapshots quietly fill the disk on Tumbleweed; warn when they are using a lot of space and offer a one-click cleanup - like the existing low-disk warning.
   Kind: feature.
   Source: user-request-2026-07-21.
+  Resolved (2026-07-24): engine pre-flight now counts Btrfs snapshots (root, after the low-disk check) and emits @@SNAPSHOTS@@|warn|count once >= SNAP_WARN_COUNT (25). Count is the honest signal — CoW extent-sharing makes a byte figure overcount and per-snapshot quotas are usually off. New --thin-snapshots engine action runs snapper's own guarded cleanup (number/timeline — retention-policy only, never a hand-pick), reports @@SNAPSHOTS@@|thinned|removed via before/after count. GUI: warn banner retargets its button to "Thin snapshots…", which after a confirmation runs the engine as a dedicated privileged process (_thin_snapshots/_on_thin_finished), guarded against firing mid-run (_run_active). Tests: 5 new engine cases (warn >=25, no-warn below threshold, cleanup invoked, thinned count, zero-removed no-false-claim) + 5 gui-smoke assertions. local-CI green (engine 114, gui-smoke 170, lint/validate/lockstep).
 
 - ✅ [ONEUP-0022] **Add an optional unattended (scheduled full-update) mode, off by default.**
   Systemd timer that runs the engine (not just --check) on a schedule, reusing the snapshot/rollback safety. Off by default; opt-in from the GUI alongside the weekly-check toggle.
@@ -231,3 +232,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: in-session-2026-07-24.
   Resolved (2026-07-24): bump.py step 6 now runs a third CHANGELOG edit that rewrites the `[Unreleased]: .../compare/vPREV...HEAD` base to `vX.Y.Z` (regex `(\[Unreleased\]: \S+/compare/)v\d+\.\d+\.\d+(\.\.\.HEAD)`). Also fixed the already-stale committed footer (v1.1.0 → v1.2.0). Added tests/bump-test.py — a stdlib-only functional test that runs a real bump in a throwaway repo copy (5 real version files + a synthetic CHANGELOG) and asserts the compare base advances; wired into local-CI.sh and .github/workflows/release.yml. Reproduced the bug first (test failed on the compare-base assertion pre-fix), then fixed. Full local-CI green (108 engine + 165 GUI + 5 bump).
+
+- 📋 [ONEUP-0034] **Break up the ~2,150-line updater.py into focused modules where it helps readability.**
+  updater.py is a single ~2,150-line module holding the main window, several dialogs (Settings, Repository manager, About), the @@MARKER@@ protocol parser, the QProcess engine-launch plumbing (run/check/size/auth/thin), banner/remedy state, tray + autostart, and pure helpers (diagnostics, os-release, log discovery). Candidate seams, cohesion-first and behaviour-preserving: (a) pull the pure/stateless helpers into a small module; (b) split the dialogs out; (c) consider isolating the marker-parsing + engine-launch layer from the widget layer. Constraints: keep the marker contract and step-key lists intact (they mirror update_system.sh + the tests), keep the privilege split (GUI never root), and keep local-CI green at every step — gui-smoke imports symbols from updater.py, so preserve public names or update the tests in lockstep. Not urgent; do it opportunistically, in small reviewable commits, only where it genuinely aids the six-month-reader test. Source: user-request-2026-07-24.
+  **Layman:** The app's main code file has grown very large. Split it into smaller, well-named pieces so it's easier to find and change things, without altering how the app behaves.
+  Kind: refactor.
+  Source: user-request-2026-07-24.

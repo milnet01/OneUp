@@ -6,6 +6,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **A pre-update warning when Btrfs snapshots pile up, with a one-click "Thin snapshots" button.** (ONEUP-0021)
+  On Tumbleweed a snapshot pair is taken around every zypper transaction, so restore points quietly accumulate and can fill the root filesystem. OneUp's pre-flight now counts them and, once a lot have built up, shows a dismissible heads-up plus a "Thin snapshots…" button. Thinning runs snapper's own retention cleanup (`number`/`timeline`), which only drops snapshots the configured policy already considers expendable — the most recent rollback points are always kept — and reports how many were removed.
+
 ### Fixed
 
 - **The signing-key-import and passwordless-consent popups now open centered over the main window, matching the About and Repositories dialogs.** (ONEUP-0026)

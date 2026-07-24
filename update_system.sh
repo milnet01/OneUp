@@ -45,6 +45,10 @@ SKIP_REPOS=()      # --skip-repo=<alias> (repeatable): sources to set aside this
 AUTO_SKIP=false    # --auto-skip-repos: unattended auto-quarantine of a broken source
 DISABLED_REPOS=()  # aliases WE disabled this run; cleanup() re-enables every one
 MAX_SKIP_REPOS=2   # more than this failing at once = systemic, don't silently skip
+THIN_SNAPSHOTS=false  # --thin-snapshots: run snapper's own retention cleanup to drop
+                      # expendable Btrfs restore points (guarded; never a hand-pick).
+SNAP_WARN_COUNT=25    # pre-flight: warn once this many Btrfs snapshots have piled up
+                      # (each zypper transaction leaves a pre/post pair, so they add up).
 
 usage() {
     cat <<EOF
@@ -69,6 +73,8 @@ Usage: $(basename "$0") [--steps=LIST] [--check] [--notify] [--log=FILE] [--help
                  rest, re-enable it. Repeatable.
   --auto-skip-repos  Unattended mode: on a repo-scoped failure, auto-detect and
                  skip the culprit(s) (up to $MAX_SKIP_REPOS), then continue.
+  --thin-snapshots  Ask snapper to remove old, expendable Btrfs snapshots (its own
+                 retention cleanup — keeps the recent ones), then report how many.
   --log=FILE     Write the run log here. Default: $LOG_DIR/<timestamp>.log
   --help         Show this help.
 
@@ -91,6 +97,7 @@ for arg in "$@"; do
         --import-keys) IMPORT_KEYS=true ;;
         --skip-repo=*)     SKIP_REPOS+=("${arg#*=}") ;;
         --auto-skip-repos) AUTO_SKIP=true ;;
+        --thin-snapshots)  THIN_SNAPSHOTS=true ;;
         --notify)  NOTIFY=true ;;
         --help|-h) usage; exit 0 ;;
         *) echo "Unknown option: $arg" >&2; usage >&2; exit 2 ;;
@@ -120,6 +127,8 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 #   @@FREED@@|key|human                  (disk reclaimed by the cache clean)
 #   @@AUTH@@|on|off                      (passwordless-authorization state)
 #   @@DISK@@|warn|mount|free             (pre-flight: low disk space)
+#   @@SNAPSHOTS@@|warn|count             (pre-flight: many Btrfs snapshots may be using disk)
+#   @@SNAPSHOTS@@|thinned|removed        (--thin-snapshots: how many snapshots were cleaned up)
 #   @@REPO@@|warn|reason                 (pre-flight: repo health issue)
 #   @@HINT@@|plain-English failure hint
 #   @@REMEDY@@|import-keys               (a one-click GUI fix is available for this failure)
@@ -495,12 +504,42 @@ auth_status() {
     fi
 }
 
+# --thin-snapshots: reclaim disk by removing expendable Btrfs snapshots. Uses
+# snapper's OWN cleanup algorithms (number/timeline), which only drop snapshots the
+# configured retention policy already considers surplus — we never hand-delete a
+# specific one, so the most recent rollback points are always kept. Reports the
+# before/after count so the GUI can confirm what was tidied.
+thin_snapshots() {
+    if ! command -v snapper &>/dev/null; then
+        marker HINT "Snapper isn't installed, so there are no snapshots to thin."
+        return 0
+    fi
+    sudo_init
+    local before after
+    before=$(sudo snapper --no-headers list 2>/dev/null | grep -c .)
+    sudo snapper cleanup number   2>&1 || true
+    sudo snapper cleanup timeline 2>&1 || true
+    after=$(sudo snapper --no-headers list 2>/dev/null | grep -c .)
+    if [[ "$before" =~ ^[0-9]+$ && "$after" =~ ^[0-9]+$ ]] && (( before > after )); then
+        echo "Thinned $(( before - after )) old snapshot(s) ($before → $after)."
+        marker SNAPSHOTS "thinned|$(( before - after ))"
+    else
+        echo "No snapshots needed thinning — snapper's retention policy is already satisfied."
+        marker SNAPSHOTS "thinned|0"
+    fi
+}
+
 if [[ -n "$AUTH_ACTION" ]]; then
     case "$AUTH_ACTION" in
         grant)  grant_auth ;;
         revoke) revoke_auth ;;
         status) auth_status ;;
     esac
+    exit $?
+fi
+
+if $THIN_SNAPSHOTS; then
+    thin_snapshots
     exit $?
 fi
 
@@ -555,6 +594,20 @@ if step_selected system; then
             marker DISK "warn|$mp|$human"
         fi
     done
+    # Btrfs snapshots: Tumbleweed takes a pre/post snapshot pair around every zypper
+    # transaction, so restore points accumulate and can quietly fill the root
+    # filesystem. We're already root here, so count them and, when a lot have piled
+    # up, surface a dismissible heads-up + the one-click "thin them" remedy. Count is
+    # the honest signal: Btrfs shares extents copy-on-write, so a byte figure would
+    # overcount, and per-snapshot quota data is usually off on the root config.
+    if command -v snapper &>/dev/null; then
+        snap_count=$(sudo snapper --no-headers list 2>/dev/null | grep -c .)
+        if [[ "$snap_count" =~ ^[0-9]+$ ]] && (( snap_count >= SNAP_WARN_COUNT )); then
+            echo "  ! $snap_count system restore points (snapshots) stored — these build up"
+            echo "    with each update and can use a lot of disk space; consider thinning them."
+            marker SNAPSHOTS "warn|$snap_count"
+        fi
+    fi
     # Repos: duplicate repository URLs are a frequent source of update conflicts.
     dupe=$(zypper --non-interactive lr -u 2>/dev/null \
         | awk -F'|' 'NF>=6{u=$NF; gsub(/ /,"",u); if(u!="" && u!="URI") c[u]++} END{for(k in c) if(c[k]>1) print k}')

@@ -162,6 +162,16 @@ def main() -> int:
     check("repo warning button becomes 'Manage repositories…'",
           w2.warn_btn.text() == "Manage repositories…")
 
+    # A SNAPSHOTS pre-flight advisory names the count and arms the "thin" action.
+    w3 = updater.Updater()
+    w3.handle_line("@@SNAPSHOTS@@|warn|30")
+    check("snapshot advisory arms the thin action", w3._warn_snapshots is True)
+    check("snapshot advisory captures the count", w3._snapshot_count == 30)
+    check("snapshot advisory names the count", "30 system restore points" in w3.warn_label.text())
+    check("snapshot advisory button becomes 'Thin snapshots…'",
+          w3.warn_btn.text() == "Thin snapshots…")
+    check("snapshot advisory shows the warning banner", w3.warn_banner.isVisibleTo(w3))
+
     # --- 3. on_finished promotes the accumulated state into the right banners ---
     w.proc = QProcess(w)   # on_finished releases self.proc; give it a real one.
     w.on_finished(0, QProcess.ExitStatus.NormalExit)

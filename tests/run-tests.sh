@@ -1063,6 +1063,77 @@ out=$(run_engine "$d" --steps=system)
 check_absent "manual over-cap offers no skip" "@@REMEDY@@|skip-repo" "$out"
 rm -rf "$d"
 
+# ---------------------------------------------------------------------------
+echo "TEST: many Btrfs snapshots warn in pre-flight and offer thinning (ONEUP-0021)"
+d=$(mktemp -d); setup_common "$d"
+# 30 snapshots (>= the 25 threshold); --print-number still answers the create.
+cat > "$d/snapper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$*" == *--print-number* ]] && { echo 42; exit 0; }
+if [[ "$1" == "--no-headers" ]]; then for ((i=0;i<30;i++)); do echo "$i | pre "; done; exit 0; fi
+exit 0
+EOF
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *dup*|*update*) echo "Nothing to do."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/snapper" "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check "many snapshots warn in pre-flight" "@@SNAPSHOTS@@|warn|30" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: few snapshots do NOT trigger the thin advisory (below threshold)"
+d=$(mktemp -d); setup_common "$d"   # default snapper mock lists a single snapshot
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *dup*|*update*) echo "Nothing to do."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check_absent "few snapshots: no thin advisory" "@@SNAPSHOTS@@|warn" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: --thin-snapshots runs snapper's cleanup and reports the count removed"
+d=$(mktemp -d); setup_common "$d"
+export MOCK_SNAPCOUNT="$d/snapcount"; rm -f "$MOCK_SNAPCOUNT"
+export MOCK_CLEANLOG="$d/cleanlog"; rm -f "$MOCK_CLEANLOG"
+# `cleanup` is recorded; `list` reports 30 before the cleanup, 20 after (call counter,
+# same trick as the cache du mock), so the engine sees exactly 10 removed.
+cat > "$d/snapper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in *cleanup*) echo "$*" >> "$MOCK_CLEANLOG"; exit 0 ;; esac
+if [[ "$1" == "--no-headers" ]]; then
+    n=$(cat "$MOCK_SNAPCOUNT" 2>/dev/null || echo 0)
+    echo $((n + 1)) > "$MOCK_SNAPCOUNT"
+    lines=30; [[ "$n" -ge 1 ]] && lines=20
+    for ((i=0;i<lines;i++)); do echo "$i | pre "; done
+    exit 0
+fi
+exit 0
+EOF
+chmod +x "$d/snapper"
+out=$(run_engine "$d" --thin-snapshots)
+check "thin invokes snapper's number cleanup"   "cleanup number"        "$(cat "$MOCK_CLEANLOG")"
+check "thin invokes snapper's timeline cleanup" "cleanup timeline"      "$(cat "$MOCK_CLEANLOG")"
+check "thin reports how many were removed"       "@@SNAPSHOTS@@|thinned|10" "$out"
+unset MOCK_SNAPCOUNT MOCK_CLEANLOG
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: --thin-snapshots with nothing to remove reports zero (no false claim)"
+d=$(mktemp -d); setup_common "$d"   # default snapper: list is a fixed single line
+out=$(run_engine "$d" --thin-snapshots)
+check "thin with a stable count reports zero removed" "@@SNAPSHOTS@@|thinned|0" "$out"
+rm -rf "$d"
+
 echo
 echo "======================================"
 echo "  Passed: $PASS   Failed: $FAIL"
