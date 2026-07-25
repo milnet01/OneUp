@@ -155,3 +155,16 @@ Dependency policy (CI actions, runtimes, PySide6, base images) is a standing rul
   new steps tolerant of a missing binary.
 - Runtime state lives in `~/.local/state/oneup/` (`history.json`, `logs/`); the engine also
   mirrors each run's log to `~/Documents/update-logs/`.
+- **Accessibility is a standing requirement (ONEUP-0028).** Any new interactive widget
+  needs an accessible name (`setAccessibleName`) — `tests/gui-smoke.py` sweeps every
+  focusable widget and fails on a nameless one. **State must never be signalled by
+  colour alone**: pair every colour cue with text or a shape. Font sizes in the QSS are
+  derived from the desktop's default point size (never hard-coded `px`) so text scales;
+  see `docs/specs/ONEUP-0028-accessibility.md`. Note the app deliberately draws **no
+  focus ring** (a user-facing design decision, 2026-07-25) — focus reuses the hover look.
+- **Privileged calls must stay out of subshells.** `out=$(sudo …)` re-authenticates:
+  with no terminal, sudo keys its cached credential to the parent process id (see
+  `sudoers(5)` `timestamp_type`), and a subshell changes it — which means a second
+  password prompt, or an outright failure. Redirect to a temp file and read that back
+  instead. `SUDO_ASKPASS`/`SUDO_PROMPT` are exported so any prompt is graphical and
+  labelled as OneUp's.

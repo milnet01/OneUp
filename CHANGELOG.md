@@ -8,6 +8,16 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Accessibility: screen-reader support, larger text, and a high-contrast option** (ONEUP-0028)
+  Every control now has a spoken name and the task switches report
+  their on/off state, so nothing announces as an unlabelled button.
+  Progress, each step's outcome and the final summary are spoken.
+  Settings gains Text size (Normal/Large/Larger) on top of your
+  desktop's own font size, and a High contrast option. No state is
+  signalled by colour alone any more: the switches show a bar for on
+  and a circle for off, the tray icon draws a "!" when updates are
+  waiting, and an overdue last run says so in words.
+
 - **Roll back to a chosen restore point, not just the last one** (ONEUP-0020)
   The "Roll back this update" action now opens a picker listing recent Snapper
   snapshots with their dates and descriptions, so you can undo a problem that
@@ -18,6 +28,11 @@ All notable changes to OneUp are documented here. The format follows
   On Tumbleweed a snapshot pair is taken around every zypper transaction, so restore points quietly accumulate and can fill the root filesystem. OneUp's pre-flight now counts them and, once a lot have built up, shows a dismissible heads-up plus a "Thin snapshots…" button. Thinning runs snapper's own retention cleanup (`number`/`timeline`), which only drops snapshots the configured policy already considers expendable — the most recent rollback points are always kept — and reports how many were removed.
 
 ### Fixed
+
+- **the download-size check asked for a password twice** (ONEUP-0037)
+  The second prompt was sudo's own unlabelled "password for root" box.
+  It now asks once, and any prompt OneUp causes says that OneUp is
+  asking and why.
 
 - **steps launched from the window could fail with "a terminal is required"** (ONEUP-0036)
   The password helper was not exported to the engine's privileged

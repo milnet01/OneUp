@@ -75,6 +75,29 @@ needed, and a run history.
 - **The engine is usable on its own.** `update_system.sh` runs fine in a plain
   terminal (`./update_system.sh --steps=system,cache`); the GUI just drives it.
 
+## Accessibility
+
+OneUp is built to be usable if you can't see the screen well — or at all.
+
+- **Screen readers.** Every control has a spoken name, so nothing announces as an
+  unlabelled button, and the task switches report their on/off state. Progress is
+  spoken as it happens ("Updating system packages, step 1 of 3"), along with each
+  step's outcome and the final summary. The update log is *not* read aloud — a run
+  prints hundreds of lines — but it is a named, focusable text area you can read at
+  your own pace.
+- **Bigger text.** OneUp follows your desktop's font-size setting automatically.
+  **Settings → Text size** enlarges it further (Normal / Large / Larger), applied
+  instantly.
+- **High contrast.** **Settings → High contrast** switches to plain black and white
+  with strong outlines, and works with both the light and the dark scheme.
+- **Never colour alone.** Every colour cue is paired with words or a shape: the task
+  switches show a bar when on and a circle when off, the tray icon draws a "!" when
+  updates are waiting, an overdue last run says "⚠ overdue", and step outcomes are
+  always text ("Failed", "Up to date", "3 installed").
+
+Screen-reader behaviour is verified against Orca. If something is announced
+confusingly, that's a bug worth reporting.
+
 ## Install & run
 
 ### openSUSE repository — recommended (auto-updates)

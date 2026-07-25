@@ -15,6 +15,7 @@ Run directly, or via tests/run-tests.sh / local-CI.sh.
 """
 import importlib.util
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -43,7 +44,14 @@ os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
     from PySide6.QtCore import QProcess, Qt, QTimer
-    from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton
+    from PySide6.QtGui import QAccessible, QFontInfo
+    from PySide6.QtWidgets import (
+        QApplication,
+        QLabel,
+        QMessageBox,
+        QPushButton,
+        QWidget,
+    )
 except ImportError as exc:  # PySide6 absent — skip, don't fail the suite.
     print(f"  SKIP - PySide6 not installed ({exc})")
     sys.exit(77)
@@ -815,10 +823,213 @@ def main() -> int:
     check("a run just under the threshold is not stale",
           wN.last_run.property("stale") == "false")
 
+    _seed_history(20)
+    wN.refresh_last_run()
+    # ONEUP-0028: "overdue" must be in WORDS, not only the amber colour — colour
+    # alone conveys nothing to a colour-blind user.
+    check("an overdue run says so in words, not just in amber",
+          "overdue" in wN.last_run.text())
+
     updater.HISTORY.unlink()
     wN.refresh_last_run()
     check("no history shows 'Last run: never'", wN.last_run.text() == "Last run: never")
     check("the 'never' state is not flagged stale", wN.last_run.property("stale") == "false")
+
+    # --- ONEUP-0028: accessibility ---------------------------------------------
+    wA = updater.Updater()
+
+    # INV-1: nothing a user can reach may be nameless. Every focusable widget must
+    # report an accessible name OR visible text. getattr for .text() is required,
+    # not defensive: focusable non-buttons (the log is a QPlainTextEdit, the detail
+    # scroll area and the rollback list) have no .text() at all.
+    def unnamed(root):
+        out = []
+        for wid in root.findChildren(QWidget):
+            if wid.focusPolicy() == Qt.NoFocus:
+                continue
+            label = wid.accessibleName() or (getattr(wid, "text", lambda: "")() or "")
+            if not str(label).strip():
+                out.append(f"{type(wid).__name__}#{wid.objectName()}")
+        return out
+
+    missing = unnamed(wA)
+    check(f"every focusable widget in the window is named (unnamed: {missing})", not missing)
+
+    repo_dlg = updater.RepoManagerDialog(wA, [
+        {"alias": "oss", "name": "Main repository", "enabled": True, "url": "http://a/x"},
+        {"alias": "up", "name": "Updates", "enabled": False, "url": "http://b/y"}])
+    miss_repo = unnamed(repo_dlg)
+    check(f"every focusable widget in Repositories is named (unnamed: {miss_repo})",
+          not miss_repo)
+    check("a repo switch does not bake its on/off state into its name",
+          all("enabled" not in s.accessibleName()
+              for s in repo_dlg.findChildren(updater.ToggleSwitch)))
+    repo_dlg.reject()
+
+    set_dlg = updater.SettingsDialog(wA)
+    miss_set = unnamed(set_dlg)
+    check(f"every focusable widget in Settings is named (unnamed: {miss_set})", not miss_set)
+    set_dlg.reject()
+
+    roll_dlg = updater.RollbackDialog(wA, [("41", "2026-07-24 09:00", "pre-update")], "41")
+    miss_roll = unnamed(roll_dlg)
+    check(f"every focusable widget in Rollback is named (unnamed: {miss_roll})", not miss_roll)
+    roll_dlg.reject()
+
+    # A checkable QAbstractButton maps to an accessible CheckBox WITH a checked
+    # state, which is how on/off reaches a screen reader. Locking that in: if the
+    # switch ever stopped being checkable, the state would silently disappear.
+    sw = wA.rows["system"].switch
+    iface = QAccessible.queryAccessibleInterface(sw)
+    check("a task switch exposes a checkable role to assistive tech",
+          iface is not None and iface.state().checkable == 1)
+    check("a task switch reports its checked state",
+          iface is not None and bool(iface.state().checked) == sw.isChecked())
+
+    # INV-2 (switch): the state must be readable WITHOUT colour. Count near-white
+    # pixels in the track half OPPOSITE the knob — that is where the bar/circle is
+    # drawn. A colour-only track leaves that region a solid fill, so this fails on
+    # a switch that lost its shape cue. NB a bare "checked vs unchecked images
+    # differ" check would pass even then, because the knob itself moves.
+    def shape_pixels(checked: bool) -> int:
+        s = updater.ToggleSwitch()
+        s.setChecked(checked)
+        s._anim.stop()                      # settle the 130 ms knob slide first
+        s.set_knob_pos(1.0 if checked else 0.0)
+        img = s.grab().toImage()
+        # Knob sits right when on, so inspect the LEFT third; and vice versa.
+        xs = range(0, img.width() // 3) if checked else \
+             range(img.width() * 2 // 3, img.width())
+        n = 0
+        for x in xs:
+            for y in range(img.height()):
+                c = img.pixelColor(x, y)
+                if c.red() > 200 and c.green() > 200 and c.blue() > 200:
+                    n += 1
+        return n
+
+    check("switch 'on' is shown by a shape, not only by green", shape_pixels(True) > 0)
+    check("switch 'off' is shown by a shape, not only by red", shape_pixels(False) > 0)
+
+    # INV-2 (tray): the attention badge must differ in SHAPE. Count near-white
+    # pixels INSIDE the amber disc, inset to exclude the disc's own white outline.
+    def badge_glyph_pixels() -> int:
+        pm = wA._tray_icon(True).pixmap(64, 64).toImage()
+        d, inset = 26, 5
+        x0, y0 = pm.width() - d - 3 + inset, pm.height() - d - 3 + inset
+        n = 0
+        for x in range(x0, x0 + d - 2 * inset):
+            for y in range(y0, y0 + d - 2 * inset):
+                c = pm.pixelColor(x, y)
+                if c.red() < 90 and c.green() < 90 and c.blue() < 90 and c.alpha() > 128:
+                    n += 1
+        return n
+
+    check("the tray attention badge carries a glyph, not just amber",
+          badge_glyph_pixels() > 0)
+
+    # INV-3: no absolute pixel font size survives, and every size scales. The
+    # regex targets the DECLARATION — a plain `"px" in line` test would false-fail
+    # on the lines that legitimately keep a px length beside a font-size.
+    qss_norm = updater.build_theme(True)
+    qss_big = updater.build_theme(True, scale=1.45)
+    check("no font size is a hard-coded pixel value",
+          re.search(r"font-size:\s*[\d.]+px", qss_norm) is None)
+    pts = lambda q: [float(m) for m in re.findall(r"font-size:\s*([\d.]+)pt", q)]  # noqa: E731
+    check("every font size is expressed in points", len(pts(qss_norm)) >= 12)
+    check("a larger text size really enlarges every font size",
+          len(pts(qss_big)) == len(pts(qss_norm))
+          and all(b > n for b, n in zip(pts(qss_big), pts(qss_norm), strict=True)))
+    check("font sizes derive from the desktop's own default point size",
+          abs(pts(qss_norm)[0]
+              - QFontInfo(QApplication.instance().font()).pointSizeF() * 1.58) < 0.2)
+    check("the badge padding scales with the text too",
+          "padding: 3px 13px" in qss_big)
+
+    # INV-4 (revised 2026-07-25 by explicit design decision): focus must NOT draw
+    # a border or an outline ring — Qt ignores outline-radius, so a ring renders as
+    # a square around our rounded buttons. Focus reuses the hover look instead.
+    check("focus draws no outline ring", "outline:" not in qss_norm)
+    check("focus still gives a cue by reusing the hover look",
+          "QPushButton#GhostBtn:focus" in qss_norm)
+    check("the focus rules come after the hover/checked rules they tie with",
+          qss_norm.index("QPushButton#GhostBtn:focus")
+          > qss_norm.index("QPushButton#GhostBtn:checked"))
+
+    # INV-5: tab order follows VISUAL order (Repositories sits before Recenter).
+    chain, node = [], wA.settings_btn
+    for _ in range(40):
+        node = node.nextInFocusChain()
+        if node in (wA.repos_btn, wA.recenter_btn):
+            chain.append(node)
+        if len(chain) == 2:
+            break
+    check("tab order reaches Repositories before Recenter",
+          chain[:1] == [wA.repos_btn])
+
+    # INV-6: high contrast only ADDS an overlay — the base sheet is untouched.
+    qss_hc = updater.build_theme(True, high_contrast=True)
+    check("high contrast appends to the base sheet rather than replacing it",
+          qss_hc.startswith(qss_norm))
+    check("high contrast tells the painted switch to change too",
+          "qproperty-highContrast: true" in qss_hc)
+    check("the base sheet resets that property explicitly (it is not auto-reverted)",
+          "qproperty-highContrast: false" in qss_norm)
+    check("high contrast restates the hover rules it must beat on specificity",
+          "QPushButton#RunBtn:hover" in qss_hc.replace(qss_norm, ""))
+
+    # INV-7: progress and outcome are spoken. _announce records unconditionally,
+    # since QAccessible.isActive() is False offscreen.
+    wB = updater.Updater()
+    wB.handle_line("@@STEP_BEGIN@@|system|1|3|Updating system packages")
+    check("the step being started is announced",
+          "Updating system packages" in wB._last_announcement
+          and "step 1 of 3" in wB._last_announcement)
+    wB.handle_line("@@STEP_END@@|system|ok|3 packages updated")
+    check("the step outcome is announced",
+          wB._last_announcement == "System packages: 3 installed")
+    wB.handle_line("@@DISK@@|warn|/|512 MiB")
+    check("a warning banner is announced when it appears",
+          wB._last_announcement.startswith("Warning:"))
+    wB.proc = QProcess(wB)
+    wB._check_mode = False
+    wB.on_finished(0, QProcess.ExitStatus.NormalExit)
+    check("the final summary is announced", "All done" in wB._last_announcement)
+    try:
+        wB._announce("plain call must not throw when no reader is listening")
+        check("_announce is safe with no screen reader attached", True)
+    except Exception as exc:  # noqa: BLE001
+        check(f"_announce is safe with no screen reader attached ({exc})", False)
+
+    # A row's outcome must be reachable by keyboard, and must NOT survive into the
+    # next run (clear_badge routes through _render_badge for exactly this reason).
+    check("the outcome is folded into the switch's description for a screen reader",
+          "3 installed" in wB.rows["system"].switch.accessibleDescription())
+    wB.rows["system"].clear_badge()
+    check("a cleared badge does not leave last run's outcome on the switch",
+          "3 installed" not in wB.rows["system"].switch.accessibleDescription())
+
+    # INV-8: both settings persist and apply live, with no restart.
+    app_inst = QApplication.instance()
+    before = app_inst.styleSheet()
+    wA.settings.setValue("text_scale", 1.45)
+    updater.apply_app_theme(app_inst)
+    check("a text-size change applies live", app_inst.styleSheet() != before)
+    wA.settings.setValue("high_contrast", True)
+    updater.apply_app_theme(app_inst)
+    check("a high-contrast change applies live",
+          "qproperty-highContrast: true" in app_inst.styleSheet())
+    wA.settings.setValue("text_scale", 1.0)
+    wA.settings.setValue("high_contrast", False)
+    updater.apply_app_theme(app_inst)
+    check("turning high contrast back off really reverts it",
+          "qproperty-highContrast: true" not in app_inst.styleSheet())
+    check("the text-size button cycles through the offered sizes",
+          wA._text_scale_index() == 0)
+    wA.on_textsize_clicked()
+    check("cycling text size updates both the setting and the label",
+          wA._text_scale_index() == 1 and "Large" in wA.textsize_btn.text())
+    wA.settings.setValue("text_scale", 1.0)
 
     print()
     print("======================================")

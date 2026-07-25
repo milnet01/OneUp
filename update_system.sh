@@ -37,6 +37,13 @@ ASKPASS=/usr/libexec/ssh/ksshaskpass
 # makes the project convention — privileged commands raise the KDE prompt, never
 # block on stdin — true for every sudo in this file rather than just the -A ones.
 export SUDO_ASKPASS="$ASKPASS"
+# Label EVERY prompt sudo may raise, including ones we didn't pass -p to. sudo's
+# own default reads "[sudo] password for root" under this distro's `targetpw`
+# default — an unlabelled request for the ROOT password looks like something
+# nefarious to a user who only clicked "check the download size". A prompt the
+# user can't attribute is a prompt they should refuse, so it must always say who
+# is asking and why (ONEUP-0037).
+export SUDO_PROMPT="OneUp needs administrator rights to update this system. Password: "
 
 # ---------------------------------------------------------------------------
 # Configuration / arguments
@@ -324,12 +331,30 @@ run_size() {
     sudo_init
     release_zypper_lock
     echo "Calculating download size (dry run)…"
+    # Redirect to a temp file rather than `out=$(sudo …)`. This is NOT a style
+    # choice: command substitution runs its command in a SUBSHELL, and per
+    # sudoers(5) `timestamp_type`, a credential cached with no terminal present is
+    # keyed to the PARENT PROCESS ID — "commands run via sudo with a different
+    # parent process ID … will be authenticated separately". The GUI runs this
+    # script through QProcess, so there is no terminal, so a sudo inside `$( )`
+    # could not see sudo_init's credential and demanded a SECOND password — with
+    # sudo's own bare "password for root" wording, which reasonably alarms users.
+    # Running it directly in this shell keeps the parent pid the same as
+    # sudo_init's, so the single up-front prompt covers it (ONEUP-0037).
+    local tmp
+    tmp=$(mktemp) || return 1
+    # shellcheck disable=SC2024  # "sudo doesn't affect redirects" does not apply:
+    # $tmp is OUR OWN mktemp file, so the shell writing it as the normal user is
+    # exactly right. Taking shellcheck's advice (`| sudo tee`) would put sudo back
+    # inside a pipeline subshell and reintroduce the second password prompt above.
     if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
-        out=$(sudo env LC_ALL=C zypper --non-interactive update --dry-run 2>&1)
+        sudo env LC_ALL=C zypper --non-interactive update --dry-run > "$tmp" 2>&1
     else
-        out=$(sudo env LC_ALL=C zypper --non-interactive dup --allow-vendor-change --dry-run 2>&1)
+        sudo env LC_ALL=C zypper --non-interactive dup --allow-vendor-change --dry-run > "$tmp" 2>&1
     fi
     rc=$?
+    out=$(<"$tmp")     # no sudo here, so no second credential lookup
+    rm -f "$tmp"
     # Two wordings, because zypper renamed this line and OneUp supports both distros:
     #   older (Leap):        "Overall download size: 1.3 GiB. Already cached: 0 B."
     #   current (TW 1.14.98) "Package download size:   371.4 MiB"

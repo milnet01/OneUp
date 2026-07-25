@@ -31,6 +31,7 @@ from string import Template
 from PySide6.QtCore import (
     Property,
     QEasingCurve,
+    QPointF,
     QProcess,
     QPropertyAnimation,
     QRectF,
@@ -40,7 +41,23 @@ from PySide6.QtCore import (
     QUrl,
     Signal,
 )
-from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPixmap
+from PySide6.QtGui import (
+    QAccessible,
+    QAccessibleEvent,
+    QColor,
+    QDesktopServices,
+    QFont,
+    QFontInfo,
+    QIcon,
+    QPainter,
+    QPen,
+    QPixmap,
+)
+
+try:  # Qt 6.8+: "speak this now" for a screen reader.
+    from PySide6.QtGui import QAccessibleAnnouncementEvent
+except ImportError:  # older PySide6 (e.g. Leap) — _announce falls back to an Alert.
+    QAccessibleAnnouncementEvent = None
 from PySide6.QtNetwork import (
     QLocalServer,
     QLocalSocket,
@@ -195,19 +212,43 @@ RED = QColor("#e74c3c")
 # The stylesheet is a $-template so the swap is a plain dict substitution with no
 # brace-escaping. Selectors are keyed to object names so system dialogs keep the
 # desktop's native look.
+#
+# Accessibility (ONEUP-0028): font sizes are DERIVED from the desktop's own
+# default point size times the user's text-size setting — never hard-coded
+# pixels — so OneUp follows the system font and can be enlarged from Settings.
+# A high-contrast overlay (_HC_QSS) is appended after the base sheet when the
+# user asks for it; Qt resolves equal-specificity conflicts the CSS way, so the
+# later rule wins. Focus rings use `outline`, not `border`: a border changes the
+# widget's box and makes buttons visibly resize when focused.
 # ---------------------------------------------------------------------------
 ACCENT = "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)"
 BTN_ACCENT = "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4aa3ff, stop:1 #2f6fe0)"
+
+# Text-size choices offered in Settings. The multiplier scales every font size
+# plus the two metrics that BOUND text (badge padding, progress-bar height) —
+# every other length is decoration that doesn't crowd at a larger size.
+TEXT_SCALES = [("Normal", 1.0), ("Large", 1.2), ("Larger", 1.45)]
+
+# Font sizes as multiples of the desktop's default point size. The ratios are the
+# app's original pixel sizes over a 10 pt (~13.3 px at 96 dpi) default, so
+# "Normal" reproduces the pre-ONEUP-0028 look to within a fraction of a point.
+_FONT_SCALE = dict(fs_header=1.58, fs_med=1.05, fs_body=0.90, fs_small=0.83)
 
 _QSS = Template(r"""
 * { font-family: "Inter", "Noto Sans", "Segoe UI", "Cantarell", sans-serif; }
 QMainWindow { background: $win; }
 
+/* The painted ToggleSwitch can't be reached by a stylesheet, so the sheet hands
+   it the contrast state as a Qt property. The explicit `false` is MANDATORY: a
+   qproperty- assignment is not reverted when its rule stops matching, so without
+   it a switch would stay stuck in high-contrast paint after HC is turned off. */
+ToggleSwitch { qproperty-highContrast: false; }
+
 #Frame { border-radius: 16px; background: $accent; }
 #Card  { border-radius: 14px; background: $card; }
 
-QLabel#Header  { font-size: 21px; font-weight: 700; color: $header; }
-QLabel#Tagline { font-size: 12px; color: $tag; }
+QLabel#Header  { font-size: $fs_header; font-weight: 700; color: $header; }
+QLabel#Tagline { font-size: $fs_body; color: $tag; }
 
 #RowBorder {
     border-radius: 12px;
@@ -220,11 +261,11 @@ QLabel#Tagline { font-size: 12px; color: $tag; }
 }
 #RowCard { border-radius: 11px; background: $rowcard; }
 #RowBorder:hover #RowCard { background: $rowhov; }
-QLabel#TaskName { font-size: 14px; font-weight: 600; color: $tname; }
-QLabel#TaskDesc { font-size: 12px; color: $tdesc; }
+QLabel#TaskName { font-size: $fs_med; font-weight: 600; color: $tname; }
+QLabel#TaskDesc { font-size: $fs_body; color: $tdesc; }
 QLabel#Badge {
     background: $badgebg; color: $badgefg; border-radius: 9px;
-    padding: 2px 9px; font-size: 11px; font-weight: 600;
+    padding: $badgepad; font-size: $fs_small; font-weight: 600;
 }
 QToolButton#Disclose {
     background: transparent; border: none; padding: 0px;
@@ -232,13 +273,13 @@ QToolButton#Disclose {
 #RowDetails { background: transparent; }
 QLabel#DetailList {
     color: $tdesc; background: $logbg; border-radius: 8px; padding: 6px 8px;
-    font-family: "JetBrains Mono", "Fira Code", "Noto Sans Mono", monospace; font-size: 11px;
+    font-family: "JetBrains Mono", "Fira Code", "Noto Sans Mono", monospace; font-size: $fs_small;
 }
 QScrollArea#DetailScroll { border: none; background: transparent; }
-QLabel#SizeResult { color: $tname; font-size: 12px; font-weight: 600; }
+QLabel#SizeResult { color: $tname; font-size: $fs_body; font-weight: 600; }
 
 QPushButton#RunBtn {
-    font-size: 14px; font-weight: 700; color: #ffffff; border: none;
+    font-size: $fs_med; font-weight: 700; color: #ffffff; border: none;
     border-radius: 11px; padding: 12px 18px; background: $btn_accent;
 }
 QPushButton#RunBtn:hover {
@@ -263,20 +304,20 @@ QPushButton#LinkBtn {
 }
 QPushButton#LinkBtn:hover { color: #6fb6ff; }
 
-QLabel#Status  { font-size: 12px; color: $status; }
-QLabel#LastRun { font-size: 12px; color: $lastrun; }
+QLabel#Status  { font-size: $fs_body; color: $status; }
+QLabel#LastRun { font-size: $fs_body; color: $lastrun; }
 QLabel#LastRun[stale="true"] { color: $amber; }
 
 QProgressBar {
     border: none; border-radius: 9px; background: $progbg;
-    min-height: 20px; text-align: center; color: $status; font-size: 12px;
+    min-height: $progmin; text-align: center; color: $status; font-size: $fs_body;
 }
 QProgressBar::chunk { border-radius: 9px; background: $accent; }
 
 QPlainTextEdit#Log {
     background: $logbg; color: $logfg;
     border: 1px solid $logbd; border-radius: 10px; padding: 6px;
-    font-family: "JetBrains Mono", "Fira Code", "Noto Sans Mono", monospace; font-size: 11px;
+    font-family: "JetBrains Mono", "Fira Code", "Noto Sans Mono", monospace; font-size: $fs_small;
 }
 
 #RebootBanner {
@@ -315,6 +356,81 @@ QToolTip {
     background: $tip; color: $tipfg; border: 1px solid #4aa3ff;
     border-radius: 4px; padding: 4px 6px;
 }
+
+/* Keyboard focus reuses the HOVER look — a colour change, never a border or an
+   outline ring (a deliberate design decision: an outline draws a square around
+   our rounded buttons, because Qt ignores `outline-radius`, and a border resizes
+   the widget). So a keyboard user gets exactly the cue a mouse user gets.
+   Emitted LAST because :focus ties with :hover / :checked on specificity —
+   placed earlier, a focused *checked* toggle would show no cue at all. */
+QPushButton#RunBtn:focus {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
+}
+QPushButton#GhostBtn:focus { border-color: #4aa3ff; color: #4aa3ff; }
+QPushButton#LinkBtn:focus  { color: #6fb6ff; }
+QPushButton#BannerBtn:focus {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
+}
+QPushButton#RestartBtn:focus {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f47c68, stop:1 #e04a32);
+}
+""")
+
+# High-contrast overlay, appended AFTER the base sheet (later rule wins). It has
+# to restate every :hover / :checked / :pressed / [attr] variant the base defines
+# — a bare `QPushButton#RunBtn` rule does NOT beat `QPushButton#RunBtn:hover`,
+# because Qt follows CSS2 specificity and a pseudo-state selector outranks it.
+# Miss one and high contrast leaks the gradient back on exactly the interaction a
+# low-vision user performs.
+_HC_QSS = Template(r"""
+ToggleSwitch { qproperty-highContrast: true; }
+
+QMainWindow { background: $win; }
+#Frame { background: $border; }
+#Card  { background: $card; }
+#RowBorder { background: $border; }
+#RowCard   { background: $card; }
+#RowBorder:hover { background: $focus; }
+#RowBorder:hover #RowCard { background: $card; }
+
+QLabel#Header, QLabel#TaskName, QLabel#SizeResult, QLabel#BannerText { color: $text; }
+QLabel#Tagline, QLabel#TaskDesc, QLabel#Status, QLabel#LastRun, QLabel#DetailList { color: $text; }
+QLabel#LastRun[stale="true"] { color: $text; font-weight: 700; }
+QLabel#Badge {
+    background: $card; color: $text; border: 1px solid $border;
+    padding: $badgepad; font-size: $fs_small; font-weight: 700;
+}
+QLabel#DetailList { background: $card; border: 1px solid $border; }
+QPlainTextEdit#Log { background: $card; color: $text; border: 1px solid $border; }
+QProgressBar { background: $card; border: 1px solid $border; color: $text; }
+QProgressBar::chunk { background: $text; }
+QToolTip { background: $card; color: $text; border: 1px solid $border; }
+
+QPushButton#RunBtn, QPushButton#RestartBtn, QPushButton#BannerBtn {
+    background: $btn; color: $btntext; border: 2px solid $border; font-weight: 700;
+}
+QPushButton#RunBtn:hover, QPushButton#RunBtn:pressed,
+QPushButton#RestartBtn:hover, QPushButton#BannerBtn:hover {
+    background: $btnhov; color: $btntext; border: 2px solid $focus;
+}
+QPushButton#RunBtn:disabled { background: $card; color: $text; border: 2px dashed $border; }
+QPushButton#GhostBtn { background: $card; color: $text; border: 2px solid $border; }
+QPushButton#GhostBtn:hover   { background: $btn; color: $btntext; border: 2px solid $focus; }
+QPushButton#GhostBtn:checked { background: $btn; color: $btntext; border: 2px solid $border; }
+QPushButton#GhostBtn:disabled { background: $card; color: $text; border: 2px dashed $border; }
+QPushButton#LinkBtn { color: $link; text-decoration: underline; }
+QPushButton#LinkBtn:hover { color: $text; }
+
+#RebootBanner { background: $card; border: 2px solid $errbd; }
+#InfoBanner   { background: $card; border: 2px solid $infobd; }
+#WarnBanner   { background: $card; border: 2px solid $warnbd; }
+
+/* Focus reuses the hover look here too — no outline ring (see the base sheet). */
+QPushButton#RunBtn:focus, QPushButton#RestartBtn:focus, QPushButton#BannerBtn:focus,
+QPushButton#GhostBtn:focus {
+    background: $btnhov; color: $btntext; border: 2px solid $focus;
+}
+QPushButton#LinkBtn:focus { color: $text; }
 """)
 
 _DARK = dict(
@@ -323,7 +439,7 @@ _DARK = dict(
     badgebg="#20304a", badgefg="#cfe0ff", logbg="#0b0e12", logfg="#cdd6e2",
     logbd="#262d38", status="#c3ccd9", lastrun="#828d9d", amber="#f5a623", progbg="#0c0f13",
     ghostbd="#38414f", ghostfg="#c7d0dd", disbg="#262b34", disfg="#aeb7c4",
-    tip="#1a1f27", tipfg="#e9edf3",
+    tip="#1a1f27", tipfg="#e9edf3", focus="#66b8ff",
 )
 _LIGHT = dict(
     win="#eef1f5", card="#ffffff", header="#1b2027", tag="#5c6673",
@@ -331,15 +447,66 @@ _LIGHT = dict(
     badgebg="#dbe8ff", badgefg="#1f4e9c", logbg="#f6f8fa", logfg="#2a2f36",
     logbd="#d5dbe2", status="#3a424d", lastrun="#8a94a2", amber="#b5730a", progbg="#dfe4ea",
     ghostbd="#c4ccd6", ghostfg="#3a424d", disbg="#d5dbe2", disfg="#9aa3ad",
-    tip="#ffffff", tipfg="#1b2027",
+    tip="#ffffff", tipfg="#1b2027", focus="#0b5fd0",
+)
+
+# High-contrast palettes: pure black/white surfaces and text (21:1), one saturated
+# focus/attention hue, and no dimmed secondary text — "dim" grey is the first thing
+# that fails for a low-vision user, so HC deliberately has none.
+_HC_DARK = dict(
+    win="#000000", card="#000000", text="#ffffff", border="#ffffff",
+    focus="#ffd400", btn="#ffffff", btntext="#000000", btnhov="#ffd400",
+    link="#7fd4ff", errbd="#ff8080", warnbd="#ffd400", infobd="#7fd4ff",
+)
+_HC_LIGHT = dict(
+    win="#ffffff", card="#ffffff", text="#000000", border="#000000",
+    focus="#0000cc", btn="#000000", btntext="#ffffff", btnhov="#0000cc",
+    link="#0000cc", errbd="#a00000", warnbd="#7a4f00", infobd="#00008b",
 )
 
 
-def build_theme(dark: bool) -> str:
+def _font_metrics(scale: float) -> dict:
+    """Font sizes (in pt) and the two text-bounding metrics, for `scale`.
+
+    Sizes are derived from the DESKTOP's default point size so OneUp follows the
+    system font setting; `scale` is the user's own text-size choice on top. The
+    clamp defends against Qt's "font was specified in pixels" sentinel — that is
+    -1, which is TRUTHY, so `pointSizeF() or 10.0` would silently pass it through
+    and emit negative point sizes that Qt discards, leaving the app unstyled.
+    """
+    base = QFontInfo(QApplication.font()).pointSizeF() if QApplication.instance() else 0.0
+    if not 6.0 <= base <= 30.0:
+        base = 10.0
+    metrics = {k: f"{base * mult * scale:.1f}pt" for k, mult in _FONT_SCALE.items()}
+    metrics["badgepad"] = f"{round(2 * scale)}px {round(9 * scale)}px"
+    metrics["progmin"] = f"{round(20 * scale)}px"
+    return metrics
+
+
+def build_theme(dark: bool, scale: float = 1.0, high_contrast: bool = False) -> str:
     palette = dict(_DARK if dark else _LIGHT)
     palette["accent"] = ACCENT
     palette["btn_accent"] = BTN_ACCENT
-    return _QSS.substitute(palette)
+    metrics = _font_metrics(scale)
+    palette.update(metrics)
+    qss = _QSS.substitute(palette)
+    if high_contrast:
+        hc = dict(_HC_DARK if dark else _HC_LIGHT)
+        hc.update(metrics)
+        qss += _HC_QSS.substitute(hc)
+    return qss
+
+
+def apply_app_theme(app: QApplication):
+    """Install the stylesheet for the desktop's colour scheme plus the user's
+    accessibility preferences. The single place the QSS is applied — startup, a
+    light/dark switch, and the two Settings controls all route through here, so a
+    change takes effect live with no restart and no window rebuild."""
+    s = QSettings("OneUp", "OneUp")
+    app.setStyleSheet(build_theme(
+        current_is_dark(app),
+        scale=float(s.value("text_scale", 1.0, type=float)),
+        high_contrast=bool(s.value("high_contrast", False, type=bool))))
 
 
 def current_is_dark(app: QApplication) -> bool:
@@ -355,7 +522,14 @@ def _version_tuple(v: str) -> list[int]:
 
 
 class ToggleSwitch(QAbstractButton):
-    """A sliding on/off switch. Track is green when on, red when off."""
+    """A sliding on/off switch. Track is green when on, red when off — plus a
+    SHAPE (a bar when on, an open circle when off) so the state survives
+    colour blindness, and a focus ring so keyboard users can see where they are.
+
+    Being a checkable QAbstractButton, Qt maps this to an accessible CheckBox
+    with a real checked state, so a screen reader announces on/off for free —
+    all it needs from the caller is an accessible name.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -365,6 +539,7 @@ class ToggleSwitch(QAbstractButton):
         self.setFixedSize(56, 30)
         self._margin = 3
         self._pos = 1.0  # 0.0 = off (left), 1.0 = on (right)
+        self._high_contrast = False   # set from the stylesheet (qproperty-highContrast)
         self._anim = QPropertyAnimation(self, b"knobPos", self)
         self._anim.setDuration(130)
         self._anim.setEasingCurve(QEasingCurve.InOutCubic)
@@ -385,6 +560,33 @@ class ToggleSwitch(QAbstractButton):
 
     knobPos = Property(float, get_knob_pos, set_knob_pos)
 
+    def get_high_contrast(self) -> bool:
+        return self._high_contrast
+
+    def set_high_contrast(self, value: bool):
+        self._high_contrast = bool(value)
+        self.update()
+
+    # Set by the stylesheet, not by code — see the qproperty- note in _QSS.
+    highContrast = Property(bool, get_high_contrast, set_high_contrast)
+
+    def _paint_state_shape(self, p: QPainter, diameter: float):
+        """A bar for on, an open circle for off, drawn in the track half OPPOSITE
+        the knob (the iOS convention). Painted as geometry rather than a text
+        glyph: a painted widget has no font-fallback chain, so a missing character
+        would silently vanish and take the only colour-independent cue with it."""
+        cx = (self._margin + diameter / 2 if self.isChecked()
+              else self.width() - self._margin - diameter / 2)
+        cy = self.height() / 2
+        p.setBrush(Qt.NoBrush)
+        p.setPen(QPen(QColor("#ffffff"), 2))
+        if self.isChecked():
+            half = diameter * 0.26
+            p.drawLine(QPointF(cx, cy - half), QPointF(cx, cy + half))
+        else:
+            r = diameter * 0.22
+            p.drawEllipse(QRectF(cx - r, cy - r, 2 * r, 2 * r))
+
     def paintEvent(self, _event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
@@ -399,8 +601,26 @@ class ToggleSwitch(QAbstractButton):
         diameter = self.height() - 2 * self._margin
         travel = self.width() - 2 * self._margin - diameter
         x = self._margin + self._pos * travel
+        self._paint_state_shape(p, diameter)
+
+        if self._high_contrast:
+            # Outline the track so the switch stays distinguishable from a pure
+            # black/white surface, and rim the knob so it reads against the track.
+            p.setBrush(Qt.NoBrush)
+            p.setPen(QPen(QColor("#ffffff"), 2))
+            p.drawRoundedRect(QRectF(1, 1, self.width() - 2, self.height() - 2),
+                              radius, radius)
+            p.setPen(QPen(QColor("#000000"), 1))
+        else:
+            p.setPen(Qt.NoPen)
         p.setBrush(QColor("#ffffff"))
         p.drawEllipse(QRectF(x, self._margin, diameter, diameter))
+
+        # No focus ring is drawn, by explicit design decision (2026-07-25): rings
+        # and outlines around these controls were rejected as visual clutter. The
+        # state SHAPE above is what carries meaning; Qt still reports focus to a
+        # screen reader, so keyboard operability is unaffected — only the sighted
+        # keyboard-only cue is absent.
 
 
 class TaskRow(QFrame):
@@ -416,8 +636,15 @@ class TaskRow(QFrame):
     def __init__(self, key: str, title: str, description: str):
         super().__init__()
         self.key = key
+        self.title = title
+        self._description = description   # kept: _render_badge folds it into the
+                                          # switch's accessible description
         self.setObjectName("RowBorder")
         self.switch = ToggleSwitch()
+        # The switch carries no text, so without a name a screen reader announces
+        # the app's PRIMARY control as an unnamed check box (ONEUP-0028).
+        self.switch.setAccessibleName(f"{title} — include in this update")
+        self.switch.setAccessibleDescription(description)
 
         name = QLabel(title)
         name.setObjectName("TaskName")
@@ -444,6 +671,9 @@ class TaskRow(QFrame):
         self.disclosure.setCursor(Qt.CursorShape.PointingHandCursor)
         self.disclosure.setVisible(False)
         self.disclosure.toggled.connect(self._on_disclosure)
+        # An arrow-only button is unnamed to a screen reader. State-agnostic
+        # wording, since the control toggles — Qt reports expanded/collapsed itself.
+        self.disclosure.setAccessibleName(f"Packages that {title.lower()} will change")
 
         inner = QFrame()
         inner.setObjectName("RowCard")
@@ -473,6 +703,9 @@ class TaskRow(QFrame):
         scroll.setWidgetResizable(True)
         scroll.setMaximumHeight(180)
         scroll.setWidget(self._items_label)
+        # Focusable (it scrolls), so it needs a name of its own — the arrow key
+        # user lands here and would otherwise hear an unnamed scroll area.
+        scroll.setAccessibleName(f"List of packages that {title.lower()} will change")
         dcol.addWidget(scroll)
 
         self.size_btn = QPushButton("Show download size")
@@ -541,13 +774,22 @@ class TaskRow(QFrame):
 
     def _render_badge(self):
         parts = [p for p in (self._badge_text, self._timing) if p]
-        self.badge.setText("  ·  ".join(parts))
+        text = "  ·  ".join(parts)
+        self.badge.setText(text)
         self.badge.setVisible(bool(parts))
+        # The outcome otherwise lives only on an unfocusable label. Fold it into
+        # the row's own control so a screen-reader user can Tab to it and hear
+        # "System packages … 3 installed · 42s" (ONEUP-0028).
+        self.switch.setAccessibleDescription(
+            f"{self._description} {text}".strip() if text else self._description)
 
     def clear_badge(self):
         self._badge_text = ""
         self._timing = ""
-        self.badge.setVisible(False)
+        # Routed through _render_badge, not cleared inline: _launch calls this on
+        # every row at the start of each run, and without the re-render the switch
+        # would keep announcing the PREVIOUS run's outcome on a row that hasn't run.
+        self._render_badge()
 
     def clear_details(self):
         """Reset the expandable panel between runs."""
@@ -679,6 +921,7 @@ class RepoManagerDialog(QDialog):
         scroll.setWidgetResizable(True)
         scroll.setWidget(inner)
         scroll.setMinimumHeight(280)
+        scroll.setAccessibleName("Repository list")
         root.addWidget(scroll, 1)
 
         btns = QHBoxLayout()
@@ -724,6 +967,9 @@ class RepoManagerDialog(QDialog):
             lay.addWidget(rm, 0)
         switch = ToggleSwitch()
         switch.setChecked(repo["enabled"])
+        # Named, but NOT with the on/off state baked in ("… — enabled" would
+        # announce "enabled" for a disabled repo). Qt reports checked state itself.
+        switch.setAccessibleName(f"{repo['name']} — include this repository")
         lay.addWidget(switch, 0, Qt.AlignVCenter)
         entry["switch"] = switch
         self._rows.append(entry)
@@ -839,6 +1085,12 @@ class SettingsDialog(QDialog):
             "Copy a bug report — version info plus your latest update log — to the "
             "clipboard, so filing an issue doesn't mean hunting through hidden folders.",
             parent.diag_btn))
+        root.addWidget(self._row(
+            "Make all text bigger. OneUp already follows your desktop's font size — "
+            "this enlarges it further.", parent.textsize_btn))
+        root.addWidget(self._row(
+            "Switch to high-contrast colours: plain black and white with strong "
+            "outlines, for easier reading.", parent.contrast_btn))
         self.status = QLabel("")
         self.status.setObjectName("Tagline")
         root.addWidget(self.status)
@@ -895,6 +1147,7 @@ class RollbackDialog(QDialog):
         root.addWidget(intro)
 
         self.list = QListWidget()
+        self.list.setAccessibleName("Restore points")
         for sid, date, desc in reversed(snapshots):
             item = QListWidgetItem(f"{date}  —  {desc or 'snapshot'}   (#{sid})")
             item.setData(Qt.UserRole, sid)
@@ -977,6 +1230,7 @@ class Updater(QMainWindow):
         self._traycheck_proc = None
         self._traycheck_buf = ""
         self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
+        self._last_announcement = ""   # what _announce last spoke (see _announce)
 
         # Gradient ring: a 2px accent border (outer #Frame) around the card.
         outer_frame = QFrame()
@@ -1070,6 +1324,25 @@ class Updater(QMainWindow):
                                  "the clipboard, ready to paste into a bug report")
         self.diag_btn.clicked.connect(self.copy_diagnostics)
 
+        # Accessibility controls (ONEUP-0028), laid out in the Settings popup but
+        # owned here like the toggles above. Text size cycles through TEXT_SCALES
+        # rather than using a combo box, matching the existing button idiom.
+        self.textsize_btn = QPushButton()
+        self.textsize_btn.setObjectName("GhostBtn")
+        self.textsize_btn.setCursor(Qt.PointingHandCursor)
+        self.textsize_btn.setToolTip("Make all text larger (on top of your desktop's font size)")
+        self._refresh_textsize_label()
+        self.textsize_btn.clicked.connect(self.on_textsize_clicked)
+
+        self.contrast_btn = QPushButton()
+        self.contrast_btn.setObjectName("GhostBtn")
+        self.contrast_btn.setCheckable(True)
+        self.contrast_btn.setCursor(Qt.PointingHandCursor)
+        self.contrast_btn.setToolTip("Plain black-and-white colours with strong outlines")
+        self.contrast_btn.setChecked(self.settings.value("high_contrast", False, type=bool))
+        self._refresh_contrast_label()
+        self.contrast_btn.toggled.connect(self.on_contrast_toggled)
+
         self.settings_btn = QPushButton("⚙ Settings")
         self.settings_btn.setObjectName("GhostBtn")
         self.settings_btn.setCursor(Qt.PointingHandCursor)
@@ -1144,24 +1417,31 @@ class Updater(QMainWindow):
         # Progress + current step.
         self.status = QLabel("Ready.")
         self.status.setObjectName("Status")
+        self.status.setAccessibleName("Current status")
         root.addWidget(self.status)
         self.bar = QProgressBar()
         self.bar.setTextVisible(True)
         self.bar.setRange(0, 1)
         self.bar.setValue(0)
+        self.bar.setAccessibleName("Update progress")
         root.addWidget(self.bar)
 
         # Banners (all hidden until needed).
+        # Each banner is named for its ROLE, so a screen reader describes what the
+        # frame is rather than announcing an unnamed panel (ONEUP-0028).
         self.reboot_banner, self.reboot_label, self.restart_btn = self._make_banner(
-            "RebootBanner", "RestartBtn", "Restart now", self.restart_now)
+            "RebootBanner", "RestartBtn", "Restart now", self.restart_now,
+            name="Restart recommended")
         root.addWidget(self.reboot_banner)
 
         self.services_banner, self.services_label, self.services_btn = self._make_banner(
-            "InfoBanner", "BannerBtn", "Restart services", self.restart_services)
+            "InfoBanner", "BannerBtn", "Restart services", self.restart_services,
+            name="Services should restart")
         root.addWidget(self.services_banner)
 
         self.warn_banner, self.warn_label, self.warn_btn = self._make_banner(
-            "WarnBanner", "BannerBtn", "Show details", self._warn_action)
+            "WarnBanner", "BannerBtn", "Show details", self._warn_action,
+            name="Warning")
         # A copy-the-suggested-command button, shown only when a hint carries a
         # runnable command the app couldn't run for you — the copy-fallback.
         self.warn_copy_btn = QPushButton("Copy command")
@@ -1178,6 +1458,9 @@ class Updater(QMainWindow):
         # unchanged when only one remedy is armed.
         self.warn_btn2 = QPushButton("")
         self.warn_btn2.setObjectName("BannerBtn")
+        # Its label is set only when shown, so it needs a standing accessible name
+        # — otherwise it is a nameless button in the widget tree.
+        self.warn_btn2.setAccessibleName("Alternative fix for this warning")
         self.warn_btn2.setCursor(Qt.PointingHandCursor)
         self.warn_btn2.clicked.connect(self._fix_keys_and_retry)
         self.warn_btn2.setVisible(False)
@@ -1185,7 +1468,8 @@ class Updater(QMainWindow):
         root.addWidget(self.warn_banner)
 
         self.appupdate_banner, self.appupdate_label, self.appupdate_btn = self._make_banner(
-            "InfoBanner", "BannerBtn", "View release", self._open_release)
+            "InfoBanner", "BannerBtn", "View release", self._open_release,
+            name="OneUp update available")
         root.addWidget(self.appupdate_banner)
 
         # Rollback link (shown after the system actually changed).
@@ -1215,6 +1499,10 @@ class Updater(QMainWindow):
         self.log.setObjectName("Log")
         self.log.setReadOnly(True)
         self.log.setPlaceholderText("Update details will appear here when you run an update.")
+        # Named, focusable and readable on demand. Deliberately NOT announced line
+        # by line — a run emits hundreds of zypper lines (see the spec's Out of
+        # scope): a screen reader would be unusable.
+        self.log.setAccessibleName("Update log")
         self.log.setMinimumHeight(180)
         self.log.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         root.addWidget(self.log, 1)
@@ -1227,8 +1515,23 @@ class Updater(QMainWindow):
         # Last-run line.
         self.last_run = QLabel()
         self.last_run.setObjectName("LastRun")
+        self.last_run.setAccessibleName("Last update run")
         root.addWidget(self.last_run)
         self.refresh_last_run()
+
+        # Tab order must follow the VISUAL order. Creation order put Recenter
+        # before Repositories while the layout shows Repositories first, so tabbing
+        # jumped sideways (ONEUP-0028).
+        self.setTabOrder(self.settings_btn, self.repos_btn)
+        self.setTabOrder(self.repos_btn, self.recenter_btn)
+        self.setTabOrder(self.recenter_btn, self.about_btn)
+        keys = [k for k, _t, _d in TASKS]
+        self.setTabOrder(self.about_btn, self.rows[keys[0]].switch)
+        # zip stops at the shorter list on purpose — it walks consecutive pairs.
+        for key, nxt in zip(keys, keys[1:], strict=False):
+            self.setTabOrder(self.rows[key].switch, self.rows[nxt].switch)
+        self.setTabOrder(self.rows[keys[-1]].switch, self.check_btn)
+        self.setTabOrder(self.check_btn, self.run_btn)
 
         # Restore the last size + position, if we saved one before.
         geo = self.settings.value("geometry")
@@ -1241,15 +1544,43 @@ class Updater(QMainWindow):
         # Non-blocking: reflect whether passwordless authorization is active.
         self._query_auth_status()
 
+    # ---- screen-reader announcements (ONEUP-0028) --------------------------
+    def _announce(self, text: str, source: QWidget | None = None):
+        """Speak `text` to a screen reader, if one is listening.
+
+        `source` is the widget whose ON-SCREEN TEXT IS this message: the pre-Qt-6.8
+        fallback fires an Alert on it and lets the reader read that text, so it must
+        never be handed a widget whose text says something else. The fallback
+        deliberately does not setAccessibleName() on the borrowed label — an
+        explicit name on a QLabel is permanent, which would make every later
+        setText() invisible to assistive tech.
+
+        _last_announcement is recorded unconditionally so the headless smoke test
+        can assert what WOULD be spoken (QAccessible.isActive() is False offscreen).
+        """
+        self._last_announcement = text
+        if not text or not QAccessible.isActive():
+            return
+        if QAccessibleAnnouncementEvent is not None:
+            QAccessible.updateAccessibility(QAccessibleAnnouncementEvent(self, text))
+        else:
+            QAccessible.updateAccessibility(
+                QAccessibleEvent(source or self.status, QAccessible.Event.Alert))
+
     # ---- banner helper ----------------------------------------------------
-    def _make_banner(self, frame_obj: str, btn_obj: str, btn_text: str, slot):
+    def _make_banner(self, frame_obj: str, btn_obj: str, btn_text: str, slot,
+                     name: str = ""):
         fr = QFrame()
         fr.setObjectName(frame_obj)
+        if name:
+            fr.setAccessibleName(name)
         lay = QHBoxLayout(fr)
         lay.setContentsMargins(14, 10, 12, 10)
         lbl = QLabel("")
         lbl.setObjectName("BannerText")
         lbl.setWordWrap(True)
+        if name:
+            lbl.setAccessibleName(name)
         btn = QPushButton(btn_text)
         btn.setObjectName(btn_obj)
         btn.setCursor(Qt.PointingHandCursor)
@@ -1286,6 +1617,10 @@ class Updater(QMainWindow):
         if cmd:
             self.warn_copy_btn.setText("Copy command")
         self.warn_banner.setVisible(True)
+        # A banner that merely appears is silent to a screen reader. Announced last
+        # in on_finished's ordering, so the warning — the more urgent message —
+        # is the one left standing rather than the summary.
+        self._announce(f"Warning: {text}", self.warn_label)
 
     def _copy_hint_command(self):
         if not self._hint_command:
@@ -1495,7 +1830,17 @@ for (var i = 0; i < clients.length; i++) {{
             p.setPen(QColor("#ffffff"))
             p.setBrush(QColor(TRAY_ATTENTION_COLOR))
             d = 26
-            p.drawEllipse(pm.width() - d - 3, pm.height() - d - 3, d, d)
+            x, y = pm.width() - d - 3, pm.height() - d - 3
+            p.drawEllipse(x, y, d, d)
+            # An exclamation mark inside the disc, so "updates waiting" differs in
+            # SHAPE and not only in colour — an amber dot alone is invisible to a
+            # colour-blind user (ONEUP-0028).
+            font = QFont()
+            font.setBold(True)
+            font.setPixelSize(int(d * 0.72))
+            p.setFont(font)
+            p.setPen(QColor("#3a2600"))
+            p.drawText(QRectF(x, y, d, d), Qt.AlignCenter, "!")
             p.end()
         return QIcon(pm)
 
@@ -1798,6 +2143,35 @@ for (var i = 0; i < clients.length; i++) {{
             self._remove_autostart()             # does NOT turn the tray off
         self._refresh_startboot_label()
 
+    # ---- accessibility settings (ONEUP-0028) ------------------------------
+    def _text_scale_index(self) -> int:
+        """Which TEXT_SCALES entry the saved setting corresponds to (0 if the
+        stored value is absent or doesn't match one — a hand-edited config must
+        never leave the button label disagreeing with the applied size)."""
+        current = float(self.settings.value("text_scale", 1.0, type=float))
+        for i, (_label, mult) in enumerate(TEXT_SCALES):
+            if abs(mult - current) < 0.01:
+                return i
+        return 0
+
+    def _refresh_textsize_label(self):
+        self.textsize_btn.setText(f"Text size: {TEXT_SCALES[self._text_scale_index()][0]}")
+
+    def on_textsize_clicked(self):
+        nxt = (self._text_scale_index() + 1) % len(TEXT_SCALES)
+        self.settings.setValue("text_scale", TEXT_SCALES[nxt][1])
+        self._refresh_textsize_label()
+        apply_app_theme(QApplication.instance())
+
+    def _refresh_contrast_label(self):
+        self.contrast_btn.setText(
+            "High contrast: on" if self.contrast_btn.isChecked() else "High contrast: off")
+
+    def on_contrast_toggled(self, on: bool):
+        self.settings.setValue("high_contrast", on)
+        self._refresh_contrast_label()
+        apply_app_theme(QApplication.instance())
+
     # ---- passwordless authorization (opt-in, ONEUP-0023) ------------------
     def _refresh_auth_label(self):
         on = self.auth_btn.isChecked()
@@ -1936,8 +2310,11 @@ for (var i = 0; i < clients.length; i++) {{
             relative = ("today" if days <= 0 else
                         "yesterday" if days == 1 else f"{days} days ago")
             stale = days >= STALE_AFTER_DAYS
+            # "Overdue" in WORDS as well as amber: colour alone carries no meaning
+            # for a colour-blind user. ⚠ matches the banners' existing idiom.
+            overdue = "  ·  ⚠ overdue" if stale else ""
             self.last_run.setText(
-                f"Last run: {when:%d %b %Y, %H:%M}  ·  {relative}  —  {data['status']}")
+                f"Last run: {when:%d %b %Y, %H:%M}  ·  {relative}  —  {data['status']}{overdue}")
         except (OSError, ValueError, KeyError):
             self.last_run.setText("Last run: never")
         # Amber the line once a run is overdue: flip the dynamic property and
@@ -2360,6 +2737,10 @@ for (var i = 0; i < clients.length; i++) {{
             self.status.setText(f"{label}…")
             self.bar.setFormat(f"{label}  (step {index} of {total})")
             self.bar.setValue(int(index) - 1)
+            # Progress out loud: without this a blind user gets silence for the
+            # whole run. Announced AFTER status.setText, so the fallback path's
+            # Alert reads text that already matches.
+            self._announce(f"{label}, step {index} of {total}")
         elif tag == "STEP_END":
             # Clamp: a duplicate/orphaned STEP_END (markers can be spliced) must not
             # push the bar past the run's total step count.
@@ -2371,7 +2752,12 @@ for (var i = 0; i < clients.length; i++) {{
             # badge --check shows, but for a real run: "3 installed", "Up to date", …).
             row = self.rows.get(key)
             if row:
-                row.set_badge(self._step_badge(status, detail))
+                badge = self._step_badge(status, detail)
+                row.set_badge(badge)
+                # The outcome, spoken once. A later TIMING/FREED marker refines the
+                # badge but is NOT re-announced — it stays reachable by Tab via the
+                # switch's accessible description. Two utterances per step is the budget.
+                self._announce(f"{row.title}: {badge}", row.badge)
             if status == "fail":
                 self._failed_steps.append(key)
         elif tag == "TIMING":
@@ -2523,6 +2909,7 @@ for (var i = 0; i < clients.length; i++) {{
             self.status.setText(
                 f"{total} update(s) available — turn on what you want and hit Run."
                 if total else "Everything is up to date. 🎉")
+            self._announce(self.status.text())
             self._notify_when_away(
                 f"{total} update(s) available." if total else "Everything is up to date.")
             self._apply_tray_total(total)
@@ -2543,6 +2930,10 @@ for (var i = 0; i < clients.length; i++) {{
             installed = "finished"
         self.status.setText(f"All done — {installed}." if ok
                             else "Finished — some steps had errors (see details).")
+        # Announced here, where the summary is set. Any warning banner below
+        # announces afterwards and so supersedes this (announcements are Polite
+        # priority, and the warning is the message that matters more).
+        self._announce(self.status.text())
         self.save_last_run("OK" if ok else "errors")
 
         # Reboot vs the lighter "just restart these services" path.
@@ -2813,12 +3204,12 @@ def main():
     app.setApplicationName(APP_NAME)
     app.setDesktopFileName(APP_ID)  # ties the window to its .desktop/icon
 
-    def apply_theme():
-        app.setStyleSheet(build_theme(current_is_dark(app)))
-
-    apply_theme()
+    # One theming entry point (module-level apply_app_theme): it folds in the
+    # user's text-size and high-contrast settings, and the Settings controls call
+    # the same function, so every path stays consistent.
+    apply_app_theme(app)
     try:  # re-theme live when the desktop switches light/dark (Qt 6.5+)
-        app.styleHints().colorSchemeChanged.connect(lambda *_: apply_theme())
+        app.styleHints().colorSchemeChanged.connect(lambda *_: apply_app_theme(app))
     except (AttributeError, TypeError):
         pass
 

@@ -304,3 +304,25 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** When OneUp asked for your password from a step launched by the window (rather than a terminal), it had no way to show the prompt and simply failed. It can now always show the KDE password popup.
   Kind: fix.
   Source: user-report-2026-07-25 (log: "sudo: a terminal is required to read the password").
+
+- ✅ [ONEUP-0037] **Stop the download-size check asking for a password twice, and label every prompt.**
+  Root cause: `out=$(sudo env … zypper --dry-run)` ran the privileged
+  command in a COMMAND-SUBSTITUTION SUBSHELL. Per sudoers(5)
+  `timestamp_type`, a credential cached with no terminal present is keyed
+  to the PARENT PROCESS ID — "commands run via sudo with a different
+  parent process ID … will be authenticated separately" — and the GUI runs
+  the engine through QProcess, so there is no terminal. sudo_init's
+  up-front credential was therefore invisible to that call: before
+  ONEUP-0036 it failed outright, and after it (askpass exported) it
+  prompted a SECOND time. Fix: redirect to a mktemp file and read it back
+  with `out=$(<"$tmp")`, keeping sudo in the same shell — and hence the
+  same parent pid — as sudo_init, so the one up-front prompt covers it.
+  Trust hardening in the same change: `SUDO_PROMPT` is now exported with a
+  OneUp-labelled message, because sudo's own default under this distro's
+  `targetpw` reads "[sudo] password for root" — an unattributable request
+  for the root password, which a user should refuse on principle. A
+  shellcheck SC2024 disable documents why `| sudo tee` is the wrong
+  "fix" here (it would put sudo back in a subshell).
+  **Layman:** Checking the download size asked for your password twice in a row, and the second box was an unlabelled request for the root password — which understandably looks suspicious. Now it asks once, and any prompt says it is OneUp asking and why.
+  Kind: fix.
+  Source: user-report-2026-07-25 (two prompts back to back; second read "password for root").
