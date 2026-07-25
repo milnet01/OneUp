@@ -155,6 +155,11 @@ Dependency policy (CI actions, runtimes, PySide6, base images) is a standing rul
   new steps tolerant of a missing binary.
 - Runtime state lives in `~/.local/state/oneup/` (`history.json`, `logs/`); the engine also
   mirrors each run's log to `~/Documents/update-logs/`.
+- **`.roadmap-counter` is deliberately git-ignored** — it is local allocator state, and
+  tracking a one-line counter means every branch that allocates a roadmap ID conflicts on
+  it. `ROADMAP.md` is the real record. On a fresh clone the file is absent, and appending a
+  bullet refuses (rather than restarting IDs at 1, so a collision is impossible); recreate
+  it with the one-liner documented in `.gitignore`.
 - **Accessibility is a standing requirement (ONEUP-0028).** Any new interactive widget
   needs an accessible name (`setAccessibleName`) — `tests/gui-smoke.py` sweeps every
   focusable widget and fails on a nameless one. **State must never be signalled by

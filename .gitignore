@@ -15,3 +15,16 @@ build/
 # Editor / OS cruft
 *~
 .DS_Store
+
+# Roadmap ID allocator — local state, not shared history. Tracking it means every
+# branch that allocates an ID conflicts on the same one-line file. ROADMAP.md is
+# the real record; this just remembers the last number handed out.
+#
+# Absent (e.g. a fresh clone), `roadmap_log op:"append"` REFUSES rather than
+# restarting from 1 — so IDs can never silently collide, but you do need to
+# recreate it before appending a bullet. Rebuild from the roadmap itself:
+#
+#   grep -oE 'ONEUP-[0-9]+' ROADMAP.md | grep -oE '[0-9]+' \
+#       | sort -n | tail -1 | sed 's/^0*//' > .roadmap-counter
+#
+.roadmap-counter
