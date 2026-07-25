@@ -268,6 +268,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The app's main code file has grown very large. Split it into smaller, well-named pieces so it's easier to find and change things, without altering how the app behaves.
   Kind: refactor.
   Source: user-request-2026-07-24.
+  Progress (2026-07-25): the figure in the headline is stale — updater.py is
+  now 3,680 lines, not ~2,150, so this is overdue rather than optional. Raised
+  by the user in the same session as ONEUP-0048/0049, alongside the wider
+  question of rewriting the Bash engine in Python; see ONEUP-0052, which
+  records why the two are worth keeping separate.
 
 - ✅ [ONEUP-0035] **Fix "Show download size" always reporting 0 B, and never report a size the dry run didn't earn.**
   Two defects, one symptom. (1) Stale parse: run_size grepped zypper's
@@ -556,3 +561,37 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The tests no longer depend on what the computer happens to be doing, and can no longer disturb a real update that is running.
   Kind: test.
   Source: in-session-2026-07-25.
+
+- 💭 [ONEUP-0052] **Consider rewriting the Bash engine in Python for finer process control.**
+  Raised by the user after ONEUP-0048. Recorded rather than actioned,
+  because the evidence cuts both ways and the decision should be made on
+  purpose rather than in the middle of a bug fix.
+
+  Not a reason to rewrite: none of that session's faults were Bash's.
+  zypper's silence, the mirror's speed and sudo's per-parent-pid
+  credential cache are all identical from Python (we would still be
+  shelling out to zypper), and the dialog placement bug was in the Python
+  half already.
+
+  A real reason to rewrite: supervising the child process. Timeouts,
+  reading output as it arrives, cancellation and byte accounting are all
+  fiddly in Bash — the per-repository budget had to be routed through
+  `sudo timeout` because the shell cannot kill a root child itself, and
+  57 sudo call sites each have to stay out of a subshell or they cost
+  another password prompt.
+
+  What makes it feasible: the 197 engine tests assert on the @@MARKER@@
+  output, not on Bash internals, so a Python engine could be validated
+  against the same suite unchanged.
+
+  What makes it risky: those same tests encode painful, hard-won
+  behaviour — the seven-prompt bug, orphaned keep-alives, surviving a
+  broken stdout pipe, cooperative stop, lock detection. A rewrite risks
+  re-introducing exactly what was just fixed, for a moderate payoff.
+
+  Keep separate from ONEUP-0034 (splitting updater.py). That refactor is
+  overdue, independently valuable and far lower risk; it does not need
+  this decision made first.
+  **Layman:** Weighing whether the part of OneUp that does the actual updating would be better written in Python, like the window is.
+  Kind: investigate.
+  Source: user-question-2026-07-25.
