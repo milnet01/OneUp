@@ -319,6 +319,69 @@ check_absent "size mode never really updates"  "BUG: real transaction"  "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# Current zypper (1.14.98 / libzypp 17.38) renamed the summary line: it prints
+# "Package download size:   371.4 MiB" and dropped "Overall download size:" /
+# "Already cached:" entirely (verified absent from /usr/bin/zypper's strings).
+# The old wording above is kept for Leap's older zypper, so the parse must accept
+# BOTH — this test is what the mock's stale wording hid.
+echo "TEST: --size=system parses current zypper's 'Package download size' wording"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *dup* && "$*" == *--dry-run* ]]; then
+  echo "137 packages to upgrade."
+  echo ""
+  echo "Package download size:   371.4 MiB"
+  echo ""
+  echo "Package install size change:"
+  echo "              |      1.42 GiB  required by packages that will be installed"
+  exit 0
+fi
+[[ "$*" == *dup* || "$*" == *update* ]] && { echo "BUG: real transaction in --size" >&2; exit 99; }
+exit 0
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --size=system)
+check        "size marker carries the new-wording figure" "@@SIZE@@|system|371.4 MiB" "$out"
+check_absent "new-wording size is not reported as nothing" "nothing to fetch" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# A failed dry run (cancelled password prompt, held package lock) must NOT be
+# reported as a confident "0 B to download" — the same never-claim-what-you-
+# didn't-earn rule the step tests enforce. It stays silent on SIZE, hints, and
+# exits non-zero so the GUI re-arms its "Show download size" link.
+echo "TEST: --size never reports 0 B when the dry run itself failed"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *--dry-run* ]]; then
+  echo "sudo: a terminal is required to read the password" >&2
+  exit 1
+fi
+exit 0
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --size=system); rc=$?
+check_absent "a failed dry run reports no size at all" "@@SIZE@@" "$out"
+check        "a failed dry run hints why"              "@@HINT@@" "$out"
+# Exit code asserted inline (the suite's convention — there is no check() for rc).
+if [[ $rc -ne 0 ]]; then echo "  ok   - a failed dry run exits non-zero"; PASS=$((PASS+1));
+else echo "  FAIL - a failed dry run exits non-zero (rc=$rc)"; FAIL=$((FAIL+1)); fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# zypper's 100-103 exits are INFORMATIONAL (update/reboot/restart needed), not
+# failures — a nothing-to-fetch answer under one of them is still trustworthy.
+echo "TEST: --size treats zypper's informational exit codes as success"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\n[[ "$*" == *--dry-run* ]] && { echo "Nothing to do."; exit 103; }\nexit 0\n' > "$d/zypper"
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --size=system)
+check "informational exit still reports 0 B" "@@SIZE@@|system|0 B" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: --size with nothing to fetch reports 0 B (a definite answer, not a failure)"
 d=$(mktemp -d); setup_common "$d"
 printf '#!/usr/bin/env bash\n[[ "$*" == *--dry-run* ]] && { echo "Nothing to do."; exit 0; }\nexit 0\n' > "$d/zypper"

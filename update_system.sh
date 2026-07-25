@@ -304,7 +304,7 @@ run_check() {
 # Mirrors the system step's command so the figure matches what a real run fetches.
 # ---------------------------------------------------------------------------
 run_size() {
-    local step="$1" out size
+    local step="$1" out size rc
     if [[ "$step" != "system" ]]; then
         echo "Download-size preview is only available for the system step." >&2
         return 2
@@ -317,21 +317,37 @@ run_size() {
     else
         out=$(sudo env LC_ALL=C zypper --non-interactive dup --allow-vendor-change --dry-run 2>&1)
     fi
-    # zypper prints e.g. "Overall download size: 1.3 GiB. Already cached: 0 B."
-    # Capture the number+unit (LC_ALL=C above pins '.' as the decimal point, so the
-    # value can't run into the trailing sentence).
-    size=$(sed -n 's/.*Overall download size: \([0-9.]\+ [A-Za-z]\+\).*/\1/p' \
+    rc=$?
+    # Two wordings, because zypper renamed this line and OneUp supports both distros:
+    #   older (Leap):        "Overall download size: 1.3 GiB. Already cached: 0 B."
+    #   current (TW 1.14.98) "Package download size:   371.4 MiB"
+    # The current one dropped "Overall"/"Already cached" entirely, which is why a
+    # parse for the old wording alone silently reported "nothing to fetch" on a
+    # 137-package upgrade. Capture the number+unit (LC_ALL=C above pins '.' as the
+    # decimal point, so the value can't run into any trailing sentence).
+    size=$(sed -n 's/.*\(Overall\|Package\) download size:[[:space:]]*\([0-9.]\+ [A-Za-z]\+\).*/\2/p' \
         <<<"$out" | head -n1)
     if [[ -n "$size" ]]; then
         marker SIZE "system|$size"
         echo "  Download size: $size"
         marker DONE "ok"
-    else
-        # No size line = nothing to fetch (up to date / all cached). Report zero so
-        # the GUI shows a definitive answer rather than treating it as a failure.
+    elif (( rc == 0 )) || (( rc >= 100 && rc <= 103 )); then
+        # zypper ran fine and reported no size = nothing to fetch (up to date / all
+        # cached). Report zero so the GUI shows a definitive answer. 100-103 are
+        # zypper's INFORMATIONAL exits (update/reboot/restart needed) — a non-zero
+        # code there is not a failure, so they must not be mistaken for one.
         marker SIZE "system|0 B"
         echo "  Download size: nothing to fetch."
         marker DONE "ok"
+    else
+        # The dry run FAILED (authentication cancelled, package lock held, network
+        # down). Never answer "0 B" here: a confident zero the run didn't earn is
+        # the exact failure class the test suite exists to prevent. Stay silent on
+        # SIZE and return non-zero — the GUI re-arms its "Show download size" link
+        # for a retry (updater.py `_on_size_finished`).
+        marker HINT "Couldn't work out the download size — the package manager was busy or the password prompt was cancelled. Try again in a moment."
+        echo "  Download size: unavailable (the dry run failed)." >&2
+        return 1
     fi
 }
 

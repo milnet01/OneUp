@@ -2193,6 +2193,11 @@ for (var i = 0; i < clients.length; i++) {{
                     row = self.rows.get(parts[0])
                     if row:
                         row.set_size_result(f"↓ {parts[1]} to download")
+            elif line.startswith("@@HINT@@|"):
+                # The size probe failed (busy package manager, cancelled password
+                # prompt). Say why in the log — the link re-arms itself for a retry
+                # in _on_size_finished, but a silent re-arm looks like a dead button.
+                self.log.appendPlainText(line.split("|", 1)[1])
             elif not line.startswith("@@"):
                 self.log.appendPlainText(line)
 

@@ -19,6 +19,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **"Show download size" reported 0 B for every update** (ONEUP-0035)
+  Current zypper renamed its summary line to "Package download size",
+  so the old parse matched nothing and a 371.4 MiB upgrade was shown as
+  "0 B to download". Both wordings are now accepted. A dry run that
+  actually fails (cancelled password prompt, busy package manager) no
+  longer reports a confident 0 B either — it says why and lets you retry.
+
 - **The signing-key-import and passwordless-consent popups now open centered over the main window, matching the About and Repositories dialogs.** (ONEUP-0026)
 
 - **bump.py: advance the CHANGELOG [Unreleased] compare-link base to the new tag.** (ONEUP-0033)

@@ -239,3 +239,26 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The app's main code file has grown very large. Split it into smaller, well-named pieces so it's easier to find and change things, without altering how the app behaves.
   Kind: refactor.
   Source: user-request-2026-07-24.
+
+- ✅ [ONEUP-0035] **Fix "Show download size" always reporting 0 B, and never report a size the dry run didn't earn.**
+  Two defects, one symptom. (1) Stale parse: run_size grepped zypper's
+  old "Overall download size: 1.3 GiB. Already cached: 0 B." wording.
+  Current zypper (1.14.98 / libzypp 17.38.14) prints "Package download
+  size:   371.4 MiB" and no longer contains the old strings at all
+  (verified absent from /usr/bin/zypper). No match fell through to the
+  "nothing to fetch" branch, so a 371.4 MiB upgrade was reported as 0 B.
+  The parse now accepts BOTH wordings — Leap may still ship the older
+  zypper. The engine test mock encoded the old wording too, which is why
+  CI stayed green; a second mock now pins the current wording.
+  (2) A FAILED dry run (cancelled password prompt, held package lock,
+  network down) was indistinguishable from "nothing to fetch" and was
+  also answered as a confident "0 B" — the exact never-claim-what-you-
+  didn't-earn class the suite exists to prevent. run_size now checks the
+  exit status, treats zypper's informational 100-103 codes as success,
+  and on real failure emits @@HINT@@ + returns non-zero so the GUI
+  re-arms its "Show download size" link. The GUI also logs that hint
+  (it was previously swallowed, making the re-arm look like a dead
+  button). Verified end to end against real zypper: @@SIZE@@|system|371.4 MiB.
+  **Layman:** The "Show download size" link said "0 B to download" even with 137 updates waiting — it now shows the real figure, and says so plainly when it can't work the size out instead of pretending it is zero.
+  Kind: fix.
+  Source: user-report-2026-07-25 (screenshot: 137 available, "↓ 0 B to download").
