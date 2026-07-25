@@ -1,6 +1,8 @@
 # ONEUP-0028 — Make OneUp usable for blind, partially-sighted, and colour-blind users
 
-**Status:** draft (cold-eyes loop 1 applied).
+**Status:** Cold-eyes converged (2 loops — loop 1: 8 HIGH / 10 MEDIUM / 9 LOW, 28
+verified and fixed, 1 dismissed; loop 2: polish only, 7 verified and fixed, 5
+dismissed). Ready to implement.
 **Roadmap:** ONEUP-0028 (🚧)
 **Kind:** accessibility (GUI only — no engine or marker change)
 
@@ -58,10 +60,15 @@ needed, and none should be written.
 | The tray "updates waiting" badge is an amber dot — colour only | `_tray_icon` `1492-1499` | Attention state indistinguishable from the normal icon. (The tooltip does carry text — `1566-1567` — but only on hover.) |
 | The overdue last-run line is signalled only by turning amber | QSS `268`, `refresh_last_run` `1943-1947` | "Overdue" is invisible. |
 
-Already correct, and must stay that way: per-step outcomes are **text** badges
-("Failed", "Up to date", "3 installed" — `_step_badge` `2311-2327`), and the
-reboot/warning banners carry a `⚠` glyph plus prose (`1282`, `2551-2558`).
-(The roadmap bullet's "red/green step badges" premise is therefore already stale.)
+**Already correct — no change needed here, despite the roadmap naming it.** The
+bullet lists "red/green step badges" as a colour-only gap, but per-step outcomes
+are already **text**: `_step_badge` returns "Failed", "Up to date", "3 installed"
+(`2311-2327`), and the badge's colours come from one theme pair
+(`badgebg`/`badgefg`) that does not vary by outcome. The reboot/warning banners
+likewise already carry a `⚠` glyph plus prose (`1282`, `2551-2558`). So the
+colour-blind work is the three rows above — switch, tray badge, overdue line —
+and an implementer should not go looking for badge colours to fix. What matters
+for the badges is that this stays true.
 
 ## Design
 
@@ -75,8 +82,12 @@ because `_render_badge` needs it:
 self._description = description
 self.switch.setAccessibleName(f"{title} — include in this update")
 self.switch.setAccessibleDescription(description)
-self.disclosure.setAccessibleName(f"Show which packages {title.lower()} will change")
+self.disclosure.setAccessibleName(f"Packages that {title.lower()} will change")
 ```
+
+The disclosure name is deliberately state-agnostic ("Packages that … will change",
+not "Show …"): the control toggles, so an imperative name would read backwards
+once the panel is open. Qt reports the expanded/collapsed state separately.
 
 `Updater.__init__` names the non-text widgets: progress bar ("Update progress"),
 log pane ("Update log"), the last-run line ("Last update run"), and each banner
@@ -88,6 +99,7 @@ frame plus its label — named for its role, not its styling:
 | `services_banner` / `services_label` | "Services should restart" |
 | `warn_banner` / `warn_label` | "Warning" |
 | `appupdate_banner` / `appupdate_label` | "OneUp update available" |
+| `RollbackDialog.list` (`897`) | "Restore points" |
 
 `RepoManagerDialog._make_row` names each repo switch
 `f"{repo['name']} — include this repository"`. The name must **not** bake in the
@@ -103,13 +115,26 @@ none is set explicitly (verified: an explicit `setAccessibleDescription` wins;
 otherwise `QAccessibleWidget` falls back to `toolTip()`).
 
 **Outcome reachability.** `TaskRow._render_badge` (`542`) also refreshes the
-switch's accessible description to `f"{self._description} {badge}"` — so a blind
-user tabbing to a switch after a run hears *"System packages … 3 installed · 42s"*
-rather than having to find a separate, unfocusable badge label. **`clear_badge`
-must route through `_render_badge`** rather than clearing the fields inline as it
-does today (`547-550`): `_launch` calls it on every row at the start of each run
-(`2267-2269`), and without the re-render the switch would keep announcing the
-*previous* run's outcome on a row that has not run yet.
+switch's accessible description, so a blind user tabbing to a switch after a run
+hears *"System packages … 3 installed · 42s"* rather than having to find a
+separate, unfocusable badge label:
+
+```python
+def _render_badge(self):
+    parts = [p for p in (self._badge_text, self._timing) if p]
+    text = "  ·  ".join(parts)
+    self.badge.setText(text)
+    self.badge.setVisible(bool(parts))
+    # The outcome is only otherwise on an unfocusable label — put it where a
+    # screen reader will reach it, on the row's own control.
+    self.switch.setAccessibleDescription(
+        f"{self._description} {text}".strip() if text else self._description)
+```
+
+**`clear_badge` must route through `_render_badge`** rather than clearing the
+fields inline as it does today (`547-550`): `_launch` calls it on every row at the
+start of each run (`2267-2269`), and without the re-render the switch would keep
+announcing the *previous* run's outcome on a row that has not run yet.
 
 ### 2. Announcements — one helper, degrading cleanly
 
@@ -151,7 +176,10 @@ The fallback deliberately does **not** call `setAccessibleName` on the borrowed
 label: an explicit accessible name on a `QLabel` is permanent, so every later
 `status.setText` (`2278-2283`, `2519-2540`) would become invisible to AT.
 
-Announced (and only these — enough to follow a run, not a monologue):
+Announced (and only these — enough to follow a run, not a monologue). The roadmap
+bullet also asks for the **live log** to be announced; that is a deliberate,
+reasoned exclusion rather than an oversight — see the first entry under *Out of
+scope*:
 
 | When | Text | `source` |
 | --- | --- | --- |
@@ -203,6 +231,13 @@ base = QFontInfo(QApplication.font()).pointSizeF()
 if not 6.0 <= base <= 30.0:
     base = 10.0
 ```
+
+**Ordering constraint:** `QApplication.font()` is only meaningful once the
+`QApplication` exists, so `build_theme` must never be called before it. Both call
+paths already satisfy this — `main()` constructs `QApplication([])` before
+theming (`2807-2814`), and the Settings handlers run long after — but the clamp
+above is also what keeps a too-early call from emitting a negative point size
+rather than crashing.
 
 Four derived sizes replace the twelve hard-coded pixel values. The multipliers are
 the current px values over a 10 pt (≈13.3 px at 96 dpi) default, so `scale=1.0`
