@@ -24,6 +24,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The GUI test suite no longer reads the machine's real zypper package cache** (ONEUP-0055)
+  A liveness-line test weighed /var/cache/zypp/packages instead of a
+  directory of its own, so its verdict depended on what a real update
+  had left behind — it passed, then failed on identical code once 44 MB
+  of packages were sitting there. Same class as ONEUP-0045/0050, which
+  fixed the engine suite; the GUI suite had one left.
+
 - **Open dialogs over the app window on Wayland, where move() is ignored.** (ONEUP-0049)
   Settings, Repositories and the message boxes now appear in the middle of the OneUp window instead of wherever the desktop felt like putting them.
 

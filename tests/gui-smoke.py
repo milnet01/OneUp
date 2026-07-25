@@ -186,8 +186,17 @@ def main() -> int:
     # index at 930 B/s, with nothing on screen the whole time: zypper reports that phase
     # as dots with no line ending, so there was never a complete line to draw and a
     # working run was indistinguishable from a frozen one.
+    # Weigh an empty directory, not the machine's real package cache: _tick_activity
+    # falls back to `cache_bytes() - _dl_base` during a download, so whatever zypper
+    # happened to leave in /var/cache/zypp/packages would otherwise decide the figures
+    # asserted below. It bit for real — 44 MB of leftovers turned "40 MB of 379 MB"
+    # into "44 MB of 379 MB" and the suite went red on an unrelated commit (ONEUP-0055).
+    _live_cache = tempfile.mkdtemp()
+    _orig_live_cache = updater.ZYPP_PACKAGE_CACHE
+    updater.ZYPP_PACKAGE_CACHE = Path(_live_cache)
     wL = updater.Updater()
     wL._run_active = True
+    wL._reset_activity()        # a real run always baselines before markers arrive
     wL.handle_line("@@STEP_BEGIN@@|system|1|5|Updating system packages")
     wL.handle_line("@@REFRESH@@|6|9|games")
     check("the source being fetched is named, with its position",
@@ -234,6 +243,8 @@ def main() -> int:
             check(f"malformed liveness marker handled ({exc})", False)
     wL.on_finished(0, None)
     check("the liveness line goes away when the run ends", not wL.activity.isVisibleTo(wL))
+    updater.ZYPP_PACKAGE_CACHE = _orig_live_cache
+    shutil.rmtree(_live_cache, ignore_errors=True)
 
     # zypper's prefetch phase reports no sizes and no counter — one line per finished
     # package and nothing else — so the figure has to come from weighing its package

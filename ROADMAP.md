@@ -595,3 +595,31 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Weighing whether the part of OneUp that does the actual updating would be better written in Python, like the window is.
   Kind: investigate.
   Source: user-question-2026-07-25.
+
+- ✅ [ONEUP-0055] **Stop the GUI liveness test weighing the machine's real zypper package cache.**
+  The same class as ONEUP-0045/0050, which fixed the ENGINE suite's dependence
+  on machine state; the GUI suite still had one and it went red mid-session on a
+  docs-only commit.
+
+  `_tick_activity` deliberately falls back to `cache_bytes() - _dl_base` during a
+  download, because zypper's prefetch phase reports no byte figures at all
+  (ONEUP-0048). The liveness test fed `@@PROGRESS@@|…|41943040|397410304` and
+  asserted "40 MB of 379 MB", but never called `_reset_activity()`, so `_dl_base`
+  stayed at its `__init__` value of 0 while `cache_bytes()` read the real
+  /var/cache/zypp/packages. With 44,722,488 bytes of leftovers there from a real
+  update, `max(41943040, 44722488 - 0)` won and the line said "44 MB of 379 MB".
+
+  Sharp edge worth remembering: it passed twice earlier in the same session and
+  then failed consistently, on identical code. The cache step runs
+  `zypper clean --all`, so a real run empties the cache and then refills it — the
+  test's verdict tracked which side of that the machine happened to be on.
+
+  Fix: point `updater.ZYPP_PACKAGE_CACHE` at an empty temp dir for the block
+  (the neighbouring prefetch-fallback block already did this) and call
+  `_reset_activity()`, which every real run does before markers arrive. Both,
+  deliberately: the baseline call makes the test match the real code path, the
+  temp dir makes the assertion independent of the machine either way.
+  Audited the rest of the GUI suite for other real-machine reads — none.
+  **Layman:** A test was accidentally reading the real folder where downloaded updates are kept, so it passed or failed depending on what happened to be in there. Now it uses an empty folder of its own.
+  Kind: test.
+  Source: in-session-2026-07-25.
