@@ -419,3 +419,33 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Closing OneUp during an update now warns you first, and the update itself finishes safely in the background instead of being cut off.
   Kind: fix.
   Source: user-report-2026-07-25.
+
+- ✅ [ONEUP-0043] **Close an orphaned password dialog instead of leaving it on screen.**
+  Eleven password dialogs had piled up on the reporter's machine since 10:19,
+  and a live verification run left one still open 5.7 hours after it had
+  finished cleanly. A dialog whose sudo has exited is one nobody is waiting on,
+  and a stack of unexplained password boxes is exactly what makes an updater
+  feel untrustworthy. cleanup now closes any askpass process carrying one of
+  OneUp's own prompts whose parent is not a waiting sudo. Two false starts worth
+  remembering: a "parent is pid 1" orphan check never fires (systemd reparents a
+  user session's orphans to `systemd --user`), and matching the helper by a
+  leading path misses a script helper, which ps shows as "bash <script>". A live
+  dialog with a waiting sudo parent is explicitly left alone, and tested.
+  **Layman:** OneUp no longer leaves stray password boxes sitting on your desktop after a run.
+  Kind: fix.
+  Source: in-session-2026-07-25.
+
+- 📋 [ONEUP-0044] **Find out why the single up-front authentication raises two password dialogs.**
+  Measured on a real run: one engine invocation, one `sudo -A -p ... -v` call,
+  and yet TWO ksshaskpass processes 16 seconds apart, both carrying sudo_init's
+  -p text, both then waiting hours. Confirmed not a fork (one invocation of the
+  helper by hand = one process) and not a retry (they overlapped, so both were on
+  screen together). Journal shows the run's three privileged commands needed no
+  authentication at all, so this is confined to the up-front validate. Suspicion
+  falls on `sudo -v` with verifypw=all against multiple password-requiring
+  sudoers entries; a scoped `sudo -A -p ... true` may avoid it. Attempts to
+  reproduce in isolation raised no dialog at all, so a working harness is the
+  first task. ONEUP-0043 removes the visible harm; this is the cause.
+  **Layman:** One password request sometimes shows two boxes; only one needs answering. Worth understanding.
+  Kind: investigate.
+  Source: in-session-2026-07-25.

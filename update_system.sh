@@ -24,7 +24,9 @@
 # (via `|| ok=false`) so the end-of-run summary and cache cleanup still happen.
 set -uo pipefail
 
-ASKPASS=/usr/libexec/ssh/ksshaskpass
+# Overridable so the test suite can point it at a mock instead of raising a real KDE
+# dialog. The default is KDE's helper, which is what this app targets.
+ASKPASS="${ONEUP_ASKPASS:-/usr/libexec/ssh/ksshaskpass}"
 # EXPORTED, not just set: sudo falls back to the askpass helper only when it finds
 # SUDO_ASKPASS in the environment. Without the export, a `sudo` that can't see
 # sudo_init's cached credential has no way to ask and dies with "a terminal is
@@ -494,8 +496,38 @@ sudo_capture() {
 # Re-enable every repo we disabled BEFORE killing the keep-alive (sudo cred still
 # warm), non-interactively (-n) so a cold-credential exit logs the manual fix
 # instead of blocking on a ksshaskpass popup inside the trap.
+# An askpass helper whose sudo has gone is a password dialog nobody is waiting on — it
+# just sits on the user's screen. Eleven had piled up on the reporter's machine, and one
+# was still open 5.7 hours after its run had finished and exited cleanly, which is a
+# large part of why "three prompts in a row" felt like more than three. Only processes
+# that are BOTH orphaned (parent pid 1) and carrying one of OUR prompts are touched, so
+# a live dialog that another OneUp process is still waiting on is never killed. Why a
+# duplicate gets raised in the first place is still unexplained — see ONEUP-0043.
+reap_orphaned_askpass() {
+    local pid ppid args pcmd
+    while read -r pid ppid args; do
+        # Both the helper's path AND one of our own prompts must appear: the path alone
+        # would catch another app's dialog, a prompt alone could match an unrelated
+        # process that merely mentions the text. Matched as substrings rather than a
+        # leading path because a script helper is shown by ps as "bash <script> …".
+        case "$args" in *"$ASKPASS"*) ;; *) continue ;; esac
+        case "$args" in
+            *"$SUDO_PROMPT"*|*"System Updater: authenticate to update the system"*) ;;
+            *) continue ;;
+        esac
+        # A dialog someone IS waiting on is a child of the sudo that launched it, so the
+        # parent's command line is the test. Deliberately not "parent is pid 1": under
+        # systemd a user session's orphans are reparented to `systemd --user`, not init,
+        # so an orphan-check against pid 1 silently never fires (measured — it was the
+        # first version of this function and it reaped nothing).
+        pcmd=$(tr '\0' ' ' < "/proc/$ppid/cmdline" 2>/dev/null)
+        [[ "$pcmd" == *sudo* ]] && continue
+        kill "$pid" 2>/dev/null
+    done < <(ps -eo pid=,ppid=,args= 2>/dev/null)
+}
 cleanup() {
     local a
+    reap_orphaned_askpass
     for a in "${DISABLED_REPOS[@]:-}"; do
         [[ -z "$a" ]] && continue
         sudo -n zypper --non-interactive modifyrepo --enable "$a" >/dev/null 2>&1 \

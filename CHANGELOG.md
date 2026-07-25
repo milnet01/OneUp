@@ -41,6 +41,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Close an orphaned password dialog instead of leaving it on screen.** (ONEUP-0043)
+  OneUp no longer leaves stray password boxes sitting on your desktop after a run.
+
 - **Never abandon an update half-way when the app is closed.** (ONEUP-0042)
   Closing OneUp during an update now warns you first, and the update itself finishes safely in the background instead of being cut off.
 

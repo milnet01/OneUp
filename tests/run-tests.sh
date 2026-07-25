@@ -468,6 +468,60 @@ fi
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0043: an orphaned password dialog must not be left on the user's screen. Eleven
+# had accumulated on the reporter's machine, and one was still open 5.7 hours after its
+# run had finished — a dialog whose sudo has exited is one nobody is waiting on, and a
+# pile of unexplained password boxes is exactly what makes an updater feel untrustworthy.
+echo "TEST: an orphaned password dialog is reaped when the run ends"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"
+# Stands in for ksshaskpass: sleeps like a dialog waiting for input.
+printf '#!/usr/bin/env bash\nsleep 300\n' > "$d/mock-askpass"
+chmod +x "$d/zypper" "$d/mock-askpass"
+# Orphan: no sudo anywhere in its ancestry, which is the "nothing is waiting on this"
+# state the reap targets. (Deliberately not tested via pid 1 — under systemd a user
+# session's orphans are reparented to `systemd --user`, so a pid-1 check never fires.)
+setsid "$d/mock-askpass" "System Updater: authenticate to update the system" \
+    >/dev/null 2>&1 &
+orphan_pid=$!
+# Live: a dialog whose parent IS a waiting sudo must survive — killing one would break a
+# concurrent OneUp process mid-authentication. fake-sudo stands in for that parent (the
+# reap matches on the parent's command line, and "fake-sudo" contains "sudo").
+cat > "$d/fake-sudo" <<EOF
+#!/usr/bin/env bash
+"$d/mock-askpass" "\$@" &
+wait
+EOF
+chmod +x "$d/fake-sudo"
+"$d/fake-sudo" "System Updater: authenticate to update the system" >/dev/null 2>&1 &
+live_parent=$!
+sleep 0.5
+live_pid=$(pgrep -P "$live_parent" -f mock-askpass | head -1)
+if ! kill -0 "$orphan_pid" 2>/dev/null || [[ -z "$live_pid" ]]; then
+    echo "  SKIP - could not stage the dialogs (orphan=$orphan_pid live=${live_pid:-none})"
+else
+    ONEUP_ASKPASS="$d/mock-askpass" run_engine "$d" --steps=cache >/dev/null 2>&1
+    reaped=no
+    for _ in $(seq 1 20); do
+        kill -0 "$orphan_pid" 2>/dev/null || { reaped=yes; break; }
+        sleep 0.1
+    done
+    if [[ "$reaped" == yes ]]; then
+        echo "  ok   - the orphaned dialog is closed when the run ends"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - an orphaned password dialog was left on screen"; FAIL=$((FAIL+1))
+    fi
+    if kill -0 "$live_pid" 2>/dev/null; then
+        echo "  ok   - a dialog someone is still waiting on is left alone"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - killed a live dialog another process was waiting on"; FAIL=$((FAIL+1))
+    fi
+fi
+kill -9 "$orphan_pid" "$live_parent" ${live_pid:+"$live_pid"} 2>/dev/null
+wait "$live_parent" 2>/dev/null
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 # ONEUP-0042: the GUI going away mid-run must not abandon the transaction. Our stdout
 # is a pipe to the GUI; when the user quits, a plain `tee` dies on the broken pipe and
 # the engine is then SIGPIPEd on its next line — killed without running cleanup. That
