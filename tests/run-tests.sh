@@ -468,6 +468,69 @@ fi
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0045: a real run records itself so a GUI starting mid-run can find it. Runs
+# outlive the window on purpose (ONEUP-0042), so without this the user is offered a Run
+# button whose only possible outcome is the package-lock message.
+echo "TEST: a real run records itself in a run-state file and clears it on exit"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\ncase "$*" in *dup*|*update*) echo "Nothing to do."; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
+# Records the state file's contents while the run is still in flight — it is deleted on
+# exit, so a check afterwards could not tell "never written" from "written and cleared".
+cat > "$d/snapper" <<EOF
+#!/usr/bin/env bash
+cp "$d/run.state" "$d/state-during-run" 2>/dev/null
+[[ "\$*" == *--print-number* ]] && { echo 42; exit 0; }
+[[ "\$1" == "--no-headers" ]] && { echo "40 | single"; exit 0; }
+exit 0
+EOF
+chmod +x "$d/zypper" "$d/snapper"
+ONEUP_RUN_STATE="$d/run.state" run_engine "$d" --steps=system >/dev/null 2>&1
+check_eq() {  # name, expected, actual
+    local name="$1" want="$2" got="$3"
+    if [[ "$got" == "$want" ]]; then
+        echo "  ok   - $name"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - $name (want '$want', got '$got')"; FAIL=$((FAIL+1))
+    fi
+}
+if [[ -f "$d/state-during-run" ]]; then
+    echo "  ok   - the run is recorded while it is in flight"; PASS=$((PASS+1))
+    mapfile -t st < "$d/state-during-run"
+    if [[ "${st[0]:-}" =~ ^[0-9]+$ ]]; then
+        echo "  ok   - it records the engine's pid"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - it records the engine's pid (got '${st[0]:-}')"; FAIL=$((FAIL+1))
+    fi
+    if [[ "${st[1]:-}" == *"$d"* ]]; then
+        echo "  ok   - it records the log path to follow"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - it records the log path (got '${st[1]:-}')"; FAIL=$((FAIL+1))
+    fi
+    check_eq "it records which steps are running" "system" "${st[2]:-}"
+else
+    # +4: this check plus the three field checks that could not run.
+    echo "  FAIL - no run-state file was written during the run"; FAIL=$((FAIL+4))
+fi
+if [[ ! -f "$d/run.state" ]]; then
+    echo "  ok   - the record is cleared when the run ends"; PASS=$((PASS+1))
+else
+    echo "  FAIL - a finished run left its record behind"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+
+echo "TEST: a read-only --check run does NOT touch the run-state file"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"; chmod +x "$d/zypper"
+echo "pretend-a-real-run-is-in-flight" > "$d/run.state"
+ONEUP_RUN_STATE="$d/run.state" run_engine "$d" --check >/dev/null 2>&1
+if [[ -f "$d/run.state" ]] && grep -q pretend "$d/run.state"; then
+    echo "  ok   - --check leaves a real run's record alone"; PASS=$((PASS+1))
+else
+    echo "  FAIL - --check erased a real run's record"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 # ONEUP-0043: an orphaned password dialog must not be left on the user's screen. Eleven
 # had accumulated on the reporter's machine, and one was still open 5.7 hours after its
 # run had finished — a dialog whose sudo has exited is one nobody is waiting on, and a

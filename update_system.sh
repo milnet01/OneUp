@@ -54,6 +54,11 @@ ALL_STEPS="system,flatpak,firmware,orphans,cache"
 STEPS="$ALL_STEPS"
 LOG_DIR="$HOME/Documents/update-logs"
 LOG_FILE=""
+# A real run records itself here so a GUI that starts (or restarts) mid-run can find
+# it, say so, and follow the log instead of letting the user launch a second run that
+# can only fail on the package lock (ONEUP-0045). Runs now deliberately outlive the
+# window (ONEUP-0042), which is exactly what makes this necessary. Overridable for tests.
+RUN_STATE_FILE="${ONEUP_RUN_STATE:-$HOME/.local/state/oneup/run.state}"
 CHECK_ONLY=false   # --check: report what WOULD update, install nothing, no root
 NOTIFY=false       # --notify: fire a desktop notification if updates are found
 SIZE_STEP=""       # --size=<step>: on-demand exact download size (needs root)
@@ -525,8 +530,11 @@ reap_orphaned_askpass() {
         kill "$pid" 2>/dev/null
     done < <(ps -eo pid=,ppid=,args= 2>/dev/null)
 }
+RUN_STATE_OWNED=false      # only the process that wrote the run-state file clears it,
+                           # so a --check or --size run can't erase a real run's entry
 cleanup() {
     local a
+    $RUN_STATE_OWNED && rm -f "$RUN_STATE_FILE"
     reap_orphaned_askpass
     for a in "${DISABLED_REPOS[@]:-}"; do
         [[ -z "$a" ]] && continue
@@ -757,6 +765,13 @@ if $needs_zypper && holder=$(lock_holder); then
     marker DONE "errors"
     exit 1
 fi
+
+# From here the run is definitely going ahead, so record it. A GUI starting up can then
+# find a run already in flight — they outlive the window on purpose (ONEUP-0042) — and
+# follow this log rather than offering a Run button that could only fail on the lock.
+mkdir -p "$(dirname "$RUN_STATE_FILE")" 2>/dev/null
+printf '%s\n%s\n%s\n%s\n' "$$" "$LOG_FILE" "$STEPS" "$(date +%s)" > "$RUN_STATE_FILE" \
+    && RUN_STATE_OWNED=true
 
 # ---------------------------------------------------------------------------
 # Pre-update snapshot note (btrfs/snapper rollback point). Read-only: Tumbleweed

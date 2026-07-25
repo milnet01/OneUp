@@ -116,6 +116,10 @@ ENGINE = _find_engine()
 STATE_DIR = Path.home() / ".local" / "state" / "oneup"
 HISTORY = STATE_DIR / "history.json"
 LOG_DIR = STATE_DIR / "logs"
+# Where the engine records a run in flight, so a window that opens mid-run can follow it
+# instead of offering a Run that could only fail on the package lock (ONEUP-0045). Must
+# match RUN_STATE_FILE in update_system.sh.
+RUN_STATE = STATE_DIR / "run.state"
 
 # Tray: one QTimer drives both the short initial check and the recurring one, so a
 # single .stop() on tray-off cancels everything (no stray one-shot survives).
@@ -1210,6 +1214,12 @@ class Updater(QMainWindow):
         self._sys_changed = False
         self._step_caption = ""      # current step's bar caption, so @@PROGRESS@@ can extend it
         self._progress_phase = ""    # download/install; a change is what gets announced
+        self._done_status = ""       # the run's own @@DONE@@ verdict; the only result
+                                     # available for a run we attached to (no exit code)
+        self._attached_pid = 0       # engine we're following that another window started
+        self._attached_log = None
+        self._attached_pos = 0
+        self._attach_timer = None
         self._failed_steps: list[str] = []
         self._services = ""
         self._snapshot = ""
@@ -1550,6 +1560,11 @@ class Updater(QMainWindow):
         # Non-blocking: reflect whether passwordless authorization is active.
         self._query_auth_status()
 
+        # A run started by an earlier window may still be going — they outlive the
+        # window on purpose (ONEUP-0042). Pick it up and follow it, rather than showing
+        # an idle app whose Run button could only fail on the package lock.
+        self._attach_to_running_engine()
+
     # ---- screen-reader announcements (ONEUP-0028) --------------------------
     def _announce(self, text: str, source: QWidget | None = None):
         """Speak `text` to a screen reader, if one is listening.
@@ -1633,6 +1648,82 @@ class Updater(QMainWindow):
             return
         QApplication.clipboard().setText(self._hint_command)
         self.warn_copy_btn.setText("Copied ✓")
+
+    # ---- attaching to a run that is already going -------------------------
+    def _read_run_state(self):
+        """The engine's record of a run in flight: (pid, log path, steps). None when
+        there is no run, or when the record is stale — a pid that no longer exists means
+        the engine was killed before it could clean up, so the record is deleted."""
+        try:
+            lines = RUN_STATE.read_text().splitlines()
+        except OSError:
+            return None
+        if len(lines) < 3 or not lines[0].isdigit():
+            return None
+        pid = int(lines[0])
+        try:
+            os.kill(pid, 0)          # signal 0 = "does this pid exist?", changes nothing
+        except ProcessLookupError:
+            RUN_STATE.unlink(missing_ok=True)
+            return None
+        except PermissionError:
+            pass                     # alive, just not ours to signal
+        return pid, lines[1], lines[2]
+
+    def _attach_to_running_engine(self):
+        """Follow a run started by an earlier OneUp window. Runs deliberately outlive the
+        window (ONEUP-0042), so without this the user is shown an idle app and a Run
+        button whose only possible outcome is the package-lock message (ONEUP-0045).
+        The engine's log carries the same @@MARKER@@ lines the live stream does, so
+        replaying it through handle_line rebuilds the full display — progress, badges
+        and banners included."""
+        state = self._read_run_state()
+        if state is None:
+            return False
+        pid, log_path, steps = state
+        self._attached_pid = pid
+        self._attached_log = Path(log_path)
+        self._attached_pos = 0
+        self._run_active = True
+        self._check_mode = False
+        self._done_status = ""
+        self._total = len([s for s in steps.split(",") if s])
+        self.bar.setRange(0, max(self._total, 1))
+        self.set_controls_enabled(False)
+        self.status.setText("An update started earlier is still running — following it…")
+        self._announce(self.status.text())
+        self._attach_timer = QTimer(self)
+        self._attach_timer.setInterval(1000)
+        self._attach_timer.timeout.connect(self._poll_attached_run)
+        self._attach_timer.start()
+        self._poll_attached_run()
+        return True
+
+    def _poll_attached_run(self):
+        """Read whatever the attached run has appended, then notice when it finishes."""
+        try:
+            with self._attached_log.open("r", errors="replace") as fh:
+                fh.seek(self._attached_pos)
+                new = fh.read()
+                self._attached_pos = fh.tell()
+        except OSError:
+            new = ""
+        for line in new.splitlines():
+            self.handle_line(line)
+        try:
+            os.kill(self._attached_pid, 0)
+            return                                  # still going
+        except PermissionError:
+            return
+        except ProcessLookupError:
+            pass
+        self._attach_timer.stop()
+        RUN_STATE.unlink(missing_ok=True)
+        # No exit code to read for someone else's process, so the run's own @@DONE@@ is
+        # the verdict. A run killed before printing one is reported as errors rather
+        # than success — never claim an outcome the run didn't actually report.
+        self._attached_pid = 0
+        self.on_finished(0 if self._done_status == "ok" else 1, None)
 
     # ---- quitting while a run is in flight --------------------------------
     def _ask_quit_during_run(self) -> bool:
@@ -2669,6 +2760,7 @@ for (var i = 0; i < clients.length; i++) {{
         self._sys_changed = False
         self._step_caption = ""
         self._progress_phase = ""
+        self._done_status = ""
         self._failed_steps = []
         self._services = ""
         self._snapshot = ""
@@ -2943,8 +3035,13 @@ for (var i = 0; i < clients.length; i++) {{
             else:
                 msg = "Pre-flight warning — see the log for details."
             self._show_warning(msg)
-        # @@DONE@@ is intentionally not handled here — the run's overall result comes
-        # from the process exit code in on_finished (the two always agree).
+        elif tag == "DONE":
+            # The overall result normally comes from the process exit code in
+            # on_finished (the two always agree). It is recorded here as well for the
+            # one case with no exit code to read: a run started by an earlier OneUp
+            # window that this one attached to and is following through its log
+            # (_attach_to_running_engine).
+            self._done_status = parts[0] if parts else ""
 
     def on_error(self, _err):
         self.status.setText("Could not start the update script.")

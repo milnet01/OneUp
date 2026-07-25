@@ -6,6 +6,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Pick up and follow a run that is already in progress when the window opens.** (ONEUP-0045)
+  If an update is already running when you open OneUp, it now shows you that run's live progress instead of looking idle.
+
 ## [1.3.0] - 2026-07-25
 
 ### Added

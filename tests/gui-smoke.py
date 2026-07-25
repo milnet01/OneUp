@@ -181,6 +181,47 @@ def main() -> int:
     check("a new step resets the progress caption",
           "141" not in wP.bar.format() and "Cleaning package cache" in wP.bar.format())
 
+    # --- attaching to a run started by an earlier window (ONEUP-0045) -----------
+    # Runs outlive the window on purpose, so a fresh window must find one in flight and
+    # follow its log rather than offering a Run that could only fail on the lock.
+    import subprocess as _sp
+    attach_dir = tempfile.mkdtemp()
+    attach_log = os.path.join(attach_dir, "run.log")
+    # A stand-in engine: alive, so the pid check passes, and writing real marker lines.
+    holder = _sp.Popen(["sleep", "60"])
+    with open(attach_log, "w") as fh:
+        fh.write("@@STEP_BEGIN@@|system|1|2|Updating system packages\n"
+                 "@@PROGRESS@@|system|12|141|download\n")
+    orig_state = updater.RUN_STATE
+    updater.RUN_STATE = Path(attach_dir) / "run.state"
+    updater.RUN_STATE.write_text(f"{holder.pid}\n{attach_log}\nsystem,cache\n0\n")
+    try:
+        wA = updater.Updater()
+        check("a run already in flight is picked up", wA._run_active is True)
+        check("the window says it is following an earlier run",
+              "still running" in wA.status.text() or "141" in wA.status.text())
+        check("the controls are locked while following", not wA.run_btn.isEnabled())
+        check("the step count comes from the attached run's steps", wA._total == 2)
+        check("markers already in the log are replayed",
+              wA.rows["system"].badge.text() == "12/141")
+        # New lines appended by the running engine must be picked up on the next poll.
+        with open(attach_log, "a") as fh:
+            fh.write("@@PROGRESS@@|system|99|141|install\n")
+        wA._poll_attached_run()
+        check("newly appended log lines are followed live",
+              wA.status.text() == "Installing 99 of 141 packages…")
+        # A stale record (pid long gone) must not lock a fresh window out.
+        holder.terminate(); holder.wait()
+        updater.RUN_STATE.write_text(f"{holder.pid}\n{attach_log}\nsystem\n0\n")
+        wB = updater.Updater()
+        check("a stale record does not lock the app", wB._run_active is False)
+        check("a stale record is deleted", not updater.RUN_STATE.exists())
+    finally:
+        if holder.poll() is None:
+            holder.terminate(); holder.wait()
+        updater.RUN_STATE = orig_state
+        shutil.rmtree(attach_dir, ignore_errors=True)
+
     # --- quitting mid-run warns first (ONEUP-0042) ------------------------------
     # The dialog itself is modal, so the decision is tested and _ask_quit_during_run
     # is stubbed — that split is why the method exists separately.

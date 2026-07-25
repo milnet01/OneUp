@@ -449,3 +449,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** One password request sometimes shows two boxes; only one needs answering. Worth understanding.
   Kind: investigate.
   Source: in-session-2026-07-25.
+
+- ✅ [ONEUP-0045] **Pick up and follow a run that is already in progress when the window opens.**
+  Runs deliberately outlive the window (ONEUP-0042), so a relaunched OneUp used
+  to look idle and offer a Run button whose only possible outcome was the
+  package-lock message — exactly the trap the reporter fell into. The engine now
+  records a run in flight (pid, log path, steps) in ~/.local/state/oneup/run.state
+  and clears it on exit; a --check or --size run never touches another run's
+  record. On startup the GUI finds it, locks the controls, and replays the log
+  through the same marker parser the live stream uses, so progress, badges and
+  banners all rebuild — then follows new lines every second. A stale record whose
+  pid is gone is deleted rather than locking the app out. With no exit code
+  available for someone else's process, the run's own @@DONE@@ line is the
+  verdict, and a run that never printed one is reported as errors, not success.
+  **Layman:** If an update is already running when you open OneUp, it now shows you that run's live progress instead of looking idle.
+  Kind: feature.
+  Source: user-request-2026-07-25.
