@@ -1003,6 +1003,14 @@ def main() -> int:
 
     # A row's outcome must be reachable by keyboard, and must NOT survive into the
     # next run (clear_badge routes through _render_badge for exactly this reason).
+    # The size probe's wait is announced, since the button label is invisible to a
+    # screen reader (the figure itself can take tens of seconds to arrive).
+    wB.rows["system"].size_requested.emit("system")
+    check("the download-size wait is announced, and sets the expectation",
+          "up to a minute" in wB._last_announcement)
+    check("the size button says the wait is expected",
+          "up to a minute" in wB.rows["system"].size_btn.text())
+
     check("the outcome is folded into the switch's description for a screen reader",
           "3 installed" in wB.rows["system"].switch.accessibleDescription())
     wB.rows["system"].clear_badge()

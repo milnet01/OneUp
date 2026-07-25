@@ -752,8 +752,12 @@ class TaskRow(QFrame):
         self._has_size = True
 
     def size_pending(self):
+        # Name the expected wait. Getting the figure means asking zypper's solver to
+        # work out the WHOLE transaction (a --dry-run), which takes tens of seconds
+        # on a big Tumbleweed upgrade; a bare "Calculating…" for that long reads as
+        # a hung button, so the label says up front that it's normal.
         self.size_btn.setEnabled(False)
-        self.size_btn.setText("Calculating…")
+        self.size_btn.setText("Calculating… (up to a minute)")
 
     def size_failed(self):
         """Re-arm the link so the user can retry after a failed size fetch."""
@@ -2548,6 +2552,10 @@ for (var i = 0; i < clients.length; i++) {{
         if proc is not None and proc.state() != QProcess.NotRunning:
             return  # a fetch is already in flight
         row.size_pending()
+        # The button's "up to a minute" label is invisible to a screen reader, so
+        # say it out loud too — otherwise a blind user gets silence for the wait.
+        self._announce("Working out the download size — this can take up to a minute.",
+                       row.size_btn)
         self._size_buf = ""
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")

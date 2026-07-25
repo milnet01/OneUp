@@ -27,6 +27,15 @@ All notable changes to OneUp are documented here. The format follows
 - **A pre-update warning when Btrfs snapshots pile up, with a one-click "Thin snapshots" button.** (ONEUP-0021)
   On Tumbleweed a snapshot pair is taken around every zypper transaction, so restore points quietly accumulate and can fill the root filesystem. OneUp's pre-flight now counts them and, once a lot have built up, shows a dismissible heads-up plus a "Thin snapshots…" button. Thinning runs snapper's own retention cleanup (`number`/`timeline`), which only drops snapshots the configured policy already considers expendable — the most recent rollback points are always kept — and reports how many were removed.
 
+### Changed
+
+- **"Show download size" now says how long the wait will be**
+  Working out the figure means asking zypper to plan the whole upgrade,
+  which takes tens of seconds on a big Tumbleweed update. The button now
+  reads "Calculating… (up to a minute)" instead of a bare "Calculating…",
+  and screen-reader users hear the same expectation, so a normal wait
+  doesn't look like a stuck button.
+
 ### Fixed
 
 - **the download-size check asked for a password twice** (ONEUP-0037)
