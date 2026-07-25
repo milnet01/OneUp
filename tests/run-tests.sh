@@ -468,6 +468,57 @@ fi
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0039: when another program holds the package lock, every zypper step fails
+# for that one reason. A user quit OneUp mid-download; the engine's zypper kept
+# installing in the background (by design — killing a transaction half-way can break
+# the package database), so the next run showed zypper's own words twice
+# ("System management is locked by the application with pid 447150 (zypper)") and
+# reported failures for steps whose only problem was "OneUp is already busy".
+echo "TEST: another program holding the package lock is named, not just failed through"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"; chmod +x "$d/zypper"
+# $$ is this test shell — a live pid whose /proc entry exists, standing in for the
+# foreign zypper. Its /proc/<pid>/comm supplies the name the engine reports.
+echo "$$" > "$d/zypp.pid"
+out=$(ONEUP_ZYPP_PID_FILE="$d/zypp.pid" run_engine "$d" 2>&1); rc=$?
+check_re     "the busy program is named with its pid" "package manager is busy: .* \(process $$\)" "$out"
+check        "the hint explains it is often OneUp's own earlier run" \
+             "still finishing in the background" "$out"
+check_absent "no snapshot is taken when nothing can change" "@@SNAPSHOT@@" "$out"
+check_absent "no step is even begun"                        "@@STEP_BEGIN@@" "$out"
+if [[ $rc -ne 0 ]]; then echo "  ok   - a blocked run exits non-zero"; PASS=$((PASS+1));
+else echo "  FAIL - a blocked run exits non-zero (rc=$rc)"; FAIL=$((FAIL+1)); fi
+rm -rf "$d"
+
+echo "TEST: a stale lock file (holder already gone) does NOT block a run"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *dup*|*update*) echo "Nothing to do." ; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+# A pid that cannot be running: zypper leaves the file behind when it is killed, and
+# it clears the entry itself — a dead pid must never block the next run.
+dead=999999; while [[ -d "/proc/$dead" ]]; do dead=$((dead+1)); done
+echo "$dead" > "$d/zypp.pid"
+out=$(ONEUP_ZYPP_PID_FILE="$d/zypp.pid" run_engine "$d" --steps=system 2>&1)
+check_absent "a stale lock does not block the run" "package manager is busy" "$out"
+check        "the system step still runs"          "@@STEP_BEGIN@@|system" "$out"
+rm -rf "$d"
+
+echo "TEST: a Flatpak-only run ignores the zypper lock (it doesn't use zypper)"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"; chmod +x "$d/zypper"
+echo "$$" > "$d/zypp.pid"
+out=$(ONEUP_ZYPP_PID_FILE="$d/zypp.pid" run_engine "$d" --steps=flatpak 2>&1)
+check_absent "a Flatpak-only run is not blocked" "package manager is busy" "$out"
+check        "the Flatpak step still runs"       "@@STEP_BEGIN@@|flatpak" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 # zypper exit 7 = ZYPP_LOCKED ("the ZYPP library is locked, e.g. packagekit is
 # running"). The hint must name that cause, not guess at authentication.
 echo "TEST: --size names a locked package manager as the reason (zypper exit 7)"

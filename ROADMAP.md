@@ -362,3 +362,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** OneUp now asks for your password a single time per update run instead of popping the box three or more times.
   Kind: fix.
   Source: user-report-2026-07-25.
+
+- ✅ [ONEUP-0039] **Name the program holding the package lock instead of failing every step through it.**
+  A user quit OneUp mid-download; the engine's zypper kept installing in the
+  background (by design — killing a transaction half-way can break the package
+  database), so the next run printed zypper's own words twice ("System
+  management is locked by the application with pid 447150 (zypper)"), took a
+  pointless snapshot, and reported two failed steps whose single cause was
+  "OneUp is already busy". The engine now reads the holder's pid from the
+  world-readable /run/zypp.pid before touching anything, names it in plain
+  English, and stops. A stale entry whose pid is gone does not block a run, and
+  a Flatpak- or firmware-only run ignores the lock entirely.
+  **Layman:** If something else is already installing software, OneUp now says so in one clear sentence and changes nothing, instead of reporting a pile of failures.
+  Kind: fix.
+  Source: user-report-2026-07-25.

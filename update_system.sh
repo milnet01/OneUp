@@ -501,6 +501,32 @@ release_zypper_lock() {
 }
 
 # ---------------------------------------------------------------------------
+# Whoever else holds the package lock (ONEUP-0039). One busy program makes every
+# zypper step below fail for the same uninteresting reason, and zypper says so only
+# in its own words: "System management is locked by the application with pid 447150
+# (zypper)". A user hit exactly that after quitting OneUp mid-download — the engine's
+# own zypper kept installing in the background (deliberately: killing a transaction
+# half-way can break the package database), so the next run reported five failures
+# whose single cause was "OneUp is already busy".
+#
+# libzypp records the holder's pid in /run/zypp.pid, which is world-readable, so we
+# can name it before touching anything. Overridable so tests never need real /run.
+# ---------------------------------------------------------------------------
+ZYPP_PID_FILE="${ONEUP_ZYPP_PID_FILE:-/run/zypp.pid}"
+lock_holder() {          # echoes "<pid> <name>" of the process holding the lock
+    local pid name
+    [[ -r "$ZYPP_PID_FILE" ]] || return 1
+    read -r pid _ < "$ZYPP_PID_FILE" 2>/dev/null || return 1
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+    # A pid with no /proc entry is a stale lock from a crashed run, not a live
+    # holder — zypper clears it itself, so it must not block us.
+    [[ -d "/proc/$pid" ]] || return 1
+    (( pid == $$ )) && return 1
+    name=$(cat "/proc/$pid/comm" 2>/dev/null)
+    echo "$pid ${name:-another program}"
+}
+
+# ---------------------------------------------------------------------------
 # Opt-in "remember my authorization" mode (ONEUP-0023). Deliberately stores NO
 # password — encrypting a password the app must itself decrypt is obfuscation,
 # and a stored root password would break OneUp's "GUI never touches root" design.
@@ -651,6 +677,23 @@ $needs_sudo && sudo_init
 
 # With the credential warm, make sure PackageKit isn't sitting on the lock.
 $needs_sudo && release_zypper_lock
+
+# Stopping PackageKit clears the common case; anything ELSE still holding the lock
+# would make every zypper step fail for one reason, so say that reason once and stop
+# rather than taking a snapshot and reporting a pile of failures (ONEUP-0039). Only
+# the zypper-backed steps care — a Flatpak- or firmware-only run is unaffected.
+needs_zypper=false
+for k in system orphans cache; do
+    step_selected "$k" && needs_zypper=true
+done
+if $needs_zypper && holder=$(lock_holder); then
+    holder_pid=${holder%% *}; holder_name=${holder#* }
+    echo "The package manager is busy: $holder_name (process $holder_pid) is using it."
+    echo "Nothing has been changed. Try again once it has finished."
+    marker HINT "Something else is installing or removing software right now — $holder_name (process $holder_pid). That is often OneUp's own earlier run still finishing in the background; it clears on its own. Nothing was changed, so just run the update again in a minute."
+    marker DONE "errors"
+    exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Pre-update snapshot note (btrfs/snapper rollback point). Read-only: Tumbleweed

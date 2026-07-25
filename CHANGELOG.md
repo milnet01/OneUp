@@ -38,6 +38,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Name the program holding the package lock instead of failing every step through it.** (ONEUP-0039)
+  If something else is already installing software, OneUp now says so in one clear sentence and changes nothing, instead of reporting a pile of failures.
+
 - **Ask for the password once per run, not once per privileged step.** (ONEUP-0038)
   OneUp now asks for your password a single time per update run instead of popping the box three or more times.
 
