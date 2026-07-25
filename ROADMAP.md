@@ -566,6 +566,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Raised by the user after ONEUP-0048. Recorded rather than actioned,
   because the evidence cuts both ways and the decision should be made on
   purpose rather than in the middle of a bug fix.
+  Decided (2026-07-25): rewrite, on a long-lived `v2` branch. The user
+  overruled the "keep separate, don't rewrite" recommendation above, on the
+  grounds that difficulty is a cost rather than an objection: v1 already
+  exists and keeps shipping from `main`, so building v2 on a branch and
+  switching when it is ready carries no delivery risk. That reasoning is
+  sound and answers the "what makes it risky" paragraph directly — the risk
+  was of shipping a regression, and a branch plus the unchanged 197-test
+  suite as the acceptance gate removes it. Design recorded in
+  docs/specs/ONEUP-0054-python-engine.md; build tracked as ONEUP-0054. The
+  technical caveats above still stand and are restated in the spec's §2 so
+  the rewrite is not justified by claims that were never true.
 
   Not a reason to rewrite: none of that session's faults were Bash's.
   zypper's silence, the mirror's speed and sudo's per-parent-pid
@@ -623,3 +634,38 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A test was accidentally reading the real folder where downloaded updates are kept, so it passed or failed depending on what happened to be in there. Now it uses an empty folder of its own.
   Kind: test.
   Source: in-session-2026-07-25.
+
+- 📋 [ONEUP-0054] **OneUp 2.0 — replace the Bash engine with a Python one, on the `v2` branch.**
+  Decided in ONEUP-0052. Design: docs/specs/ONEUP-0054-python-engine.md
+  (draft — must go through /cold-eyes before any code, global rule 14).
+
+  Shape: update_system.sh (1,486 lines, 57 sudo call sites) becomes eight
+  Python modules under oneup/engine/, keeping the @@MARKER@@ protocol and
+  all 13 CLI flags byte-identical. The point of freezing the contract is
+  that the existing 197 engine tests then PROVE the rewrite instead of
+  being rewritten for it.
+
+  Switch-over gate (all six): G1 197/197 engine tests unchanged; G2 v1 and
+  v2 emit the same marker stream under identical mocks (new differential
+  harness); G3 GUI suite green driving v2; G4 still exactly one password
+  prompt per run; G5 engine imports no Qt and runs with PySide6 absent;
+  G6 a real run on the user's machine.
+
+  What the rewrite actually buys, and nothing else is claimed: the
+  seven-prompt bug class becomes structurally impossible (one parent pid
+  for every privileged child, instead of a discipline 57 call sites must
+  each observe); timeouts and cancellation become bookkeeping in one
+  runner; the metadata fetch becomes measurable at last, because Python
+  can read bytes as they arrive and zypper's dots have no line ending;
+  parsers become unit-testable; and two fragile dependencies go away
+  (`tee -a -p` and the orphan-prone keep-alive loop). Python does NOT gain
+  the ability to kill a root child — `sudo timeout` stays.
+
+  Ten phases, each ending with local-CI green on `v2`; phase 1 (an
+  ONEUP_ENGINE_CMD indirection in the test harness) lands on `main` first
+  and is a no-op there. `main` ships 1.x throughout; the switch is a 2.0.0
+  major bump. Keep ONEUP-0034 (splitting updater.py) separate — it is
+  independent and must not be entangled with this gate.
+  **Layman:** Rewrite the part of OneUp that does the actual updating in Python, the same language as the window, so the app has finer control over what it is running. Built on a side branch so the current version keeps working until the new one is provably better.
+  Kind: implement.
+  Source: user-decision-2026-07-25.
