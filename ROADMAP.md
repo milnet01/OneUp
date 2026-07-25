@@ -194,11 +194,20 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: feature.
   Source: user-request-2026-07-23.
 
-- 📋 [ONEUP-0028] **Make OneUp usable for blind, partially-sighted, and colour-blind users.**
+- 🚧 [ONEUP-0028] **Make OneUp usable for blind, partially-sighted, and colour-blind users.**
   Cover the three groups: (1) blind — full screen-reader (Orca/AT-SPI) support: accessible names/roles on every control, the live log and progress announced, focus order sane, no unlabelled icon-only buttons; (2) partially sighted — scalable/large text, honour the desktop font scale, a high-contrast option, keyboard operability throughout; (3) colour-blind — never signal state by colour alone (the amber tray icon, red/green step badges) — pair every colour cue with text/shape/icon. Coordinates with ONEUP-0026 (dialog standard) and ONEUP-0027 (themes: any theme must keep WCAG-AA contrast). Likely warrants its own spec + an audit pass with Orca.
   **Layman:** Design OneUp so people who can't see well — or at all — can still use it: screen-reader support, large/scalable text and high-contrast options, and never relying on colour alone to convey status.
   Kind: accessibility.
   Source: user-request-2026-07-23.
+  Progress (2026-07-25): spec drafted at docs/specs/ONEUP-0028-accessibility.md and
+  run through /cold-eyes. Loop 1 surfaced 8 HIGH / 10 MEDIUM / 9 LOW (28 verified,
+  1 dismissed); all verified findings fixed in the spec. Notable: the HC overlay
+  must restate every pseudo-state selector (CSS2 specificity — a bare rule cannot
+  beat #RunBtn:hover), the font-scale base needs a clamp (Qt's -1 sentinel is
+  truthy, so `or 10.0` misses it), and two draft invariants could not fail against
+  today's code. Verified along the way that a checkable QAbstractButton already
+  maps to Role.CheckBox with checked state, so no custom accessible interface is
+  needed for the roadmap's "roles" requirement.
 
 - ✅ [ONEUP-0029] **Report how much disk space the cache clean actually freed.**
   Measure /var/cache/zypp (du) before and after `zypper clean --all` in update_system.sh (~line 813) and print/emit the delta. The cache step is the only task whose benefit the user can't currently see. Small, no risk. Natural lead-in to ONEUP-0021 (snapshot thinning).
@@ -262,3 +271,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The "Show download size" link said "0 B to download" even with 137 updates waiting — it now shows the real figure, and says so plainly when it can't work the size out instead of pretending it is zero.
   Kind: fix.
   Source: user-report-2026-07-25 (screenshot: 137 available, "↓ 0 B to download").
+  Follow-up (2026-07-25): the failure path's hint was itself a guess ("busy or
+  cancelled"). It now names the real cause from zypper's documented exit codes — 7
+  ZYPP_LOCKED (another program holds the package-manager lock), 5 insufficient
+  privileges, 6 no repositories — and echoes the last 5 lines of what zypper
+  actually said, prefixed "zypper:". Previously `out` was captured into a variable
+  and discarded on failure, so the log recorded only "unavailable" with nothing to
+  act on. Found because a user hit the new failure path live: the cause was the
+  ZYPP lock held by a concurrent diagnostic dry run, which the old hint would have
+  mis-attributed to a cancelled password prompt. Tests: 126 passed / 0 failed.

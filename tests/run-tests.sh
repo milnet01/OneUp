@@ -365,9 +365,29 @@ chmod +x "$d/zypper"
 out=$(run_engine "$d" --size=system); rc=$?
 check_absent "a failed dry run reports no size at all" "@@SIZE@@" "$out"
 check        "a failed dry run hints why"              "@@HINT@@" "$out"
+check        "a failed dry run logs what zypper said"  "zypper: sudo: a terminal is required" "$out"
 # Exit code asserted inline (the suite's convention — there is no check() for rc).
 if [[ $rc -ne 0 ]]; then echo "  ok   - a failed dry run exits non-zero"; PASS=$((PASS+1));
 else echo "  FAIL - a failed dry run exits non-zero (rc=$rc)"; FAIL=$((FAIL+1)); fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# zypper exit 7 = ZYPP_LOCKED ("the ZYPP library is locked, e.g. packagekit is
+# running"). The hint must name that cause, not guess at authentication.
+echo "TEST: --size names a locked package manager as the reason (zypper exit 7)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *--dry-run* ]]; then
+  echo "System management is locked by the application with pid 4242 (zypper)." >&2
+  exit 7
+fi
+exit 0
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --size=system)
+check        "a locked package manager is named as the cause" "another program is using the package manager" "$out"
+check_absent "a locked package manager reports no size"       "@@SIZE@@" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

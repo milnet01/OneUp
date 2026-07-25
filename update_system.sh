@@ -340,13 +340,25 @@ run_size() {
         echo "  Download size: nothing to fetch."
         marker DONE "ok"
     else
-        # The dry run FAILED (authentication cancelled, package lock held, network
-        # down). Never answer "0 B" here: a confident zero the run didn't earn is
-        # the exact failure class the test suite exists to prevent. Stay silent on
-        # SIZE and return non-zero — the GUI re-arms its "Show download size" link
-        # for a retry (updater.py `_on_size_finished`).
-        marker HINT "Couldn't work out the download size — the package manager was busy or the password prompt was cancelled. Try again in a moment."
-        echo "  Download size: unavailable (the dry run failed)." >&2
+        # The dry run FAILED. Never answer "0 B" here: a confident zero the run
+        # didn't earn is the exact failure class the test suite exists to prevent.
+        # Stay silent on SIZE and return non-zero — the GUI re-arms its "Show
+        # download size" link for a retry (updater.py `_on_size_finished`).
+        #
+        # Name the real cause from zypper's documented exit codes rather than
+        # guessing, and echo the tail of what it actually said: `out` is captured
+        # into a variable, so without this the log records only "unavailable" and
+        # the user has nothing to act on.
+        local why
+        case "$rc" in
+            7) why="another program is using the package manager (PackageKit, or a zypper you have open elsewhere) — close it and try again." ;;
+            5) why="OneUp wasn't allowed to run the check as administrator — the password prompt may have been cancelled." ;;
+            6) why="no software sources are enabled, so there is nothing to weigh up." ;;
+            *) why="the package manager reported an error (code $rc) — see the lines below." ;;
+        esac
+        marker HINT "Couldn't work out the download size: $why"
+        echo "  Download size: unavailable — $why"
+        sed -n 's/^/    zypper: /p' <<<"$out" | tail -n 5
         return 1
     fi
 }
