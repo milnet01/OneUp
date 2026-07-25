@@ -407,6 +407,67 @@ check        "the size still parses through the real code path" "@@SIZE@@|system
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0038: a whole run must cost exactly ONE password prompt. sudo_init obtains
+# the credential once, but with no terminal (the GUI runs us through QProcess) the
+# cached record is keyed to the PARENT PROCESS ID — sudoers(5) `timestamp_type`,
+# whose `tty` default falls back to the ppid when no terminal is present. Measured
+# on bash 5.3: `$(cmd)` keeps our own pid as the parent, but `$(cmd | other)`,
+# `$( { …; } )` and `$(a; b)` fork a subshell FIRST, so a sudo inside one is
+# authenticated *separately* — an extra password popup, in sudo's own bare
+# "password for root" wording. A user reported three in a row.
+#
+# The mock models that cache faithfully — one timestamp file per parent pid — and
+# logs a line whenever a call actually has to authenticate, so this counts real
+# password popups rather than sudo invocations.
+echo "TEST: a full run asks for the password exactly once (no per-step prompts)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+ts="${ONEUP_TEST_TS:?mock sudo needs ONEUP_TEST_TS}"
+for a in "$@"; do [[ "$a" == "-k" ]] && rm -f "$ts/ts.$PPID"; done
+for a in "$@"; do [[ "$a" == "-n" ]] && exit 1; done   # no passwordless drop-in
+if [[ ! -f "$ts/ts.$PPID" ]]; then
+    echo "PROMPT ppid=$PPID cmd=$*" >> "$ts/prompts"
+    : > "$ts/ts.$PPID"
+fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -A|-v|-k|-E) shift ;;
+        -p) shift 2 ;;
+        --) shift; break ;;
+        -*) shift ;;
+        *) break ;;
+    esac
+done
+[[ $# -eq 0 ]] && exit 0
+exec "$@"
+EOF
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)           exit 0 ;;
+  *dup*|*update*)      echo "Nothing to do." ; exit 0 ;;
+  *needs-rebooting*)   exit 0 ;;
+  *clean*)             exit 0 ;;
+  *" lr "*|*" lr -u"*) echo "1 | repo | X | Yes | (r ) | Yes | http://x" ; exit 0 ;;
+  *packages*)          exit 0 ;;
+  *ps*)                exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+printf '#!/usr/bin/env bash\necho "1024\t/var/cache/zypp"\n' > "$d/du"
+chmod +x "$d/sudo" "$d/zypper" "$d/du"
+ONEUP_TEST_TS="$d" run_engine "$d" >/dev/null 2>&1
+prompts=$(grep -c . "$d/prompts" 2>/dev/null || echo 0)
+if [[ "$prompts" == "1" ]]; then
+    echo "  ok   - the whole run asks for the password exactly once"; PASS=$((PASS+1))
+else
+    echo "  FAIL - the whole run asks for the password exactly once (got $prompts)"; FAIL=$((FAIL+1))
+    awk '{print "         " $0}' "$d/prompts" 2>/dev/null
+fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 # zypper exit 7 = ZYPP_LOCKED ("the ZYPP library is locked, e.g. packagekit is
 # running"). The hint must name that cause, not guess at authentication.
 echo "TEST: --size names a locked package manager as the reason (zypper exit 7)"

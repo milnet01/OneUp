@@ -38,6 +38,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Ask for the password once per run, not once per privileged step.** (ONEUP-0038)
+  OneUp now asks for your password a single time per update run instead of popping the box three or more times.
+
 - **the download-size check asked for a password twice** (ONEUP-0037)
   The second prompt was sudo's own unlabelled "password for root" box.
   It now asks once, and any prompt OneUp causes says that OneUp is

@@ -331,30 +331,15 @@ run_size() {
     sudo_init
     release_zypper_lock
     echo "Calculating download size (dry run)…"
-    # Redirect to a temp file rather than `out=$(sudo …)`. This is NOT a style
-    # choice: command substitution runs its command in a SUBSHELL, and per
-    # sudoers(5) `timestamp_type`, a credential cached with no terminal present is
-    # keyed to the PARENT PROCESS ID — "commands run via sudo with a different
-    # parent process ID … will be authenticated separately". The GUI runs this
-    # script through QProcess, so there is no terminal, so a sudo inside `$( )`
-    # could not see sudo_init's credential and demanded a SECOND password — with
-    # sudo's own bare "password for root" wording, which reasonably alarms users.
-    # Running it directly in this shell keeps the parent pid the same as
-    # sudo_init's, so the single up-front prompt covers it (ONEUP-0037).
-    local tmp
-    tmp=$(mktemp) || return 1
-    # shellcheck disable=SC2024  # "sudo doesn't affect redirects" does not apply:
-    # $tmp is OUR OWN mktemp file, so the shell writing it as the normal user is
-    # exactly right. Taking shellcheck's advice (`| sudo tee`) would put sudo back
-    # inside a pipeline subshell and reintroduce the second password prompt above.
+    # sudo_capture, not `out=$(sudo …)`: a substitution can run sudo in a subshell,
+    # which re-authenticates and pops a second password box (ONEUP-0037/0038).
     if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
-        sudo env LC_ALL=C zypper --non-interactive update --dry-run > "$tmp" 2>&1
+        sudo_capture -e out env LC_ALL=C zypper --non-interactive update --dry-run
     else
-        sudo env LC_ALL=C zypper --non-interactive dup --allow-vendor-change --dry-run > "$tmp" 2>&1
+        sudo_capture -e out env LC_ALL=C zypper --non-interactive dup \
+            --allow-vendor-change --dry-run
     fi
     rc=$?
-    out=$(<"$tmp")     # no sudo here, so no second credential lookup
-    rm -f "$tmp"
     # Two wordings, because zypper renamed this line and OneUp supports both distros:
     #   older (Leap):        "Overall download size: 1.3 GiB. Already cached: 0 B."
     #   current (TW 1.14.98) "Package download size:   371.4 MiB"
@@ -439,6 +424,43 @@ sudo_init() {
     setsid bash -c 'while true; do sudo -n -v 2>/dev/null || true; sleep 50; done' \
         >/dev/null 2>&1 &
     SUDO_KEEPALIVE=$!
+}
+
+# Capture a privileged command's output without letting sudo re-authenticate:
+#
+#     sudo_capture [-e] VAR cmd [args…]      # -e also captures stderr
+#
+# With no terminal — the GUI runs us through QProcess — sudo keys its cached
+# credential to the PARENT PROCESS ID (sudoers(5) `timestamp_type`: the `tty`
+# default falls back to the ppid when no terminal is present). Bash forks a real
+# subshell for `$(cmd | other)`, `$(a; b)`, `$(cmd "$(nested)")` and `< <(cmd |
+# other)`, so a sudo inside one has a *different* parent and is authenticated
+# separately — one extra KDE password popup per call site, worded in sudo's own bare
+# "password for root" (ONEUP-0038: a full run asked seven times).
+#
+# Redirecting to a temp file we own keeps sudo in the caller's own shell, so
+# sudo_init's single up-front prompt covers the whole run. Rule for new code: run
+# the privileged command through this helper, then do the text processing on the
+# captured text (`awk … <<<"$var"`) — never in a pipeline wrapped around sudo.
+sudo_capture() {
+    local _cap_err=false
+    [[ "$1" == "-e" ]] && { _cap_err=true; shift; }
+    local -n _cap_var="$1"; shift
+    local _cap_tmp _cap_rc
+    _cap_tmp=$(mktemp) || return 1
+    # shellcheck disable=SC2024  # "sudo doesn't affect redirects" isn't a problem
+    # here: $_cap_tmp is our own mktemp file, so writing it as the normal user is
+    # exactly right. shellcheck's suggested `| sudo tee` would put sudo back inside
+    # a pipeline subshell and reintroduce the extra password prompt.
+    if $_cap_err; then
+        sudo "$@" > "$_cap_tmp" 2>&1
+    else
+        sudo "$@" > "$_cap_tmp" 2>/dev/null
+    fi
+    _cap_rc=$?
+    _cap_var=$(<"$_cap_tmp")     # no sudo here, so no second credential lookup
+    rm -f "$_cap_tmp"
+    return $_cap_rc
 }
 # Negative PID targets the keep-alive's process group (the loop shell + its sleep),
 # so nothing survives the run. See sudo_init for why setsid makes this a lone group.
@@ -581,11 +603,13 @@ thin_snapshots() {
         return 0
     fi
     sudo_init
-    local before after
-    before=$(sudo snapper --no-headers list 2>/dev/null | grep -c .)
+    local before after list
+    sudo_capture list snapper --no-headers list
+    before=$(grep -c . <<<"$list")
     sudo snapper cleanup number   2>&1 || true
     sudo snapper cleanup timeline 2>&1 || true
-    after=$(sudo snapper --no-headers list 2>/dev/null | grep -c .)
+    sudo_capture list snapper --no-headers list
+    after=$(grep -c . <<<"$list")
     if [[ "$before" =~ ^[0-9]+$ && "$after" =~ ^[0-9]+$ ]] && (( before > after )); then
         echo "Thinned $(( before - after )) old snapshot(s) ($before → $after)."
         marker SNAPSHOTS "thinned|$(( before - after ))"
@@ -637,9 +661,15 @@ if step_selected system && command -v snapper &>/dev/null; then
     # Create a clearly-labelled rollback point so the pre-update state is easy to
     # find later. (Tumbleweed also auto-snapshots around zypper, but a named entry
     # is unambiguous.) Fall back to reporting the newest snapshot if create fails.
-    SNAP_ID=$(sudo snapper create --description "OneUp pre-update $(date '+%Y-%m-%d %H:%M')" \
-        --cleanup-algorithm number --print-number 2>/dev/null)
-    [[ -z "$SNAP_ID" ]] && SNAP_ID=$(sudo snapper --no-headers list 2>/dev/null | tail -n1 | awk '{print $1}')
+    # The description is built FIRST: a nested `$(date …)` inside the capture would
+    # fork a subshell and cost an extra password prompt (see sudo_capture).
+    SNAP_DESC="OneUp pre-update $(date '+%Y-%m-%d %H:%M')"
+    sudo_capture SNAP_ID snapper create --description "$SNAP_DESC" \
+        --cleanup-algorithm number --print-number
+    if [[ -z "$SNAP_ID" ]]; then
+        sudo_capture SNAP_LIST snapper --no-headers list
+        SNAP_ID=$(tail -n1 <<<"$SNAP_LIST" | awk '{print $1}')
+    fi
     if [[ -n "$SNAP_ID" ]]; then
         echo "Pre-update snapshot #$SNAP_ID recorded  (roll back with: sudo snapper rollback $SNAP_ID)"
         marker SNAPSHOT "$SNAP_ID"
@@ -651,12 +681,13 @@ if step_selected system && command -v snapper &>/dev/null; then
     # no date and isn't a rollback target) and keep only the newest 12. Only the
     # id is trusted downstream (the GUI re-validates it as a bare number before it
     # reaches snapper); the date/description are display-only.
-    sudo snapper --machine-readable csv list --columns number,date,description 2>/dev/null \
-        | awk -F',' 'NR>1 && $1 ~ /^[0-9]+$/ && $1 != "0" && $2 != "" {
+    sudo_capture SNAP_CSV snapper --machine-readable csv list \
+        --columns number,date,description
+    awk -F',' 'NR>1 && $1 ~ /^[0-9]+$/ && $1 != "0" && $2 != "" {
               desc = $0; sub(/^[^,]*,[^,]*,/, "", desc)   # everything after the 2nd comma
               gsub(/^"|"$/, "", desc); gsub(/\|/, "/", desc)
               print $1 "|" $2 "|" desc
-          }' \
+          }' <<<"$SNAP_CSV" \
         | tail -n 12 \
         | while IFS='|' read -r snum sdate sdesc; do
               marker SNAPSHOT_ITEM "$snum|$sdate|$sdesc"
@@ -684,7 +715,8 @@ if step_selected system; then
     # the honest signal: Btrfs shares extents copy-on-write, so a byte figure would
     # overcount, and per-snapshot quota data is usually off on the root config.
     if command -v snapper &>/dev/null; then
-        snap_count=$(sudo snapper --no-headers list 2>/dev/null | grep -c .)
+        sudo_capture SNAP_LIST snapper --no-headers list
+        snap_count=$(grep -c . <<<"$SNAP_LIST")
         if [[ "$snap_count" =~ ^[0-9]+$ ]] && (( snap_count >= SNAP_WARN_COUNT )); then
             echo "  ! $snap_count system restore points (snapshots) stored — these build up"
             echo "    with each update and can use a lot of disk space; consider thinning them."
@@ -724,17 +756,26 @@ enabled_repo_aliases() {   # alias of each ENABLED repo (read-only; no root)
         $1 ~ /^[0-9]+$/ && tolower(substr($4,1,1))=="y" { print $2 }'
 }
 
-find_failing_repos() {     # "alias reason" per enabled repo that fails its own refresh
+# Fills FAILING_REPOS[] with "alias reason" per enabled repo that fails its own
+# refresh. It fills a global instead of echoing on purpose: the caller used to read
+# it through `< <(find_failing_repos)`, which runs the whole function — and its
+# privileged refreshes — in a subshell, costing an extra password prompt (see
+# sudo_capture). Nothing here may sit inside a substitution.
+FAILING_REPOS=()
+find_failing_repos() {
     local alias out rc reason
-    while IFS= read -r alias; do
+    local -a aliases=()
+    mapfile -t aliases < <(enabled_repo_aliases)   # read-only, no sudo inside
+    FAILING_REPOS=()
+    for alias in "${aliases[@]}"; do
         [[ -z "$alias" ]] && continue
-        out=$(sudo zypper --non-interactive refresh "$alias" 2>&1); rc=$?
+        sudo_capture -e out zypper --non-interactive refresh "$alias"; rc=$?
         (( rc == 0 )) && continue
         if   grep -qiE 'signature|GPG|key' <<<"$out"; then reason=signature
         elif grep -qiE 'metadata|Valid metadata not found' <<<"$out"; then reason=metadata
         else reason=unreachable; fi
-        echo "$alias $reason"
-    done < <(enabled_repo_aliases)
+        FAILING_REPOS+=("$alias $reason")
+    done
 }
 
 repo_scoped_failure() {
@@ -802,7 +843,8 @@ if step_selected system; then
     # and the failure actually looks repo-scoped (disk-full/conflict are not).
     systemic_repo_fail=false
     if ! $ok && (( ${#SKIP_REPOS[@]} == 0 )) && repo_scoped_failure; then
-        mapfile -t failing < <(find_failing_repos)
+        find_failing_repos                    # fills FAILING_REPOS[] in THIS shell
+        failing=("${FAILING_REPOS[@]}")
         if (( ${#failing[@]} > MAX_SKIP_REPOS )); then
             systemic_repo_fail=true                       # too many at once → not one bad source
         elif (( ${#failing[@]} > 0 )); then
@@ -953,8 +995,9 @@ fi
 # ---------------------------------------------------------------------------
 if step_selected orphans; then
     begin_step orphans
-    mapfile -t UNNEEDED < <(sudo zypper --non-interactive packages --unneeded 2>/dev/null \
-        | awk -F'|' 'NR>2 && $3 !~ /^[[:space:]]*$/ {gsub(/ /,"",$3); print $3}')
+    sudo_capture UNNEEDED_RAW zypper --non-interactive packages --unneeded
+    mapfile -t UNNEEDED < <(awk -F'|' \
+        'NR>2 && $3 !~ /^[[:space:]]*$/ {gsub(/ /,"",$3); print $3}' <<<"$UNNEEDED_RAW")
     if ((${#UNNEEDED[@]})); then
         echo "Removing ${#UNNEEDED[@]} leftover dependency package(s):"
         printf '  - %s\n' "${UNNEEDED[@]}"
@@ -968,8 +1011,8 @@ if step_selected orphans; then
         end_step orphans ok "nothing to remove"
     fi
     # Report-only: packages with no active repo (do NOT auto-remove these).
-    ORPHAN_COUNT=$(sudo zypper --non-interactive packages --orphaned 2>/dev/null \
-        | awk -F'|' 'NR>2 && $3 !~ /^[[:space:]]*$/' | wc -l)
+    sudo_capture ORPHAN_RAW zypper --non-interactive packages --orphaned
+    ORPHAN_COUNT=$(awk -F'|' 'NR>2 && $3 !~ /^[[:space:]]*$/' <<<"$ORPHAN_RAW" | wc -l)
     if ((ORPHAN_COUNT > 0)); then
         echo
         echo "Note: $ORPHAN_COUNT package(s) have no active repository (possibly"
@@ -985,10 +1028,12 @@ if step_selected cache; then
     # Measure the package cache before/after the clean so we can report what it
     # freed — the cache step is otherwise the one task with no visible payoff.
     # du needs root for some subdirs; this step's sudo credential is already warm.
-    cache_before=$(sudo du -sB1 /var/cache/zypp 2>/dev/null | awk '{print $1}')
+    sudo_capture CACHE_DU du -sB1 /var/cache/zypp
+    cache_before=$(awk '{print $1}' <<<"$CACHE_DU")
     if sudo zypper --non-interactive clean --all; then
         end_step cache ok
-        cache_after=$(sudo du -sB1 /var/cache/zypp 2>/dev/null | awk '{print $1}')
+        sudo_capture CACHE_DU du -sB1 /var/cache/zypp
+        cache_after=$(awk '{print $1}' <<<"$CACHE_DU")
         # Only report a genuine reclamation — skip the marker when nothing shrank
         # so the GUI never shows a misleading "Reclaimed 0B".
         if [[ "$cache_before" =~ ^[0-9]+$ && "$cache_after" =~ ^[0-9]+$ ]] \
@@ -1041,7 +1086,8 @@ marker REBOOT "$REBOOT${REBOOT_REASON:+|$REBOOT_REASON}"
 # ---------------------------------------------------------------------------
 SERVICES=""
 if $SYS_CHANGED && [[ "$REBOOT" == "no" ]] && command -v zypper &>/dev/null; then
-    SERVICES=$(sudo zypper ps -sss 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+    sudo_capture SERVICES_RAW zypper ps -sss
+    SERVICES=$(tr '\n' ' ' <<<"$SERVICES_RAW" | sed 's/[[:space:]]*$//')
     [[ -n "$SERVICES" ]] && marker SERVICES "$SERVICES"
 fi
 

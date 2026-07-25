@@ -346,3 +346,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Checking the download size asked for your password twice in a row, and the second box was an unlabelled request for the root password — which understandably looks suspicious. Now it asks once, and any prompt says it is OneUp asking and why.
   Kind: fix.
   Source: user-report-2026-07-25 (two prompts back to back; second read "password for root").
+
+- ✅ [ONEUP-0038] **Ask for the password once per run, not once per privileged step.**
+  A user reported three password prompts in a row, twice in one session, the
+  extra ones in sudo's own bare "password for root" wording. Measured cause:
+  with no terminal (the GUI runs the engine through QProcess) sudo keys its
+  cached credential to the PARENT PROCESS ID, and bash forks a real subshell
+  for `$(cmd | other)`, `$(a; b)`, `$(cmd "$(nested)")` and `< <(cmd | other)`
+  — so a sudo inside one authenticates separately. Eleven privileged captures
+  were shaped that way; an instrumented full run needed SEVEN prompts. Added a
+  `sudo_capture` helper (temp file we own, no subshell) and routed every capture
+  through it, including `find_failing_repos`, whose caller read it through a
+  process substitution. Regression test models sudo's per-parent-pid credential
+  cache and fails if a full run needs more than one prompt.
+  **Layman:** OneUp now asks for your password a single time per update run instead of popping the box three or more times.
+  Kind: fix.
+  Source: user-report-2026-07-25.
