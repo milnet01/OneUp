@@ -54,9 +54,17 @@ They communicate through a **line-based marker protocol**: the engine prints
 progress bars, badges, and banners. Non-marker lines are plain log output. The markers are
 the contract between the two files — **changing a marker's name or field layout in one file
 means updating the parser in the other, and the assertions in `tests/run-tests.sh`.**
-Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `SNAPSHOT`, `SNAPSHOT_ITEM`, `SNAPSHOTS`, `CHECK`,
+Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `PROGRESS`, `SNAPSHOT`, `SNAPSHOT_ITEM`, `SNAPSHOTS`, `CHECK`,
 `CHECK_ITEM`, `SIZE`, `FREED`, `AUTH`, `DISK`, `REPO`, `REPO_SKIPPED`, `HINT`, `REMEDY`,
 `SERVICES`, `INSTALLED`, `REBOOT`, `DONE`.
+(`PROGRESS|key|done|total|phase` carries live per-package progress *within* a step, so a
+long download can't look like a hang — `phase` is `download` or `install`, and a **total of
+0 means "unknown"**, which the GUI must render as a running tally rather than inventing a
+denominator. The engine derives it in `progress_filter` by parsing zypper's own output
+(`Preloading:` has no counter, `Retrieving: … (12/77)` and `( 7/77) Installing:` do), so the
+three phase wordings are a dependency on zypper's output format — `LC_ALL=C` is pinned on the
+transaction to keep them stable on a non-English desktop. The GUI announces a phase *change*
+only, never each package.)
 (`CHECK_ITEM|key|name|from|to` carries one changed package for the `--check` preview
 panel; `SIZE|key|download` carries the on-demand download-size figure from `--size=<step>`;
 `FREED|cache|human` carries the disk the cache clean reclaimed (measured before/after
@@ -167,9 +175,20 @@ Dependency policy (CI actions, runtimes, PySide6, base images) is a standing rul
   derived from the desktop's default point size (never hard-coded `px`) so text scales;
   see `docs/specs/ONEUP-0028-accessibility.md`. Note the app deliberately draws **no
   focus ring** (a user-facing design decision, 2026-07-25) — focus reuses the hover look.
-- **Privileged calls must stay out of subshells.** `out=$(sudo …)` re-authenticates:
-  with no terminal, sudo keys its cached credential to the parent process id (see
-  `sudoers(5)` `timestamp_type`), and a subshell changes it — which means a second
-  password prompt, or an outright failure. Redirect to a temp file and read that back
-  instead. `SUDO_ASKPASS`/`SUDO_PROMPT` are exported so any prompt is graphical and
-  labelled as OneUp's.
+- **Privileged calls must stay out of subshells — capture with `sudo_capture`.** With no
+  terminal (the GUI runs the engine through `QProcess`) sudo keys its cached credential to
+  the **parent process id** (`sudoers(5)` `timestamp_type`), and bash forks a real subshell
+  for `$(cmd | other)`, `$(a; b)`, `$(cmd "$(nested)")` and `< <(cmd | other)` — so a `sudo`
+  inside one authenticates *again*, i.e. another password popup. Measured, not assumed: a
+  full run once needed seven. Use `sudo_capture [-e] VAR cmd …` (writes to a temp file we
+  own, no subshell) and do the text processing on the captured text — `awk … <<<"$VAR"` —
+  never in a pipeline wrapped around `sudo`. A *top-level* `sudo … | tee` is fine (sudo stays
+  the caller's child), which is how `run_system_upgrade` streams. The regression test models
+  sudo's per-parent-pid credential cache and fails if a run needs more than one prompt.
+  `SUDO_ASKPASS`/`SUDO_PROMPT` are exported so any prompt is graphical and labelled as
+  OneUp's.
+- **Anything the engine spawns must not outlive it.** `cleanup`'s trap can't run when the
+  engine is SIGKILLed, so the sudo keep-alive also watches the engine's pid and exits on its
+  own; it's tagged `oneup-keepalive` in `$0` so tests can find it. Before this, an interrupted
+  run left a loop validating sudo every 50 seconds indefinitely. Same reasoning applies to any
+  new background helper.

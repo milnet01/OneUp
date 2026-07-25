@@ -1208,6 +1208,8 @@ class Updater(QMainWindow):
         self._reboot_reason = ""     # optional "why a reboot matters" phrase from the engine
         self._installed_count = ""   # system packages changed, as reported by the engine
         self._sys_changed = False
+        self._step_caption = ""      # current step's bar caption, so @@PROGRESS@@ can extend it
+        self._progress_phase = ""    # download/install; a change is what gets announced
         self._failed_steps: list[str] = []
         self._services = ""
         self._snapshot = ""
@@ -2629,6 +2631,8 @@ for (var i = 0; i < clients.length; i++) {{
         self._reboot_reason = ""
         self._installed_count = ""
         self._sys_changed = False
+        self._step_caption = ""
+        self._progress_phase = ""
         self._failed_steps = []
         self._services = ""
         self._snapshot = ""
@@ -2743,7 +2747,11 @@ for (var i = 0; i < clients.length; i++) {{
                 return
             _key, index, total, label = parts[0], parts[1], parts[2], parts[3]
             self.status.setText(f"{label}…")
-            self.bar.setFormat(f"{label}  (step {index} of {total})")
+            # Kept so @@PROGRESS@@ can rebuild the bar's caption without re-deriving
+            # the step's label and position from a marker it doesn't carry.
+            self._step_caption = f"{label}  (step {index} of {total})"
+            self._progress_phase = ""
+            self.bar.setFormat(self._step_caption)
             self.bar.setValue(int(index) - 1)
             # Progress out loud: without this a blind user gets silence for the
             # whole run. Announced AFTER status.setText, so the fallback path's
@@ -2815,6 +2823,33 @@ for (var i = 0; i < clients.length; i++) {{
                 date = parts[1] if len(parts) > 1 else ""
                 desc = parts[2] if len(parts) > 2 else ""
                 self._snapshots.append((parts[0], date, desc))
+        elif tag == "PROGRESS":
+            # Live per-package progress inside a step (ONEUP-0040). Without this the
+            # app shows one static line for the whole download — a user reasonably
+            # read a working 379 MiB fetch as a hang and quit mid-transaction.
+            # Guarded like STEP_BEGIN: the engine's stdout and stderr are merged, so
+            # any marker can arrive spliced, and a throw here would abort parsing and
+            # drop the rest of the run's markers.
+            if len(parts) < 4 or not parts[1].isdigit() or not parts[2].isdigit():
+                return
+            key, phase = parts[0], parts[3]
+            n, total = int(parts[1]), int(parts[2])
+            verb = "Downloading" if phase == "download" else "Installing"
+            # total 0 = zypper's preload phase, which reports no denominator. Show the
+            # honest running tally rather than inventing one.
+            detail = f"{verb} {n} of {total} packages" if total else f"{verb} packages — {n} so far"
+            self.status.setText(f"{detail}…")
+            self.bar.setFormat(f"{self._step_caption} — {detail}"
+                               if self._step_caption else f"{detail}…")
+            row = self.rows.get(key)
+            if row:
+                row.set_badge(f"{n}/{total}" if total else str(n))
+            # Spoken once per phase, not per package: a screen reader announcing all
+            # 141 packages would bury everything else, but silence through the run's
+            # longest stretch is exactly what made it look hung.
+            if phase != self._progress_phase:
+                self._progress_phase = phase
+                self._announce(f"{verb} packages.")
         elif tag == "SERVICES":
             self._services = rest.strip()
         elif tag == "HINT":

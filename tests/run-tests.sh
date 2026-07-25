@@ -468,6 +468,77 @@ fi
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0040: a long download must never look like a hang. The zypper output below
+# is copied verbatim from a real Tumbleweed upgrade log, including the padded
+# counter ("( 1/3)") and the preload phase, which carries no counter at all.
+echo "TEST: the engine reports per-package progress during download and install"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*) exit 0 ;;
+  *dup*|*update*)
+    echo "3 packages to upgrade."
+    echo "Preloading Packages [..."
+    echo "Preloading: libglfw3-3.4-67.34.x86_64.rpm [done]"
+    echo "Preloading: libbox2d2-2.4.1-18.53.x86_64.rpm [done]"
+    echo "Retrieving: cpupower-lang-7.1.4-17.d_t.142.noarch (devel-tools) (1/3),  31.0 KiB"
+    echo "Retrieving: libcapstone5-5.0.6-18.d_t.5.x86_64 (devel-tools) (2/3), 898.3 KiB"
+    echo "Checking for file conflicts: [.........done]"
+    echo "( 1/3) Installing: cpupower-lang-7.1.4-17.d_t.142.noarch [...done]"
+    echo "( 3/3) Installing: libcapstone5-5.0.6-18.d_t.5.x86_64 [..done]"
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+check "the preload phase reports a running count (zypper gives no total there)" \
+      "@@PROGRESS@@|system|2|0|download" "$out"
+check "a counted download reports done and total" "@@PROGRESS@@|system|2|3|download" "$out"
+check "the install phase reports done and total"  "@@PROGRESS@@|system|1|3|install" "$out"
+check "zypper's padded counter is parsed"         "@@PROGRESS@@|system|3|3|install" "$out"
+check_absent "a non-package line emits no progress" "@@PROGRESS@@|system|0|" "$out"
+# The filter is a pass-through: losing zypper's own words would blind the log.
+check "zypper's own output still reaches the log" "Checking for file conflicts" "$out"
+check "the step still succeeds through the filter" "@@STEP_END@@|system|ok" "$out"
+rm -rf "$d"
+
+echo "TEST: progress parsing does not cost an extra password prompt"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+ts="${ONEUP_TEST_TS:?mock sudo needs ONEUP_TEST_TS}"
+for a in "$@"; do [[ "$a" == "-k" ]] && rm -f "$ts/ts.$PPID"; done
+for a in "$@"; do [[ "$a" == "-n" ]] && exit 1; done
+if [[ ! -f "$ts/ts.$PPID" ]]; then
+    echo "PROMPT ppid=$PPID cmd=$*" >> "$ts/prompts"
+    : > "$ts/ts.$PPID"
+fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -A|-v|-k|-E) shift ;;
+        -p) shift 2 ;;
+        --) shift; break ;;
+        -*) shift ;;
+        *) break ;;
+    esac
+done
+[[ $# -eq 0 ]] && exit 0
+exec "$@"
+EOF
+printf '#!/usr/bin/env bash\ncase "$*" in *dup*|*update*) echo "Preloading: a.rpm [done]"; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
+chmod +x "$d/sudo" "$d/zypper"
+ONEUP_TEST_TS="$d" run_engine "$d" --steps=system >/dev/null 2>&1
+prompts=$(grep -c . "$d/prompts" 2>/dev/null || echo 0)
+if [[ "$prompts" == "1" ]]; then
+    echo "  ok   - the extra pipeline stage keeps sudo in this shell (one prompt)"; PASS=$((PASS+1))
+else
+    echo "  FAIL - the extra pipeline stage keeps sudo in this shell (got $prompts)"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 # ONEUP-0039: when another program holds the package lock, every zypper step fails
 # for that one reason. A user quit OneUp mid-download; the engine's zypper kept
 # installing in the background (by design — killing a transaction half-way can break
@@ -897,14 +968,22 @@ d=$(mktemp -d); setup_common "$d"
 # process-group kill) would orphan the sleep, reparented to init for up to 50s.
 printf '#!/usr/bin/env bash\ncase "$*" in *refresh*) exit 0;; *dup*|*update*) sleep 1; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
 chmod +x "$d/zypper"
-# Diff the set of `sleep 50` processes (the keep-alive's idle) across the run:
-# anything new that survives is an orphan cleanup failed to reap. -xf matches the
-# full command line exactly, so this harness's own long argv can't false-match.
-ka_before=$(pgrep -xf 'sleep 50' | sort)
+# Diff the keep-alive LOOP SHELLS (tagged oneup-keepalive in $0) across the run:
+# a survivor is an orphan cleanup failed to reap. Deliberately NOT `pgrep -xf 'sleep
+# 50'`: the loop spawns a fresh sleep every 50s, so ANY keep-alive already leaked on
+# the machine — including one left by a real interrupted run — made this test fail
+# roughly one run in six with a pid that had nothing to do with the run under test.
+# The loop shell's pid is stable for the life of the run, so this can't false-positive.
+ka_before=$(pgrep -f oneup-keepalive | sort)
 run_engine "$d" --steps=system >/dev/null 2>&1
-sleep 0.4   # let the process-group kill propagate
-ka_after=$(pgrep -xf 'sleep 50' | sort)
-ka_leaked=$(comm -13 <(echo "$ka_before") <(echo "$ka_after") | grep -v '^$' || true)
+# The process-group kill is asynchronous, so poll rather than guessing a fixed delay.
+ka_leaked=""
+for _ in $(seq 1 40); do          # up to 4s, returns as soon as it is clean
+    ka_after=$(pgrep -f oneup-keepalive | sort)
+    ka_leaked=$(comm -13 <(echo "$ka_before") <(echo "$ka_after") | grep -v '^$' || true)
+    [[ -z "$ka_leaked" ]] && break
+    sleep 0.1
+done
 if [[ -z "$ka_leaked" ]]; then
     echo "  ok   - no orphaned keep-alive after the run"; PASS=$((PASS+1))
 else
@@ -912,6 +991,30 @@ else
     echo "$ka_leaked" | xargs -r kill 2>/dev/null
 fi
 rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0041: cleanup's trap cannot run when the engine is SIGKILLed, and the
+# keep-alive used to loop forever in that case. Two were found on the reporter's
+# machine still validating sudo every 50 seconds, 40 minutes after the runs that
+# spawned them had been killed. So the loop must also watch the engine's pid and
+# exit on its own. This asserts the guard directly: run the real loop against a pid
+# that is already gone and it must exit rather than idle.
+echo "TEST: the keep-alive exits on its own once the engine is gone (SIGKILL-proof)"
+dead=999999; while [[ -d "/proc/$dead" ]]; do dead=$((dead+1)); done
+ka_body=$(sed -n '/setsid bash -c ./,/oneup-keepalive/p' "$ENGINE")
+if [[ -z "$ka_body" ]]; then
+    echo "  FAIL - could not find the keep-alive loop in the engine"; FAIL=$((FAIL+1))
+else
+    # Run the engine's own loop body, substituting a 0.1s sleep for its 50s one so the
+    # test doesn't wait a minute to observe the guard. The `kill -0` guard is verbatim.
+    loop=$(sed 's/sleep 50/sleep 0.1/' <<<"$ka_body" \
+           | sed -e 's/^ *setsid bash -c .//' -e "s/. oneup-keepalive .*$//")
+    if timeout 5 bash -c "$loop" oneup-keepalive-test "$dead" >/dev/null 2>&1; then
+        echo "  ok   - the keep-alive exits when its engine no longer exists"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - the keep-alive kept running with no engine to keep alive"; FAIL=$((FAIL+1))
+    fi
+fi
 
 # ---------------------------------------------------------------------------
 echo "TEST: @@INSTALLED@@ keeps its positional 3-field layout the GUI depends on"

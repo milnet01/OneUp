@@ -139,6 +139,9 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 #   @@STEP_BEGIN@@|key|index|total|Human label
 #   @@STEP_END@@|key|ok|skip|fail|detail
 #   @@TIMING@@|key|seconds               (how long the step took)
+#   @@PROGRESS@@|key|done|total|phase    (live per-package progress within a step;
+#                                         phase is download|install, and total 0
+#                                         means zypper gave no denominator)
 #   @@SNAPSHOT@@|id
 #   @@SNAPSHOT_ITEM@@|id|date|description (rollback picker: one recent restore point)
 #   @@CHECK@@|key|count|label            (--check mode: updates available)
@@ -421,8 +424,19 @@ sudo_init() {
     # setsid puts the loop in its own process group so cleanup can kill the WHOLE
     # group (kill -- -PGID): a plain `kill $subshell` leaves the inner `sleep 50`
     # orphaned (reparented to init, lingering up to 50s) after a cancelled run.
-    setsid bash -c 'while true; do sudo -n -v 2>/dev/null || true; sleep 50; done' \
-        >/dev/null 2>&1 &
+    # It also watches OUR pid and exits on its own once we're gone. cleanup's group
+    # kill is the fast path, but a trap cannot run if the engine is SIGKILLed — and
+    # then the loop ran forever: two of them were found still calling `sudo -n -v`
+    # every 50 seconds, 40 minutes after the runs that spawned them were killed
+    # (ONEUP-0041). $0 carries a grep-able tag so a test can identify these without
+    # matching every `sleep 50` on the machine.
+    # shellcheck disable=SC2016  # the single quotes are the point: "$1" must reach the
+    # INNER shell unexpanded, where it is the engine pid passed as an argument below.
+    setsid bash -c '
+        while kill -0 "$1" 2>/dev/null; do
+            sudo -n -v 2>/dev/null || true
+            sleep 50
+        done' oneup-keepalive "$$" >/dev/null 2>&1 &
     SUDO_KEEPALIVE=$!
 }
 
@@ -825,14 +839,59 @@ repo_scoped_failure() {
     grep -qiE 'signature|GPG|key|metadata|Valid metadata not found|Curl|could not resolve|Download.*failed|Skipping repository' "$SYS_LOG"
 }
 
+# Turn zypper's own per-package chatter into progress markers, so a long download or
+# install can never look like a hang (ONEUP-0040). A user quit a run that was working
+# perfectly — it was several minutes into fetching 379 MiB with nothing on screen but
+# zypper's dots — and the orphaned transaction then blocked the next two runs.
+#
+# zypper's three phases, verbatim (LC_ALL=C is pinned on the transaction, so these
+# strings are stable on a non-English desktop too):
+#
+#   Preloading: libglfw3-3.4-67.34.x86_64.rpm [done]
+#   Retrieving: cpupower-lang-7.1.4-17.noarch (devel-tools) (1/77),  31.0 KiB
+#   ( 1/77) Installing: cpupower-lang-7.1.4-17.noarch [...done]
+#
+# Only the last two carry a total. The preload — the parallel prefetch, and the phase
+# the user actually sat through — has no counter, so it reports a total of 0 meaning
+# "unknown" and the GUI shows a live tally instead of inventing a denominator.
+emit_progress() {        # step-key, "n/m" (zypper pads it: "( 1/77)"), phase
+    local step="$1" frac="${2// /}" phase="$3"
+    [[ "$frac" =~ ^([0-9]+)/([0-9]+)$ ]] || return 0
+    marker PROGRESS "$step|${BASH_REMATCH[1]}|${BASH_REMATCH[2]}|$phase"
+}
+progress_filter() {      # step-key; passes every line through, adding @@PROGRESS@@
+    local step="$1" line frac preloaded=0
+    # `|| [[ -n $line ]]` so a final line with no trailing newline is not swallowed.
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        printf '%s\n' "$line"
+        case "$line" in
+            Preloading:*)
+                preloaded=$((preloaded+1))
+                marker PROGRESS "$step|$preloaded|0|download" ;;
+            Retrieving:*)
+                frac=${line##*\(}; frac=${frac%%)*}      # last (…) is the counter
+                emit_progress "$step" "$frac" download ;;
+            \(*Installing:*|\(*Removing:*|\(*Upgrading:*)
+                frac=${line#*\(}; frac=${frac%%)*}       # leading (…) is the counter
+                emit_progress "$step" "$frac" install ;;
+        esac
+    done
+}
+
 run_system_upgrade() {   # runs the transaction into $SYS_LOG (truncates it); sets global `ok`
     ok=true
+    # tee BEFORE the progress filter, so $SYS_LOG holds zypper's output alone — the
+    # change-detection and reboot-reason parsing read it and must not see our markers.
+    # sudo stays the pipeline's first element, so it keeps this shell as its parent and
+    # reuses sudo_init's credential (see sudo_capture) — and PIPESTATUS[0] is zypper's.
     if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
-        sudo env LC_ALL=C zypper --non-interactive update 2>&1 | tee "$SYS_LOG"
+        sudo env LC_ALL=C zypper --non-interactive update 2>&1 \
+            | tee "$SYS_LOG" | progress_filter system
     else
         # Tumbleweed: --allow-vendor-change lets Packman codec packages update
         # cleanly; without it the upgrade stalls on vendor conflicts.
-        sudo env LC_ALL=C zypper --non-interactive dup --allow-vendor-change 2>&1 | tee "$SYS_LOG"
+        sudo env LC_ALL=C zypper --non-interactive dup --allow-vendor-change 2>&1 \
+            | tee "$SYS_LOG" | progress_filter system
     fi
     [[ ${PIPESTATUS[0]} -eq 0 ]] || ok=false
 }

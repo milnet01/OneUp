@@ -376,3 +376,30 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** If something else is already installing software, OneUp now says so in one clear sentence and changes nothing, instead of reporting a pile of failures.
   Kind: fix.
   Source: user-report-2026-07-25.
+
+- ✅ [ONEUP-0040] **Show live per-package progress so a long download can't look like a hang.**
+  A user watched a working run sit on "Updating system packages…" for minutes
+  while zypper fetched 379 MiB, concluded it was stuck, and quit the app — which
+  left the transaction running in the background and blocked the next two runs.
+  The engine now parses zypper's own counters (`Retrieving: … (12/77)` and
+  `( 7/77) Installing:`) plus the uncounted `Preloading:` prefetch and emits a
+  new `@@PROGRESS@@|key|done|total|phase` marker; the GUI puts it in the status
+  line, the progress-bar caption and the step's badge. A total of 0 means zypper
+  gave no denominator, so the GUI shows a running tally rather than inventing
+  one. Screen readers hear a phase change, not 141 packages.
+  **Layman:** While OneUp downloads and installs, it now says "Downloading 12 of 141 packages" instead of sitting on one line for minutes.
+  Kind: feature.
+  Source: user-report-2026-07-25.
+
+- ✅ [ONEUP-0041] **Stop the sudo keep-alive outliving a killed run.**
+  Two keep-alive loops were found on the reporter's machine still validating
+  sudo every 50 seconds forty minutes after the runs that spawned them had been
+  killed. `cleanup`'s trap handles the normal exit but cannot run on SIGKILL, so
+  the loop now also watches the engine's pid and exits on its own; it carries an
+  `oneup-keepalive` tag in $0. Those orphans were also why the anti-orphan test
+  was flaky one run in six: it matched every `sleep 50` on the machine, and a
+  leaked loop respawns one every 50 seconds. It now diffs the tagged loop shells,
+  whose pids are stable, and a new test asserts the pid guard directly.
+  **Layman:** An interrupted update no longer leaves a background helper running for hours.
+  Kind: fix.
+  Source: in-session-2026-07-25.

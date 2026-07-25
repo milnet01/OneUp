@@ -143,6 +143,44 @@ def main() -> int:
     # isVisibleTo(window): the banner's own visibility, independent of the never-shown window.
     check("disk warning banner shown", w.warn_banner.isVisibleTo(w))
 
+    # --- @@PROGRESS@@: a long download must never look like a hang (ONEUP-0040) ---
+    wP = updater.Updater()
+    wP.handle_line("@@STEP_BEGIN@@|system|1|5|Updating system packages")
+    caption = wP.bar.format()
+    # zypper's preload phase gives no total, so the GUI must show a running tally
+    # rather than inventing a denominator it doesn't have.
+    wP.handle_line("@@PROGRESS@@|system|34|0|download")
+    check("unknown total shows a running tally, not a fake ratio",
+          "34 so far" in wP.status.text() and "of 0" not in wP.status.text())
+    check("the bar keeps the step caption and adds the detail",
+          caption in wP.bar.format() and "34 so far" in wP.bar.format())
+    wP.handle_line("@@PROGRESS@@|system|12|141|download")
+    check("a counted download reads as 'Downloading 12 of 141 packages'",
+          wP.status.text() == "Downloading 12 of 141 packages…")
+    check("the row badge tracks progress", wP.rows["system"].badge.text() == "12/141")
+    wP.handle_line("@@PROGRESS@@|system|7|141|install")
+    check("the install phase says Installing", wP.status.text() == "Installing 7 of 141 packages…")
+    # One announcement per phase, not per package: 141 spoken lines would bury
+    # everything else, but silence through the longest phase is what looked hung.
+    check("a phase change is announced once", wP._last_announcement == "Installing packages.")
+    wP._last_announcement = ""
+    wP.handle_line("@@PROGRESS@@|system|8|141|install")
+    check("further packages in the same phase are not re-announced",
+          wP._last_announcement == "")
+    # Same splice-safety contract as STEP_BEGIN: merged stdout/stderr can cut a marker.
+    for bad in ("@@PROGRESS@@|system",
+                "@@PROGRESS@@|system|x|141|download",
+                "@@PROGRESS@@|system|12|y|download"):
+        try:
+            wP.handle_line(bad)
+            check(f"malformed progress marker handled: {bad[-14:]!r}", True)
+        except Exception as exc:  # noqa: BLE001 — any throw is the failure.
+            check(f"malformed progress marker handled ({exc})", False)
+    # A later step's caption must replace the previous one, not accumulate.
+    wP.handle_line("@@STEP_BEGIN@@|cache|5|5|Cleaning package cache")
+    check("a new step resets the progress caption",
+          "141" not in wP.bar.format() and "Cleaning package cache" in wP.bar.format())
+
     # --- passwordless-authorization toggle (opt-in) ----------------------------
     check("auth toggle defaults to off", w.auth_btn.text() == "Passwordless: off")
     w._set_auth_checked(True)

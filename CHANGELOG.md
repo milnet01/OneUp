@@ -8,6 +8,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Show live per-package progress so a long download can't look like a hang.** (ONEUP-0040)
+  While OneUp downloads and installs, it now says "Downloading 12 of 141 packages" instead of sitting on one line for minutes.
+
 - **Accessibility: screen-reader support, larger text, and a high-contrast option** (ONEUP-0028)
   Every control now has a spoken name and the task switches report
   their on/off state, so nothing announces as an unlabelled button.
@@ -37,6 +40,9 @@ All notable changes to OneUp are documented here. The format follows
   doesn't look like a stuck button.
 
 ### Fixed
+
+- **Stop the sudo keep-alive outliving a killed run.** (ONEUP-0041)
+  An interrupted update no longer leaves a background helper running for hours.
 
 - **Name the program holding the package lock instead of failing every step through it.** (ONEUP-0039)
   If something else is already installing software, OneUp now says so in one clear sentence and changes nothing, instead of reporting a pile of failures.
