@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.2.0
+Version:        1.3.0
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -74,6 +74,22 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Sat Jul 25 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.3.0-0
+- Show live per-package progress so a long download can't look like a hang.
+- Accessibility: screen-reader support, larger text, and a high-contrast option
+- Roll back to a chosen restore point, not just the last one
+- A pre-update warning when Btrfs snapshots pile up, with a one-click "Thin snapshots" button.
+- "Show download size" now says how long the wait will be
+- Close an orphaned password dialog instead of leaving it on screen.
+- Never abandon an update half-way when the app is closed.
+- Stop the sudo keep-alive outliving a killed run.
+- Name the program holding the package lock instead of failing every step through it.
+- Ask for the password once per run, not once per privileged step.
+- the download-size check asked for a password twice
+- steps launched from the window could fail with "a terminal is required"
+- "Show download size" reported 0 B for every update
+- The signing-key-import and passwordless-consent popups now open centered over the main window, matching the About and Repositories dialogs.
+- bump.py: advance the CHANGELOG [Unreleased] compare-link base to the new tag.
 * Fri Jul 24 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.2.0-0
 - Add a one-click 'copy diagnostics for a bug report' button.
 - Report how much disk the cache clean reclaimed

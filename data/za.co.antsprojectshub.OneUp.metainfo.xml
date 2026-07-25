@@ -48,6 +48,28 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.3.0" date="2026-07-25">
+      <description>
+        <p>Release 1.3.0.</p>
+        <ul>
+          <li>Show live per-package progress so a long download can't look like a hang.</li>
+          <li>Accessibility: screen-reader support, larger text, and a high-contrast option</li>
+          <li>Roll back to a chosen restore point, not just the last one</li>
+          <li>A pre-update warning when Btrfs snapshots pile up, with a one-click "Thin snapshots" button.</li>
+          <li>"Show download size" now says how long the wait will be</li>
+          <li>Close an orphaned password dialog instead of leaving it on screen.</li>
+          <li>Never abandon an update half-way when the app is closed.</li>
+          <li>Stop the sudo keep-alive outliving a killed run.</li>
+          <li>Name the program holding the package lock instead of failing every step through it.</li>
+          <li>Ask for the password once per run, not once per privileged step.</li>
+          <li>the download-size check asked for a password twice</li>
+          <li>steps launched from the window could fail with "a terminal is required"</li>
+          <li>"Show download size" reported 0 B for every update</li>
+          <li>The signing-key-import and passwordless-consent popups now open centered over the main window, matching the About and Repositories dialogs.</li>
+          <li>bump.py: advance the CHANGELOG [Unreleased] compare-link base to the new tag.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-07-24">
       <description>
         <p>Release 1.2.0.</p>

@@ -6,6 +6,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-25
+
 ### Added
 
 - **Show live per-package progress so a long download can't look like a hang.** (ONEUP-0040)
@@ -279,7 +281,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/milnet01/OneUp/releases/tag/v1.3.0
 [1.2.0]: https://github.com/milnet01/OneUp/releases/tag/v1.2.0
 [1.1.0]: https://github.com/milnet01/OneUp/releases/tag/v1.1.0
 [1.0.1]: https://github.com/milnet01/OneUp/releases/tag/v1.0.1
