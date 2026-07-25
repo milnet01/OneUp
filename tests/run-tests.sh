@@ -372,6 +372,41 @@ else echo "  FAIL - a failed dry run exits non-zero (rc=$rc)"; FAIL=$((FAIL+1));
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# The GUI runs this engine through QProcess, so there is NO terminal. sudo can
+# only fall back to the graphical password helper if it finds SUDO_ASKPASS in its
+# environment, and a privileged call inside `out=$(sudo …)` cannot always see
+# sudo_init's cached credential (a subshell changes the parent pid that sudo keys
+# its no-tty credential record on). Without the export such a call dies with
+# "a terminal is required to read the password" — the ONEUP-0036 bug. This asserts
+# the export reaches the privileged commands themselves, not just the -A calls.
+echo "TEST: privileged commands can reach the graphical password helper (no tty)"
+d=$(mktemp -d); setup_common "$d"
+# This sudo mock reports whether SUDO_ASKPASS was exported into its environment.
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+[[ -n "${SUDO_ASKPASS:-}" ]] && echo "ASKPASS-VISIBLE=$SUDO_ASKPASS" >&2 || echo "ASKPASS-MISSING" >&2
+for a in "$@"; do [[ "$a" == "-n" ]] && exit 1; done
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -A|-v|-k|-E) shift ;;
+        -p) shift 2 ;;
+        --) shift; break ;;
+        -*) shift ;;
+        *) break ;;
+    esac
+done
+[[ $# -eq 0 ]] && exit 0
+exec "$@"
+EOF
+printf '#!/usr/bin/env bash\n[[ "$*" == *--dry-run* ]] && { echo "Package download size:   12.5 MiB"; exit 0; }\nexit 0\n' > "$d/zypper"
+chmod +x "$d/sudo" "$d/zypper"
+out=$(run_engine "$d" --size=system 2>&1)
+check        "the askpass helper is exported to privileged commands" "ASKPASS-VISIBLE=" "$out"
+check_absent "no privileged command runs without an askpass helper"  "ASKPASS-MISSING" "$out"
+check        "the size still parses through the real code path" "@@SIZE@@|system|12.5 MiB" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 # zypper exit 7 = ZYPP_LOCKED ("the ZYPP library is locked, e.g. packagekit is
 # running"). The hint must name that cause, not guess at authentication.
 echo "TEST: --size names a locked package manager as the reason (zypper exit 7)"

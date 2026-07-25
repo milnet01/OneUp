@@ -19,6 +19,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **steps launched from the window could fail with "a terminal is required"** (ONEUP-0036)
+  The password helper was not exported to the engine's privileged
+  commands, so a step that needed a password but couldn't see the
+  up-front one — "Show download size" was the visible case — failed
+  outright instead of showing the KDE password popup.
+
 - **"Show download size" reported 0 B for every update** (ONEUP-0035)
   Current zypper renamed its summary line to "Package download size",
   so the old parse matched nothing and a 371.4 MiB upgrade was shown as

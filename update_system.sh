@@ -25,6 +25,18 @@
 set -uo pipefail
 
 ASKPASS=/usr/libexec/ssh/ksshaskpass
+# EXPORTED, not just set: sudo falls back to the askpass helper only when it finds
+# SUDO_ASKPASS in the environment. Without the export, a `sudo` that can't see
+# sudo_init's cached credential has no way to ask and dies with "a terminal is
+# required to read the password" — there is no terminal, because the GUI runs this
+# script through QProcess. That is not hypothetical: it is what made "Show download
+# size" fail (ONEUP-0036). sudo_init's credential is not always visible to a later
+# call — `out=$(sudo …)` runs in a subshell, and with no tty sudo keys its
+# credential record on the parent process id, which the subshell changes. Exporting
+# this turns that from a hard failure into (at worst) one graphical prompt, and
+# makes the project convention — privileged commands raise the KDE prompt, never
+# block on stdin — true for every sudo in this file rather than just the -A ones.
+export SUDO_ASKPASS="$ASKPASS"
 
 # ---------------------------------------------------------------------------
 # Configuration / arguments

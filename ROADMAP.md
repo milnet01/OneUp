@@ -280,3 +280,27 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   act on. Found because a user hit the new failure path live: the cause was the
   ZYPP lock held by a concurrent diagnostic dry run, which the old hint would have
   mis-attributed to a cancelled password prompt. Tests: 126 passed / 0 failed.
+
+- ✅ [ONEUP-0036] **Export SUDO_ASKPASS so privileged commands can raise the password prompt without a terminal.**
+  The engine set ASKPASS but never exported SUDO_ASKPASS, so only the
+  explicit `sudo -A` calls (sudo_init, auth_status) could reach the
+  graphical helper. Every other privileged call — including run_size's
+  `out=$(sudo env LC_ALL=C zypper … --dry-run)` — relied purely on
+  sudo_init's cached credential. That credential is not always visible:
+  `out=$(…)` runs in a subshell, and with no tty sudo keys its credential
+  record on the PARENT PID, which the subshell changes. The GUI runs the
+  engine through QProcess, so there is no tty to fall back on either, and
+  the call died with "sudo: a terminal is required to read the password".
+  Symptom: "Show download size" failed even after ONEUP-0035 fixed the
+  wording parse — the improved diagnostics from that fix are what made
+  this visible (the log now echoes what zypper/sudo actually said).
+  Fix: `export SUDO_ASKPASS="$ASKPASS"` at the top, which makes the
+  project's documented convention (privileged commands raise the KDE
+  prompt, never block on stdin) true for EVERY sudo in the file rather
+  than just the -A ones. Worst case is now one graphical prompt instead
+  of a hard failure. Regression test asserts the helper is visible in the
+  environment of the privileged command itself, via a sudo mock that
+  reports whether SUDO_ASKPASS reached it. Tests: 129 passed / 0 failed.
+  **Layman:** When OneUp asked for your password from a step launched by the window (rather than a terminal), it had no way to show the prompt and simply failed. It can now always show the KDE password popup.
+  Kind: fix.
+  Source: user-report-2026-07-25 (log: "sudo: a terminal is required to read the password").
