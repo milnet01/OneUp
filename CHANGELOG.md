@@ -41,6 +41,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Never abandon an update half-way when the app is closed.** (ONEUP-0042)
+  Closing OneUp during an update now warns you first, and the update itself finishes safely in the background instead of being cut off.
+
 - **Stop the sudo keep-alive outliving a killed run.** (ONEUP-0041)
   An interrupted update no longer leaves a background helper running for hours.
 

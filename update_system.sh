@@ -132,7 +132,20 @@ mkdir -p "$LOG_DIR"
 if [[ -z "$LOG_FILE" ]]; then
     LOG_FILE="$LOG_DIR/$(date +%Y-%m-%d_%H%M).log"
 fi
-exec > >(tee -a "$LOG_FILE") 2>&1
+# -p (--output-error=warn-nopipe) is what lets a run survive the GUI going away
+# (ONEUP-0042). Our stdout is a pipe to the GUI; when the user quits, plain `tee` dies
+# on the broken pipe, and the engine then takes a SIGPIPE on its next line and is
+# killed WITHOUT running its cleanup trap. That is what happened to a real run: the
+# keep-alive was left looping, and zypper was orphaned mid-transaction — which is the
+# one thing that must never happen, since a half-applied rpm transaction can leave
+# packages broken, and the abandoned lock then blocked the next two runs. With -p, tee
+# keeps writing the log alone, so the engine never notices and finishes the job
+# properly. Probed rather than assumed: a tee without -p degrades to the old
+# behaviour (the PIPE trap below then at least runs cleanup) instead of breaking
+# every run with a usage error on a pipe nobody reads.
+tee_opts=(-a)
+echo | tee -p /dev/null >/dev/null 2>&1 && tee_opts+=(-p)
+exec > >(tee "${tee_opts[@]}" "$LOG_FILE") 2>&1
 
 # ---------------------------------------------------------------------------
 # Progress-marker helpers (consumed by the GUI; benign in a terminal).
@@ -498,6 +511,10 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM HUP
+# 141 = 128+SIGPIPE. Only reachable on a `tee` without -p (see the logging block): the
+# point is that cleanup still runs — an untrapped SIGPIPE kills the shell outright and
+# leaves the keep-alive looping and disabled repos disabled.
+trap 'exit 141' PIPE
 
 # ---------------------------------------------------------------------------
 # Free the zypper lock. The desktop's background updater (PackageKit) grabs the

@@ -44,7 +44,7 @@ os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
     from PySide6.QtCore import QProcess, Qt, QTimer
-    from PySide6.QtGui import QAccessible, QFontInfo
+    from PySide6.QtGui import QAccessible, QCloseEvent, QFontInfo
     from PySide6.QtWidgets import (
         QApplication,
         QLabel,
@@ -180,6 +180,28 @@ def main() -> int:
     wP.handle_line("@@STEP_BEGIN@@|cache|5|5|Cleaning package cache")
     check("a new step resets the progress caption",
           "141" not in wP.bar.format() and "Cleaning package cache" in wP.bar.format())
+
+    # --- quitting mid-run warns first (ONEUP-0042) ------------------------------
+    # The dialog itself is modal, so the decision is tested and _ask_quit_during_run
+    # is stubbed — that split is why the method exists separately.
+    wQ = updater.Updater()
+    asked = []
+    wQ._ask_quit_during_run = lambda: (asked.append(1), False)[1]
+    wQ._run_active = False
+    check("quitting while idle asks nothing", wQ._confirm_quit() is True and not asked)
+    wQ._run_active = True
+    check("quitting mid-run asks first, and 'keep open' blocks the quit",
+          wQ._confirm_quit() is False and len(asked) == 1)
+    wQ._ask_quit_during_run = lambda: True
+    check("'close anyway' still allows the quit", wQ._confirm_quit() is True)
+    # With no tray, closing the window IS quitting, so it must honour the same guard.
+    wQ._tray = None
+    wQ._ask_quit_during_run = lambda: False
+    ev = QCloseEvent()
+    ev.setAccepted(True)
+    wQ.closeEvent(ev)
+    check("a mid-run window close is refused when the user keeps OneUp open",
+          not ev.isAccepted())
 
     # --- passwordless-authorization toggle (opt-in) ----------------------------
     check("auth toggle defaults to off", w.auth_btn.text() == "Passwordless: off")

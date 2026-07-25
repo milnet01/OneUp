@@ -403,3 +403,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** An interrupted update no longer leaves a background helper running for hours.
   Kind: fix.
   Source: in-session-2026-07-25.
+
+- ✅ [ONEUP-0042] **Never abandon an update half-way when the app is closed.**
+  The engine's stdout is a pipe to the GUI. Quitting killed `tee`, which SIGPIPEd
+  the engine on its next line — killing it without running its cleanup trap, so
+  the keep-alive leaked and zypper was left orphaned mid-transaction. A
+  half-applied rpm transaction can leave programs broken, and the abandoned lock
+  blocked the next two runs. The logging redirect now uses `tee -a -p`
+  (--output-error=warn-nopipe, probed not assumed) so tee keeps writing the log
+  and the engine finishes the job; a PIPE trap is the fallback. The GUI warns
+  before quitting mid-run — the safe "Keep OneUp open" is the default button —
+  and closing to the tray is left alone, since it isn't a quit. Verified
+  falsifiable: without the flag the engine dies after five log lines and never
+  reaches @@DONE@@.
+  **Layman:** Closing OneUp during an update now warns you first, and the update itself finishes safely in the background instead of being cut off.
+  Kind: fix.
+  Source: user-report-2026-07-25.

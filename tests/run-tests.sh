@@ -468,6 +468,36 @@ fi
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0042: the GUI going away mid-run must not abandon the transaction. Our stdout
+# is a pipe to the GUI; when the user quits, a plain `tee` dies on the broken pipe and
+# the engine is then SIGPIPEd on its next line — killed without running cleanup. That
+# is what happened to a real run: zypper was left orphaned mid-transaction (a
+# half-applied rpm transaction can leave packages broken) and its abandoned lock
+# blocked the next two runs. `head -c` below closes the pipe early, standing in for the
+# GUI quitting; the run must still reach its end and finish writing the log.
+echo "TEST: a run survives the GUI going away and still finishes (broken stdout pipe)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *dup*|*update*)
+    # Enough output to be sure the reader is gone before the run ends.
+    for i in $(seq 1 200); do echo "Preloading: package-$i.rpm [done]"; done
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+PATH="$d:$PATH" bash "$ENGINE" --steps=system --log="$d/run.log" 2>&1 | head -c 200 >/dev/null
+# The engine keeps running after the reader closes; wait for the log to settle.
+for _ in $(seq 1 50); do grep -q '@@DONE@@' "$d/run.log" 2>/dev/null && break; sleep 0.1; done
+out=$(cat "$d/run.log" 2>/dev/null)
+check "the run reaches its end despite the closed pipe" "@@DONE@@" "$out"
+check "the summary still lands in the log"              "Summary" "$out"
+check "the step still completes"                        "@@STEP_END@@|system" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 # ONEUP-0040: a long download must never look like a hang. The zypper output below
 # is copied verbatim from a real Tumbleweed upgrade log, including the padded
 # counter ("( 1/3)") and the preload phase, which carries no counter at all.

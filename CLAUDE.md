@@ -192,3 +192,12 @@ Dependency policy (CI actions, runtimes, PySide6, base images) is a standing rul
   own; it's tagged `oneup-keepalive` in `$0` so tests can find it. Before this, an interrupted
   run left a loop validating sudo every 50 seconds indefinitely. Same reasoning applies to any
   new background helper.
+- **A run must survive the GUI going away, and never be interrupted mid-transaction.** The
+  engine's stdout is a pipe to the GUI, so the logging `exec` uses `tee -a -p`
+  (`--output-error=warn-nopipe`) — without it, a quit kills `tee`, then SIGPIPEs the engine on
+  its next line, so `cleanup` never runs and zypper is left orphaned half-way through an rpm
+  transaction (which can leave packages broken, and whose abandoned lock blocks the next run).
+  `-p` is probed, not assumed, and a `PIPE` trap is the fallback. Correspondingly the GUI
+  **warns before quitting during a run** (`Updater._confirm_quit`) and tells the user it
+  finishes in the background — so never add a code path that kills the engine mid-run.
+  Closing to the tray is not a quit and needs no warning.

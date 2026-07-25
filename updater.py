@@ -1634,16 +1634,52 @@ class Updater(QMainWindow):
         QApplication.clipboard().setText(self._hint_command)
         self.warn_copy_btn.setText("Copied ✓")
 
+    # ---- quitting while a run is in flight --------------------------------
+    def _ask_quit_during_run(self) -> bool:
+        """Modal 'an update is still running' prompt. True = close anyway. Split out
+        from _confirm_quit so the decision logic stays testable without a dialog."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("An update is still running")
+        box.setText("An update is still running.")
+        box.setInformativeText(
+            "Closing OneUp won't stop it. Interrupting an update half-way can leave "
+            "programs broken, so it carries on in the background and finishes on its "
+            "own — but you won't be able to watch it, and the next update can't start "
+            "until it's done.")
+        stay = box.addButton("Keep OneUp open", QMessageBox.ButtonRole.RejectRole)
+        box.addButton("Close anyway", QMessageBox.ButtonRole.AcceptRole)
+        box.setDefaultButton(stay)          # the safe choice is the one Enter picks
+        box.exec()
+        return box.clickedButton() is not stay
+
+    def _confirm_quit(self) -> bool:
+        """True when it's fine to quit now. A run in flight gets a warning first: a
+        user who read a working 379 MiB download as a hang quit mid-transaction, which
+        orphaned it and blocked the next two runs (ONEUP-0042)."""
+        if not self._run_active:
+            return True
+        return self._ask_quit_during_run()
+
+    def _quit_requested(self):
+        if self._confirm_quit():
+            QApplication.quit()
+
     # ---- window geometry --------------------------------------------------
     def closeEvent(self, event):
         self.settings.setValue("geometry", self.saveGeometry())
         if self._tray is not None:
-            # Resident: hide to the tray instead of quitting.
+            # Resident: hide to the tray instead of quitting. The run stays visible on
+            # reopening, so this needs no warning — it isn't a quit.
             event.ignore()
             self.hide()
             if not self._tray_hint_shown:
                 self._tray_hint_shown = True
                 self._notify_tray_hint()
+            return
+        # No tray: closing the window IS quitting, so it gets the same guard.
+        if not self._confirm_quit():
+            event.ignore()
             return
         super().closeEvent(event)
 
@@ -1970,7 +2006,7 @@ for (var i = 0; i < clients.length; i++) {{
         menu.addAction("Update now", self._tray_update)
         menu.addAction("Open OneUp", self._show_window)
         menu.addSeparator()
-        menu.addAction("Quit", QApplication.quit)
+        menu.addAction("Quit", self._quit_requested)
         self._tray.setContextMenu(menu)
         self._tray.activated.connect(self._on_tray_activated)
         self._tray.setIcon(self._tray_icon(self._tray_total > 0))
