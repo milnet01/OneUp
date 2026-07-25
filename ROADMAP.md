@@ -194,7 +194,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: feature.
   Source: user-request-2026-07-23.
 
-- 🚧 [ONEUP-0028] **Make OneUp usable for blind, partially-sighted, and colour-blind users.**
+- ✅ [ONEUP-0028] **Make OneUp usable for blind, partially-sighted, and colour-blind users.**
   Cover the three groups: (1) blind — full screen-reader (Orca/AT-SPI) support: accessible names/roles on every control, the live log and progress announced, focus order sane, no unlabelled icon-only buttons; (2) partially sighted — scalable/large text, honour the desktop font scale, a high-contrast option, keyboard operability throughout; (3) colour-blind — never signal state by colour alone (the amber tray icon, red/green step badges) — pair every colour cue with text/shape/icon. Coordinates with ONEUP-0026 (dialog standard) and ONEUP-0027 (themes: any theme must keep WCAG-AA contrast). Likely warrants its own spec + an audit pass with Orca.
   **Layman:** Design OneUp so people who can't see well — or at all — can still use it: screen-reader support, large/scalable text and high-contrast options, and never relying on colour alone to convey status.
   Kind: accessibility.
@@ -208,6 +208,26 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   today's code. Verified along the way that a checkable QAbstractButton already
   maps to Role.CheckBox with checked state, so no custom accessible interface is
   needed for the roadmap's "roles" requirement.
+  Resolved (2026-07-25): implemented per docs/specs/ONEUP-0028-accessibility.md
+  (cold-eyes converged, 2 loops). Screen reader: accessible names on every focusable
+  control (task switches, disclosure arrows, detail lists, progress bar, log,
+  banners, repo switches, rollback list) — a nameless focusable widget now FAILS
+  gui-smoke; announcements via one _announce helper (step begin/end, warnings, final
+  summary) using Qt 6.8's QAccessibleAnnouncementEvent with an Alert fallback for
+  older PySide6. Roles needed no work: a checkable QAbstractButton already maps to
+  an accessible CheckBox carrying the checked state. Low vision: the twelve
+  hard-coded px font sizes are gone, derived from the desktop's default point size
+  times a new Settings "Text size" control (Normal/Large/Larger); badge padding and
+  progress-bar height scale with it; a "High contrast" option appends an overlay that
+  restates every :hover/:checked/[attr] rule (Qt follows CSS2 specificity, so a bare
+  rule cannot beat #RunBtn:hover). Colour-blind: bar/circle shape on the switches, a
+  "!" glyph in the tray badge, "⚠ overdue" in words. Tab order follows visual order.
+  36 new GUI assertions (211 total). DEVIATION from the spec: no focus ring — the
+  user rejected focus borders/outlines on sight (an outline renders as a square
+  around the rounded buttons because Qt ignores outline-radius), so focus reuses the
+  hover look instead. That trades away WCAG 2.4.7's visible-focus requirement for
+  sighted keyboard-only users; the roadmap's Orca audit pass remains the open
+  follow-up, and a subtler cue could revisit it.
 
 - ✅ [ONEUP-0029] **Report how much disk space the cache clean actually freed.**
   Measure /var/cache/zypp (du) before and after `zypper clean --all` in update_system.sh (~line 813) and print/emit the delta. The cache step is the only task whose benefit the user can't currently see. Small, no risk. Natural lead-in to ONEUP-0021 (snapshot thinning).
