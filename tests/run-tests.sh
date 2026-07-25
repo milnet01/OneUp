@@ -651,6 +651,123 @@ check "zypper's own output still reaches the log" "Checking for file conflicts" 
 check "the step still succeeds through the filter" "@@STEP_END@@|system|ok" "$out"
 rm -rf "$d"
 
+# ---------------------------------------------------------------------------
+# ONEUP-0047: a stop must be honoured only at a safe boundary. Interrupting rpm can leave
+# programs half-installed, and signalling the engine mid-transaction would orphan a zypper
+# that carries on anyway — the failure mode this project takes most seriously.
+echo "TEST: a stop skips the remaining steps, reports 'stopped', and still summarises"
+d=$(mktemp -d); setup_common "$d"
+# The FIRST step requests the stop, so every later step must be skipped. Asking before
+# the run started would be a leftover request and is deliberately ignored (see the stale
+# test below), so the request has to be made from inside the run.
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *refresh*) touch "$d/stop.request"; exit 0 ;;
+  *dup*|*update*) echo "Nothing to do."; exit 0 ;;
+  *clean*) echo "CACHE-CLEAN-RAN"; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(ONEUP_STOP_FILE="$d/stop.request" run_engine "$d" --steps=system,flatpak,cache 2>&1)
+check        "the run reports it stopped, not that it succeeded" "@@DONE@@|stopped" "$out"
+check_absent "a stopped run never claims success" "@@DONE@@|ok" "$out"
+check_absent "steps after the stop do not run" "CACHE-CLEAN-RAN" "$out"
+check_absent "no later step is even begun" "@@STEP_BEGIN@@|cache" "$out"
+check        "the summary is still printed" "Summary" "$out"
+check "the hint says an install is never cut half-way" \
+      "never interrupts an install half-way" "$out"
+check "stopping before the transaction is recorded honestly" \
+      "@@STEP_END@@|system|skip|stopped before installing anything" "$out"
+rm -rf "$d"
+
+echo "TEST: a stop DURING the run lets the running transaction finish, then stops"
+d=$(mktemp -d); setup_common "$d"
+# The transaction requests the stop itself, mid-flight — the engine must still see it
+# through and only then skip the remaining steps.
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *refresh*) exit 0 ;;
+  *dup*|*update*)
+      touch "$d/stop.request"          # user hits Stop while the install is running
+      echo "( 1/1) Installing: demo-1.0.x86_64 [...done]"
+      echo "1 packages to upgrade."
+      exit 0 ;;
+  *clean*) echo "CACHE-CLEAN-RAN"; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(ONEUP_STOP_FILE="$d/stop.request" run_engine "$d" --steps=system,cache 2>&1)
+check        "the transaction that was already running completes" "@@STEP_END@@|system|ok" "$out"
+check        "progress from that transaction is still reported" "@@PROGRESS@@|system|1|1|install" "$out"
+check_absent "the step after the stop does not run" "CACHE-CLEAN-RAN" "$out"
+check        "the run reports stopped" "@@DONE@@|stopped" "$out"
+rm -rf "$d"
+
+echo "TEST: a stop left over from a previous run does not abort the next one"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\ncase "$*" in *dup*|*update*) echo "Nothing to do."; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
+chmod +x "$d/zypper"
+# Older than the run, so it must be ignored rather than silently aborting the run.
+touch -d '1 hour ago' "$d/stale-stop"
+out=$(ONEUP_STOP_FILE="$d/stale-stop" run_engine "$d" --steps=system 2>&1)
+check        "a stale stop request is cleared, so the run proceeds" "@@STEP_BEGIN@@|system" "$out"
+check_absent "the run is not reported as stopped" "@@DONE@@|stopped" "$out"
+if [[ ! -f "$d/stale-stop" ]]; then
+    echo "  ok   - the stop request is removed on exit"; PASS=$((PASS+1))
+else
+    echo "  FAIL - the stop request was left behind"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+
+# ONEUP-0046: the progress parser reads zypper's own wording, so an upstream rename makes
+# it silently stop. Silence is exactly how the "download size: 0 B" bug hid for weeks
+# (ONEUP-0035). A transaction that installed packages but produced no progress must say so.
+echo "TEST: a transaction with no recognisable progress lines says so (stale-parser canary)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*) exit 0 ;;
+  *dup*|*update*)
+    echo "3 packages to upgrade."
+    # Plausible future wording that today's parser does NOT recognise.
+    echo "Prefetching: libglfw3-3.4-67.34.x86_64.rpm [done]"
+    echo "[1 of 3] Unpacking: libglfw3-3.4-67.34.x86_64"
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+check_absent "no progress markers are invented from unknown wording" "@@PROGRESS@@" "$out"
+check "the run warns that progress could not be followed" \
+      "zypper has probably renamed the lines it reports progress on" "$out"
+check "the step still succeeds — the update itself was fine" "@@STEP_END@@|system|ok" "$out"
+rm -rf "$d"
+
+echo "TEST: recognised progress lines raise NO stale-parser warning"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*) exit 0 ;;
+  *dup*|*update*)
+    echo "3 packages to upgrade."
+    echo "( 1/3) Installing: libglfw3-3.4-67.34.x86_64 [...done]"
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+check        "progress is reported" "@@PROGRESS@@|system|1|3|install" "$out"
+check_absent "no false stale-parser warning" "probably renamed the lines" "$out"
+rm -rf "$d"
+
 echo "TEST: progress parsing does not cost an extra password prompt"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/sudo" <<'EOF'

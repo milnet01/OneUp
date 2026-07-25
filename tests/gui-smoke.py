@@ -181,6 +181,44 @@ def main() -> int:
     check("a new step resets the progress caption",
           "141" not in wP.bar.format() and "Cleaning package cache" in wP.bar.format())
 
+    # --- Stop button (ONEUP-0047) -----------------------------------------------
+    # Stop is deliberately cooperative: it asks, and the engine honours it at a safe
+    # point. The UI must promise exactly that and never imply an instant abort.
+    wS = updater.Updater()
+    check("Stop is hidden while idle", not wS.stop_btn.isVisibleTo(wS))
+    check("Stop explains it waits for the current step",
+          "after the current step" in wS.stop_btn.toolTip()
+          and "never cut off half-way" in wS.stop_btn.toolTip())
+    stop_dir = tempfile.mkdtemp()
+    orig_stop, orig_rs = updater.STOP_REQUEST, updater.RUN_STATE
+    updater.STOP_REQUEST = Path(stop_dir) / "stop.request"
+    updater.RUN_STATE = Path(stop_dir) / "run.state"
+    try:
+        wS._run_active, wS._check_mode = True, False
+        wS.set_controls_enabled(False)
+        check("Stop appears once a real run is going", wS.stop_btn.isVisibleTo(wS))
+        wS.request_stop()
+        check("asking to stop creates the file the engine watches",
+              updater.STOP_REQUEST.exists())
+        check("the button reflects that the request is in", wS.stop_btn.text() == "Stopping…")
+        check("it cannot be clicked twice", not wS.stop_btn.isEnabled())
+        check("the status says what will actually happen",
+              "after the current step" in wS.status.text())
+        # A stopped run must claim neither success nor failure.
+        wS.handle_line("@@DONE@@|stopped")
+        wS.on_finished(0, None)
+        check("a stopped run is reported as stopped", wS.bar.format() == "Stopped")
+        check("a stopped run never says 'All done'", "All done" not in wS.status.text())
+        check("a stopped run says what survived",
+              "still installed" in wS.status.text())
+        # A --check has nothing to stop.
+        wS._run_active, wS._check_mode = True, True
+        wS.set_controls_enabled(False)
+        check("Stop is not offered for a read-only check", not wS.stop_btn.isVisibleTo(wS))
+    finally:
+        updater.STOP_REQUEST, updater.RUN_STATE = orig_stop, orig_rs
+        shutil.rmtree(stop_dir, ignore_errors=True)
+
     # --- attaching to a run started by an earlier window (ONEUP-0045) -----------
     # Runs outlive the window on purpose, so a fresh window must find one in flight and
     # follow its log rather than offering a Run that could only fail on the lock.
@@ -210,8 +248,20 @@ def main() -> int:
         wA._poll_attached_run()
         check("newly appended log lines are followed live",
               wA.status.text() == "Installing 99 of 141 packages…")
-        # A stale record (pid long gone) must not lock a fresh window out.
+        # When the followed run ends there is no QProcess and no exit code to read — only
+        # its @@DONE@@ line. This must not throw (it did: on_finished assumed self.proc).
+        with open(attach_log, "a") as fh:
+            fh.write("@@DONE@@|ok\n")
         holder.terminate(); holder.wait()
+        try:
+            wA._poll_attached_run()
+            check("a followed run finishing is handled without a process object", True)
+        except Exception as exc:  # noqa: BLE001 — any throw is the failure.
+            check(f"a followed run finishing is handled ({exc})", False)
+        check("the followed run's own verdict is used", wA._run_active is False)
+        check("the record is cleared once the followed run ends",
+              not updater.RUN_STATE.exists())
+        # A stale record (pid long gone) must not lock a fresh window out.
         updater.RUN_STATE.write_text(f"{holder.pid}\n{attach_log}\nsystem\n0\n")
         wB = updater.Updater()
         check("a stale record does not lock the app", wB._run_active is False)

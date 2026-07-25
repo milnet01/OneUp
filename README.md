@@ -72,6 +72,12 @@ needed, and a run history.
 - **A failed step never claims success.** The reboot advice only appears when
   something was actually installed, or when `zypper needs-rebooting` explicitly says
   so — not when a step merely errored out.
+- **An update is never cut off half-way.** Stop asks the update to finish the step it's
+  on and then stop — it doesn't kill it mid-install, because a half-applied package
+  transaction is how you end up with broken programs. For the same reason, closing OneUp
+  doesn't abort a running update: it carries on in the background and finishes properly,
+  and OneUp warns you before you close so this isn't a surprise. Reopen it and you'll be
+  shown that run's live progress again.
 - **The engine is usable on its own.** `update_system.sh` runs fine in a plain
   terminal (`./update_system.sh --steps=system,cache`); the GUI just drives it.
 

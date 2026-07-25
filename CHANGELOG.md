@@ -8,6 +8,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Warn when zypper's wording changes instead of silently showing no progress.** (ONEUP-0046)
+  If a future zypper renames its output, OneUp says so rather than quietly showing no progress.
+
+- **Add a Stop button that never interrupts an install half-way.** (ONEUP-0047)
+  You can now stop an update. It finishes the step it is on first, so nothing is left half-installed.
+
 - **Pick up and follow a run that is already in progress when the window opens.** (ONEUP-0045)
   If an update is already running when you open OneUp, it now shows you that run's live progress instead of looking idle.
 

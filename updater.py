@@ -120,6 +120,9 @@ LOG_DIR = STATE_DIR / "logs"
 # instead of offering a Run that could only fail on the package lock (ONEUP-0045). Must
 # match RUN_STATE_FILE in update_system.sh.
 RUN_STATE = STATE_DIR / "run.state"
+# Creating this file asks a running engine to stop at its next safe point. Must match
+# STOP_FILE in update_system.sh.
+STOP_REQUEST = STATE_DIR / "stop.request"
 
 # Tray: one QTimer drives both the short initial check and the recurring one, so a
 # single .stop() on tray-off cancels everything (no stray one-shot survives).
@@ -1416,10 +1419,24 @@ class Updater(QMainWindow):
         self.run_btn.setCursor(Qt.PointingHandCursor)
         self.run_btn.clicked.connect(self.start_run)
 
+        # Stop (only while a run is going). Deliberately not a "cancel" — it takes effect
+        # at the next safe point, because interrupting an install can leave programs
+        # broken. The label and tooltip say so rather than implying an instant abort.
+        self.stop_btn = QPushButton("Stop")
+        self.stop_btn.setObjectName("GhostBtn")
+        self.stop_btn.setCursor(Qt.PointingHandCursor)
+        self.stop_btn.setAccessibleName("Stop the update")
+        self.stop_btn.setToolTip(
+            "Stop after the current step. Anything already installed stays installed — "
+            "an install is never cut off half-way, because that can break programs.")
+        self.stop_btn.clicked.connect(self.request_stop)
+        self.stop_btn.setVisible(False)
+
         actions = QHBoxLayout()
         actions.setSpacing(10)
         actions.addWidget(self.check_btn, 0)
         actions.addWidget(self.run_btn, 1)
+        actions.addWidget(self.stop_btn, 0)
         root.addLayout(actions)
 
         # Retry-failed (hidden until a run has failures).
@@ -2657,6 +2674,28 @@ for (var i = 0; i < clients.length; i++) {{
         self.check_btn.setEnabled(enabled)
         for r in self.rows.values():
             r.switch.setEnabled(enabled)
+        # Stop is the mirror image: it only exists while a run does. Shown for a real run
+        # only — a --check installs nothing, so there is nothing to stop.
+        stoppable = (not enabled) and self._run_active and not self._check_mode
+        self.stop_btn.setVisible(stoppable)
+        if stoppable:
+            self.stop_btn.setEnabled(True)
+            self.stop_btn.setText("Stop")
+
+    def request_stop(self):
+        """Ask the engine to stop at its next safe point by creating the file it watches.
+        Not a signal: signalling mid-transaction would either leave rpm half-applied or
+        orphan a zypper that carries on anyway (ONEUP-0047)."""
+        try:
+            RUN_STATE.parent.mkdir(parents=True, exist_ok=True)
+            STOP_REQUEST.touch()
+        except OSError as exc:
+            QMessageBox.warning(self, "Stop", f"Could not ask the update to stop:\n{exc}")
+            return
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.setText("Stopping…")
+        self.status.setText("Stopping after the current step — nothing new will start…")
+        self._announce("Stopping after the current step.")
 
     def start_check(self):
         self._launch(self.selected_steps(), check=True)
@@ -3071,8 +3110,12 @@ for (var i = 0; i < clients.length; i++) {{
         self._buf = ""
         self._run_active = False
         # Release the finished process so QProcess instances don't accumulate on the
-        # window across a long session (each run parents a new one to self).
-        self.proc.deleteLater()
+        # window across a long session (each run parents a new one to self). There may be
+        # no process at all: a run we merely FOLLOWED belongs to another window, and this
+        # is called from _poll_attached_run with only the log to go on (ONEUP-0045).
+        proc = getattr(self, "proc", None)
+        if proc is not None:
+            proc.deleteLater()
         ok = exit_code == 0
         self.set_controls_enabled(True)
 
@@ -3092,8 +3135,22 @@ for (var i = 0; i < clients.length; i++) {{
             self._check_mode = False
             return
 
+        # A stopped run is neither: nothing went wrong, but it didn't do what was asked.
+        # Claiming "All done" would be a success it never earned.
+        stopped = self._done_status == "stopped"
         self.bar.setValue(self._total)
-        self.bar.setFormat("Finished" if ok else "Finished with errors")
+        self.bar.setFormat("Stopped" if stopped else
+                           ("Finished" if ok else "Finished with errors"))
+        if stopped:
+            self.status.setText("Stopped — anything already installed is still installed.")
+            self._announce(self.status.text())
+            self.save_last_run("stopped")
+            self.refresh_last_run()
+            if self._hints:
+                self._show_warning(self._hints[0])
+            if self._sys_changed and self._snapshot:
+                self.rollback_btn.setVisible(True)
+            return
 
         n = self._installed_count
         if n and n not in ("", "0"):

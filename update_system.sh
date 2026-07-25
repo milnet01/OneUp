@@ -59,6 +59,13 @@ LOG_FILE=""
 # can only fail on the package lock (ONEUP-0045). Runs now deliberately outlive the
 # window (ONEUP-0042), which is exactly what makes this necessary. Overridable for tests.
 RUN_STATE_FILE="${ONEUP_RUN_STATE:-$HOME/.local/state/oneup/run.state}"
+# The GUI asks for a stop by creating this file. Deliberately COOPERATIVE rather than a
+# signal: the engine honours it only at a safe boundary — between steps, and after the
+# repo refresh but before the transaction starts. Signalling the engine mid-transaction
+# would leave rpm half-applied, or orphan a zypper that carries on regardless, which is
+# the failure this project takes most seriously (ONEUP-0047). Overridable for tests.
+STOP_FILE="${ONEUP_STOP_FILE:-$HOME/.local/state/oneup/stop.request}"
+STOP_HONOURED=false
 CHECK_ONLY=false   # --check: report what WOULD update, install nothing, no root
 NOTIFY=false       # --notify: fire a desktop notification if updates are found
 SIZE_STEP=""       # --size=<step>: on-demand exact download size (needs root)
@@ -257,6 +264,25 @@ SYS_COUNT=""        # best-effort count of system packages changed
 SYS_REBOOT_DETAIL=""  # plain-English "why a reboot matters" phrase (kernel/driver names)
 FW_CHANGED=false    # did firmware updates get applied?
 
+# True once the user has asked to stop. Checked at safe boundaries only (see STOP_FILE):
+# every remaining step is then skipped and the run still prints its summary, so the user
+# sees what did happen rather than the output just ending.
+stop_pending() {
+    [[ -e "$STOP_FILE" ]] || return 1
+    # Only a request made AFTER this run began counts. The run-state file is written the
+    # moment the run commits, so it doubles as the run's start stamp — no separate marker
+    # needed. Deleting a leftover request at startup instead would race: a stop clicked in
+    # the moment before the engine got there would be silently swallowed.
+    [[ -e "$RUN_STATE_FILE" && "$STOP_FILE" -nt "$RUN_STATE_FILE" ]] || return 1
+    if ! $STOP_HONOURED; then
+        STOP_HONOURED=true
+        echo
+        echo "Stopping at your request — the step that was running has finished, and"
+        echo "nothing further will be started."
+        marker HINT "Stopped at your request. Anything already installed stays installed — a stop never interrupts an install half-way, because that can leave programs broken. Run the update again whenever you like."
+    fi
+    return 0
+}
 begin_step() {
     local key="$1"
     STEP_INDEX=$((STEP_INDEX + 1))
@@ -534,7 +560,7 @@ RUN_STATE_OWNED=false      # only the process that wrote the run-state file clea
                            # so a --check or --size run can't erase a real run's entry
 cleanup() {
     local a
-    $RUN_STATE_OWNED && rm -f "$RUN_STATE_FILE"
+    $RUN_STATE_OWNED && rm -f "$RUN_STATE_FILE" "$STOP_FILE"
     reap_orphaned_askpass
     for a in "${DISABLED_REPOS[@]:-}"; do
         [[ -z "$a" ]] && continue
@@ -772,6 +798,8 @@ fi
 mkdir -p "$(dirname "$RUN_STATE_FILE")" 2>/dev/null
 printf '%s\n%s\n%s\n%s\n' "$$" "$LOG_FILE" "$STEPS" "$(date +%s)" > "$RUN_STATE_FILE" \
     && RUN_STATE_OWNED=true
+# A stop request older than the line above is a leftover and is ignored by stop_pending;
+# cleanup deletes it on the way out so it can't confuse anything later.
 
 # ---------------------------------------------------------------------------
 # Pre-update snapshot note (btrfs/snapper rollback point). Read-only: Tumbleweed
@@ -920,27 +948,33 @@ repo_scoped_failure() {
 # "unknown" and the GUI shows a live tally instead of inventing a denominator.
 emit_progress() {        # step-key, "n/m" (zypper pads it: "( 1/77)"), phase
     local step="$1" frac="${2// /}" phase="$3"
-    [[ "$frac" =~ ^([0-9]+)/([0-9]+)$ ]] || return 0
+    # Non-zero when there was no counter to parse, so the caller can tell "emitted" from
+    # "skipped" — that distinction is what the stale-parser canary below relies on.
+    [[ "$frac" =~ ^([0-9]+)/([0-9]+)$ ]] || return 1
     marker PROGRESS "$step|${BASH_REMATCH[1]}|${BASH_REMATCH[2]}|$phase"
 }
+PROGRESS_SEEN_FILE=""    # progress_filter runs as a pipeline element, i.e. in a subshell,
+                         # so it reports back through a file rather than a variable
 progress_filter() {      # step-key; passes every line through, adding @@PROGRESS@@
-    local step="$1" line frac preloaded=0
+    local step="$1" line frac preloaded=0 seen=0
     # `|| [[ -n $line ]]` so a final line with no trailing newline is not swallowed.
     while IFS= read -r line || [[ -n "$line" ]]; do
         printf '%s\n' "$line"
         case "$line" in
             Preloading:*)
-                preloaded=$((preloaded+1))
+                preloaded=$((preloaded+1)); seen=$((seen+1))
                 marker PROGRESS "$step|$preloaded|0|download" ;;
             Retrieving:*)
                 frac=${line##*\(}; frac=${frac%%)*}      # last (…) is the counter
-                emit_progress "$step" "$frac" download ;;
+                emit_progress "$step" "$frac" download && seen=$((seen+1)) ;;
             \(*Installing:*|\(*Removing:*|\(*Upgrading:*)
                 frac=${line#*\(}; frac=${frac%%)*}       # leading (…) is the counter
-                emit_progress "$step" "$frac" install ;;
+                emit_progress "$step" "$frac" install && seen=$((seen+1)) ;;
         esac
     done
-}
+    [[ -n "$PROGRESS_SEEN_FILE" ]] && printf '%s' "$seen" > "$PROGRESS_SEEN_FILE"
+    return 0        # our status is the pipeline's last, and a failed match must not
+}                   # make the transaction itself look like it failed
 
 run_system_upgrade() {   # runs the transaction into $SYS_LOG (truncates it); sets global `ok`
     ok=true
@@ -970,7 +1004,7 @@ echo "########################################################"
 # ---------------------------------------------------------------------------
 # Step: system packages (Leap = update, Tumbleweed = dup)
 # ---------------------------------------------------------------------------
-if step_selected system; then
+if step_selected system && ! stop_pending; then
     begin_step system
     # Interactive "Skip & update the rest" re-run: set the named sources aside up front.
     for alias in "${SKIP_REPOS[@]:-}"; do
@@ -994,9 +1028,17 @@ if step_selected system; then
     else
         sudo zypper --non-interactive refresh || refresh_ok=false
     fi
+    # Second safe boundary: the refresh above can take a minute on a slow mirror, so
+    # honour a stop asked for during it. Nothing has been installed at this point, which
+    # is exactly why stopping here is free — once the transaction starts it is seen
+    # through, because interrupting rpm can leave programs broken.
+    if stop_pending; then
+        end_step system skip "stopped before installing anything"
+    else
     # Capture the transaction output so we can tell whether anything actually
     # changed (for the summary and the reboot advice), while still streaming it.
     SYS_LOG=$(mktemp)
+    PROGRESS_SEEN_FILE=$(mktemp)
     # Pin LC_ALL=C on the transaction whose output we parse below: the "Nothing to
     # do." / "N packages to upgrade" strings are translated on a non-English system,
     # and matching the English text keeps the change-detection reliable everywhere.
@@ -1045,6 +1087,17 @@ if step_selected system; then
             end_step system ok "already up to date"
         else
             SYS_CHANGED=true
+            # Canary for a stale parser. progress_filter reads zypper's own wording, so a
+            # rename upstream makes progress silently stop — and silence is exactly how
+            # the "download size: 0 B" bug hid for weeks (ONEUP-0035: zypper renamed
+            # "Overall download size" to "Package download size" and OneUp believed the
+            # wrong answer). A transaction that installed packages but produced no
+            # progress at all is the signature of that, so say so rather than quietly
+            # showing nothing (ONEUP-0046).
+            if [[ "$(cat "$PROGRESS_SEEN_FILE" 2>/dev/null || echo 0)" == "0" ]]; then
+                marker HINT "Packages were installed, but OneUp couldn't follow the progress — zypper has probably renamed the lines it reports progress on. The update itself was fine; please report this so the progress display can be updated."
+                echo "  Note: no progress lines recognised in zypper's output (see @@HINT@@ above)."
+            fi
             up=$(grep -oiE '[0-9]+ packages? to upgrade' "$SYS_LOG" | tail -1 | grep -oE '[0-9]+' | head -1)
             ins=$(grep -oiE '[0-9]+ to install' "$SYS_LOG" | tail -1 | grep -oE '[0-9]+' | head -1)
             SYS_COUNT=$(( ${up:-0} + ${ins:-0} ))
@@ -1091,13 +1144,14 @@ if step_selected system; then
         fi
         end_step system fail "zypper reported an error"
     fi
-    rm -f "$SYS_LOG"
+    rm -f "$SYS_LOG" "$PROGRESS_SEEN_FILE"
+    fi      # closes the stop_pending guard above the transaction
 fi
 
 # ---------------------------------------------------------------------------
 # Step: Flatpak (user scope needs no root; system scope reuses cached sudo)
 # ---------------------------------------------------------------------------
-if step_selected flatpak; then
+if step_selected flatpak && ! stop_pending; then
     begin_step flatpak
     if command -v flatpak &>/dev/null; then
         ok=true
@@ -1128,7 +1182,7 @@ fi
 # ---------------------------------------------------------------------------
 # Step: firmware (fwupd elevates via polkit on its own)
 # ---------------------------------------------------------------------------
-if step_selected firmware; then
+if step_selected firmware && ! stop_pending; then
     begin_step firmware
     if command -v fwupdmgr &>/dev/null; then
         fwupdmgr refresh || true
@@ -1159,7 +1213,7 @@ fi
 #     REPORTED, never auto-removed: they are often software you installed by hand.
 #   * The pre-update snapshot makes even the autoremove reversible.
 # ---------------------------------------------------------------------------
-if step_selected orphans; then
+if step_selected orphans && ! stop_pending; then
     begin_step orphans
     sudo_capture UNNEEDED_RAW zypper --non-interactive packages --unneeded
     mapfile -t UNNEEDED < <(awk -F'|' \
@@ -1189,7 +1243,7 @@ fi
 # ---------------------------------------------------------------------------
 # Step: clean the zypper package cache
 # ---------------------------------------------------------------------------
-if step_selected cache; then
+if step_selected cache && ! stop_pending; then
     begin_step cache
     # Measure the package cache before/after the clean so we can report what it
     # freed — the cache step is otherwise the one task with no visible payoff.
@@ -1293,6 +1347,11 @@ echo "------------------------------------------"
 if ((ERRORS > 0)); then
     echo "  Finished with $ERRORS error(s) — see the log above."
     marker DONE "errors"
+elif $STOP_HONOURED; then
+    # Not "ok": the run did not do what was asked of it. Not "errors" either — nothing
+    # went wrong. The GUI reports it as stopped, so neither claim is made.
+    echo "  Stopped at your request — the steps above are all that ran."
+    marker DONE "stopped"
 else
     echo "  All selected steps completed cleanly."
     marker DONE "ok"

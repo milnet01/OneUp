@@ -465,3 +465,34 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** If an update is already running when you open OneUp, it now shows you that run's live progress instead of looking idle.
   Kind: feature.
   Source: user-request-2026-07-25.
+
+- ✅ [ONEUP-0046] **Warn when zypper's wording changes instead of silently showing no progress.**
+  The progress display reads zypper's own wording, so an upstream rename makes it
+  silently stop — and silence is exactly how the "download size: 0 B" bug hid for
+  weeks (ONEUP-0035: zypper renamed "Overall download size" to "Package download
+  size", and the test had the old wording baked in so CI stayed green). A
+  transaction that installs packages but produces no recognisable progress line is
+  the signature of that, so the engine now emits a plain-English hint saying the
+  update itself was fine but the progress display needs updating. Tested both
+  ways: unknown wording warns and invents no progress, recognised wording raises
+  no false alarm.
+  **Layman:** If a future zypper renames its output, OneUp says so rather than quietly showing no progress.
+  Kind: feature.
+  Source: user-request-2026-07-25.
+
+- ✅ [ONEUP-0047] **Add a Stop button that never interrupts an install half-way.**
+  There was no way to stop a run, so quitting the app was the only option — which
+  is what started this whole incident. Stop is deliberately COOPERATIVE: the GUI
+  creates ~/.local/state/oneup/stop.request and the engine honours it only at safe
+  boundaries (between steps, and after the repo refresh but before a transaction
+  starts), then skips the remaining steps and still prints its summary. Signalling
+  the engine instead would either leave rpm half-applied or orphan a zypper that
+  carries on regardless — the exact failure of ONEUP-0039/0042. The button, its
+  tooltip and the status line all say "after the current step" rather than
+  implying an instant abort. A stopped run reports @@DONE@@|stopped, and the GUI
+  claims neither success nor failure. A request older than run.state is a
+  leftover and ignored — judged by mtime, because deleting stale requests at
+  startup would swallow a stop clicked a moment earlier.
+  **Layman:** You can now stop an update. It finishes the step it is on first, so nothing is left half-installed.
+  Kind: feature.
+  Source: user-request-2026-07-25.

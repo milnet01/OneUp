@@ -57,6 +57,12 @@ means updating the parser in the other, and the assertions in `tests/run-tests.s
 Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `PROGRESS`, `SNAPSHOT`, `SNAPSHOT_ITEM`, `SNAPSHOTS`, `CHECK`,
 `CHECK_ITEM`, `SIZE`, `FREED`, `AUTH`, `DISK`, `REPO`, `REPO_SKIPPED`, `HINT`, `REMEDY`,
 `SERVICES`, `INSTALLED`, `REBOOT`, `DONE`.
+(`DONE|ok|errors|stopped` — the third value means the user asked to stop, so the GUI must
+report neither success nor failure. The GUI normally takes the verdict from the engine's
+exit code and `DONE` is belt-and-braces, **except** for a run it merely *followed*
+(`Updater._attach_to_running_engine`), where there is no exit code to read and `DONE` is
+the only verdict; a followed run that never printed one is reported as errors, never as
+success.)
 (`PROGRESS|key|done|total|phase` carries live per-package progress *within* a step, so a
 long download can't look like a hang — `phase` is `download` or `install`, and a **total of
 0 means "unknown"**, which the GUI must render as a running tally rather than inventing a
@@ -162,7 +168,22 @@ Dependency policy (CI actions, runtimes, PySide6, base images) is a standing rul
 - Steps for absent tools (`flatpak`, `fwupd`) are **skipped cleanly**, not errored — keep
   new steps tolerant of a missing binary.
 - Runtime state lives in `~/.local/state/oneup/` (`history.json`, `logs/`); the engine also
-  mirrors each run's log to `~/Documents/update-logs/`.
+  mirrors each run's log to `~/Documents/update-logs/`. Two files there are a **contract
+  between the GUI and the engine**, so moving either means changing both files:
+  `run.state` (pid, log path, steps — written when a run commits, cleared on exit; lets a
+  window that opens mid-run find and follow that run) and `stop.request` (the GUI creates
+  it to ask for a stop). Both are overridable via `ONEUP_RUN_STATE` / `ONEUP_STOP_FILE` so
+  tests never touch the real ones.
+- **Stopping is cooperative, and that's a safety decision.** The engine looks for
+  `stop.request` only at safe boundaries — between steps, and after the repo refresh but
+  *before* a transaction starts — then skips the remaining steps and still prints its
+  summary, so the user sees what did happen. **Never signal the engine to stop a
+  transaction**: SIGTERM mid-`zypper dup` either leaves rpm half-applied or orphans a zypper
+  that carries on regardless — see ONEUP-0039/0042 for what that cost in practice. A request
+  older than `run.state` is a leftover and is ignored; staleness is judged by mtime rather
+  than by deleting the file at startup, because deleting would swallow a stop clicked a
+  moment earlier. A stopped run reports `@@DONE@@|stopped` and the GUI claims neither
+  success nor failure.
 - **`.roadmap-counter` is deliberately git-ignored** — it is local allocator state, and
   tracking a one-line counter means every branch that allocates a roadmap ID conflicts on
   it. `ROADMAP.md` is the real record. On a fresh clone the file is absent, and appending a
