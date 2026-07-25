@@ -496,3 +496,63 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** You can now stop an update. It finishes the step it is on first, so nothing is left half-installed.
   Kind: feature.
   Source: user-request-2026-07-25.
+
+- ✅ [ONEUP-0048] **Make a slow mirror legible instead of indistinguishable from a hang.**
+  Measured, not assumed: one mirror served an 18 MB repository index at
+  930 B/s and another 86 MB of packages at ~18 KB/s, and the app showed
+  nothing at all through either. zypper prints a metadata fetch as dots
+  with no line ending (no complete line for the GUI to draw) and its
+  package prefetch as one line per FINISHED package, ten minutes apart at
+  that speed. zypper has no timeout of its own, so left alone it would
+  have waited hours.
+
+  Engine: refresh_repos refreshes one repository at a time under
+  `sudo timeout $REFRESH_TIMEOUT` (root, so it can kill its own zypper
+  child), emits REFRESH|done|total|alias, checks for a stop between
+  sources, and offers the existing REMEDY|skip-repo when it gives up.
+  Falls back to one bulk refresh if the repository list can't be parsed,
+  rather than silently skipping the refresh. PROGRESS gained two optional
+  byte fields; both of zypper's total wordings are parsed.
+
+  GUI: a liveness line under the progress bar naming what is being waited
+  on, for how long, the size and the rate. The stall clock is stamped on
+  the raw chunk before line splitting, because a partial line is the only
+  proof of life during a metadata fetch. Where zypper reports no bytes,
+  the package cache is weighed against a run-start baseline (world-readable,
+  no root; already-cached packages stay inside the baseline).
+  **Layman:** OneUp now shows which source it is fetching, the download size and speed, and how long it has been waiting — and gives up on a source that is too slow rather than waiting hours.
+  Kind: fix.
+  Source: user-report-2026-07-25.
+
+- ✅ [ONEUP-0049] **Open dialogs over the app window on Wayland, where move() is ignored.**
+  Every dialog centred itself with widget.move(), which Wayland accepts
+  and silently ignores — the compositor owns placement. The same file
+  already said so in recenter()'s comment, but the dialogs predated it.
+
+  center_on_parent() now takes the X11 path directly and asks KWin on
+  Wayland, matching on transientFor so every dialog is covered including
+  the message boxes that have no title of their own, and clamping to the
+  screen. Three duplicated showEvent bodies and _center_child collapse
+  onto it; run_kwin_script is shared with recenter().
+  **Layman:** Settings, Repositories and the message boxes now appear in the middle of the OneUp window instead of wherever the desktop felt like putting them.
+  Kind: fix.
+  Source: user-report-2026-07-25.
+
+- ✅ [ONEUP-0050] **Stop the test suite reading, and damaging, real machine state.**
+  Found while validating the work above, and both halves bit for real in
+  the same session:
+
+    * the package-lock probe defaults to /run/zypp.pid, so 40 scenarios
+      failed merely because the machine happened to be running zypper —
+      precisely when someone is working on an update tool;
+    * run.state defaults to the user's own and cleanup() deletes the file
+      it owns, so running the suite during a live update DELETED that
+      run's record and the window could no longer follow it (ONEUP-0045).
+
+  run_engine now redirects ONEUP_ZYPP_PID_FILE, ONEUP_RUN_STATE and
+  ONEUP_STOP_FILE into the mock dir unless the scenario sets them itself.
+  The one scenario that invokes the engine directly (the broken-pipe test)
+  repeats the overrides by hand.
+  **Layman:** The tests no longer depend on what the computer happens to be doing, and can no longer disturb a real update that is running.
+  Kind: test.
+  Source: in-session-2026-07-25.

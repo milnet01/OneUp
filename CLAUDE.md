@@ -54,7 +54,7 @@ They communicate through a **line-based marker protocol**: the engine prints
 progress bars, badges, and banners. Non-marker lines are plain log output. The markers are
 the contract between the two files — **changing a marker's name or field layout in one file
 means updating the parser in the other, and the assertions in `tests/run-tests.sh`.**
-Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `PROGRESS`, `SNAPSHOT`, `SNAPSHOT_ITEM`, `SNAPSHOTS`, `CHECK`,
+Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `PROGRESS`, `REFRESH`, `SNAPSHOT`, `SNAPSHOT_ITEM`, `SNAPSHOTS`, `CHECK`,
 `CHECK_ITEM`, `SIZE`, `FREED`, `AUTH`, `DISK`, `REPO`, `REPO_SKIPPED`, `HINT`, `REMEDY`,
 `SERVICES`, `INSTALLED`, `REBOOT`, `DONE`.
 (`DONE|ok|errors|stopped` — the third value means the user asked to stop, so the GUI must
@@ -70,7 +70,19 @@ denominator. The engine derives it in `progress_filter` by parsing zypper's own 
 (`Preloading:` has no counter, `Retrieving: … (12/77)` and `( 7/77) Installing:` do), so the
 three phase wordings are a dependency on zypper's output format — `LC_ALL=C` is pinned on the
 transaction to keep them stable on a non-English desktop. The GUI announces a phase *change*
-only, never each package.)
+only, never each package. Two **optional** trailing fields —
+`PROGRESS|key|done|total|phase|bytes|bytes_total` — carry the download figures; either may be
+`0` for "not known". zypper's total is printed once as `Package download size:` *or*
+`Overall download size:` (which one depends on the transaction backend, so **both wordings
+are parsed** — the first is what `classic_rpmtrans` prints).)
+(`REFRESH|done|total|alias` names the repository being fetched and the position in the list,
+because that phase is otherwise **completely invisible**: zypper reports it as undelimited
+dots with no line ending, so the GUI's line-based reader draws nothing at all. See
+`refresh_repos` — the engine refreshes one repository at a time precisely so this marker,
+a per-source time budget, and a stop check can exist. Byte figures are impossible here:
+zypper's metadata staging directory is root-only, so the GUI's fallback of weighing
+`/var/cache/zypp/packages` (world-readable, hence no root) only helps the *package*
+download.)
 (`CHECK_ITEM|key|name|from|to` carries one changed package for the `--check` preview
 panel; `SIZE|key|download` carries the on-demand download-size figure from `--size=<step>`;
 `FREED|cache|human` carries the disk the cache clean reclaimed (measured before/after
@@ -222,3 +234,27 @@ Dependency policy (CI actions, runtimes, PySide6, base images) is a standing rul
   **warns before quitting during a run** (`Updater._confirm_quit`) and tells the user it
   finishes in the background — so never add a code path that kills the engine mid-run.
   Closing to the tray is not a quit and needs no warning.
+- **A slow server must never be indistinguishable from a hang (ONEUP-0048).** Measured, not
+  assumed: one mirror served an 18 MB repository index at **930 B/s** and another 86 MB of
+  packages at **~18 KB/s**, and through both the app showed nothing whatever — zypper prints
+  the metadata fetch as dots with no line ending (so there is no complete line to draw) and
+  its package prefetch as one line per *finished* package (ten minutes apart at that speed).
+  Three defences, and all three are needed: the engine refreshes **one repository at a time**
+  under `sudo timeout "$REFRESH_TIMEOUT"` (as root, so it can actually kill its own zypper
+  child) and offers the existing `REMEDY|skip-repo` when it gives up; the GUI keeps a
+  **liveness line** under the progress bar (`Updater._tick_activity`) showing what is being
+  waited on, for how long, the size and the rate; and its stall clock is stamped on the raw
+  **chunk** in `on_output`, before any line splitting, because during a metadata fetch a
+  partial line is the only proof of life there is. When zypper reports no byte figures, the
+  GUI weighs `/var/cache/zypp/packages` against a baseline taken at run start — it is
+  world-readable, so no root is involved, and already-cached packages stay inside the
+  baseline rather than flattering the rate.
+- **A test must never depend on, or damage, the state of the machine it runs on.** `run_engine`
+  redirects `ONEUP_ZYPP_PID_FILE`, `ONEUP_RUN_STATE` and `ONEUP_STOP_FILE` into the mock dir
+  unless the scenario sets them itself. Both defaults bit for real: the lock probe reads
+  `/run/zypp.pid`, so **40 tests failed merely because the machine happened to be running
+  zypper** — precisely when someone is working on an update tool; and `run.state` defaults to
+  the user's own, which `cleanup` deletes as its owner, so running the suite during a real
+  update **deleted that run's record** and the window could no longer follow it (ONEUP-0045).
+  A new scenario that invokes the engine directly rather than through `run_engine` must repeat
+  those overrides by hand.

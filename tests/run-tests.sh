@@ -55,7 +55,20 @@ EOF
 # Run the engine with a given mock dir; echo its combined output.
 run_engine() {
     local mockdir="$1"; shift
-    PATH="$mockdir:$PATH" bash "$ENGINE" "$@" --log="$mockdir/run.log" 2>&1
+    # Redirect every path that reaches outside the mock dir, unless the scenario set it
+    # itself. Two ways this bit for real:
+    #   * the package-lock probe defaults to /run/zypp.pid, so every scenario failed
+    #     whenever the machine happened to be running zypper — precisely when someone is
+    #     working on an update tool;
+    #   * run.state defaults to the user's own, and cleanup() deletes the file it owns —
+    #     so running the suite during a real update deleted that run's record, and the
+    #     window could no longer find the run it was following (ONEUP-0045).
+    # A test must never depend on, or damage, the state of the box it runs on.
+    PATH="$mockdir:$PATH" \
+        ONEUP_ZYPP_PID_FILE="${ONEUP_ZYPP_PID_FILE:-$mockdir/no-zypp.pid}" \
+        ONEUP_RUN_STATE="${ONEUP_RUN_STATE:-$mockdir/run.state}" \
+        ONEUP_STOP_FILE="${ONEUP_STOP_FILE:-$mockdir/stop.request}" \
+        bash "$ENGINE" "$@" --log="$mockdir/run.log" 2>&1
 }
 
 check() {  # name, expected-substring, haystack
@@ -605,7 +618,11 @@ case "$*" in
 esac
 EOF
 chmod +x "$d/zypper"
-PATH="$d:$PATH" bash "$ENGINE" --steps=system --log="$d/run.log" 2>&1 | head -c 200 >/dev/null
+# Invoked directly rather than through run_engine, because the point is to break the
+# stdout pipe — so it has to repeat run_engine's isolation of the real paths by hand.
+PATH="$d:$PATH" ONEUP_ZYPP_PID_FILE="$d/no-zypp.pid" \
+    ONEUP_RUN_STATE="$d/run.state" ONEUP_STOP_FILE="$d/stop.request" \
+    bash "$ENGINE" --steps=system --log="$d/run.log" 2>&1 | head -c 200 >/dev/null
 # The engine keeps running after the reader closes; wait for the log to settle.
 for _ in $(seq 1 50); do grep -q '@@DONE@@' "$d/run.log" 2>/dev/null && break; sleep 0.1; done
 out=$(cat "$d/run.log" 2>/dev/null)
@@ -649,6 +666,167 @@ check_absent "a non-package line emits no progress" "@@PROGRESS@@|system|0|" "$o
 # The filter is a pass-through: losing zypper's own words would blind the log.
 check "zypper's own output still reaches the log" "Checking for file conflicts" "$out"
 check "the step still succeeds through the filter" "@@STEP_END@@|system|ok" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0048: a slow mirror must be visible, bounded and interruptible. A real run sat 26
+# minutes on one repository whose server was delivering an 18 MB index at 930 B/s, with
+# nothing on screen the whole time: zypper reports that phase as dots with no line ending,
+# so the GUI's line-based reader had nothing to draw and a working run read as frozen.
+# zypper has no timeout of its own, so left alone it would have waited hours.
+echo "TEST: the refresh names each source and says how far through the list it is"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *lr*)
+    # zypper's own table, which is the only place the repository list comes from.
+    echo "#  | Alias   | Name         | Enabled | GPG Check | Refresh"
+    echo "---+---------+--------------+---------+-----------+--------"
+    echo " 1 | oss     | Main OSS     | Yes     | (r ) Yes  | Yes"
+    echo " 2 | games   | Games        | Yes     | (r ) Yes  | Yes"
+    echo " 3 | offrepo | Disabled one | No      | ----      | ----"
+    exit 0 ;;
+  *refresh*) exit 0 ;;
+  *dup*|*update*) echo "Nothing to do."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+check        "the first source is named, with its position" "@@REFRESH@@|1|2|oss"   "$out"
+check        "the second source is named too"               "@@REFRESH@@|2|2|games" "$out"
+check_absent "a disabled source is not refreshed"           "offrepo"               "$out"
+check        "the step still succeeds"                      "@@STEP_END@@|system|ok" "$out"
+rm -rf "$d"
+
+echo "TEST: a source too slow to refresh is bounded, named, and offers the skip"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *lr*)
+    echo " 1 | oss   | Main OSS | Yes | (r ) Yes | Yes"
+    echo " 2 | games | Games    | Yes | (r ) Yes | Yes"
+    exit 0 ;;
+  *refresh*games*) sleep 30 ;;          # the stalled mirror: never finishes in budget
+  *refresh*) exit 0 ;;
+  *dup*|*update*) echo "Nothing to do."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(ONEUP_REFRESH_TIMEOUT=1 run_engine "$d" --steps=system 2>&1)
+check "the slow source is given up on by name"   "Gave up on 'games'"          "$out"
+check "the hint names the source in plain words" "The 'games' source is serving updates too slowly" "$out"
+check "the GUI is offered the matching skip"     "@@REMEDY@@|skip-repo|games"  "$out"
+# The point of bounding it: the rest of the update still happens.
+check "the upgrade still runs after the timeout" "@@STEP_END@@|system|ok"      "$out"
+check "and the stale-metadata caveat is stated"  "cached metadata"             "$out"
+rm -rf "$d"
+
+echo "TEST: Stop is honoured DURING the refresh, before anything is installed"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *lr*)
+    echo " 1 | oss   | Main OSS | Yes | (r ) Yes | Yes"
+    echo " 2 | games | Games    | Yes | (r ) Yes | Yes"
+    exit 0 ;;
+  *refresh*oss*) touch "$d/stop.request"; exit 0 ;;
+  *refresh*) echo "SECOND-SOURCE-REFRESHED"; exit 0 ;;
+  *dup*|*update*) echo "TRANSACTION-RAN"; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system,cache 2>&1)
+# Stopping here is free, which is the whole reason the check sits between sources: the
+# refresh has changed nothing, so there is no half-applied transaction to worry about.
+check_absent "the remaining sources are not refreshed"   "SECOND-SOURCE-REFRESHED" "$out"
+check_absent "nothing is installed after such a stop"    "TRANSACTION-RAN"         "$out"
+check        "the run reports it stopped"                "@@DONE@@|stopped"        "$out"
+rm -rf "$d"
+
+echo "TEST: an unreadable repository list falls back to one bulk refresh (never skips it)"
+d=$(mktemp -d); setup_common "$d"
+# `lr` gives nothing parsable — an unexpected table format, or no repos configured. The
+# refresh must still happen: upgrading from stale metadata because the refresh was quietly
+# skipped is a far worse outcome than losing the per-source progress.
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *lr*) echo "no repositories defined"; exit 0 ;;
+  *refresh*) echo "BULK-REFRESH-RAN"; exit 0 ;;
+  *dup*|*update*) echo "Nothing to do."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+check        "the refresh still happens"        "BULK-REFRESH-RAN"       "$out"
+check_absent "and claims no per-source figure" "@@REFRESH@@"            "$out"
+check        "the step still succeeds"          "@@STEP_END@@|system|ok" "$out"
+rm -rf "$d"
+
+echo "TEST: the download reports bytes and a total, so a slow one is legible (ONEUP-0048)"
+d=$(mktemp -d); setup_common "$d"
+# Sizes and the "Overall download size" line are verbatim zypper wording; they are the
+# only byte figures available anywhere in a run — a metadata refresh reports none, and
+# zypper's own temp directory is root-only, so this is what a rate can be built from.
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*) exit 0 ;;
+  *dup*|*update*)
+    echo "2 packages to upgrade."
+    echo "Overall download size: 1.5 MiB. Already cached: 0 B."
+    echo "Retrieving: cpupower-lang-7.1.4-17.noarch (devel-tools) (1/2),  31.0 KiB"
+    echo "Retrieving: libcapstone5-5.0.6-18.x86_64 (devel-tools) (2/2), 1.0 MiB"
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+# 31.0 KiB = 31744 bytes, then + 1.0 MiB (1048576) = 1080320. Totals are cumulative on
+# purpose: the GUI divides by elapsed time for the rate, so it needs a running figure.
+check "the first package's bytes are counted against the total" \
+      "@@PROGRESS@@|system|1|2|download|31744|1572864" "$out"
+check "byte counts accumulate across packages" \
+      "@@PROGRESS@@|system|2|2|download|1080320|1572864" "$out"
+rm -rf "$d"
+
+echo "TEST: the prefetch phase passes on the transaction total (either zypper wording)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*) exit 0 ;;
+  *dup*|*update*)
+    echo "7 packages to upgrade."
+    # Verbatim from a real run: the classic_rpmtrans backend says "Package download
+    # size", not "Overall download size", and its prefetch prints one line per finished
+    # package with no counter and no size. On an 86 MB download from a slow mirror that
+    # meant ten minutes between lines, which is what read as a dead app.
+    echo "Package download size:    86.4 MiB"
+    echo "Preloading Packages [.."
+    echo "Preloading: libswresample6-32bit-8.1.2-1699.3.pm.5.x86_64.rpm [done]"
+    echo "Preloading: libavformat62-32bit-8.1.2-1699.3.pm.5.x86_64.rpm [done]"
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+# 86.4 MiB = 90596966 bytes. The tally still has no denominator (zypper gives none) and
+# the byte count is 0 because this phase reports none — but the TOTAL is passed on, since
+# the GUI weighs zypper's package cache for the rest and needs something to measure against.
+check "the prefetch tally invents no denominator but carries the total" \
+      "@@PROGRESS@@|system|1|0|download|0|90596966" "$out"
+check "every prefetched package keeps the total" \
+      "@@PROGRESS@@|system|2|0|download|0|90596966" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

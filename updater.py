@@ -23,6 +23,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -123,6 +124,15 @@ RUN_STATE = STATE_DIR / "run.state"
 # Creating this file asks a running engine to stop at its next safe point. Must match
 # STOP_FILE in update_system.sh.
 STOP_REQUEST = STATE_DIR / "stop.request"
+# How long the engine may produce NOTHING before the liveness line calls it stalled
+# (ONEUP-0048). Generously past a normal gap — a big repository's cache rebuild is quiet
+# for a while — so the wording is trustworthy when it does appear.
+STALL_SECONDS = 45
+# zypper's package cache, which is world-readable — so OneUp can weigh it without root.
+# This is the ONLY byte figure available during the prefetch phase: zypper prints one line
+# per finished package and nothing else, so an 86 MB download from a slow mirror produced
+# no output for ten minutes at a stretch and read as a dead app.
+ZYPP_PACKAGE_CACHE = Path("/var/cache/zypp/packages")
 
 # Tray: one QTimer drives both the short initial check and the recurring one, so a
 # single .stop() on tray-off cancels everything (no stray one-shot survives).
@@ -526,6 +536,98 @@ def current_is_dark(app: QApplication) -> bool:
 
 def _version_tuple(v: str) -> list[int]:
     return [int(x) for x in re.findall(r"\d+", v)] or [0]
+
+
+def _on_wayland() -> bool:
+    return os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
+
+
+def cache_bytes() -> int:
+    """Weigh zypper's package cache. Sampled against a baseline taken as the run starts,
+    the growth is how much has been downloaded — the only figure available while zypper is
+    prefetching, because that phase prints no sizes and no progress of any kind."""
+    total = 0
+    try:
+        for p in ZYPP_PACKAGE_CACHE.rglob("*"):
+            try:
+                if p.is_file():
+                    total += p.stat().st_size
+            except OSError:
+                continue        # a file zypper moved or removed mid-walk
+    except OSError:
+        return 0                # no cache directory, or not readable — figure unavailable
+    return total
+
+
+def run_kwin_script(js: str) -> None:
+    """Load, run and unload a one-shot KWin script (Plasma 5 & 6).
+
+    On Wayland an application may not place its own windows — the compositor owns
+    placement, so Qt's move() is accepted and silently ignored. Asking KWin is the only
+    way to position anything, which is why both window recentring and dialog placement
+    come through here."""
+    if not shutil.which("dbus-send"):
+        return
+    script_path = None
+    name = "oneup_place"
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".js",
+                                         prefix="oneup_place_", delete=False) as f:
+            script_path = f.name   # capture before write so a write error still cleans up
+            f.write(js)
+        base = ["dbus-send", "--session", "--dest=org.kde.KWin",
+                "--print-reply", "/Scripting"]
+        subprocess.run(base + ["org.kde.kwin.Scripting.loadScript",  # noqa: S603 — fixed argv.
+                               f"string:{script_path}", f"string:{name}"],
+                       capture_output=True, timeout=3)
+        subprocess.run(base + ["org.kde.kwin.Scripting.start"],  # noqa: S603
+                       capture_output=True, timeout=3)
+        subprocess.run(base + ["org.kde.kwin.Scripting.unloadScript",  # noqa: S603
+                               f"string:{name}"],
+                       capture_output=True, timeout=3)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    finally:
+        if script_path:
+            try:
+                os.unlink(script_path)
+            except OSError:
+                pass
+
+
+def center_on_parent(widget) -> None:
+    """Put a dialog in the middle of the window that opened it.
+
+    On X11 the direct move works. On Wayland it does nothing whatsoever, which is why
+    OneUp's dialogs kept opening away from the window (ONEUP-0049) — there we ask KWin to
+    centre each of our transient windows over its own parent. Matching on `transientFor`
+    rather than on a window title means every dialog is covered, including the message
+    boxes that have no title of their own."""
+    if not _on_wayland():
+        parent = widget.parent()
+        if parent is not None:
+            fg = widget.frameGeometry()
+            fg.moveCenter(parent.frameGeometry().center())
+            widget.move(fg.topLeft())
+        return
+    js = f"""\
+var wins = workspace.windowList();
+for (var i = 0; i < wins.length; i++) {{
+    var c = wins[i];
+    if (c.pid !== {os.getpid()} || !c.transientFor) continue;
+    var g = c.frameGeometry, pg = c.transientFor.frameGeometry;
+    var area = workspace.clientArea(workspace.PlacementArea, c);
+    var x = pg.x + Math.round((pg.width - g.width) / 2);
+    var y = pg.y + Math.round((pg.height - g.height) / 2);
+    // Clamp to the screen: a dialog taller than its parent would otherwise hang off it.
+    x = Math.max(area.x, Math.min(x, area.x + area.width - g.width));
+    y = Math.max(area.y, Math.min(y, area.y + area.height - g.height));
+    c.frameGeometry = {{ x: x, y: y, width: g.width, height: g.height }};
+}}
+"""
+    # Deferred by a tick: KWin can only move a window it already knows about, and on
+    # Wayland the surface isn't committed yet while showEvent is still running.
+    QTimer.singleShot(0, lambda: run_kwin_script(js))
 
 
 class ToggleSwitch(QAbstractButton):
@@ -1048,11 +1150,7 @@ class RepoManagerDialog(QDialog):
         # Centre over the main window each time it opens (size is restored from
         # settings; only the position is re-centred).
         super().showEvent(event)
-        parent = self.parent()
-        if parent:
-            fg = self.frameGeometry()
-            fg.moveCenter(parent.frameGeometry().center())
-            self.move(fg.topLeft())
+        center_on_parent(self)
 
     def done(self, result: int):
         # done() is the funnel for Apply/Close/× — persist the size on the way out.
@@ -1128,11 +1226,7 @@ class SettingsDialog(QDialog):
     def showEvent(self, event):
         # Centre over the main window each time it opens (mirrors RepoManagerDialog).
         super().showEvent(event)
-        parent = self.parent()
-        if parent:
-            fg = self.frameGeometry()
-            fg.moveCenter(parent.frameGeometry().center())
-            self.move(fg.topLeft())
+        center_on_parent(self)
 
 
 class RollbackDialog(QDialog):
@@ -1192,11 +1286,7 @@ class RollbackDialog(QDialog):
     def showEvent(self, event):
         # Centre over the main window each time it opens (dialog standard).
         super().showEvent(event)
-        parent = self.parent()
-        if parent:
-            fg = self.frameGeometry()
-            fg.moveCenter(parent.frameGeometry().center())
-            self.move(fg.topLeft())
+        center_on_parent(self)
 
 
 class Updater(QMainWindow):
@@ -1217,6 +1307,18 @@ class Updater(QMainWindow):
         self._sys_changed = False
         self._step_caption = ""      # current step's bar caption, so @@PROGRESS@@ can extend it
         self._progress_phase = ""    # download/install; a change is what gets announced
+        # Liveness state (ONEUP-0048). _activity_at is the last time ANY output arrived —
+        # including a partial line, which is all zypper's dots ever are — so "quiet for
+        # 4m" means genuinely nothing, not merely nothing complete enough to draw.
+        self._activity_at = 0.0
+        self._activity_what = ""     # what we're waiting on, e.g. "Fetching the games source"
+        self._activity_since = 0.0   # when that wait started
+        self._activity_stalled = False   # announced on the transition, not every tick
+        self._dl_at = 0.0            # first byte reading of this download, for the rate
+        self._dl_from = 0            # bytes already fetched at that reading
+        self._dl_bytes = 0           # bytes fetched so far, as reported by zypper
+        self._dl_total = 0           # transaction's total download size (0 = unknown)
+        self._dl_base = 0            # package-cache weight before the run started
         self._done_status = ""       # the run's own @@DONE@@ verdict; the only result
                                      # available for a run we attached to (no exit code)
         self._attached_pid = 0       # engine we're following that another window started
@@ -1458,6 +1560,22 @@ class Updater(QMainWindow):
         self.bar.setValue(0)
         self.bar.setAccessibleName("Update progress")
         root.addWidget(self.bar)
+        # Liveness, on its own line under the bar (ONEUP-0048): how long the current
+        # phase has been going, the download rate, and — when the engine has gone quiet —
+        # how long for. A slow mirror and a hung one look identical without this: zypper
+        # reports a metadata fetch as undelimited dots with no line ending, so there is
+        # nothing for the log pane to draw, and a working run reads as frozen.
+        self.activity = QLabel("")
+        self.activity.setObjectName("Activity")
+        self.activity.setAccessibleName("Activity")
+        self.activity.setVisible(False)
+        root.addWidget(self.activity)
+        # Five seconds, not one: the label is a live region, and a screen reader reading a
+        # ticking counter aloud would bury everything else. _tick_activity only re-announces
+        # when the WORDING changes, so the elapsed figure updates silently.
+        self._activity_timer = QTimer(self)
+        self._activity_timer.setInterval(5000)
+        self._activity_timer.timeout.connect(self._tick_activity)
 
         # Banners (all hidden until needed).
         # Each banner is named for its ROLE, so a screen reader describes what the
@@ -1704,6 +1822,8 @@ class Updater(QMainWindow):
         self._run_active = True
         self._check_mode = False
         self._done_status = ""
+        self._reset_activity()
+        self._activity_timer.start()
         self._total = len([s for s in steps.split(",") if s])
         self.bar.setRange(0, max(self._total, 1))
         self.set_controls_enabled(False)
@@ -1725,6 +1845,8 @@ class Updater(QMainWindow):
                 self._attached_pos = fh.tell()
         except OSError:
             new = ""
+        if new:
+            self._activity_at = time.monotonic()   # the log grew: the run is alive
         for line in new.splitlines():
             self.handle_line(line)
         try:
@@ -1809,7 +1931,7 @@ class Updater(QMainWindow):
         # On Wayland an app is not allowed to move itself — the compositor owns
         # window placement — so self.move() is silently ignored. We ask KWin to
         # do it via a one-shot script. On X11, the direct move works fine.
-        if os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+        if _on_wayland():
             self._kwin_recenter()
         else:
             screen = self.screen() or QApplication.primaryScreen()
@@ -1818,54 +1940,28 @@ class Updater(QMainWindow):
                 frame.moveCenter(screen.availableGeometry().center())
                 self.move(frame.topLeft())
 
-    def _kwin_recenter(self):
-        # Center via KWin scripting (Plasma 5 & 6). We match our own window by
-        # PID and use workspace.PlacementArea for the usable screen rectangle —
-        # the approach proven to work on this machine's KDE Wayland session.
-        if not shutil.which("dbus-send"):
-            return
-        pid = os.getpid()
-        kwin_js = f"""\
-var clients = workspace.windowList();
-for (var i = 0; i < clients.length; i++) {{
-    var c = clients[i];
-    if (c.pid === {pid}) {{
-        var area = workspace.clientArea(workspace.PlacementArea, c);
-        c.frameGeometry = {{
-            x: area.x + Math.round((area.width - c.frameGeometry.width) / 2),
-            y: area.y + Math.round((area.height - c.frameGeometry.height) / 2),
-            width: c.frameGeometry.width,
-            height: c.frameGeometry.height
-        }};
-        break;
-    }}
+    @staticmethod
+    def _kwin_recenter():
+        # Center via KWin scripting (Plasma 5 & 6). We match our own window by PID and use
+        # workspace.PlacementArea for the usable screen rectangle — the approach proven to
+        # work on this machine's KDE Wayland session. Transients are skipped so this
+        # always finds the main window, never a dialog that happens to come first;
+        # centring a dialog is center_on_parent's job.
+        run_kwin_script(f"""\
+var wins = workspace.windowList();
+for (var i = 0; i < wins.length; i++) {{
+    var c = wins[i];
+    if (c.pid !== {os.getpid()} || c.transientFor) continue;
+    var area = workspace.clientArea(workspace.PlacementArea, c);
+    c.frameGeometry = {{
+        x: area.x + Math.round((area.width - c.frameGeometry.width) / 2),
+        y: area.y + Math.round((area.height - c.frameGeometry.height) / 2),
+        width: c.frameGeometry.width,
+        height: c.frameGeometry.height
+    }};
+    break;
 }}
-"""
-        script_path = None
-        name = "oneup_center"
-        try:
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".js",
-                                             prefix="oneup_center_", delete=False) as f:
-                script_path = f.name   # capture before write so a write error still cleans up
-                f.write(kwin_js)
-            base = ["dbus-send", "--session", "--dest=org.kde.KWin",
-                    "--print-reply", "/Scripting"]
-            subprocess.run(base + ["org.kde.kwin.Scripting.loadScript",
-                                   f"string:{script_path}", f"string:{name}"],
-                           capture_output=True, timeout=3)
-            subprocess.run(base + ["org.kde.kwin.Scripting.start"],
-                           capture_output=True, timeout=3)
-            subprocess.run(base + ["org.kde.kwin.Scripting.unloadScript",
-                                   f"string:{name}"],
-                           capture_output=True, timeout=3)
-        except (OSError, subprocess.SubprocessError):
-            pass
-        finally:
-            if script_path:
-                try:
-                    os.unlink(script_path)
-                except OSError:
-                    pass
+""")
 
     # ---- weekly auto-check (systemd user timer) ---------------------------
     @staticmethod
@@ -2800,6 +2896,7 @@ for (var i = 0; i < clients.length; i++) {{
         self._step_caption = ""
         self._progress_phase = ""
         self._done_status = ""
+        self._reset_activity()
         self._failed_steps = []
         self._services = ""
         self._snapshot = ""
@@ -2820,6 +2917,7 @@ for (var i = 0; i < clients.length; i++) {{
         self._remedy_keys = False
         self._remedy_skips = []
         self._run_active = not check   # a real run guards the standalone thin action
+        self._activity_timer.start()   # stopped again in on_finished
         self.warn_copy_btn.setVisible(False)
         self.warn_btn2.setVisible(False)
         self.retry_btn.setVisible(False)
@@ -2855,6 +2953,12 @@ for (var i = 0; i < clients.length; i++) {{
 
     def on_output(self):
         chunk = bytes(self.proc.readAllStandardOutput()).decode(errors="replace")
+        # Stamped on the raw chunk, before any line splitting: zypper's progress is a
+        # stream of dots with no line ending, so a partial line is the only proof of life
+        # during a metadata fetch. Waiting for a complete line would call a working
+        # download stalled (ONEUP-0048).
+        if chunk:
+            self._activity_at = time.monotonic()
         # Normalise carriage returns to newlines on the ACCUMULATED buffer (so a CRLF
         # straddling two read chunks doesn't become a spurious blank line) — this keeps
         # a tool's \r progress output from prepending text to a marker and hiding it.
@@ -2896,6 +3000,79 @@ for (var i = 0; i < clients.length; i++) {{
             return f"{secs}s"
         return f"{secs // 60}m {secs % 60}s"
 
+    @staticmethod
+    def _format_size(n: int) -> str:
+        """A compact human size: '900 B', '512 KB', '41 MB', '1.4 GB'."""
+        if n >= 1 << 30:
+            return f"{n / (1 << 30):.1f} GB"
+        if n >= 1 << 20:
+            return f"{n / (1 << 20):.0f} MB"
+        if n >= 1 << 10:
+            return f"{n / (1 << 10):.0f} KB"
+        return f"{n} B"
+
+    def _set_activity(self, text: str):
+        self.activity.setText(text)
+        self.activity.setVisible(bool(text))
+
+    def _reset_activity(self):
+        """Clear the liveness line and start its clock. Called as a run begins — the
+        first thing being waited on is the password prompt, which counts as activity."""
+        self._activity_at = time.monotonic()
+        self._activity_what = ""
+        self._activity_since = 0.0
+        self._activity_stalled = False
+        self._dl_at = self._dl_from = self._dl_bytes = self._dl_total = 0
+        # Weighed once, before anything is fetched, so later samples measure THIS run's
+        # download. Packages already cached are inside the baseline and rightly excluded —
+        # zypper won't re-fetch them, and counting them would flatter the rate.
+        self._dl_base = cache_bytes()
+        self._set_activity("")
+
+    def _tick_activity(self):
+        """Redraw the liveness line: what we're waiting on, for how long, and how fast
+        it's moving. Runs every 5s for the length of a run, and again whenever fresh
+        figures arrive, so the answer to "has it stalled?" is always on screen."""
+        if not self._run_active:
+            return
+        now = time.monotonic()
+        bits = []
+        if self._activity_what and self._activity_since:
+            waited = self._format_duration(int(now - self._activity_since))
+            bits.append(f"{self._activity_what} — {waited}")
+        # Two byte sources, whichever is further along: what zypper printed (per-package
+        # sizes, when it prints them at all) and what its package cache actually weighs.
+        # The cache is the only one that covers the prefetch phase — the phase a big
+        # download spends its time in, and the one that reports nothing whatsoever.
+        got = self._dl_bytes
+        if self._progress_phase == "download":
+            got = max(got, cache_bytes() - self._dl_base)
+        if got > 0:
+            human = self._format_size(got)
+            bits.append(f"{human} of {self._format_size(self._dl_total)}"
+                        if self._dl_total else human)
+            if not self._dl_at:                       # anchor the rate on first sight
+                self._dl_at, self._dl_from = now, got
+            # Averaged over the whole download, not sampled: an average is steady enough
+            # to read, and the question being asked is "will this ever finish?".
+            secs, moved = now - self._dl_at, got - self._dl_from
+            if secs >= 1 and moved > 0:
+                bits.append(f"{self._format_size(int(moved / secs))}/s")
+        quiet = int(now - self._activity_at) if self._activity_at else 0
+        stalled = quiet >= STALL_SECONDS
+        if stalled:
+            bits.append(f"nothing received for {self._format_duration(quiet)}"
+                        " — the server may have stalled. Stopping now is safe.")
+        elif bits:
+            bits.append("still working")
+        self._set_activity(" · ".join(bits))
+        # Announced on the transition only — a live region that speaks every tick would
+        # bury the rest of the run, but going quiet for minutes is genuinely news.
+        if stalled != self._activity_stalled:
+            self._activity_stalled = stalled
+            if stalled:
+                self._announce("No response from the server. Stopping now is safe.")
+
     def handle_marker(self, line: str):
         try:
             tag, rest = line[2:].split("@@|", 1)
@@ -2918,6 +3095,12 @@ for (var i = 0; i < clients.length; i++) {{
             # the step's label and position from a marker it doesn't carry.
             self._step_caption = f"{label}  (step {index} of {total})"
             self._progress_phase = ""
+            # A new step is a new thing to wait on, and its own download: carrying the
+            # previous step's elapsed time or byte rate over would misreport both.
+            self._activity_what = ""
+            self._activity_since = 0.0
+            self._dl_at = self._dl_from = self._dl_bytes = self._dl_total = 0
+            self._tick_activity()   # redraw now; a 5s-stale line would name the old step
             self.bar.setFormat(self._step_caption)
             self.bar.setValue(int(index) - 1)
             # Progress out loud: without this a blind user gets silence for the
@@ -3014,9 +3197,35 @@ for (var i = 0; i < clients.length; i++) {{
             # Spoken once per phase, not per package: a screen reader announcing all
             # 141 packages would bury everything else, but silence through the run's
             # longest stretch is exactly what made it look hung.
-            if phase != self._progress_phase:
-                self._progress_phase = phase
+            announce = phase != self._progress_phase
+            self._progress_phase = phase
+            # Optional trailing byte fields: how much zypper says has come down, and its
+            # total for the transaction. Either may be 0 for "not known" — during the
+            # prefetch phase zypper reports no sizes at all, and the liveness line falls
+            # back to weighing the package cache. Set the phase FIRST: that fallback is
+            # gated on it, so a stale phase would skip the very first measurement.
+            if len(parts) > 4 and parts[4].isdigit():
+                self._dl_bytes = max(self._dl_bytes, int(parts[4]))
+                if len(parts) > 5 and parts[5].isdigit() and int(parts[5]):
+                    self._dl_total = int(parts[5])
+                self._tick_activity()
+            if announce:
                 self._announce(f"{verb} packages.")
+        elif tag == "REFRESH":
+            # Which source is being fetched, and how far through the list (ONEUP-0048).
+            # This phase used to be a blank several minutes: zypper reports it as dots
+            # with no line ending, so there was nothing for the log pane to draw, and a
+            # crawling mirror was indistinguishable from a hung app.
+            if len(parts) < 3 or not parts[0].isdigit() or not parts[1].isdigit():
+                return
+            n, total, alias = int(parts[0]), int(parts[1]), parts[2]
+            detail = f"Checking for updates from {alias} ({n} of {total} sources)"
+            self.status.setText(f"{detail}…")
+            self.bar.setFormat(f"{self._step_caption} — {detail}"
+                               if self._step_caption else f"{detail}…")
+            self._activity_what = f"Fetching {alias}"
+            self._activity_since = time.monotonic()
+            self._tick_activity()
         elif tag == "SERVICES":
             self._services = rest.strip()
         elif tag == "HINT":
@@ -3109,6 +3318,8 @@ for (var i = 0; i < clients.length; i++) {{
             self.handle_line(self._buf)
         self._buf = ""
         self._run_active = False
+        self._activity_timer.stop()
+        self._set_activity("")
         # Release the finished process so QProcess instances don't accumulate on the
         # window across a long session (each run parents a new one to self). There may be
         # no process at all: a run we merely FOLLOWED belongs to another window, and this
@@ -3330,9 +3541,7 @@ for (var i = 0; i < clients.length; i++) {{
 
     def _center_child(self, widget):
         """Move a child popup so its centre sits over the main window's centre."""
-        fg = widget.frameGeometry()
-        fg.moveCenter(self.frameGeometry().center())
-        widget.move(fg.topLeft())
+        center_on_parent(widget)
 
     # ---- self-update check ------------------------------------------------
     def _check_app_update(self, manual: bool = False):

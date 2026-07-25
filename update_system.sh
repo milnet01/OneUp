@@ -82,6 +82,10 @@ THIN_SNAPSHOTS=false  # --thin-snapshots: run snapper's own retention cleanup to
                       # expendable Btrfs restore points (guarded; never a hand-pick).
 SNAP_WARN_COUNT=25    # pre-flight: warn once this many Btrfs snapshots have piled up
                       # (each zypper transaction leaves a pre/post pair, so they add up).
+REFRESH_TIMEOUT="${ONEUP_REFRESH_TIMEOUT:-120}"   # per-repository refresh budget, seconds.
+                      # zypper has no timeout of its own: a mirror trickling metadata at
+                      # 1 KB/s once held a run for hours with nothing on screen. Overridable
+                      # so the tests don't have to wait out a real one (ONEUP-0048).
 
 usage() {
     cat <<EOF
@@ -166,9 +170,14 @@ exec > >(tee "${tee_opts[@]}" "$LOG_FILE") 2>&1
 #   @@STEP_BEGIN@@|key|index|total|Human label
 #   @@STEP_END@@|key|ok|skip|fail|detail
 #   @@TIMING@@|key|seconds               (how long the step took)
-#   @@PROGRESS@@|key|done|total|phase    (live per-package progress within a step;
+#   @@PROGRESS@@|key|done|total|phase[|bytes|bytes_total]
+#                                        (live per-package progress within a step;
 #                                         phase is download|install, and total 0
-#                                         means zypper gave no denominator)
+#                                         means zypper gave no denominator. The two
+#                                         byte fields are optional — present only in the
+#                                         download phase once zypper has printed a size —
+#                                         and a bytes_total of 0 means "not known yet")
+#   @@REFRESH@@|done|total|alias         (refreshing this repository, done-of-total)
 #   @@SNAPSHOT@@|id
 #   @@SNAPSHOT_ITEM@@|id|date|description (rollback picker: one recent restore point)
 #   @@CHECK@@|key|count|label            (--check mode: updates available)
@@ -931,6 +940,58 @@ repo_scoped_failure() {
     grep -qiE 'signature|GPG|key|metadata|Valid metadata not found|Curl|could not resolve|Download.*failed|Skipping repository' "$SYS_LOG"
 }
 
+# Refresh each enabled repository on its own, with its own time budget, instead of one
+# bulk `zypper refresh` (ONEUP-0048). Three things that buys us, all of them things a
+# bulk refresh cannot give:
+#
+#   * a name — @@REFRESH@@ says WHICH source is being fetched, and how far through the
+#     list we are. Bulk refresh reports progress as undelimited dots with no newline, so
+#     a line-based reader (the GUI) draws nothing at all for the whole phase.
+#   * an escape — zypper has no timeout, so a mirror serving an 18 MB index at 1 KB/s
+#     hangs the run for hours. `sudo timeout` runs timeout AS ROOT so it can actually
+#     kill its zypper child; we then carry on from cached metadata, which the caller
+#     already reports honestly as "upgraded from cached metadata".
+#   * a stop — the request is checked between repositories, so Stop works during the
+#     longest phase of the run. Free here, because nothing has been installed yet.
+#
+# The sudo stays a top-level command of THIS shell — never inside a subshell or a
+# backgrounded pipeline — so it reuses sudo_init's one credential (see sudo_capture).
+REFRESH_FAILED=false
+refresh_repos() {
+    local -a aliases=() gpg=()
+    mapfile -t aliases < <(enabled_repo_aliases)   # read-only, no sudo inside
+    local total=${#aliases[@]} i=0 alias rc
+    # The user approved importing repository signing keys for this run (--import-keys).
+    $IMPORT_KEYS && gpg=(--gpg-auto-import-keys)
+    if (( total == 0 )); then
+        # The repository list is only available by parsing zypper's own table, so it can
+        # come back empty (an unexpected format, a machine with none configured). Fall
+        # back to one bulk refresh: upgrading from stale metadata because we quietly
+        # skipped the refresh is far worse than losing the per-source progress.
+        sudo zypper --non-interactive "${gpg[@]}" refresh || REFRESH_FAILED=true
+        return 0
+    fi
+    for alias in "${aliases[@]}"; do
+        [[ -z "$alias" ]] && continue
+        i=$((i+1))
+        stop_pending && return 0
+        marker REFRESH "$i|$total|$alias"
+        sudo timeout "$REFRESH_TIMEOUT" zypper --non-interactive "${gpg[@]}" refresh "$alias"
+        rc=$?
+        (( rc == 0 )) && continue
+        # 124 is timeout's "I killed it" — a slow server, not a broken repository, so say
+        # so in those words and offer the skip the GUI already knows how to apply. The
+        # repo is NOT disabled here: we simply could not refresh it this run.
+        if (( rc == 124 )); then
+            echo "  Gave up on '$alias' after ${REFRESH_TIMEOUT}s — its server is too slow right now."
+            marker HINT "The '$alias' source is serving updates too slowly to wait for, so OneUp moved on. Use \"Skip $alias & update the rest\" to leave it out of the next run, or try again later."
+            marker REMEDY "skip-repo|$alias"
+        fi
+        REFRESH_FAILED=true
+    done
+    return 0
+}
+
 # Turn zypper's own per-package chatter into progress markers, so a long download or
 # install can never look like a hang (ONEUP-0040). A user quit a run that was working
 # perfectly — it was several minutes into fetching 379 MiB with nothing on screen but
@@ -946,27 +1007,66 @@ repo_scoped_failure() {
 # Only the last two carry a total. The preload — the parallel prefetch, and the phase
 # the user actually sat through — has no counter, so it reports a total of 0 meaning
 # "unknown" and the GUI shows a live tally instead of inventing a denominator.
-emit_progress() {        # step-key, "n/m" (zypper pads it: "( 1/77)"), phase
-    local step="$1" frac="${2// /}" phase="$3"
+# "31.0 KiB" -> 31744. Integer arithmetic only, because bash has no floats: zypper
+# prints one decimal place, so scale by ten and divide back down.
+to_bytes() {             # number, unit -> whole bytes on stdout (0 if unparsable)
+    local n="$1" u="$2" whole frac mult
+    whole=${n%%.*}
+    frac=${n#*.}; [[ "$frac" == "$n" ]] && frac=0    # no decimal point at all
+    frac=${frac:0:1}
+    [[ "$whole" =~ ^[0-9]+$ && "$frac" =~ ^[0-9]$ ]] || { echo 0; return 0; }
+    case "$u" in
+        B)   mult=1 ;;
+        KiB) mult=1024 ;;
+        MiB) mult=1048576 ;;
+        GiB) mult=1073741824 ;;
+        *)   echo 0; return 0 ;;
+    esac
+    # 10# so a zero-padded figure is read as decimal, not as an invalid octal literal.
+    echo $(( (10#$whole * 10 + 10#$frac) * mult / 10 ))
+}
+emit_progress() {        # step-key, "n/m" (zypper pads it: "( 1/77)"), phase, [bytes-so-far], [bytes-total]
+    local step="$1" frac="${2// /}" phase="$3" got="${4:-}" want="${5:-}"
     # Non-zero when there was no counter to parse, so the caller can tell "emitted" from
     # "skipped" — that distinction is what the stale-parser canary below relies on.
     [[ "$frac" =~ ^([0-9]+)/([0-9]+)$ ]] || return 1
-    marker PROGRESS "$step|${BASH_REMATCH[1]}|${BASH_REMATCH[2]}|$phase"
+    local payload="$step|${BASH_REMATCH[1]}|${BASH_REMATCH[2]}|$phase"
+    # The byte fields are optional: only the download phase can count them, and only
+    # once zypper has printed a size. A total of 0 means "not known yet".
+    [[ -n "$got" ]] && payload+="|$got|${want:-0}"
+    marker PROGRESS "$payload"
 }
 PROGRESS_SEEN_FILE=""    # progress_filter runs as a pipeline element, i.e. in a subshell,
                          # so it reports back through a file rather than a variable
 progress_filter() {      # step-key; passes every line through, adding @@PROGRESS@@
-    local step="$1" line frac preloaded=0 seen=0
+    local step="$1" line frac preloaded=0 seen=0 got=0 want=0
     # `|| [[ -n $line ]]` so a final line with no trailing newline is not swallowed.
     while IFS= read -r line || [[ -n "$line" ]]; do
         printf '%s\n' "$line"
         case "$line" in
+            "Overall download size:"*|"Package download size:"*)
+                # zypper's own figure for the whole transaction, printed before the
+                # download starts. It is what lets the GUI show "19 MB of 86 MB" and a
+                # rate — the two numbers that tell a slow download from a stalled one.
+                # Both wordings are real: "Package download size" is what the
+                # classic_rpmtrans backend prints, "Overall download size" the other.
+                [[ "$line" =~ ^(Overall|Package)\ download\ size:\ *([0-9.]+)\ *([KMG]?i?B) ]] \
+                    && want=$(to_bytes "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}") ;;
             Preloading:*)
+                # The parallel prefetch, and the phase a big download actually spends its
+                # time in — zypper gives it neither a counter nor a size, so all we can
+                # pass on is the tally and the transaction total. The GUI measures the
+                # bytes itself (zypper's package cache is world-readable), which is the
+                # only way this phase gets a figure at all.
                 preloaded=$((preloaded+1)); seen=$((seen+1))
-                marker PROGRESS "$step|$preloaded|0|download" ;;
+                marker PROGRESS "$step|$preloaded|0|download|0|$want" ;;
             Retrieving:*)
                 frac=${line##*\(}; frac=${frac%%)*}      # last (…) is the counter
-                emit_progress "$step" "$frac" download && seen=$((seen+1)) ;;
+                # Each line ends with that package's size: "…(1/77),  31.0 KiB". Summing
+                # them is the only byte count available — zypper reports no running total.
+                [[ "$line" =~ ,\ *([0-9.]+)\ *([KMG]?i?B) ]] \
+                    && got=$(( got + $(to_bytes "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}") ))
+                emit_progress "$step" "$frac" download "$got" "$want" && seen=$((seen+1)) ;;
             \(*Installing:*|\(*Removing:*|\(*Upgrading:*)
                 frac=${line#*\(}; frac=${frac%%)*}       # leading (…) is the counter
                 emit_progress "$step" "$frac" install && seen=$((seen+1)) ;;
@@ -1018,16 +1118,13 @@ if step_selected system && ! stop_pending; then
     # changes that really landed. So track refresh separately and, if it failed but
     # the upgrade succeeded, surface a non-fatal "used cached metadata" note.
     refresh_ok=true
-    if $IMPORT_KEYS; then
-        # The user approved importing repository signing keys (via the GUI's
-        # confirmation, or --import-keys on the CLI), so refresh WITH key import: a
-        # rotated/expired key is accepted for the repos they've chosen to trust. This
-        # is opt-in per run and never the default — a plain run stays strict and only
-        # advises the fix (emitting @@REMEDY@@ below for the GUI's one-click button).
-        sudo zypper --non-interactive --gpg-auto-import-keys refresh || refresh_ok=false
-    else
-        sudo zypper --non-interactive refresh || refresh_ok=false
-    fi
+    REFRESH_FAILED=false
+    # One repository at a time, each with its own time budget, so a crawling mirror
+    # can't hang the run and the GUI can name the source it's waiting on — see
+    # refresh_repos, which also honours --import-keys (the user's approval to accept a
+    # rotated signing key) and checks for a stop between repositories.
+    refresh_repos
+    if $REFRESH_FAILED; then refresh_ok=false; fi
     # Second safe boundary: the refresh above can take a minute on a slow mirror, so
     # honour a stop asked for during it. Nothing has been installed at this point, which
     # is exactly why stopping here is free — once the transaction starts it is seen

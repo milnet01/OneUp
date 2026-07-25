@@ -78,6 +78,13 @@ needed, and a run history.
   doesn't abort a running update: it carries on in the background and finishes properly,
   and OneUp warns you before you close so this isn't a surprise. Reopen it and you'll be
   shown that run's live progress again.
+- **A slow server never looks like a crash.** Some mirrors are painfully slow — one served
+  an update index at under 1 KB/s. `zypper` says nothing at all while it waits, so the app
+  used to look frozen for minutes at a time. OneUp now shows which source it's fetching and
+  how far through the list it is, the download size and speed, and how long it's been
+  waiting — and says so plainly when nothing has arrived for a while. It also stops waiting
+  on any one source after two minutes and offers to leave it out, rather than sitting there
+  for hours.
 - **The engine is usable on its own.** `update_system.sh` runs fine in a plain
   terminal (`./update_system.sh --steps=system,cache`); the GUI just drives it.
 

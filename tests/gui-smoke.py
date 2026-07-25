@@ -181,6 +181,118 @@ def main() -> int:
     check("a new step resets the progress caption",
           "141" not in wP.bar.format() and "Cleaning package cache" in wP.bar.format())
 
+    # --- @@REFRESH@@ and the liveness line (ONEUP-0048) -------------------------
+    # A run once sat 26 minutes on one repository whose server was delivering an 18 MB
+    # index at 930 B/s, with nothing on screen the whole time: zypper reports that phase
+    # as dots with no line ending, so there was never a complete line to draw and a
+    # working run was indistinguishable from a frozen one.
+    wL = updater.Updater()
+    wL._run_active = True
+    wL.handle_line("@@STEP_BEGIN@@|system|1|5|Updating system packages")
+    wL.handle_line("@@REFRESH@@|6|9|games")
+    check("the source being fetched is named, with its position",
+          wL.status.text() == "Checking for updates from games (6 of 9 sources)…")
+    check("the bar keeps the step caption and adds the source",
+          "Updating system packages" in wL.bar.format() and "games" in wL.bar.format())
+    check("the liveness line names what is being waited on",
+          "Fetching games" in wL.activity.text())
+    check("the liveness line is visible during a run", wL.activity.isVisibleTo(wL))
+    # Bytes: the download phase is the only place in a run where a figure exists at all.
+    wL.handle_line("@@PROGRESS@@|system|12|141|download|41943040|397410304")
+    check("the download says how much of how much", "40 MB of 379 MB" in wL.activity.text())
+    check("the byte total is remembered", wL._dl_total == 397410304)
+    # A rate needs both movement and elapsed time to divide by.
+    wL.handle_line("@@PROGRESS@@|system|24|141|download|83886080|397410304")
+    wL._dl_at -= 10
+    wL._tick_activity()
+    check("a rate appears once bytes have moved", "/s" in wL.activity.text())
+    # Going quiet is the signal that actually matters, and must be said in those terms.
+    wL._activity_at = time.monotonic() - (updater.STALL_SECONDS + 5)
+    wL._tick_activity()
+    check("a stalled server is named as such", "may have stalled" in wL.activity.text())
+    check("and the user is told stopping is safe", "safe" in wL.activity.text())
+    check("the stall is announced once", "No response" in wL._last_announcement)
+    wL._last_announcement = ""
+    wL._tick_activity()
+    check("a continuing stall is not re-announced every tick", wL._last_announcement == "")
+    # Output arriving again means slow, not stalled — the wording has to go back.
+    wL._activity_at = time.monotonic()
+    wL._tick_activity()
+    check("output arriving clears the stall wording",
+          "may have stalled" not in wL.activity.text())
+    # A new step is a new wait and a new download; neither figure may carry over.
+    wL.handle_line("@@STEP_BEGIN@@|flatpak|2|5|Updating Flatpak apps")
+    check("a new step drops the previous source", "games" not in wL.activity.text())
+    check("a new step resets the byte counters", wL._dl_bytes == 0 and wL._dl_total == 0)
+    # Same splice-safety contract as PROGRESS: merged stdout/stderr can cut a marker.
+    for bad in ("@@REFRESH@@|6", "@@REFRESH@@|x|9|games", "@@REFRESH@@|6|y|games",
+                "@@PROGRESS@@|system|1|2|download|notanumber"):
+        try:
+            wL.handle_line(bad)
+            check(f"malformed liveness marker handled: {bad[-12:]!r}", True)
+        except Exception as exc:  # noqa: BLE001 — any throw is the failure.
+            check(f"malformed liveness marker handled ({exc})", False)
+    wL.on_finished(0, None)
+    check("the liveness line goes away when the run ends", not wL.activity.isVisibleTo(wL))
+
+    # zypper's prefetch phase reports no sizes and no counter — one line per finished
+    # package and nothing else — so the figure has to come from weighing its package
+    # cache. That is world-readable, so no root is involved.
+    cache_dir = tempfile.mkdtemp()
+    _orig_cache = updater.ZYPP_PACKAGE_CACHE
+    updater.ZYPP_PACKAGE_CACHE = Path(cache_dir)
+    try:
+        check("an empty cache weighs nothing", updater.cache_bytes() == 0)
+        wC = updater.Updater()
+        wC._run_active = True
+        wC._reset_activity()        # baseline taken before anything is fetched
+        wC.handle_line("@@STEP_BEGIN@@|system|1|5|Updating system packages")
+        wC.handle_line("@@PROGRESS@@|system|1|0|download|0|90596966")
+        check("a prefetch tally still invents no denominator",
+              "1 so far" in wC.status.text() and "of 0" not in wC.status.text())
+        (Path(cache_dir) / "pkg.rpm").write_bytes(b"x" * (20 * 1024 * 1024))
+        wC._tick_activity()
+        check("the download is measured even though zypper reported no size",
+              "20 MB of 86 MB" in wC.activity.text())
+        # Packages already cached sit inside the baseline: zypper won't re-fetch them, so
+        # counting them would overstate progress and flatter the rate.
+        wC2 = updater.Updater()
+        wC2._run_active = True
+        wC2._reset_activity()       # baseline now includes the 20 MB above
+        wC2.handle_line("@@PROGRESS@@|system|1|0|download|0|90596966")
+        wC2._tick_activity()
+        check("already-cached packages are excluded from this run's figure",
+              "20 MB" not in wC2.activity.text())
+    finally:
+        updater.ZYPP_PACKAGE_CACHE = _orig_cache
+        shutil.rmtree(cache_dir, ignore_errors=True)
+
+    # --- dialogs open over the window, on Wayland too (ONEUP-0049) --------------
+    # Qt's move() is accepted and silently ignored on Wayland (the compositor owns
+    # placement), which is why every dialog opened away from the window. X11 still moves
+    # directly; Wayland has to ask KWin, so the one thing to prove here is that each
+    # session type takes its own path and neither throws.
+    _orig_session = os.environ.get("XDG_SESSION_TYPE", "")
+    try:
+        os.environ["XDG_SESSION_TYPE"] = "x11"
+        check("the session type is read from the environment", not updater._on_wayland())
+        host = updater.QWidget()
+        host.setGeometry(100, 100, 800, 600)
+        dlg = updater.QDialog(host)
+        dlg.resize(200, 100)
+        updater.center_on_parent(dlg)
+        check("on X11 a dialog is moved onto its parent's centre",
+              abs(dlg.frameGeometry().center().x() - host.frameGeometry().center().x()) <= 2
+              and abs(dlg.frameGeometry().center().y() - host.frameGeometry().center().y()) <= 2)
+        os.environ["XDG_SESSION_TYPE"] = "wayland"
+        check("Wayland is detected", updater._on_wayland())
+        moved_to = dlg.pos()
+        updater.center_on_parent(dlg)   # queues a KWin request; must not move it itself
+        check("on Wayland placement is left to the compositor, not a futile move()",
+              dlg.pos() == moved_to)
+    finally:
+        os.environ["XDG_SESSION_TYPE"] = _orig_session
+
     # --- Stop button (ONEUP-0047) -----------------------------------------------
     # Stop is deliberately cooperative: it asks, and the engine honours it at a safe
     # point. The UI must promise exactly that and never imply an instant abort.

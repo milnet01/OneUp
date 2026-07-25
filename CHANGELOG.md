@@ -17,6 +17,19 @@ All notable changes to OneUp are documented here. The format follows
 - **Pick up and follow a run that is already in progress when the window opens.** (ONEUP-0045)
   If an update is already running when you open OneUp, it now shows you that run's live progress instead of looking idle.
 
+### Changed
+
+- **Stop the test suite reading, and damaging, real machine state.** (ONEUP-0050)
+  The tests no longer depend on what the computer happens to be doing, and can no longer disturb a real update that is running.
+
+### Fixed
+
+- **Open dialogs over the app window on Wayland, where move() is ignored.** (ONEUP-0049)
+  Settings, Repositories and the message boxes now appear in the middle of the OneUp window instead of wherever the desktop felt like putting them.
+
+- **Make a slow mirror legible instead of indistinguishable from a hang.** (ONEUP-0048)
+  OneUp now shows which source it is fetching, the download size and speed, and how long it has been waiting — and gives up on a source that is too slow rather than waiting hours.
+
 ## [1.3.0] - 2026-07-25
 
 ### Added
