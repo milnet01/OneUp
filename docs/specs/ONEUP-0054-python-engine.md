@@ -72,7 +72,8 @@ never waved through.
   thing that touches root, and only through `sudo -A` with `SUDO_ASKPASS` and a
   labelled `SUDO_PROMPT`.
 - **The marker protocol is frozen for the duration.** Every marker in
-  `CLAUDE.md`'s list keeps its name, field order and semantics. A rewrite that
+  `docs/reference/marker-protocol.md` §3 keeps its name, field order and
+  semantics. A rewrite that
   also redesigns its own contract cannot be differentially tested, which would
   throw away the only real safety net this project has. Protocol changes come
   *after* the switch, on `main`, one at a time.

@@ -91,7 +91,7 @@ if command -v appstreamcli >/dev/null 2>&1; then
     else bad "appstreamcli validate"; cat /tmp/local-ci-appstream.log; fi
 else skip "appstreamcli" "not installed"; fi
 
-# --- version lockstep (the six sites CLAUDE.md documents) -------------------
+# --- version lockstep (the six sites docs/standards/workflow.md §5.1 documents) ---
 step "Version lockstep (six sites must agree)"
 v_py=$(grep -oP 'APP_VERSION = "\K[^"]+' updater.py)
 v_spec=$(grep -oP '^Version:\s+\K\S+' packaging/rpm/oneup.spec)

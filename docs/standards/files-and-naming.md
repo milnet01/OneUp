@@ -255,8 +255,8 @@ ships in none of them:
   that gate greps **`updater.py` by name** for `APP_VERSION`, so moving the constant into
   the package means editing the `v_py=` line in the same change.
 - `tests/bump-test.py` must cover it.
-- `docs/standards/workflow.md` §5.1's list of six sites becomes seven, and `CLAUDE.md`'s
-  summary of it with it.
+- `docs/standards/workflow.md` §5.1's list of six sites becomes seven. It is the only
+  place that list is written out, so nothing else needs editing with it.
 
 **Any new document** — `docs/standards/documentation.md` says which directory, and
 whether it needs a `/cold-eyes` pass before it counts as written.
@@ -315,7 +315,7 @@ which category it is in — the answer decides whether §6 applies at all.
 - If it writes at runtime, does it have a `ONEUP_*` override and a test that uses it?
 - Does it need any of the three packaging paths (§6)?
 - Does it carry a version number? If so, all of `bump.py`, `local-CI.sh`,
-  `tests/bump-test.py`, `docs/standards/workflow.md` §5.1 and `CLAUDE.md`.
+  `tests/bump-test.py` and `docs/standards/workflow.md` §5.1.
 
 ---
 

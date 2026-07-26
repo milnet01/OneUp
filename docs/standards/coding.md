@@ -255,7 +255,7 @@ OneUp's entire job is running other programs, so this section is load-bearing.
 2. **Fixed argv only.** No string interpolation of user or engine data into a command.
    Where a value must be passed, it is a separate list element, and it is validated first
    — the snapshot id reaching `snapper rollback` is checked to be a bare number before it
-   is used (see `CLAUDE.md` and `docs/standards/security.md`).
+   is used (`docs/standards/security.md` §4).
 3. **The GUI never calls `sudo` and never becomes root** — measured: zero `sudo`
    invocations in `updater.py`. Update work shells out to the engine, which is the only
    part that touches root during a run. It *may* ask `pkexec` to run a named program as

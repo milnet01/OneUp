@@ -16,17 +16,19 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — resume at **Task 11**
+> ## ▶ You are here — resume at **Task 12**
 >
-> **Done:** Tasks 1–10 (2026-07-26). Nine standards, the marker-protocol reference, and
-> cold-eyes batch 1 — two loops, converged; all ten documents are `Status: Reviewed` and
-> carry their own loop log. `documentation.md` took a third loop after §8 (plain language)
-> was added at the user's request. Last commit `677351a`, pushed, tree clean,
-> `./local-CI.sh` green (205 engine / 283 GUI / 6 bump).
+> **Done:** Tasks 1–11 (2026-07-26). Nine standards, the marker-protocol reference,
+> cold-eyes batch 1, and `CLAUDE.md`. All ten reviewed documents are `Status: Reviewed`
+> and carry their own loop log. Batch 1 ran to convergence over four loops; the last one
+> returned polish only. Three things came out of it that outlive it: `tests/docs-check.py`
+> now gates the documentation rules a script can settle, every standard ends with a **What
+> checks this** table, and `documentation.md` gained §6a (cite by name, never by line
+> number) and §6b (keep counts taken from the code out of a document). `./local-CI.sh`
+> green — it prints the tallies.
 >
-> **Next:** Task 11 — rewrite `CLAUDE.md` into a map that still carries the traps. It runs
-> after batch 1 on purpose, so it can only point at documents that have been proven
-> correct. Then Tasks 12–19 in order.
+> **Next:** Task 12 — revise `docs/specs/ONEUP-0054-python-engine.md` under the standards.
+> Then Tasks 13–19 in order.
 >
 > **Carry these forward — they are decisions, not suggestions:**
 > - **`main` is frozen at 1.4.0.** Anything found that cannot be fixed is *filed on the
@@ -669,24 +671,24 @@ git commit -m "ONEUP-0057: cold-eyes loop N on the standards — <what changed>"
 **Consumes:** every standard, now reviewed. Runs *after* Task 10 so it points at documents
 that have been proven correct.
 
-- [ ] **Step 1: Classify every rule currently in `CLAUDE.md`** into: (a) now covered by a
+- [x] **Step 1: Classify every rule currently in `CLAUDE.md`** into: (a) now covered by a
       standard → replace with a pointer; (b) a **trap** — a rule that cost a real bug to
       learn → keep a terse statement *and* point at the standard; (c) orientation (what
       the app is, how to run it) → keep.
-- [ ] **Step 2: Rewrite.** The traps that stay, at minimum: sudo in subshells; never
+- [x] **Step 2: Rewrite.** The traps that stay, at minimum: sudo in subshells; never
       signal the engine mid-transaction; `tee -a -p` so a quitting GUI cannot SIGPIPE the
       engine; tests must not read or damage machine state; anything spawned must not
       outlive the engine; a slow server must never look like a hang.
       Reason this is not pure de-duplication: **`CLAUDE.md` is loaded into every session
       automatically; the standards are not.** A trap that exists only in a standard can be
       walked straight past.
-- [ ] **Step 3: Verify every pointer resolves:**
+- [x] **Step 3: Verify every pointer resolves:**
 
 ```bash
 grep -oE 'docs/[a-z/-]+\.md' CLAUDE.md | sort -u | xargs ls
 ```
       Expected: no "No such file".
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add CLAUDE.md
