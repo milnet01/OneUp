@@ -5,7 +5,7 @@ day with their computer, so every message says plainly what happened and what to
 never blames them, never claims something it did not check — and is written so it can be
 translated into another language later without rewriting the app.
 
-**Status:** Reviewed — cold-eyes converged, 2 loops (see the log at the foot)
+**Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
@@ -280,4 +280,4 @@ Rules:
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document was one of three lanes the breadth pass accepted clean. Its share: a bare "§5.1" that meant the *design's* §5.1, and a paragraph restated verbatim from `docs/reference/marker-protocol.md` §5.1, now a pointer |
-| 2 | 2026-07-26 | 1 high, 5 medium, 1 low — **2 verified, 4 unverified** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
+| 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |

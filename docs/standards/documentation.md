@@ -3,7 +3,7 @@
 **In one sentence:** every document here has one job, and this file says which job, so
 nobody has to guess where a decision belongs or whether it has been reviewed.
 
-**Status:** Reviewed — cold-eyes converged, 2 loops (see the log at the foot)
+**Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
@@ -15,8 +15,8 @@ files under `packaging/obs/` and `screenshots/` (they follow §8's writing rules
 no Status header, because they document a directory rather than a decision).
 
 **Sections:** 1 the documents · 2 when each is required · 3 the Status header · 4 the spec
-template · 5 invariants · 6 verification · 6a citing code · 7 the review gate · 8 writing
-for a non-programmer · 9 keeping documents true · 10 cold-eyes log
+template · 5 invariants · 6 verification · 6a citing code · 7 the review gate · 8 plain
+language · 9 keeping documents true · 10 cold-eyes log
 
 ## 1. The documents, and what each is for
 
@@ -94,15 +94,19 @@ read two ways:
 | `Implemented` | the work shipped; the document is now a record |
 | `Superseded by <id>` | replaced. Kept, not deleted (§9) |
 
-A document mid-review is `Draft` with a note — `Draft — cold-eyes loop 1 applied` — never
-`Reviewed`. The §10 loop log and the `Status` line must agree; if they disagree, the log
-is right.
+A document mid-review is `Draft`, and may carry a short note saying so — `Draft —
+cold-eyes in progress`. It is never `Reviewed`.
+
+**The `Status` line carries state, never history.** No loop counts, no dates, no findings:
+those live in the log and nowhere else (§4, item 11). `Reviewed` is the whole value. If the
+`Status` line and the log ever disagree, the log is right.
 
 **This is prescriptive from 2026-07-26, not a description of the tree.** The five specs
 written before it (`ONEUP-0018`, `0022`, `0025`, `0028`, `0054`) use their own shapes —
-`Status: design`, `Status: Cold-eyes converged (2 loops — …)`, `Kind: accessibility`, and
-none carries `Branch:` or `Verified at:`. They are **grandfathered**: each is brought to
-this shape the next time it is edited for another reason, not in a sweep.
+`Status: design`, `Status: Cold-eyes converged (2 loops — …)`, `Kind: accessibility`. Only
+`ONEUP-0054` carries `Branch:`; none carries `Verified at:`. They are **grandfathered**:
+each is brought to this shape the next time it is edited for another reason, not in a
+sweep.
 
 `Verified at` is not decoration. It is the only thing that lets a later reader know
 whether a number is current. A document without it is assumed stale. The design document
@@ -169,7 +173,9 @@ probably works. (How to *write* the citation — by name, never by line number �
   Two lines of question cost less than a document built on a wrong premise.
 
 The live example of why: the ONEUP-0054 draft cites 197 engine tests and 3,680 lines from
-commit `ea51adc`. The real figures at `dbef1a8` are 205 and 3,719. Numbers rot silently,
+commit `ea51adc`. Measured at `dbef1a8` the figures were 205 assertions and 3,719 lines —
+and "tests" was the wrong noun anyway; `docs/standards/testing.md` §1 is canonical (76
+scenarios, 205 assertions). Numbers rot silently,
 which is what §3's `Verified at` line is for.
 
 ## 6a. Cite by name, never by line number
@@ -221,9 +227,20 @@ defence: it is stale the moment someone adds an import.
 
 ## 7. Review — the cold-eyes gate
 
-**Every design document, spec, standard and reference goes through `/cold-eyes` and is
-looped until a pass returns zero verified findings.** Implementation does not start
-before that. Should the project ever adopt per-feature test contracts (a `spec.md` beside
+**Every design document, spec, standard and reference goes through `/cold-eyes`, and is
+looped until a pass finds nothing substantive left.** Implementation does not start before
+that.
+
+**Converged means one of two things**, and the distinction matters because chasing the
+first one forever is its own waste:
+
+- **Clean** — the pass returned zero verified findings.
+- **Polish only** — everything it verified was precision: wording, an exact citation, a
+  stale parenthetical. Nothing structural, nothing that changes a mechanism or a contract.
+  Fix the polish and stop; another loop to re-check wording buys nothing.
+
+Keep looping while any verified finding is **substantive** — a missing section, a claim the
+code contradicts, or an approach that is itself wrong. Should the project ever adopt per-feature test contracts (a `spec.md` beside
 a test), those are exempt — they are too small to warrant it. OneUp has none today.
 
 - **Run it before implementation, not after.** A spec is a contract for the implementer;
@@ -247,18 +264,77 @@ The log format:
 | 2 | 2026-07-27 | none | converged |
 ```
 
-## 8. Writing for a non-programmer
+## 8. Plain language
+
+### 8.1 Write it so it can be checked
+
+**Plain, short, direct — because a sentence nobody can check is a sentence nobody checks.**
+This is a correctness rule wearing a style rule's clothes. Every review is somebody
+deciding, sentence by sentence, whether a claim is true. A sentence that has to be read
+twice does not get that decision made. It gets skipped, and whatever is wrong inside it
+survives.
+
+The rules:
+
+- **One sentence, one claim.** A sentence doing two jobs can be half-wrong and still look
+  right.
+- **Say the rule, then the reason.** Not a run-up to the point — the point, then why.
+- **Short sentences.** If it needs a semicolon and two clauses, it is two sentences.
+- **The shorter word, and the concrete noun.** "Uses" beats "utilises". `bump.py` beats
+  "the version tooling".
+- **No hedge you cannot check.** "Generally", "should usually", "where appropriate" —
+  each one means the reader decides, and two readers will decide differently. Either it is
+  the rule or it is not. If a real exception exists, name it.
+- **Cut anything that does not change what the reader does.** Length is not thoroughness.
+  A rule buried in three paragraphs of preamble is a rule that will be missed.
+- **The shortest version that is still complete** — not simply the shortest. Cutting a
+  qualifier that carried a real exception is not concision. It is a new bug with fewer
+  words.
+- **Read your own sentence as an opponent would.** If it can be read two ways, it will be.
+  Fix it now, while you still know which one you meant.
+- **Say "I do not know" loudly.** An open question written plainly — *"the field layout is
+  pinned nowhere"* — gets answered. The same gap written as a hedge reads as settled and
+  never gets looked at. Silence and vagueness are the same failure. This does not compete
+  with §6: ask first, and delete a claim you cannot verify. Write the gap into the document
+  only when the answer is nobody's to give yet.
+
+**The evidence is in this file's own §10.** The first cold-eyes loop found that the old
+tie-break rule contradicted itself. It read *"the one higher in §1's table wins — a
+standard beats a spec"*. Those two halves disagree. §1's table is ordered by audience, so
+"higher in the table" actually made a spec beat a standard, and the README beat everything.
+The gloss said what the author meant. The rule said something else, and the gloss was
+comfortable enough that nobody checked. Stated as the ordered list it is now (§1.1), the
+error would have been visible on the first reading.
+
+**This applies to a review comment as much as a document.** A finding written as *"the
+sudo count in the security standard may not be consistent with the tree"* cannot be acted
+on. *"`security.md` §1.2 says 21 of 22 calls go through `sudo_capture`. The tree has 14 of
+34"* can. That is the real finding from the first loop, in its original wording — and it is
+why `security.md` §1.2 now reads 34 and 14.
+
+**The same instinct already runs through the rest of the set.** §6 deletes a claim it
+cannot verify rather than softening it. `docs/standards/coding.md` §4 puts a soft ceiling
+on a module at what a reader can hold in their head. `docs/standards/testing.md` §3 makes a
+mock exit **99** rather than fail quietly. Same rule, three subjects: be simple, be
+explicit, make the wrong thing loud.
+
+### 8.2 Writing for a non-programmer
 
 The primary reader is not a programmer. Accordingly:
 
 - **Every roadmap bullet carries a `**Layman:**` line** — one sentence saying what the
   work means for someone using the app.
-- **Every standard opens with one plain sentence** a non-programmer could act on.
+- **Every standard opens with a single `**In one sentence:**` line** saying what the
+  standard is for, in words a non-programmer understands. All nine do.
 - **Define jargon inline on first use**, or use a plainer word. "The window never runs
   with administrator powers" beats "the GUI is unprivileged".
-- Short sentences. Concrete over abstract. Name the actual file or button.
+- **Name the actual thing** — the file, the button, the command. Not "the relevant
+  option".
 
-This is a writing rule, not a dumbing-down rule: the technical content stays.
+This is a writing rule, not a dumbing-down rule: the technical content stays. Simplifying
+the *language* is not the same as simplifying the *claim*, and where the two pull apart,
+the claim wins — an accurate sentence that needs a technical word keeps the word and
+explains it.
 
 ## 9. Keeping documents true
 
@@ -275,5 +351,6 @@ This is a writing rule, not a dumbing-down rule: the technical content stays.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: the precedence rule contradicted §1's table, the header block was missing from the standard that mandates it, the `Status`/`Kind` enums matched no document in the tree, and "standards never hold anything version-specific" contradicted six of the nine |
-| 2 | 2026-07-26 | 1 high, 5 medium, 1 low — **2 verified, 4 unverified** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
+| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: the tie-break rule contradicted §1's table, the header block was missing from the standard that mandates it, the `Status`/`Kind` enums matched no document in the tree, and "standards never hold anything version-specific" contradicted six of the nine |
+| 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
+| 3 | 2026-07-26 | 5 high, 4 medium, 7 low — **all verified** | §8 (plain language) was added at the user's request and re-reviewed on its own. The section did not obey itself: its showcase example inverted the very error it described, and it used semicolons in the paragraph banning them. Also fixed set-wide: the `Status` line carried loop history that §4 item 11 reserves for the log (ten files), §7 defined convergence as zero findings when the practice is zero *substantive* findings, and §3 claimed no pre-existing spec carries `Branch:` (ONEUP-0054 does) |

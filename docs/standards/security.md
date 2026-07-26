@@ -5,7 +5,7 @@ asks the user for permission, what it must check before passing a value to a roo
 and what may be written to a log — because OneUp's whole job is running privileged
 commands, and every bug in this file is a root bug.
 
-**Status:** Reviewed — cold-eyes converged, 2 loops (see the log at the foot)
+**Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
@@ -412,7 +412,7 @@ incidents and the rule are `docs/standards/testing.md` §2, which is canonical.
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §1.2's "21 of 22 through `sudo_capture`" was wrong (14 of 34) and contradicted §2.2's own top-level-`sudo` rule; "never launches `zypper` itself" was false (`read_repos`); §3.1 demanded `-A -p` on every call when 20 of 21 deliberately inherit it from the exported environment; and `Updater.restart_now`'s `systemctl reboot` was missing from the privileged-site inventory |
-| 2 | 2026-07-26 | 1 high, 5 medium, 1 low — **2 verified, 4 unverified** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
+| 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
 
 ---
 

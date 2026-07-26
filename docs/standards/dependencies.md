@@ -4,7 +4,7 @@
 newer one demonstrably breaks us, and when that happens the breakage is written down with a
 cue to re-test — so nobody has to remember why a version is old.
 
-**Status:** Reviewed — cold-eyes converged, 2 loops (see the log at the foot)
+**Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0004
 **Branch:** main
@@ -106,5 +106,5 @@ zypper info python3-pyside6 | grep -i version
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: it carried neither the Status header block nor the one-sentence opener that `docs/standards/documentation.md` §3 and §8 require of every standard |
-| 2 | 2026-07-26 | 1 high, 5 medium, 1 low — **2 verified, 4 unverified** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
+| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: it carried neither the Status header block nor the one-sentence opener that `docs/standards/documentation.md` §3 and §8.2 require of every standard |
+| 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |

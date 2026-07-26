@@ -2,8 +2,9 @@
 
 **Status:** Draft — **not yet run through `/cold-eyes`.** No implementation may start
 until it has (global rule 14).
-**Kind:** programme design — the release as a whole. Each item below has (or gets) its
+**Kind:** programme-design — the release as a whole. Each item below has (or gets) its
 own spec; this document holds only what the items *share* or *contend over*.
+**Roadmap:** ONEUP-0057 (the documentation set this design opens)
 **Branch:** `v2` (exists at `6ec47ec`, one commit behind `main`). `main` ships **1.4.0**
 and then freezes — see §5.4 for what unfreezes it.
 **Baseline:** every figure in §2 was measured against commit `256d0dc` on 2026-07-26,

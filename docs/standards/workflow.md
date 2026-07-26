@@ -4,7 +4,7 @@
 branch it belongs on, what the commit says, how it earns a version number, and the one
 gate it must pass green before it leaves this machine.
 
-**Status:** Reviewed — cold-eyes converged, 2 loops (see the log at the foot)
+**Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
@@ -327,4 +327,4 @@ Can people still install system, Flatpak and firmware updates?
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §6's gate table called the engine suite's 205 *assertions* 205 scenarios (it has 76), and §1 restated the freeze in full alongside `docs/design/oneup-2.0.md` §5.4 — this document is now canonical for the rule and the design carries the programme framing |
-| 2 | 2026-07-26 | 1 high, 5 medium, 1 low — **2 verified, 4 unverified** | converged (polish only). Verified here: §6 told the reader to keep `local-CI.sh` and `release.yml` in step, while three of `local-CI.sh`'s gates have never run in CI — now stated as the deliberate split it is, with what it costs |
+| 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged (polish only). Verified here: §6 told the reader to keep `local-CI.sh` and `release.yml` in step, while three of `local-CI.sh`'s gates have never run in CI — now stated as the deliberate split it is, with what it costs |
