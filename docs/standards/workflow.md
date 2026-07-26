@@ -212,7 +212,7 @@ more than GitHub CI does:
 | lint | `ruff` and `shellcheck`, best-effort |
 | packaging validation | desktop file and AppStream metainfo |
 | version lockstep | the six sites of §5.1 agree |
-| documentation | `check-docs.py` — the rules of `docs/standards/documentation.md` that a script can settle |
+| documentation | `tests/docs-check.py` — the rules of `docs/standards/documentation.md` that a script can settle |
 
 Two deliberate design points:
 
@@ -233,13 +233,14 @@ git config core.hooksPath githooks
 itself is broken. A failing test is fixed, not bypassed.
 
 **The two gate sets are not identical, deliberately.** `release.yml` runs the three test
-suites and the AppImage build. `local-CI.sh` runs those three suites **plus** lint,
-packaging validation, version lockstep and the documentation check — and those four extras
-have never run in GitHub CI.
+suites and the AppImage build — and nothing else. `local-CI.sh` runs those three suites
+**plus five gates that have never run in GitHub CI**: Python syntax, lint, packaging
+validation, version lockstep and documentation. Counted against §6's table, which is the
+list `local-CI.sh` actually executes.
 
 - **A new *test* gate goes in both.** Otherwise the first thing it catches is caught after
   the tag is already pushed, which is the expensive moment.
-- **The four extras stay local**, so understand what that costs: **a lint failure is
+- **The five extras stay local**, so understand what that costs: **a lint failure is
   caught before a push or not at all.** The pre-push hook is what makes that reliable, and
   is why `git push --no-verify` is not a way past a red gate (§6).
 
@@ -260,7 +261,7 @@ Adding a gate:
    nobody has seen fail is a gate nobody knows works — this is the same rule as
    `docs/standards/testing.md` §4, applied to the gate itself.
 
-**A gate reports, it does not repair.** `check-docs.py` names the file, the line and the
+**A gate reports, it does not repair.** `tests/docs-check.py` names the file, the line and the
 rule, and changes nothing; the author decides what the right text is. A gate that edits prose
 would quietly rewrite a claim it does not understand.
 

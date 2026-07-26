@@ -51,7 +51,7 @@ Measured at `256d0dc`, 2026-07-26. These are the numbers 2.0 is measured against
 | `bump.py` tests | **6 passing** |
 | Markers in the contract | **23** |
 | Engine CLI flags | **13** (`--auth-status`, `--auto-skip-repos`, `--check`, `--grant-auth`, `--help`, `--import-keys`, `--log`, `--notify`, `--revoke-auth`, `--size`, `--skip-repo`, `--steps`, `--thin-snapshots`) |
-| Privileged invocations in the engine | **34** — 14 through `sudo_capture`, 20 direct `sudo` at command position (counted at `58ea3bc`; the two `sudo` lines *inside* `sudo_capture` are the helper, not call sites) |
+| Privileged invocations in the engine | **34**, counted at `58ea3bc`. `docs/standards/security.md` §1.2 owns the breakdown and the counting rule |
 | Lint gates | `shellcheck`, `ruff --select F,B`, `py_compile` — **no lint config file exists** (see §6.3) |
 | Python | CI pins `3.13`; the development machine runs 3.13.14 |
 

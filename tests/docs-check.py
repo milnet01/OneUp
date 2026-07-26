@@ -22,6 +22,12 @@ ROOT = Path(__file__).resolve().parent.parent
 # brought to shape the next time each is edited for another reason, not in a sweep (§3).
 GRANDFATHERED = {"ONEUP-0018", "ONEUP-0022", "ONEUP-0025", "ONEUP-0028", "ONEUP-0054"}
 
+# Markers the engine emits that the engine suite does not assert on. Each needs a roadmap
+# id, so the exemption reads as a known gap rather than an oversight. DISK fires only when
+# a mount drops below the pre-flight threshold, which no scenario currently arranges; the
+# GUI half IS covered, in tests/gui-smoke.py.
+KNOWN_UNTESTED_MARKERS = {"DISK"}  # ONEUP-0069
+
 STATUS_RE = re.compile(r"^\*\*Status:\*\* (Draft|Reviewed|Implemented|Superseded by \S+)"
                        r"(?: — cold-eyes in progress)?$")
 # §6a's durable-citation ban. The prose form ("~line 786") is deliberately not caught —
@@ -166,14 +172,25 @@ def check_marker_table() -> None:
     and the table omits makes the *contract* wrong, not the code. Compared against the engine
     only: the GUI dispatches on the parsed name, so it has no comparable token list."""
     doc = ROOT / "docs/reference/marker-protocol.md"
-    table = set(re.findall(r"^\| `(@@[A-Z_]+@@)", doc.read_text(), re.M))
-    # @@MARKER@@ is the placeholder the engine's header comment uses for "any marker".
-    engine = set(re.findall(r"@@[A-Z_]+@@",
-                            (ROOT / "update_system.sh").read_text())) - {"@@MARKER@@"}
+    table = set(re.findall(r"^\| `@@([A-Z_]+)@@", doc.read_text(), re.M))
+    # Compare against the `marker NAME "payload"` CALL SITES, which is where a marker is
+    # actually emitted (`marker()` does the printf). Matching `@@NAME@@` literals instead
+    # would compare the table against the engine's header comment — and §7 of that same
+    # document records three inaccuracies in it, so the check would be validating one
+    # stale list against another and calling it agreement.
+    engine = set(re.findall(r"\bmarker ([A-Z_]+)",
+                            (ROOT / "update_system.sh").read_text()))
     check(not engine - table, doc, 0, "§3",
           f"the engine emits markers this table omits: {sorted(engine - table)}")
     check(not table - engine, doc, 0, "§3",
           f"this table names markers the engine never emits: {sorted(table - engine)}")
+    # The engine suite is what proves each marker is really produced. A marker nothing
+    # asserts on is a row in the contract with no evidence behind it.
+    tested = set(re.findall(r"@@([A-Z_]+)@@", (ROOT / "tests/run-tests.sh").read_text()))
+    untested = engine - tested - KNOWN_UNTESTED_MARKERS
+    check(not untested, doc, 0, "§3",
+          f"markers the engine emits that no engine-suite scenario asserts on: "
+          f"{sorted(untested)}")
 
 
 def main() -> int:

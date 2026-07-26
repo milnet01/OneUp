@@ -145,7 +145,21 @@ through the gate.
 immediately before the loop log, holding one table: each rule the document sets, and what
 catches a breach of it. It is unnumbered so that adding it renumbered nothing (§9). A rule
 whose row says *nothing yet* is honest and gets fixed; a rule with no row at all is a rule
-nobody has thought about. `check-docs.py` fails a standard that lacks the section.
+nobody has thought about. `tests/docs-check.py` fails a standard that lacks the section.
+
+**The right-hand cell says one of two things, and never blurs them:**
+
+- **a gate** — the file that catches a breach, named exactly, plus the assertion or scenario
+  if the file is large.
+- **`nothing`, in bold, followed by why** — and a roadmap id when the gap is a defect rather
+  than a limit of what a script can decide.
+
+Keep the row about the rule the *left* cell names. The 2026-07-26 review found a row that
+said the GUI suite does not redirect `HOME` — it does; the engine suite is the one that does
+not, and the row had borrowed the engine's roadmap id. Two rules, two failures, one row, and
+the table read as authoritative while saying the opposite of the truth. **A row that is
+wrong is worse than a row that is missing**, because the whole point of the section is that
+it can be trusted without re-deriving it.
 
 ## 5. Correctness invariants — the format
 
@@ -349,7 +363,7 @@ a test), those are exempt — they are too small to warrant it. OneUp has none t
 - **Write the log as the loops happen.** Back-filling it destroys the audit trail, which
   is the only evidence the review was real.
 - **The tally must balance.** A row saying 8 findings and 6 outcomes is a row where two
-  findings were dropped without a decision. `check-docs.py` fails on it.
+  findings were dropped without a decision. `tests/docs-check.py` fails on it.
 
 **Spend a cold reader only on what a script cannot do.** The catchers, cheapest first:
 
@@ -457,7 +471,7 @@ said once.
 Every contradiction the first review loop found existed because a fact lived in two places:
 the privileged-call count in `security.md` and in the design document (21 of 22 against 14 of
 34), and the cause of the GUI suite's teardown crash, given differently in two standards. A
-pointer can go stale in exactly one way, and `check-docs.py` catches it. A restatement can go
+pointer can go stale in exactly one way, and `tests/docs-check.py` catches it. A restatement can go
 stale in every way, silently.
 
 The owners: `docs/reference/` owns the marker contract, and each standard owns its own
@@ -495,7 +509,7 @@ fact only to make a *different* point with it, and say where it came from.
 | §6b most counts taken from the code stay out of the document | nothing automatic — a cold reader |
 | §7 a loop tally balances | `tests/docs-check.py` |
 | §8 plain language | nothing automatic — a cold reader, and the author reading their own sentence as an opponent |
-| §9 a pointer resolves | `tests/docs-check.py`, over the documents that describe the tree as it is: standards, reference, `CLAUDE.md`, `README.md`. A spec, design document or plan is excluded, because each legitimately names files it is going to create |
+| §9 a pointer resolves | `tests/docs-check.py`, over the documents that describe the tree as it is: standards, reference, `CLAUDE.md`, `README.md`. A spec, design document or plan is excluded, because each legitimately names files it is going to create. **Only paths containing a `/` are checked** — a bare `foo.py` is not, because the same form is used for naming-pattern examples (`snake_case.py`), for 2.0 modules that do not exist yet, and for runtime files that are never in git. A renamed script therefore leaves residue this gate cannot see; the 2026-07-26 review found five such references after `check-docs.py` became `tests/docs-check.py` |
 | §9 one owner per fact | nothing automatic. This is the gap the review loop exists to cover, and the most expensive one to leave uncovered |
 
 **Five of the eleven rows have nothing automatic behind them**, and that is the honest state

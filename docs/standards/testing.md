@@ -19,8 +19,9 @@ what checks this · 11 cold-eyes log
 
 ## 1. What the suite is
 
-Three programmes, all runnable on their own, all gated by `./local-CI.sh` and by GitHub CI
-on a `v*` tag:
+Three programmes, each runnable on its own. All three are gated by `./local-CI.sh`, and all
+three are the *only* gates GitHub CI also runs on a `v*` tag — everything else in
+`local-CI.sh` is local-only (`docs/standards/workflow.md` §6):
 
 | Suite | File | Asserts on |
 | --- | --- | --- |
@@ -232,9 +233,7 @@ $ echo $?
 0
 ```
 
-— and in between, **about thirty tracebacks** (measured four times at `58ea3bc`: 30, 30,
-30, 31 — the count varies with teardown and garbage-collection order, so it is not a fixed
-number to assert on), every one of them:
+— and in between, **dozens of tracebacks**, every one of them:
 
 ```
 RuntimeError: libshiboken: Internal C++ object (PySide6.QtCore.QProcess) already deleted.
@@ -245,7 +244,21 @@ opposite of the obvious one: that `QProcess` **is** parented (`QProcess(self)`),
 parenting is what does it — the test drops the window, Qt deletes the child C++ object, and
 the still-connected `finished` signal then fires into a Python wrapper whose C++ side is
 gone. The suite is genuinely passing; the tracebacks are teardown, not failure. That is
-precisely the problem — they are indistinguishable at a glance from thirty real errors.
+precisely the problem — they are indistinguishable at a glance from that many real errors.
+
+**The count is deliberately not stated** (`docs/standards/documentation.md` §6b). It varies
+with teardown and garbage-collection order, so it differs between runs of the *same* commit
+and drifts as the suite grows: four runs at `58ea3bc` gave 30, 30, 30, 31, and five at
+`5e76cfb` gave 33, 32, 33, 33, 33. `ROADMAP.md`'s ONEUP-0062 headline says 56, which was one
+observation and is now the third figure in circulation — the reason this section owns the
+measurement and the roadmap bullet cites it. To see the current number:
+
+```bash
+python3 tests/gui-smoke.py 2>&1 | grep -c 'Traceback (most recent call last)'
+```
+
+**Do not assert on it.** §10's checklist asks for a traceback of a *new shape*, which is the
+signal that survives the count changing.
 Filed as **ONEUP-0062**, to be fixed in 2.0.
 
 Two consequences for new tests. **An expected-error test asserts on the error and swallows
@@ -320,14 +333,15 @@ with the layout direction forced right-to-left.
 | Rule | What catches a breach |
 | --- | --- |
 | §2.1 the three redirects | `run_engine` applies them itself, so a scenario that goes through it cannot forget. A scenario that invokes the engine directly must repeat them by hand, and **nothing catches that** |
-| §2.2 the GUI suite redirects `HOME` | **nothing** — it does not redirect it, which is ONEUP-0058 |
+| §2.2 the GUI suite redirects `HOME` | the redirect is unconditional and module-level in `tests/gui-smoke.py`, so no individual test can forget it. **Nothing checks it still runs *before* `QApplication` is constructed** — and that ordering is the whole point, because `QSettings` resolves its path once and keeps it |
 | §2.3 no root | the mock `PATH`: a real `sudo` is not on it, so a scenario that reaches for one gets the mock or nothing |
+| §2.3 a test writes only inside its own temporary directory | **nothing — the engine suite breaks this.** `update_system.sh` builds `LOG_DIR` from `$HOME`, which `tests/run-tests.sh` does not redirect, so every scenario creates `~/Documents/update-logs` on the real machine (ONEUP-0058) |
 | §2.3 no network | **nothing** — the GUI suite makes 49 live GitHub requests per run (ONEUP-0067) |
 | §3 a mock fails loudly rather than quietly | several scenarios carry an `exit 99` trap. Nothing checks that a *new* mock has one |
 | §4 one invariant, one test | nothing automatic |
 | §5 the four correctness invariants | `tests/run-tests.sh` — this is what the suite is for, and the reason it exists |
 | §6 poll for the condition, never sleep | **nothing** — one `sleep 0.5` remains in the orphaned-dialog scenario (ONEUP-0068) |
-| §7 a passing suite is silent | **nothing** — the GUI suite prints about thirty teardown tracebacks while passing (ONEUP-0062) |
+| §7 a passing suite is silent | **nothing** — the GUI suite prints dozens of teardown tracebacks while passing (ONEUP-0062). §7 says how to count them and why the number is not stated |
 
 **Four rows name an open roadmap item instead of a gate**, and all four are places where the
 suite does not yet obey its own standard. That is the honest picture, and it is the reason

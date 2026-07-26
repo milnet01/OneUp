@@ -357,9 +357,9 @@ down before the rewrite — either in that spec, or as a new subsection added he
 
 | Rule | What catches a breach |
 | --- | --- |
-| the engine emits each marker | `tests/run-tests.sh` |
-| the window reacts to each marker | `tests/gui-smoke.py` |
-| §3's table matches the markers the engine emits | `tests/docs-check.py`, both ways: a marker the engine emits and this table omits, and a marker this table names that the engine never emits. It is compared against the engine only — the GUI dispatches on the parsed name, so it has no comparable token list, and that half stays uncovered |
+| the engine emits each marker | `tests/run-tests.sh` — **for 22 of the 23**. `DISK` is asserted by no engine scenario (ONEUP-0069); `tests/docs-check.py` fails if any *other* marker joins it |
+| the window reacts to each marker | `tests/gui-smoke.py` — for the markers it exercises, which is not the whole table. Nothing enumerates what `handle_marker` accepts, so this row cannot yet be made exact |
+| §3's table matches the markers the engine emits | `tests/docs-check.py`, both ways: a marker the engine emits and this table omits, and a marker this table names that the engine never emits. It reads the `marker NAME` **call sites**, not the `@@NAME@@` literals in the engine's header comment — §7 records three inaccuracies in that comment, so comparing against it would validate one stale list against another |
 | §1.1 a payload contains no `\|` | nothing automatic. The engine rewrites `\|` to `/` before emitting `SNAPSHOT_ITEM`; a new free-text field that forgets to is caught by nobody |
 | §1.2 a marker read must survive being spliced with stderr | nothing automatic — the three guards are in the engine, and nothing checks a fourth has one |
 | §5.1 the contract is frozen for 1.x | nothing automatic |
@@ -370,6 +370,11 @@ this table on every push, but nothing proves the window *handles* each marker it
 covers the markers it happens to exercise — not the whole table. Closing that needs a list of
 handled names the GUI can be asked for, which the 2.0 split (ONEUP-0034) makes easy and the
 current single file does not.
+
+**`DISK` is worth knowing about as a pattern, not just an omission.** It reads as covered
+when you grep the whole suite, because `tests/gui-smoke.py` does feed it — so the *window*
+is proven to react to a marker the *engine* is not proven to send. A marker needs both
+halves, and only checking them separately shows which one is missing.
 
 ## 9. Cold-eyes loop log
 

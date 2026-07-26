@@ -32,7 +32,11 @@ through `sudo_capture` (§2.2) and **20** direct `sudo` calls at command positio
 `sudo` lines sit *inside* `sudo_capture` itself — they are the helper, not call sites.) That
 is a measurement of one commit and not a standing figure
 (`docs/standards/documentation.md` §6b.4); the **split** is the rule, and it holds at any
-count. This document owns both figures — nothing else restates them. The direct calls are the streaming and fire-and-forget ones that
+count. **This document owns the breakdown and how it was taken.**
+`docs/design/oneup-2.0.md` §2 carries the total as one of its dated 2.0 baselines and cites
+this section rather than repeating the derivation — the earlier arrangement, where both
+stated the split, is what produced the 21-of-22 against 14-of-34 contradiction the first
+review found. The direct calls are the streaming and fire-and-forget ones that
 **must** stay at top level: `sudo … | tee` keeps sudo as the caller's own child, which is
 exactly what §2.2 requires.
 

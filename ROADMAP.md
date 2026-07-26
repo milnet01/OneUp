@@ -889,9 +889,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: implement.
   Source: in-session-2026-07-26 (ONEUP-0057 Task 3 gotcha sweep).
 
-- 📋 [ONEUP-0062] **Silence the 56 teardown tracebacks the GUI suite prints while passing.**
+- 📋 [ONEUP-0062] **Silence the teardown tracebacks the GUI suite prints while passing.**
   Measured 2026-07-26: `QT_QPA_PLATFORM=offscreen python3 tests/gui-smoke.py`
-  prints 56 Traceback / RuntimeError lines and exits 0. All of them are
+  printed 56 Traceback / RuntimeError lines and exited 0. That figure was one
+  observation — the count varies run to run and drifts as the suite grows, so
+  `docs/standards/testing.md` §7 owns the measurement and how to take it. All of them are
   `RuntimeError: libshiboken: Internal C++ object (QProcess) already
   deleted`, raised from the lambda at updater.py:2461 (and the same shape
   at the other six QProcess sites). Cause: the QProcess is parented to the
@@ -1088,3 +1090,25 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** One test waits half a second and hopes; when the guess is wrong it quietly skips instead of failing.
   Kind: test.
   Source: cold-eyes-2026-07-26 batch 1, testing-standard lane HIGH.
+
+- 📋 [ONEUP-0069] **Cover the DISK marker in the engine test suite.**
+  The engine emits 23 markers via the `marker NAME "payload"` helper.
+  `tests/run-tests.sh` asserts on 22 of them; **DISK** is the exception.
+  It fires only from the pre-flight low-disk check, which no scenario
+  arranges, so nothing proves the engine still produces it. The GUI half
+  IS covered — `tests/gui-smoke.py` feeds `@@DISK@@|warn|/|512 MiB` and
+  asserts the banner — which is what made the gap easy to miss: the
+  marker looks tested when you grep the suite as a whole.
+
+  Add a scenario whose mock puts a mount under the pre-flight threshold
+  and assert the `@@DISK@@|warn|<mount>|<free>` line. Then delete DISK
+  from `KNOWN_UNTESTED_MARKERS` in `tests/docs-check.py`, which fails the
+  build if any other marker ever loses its coverage.
+
+  Found by the cold-eyes pass on the documentation set, checking the
+  claim in `docs/reference/marker-protocol.md`'s "What checks this" table
+  that `tests/run-tests.sh` proves the engine emits each marker. It did
+  not, for one of the 23.
+  **Layman:** One of the messages the updater can send — the warning that your disk is nearly full — is never exercised by the automated tests, so a change could break it without anything noticing.
+  Kind: test.
+  Source: cold-eyes-2026-07-26 lane-6 (ONEUP-0057 documentation set).

@@ -166,10 +166,11 @@ because the config is missing, which is the thing being fixed.
 | `RUF005`, `RUF003`, `RUF007` | 6 | literal concatenation, ambiguous unicode in a comment, `zip` instead of `pairwise` |
 | `S103`, `S108`, `BLE001` | 3 | a permissive file mode, a hard-coded `/tmp` path, and one unsuppressed blind `except` — all in tests |
 
-**Leaving `BLE` out of the set costs 8 more.** Without it, every one of
-`tests/gui-smoke.py`'s eight `# noqa: BLE001` comments becomes a `RUF100` "unused noqa",
-taking the total to 54 — a rule set that punishes the code for suppressing a rule the rule
-set declined to enable. That is why `BLE` is in the list above.
+**Leaving `BLE` out of the set makes it worse, not better: 54 rather than 47.** Drop `BLE`
+and the one real `BLE001` error goes away (47 → 46), but every one of `tests/gui-smoke.py`'s
+eight `# noqa: BLE001` comments becomes a `RUF100` "unused noqa" (46 + 8 = 54) — a rule set
+that punishes the code for suppressing a rule the rule set declined to enable. Both figures
+were measured, not derived; that is why `BLE` is in the list above.
 
 **Three of the six `# noqa` comments do not work where they sit** — a trap worth naming,
 because it is invisible until `S` is on. Ruff anchors `S607` to the line carrying the
@@ -333,13 +334,10 @@ genuinely is the only option, a comment names the constraint so it reads as deli
   `run_kwin_script` and `read_repos`.
 - **No `except Exception: pass`.** There is exactly **one** `except Exception` in
   `updater.py`. One is a defensible number; keep it there.
-- **A failure is reported, never silenced.** In the engine, a failed step is recorded,
-  emits a plain-English `@@HINT@@`, and **the run continues to the next step** — so cache
-  cleanup still happens and the summary is still useful. This is a tested invariant, not a
-  style preference; `tests/run-tests.sh` locks it in.
-- **Never claim success you did not earn.** Reboot advice fires only when something was
-  actually installed, or when `zypper needs-rebooting` says so — never merely because a
-  step errored. This is the single most important correctness rule in the project.
+- **A failure is reported, never silenced**, and **never claim success you did not earn.**
+  These are not style preferences — they are the four correctness invariants the engine
+  suite exists to protect, and `docs/standards/testing.md` §5 states them in full and owns
+  them. Read them before changing any engine path that decides what to tell the user.
 - **When a workaround is genuinely unavoidable**, leave a comment naming the constraint
   that forced it, so it reads as deliberate rather than as neglect.
 
