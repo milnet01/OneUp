@@ -1301,6 +1301,7 @@ class Updater(QMainWindow):
         self._buf = ""
         self._total = 0
         self._check_mode = False
+        self._unchecked = []         # reasons a --check couldn't read a source (ONEUP-0056)
         self._reboot = False
         self._reboot_reason = ""     # optional "why a reboot matters" phrase from the engine
         self._installed_count = ""   # system packages changed, as reported by the engine
@@ -1350,6 +1351,7 @@ class Updater(QMainWindow):
         self._local_server = None
         self._traycheck_proc = None
         self._traycheck_buf = ""
+        self._traycheck_unknown = False
         self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
         self._last_announcement = ""   # what _announce last spoke (see _announce)
 
@@ -2111,6 +2113,7 @@ for (var i = 0; i < wins.length; i++) {{
         if proc is not None and proc.state() != QProcess.NotRunning:
             return  # a check is already in flight
         self._traycheck_buf = ""
+        self._traycheck_unknown = False
         p = QProcess(self)
         p.setProcessChannelMode(QProcess.MergedChannels)
         p.readyReadStandardOutput.connect(self._on_traycheck_output)
@@ -2138,24 +2141,35 @@ for (var i = 0; i < wins.length; i++) {{
     def _parse_tray_line(self, line: str):
         # Engine emits @@CHECK@@|TOTAL|<n>|updates available (three fields). Read field
         # 1 like handle_marker does; a naive int(after-prefix) would choke on field 2.
-        if line.startswith("@@CHECK@@|"):
+        # A source the check couldn't read makes the total a floor, not an answer —
+        # the tray must not sit there quietly claiming "up to date" (ONEUP-0056).
+        # Ordered first: the engine emits CHECK_UNKNOWN before the TOTAL it qualifies.
+        if line.startswith("@@CHECK_UNKNOWN@@|"):
+            self._traycheck_unknown = True
+        elif line.startswith("@@CHECK@@|"):
             parts = line[len("@@CHECK@@|"):].split("|")
             if len(parts) >= 2 and parts[0] == "TOTAL":
-                self._apply_tray_total(int(parts[1]) if parts[1].isdigit() else 0)
+                self._apply_tray_total(int(parts[1]) if parts[1].isdigit() else 0,
+                                       uncertain=self._traycheck_unknown)
 
     def _on_traycheck_finished(self, *args):
         if self._traycheck_proc is not None:
             self._traycheck_proc.deleteLater()   # don't accumulate over a long session
             self._traycheck_proc = None
 
-    def _apply_tray_total(self, n: int):
+    def _apply_tray_total(self, n: int, uncertain: bool = False):
         self._tray_total = n
         self._tray_checked_at = datetime.now()
         if self._tray is None:
             return
         self._tray.setIcon(self._tray_icon(n > 0))
-        self._tray.setToolTip(
-            f"{APP_NAME} — {n} update(s) waiting" if n > 0 else f"{APP_NAME} — up to date")
+        if uncertain:
+            tip = (f"{APP_NAME} — {n} update(s) waiting (some sources couldn't be checked)"
+                   if n > 0 else f"{APP_NAME} — couldn't check for updates")
+        else:
+            tip = (f"{APP_NAME} — {n} update(s) waiting" if n > 0
+                   else f"{APP_NAME} — up to date")
+        self._tray.setToolTip(tip)
 
     # ---- resident tray lifecycle (ONEUP-0018) -----------------------------
     def _single_instance_name(self) -> str:
@@ -2903,6 +2917,7 @@ for (var i = 0; i < wins.length; i++) {{
         self._snapshots = []
         self._hints = []
         self._skipped_repos = []
+        self._unchecked = []
         self._buf = ""
         self._total = len(steps)
         for b in (self.reboot_banner, self.services_banner, self.warn_banner):
@@ -3151,6 +3166,16 @@ for (var i = 0; i < wins.length; i++) {{
                 if row:
                     n = int(count) if count.isdigit() else 0
                     row.set_badge(f"{n} available" if n > 0 else "up to date")
+        elif tag == "CHECK_UNKNOWN":
+            # This step couldn't read one of its sources, so its count is a floor,
+            # not an answer. Recorded so on_finished can refuse the "up to date"
+            # summary — the whole point of the marker (ONEUP-0056).
+            reason = parts[1] if len(parts) > 1 else "a source couldn't be read"
+            self._unchecked.append(reason)
+            row = self.rows.get(parts[0])
+            if row:
+                # Text, not colour: the badge must read as unknown to everyone.
+                row.set_badge("couldn't check")
         elif tag == "CHECK_ITEM":
             # One changed package for the expandable preview: key|name|from|to.
             if len(parts) >= 2:
@@ -3336,13 +3361,27 @@ for (var i = 0; i < wins.length; i++) {{
             self.bar.setFormat("Check complete")
             n = self._installed_count
             total = int(n) if n.isdigit() else 0
-            self.status.setText(
-                f"{total} update(s) available — turn on what you want and hit Run."
-                if total else "Everything is up to date. 🎉")
+            # A count built on sources we couldn't read is a floor, not an answer, so
+            # it must never be dressed up as an all-clear — that is the bug this whole
+            # marker exists to prevent: the app said "up to date 🎉" while 8 updates
+            # were waiting, because a repository it silently skipped held them all
+            # (ONEUP-0056). Say what we found AND what we couldn't see.
+            if self._unchecked:
+                self.status.setText(
+                    f"{total} update(s) found, but some sources couldn't be checked."
+                    if total else "Couldn't check for updates — no sources could be read.")
+                self._show_warning(self._unchecked[0] if len(self._unchecked) == 1
+                                   else "  ".join(self._unchecked))
+            else:
+                self.status.setText(
+                    f"{total} update(s) available — turn on what you want and hit Run."
+                    if total else "Everything is up to date. 🎉")
             self._announce(self.status.text())
             self._notify_when_away(
-                f"{total} update(s) available." if total else "Everything is up to date.")
-            self._apply_tray_total(total)
+                f"{total} update(s) available." if total
+                else ("Couldn't check for updates." if self._unchecked
+                      else "Everything is up to date."))
+            self._apply_tray_total(total, uncertain=bool(self._unchecked))
             self._check_mode = False
             return
 

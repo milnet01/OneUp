@@ -55,7 +55,7 @@ progress bars, badges, and banners. Non-marker lines are plain log output. The m
 the contract between the two files — **changing a marker's name or field layout in one file
 means updating the parser in the other, and the assertions in `tests/run-tests.sh`.**
 Current markers: `STEP_BEGIN`, `STEP_END`, `TIMING`, `PROGRESS`, `REFRESH`, `SNAPSHOT`, `SNAPSHOT_ITEM`, `SNAPSHOTS`, `CHECK`,
-`CHECK_ITEM`, `SIZE`, `FREED`, `AUTH`, `DISK`, `REPO`, `REPO_SKIPPED`, `HINT`, `REMEDY`,
+`CHECK_ITEM`, `CHECK_UNKNOWN`, `SIZE`, `FREED`, `AUTH`, `DISK`, `REPO`, `REPO_SKIPPED`, `HINT`, `REMEDY`,
 `SERVICES`, `INSTALLED`, `REBOOT`, `DONE`.
 (`DONE|ok|errors|stopped` — the third value means the user asked to stop, so the GUI must
 report neither success nor failure. The GUI normally takes the verdict from the engine's

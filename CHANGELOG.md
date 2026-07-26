@@ -24,6 +24,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Never report "up to date" for a source the check couldn't read.** (ONEUP-0056)
+  OneUp said "Everything is up to date" while 8 updates were waiting — it now says when it couldn't check something instead of guessing.
+
 - **The GUI test suite no longer reads the machine's real zypper package cache** (ONEUP-0055)
   A liveness-line test weighed /var/cache/zypp/packages instead of a
   directory of its own, so its verdict depended on what a real update

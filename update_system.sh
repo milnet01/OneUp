@@ -182,6 +182,8 @@ exec > >(tee "${tee_opts[@]}" "$LOG_FILE") 2>&1
 #   @@SNAPSHOT_ITEM@@|id|date|description (rollback picker: one recent restore point)
 #   @@CHECK@@|key|count|label            (--check mode: updates available)
 #   @@CHECK_ITEM@@|key|name|from|to      (--check mode: one changed package)
+#   @@CHECK_UNKNOWN@@|key|reason         (--check mode: this step's answer is NOT
+#                                         trustworthy — a source couldn't be read)
 #   @@SIZE@@|key|download                (--size mode: total download size)
 #   @@FREED@@|key|human                  (disk reclaimed by the cache clean)
 #   @@AUTH@@|on|off                      (passwordless-authorization state)
@@ -315,23 +317,61 @@ end_step() {
     marker TIMING "$key|${SECS[$key]}"
 }
 
+# Report one step's check result honestly. A count is only trustworthy when we
+# could read every source, so when something was unreadable we say so — and we
+# withhold a bare zero, because "I couldn't look" rendered as "you're up to date"
+# is the one answer an update checker must never give (ONEUP-0056). A count is
+# still emitted alongside the warning when we DID find updates: knowing about 7
+# of them beats knowing about none while a repository is broken.
+emit_check() {  # key, count, label, [what-was-unreadable]
+    local key="$1" count="$2" label="$3" unreadable="${4:-}"
+    [[ -n "$unreadable" ]] && marker CHECK_UNKNOWN "$key|$unreadable"
+    if [[ -z "$unreadable" ]] || (( count > 0 )); then
+        marker CHECK "$key|$count|$label"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # --check: read-only "what would update?" pass. Deliberately avoids root (and a
 # password popup) so an unattended timer can run it; it reads cached repo
-# metadata, which the system keeps reasonably fresh, and installs nothing.
+# metadata and installs nothing. Because it cannot refresh that metadata, it must
+# be scrupulous about saying when the metadata isn't there to read.
 # ---------------------------------------------------------------------------
 run_check() {
     echo "Checking for available updates (read-only)…"
-    local total=0 n
+    local total=0 n incomplete=false
     if step_selected system; then
         # Read the upgrade list once: the count AND the per-package detail (name,
         # current → available version) the GUI shows in its expandable preview both
         # come from it. LC_ALL=C keeps the column layout parseable on any locale.
-        local updates
-        updates=$(LC_ALL=C zypper --no-refresh --non-interactive list-updates 2>/dev/null)
+        # stderr is captured WITH stdout rather than discarded: zypper reports a
+        # repository it had to set aside as a warning there (and exit 106), and
+        # that warning is the only difference between "nothing to update" and
+        # "I couldn't read the repository that had the updates". Merging is safe —
+        # every line we parse is anchored to zypper's 'v' status column.
+        local updates rc unreadable=""
+        updates=$(LC_ALL=C zypper --no-refresh --non-interactive list-updates 2>&1)
+        rc=$?
         # Upgradable packages have a 'v' in zypper's status column.
         n=$(grep -cE '^v[[:space:]]*\|' <<<"$updates")
-        marker CHECK "system|$n|system package(s)"
+        if (( rc != 0 )); then
+            # 106 = ZYPPER_EXIT_INF_REPO_SKIPPED. Name the repositories if zypper
+            # did; otherwise report the failure without guessing at a cause.
+            local skipped
+            skipped=$(sed -n "s/.*Skipping repository '\([^']*\)'.*/\1/p" <<<"$updates" \
+                      | sort -u | tr '\n' ',' | sed 's/,$//; s/,/, /g')
+            if [[ -n "$skipped" ]]; then
+                unreadable="OneUp couldn't read these software sources: $skipped"
+            else
+                unreadable="OneUp couldn't read the software sources (zypper exited $rc)"
+            fi
+            unreadable+=" — this list may be incomplete. Running an update refreshes them."
+            incomplete=true
+            echo "  System packages: couldn't check — $unreadable"
+        else
+            echo "  System packages: $n update(s)"
+        fi
+        emit_check system "$n" "system package(s)" "$unreadable"
         # Columns: S | Repository | Name | Current | Available | Arch. Trim each
         # field and emit one CHECK_ITEM per package (one awk pass, no per-line fork).
         while IFS='|' read -r name cur avail; do
@@ -339,23 +379,43 @@ run_check() {
         done < <(awk -F'|' '/^v[[:space:]]*\|/ {
                     for (i=3;i<=5;i++) gsub(/^[ \t]+|[ \t]+$/,"",$i); print $3"|"$4"|"$5 }' \
                  <<<"$updates")
-        echo "  System packages: $n update(s)"
         (( total += n ))
     fi
     if step_selected flatpak && command -v flatpak &>/dev/null; then
-        # --columns pins the output to app-id + version so both the count and the
-        # per-app detail parse the same way regardless of flatpak's default columns.
-        local flatpaks
-        flatpaks=$(
-            flatpak remote-ls --updates --user --columns=application,version 2>/dev/null
-            flatpak remote-ls --updates --system --columns=application,version 2>/dev/null
-        )
+        # Ask each remote for its own updates. `flatpak remote-ls --updates` with no
+        # remote named abandons the WHOLE listing — exit 1, empty stdout — the moment
+        # any single remote can't be summarised, and a local `--no-enumerate` origin
+        # (what `flatpak install ./app.flatpak` leaves behind) never can be. Measured:
+        # six such leftovers on one box hid a real Discord update behind "0" for weeks.
+        # Per-remote, one broken source costs only itself. --columns pins the output to
+        # app-id + version so count and detail parse the same way on any flatpak build.
+        local flatpaks="" scope remote opts rows unreadable=""
+        for scope in --user --system; do
+            while IFS=$'\t' read -r remote opts; do
+                [[ -n "$remote" ]] || continue
+                if rows=$(flatpak remote-ls --updates "$scope" "$remote" \
+                              --columns=application,version 2>/dev/null); then
+                    [[ -n "$rows" ]] && flatpaks+="$rows"$'\n'
+                elif [[ "$opts" != *no-enumerate* ]]; then
+                    # A no-enumerate origin serves no listing BY DESIGN — apps installed
+                    # from a local file have no remote updates to miss, so it is not a
+                    # failed check. Any other remote failing means apps went uncounted.
+                    unreadable+="${unreadable:+, }$remote"
+                fi
+            done < <(flatpak remotes "$scope" --columns=name,options 2>/dev/null)
+        done
         n=$(grep -c '[^[:space:]]' <<<"$flatpaks")
-        marker CHECK "flatpak|$n|Flatpak app(s)"
+        if [[ -n "$unreadable" ]]; then
+            unreadable="OneUp couldn't reach these Flatpak sources: $unreadable — this list may be incomplete."
+            incomplete=true
+            echo "  Flatpak apps: couldn't check — $unreadable"
+        else
+            echo "  Flatpak apps: $n update(s)"
+        fi
+        emit_check flatpak "$n" "Flatpak app(s)" "$unreadable"
         while read -r app ver _rest; do
             [[ -n "$app" ]] && marker CHECK_ITEM "flatpak|$app||$ver"
         done <<<"$flatpaks"
-        echo "  Flatpak apps: $n update(s)"
         (( total += n ))
     fi
     if step_selected firmware && command -v fwupdmgr &>/dev/null; then
@@ -365,7 +425,12 @@ run_check() {
         (( total += n ))
     fi
     marker CHECK "TOTAL|$total|updates available"
-    echo "  Total: $total update(s) available."
+    if $incomplete; then
+        echo "  Total: $total update(s) found, but at least one source couldn't be read"
+        echo "         — treat this as a floor, not an all-clear."
+    else
+        echo "  Total: $total update(s) available."
+    fi
     if $NOTIFY && (( total > 0 )); then
         notify_send "Updates available" \
             "$total update(s) ready to install. Open OneUp to update."
@@ -1347,7 +1412,14 @@ if step_selected cache && ! stop_pending; then
     # du needs root for some subdirs; this step's sudo credential is already warm.
     sudo_capture CACHE_DU du -sB1 /var/cache/zypp
     cache_before=$(awk '{print $1}' <<<"$CACHE_DU")
-    if sudo zypper --non-interactive clean --all; then
+    # Packages only — deliberately NOT `clean --all`, which also wipes the repository
+    # METADATA cache. Two reasons, and the first is a correctness bug: the rootless
+    # `--check` reads that metadata and cannot rebuild it, so wiping it made the very
+    # next check answer "up to date" no matter what was actually waiting (ONEUP-0056).
+    # Second, metadata is not the win it looks like — 93 MB here, every byte of which
+    # zypper re-downloads on the next run. This step's own label promises "the
+    # downloaded-package cache"; now it clears exactly that.
+    if sudo zypper --non-interactive clean; then
         end_step cache ok
         sudo_capture CACHE_DU du -sB1 /var/cache/zypp
         cache_after=$(awk '{print $1}' <<<"$CACHE_DU")

@@ -861,19 +861,52 @@ def main() -> int:
     # (12) on_finished refreshes the tray: a successful run -> neutral; a check -> the count.
     w = updater.Updater()
     applied = []
-    w._apply_tray_total = lambda n: applied.append(n)
+    w._apply_tray_total = lambda n, uncertain=False: applied.append(n)
     w.proc = QProcess(w)
     w._installed_count = "2"
     w.on_finished(0, QProcess.ExitStatus.NormalExit)     # a run
     check("successful run sets the tray neutral", applied and applied[-1] == 0)
     w = updater.Updater()
     applied2 = []
-    w._apply_tray_total = lambda n: applied2.append(n)
+    w._apply_tray_total = lambda n, uncertain=False: applied2.append(n)
     w._check_mode = True
     w._installed_count = "5"
     w.proc = QProcess(w)
     w.on_finished(0, QProcess.ExitStatus.NormalExit)     # a check
     check("finished check pushes the count to the tray", applied2 and applied2[-1] == 5)
+
+    # (12b) ONEUP-0056: a check that couldn't read a source knows nothing about it,
+    # and "I don't know" must never reach the user as "Everything is up to date. 🎉".
+    # That exact false all-clear shipped: the window said it while 8 updates waited,
+    # because the sources holding them had been silently skipped.
+    w = updater.Updater()
+    w._apply_tray_total = lambda n, uncertain=False: None
+    w._check_mode = True
+    w._installed_count = "0"
+    w._unchecked = ["OneUp couldn't read these software sources: packman"]
+    w.proc = QProcess(w)
+    w.on_finished(0, QProcess.ExitStatus.NormalExit)
+    check("no false all-clear when a source was unreadable",
+          "up to date" not in w.status.text())
+    check("says it couldn't check instead", "ouldn't check" in w.status.text())
+    check("the unreadable source is named in the warning",
+          w.warn_banner.isVisibleTo(w) and "packman" in w.warn_label.text())
+    # A clean check still gets its cheerful summary — the fix must not cry wolf.
+    w = updater.Updater()
+    w._apply_tray_total = lambda n, uncertain=False: None
+    w._check_mode = True
+    w._installed_count = "0"
+    w.proc = QProcess(w)
+    w.on_finished(0, QProcess.ExitStatus.NormalExit)
+    check("a complete check still reports up to date", "up to date" in w.status.text())
+
+    # (12c) The tray makes the same claim from the same markers, so it needs the same
+    # guard: CHECK_UNKNOWN arrives before the TOTAL it qualifies.
+    w = updater.Updater()
+    w._parse_tray_line("@@CHECK_UNKNOWN@@|system|OneUp couldn't read these software sources: packman")
+    w._parse_tray_line("@@CHECK@@|TOTAL|0|updates available")
+    check("tray records the qualified total", w._tray_total == 0)
+    check("tray flagged the check as uncertain", w._traycheck_unknown is True)
 
     # --- ONEUP-0025: repo resilience — skip_repos threads through to the engine ---
     args = updater.Updater._engine_args(["system"], check=False, import_keys=False,

@@ -669,3 +669,54 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Rewrite the part of OneUp that does the actual updating in Python, the same language as the window, so the app has finer control over what it is running. Built on a side branch so the current version keeps working until the new one is provably better.
   Kind: implement.
   Source: user-decision-2026-07-25.
+
+- ✅ [ONEUP-0056] **Never report "up to date" for a source the check couldn't read.**
+  Reported with two screenshots: OneUp's check said "Everything is up
+  to date. 🎉" while Discover listed 8 (finbreak, six 32-bit packman
+  libs, and a Discord Flatpak). Root cause was one flaw with three
+  faces — the check could not tell "nothing to update" from "I could
+  not read the sources", because it discarded stderr (2>/dev/null) and
+  never looked at an exit code, then rendered the resulting empty
+  answer as a confident all-clear.
+
+  Three independent defects, each able to produce the false all-clear
+  on its own, all measured on the reporter's box:
+
+  1. Flatpak: `flatpak remote-ls --updates` abandons the WHOLE listing
+     (exit 1, empty stdout) when any one remote lacks a summary file —
+     and a local `--no-enumerate` origin, which `flatpak install
+     ./app.flatpak` leaves behind, never has one. Six such leftovers
+     hid the real Discord update. Now queried per remote, so one dead
+     source costs only itself; a no-enumerate origin failing is not
+     counted as a failed check, since it serves no listing by design.
+
+  2. System: zypper exits 106 (ZYPPER_EXIT_INF_REPO_SKIPPED) and warns
+     on stderr when it sets a repository aside. Both were thrown away,
+     so a skipped repo silently contributed zero updates. Verified live:
+     microsoft-prod is being skipped on this machine right now for
+     "No permission to write repository cache", and nobody was told.
+
+  3. The cache step was wiping the metadata its own check depends on.
+     `zypper clean --all` cleans metadata AND packages; the rootless
+     --check reads that metadata and cannot rebuild it. So the first
+     check after any successful run answered "up to date" regardless
+     of truth — which is exactly what happened here: the 22:05 run
+     cleaned the cache, and the 10:18 tray check reported 0 into an
+     empty directory. Now cleans packages only, matching the step's
+     own label ("the downloaded-package cache"). The metadata was
+     93 MB of purely re-downloadable data.
+
+  New marker `CHECK_UNKNOWN|key|reason` carries "this answer is not
+  trustworthy" to the GUI, which now shows "couldn't check" on the row,
+  names the unreadable source in the warning banner, and withholds the
+  🎉. The tray tooltip gets the same guard. A count is still emitted
+  alongside the warning when updates WERE found — knowing about 7 beats
+  knowing about none while a repository is broken.
+
+  Verified end to end against the real machine: the check now reports
+  8, exactly matching what Discover found, and names microsoft-prod.
+  Regression tests: 3 engine scenarios + 5 GUI assertions (205 and 283
+  green).
+  **Layman:** OneUp said "Everything is up to date" while 8 updates were waiting — it now says when it couldn't check something instead of guessing.
+  Kind: fix.
+  Source: user-report-2026-07-26 (screenshots: OneUp "up to date" vs Discover "8 updates").

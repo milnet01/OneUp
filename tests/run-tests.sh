@@ -297,7 +297,11 @@ EOF
 chmod +x "$d/zypper"
 cat > "$d/flatpak" <<'EOF'
 #!/usr/bin/env bash
-[[ "$*" == *--user* ]] && echo "org.x.App 1"
+# The check enumerates remotes first, then asks each one for its updates.
+case "$1" in
+  remotes)   [[ "$*" == *--user* ]] && printf 'flathub\t\n'; exit 0 ;;
+  remote-ls) [[ "$*" == *--user* ]] && echo "org.x.App 1"; exit 0 ;;
+esac
 exit 0
 EOF
 chmod +x "$d/flatpak"
@@ -309,6 +313,91 @@ check_absent "no mutation during check" "BUG: mutated"       "$out"
 check        "system detail item a 1->2" "@@CHECK_ITEM@@|system|a|1|2"       "$out"
 check        "system detail item b 1->2" "@@CHECK_ITEM@@|system|b|1|2"       "$out"
 check        "flatpak detail item"       "@@CHECK_ITEM@@|flatpak|org.x.App|" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# A check that cannot READ a repository knows nothing about it — and "I don't
+# know" must never be rendered as "you're up to date". zypper exits 106
+# (ZYPPER_EXIT_INF_REPO_SKIPPED) and warns on stderr when it sets a repository
+# aside; the check used to discard both, so a repo whose metadata was missing
+# silently contributed zero updates and the GUI cheerfully said "up to date".
+# Measured on the author's box: the cache clean below had wiped every repo's
+# metadata, so the next check reported 0 while Discover found 8 (ONEUP-0056).
+echo "TEST: --check reports an unreadable repository instead of claiming up to date"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *list-updates* ]]; then
+  echo "Warning: Skipping repository 'packman' because of the above error." >&2
+  echo "Some of the repositories have not been refreshed because of an error." >&2
+  printf 'S | Repo | Name | Cur | Avail | Arch\n--+--+--+--+--+--\n'
+  exit 106                      # ZYPPER_EXIT_INF_REPO_SKIPPED
+fi
+exit 0
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --check --steps=system)
+check        "system marked not-checkable"   "@@CHECK_UNKNOWN@@|system" "$out"
+check        "reason names the repository"   "packman"                  "$out"
+check_absent "no confident zero for system"  "@@CHECK@@|system|0"       "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# One unreadable remote must not hide every other remote's updates. `flatpak
+# remote-ls --updates` aborts the WHOLE listing (exit 1, empty stdout) when any
+# one remote has no summary file — and a local `--no-enumerate` origin, which is
+# what `flatpak install ./foo.flatpak` leaves behind, never has one. Measured:
+# six such origins on the author's box hid a real Discord update (ONEUP-0056).
+echo "TEST: --check counts Flatpak updates even when one remote is unreadable"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/flatpak" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  remotes)
+    # name <TAB> options; the broken one is a local no-enumerate origin.
+    [[ "$*" == *--user* ]] && printf 'flathub\t\nbroken-origin\tno-enumerate,no-gpg-verify\n'
+    exit 0 ;;
+  remote-ls)
+    if [[ "$*" == *broken-origin* ]]; then
+      echo "error: Unable to load summary from remote broken-origin" >&2; exit 1
+    fi
+    [[ "$*" == *flathub* ]] && echo "com.discordapp.Discord 1.0.150"
+    exit 0 ;;
+esac
+exit 0
+EOF
+chmod +x "$d/flatpak"
+out=$(run_engine "$d" --check --steps=flatpak)
+check        "working remote still counted"  "@@CHECK@@|flatpak|1"                        "$out"
+check        "its app is listed"             "@@CHECK_ITEM@@|flatpak|com.discordapp.Discord|" "$out"
+# A local origin has no updates to serve BY DESIGN, so it is not a failed check.
+check_absent "local origin isn't an unknown" "@@CHECK_UNKNOWN@@|flatpak"                  "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# The cache step's own label promises "the downloaded-package cache" — and the
+# rootless --check reads the repository METADATA cache, which it must therefore
+# leave alone. `zypper clean --all` cleans both, so the step was blinding the
+# next check (93 MB of metadata here, all of it re-downloaded) (ONEUP-0056).
+echo "TEST: the cache step clears packages but keeps repository metadata"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *clean* ]]; then
+  for a in "$@"; do
+    case "$a" in
+      --all|-a|--metadata|-m|--raw-metadata|-M)
+        echo "BUG: cache step wiped repository metadata" >&2; exit 99 ;;
+    esac
+  done
+  echo "All repositories have been cleaned up."; exit 0
+fi
+exit 0
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=cache)
+check_absent "metadata left intact"  "BUG: cache step wiped" "$out"
+check        "cache step still ok"   "@@STEP_END@@|cache|ok" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
