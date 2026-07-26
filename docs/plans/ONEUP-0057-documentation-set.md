@@ -409,12 +409,14 @@ grep -n '^#\{1,3\} ' docs/specs/ONEUP-0028-accessibility.md
         `px`.
       - **No focus ring** — a deliberate user-facing decision (2026-07-25): focus reuses
         the hover look. Qt ignores `outline-radius`, so a ring draws square.
-      - **No borders on buttons or links at all** — the user extended the rule above on
-        2026-07-26, from focus to affordance generally. Write it as a standing rule, and
-        state what carries affordance and focus *instead* (fill, weight, spacing, cursor,
-        wording), because "no border" on its own is a prohibition and a standard has to
-        give the alternative. The redesign (Task 17) then works inside this rule; it does
-        not get to reopen it.
+        **Scope, clarified by the user 2026-07-26:** the rule is about **focus** borders
+        only. **Ordinary borders are fine** — a button may look like a button, a card may
+        have an edge. What must never appear is a border or outline drawn to mark the
+        focused/highlighted control. Write the rule at that width, and state what carries
+        focus *instead* (the hover treatment — fill and contrast shift), because "no ring"
+        on its own is a prohibition and a standard has to give the alternative. An earlier
+        revision of this plan widened it to "no borders on buttons or links at all"; that
+        was a misreading and is corrected here.
       - **New, for themes (ONEUP-0027):** every theme must satisfy the contrast rule and
         the colour-never-alone rule; a theme that cannot is not shipped. State how a new
         theme is checked.
@@ -805,10 +807,19 @@ git commit -m "ONEUP-0032: spec translation, including the marker-payload change
 **Requested by the user, 2026-07-26**, as part of 2.0 rather than polish after it. Three
 priorities in the user's own order: **ergonomics, user-friendliness, accessibility.**
 
-**The one hard constraint, stated by the user: do not highlight buttons or links with
-borders.** This extends the existing no-focus-ring decision (2026-07-25) from focus to
-affordance in general. It is a design instruction, not a suggestion — the spec works
-within it rather than reopening it.
+**The constraints, as clarified by the user 2026-07-26.** Three, and they are design
+instructions rather than suggestions — the spec works within them rather than reopening
+them:
+
+1. **No focus borders.** Ordinary borders are fine and always were; what must not appear
+   is a border or outline drawn to mark the focused/highlighted control. This restates the
+   2026-07-25 no-focus-ring decision at its original width. (An earlier revision of this
+   task widened it to "no borders at all" — a misreading, corrected.)
+2. **The phone-style on/off switches stay.** The user's long-standing preference over
+   checkboxes, specifically because on/off reads at a glance. A fixed point, not a
+   candidate.
+3. **Free rein otherwise.** The user's words: propose and build, and we tweak afterwards.
+   So this task does **not** stop to ask how far the layout may move.
 
 - [ ] **Step 1: Read what the interface is today** before proposing anything different.
       The redesign is judged against the current window, so measure it:
@@ -817,17 +828,18 @@ within it rather than reopening it.
 grep -n 'setAccessibleName\|addWidget\|addLayout' updater.py | wc -l
 grep -n 'class .*Q\(Dialog\|MainWindow\|Widget\|Frame\)' updater.py
 ```
-- [ ] **Step 2: Answer the borderless-affordance question head-on.** Without an outline, a
-      keyboard user still has to know where they are and a low-vision user still has to
-      know what is clickable. WCAG 2.2 SC 1.4.11 (non-text contrast) and SC 2.4.11 (focus
-      not obscured) do not go away because a border is off the table. Settle in the spec
-      how affordance and focus are conveyed instead — fill, weight, spacing, cursor and
-      wording are the likely answers — and **measure the contrast ratios**, do not assert
-      them. If a chosen treatment cannot meet the ratio, say so and pick another.
-- [ ] **Step 3: Ask the user the questions that are preference, not fact.** At minimum:
-      how much may the layout move (a tidy-up versus a re-plan), and whether the phone-style
-      toggle switches stay. Do not invent answers to these — but do bring a recommendation
-      to each, per the standing instruction not to hand back open questions bare.
+- [ ] **Step 2: Answer the ringless-focus question head-on.** Without a focus ring, a
+      keyboard user still has to know where they are. WCAG 2.2 SC 2.4.11 (focus not
+      obscured) and SC 1.4.11 (non-text contrast) do not go away because the ring is off
+      the table. Settle in the spec how focus is conveyed instead — the hover treatment
+      (fill and contrast shift) is the existing answer and the likely one — and **measure
+      the contrast ratios**, do not assert them. If a chosen treatment cannot meet the
+      ratio, say so and pick another. Note this is the *narrower* question than an earlier
+      revision posed: affordance may still use an ordinary border, so only focus needs a
+      non-border answer.
+- [ ] **Step 3: Do not stop to ask.** The user granted free rein (2026-07-26) with two
+      fixed points — no focus borders, and the on/off switches stay. Propose the design and
+      build it; tweaks come after. Bring recommendations, not questions.
 - [ ] **Step 4: Write the spec** to the template, settling: what changes and what
       deliberately does not; the affordance and focus treatment from Step 2 with its
       measured ratios; how the five task rows, the progress area, the log pane and the
@@ -837,8 +849,9 @@ grep -n 'class .*Q\(Dialog\|MainWindow\|Widget\|Frame\)' updater.py
       starting position: every focusable widget keeps an accessible name (`gui-smoke.py`
       fails on a nameless one); **no state is signalled by colour alone**; font sizes stay
       derived from the desktop point size, never hard-coded `px`. Add the redesign's own:
-      no button or link is bordered; every control reachable and operable by keyboard
-      alone; focus is always visibly located without a ring.
+      focus is never marked by a border or outline, yet is always visibly located; every
+      control reachable and operable by keyboard alone; the on/off switches survive the
+      redesign with their state still readable without relying on colour.
 - [ ] **Step 6: Record the sequencing** the design doc §5.2 now fixes — the redesign lands
       **after** the GUI split (0034) and **before** themes (0027) and translation (0032),
       because it restructures what those two then style and translate.
@@ -925,10 +938,13 @@ without asking: Leap 15.6 reached end-of-life on 2026-04-30, so the oldest *supp
 Leap is 16.0, whose release notes put `/usr/bin/python3` at **3.13** — the same as
 Tumbleweed. See `docs/standards/coding.md` §1.
 
-**Open questions now live only in Task 15 Step 2 and Task 17 Step 3**, and both are
-genuine preference rather than fact: how many themes and where the picker lives; and how
-far the redesign may move the layout. Both are asked *with a recommendation attached*,
-never handed back bare. Nothing else defers.
+**One open question remains, in Task 15 Step 2**: how many themes and where the picker
+lives — genuine preference rather than fact, and asked *with a recommendation attached*,
+never handed back bare.
+
+**Task 17 no longer asks anything.** The user granted free rein on the redesign
+(2026-07-26) with two fixed points — no focus borders, and the on/off switches stay — so
+the spec proposes and builds rather than pausing. Nothing else defers.
 
 **Consistency.** Task 1 defines the spec template; Tasks 12, 14, 15 and 16 all name it as
 the shape they follow. Task 2 defines the `oneup/` layout; Tasks 12 and 14 consume it.

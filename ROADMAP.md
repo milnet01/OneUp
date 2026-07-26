@@ -934,18 +934,36 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   afterwards. Three stated priorities, in the user's order: ergonomics,
   user-friendliness, accessibility.
 
-  HARD CONSTRAINT, stated by the user: do NOT highlight buttons or links
-  with borders. This extends the existing no-focus-ring decision
-  (2026-07-25, recorded in CLAUDE.md: the app deliberately draws no focus
-  ring and focus reuses the hover look) from focus to affordance
-  generally. Buttons and links must read as interactive through fill,
-  weight, spacing, cursor and wording instead of an outline. The
-  accessibility consequence has to be answered head-on rather than
-  waived: WCAG 2.2 SC 1.4.11 wants a visible non-text indicator and SC
-  2.4.11 wants focus not obscured, so the spec must show how a
-  keyboard-only user can tell where they are without a ring — fill and
-  contrast shift are the likely answer, and whatever is chosen must be
-  measured, not asserted.
+  HARD CONSTRAINT, stated by the user and CLARIFIED 2026-07-26: no
+  FOCUS borders. Ordinary borders are fine and always were — a button
+  may look like a button, a card may have an edge. What must not appear
+  is a border/outline drawn to mark the focused or highlighted control.
+  This is the existing no-focus-ring decision (2026-07-25, CLAUDE.md:
+  the app deliberately draws no focus ring; focus reuses the hover
+  look), restated, not widened. An earlier revision of this bullet read
+  it as "no borders on buttons or links at all" — that was my
+  over-reading of the original wording, corrected by the user the same
+  day.
+
+  The accessibility consequence still has to be answered head-on rather
+  than waived, because it is the focus indicator specifically that is
+  off the table: WCAG 2.2 SC 2.4.11 wants focus not obscured and SC
+  1.4.11 wants a visible non-text indicator. The spec must show how a
+  keyboard-only user can tell where they are without a ring — the hover
+  treatment (fill and contrast shift) is the existing answer and the
+  likely one, and whatever is chosen must be MEASURED, not asserted.
+
+  Two further decisions from the user (2026-07-26):
+  - FREE REIN on the redesign itself. No layout question needs to be
+    asked up front; propose and build, and we tweak afterwards. This
+    removes the "how far may the layout move" question the spec task
+    was going to ask.
+  - KEEP the phone-style on/off switches. The user has always preferred
+    them to checkboxes, specifically because on/off is easy to see at a
+    glance. They are a fixed point of the design, not a candidate for
+    replacement — and their state must stay readable without relying on
+    colour alone (ONEUP-0028), which the current high-contrast property
+    already handles.
 
   Interacts with three other 2.0 items and the sequencing matters:
   - ONEUP-0034 (GUI split) comes FIRST — redesigning a 3,719-line module

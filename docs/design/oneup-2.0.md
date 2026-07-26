@@ -23,7 +23,7 @@ thing can replace what they run today.
 | --- | --- | --- |
 | **ONEUP-0054** | Replace the Bash engine with a Python one | `docs/specs/ONEUP-0054-python-engine.md` |
 | **ONEUP-0034** | Split `updater.py` into focused modules | `docs/specs/ONEUP-0034-gui-modules.md` *(to be written)* |
-| **ONEUP-0064** | Redesign the interface for ergonomics, clarity and accessibility — **no borders on buttons or links** | `docs/specs/ONEUP-0064-interface-redesign.md` *(to be written)* |
+| **ONEUP-0064** | Redesign the interface for ergonomics, clarity and accessibility — **no focus borders**; the on/off switches stay | `docs/specs/ONEUP-0064-interface-redesign.md` *(to be written)* |
 | **ONEUP-0027** | Selectable colour themes beyond follow-the-desktop | `docs/specs/ONEUP-0027-themes.md` *(to be written)* |
 | **ONEUP-0032** | Wrap user-facing text for translation, and mirror the window for right-to-left languages — **groundwork only, English alone**, see §5.1 | `docs/specs/ONEUP-0032-i18n.md` *(to be written)* |
 | **ONEUP-0044** | The double password box | no spec — see §6.2 |
