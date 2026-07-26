@@ -16,6 +16,31 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
+> ## ▶ You are here — resume at **Task 11**
+>
+> **Done:** Tasks 1–10 (2026-07-26). Nine standards, the marker-protocol reference, and
+> cold-eyes batch 1 — two loops, converged; all ten documents are `Status: Reviewed` and
+> carry their own loop log. Last commit `987152d`, pushed, tree clean, `./local-CI.sh`
+> green (205 engine / 283 GUI / 6 bump).
+>
+> **Next:** Task 11 — rewrite `CLAUDE.md` into a map that still carries the traps. It runs
+> after batch 1 on purpose, so it can only point at documents that have been proven
+> correct. Then Tasks 12–19 in order.
+>
+> **Carry these forward — they are decisions, not suggestions:**
+> - **`main` is frozen at 1.4.0.** Anything found that cannot be fixed is *filed on the
+>   roadmap at the moment it is found*, never held to close-out. That standing instruction
+>   is why ONEUP-0058 … 0068 exist.
+> - **2.0's scope** is ONEUP-0054, 0034, 0027, 0032, 0064, 0044, 0004. No partial 2.0
+>   releases.
+> - **The interface redesign (0064)** has free rein, with two fixed points: **no focus
+>   borders** (ordinary borders are fine) and **the on/off switches stay**.
+> - **Translation (0032)** ships groundwork only in 2.0 — English alone, right-to-left in
+>   scope.
+> - One open decision, recorded not blocking: the ringless focus cue measures **1.14:1** on
+>   the main button against WCAG 2.4.13's 3:1 (`docs/standards/ui-and-accessibility.md`
+>   §5.4). Routed to Task 17.
+
 ## Global Constraints
 
 Copied verbatim from the design doc and the user's decisions. Every task inherits these.
