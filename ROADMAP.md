@@ -720,3 +720,25 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** OneUp said "Everything is up to date" while 8 updates were waiting — it now says when it couldn't check something instead of guessing.
   Kind: fix.
   Source: user-report-2026-07-26 (screenshots: OneUp "up to date" vs Discover "8 updates").
+
+- 🚧 [ONEUP-0057] **Write the OneUp 2.0 documentation set before any 2.0 code is written.**
+  Agreed with the user 2026-07-26. Deliverables, in order: nine standards
+  (documentation, coding, security, files-and-naming, testing,
+  ui-and-accessibility, wording-and-translation, workflow, plus the existing
+  dependencies.md), a marker-protocol reference, the programme design
+  (docs/design/oneup-2.0.md, written first), and one spec each for
+  ONEUP-0054/0034/0027/0032. Cold-eyes in three batches, each looped until
+  clean (global rule 14); implementation is blocked until then. Build plans
+  (docs/plans/) are deliberately NOT written now — each is written when its
+  item starts.
+
+  Decisions taken with the user in the same session, recorded in the design:
+  2.0 is a full feature release (engine rewrite + GUI split + themes + i18n +
+  the double-prompt fix + a dependency refresh, list open); nothing ships as
+  2.0 until it fully replaces v1; main keeps shipping 1.x meanwhile; the GUI
+  split (ONEUP-0034) lands on main first, because it changes no behaviour and
+  branching v2 from already-split code is what keeps months of merges sane;
+  CLAUDE.md shrinks to a map that still carries the hard-won traps.
+  **Layman:** Write down the design and the rules for version 2 before building it, so every piece is built to the same standard.
+  Kind: doc.
+  Source: user-request-2026-07-26.
