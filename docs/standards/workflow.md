@@ -168,7 +168,7 @@ One version number lives in six places, and they must agree:
 | 3 | the newest `%changelog` stanza in the same spec — rpmlint rejects a mismatch |
 | 4 | `versionformat` **and** `revision` in `packaging/obs/_service` |
 | 5 | the newest `<release version="…">` in `data/za.co.antsprojectshub.OneUp.metainfo.xml` |
-| 6 | the newest `## [x.y.z]` heading **and its link** at the foot of `CHANGELOG.md` |
+| 6 | the newest `## [x.y.z]` heading in `CHANGELOG.md`, **and the two links at its foot** — the `[x.y.z]:` release link, and the `[Unreleased]:` compare base, which must point at the tag just cut |
 
 `_service`'s `revision` is pinned to the release tag on purpose. Left on `main` it would
 repackage post-release commits under the old version number — a build that claims to be
@@ -207,12 +207,14 @@ more than GitHub CI does:
 | --- | --- |
 | `tests/run-tests.sh` | the engine suite — the markers `update_system.sh` prints |
 | `tests/gui-smoke.py` | the offscreen GUI suite — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip) |
-| `tests/bump-test.py` | a real bump in a throwaway copy advances every version site |
 | Python syntax | `updater.py` and `bump.py` parse |
+| `tests/bump-test.py` | a real bump in a throwaway copy advances every version site |
 | lint | `ruff` and `shellcheck`, best-effort |
 | packaging validation | desktop file and AppStream metainfo |
-| version lockstep | the six sites of §5.1 agree |
-| documentation | `tests/docs-check.py` — the rules of `docs/standards/documentation.md` that a script can settle |
+| version lockstep | the **version numbers** at the six sites of §5.1 agree |
+| documentation | `tests/docs-check.py` — the rules of `docs/standards/documentation.md` that a script can settle, plus the `CHANGELOG.md` links §5.1's site 6 depends on |
+
+Listed in the order `local-CI.sh` runs them, so the table can be read against the script.
 
 Two deliberate design points:
 
@@ -352,7 +354,8 @@ Can people still install system, Flatpak and firmware updates?
 | §1 the v1 freeze | nothing automatic — the branch a commit lands on is a human decision |
 | §3 the commit subject format | nothing automatic. There is no `commit-msg` hook, and adding one is cheap if the format ever drifts |
 | §4 roadmap IDs come from `.roadmap-counter` | the allocator itself: on a fresh clone the file is absent and appending **refuses**, rather than restarting at 1 and colliding |
-| §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate, and `tests/bump-test.py` proves `bump.py` advances all six in a throwaway copy |
+| §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate — for the version **numbers**. `tests/bump-test.py` proves `bump.py` writes all six correctly, but against a synthetic fixture, not the real file |
+| §5.1 site 6's two `CHANGELOG.md` links match its newest heading | `tests/docs-check.py`. Added 2026-07-26: the lockstep gate reads only the heading, and a hand-edit could leave the release link missing or the `[Unreleased]` compare base pointing at the previous tag — which is ONEUP-0033, a bug this project shipped once already |
 | §6 local CI is green before a push | `githooks/pre-push` — but only once per clone, after `git config core.hooksPath githooks`. **Nothing enforces that it is enabled**, so on a fresh clone this rule is a habit |
 | §6.1 a new gate is proved to fail before it is trusted | nothing automatic |
 | §8 the release preconditions | `release.sh` — three fatal checks before it touches anything: a clean tree, on `main`, and the tag not already existing |

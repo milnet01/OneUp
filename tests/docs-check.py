@@ -193,9 +193,31 @@ def check_marker_table() -> None:
           f"{sorted(untested)}")
 
 
+# --- the CHANGELOG's own links agree with its newest heading ---------------
+def check_changelog_links() -> None:
+    """`bump.py` writes three things into CHANGELOG.md — the heading, the release link and
+    the [Unreleased] compare base. `local-CI.sh`'s lockstep gate reads only the heading, and
+    `tests/bump-test.py` proves bump.py's behaviour against a synthetic fixture, so nothing
+    checked the real file. A stale compare base is ONEUP-0033, a bug this project shipped."""
+    path = ROOT / "CHANGELOG.md"
+    text = path.read_text()
+    newest = re.search(r"^## \[(\d+\.\d+\.\d+)\]", text, re.M)
+    check(newest is not None, path, 0, "workflow §5.1",
+          "no `## [x.y.z]` release heading found" if not newest else "")
+    if not newest:
+        return
+    ver = newest.group(1)
+    check(f"\n[{ver}]: " in text, path, 0, "workflow §5.1",
+          f"newest heading is {ver} but no `[{ver}]:` link reference exists at the foot")
+    base = re.search(r"^\[Unreleased\]: \S+/compare/v(\d+\.\d+\.\d+)\.\.\.HEAD", text, re.M)
+    check(base is not None and base.group(1) == ver, path, 0, "workflow §5.1",
+          f"[Unreleased] compare base is "
+          f"{'absent' if not base else 'v' + base.group(1)}, not v{ver} (ONEUP-0033)")
+
+
 def main() -> int:
     for fn in (check_headers, check_sections, check_loop_tallies, check_line_citations,
-               check_pointers, check_markers, check_marker_table):
+               check_pointers, check_markers, check_marker_table, check_changelog_links):
         fn()
     for line in failures:
         print(f"  FAIL {line}")

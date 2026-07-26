@@ -1,7 +1,7 @@
 # OneUp
 
 **One click, everything up to date.** A small, no-nonsense update dashboard for
-openSUSE (Tumbleweed and Leap) that does the four things you actually need — in
+openSUSE (Tumbleweed and Leap) that does the five things you actually need — in
 the *right* way — from a single window.
 
 ![OneUp](screenshots/oneup.png)

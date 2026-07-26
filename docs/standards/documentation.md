@@ -204,6 +204,12 @@ probably works. (How to *write* the citation — by name, never by line number �
 - A claim that cannot be verified is **deleted**, not softened into a hedge.
 - When the answer is not on disk — it concerns intent, scope, or preference — **ask**.
   Two lines of question cost less than a document built on a wrong premise.
+- **A gap is written as a sentence, never as a marker.** No `TODO`, `TBD`, `FIXME` or
+  `XXX`. A marker is a claim nobody made: it names no question, so nobody can answer it,
+  and it survives every review by looking like work already accounted for. Write what is
+  not known and who has to decide it — §8.1's *say "I do not know" loudly*.
+  `tests/docs-check.py` fails on a marker in any spec, standard, design document or
+  reference.
 
 The live example of why: the `ONEUP-0054` draft cited 197 engine tests and 3,680 lines,
 measured at `ea51adc`. By `dbef1a8` neither figure held, and "tests" was the wrong noun

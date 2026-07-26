@@ -160,7 +160,9 @@ under `data/` all use it.
    The `revision` is pinned to the tag on purpose — leaving it on `main` would repackage
    post-release commits under the old version number.
 5. the newest `<release version="…">` in `data/za.co.antsprojectshub.OneUp.metainfo.xml`
-6. the newest `## [x.y.z]` heading (and its link at the bottom) in `CHANGELOG.md`
+6. the newest `## [x.y.z]` heading in `CHANGELOG.md`, and the **two** links at its foot —
+   the `[x.y.z]:` release link and the `[Unreleased]:` compare base, which must point at
+   the tag just cut (ONEUP-0033). `tests/docs-check.py` checks both.
 
 `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/); the metainfo
 `<release>` notes should mirror its entries. **Don't hand-edit the six sites** — run
