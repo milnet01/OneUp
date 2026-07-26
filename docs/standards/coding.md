@@ -4,7 +4,7 @@
 to get, how to run another program safely, and what to do when something fails — so that
 2.0 code looks like it was written by one person who was paying attention.
 
-**Status:** Draft — cold-eyes loop 1 applied; see §12
+**Status:** Reviewed — cold-eyes converged, 2 loops (see the log at the foot)
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
@@ -461,3 +461,4 @@ and the guards it requires.
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §2.1 said the divergence was with GitHub CI, which does not lint at all; the prescribed ruff config was measured and reports 54 errors rather than 14 wrappable lines; three `# noqa` comments were found anchored one line above their diagnostic; and the `QProcess` teardown error was attributed to *un*parented objects when every one in the tree is parented |
+| 2 | 2026-07-26 | 1 high, 5 medium, 1 low — **2 verified, 4 unverified** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |

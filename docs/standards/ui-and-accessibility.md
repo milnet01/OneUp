@@ -5,7 +5,7 @@ distinguish red from green, needs the text twice as large, or reads right-to-lef
 must stay that way without anyone having to remember to check, which is why every rule
 below names the test that enforces it.
 
-**Status:** Draft — cold-eyes loop 1 applied; see §10
+**Status:** Reviewed — cold-eyes converged, 2 loops (see the log at the foot)
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
@@ -385,3 +385,4 @@ today; the RTL work adds them, and this is the form they take.
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §6.2's dialog example was the hand-rolled X11 path ONEUP-0049 replaced and never named `center_on_parent`; the tray glyph is dark, not white; §7's contrast check was described in the present tense although nothing computes it, and its "the built-ins pass" premise is false at 3.07:1; and the focus cue's state-change contrast was measured at 1.14–1.62:1 in three of four cases |
+| 2 | 2026-07-26 | 1 high, 5 medium, 1 low — **2 verified, 4 unverified** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |

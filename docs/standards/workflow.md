@@ -4,7 +4,7 @@
 branch it belongs on, what the commit says, how it earns a version number, and the one
 gate it must pass green before it leaves this machine.
 
-**Status:** Draft — cold-eyes loop 1 applied; see §12
+**Status:** Reviewed — cold-eyes converged, 2 loops (see the log at the foot)
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
@@ -231,8 +231,16 @@ git config core.hooksPath githooks
 **`--no-verify` is not a way past a red gate.** It exists for the case where the hook
 itself is broken. A failing test is fixed, not bypassed.
 
-**Keep `local-CI.sh` and `.github/workflows/release.yml` in step** — a new gate is added to
-both, or the first thing it catches will be caught after the tag is already pushed.
+**The two gate sets are not identical, deliberately.** `release.yml` runs the three test
+suites and the AppImage build. `local-CI.sh` runs those three suites **plus** lint,
+packaging validation and version lockstep — and those three extras have never run in
+GitHub CI.
+
+- **A new *test* gate goes in both.** Otherwise the first thing it catches is caught after
+  the tag is already pushed, which is the expensive moment.
+- **The three extras stay local**, so understand what that costs: **a lint failure is
+  caught before a push or not at all.** The pre-push hook is what makes that reliable, and
+  is why `git push --no-verify` is not a way past a red gate (§6).
 
 ## 7. Pushing
 
@@ -319,3 +327,4 @@ Can people still install system, Flatpak and firmware updates?
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §6's gate table called the engine suite's 205 *assertions* 205 scenarios (it has 76), and §1 restated the freeze in full alongside `docs/design/oneup-2.0.md` §5.4 — this document is now canonical for the rule and the design carries the programme framing |
+| 2 | 2026-07-26 | 1 high, 5 medium, 1 low — **2 verified, 4 unverified** | converged (polish only). Verified here: §6 told the reader to keep `local-CI.sh` and `release.yml` in step, while three of `local-CI.sh`'s gates have never run in CI — now stated as the deliberate split it is, with what it costs |

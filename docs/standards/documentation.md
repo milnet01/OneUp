@@ -3,7 +3,7 @@
 **In one sentence:** every document here has one job, and this file says which job, so
 nobody has to guess where a decision belongs or whether it has been reviewed.
 
-**Status:** Draft — cold-eyes loop 1 applied; see §10
+**Status:** Reviewed — cold-eyes converged, 2 loops (see the log at the foot)
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
@@ -276,3 +276,4 @@ This is a writing rule, not a dumbing-down rule: the technical content stays.
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: the precedence rule contradicted §1's table, the header block was missing from the standard that mandates it, the `Status`/`Kind` enums matched no document in the tree, and "standards never hold anything version-specific" contradicted six of the nine |
+| 2 | 2026-07-26 | 1 high, 5 medium, 1 low — **2 verified, 4 unverified** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |

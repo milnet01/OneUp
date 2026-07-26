@@ -4,7 +4,7 @@
 else you are obliged to change once you have added it — so nobody has to guess, and
 nothing is half-installed.
 
-**Status:** Draft — cold-eyes loop 1 applied; see §8
+**Status:** Reviewed — cold-eyes converged, 2 loops (see the log at the foot)
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
@@ -114,8 +114,9 @@ form; that is the desktop convention, not ours.
 
 ## 4. The `oneup/` package — 2.0's one new directory
 
-From design §4. **The engine spec (ONEUP-0054) and the GUI-split spec (ONEUP-0034) must
-follow this exactly**, because they split the two halves independently and would otherwise
+From `docs/design/oneup-2.0.md` §4. **The engine spec (ONEUP-0054) and the GUI-split spec
+(ONEUP-0034) must
+follow it exactly**, because they split the two halves independently and would otherwise
 disagree.
 
 ```
@@ -323,3 +324,4 @@ which category it is in — the answer decides whether §6 applies at all.
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: `docs/reference/` was described as not existing when it does, four bare line-number citations survived the `documentation.md` §6a sweep, gate G5 was credited with a check it does not make, and the root was said to hold three programs when it holds two |
+| 2 | 2026-07-26 | 1 high, 5 medium, 1 low — **2 verified, 4 unverified** | converged (polish only). Verified here: "From design §4" never named the design document. The two line-number citations two lanes reported are in `CLAUDE.md`, not in this document — dismissed, and already covered by ONEUP-0065 and Task 11 |
