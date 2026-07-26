@@ -612,16 +612,22 @@ git commit -m "ONEUP-0057: write the engine-to-window contract down properly"
 
 **Files:** all of Tasks 1–9; loop log appended to each document reviewed.
 
-- [ ] **Step 1: Run `/cold-eyes`** over `docs/standards/*.md` and
-      `docs/reference/marker-protocol.md`.
-- [ ] **Step 2: Verify every finding against the tree before acting on it.** A reviewer
+- [x] **Step 1: Run `/cold-eyes`** over `docs/standards/*.md` and
+      `docs/reference/marker-protocol.md`. **Done — nine lanes**, cheap breadth over all of
+      them then a strong depth pass over the six that flagged anything (wording,
+      workflow+dependencies and the marker reference came back clean and were not re-read).
+- [x] **Step 2: Verify every finding against the tree before acting on it.** A reviewer
       claim is a hypothesis. Fix CRITICAL/HIGH/MEDIUM/LOW; leave INFO. A LOW that proves
       wrong is dropped *explicitly*, with a line saying so — never silently filtered.
-- [ ] **Step 3: Loop.** Run again, **cold** — do not brief the reviewer on earlier
-      findings. Repeat until a pass returns zero verified findings.
-- [ ] **Step 4: Write the loop log** into each document as the loops happen. Never
-      back-fill.
-- [ ] **Step 5: Commit** after each loop:
+      **Done.** Loop 1: 9 critical, 19 high, 28 medium, 30 low — 82 verified, 4 not. Loop 2:
+      6 suspects, 2 verified, 4 dismissed with the reason recorded in the log.
+- [x] **Step 3: Loop.** Run again, **cold** — do not brief the reviewer on earlier
+      findings. **Done, and it did its job:** nothing from loop 1 resurfaced, which is the
+      proof the fixes held. Loop 2's only verified findings were precision, so the pass
+      converged and all ten documents flipped from Draft to Reviewed.
+- [x] **Step 4: Write the loop log** into each document as the loops happen. Never
+      back-fill. **Done — two rows in each of the ten.**
+- [x] **Step 5: Commit** after each loop:
 
 ```bash
 git add docs/standards docs/reference
