@@ -4,12 +4,16 @@
 else you are obliged to change once you have added it — so nobody has to guess, and
 nothing is half-installed.
 
-**Status:** Reviewed
+**Status:** Draft — cold-eyes loop 1 applied; see §8
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `3750efe` — every path, name and figure below was read out of the tree,
+**Verified at:** `58ea3bc` — every path, name and figure below was read out of the tree,
 not recalled.
+
+**Sections:** 1 the repository · 2 naming · 3 the app ID · 4 the `oneup/` package ·
+5 runtime state · 6 what a new file obliges you to update · 7 traps · 8 quick check ·
+9 cold-eyes log
 
 ---
 
@@ -26,7 +30,7 @@ exist yet, and saying so is the point.
 | `docs/specs/` | One item's contract. |
 | `docs/plans/` | One item's build steps. |
 | `docs/standards/` | Standing rules, like this one. |
-| `docs/reference/` | Frozen contracts (formats, protocols). **Does not exist yet** — Task 9 of the ONEUP-0057 plan creates it with `marker-protocol.md`. |
+| `docs/reference/` | Frozen contracts (formats, protocols). One file: `marker-protocol.md`. |
 | `packaging/rpm/` | `oneup.spec` — the `zypper`-installable package. |
 | `packaging/appimage/` | `build-appimage.sh` — the single-file portable build. |
 | `packaging/obs/` | `_service` + `README.md` — the openSUSE Build Service recipe. |
@@ -35,8 +39,9 @@ exist yet, and saying so is the point.
 | `screenshots/` | Images the README and the app-store metadata point at. |
 | `.github/workflows/` | GitHub CI. One file: `release.yml`, triggered by a `v*` tag. |
 | `.ants/`, `.obs/` | Tooling configuration, not application code. |
+| *(root dotfiles)* | `.gitignore`, `.ants_review_falsepos.jsonl` — tooling state that has to sit at the root to be found. |
 
-**The root is closed.** Adding a fourth program or a fourth developer script to the root
+**The root is closed.** Adding a third program or a fourth developer script to the root
 needs a reason written in the commit message. Everything else has a directory.
 
 **There is no `src/`, no `lib/`, and no `bin/`** — do not create one out of habit. 2.0
@@ -52,7 +57,7 @@ introduces exactly one new source directory, `oneup/` (§4).
 | --- | --- | --- |
 | Python module | `snake_case.py` | `updater.py`, `bump.py` |
 | Shell script | `kebab-case.sh` | `build-appimage.sh`, `run-tests.sh`, `release.sh` |
-| Test file | `<subject>-<kind>` | `gui-smoke.py`, `bump-test.py`, `run-tests.sh` |
+| Test file | `<subject>-<kind>` | `gui-smoke.py`, `bump-test.py` |
 | Spec / plan | `ONEUP-NNNN-<kebab-topic>.md` | `ONEUP-0028-accessibility.md` |
 | Standard | `<subject>.md`, no ID | `documentation.md`, `dependencies.md` |
 | Anything under `data/` | `za.co.antsprojectshub.OneUp.<ext>` | all three files |
@@ -66,6 +71,10 @@ Two shell scripts break the kebab-case rule, and both stay as they are:
   installed copies for no benefit.
 - **`local-CI.sh`** — carries an uppercase `CI`, because that is what it is. Also named
   in `CLAUDE.md`, `githooks/pre-push` and the plan documents.
+
+**`run-tests.sh` is verb-first, not `<subject>-<kind>`** — it is the suite's entry point
+rather than one subject's test file, and it reads as a command because it is one. A new
+*test file* follows §2.1; a new *runner* may follow this.
 
 **`githooks/pre-push` has no extension and cannot get one** — git will only run a hook
 whose filename is exactly the hook's name.
@@ -105,8 +114,9 @@ form; that is the desktop convention, not ours.
 
 ## 4. The `oneup/` package — 2.0's one new directory
 
-From design §4. **Tasks 12 and 14 must follow this exactly**, because they split the two
-halves independently and would otherwise disagree.
+From design §4. **The engine spec (ONEUP-0054) and the GUI-split spec (ONEUP-0034) must
+follow this exactly**, because they split the two halves independently and would otherwise
+disagree.
 
 ```
 oneup/
@@ -129,7 +139,11 @@ are tracked; the compiled `.qm` files are build artefacts and are git-ignored �
    entry, the RPM's `/usr/bin/oneup` wrapper and every user's hand-made launcher all name
    it. It becomes a few lines that import from `oneup/` and call it.
 2. **No engine module imports from `oneup/gui/`.** The engine must stay runnable in a
-   terminal with no Qt installed. Enforced by test — design gate G5.
+   terminal with no Qt installed. Design gate **G5** covers half of this: it proves the
+   engine imports no Qt and runs with PySide6 absent. It does **not** catch an engine
+   module importing a Qt-free helper out of `oneup/gui/`, which would pass G5 and still
+   invert the dependency. The stronger check — no `oneup.gui` import anywhere under
+   `oneup/engine/` — belongs to ONEUP-0034's spec, which owns the test.
 3. **Module names are `snake_case.py`** and say what they *do*, not what they *are*:
    `refresh.py`, not `refresh_manager.py`; `markers.py`, not `protocol_utils.py`.
 4. **One responsibility per module.** If you cannot say what a module is for in one
@@ -228,19 +242,20 @@ ships in none of them:
    `%files`. The spec currently installs exactly two source files by name
    (`updater.py`, `update_system.sh`); a package needs a directory install instead.
 2. `packaging/appimage/build-appimage.sh` — PyInstaller follows `import` statements by
-   itself, but **data files need an explicit `--add-data`** (line 26-27 does this for
-   `update_system.sh` and the icon).
+   itself, but **data files need an explicit `--add-data`** — the script's two
+   `--add-data` flags do this for `update_system.sh` and the icon.
 3. `packaging/obs/_service` — rolls the tarball the RPM spec expects; a layout change
    means checking it still matches.
 
 **Any new file that carries a version number** — four more places, and the tests:
 
-- `bump.py` must learn to edit it (it currently rewrites six sites, lines 60-93).
-- `local-CI.sh`'s lockstep gate must read it (lines 94-103). Note the gate greps
-  **`updater.py` by name** for `APP_VERSION` — moving that constant into the package
-  requires editing line 96 in the same change.
+- `bump.py` must learn to edit it — the six `edit(...)` calls in `main()`.
+- `local-CI.sh`'s lockstep gate must read it — the `# --- version lockstep` step. Note
+  that gate greps **`updater.py` by name** for `APP_VERSION`, so moving the constant into
+  the package means editing the `v_py=` line in the same change.
 - `tests/bump-test.py` must cover it.
-- `CLAUDE.md`'s "six places" list becomes seven.
+- `docs/standards/workflow.md` §5.1's list of six sites becomes seven, and `CLAUDE.md`'s
+  summary of it with it.
 
 **Any new document** — `docs/standards/documentation.md` says which directory, and
 whether it needs a `/cold-eyes` pass before it counts as written.
@@ -299,4 +314,12 @@ which category it is in — the answer decides whether §6 applies at all.
 - If it writes at runtime, does it have a `ONEUP_*` override and a test that uses it?
 - Does it need any of the three packaging paths (§6)?
 - Does it carry a version number? If so, all of `bump.py`, `local-CI.sh`,
-  `tests/bump-test.py` and `CLAUDE.md`.
+  `tests/bump-test.py`, `docs/standards/workflow.md` §5.1 and `CLAUDE.md`.
+
+---
+
+## 9. Cold-eyes loop log
+
+| Loop | Date | Findings | Outcome |
+| --- | --- | --- | --- |
+| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: `docs/reference/` was described as not existing when it does, four bare line-number citations survived the `documentation.md` §6a sweep, gate G5 was credited with a check it does not make, and the root was said to hold three programs when it holds two |

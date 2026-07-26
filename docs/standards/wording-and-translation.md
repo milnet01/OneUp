@@ -5,12 +5,16 @@ day with their computer, so every message says plainly what happened and what to
 never blames them, never claims something it did not check — and is written so it can be
 translated into another language later without rewriting the app.
 
-**Status:** Reviewed
+**Status:** Draft — cold-eyes loop 1 applied; see §10
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `879b29c` — every quoted string and symbol name below was copied from the
+**Verified at:** `58ea3bc` — every quoted string and symbol name below was copied from the
 tree on 2026-07-26, not recalled.
+
+**Sections:** 1 who is reading · 2 plain English · 3 never blame the user · 4 never claim
+what was not earned · 5 where wording lives · 6 writing a translatable string · 7 the
+catalogue workflow · 8 traps · 9 before you commit · 10 cold-eyes log
 
 ## 1. Who is reading
 
@@ -24,6 +28,11 @@ person read this and know what to do?**
 ## 2. Plain English
 
 ### 2.1 The rules
+
+**Two words are deliberately different inside and outside the app**, and neither is drift:
+a *step* in the code and the marker protocol is a **task** on screen and in the README;
+a *repository* to zypper is a **source** to the user. Keep each on its own side. Likewise
+the code and these standards say **the GUI**; user-facing prose says **the window**.
 
 - **Say what happened, in ordinary words.** Not "transaction aborted" — "the update
   stopped".
@@ -131,8 +140,8 @@ quotation in §2.2 shows. The transition is deliberately ordered:
 2. **Then**, as part of ONEUP-0032, the prose payloads become codes in one deliberate,
    versioned change — marker reference, both test suites and the GUI updated in lockstep.
 
-Never both at once: a rewrite and a contract change in the same step means a failing test
-cannot tell you which one broke it.
+Never both at once — `docs/reference/marker-protocol.md` §5.1 is canonical for that rule
+and says why.
 
 **Once that lands:** a marker payload is an **identifier, not text**. It is never
 translated, never shown to the user verbatim, and renaming one is a contract change
@@ -248,8 +257,8 @@ Rules:
   other languages do not; give each a disambiguation context.
 - **"Up to date" as the default empty state.** The ONEUP-0056 bug in one sentence — empty is
   not the same as verified-empty.
-- **Sneaking prose into a marker payload after §5.1 lands.** It will pass every test and
-  appear untranslated in every language.
+- **Sneaking prose into a marker payload after the codes change lands** (design §5.1). It
+  will pass every test and appear untranslated in every language.
 - **Assuming text length.** A German string can be half again as long as its English
   original; a layout that only fits the English is broken in translation (see
   `docs/standards/ui-and-accessibility.md` §4 on fixed heights).
@@ -270,4 +279,4 @@ Rules:
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| — | — | *not yet run* | scheduled as batch 1 (`docs/plans/ONEUP-0057-documentation-set.md`, Task 10) |
+| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document was one of three lanes the breadth pass accepted clean. Its share: a bare "§5.1" that meant the *design's* §5.1, and a paragraph restated verbatim from `docs/reference/marker-protocol.md` §5.1, now a pointer |

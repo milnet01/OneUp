@@ -4,17 +4,24 @@
 branch it belongs on, what the commit says, how it earns a version number, and the one
 gate it must pass green before it leaves this machine.
 
-**Status:** Reviewed
+**Status:** Draft — cold-eyes loop 1 applied; see §12
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `4fbeb6c` — every command, path and figure below was run or read against
+**Verified at:** `58ea3bc` — every command, path and figure below was run or read against
 the tree on 2026-07-26, not recalled.
+
+**Sections:** 1 the v1 freeze · 2 branches · 3 commits · 4 roadmap IDs · 5 versions ·
+6 the gate before a push · 7 pushing · 8 releasing · 9 where a 2.0 change goes · 10 traps ·
+11 before you push · 12 cold-eyes log
 
 ## 1. The v1 freeze
 
 **`main` is frozen at 1.4.0.** This is the single most important thing in this document,
 because it decides where *every* change goes.
+
+*This section is canonical for the rule.* `docs/design/oneup-2.0.md` §5.4 carries the
+programme framing — why the freeze exists and what it costs — and defers here for the test.
 
 1.4.0 was released first on purpose: it carries eight finished improvements — the Stop
 button, following a run already in progress, making a slow mirror legible, Wayland dialog
@@ -198,10 +205,10 @@ more than GitHub CI does:
 
 | Gate | What it proves |
 | --- | --- |
-| `tests/run-tests.sh` | the engine suite — 205 scenarios |
+| `tests/run-tests.sh` | the engine suite — 76 scenarios, 205 assertions |
 | `tests/gui-smoke.py` | the offscreen GUI suite — 283 assertions (exit 77 = PySide6 absent, a skip) |
+| `tests/bump-test.py` | a real bump in a throwaway copy advances every version site — 6 assertions |
 | Python syntax | `updater.py` and `bump.py` parse |
-| `tests/bump-test.py` | a real bump in a throwaway copy advances every version site |
 | lint | `ruff` and `shellcheck`, best-effort |
 | packaging validation | desktop file and AppStream metainfo |
 | version lockstep | the six sites of §5.1 agree |
@@ -311,4 +318,4 @@ Can people still install system, Flatpak and firmware updates?
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| — | — | *not yet run* | scheduled as batch 1 (`docs/plans/ONEUP-0057-documentation-set.md`, Task 10) |
+| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §6's gate table called the engine suite's 205 *assertions* 205 scenarios (it has 76), and §1 restated the freeze in full alongside `docs/design/oneup-2.0.md` §5.4 — this document is now canonical for the rule and the design carries the programme framing |

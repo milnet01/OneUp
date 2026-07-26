@@ -1,5 +1,15 @@
 # Dependency Policy & Known-Incompatibility Ledger
 
+**In one sentence:** everything OneUp depends on runs at its latest stable version unless a
+newer one demonstrably breaks us, and when that happens the breakage is written down with a
+cue to re-test — so nobody has to remember why a version is old.
+
+**Status:** Draft — cold-eyes loop 1 applied; see the log at the foot of this file
+**Kind:** doc
+**Roadmap:** ONEUP-0004
+**Branch:** main
+**Verified at:** `58ea3bc` — the snapshot below was checked on 2026-07-26, not recalled.
+
 **Standing rule for OneUp.** Every dependency — CI actions, language runtimes, base
 images, and Python packages — tracks the **latest stable version**, for security fixes as
 much as for features. Staying current is the default; falling behind needs a reason.
@@ -91,3 +101,9 @@ done
 # Host packages (openSUSE):
 zypper info python3-pyside6 | grep -i version
 ```
+
+## Cold-eyes loop log
+
+| Loop | Date | Findings | Outcome |
+| --- | --- | --- | --- |
+| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: it carried neither the Status header block nor the one-sentence opener that `docs/standards/documentation.md` §3 and §8 require of every standard |

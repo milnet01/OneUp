@@ -995,6 +995,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Not yet swept, measured at 0812d81: ONEUP-0022 plan (30), ONEUP-0018
   spec (27), ONEUP-0022 spec (18), ROADMAP.md (10), ONEUP-0028 spec (10),
   ONEUP-0025 spec (10), ONEUP-0018 plan (9), ONEUP-0057 plan (8),
+  the 2.0 design doc's three (updater.py:699, line 712, lines 692-697 —
+  added to this bullet's scope by the cold-eyes batch-1 sweep),
   ONEUP-0054 spec (7), the 2.0 design doc (1) — 130 in total.
 
   Two of those counts are absorbed elsewhere rather than by this item:
@@ -1037,3 +1039,46 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The update script has a quick summary of its own progress messages at the top, and three lines of it are out of date.
   Kind: doc-fix.
   Source: in-session-2026-07-26 (ONEUP-0057 Task 9, writing the marker reference).
+
+- 📋 [ONEUP-0067] **Stop the GUI smoke suite making live GitHub requests.**
+  Updater.__init__ calls _check_app_update() unconditionally, which issues
+  a QNetworkAccessManager GET to api.github.com/repos/<slug>/releases/latest.
+  tests/gui-smoke.py constructs updater.Updater() 49 times and stubs
+  nothing — no monkeypatch of _check_app_update, no QNetwork fake — so a
+  suite run makes 49 live requests.
+
+  Three costs, in order: the suite is silently network-dependent, so it
+  fails differently offline than on; GitHub rate-limits unauthenticated
+  calls, so a loop of runs can start failing for a reason unrelated to the
+  code; and docs/standards/testing.md 2.3 states "no test may reach the
+  network" as an absolute, which was false when it was written.
+
+  The standard now names this as a known exception rather than pretending
+  the rule holds. Fix belongs on v2 (main is frozen): either stub the check
+  in the suite, or give _check_app_update a skip when a test environment is
+  detected — the suite already rewrites HOME before importing, so a
+  sentinel is available.
+  **Layman:** The window's test run quietly phones GitHub 49 times to ask whether a newer OneUp exists.
+  Kind: test.
+  Source: cold-eyes-2026-07-26 batch 1, testing-standard lane CRITICAL.
+
+- 📋 [ONEUP-0068] **Replace the orphaned-dialog scenario's sleep with a poll, and make its SKIP branch loud.**
+  The scenario "an orphaned password dialog is reaped when the run ends"
+  stages two background processes, then does a bare `sleep 0.5` IN THE
+  SCENARIO BODY before pgrep-ing for their children. docs/standards/
+  testing.md 6 forbids exactly this — poll for a condition, never sleep for
+  a duration — and the scenario is the only place in either suite that
+  breaks it.
+
+  The second half is worse than the first: when the race is lost it prints
+  "SKIP - could not stage the dialogs" and increments NEITHER pass nor
+  fail. So a run that reports a green 205 can silently have made 203
+  assertions, and nothing says so. A skip that costs coverage must be as
+  visible as a failure.
+
+  Fix: poll for the child pid with a ceiling (the pattern the rest of the
+  suite uses), and make the give-up path a FAIL — if the fixture cannot be
+  staged, the test cannot prove what it claims.
+  **Layman:** One test waits half a second and hopes; when the guess is wrong it quietly skips instead of failing.
+  Kind: test.
+  Source: cold-eyes-2026-07-26 batch 1, testing-standard lane HIGH.

@@ -3,8 +3,20 @@
 **In one sentence:** every document here has one job, and this file says which job, so
 nobody has to guess where a decision belongs or whether it has been reviewed.
 
-**Applies to:** every document in the repository. Written 2026-07-26, verified against
-the tree at `dbef1a8` (v1.4.0).
+**Status:** Draft — cold-eyes loop 1 applied; see §10
+**Kind:** doc
+**Roadmap:** ONEUP-0057
+**Branch:** main
+**Verified at:** `58ea3bc` — every path and claim below was checked against the tree on
+2026-07-26, not recalled.
+
+**Applies to:** every document in the repository, including the component `README.md`
+files under `packaging/obs/` and `screenshots/` (they follow §8's writing rules; they need
+no Status header, because they document a directory rather than a decision).
+
+**Sections:** 1 the documents · 2 when each is required · 3 the Status header · 4 the spec
+template · 5 invariants · 6 verification · 6a citing code · 7 the review gate · 8 writing
+for a non-programmer · 9 keeping documents true · 10 cold-eyes log
 
 ## 1. The documents, and what each is for
 
@@ -17,12 +29,37 @@ the tree at `dbef1a8` (v1.4.0).
 | `docs/design/` | the project | **programme-level** decisions that several items share or contend over | one item's implementation detail |
 | `docs/specs/` | the implementer | **one item's** contract: what it must do and how it is proven | build steps |
 | `docs/plans/` | the implementer | **one item's** build steps, in order, with verification | design decisions (they belong in the spec) |
-| `docs/standards/` | everyone | standing rules that outlive any one item | anything version-specific |
+| `docs/standards/` | everyone | standing rules that outlive any one item | release *status* — what shipped, what is in progress |
 | `docs/reference/` | both halves of the app | frozen contracts — formats, protocols | rules or rationale |
 
 **The distinction that matters most:** a *standard* is a rule that applies to work not yet
 imagined; a *spec* is a contract for one piece of work. If a sentence would still be true
 after 2.0 ships, it is a standard.
+
+**A standard may name a release; it may not track one.** "2.0 adds a `pyproject.toml`
+carrying this rule set" is a standing rule with a date attached — it stays true afterwards,
+because the rule set is the point. "ONEUP-0063 is in progress" is status, and belongs on
+the roadmap. The test: *after 2.0 ships, does deleting this sentence lose a rule?* If yes,
+it is a standard.
+
+### 1.1 Which document wins
+
+When two documents disagree, this order settles it — **highest first**:
+
+| # | Document | Why it ranks there |
+| --- | --- | --- |
+| 1 | `docs/reference/` | a frozen contract. Both halves of the app are built against it, so it cannot bend to any one of them |
+| 2 | `docs/standards/` | standing rules. A spec that breaks one is wrong, not an exception |
+| 3 | `docs/design/` | programme decisions, binding on the items inside that programme |
+| 4 | `docs/specs/` | one item's contract |
+| 5 | `docs/plans/` | one item's build steps |
+| 6 | `CLAUDE.md` | a map and a trap list; where it restates a rule, the standard is canonical |
+
+`README.md`, `CHANGELOG.md` and `ROADMAP.md` are **descriptive, not authoritative** — they
+record what is, what shipped and what is intended. A disagreement between one of them and a
+rule above is a bug in the record, fixed by correcting the record.
+
+**The loser is fixed immediately**, in the same session, not noted for later.
 
 ## 2. When each is required
 
@@ -36,18 +73,40 @@ after 2.0 ships, it is a standard.
 
 ## 3. The Status header
 
-Every spec, design document and standard opens with a header block:
+Every spec, design document, standard and reference opens with a header block:
 
 ```markdown
 **Status:** Draft | Reviewed | Implemented | Superseded by <id>
-**Kind:** implement | fix | refactor | feature | doc | investigate
+**Kind:** implement | fix | refactor | feature | doc | investigate | accessibility |
+          programme-design | reference
 **Roadmap:** ONEUP-NNNN
 **Branch:** main | v2 | <branch name>
 **Verified at:** <commit> — every figure below was measured against this tree, not recalled.
 ```
 
+**The four `Status` values mean exactly this**, because the word "reviewed" is otherwise
+read two ways:
+
+| Value | Means |
+| --- | --- |
+| `Draft` | written, not yet through `/cold-eyes`. **Implementation may not start** (§7) |
+| `Reviewed` | a `/cold-eyes` pass converged. Ready to implement |
+| `Implemented` | the work shipped; the document is now a record |
+| `Superseded by <id>` | replaced. Kept, not deleted (§9) |
+
+A document mid-review is `Draft` with a note — `Draft — cold-eyes loop 1 applied` — never
+`Reviewed`. The §10 loop log and the `Status` line must agree; if they disagree, the log
+is right.
+
+**This is prescriptive from 2026-07-26, not a description of the tree.** The five specs
+written before it (`ONEUP-0018`, `0022`, `0025`, `0028`, `0054`) use their own shapes —
+`Status: design`, `Status: Cold-eyes converged (2 loops — …)`, `Kind: accessibility`, and
+none carries `Branch:` or `Verified at:`. They are **grandfathered**: each is brought to
+this shape the next time it is edited for another reason, not in a sweep.
+
 `Verified at` is not decoration. It is the only thing that lets a later reader know
-whether a number is current. A document without it is assumed stale.
+whether a number is current. A document without it is assumed stale. The design document
+spells it `Baseline:`; that is the same field under an older name.
 
 ## 4. The spec template
 
@@ -68,7 +127,12 @@ leaving a heading with nothing under it.
    no reason gets re-proposed in six months.
 10. **Out of scope** — deliberately, so absence reads as a decision rather than an
     oversight.
-11. **Cold-eyes loop log** — see §7.
+11. **Cold-eyes loop log** — see §7. This is the *only* home for the loop history; the
+    `Status` line names the current state and never the loops that got there.
+
+**Every standard and reference carries a `Cold-eyes loop log` section too**, as its last
+numbered section. A document subject to the §7 gate with no loop-log section has not been
+through the gate.
 
 ## 5. Correctness invariants — the format
 
@@ -116,7 +180,7 @@ number.** Decided with the user, 2026-07-26.
 | Don't | Do |
 | --- | --- |
 | `updater.py:3581` | `updater.py` — `Updater._center_child` |
-| `update_system.sh:864` | `update_system.sh` — the held-lock hint, in the main flow |
+| `update_system.sh:864` | `update_system.sh` — the held-lock hint, guarded by `lock_holder` |
 | "the regex at `:927`" | "the `_ALIAS_RE` pattern" |
 | "the comment at `:377-382`" | "the QSS comment beginning *\"Keyboard focus reuses the HOVER look\"*" |
 
@@ -159,8 +223,8 @@ defence: it is stale the moment someone adds an import.
 
 **Every design document, spec, standard and reference goes through `/cold-eyes` and is
 looped until a pass returns zero verified findings.** Implementation does not start
-before that. Per-feature test contracts (`tests/features/*/spec.md`) are exempt — they are
-too small to warrant it.
+before that. Should the project ever adopt per-feature test contracts (a `spec.md` beside
+a test), those are exempt — they are too small to warrant it. OneUp has none today.
 
 - **Run it before implementation, not after.** A spec is a contract for the implementer;
   if the contract is wrong, the implementation is wrong by construction.
@@ -204,11 +268,11 @@ This is a writing rule, not a dumbing-down rule: the technical content stays.
   received. Fix the wording of an unreleased entry freely; leave shipped ones alone.
 - **A superseded document is marked, not deleted.** `Status: Superseded by <id>` at the
   top, so its citations still resolve and the reasoning stays readable.
-- **When two documents disagree, the one higher in §1's table wins** — a standard beats a
-  spec, a design beats a spec, and the loser is fixed immediately rather than noted.
+- **When two documents disagree, §1.1's order settles it**, and the loser is fixed
+  immediately rather than noted.
 
 ## 10. Cold-eyes loop log
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| — | — | *not yet run* | scheduled as batch 1 (`docs/plans/ONEUP-0057-documentation-set.md`, Task 10) |
+| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: the precedence rule contradicted §1's table, the header block was missing from the standard that mandates it, the `Status`/`Kind` enums matched no document in the tree, and "standards never hold anything version-specific" contradicted six of the nine |

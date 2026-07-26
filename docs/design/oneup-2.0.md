@@ -43,12 +43,12 @@ Measured at `256d0dc`, 2026-07-26. These are the numbers 2.0 is measured against
 | `update_system.sh` | 1,558 lines |
 | `updater.py` | 3,719 lines |
 | `tests/run-tests.sh` | 2,041 lines |
-| Engine tests | **205 passing** |
+| Engine tests | **76 scenarios, 205 assertions**, all passing |
 | GUI smoke tests | **283 passing** |
 | `bump.py` tests | **6 passing** |
 | Markers in the contract | **23** |
 | Engine CLI flags | **13** (`--auth-status`, `--auto-skip-repos`, `--check`, `--grant-auth`, `--help`, `--import-keys`, `--log`, `--notify`, `--revoke-auth`, `--size`, `--skip-repo`, `--steps`, `--thin-snapshots`) |
-| Privileged invocations in the engine | 34 at command position, of which 21 go through `sudo_capture` |
+| Privileged invocations in the engine | **34** — 14 through `sudo_capture`, 20 direct `sudo` at command position (counted at `58ea3bc`; the two `sudo` lines *inside* `sudo_capture` are the helper, not call sites) |
 | Lint gates | `shellcheck`, `ruff --select F,B`, `py_compile` — **no lint config file exists** (see §6.3) |
 | Python | CI pins `3.13`; the development machine runs 3.13.14 |
 
@@ -81,6 +81,7 @@ oneup/
     ...            (module split defined in ONEUP-0054's spec)
   gui/             the split-up updater.py
     ...            (module split defined in ONEUP-0034's spec)
+  translations/    oneup_<lang>.ts catalogues (ONEUP-0032)
 updater.py         thin entry point — kept at the root, so the desktop file,
                    RPM, AppImage and every user's launcher still work
 update_system.sh   retained until the switch-over gate passes, then removed
@@ -251,23 +252,13 @@ version people are frozen on should be the best one available.
 
 After that, **`main` takes a change only when 1.x cannot do its job.** The user's
 definition, 2026-07-26: *if people can no longer use OneUp to install system updates,
-Flatpak updates or firmware updates, we fix it and ship a 1.4.x.* Two readings are inside
-that definition, not extensions of it — both stated here so neither is re-argued later:
+Flatpak updates or firmware updates, we fix it and ship a 1.4.x.*
 
-- **A silent wrong answer is a failure to do the job.** ONEUP-0056 is the precedent:
-  OneUp reported "everything is up to date" while eight updates waited. No system got
-  updated and no one knew. Same outcome as a crash, quieter.
-- **Leaving the machine damaged is worse than not doing the job.** A half-applied rpm
-  transaction, or an abandoned lock that blocks the *next* run, means updating is now
-  actively broken.
-
-A likely trigger deserves naming, because it is not a bug in OneUp at all: **openSUSE can
-break OneUp from underneath it.** The engine reads zypper's output, and zypper's wording
-is not an API — ONEUP-0046 exists precisely because that can change. If a zypper update
-blinds 1.x, that qualifies and ships as a 1.4.x.
-
-Anything else — a misplaced dialog, awkward wording, a missing convenience — waits for
-2.0. No feature work lands on `main` during the freeze.
+**`docs/standards/workflow.md` §1 is canonical for that rule** — the two readings inside
+it, the openSUSE-changes-underneath trigger, and what does not qualify. It is a standard,
+so it outranks this document (`docs/standards/documentation.md` §1.1), and it is where
+somebody deciding *which branch does this go on* will look. Not restated here, so the two
+cannot drift.
 
 **Merge direction:** `main` is merged into `v2` after any 1.4.x release, never the
 reverse. `v2` is not rebased — it is long-lived and shared with the origin remote, so

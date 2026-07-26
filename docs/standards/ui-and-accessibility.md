@@ -5,12 +5,16 @@ distinguish red from green, needs the text twice as large, or reads right-to-lef
 must stay that way without anyone having to remember to check, which is why every rule
 below names the test that enforces it.
 
-**Status:** Reviewed
+**Status:** Draft — cold-eyes loop 1 applied; see §10
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `81b41aa` — every symbol name, count and QSS rule below was measured
-against the tree on 2026-07-26, not recalled.
+**Verified at:** `58ea3bc` — every symbol name, count, QSS rule and contrast ratio below
+was measured against the tree on 2026-07-26, not recalled.
+
+**Sections:** 1 the one-line version · 2 accessible names · 3 never colour alone ·
+4 text that scales · 5 focus · 6 dialogs · 7 themes · 8 right-to-left · 9 traps ·
+10 before you commit · 11 cold-eyes log
 
 **Absorbs** `docs/standards/dialogs.md` (deleted in the same commit) and the standing rules
 of `docs/specs/ONEUP-0028-accessibility.md`. The spec remains the record of *why* and of how
@@ -20,18 +24,19 @@ each invariant is tested; this file is the rule a new widget must obey.
 
 | Rule | Enforced by |
 | --- | --- |
-| Everything focusable has a name a screen reader can read | `tests/gui-smoke.py`, the `unnamed()` sweep — walks every widget, keeps `focusPolicy() != Qt.NoFocus`, fails on a nameless one |
+| Everything focusable has a name a screen reader can read | `tests/gui-smoke.py` INV-1, the `unnamed()` sweep — walks every widget, keeps `focusPolicy() != Qt.NoFocus`, fails on a nameless one |
 | No state is signalled by colour alone | `gui-smoke.py` INV-2 checks |
-| No hard-coded pixel font size | regex over the built stylesheet (INV-3) |
-| Focus never draws a ring or adds a border | §5, and the QSS itself |
-| Dialogs inherit the app theme and open centred on the window | §6 |
-| Every theme passes the same checks | §7 |
+| No hard-coded pixel font size | `gui-smoke.py` INV-3 — a regex over the built stylesheet |
+| Focus never draws a ring or adds a border | `gui-smoke.py` INV-4 — asserts no ring, and that the `:focus` rules are emitted after `:hover`/`:checked` (§5) |
+| Dialogs inherit the app theme and open centred on the window | `gui-smoke.py`'s X11 and Wayland `center_on_parent` assertions (§6) |
+| Every theme passes the same contrast checks | **not enforced yet** — the check is ONEUP-0027's to write (§7) |
 | The window mirrors for Hebrew and Arabic | §8, gate G10 |
 
 ## 2. Accessible names — a name for everything reachable
 
-**Every widget a user can focus reports a non-empty accessible name.** There are 16
-`setAccessibleName` calls and 2 `setAccessibleDescription` calls in `updater.py` today.
+**Every widget a user can focus reports a non-empty accessible name.** The sweep is the
+rule; the current call count is not worth citing, because nothing pins it and the next
+widget changes it.
 
 - A name says **what the control is**, in the words on screen: "Run selected updates", not
   "runBtn".
@@ -52,10 +57,17 @@ Roughly one man in twelve cannot reliably separate red from green — the exact 
 "done / failed" badge reaches for first. **Every colour cue is paired with text or a
 shape.** The three live pairings:
 
+**The on/off switch form is a fixed design point, not a candidate for change.** The
+phone-style `ToggleSwitch` stays; checkboxes are not an alternative to propose. It was
+chosen because on and off read at a glance, and the state *shape* below is what makes that
+true for a colour-blind user — so a redesign may restyle the switch, and may not replace
+it. (User's decision, standing; restated in `docs/design/oneup-2.0.md` §1 as a constraint
+on ONEUP-0064.)
+
 | Cue | Pairing |
 | --- | --- |
 | Switch on / off | A shape drawn in the track opposite the knob — a **vertical bar** when on, an **open circle** when off. Drawn with `QPainter` primitives, not a font glyph: a painted widget has no font-fallback chain, so a missing character would vanish silently. |
-| Tray attention badge | A white `!` inside the amber disc, drawn in `Updater._tray_icon` — the icon differs in *shape*, not only colour. |
+| Tray attention badge | A dark `!` (`#3a2600`) inside the amber disc, drawn in `Updater._tray_icon` — the icon differs in *shape*, not only colour. (The white pen in that method draws the disc's rim.) |
 | Overdue last-run line | The text gains a `⚠` prefix and the word `overdue`. Text is safe here because it is an ordinary `QLabel` in the app's font stack. |
 
 **The test for a new cue:** describe the two states out loud without using a colour word.
@@ -74,8 +86,10 @@ gets small text anyway.
 - **Never set a pixel size on a widget font in code** for on-screen text. The one exception
   in the tree is the tray icon's `!` glyph in `Updater._tray_icon`, which is painted into a
   fixed-size pixmap and is not text the user reads.
-- **Nothing may have a fixed height that text can outgrow.** A button sized to fit 10 pt
-  text clips at 15 pt.
+- **Nothing that contains text may have a fixed height that text can outgrow.** A button
+  sized to fit 10 pt text clips at 15 pt. A wholly painted widget with no text may be
+  fixed-size — `ToggleSwitch` is `setFixedSize(56, 30)` and that is legitimate, because
+  nothing inside it grows with the font.
 
 ## 5. Focus — no ring, no added border
 
@@ -128,10 +142,25 @@ Two measured reasons, both visual bugs rather than preferences:
 - A `border` added on focus **resizes the widget** — measured 33 px → 37 px — so the layout
   twitches as you tab through it.
 
-The cost is stated honestly rather than hidden: this trades away WCAG 2.4.7's visible-focus
-requirement for sighted keyboard-only users. It is a deliberate, documented deviation.
-Screen-reader focus reporting is unaffected — Qt still reports focus; only the sighted cue
-is the hover treatment rather than a ring. `ToggleSwitch.paintEvent` draws no ring either,
+The cost is stated honestly rather than hidden. **WCAG 2.2 SC 2.4.7 (Focus Visible) is
+still met** — it asks only that focus be *visible*, and a colour or fill change is visible.
+What this design forgoes is **SC 2.4.13 (Focus Appearance)**, which asks the indicator to
+be strong enough to find: at least 3:1 between the focused and unfocused states of the
+changed area. Measured over the shipped palettes:
+
+| Control | Rest → focus | Ratio |
+| --- | --- | --- |
+| `#RunBtn` | `#4aa3ff` → `#5cb0ff` (gradient top) | **1.14:1** |
+| `#LinkBtn` | `#4aa3ff` → `#6fb6ff` | **1.23:1** |
+| `#GhostBtn`, light | border `#c4ccd6` → `#4aa3ff` | **1.62:1** |
+| `#GhostBtn`, dark | border `#38414f` → `#4aa3ff` | **3.91:1** |
+
+Only the dark ghost button clears 3:1. **This is a real gap, not a rounding error**, and it
+is the redesign's to close: **ONEUP-0064** must pick a ringless focus treatment that
+measures ≥ 3:1 against its own rest state, in every shipped theme, and add the measurement
+to the test suite. Until it does, the honest statement is that OneUp's focus cue is visible
+but weak. Screen-reader focus reporting is unaffected — Qt still reports focus; only the
+sighted cue is at issue. `ToggleSwitch.paintEvent` draws no ring either,
 and says so in a comment there; the switch's **state shape** (§3) is what carries meaning.
 
 ### 5.5 Ordering, which is easy to get wrong
@@ -173,18 +202,20 @@ Wayland places top-level windows itself and ignores `move()` on an already-mappe
 which is why these helpers exist at all (ONEUP-0049).
 
 **A `QDialog` subclass** — `RepoManagerDialog`, `SettingsDialog`, `RollbackDialog` —
-centres itself in `showEvent`; size is restored from
-`QSettings`, position is re-centred every time it opens:
+calls the module-level helper from its `showEvent`. Position is re-centred every time it
+opens; only `RepoManagerDialog` also restores its *size* (`repos_geometry` in `QSettings`,
+saved in `done()`), and the other two persist nothing:
 
 ```python
 def showEvent(self, event):
     super().showEvent(event)
-    parent = self.parent()
-    if parent:
-        fg = self.frameGeometry()
-        fg.moveCenter(parent.frameGeometry().center())
-        self.move(fg.topLeft())
+    center_on_parent(self)
 ```
+
+**`center_on_parent` is the canonical helper** and the only one that handles Wayland;
+`Updater._center_child` is a one-line wrapper around it for the deferred case below. Do not
+hand-roll `frameGeometry().moveCenter(...)` + `move(...)` — that is the X11-only path
+ONEUP-0049 replaced, and on Wayland it silently does nothing.
 
 **A `QMessageBox` we build and `exec()` ourselves** cannot use `showEvent` cleanly, because
 the box sizes to its content only once shown. Centre it via `Updater._center_child`
@@ -236,9 +267,21 @@ which are also the rules:
   the desired behaviour — a theme that half-applies is worse than one that refuses to load.
 - **Contrast is checked, not eyeballed:** body text at least **4.5:1** against its
   background, and any colour that carries meaning — a border, a badge rim, a switch track —
-  at least **3:1** (WCAG 2.2 SC 1.4.3 and 1.4.11). The check is a computation over the
-  palette dictionary, so it runs in the test suite for every theme including ones added
-  later; it is not a review step somebody can forget.
+  at least **3:1** (WCAG 2.2 SC 1.4.3 and 1.4.11).
+
+  **This check does not exist yet.** No contrast computation runs in `tests/gui-smoke.py`
+  today; writing one is **ONEUP-0027**'s work, and it is the first thing that item should
+  do, because it is what makes "a theme that cannot pass is not shipped" enforceable rather
+  than aspirational. The check is a computation over the palette dictionary, so once written
+  it covers every theme including ones added later — it is not a review step somebody can
+  forget.
+
+  **The two shipped palettes are not both clean, so "pass what the built-ins pass" is the
+  wrong bar.** Measured: light `lastrun` `#8a94a2` is **3.07:1** on `card` `#ffffff` and
+  **2.71:1** on `win` `#eef1f5` — below 4.5:1 for what `QLabel#LastRun` renders as body
+  text. (Dark's equivalent is 5.4:1 and fine.) Either the light palette's `lastrun` is
+  darkened when the check lands, or it is recorded as an accepted exception with a reason —
+  ONEUP-0027 decides which. It must not be discovered by the check and quietly ignored.
 - **The colour-never-alone rule is per-theme.** A theme whose "on" and "off" track colours
   are close is still legible, because §3's shapes carry the state — but a theme must not
   remove or recolour a shape into invisibility against its own track.
@@ -255,11 +298,16 @@ it mirrors nothing else. These four rules are what "nothing else" means in pract
 ### 8.1 Never use a directional stylesheet property
 
 `margin-left`, `margin-right`, `padding-left`, `padding-right`, `border-left`,
-`border-right`. **Qt does not mirror stylesheets**, so each one is a bug that appears only in
-Arabic or Hebrew and is invisible to everyone testing in English.
+`border-right` — **and `text-align: left` / `right`, and `qproperty-alignment`**. Qt does
+not mirror stylesheets, so each one is a bug that appears only in Arabic or Hebrew and is
+invisible to everyone testing in English.
 
-There are **0** in `updater.py` today (verified at `81b41aa`). The rule exists to keep the
-count at zero — use the symmetric form (`margin`, `padding`) or a layout spacer.
+The six margin/padding/border properties are at **0** in `updater.py`. `text-align` is
+**not**: `QPushButton#LinkBtn` in `_QSS` carries `text-align: left`, which will not mirror.
+That is one known site, to be resolved by ONEUP-0032 along with the painting in §8.3 —
+`text-align: center` on the progress bar is fine, because centre has no handedness. The
+rule exists to keep the count from growing: use the symmetric form, or set alignment in
+code from the application's layout direction.
 
 ### 8.2 Never hard-code `AlignLeft` or `AlignRight` for translatable text
 
@@ -269,8 +317,15 @@ window points away from the text it labels.
 
 ### 8.3 Custom painting must apply the direction itself
 
-Qt mirrors layouts, not `paintEvent`. There is exactly one custom-painted widget in the app,
-and it is the one thing that would mirror wrongly:
+Qt mirrors layouts, not `paintEvent`. There is exactly one custom-painted *widget* in the
+layout — `ToggleSwitch` — and it is the one thing that would mirror wrongly. (The tray icon
+is painted too, but it is an icon in a system tray, not a widget in a mirrored layout, so
+it is unaffected.)
+
+**Two places inside `ToggleSwitch` compute from the left edge, not one.** The knob is the
+obvious one; `ToggleSwitch._paint_state_shape` derives its centre the same way, and that
+shape is §3's colour-blind cue — an RTL fix that mirrors the knob and forgets the shape
+breaks the state cue in Arabic and Hebrew while looking correct in English.
 
 ```python
 # ToggleSwitch.paintEvent — the knob position is computed from the LEFT
@@ -329,4 +384,4 @@ today; the RTL work adds them, and this is the form they take.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| — | — | *not yet run* | scheduled as batch 1 (`docs/plans/ONEUP-0057-documentation-set.md`, Task 10) |
+| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §6.2's dialog example was the hand-rolled X11 path ONEUP-0049 replaced and never named `center_on_parent`; the tray glyph is dark, not white; §7's contrast check was described in the present tense although nothing computes it, and its "the built-ins pass" premise is false at 3.07:1; and the focus cue's state-change contrast was measured at 1.14–1.62:1 in three of four cases |

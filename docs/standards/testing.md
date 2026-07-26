@@ -5,12 +5,17 @@ what state the machine it runs on happens to be in, and must not damage that mac
 because the suite runs on the same computer OneUp updates, sometimes while a real update
 is going on.
 
-**Status:** Reviewed
+**Status:** Draft — cold-eyes loop 1 applied; see §11
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `416caa4` — every count, path and symbol name below was measured against
+**Verified at:** `58ea3bc` — every count, path and symbol name below was measured against
 the tree on 2026-07-26, not recalled.
+
+**Sections:** 1 what the suite is · 2 isolation from the machine · 3 the mock-PATH sandbox ·
+4 one invariant, one test · 5 the four correctness invariants · 6 determinism ·
+7 a passing suite is silent · 8 new in 2.0 · 9 traps · 10 before you commit ·
+11 cold-eyes log
 
 ## 1. What the suite is
 
@@ -20,12 +25,16 @@ on a `v*` tag:
 | Suite | File | Size | Asserts on |
 | --- | --- | --- | --- |
 | Engine | `tests/run-tests.sh` | 2,041 lines, **76 scenarios**, 205 assertions | the `@@MARKER@@` lines `update_system.sh` prints |
+
+"205 assertions" is the figure the suite's own `Passed:` line reports. The source carries
+185 `check*` call sites; two scenarios count a pass or fail by hand. Cite the reported
+tally, not a grep.
 | GUI | `tests/gui-smoke.py` | 1,361 lines, 283 assertions | the window's state after being fed those same marker lines |
 | Version bump | `tests/bump-test.py` | 95 lines, 6 assertions | that `bump.py` rewrites all six version sites |
 
 They meet in the middle: the engine suite proves the engine **emits** a marker, the GUI
 suite proves the window **reacts** to it. Neither alone proves the pair works, which is why
-a marker change touches both (`docs/reference/marker-protocol.md`, once Task 9 lands).
+a marker change touches both (`docs/reference/marker-protocol.md`).
 
 The GUI suite exits **77** when PySide6 is absent, and both `local-CI.sh` and
 `.github/workflows/release.yml` read that as *skipped*, not *failed* — the same
@@ -48,7 +57,7 @@ ONEUP_STOP_FILE="${ONEUP_STOP_FILE:-$mockdir/stop.request}"
 
 Both defaults bit for real, which is why the rule is not theoretical:
 
-- The package-lock probe reads `/run/zypp.pid`. **40 scenarios failed** merely because the
+- The package-lock probe reads `/run/zypp.pid`. **40 tests failed** merely because the
   machine happened to be running zypper at the time — precisely the moment somebody is
   likely to be working on an update tool.
 - `run.state` defaults to the user's own, and `cleanup` deletes the file it owns. Running
@@ -79,13 +88,31 @@ No test in this repository may:
 - reach the network, including a package mirror, GitHub, or a DNS lookup;
 - write outside its own `mktemp -d` directory or the redirected `HOME`.
 
-The engine suite creates **75 throwaway directories and removes 75**. A scenario adds
-`rm -rf "$d"` as its last line, in the same block, not in a shared teardown — a shared
-teardown does not run when a scenario is commented out during debugging.
+**Two known exceptions exist today, and both are defects rather than carve-outs.** They
+are named here because a rule with a silent exception is worse than a rule with a stated
+one:
+
+- **The GUI suite does reach the network.** `Updater.__init__` calls `_check_app_update`
+  unconditionally, which issues a `QNetworkAccessManager` GET to `api.github.com` for the
+  latest release. `tests/gui-smoke.py` constructs the window **49 times** and stubs
+  nothing, so a run makes 49 live requests — rate-limitable, and silently dependent on a
+  working connection. Filed as **ONEUP-0067**.
+- **The engine suite does not redirect `HOME`.** `update_system.sh` runs
+  `mkdir -p "$LOG_DIR"` with `LOG_DIR="$HOME/Documents/update-logs"`, so every scenario
+  creates that directory on the real machine. The three `ONEUP_*` paths are redirected;
+  `HOME` is not. Filed as **ONEUP-0058**.
+
+The engine suite creates **75 throwaway directories and removes 75** — one per scenario
+except the keep-alive-guard scenario, which needs none. A scenario adds `rm -rf "$d"` as
+its last line, in the same block, not in a shared teardown — a shared teardown does not run
+when a scenario is commented out during debugging.
 
 ## 3. The mock-PATH sandbox
 
-Every engine scenario builds a directory of fake system tools and prepends it to `PATH`.
+Almost every engine scenario — 75 of 76 — builds a directory of fake system tools and
+prepends it to `PATH`. (The exception is the keep-alive-guard scenario, which executes a
+`sed`-extracted fragment of the engine rather than the engine, and is safe only because its
+`kill -0` guard fails before the body runs. Nothing asserts that; see §2.1.)
 `setup_common` in `tests/run-tests.sh` supplies the ones every scenario needs — `sudo`,
 `systemctl`, `snapper`, `notify-send`, `flatpak`, `fwupdmgr` — and the scenario overwrites
 whichever it needs to behave differently, usually `zypper`.
@@ -102,8 +129,8 @@ Three rules for writing a mock:
    [[ "$*" == *dup* || "$*" == *update* ]] && { echo "BUG: mutated in --check" >&2; exit 99; }
    ```
 
-   There are five such traps today — in the `--check`, cache-clean, both `--size=` and
-   passwordless-drop-in scenarios. A silent wrong call is a test that passes for the wrong
+   There are **six** such traps today — in the two `--check` scenarios, the cache-clean
+   scenario, both `--size=` scenarios and the passwordless-drop-in one. A silent wrong call is a test that passes for the wrong
    reason; an exit-99 is a test that says what it caught.
 3. **Model the mechanism when the mechanism is the bug.** The one-prompt test's mock `sudo`
    (scenario: "a full run asks for the password exactly once") keeps **one timestamp file
@@ -147,7 +174,7 @@ A test that sleeps long enough "on this machine" is a test that fails on a loade
 runner and passes again on a re-run — the worst kind, because a flake trains people to
 re-run rather than read.
 
-Both suites already do this correctly, and new tests copy the pattern:
+Both suites do this nearly everywhere, and new tests copy the pattern:
 
 ```bash
 # tests/run-tests.sh — wait for the thing, with a ceiling
@@ -164,10 +191,17 @@ while time.monotonic() < deadline:
 ```
 
 A bare `sleep` is acceptable only **inside a mock**, where the delay is the thing being
-simulated — the mirror that stalls (`sleep 30`, in the slow-source scenario), the askpass
-that never returns (`sleep 300`, in the orphaned-dialog scenario), the transaction slow
-enough for the keep-alive to be mid-sleep when it ends (`sleep 1`, in the keep-alive
-scenario). Those are fixtures, not waits.
+simulated — for example the mirror that stalls (`sleep 30`, in the slow-source scenario),
+the askpass that never returns (`sleep 300`, in the orphaned-dialog scenario), the
+transaction slow enough for the keep-alive to be mid-sleep when it ends (`sleep 1`, in the
+keep-alive scenario). Those are fixtures, not waits.
+
+**One scenario breaks this rule and is the known exception**: the orphaned-dialog scenario
+stages two background processes and then waits `sleep 0.5` **in the scenario body** before
+`pgrep`-ing for their children. Worse, when that race is lost it takes a `SKIP` branch that
+counts neither a pass nor a failure — so a run reported as green can quietly have made two
+fewer assertions than the last one. Filed as **ONEUP-0068**. Do not copy the pattern; poll
+for the child instead.
 
 Determinism also means: no dependence on wall-clock time of day, on the order a real
 filesystem returns entries, or on any network at all.
@@ -188,21 +222,34 @@ $ echo $?
 0
 ```
 
-— and in between, **28 tracebacks**, every one of them:
+— and in between, **about thirty tracebacks** (measured four times at `58ea3bc`: 30, 30,
+30, 31 — the count varies with teardown and garbage-collection order, so it is not a fixed
+number to assert on), every one of them:
 
 ```
 RuntimeError: libshiboken: Internal C++ object (PySide6.QtCore.QProcess) already deleted.
 ```
 
-They come from the `finished` lambda in `Updater._query_auth_status` firing after Python
-has dropped the last reference to the `QProcess`, so the C++ object is gone while the wrapper is not. The
-suite is genuinely passing; the tracebacks are teardown, not failure. That is precisely the
-problem — they are indistinguishable at a glance from 28 real errors. Filed as
-**ONEUP-0062**, to be fixed in 2.0.
+They come from the `finished` lambda in `Updater._query_auth_status`. The cause is the
+opposite of the obvious one: that `QProcess` **is** parented (`QProcess(self)`), and
+parenting is what does it — the test drops the window, Qt deletes the child C++ object, and
+the still-connected `finished` signal then fires into a Python wrapper whose C++ side is
+gone. The suite is genuinely passing; the tracebacks are teardown, not failure. That is
+precisely the problem — they are indistinguishable at a glance from thirty real errors.
+Filed as **ONEUP-0062**, to be fixed in 2.0.
 
-Two consequences for new tests: an expected-error test asserts on the error and swallows
-the output rather than letting it print, and a test that cannot be made quiet says why in a
-comment, with a roadmap id.
+Two consequences for new tests. **An expected-error test asserts on the error and swallows
+the output** rather than letting it print:
+
+```python
+try:
+    w.handle_line(bad)
+    check(f"malformed line handled: {bad[:22]!r}", True)
+except Exception as exc:            # the assertion IS that this does not happen
+    check(f"malformed line handled: {bad[:22]!r} ({exc})", False)
+```
+
+And **a test that cannot be made quiet says why in a comment, with a roadmap id.**
 
 ## 8. New in 2.0: unit tests become possible
 
@@ -220,11 +267,12 @@ with a line and inspect what it returns without running a whole scenario. The Py
 - **Do not unit-test through the mock PATH.** If a function can be called directly, call it
   directly; the sandbox is for things that must spawn a process.
 
-The 2.0 release gates (`docs/design/oneup-2.0.md` §7) add four suite-level obligations:
+The 2.0 release gates (`docs/design/oneup-2.0.md` §7) add **six** suite-level obligations:
 **G1** the engine suite passes with *no assertion changed*; **G2** v1 and v2 emit the same
-marker stream under identical mocks; **G4** a full run raises exactly one password prompt;
-**G5** the engine imports no Qt, enforced by test; **G10** the GUI suite passes with the
-layout direction forced right-to-left.
+marker stream under identical mocks; **G3** the GUI suite is green with the window driving
+the new engine; **G4** a full run raises exactly one password prompt; **G5** the engine
+imports no Qt and runs with PySide6 absent, enforced by test; **G10** the GUI suite passes
+with the layout direction forced right-to-left.
 
 ## 9. Traps
 
@@ -253,7 +301,7 @@ layout direction forced right-to-left.
 - [ ] Its mock fails loudly (exit 99) on the behaviour it is guarding against.
 - [ ] It waits by polling for a condition, not by sleeping for a duration.
 - [ ] It fails before the fix and passes after — verified, not assumed.
-- [ ] A green run of the whole suite prints no tracebacks it did not already print.
+- [ ] A green run of the whole suite prints no traceback of a *new shape* (the count of the known ONEUP-0062 ones varies run to run; a new message is the signal).
 - [ ] If it locks in a spec invariant, the spec names it by file.
 - [ ] `./local-CI.sh` is green.
 
@@ -261,4 +309,4 @@ layout direction forced right-to-left.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| — | — | *not yet run* | scheduled as batch 1 (`docs/plans/ONEUP-0057-documentation-set.md`, Task 10) |
+| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §2.3's no-network rule was flatly false (the GUI suite makes 49 live GitHub requests per run, now ONEUP-0067), the traceback count was neither 28 nor fixed, its stated cause was backwards, and "both suites already do this correctly" was contradicted by a `sleep 0.5` and a silent SKIP branch in the suite itself (ONEUP-0068) |

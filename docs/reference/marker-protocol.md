@@ -4,12 +4,16 @@
 separate programs, and this file is the entire vocabulary they share — one line of text at
 a time, in one direction.
 
-**Status:** Reviewed
-**Kind:** doc
+**Status:** Draft — cold-eyes loop 1 applied; see §9
+**Kind:** reference
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `b3ede2d` — every marker, field and behaviour below was read out of
+**Verified at:** `58ea3bc` — every marker, field and behaviour below was read out of
 `update_system.sh` and `updater.py` on 2026-07-26, not recalled.
+
+**Sections:** 1 the shape of a line · 2 reading order · 3 the markers · 4 the ones with
+traps · 5 changing the contract · 6 traps · 7 drift in the engine's header comment ·
+8 the two state files · 9 cold-eyes log
 
 This is a **reference**, not a standard: it records a contract, not a rule about how to
 work. Where it and the engine's own header comment disagree, **this document is right** —
@@ -53,12 +57,13 @@ middle of a marker line. Every parser that unpacks a fixed number of fields or c
 the read slot would abort parsing and silently drop the rest of the run's markers —
 the run would appear to freeze while it was in fact still updating.
 
-Two markers carry that guard explicitly (`STEP_BEGIN`, `PROGRESS`, and `REFRESH` — see
-their notes below); the rest read fields defensively with `len(parts) > n` tests.
+Three markers carry that guard explicitly — `STEP_BEGIN`, `PROGRESS` and `REFRESH`, the
+three that unpack a fixed shape (see their notes below); the rest read fields defensively
+with `len(parts) > n` tests.
 
 ## 2. Reading order
 
-Three channels use this protocol, and only the first goes through `handle_marker`:
+Four channels use this protocol, and only the first goes through `handle_marker`:
 
 | Channel | How the engine is invoked | Who reads it |
 | --- | --- | --- |
@@ -102,7 +107,7 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@DONE@@` | `ok` *or* `errors` *or* `stopped` | the exit paths | `handle_marker` |
 
 **Every marker the engine emits is read, and every marker the window reads is emitted.**
-Checked both directions at `b3ede2d`; the two side-channel markers (`SIZE`, `AUTH`) are the
+Checked both directions at `58ea3bc`; the two side-channel markers (`SIZE`, `AUTH`) are the
 only ones absent from `handle_marker`, and that is by design.
 
 ## 4. The ones with traps
@@ -276,6 +281,23 @@ plus this document
 Never both at once. A rewrite and a contract change in the same step means a failing test
 cannot tell you which one broke it.
 
+### 5.2 What the codes must define, when they land
+
+ONEUP-0032 turns `HINT` and `REMEDY` payloads into codes, and three questions have to be
+answered *in that spec* rather than discovered during implementation. They are reserved
+here so the reference is where a reader looks for them:
+
+1. **The shape of a code** — a stable identifier, ASCII, no spaces or `|`, chosen so it
+   never needs translating and never reads as prose.
+2. **Where the code→sentence map lives** — in the window, per
+   `docs/standards/wording-and-translation.md` §5, and how a code with no entry renders.
+   **It must render as something readable**, never as the raw token and never as an empty
+   banner; a code the window does not know about is a bug in the window, not in the run.
+3. **Who allocates one**, and the rule that a code is never reused for a different meaning
+   once shipped — the same discipline as a roadmap ID.
+
+Until that lands, the payloads are English prose (§4.10, §5.1).
+
 ## 6. Traps
 
 - **Adding a field in the middle.** Positions are the whole protocol. Append, or rename.
@@ -295,7 +317,7 @@ cannot tell you which one broke it.
 ## 7. Known drift in the engine's own header comment
 
 `update_system.sh` carries an abbreviated marker list in its header. It is convenient and
-mostly right, but **three entries are inaccurate at `b3ede2d`**, and a reader who trusts
+mostly right, but **three entries are inaccurate at `58ea3bc`**, and a reader who trusts
 them writes a wrong parser:
 
 | Entry | The header says | Actually |
@@ -309,8 +331,30 @@ of the three is a defect in running code. **ONEUP-0066** tracks carrying the cor
 into the Python engine, where the rewrite replaces this comment anyway. Until then, this
 document is the authority.
 
-## 8. Cold-eyes loop log
+## 8. The two state files — a contract this protocol does *not* cover
+
+`~/.local/state/oneup/run.state` and `stop.request` are also a contract between the two
+halves, and neither is a marker: the window **writes** them, which nothing in §1 permits.
+They are named here because the obvious place to look for "how do the halves agree" is
+this file, and finding nothing would suggest there is nothing to agree on.
+
+- **`run.state`** — written by the engine when a run commits, cleared on exit. Carries the
+  pid, the log path and the selected steps, so a window opened mid-run can find that run
+  and follow its log (`Updater._attach_to_running_engine`).
+- **`stop.request`** — created by the *window* to ask for a stop. The engine reads it only
+  at safe boundaries (`docs/standards/security.md` §6). A request older than `run.state` is
+  a leftover and is ignored.
+
+Both paths are overridable — `ONEUP_RUN_STATE`, `ONEUP_STOP_FILE` — in the **engine only**;
+the window resolves them from `Path.home()` and is isolated in tests by rewriting `HOME`
+(`docs/standards/files-and-naming.md` §5).
+
+**Their field layout is not pinned anywhere, including here.** The Python engine must
+reproduce it exactly or run-following breaks silently, so ONEUP-0054's spec has to write it
+down before the rewrite — either in that spec, or as a new subsection added here.
+
+## 9. Cold-eyes loop log
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| — | — | *not yet run* | scheduled as batch 1 (`docs/plans/ONEUP-0057-documentation-set.md`, Task 10) |
+| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document was one of three lanes the breadth pass accepted clean, and its share was additive rather than corrective: the `HINT`/`REMEDY` code vocabulary (§5.2) and the two state files (§8) were relied on by other documents and defined by none |

@@ -5,13 +5,17 @@ asks the user for permission, what it must check before passing a value to a roo
 and what may be written to a log — because OneUp's whole job is running privileged
 commands, and every bug in this file is a root bug.
 
-**Status:** Reviewed
+**Status:** Draft — cold-eyes loop 1 applied; see §11
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `84fd051` — every count, line number and rule below was measured against
-the tree on 2026-07-26, not recalled. Where a claim was checked and turned out different
-from the project's own prior description, the correction is stated in place.
+**Verified at:** `58ea3bc` — every count and rule below was measured against the tree on
+2026-07-26, not recalled. Where a claim was checked and turned out different from the
+project's own prior description, the correction is stated in place.
+
+**Sections:** 1 the privilege boundary · 2 one authentication per run · 3 attributable
+prompts · 4 validate at the boundary · 5 the passwordless drop-in · 6 cooperative
+stopping · 7 logs · 8 supply chain · 9 traps · 10 before you commit · 11 cold-eyes log
 
 ---
 
@@ -23,12 +27,21 @@ This is rule one. Everything else in this document exists to keep it true.
 contains **zero** `sudo` invocations. Root work is delegated, never assumed.
 
 **1.2 — The engine is the only thing that runs privileged commands during an update.**
-`update_system.sh` holds 22 `sudo` calls at command position, 21 of them through
-`sudo_capture` (§2). The GUI launches the engine with `QProcess` and reads its output; it
-never launches `zypper` itself.
+Measured at `58ea3bc`, `update_system.sh` makes **34** privileged invocations: **14**
+through `sudo_capture` (§2.2) and **20** direct `sudo` calls at command position. (A
+thirty-fifth and thirty-sixth `sudo` appear *inside* `sudo_capture` itself — they are the
+helper, not call sites.) The direct calls are the streaming and fire-and-forget ones that
+**must** stay at top level: `sudo … | tee` keeps sudo as the caller's own child, which is
+exactly what §2.2 requires.
 
-**1.3 — The engine never imports Qt.** Measured: **zero** Qt or PySide references in
-`update_system.sh`. This is gate **G5** in the 2.0 design, and it is what keeps the split
+The GUI launches the engine with `QProcess` and reads its output; it never launches a
+**privileged** `zypper`. It does make one direct, unprivileged call — `read_repos` runs
+`zypper --non-interactive lr -u` to list repositories, which needs no root.
+
+**1.3 — The engine never imports Qt.** It is Bash, so it imports nothing; measured, the
+only occurrences of a Qt name in `update_system.sh` are two comments mentioning
+`QProcess`. The property that matters, and the one gate **G5** tests, is that the engine
+runs with **PySide6 absent**. This is gate **G5** in the 2.0 design, and it is what keeps the split
 honest — the moment the privileged half can draw a window, "the GUI is not root" stops
 being structural and becomes a promise.
 
@@ -47,6 +60,16 @@ update run:
 | `Updater.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped |
 | `Updater.rollback` | `pkexec sh -c "snapper rollback <id> && systemctl reboot"` | `id` must satisfy `str.isdigit()` |
 
+One more privileged action does not go through `pkexec` at all and must not be forgotten
+when this list is checked:
+
+| Site | Command | Guard |
+| --- | --- | --- |
+| `Updater.restart_now` | `QProcess.startDetached("systemctl", ["reboot"])` — argv form | **no arguments, so nothing to validate**; logind's own polkit policy decides whether an active local session may reboot |
+
+It is listed because the *shape* is the risk: a future `startDetached` that interpolates a
+value would be a privileged call with no validation and no `pkexec` to make it obvious.
+
 **1.5 — The rule that follows from 1.4.** Anything belonging to *an update run* goes
 through the engine, always. `pkexec` is reserved for short administrative actions the user
 explicitly asks for, outside a run. A new privileged call in the GUI is not automatically
@@ -63,7 +86,9 @@ without validation is a root shell injection, full stop.
 
 **2.1 — The engine authenticates once, up front.** `sudo_init` in `update_system.sh`
 raises a single graphical prompt via `sudo -A -v`, then starts a keep-alive that refreshes
-the credential every 50 seconds for the life of the run.
+the credential every 50 seconds for the life of the run. **Zero** prompts, and no
+keep-alive at all, when §5's passwordless drop-in is active — `sudo_init` probes for it
+and returns early.
 
 **2.2 — Privileged output is captured with `sudo_capture`, never a subshell.** This is the
 most expensive trap in the project's history and the reason the helper exists:
@@ -114,8 +139,13 @@ new background helper inherits this rule.
 A root password prompt the user cannot attribute is indistinguishable from a phishing
 dialog, and the correct response to one is to refuse it. So:
 
-**3.1 — Never bare `sudo` in a context that can prompt.** Use `sudo -A` with
-`SUDO_ASKPASS` set, so the graphical helper appears instead of a silent block on stdin.
+**3.1 — Attribution comes from the exported environment, and the *authenticating* call
+carries it explicitly.** Exactly one `sudo` in the engine passes `-A` and `-p`:
+`sudo_init`'s `sudo -A -v`, which is the call that actually prompts. The other 20 are
+plain `sudo` **on purpose** — they inherit the exported `SUDO_ASKPASS` and `SUDO_PROMPT`
+(3.2, 3.3), so if any of them ever has to ask, the prompt is graphical and labelled
+anyway. That is why the export is mandatory rather than a convenience: it is what makes
+"every prompt is attributable" true of a call site that never mentions it.
 `ASKPASS` defaults to `/usr/libexec/ssh/ksshaskpass` and is overridable via
 `ONEUP_ASKPASS` so tests point it at a mock (the `ASKPASS=` constant near the top of
 `update_system.sh`).
@@ -157,7 +187,8 @@ trustworthy. They are not:
   anyone ever put in a snapshot description.
 - Repository aliases come from files under `/etc/zypp/repos.d/`.
 
-**4.1 — The three live guards**, all verified in place:
+**4.1 — The three live guards**, all verified in place. Note each one is a `fullmatch`
+or an exact test, never a `search` — a `re.match` would accept trailing junk:
 
 ```python
 # updater.py, the module-level _ALIAS_RE — repo aliases. The first character
@@ -165,6 +196,7 @@ trustworthy. They are not:
 # space, quote, ';', '&', '$' or backtick is permitted, so it cannot break out
 # of the sh -c string either.
 _ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
+# …used as: if not _ALIAS_RE.fullmatch(alias): return None
 
 # Updater.rollback — the rollback target is interpolated into a root shell.
 if not target.isdigit(): return          # isdigit() also rejects empty
@@ -211,8 +243,8 @@ not in a keyring, not in a file, not in memory.
 | Entry | Why |
 | --- | --- |
 | `zypper` (any arguments) | the update itself |
-| `snapper` | snapshot create/list |
-| `flatpak` | flatpak updates |
+| `snapper` (any arguments) | snapshot create/list — the rule adds the bare resolved path, so it also permits `snapper delete` |
+| `flatpak` (any arguments) | flatpak update/uninstall — likewise unrestricted by subcommand |
 | `systemctl stop packagekit` | releases the package lock |
 | `env LC_ALL=C zypper *` | the engine pins the locale via `sudo env …`, and sudo matches the rest of the argv literally, so the wrapper form needs its own entry |
 
@@ -252,7 +284,12 @@ what this cost in practice.
 
 **6.2 — Stop requests are honoured at safe boundaries only**: between steps, and after the
 repo refresh but *before* a transaction starts. The engine then skips the remaining steps
-and still prints its summary, so the user sees what did happen.
+and still prints its summary, so the user sees what did happen, and reports
+`@@DONE@@|stopped` — neither success nor failure.
+
+**A stop request older than `run.state` is a leftover and is ignored.** Staleness is
+judged by modification time rather than by deleting the file at startup, because deleting
+would swallow a stop the user clicked a moment earlier.
 
 **6.3 — A run must survive the GUI going away.** The logging `exec` uses `tee -a -p`
 (`--output-error=warn-nopipe`). Without `-p`, quitting the GUI kills `tee`, which `SIGPIPE`s
@@ -285,7 +322,7 @@ choice, not a reflex `echo "$captured"`.
 **7.4 — Anything leaving the machine is scrubbed.** The "Copy diagnostics" bundle
 (`build_diagnostics` in `updater.py`) replaces the home path with `~` and the hostname
 with `<host>` **across the whole payload, log body included**, and trims an oversized log to
-its last `DIAG_LOG_CAP` (200 KB, tail-first, because errors sit at the end). A user pasting
+its last `DIAG_LOG_CAP` (200 KiB of text, tail-first, because errors sit at the end). A user pasting
 that into a public issue tracker must not thereby publish their username and machine name.
 Any future "share this" feature inherits the rule.
 
@@ -349,27 +386,32 @@ root**, and must never call `zypper dup`/`update`. The mock in the test suite ex
 does, and a separate sentinel test asserts `--check` invokes `sudo` **zero** times. This is
 what makes the background timer and the tray check safe to run unattended.
 
-**9.6 — A test must not damage the machine it runs on.** Scenarios that invoke the engine
-directly must redirect `ONEUP_ZYPP_PID_FILE`, `ONEUP_RUN_STATE` and `ONEUP_STOP_FILE`.
-Both defaults have bitten for real: the lock probe reads `/run/zypp.pid`, so 40 tests once
-failed merely because the machine was running zypper — precisely when someone is working on
-an update tool; and `run.state` defaults to the user's own, which `cleanup` deletes as its
-owner, so running the suite during a real update **deleted that run's record** (ONEUP-0045).
-See `docs/standards/testing.md`.
+**9.6 — A test must not damage the machine it runs on.** Scenarios that invoke the engine —
+or any code extracted from it — outside `run_engine` must redirect `ONEUP_ZYPP_PID_FILE`,
+`ONEUP_RUN_STATE` and `ONEUP_STOP_FILE` by hand. Both defaults have bitten for real; the
+incidents and the rule are `docs/standards/testing.md` §2, which is canonical.
 
 ---
 
 ## 10. Before you commit
 
-- [ ] No new `sudo` in the GUI; any new `pkexec` argued against §1.5 and argv-form if possible.
+- [ ] No new `sudo` in the GUI; any new `pkexec` — or privileged `startDetached` — argued against §1.5 and argv-form if possible.
 - [ ] Every value reaching a privileged command validated by shape at the boundary (§4), failing closed.
 - [ ] No privileged call inside a subshell — captured with `sudo_capture`, or the Python equivalent from §2.3.
 - [ ] Any new background helper watches the engine's pid and dies with it (§2.4).
-- [ ] Every prompt attributable: `-A` with an exported `SUDO_ASKPASS`, and a labelled `-p` (§3).
+- [ ] `SUDO_ASKPASS` and `SUDO_PROMPT` still **exported**, and any new *authenticating* call labelled with `-p` (§3).
 - [ ] No new code path that signals the engine during a transaction (§6.1).
-- [ ] Nothing captured from a privileged command echoed to the log unreviewed (§7.3).
+- [ ] Nothing captured from a privileged command echoed to the log unreviewed — no bare `echo "$CAPTURED"` of a `sudo_capture` variable (§7.3).
 - [ ] `--check` still authenticates zero times (§9.5).
 - [ ] Tests redirect the three state-file overrides (§9.6).
+
+---
+
+## 11. Cold-eyes loop log
+
+| Loop | Date | Findings | Outcome |
+| --- | --- | --- | --- |
+| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §1.2's "21 of 22 through `sudo_capture`" was wrong (14 of 34) and contradicted §2.2's own top-level-`sudo` rule; "never launches `zypper` itself" was false (`read_repos`); §3.1 demanded `-A -p` on every call when 20 of 21 deliberately inherit it from the exported environment; and `Updater.restart_now`'s `systemctl reboot` was missing from the privileged-site inventory |
 
 ---
 
@@ -380,3 +422,4 @@ See `docs/standards/testing.md`.
 - `docs/standards/dependencies.md` — version policy and the incompatibility ledger
 - `docs/reference/marker-protocol.md` — the engine↔GUI contract these guards validate
 - `docs/design/oneup-2.0.md` §7 — gate G5, the engine importing no Qt
+

@@ -4,18 +4,24 @@
 to get, how to run another program safely, and what to do when something fails — so that
 2.0 code looks like it was written by one person who was paying attention.
 
-**Status:** Reviewed
+**Status:** Draft — cold-eyes loop 1 applied; see §12
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `7fce9d6` — every version, line number and count below was measured on
-2026-07-26, not recalled. Where a lookup was needed the source is named.
+**Verified at:** `58ea3bc` — every version and count below was measured on 2026-07-26,
+not recalled. Where a lookup was needed the source is named.
+
+**Sections:** 1 the Python floor · 2 lint configuration · 3 type hints · 4 module size ·
+5 subprocess discipline · 6 Qt idioms · 7 error handling · 8 comments · 9 reuse ·
+10 traps · 11 before you commit · 12 cold-eyes log
 
 ---
 
 ## 1. The Python floor: **3.13**
 
-**You may write code that requires Python 3.13.** You may not require 3.14.
+**You may write code that requires Python 3.13.** You may not require 3.14 — not because
+3.14 is unsupported (§1.2 shows it is inside PySide6's ceiling), but because the *floor*
+is what every supported target actually ships, and both ship 3.13.
 
 ### 1.1 How that was established
 
@@ -50,9 +56,10 @@ syntax. It is not supported, so we do not carry that weight.
 
 PySide6 — the only third-party thing the GUI needs — declares `requires_python:
 <3.15,>=3.10` (measured against PyPI for 6.11.1; see `docs/standards/dependencies.md`).
-So **3.14 is fine and 3.15 is not**, until PySide6 raises its own ceiling. This matters
-for ONEUP-0004's pending CI bump: 3.13 → 3.14 is inside the ceiling; a later jump to 3.15
-is not, and must wait for PySide6.
+So **3.14 is permitted by the ceiling and 3.15 is not**, until PySide6 raises it. Ceiling
+and floor are different questions: CI and the AppImage may *run* 3.14, while code may not
+*require* it (§1). This is what ONEUP-0004's pending CI bump turns on — 3.13 → 3.14 is
+inside the ceiling; a later jump to 3.15 is not, and must wait for PySide6.
 
 ### 1.3 What the floor lets you write
 
@@ -95,13 +102,19 @@ local-CI.sh, the Lint gate:
 
 That is a real problem and the reason this section exists. A developer who runs the
 obvious command — `ruff check .` — gets **ruff's default rule set**, which is not `F,B`.
-So the same tool, on the same code, gives one answer locally and a different one in CI.
-Nobody is warned; the local run simply passes or fails for different reasons.
+So the same tool, on the same code, gives one answer to a bare invocation and a different
+one to the gate. Nobody is warned; the local run simply passes or fails for different
+reasons.
+
+**Note what "the gate" means here.** Lint runs in `local-CI.sh` **only**. GitHub CI
+(`.github/workflows/release.yml`) runs the three test suites and the AppImage build — it
+has never run `ruff` or `shellcheck`. So the divergence is `ruff check .` versus
+`./local-CI.sh`, not versus CI; a lint failure is caught before a push or not at all.
 
 **The settled decision:** 2.0 adds a `pyproject.toml` at the repo root carrying the rule
-set, so that a bare `ruff check` and CI agree. `local-CI.sh` then drops its `--select`
-flags and calls plain `ruff check`. Writing that file is 2.0 work, not this document's —
-but the content is settled here so the implementer has nothing to invent:
+set, so that a bare `ruff check` and the gate agree. `local-CI.sh` then drops its
+`--select` flags and calls plain `ruff check`. Writing that file is 2.0 work, not this
+document's — but the content is settled here so the implementer has nothing to invent:
 
 ```toml
 [tool.ruff]
@@ -110,28 +123,66 @@ line-length = 100
 exclude = ["screenshots"]
 
 [tool.ruff.lint]
-select = ["F", "B", "S", "E", "W", "I", "UP", "RUF"]
+select = ["F", "B", "S", "E", "W", "I", "UP", "RUF", "BLE"]
 # F  pyflakes — real bugs (undefined name, unused import)
 # B  bugbear — mutable default args, loop-variable capture
 # S  bandit — subprocess/shell safety; see §5 and the existing noqa comments
 # E,W pycodestyle; I import sorting; UP pyupgrade — keeps idioms at the floor
 # RUF ruff's own, incl. RUF100 which flags a noqa that no longer suppresses anything
+# BLE blind-except — enabled because tests/gui-smoke.py already carries 8
+#     `# noqa: BLE001` comments; without BLE, RUF100 flags every one of them
 ```
 
-**Why `line-length = 100` and not ruff's default 88:** measured. At 100, exactly **13
-lines** in the tree are too long (5 in `updater.py`, 8 across `bump.py` and
-`tests/gui-smoke.py`); the longest line in the codebase is 106 characters. At 88, **135
-lines** in `updater.py` alone would be flagged. 100 records what the code already does
-and leaves 13 lines to wrap; 88 would be a reformatting project disguised as a lint
-setting, and global rule 11 forbids drive-by reformatting.
+**Why `line-length = 100` and not ruff's default 88:** measured at `58ea3bc`. At 100,
+**14** lines in the tree are too long — 5 in `updater.py`, 8 in `tests/gui-smoke.py`, 1 in
+`tests/bump-test.py` (`bump.py` has none); the longest is 115 characters, in
+`tests/gui-smoke.py`. At 88, **135 lines in `updater.py` alone** would be flagged. 100
+records what the code already does and leaves 14 lines to wrap; 88 would be a reformatting
+project disguised as a lint setting. Reformatting code you are not otherwise changing is
+not this project's habit: every changed line should trace to the change you set out to
+make.
 
-**Why `S` is in the set even though CI does not run it today:** there are already **six**
-`# noqa: S603` / `S607` comments in `updater.py` (lines 580, 583, 585, 985, 1925 and
-3333). They suppress rules **that are not currently enabled**,
-so today they do nothing at all — they read as safety review but no tool is checking.
-Enabling `S` makes them mean what they appear to mean. **Do not delete them** on the
-grounds that they are inert; they are inert because the config is missing, which is the
-thing being fixed.
+**Why `S` is in the set even though the gate does not run it today:** `updater.py` already
+carries **six** `# noqa: S603` / `S607` comments — three in `run_kwin_script`, and one each
+on the `subprocess.run` in `read_repos` and the two `subprocess.Popen` calls in `Updater`.
+They suppress rules **that are not currently enabled**, so today they do nothing at all —
+they read as safety review, but no tool is checking. Enabling `S` makes them mean what they
+appear to mean. **Do not delete them** on the grounds that they are inert; they are inert
+because the config is missing, which is the thing being fixed.
+
+### 2.1.1 What adopting it actually costs — measured, not estimated
+
+**The config above does not go green on today's tree.** Run against `58ea3bc` with ruff
+0.15.11 it reports **47 errors**:
+
+| Rule | Count | What it is |
+| --- | --- | --- |
+| `E501` | 14 | the long lines above |
+| `S607` | 11 | partial executable path (`"systemctl"`, not `/usr/bin/systemctl`) |
+| `S603` | 6 | `subprocess` call without `shell=False` proof |
+| `E702` | 4 | two statements on one line, separated by `;` |
+| `RUF100` | 3 | `noqa` comments that suppress nothing (below) |
+| `RUF005`, `RUF003`, `RUF007` | 6 | literal concatenation, ambiguous unicode in a comment, `zip` instead of `pairwise` |
+| `S103`, `S108`, `BLE001` | 3 | a permissive file mode, a hard-coded `/tmp` path, and one unsuppressed blind `except` — all in tests |
+
+**Leaving `BLE` out of the set costs 8 more.** Without it, every one of
+`tests/gui-smoke.py`'s eight `# noqa: BLE001` comments becomes a `RUF100` "unused noqa",
+taking the total to 54 — a rule set that punishes the code for suppressing a rule the rule
+set declined to enable. That is why `BLE` is in the list above.
+
+**Three of the six `# noqa` comments do not work where they sit** — a trap worth naming,
+because it is invisible until `S` is on. Ruff anchors `S607` to the line carrying the
+executable literal, which is the line *after* the `subprocess.run(` / `subprocess.Popen(`
+that the comment is attached to. So the directive suppresses nothing (`RUF100: unused
+noqa`) **and** the underlying `S607` fires unsuppressed — two errors where the author
+intended none. The three in `run_kwin_script` are fine; the ones in `read_repos` and the
+two `Updater` `Popen` calls are not. **Re-anchor them to the reported line as part of
+enabling `S`.**
+
+Adopting the config is therefore a small, bounded piece of work — wrap 14 lines, re-anchor
+3 comments, resolve or explicitly ignore the rest — and **not** a one-line config drop.
+Filed as **ONEUP-0063**. An implementer who adds the file without doing the rest turns the
+gate red on the next commit.
 
 ### 2.2 Shell code
 
@@ -169,12 +220,11 @@ The reason is not taste. It is measured, and it is the reason ONEUP-0034 exists:
 | Thing | Lines | Note |
 |---|---|---|
 | `updater.py` | **3,719** | one file |
-| the `Updater` class inside it | **2,340** | lines 1292–3632 — one class |
+| the `Updater` class inside it | **2,338** | `class Updater(QMainWindow)` through to the module-level `_app_icon` — one class |
 
-A 2,340-line class cannot be held in a reader's head, cannot be reviewed as a unit, and
-cannot be tested except through the whole application. Every argument for splitting it is
-already written in `docs/specs/ONEUP-0034-gui-modules.md`; this standard's job is to stop
-the next file getting there.
+A 2,338-line class cannot be held in a reader's head, cannot be reviewed as a unit, and
+cannot be tested except through the whole application. Splitting it is ONEUP-0034, whose
+spec is not written yet; this standard's job is to stop the next file getting there.
 
 ### 4.2 Split by responsibility, not by layer
 
@@ -210,14 +260,18 @@ OneUp's entire job is running other programs, so this section is load-bearing.
    argument validated first. Corrected 2026-07-26: an earlier revision of this line said
    the GUI "never runs a privileged command", which is not accurate and is the more
    dangerous belief to code under. The full rule is `docs/standards/security.md` §1.
-4. **In the engine, every privileged call goes through one runner** — `sudo_capture` —
-   and never sits inside a subshell. This is the most expensive trap in the project and
-   §8.1 explains why.
+4. **No privileged call ever sits inside a subshell.** In the engine, a call whose
+   *output* is needed goes through `sudo_capture` (14 sites); the rest are direct `sudo`
+   at top level (20), which is safe precisely because sudo stays the caller's own child.
+   This is the most expensive trap in the project and §8.1 explains why. In Python the
+   rule becomes: one runner object owns every privileged child process.
 5. **Long-running child processes use `QProcess`, not `subprocess`**, in the GUI. Qt's
    event loop reads its output without blocking the window; `subprocess.run` freezes it.
    `subprocess` is for short, immediate calls that answer a question (`systemctl
-   --user is-enabled`) — currently in `read_repos`, `Updater._timer_enabled`,
-   `Updater._install_user_timer` and `Updater._remove_user_timer`.
+   --user is-enabled`). There are **13** such call sites in `updater.py` today — among
+   them `read_repos`, `run_kwin_script`, `Updater._timer_enabled`,
+   `Updater._install_user_timer`, `Updater._remove_user_timer`, and the two
+   `subprocess.Popen` sites in `Updater`.
 
 ### 5.2 Annotating a suppression
 
@@ -228,7 +282,9 @@ just which rule to silence. The existing ones are the pattern to copy:
 subprocess.run(  # noqa: S603,S607 — fixed argv, no shell.
 ```
 
-A bare `# noqa: S603` with no reason is a review comment.
+A bare `# noqa: S603` with no reason is a review comment. Two of the six are exactly that
+today — the second and third calls in `run_kwin_script` — and they are the counterexample,
+not the pattern. Give each a reason when §2.1's config lands.
 
 ---
 
@@ -246,13 +302,18 @@ lock in what is true rather than asking for a migration.
   `Updater._ensure_tray`), and new ones must be.
 - **Parent every `QProcess`.** Every one in the tree is (`QProcess(self)` — seven call
   sites). An unparented one is collected by Python while C++ still holds it, which
-  surfaces as `RuntimeError: Internal C++ object (QProcess) already deleted`. That error
-  is currently visible in `tests/gui-smoke.py` teardown, so this is not a hypothetical
-  failure mode in this codebase — it is the one we already have.
-- **Use `QPointer<T>` for a non-owning reference to a widget you did not parent.** There
-  is no `QPointer` in the tree today; parenting has covered every case so far. If you find
-  yourself storing a bare reference to a widget you do not own, that is what `QPointer` is
-  for — it becomes null on deletion instead of dangling.
+  surfaces as `RuntimeError: Internal C++ object (QProcess) already deleted`.
+- **Parenting is not the whole answer, and the tree proves it.** That same `RuntimeError`
+  is printed ~30 times by a *passing* `tests/gui-smoke.py` run, from the `finished` lambda
+  in `Updater._query_auth_status` — where the `QProcess` **is** parented. Parenting is
+  what kills it: the test drops the window, Qt deletes the child C++ object, and the
+  pending connection then fires into a Python wrapper whose C++ side is gone. Parent *and*
+  make sure nothing outlives the parent — disconnect in the handler, or hold the reference
+  through a `QPointer` and check it. Filed as **ONEUP-0062**.
+- **Use `QPointer` for a non-owning reference to an object you did not parent, or one that
+  may be destroyed before your callback runs.** There is none in the tree today, which is
+  precisely why the bug above survives. It becomes null on deletion instead of dangling,
+  so the handler can test it.
 - **Scoped enums** (`Qt.AlignmentFlag.AlignLeft`) where the codebase already uses them;
   match the surrounding file.
 
@@ -260,7 +321,9 @@ lock in what is true rather than asking for a migration.
 
 ## 7. Error handling
 
-Global rule 1 — no workaround without a root-cause fix — applies with no exceptions.
+**No workaround without a root-cause fix** — silencing a warning, `try/except: pass`,
+`--no-verify`, commenting out the broken part. Last resort, never the default, and when it
+genuinely is the only option, a comment names the constraint so it reads as deliberate.
 
 - **No bare `except:`.** There are none (measured). Catch what you can name:
   `except (OSError, subprocess.SubprocessError)` — the form already used in
@@ -346,14 +409,16 @@ would pass CI, ship a working AppImage, and break for every user who installed v
 "it works in the AppImage" is not evidence that it works when installed from the RPM or
 OBS. Two distribution paths, two Pythons. Test the one you are claiming about.
 
-**10.3 — `ruff check .` and CI disagree today.** Covered in §2.1. Until `pyproject.toml`
-exists, run the CI command verbatim — `ruff check . --select F,B --exclude screenshots` —
-or better, run `./local-CI.sh`, which is the only thing that agrees with CI by
-construction.
+**10.3 — `ruff check .` and the gate disagree today.** Covered in §2.1. Until
+`pyproject.toml` exists, run the gate's command verbatim —
+`ruff check . --select F,B --exclude screenshots` — or better, run `./local-CI.sh`, which
+is where lint actually runs. **GitHub CI never lints**, so a `ruff` failure that gets past
+`local-CI.sh` gets past everything.
 
 **10.4 — The six `noqa: S` comments suppress nothing.** They name rules the current
 invocation does not enable. Do not read them as evidence that a security rule set is
-running, and do not delete them; §2.1 turns them on.
+running, and do not delete them; §2.1 turns them on — and §2.1.1 explains why three of
+them still will not work until they are re-anchored.
 
 **10.5 — `python3-pyside6` looks like it does not exist, and does.** Checking with
 `zypper info python3-pyside6` on Tumbleweed reports *"package not found"*, because the
@@ -380,11 +445,19 @@ and the guards it requires.
 
 ## 11. Before you commit
 
-- [ ] Nothing requires newer than Python **3.13** (§1); nothing needs 3.15+.
+- [ ] Nothing requires newer than Python **3.13** (§1).
 - [ ] Public functions on new code are annotated (§3).
 - [ ] No module crossed 600 lines without a reason you can state (§4).
 - [ ] No `shell=True`, no `os.system`, fixed argv, and any `noqa` says *why* (§5).
 - [ ] New Qt objects that own a window, and every `QProcess`, are parented (§6).
 - [ ] No bare `except:`, nothing silenced, no unearned success claim (§7).
 - [ ] Comments explain why, and any trap touched is named at the call site (§8).
-- [ ] `./local-CI.sh` is green (§2.1 — it is the only lint run that matches CI).
+- [ ] `./local-CI.sh` is green (§2.1 — it is the only place lint runs at all).
+
+---
+
+## 12. Cold-eyes loop log
+
+| Loop | Date | Findings | Outcome |
+| --- | --- | --- | --- |
+| 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §2.1 said the divergence was with GitHub CI, which does not lint at all; the prescribed ruff config was measured and reports 54 errors rather than 14 wrappable lines; three `# noqa` comments were found anchored one line above their diagnostic; and the `QProcess` teardown error was attributed to *un*parented objects when every one in the tree is parented |
