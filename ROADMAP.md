@@ -212,6 +212,18 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   when the spec is written (ONEUP-0057 plan, Task 15). Every theme must
   satisfy the contrast and colour-never-alone rules from ONEUP-0028; a
   theme that cannot is not shipped.
+  Measured (2026-07-26, gotcha sweep): the theme machinery does not reach
+  every colour. 116 hex literals live in updater.py; most sit inside the
+  _QSS Template (254-394, 451) and so follow build_theme(), but ten do
+  not and a new theme cannot touch them: GREEN/RED (222-223),
+  TRAY_ATTENTION_COLOR (141), and seven QColor() calls inside paintEvent
+  overrides — the ToggleSwitch painter (691, 719, 722, 725) and the tray
+  icon painter (2072, 2078, 2090). Painted widgets bypass QSS entirely,
+  so the switch and tray badge would keep their current colours under
+  every new theme. The spec (ONEUP-0057 plan, Task 15) must therefore
+  define theme tokens the painters read, not only QSS variables, and the
+  per-theme WCAG-AA contrast check must cover the painted surfaces too —
+  they are exactly the ones carrying state meaning.
 
 - ✅ [ONEUP-0028] **Make OneUp usable for blind, partially-sighted, and colour-blind users.**
   Cover the three groups: (1) blind — full screen-reader (Orca/AT-SPI) support: accessible names/roles on every control, the live log and progress announced, focus order sane, no unlabelled icon-only buttons; (2) partially sighted — scalable/large text, honour the desktop font scale, a high-contrast option, keyboard operability throughout; (3) colour-blind — never signal state by colour alone (the amber tray icon, red/green step badges) — pair every colour cue with text/shape/icon. Coordinates with ONEUP-0026 (dialog standard) and ONEUP-0027 (themes: any theme must keep WCAG-AA contrast). Likely warrants its own spec + an audit pass with Orca.
@@ -311,6 +323,23 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   by the user in the same session as ONEUP-0048/0049, alongside the wider
   question of rewriting the Bash engine in Python; see ONEUP-0052, which
   records why the two are worth keeping separate.
+  Measured (2026-07-26, gotcha sweep): two concrete obstacles the bullet
+  above does not yet name. (1) tests/gui-smoke.py:62 loads the GUI with
+  importlib.util.spec_from_file_location("updater", REPO/"updater.py") —
+  a single-FILE loader. It cannot load a package: the moment updater.py
+  becomes updater/ with relative imports, the loader fails outright, so
+  the split's first commit breaks the whole 283-check GUI suite, not just
+  the symbol names. The test harness has to move to a path-based package
+  import before any code moves. (2) The GUI's repo parsing depends on a
+  locale pin that no test exercises: read_repos passes
+  env={**os.environ, "LC_ALL": "C"} (updater.py:988) because
+  _parse_repos reads zypper's human table and decides enabled/disabled
+  from cols[3][:1].lower() == "y" — on a German desktop "Ja" gives "j"
+  and every repository would read as disabled. The engine has a
+  non-English locale regression test (tests/run-tests.sh:1360); the GUI
+  has none, so dropping that env kwarg while moving code stays green in
+  CI and only breaks for non-English users. Add the GUI-side locale check
+  before the split starts.
 
 - ✅ [ONEUP-0035] **Fix "Show download size" always reporting 0 B, and never report a size the dry run didn't earn.**
   Two defects, one symptom. (1) Stale parse: run_size grepped zypper's
@@ -819,3 +848,42 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Lanes: gui.
   Source: in-session-2026-07-26 (writing docs/standards/files-and-naming.md).
+
+- 📋 [ONEUP-0060] **Pin PySide6 and PyInstaller in the AppImage build.**
+  packaging/appimage/build-appimage.sh:22 runs `pip install --quiet
+  pyinstaller PySide6` with no version constraint, inside a fresh venv, on
+  every tagged release. Three consequences, all measured against the file
+  on 2026-07-26: (1) the AppImage attached to a tag is NOT reproducible —
+  rebuilding v1.4.0 tomorrow can bundle a different PySide6 than the one
+  users downloaded; (2) a broken or compromised upstream release lands in
+  users' AppImages automatically, with no gate; (3) it contradicts
+  docs/standards/dependencies.md, whose known-incompatibility ledger
+  assumes a version can be pinned away from — you cannot pin away from a
+  bad version if you never pin at all. The RPM path is unaffected (it
+  Requires python3-pyside6 and takes the distro's). Fix: pin both to an
+  exact version in the build script (or a requirements file it installs
+  from), and treat the bump as ordinary ledger-governed dependency work.
+  Not fixable on frozen main; lands with the 2.0 packaging pass.
+  **Layman:** The downloadable app is rebuilt against whatever version of its toolkit is newest that day, so two builds of the same release can differ — pin the versions so a release is reproducible.
+  Kind: security.
+  Source: in-session-2026-07-26 (ONEUP-0057 Task 3 gotcha sweep).
+
+- 📋 [ONEUP-0061] **Migrate QSettings if 2.0 renames the settings organisation.**
+  updater.py constructs QSettings("OneUp", "OneUp") at four sites (522,
+  1008, 1299, 3698), which writes ~/.config/OneUp/OneUp.conf — verified
+  present on this machine, holding geometry, repos_geometry, log_shown and
+  tray_enabled. Every other artefact uses the app ID
+  za.co.antsprojectshub.OneUp (desktop file, icon, metainfo) and runtime
+  state uses ~/.local/state/oneup/, so the settings path is the one
+  outlier. docs/standards/files-and-naming.md makes that inconsistency
+  visible, and the natural 2.0 tidy-up is to switch the organisation to
+  the app ID. Doing so with no migration silently resets every existing
+  user's preferences: the tray toggle turns itself off, window geometry
+  is forgotten, the text-size choice reverts. Requirement for 2.0: either
+  leave the organisation string alone and document why, or copy the old
+  keys across on first run before reading them. Whichever is chosen, the
+  GUI suite needs a regression check that an old-format config is still
+  honoured.
+  **Layman:** The app's saved preferences live under a folder name that doesn't match the app's official ID; tidying that up in 2.0 would silently wipe everyone's settings unless we copy them across first.
+  Kind: implement.
+  Source: in-session-2026-07-26 (ONEUP-0057 Task 3 gotcha sweep).
