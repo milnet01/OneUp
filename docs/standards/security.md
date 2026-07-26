@@ -43,9 +43,9 @@ update run:
 
 | Site | Command | Guard |
 | --- | --- | --- |
-| `updater.py:1118` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must match `_ALIAS_RE`, else the whole command is `None` and nothing runs |
-| `updater.py:3525` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped |
-| `updater.py:3551` | `pkexec sh -c "snapper rollback <id> && systemctl reboot"` | `id` must satisfy `str.isdigit()` |
+| `RepoManagerDialog._build_apply_command` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must match `_ALIAS_RE`, else the whole command is `None` and nothing runs |
+| `Updater.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped |
+| `Updater.rollback` | `pkexec sh -c "snapper rollback <id> && systemctl reboot"` | `id` must satisfy `str.isdigit()` |
 
 **1.5 — The rule that follows from 1.4.** Anything belonging to *an update run* goes
 through the engine, always. `pkexec` is reserved for short administrative actions the user
@@ -61,7 +61,7 @@ without validation is a root shell injection, full stop.
 
 ## 2. One authentication per run
 
-**2.1 — The engine authenticates once, up front.** `sudo_init` (`update_system.sh:521`)
+**2.1 — The engine authenticates once, up front.** `sudo_init` in `update_system.sh`
 raises a single graphical prompt via `sudo -A -v`, then starts a keep-alive that refreshes
 the credential every 50 seconds for the life of the run.
 
@@ -117,15 +117,16 @@ dialog, and the correct response to one is to refuse it. So:
 **3.1 — Never bare `sudo` in a context that can prompt.** Use `sudo -A` with
 `SUDO_ASKPASS` set, so the graphical helper appears instead of a silent block on stdin.
 `ASKPASS` defaults to `/usr/libexec/ssh/ksshaskpass` and is overridable via
-`ONEUP_ASKPASS` so tests point it at a mock (`update_system.sh:29`).
+`ONEUP_ASKPASS` so tests point it at a mock (the `ASKPASS=` constant near the top of
+`update_system.sh`).
 
-**3.2 — `SUDO_ASKPASS` is exported, not merely set** (`update_system.sh:41`). sudo consults
+**3.2 — `SUDO_ASKPASS` is exported, not merely set.** sudo consults
 the askpass helper only when it finds the variable **in the environment**. Without the
 export, a `sudo` that cannot see the cached credential has no way to ask and dies with *"a
 terminal is required to read the password"* — which is precisely what made "Show download
 size" fail (ONEUP-0036).
 
-**3.3 — `SUDO_PROMPT` is exported too** (`update_system.sh:48`), so that even prompts we
+**3.3 — `SUDO_PROMPT` is exported too**, so that even prompts we
 did not pass `-p` to are labelled. This distro defaults to `targetpw`, under which sudo's
 own wording is *"[sudo] password for root"* — an unlabelled request for the **root**
 password shown to someone who only clicked "check the download size" (ONEUP-0037).
@@ -159,15 +160,16 @@ trustworthy. They are not:
 **4.1 — The three live guards**, all verified in place:
 
 ```python
-# updater.py:927 — repo aliases. First character class excludes '-', so an alias
-# can never be read as an option by zypper; no space, quote, ';', '&', '$' or
-# backtick is permitted, so it cannot break out of the sh -c string either.
+# updater.py, the module-level _ALIAS_RE — repo aliases. The first character
+# class excludes '-', so an alias can never be read as an option by zypper; no
+# space, quote, ';', '&', '$' or backtick is permitted, so it cannot break out
+# of the sh -c string either.
 _ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
 
-# updater.py:3541 — the rollback target is interpolated into a root shell.
+# Updater.rollback — the rollback target is interpolated into a root shell.
 if not target.isdigit(): return          # isdigit() also rejects empty
 
-# updater.py:3517 — service units, argv form. Leading '-' rejected separately so a
+# Updater.restart_services — service units, argv form. Leading '-' rejected separately so a
 # spliced token cannot become a systemctl option.
 svcs = [s for s in self._services.split()
         if not s.startswith("-") and re.fullmatch(r"[A-Za-z0-9:@._\\-]+\.[a-z]+", s)]
@@ -204,7 +206,7 @@ OneUp's update commands as root without a password. It stores **no password anyw
 not in a keyring, not in a file, not in memory.
 
 **5.2 — The exact scope**, built from resolved absolute paths at grant time
-(`build_auth_rule`, `update_system.sh:718`):
+(`build_auth_rule` in `update_system.sh`):
 
 | Entry | Why |
 | --- | --- |
@@ -281,7 +283,7 @@ repository URLs with embedded credentials. Anything routed to the log is a delib
 choice, not a reflex `echo "$captured"`.
 
 **7.4 — Anything leaving the machine is scrubbed.** The "Copy diagnostics" bundle
-(`build_diagnostics`, `updater.py:188`) replaces the home path with `~` and the hostname
+(`build_diagnostics` in `updater.py`) replaces the home path with `~` and the hostname
 with `<host>` **across the whole payload, log body included**, and trims an oversized log to
 its last `DIAG_LOG_CAP` (200 KB, tail-first, because errors sit at the end). A user pasting
 that into a public issue tracker must not thereby publish their username and machine name.
@@ -309,7 +311,8 @@ paper over.** A rotated or expired key surfaces as `REMEDY|import-keys`, which t
 offers as a **warned, confirmed** action ("Import signing key & retry"). It is never
 automatic, and `--no-gpg-checks` is not an acceptable remedy anywhere in this project.
 
-That last one is enforced, not merely intended: `tests/run-tests.sh:1816` and `:1859`
+That last one is enforced, not merely intended: the two `check_absent "…never disables gpg
+checks"` assertions in `tests/run-tests.sh`
 assert the flag never reaches zypper, including down the repository auto-skip path — the
 place where "just get past it" is most tempting. Keep both tests when the engine is
 rewritten.

@@ -9,7 +9,7 @@ translated into another language later without rewriting the app.
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `879b29c` — every quoted string and line number below was copied from the
+**Verified at:** `879b29c` — every quoted string and symbol name below was copied from the
 tree on 2026-07-26, not recalled.
 
 ## 1. Who is reading
@@ -42,7 +42,7 @@ person read this and know what to do?**
 These are the standard, not illustrations of it:
 
 ```
-# update_system.sh:864 — a held package lock
+# update_system.sh — the held-lock hint, in the main flow
 Something else is installing or removing software right now — <name> (process <pid>).
 That is often OneUp's own earlier run still finishing in the background; it clears on
 its own. Nothing was changed, so just run the update again in a minute.
@@ -53,7 +53,7 @@ Why it works: names the blocker, explains the most likely cause in the user's te
 action.
 
 ```
-# update_system.sh:293 — the user pressed Stop
+# update_system.sh, stop_pending — the user pressed Stop
 Stopped at your request. Anything already installed stays installed — a stop never
 interrupts an install half-way, because that can leave programs broken. Run the update
 again whenever you like.
@@ -64,7 +64,7 @@ Why it works: reassures about the state of the machine before anything else, and
 limitation.
 
 ```
-# update_system.sh:1052 — a slow mirror was abandoned
+# update_system.sh, refresh_repos — a slow mirror was abandoned
 The '<alias>' source is serving updates too slowly to wait for, so OneUp moved on.
 Use "Skip <alias> & update the rest" to leave it out of the next run, or try again later.
 ```

@@ -142,7 +142,7 @@ are tracked; the compiled `.qm` files are build artefacts and are git-ignored �
 `updater.py` finds the engine and the icon relative to **its own file**:
 
 ```python
-# updater.py:99-102
+# updater.py, the HERE constant
 if getattr(sys, "frozen", False):
     HERE = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
 else:
@@ -151,7 +151,7 @@ else:
 
 `HERE` is the repo root today because `updater.py` sits in the repo root. **A module
 moved to `oneup/gui/` that computes the same expression gets `oneup/gui/`** — and
-`_find_engine()` (line 105) then looks for `update_system.sh` in the wrong directory,
+`_find_engine()` then looks for `update_system.sh` in the wrong directory,
 falls through its `~/Documents/update_system.sh` fallback, and returns a path that does
 not exist. The window opens and the Run button fails.
 
@@ -173,7 +173,8 @@ Two directories hold everything OneUp writes at runtime:
 
 `run.state` and `stop.request` are a **contract between the two halves** — each file is
 defined independently in both programs, with a comment in each saying it must match the
-other (`updater.py:120-126`, `update_system.sh:61,67`). Moving either means editing both.
+other — `updater.py`'s `RUN_STATE` / `STOP_REQUEST` constants and `update_system.sh`'s
+`RUN_STATE_FILE` / `STOP_FILE`. Moving either means editing both.
 
 ### 5.1 The override table — measured, and not what you would assume
 
@@ -194,13 +195,14 @@ Every environment override that exists, and every path that has none:
 **So the rule "everything has an override" is false, and writing it down as though it
 were true would have misled the 2.0 implementer.** What is actually true:
 
-- **The engine is isolated by environment variable.** `tests/run-tests.sh:56-72`
-  (`run_engine`) sets the first three unless the scenario sets them itself; scenarios that
-  need `ONEUP_AUTH_FILE` set it themselves (lines 1186-1246).
-- **The GUI is isolated by rewriting `HOME`.** `tests/gui-smoke.py:30` sets
+- **The engine is isolated by environment variable.** `run_engine` in
+  `tests/run-tests.sh` sets the first three unless the scenario sets them itself;
+  scenarios that need `ONEUP_AUTH_FILE` set it themselves.
+- **The GUI is isolated by rewriting `HOME`.** `tests/gui-smoke.py`'s sandbox block sets
   `HOME` to a throwaway directory *before* `updater` is imported, because the GUI's paths
-  are module-level constants evaluated at import time (`updater.py:117-126`). Individual
-  tests then reassign the module globals directly (`updater.STOP_REQUEST = …`, line 317).
+  are module-level constants (`STATE_DIR`, `LOG_DIR`, `RUN_STATE`, `STOP_REQUEST`)
+  evaluated at import time. Individual tests then reassign the module globals directly
+  (`updater.STOP_REQUEST = …`).
 
 ### 5.2 What that obliges 2.0 to do
 
@@ -252,14 +254,15 @@ build. See the UI standard.
 
 Measured, not suspected. Recorded here so 2.0 does not reproduce them.
 
-**Trap 1 — `LOG_DIR` names two different directories.** In `update_system.sh:55` it is
-`~/Documents/update-logs`; in `updater.py:119` it is `~/.local/state/oneup/logs`. Today
+**Trap 1 — `LOG_DIR` names two different directories.** In `update_system.sh` it is
+`~/Documents/update-logs`; in `updater.py` it is `~/.local/state/oneup/logs`. Today
 they live in separate languages and cannot collide. **When the engine becomes Python and
 moves into the same package, they will.** Give them distinct names in 2.0 —
 `USER_LOG_DIR` and `STATE_LOG_DIR`, or equivalent — before either is imported anywhere.
 
 **Trap 2 — the engine's log directory is created on the real machine during tests.**
-`update_system.sh:149` runs `mkdir -p "$LOG_DIR"` *before* checking whether `--log=` was
+`update_system.sh`'s logging preamble runs `mkdir -p "$LOG_DIR"` *before* checking whether
+`--log=` was
 passed, and `run_engine` does not redirect `HOME`. So the suite creates
 `~/Documents/update-logs` on any machine it runs on, including one that has never
 installed OneUp. It writes nothing there — `--log=` is always supplied — but it is still
@@ -268,13 +271,13 @@ the suite touching the box, which the testing standard forbids. Filed as **ONEUP
 to write to it.
 
 **Trap 3 — `XDG_STATE_HOME` is set by the tests and ignored by the app.**
-`tests/gui-smoke.py:31-32` exports `XDG_CONFIG_HOME` and `XDG_STATE_HOME` into the
-sandbox, but `updater.py:117` builds `STATE_DIR` from `Path.home()` and never reads
+`tests/gui-smoke.py`'s sandbox block exports `XDG_CONFIG_HOME` and `XDG_STATE_HOME`, but
+`updater.py` builds `STATE_DIR` from `Path.home()` and never reads
 either. The isolation works only because `HOME` is redirected too. Two consequences: the
 app does not follow the XDG specification, and the two exports read as protection they do
 not provide. Filed as **ONEUP-0059**.
 
-**Trap 4 — `_find_engine`'s fallback hides a broken install.** `updater.py:105-113` tries
+**Trap 4 — `_find_engine`'s fallback hides a broken install.** It tries
 `HERE/update_system.sh`, then `~/Documents/update_system.sh`, then returns the first path
 regardless of whether it exists. A packaging mistake therefore surfaces as "the Run button
 did nothing", not as an error naming the missing file. Any 2.0 equivalent must say which

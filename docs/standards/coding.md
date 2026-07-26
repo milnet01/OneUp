@@ -24,8 +24,10 @@ OneUp still supports, because **that is the interpreter that actually runs the a
 it is installed from the RPM:
 
 ```
-packaging/rpm/oneup.spec:55   exec python3 %{_datadir}/oneup/updater.py "$@"
-data/za.co.antsprojectshub.OneUp.desktop:6   Exec=oneup
+packaging/rpm/oneup.spec, the %{_bindir}/oneup wrapper:
+    exec python3 %{_datadir}/oneup/updater.py "$@"
+data/za.co.antsprojectshub.OneUp.desktop:
+    Exec=oneup
 ```
 
 The desktop entry launches a wrapper; the wrapper calls plain `python3`. So the floor is
@@ -41,7 +43,7 @@ Leap 15.6 going end-of-life is what makes 3.13 honest. While 15.6 was supported 
 would have been much lower, and half this document would have been about avoiding modern
 syntax. It is not supported, so we do not carry that weight.
 
-`README.md:166` says "openSUSE Tumbleweed or Leap". With 15.6 retired, **Leap means Leap
+`README.md`'s requirements section says "openSUSE Tumbleweed or Leap". With 15.6 retired, **Leap means Leap
 16.0**, and both supported targets ship the same interpreter.
 
 ### 1.2 The ceiling: below 3.15
@@ -67,7 +69,7 @@ def latest(log: Path) -> Path | None:      # X | Y unions (3.10+), not Optional[
 steps: list[str] = []                      # builtin generics (3.9+), not List[str]
 ```
 
-The codebase already does this — `updater.py:161` is `-> Path | None`. Do not add
+The codebase already does this — `_latest_run_log` is annotated `-> Path | None`. Do not add
 `from typing import Optional, List`; they are not needed and their presence in a new
 module is a review comment.
 
@@ -87,7 +89,8 @@ lower it. Verify with `python3 -V` on the target, not from memory.
 one place only:
 
 ```
-local-CI.sh:78   ruff check . --select F,B --exclude screenshots -q
+local-CI.sh, the Lint gate:
+    ruff check . --select F,B --exclude screenshots -q
 ```
 
 That is a real problem and the reason this section exists. A developer who runs the
@@ -132,7 +135,7 @@ thing being fixed.
 
 ### 2.2 Shell code
 
-`shellcheck` runs in `local-CI.sh:73` with `-e SC2001` on `update_system.sh`,
+`shellcheck` runs in `local-CI.sh`'s Lint gate with `-e SC2001` on `update_system.sh`,
 `tests/run-tests.sh` and the other shell scripts. Keep new shell clean under the same
 flags. If the Python engine rewrite (ONEUP-0054) lands, shell shrinks but does not vanish
 — `local-CI.sh`, `release.sh`, `bump.py`'s callers and `githooks/pre-push` stay.
@@ -213,7 +216,8 @@ OneUp's entire job is running other programs, so this section is load-bearing.
 5. **Long-running child processes use `QProcess`, not `subprocess`**, in the GUI. Qt's
    event loop reads its output without blocking the window; `subprocess.run` freezes it.
    `subprocess` is for short, immediate calls that answer a question (`systemctl
-   --user is-enabled`) — currently at `updater.py:985`, `2257`, `2283`, `2293`, `2300`.
+   --user is-enabled`) — currently in `read_repos`, `Updater._timer_enabled`,
+   `Updater._install_user_timer` and `Updater._remove_user_timer`.
 
 ### 5.2 Annotating a suppression
 
@@ -238,8 +242,8 @@ lock in what is true rather than asking for a migration.
   runtime instead of at import, which is the worst possible time to find a typo.
 - **Parent every widget that owns a window** — dialogs, `QMenu`, `QMessageBox`. An
   unparented menu can be garbage-collected while it is on screen; the ONEUP-0018 review
-  found exactly that. The one menu in the tree is parented today (`updater.py:2222`,
-  `QMenu(self)`), and new ones must be.
+  found exactly that. The one menu in the tree is parented today (`QMenu(self)` in
+  `Updater._ensure_tray`), and new ones must be.
 - **Parent every `QProcess`.** Every one in the tree is (`QProcess(self)` — seven call
   sites). An unparented one is collected by Python while C++ still holds it, which
   surfaces as `RuntimeError: Internal C++ object (QProcess) already deleted`. That error
@@ -259,8 +263,8 @@ lock in what is true rather than asking for a migration.
 Global rule 1 — no workaround without a root-cause fix — applies with no exceptions.
 
 - **No bare `except:`.** There are none (measured). Catch what you can name:
-  `except (OSError, subprocess.SubprocessError)` — the form already used at
-  `updater.py:588` and `990`.
+  `except (OSError, subprocess.SubprocessError)` — the form already used in
+  `run_kwin_script` and `read_repos`.
 - **No `except Exception: pass`.** There is exactly **one** `except Exception` in
   `updater.py`. One is a defensible number; keep it there.
 - **A failure is reported, never silenced.** In the engine, a failed step is recorded,
@@ -331,10 +335,10 @@ path for a situation that cannot arise at the call site.
 
 Written down because each one has either bitten this project or is positioned to.
 
-**10.1 — CI's Python version is not the floor.** `.github/workflows/release.yml:20` pins
+**10.1 — CI's Python version is not the floor.** `.github/workflows/release.yml` pins
 `python-version: '3.13'`, and ONEUP-0004 will raise it to 3.14. **That bump does not
 raise the floor.** CI's interpreter builds the AppImage, which bundles its own Python; the
-RPM path runs the *distro's* `/usr/bin/python3` (`oneup.spec:55`). So a 3.14-only idiom
+RPM path runs the *distro's* `/usr/bin/python3` (the spec's `oneup` wrapper). So a 3.14-only idiom
 would pass CI, ship a working AppImage, and break for every user who installed via
 `zypper`. The floor moves only when §1's table moves.
 
@@ -354,7 +358,7 @@ running, and do not delete them; §2.1 turns them on.
 **10.5 — `python3-pyside6` looks like it does not exist, and does.** Checking with
 `zypper info python3-pyside6` on Tumbleweed reports *"package not found"*, because the
 real package is `python313-pyside6`. The RPM's `Requires: python3-pyside6`
-(`oneup.spec:18`) nevertheless resolves correctly, because `python313-pyside6` carries
+nevertheless resolves correctly, because `python313-pyside6` carries
 `Provides: python3-pyside6 = 6.11.1-1.2` (verified with `zypper info --provides`). **The
 dependency is fine — do not "fix" it.** Search provides, not names:
 `zypper search --provides --match-exact python3-pyside6`.
@@ -366,7 +370,8 @@ value goes through a marker (see `docs/reference/marker-protocol.md`).
 
 Corrected 2026-07-26: this trap previously read "the GUI must never grow a privileged
 call", which is both wrong and misleading — the GUI already calls `pkexec` at three sites
-(`updater.py:1118`, `3525`, `3551`), two of which build a root shell string. Coding to the
+(`RepoManagerDialog._build_apply_command`, `Updater.restart_services`,
+`Updater.rollback`), two of which build a root shell string. Coding to the
 absolute version means not writing the boundary validation those sites depend on, which is
 the opposite of safe. `docs/standards/security.md` §1.4–1.6 and §4 carry the accurate rule
 and the guards it requires.

@@ -9,7 +9,7 @@ is going on.
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `416caa4` — every count, path and line number below was measured against
+**Verified at:** `416caa4` — every count, path and symbol name below was measured against
 the tree on 2026-07-26, not recalled.
 
 ## 1. What the suite is
@@ -27,8 +27,8 @@ They meet in the middle: the engine suite proves the engine **emits** a marker, 
 suite proves the window **reacts** to it. Neither alone proves the pair works, which is why
 a marker change touches both (`docs/reference/marker-protocol.md`, once Task 9 lands).
 
-The GUI suite exits **77** when PySide6 is absent, and both `local-CI.sh:49` and
-`.github/workflows/release.yml:38` read that as *skipped*, not *failed* — the same
+The GUI suite exits **77** when PySide6 is absent, and both `local-CI.sh` and
+`.github/workflows/release.yml` read that as *skipped*, not *failed* — the same
 skip-cleanly-for-an-absent-tool convention the engine uses for `flatpak` and `fwupd`.
 
 ## 2. A test never depends on, or damages, the machine
@@ -37,7 +37,7 @@ This is the rule with the most scar tissue behind it, so it is first.
 
 ### 2.1 The three redirects
 
-`run_engine` (`tests/run-tests.sh:56`) rewrites three paths before every engine
+`run_engine` in `tests/run-tests.sh` rewrites three paths before every engine
 invocation, each only if the scenario has not set it itself:
 
 ```bash
@@ -62,12 +62,12 @@ happens to be doing.
 
 ### 2.2 The GUI suite redirects the home directory
 
-`tests/gui-smoke.py:29-32` points `HOME`, `XDG_CONFIG_HOME` and `XDG_STATE_HOME` at a
-throwaway directory **before `QApplication` is constructed**, because `QSettings` resolves
+`tests/gui-smoke.py`'s module-level sandbox block points `HOME`, `XDG_CONFIG_HOME` and
+`XDG_STATE_HOME` at a throwaway directory **before `QApplication` is constructed**, because `QSettings` resolves
 its file path once and keeps it. Set them after and the test writes to the real
 `~/.config`; `save_last_run()` then overwrites the user's own history with test data.
 
-The same block puts a mock `notify-send` on `PATH` (`:34-43`) that appends to a log file,
+The same block puts a mock `notify-send` on `PATH` that appends to a log file,
 so "a finished run notifies" is asserted without firing a desktop notification at whoever
 is sitting in front of the machine.
 
@@ -86,7 +86,7 @@ teardown does not run when a scenario is commented out during debugging.
 ## 3. The mock-PATH sandbox
 
 Every engine scenario builds a directory of fake system tools and prepends it to `PATH`.
-`setup_common` (`tests/run-tests.sh:16`) supplies the ones every scenario needs — `sudo`,
+`setup_common` in `tests/run-tests.sh` supplies the ones every scenario needs — `sudo`,
 `systemctl`, `snapper`, `notify-send`, `flatpak`, `fwupdmgr` — and the scenario overwrites
 whichever it needs to behave differently, usually `zypper`.
 
@@ -98,16 +98,17 @@ Three rules for writing a mock:
    **99** and prints why:
 
    ```bash
-   # tests/run-tests.sh:294 — --check must never mutate the system
+   # tests/run-tests.sh, scenario "--check reports counts read-only and never installs"
    [[ "$*" == *dup* || "$*" == *update* ]] && { echo "BUG: mutated in --check" >&2; exit 99; }
    ```
 
-   There are five such traps today (`:294`, `:390`, `:414`, `:442`, `:1268`). A silent
-   wrong call is a test that passes for the wrong reason; an exit-99 is a test that says
-   what it caught.
+   There are five such traps today — in the `--check`, cache-clean, both `--size=` and
+   passwordless-drop-in scenarios. A silent wrong call is a test that passes for the wrong
+   reason; an exit-99 is a test that says what it caught.
 3. **Model the mechanism when the mechanism is the bug.** The one-prompt test's mock `sudo`
-   (`:526`) keeps **one timestamp file per parent pid**, because that is exactly how
-   `sudoers(5)` `timestamp_type` behaves with no terminal, and the bug being locked out
+   (scenario: "a full run asks for the password exactly once") keeps **one timestamp file
+   per parent pid**, because that is exactly how `sudoers(5)` `timestamp_type` behaves with
+   no terminal, and the bug being locked out
    (ONEUP-0038) is a subshell changing the parent pid. A mock that just returned success
    would pass while the user got seven password popups.
 
@@ -119,8 +120,8 @@ Every `INV-N` in a spec names the test that locks it in
 - **A spec invariant with no test is an incomplete spec**, not a spec with a follow-up.
 - **A test with no invariant is fine** — plenty of assertions are ordinary coverage — but
   when a test exists precisely because a bug once shipped, say so in a comment naming the
-  roadmap id, as `:512` and `:65` do. The comment is what stops the next person deleting
-  the test as redundant.
+  roadmap id, as the one-prompt scenario's preamble and `run_engine`'s own comment do. The
+  comment is what stops the next person deleting the test as redundant.
 
 When an invariant is withdrawn, its test is deleted in the same commit. A test kept
 "just in case" after the rule it proved is gone will eventually fail for a reason nobody
@@ -149,12 +150,12 @@ re-run rather than read.
 Both suites already do this correctly, and new tests copy the pattern:
 
 ```bash
-# tests/run-tests.sh:716 — wait for the thing, with a ceiling
+# tests/run-tests.sh — wait for the thing, with a ceiling
 for _ in $(seq 1 50); do grep -q '@@DONE@@' "$d/run.log" 2>/dev/null && break; sleep 0.1; done
 ```
 
 ```python
-# tests/gui-smoke.py:85 — same shape, monotonic clock so a clock change can't hang it
+# tests/gui-smoke.py, _wait_for_notify — monotonic clock, so a clock change can't hang it
 deadline = time.monotonic() + timeout
 while time.monotonic() < deadline:
     if os.path.exists(_NOTIFY_LOG) and os.path.getsize(_NOTIFY_LOG) > 0:
@@ -163,9 +164,10 @@ while time.monotonic() < deadline:
 ```
 
 A bare `sleep` is acceptable only **inside a mock**, where the delay is the thing being
-simulated — a mirror that stalls (`:801`, `sleep 30`), an askpass that never returns
-(`:644`, `sleep 300`), a transaction slow enough for the keep-alive to be mid-sleep when it
-ends (`:1500`). Those are fixtures, not waits.
+simulated — the mirror that stalls (`sleep 30`, in the slow-source scenario), the askpass
+that never returns (`sleep 300`, in the orphaned-dialog scenario), the transaction slow
+enough for the keep-alive to be mid-sleep when it ends (`sleep 1`, in the keep-alive
+scenario). Those are fixtures, not waits.
 
 Determinism also means: no dependence on wall-clock time of day, on the order a real
 filesystem returns entries, or on any network at all.
@@ -192,8 +194,8 @@ $ echo $?
 RuntimeError: libshiboken: Internal C++ object (PySide6.QtCore.QProcess) already deleted.
 ```
 
-They come from a `finished` lambda (`updater.py:2461`) firing after Python has dropped the
-last reference to the `QProcess`, so the C++ object is gone while the wrapper is not. The
+They come from the `finished` lambda in `Updater._query_auth_status` firing after Python
+has dropped the last reference to the `QProcess`, so the C++ object is gone while the wrapper is not. The
 suite is genuinely passing; the tracebacks are teardown, not failure. That is precisely the
 problem — they are indistinguishable at a glance from 28 real errors. Filed as
 **ONEUP-0062**, to be fixed in 2.0.

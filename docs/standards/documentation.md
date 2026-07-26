@@ -58,7 +58,7 @@ leaving a heading with nothing under it.
 2. **Background** — what is broken or missing today, with evidence from the tree.
 3. **Scope decisions (agreed with the user)** — the choices that were preference, not
    deduction, and who made them. This is what stops the same argument being had twice.
-4. **Design** — the mechanism. Cite real files and line numbers.
+4. **Design** — the mechanism. Cite real files and symbols (§6a).
 5. **Correctness invariants** — see §5.
 6. **Failure modes** — what happens when each assumption breaks.
 7. **Tests** — which test locks in which invariant, and where it lives.
@@ -93,9 +93,9 @@ Rules:
 
 ## 6. The verification rule
 
-**Every claim naming a function, file, line number, flag, marker, constant or version is
-checked against the tree in the session it is written.** Not recalled, not inferred from
-how the code probably works.
+**Every claim naming a function, file, flag, marker, constant or version is checked against
+the tree in the session it is written.** Not recalled, not inferred from how the code
+probably works. (How to *write* the citation — by name, never by line number — is §6a.)
 
 - Phrases that must stop you: *"I assume"*, *"presumably"*, *"this is probably how it
   works"*, *"the wiring likely does"*. Each is the signal to run a `grep`, not to keep
@@ -107,6 +107,53 @@ how the code probably works.
 The live example of why: the ONEUP-0054 draft cites 197 engine tests and 3,680 lines from
 commit `ea51adc`. The real figures at `dbef1a8` are 205 and 3,719. Numbers rot silently,
 which is what §3's `Verified at` line is for.
+
+## 6a. Cite by name, never by line number
+
+**A citation names a symbol or quotes a searchable anchor. It never points at a bare line
+number.** Decided with the user, 2026-07-26.
+
+| Don't | Do |
+| --- | --- |
+| `updater.py:3581` | `updater.py` — `Updater._center_child` |
+| `update_system.sh:864` | `update_system.sh` — the held-lock hint, in the main flow |
+| "the regex at `:927`" | "the `_ALIAS_RE` pattern" |
+| "the comment at `:377-382`" | "the QSS comment beginning *\"Keyboard focus reuses the HOVER look\"*" |
+
+**Why a line number is worse than no locator at all:** it looks precise, so a reader trusts
+it, and it is wrong after any edit *above* it — an edit that need not have touched the cited
+code at all. A wrong-but-confident pointer costs more than an approximate one, because the
+reader follows it, finds unrelated code, and either believes the document is describing that
+code or concludes the whole document is stale.
+
+**Why now specifically:** 2.0 splits `updater.py` into `oneup/gui/` and replaces
+`update_system.sh` with `oneup/engine/`. Every line number in every document will not merely
+drift — it will point into a file that no longer exists. A symbol name mostly survives that
+move; where it does not, the rename is a real change worth noticing.
+
+### 6a.1 When there is no symbol to name
+
+Some things genuinely have no enclosing function — a QSS rule inside a template string, a
+header comment, a `case` arm, a constant list. Cite them by **quoting enough text to
+`grep` for**, in preference order:
+
+1. **The nearest enclosing symbol**, plus what to look for inside it.
+2. **A short verbatim quote** of the line itself — six or eight distinctive words is plenty.
+3. **A stable named anchor** — a marker name, a QSS selector (`QPushButton#GhostBtn:focus`),
+   an environment variable, a step key.
+
+A citation is well-formed when a reader can find the code with one search and no guessing.
+
+### 6a.2 What line numbers are still for
+
+Nothing durable. They are fine in a **commit message**, a **review comment**, or a
+**conversation** — all three are pinned to a moment in time and are never re-read as
+current. They do not belong in a standard, a spec, a design document, `CLAUDE.md` or the
+roadmap.
+
+**Counts and measurements keep working the same way** — "205 engine tests", "0 directional
+QSS properties" — because §3's `Verified at` header dates them. A line number has no such
+defence: it is stale the moment someone adds an import.
 
 ## 7. Review — the cold-eyes gate
 

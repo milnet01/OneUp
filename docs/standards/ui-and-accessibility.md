@@ -9,7 +9,7 @@ below names the test that enforces it.
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `81b41aa` — every line number, count and QSS rule below was measured
+**Verified at:** `81b41aa` — every symbol name, count and QSS rule below was measured
 against the tree on 2026-07-26, not recalled.
 
 **Absorbs** `docs/standards/dialogs.md` (deleted in the same commit) and the standing rules
@@ -20,7 +20,7 @@ each invariant is tested; this file is the rule a new widget must obey.
 
 | Rule | Enforced by |
 | --- | --- |
-| Everything focusable has a name a screen reader can read | `tests/gui-smoke.py:1155` — walks every widget, keeps `focusPolicy() != Qt.NoFocus`, fails on a nameless one |
+| Everything focusable has a name a screen reader can read | `tests/gui-smoke.py`, the `unnamed()` sweep — walks every widget, keeps `focusPolicy() != Qt.NoFocus`, fails on a nameless one |
 | No state is signalled by colour alone | `gui-smoke.py` INV-2 checks |
 | No hard-coded pixel font size | regex over the built stylesheet (INV-3) |
 | Focus never draws a ring or adds a border | §5, and the QSS itself |
@@ -55,7 +55,7 @@ shape.** The three live pairings:
 | Cue | Pairing |
 | --- | --- |
 | Switch on / off | A shape drawn in the track opposite the knob — a **vertical bar** when on, an **open circle** when off. Drawn with `QPainter` primitives, not a font glyph: a painted widget has no font-fallback chain, so a missing character would vanish silently. |
-| Tray attention badge | A white `!` inside the amber disc (`updater.py:2085-2090`) — the icon differs in *shape*, not only colour. |
+| Tray attention badge | A white `!` inside the amber disc, drawn in `Updater._tray_icon` — the icon differs in *shape*, not only colour. |
 | Overdue last-run line | The text gains a `⚠` prefix and the word `overdue`. Text is safe here because it is an ordinary `QLabel` in the app's font stack. |
 
 **The test for a new cue:** describe the two states out loud without using a colour word.
@@ -72,8 +72,8 @@ gets small text anyway.
   and `min-height: 20px` are legitimate and the test is written to allow them (it matches
   the `font-size:` declaration specifically, not any line containing "px").
 - **Never set a pixel size on a widget font in code** for on-screen text. The one exception
-  in the tree is the tray icon's `!` glyph (`:2087`), which is painted into a fixed-size
-  pixmap and is not text the user reads.
+  in the tree is the tray icon's `!` glyph in `Updater._tray_icon`, which is painted into a
+  fixed-size pixmap and is not text the user reads.
 - **Nothing may have a fixed height that text can outgrow.** A button sized to fit 10 pt
   text clips at 15 pt.
 
@@ -91,7 +91,8 @@ sounds, so read the scope carefully.
 
 **Ordinary borders are entirely fine.** A button may look like a button, a card may have an
 edge, a banner may have a coloured rim. The rule is about the *highlight*, not the control.
-`#GhostBtn` carries `border: 1px solid $ghostbd` at rest (`updater.py:312`) and always has.
+`#GhostBtn` carries `border: 1px solid $ghostbd` at rest in the base stylesheet, and
+always has.
 
 *This scope was clarified by the user on 2026-07-26 after an earlier draft of the 2.0
 documents widened it to "no borders on buttons or links at all". That was a misreading and
@@ -103,21 +104,20 @@ is recorded here so it cannot recur.*
 captures both halves and can be checked by reading a rule:
 
 ```css
-/* updater.py:312-314, 386 — a border that already exists changes COLOUR */
+/* base sheet (_QSS) — a border that already exists changes COLOUR */
 QPushButton#GhostBtn        { border: 1px solid $ghostbd; }
 QPushButton#GhostBtn:hover  { border-color: #4aa3ff; color: #4aa3ff; }
 QPushButton#GhostBtn:focus  { border-color: #4aa3ff; color: #4aa3ff; }   /* same as hover */
 
-/* updater.py:370-385 — a borderless button changes its FILL */
+/* base sheet (_QSS) — a borderless button changes its FILL */
 QPushButton#RunBtn        { border: none; background: $btn_accent; }
 QPushButton#RunBtn:focus  { background: qlineargradient(… #5cb0ff … #3a7cf0); }
 ```
 
 The high-contrast overlay obeys the same rule and is worth stating explicitly, because it
 looks at first glance like an exception: every HC button carries `border: 2px solid $border`
-at rest (`:427`, `:434`), hover recolours it to `$focus` (`:430`, `:435`), and the `:focus`
-rule (`:446-450`) is a copy of hover. **No border is added on focus** — an existing one
-changes colour.
+at rest, hover recolours it to `$focus`, and the `:focus` rule is a copy of hover (all three
+in `_HC_QSS`). **No border is added on focus** — an existing one changes colour.
 
 ### 5.4 Why, and what it costs
 
@@ -132,15 +132,15 @@ The cost is stated honestly rather than hidden: this trades away WCAG 2.4.7's vi
 requirement for sighted keyboard-only users. It is a deliberate, documented deviation.
 Screen-reader focus reporting is unaffected — Qt still reports focus; only the sighted cue
 is the hover treatment rather than a ring. `ToggleSwitch.paintEvent` draws no ring either,
-and says so at `updater.py:728-732`; the switch's **state shape** (§3) is what carries
-meaning there.
+and says so in a comment there; the switch's **state shape** (§3) is what carries meaning.
 
 ### 5.5 Ordering, which is easy to get wrong
 
 `:focus` ties with `:hover` and `:checked` on CSS specificity, so **the `:focus` rules must
 be emitted after all `:hover` / `:checked` / `:pressed` rules for the same selector.**
 Emitted earlier, a focused *checked* control — exactly what a keyboard user lands on — shows
-no cue at all. Both stylesheets already order it correctly (`:377-382` carries the comment).
+no cue at all. Both stylesheets already order it correctly — the base sheet carries the
+comment, beginning *"Keyboard focus reuses the HOVER look"*.
 
 ### 5.6 Tab order follows visual order
 
@@ -158,7 +158,7 @@ two helpers; do not invent a third centring path and do not set a per-dialog pal
 
 The whole app is themed once, application-wide, through `apply_app_theme(app)`, which is
 re-applied live when the desktop switches light/dark
-(`app.styleHints().colorSchemeChanged`, `updater.py:3693`). Because the stylesheet lives on
+(`app.styleHints().colorSchemeChanged`, wired in `main()`). Because the stylesheet lives on
 the `QApplication`, **every child widget — `QDialog` subclasses and `QMessageBox` instances
 alike — inherits it automatically.**
 
@@ -172,8 +172,8 @@ alike — inherits it automatically.**
 Wayland places top-level windows itself and ignores `move()` on an already-mapped window,
 which is why these helpers exist at all (ONEUP-0049).
 
-**A `QDialog` subclass** — `RepoManagerDialog` (`:995`), `SettingsDialog` (`:1161`),
-`RollbackDialog` (`:1232`) — centres itself in `showEvent`; size is restored from
+**A `QDialog` subclass** — `RepoManagerDialog`, `SettingsDialog`, `RollbackDialog` —
+centres itself in `showEvent`; size is restored from
 `QSettings`, position is re-centred every time it opens:
 
 ```python
@@ -188,8 +188,8 @@ def showEvent(self, event):
 
 **A `QMessageBox` we build and `exec()` ourselves** cannot use `showEvent` cleanly, because
 the box sizes to its content only once shown. Centre it via `Updater._center_child`
-(`:3581`) deferred one event-loop tick — the four live call sites are `:2508`, `:2673`,
-`:2725`, `:3576`:
+deferred one event-loop tick — the four live call sites are `Updater._confirm_passwordless`,
+`Updater._confirm_key_import`, `Updater._thin_snapshots` and `Updater.show_about`:
 
 ```python
 box = QMessageBox(self)
@@ -225,8 +225,8 @@ that must pass the same checks the two built-in ones pass.** A theme that cannot
 shipped — there is no "it's only optional" exemption, because a user who picks it is using
 the whole app through it.
 
-A theme is a palette dictionary of the same shape as `_DARK` (`updater.py:453`) and
-`_LIGHT` (`:461`), substituted into the one `_QSS` template by `build_theme`. Consequences,
+A theme is a palette dictionary of the same shape as `updater.py`'s `_DARK` and `_LIGHT`,
+substituted into the one `_QSS` template by `build_theme`. Consequences,
 which are also the rules:
 
 - **A theme supplies colours only — never structure.** It cannot add a border, change a
@@ -273,16 +273,17 @@ Qt mirrors layouts, not `paintEvent`. There is exactly one custom-painted widget
 and it is the one thing that would mirror wrongly:
 
 ```python
-# updater.py:699 ToggleSwitch.paintEvent — the knob position is computed
-# from the LEFT edge, unconditionally:
-x = self._margin + self._pos * travel        # :712
+# ToggleSwitch.paintEvent — the knob position is computed from the LEFT
+# edge, unconditionally:
+x = self._margin + self._pos * travel
 ```
 
 In a right-to-left window the switch must travel the other way, or "on" sits on the side the
 user reads as "off". A new painted widget either computes its geometry from the layout
 direction or states in a comment why it is direction-independent.
 
-The tray icon is painted the same way (`:2060-2092`) but is not laid out by Qt at all, so it
+The tray icon is painted the same way (`Updater._tray_icon`) but is not laid out by Qt at
+all, so it
 is out of scope — named here so its absence reads as a decision.
 
 ### 8.4 Read the direction from the application, never assume it
