@@ -335,7 +335,7 @@ git commit -m "ONEUP-0057: settle the privilege split, the sudo model and bounda
 
 **Files:** Create `docs/standards/testing.md`
 
-- [ ] **Step 1: Read how the harness actually works** — the standard describes it, so it
+- [x] **Step 1: Read how the harness actually works** — the standard describes it, so it
       must match:
 
 ```bash
@@ -343,7 +343,7 @@ grep -n 'run_engine()' -A 30 tests/run-tests.sh
 grep -n 'ONEUP_RUN_STATE\|ONEUP_STOP_FILE\|ONEUP_ZYPP_PID_FILE' tests/run-tests.sh | head
 ```
 
-- [ ] **Step 2: Write the document**, settling:
+- [x] **Step 2: Write the document**, settling:
       - **A test never depends on, or damages, the machine.** With the precedent: 40 tests
         once failed because the machine happened to be running zypper, and a suite run
         during a real update deleted that run's `run.state` (ONEUP-0045/0050/0055). Every
@@ -358,16 +358,16 @@ grep -n 'ONEUP_RUN_STATE\|ONEUP_STOP_FILE\|ONEUP_ZYPP_PID_FILE' tests/run-tests.
         change offers a service restart, not a reboot; `--check` is read-only and rootless
         (the mock exits 99 if it is not).
       - **A passing suite is silent.** Live finding, 2026-07-26: `tests/gui-smoke.py`
-        passes 283/283 while printing ~26 `RuntimeError` tracebacks from teardown. Noise
-        in a green run trains you to ignore output. Record it as a roadmap bullet in
-        Task 18 and state the rule here.
+        passes 283/283 while printing `RuntimeError` tracebacks from teardown. Noise
+        in a green run trains you to ignore output. Already filed as **ONEUP-0062** at
+        discovery; state the rule here. *Measured at `416caa4`: **28** tracebacks, exit 0.*
       - **New in 2.0:** the Python engine makes *unit* tests possible for parsers, which
         the Bash one could only test end-to-end. Unit-test the parser, keep the end-to-end
         scenario for the contract.
       - **Determinism:** no reliance on wall-clock timing, ordering of a real filesystem,
         or a network.
 
-- [ ] **Step 3: Verify the ~26-traceback claim before writing it as fact:**
+- [x] **Step 3: Verify the ~26-traceback claim before writing it as fact:**
 
 ```bash
 python3 tests/gui-smoke.py 2>&1 | grep -c RuntimeError; echo "exit=$?"
@@ -375,7 +375,7 @@ python3 tests/gui-smoke.py 2>&1 | grep -c RuntimeError; echo "exit=$?"
       Expected: a non-zero count with the suite still reporting `Failed: 0`. If the count
       is now zero, delete the claim.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add docs/standards/testing.md
