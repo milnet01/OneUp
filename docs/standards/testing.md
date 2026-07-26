@@ -123,7 +123,10 @@ when a scenario is commented out during debugging.
 Almost every engine scenario — 75 of 76 — builds a directory of fake system tools and
 prepends it to `PATH`. (The exception is the keep-alive-guard scenario, which executes a
 `sed`-extracted fragment of the engine rather than the engine, and is safe only because its
-`kill -0` guard fails before the body runs. Nothing asserts that; see §2.1.)
+`kill -0` guard fails before the body runs. **Its safety rests on that guard and nothing
+asserts the guard** — the suite does assert what the keep-alive *does* (it exits once the
+engine is gone, SIGKILL and all), but not that this scenario's extracted fragment stays
+harmless when it does not.)
 `setup_common` in `tests/run-tests.sh` supplies the ones every scenario needs — `sudo`,
 `systemctl`, `snapper`, `notify-send`, `flatpak`, `fwupdmgr` — and the scenario overwrites
 whichever it needs to behave differently, usually `zypper`.
@@ -354,3 +357,7 @@ suite breaks every single run.
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §2.3's no-network rule was flatly false (the GUI suite makes 49 live GitHub requests per run, now ONEUP-0067), the traceback count was neither 28 nor fixed, its stated cause was backwards, and "both suites already do this correctly" was contradicted by a `sleep 0.5` and a silent SKIP branch in the suite itself (ONEUP-0068) |
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
+| 3 | 2026-07-26 | none | clean. |
+| 4 | 2026-07-26 | 1 critical, 1 medium — **2 verified** | the What-checks-this table said the GUI suite does not redirect `HOME`. It does; the **engine** suite is the one that does not, and the row had borrowed the engine's roadmap id. Two rules, two failures, one row — and the table read as authoritative while saying the opposite of the truth. |
+| 5 | 2026-07-26 | 2 medium — **0 verified, 2 dismissed** | both asked that §2.3's absolute *no test may reach the network* be softened to *should not*, because the section then names its own violations. That disclosure is deliberate, and the proposed wording is the uncheckable hedge `documentation.md` §8.1 bans. Dismissed explicitly rather than filtered. |
+| 6 | 2026-07-26 | 1 medium — **1 verified** | converged (polish only). §3's parenthetical pointed at §2.1 for a claim §2.1 does not make, and blurred what the suite does assert about the keep-alive against what it does not. |

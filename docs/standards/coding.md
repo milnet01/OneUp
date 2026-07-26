@@ -304,12 +304,14 @@ lock in what is true rather than asking for a migration.
   unparented menu can be garbage-collected while it is on screen; the ONEUP-0018 review
   found exactly that. The one menu in the tree is parented today (`QMenu(self)` in
   `Updater._ensure_tray`), and new ones must be.
-- **Parent every `QProcess`.** Every one in the tree is (`QProcess(self)` — seven call
-  sites). An unparented one is collected by Python while C++ still holds it, which
-  surfaces as `RuntimeError: Internal C++ object (QProcess) already deleted`.
+- **Parent every `QProcess`.** Every one in the tree is (`QProcess(self)`). An unparented
+  one is collected by Python while C++ still holds it, which surfaces as
+  `RuntimeError: Internal C++ object (QProcess) already deleted`.
 - **Parenting is not the whole answer, and the tree proves it.** That same `RuntimeError`
-  is printed ~30 times by a *passing* `tests/gui-smoke.py` run, from the `finished` lambda
-  in `Updater._query_auth_status` — where the `QProcess` **is** parented. Parenting is
+  is printed dozens of times by a *passing* `tests/gui-smoke.py` run, from the `finished` lambda
+  in `Updater._query_auth_status` — where the `QProcess` **is** parented.
+  (`docs/standards/testing.md` §7 owns the measurement and says how to take it; the count
+  varies run to run, so it is not quoted here.) Parenting is
   what kills it: the test drops the window, Qt deletes the child C++ object, and the
   pending connection then fires into a Python wrapper whose C++ side is gone. Parent *and*
   make sure nothing outlives the parent — disconnect in the handler, or hold the reference
@@ -485,3 +487,7 @@ that checked two rule families out of eight.
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §2.1 said the divergence was with GitHub CI, which does not lint at all; the prescribed ruff config was measured and reports far more than the 14 wrappable lines then claimed (§2.1.1 carries the figures, and owns them); three `# noqa` comments were found anchored one line above their diagnostic; and the `QProcess` teardown error was attributed to *un*parented objects when every one in the tree is parented |
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
+| 3 | 2026-07-26 | 1 medium — **1 verified** | §7 restated two of the four correctness invariants that `testing.md` §5 owns. Replaced with a pointer. |
+| 4 | 2026-07-26 | none | clean. |
+| 5 | 2026-07-26 | 1 medium — **1 verified** | the loop-1 row above carried 54 as the prescribed ruff config's error count. 54 is the figure *without* `BLE`; §2.1.1 owns both, and the row now defers to it. |
+| 6 | 2026-07-26 | 1 low — **1 verified** | converged (polish only). §6 quoted the teardown-traceback count as '~30'. It varies run to run, so `testing.md` §7 owns it and this file no longer states a number (§6b). |

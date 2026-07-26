@@ -405,3 +405,5 @@ where the contrast half stops being manual.
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §6.2's dialog example was the hand-rolled X11 path ONEUP-0049 replaced and never named `center_on_parent`; the tray glyph is dark, not white; §7's contrast check was described in the present tense although nothing computes it, and its "the built-ins pass" premise is false at 3.07:1; and the focus cue's state-change contrast was measured at 1.14–1.62:1 in three of four cases |
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
+| 3 | 2026-07-26 | none | clean. Collateral only: a pointer to the deleted `dialogs.md` became a plain mention, so it no longer reads as a live path. |
+| 4 | 2026-07-26 | none | converged. |

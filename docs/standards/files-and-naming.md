@@ -340,3 +340,5 @@ misnamed or unregistered file.
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: `docs/reference/` was described as not existing when it does, four bare line-number citations survived the `documentation.md` §6a sweep, gate G5 was credited with a check it does not make, and the root was said to hold three programs when it holds two |
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged (polish only). Verified here: "From design §4" never named the design document. The two line-number citations two lanes reported are in `CLAUDE.md`, not in this document — dismissed, and already covered by ONEUP-0065 and Task 11 |
+| 3 | 2026-07-26 | none | clean. Collateral only: the `tests/` row and the test-file naming row gained `docs-check.py`. |
+| 4 | 2026-07-26 | none | converged. |

@@ -299,3 +299,5 @@ review is the backstop.
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document was one of three lanes the breadth pass accepted clean. Its share: a bare "§5.1" that meant the *design's* §5.1, and a paragraph restated verbatim from `docs/reference/marker-protocol.md` §5.1, now a pointer |
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
+| 3 | 2026-07-26 | none | clean. |
+| 4 | 2026-07-26 | none | converged. |

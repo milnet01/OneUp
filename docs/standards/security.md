@@ -440,6 +440,9 @@ shows up as nothing in particular cannot be tested, however carefully it is word
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: §1.2's "21 of 22 through `sudo_capture`" was wrong (14 of 34) and contradicted §2.2's own top-level-`sudo` rule; "never launches `zypper` itself" was false (`read_repos`); §3.1 demanded `-A -p` on every call when 20 of 21 deliberately inherit it from the exported environment; and `Updater.restart_now`'s `systemctl reboot` was missing from the privileged-site inventory |
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
+| 3 | 2026-07-26 | 1 medium — **1 verified** | §1.2 claimed *this document owns both figures — nothing else restates them*. The design document restated the whole breakdown — the same duplication behind the 21-of-22 against 14-of-34 contradiction the previous review found. The design document now cites this section. |
+| 4 | 2026-07-26 | none | clean. Nothing from the previous pass resurfaced, which is the proof that fix held. |
+| 5 | 2026-07-26 | none | converged. |
 
 ---
 

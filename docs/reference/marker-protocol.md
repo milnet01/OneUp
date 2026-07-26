@@ -103,7 +103,7 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@REMEDY@@` | `import-keys` *or* `skip-repo\|alias` | the system step; `refresh_repos` | `handle_marker` |
 | `@@SERVICES@@` | `svc1 svc2 …` | the summary | `handle_marker` |
 | `@@INSTALLED@@` | `count\|sys_changed\|fw_changed` | the summary | `handle_marker` |
-| `@@REBOOT@@` | `yes\|no[\|reason]` | the summary | `handle_marker` |
+| `@@REBOOT@@` | `yes[\|reason]` *or* `no` | the summary | `handle_marker` |
 | `@@DONE@@` | `ok` *or* `errors` *or* `stopped` | the exit paths | `handle_marker` |
 
 **Every marker the engine emits is read, and every marker the window reads is emitted.**
@@ -211,9 +211,10 @@ is empty for Flatpaks** — the Flatpak path knows the new version only.
 `count` and `sys_changed`; **`fw_changed` is emitted and currently unread** — it is part of
 the layout (a positional regression test pins all three) and must keep its position.
 
-### 4.8 `REBOOT|yes|no[|reason]`
+### 4.8 `REBOOT|yes[|reason]` or `REBOOT|no`
 
-The third field is **optional** and appears only when a reboot is advised. It is a
+The payload is `yes` or `no`, and **`no` never carries anything after it**. The trailing
+`reason` is **optional**, appears only alongside `yes`, and is a
 plain-English phrase built from the run's system transaction log naming what makes the
 restart matter — *"a new kernel and your NVIDIA graphics driver were installed"*. The
 window shows it **verbatim**, falling back to generic wording when it is absent.
@@ -382,3 +383,6 @@ halves, and only checking them separately shows which one is missing.
 | --- | --- | --- | --- |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document was one of three lanes the breadth pass accepted clean, and its share was additive rather than corrective: the `HINT`/`REMEDY` code vocabulary (§5.2) and the two state files (§8) were relied on by other documents and defined by none |
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
+| 3 | 2026-07-26 | 1 high — **1 verified** | the What-checks-this row claimed `tests/run-tests.sh` proves the engine emits each marker. It proves 22 of 23 — `DISK` is asserted by no engine scenario, and reads as covered only because `gui-smoke.py` feeds it (**ONEUP-0069**). The gate meant to protect this table was itself comparing against the engine's *header comment*, which §7 of this document records as stale, rather than the `marker` call sites. |
+| 4 | 2026-07-26 | none | clean. |
+| 5 | 2026-07-26 | 1 medium — **1 verified** | converged (polish only). §3 wrote the REBOOT payload as `yes|no[|reason]`, which reads as three fields where the house style elsewhere is *or*. The ambiguity had already propagated into §4.8's prose, which called the reason 'the third field'. |

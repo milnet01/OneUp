@@ -229,7 +229,7 @@ number.** Decided with the user, 2026-07-26.
 | `updater.py:3581` | `updater.py` — `Updater._center_child` |
 | `update_system.sh:864` | `update_system.sh` — the held-lock hint, guarded by `lock_holder` |
 | "the regex at `:927`" | "the `_ALIAS_RE` pattern" |
-| "the comment at `:377-382`" | "the QSS comment beginning *\"Keyboard focus reuses the HOVER look\"*" |
+| "the comment at `:377-382`" | "the QSS (Qt stylesheet) comment beginning *\"Keyboard focus reuses the HOVER look\"*" |
 
 **Why a line number is worse than no locator at all:** it looks precise, so a reader trusts
 it, and it is wrong after any edit *above* it — an edit that need not have touched the cited
@@ -293,6 +293,11 @@ not its current result.
 rule; the current call count is not worth citing, because nothing pins it and the next widget
 changes it."*
 
+**A ratio is a shape too, and it is often the honest form.** *"`updater.py` is more than six
+times the 600-line ceiling"* carries the whole argument for ONEUP-0034 and stays true through
+any ordinary edit, where *"`updater.py` is 3,719 lines"* is wrong by the next commit and
+carries no argument at all. Reach for the ratio whenever the *comparison* is the point.
+
 ### 6b.3 The command, not its output
 
 **Where a reader really does want the number, give them the thing that prints it.** `Passed:
@@ -307,7 +312,7 @@ it as **something that was measured**, not as something that is true:
 | Rots | Does not rot |
 | --- | --- |
 | "there are 47 lint errors" | "measured at `58ea3bc`, adopting the config reported 47 errors" |
-| "`updater.py` is 3,719 lines" | "`updater.py` is more than six times the 600-line ceiling" |
+| "the GUI suite prints 33 teardown tracebacks" | "measured five times at `5e76cfb`: 33, 32, 33, 33, 33 — the count varies with teardown order" |
 | "the engine makes 34 privileged calls" | "a full run once needed **seven** password prompts, which is what `sudo_capture` exists to prevent" |
 
 The right-hand column is durable because each sentence is about **what happened**, and what
@@ -533,3 +538,6 @@ them.
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: the tie-break rule contradicted §1's table, the header block was missing from the standard that mandates it, the `Status`/`Kind` enums matched no document in the tree, and "standards never hold anything version-specific" contradicted six of the nine |
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
 | 3 | 2026-07-26 | 5 high, 4 medium, 7 low — **all verified** | §8 (plain language) was added at the user's request and re-reviewed on its own. The section did not obey itself: its showcase example inverted the very error it described, and it used semicolons in the paragraph banning them. Also fixed set-wide: the `Status` line carried loop history that §4 item 11 reserves for the log (ten files), §7 defined convergence as zero findings when the practice is zero *substantive* findings, and §3 claimed no pre-existing spec carries `Branch:` (ONEUP-0054 does) |
+| 4 | 2026-07-26 | none | clean. Skipped in the next pass — its bytes were unchanged, so the same cold read could not surface anything new. |
+| 5 | 2026-07-26 | 1 medium — **1 verified** | the What-checks-this table cited §6 for a `TODO`/`TBD` rule §6 never stated. The gate existed; the rule was implicit. Now written into §6. |
+| 6 | 2026-07-26 | 2 medium — **2 verified** | converged (polish only). `QSS` was used undefined, against this file's own §8.2; and §6b.4's second example was a ratio, not a past-tense measurement, while the prose beneath claimed every row was 'about what happened'. The ratio moved to §6b.2, where it demonstrates the right rule. |
