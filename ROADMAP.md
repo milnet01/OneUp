@@ -887,3 +887,82 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The app's saved preferences live under a folder name that doesn't match the app's official ID; tidying that up in 2.0 would silently wipe everyone's settings unless we copy them across first.
   Kind: implement.
   Source: in-session-2026-07-26 (ONEUP-0057 Task 3 gotcha sweep).
+
+- 📋 [ONEUP-0062] **Silence the 56 teardown tracebacks the GUI suite prints while passing.**
+  Measured 2026-07-26: `QT_QPA_PLATFORM=offscreen python3 tests/gui-smoke.py`
+  prints 56 Traceback / RuntimeError lines and exits 0. All of them are
+  `RuntimeError: libshiboken: Internal C++ object (QProcess) already
+  deleted`, raised from the lambda at updater.py:2461 (and the same shape
+  at the other six QProcess sites). Cause: the QProcess is parented to the
+  window, so when a test drops the window while a probe is still running,
+  Qt deletes the child C++ object but the pending `finished` connection
+  still fires into Python. The docstring at 2448 shows the author already
+  considered teardown for incremental reads — the `finished` slot itself is
+  the gap. Two reasons to fix rather than tolerate: (1) a passing suite
+  must be silent, or a genuine regression hides in the noise, which is the
+  rule docs/standards/testing.md will carry (ONEUP-0057 plan, Task 5); (2)
+  the same ordering can bite in production if the user quits while an
+  auth-status probe is in flight. Likely fix: disconnect (or guard the slot
+  with a shiboken.isValid check) in closeEvent, plus a test assertion that
+  stderr is empty. Not fixable on frozen main.
+  **Layman:** The window tests print 56 alarming error reports and then say everything passed — which trains us to ignore errors, so a real one would slide straight past.
+  Kind: test.
+  Source: in-session-2026-07-26 (ONEUP-0057 gotcha sweep).
+
+- 📋 [ONEUP-0063] **Add pyproject.toml so local lint and CI check the same rules.**
+  Verified 2026-07-26: the repo has no pyproject.toml, no requirements
+  file and no setup.py. local-CI.sh:78 runs `ruff check . --select F,B
+  --exclude screenshots -q`, so the rule set lives only in that one
+  script. Consequences: a contributor running plain `ruff check .` gets
+  ruff's defaults and disagrees with CI in both directions, with no
+  warning; and the six `# noqa: S` comments at updater.py 580, 583, 585,
+  985, 1925 and 3333 currently suppress nothing at all, because S
+  (bandit/security) is not among the selected rules — they read as
+  evidence that a security review happened when none is enforced.
+  docs/standards/coding.md §2.1 already settles the exact contents
+  (target-version py313, line-length 100, select F,B,S,E,W,I,UP,RUF) and
+  §10 records both as traps. Work: add the file, drop the --select and
+  --exclude flags from local-CI.sh, and fix whatever the newly-enabled
+  rules surface — measured as 13 over-long lines tree-wide at 100 columns.
+  Not landable on frozen main; part of the 2.0 opening pass.
+  **Layman:** Running the code checker yourself gives different answers than the build server does, and six safety comments in the code silence a rule that isn't switched on — one small config file fixes both.
+  Kind: chore.
+  Source: in-session-2026-07-26 (ONEUP-0057 Task 3).
+
+- 📋 [ONEUP-0064] **Redesign the interface around ergonomics, plain-language clarity and accessibility.**
+  Requested by the user (2026-07-26) as part of 2.0, not as polish
+  afterwards. Three stated priorities, in the user's order: ergonomics,
+  user-friendliness, accessibility.
+
+  HARD CONSTRAINT, stated by the user: do NOT highlight buttons or links
+  with borders. This extends the existing no-focus-ring decision
+  (2026-07-25, recorded in CLAUDE.md: the app deliberately draws no focus
+  ring and focus reuses the hover look) from focus to affordance
+  generally. Buttons and links must read as interactive through fill,
+  weight, spacing, cursor and wording instead of an outline. The
+  accessibility consequence has to be answered head-on rather than
+  waived: WCAG 2.2 SC 1.4.11 wants a visible non-text indicator and SC
+  2.4.11 wants focus not obscured, so the spec must show how a
+  keyboard-only user can tell where they are without a ring — fill and
+  contrast shift are the likely answer, and whatever is chosen must be
+  measured, not asserted.
+
+  Interacts with three other 2.0 items and the sequencing matters:
+  - ONEUP-0034 (GUI split) comes FIRST — redesigning a 3,719-line module
+    and splitting it at the same time makes both unreviewable.
+  - ONEUP-0027 (themes) comes AFTER — theming a layout that is about to
+    change means doing it twice.
+  - ONEUP-0032 (translation) comes after both, unchanged: the redesign
+    rewrites user-facing strings, and wrapping them for translation
+    before that means wrapping them twice.
+
+  Governed by docs/standards/ui-and-accessibility.md (ONEUP-0057 plan,
+  Task 6) and specced at Task 17. ONEUP-0028's three groups (blind,
+  partially sighted, colour-blind) remain the accessibility floor: every
+  existing guarantee — accessible name on every focusable widget, never
+  signalling state by colour alone, font sizes derived from the desktop
+  point size — is a regression test the redesign must still pass, not a
+  starting position to renegotiate.
+  **Layman:** Rework the window so it is easier and more comfortable to use — clearer wording, less reaching, everything usable by keyboard and screen reader — without drawing boxes around buttons and links.
+  Kind: ux.
+  Source: user-request-2026-07-26.

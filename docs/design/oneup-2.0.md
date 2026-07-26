@@ -23,6 +23,7 @@ thing can replace what they run today.
 | --- | --- | --- |
 | **ONEUP-0054** | Replace the Bash engine with a Python one | `docs/specs/ONEUP-0054-python-engine.md` |
 | **ONEUP-0034** | Split `updater.py` into focused modules | `docs/specs/ONEUP-0034-gui-modules.md` *(to be written)* |
+| **ONEUP-0064** | Redesign the interface for ergonomics, clarity and accessibility — **no borders on buttons or links** | `docs/specs/ONEUP-0064-interface-redesign.md` *(to be written)* |
 | **ONEUP-0027** | Selectable colour themes beyond follow-the-desktop | `docs/specs/ONEUP-0027-themes.md` *(to be written)* |
 | **ONEUP-0032** | Wrap user-facing text for translation, and mirror the window for right-to-left languages — **groundwork only, English alone**, see §5.1 | `docs/specs/ONEUP-0032-i18n.md` *(to be written)* |
 | **ONEUP-0044** | The double password box | no spec — see §6.2 |
@@ -200,18 +201,32 @@ dependency refresh (0004)      ← first: the Python floor decides what idioms t
 GUI split (0034)               ← first substantial work on v2, and alone: it is
         │                        behaviour-preserving, so the existing 283 GUI
         │                        tests judge it with nothing else in flight
-        ├──────────────► themes (0027)   needs the split's theme module
-        │
+        ▼
+interface redesign (0064)      ← after the split, because redesigning a
+        │                        3,719-line module while also cutting it up
+        │                        makes both changes unreviewable
+        ▼
+themes (0027)                  ← after the redesign, for the same reason in
+        │                        reverse: theming a layout that is about to
+        │                        change means doing it twice
         ▼
 engine rewrite (0054)          ← the long pole; gate in §7
         │
         ▼
 translation (0032)             ← last: wrapping strings before the split means
-                                 wrapping them twice, and §5.1 requires the
+                                 wrapping them twice, the redesign rewrites
+                                 the wording anyway, and §5.1 requires the
                                  rewrite to be proven before the contract moves
 ```
 
 The double-password investigation (0044) runs alongside the rewrite; see §6.2.
+
+**Why the redesign sits between the split and themes.** All three touch the same
+widgets. Doing the split first means the 283 existing GUI tests judge it with nothing
+else in flight (it changes no behaviour); doing the redesign next means themes style the
+final layout rather than a doomed one; and leaving translation last means the redesign's
+new wording is wrapped once, not twice. The order is a consequence of each item's
+verification method, not a preference.
 
 ### 5.3 Where each item lands
 

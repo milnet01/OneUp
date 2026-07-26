@@ -55,6 +55,7 @@ Copied verbatim from the design doc and the user's decisions. Every task inherit
 | `docs/specs/ONEUP-0034-gui-modules.md` | The GUI split | 14 |
 | `docs/specs/ONEUP-0027-themes.md` | Selectable themes | 15 |
 | `docs/specs/ONEUP-0032-i18n.md` | Translation, incl. the §5.1 contract change | 16 |
+| `docs/specs/ONEUP-0064-interface-redesign.md` | The interface redesign — ergonomics, clarity, accessibility, no borders | 17 |
 
 ---
 
@@ -384,6 +385,12 @@ grep -n '^#\{1,3\} ' docs/specs/ONEUP-0028-accessibility.md
         `px`.
       - **No focus ring** — a deliberate user-facing decision (2026-07-25): focus reuses
         the hover look. Qt ignores `outline-radius`, so a ring draws square.
+      - **No borders on buttons or links at all** — the user extended the rule above on
+        2026-07-26, from focus to affordance generally. Write it as a standing rule, and
+        state what carries affordance and focus *instead* (fill, weight, spacing, cursor,
+        wording), because "no border" on its own is a prohibition and a standard has to
+        give the alternative. The redesign (Task 17) then works inside this rule; it does
+        not get to reopen it.
       - **New, for themes (ONEUP-0027):** every theme must satisfy the contrast rule and
         the colour-never-alone rule; a theme that cannot is not shipped. State how a new
         theme is checked.
@@ -703,6 +710,14 @@ grep -n 'build_theme\|apply_theme\|current_is_dark\|colorSchemeChanged' updater.
       every theme keeps every accessible name; "Follow system" still switches live on
       `colorSchemeChanged`; an unknown/corrupt stored theme name falls back rather than
       failing to start.
+- [ ] **Step 4a: Cover the painted widgets** — measured 2026-07-26 and recorded on the
+      ONEUP-0027 bullet: **ten colours sit outside the theme machinery** and no stylesheet
+      can reach them (`GREEN`/`RED` at `updater.py:222-223`, `TRAY_ATTENTION_COLOR` at 141,
+      and seven `QColor` calls inside the `ToggleSwitch` and tray `paintEvent` overrides at
+      691, 719, 722, 725, 2072, 2078, 2090). `paintEvent` bypasses QSS entirely, so a new
+      theme would leave the on/off switch and tray badge at their old colours — and those
+      are precisely the surfaces carrying state meaning. The spec must define theme tokens
+      the painters read, and the contrast check must cover painted surfaces too.
 - [ ] **Step 5: Commit.**
 
 ```bash
@@ -759,9 +774,62 @@ git commit -m "ONEUP-0032: spec translation, including the marker-payload change
 
 ---
 
-### Task 17: Cold-eyes batch 3 — the three new specs
+### Task 17: `ONEUP-0064-interface-redesign.md`
 
-- [ ] **Step 1: Run `/cold-eyes`** over the specs from Tasks 14, 15 and 16.
+**Files:** Create `docs/specs/ONEUP-0064-interface-redesign.md`
+
+**Requested by the user, 2026-07-26**, as part of 2.0 rather than polish after it. Three
+priorities in the user's own order: **ergonomics, user-friendliness, accessibility.**
+
+**The one hard constraint, stated by the user: do not highlight buttons or links with
+borders.** This extends the existing no-focus-ring decision (2026-07-25) from focus to
+affordance in general. It is a design instruction, not a suggestion — the spec works
+within it rather than reopening it.
+
+- [ ] **Step 1: Read what the interface is today** before proposing anything different.
+      The redesign is judged against the current window, so measure it:
+
+```bash
+grep -n 'setAccessibleName\|addWidget\|addLayout' updater.py | wc -l
+grep -n 'class .*Q\(Dialog\|MainWindow\|Widget\|Frame\)' updater.py
+```
+- [ ] **Step 2: Answer the borderless-affordance question head-on.** Without an outline, a
+      keyboard user still has to know where they are and a low-vision user still has to
+      know what is clickable. WCAG 2.2 SC 1.4.11 (non-text contrast) and SC 2.4.11 (focus
+      not obscured) do not go away because a border is off the table. Settle in the spec
+      how affordance and focus are conveyed instead — fill, weight, spacing, cursor and
+      wording are the likely answers — and **measure the contrast ratios**, do not assert
+      them. If a chosen treatment cannot meet the ratio, say so and pick another.
+- [ ] **Step 3: Ask the user the questions that are preference, not fact.** At minimum:
+      how much may the layout move (a tidy-up versus a re-plan), and whether the phone-style
+      toggle switches stay. Do not invent answers to these — but do bring a recommendation
+      to each, per the standing instruction not to hand back open questions bare.
+- [ ] **Step 4: Write the spec** to the template, settling: what changes and what
+      deliberately does not; the affordance and focus treatment from Step 2 with its
+      measured ratios; how the five task rows, the progress area, the log pane and the
+      header controls are arranged; and what a first-time user is expected to understand
+      without reading anything.
+- [ ] **Step 5: Name the invariants.** ONEUP-0028's floor is a regression bar, not a
+      starting position: every focusable widget keeps an accessible name (`gui-smoke.py`
+      fails on a nameless one); **no state is signalled by colour alone**; font sizes stay
+      derived from the desktop point size, never hard-coded `px`. Add the redesign's own:
+      no button or link is bordered; every control reachable and operable by keyboard
+      alone; focus is always visibly located without a ring.
+- [ ] **Step 6: Record the sequencing** the design doc §5.2 now fixes — the redesign lands
+      **after** the GUI split (0034) and **before** themes (0027) and translation (0032),
+      because it restructures what those two then style and translate.
+- [ ] **Step 7: Commit.**
+
+```bash
+git add docs/specs/ONEUP-0064-interface-redesign.md
+git commit -m "ONEUP-0064: spec the interface redesign"
+```
+
+---
+
+### Task 18: Cold-eyes batch 3 — the four new specs
+
+- [ ] **Step 1: Run `/cold-eyes`** over the specs from Tasks 14, 15, 16 and 17.
 - [ ] **Step 2–4:** verify, fix by severity, loop cold until clean, log as you go.
 - [ ] **Step 5: Commit** per loop:
 
@@ -772,7 +840,7 @@ git commit -m "ONEUP-0057: cold-eyes loop N on the 2.0 specs — <what changed>"
 
 ---
 
-### Task 18: Close the documentation set
+### Task 19: Close the documentation set
 
 - [ ] **Step 1: Cross-document consistency sweep.** Every internal link resolves; no
       document contradicts the design; every 2.0 item in design §1 has a spec or a stated
@@ -782,9 +850,18 @@ git commit -m "ONEUP-0057: cold-eyes loop N on the 2.0 specs — <what changed>"
 grep -rhoE '\bdocs/[a-zA-Z0-9/_.-]+\.md' docs/ CLAUDE.md README.md | sort -u | xargs ls
 ```
       Expected: no "No such file".
-- [ ] **Step 2: File the findings this plan turned up** as roadmap bullets — the
-      GUI-suite teardown tracebacks (Task 5), any marker asymmetry (Task 9), and any rule
-      Task 4 found the engine does not actually follow.
+- [ ] **Step 2: File any remaining findings** as roadmap bullets — any marker asymmetry
+      (Task 9), and any rule Task 4 found the engine does not actually follow.
+
+      **Filed as they were found, not deferred to here** (2026-07-26): ONEUP-0058
+      (test suite writes to `~/Documents`), ONEUP-0059 (XDG paths), ONEUP-0060 (unpinned
+      PySide6/PyInstaller in the AppImage build), ONEUP-0061 (QSettings migration),
+      ONEUP-0062 (the 56 GUI-suite teardown tracebacks), ONEUP-0063 (`pyproject.toml`, and
+      the six `# noqa: S` comments that currently suppress nothing). Two further findings
+      were folded into existing bullets rather than duplicated: the painted widgets no
+      theme can reach (ONEUP-0027) and the single-file test loader the GUI split breaks
+      on, plus the untested GUI-side locale pin (ONEUP-0034). Filing at discovery is the
+      rule — a gotcha held until close-out is a gotcha that gets lost.
 - [ ] **Step 3: Record the outcome on ONEUP-0057** and flip it to shipped, listing the
       documents produced and the loop counts.
 - [ ] **Step 4: Add a CHANGELOG `[Unreleased]` entry** — documentation-only, but it is
@@ -799,11 +876,16 @@ grep -rhoE '\bdocs/[a-zA-Z0-9/_.-]+\.md' docs/ CLAUDE.md README.md | sort -u | x
 
 ## Self-review
 
-**Coverage.** Design §1's six items: 0054 → Task 12; 0034 → Task 14; 0027 → Task 15;
-0032 → Task 16; 0044 and 0004 → no spec by design §6.2/§6.3, and the coding standard
-(Task 3) carries the Python-floor decision 0004 needs. The nine standards → Tasks 1–8 plus
-the existing `dependencies.md`. The reference → Task 9. The three cold-eyes batches →
-Tasks 10, 13, 17. `CLAUDE.md` → Task 11.
+**Coverage.** Design §1's **seven** items: 0054 → Task 12; 0034 → Task 14; 0027 → Task 15;
+0032 → Task 16; **0064 → Task 17**; 0044 and 0004 → no spec by design §6.2/§6.3, and the
+coding standard (Task 3) carries the Python-floor decision 0004 needs. The nine standards
+→ Tasks 1–8 plus the existing `dependencies.md`. The reference → Task 9. The three
+cold-eyes batches → Tasks 10, 13, 18. `CLAUDE.md` → Task 11.
+
+**Task 17 was added 2026-07-26** at the user's request (the interface redesign), which
+renumbered the old Tasks 17 and 18 to 18 and 19. It sits after the two specs it
+constrains — themes (15) styles the redesigned layout and translation (16) wraps its new
+wording — so batch 3 (Task 18) still cold-eyes all four specs together.
 
 **Placeholders.** Three tasks originally stopped to ask the user rather than inventing an
 answer. **Two are now answered (2026-07-26)** and the tasks proceed without pausing:
@@ -814,9 +896,15 @@ answer. **Two are now answered (2026-07-26)** and the tasks proceed without paus
 - *Does a locale ship in 2.0?* — **no: groundwork only, English alone, languages after
   release** (Task 16 Step 2, design §5.1).
 
-**One remains:** the Python floor, *if* the oldest supported Leap's Python version cannot
-be established from the distro's own documentation (Task 3). That one is a fact-lookup
-first and a question only on failure. Nothing else defers.
+**The third is now answered too (2026-07-26).** The Python floor was settled from fact
+without asking: Leap 15.6 reached end-of-life on 2026-04-30, so the oldest *supported*
+Leap is 16.0, whose release notes put `/usr/bin/python3` at **3.13** — the same as
+Tumbleweed. See `docs/standards/coding.md` §1.
+
+**Open questions now live only in Task 15 Step 2 and Task 17 Step 3**, and both are
+genuine preference rather than fact: how many themes and where the picker lives; and how
+far the redesign may move the layout. Both are asked *with a recommendation attached*,
+never handed back bare. Nothing else defers.
 
 **Consistency.** Task 1 defines the spec template; Tasks 12, 14, 15 and 16 all name it as
 the shape they follow. Task 2 defines the `oneup/` layout; Tasks 12 and 14 consume it.
