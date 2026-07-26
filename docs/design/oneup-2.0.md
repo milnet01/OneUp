@@ -4,8 +4,8 @@
 until it has (global rule 14).
 **Kind:** programme design — the release as a whole. Each item below has (or gets) its
 own spec; this document holds only what the items *share* or *contend over*.
-**Branch:** `v2` (exists at `6ec47ec`, one commit behind `main`). `main` keeps shipping
-1.x throughout.
+**Branch:** `v2` (exists at `6ec47ec`, one commit behind `main`). `main` ships **1.4.0**
+and then freezes — see §5.4 for what unfreezes it.
 **Baseline:** every figure in §2 was measured against commit `256d0dc` on 2026-07-26,
 not recalled. The earlier draft of `ONEUP-0054` cites figures from `ea51adc`; where the
 two disagree, this document is current.
@@ -133,15 +133,19 @@ can't tell you which one broke it.
 ### 5.2 Order of work, and why
 
 ```
+1.4.0 released from main, then main freezes  ← §5.4
+        │
+        ▼
 dependency refresh (0004)      ← first: the Python floor decides what idioms the
         │                        coding standard permits, so it precedes real code
         ▼
-GUI split (0034) — on main     ← §5.3
-        │
+GUI split (0034)               ← first substantial work on v2, and alone: it is
+        │                        behaviour-preserving, so the existing 283 GUI
+        │                        tests judge it with nothing else in flight
         ├──────────────► themes (0027)   needs the split's theme module
         │
         ▼
-engine rewrite (0054) — on v2  ← the long pole; gate in §7
+engine rewrite (0054)          ← the long pole; gate in §7
         │
         ▼
 translation (0032)             ← last: wrapping strings before the split means
@@ -155,23 +159,46 @@ The double-password investigation (0044) runs alongside the rewrite; see §6.2.
 
 | Item | Branch | Why |
 | --- | --- | --- |
-| Documentation (this set) | `main` | The standards govern 1.x work too |
-| Dependency refresh (0004) | `main` | Small, and 1.x benefits |
-| **GUI split (0034)** | **`main`** | It changes no behaviour, so it can ship in a 1.x release. Landing it on main first means `v2` branches from already-tidy code — otherwise every 1.x fix for months collides with files `v2` has moved. Decided with the user, 2026-07-26. |
-| Engine rewrite (0054) | `v2` | The only item that can't ship incrementally |
-| Themes (0027) | `v2` | User-visible; held for the 2.0 release |
-| Translation (0032) | `v2` | Requires the contract change of §5.1 |
+| Documentation (this set) | `main` | The standards govern 1.x maintenance too, and `v2` inherits them by merge. Docs are not a release, so they are unaffected by the freeze |
+| **Everything in §1** | **`v2`** | Under the freeze (§5.4) `main` takes nothing but qualifying bug fixes, so every 2.0 item — including the GUI split — belongs on the branch |
 
-Landing the split on `main` means one item of the 2.0 list reaches users early — as
-invisible plumbing, under a 1.x version number. That is a deliberate trade for mergeable
-branches, not a loosening of §7.
+**The GUI split moved.** An earlier revision of this document put it on `main`, for one
+reason only: months of 1.x fixes would otherwise collide with files `v2` had moved.
+**The freeze removes that reason** — `main` is now near-idle — so the split returns to
+`v2`, where it is the first substantial work (§5.2) and everything on the 2.0 list ships
+as 2.0. Decided with the user, 2026-07-26, superseding the same day's earlier call.
 
-### 5.4 Keeping 1.x alive without stranding `v2`
+### 5.4 The v1 freeze
 
-`main` continues to take bug fixes and ship 1.x releases while 2.0 is built. To stop the
-branch drifting: **`main` is merged into `v2` after every 1.x release, and never the
-reverse.** `v2` is not rebased — it is long-lived and (once work starts) shared with the
-origin remote, so rewriting its history would break any clone.
+**`main` freezes at 1.4.0.** First, 1.4.0 ships the work already finished and unreleased
+at `256d0dc` — the Stop button, following a run already in progress, making a slow mirror
+legible, Wayland dialog placement, and the false "up to date" fix. Freezing before that
+release would bury eight completed improvements for the length of the 2.0 build; the
+version people are frozen on should be the best one available.
+
+After that, **`main` takes a change only when 1.x cannot do its job.** The user's
+definition, 2026-07-26: *if people can no longer use OneUp to install system updates,
+Flatpak updates or firmware updates, we fix it and ship a 1.4.x.* Two readings are inside
+that definition, not extensions of it — both stated here so neither is re-argued later:
+
+- **A silent wrong answer is a failure to do the job.** ONEUP-0056 is the precedent:
+  OneUp reported "everything is up to date" while eight updates waited. No system got
+  updated and no one knew. Same outcome as a crash, quieter.
+- **Leaving the machine damaged is worse than not doing the job.** A half-applied rpm
+  transaction, or an abandoned lock that blocks the *next* run, means updating is now
+  actively broken.
+
+A likely trigger deserves naming, because it is not a bug in OneUp at all: **openSUSE can
+break OneUp from underneath it.** The engine reads zypper's output, and zypper's wording
+is not an API — ONEUP-0046 exists precisely because that can change. If a zypper update
+blinds 1.x, that qualifies and ships as a 1.4.x.
+
+Anything else — a misplaced dialog, awkward wording, a missing convenience — waits for
+2.0. No feature work lands on `main` during the freeze.
+
+**Merge direction:** `main` is merged into `v2` after any 1.4.x release, never the
+reverse. `v2` is not rebased — it is long-lived and shared with the origin remote, so
+rewriting its history would break any clone.
 
 ## 6. Items without a spec of their own
 
@@ -199,8 +226,8 @@ whether to add a lint configuration file — there is none today, so
 ## 7. The gate — what "ready" means
 
 **Nothing ships as 2.0 until it can fully replace v1.** The user's rule, 2026-07-26:
-no partial 2.0 releases, no 2.0 beta cut from the branch mid-way. `main` ships 1.x, and
-one day 2.0.0 arrives complete.
+no partial 2.0 releases, no 2.0 beta cut from the branch mid-way. Users stay on frozen
+1.4.0 (§5.4) until 2.0.0 arrives complete.
 
 Concretely, all of the following:
 
@@ -221,10 +248,13 @@ G1–G6 come from the ONEUP-0054 draft and are its gate; G7–G9 are the release
 ## 8. Risks, and permission to fail
 
 - **The branch may be abandoned.** That is what a side branch is for. If the rewrite
-  stalls, 1.x keeps shipping and nothing is lost but the branch. This is stated so that
-  abandoning it stays an available, unembarrassing option.
-- **Long-branch drift** — mitigated by §5.3 (split lands on main) and §5.4 (merge after
-  every release), not by hope.
+  stalls, frozen 1.4.0 keeps working and nothing is lost but the branch. This is stated
+  so that abandoning it stays an available, unembarrassing option.
+- **Long-branch drift** — mitigated by the freeze itself (§5.4): a `main` that takes only
+  qualifying bug fixes cannot drift far, and each one is merged into `v2` on release.
+- **The freeze leaks.** The failure mode of any freeze is a slow slide back into 1.x
+  work, one "small" fix at a time. §5.4's definition is deliberately testable — *can
+  people still install their updates?* — so the answer is a finding, not a preference.
 - **A rewrite that buys less than claimed.** The ONEUP-0054 draft is unusually honest
   about this and its §2 should survive review intact: nothing that went wrong in
   ONEUP-0048 was Bash's fault, and Python still cannot kill a root child.

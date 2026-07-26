@@ -731,6 +731,15 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   clean (global rule 14); implementation is blocked until then. Build plans
   (docs/plans/) are deliberately NOT written now — each is written when its
   item starts.
+  Decision (2026-07-26, superseding the same day's earlier call): v1 freezes.
+  main ships 1.4.0 first — the eight finished-but-unreleased improvements from
+  ONEUP-0045/0046/0047/0048/0049/0050/0055/0056 — then takes a change ONLY when
+  1.x cannot do its job, i.e. people can no longer install system, Flatpak or
+  firmware updates (user's definition; a silent wrong verdict and a machine left
+  damaged both count, as does zypper changing its output and blinding 1.x).
+  With main near-idle, the merge-pain argument for landing the GUI split
+  (ONEUP-0034) on main is gone, so the split moves back to v2 as its first
+  substantial work. See docs/design/oneup-2.0.md §5.3/§5.4.
 
   Decisions taken with the user in the same session, recorded in the design:
   2.0 is a full feature release (engine rewrite + GUI split + themes + i18n +
