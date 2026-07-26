@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.3.0
+Version:        1.4.0
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -74,6 +74,15 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Sun Jul 26 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.0-0
+- Warn when zypper's wording changes instead of silently showing no progress.
+- Add a Stop button that never interrupts an install half-way.
+- Pick up and follow a run that is already in progress when the window opens.
+- Stop the test suite reading, and damaging, real machine state.
+- Never report "up to date" for a source the check couldn't read.
+- The GUI test suite no longer reads the machine's real zypper package cache
+- Open dialogs over the app window on Wayland, where move() is ignored.
+- Make a slow mirror legible instead of indistinguishable from a hang.
 * Sat Jul 25 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.3.0-0
 - Show live per-package progress so a long download can't look like a hang.
 - Accessibility: screen-reader support, larger text, and a high-contrast option
