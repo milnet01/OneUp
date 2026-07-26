@@ -459,13 +459,13 @@ git commit -m "ONEUP-0057: merge the dialog and accessibility rules into one UI 
 
 **Consumes:** design §5.1 (the engine emits codes; the window does all wording).
 
-- [ ] **Step 1: Sample the strings that exist**, so the rules are drawn from real text:
+- [x] **Step 1: Sample the strings that exist**, so the rules are drawn from real text:
 
 ```bash
 grep -n '@@HINT@@\|@@REMEDY@@' update_system.sh | head -20
 ```
 
-- [ ] **Step 2: Write the document**, settling:
+- [x] **Step 2: Write the document**, settling:
       - **Plain English, no jargon** — the user is not a programmer. With before/after
         examples taken from Step 1's real hints.
       - **Never blame the user**; say what happened and what to do next.
@@ -480,7 +480,7 @@ grep -n '@@HINT@@\|@@REMEDY@@' update_system.sh | head -20
       - **Marker payloads are not user-facing text** once §5.1's change lands — they are
         identifiers, and renaming one is a contract change (Task 9).
 
-- [ ] **Step 3: Commit.**
+- [x] **Step 3: Commit.**
 
 ```bash
 git add docs/standards/wording-and-translation.md

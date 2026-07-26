@@ -113,9 +113,15 @@ oneup/
   __init__.py
   engine/          the Python replacement for update_system.sh
   gui/             the split-up updater.py
+  translations/    oneup_<lang>.ts catalogues (ONEUP-0032)
 updater.py         thin entry point — stays at the root
 update_system.sh   stays until the switch-over gate passes, then goes
 ```
+
+`translations/` holds data rather than code, and sits inside the package so a plain
+checkout, the RPM and the AppImage all resolve it by the same relative path. `.ts` files
+are tracked; the compiled `.qm` files are build artefacts and are git-ignored — see
+`docs/standards/wording-and-translation.md` §7.
 
 ### 4.1 Rules the split must obey
 
