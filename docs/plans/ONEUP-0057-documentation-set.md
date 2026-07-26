@@ -353,6 +353,20 @@ grep -n '^#\{1,3\} ' docs/specs/ONEUP-0028-accessibility.md
       - **New, for themes (ONEUP-0027):** every theme must satisfy the contrast rule and
         the colour-never-alone rule; a theme that cannot is not shipped. State how a new
         theme is checked.
+      - **New, for right-to-left languages (ONEUP-0032, design §5.1):** the window must
+        mirror for Hebrew and Arabic. Write these as rules a future widget must obey:
+        - **Never use a directional stylesheet property** — `margin-left`, `padding-right`,
+          `border-left` and friends. Qt does **not** mirror stylesheets, so each one is a
+          bug that only appears in Arabic. There are **0** in `updater.py` today
+          (verified at `ff4f4a7`); the rule exists to keep it that way.
+        - **Never hard-code `AlignLeft` / `AlignRight`** for text that could be
+          translated. Also **0** today.
+        - **Custom painting must apply the layout direction itself.** Qt mirrors layouts,
+          not `paintEvent`. Name the live example: the toggle in `updater.py:699` computes
+          its knob position from the left edge (line 712) and is the one thing in the app
+          that would mirror wrongly.
+        - **Layout direction is never assumed from the widget** — read it from the
+          application, so every widget agrees.
 
 - [ ] **Step 3: Remove the absorbed file and repoint its readers.**
 
@@ -636,6 +650,9 @@ git commit -m "ONEUP-0034: spec the GUI module split"
 
 **Files:** Create `docs/specs/ONEUP-0027-themes.md`
 
+**Confirmed by the user, 2026-07-26:** themes are **required for 2.0**, not optional. The
+item's place in the release is settled; only the design questions in Step 2 remain.
+
 - [ ] **Step 1: Read how theming works today:**
 
 ```bash
@@ -672,17 +689,34 @@ grep -coE '"[A-Z][^"]{12,}"' updater.py
 grep -n '@@HINT@@\|@@REMEDY@@' update_system.sh | wc -l
 ```
 - [ ] **Step 2: Write the spec** to the template, settling: how strings are wrapped; the
-      `.ts`/`.qm` build step and where catalogues live; whether any locale ships in 2.0 or
-      only the groundwork (**ask the user** — it changes the size of the job); and how a
-      missing catalogue degrades (English, never a blank label).
+      `.ts`/`.qm` build step and where catalogues live; and how a missing catalogue
+      degrades (English, never a blank label).
+      **Answered by the user, 2026-07-26 — no longer an open question:** 2.0 ships the
+      **groundwork only, English alone**; additional languages come after 2.0 is released
+      (design §5.1). The spec states that as a scope decision and puts a translated locale
+      file in its own "Out of scope" section, so a later reader sees a decision rather than
+      an omission.
 - [ ] **Step 3: Specify the contract change** from design §5.1 explicitly: `HINT` and
       `REMEDY` payloads become stable codes; the GUI holds the wording; the marker
       reference (Task 9), both test suites and the GUI parser change **in one commit**;
       and it happens **after** the engine rewrite has passed its gate, never inside it.
-- [ ] **Step 4: Name the invariants**, at minimum: the engine imports no translation
+- [ ] **Step 4: Specify right-to-left support** (design §5.1 — user's requirement,
+      2026-07-26). Settle: where the application's layout direction is set and from what;
+      that it is set **once**, at startup, not per widget; and that the toggle's custom
+      `paintEvent` (`updater.py:699`, knob position at line 712) applies the direction to
+      its knob arithmetic while leaving the symmetric state shapes alone. Verify Qt's own
+      mechanism for deriving direction from the locale against the installed Qt's
+      documentation before writing it down — do not state it from memory.
+- [ ] **Step 5: Name the invariants**, at minimum: the engine imports no translation
       machinery (it is the root-privileged half); an unknown code renders as something
-      readable rather than raw; and no user-facing sentence is built by concatenation.
-- [ ] **Step 5: Commit.**
+      readable rather than raw; no user-facing sentence is built by concatenation (there
+      are 10 concatenation sites in `updater.py` today, verified at `ff4f4a7`); **no
+      directional stylesheet property or hard-coded `AlignLeft`/`AlignRight` exists**
+      (both are 0 today, so the test is a guard, not a clean-up); and **the window opens
+      and every smoke assertion passes with the layout direction forced right-to-left** —
+      a new pass in `tests/gui-smoke.py`, because on an English desktop nobody will ever
+      see an RTL regression by eye.
+- [ ] **Step 6: Commit.**
 
 ```bash
 git add docs/specs/ONEUP-0032-i18n.md
@@ -737,10 +771,18 @@ grep -rhoE '\bdocs/[a-zA-Z0-9/_.-]+\.md' docs/ CLAUDE.md README.md | sort -u | x
 the existing `dependencies.md`. The reference → Task 9. The three cold-eyes batches →
 Tasks 10, 13, 17. `CLAUDE.md` → Task 11.
 
-**Placeholders.** Three tasks stop to ask the user rather than inventing an answer, which
-is deliberate and marked: the Python floor if Leap's version cannot be established
-(Task 3), the theme questions (Task 15), and whether a locale ships in 2.0 (Task 16).
-Nothing else defers.
+**Placeholders.** Three tasks originally stopped to ask the user rather than inventing an
+answer. **Two are now answered (2026-07-26)** and the tasks proceed without pausing:
+
+- *Does 2.0 include themes?* — **yes, required** (Task 15 proceeds; only the sub-questions
+  in its Step 2 — how many themes, whether "Follow system" stays the default — remain, and
+  they are asked together when the spec is written).
+- *Does a locale ship in 2.0?* — **no: groundwork only, English alone, languages after
+  release** (Task 16 Step 2, design §5.1).
+
+**One remains:** the Python floor, *if* the oldest supported Leap's Python version cannot
+be established from the distro's own documentation (Task 3). That one is a fact-lookup
+first and a question only on failure. Nothing else defers.
 
 **Consistency.** Task 1 defines the spec template; Tasks 12, 14, 15 and 16 all name it as
 the shape they follow. Task 2 defines the `oneup/` layout; Tasks 12 and 14 consume it.

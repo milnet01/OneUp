@@ -12,6 +12,11 @@ much as for features. Staying current is the default; falling behind needs a rea
 2. **An older pin is allowed only when a newer version explicitly breaks something we rely
    on** — and there is genuinely no other way. A preference for a version you remember is
    not a reason.
+   - **A security advisory against the pinned version ends the exemption.** If the version
+     we are held back on has a known vulnerability, we move — and if the newer version
+     genuinely breaks a feature, the feature gives way, not the security fix. Record what
+     broke and why we accepted it; never sit on a vulnerable pin because the alternative is
+     inconvenient.
 3. **Every older pin must be documented in the ledger below**, with:
    - *what* is pinned and to which version,
    - *why* (the exact feature that breaks and how it manifests),
@@ -32,18 +37,47 @@ backlog item, not a ledger entry.
 | Dependency | Pinned to | Latest available | First broken version | Why held back | Re-test when |
 |---|---|---|---|---|---|
 | GitHub runner image (`runs-on`) | `ubuntu-22.04` | `ubuntu-24.04`+ | — (not a break) | **Compatibility floor, not a breakage.** The AppImage is built on an older glibc so it runs on older openSUSE/other distros; a newer runner would raise the minimum glibc and shrink the audience. | Only if we drop the "runs on old glibc" goal, or AppImage tooling changes the target. |
-| `python-version` (release workflow) | `3.13` | `3.14` (verify) | *unverified* | Held one series back pending confirmation that **PySide6 publishes wheels for 3.14**; a build Python without a matching PySide6 wheel fails `pip install` in the AppImage step. This is *unverified caution*, not a confirmed break. | Next release: check PyPI for a PySide6 wheel on 3.14; if present, bump and drop this row. |
 
-## Current dependency snapshot (verified 2026-07-21)
+*The `python-version` row was removed on 2026-07-26 — see the sweep below. It recorded a
+suspected breakage that turned out not to exist, so by rule 4 it had no business in the
+ledger.*
 
-Bumped to latest during the 2026-07-21 audit; recorded so the next sweep has a baseline:
+## Current dependency snapshot (verified 2026-07-26)
 
-- `actions/checkout` → **v7** (was v4)
-- `actions/setup-python` → **v7** (was v5)
-- `softprops/action-gh-release` → **v3** (was v2)
+Recorded so the next sweep has a baseline:
+
+- `actions/checkout` → **v7**, latest `v7.0.1` — current.
+- `actions/setup-python` → **v7**, latest `v7.0.0` — current.
+- `softprops/action-gh-release` → **v3**, latest `v3.0.2` — current.
+- `python-version` in `.github/workflows/release.yml` → **`3.13`**. Behind `3.14`, and
+  **not** for a documented reason — a backlog item, tracked as ONEUP-0004, to be bumped
+  with the rest of the 2.0 dependency refresh on the `v2` branch. `main` is frozen at
+  1.4.0 and takes only qualifying bug fixes, so the bump does not land there.
 - **PySide6** — intentionally *unpinned*: the RPM uses the distro's `python3-pyside6`, and the
   AppImage build `pip install`s the latest. It tracks upstream automatically; no manifest pin
   to bump. Requires only Qt 6 idioms (new-style `connect`, scoped enums where practical).
+
+### Sweep, 2026-07-26 — why the Python row died
+
+The ledger claimed 3.13 was held back pending "PySide6 wheels for 3.14". Checked against
+PyPI rather than recalled, and **the premise was wrong**: PySide6 ships **stable-ABI**
+wheels, so there is no per-version wheel to wait for.
+
+```
+$ curl -s https://pypi.org/pypi/PySide6/6.11.1/json | ... ['urls'] → filename
+pyside6-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl      ← cp310-abi3, not cp313/cp314
+requires_python: <3.15,>=3.10
+```
+
+`cp310-abi3` installs on **any** CPython from 3.10 up to the `<3.15` ceiling — 3.14
+included — and `manylinux_2_34` is satisfied by the `ubuntu-22.04` runner (glibc 2.35). So
+nothing was ever broken; the pin was caution with no measurement behind it, which rule 4
+says must not sit in the ledger. Removed.
+
+**The lesson, worth more than the bump:** an unverified suspicion written into a ledger
+reads exactly like a verified breakage six months later, and nobody re-checks it because
+the ledger looks authoritative. A row goes in only when something has been *observed* to
+break — a hunch is a backlog item.
 - `zypper`, `flatpak`, `fwupd`, `snapper` — host tools, versioned by the user's openSUSE
   install; OneUp calls stable CLI surfaces and skips cleanly when a tool is absent.
 

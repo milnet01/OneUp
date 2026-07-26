@@ -24,7 +24,7 @@ thing can replace what they run today.
 | **ONEUP-0054** | Replace the Bash engine with a Python one | `docs/specs/ONEUP-0054-python-engine.md` |
 | **ONEUP-0034** | Split `updater.py` into focused modules | `docs/specs/ONEUP-0034-gui-modules.md` *(to be written)* |
 | **ONEUP-0027** | Selectable colour themes beyond follow-the-desktop | `docs/specs/ONEUP-0027-themes.md` *(to be written)* |
-| **ONEUP-0032** | Wrap user-facing text for translation | `docs/specs/ONEUP-0032-i18n.md` *(to be written)* |
+| **ONEUP-0032** | Wrap user-facing text for translation, and mirror the window for right-to-left languages — **groundwork only, English alone**, see §5.1 | `docs/specs/ONEUP-0032-i18n.md` *(to be written)* |
 | **ONEUP-0044** | The double password box | no spec — see §6.2 |
 | **ONEUP-0004** | Dependency refresh, incl. the Python floor | no spec — see §6.3 |
 
@@ -130,6 +130,64 @@ Three reasons, in order of weight:
 Never both at once: a rewrite and a contract change in the same step means a failing test
 can't tell you which one broke it.
 
+**How much of this ships in 2.0 — decided by the user, 2026-07-26:** *"I would like to
+offer the app in different languages too, however, first point is to get to a working
+version first, release and then we can add additional languages."*
+
+So 2.0 ships the **machinery and no second language**:
+
+- every user-facing string wrapped for translation, the catalogue extracted and building,
+  and the engine's `@@HINT@@` / `@@REMEDY@@` payloads converted to codes;
+- **English only** in the release. No `.ts`/`.qm` locale file for another language is
+  written, reviewed or shipped as part of 2.0.
+
+The reason this is the right cut, and not a hedge: wrapping strings is a change to
+**every file that shows text**, so it must happen while the modules are being written —
+retrofitting it later means touching all of them twice. Translating strings, by contrast,
+touches **no code at all**. One is structural and belongs inside the rewrite; the other is
+content and can arrive in 2.1 without reopening anything. Shipping the groundwork also
+means the first language contributed later is a data file, not a project.
+
+Consequence for §7's gate: "a language is available" is **not** a release condition for
+2.0. "Every user-facing string is translatable" is.
+
+**Right-to-left languages are in scope — user's decision, 2026-07-26.** Hebrew and Arabic
+read right-to-left, and the whole window must mirror: the toggles sit on the other side,
+progress fills the other way, text aligns to the right.
+
+This lands in 2.0 **with the groundwork, not with the languages**, for the same reason the
+string-wrapping does — it is structural. A layout built the wrong way must be rebuilt, not
+translated. Getting it right while the modules are being written costs almost nothing;
+retrofitting it means reopening every one of them.
+
+**Measured at `ff4f4a7`, not assumed — the starting position is unusually good:**
+
+| Thing that normally breaks RTL | Count in `updater.py` |
+| --- | --- |
+| Directional stylesheet rules (`margin-left`, `padding-right`, …) — Qt does **not** mirror these | **0** |
+| Hard-coded `AlignLeft` / `AlignRight` | **0** |
+| Existing RTL/locale handling | **0** — nothing to unpick either |
+
+Qt mirrors widget layouts automatically once the application's layout direction is set, so
+with none of the usual hand-written obstacles, most of the window should mirror for free.
+
+**The one place it will not**: `updater.py:699` `paintEvent` draws the toggle switch by
+hand, and its knob position is computed from the left edge (`x = self._margin + self._pos *
+travel`, line 712). Custom painting is invisible to Qt's mirroring, so in Hebrew or Arabic
+the switch would slide the wrong way while everything around it mirrored correctly. The
+painted state *shapes* are safe — a centred bar and a circle are symmetric by construction
+(lines 692–697) — so only the position arithmetic needs the direction applied.
+
+Two further consequences, both structural:
+
+- **No user-facing sentence may be built by concatenation.** There are 10 concatenation
+  sites in `updater.py` today. A sentence glued from fragments cannot be reordered by a
+  translator, and in RTL the fragments can render in an order nobody intended. Whole
+  sentences with named placeholders, always.
+- **RTL is tested, not hoped for.** `tests/gui-smoke.py` gains a pass with the layout
+  direction forced right-to-left. Without a test it will regress the first time somebody
+  adds a widget, because on an English desktop nobody will ever see it.
+
 ### 5.2 Order of work, and why
 
 ```
@@ -216,8 +274,16 @@ the engine authenticates — it earns a spec at that point.
 
 ### 6.3 Dependency refresh (ONEUP-0004)
 
-Governed by `docs/standards/dependencies.md`, which already carries the ledger row and
-its re-test cue. Two decisions belong to the coding standard rather than a spec: the
+Governed by `docs/standards/dependencies.md`. **The Python ledger row is gone** — a sweep
+on 2026-07-26 found its premise false: PySide6 ships stable-ABI wheels
+(`cp310-abi3`, `requires_python <3.15,>=3.10`), so 3.14 was never blocked and nothing
+needed waiting for. The one-line bump of `release.yml`'s `python-version` 3.13 → 3.14
+belongs to this item, on `v2`; `main` is frozen and does not take it. The CI actions
+(`checkout@v7`, `setup-python@v7`, `action-gh-release@v3`) were all verified current in the
+same sweep. The `ubuntu-22.04` runner stays pinned — that row is a real, deliberate glibc
+compatibility floor, not a suspicion.
+
+Two decisions belong to the coding standard rather than a spec: the
 **minimum Python version** OneUp supports — the binding constraint is whatever the
 oldest supported openSUSE Leap ships, which must be *looked up*, not assumed — and
 whether to add a lint configuration file — there is none today, so
@@ -242,8 +308,13 @@ Concretely, all of the following:
 | **G7** | Every item in §1 is complete, its spec's invariants covered by tests |
 | **G8** | The three packaging paths (RPM, AppImage, OBS) build and launch from the new layout |
 | **G9** | Docs current: README, CLAUDE.md, standards, marker reference, CHANGELOG |
+| **G10** | Every user-facing string is translatable, and the GUI suite passes with the layout direction forced **right-to-left** — the machinery works even though no second language ships (§5.1) |
 
-G1–G6 come from the ONEUP-0054 draft and are its gate; G7–G9 are the release's.
+G1–G6 come from the ONEUP-0054 draft and are its gate; G7–G10 are the release's.
+
+**G10 deliberately tests the machinery, not a translation.** Since 2.0 ships English only,
+nothing else would exercise the wrapping or the mirroring, and untested groundwork is
+indistinguishable from no groundwork by the time somebody contributes Hebrew.
 
 ## 8. Risks, and permission to fail
 
@@ -279,6 +350,9 @@ G1–G6 come from the ONEUP-0054 draft and are its gate; G7–G9 are the release
   out; only the shelling-out moves language.
 - A plugin or extension system.
 - Any change to the five steps or their order.
+- **Any actual second language.** The translation *machinery* is in scope (§5.1); a
+  translated locale file is not, and arrives after 2.0 is released — user's decision,
+  2026-07-26.
 
 ## 11. Cold-eyes loop log
 

@@ -31,6 +31,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** We're one Python version behind on purpose until the GUI toolkit supports the newest one.
   Kind: chore.
   Source: dependency-standard 2026-07-21.
+  Progress (2026-07-26): the premise was checked and is wrong. PySide6
+  ships STABLE-ABI wheels (pyside6-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl,
+  requires_python <3.15,>=3.10), so there is no per-version wheel to wait
+  for — cp310-abi3 installs on 3.14 today, and manylinux_2_34 is satisfied
+  by the ubuntu-22.04 runner (glibc 2.35). Nothing is broken and nothing
+  is blocking. The ledger row in docs/standards/dependencies.md has been
+  removed (a suspicion is a backlog item, not a documented breakage); this
+  bullet is now the sole tracker. The actual one-line bump of
+  release.yml's python-version 3.13 -> 3.14 is deferred to the 2.0
+  dependency refresh on the v2 branch, because main is frozen at 1.4.0 and
+  takes only qualifying bug fixes.
 
 - ✅ [ONEUP-0005] **Decide refresh-failure semantics for the system step (dup on stale metadata).**
   update_system.sh: when `zypper refresh` fails, `ok=false` but `dup` still runs; a dup that then succeeds is recorded fail with SYS_CHANGED unset, so real changes get no reboot/service advice. Errs on the SAFE side (never a false reboot), hence deferred. Options: abort the step before dup when refresh failed, or evaluate change-detection on the dup exit code independently of the refresh result. Pick one and add a test.
@@ -193,6 +204,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Let people choose from a few built-in colour themes for OneUp, instead of only matching the desktop's light or dark setting.
   Kind: feature.
   Source: user-request-2026-07-23.
+  Confirmed by the user (2026-07-26): themes are REQUIRED for 2.0, not
+  optional — the item's place in the release is settled and it appears in
+  docs/design/oneup-2.0.md section 1. The three design questions in the
+  bullet above (how many themes, whether "Follow system" stays the
+  default, where the picker lives) are still open and are asked together
+  when the spec is written (ONEUP-0057 plan, Task 15). Every theme must
+  satisfy the contrast and colour-never-alone rules from ONEUP-0028; a
+  theme that cannot is not shipped.
 
 - ✅ [ONEUP-0028] **Make OneUp usable for blind, partially-sighted, and colour-blind users.**
   Cover the three groups: (1) blind — full screen-reader (Orca/AT-SPI) support: accessible names/roles on every control, the live log and progress announced, focus order sane, no unlabelled icon-only buttons; (2) partially sighted — scalable/large text, honour the desktop font scale, a high-contrast option, keyboard operability throughout; (3) colour-blind — never signal state by colour alone (the amber tray icon, red/green step badges) — pair every colour cue with text/shape/icon. Coordinates with ONEUP-0026 (dialog standard) and ONEUP-0027 (themes: any theme must keep WCAG-AA contrast). Likely warrants its own spec + an audit pass with Orca.
@@ -255,6 +274,25 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Prepare the app so its text can be translated into other languages later (German, etc.) — cheap to do now, expensive once the wording grows.
   Kind: enhancement.
   Source: in-session-2026-07-23.
+  Scope settled by the user (2026-07-26), now a 2.0 item — see
+  docs/design/oneup-2.0.md section 5.1. Three decisions: (1) 2.0 ships the
+  GROUNDWORK ONLY, English alone; additional languages arrive after 2.0 is
+  released, because wrapping strings touches every file that shows text
+  while translating them touches no code at all. (2) RIGHT-TO-LEFT
+  languages (Hebrew, Arabic) are in scope and land with the groundwork —
+  a layout built the wrong way has to be rebuilt, not translated.
+  (3) Gate G10 tests the machinery rather than a translation: the GUI
+  suite must pass with the layout direction forced RTL.
+  Measured at ff4f4a7, the starting position is good: 0 directional QSS
+  properties, 0 hard-coded AlignLeft/AlignRight, 0 existing RTL handling
+  to unpick, so Qt's automatic layout mirroring does most of the work.
+  The one exception is custom painting, which Qt cannot mirror: the
+  toggle's paintEvent (updater.py:699) computes its knob position from
+  the left edge (line 712) and must apply the direction itself; its
+  painted state shapes are symmetric (lines 692-697) and are fine. Also
+  10 string-concatenation sites to convert to whole sentences with named
+  placeholders — a glued sentence cannot be reordered by a translator and
+  renders unpredictably in RTL.
 
 - ✅ [ONEUP-0033] **bump.py: advance the CHANGELOG [Unreleased] compare-link base to the new tag.**
   bump.py rewrites the six version sites and adds a new `[x.y.z]: .../releases/tag/vX.Y.Z` reference link, but leaves the `[Unreleased]: .../compare/vPREV...HEAD` link pointing at the PREVIOUS tag. After releasing 1.2.0 the link still reads `compare/v1.1.0...HEAD` (CHANGELOG.md:207) — it should read `compare/v1.2.0...HEAD`. Fix: in bump.py, when moving `## [Unreleased]` to `## [X.Y.Z]`, also rewrite the `[Unreleased]:` compare base from the old tag to `vX.Y.Z`. Cosmetic (the link 404s on the stale range only until the next commit), pre-existing since at least 1.1.0. Add/adjust a bump.py test to assert the Unreleased compare base advances. No version-lockstep impact (local-CI's lockstep gate doesn't check this link).
