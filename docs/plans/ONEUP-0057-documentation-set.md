@@ -184,7 +184,7 @@ git commit -m "ONEUP-0057: settle where a file goes and what it is called"
 **Produces:** the Python floor and lint configuration decision that Task 12's spec and all
 2.0 code depend on.
 
-- [ ] **Step 1: Establish the Python floor — look it up, do not assume.** The binding
+- [x] **Step 1: Establish the Python floor — look it up, do not assume.** The binding
       constraint is the oldest openSUSE Leap OneUp supports, because Tumbleweed is always
       newer:
 
@@ -196,8 +196,17 @@ grep -n 'Requires\|BuildRequires' packaging/rpm/oneup.spec
       Then check what Leap ships — `https://software.opensuse.org/package/python3` or a
       Leap box. **If the answer is not obtainable, stop and ask the user** whether Leap is
       a supported target at all; do not guess a floor.
+      **Answered from fact (2026-07-26) — the user did not need to be asked.** The floor
+      is **3.13**, and this step's own framing ("the oldest Leap") was the thing that
+      needed correcting: **Leap 15.6 reached end-of-life on 2026-04-30**, three months
+      before this was written, so the oldest *supported* Leap is **16.0**, whose release
+      notes state `/usr/bin/python3` is Python **3.13** — the same as Tumbleweed
+      (measured on this machine, snapshot `20260723`). PySide6 supplies a **ceiling**
+      (`<3.15`), which also confirms ONEUP-0004's pending 3.13 → 3.14 CI bump is safe.
+      Two search summaries claimed Leap 16.0's interpreter was 3.11; the release notes
+      disagreed and won.
 
-- [ ] **Step 2: Decide the lint configuration.** There is no config file today
+- [x] **Step 2: Decide the lint configuration.** There is no config file today
       (`ruff` runs on `--select F,B` from `local-CI.sh` only), so a developer's local run
       differs from CI's:
 
@@ -208,8 +217,15 @@ ls pyproject.toml ruff.toml .ruff.toml 2>/dev/null || echo "no lint config"
       Record the decision (add `pyproject.toml` with the ruff rule set, or keep
       flags-in-CI and say why) in the document. Adding the file itself is 2.0 work, not
       this plan's.
+      **Decided: add `pyproject.toml`,** with the rule set written out verbatim in §2.1
+      so the 2.0 implementer invents nothing. `line-length = 100` was chosen by
+      measurement, not taste — at 100 exactly **13** lines in the tree are too long; at
+      ruff's default 88, **135** lines in `updater.py` alone would be, which is a
+      reformatting project disguised as a lint setting (global rule 11). The rule set
+      includes `S`, which turns the **six** existing `# noqa: S603/S607` comments from
+      decorative into functional — they currently suppress rules nothing enables.
 
-- [ ] **Step 3: Write the document**, settling:
+- [x] **Step 3: Write the document**, settling:
       - The Python floor from Step 1, with its reason, and the rule that idioms may
         assume it (`match`, `X | Y` unions, `list[int]`).
       - **Type hints** on new modules: required on public functions, optional inside.
@@ -225,6 +241,14 @@ ls pyproject.toml ruff.toml .ruff.toml 2>/dev/null || echo "no lint config"
         (global rule 1); a failed step records, hints in plain English, and continues.
       - **Comments:** explain *why*, and the six-month test.
       - **Reuse before rewriting**, and the Rule of Three.
+      **Done, plus a §10 traps section** (the user's standing instruction to catch the
+      gotchas early). Two of this step's own premises needed correcting against the tree:
+      the `QMenu` at `updater.py:2222` **is** parented today, so ONEUP-0018's finding is
+      history rather than a live defect; and `QPointer` appears **nowhere** in the
+      codebase — parenting has covered every case — so it is written as the rule for a
+      reference you do *not* own, not as current practice. The measured module figure is
+      sharper than the plan's: the `Updater` class alone is **2,340 lines** (1292–3632)
+      of `updater.py`'s 3,719.
 
 - [ ] **Step 4: Commit.**
 
