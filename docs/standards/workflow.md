@@ -13,7 +13,7 @@ the tree on 2026-07-26, not recalled.
 
 **Sections:** 1 the v1 freeze · 2 branches · 3 commits · 4 roadmap IDs · 5 versions ·
 6 the gate before a push · 7 pushing · 8 releasing · 9 where a 2.0 change goes · 10 traps ·
-11 before you push · 12 cold-eyes log
+11 before you push · what checks this · 12 cold-eyes log
 
 ## 1. The v1 freeze
 
@@ -205,13 +205,14 @@ more than GitHub CI does:
 
 | Gate | What it proves |
 | --- | --- |
-| `tests/run-tests.sh` | the engine suite — 76 scenarios, 205 assertions |
-| `tests/gui-smoke.py` | the offscreen GUI suite — 283 assertions (exit 77 = PySide6 absent, a skip) |
-| `tests/bump-test.py` | a real bump in a throwaway copy advances every version site — 6 assertions |
+| `tests/run-tests.sh` | the engine suite — the markers `update_system.sh` prints |
+| `tests/gui-smoke.py` | the offscreen GUI suite — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip) |
+| `tests/bump-test.py` | a real bump in a throwaway copy advances every version site |
 | Python syntax | `updater.py` and `bump.py` parse |
 | lint | `ruff` and `shellcheck`, best-effort |
 | packaging validation | desktop file and AppStream metainfo |
 | version lockstep | the six sites of §5.1 agree |
+| documentation | `check-docs.py` — the rules of `docs/standards/documentation.md` that a script can settle |
 
 Two deliberate design points:
 
@@ -233,14 +234,35 @@ itself is broken. A failing test is fixed, not bypassed.
 
 **The two gate sets are not identical, deliberately.** `release.yml` runs the three test
 suites and the AppImage build. `local-CI.sh` runs those three suites **plus** lint,
-packaging validation and version lockstep — and those three extras have never run in
-GitHub CI.
+packaging validation, version lockstep and the documentation check — and those four extras
+have never run in GitHub CI.
 
 - **A new *test* gate goes in both.** Otherwise the first thing it catches is caught after
   the tag is already pushed, which is the expensive moment.
-- **The three extras stay local**, so understand what that costs: **a lint failure is
+- **The four extras stay local**, so understand what that costs: **a lint failure is
   caught before a push or not at all.** The pre-push hook is what makes that reliable, and
   is why `git push --no-verify` is not a way past a red gate (§6).
+
+### 6.1 A gate is how a rule stops being a wish
+
+**When a reviewer or a human catches the same *class* of error twice, it becomes a gate.**
+A rule nothing checks is a wish (`docs/standards/documentation.md` §5), and a cold reader is
+the scarcest thing in this process — never spend one on what `grep -c` can settle.
+
+Adding a gate:
+
+1. **Add the check to `local-CI.sh`**, using its `ok` / `bad` / `skip` helpers, so a missing
+   tool is reported as skipped and never silently passed.
+2. **Add a row to §6's table** saying what it proves, in the same words the gate prints.
+3. **If it is a *test* gate, add it to `.github/workflows/release.yml` as well** — a test
+   gate that runs only locally catches its first regression after the tag is pushed.
+4. **Prove it fails.** Break the thing it checks, run it, see red, put the thing back. A gate
+   nobody has seen fail is a gate nobody knows works — this is the same rule as
+   `docs/standards/testing.md` §4, applied to the gate itself.
+
+**A gate reports, it does not repair.** `check-docs.py` names the file, the line and the
+rule, and changes nothing; the author decides what the right text is. A gate that edits prose
+would quietly rewrite a claim it does not understand.
 
 ## 7. Pushing
 
@@ -321,6 +343,22 @@ Can people still install system, Flatpak and firmware updates?
       would notice this change.
 - [ ] The branch is right: `main` only if §1.1 says so.
 - [ ] `./local-CI.sh` is green — the whole thing, not the part you thought was affected.
+
+## What checks this
+
+| Rule | What catches a breach |
+| --- | --- |
+| §1 the v1 freeze | nothing automatic — the branch a commit lands on is a human decision |
+| §3 the commit subject format | nothing automatic. There is no `commit-msg` hook, and adding one is cheap if the format ever drifts |
+| §4 roadmap IDs come from `.roadmap-counter` | the allocator itself: on a fresh clone the file is absent and appending **refuses**, rather than restarting at 1 and colliding |
+| §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate, and `tests/bump-test.py` proves `bump.py` advances all six in a throwaway copy |
+| §6 local CI is green before a push | `githooks/pre-push` — but only once per clone, after `git config core.hooksPath githooks`. **Nothing enforces that it is enabled**, so on a fresh clone this rule is a habit |
+| §6.1 a new gate is proved to fail before it is trusted | nothing automatic |
+| §8 the release preconditions | `release.sh` — three fatal checks before it touches anything: a clean tree, on `main`, and the tag not already existing |
+
+**The gap worth knowing about is §6.** Every other gate in this project runs *because*
+`local-CI.sh` runs, and `local-CI.sh` runs automatically only if the hook path was set. On a
+clone where nobody ran that one command, a green push proves nothing at all.
 
 ## 12. Cold-eyes loop log
 

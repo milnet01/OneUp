@@ -13,7 +13,7 @@ not recalled. Where a lookup was needed the source is named.
 
 **Sections:** 1 the Python floor · 2 lint configuration · 3 type hints · 4 module size ·
 5 subprocess discipline · 6 Qt idioms · 7 error handling · 8 comments · 9 reuse ·
-10 traps · 11 before you commit · 12 cold-eyes log
+10 traps · 11 before you commit · what checks this · 12 cold-eyes log
 
 ---
 
@@ -153,7 +153,8 @@ because the config is missing, which is the thing being fixed.
 ### 2.1.1 What adopting it actually costs — measured, not estimated
 
 **The config above does not go green on today's tree.** Run against `58ea3bc` with ruff
-0.15.11 it reports **47 errors**:
+0.15.11 it reported **47 errors** — a measurement of that commit, not a standing claim
+(`docs/standards/documentation.md` §6b.4). Re-run it before acting on the breakdown:
 
 | Rule | Count | What it is |
 | --- | --- | --- |
@@ -215,16 +216,17 @@ functions get annotated when you are already editing them, not in a sweep of the
 **Soft ceiling: 600 lines per module.** Crossing it is not forbidden, but it is a prompt
 to ask what second responsibility has moved in.
 
-The reason is not taste. It is measured, and it is the reason ONEUP-0034 exists:
+The reason is not taste, and it is the reason ONEUP-0034 exists: **`updater.py` is more than
+six times the ceiling, and a single class inside it — `Updater(QMainWindow)`, running to the
+module-level `_app_icon` — is nearly four times it on its own.**
 
-| Thing | Lines | Note |
-|---|---|---|
-| `updater.py` | **3,719** | one file |
-| the `Updater` class inside it | **2,338** | `class Updater(QMainWindow)` through to the module-level `_app_icon` — one class |
+A class that size cannot be held in a reader's head, cannot be reviewed as a unit, and cannot
+be tested except through the whole application. Splitting it is ONEUP-0034, whose spec is not
+written yet; this standard's job is to stop the next file getting there.
 
-A 2,338-line class cannot be held in a reader's head, cannot be reviewed as a unit, and
-cannot be tested except through the whole application. Splitting it is ONEUP-0034, whose
-spec is not written yet; this standard's job is to stop the next file getting there.
+*(The exact line counts are deliberately not quoted — `docs/standards/documentation.md` §6b.
+They change with every commit, and the multiple is what carries the argument. The measured
+figures, dated, are in `docs/design/oneup-2.0.md` §2.)*
 
 ### 4.2 Split by responsibility, not by layer
 
@@ -256,15 +258,16 @@ OneUp's entire job is running other programs, so this section is load-bearing.
 3. **The GUI never calls `sudo` and never becomes root** — measured: zero `sudo`
    invocations in `updater.py`. Update work shells out to the engine, which is the only
    part that touches root during a run. It *may* ask `pkexec` to run a named program as
-   root for a short user-initiated action outside a run — three sites today, every
-   argument validated first. Corrected 2026-07-26: an earlier revision of this line said
+   root for a short user-initiated action outside a run, and **every argument is validated
+   first, at every such site**. Corrected 2026-07-26: an earlier revision of this line said
    the GUI "never runs a privileged command", which is not accurate and is the more
    dangerous belief to code under. The full rule is `docs/standards/security.md` §1.
 4. **No privileged call ever sits inside a subshell.** In the engine, a call whose
-   *output* is needed goes through `sudo_capture` (14 sites); the rest are direct `sudo`
-   at top level (20), which is safe precisely because sudo stays the caller's own child.
-   This is the most expensive trap in the project and §8.1 explains why. In Python the
-   rule becomes: one runner object owns every privileged child process.
+   *output* is needed goes through `sudo_capture`; every other one is a direct `sudo` at
+   top level, which is safe precisely because sudo stays the caller's own child. This is
+   the most expensive trap in the project and §8.1 explains why. In Python the rule
+   becomes: one runner object owns every privileged child process.
+   (`docs/standards/security.md` §1.2 owns the counts and how they were taken.)
 5. **Long-running child processes use `QProcess`, not `subprocess`**, in the GUI. Qt's
    event loop reads its output without blocking the window; `subprocess.run` freezes it.
    `subprocess` is for short, immediate calls that answer a question (`systemctl
@@ -455,6 +458,28 @@ and the guards it requires.
 - [ ] `./local-CI.sh` is green (§2.1 — it is the only place lint runs at all).
 
 ---
+
+## What checks this
+
+| Rule | What catches a breach |
+| --- | --- |
+| the code parses | `python3 -m py_compile updater.py bump.py` in `local-CI.sh` |
+| §1 the 3.13 floor and the below-3.15 ceiling | **nothing** — no `python_requires` is declared anywhere in the tree. ONEUP-0063's `pyproject.toml` is what will declare it |
+| §2.1 the select list | **nothing** — `local-CI.sh` runs `ruff check . --select F,B`, the bug classes only, because there is no config for `ruff` to read. ONEUP-0063 closes this |
+| §2.2 shell code | `shellcheck -e SC2001` in `local-CI.sh`, over the six shell scripts it names |
+| §3 type hints | nothing automatic |
+| §4 module and function size | nothing automatic, deliberately. It is a soft ceiling, and a hard one is met by splitting badly |
+| §5 subprocess discipline | half-covered. `tests/run-tests.sh` proves an unsafe repo alias never reaches a privileged command; `ruff`'s `S` rules would cover the rest, but only after ONEUP-0063 |
+| §6 Qt idioms | nothing automatic |
+| §7 error handling | `ruff`'s `BLE` rule, again only after ONEUP-0063 |
+| §8 comments | nothing automatic |
+| §9 reuse before rewriting | nothing automatic |
+
+**Almost nothing in this standard is gated today, and one roadmap item fixes most of it.**
+ONEUP-0063's `pyproject.toml` turns §2.1, §5 and §7 from prose into `ruff` rules that run on
+every push. Until it lands, this standard is enforced by review alone — which is worth
+stating plainly here rather than leaving a reader to discover it from a green `local-CI.sh`
+that checked two rule families out of eight.
 
 ## 12. Cold-eyes loop log
 

@@ -3,8 +3,8 @@
 # Local CI — run this before every push so failures are caught here, not on GitHub.
 #
 # It gates on the same test suite GitHub CI runs, plus checks CI doesn't (lint,
-# packaging validation, version lockstep) — all best-effort: a gate whose tool
-# isn't installed is skipped, never silently passed. The AppImage build
+# packaging validation, version lockstep, documentation) — all best-effort: a gate
+# whose tool isn't installed is skipped, never silently passed. The AppImage build
 # (packaging/appimage/build-appimage.sh — the same step the release workflow runs)
 # is opt-in via --full, because appimagetool downloads its runtime from GitHub on
 # every run and can stall on a slow/filtered link (e.g. a VPN). GitHub CI builds and
@@ -12,7 +12,7 @@
 #
 # Usage:
 #   ./local-CI.sh          fast gates — tests, lint, packaging validation, version
-#                          lockstep (seconds). The reliable pre-push check.
+#                          lockstep, documentation (seconds). The reliable pre-push check.
 #   ./local-CI.sh --full   also run the AppImage build (wrapped in a 10-min timeout).
 #
 # A pre-push hook (githooks/pre-push) runs the fast gates automatically before a push.
@@ -107,6 +107,16 @@ if [[ "$v_py" == "$v_spec" && "$v_py" == "$v_speclog" && "$v_py" == "$v_fmt" \
     ok "all six version sites = $v_py"
 else
     bad "version sites disagree (see line above)"
+fi
+
+# --- documentation (the rules of docs/standards/documentation.md a script can settle) ---
+# Reports, never repairs (workflow.md §6.1): it names the file, the line and the rule, and
+# the author decides what the right text is.
+step "Documentation"
+if python3 tests/docs-check.py >/tmp/local-ci-docs.log 2>&1; then
+    ok "tests/docs-check.py — $(grep -oE 'Checked: [0-9]+   Failed: [0-9]+' /tmp/local-ci-docs.log | tail -1)"
+else
+    bad "tests/docs-check.py"; cat /tmp/local-ci-docs.log
 fi
 
 # --- AppImage build (opt-in; also built + verified by GitHub CI on a tag push) ---

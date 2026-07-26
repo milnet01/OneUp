@@ -1,15 +1,17 @@
 # OneUp 2.0 — programme design
 
-**Status:** Draft — **not yet run through `/cold-eyes`.** No implementation may start
-until it has (global rule 14).
+**Status:** Draft
 **Kind:** programme-design — the release as a whole. Each item below has (or gets) its
 own spec; this document holds only what the items *share* or *contend over*.
 **Roadmap:** ONEUP-0057 (the documentation set this design opens)
 **Branch:** `v2` (exists at `6ec47ec`, one commit behind `main`). `main` ships **1.4.0**
 and then freezes — see §5.4 for what unfreezes it.
-**Baseline:** every figure in §2 was measured against commit `256d0dc` on 2026-07-26,
-not recalled. The earlier draft of `ONEUP-0054` cites figures from `ea51adc`; where the
-two disagree, this document is current.
+**Verified at:** `256d0dc` — every figure in §2 was measured against that tree on
+2026-07-26, not recalled. The earlier draft of `ONEUP-0054` cites figures from `ea51adc`;
+where the two disagree, this document is current.
+
+**`Draft` means implementation may not start** (`docs/standards/documentation.md` §3). This
+document has not been through `/cold-eyes` as a lane of its own — §11 is the record.
 
 **In one sentence:** 2.0 rebuilds OneUp's insides — the updating engine moves from Bash
 to Python, the one huge window file becomes several small ones — and adds colour themes
@@ -174,12 +176,12 @@ retrofitting it means reopening every one of them.
 Qt mirrors widget layouts automatically once the application's layout direction is set, so
 with none of the usual hand-written obstacles, most of the window should mirror for free.
 
-**The one place it will not**: `updater.py:699` `paintEvent` draws the toggle switch by
-hand, and its knob position is computed from the left edge (`x = self._margin + self._pos *
-travel`, line 712). Custom painting is invisible to Qt's mirroring, so in Hebrew or Arabic
+**The one place it will not**: `ToggleSwitch.paintEvent` in `updater.py` draws the toggle
+switch by hand, and its knob position is computed from the left edge (`x = self._margin +
+self._pos * travel`). Custom painting is invisible to Qt's mirroring, so in Hebrew or Arabic
 the switch would slide the wrong way while everything around it mirrored correctly. The
-painted state *shapes* are safe — a centred bar and a circle are symmetric by construction
-(lines 692–697) — so only the position arithmetic needs the direction applied.
+painted state *shapes* are safe — `_paint_state_shape` draws a centred bar and a circle,
+symmetric by construction — so only the position arithmetic needs the direction applied.
 
 Two further consequences, both structural:
 

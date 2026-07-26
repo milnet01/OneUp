@@ -909,6 +909,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The window tests print 56 alarming error reports and then say everything passed — which trains us to ignore errors, so a real one would slide straight past.
   Kind: test.
   Source: in-session-2026-07-26 (ONEUP-0057 gotcha sweep).
+  Note (2026-07-26): the headline's "56" is a single observation, not a
+  stable figure. Measured four times at `58ea3bc` the count was 30, 30,
+  30, 31 — it varies run to run, because the tracebacks come from
+  parented QProcess objects torn down in a non-deterministic order.
+  `docs/standards/testing.md` §7 owns the measurement and its derivation;
+  treat this bullet's number as the symptom that opened the item.
 
 - 📋 [ONEUP-0063] **Add pyproject.toml so local lint and CI check the same rules.**
   Verified 2026-07-26: the repo has no pyproject.toml, no requirements

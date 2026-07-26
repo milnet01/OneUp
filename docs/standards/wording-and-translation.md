@@ -14,7 +14,7 @@ tree on 2026-07-26, not recalled.
 
 **Sections:** 1 who is reading · 2 plain English · 3 never blame the user · 4 never claim
 what was not earned · 5 where wording lives · 6 writing a translatable string · 7 the
-catalogue workflow · 8 traps · 9 before you commit · 10 cold-eyes log
+catalogue workflow · 8 traps · 9 before you commit · what checks this · 10 cold-eyes log
 
 ## 1. Who is reading
 
@@ -274,6 +274,24 @@ Rules:
 - [ ] Anything ambiguous out of context has a disambiguation comment.
 - [ ] It is not a tool's own output passed through.
 - [ ] Read it aloud as if the update just failed. Would you be reassured or annoyed?
+
+## What checks this
+
+| Rule | What catches a breach |
+| --- | --- |
+| §2 plain English | nothing automatic |
+| §3 never blame the user | nothing automatic |
+| §4 never claim what was not earned | `tests/run-tests.sh` — the reboot and success invariants. A failed step is recorded, gives a hint, and claims nothing; a package-only change offers a service restart rather than a reboot |
+| §6.1 every user-facing string is wrapped for translation | nothing yet — there is no `tr()` anywhere in the tree. ONEUP-0032 is groundwork, and this rule binds the code it will produce |
+| §6.2 no sentence assembled by concatenation | nothing automatic |
+| §6.3 plurals go through the plural form | nothing automatic |
+| §7 the catalogue workflow | nothing yet — no catalogue exists |
+
+**§4 is the one rule here with real teeth, and it is not a wording rule by accident.** "Never
+claim what was not earned" is testable because it is a claim about *state*, not about prose:
+a marker either says a reboot is needed or it does not. The rest of this standard governs how
+a true sentence is phrased, which no script can judge — so §9's checklist is the catcher, and
+review is the backstop.
 
 ## 10. Cold-eyes loop log
 

@@ -13,7 +13,7 @@ a time, in one direction.
 
 **Sections:** 1 the shape of a line · 2 reading order · 3 the markers · 4 the ones with
 traps · 5 changing the contract · 6 traps · 7 drift in the engine's header comment ·
-8 the two state files · 9 cold-eyes log
+8 the two state files · what checks this · 9 cold-eyes log
 
 This is a **reference**, not a standard: it records a contract, not a rule about how to
 work. Where it and the engine's own header comment disagree, **this document is right** —
@@ -352,6 +352,24 @@ the window resolves them from `Path.home()` and is isolated in tests by rewritin
 **Their field layout is not pinned anywhere, including here.** The Python engine must
 reproduce it exactly or run-following breaks silently, so ONEUP-0054's spec has to write it
 down before the rewrite — either in that spec, or as a new subsection added here.
+
+## What checks this
+
+| Rule | What catches a breach |
+| --- | --- |
+| the engine emits each marker | `tests/run-tests.sh` |
+| the window reacts to each marker | `tests/gui-smoke.py` |
+| §3's table matches the markers the engine emits | `tests/docs-check.py`, both ways: a marker the engine emits and this table omits, and a marker this table names that the engine never emits. It is compared against the engine only — the GUI dispatches on the parsed name, so it has no comparable token list, and that half stays uncovered |
+| §1.1 a payload contains no `\|` | nothing automatic. The engine rewrites `\|` to `/` before emitting `SNAPSHOT_ITEM`; a new free-text field that forgets to is caught by nobody |
+| §1.2 a marker read must survive being spliced with stderr | nothing automatic — the three guards are in the engine, and nothing checks a fourth has one |
+| §5.1 the contract is frozen for 1.x | nothing automatic |
+
+**The gap left is the GUI half.** The engine's side of the contract is now compared against
+this table on every push, but nothing proves the window *handles* each marker it is told to.
+`tests/gui-smoke.py` feeds the window marker lines and asserts what it does with them, which
+covers the markers it happens to exercise — not the whole table. Closing that needs a list of
+handled names the GUI can be asked for, which the 2.0 split (ONEUP-0034) makes easy and the
+current single file does not.
 
 ## 9. Cold-eyes loop log
 

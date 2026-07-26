@@ -15,22 +15,32 @@ the tree on 2026-07-26, not recalled.
 **Sections:** 1 what the suite is · 2 isolation from the machine · 3 the mock-PATH sandbox ·
 4 one invariant, one test · 5 the four correctness invariants · 6 determinism ·
 7 a passing suite is silent · 8 new in 2.0 · 9 traps · 10 before you commit ·
-11 cold-eyes log
+what checks this · 11 cold-eyes log
 
 ## 1. What the suite is
 
 Three programmes, all runnable on their own, all gated by `./local-CI.sh` and by GitHub CI
 on a `v*` tag:
 
-| Suite | File | Size | Asserts on |
-| --- | --- | --- | --- |
-| Engine | `tests/run-tests.sh` | 2,041 lines, **76 scenarios**, 205 assertions | the `@@MARKER@@` lines `update_system.sh` prints |
+| Suite | File | Asserts on |
+| --- | --- | --- |
+| Engine | `tests/run-tests.sh` | the `@@MARKER@@` lines `update_system.sh` prints |
+| GUI | `tests/gui-smoke.py` | the window's state after being fed those same marker lines |
+| Version bump | `tests/bump-test.py` | that `bump.py` rewrites all six version sites |
 
-"205 assertions" is the figure the suite's own `Passed:` line reports. The source carries
-185 `check*` call sites; two scenarios count a pass or fail by hand. Cite the reported
-tally, not a grep.
-| GUI | `tests/gui-smoke.py` | 1,361 lines, 283 assertions | the window's state after being fed those same marker lines |
-| Version bump | `tests/bump-test.py` | 95 lines, 6 assertions | that `bump.py` rewrites all six version sites |
+**No sizes or assertion counts appear here, deliberately**
+(`docs/standards/documentation.md` §6b). They are wrong the next time anybody adds a test,
+and wrong silently. **`./local-CI.sh` prints each suite's tally on every run**, which is
+always current and is where to look. Where a count is genuinely needed as a baseline — the
+figures 2.0 will be measured against — it belongs in the document doing the measuring, dated
+and in the past tense: `docs/design/oneup-2.0.md` §2.
+
+**`tests/docs-check.py` is a fourth programme in that directory and is deliberately not in
+the table above.** It asserts nothing about what OneUp does — it checks the documentation
+against the rules of `docs/standards/documentation.md`. It runs in `local-CI.sh` and, unlike
+the three suites, **not** in GitHub CI (`docs/standards/workflow.md` §6 explains why the two
+gate sets differ). Everything in §2 and §3 below is about the three suites; a rule that also
+binds `docs-check.py` says so.
 
 They meet in the middle: the engine suite proves the engine **emits** a marker, the GUI
 suite proves the window **reacts** to it. Neither alone proves the pair works, which is why
@@ -57,9 +67,9 @@ ONEUP_STOP_FILE="${ONEUP_STOP_FILE:-$mockdir/stop.request}"
 
 Both defaults bit for real, which is why the rule is not theoretical:
 
-- The package-lock probe reads `/run/zypp.pid`. **40 tests failed** merely because the
-  machine happened to be running zypper at the time — precisely the moment somebody is
-  likely to be working on an update tool.
+- The package-lock probe reads `/run/zypp.pid`. The suite went green to **40 failures**
+  merely because the machine happened to be running zypper at the time — precisely the
+  moment somebody is likely to be working on an update tool.
 - `run.state` defaults to the user's own, and `cleanup` deletes the file it owns. Running
   the suite during a real update **deleted that run's record**, and the window could no
   longer find the run it was following (ONEUP-0045).
@@ -304,6 +314,25 @@ with the layout direction forced right-to-left.
 - [ ] A green run of the whole suite prints no traceback of a *new shape* (the count of the known ONEUP-0062 ones varies run to run; a new message is the signal).
 - [ ] If it locks in a spec invariant, the spec names it by file.
 - [ ] `./local-CI.sh` is green.
+
+## What checks this
+
+| Rule | What catches a breach |
+| --- | --- |
+| §2.1 the three redirects | `run_engine` applies them itself, so a scenario that goes through it cannot forget. A scenario that invokes the engine directly must repeat them by hand, and **nothing catches that** |
+| §2.2 the GUI suite redirects `HOME` | **nothing** — it does not redirect it, which is ONEUP-0058 |
+| §2.3 no root | the mock `PATH`: a real `sudo` is not on it, so a scenario that reaches for one gets the mock or nothing |
+| §2.3 no network | **nothing** — the GUI suite makes 49 live GitHub requests per run (ONEUP-0067) |
+| §3 a mock fails loudly rather than quietly | several scenarios carry an `exit 99` trap. Nothing checks that a *new* mock has one |
+| §4 one invariant, one test | nothing automatic |
+| §5 the four correctness invariants | `tests/run-tests.sh` — this is what the suite is for, and the reason it exists |
+| §6 poll for the condition, never sleep | **nothing** — one `sleep 0.5` remains in the orphaned-dialog scenario (ONEUP-0068) |
+| §7 a passing suite is silent | **nothing** — the GUI suite prints about thirty teardown tracebacks while passing (ONEUP-0062) |
+
+**Four rows name an open roadmap item instead of a gate**, and all four are places where the
+suite does not yet obey its own standard. That is the honest picture, and it is the reason
+each of the four is on the roadmap rather than in a footnote: §7 in particular is a rule this
+suite breaks every single run.
 
 ## 11. Cold-eyes loop log
 

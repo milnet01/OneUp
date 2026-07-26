@@ -15,7 +15,7 @@ project's own prior description, the correction is stated in place.
 
 **Sections:** 1 the privilege boundary · 2 one authentication per run · 3 attributable
 prompts · 4 validate at the boundary · 5 the passwordless drop-in · 6 cooperative
-stopping · 7 logs · 8 supply chain · 9 traps · 10 before you commit · 11 cold-eyes log
+stopping · 7 logs · 8 supply chain · 9 traps · 10 before you commit · what checks this · 11 cold-eyes log
 
 ---
 
@@ -27,10 +27,12 @@ This is rule one. Everything else in this document exists to keep it true.
 contains **zero** `sudo` invocations. Root work is delegated, never assumed.
 
 **1.2 — The engine is the only thing that runs privileged commands during an update.**
-Measured at `58ea3bc`, `update_system.sh` makes **34** privileged invocations: **14**
-through `sudo_capture` (§2.2) and **20** direct `sudo` calls at command position. (A
-thirty-fifth and thirty-sixth `sudo` appear *inside* `sudo_capture` itself — they are the
-helper, not call sites.) The direct calls are the streaming and fire-and-forget ones that
+Measured at `58ea3bc`, `update_system.sh` made **34** privileged invocations: **14**
+through `sudo_capture` (§2.2) and **20** direct `sudo` calls at command position. (Two more
+`sudo` lines sit *inside* `sudo_capture` itself — they are the helper, not call sites.) That
+is a measurement of one commit and not a standing figure
+(`docs/standards/documentation.md` §6b.4); the **split** is the rule, and it holds at any
+count. This document owns both figures — nothing else restates them. The direct calls are the streaming and fire-and-forget ones that
 **must** stay at top level: `sudo … | tee` keeps sudo as the caller's own child, which is
 exactly what §2.2 requires.
 
@@ -406,6 +408,27 @@ incidents and the rule are `docs/standards/testing.md` §2, which is canonical.
 - [ ] Tests redirect the three state-file overrides (§9.6).
 
 ---
+
+## What checks this
+
+| Rule | What catches a breach |
+| --- | --- |
+| §1 the GUI never runs as root | nothing automatic |
+| §2 one authentication per run | `tests/run-tests.sh` — *"a full run asks for the password exactly once"*, against a mock that models sudo's per-parent-pid credential cache |
+| §2 no `sudo` inside a subshell | the same scenario, because a subshell **is** a second prompt. The rule and its symptom are the same thing, which is what makes this the strongest gate in the set |
+| §3 every prompt says who is asking | nothing automatic |
+| §4 validate at the boundary, by shape | `tests/run-tests.sh` — an unsafe repo alias is refused and never reaches a privileged command |
+| §5 the passwordless drop-in | `tests/run-tests.sh` — grant, revoke and status, and the generated file is put through a real `visudo -cf` |
+| §5 `--check` authenticates zero times | `tests/run-tests.sh` — *"`--check` performs NO privileged auth"*, backed by a mock that exits 99 if a transaction is attempted |
+| §6 stopping is cooperative | `tests/run-tests.sh` |
+| §7 logs carry no secrets | `tests/gui-smoke.py` — the diagnostics bundle has its hostname scrubbed |
+| §8 supply chain | nothing automatic |
+| nothing the engine spawns outlives it | `tests/run-tests.sh` — the sudo keep-alive leaves no orphaned process when a run ends |
+
+**This is the best-gated standard in the set**, and the reason is worth copying rather than
+admiring: each rule was written so that breaking it produces a *visible symptom* — a second
+password prompt, an orphaned process, a mutation during a read-only pass. A rule whose breach
+shows up as nothing in particular cannot be tested, however carefully it is worded.
 
 ## 11. Cold-eyes loop log
 

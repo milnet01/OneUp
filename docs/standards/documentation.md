@@ -15,8 +15,9 @@ files under `packaging/obs/` and `screenshots/` (they follow §8's writing rules
 no Status header, because they document a directory rather than a decision).
 
 **Sections:** 1 the documents · 2 when each is required · 3 the Status header · 4 the spec
-template · 5 invariants · 6 verification · 6a citing code · 7 the review gate · 8 plain
-language · 9 keeping documents true · 10 cold-eyes log
+template · 5 invariants · 6 verification · 6a citing code · 6b figures from the code · 7 the
+review gate · 8 plain language · 9 keeping documents true · what checks this · 10 cold-eyes
+log
 
 ## 1. The documents, and what each is for
 
@@ -109,8 +110,10 @@ each is brought to this shape the next time it is edited for another reason, not
 sweep.
 
 `Verified at` is not decoration. It is the only thing that lets a later reader know
-whether a number is current. A document without it is assumed stale. The design document
-spells it `Baseline:`; that is the same field under an older name.
+whether a figure is current — and §6b says how each figure was counted, so re-checking one
+is cheap. A document without `Verified at` is assumed stale. **The field has exactly one
+name**: the design document spelled it `Baseline:` until 2026-07-26, and was renamed rather
+than blessed, because one thing with two names is the beginning of two things.
 
 ## 4. The spec template
 
@@ -138,6 +141,12 @@ leaving a heading with nothing under it.
 numbered section. A document subject to the §7 gate with no loop-log section has not been
 through the gate.
 
+**Every standard and reference also carries an unnumbered `## What checks this` section**,
+immediately before the loop log, holding one table: each rule the document sets, and what
+catches a breach of it. It is unnumbered so that adding it renumbered nothing (§9). A rule
+whose row says *nothing yet* is honest and gets fixed; a rule with no row at all is a rule
+nobody has thought about. `check-docs.py` fails a standard that lacks the section.
+
 ## 5. Correctness invariants — the format
 
 One canonical form, because tooling parses it and because a table cell cannot hold the
@@ -159,6 +168,16 @@ Rules:
   step is recorded, emits a plain-English hint, and the run continues to the next step"
   can.
 
+**This generalises past invariants, and it is the governing idea of the whole set: a rule
+with no check is a wish.** Whether a rule holds is settled by whether something cheap
+catches it failing, not by how firmly it is written. So every standard and reference ends
+with a **What checks this** section naming what catches each of its rules — and naming, in
+the same table, the rules nothing catches. An unchecked rule recorded as unchecked gets
+fixed. An unchecked rule left silent reads as covered.
+
+Which catcher to reach for is §7's ordering, and adding one is
+`docs/standards/workflow.md` §6.1.
+
 ## 6. The verification rule
 
 **Every claim naming a function, file, flag, marker, constant or version is checked against
@@ -172,16 +191,18 @@ probably works. (How to *write* the citation — by name, never by line number �
 - When the answer is not on disk — it concerns intent, scope, or preference — **ask**.
   Two lines of question cost less than a document built on a wrong premise.
 
-The live example of why: the ONEUP-0054 draft cites 197 engine tests and 3,680 lines from
-commit `ea51adc`. Measured at `dbef1a8` the figures were 205 assertions and 3,719 lines —
-and "tests" was the wrong noun anyway; `docs/standards/testing.md` §1 is canonical (76
-scenarios, 205 assertions). Numbers rot silently,
-which is what §3's `Verified at` line is for.
+The live example of why: the `ONEUP-0054` draft cited 197 engine tests and 3,680 lines,
+measured at `ea51adc`. By `dbef1a8` neither figure held, and "tests" was the wrong noun
+anyway. **Numbers rot silently** — no gate fails and no reader notices — which is why §6b
+says to write most of them out of the document altogether, and why §3's `Verified at` dates
+the ones that stay.
 
 ## 6a. Cite by name, never by line number
 
 **A citation names a symbol or quotes a searchable anchor. It never points at a bare line
 number.** Decided with the user, 2026-07-26.
+
+<!-- docs-check: ignore-line-numbers — the Don't column has to show the banned form -->
 
 | Don't | Do |
 | --- | --- |
@@ -221,9 +242,82 @@ Nothing durable. They are fine in a **commit message**, a **review comment**, or
 current. They do not belong in a standard, a spec, a design document, `CLAUDE.md` or the
 roadmap.
 
-**Counts and measurements keep working the same way** — "205 engine tests", "0 directional
-QSS properties" — because §3's `Verified at` header dates them. A line number has no such
-defence: it is stale the moment someone adds an import.
+**A count is a separate problem, and a worse one** — §6b, which says to keep most of them
+out of a document entirely. A line number cannot even be rescued that way: it is stale the
+moment someone adds an import above it, and it is stale while still looking exact.
+
+## 6b. Figures counted from the code
+
+**Most counts taken from the tree should not be in a document at all.** They are the fastest
+thing here to go stale: a count of lines, tests, call sites or errors is wrong the next time
+anyone edits the thing it counts, and it goes wrong **silently** — no gate fails, no reader
+notices, and the number keeps being quoted because it looks precise. Decided with the user,
+2026-07-26.
+
+Four forms, best first. Use the highest one that still makes the point.
+
+### 6b.1 No figure
+
+**Ask what the reader does differently for knowing.** If the answer is nothing, cut it.
+*"The engine suite has 2,041 lines and 205 assertions"* changes no decision anybody makes;
+*"the engine suite asserts on the marker lines the engine prints"* is the whole of what a
+reader needs. Most counts in a document are scene-setting, and scene-setting is exactly what
+§8 says to cut.
+
+### 6b.2 The shape, not the count
+
+**A rule about "every" survives an edit; a rule about "all 47" does not.** Write the sweep,
+not its current result.
+
+`docs/standards/ui-and-accessibility.md` §2 got here first and says why: *"The sweep is the
+rule; the current call count is not worth citing, because nothing pins it and the next widget
+changes it."*
+
+### 6b.3 The command, not its output
+
+**Where a reader really does want the number, give them the thing that prints it.** `Passed:
+205` is stale the moment a test is added; *"`./local-CI.sh` prints the tally"* is correct
+forever, and it is shorter.
+
+### 6b.4 A measurement, in the past tense
+
+When the figure is *evidence* — for a decision, a cost estimate, a bug — keep it, and write
+it as **something that was measured**, not as something that is true:
+
+| Rots | Does not rot |
+| --- | --- |
+| "there are 47 lint errors" | "measured at `58ea3bc`, adopting the config reported 47 errors" |
+| "`updater.py` is 3,719 lines" | "`updater.py` is more than six times the 600-line ceiling" |
+| "the engine makes 34 privileged calls" | "a full run once needed **seven** password prompts, which is what `sudo_capture` exists to prevent" |
+
+The right-hand column is durable because each sentence is about **what happened**, and what
+happened stays happened. The left-hand column claims a present state the document cannot
+keep. Same numbers; one form is a fact and the other is a promise.
+
+A figure kept under this rule states **how it was counted**, because a measurement nobody can
+reproduce cannot be disagreed with, and a claim nobody can disagree with never gets checked —
+it only gets re-copied:
+
+- **Name the unit.** "Tests" is not a unit here. Scenarios, assertions, call sites, lines.
+- **Name the command**, where one exists, short enough to paste.
+- **Name what is excluded**, whenever the exclusion took a judgement — *"34 privileged calls
+  = 14 `sudo_capture` call sites + 20 direct `sudo` at command position; the helper's own 2
+  `sudo` lines are the helper, not call sites."*
+- **Say when a grep is the wrong tool**, next to the figure, so a later reader cannot
+  innocently "correct" it.
+
+**The worst error this set has produced was not a stale number — it was an unnamed unit.**
+The `ONEUP-0054` draft said **197 tests**. The tree held 76 scenarios and 205 assertions.
+Nobody was wrong on purpose: "test" meant three different things and no document said which.
+
+### 6b.5 What is exempt
+
+A number that is **fixed by a contract** is not a measurement and does not rot: the six
+version sites (`docs/standards/workflow.md` §5.1), the marker table
+(`docs/reference/marker-protocol.md` §3), the Python floor. Each is a decision rather than an
+observation, and each has a gate that fails when the tree stops matching it. **That is the
+test**: if nothing fails when the number goes wrong, it is a measurement, and §6b.1 to §6b.4
+apply.
 
 ## 7. Review — the cold-eyes gate
 
@@ -254,6 +348,23 @@ a test), those are exempt — they are too small to warrant it. OneUp has none t
   with a line saying so — never silently filtered.
 - **Write the log as the loops happen.** Back-filling it destroys the audit trail, which
   is the only evidence the review was real.
+- **The tally must balance.** A row saying 8 findings and 6 outcomes is a row where two
+  findings were dropped without a decision. `check-docs.py` fails on it.
+
+**Spend a cold reader only on what a script cannot do.** The catchers, cheapest first:
+
+| Catcher | Cost | Use for |
+| --- | --- | --- |
+| a gate in `local-CI.sh` | seconds, every run, forever | anything countable or greppable |
+| a checklist (each standard's *Before you commit*) | a minute, when you remember | judgement a script cannot make, with a fixed trigger |
+| a cold reader (`/cold-eyes`) | a review pass | reasoning, contradictions, an approach that is wrong |
+| the user | a bug report | the failure the first three missed |
+
+Four of the six errors the first three loops found were countable: a marker table that would
+have broken its own `grep` gate, a "four fields" list naming three, a loop tally of 8
+findings against 6 outcomes, and a `Status` line carrying history in ten files. Each was paid
+for at cold-reader prices. **When a reviewer or a human catches the same *class* twice, it
+becomes a gate** — `docs/standards/workflow.md` §6.1 says how.
 
 The log format:
 
@@ -338,6 +449,30 @@ explains it.
 
 ## 9. Keeping documents true
 
+**One document owns each fact. Everywhere else points at it.** §1.1 settles a contradiction
+after it exists, which is recovery. Not writing the fact twice is prevention, and it is the
+cheaper of the two by a wide margin — you cannot contradict yourself about something you
+said once.
+
+Every contradiction the first review loop found existed because a fact lived in two places:
+the privileged-call count in `security.md` and in the design document (21 of 22 against 14 of
+34), and the cause of the GUI suite's teardown crash, given differently in two standards. A
+pointer can go stale in exactly one way, and `check-docs.py` catches it. A restatement can go
+stale in every way, silently.
+
+The owners: `docs/reference/` owns the marker contract, and each standard owns its own
+subject. Where a second document needs the fact, it names the owner and the section — as
+`security.md` §9.6 does for the test rules — rather than repeating the content. Restate a
+fact only to make a *different* point with it, and say where it came from.
+
+- **Changing a fact is not finished until you have searched for who cited it.** Fix document
+  A, and document B — which quoted A's figure — is now wrong. B's bytes did not change, so a
+  review pass that skips unchanged files never opens it, and the contradiction survives to
+  `Reviewed`. Search the whole doc set for the figure, symbol or section you changed, in the
+  same session. This applies to every edit, not only inside a `/cold-eyes` run.
+- **Renumbering is a blast radius, not a tidy-up.** Renaming a section or an `INV-N` breaks
+  every citation of it. If you cannot fix all of them in the same session, do not renumber —
+  which is why §6a and §6b are lettered rather than inserted as a new §7.
 - **Correct a stale figure in the session you notice it**, not "later". Later does not
   arrive, and the next reader trusts the number.
 - **Never rewrite `CHANGELOG.md` history.** Released entries are a record of what users
@@ -346,6 +481,30 @@ explains it.
   top, so its citations still resolve and the reasoning stays readable.
 - **When two documents disagree, §1.1's order settles it**, and the loser is fixed
   immediately rather than noted.
+
+## What checks this
+
+| Rule | What catches a breach |
+| --- | --- |
+| §3 the header block, and the four `Status` values | `tests/docs-check.py` |
+| §4 every standard carries this section and a loop log | `tests/docs-check.py` |
+| §5 an invariant names its test | nothing automatic — a cold reader |
+| §6 a claim is checked against the tree | nothing automatic. `/cold-eyes` is the only catcher, which is why §7 is a gate and not advice |
+| §6 no `TODO` / `TBD` / `FIXME` left in a document | `tests/docs-check.py` |
+| §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design. `docs/specs/` is exempt until ONEUP-0065 converts the 69 citations the five older specs carry. The prose form — *"around line 786"* — is caught by nobody |
+| §6b most counts taken from the code stay out of the document | nothing automatic — a cold reader |
+| §7 a loop tally balances | `tests/docs-check.py` |
+| §8 plain language | nothing automatic — a cold reader, and the author reading their own sentence as an opponent |
+| §9 a pointer resolves | `tests/docs-check.py`, over the documents that describe the tree as it is: standards, reference, `CLAUDE.md`, `README.md`. A spec, design document or plan is excluded, because each legitimately names files it is going to create |
+| §9 one owner per fact | nothing automatic. This is the gap the review loop exists to cover, and the most expensive one to leave uncovered |
+
+**Five of the eleven rows have nothing automatic behind them**, and that is the honest state
+rather than a to-do list: a gate for *"is this claim true?"* would have to read the code and
+decide. Two are worth building anyway, because both would have caught errors this set has
+actually produced — a check for a tree-derived count written in the present tense with no
+command beside it (§6b), and a check for the same figure appearing in two documents at once
+(§9). Both are approximations. Both are cheaper than the review pass that currently catches
+them.
 
 ## 10. Cold-eyes loop log
 

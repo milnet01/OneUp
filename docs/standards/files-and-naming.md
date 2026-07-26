@@ -13,7 +13,7 @@ not recalled.
 
 **Sections:** 1 the repository · 2 naming · 3 the app ID · 4 the `oneup/` package ·
 5 runtime state · 6 what a new file obliges you to update · 7 traps · 8 quick check ·
-9 cold-eyes log
+what checks this · 9 cold-eyes log
 
 ---
 
@@ -34,7 +34,7 @@ exist yet, and saying so is the point.
 | `packaging/rpm/` | `oneup.spec` — the `zypper`-installable package. |
 | `packaging/appimage/` | `build-appimage.sh` — the single-file portable build. |
 | `packaging/obs/` | `_service` + `README.md` — the openSUSE Build Service recipe. |
-| `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `bump-test.py` (version lockstep). |
+| `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `bump-test.py` (version lockstep), `docs-check.py` (the documentation rules a script can settle). |
 | `githooks/` | Repo-local git hooks. One file: `pre-push`. Not active until `git config core.hooksPath githooks`. |
 | `screenshots/` | Images the README and the app-store metadata point at. |
 | `.github/workflows/` | GitHub CI. One file: `release.yml`, triggered by a `v*` tag. |
@@ -57,7 +57,7 @@ introduces exactly one new source directory, `oneup/` (§4).
 | --- | --- | --- |
 | Python module | `snake_case.py` | `updater.py`, `bump.py` |
 | Shell script | `kebab-case.sh` | `build-appimage.sh`, `run-tests.sh`, `release.sh` |
-| Test file | `<subject>-<kind>` | `gui-smoke.py`, `bump-test.py` |
+| Test file | `<subject>-<kind>` | `gui-smoke.py`, `bump-test.py`, `docs-check.py` |
 | Spec / plan | `ONEUP-NNNN-<kebab-topic>.md` | `ONEUP-0028-accessibility.md` |
 | Standard | `<subject>.md`, no ID | `documentation.md`, `dependencies.md` |
 | Anything under `data/` | `za.co.antsprojectshub.OneUp.<ext>` | all three files |
@@ -318,6 +318,21 @@ which category it is in — the answer decides whether §6 applies at all.
   `tests/bump-test.py`, `docs/standards/workflow.md` §5.1 and `CLAUDE.md`.
 
 ---
+
+## What checks this
+
+| Rule | What catches a breach |
+| --- | --- |
+| §1 the root is closed | nothing automatic — the reason for a new root file goes in the commit message, where a reader finds it and a script does not |
+| §2.1 the naming rules | nothing automatic |
+| §4.1 the rules the `oneup/` split must obey | nothing yet — the package does not exist (ONEUP-0034) |
+| §5 runtime state paths, and which are redirectable | `tests/run-tests.sh` — `run_engine` redirects three of them on every scenario. The fourth, `HOME`, cannot be redirected today (ONEUP-0058) |
+| §6 what a new file obliges you to update | nothing automatic. §8's checklist is the only catcher, and it works only if the author opens it |
+
+**Nothing here is gated, and most of it could be.** Naming, the closed root and the packaging
+manifests are all patterns a script can match. This is the standard most likely to be worth a
+gate next, by `docs/standards/workflow.md` §6.1's rule — the second time a review catches a
+misnamed or unregistered file.
 
 ## 9. Cold-eyes loop log
 

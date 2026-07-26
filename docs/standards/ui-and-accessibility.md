@@ -14,9 +14,9 @@ was measured against the tree on 2026-07-26, not recalled.
 
 **Sections:** 1 the one-line version · 2 accessible names · 3 never colour alone ·
 4 text that scales · 5 focus · 6 dialogs · 7 themes · 8 right-to-left · 9 traps ·
-10 before you commit · 11 cold-eyes log
+10 before you commit · what checks this · 11 cold-eyes log
 
-**Absorbs** `docs/standards/dialogs.md` (deleted in the same commit) and the standing rules
+**Absorbs** the former `dialogs.md` standard (deleted in the same commit) and the standing rules
 of `docs/specs/ONEUP-0028-accessibility.md`. The spec remains the record of *why* and of how
 each invariant is tested; this file is the rule a new widget must obey.
 
@@ -379,6 +379,25 @@ today; the RTL work adds them, and this is the form they take.
 - [ ] No directional QSS property, no hard-coded `AlignLeft` / `AlignRight`.
 - [ ] Custom painting reads the layout direction, or says why it need not.
 - [ ] `./local-CI.sh` is green — the GUI suite is where most of the above is enforced.
+
+## What checks this
+
+| Rule | What catches a breach |
+| --- | --- |
+| §2 every focusable widget has an accessible name | `tests/gui-smoke.py` — four sweeps, over the main window and the Repositories, Rollback and Settings pages, each naming the widgets that failed |
+| §3 state is never signalled by colour alone | nothing automatic |
+| §4 no hard-coded `px` font size | `tests/gui-smoke.py` — every font size is in points, and derives from the desktop's own default |
+| §5 focus draws no ring | `tests/gui-smoke.py` — *"focus draws no outline ring"*, paired with *"focus still gives a cue by reusing the hover look"*, so the rule cannot be satisfied by removing the cue altogether |
+| §5.4 the 3:1 focus-indicator ratio | **nothing computes contrast anywhere in the suite.** The four measured ratios in §5.4 were taken by hand, and the shortfall is deliberate (ONEUP-0027) |
+| §7 themes | ONEUP-0027 — the contrast check is that item's to write, and the light theme's `lastrun` text sits at 3.07:1 today |
+| §8.1 no directional QSS property | nothing automatic |
+| §8.2 no hard-coded `AlignLeft` / `AlignRight` | nothing automatic — `#LinkBtn` violates it today |
+| §8.3 custom painting applies the direction | **nothing** — the toggle knob does not apply it (ONEUP-0032) |
+
+**The gated half is the half a script can see.** A name is present or absent; a font size is
+points or pixels; an outline is drawn or not. Everything left ungated needs a number computed
+(contrast) or a judgement made (is this cue really more than colour?) — and ONEUP-0027 is
+where the contrast half stops being manual.
 
 ## 11. Cold-eyes loop log
 

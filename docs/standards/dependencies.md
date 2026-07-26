@@ -102,6 +102,21 @@ done
 zypper info python3-pyside6 | grep -i version
 ```
 
+## What checks this
+
+| Rule | What catches a breach |
+| --- | --- |
+| use the latest stable release | nothing automatic — the sweep under *How to check what's behind* is run by hand |
+| a pin older than latest carries a written reason | nothing automatic |
+| a bump updates the calling code in the same change | nothing automatic |
+| the ledger records each known incompatibility | nothing automatic |
+
+**Nothing here is gated, and that is structural rather than neglect.** *"Is this the latest
+version?"* can only be answered by a network call, and no suite in this project makes one
+(`docs/standards/testing.md` §2.3). The catcher is the sweep, and a sweep is a habit, not a
+gate — so the honest reading of a green `local-CI.sh` is that it says nothing whatever about
+whether these dependencies are current.
+
 ## Cold-eyes loop log
 
 | Loop | Date | Findings | Outcome |
