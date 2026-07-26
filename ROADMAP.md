@@ -808,6 +808,25 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   With main near-idle, the merge-pain argument for landing the GUI split
   (ONEUP-0034) on main is gone, so the split moves back to v2 as its first
   substantial work. See docs/design/oneup-2.0.md §5.3/§5.4.
+  Progress (2026-07-26): the standards set gained three structural rules
+  and the gate that enforces the countable half of them — a rule with no
+  check is a wish (every standard now ends with a "What checks this"
+  table, naming honestly the rules nothing catches); §6b, which keeps
+  most code-derived counts out of a document altogether; and one-owner-
+  per-fact plus the blast-radius rule. `tests/docs-check.py` runs in
+  `local-CI.sh` with eight checks, each proved to fail on a seeded fault.
+
+  Cold-eyes: 4 loops, 6 lanes, converged on polish. 27 findings raw, 22
+  verified, 5 dismissed. The two that mattered most were both false
+  assurances: the marker gate was comparing the contract table against
+  the engine's own header comment — which the contract document records
+  as stale — and `testing.md`'s new table stated the opposite of the
+  truth about which suite redirects HOME. Also found: README said OneUp
+  does "four things" and listed five; `workflow.md` claimed the version
+  lockstep covered the CHANGELOG links and it did not (ONEUP-0033's
+  failure mode, ungated). Filed ONEUP-0069 for the DISK marker.
+
+  Still open: Task 11 (rewrite CLAUDE.md as a map) through Task 19.
 
   Decisions taken with the user in the same session, recorded in the design:
   2.0 is a full feature release (engine rewrite + GUI split + themes + i18n +
