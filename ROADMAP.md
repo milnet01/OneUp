@@ -985,3 +985,29 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Rework the window so it is easier and more comfortable to use — clearer wording, less reaching, everything usable by keyboard and screen reader — without drawing boxes around buttons and links.
   Kind: ux.
   Source: user-request-2026-07-26.
+
+- 📋 [ONEUP-0065] **Convert the remaining line-number citations in the older documents to symbol names.**
+  docs/standards/documentation.md 6a (added 2026-07-26, the user's
+  decision) requires a citation to name a symbol or quote a searchable
+  anchor, never a bare line number. All seven standards were swept in the
+  same commit (0812d81).
+
+  Not yet swept, measured at 0812d81: ONEUP-0022 plan (30), ONEUP-0018
+  spec (27), ONEUP-0022 spec (18), ROADMAP.md (10), ONEUP-0028 spec (10),
+  ONEUP-0025 spec (10), ONEUP-0018 plan (9), ONEUP-0057 plan (8),
+  ONEUP-0054 spec (7), the 2.0 design doc (1) — 130 in total.
+
+  Two of those counts are absorbed elsewhere rather than by this item:
+  ONEUP-0054's 7 are rewritten by ONEUP-0057 Task 12 (the spec revision),
+  and the ONEUP-0057 plan's 8 are verification commands rather than prose
+  citations, which the standard permits.
+
+  Deliberately deferred rather than done in the sweep: the 0018/0022/0025
+  documents describe already-shipped work, so their citations are read
+  rarely and rot harmlessly. The ones that matter are the documents 2.0 is
+  built from, and those are now clean. Do this before the GUI split
+  (ONEUP-0034) lands, since that is what turns every remaining line number
+  into a pointer at a file that no longer exists.
+  **Layman:** Make the older design notes point at code by name instead of by line number, so they don't go wrong the moment the code shifts down a few lines.
+  Kind: doc-fix.
+  Source: user-request-2026-07-26.
