@@ -264,7 +264,7 @@ git commit -m "ONEUP-0057: settle the Python floor, module size and subprocess d
 
 **Files:** Create `docs/standards/security.md`
 
-- [ ] **Step 1: Re-derive the sudo model from the engine, not from memory.**
+- [x] **Step 1: Re-derive the sudo model from the engine, not from memory.**
 
 ```bash
 grep -n 'sudo_capture()' -A 25 update_system.sh
@@ -272,9 +272,21 @@ grep -c 'sudo_capture' update_system.sh
 grep -n 'SUDO_ASKPASS\|SUDO_PROMPT\|sudo -v\|keepalive' update_system.sh | head -20
 ```
 
-- [ ] **Step 2: Write the document**, settling:
+- [x] **Step 2: Write the document**, settling:
       - **The privilege split** as rule one: the GUI never runs as root, ever; the engine
         is the only path to root; gate G5 (engine imports no Qt) is how it stays true.
+
+        **Corrected while writing (2026-07-26).** This framing is not accurate and the
+        inaccuracy is the dangerous direction. Measured: `updater.py` contains **zero**
+        `sudo` invocations and the engine contains **zero** Qt references, so G5 and "the
+        GUI never becomes root" both hold — but the GUI *does* call **`pkexec`** at three
+        sites (`updater.py:1118`, `3525`, `3551`), and two of them build a **root shell
+        string** (`pkexec sh -c …`). Coding under the absolute version of the rule means
+        not writing the boundary validation those sites depend on. The standard therefore
+        states the precise rule (§1.4–1.6): the GUI never *becomes* root, may ask polkit
+        to run a named program as root for short user-initiated actions outside a run,
+        and validates every argument first. `coding.md` §5.1(3) and §10.6 carried the same
+        overstatement and were corrected in this task.
       - **One authentication per run**, and *why the subshell rule exists*: with no
         terminal, sudo keys its cached credential to the parent pid, and bash forks a real
         subshell for `$(cmd | other)` — a measured run once needed seven prompts. In
@@ -294,11 +306,23 @@ grep -n 'SUDO_ASKPASS\|SUDO_PROMPT\|sudo -v\|keepalive' update_system.sh | head 
         and that nothing captured from a privileged command is echoed without review.
       - **Supply chain:** points at `dependencies.md`; the AppImage and RPM build inputs.
 
-- [ ] **Step 3: Verify every claim in the document** by re-reading the greps from Step 1.
+- [x] **Step 3: Verify every claim in the document** by re-reading the greps from Step 1.
       Any rule that the engine does not actually follow is a **finding**, not a rule —
       record it as a roadmap bullet rather than describing fiction.
 
-- [ ] **Step 4: Commit.**
+      **Done, mechanically.** All 13 `file:line` citations in the document were resolved
+      against the tree and each prints the construct claimed — no drift, no out-of-range.
+      Two claims came back *better* than drafted and were strengthened rather than left
+      as assertions: `--no-gpg-checks` is not merely absent but **guarded by two
+      regression tests** (`tests/run-tests.sh:1816`, `:1859`, including the auto-skip
+      path); and the `env LC_ALL=C zypper *` sudoers entry matches that literal prefix
+      only, so it cannot be used to hand `env` an arbitrary environment. One finding was
+      recorded in place rather than filed (§4.5): the service-unit pattern permits a
+      literal backslash, almost certainly a typo for `\-`, **not exploitable** because
+      that site is argv-form — tidy it when the file is next touched, not on frozen
+      `main`. No roadmap bullet was warranted from this task.
+
+- [x] **Step 4: Commit.**
 
 ```bash
 git add docs/standards/security.md

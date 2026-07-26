@@ -200,8 +200,13 @@ OneUp's entire job is running other programs, so this section is load-bearing.
    Where a value must be passed, it is a separate list element, and it is validated first
    — the snapshot id reaching `snapper rollback` is checked to be a bare number before it
    is used (see `CLAUDE.md` and `docs/standards/security.md`).
-3. **The GUI never runs a privileged command.** It shells out to the engine, which is the
-   only part that touches root. This is the architecture, not a guideline.
+3. **The GUI never calls `sudo` and never becomes root** — measured: zero `sudo`
+   invocations in `updater.py`. Update work shells out to the engine, which is the only
+   part that touches root during a run. It *may* ask `pkexec` to run a named program as
+   root for a short user-initiated action outside a run — three sites today, every
+   argument validated first. Corrected 2026-07-26: an earlier revision of this line said
+   the GUI "never runs a privileged command", which is not accurate and is the more
+   dangerous belief to code under. The full rule is `docs/standards/security.md` §1.
 4. **In the engine, every privileged call goes through one runner** — `sudo_capture` —
    and never sits inside a subshell. This is the most expensive trap in the project and
    §8.1 explains why.
@@ -354,10 +359,17 @@ real package is `python313-pyside6`. The RPM's `Requires: python3-pyside6`
 dependency is fine — do not "fix" it.** Search provides, not names:
 `zypper search --provides --match-exact python3-pyside6`.
 
-**10.6 — The GUI must never grow a privileged call.** It is tempting, when a value is
-awkward to get out of the engine, to just run `sudo` from the GUI. That inverts the
-project's central safety property. The value goes through a marker instead; see
-`docs/reference/marker-protocol.md`.
+**10.6 — Don't reach for `sudo` in the GUI when a marker is what you want.** It is
+tempting, when a value is awkward to get out of the engine, to just run the privileged
+command from the GUI instead. That inverts the project's central safety property: the
+value goes through a marker (see `docs/reference/marker-protocol.md`).
+
+Corrected 2026-07-26: this trap previously read "the GUI must never grow a privileged
+call", which is both wrong and misleading — the GUI already calls `pkexec` at three sites
+(`updater.py:1118`, `3525`, `3551`), two of which build a root shell string. Coding to the
+absolute version means not writing the boundary validation those sites depend on, which is
+the opposite of safe. `docs/standards/security.md` §1.4–1.6 and §4 carry the accurate rule
+and the guards it requires.
 
 ---
 
