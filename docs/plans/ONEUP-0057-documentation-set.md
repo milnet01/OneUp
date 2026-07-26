@@ -124,14 +124,14 @@ git commit -m "ONEUP-0057: settle what each document is for, and the spec templa
 **Consumes:** Task 1's Status header block.
 **Produces:** the `oneup/` package naming rules Tasks 12 and 14 must follow.
 
-- [ ] **Step 1: Measure the tree as it is.** The standard describes reality first:
+- [x] **Step 1: Measure the tree as it is.** The standard describes reality first:
 
 ```bash
 git ls-files | grep -v '^docs/' | sed 's#/[^/]*$##' | sort -u
 ls data/ packaging/*/ tests/
 ```
 
-- [ ] **Step 2: Write the document**, settling:
+- [x] **Step 2: Write the document**, settling:
       - **Repo layout**, directory by directory, one line each on what belongs there.
       - **Naming:** Python modules `snake_case.py`; shell scripts `kebab-case.sh` (note
         the existing exceptions `update_system.sh`, `local-CI.sh` — describe, don't
@@ -143,21 +143,31 @@ ls data/ packaging/*/ tests/
       - **The `oneup/` package layout** from design §4, and the rule that a new engine
         module never imports from `oneup/gui/` (enforced by test, gate G5).
       - **Runtime state:** `~/.local/state/oneup/` for `history.json`, `logs/`,
-        `run.state`, `stop.request`; log mirror at `~/Documents/update-logs/`; and the
-        rule that every one of them has an environment-variable override so tests never
-        touch the real path.
+        `run.state`, `stop.request`; log mirror at `~/Documents/update-logs/`; and which
+        of them can actually be redirected in a test.
+        **Correction made while writing (2026-07-26):** this step originally asserted
+        "every one of them has an environment-variable override so tests never touch the
+        real path." Measured, that is false — **three paths have no override at all**
+        (`~/Documents/update-logs`, the GUI's `logs/`, `history.json`), and the GUI has
+        no `ONEUP_*` override of any kind; it is isolated by rewriting `HOME` before
+        import. The standard states what is true and §5.2 makes the override a
+        *requirement on new state paths* rather than a description of existing ones.
       - **What a new file obliges you to update:** the three packaging paths, and the
         six version sites if it is version-bearing.
 
-- [ ] **Step 3: Verify the state-path claims against the engine:**
+- [x] **Step 3: Verify the state-path claims against the engine:**
 
 ```bash
 grep -n 'ONEUP_RUN_STATE\|ONEUP_STOP_FILE\|ONEUP_ZYPP_PID_FILE\|local/state/oneup\|Documents/update-logs' update_system.sh updater.py | head -20
 ```
       Every override named in the document must appear here. Any that does not is deleted
-      from the document.
+      from the document. **Done — and it caught the Step 2 error above.** Two defects
+      surfaced by the same sweep and filed rather than fixed (`main` is frozen):
+      **ONEUP-0058** (the suite creates `~/Documents/update-logs` on the real machine,
+      `update_system.sh:149`) and **ONEUP-0059** (`XDG_STATE_HOME` set by the tests,
+      ignored by `updater.py:117`).
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add docs/standards/files-and-naming.md

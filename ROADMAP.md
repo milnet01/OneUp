@@ -789,3 +789,33 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Write down the design and the rules for version 2 before building it, so every piece is built to the same standard.
   Kind: doc.
   Source: user-request-2026-07-26.
+
+- 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
+  update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether
+  --log= was passed, and LOG_DIR ($HOME/Documents/update-logs, line 55) has NO
+  environment override. tests/run-tests.sh's run_engine (lines 56-72) redirects
+  ONEUP_ZYPP_PID_FILE / ONEUP_RUN_STATE / ONEUP_STOP_FILE but not HOME, so every
+  engine scenario creates that directory on whatever box the suite runs on.
+  Nothing is written there (--log= is always supplied), but it still breaks the
+  standing rule that a test must never depend on, or damage, the state of the
+  machine it runs on. Fix in the 2.0 Python engine (ONEUP-0054): either give the
+  directory an ONEUP_* override, or create it only immediately before writing to
+  it. Do not fix on main, which is frozen at 1.4.0.
+  **Layman:** Running OneUp's tests currently creates a folder in your Documents, even if you have never used the app.
+  Kind: fix.
+  Lanes: engine, tests.
+  Source: in-session-2026-07-26 (writing docs/standards/files-and-naming.md).
+
+- 📋 [ONEUP-0059] **Honour XDG_STATE_HOME and XDG_CONFIG_HOME instead of hard-coding ~/.local/state.**
+  updater.py:117 builds STATE_DIR from Path.home() / ".local" / "state" /
+  "oneup" and never reads XDG_STATE_HOME; tests/gui-smoke.py:31-32 exports both
+  XDG_CONFIG_HOME and XDG_STATE_HOME into its sandbox, so those two lines read as
+  protection they do not actually provide -- the isolation works only because
+  line 30 also rewrites HOME. Two things to fix together: make the app follow the
+  XDG base-directory specification, and make the sandbox's exports meaningful
+  (or drop them). Lands with the GUI split (ONEUP-0034), whose module-level path
+  constants this touches.
+  **Layman:** OneUp ignores the standard setting that tells apps where to keep their working files.
+  Kind: fix.
+  Lanes: gui.
+  Source: in-session-2026-07-26 (writing docs/standards/files-and-naming.md).
