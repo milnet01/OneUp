@@ -20,8 +20,9 @@ absorbed and removed).
 >
 > **Done:** Tasks 1–10 (2026-07-26). Nine standards, the marker-protocol reference, and
 > cold-eyes batch 1 — two loops, converged; all ten documents are `Status: Reviewed` and
-> carry their own loop log. Last commit `987152d`, pushed, tree clean, `./local-CI.sh`
-> green (205 engine / 283 GUI / 6 bump).
+> carry their own loop log. `documentation.md` took a third loop after §8 (plain language)
+> was added at the user's request. Last commit `677351a`, pushed, tree clean,
+> `./local-CI.sh` green (205 engine / 283 GUI / 6 bump).
 >
 > **Next:** Task 11 — rewrite `CLAUDE.md` into a map that still carries the traps. It runs
 > after batch 1 on purpose, so it can only point at documents that have been proven
