@@ -493,14 +493,17 @@ git commit -m "ONEUP-0057: settle how user-facing text is written and translated
 
 **Files:** Create `docs/standards/workflow.md`
 
-- [ ] **Step 1: Confirm the release machinery before describing it:**
+- [x] **Step 1: Confirm the release machinery before describing it:**
 
 ```bash
 grep -n 'six\|lockstep' local-CI.sh | head
 ./bump.py --help 2>&1 | head -5 || head -20 bump.py
 ```
+      **Done, and widened** — `release.sh`, `githooks/pre-push` and `release.yml` were read
+      as well, because the document describes the whole path from commit to release and
+      each of the three owns part of it.
 
-- [ ] **Step 2: Write the document**, settling:
+- [x] **Step 2: Write the document**, settling:
       - **The v1 freeze** (design §5.4) in the user's own definition: `main` takes a
         change only when people can no longer install system, Flatpak or firmware
         updates — with the two readings inside it (a silent wrong verdict counts; a
@@ -518,8 +521,18 @@ grep -n 'six\|lockstep' local-CI.sh | head
       - **`./local-CI.sh` green before every push**, enforced by `githooks/pre-push`.
       - **Semver for this project:** 2.0.0 is major because the engine is replaced; the
         release gate is design §7.
+      **Done. Three facts were measured rather than assumed, and one of them changed what
+      the document says:** the repository is **PUBLIC** (`gh repo view`), so pushes are
+      free and the standard says push as you go rather than batching; `release.yml`
+      triggers on **tags only**, so an ordinary commit push runs no CI at all; and the
+      history has **zero merge commits, no `CODEOWNERS` and no branch protection**, so the
+      standard records direct-to-branch commits as the real workflow instead of describing
+      a pull-request gate that does not exist. `release.sh`'s `read -rp` confirmation is
+      written up in §8 as intended behaviour (a release is not unattended), together with
+      the reason its `git add -A` is safe — the clean-tree precondition is checked first
+      and is fatal.
 
-- [ ] **Step 3: Commit.**
+- [x] **Step 3: Commit.**
 
 ```bash
 git add docs/standards/workflow.md
@@ -534,7 +547,7 @@ git commit -m "ONEUP-0057: settle the freeze, branch policy, commits and the rel
 
 **Produces:** the reference Task 12's spec freezes and Task 16's spec deliberately changes.
 
-- [ ] **Step 1: Enumerate the markers from both sides — the document is only correct if
+- [x] **Step 1: Enumerate the markers from both sides — the document is only correct if
       the two agree:**
 
 ```bash
@@ -544,8 +557,14 @@ grep -oE '@@[A-Z_]+@@' tests/run-tests.sh | sort -u
 ```
       Expected: 23 markers. **Any marker the engine emits that the GUI does not parse — or
       the reverse — is a finding**, recorded as a roadmap bullet in Task 18.
+      **Done — 23, and no asymmetry.** The engine emits 24 distinct `@@…@@` tokens, one of
+      which (`@@MARKER@@`) is the header comment's own placeholder, not a marker. Both
+      directions check out: `handle_marker` reads 21, and the remaining two (`SIZE`,
+      `AUTH`) are read by the `--size` and `--auth-status` side-channel handlers. That
+      split is itself a trap worth documenting — a marker emitted on a side channel never
+      reaches `handle_marker` — so the reference states it in §2.
 
-- [ ] **Step 2: Write the reference.** One row per marker: name, field list in order,
+- [x] **Step 2: Write the reference.** One row per marker: name, field list in order,
       each field's meaning and type, who emits it, who consumes it, and what the GUI must
       do when a field is `0`/absent. Cover in particular:
       - `PROGRESS|key|done|total|phase[|bytes|bytes_total]` — **total 0 means unknown**,
@@ -564,14 +583,23 @@ grep -oE '@@[A-Z_]+@@' tests/run-tests.sh | sort -u
         engine, the GUI parser and both suites in one commit; during 2.0 the contract is
         frozen (design §3) with the single exception of §5.1's codes change.
 
-- [ ] **Step 3: Verify the count in the document matches the tree:**
+- [x] **Step 3: Verify the count in the document matches the tree:**
 
 ```bash
 grep -c '^| `@@' docs/reference/marker-protocol.md
 ```
       Expected: 23. If it differs, the document is wrong, not the engine.
+      **Done — 23, and the check was strengthened.** A count alone would pass with the
+      right number of *wrong* names, so the document's marker column was extracted and
+      `diff`ed against the engine's own `@@…@@` tokens: identical. Writing the §7 drift
+      table nearly broke this gate — its rows began `| \`@@`, which the count would have
+      read as three extra markers. Restructured so exactly one table in the file has that
+      shape. **Three inaccuracies in the engine's header comment were found and filed as
+      ONEUP-0066** (`STEP_END`'s field count, `REPO`'s third field, `DONE|stopped`); not
+      patched, because `main` is frozen and only the comment is stale — the emitters and
+      the parser agree.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add docs/reference/marker-protocol.md
@@ -893,8 +921,10 @@ grep -rhoE '\bdocs/[a-zA-Z0-9/_.-]+\.md' docs/ CLAUDE.md README.md | sort -u | x
       **Filed as they were found, not deferred to here** (2026-07-26): ONEUP-0058
       (test suite writes to `~/Documents`), ONEUP-0059 (XDG paths), ONEUP-0060 (unpinned
       PySide6/PyInstaller in the AppImage build), ONEUP-0061 (QSettings migration),
-      ONEUP-0062 (the 56 GUI-suite teardown tracebacks), ONEUP-0063 (`pyproject.toml`, and
-      the six `# noqa: S` comments that currently suppress nothing). Two further findings
+      ONEUP-0062 (the 28 GUI-suite teardown tracebacks, measured at `416caa4`),
+      ONEUP-0063 (`pyproject.toml`, and the six `# noqa: S` comments that currently
+      suppress nothing), ONEUP-0065 (the 130 line-number citations left in the older
+      documents), ONEUP-0066 (three stale entries in the engine's own marker list). Two further findings
       were folded into existing bullets rather than duplicated: the painted widgets no
       theme can reach (ONEUP-0027) and the single-file test loader the GUI split breaks
       on, plus the untested GUI-side locale pin (ONEUP-0034). Filing at discovery is the
