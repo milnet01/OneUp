@@ -1011,3 +1011,29 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Make the older design notes point at code by name instead of by line number, so they don't go wrong the moment the code shifts down a few lines.
   Kind: doc-fix.
   Source: user-request-2026-07-26.
+
+- 📋 [ONEUP-0066] **Correct the engine's abbreviated marker list when the Python engine replaces it.**
+  update_system.sh's header comment lists the markers for a reader's
+  convenience. Measured at b3ede2d while writing
+  docs/reference/marker-protocol.md, three entries are wrong, and each
+  would make somebody write a broken parser:
+
+  - STEP_END is listed as `key|ok|skip|fail|detail`, implying five
+    fields. It is three: `key|status|detail`, where status is one OF
+    ok/skip/fail.
+  - REPO is listed as `warn|reason`. It is `warn|duplicate|urls`, and
+    the GUI reads that third field.
+  - DONE is listed as `ok|errors`. `stopped` is a third value — and the
+    one with a behaviour rule attached (the GUI must claim neither
+    success nor failure).
+
+  Not fixed at discovery: main is frozen (workflow standard 1), and none
+  of the three is a defect in running code — the emitters and the parser
+  agree; only the comment is stale. ONEUP-0054 replaces this file
+  outright, so the fix belongs to the rewrite: the Python engine carries
+  the corrected list, or drops the comment and points at the reference.
+  Until then docs/reference/marker-protocol.md 7 records the drift and is
+  the authority.
+  **Layman:** The update script has a quick summary of its own progress messages at the top, and three lines of it are out of date.
+  Kind: doc-fix.
+  Source: in-session-2026-07-26 (ONEUP-0057 Task 9, writing the marker reference).
