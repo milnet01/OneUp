@@ -474,7 +474,8 @@ flag).
   interactive widgets need an accessible name, and state must never be
   colour-only.
 - The two new Settings controls live inside the existing `SettingsDialog`, so
-  `docs/standards/dialogs.md` needs no change — but its checklist (inherit the app
+  `docs/standards/ui-and-accessibility.md` §6 needs no change — but its checklist
+  (inherit the app
   QSS, no per-dialog stylesheet) governs them, and the HC overlay must stay an
   **application-wide** sheet for exactly that reason.
 - `CHANGELOG.md` — `### Added` entry under `[Unreleased]`.

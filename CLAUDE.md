@@ -205,9 +205,13 @@ Dependency policy (CI actions, runtimes, PySide6, base images) is a standing rul
   needs an accessible name (`setAccessibleName`) — `tests/gui-smoke.py` sweeps every
   focusable widget and fails on a nameless one. **State must never be signalled by
   colour alone**: pair every colour cue with text or a shape. Font sizes in the QSS are
-  derived from the desktop's default point size (never hard-coded `px`) so text scales;
-  see `docs/specs/ONEUP-0028-accessibility.md`. Note the app deliberately draws **no
-  focus ring** (a user-facing design decision, 2026-07-25) — focus reuses the hover look.
+  derived from the desktop's default point size (never hard-coded `px`) so text scales.
+  Note the app deliberately draws **no focus ring** (a user-facing design decision,
+  2026-07-25) — focus reuses the hover look. That rule is about **focus** highlighting
+  only: ordinary borders are fine, and the testable form is *focus changes colour or fill,
+  never the box model*. The full rules — names, colour-never-alone, scaling, focus,
+  dialogs, themes and right-to-left — are `docs/standards/ui-and-accessibility.md`;
+  `docs/specs/ONEUP-0028-accessibility.md` is the record of why and how each is tested.
 - **Privileged calls must stay out of subshells — capture with `sudo_capture`.** With no
   terminal (the GUI runs the engine through `QProcess`) sudo keys its cached credential to
   the **parent process id** (`sudoers(5)` `timestamp_type`), and bash forks a real subshell

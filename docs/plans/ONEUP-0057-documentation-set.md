@@ -389,14 +389,14 @@ git commit -m "ONEUP-0057: settle test isolation, the mock sandbox and invariant
 **Files:** Create `docs/standards/ui-and-accessibility.md`; Delete
 `docs/standards/dialogs.md`; Modify `CLAUDE.md:209` region (the accessibility pointer)
 
-- [ ] **Step 1: Read both sources in full** — nothing in either may be lost:
+- [x] **Step 1: Read both sources in full** — nothing in either may be lost:
 
 ```bash
 cat docs/standards/dialogs.md
 grep -n '^#\{1,3\} ' docs/specs/ONEUP-0028-accessibility.md
 ```
 
-- [ ] **Step 2: Write the merged document**, settling:
+- [x] **Step 2: Write the merged document**, settling:
       - **Dialogs** (verbatim from `dialogs.md`): theme-matched by inheritance from the
         app-wide stylesheet; centred over the main window via the existing helper — no
         third centring path, no per-dialog palette. Wayland ignores `move()`, which is why
@@ -435,7 +435,7 @@ grep -n '^#\{1,3\} ' docs/specs/ONEUP-0028-accessibility.md
         - **Layout direction is never assumed from the widget** — read it from the
           application, so every widget agrees.
 
-- [ ] **Step 3: Remove the absorbed file and repoint its readers.**
+- [x] **Step 3: Remove the absorbed file and repoint its readers.**
 
 ```bash
 git rm docs/standards/dialogs.md
@@ -444,7 +444,7 @@ grep -rn 'standards/dialogs' --include='*.md' . | grep -v CHANGELOG
       Fix every hit except `CHANGELOG.md` — changelog entries are history and are never
       rewritten.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add -A docs/standards CLAUDE.md
