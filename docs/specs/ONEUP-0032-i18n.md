@@ -62,8 +62,9 @@ badge. It does so by matching English substrings against the engine's sentence �
 
 So the engine composes an English phrase, sends it, and the window takes it apart again to
 recover the two facts it wanted: which outcome, and how many. Every one of those substrings
-is a coupling nothing tests. Change `end_step system ok "already up to date"` to *"nothing
-to update"* and the badge silently becomes `Done`.
+is a coupling nothing tests. Change `end_step system ok "already up to date"` to *"no
+changes"* — a wording nobody would think twice about — and it matches none of the branches,
+so the badge silently becomes `Done`.
 
 The same shape appears at `@@STEP_BEGIN@@`: the engine sends a `label`, the window shows it
 verbatim in the status line — while already holding its own title for that step in `TASKS`.
@@ -71,8 +72,8 @@ Two owners for one piece of wording.
 
 ### 2.3 What Qt does, measured rather than assumed
 
-Four probes against PySide6 6.11 / Qt 6.11, each run on 2026-07-27. They decide §4.2, and
-three of the four contradict what the mechanism is usually assumed to be.
+Every row below was run against PySide6 6.11 / Qt 6.11 on 2026-07-27. They decide §4.2, and
+most of them contradict what the mechanism is usually assumed to be.
 
 | Question | Measured answer |
 | --- | --- |
@@ -80,6 +81,7 @@ three of the four contradict what the mechanism is usually assumed to be.
 | What does set it? | An installed `QTranslator`. Loading `/usr/share/qt6/translations/qtbase_he.qm` and installing it flips `isRightToLeft()` to `True` on its own |
 | Does `-reverse` survive? | Yes through an installed left-to-right catalogue — but an explicit `setLayoutDirection()` call **clobbers it** |
 | Does an uninstalled reference matter? | Yes. A `QTranslator` created inside a function and installed without keeping a reference is garbage-collected, and the application silently reverts |
+| Does any of it work with no application object? | No. `installTranslator` prints *"Please instantiate the QApplication object first"* and returns `False`; `translate` returns the English. A plain `QCoreApplication` — no display needed — is enough |
 
 The last two are the ones that would have shipped as bugs. A window that sets its own
 direction at startup makes the `-reverse` test pass while proving nothing; a translator
@@ -144,12 +146,14 @@ substring matching with a lookup; it does not add a layer beside it.
 
 `oneup/gui/i18n.py` is separate because it is the one thing that must happen **before any
 translatable string is evaluated**, which in practice means before the first widget is
-constructed. `oneup/gui/app.py`'s `main` calls it as its first action after building the
-`QApplication`.
+constructed. Every entry point in `oneup/gui/app.py` calls it immediately after building its
+application object — `main` after the `QApplication`, and the two headless paths after the
+`QCoreApplication` they gain in §4.4. There is no path that renders a sentence without
+having called it.
 
 ### 4.2 Loading a catalogue
 
-Four rules, each one of §2.3's measurements turned into code.
+Five rules, each one of §2.3's measurements turned into code.
 
 **Two catalogues, loaded as a pair or not at all.** OneUp's own `oneup_<lang>.qm` and Qt's
 `qtbase_<lang>.qm` — the latter found through `QLibraryInfo.path(TranslationsPath)`, never
@@ -277,12 +281,24 @@ launches the engine on those paths; it reads the run's `@@CHECK@@`, `@@STEP_END@
 engine keeps its `--notify` flag for somebody running `./update_system.sh` in a terminal,
 where the notification is part of its own English output (§10).
 
+**Which means the headless paths need an application object, and today they have none.**
+`main` dispatches `--check` and `--update` and exits before `QApplication` is built, so
+nothing is installed and nothing translates — measured in §2.3: with no instance,
+`installTranslator` refuses and `translate` hands back the English. A **`QCoreApplication`**
+is what those two paths construct, not a `QApplication`: it is enough for the catalogues and
+it needs no display, which a systemd user timer may not have. It is built first, the
+catalogues are loaded onto it (§4.2), and only then does the run start.
+
 ### 4.5 The shape of a code, and its arguments
 
 `marker-protocol.md` §5.2 reserved three questions for this spec. These are the answers.
 
-**A code is `^[a-z0-9-]+$`** — lowercase ASCII, hyphen-separated, no spaces and no `|`. It
-names the situation, not the sentence: `repo-key-expired`, not `import-the-key`. The
+**A code is `^[a-z0-9-]+$`** — lowercase ASCII, hyphen-separated, no spaces and no `|`. A
+`HINT` code names the situation rather than the sentence — `repo-key-expired`, not
+`use-the-import-button` — because the sentence is the window's to choose and will be
+reworded without the engine hearing about it. A `REMEDY` code is the exception and always
+was: it names an **action**, because that is what it selects (`import-keys`), not a
+situation to describe. The
 constraint is not cosmetic — the protocol has no escaping (`marker-protocol.md` §1.1), and a
 code that can never contain `|` or a space can never shift a field.
 
@@ -314,13 +330,23 @@ long as an older engine could still be installed.
 The tables live in `oneup/gui/markers.py`, one per marker family, each entry pairing the
 code with its `QT_TRANSLATE_NOOP`-marked English and its parameter names.
 
-**Two entries are not a template with placeholders, and the table has to admit it.**
-`@@REBOOT@@`'s reason and `@@CHECK_UNKNOWN@@`'s alias list both render a *variable number*
-of things into one sentence — which in English means a comma-and-`and` join and a `was`/
-`were` agreement, and in another language means whatever that language does. So those
-entries carry a small render function rather than a format string, and the sentence around
-the join goes through the plural form (`wording-and-translation.md` §6.3) so the agreement
-is the catalogue's to decide rather than English's.
+**Some entries are not a template with placeholders, and the table has to admit it.** Three
+render a *variable number* of things into one sentence — `@@REBOOT@@`'s components, and both
+of `@@CHECK_UNKNOWN@@`'s list-bearing codes, the unreadable sources and the unreachable
+Flatpak remotes. In English that is a comma-and-`and` join with a `was`/`were` agreement; in
+another language it is whatever that language does. So those three entries carry a small
+render function rather than a format string, and the sentence around the join goes through
+the plural form (`wording-and-translation.md` §6.3) so the agreement is the catalogue's to
+decide rather than English's. `CHECK_UNKNOWN`'s third code, the one carrying zypper's exit
+status, is an ordinary substitution.
+
+**Every reader of a converted marker goes through these tables, not just `handle_marker`.**
+`updater.py` unpacks `@@HINT@@` in three further places on the side channels —
+`_on_auth_finished` and `_on_thin_finished` put the payload straight into a `QMessageBox`,
+and `_on_size_output` appends it to the log — each with `line.split("|", 1)[1]`. Left alone,
+those three would show the user a bare `auth-write-failed` in a message box, which is the
+raw token `marker-protocol.md` §5.2 forbids and INV-4 exists to prevent. They are the easiest
+site in this item to miss, because they are nowhere near the marker handler.
 
 **A code with no entry renders a readable sentence, never the raw token and never an empty
 banner** (`marker-protocol.md` §5.2). It says that this version of OneUp has no wording for
@@ -373,10 +399,11 @@ system tray, not a widget in a mirrored layout (§8.3).
   produces a line the window's parser splits into the expected number of fields.
 - **INV-4** A code the window has no entry for renders a non-empty sentence that is not the
   code alone.
-  *Test:* `tests/gui-smoke.py` feeds an unknown code to the marker handler once for each of
-  the five families §4.4 converts, and asserts the rendered text contains the code, contains
-  a space, and is at least twice its length — the cheapest checkable proxy for "a sentence,
-  not the token with something stuck to it".
+  *Test:* `tests/gui-smoke.py` feeds an unknown code once for each of the five families §4.4
+  converts, and once for each of the three side-channel `HINT` readers §4.6 names, and
+  asserts the rendered text contains the code, contains a space, and is at least twice its
+  length — the cheapest checkable proxy for "a sentence, not the token with something stuck
+  to it".
 - **INV-5** Both catalogues are installed, or neither is. A `qtbase` catalogue is never
   installed on its own, because it alone sets the layout direction. It guarantees nothing
   about how *complete* OneUp's catalogue is; a stale translation is a translator's problem,
@@ -485,8 +512,9 @@ suites, and those are 2.0-only. A reference amended on `main` would describe a c
   and both gain the second, `-reverse` run of `tests/gui-smoke.py`. A suite named in neither
   runs nowhere (`docs/standards/files-and-naming.md` §2.2), and over half the invariants
   here are carried by those two additions.
-- **`tests/gui-smoke.py`** — its own `QApplication` is constructed with `sys.argv`, or the
-  `-reverse` run is silently left-to-right (§4.2).
+- **`oneup/gui/app.py` and `tests/gui-smoke.py`** — both construct their `QApplication` with
+  `sys.argv`, or the `-reverse` run is silently left-to-right (§4.2). `app.py`'s two headless
+  entry points also gain the `QCoreApplication` the catalogues install onto (§4.4).
 - **`docs/standards/wording-and-translation.md`** — its **What checks this** table gains
   real catchers for §6.1 and §7, which say *nothing yet* today.
 - **`docs/standards/ui-and-accessibility.md`** — §8.1's known `text-align` site and §8.3's
@@ -561,3 +589,4 @@ suites, and those are 2.0-only. A reference amended on `main` would describe a c
 | 2 | 2026-07-27 | 3 lanes; 3 high, 5 medium, 4 low — **10 verified, 2 dismissed** | The gap worth the loop was one the marker protocol could never have shown: `notify_send` raises a desktop notification, in English, on the two timer paths — the only paths where no window is open — and it never travels as a marker, so none of §4.4's routes touched it. The timers now stop passing `--notify` and the window builds the sentence (INV-13). Two of loop 1's own fixes had defects: INV-2's `^[a-z0-9-]+$` could not match the space-separated field the same loop gave `@@REBOOT@@`, and §8's "§4.1 (including its four-field guard, §4.4)" reads as `marker-protocol.md` §4.4, which is `REFRESH` and unrelated. `oneup-2.0.md` §4 assigns this item a release-note sentence — the Bash fallback stops being a drop-in — that §8 was not carrying. Dismissed: that §4.2 does not describe a mechanism for "pair or neither" and §4.4 does not state the new guard value; both sentences already say it, and answering a finding with more prose is what makes the next loop cost more. |
 | 3 | 2026-07-27 | 3 lanes, two accepted clean; 1 critical, 2 high, 1 medium, 4 low — **5 verified, 3 dismissed** | The critical was a rule this spec invokes and cannot satisfy: `marker-protocol.md` §5 puts the reference edit in the same commit as the four code files, `workflow.md` §9 sends all documentation to `main`, and those code files are 2.0-only — so the tree as written offered a choice between breaking the same-commit rule and breaking the freeze. Fixed in `workflow.md` §9, where it belongs, along with the two places §2 and §11 restate the branch rule; the answer is that the reference goes to `v2`, because a reference amended on `main` would describe a contract `main`'s own 1.4.0 engine does not implement. Loop 2's own fix stranded a sibling again: INV-2 gained "space-separated as `@@REBOOT@@` and `@@SERVICES@@` do", but `SERVICES` carries unit names, which §4.4 routes to data. And §1 promised a gate for "a widget that only works in English" that only exists for the one painted widget the suite already samples. Dismissed: that §6 has no row for five invariants (they are source-level guards with no runtime failure mode), that §2.1's `grep -c` result is a raw count (`documentation.md` §6b's permitted form is exactly a command plus a past-tense measurement), and that §8 cites the wrong section for the same-commit rule (§5 is where it is written). |
 | 4 | 2026-07-27 | 3 lanes, two accepted clean; 3 medium, 3 low, 1 info — **6 verified, 1 dismissed** | Nothing found was a wrong claim; every finding was the document not saying enough, and all in one section. `@@CHECK_UNKNOWN@@`'s `reason` is three engine sentences, not one, and one of them interpolates a comma-joined alias list — so it is three codes and a list argument, which §4.4 had not worked out. `@@REBOOT@@`'s components and that same alias list both render a *variable number* of things into a sentence, which §4.6's "code plus parameter names" table shape cannot express; those two entries carry a render function, and the agreement goes through the plural form rather than English's. `@@STEP_BEGIN@@`'s and `@@STEP_END@@`'s new field shapes are now written out rather than inferable. Dismissed: that §4.4's pointer to §4.5 for the space-separated format is misdirected — §4.5 states that rule. |
+| 5 | 2026-07-27 | 2 lanes; 1 critical, 2 high, 3 medium, 2 low — **6 verified, 2 dismissed** | Every finding was in the payload half, and the critical was loop 2's own fix landing in a place that cannot run it: the notification moved to the window, but `main` dispatches `--check` and `--update` and exits *before* any `QApplication` exists — and with no application object `installTranslator` refuses outright, measured and now in §2.3. Those two paths build a `QCoreApplication`, which needs no display. `@@HINT@@` turned out to have three readers outside `handle_marker` — two `QMessageBox`es and the log — each doing `line.split("|", 1)[1]`, so a bare `auth-write-failed` would have been shown to a user in a message box. And §2.2's worked example, the evidence the whole conversion rests on, was wrong: `_step_badge` already matches `"nothing"`, so the sentence chosen to demonstrate a silent badge change would not have changed it. Three siblings fixed in the same pass: §2.3's "four probes" over five rows, §4.1's single entry point, INV-4's test scope. Dismissed: two requests for field layouts §4.4 and §4.5 already give. |
