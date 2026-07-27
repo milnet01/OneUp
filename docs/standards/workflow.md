@@ -307,6 +307,37 @@ publishes. The OBS rebuild is the one step that can need finishing manually.
 the tag workflow), the RPM (`packaging/rpm/oneup.spec`), and the OBS repository users
 install from with `zypper`.
 
+### 8.1 There is no fourth path, and there is not going to be one
+
+**OneUp is not published on Flathub, and is not packaged for any distribution other than
+openSUSE.** The user's decision, 2026-07-27. It is a decision on the merits, not a
+deferral — recorded here so that *"why isn't this on Flathub?"* has a dated answer instead
+of looking like an oversight.
+
+Two independent reasons, either of which is sufficient:
+
+- **A Flatpak is sandboxed, and every one of OneUp's five steps acts on the host.**
+  `zypper` and `flatpak update --system` are run through `sudo`; `fwupdmgr` is not, because
+  it reaches the same host state through fwupd's own system daemon. Different routes, same
+  destination: the machine outside any sandbox. A sandboxed build would have to hole its
+  own confinement to do the one thing it exists for, leaving a package that is either
+  useless or dishonest about being confined. The boundary in
+  `docs/standards/security.md` §1 assumes the engine is an ordinary host process that
+  `sudo` elevates. A Flatpak is not that.
+- **The other distributions do not need it.** The user tested them: their update systems
+  are already fine. OneUp exists because keeping openSUSE current means running several
+  different commands, some of which the graphical tools get wrong on Tumbleweed
+  (`README.md` says which). That problem is openSUSE's, so the answer is too.
+
+**What this does and does not close.** It closes packaging OneUp *for* other systems. It
+does not touch the `flatpak` **step** — OneUp updates the Flatpaks already installed on
+your machine, and that is unaffected. The two share a word and nothing else.
+
+Reopening this needs a new reason, not a new opinion: a distribution whose own update path
+is genuinely broken in the way Tumbleweed's was, or a confinement technology that can grant
+host package-manager access without pretending to be a sandbox. Filed as **ONEUP-0071**,
+status *considered*, so the reasoning stays findable.
+
 ## 9. Where a 2.0 change goes
 
 While the freeze holds, the decision is short:
@@ -359,6 +390,7 @@ Can people still install system, Flatpak and firmware updates?
 | §6 local CI is green before a push | `githooks/pre-push` — but only once per clone, after `git config core.hooksPath githooks`. **Nothing enforces that it is enabled**, so on a fresh clone this rule is a habit |
 | §6.1 a new gate is proved to fail before it is trusted | nothing automatic |
 | §8 the release preconditions | `release.sh` — three fatal checks before it touches anything: a clean tree, on `main`, and the tag not already existing |
+| §8.1 no fourth distribution path | **nothing, and nothing should.** Adding a packaging path is a deliberate act by a person, not something that happens by accident, so there is no breach for a script to catch. What the row is for is the opposite failure: somebody proposing one without knowing it was already weighed. ONEUP-0071 is the answer to that |
 
 **The gap worth knowing about is §6.** Every other gate in this project runs *because*
 `local-CI.sh` runs, and `local-CI.sh` runs automatically only if the hook path was set. On a

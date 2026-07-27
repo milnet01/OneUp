@@ -1153,3 +1153,34 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Prove that OneUp quietly skips the Flatpak and firmware steps on a machine that doesn't have those tools, instead of reporting a failure.
   Kind: test.
   Source: in-session-2026-07-27 (ONEUP-0057 Task 12).
+
+- 💭 [ONEUP-0071] **Publishing OneUp on Flathub, or packaging it for other distributions — considered and declined.**
+  The user's decision, 2026-07-27. Recorded as considered rather than
+  planned so the reasoning is findable, and so the question has a dated
+  answer instead of looking like nobody thought of it. The rule itself lives
+  in docs/standards/workflow.md 8.1, which owns it; this bullet is the
+  record, not the rule.
+
+  Nothing had proposed it. Raised by the user unprompted, and worth writing
+  down for exactly that reason.
+
+  Two independent reasons, either sufficient. (1) A Flatpak is sandboxed and
+  every one of OneUp's five steps acts on the host: zypper and
+  `flatpak update --system` go through sudo, and fwupdmgr reaches the same
+  host state via fwupd's system daemon. A sandboxed build would have to hole
+  its own confinement to do its job. (2) The other distributions do not need
+  it — the user tested them and their update paths are already fine. OneUp
+  exists because Tumbleweed's graphical tools get the system update wrong;
+  that is an openSUSE problem, so the answer is an openSUSE app.
+
+  Does NOT touch the `flatpak` STEP. OneUp still updates the Flatpaks
+  installed on the user's machine; that is unaffected and unrelated beyond
+  sharing a word.
+
+  Reopen on a new reason, not a new opinion: a distribution whose own update
+  path is broken the way Tumbleweed's was, or a confinement technology that
+  can grant host package-manager access without pretending to be a sandbox.
+  The three shipping paths stay the AppImage, the RPM and the OBS repo.
+  **Layman:** OneUp stays an openSUSE app, installed the three ways it already is. It won't be put on Flathub, because the app needs to change the whole machine and a Flathub app is deliberately walled off from doing that — and the other Linux systems already update themselves fine.
+  Kind: package.
+  Source: user-request-2026-07-27.

@@ -354,7 +354,9 @@ indistinguishable from no groundwork by the time somebody contributes Hebrew.
 
 ## 10. Out of scope for 2.0
 
-- Supporting distributions other than openSUSE.
+- Supporting distributions other than openSUSE, and publishing on Flathub. Not merely out
+  of scope for 2.0 — declined outright, with the reasoning in
+  `docs/standards/workflow.md` §8.1, which owns it. ONEUP-0071.
 - Replacing `zypper`/`flatpak`/`fwupd` call-outs with library bindings — 2.0 still shells
   out; only the shelling-out moves language.
 - A plugin or extension system.

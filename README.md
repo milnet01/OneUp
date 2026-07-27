@@ -113,6 +113,10 @@ confusingly, that's a bug worth reporting.
 
 ## Install & run
 
+Three ways, below. **OneUp is not on Flathub and is not packaged for other
+distributions** — it drives openSUSE's own update tools directly, which is something a
+sandboxed app cannot do, and the distributions we tested already update themselves fine.
+
 ### openSUSE repository — recommended (auto-updates)
 
 On Tumbleweed, add the repo once and install — OneUp then updates along with the
