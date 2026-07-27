@@ -322,15 +322,23 @@ layout — `ToggleSwitch` — and it is the one thing that would mirror wrongly.
 is painted too, but it is an icon in a system tray, not a widget in a mirrored layout, so
 it is unaffected.)
 
-**Two places inside `ToggleSwitch` compute from the left edge, not one.** The knob is the
-obvious one; `ToggleSwitch._paint_state_shape` derives its centre the same way, and that
-shape is §3's colour-blind cue — an RTL fix that mirrors the knob and forgets the shape
-breaks the state cue in Arabic and Hebrew while looking correct in English.
+**Two places inside `ToggleSwitch` are handed, not one, and they are handed differently.**
+The knob is the obvious one, and it is unconditionally left-anchored.
+`ToggleSwitch._paint_state_shape` is the second, and it picks its edge from the *state*:
+checked measures from the left, unchecked from `self.width()`. That shape is §3's
+colour-blind cue — an RTL fix that mirrors the knob and forgets the shape breaks the state
+cue in Arabic and Hebrew while looking correct in English, and the fix is not the same
+expression in both places.
 
 ```python
 # ToggleSwitch.paintEvent — the knob position is computed from the LEFT
 # edge, unconditionally:
 x = self._margin + self._pos * travel
+
+# ToggleSwitch._paint_state_shape — the state picks the edge, so BOTH
+# branches have to swap when the window is mirrored:
+cx = (self._margin + diameter / 2 if self.isChecked()
+      else self.width() - self._margin - diameter / 2)
 ```
 
 In a right-to-left window the switch must travel the other way, or "on" sits on the side the

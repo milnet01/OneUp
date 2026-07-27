@@ -325,7 +325,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   The one exception is custom painting, which Qt cannot mirror: the
   toggle's paintEvent (updater.py:699) computes its knob position from
   the left edge (line 712) and must apply the direction itself; its
-  the painted state shape is NOT symmetric — `_paint_state_shape` derives its centre from the left edge exactly as the knob does, so there are two handed sites in `ToggleSwitch`, not one (corrected 2026-07-27, cold-eyes batch 2; `docs/standards/ui-and-accessibility.md` §8.3). Also
+  the painted state shape is NOT symmetric either — `_paint_state_shape` picks its edge from the state (checked measures from the left, unchecked from `self.width()`), so there are two handed sites in `ToggleSwitch`, not one, and they need different fixes (corrected 2026-07-27, ONEUP-0032 spec review; `docs/standards/ui-and-accessibility.md` §8.3). Also
   10 string-concatenation sites to convert to whole sentences with named
   placeholders — a glued sentence cannot be reordered by a translator and
   renders unpredictably in RTL.

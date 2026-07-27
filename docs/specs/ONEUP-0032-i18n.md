@@ -97,17 +97,17 @@ the translated text where it returned the English before.
 | --- | --- |
 | 2.0 ships the **groundwork only** — English alone. Another language is a post-2.0 data file | the user, 2026-07-26 (design §5.1) |
 | **Right-to-left is in scope** and lands with the groundwork, not with the languages | the user, 2026-07-26 (design §5.1) |
-| The gate tests the **machinery**, not a translation: the GUI suite passes with the direction forced right-to-left | design §5.1, gate **G10** |
-| This item is **last** in 2.0 (design §5.2), and starts only after the engine rewrite has passed its gate | design §5.1, `docs/reference/marker-protocol.md` §5.1 |
+| The gate tests the **machinery**, not a translation: the GUI suite passes with the direction forced right-to-left | inherited, not chosen here — design §5.1, gate **G10** |
+| This item is **last** in 2.0, and starts only after the engine rewrite has passed its gate | inherited, not chosen here — design §5.2, `docs/reference/marker-protocol.md` §5.1 |
 
 **One decision this spec takes, because the evidence forces it.**
 `docs/reference/marker-protocol.md` §5.1 reserves this item for the `HINT` and `REMEDY`
 payloads. That is too narrow to meet the gate it is meant to meet: design §7's **G10** is
 *"every user-facing string is translatable"*, and converting only those two would leave
-every task badge, every check summary and every reboot reason in English on a Hebrew
-desktop. §2.2 shows the same fields are already being re-worded by the window through
-English substring matching, so the conversion is owed for correctness even if no second
-language ever ships.
+every task badge, every unreadable-source warning and every reboot reason in English on a
+Hebrew desktop. §2.2 shows one of those fields is already being re-worded by the window
+through English substring matching, so the conversion is owed for correctness even if no
+second language ever ships.
 
 So this spec converts **every payload the window renders as words** (§4.4), and
 `marker-protocol.md` §5.1 and §5.2 are amended in the same commit — which is what that
@@ -141,9 +141,10 @@ already gives it *"reading what the engine said, and saying it in English"*, and
 `_step_badge` — the function §2.2 is about — is already its own. This replaces its English
 substring matching with a lookup; it does not add a layer beside it.
 
-`oneup/gui/i18n.py` is separate because it is the one thing that must happen **before the
-first widget exists**, and `oneup/gui/app.py`'s `main` calls it as its first action, ahead
-of `apply_app_theme`.
+`oneup/gui/i18n.py` is separate because it is the one thing that must happen **before any
+translatable string is evaluated**, which in practice means before the first widget is
+constructed. `oneup/gui/app.py`'s `main` calls it as its first action after building the
+`QApplication`.
 
 ### 4.2 Loading a catalogue
 
@@ -165,10 +166,14 @@ the gate in §7 pass while testing nothing. `ui-and-accessibility.md` §8.4 alre
 `oneup/gui/i18n.py`, not local to the loading function. §2.3 measured what happens
 otherwise.
 
-**`QApplication` is constructed with `sys.argv`.** Today `main` in `updater.py` passes
-`QApplication([])`, so Qt sees no arguments and `-reverse` cannot reach it. Qt consumes only
-its own options and leaves Python's `sys.argv` alone, so the existing `"--tray" not in argv`
-and `"--check" in sys.argv[1:]` membership tests are unaffected.
+**Every `QApplication` is constructed with `sys.argv` — and there are two.** `main` in
+`updater.py` passes `QApplication([])` today, so Qt sees no arguments and `-reverse` cannot
+reach it. **`tests/gui-smoke.py` builds its own** — `QApplication.instance() or
+QApplication([])` — and never calls the application's `main`, so changing only the
+application would leave the gate in §7 running left-to-right while reporting a pass. Both
+call sites change. Qt consumes only its own options and leaves Python's `sys.argv` alone, so
+the existing `"--tray" not in argv` and `"--check" in sys.argv[1:]` membership tests are
+unaffected.
 
 **A missing catalogue is not an error** (`wording-and-translation.md` §7). In 2.0 it is the
 *normal* case: no `.ts` file for any language is written, so `load()` returns `False` on
@@ -182,45 +187,66 @@ to it, each because the tree makes them necessary:
 - **A table of sentences outside a class uses `QT_TRANSLATE_NOOP`**, with the lookup calling
   `QCoreApplication.translate` at render time — verified extractable in §2.3. `self.tr()`
   is unavailable at module level, and marking at definition while translating at render is
-  what lets the language change without rebuilding the table.
-- **A sentence built by an f-string is a concatenation** and is caught by the same rule.
-  `wording-and-translation.md` §6.2's own sweep — `grep -cE '"\s*\+|\+\s*"' oneup/` — does
-  not see them; `Updater._announce`'s `f"{row.title}: {badge}"` and the status line's
-  `f"{label}…"` are both sentences a translator can never reach.
+  what lets the language change without rebuilding the table. An entry needing
+  `wording-and-translation.md` §6.4's disambiguation comment takes `QT_TRANSLATE_NOOP3`,
+  which is the only one of the two forms with a slot for it.
+- **A sentence built by an f-string is a concatenation**, and INV-10's check is what catches
+  it. `wording-and-translation.md` §6.2's own sweep — `grep -cE '"\s*\+|\+\s*"' oneup/` —
+  does not see f-strings at all; `Updater._announce`'s `f"{row.title}: {badge}"` and the
+  status line's `f"{label}…"` are both sentences a translator can never reach.
 - **Accessible names and descriptions are wrapped too.** They are read aloud, so they are
   user-facing in the most literal sense (`ui-and-accessibility.md` §2).
 
 ### 4.4 The engine's payloads: three fates
 
-Every field the window renders as words takes exactly one of three routes. The rule is what
-matters; the field lists below are the application of it, and
-`docs/reference/marker-protocol.md` §3's table is the authority on which fields exist.
+Every field takes exactly one of three routes, decided by what the window does with it. The
+rule is what matters; the field lists below are the application of it, checked one by one
+against `docs/reference/marker-protocol.md` §3's table, which is the authority on which
+fields exist.
 
 **1 — The window already knows it, so the field is retired.**
 `@@STEP_BEGIN@@`'s trailing `label`. The window holds a title for every step key in
 `TASKS`; it gains the in-progress phrasing beside it (§4.1) and looks both up by `key`. The
 engine keeps its own `LABEL` map for the terminal output a user sees when running
 `./update_system.sh` directly, which stays English by design (`wording-and-translation.md`
-§5). Retiring a trailing field is the cheap direction: every reader already guards its
-length (`marker-protocol.md` §1.2).
+§5).
 
-**2 — The window cannot know it, so it becomes a code.** `@@HINT@@`'s sentence;
-`@@REMEDY@@`'s action; `@@STEP_END@@`'s `detail`; `@@CHECK@@`'s `label`;
-`@@CHECK_UNKNOWN@@`'s `reason`; `@@REPO_SKIPPED@@`'s `reason`; `@@REBOOT@@`'s optional
-`reason`. `REMEDY` is the one already halfway there — `import-keys` and `skip-repo` are
-codes today and only need the rule written down.
+This one is **not** free, and the reason is worth stating: `STEP_BEGIN` is one of the three
+markers with an explicit fixed-shape guard (`marker-protocol.md` §4.1), and both the
+reference and the window's parser floor it at four fields. Dropping to three means moving
+that floor in the same commit, or every well-formed `STEP_BEGIN` is silently ignored and the
+run appears to freeze while it is in fact updating.
+
+**2 — The window renders it as words, so it becomes a code.** `@@HINT@@`'s sentence;
+`@@REMEDY@@`'s action; `@@STEP_END@@`'s `detail`; `@@CHECK_UNKNOWN@@`'s `reason`;
+`@@REBOOT@@`'s optional `reason`. `REMEDY` is the one already halfway there —
+`import-keys` and `skip-repo` are codes today and only need the rule written down.
+
+`@@STEP_END@@`'s `detail` carries a number today, and `_step_badge` recovers it with a
+regular expression (§2.2). Under codes the number is an **argument** (§4.5), so the window
+renders it through the plural form (`wording-and-translation.md` §6.3) — which is also how
+the badge stops saying `package(s)` in English.
 
 `@@REBOOT@@`'s reason is the interesting one. `reboot_reason_from_log` composes a phrase
-today — joining up to three components and agreeing the verb — which no other language can
-be assembled the same way. Under codes it emits the **components** as trailing fields and
-the window builds the sentence, so the joining and the agreement happen where the language
-is known. ONEUP-0054 §4.2 places that composition in `parsers.py`; this item changes what it
-composes, from a phrase to a list.
+today — joining up to three components and agreeing the verb — which no other language
+assembles the same way. Under codes it emits the **components**, and the window builds the
+sentence, so the joining and the agreement happen where the language is known. They are
+several values of one kind, so they share one space-separated field like `@@SERVICES@@`
+does (§4.5). ONEUP-0054 §4.2 places that composition in `parsers.py`; this item changes what
+it composes, from a phrase to a list.
 
-**3 — It is data, not words, and does not change.** Step keys, repository aliases, package
-names, counts, byte sizes, mount points, snapshot ids and dates, and a Btrfs snapshot's own
-description. A translator must never see these, and a code would be a lie about what they
-are.
+**3 — It is data, or the window never renders it, so it does not change.** Step keys,
+repository aliases, package names, counts, byte sizes, mount points, snapshot ids and dates,
+and a Btrfs snapshot's own description are data; a translator must never see them, and a
+code would be a lie about what they are.
+
+**Two fields carry English prose and still belong here**, which is the case worth naming
+because it looks like an oversight: `@@CHECK@@`'s `label` and `@@REPO_SKIPPED@@`'s `reason`.
+Neither is read by the window at all — `handle_marker` takes `key` and `count` from the
+first and only the `alias` from the second, building its own wording in both cases, and
+`marker-protocol.md` §4.6 says so outright of the `label`. They are the engine's terminal
+output, which stays English (`wording-and-translation.md` §5). Converting them would put a
+bare token in front of the one reader they have.
 
 ### 4.5 The shape of a code, and its arguments
 
@@ -275,10 +301,13 @@ Qt mirrors every layout built from its own containers once the direction is set,
 nothing else. `ui-and-accessibility.md` §8 owns the four rules; the work this item does
 under them is:
 
-- **`ToggleSwitch` applies the direction itself, at both handed sites.** §8.3 names them:
-  the knob's position and `_paint_state_shape`'s centre, both derived from the left edge.
-  Fixing only the knob is worse than fixing neither — the state shape is §3's colour-blind
-  cue, so a half fix breaks the cue in Arabic while looking right in English.
+- **`ToggleSwitch` applies the direction itself, at both handed sites, and they are handed
+  differently.** §8.3 names them: the knob is unconditionally left-anchored, while
+  `_paint_state_shape` picks its edge from the state, so the two need different fixes rather
+  than the same one twice. Fixing only the knob is worse than fixing neither — the state
+  shape is §3's colour-blind cue, so a half fix breaks the cue in Arabic while looking right
+  in English. Both read `QApplication.isRightToLeft()`, never the widget's own
+  `layoutDirection()` (§8.4).
 - **`QPushButton#LinkBtn`'s `text-align: left` goes** (§8.1). The progress bar's
   `text-align: center` stays: centre has no handedness.
 - **Nothing else acquires a directional property or a fixed `AlignLeft`/`AlignRight`.**
@@ -294,24 +323,28 @@ system tray, not a widget in a mirrored layout (§8.3).
   locale.
   *Test:* `tests/i18n-check.py`, the engine-purity check.
 - **INV-2** Every payload field the window renders as words is a code matching
-  `^[a-z0-9-]+$`; no field carries a sentence.
+  `^[a-z0-9-]+$`; no field the window renders carries a sentence.
   *Test:* `tests/run-tests.sh` asserts the shape of the payload on every `HINT`, `STEP_END`
-  detail, `CHECK` label, `CHECK_UNKNOWN`, `REPO_SKIPPED` and `REBOOT` reason a scenario
-  produces.
+  detail, `CHECK_UNKNOWN` reason, `REMEDY` action and `REBOOT` reason a scenario produces —
+  the five families §4.4 routes to a code.
 - **INV-3** No marker field contains a `|`: the emitter rewrites it to `/` in every
   argument before the line is printed.
   *Test:* `tests/run-tests.sh` — a lock-holder scenario whose process name contains a `|`
   produces a line the window's parser splits into the expected number of fields.
 - **INV-4** A code the window has no entry for renders a non-empty sentence that is not the
   code alone.
-  *Test:* `tests/gui-smoke.py` feeds `@@HINT@@|no-such-code-exists` to the marker handler
-  and asserts the banner text is non-empty and differs from the payload.
+  *Test:* `tests/gui-smoke.py` feeds an unknown code to the marker handler once for each of
+  the five families §4.4 converts, and asserts the rendered text is non-empty, is longer
+  than the code, and contains it.
 - **INV-5** Both catalogues are installed, or neither is. The window is never mirrored while
   its own text is untranslated.
-  *Test:* `tests/gui-smoke.py`, loading against a directory holding one of the pair.
-- **INV-6** The application never calls `setLayoutDirection`, because it would override
-  `-reverse` and make INV-8's pass vacuous.
-  *Test:* `tests/i18n-check.py`, the direction-writer check.
+  *Test:* `tests/gui-smoke.py`, three loads — both present, one present, neither — asserting
+  installation only in the first.
+- **INV-6** The application never calls `setLayoutDirection`, and no widget reads its own
+  `layoutDirection()`; the direction is Qt's to derive and `QApplication.isRightToLeft()`'s
+  to report (`ui-and-accessibility.md` §8.4). Writing it would override `-reverse` and make
+  INV-8's pass vacuous.
+  *Test:* `tests/i18n-check.py`, the direction check.
 - **INV-7** An installed translator is referenced for the process's lifetime.
   *Test:* `tests/gui-smoke.py` asserts a translated string still translates after
   `gc.collect()`.
@@ -345,7 +378,7 @@ system tray, not a widget in a mirrored layout (§8.3).
 | A catalogue file is missing or corrupt | English, laid out left to right | `load()` returns `False` and nothing is installed (INV-5); a missing catalogue is the normal case in 2.0 |
 | The engine emits a code the window does not know | A readable sentence naming the code, and the log | INV-4. The run's verdict, badges and reboot advice are unaffected — only the explanation is |
 | The window is newer than the engine | An engine payload the window still has an entry for | Entries are retired only when no supported engine emits them (§4.5) |
-| A `|` reaches a marker argument | Nothing — it arrives as `/` | INV-3, in one place in the emitter |
+| A `\|` reaches a marker argument | Nothing — it arrives as `/` | INV-3, in one place in the emitter |
 | A translator is garbage-collected | Silent reversion to English mid-run | INV-7 is the guard; §2.3 measured that it happens without one |
 | A new widget hard-codes a left edge | A control on the wrong side, in Arabic and Hebrew only | INV-8's second pass fails on the switch's own pixel check, which samples the track half opposite the knob |
 | A sentence is added without `tr()` | It stays English in every language | INV-10 catches it at the call site. A sentence assembled through a variable is not caught — §7 |
@@ -354,7 +387,7 @@ system tray, not a widget in a mirrored layout (§8.3).
 
 | What it locks in | Where |
 | --- | --- |
-| INV-2, INV-3 — payload shape and the `|` guard | `tests/run-tests.sh`, per-scenario assertions on every marker carrying a code |
+| INV-2, INV-3 — payload shape and the `\|` guard | `tests/run-tests.sh`, per-scenario assertions on every marker carrying a code |
 | INV-4, INV-5, INV-7 — unknown code, the catalogue pair, translator lifetime | `tests/gui-smoke.py`, new checks |
 | INV-8 — the whole window under right-to-left | `tests/gui-smoke.py -reverse`, a second run wired into `local-CI.sh` and `.github/workflows/release.yml` |
 | INV-1, INV-6, INV-9, INV-10, INV-11 — the five source-level guards | `tests/i18n-check.py`, a new suite |
@@ -374,13 +407,23 @@ source line numbers, so a freshness gate would fail on every unrelated edit.
 
 **The second GUI pass is a second process, not a second function.** A `QApplication` exists
 once per process and `-reverse` is read at construction, so the suite is run twice from the
-outside. The cost is one more offscreen Qt start-up.
+outside. That doubles everything the suite already does per run — including the live
+`api.github.com` requests `docs/standards/testing.md` §2.3 records as a defect
+(ONEUP-0067). Fixing that is not this item's, but doubling it is this item's doing, and
+that is the argument for landing ONEUP-0067 first.
 
 ## 8. Docs & release
 
-- **`docs/reference/marker-protocol.md`** — §3's field table, §4.1, §4.2, §4.6, §4.8,
-  §4.10, and §5.1/§5.2 which currently reserve this item for `HINT` and `REMEDY` alone
-  (§3). All in the same commit as the engine and both suites, per that document's §5.
+- **`docs/reference/marker-protocol.md`** — §3's field table, §4.1 (including its four-field
+  guard, §4.4), §4.2, §4.6, §4.8, §4.10, and §5.1/§5.2 which currently reserve this item for
+  `HINT` and `REMEDY` alone (§3). All in the same commit as the engine and both suites, per
+  that document's §5.
+- **`local-CI.sh` and `.github/workflows/release.yml`** — both name `tests/i18n-check.py`,
+  and both gain the second, `-reverse` run of `tests/gui-smoke.py`. A suite named in neither
+  runs nowhere (`docs/standards/files-and-naming.md` §2.2), and six of the twelve invariants
+  here are carried by those two additions.
+- **`tests/gui-smoke.py`** — its own `QApplication` is constructed with `sys.argv`, or the
+  `-reverse` run is silently left-to-right (§4.2).
 - **`docs/standards/wording-and-translation.md`** — its **What checks this** table gains
   real catchers for §6.1 and §7, which say *nothing yet* today.
 - **`docs/standards/ui-and-accessibility.md`** — §8.1's known `text-align` site and §8.3's
@@ -437,3 +480,4 @@ outside. The cost is one more offscreen Qt start-up.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 1 | 2026-07-27 | 3 lanes; 3 critical, 3 high, 9 medium, 3 low — **17 verified, 1 dismissed** | The three worst were each a claim the tree contradicts. `@@CHECK@@`'s `label` and `@@REPO_SKIPPED@@`'s `reason` were routed to codes when the window reads neither — the reference says so of the first outright — which would have put a bare token in front of the only reader they have. §4.4 and §4.5 gave two different wire shapes for `@@REBOOT@@`'s components. And the right-to-left gate was wired to the wrong `QApplication`: `tests/gui-smoke.py` builds its own with an empty argument list and never calls the application's `main`, so `-reverse` would have reached nothing and INV-8 would have passed while proving the opposite. Two fixes landed outside this spec: `ui-and-accessibility.md` §8.3 was wrong that `_paint_state_shape` computes from the left edge as the knob does — it picks its edge from the *state*, so the two handed sites need different fixes — and the ROADMAP bullet repeating it. Dismissed: that §4.2 misattributes the no-`setLayoutDirection` rule to §8.4; the sentence says §8.4 owns the *reading* half and this is the writing half, which is what it says. |
