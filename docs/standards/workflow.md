@@ -13,7 +13,7 @@ the tree on 2026-07-27, not recalled.
 
 **Sections:** 1 the v1 freeze · 2 branches · 3 commits · 4 roadmap IDs · 5 versions ·
 6 the gate before a push · 7 pushing · 8 releasing · 9 where a 2.0 change goes · 10 traps ·
-11 before you push · what checks this · 12 cold-eyes log
+11 before you commit and push · what checks this · 12 cold-eyes log
 
 ## 1. The v1 freeze
 
@@ -58,7 +58,8 @@ Two things are not feature work and are unaffected:
 
 - **Documentation.** It is not a release. This whole standards set lands on `main` normally,
   because the rules govern 1.x maintenance too and `v2` inherits them by merge (design §5.3).
-- **One named test-harness change**, granted 2026-07-27 at the user's decision: the
+- **One named, behaviour-neutral test-harness change**, granted 2026-07-27 at the user's
+  decision: the
   `ONEUP_ENGINE_CMD` indirection that lets the suite drive either engine
   (`docs/specs/ONEUP-0054-python-engine.md` §4.4). Its justification is that the suite must
   be *seen* to stay green on `main` before anything on `v2` depends on it.
@@ -239,8 +240,10 @@ Two deliberate design points:
   green run that quietly checked nothing is worse than a red one.
 - **The AppImage build is opt-in** (`./local-CI.sh --full`, wrapped in a 10-minute
   timeout). `appimagetool` downloads its runtime from GitHub on every run and can stall on
-  a slow or filtered link; GitHub CI builds and verifies the AppImage on every tag push
-  anyway, so the local build is a convenience, not a gate.
+  a slow or filtered link; GitHub CI builds the AppImage on every tag push and attaches it to the
+  release, so the local build is a convenience, not a gate. **Neither CI nor `--full`
+  launches the result** — that check is a person, once, per `docs/design/oneup-2.0.md` §7's
+  G8.
 
 `githooks/pre-push` runs the fast gates automatically. Enable it once per clone:
 
@@ -252,10 +255,10 @@ git config core.hooksPath githooks
 itself is broken. A failing test is fixed, not bypassed.
 
 **The two gate sets are not identical, deliberately.** `release.yml` runs the three test
-suites and the AppImage build — and nothing else. `local-CI.sh` runs those three suites
-**plus five gates that have never run in GitHub CI**: Python syntax, lint, packaging
-validation, version lockstep and documentation. Counted against §6's table, which is the
-list `local-CI.sh` actually executes.
+suites and the AppImage build — and nothing else. So **every gate in §6's table below the
+three suites has never run in GitHub CI**: the compile check, lint, packaging validation,
+version lockstep and documentation. Written as the shape rather than a count, because the
+count has gone stale here once already.
 
 - **The five extras stay local**, so understand what that costs: **a lint failure is
   caught before a push or not at all.** The pre-push hook is what makes that reliable.
@@ -309,6 +312,10 @@ confirmation** → commit `OneUp X.Y.Z`, tag, push → update the OBS package vi
 **A red gate stops it there, with the bump already written to your tree** — the same state a
 declined confirmation leaves, and the same recovery: fix and re-run, or `git checkout -- .`
 to discard.
+
+**A failed `git push` is the awkward one**, because it fires after the commit and the tag.
+`git checkout -- .` recovers nothing there; undoing it is `git tag -d vX.Y.Z` and
+`git reset --soft HEAD~1`, then re-run.
 
 Three things about that sequence are worth knowing before you run it:
 
@@ -379,7 +386,7 @@ states it and owns what "complete" means.
 ## 10. Traps
 
 - **Rebasing `v2`.** It is shared with the remote. The damage is not to your clone.
-- **Hand-editing one version site.** Five of the six then disagree; the lockstep gate
+- **Hand-editing one version site.** The other five then disagree with it; the lockstep gate
   catches it, but only if you run local CI — and the RPM `%changelog` one is the easiest to
   forget, because nothing else references it.
 - **Committing `.roadmap-counter`.** It is ignored for a reason. If it ever appears in
@@ -394,14 +401,15 @@ states it and owns what "complete" means.
   what actually ships; a test gate it does not run is a test gate that fires too late. (The
   five non-test extras staying local is deliberate, not this trap — §6.)
 
-## 11. Before you push
+## 11. Before you commit and push
 
 - [ ] Every commit subject carries its `ONEUP-` id (or is a release commit).
 - [ ] The body says *why*, and records any figure that was measured.
 - [ ] The roadmap bullet exists, and is annotated if this closes it.
 - [ ] `CHANGELOG.md` has an `## [Unreleased]` entry with its plain-English line, if a user
       would notice this change.
-- [ ] The branch is right — §9's tree, not a guess. `main` takes a §1.1 fix, documentation, and nothing else.
+- [ ] The branch is right — §9's tree, not a guess. `main` takes a §1.1 fix, documentation,
+      and the one named test-harness change §1.2 grants. Nothing else.
 - [ ] `./local-CI.sh` is green — the whole thing, not the part you thought was affected.
 
 ## What checks this
@@ -433,6 +441,7 @@ states it and owns what "complete" means.
 | §5.2 a CHANGELOG entry's shape — bold summary, id, then the plain-English line | nothing automatic. `bump.py` reads the bold summaries to build the packaging notes, so a missing `**` silently drops an entry from the release notes rather than failing |
 | §6.1 step 3 — a new **test** gate goes in `release.yml` too | nothing automatic. Nothing compares the two gate sets, and the failure is silent by construction: the gate passes locally, so the omission only shows up as a regression that reached a tag |
 | §8 the release preconditions | `release.sh` — three fatal checks before it touches anything: a clean tree, on `main`, and the tag not already existing |
+| §8 all three distribution paths work | **nothing automatic.** `./local-CI.sh --full` builds the AppImage and does not launch it; nothing anywhere builds the RPM or the OBS package. They are proven by a real release, which is why `docs/design/oneup-2.0.md` §7's G8 makes all three launches a manual condition |
 | §8.1 no fourth distribution path | **nothing, and nothing should.** Adding a packaging path is a deliberate act by a person, not something that happens by accident, so there is no breach for a script to catch. What the row is for is the opposite failure: somebody proposing one without knowing it was already weighed. ONEUP-0071 is the answer to that |
 
 **The gap worth knowing about is §6.** Every other gate in this project runs *because*
@@ -452,3 +461,4 @@ clone where nobody ran that one command, a green push proves nothing at all.
 | 7 | 2026-07-27 | 2 critical, 3 high, 4 medium, 4 low — **11 verified, 2 dismissed** (re-reviewed in batch 2, because §8.1 was written after loop 6 and no cold reader had seen it) | §8.1 itself survived intact — its Flatpak-sandbox argument checks out against `security.md` §1 and against what the engine does for each of the five steps. What did not: **both** descriptions of `tests/bump-test.py` were wrong in the reassuring direction — §6's table credited it with proving every version site advances, and the What-checks-this row had the synthetic and real files exactly backwards. And "it runs in about a second" was 34 seconds, measured, in the one figure that decides whether the gate gets run at all. §1.2 gained the behaviour-neutral test-harness exception (user's decision, 2026-07-27), which the engine spec had been granting itself |
 | 8 | 2026-07-27 | 3 high, 5 medium, 5 low — **11 verified, 2 dismissed** | Nothing from loop 7 returned. The freeze exception loop 7 added had already leaked: §9's decision tree offered it to *any* test-only change, where §1.2 grants it to one named change. §6.1's "prove it fails" pointed at `testing.md` §4 ("one invariant, one test") instead of §9's trap, which is worse than a broken link because it resolves. The gate table's documentation row omitted the marker check entirely, so the one change most likely to trip it — adding a marker — came with no warning |
 | 9 | 2026-07-27 | 2 high, 5 medium, 5 low — **10 verified, 2 dismissed** | Converged on the same two classes and nothing new: pointers and duplication. `testing.md` and `coding.md` each restated a §6 gate-policy fact without citing this document as the owner, and the What-checks-this table still had no row for the roadmap-bullet shape or the CHANGELOG entry shape — both rules this document states and nothing checks |
+| 10 | 2026-07-27 | 2 high, 4 medium, 5 low — **9 verified, 2 dismissed** | §6 claimed GitHub CI "builds and verifies" the AppImage. It builds it and attaches it; nothing launches it, and design §7's G8 says as much in the opposite direction — so the sentence telling a reader `--full` is optional rested on a check that does not exist. §11's checklist had drifted the other way from §9's tree, giving `main` a §1.1 fix and documentation "and nothing else" where §1.2 grants one more. The five-gates-never-in-CI count, already stale once, is now written as a shape |

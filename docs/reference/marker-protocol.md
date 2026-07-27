@@ -350,9 +350,11 @@ Both paths are overridable — `ONEUP_RUN_STATE`, `ONEUP_STOP_FILE` — in the *
 the window resolves them from `Path.home()` and is isolated in tests by rewriting `HOME`
 (`docs/standards/files-and-naming.md` §5).
 
-**Their field layout is not pinned anywhere, including here.** The Python engine must
-reproduce it exactly or run-following breaks silently, so ONEUP-0054's spec has to write it
-down before the rewrite — either in that spec, or as a new subsection added here.
+**Their field layout is pinned in `docs/specs/ONEUP-0054-python-engine.md` §4.1.1**, and
+nowhere else. It is not part of this protocol — these are files, not markers — but the
+Python engine must reproduce the layout exactly or run-following breaks silently, so it had
+to be written down somewhere before the rewrite. That subsection is the place; it records
+the four lines, which three the window reads, and how each half deletes the files.
 
 ## What checks this
 

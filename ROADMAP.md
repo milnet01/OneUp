@@ -296,9 +296,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   a layout built the wrong way has to be rebuilt, not translated.
   (3) Gate G10 tests the machinery rather than a translation: the GUI
   suite must pass with the layout direction forced RTL.
-  Measured at ff4f4a7, the starting position is good: 0 directional QSS
-  properties, 0 hard-coded AlignLeft/AlignRight, 0 existing RTL handling
-  to unpick, so Qt's automatic layout mirroring does most of the work.
+  Measured at ff4f4a7, the starting position is good: 0 hard-coded
+  AlignLeft/AlignRight, 0 existing RTL handling to unpick, and of the
+  directional QSS properties only one — #LinkBtn's text-align: left
+  (corrected 2026-07-27, cold-eyes batch 2; the earlier "0 directional
+  QSS properties" counted only margin/padding/border). So Qt's automatic
+  layout mirroring does most of the work.
   The one exception is custom painting, which Qt cannot mirror: the
   toggle's paintEvent (updater.py:699) computes its knob position from
   the left edge (line 712) and must apply the direction itself; its
@@ -795,7 +798,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   ui-and-accessibility, wording-and-translation, workflow, plus the existing
   dependencies.md), a marker-protocol reference, the programme design
   (docs/design/oneup-2.0.md, written first), and one spec each for
-  ONEUP-0054/0034/0027/0032. Cold-eyes in three batches, each looped until
+  ONEUP-0054/0034/0027/0032/0064 (0064 added 2026-07-26 with Task 17). Cold-eyes in three batches, each looped until
   clean (global rule 14); implementation is blocked until then. Build plans
   (docs/plans/) are deliberately NOT written now — each is written when its
   item starts.

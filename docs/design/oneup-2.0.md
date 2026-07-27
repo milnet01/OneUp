@@ -28,12 +28,13 @@ thing can replace what they run today.
 | --- | --- | --- |
 | **ONEUP-0054** | Replace the Bash engine with a Python one | `docs/specs/ONEUP-0054-python-engine.md` |
 | **ONEUP-0034** | Split `updater.py` into focused modules | `docs/specs/ONEUP-0034-gui-modules.md` *(to be written)* |
-| **ONEUP-0064** | Redesign the interface for ergonomics, clarity and accessibility — **no focus borders**; the on/off switches stay | `docs/specs/ONEUP-0064-interface-redesign.md` *(to be written)* |
-| **ONEUP-0027** | Selectable colour themes beyond follow-the-desktop | `docs/specs/ONEUP-0027-themes.md` *(to be written)* |
+| **ONEUP-0064** | Redesign the interface for ergonomics, clarity and accessibility — **no focus borders**; the on/off switches stay. `docs/standards/ui-and-accessibility.md` §5.4 adds a hard obligation: pick a ringless focus treatment measuring **≥ 3:1** and add the measurement to the suite | `docs/specs/ONEUP-0064-interface-redesign.md` *(to be written)* |
+| **ONEUP-0027** | Selectable colour themes beyond follow-the-desktop. `docs/standards/ui-and-accessibility.md` §7 adds a hard obligation: the contrast check every new theme must pass | `docs/specs/ONEUP-0027-themes.md` *(to be written)* |
 | **ONEUP-0032** | Wrap user-facing text for translation, and mirror the window for right-to-left languages — **groundwork only, English alone**, see §5.1 | `docs/specs/ONEUP-0032-i18n.md` *(to be written)* |
 | **ONEUP-0044** | The double password box | no spec — see §6.2 |
 | **ONEUP-0004** | Dependency refresh — chiefly the CI Python version | no spec — see §6.3 |
 | **ONEUP-0063** | Add `pyproject.toml`, so a bare `ruff check` and the gate agree — not a one-line config drop, see §6.4 | no spec — `docs/standards/coding.md` §2.1 settles it |
+| **ONEUP-0059** | Honour `XDG_STATE_HOME` and `XDG_CONFIG_HOME` instead of hard-coding `~/.local/state` | no spec — `docs/standards/files-and-naming.md` §5.2 settles it, and it is a path change, not a contract change |
 
 The list is **open, but not forever.** More items may be added while 2.0 is being built;
 each addition gets a roadmap bullet and, if it needs design, a spec, and is judged against
@@ -53,7 +54,8 @@ privileged-call total runs the other way: `docs/standards/security.md` §1.2 **o
 this section merely carries it, which is deliberate — the earlier arrangement, where two
 documents each derived the split, is what produced the contradiction that standard's first
 review had to unpick. Everything here was
-**measured at `7a7afc1` on 2026-07-27**, and is written as something that was measured, not
+**measured at `7a7afc1` on 2026-07-27** unless the row names its own commit, and is written
+as something that was measured, not
 as something that is true (`docs/standards/documentation.md` §6b.4). The unit is named in
 every row, because the worst figure error this set has produced was an unnamed one.
 
@@ -252,10 +254,12 @@ Two further consequences, both structural:
 1.4.0 released from main, then main freezes  ← §5.4
         │
         ▼
-dependency refresh (0004)      ← first because they are nearly free and touch tooling
-   + lint config (0063)          rather than the app, so one green run proves both.
-        │                        Neither moves the Python floor — coding.md §1
-        │                        settled that at 3.13; §6.3 explains the difference.
+dependency refresh (0004)      ← first because they set the tooling every later item
+   + lint config (0063)          is judged by: adopting the lint config changes what
+        │                        the gate accepts, so doing it after the rewrites
+        │                        means re-clearing it against far more code. Not
+        │                        free — §6.4 records the 47 errors measured. Neither
+        │                        moves the Python floor (coding.md §1, and §6.3).
         ▼
 GUI split (0034)               ← first substantial work on v2, and alone: it is
         │                        behaviour-preserving, so the existing GUI
@@ -332,10 +336,22 @@ no open design question gets a roadmap bullet and a build plan, not a spec.
 
 ### 6.2 The double password box (ONEUP-0044)
 
-Already an acceptance condition of the rewrite: gate G4 requires a full run to raise
-**exactly one** password prompt. It gets a diagnosis step in the engine's build plan.
-Should the cause turn out to need real design — for example if it forces a change to how
-the engine authenticates — it earns a spec at that point.
+**No existing gate can see this bug, and G4 is not the exception it looks like.** The
+symptom is *two dialogs from one authentication*: the roadmap bullet measures one engine
+invocation, one `sudo -A -p … -v`, and two `ksshaskpass` processes sixteen seconds apart.
+G4's scenario counts **authentications** — its mock `sudo` keeps one timestamp file per
+parent pid and logs a line only when a call actually has to authenticate — and there is no
+real askpass in the sandbox at all. So the suite is green today while the bug is open, and
+will stay green if the rewrite reproduces it.
+
+That is why this item is an investigation rather than a fix: the first task is a harness
+that reproduces it, which attempts so far have not managed. It gets a diagnosis step in the
+engine's build plan. Should the cause need real design — for example a change to how the
+engine authenticates — it earns a spec at that point.
+
+**Complete when** the cause is identified and either fixed with a test that fails without
+the fix, or recorded as understood-and-accepted with the reason. "We could not reproduce
+it" is an acceptable outcome; leaving it unexamined is not.
 
 ### 6.3 Dependency refresh (ONEUP-0004)
 
@@ -390,12 +406,12 @@ nothing can check is not a gate.
 | **G2** | v1 and v2 emit the **same marker stream** under identical mocks | `tests/differential.sh` — new, and `ONEUP-0054` §4.5 owes it |
 | **G3** | GUI suite green with the window driving the new engine | `python3 tests/gui-smoke.py` — **but the suite as it stands feeds the window marker lines and never launches an engine at all**, so on its own it proves the window, not the pairing. G3 needs the run under `ONEUP-0054` §4.6 stage 7's environment switch, with the window actually resolving to v2 |
 | **G4** | A full run raises **exactly one** password prompt | the existing one-prompt scenario |
-| **G5** | The engine runs with **PySide6 absent** and imports no Qt — the privilege split, enforced by test | a new scenario with PySide6 hidden from the import path |
+| **G5** | The engine runs with **PySide6 absent** and imports no Qt — the *dependency direction*, enforced by test. It is half of §3's privilege split, not the whole: `docs/standards/files-and-naming.md` §4.1 rule 2 names what it misses, an engine module importing a Qt-free helper out of `oneup/gui/` | a new scenario with PySide6 hidden from the import path |
 | **G6** | A real run on the user's own machine | manual, against the explicit list `ONEUP-0054` §4.5 requires the differential phase to write — the list is a deliverable, not a judgement call |
 | **G7** | Every item on the §1 list is complete — those with a spec, by their spec's invariants being covered by tests; those without one, by the **Complete when** line §6 gives each | **nothing automatic.** It is a release checklist walked by hand, over a list §1 closes at the start of the engine rewrite so that it can be walked at all |
-| **G8** | The three packaging paths build from the new layout, and what each delivers launches: the AppImage directly, the RPM and the OBS repository once installed | `./local-CI.sh --full` builds the AppImage — it does not launch it. All three launches are manual, once each, and that is the honest state of this gate |
+| **G8** | The three packaging paths build from the new layout, and what each delivers launches: the AppImage directly, the RPM and the OBS repository once installed | `./local-CI.sh --full` builds the AppImage — it does not launch it. All three launches are manual, once each. **The OBS leg cannot be met before the tag**: `packaging/obs/_service` pins its `revision` to the release tag, so that build only exists after 2.0.0 is cut. It is the one condition verified immediately *after* the tag and before the release is announced |
 | **G9** | Docs current: README, CLAUDE.md, standards, marker reference, CHANGELOG | `tests/docs-check.py`, plus a `/cold-eyes` pass over anything 2.0 edited |
-| **G10** | Every user-facing string is translatable, and the GUI suite passes with the layout direction forced **right-to-left** | the RTL half is a GUI-suite pass. The wrapping half has **no automatic check** — `docs/standards/wording-and-translation.md`'s own table records that gap against its §6.1 — so it is a review of `oneup/gui/` against that standard, and it is the weakest gate here |
+| **G10** | Every user-facing string is translatable, and the GUI suite passes with the layout direction forced **right-to-left** | the RTL half is a GUI-suite pass forced right-to-left — **new, and ONEUP-0032 owes it** (§5.1). The wrapping half has **no automatic check** — `docs/standards/wording-and-translation.md`'s own table records that gap against its §6.1 — so it is a review of `oneup/gui/` against that standard, and it is the weakest gate here |
 
 **G1–G6 are the engine rewrite's**, and each is met at the stage that earns it —
 `ONEUP-0054` §4.6's table is the mapping, and this document does not restate it. Stage 9, the switch-over, is the commit they are all measured against. **G7–G10 are the release's**, met at the 2.0.0 tag.
@@ -466,3 +482,4 @@ table answers *which one wins* as well as *which one covers this*:
 | 2 | 2026-07-27 | 2 critical, 5 high, 7 medium, 7 low — **19 verified, 2 dismissed** | Nothing from loop 1 came back, which is the proof those fixes held. What loop 2 found was largely what loop 1's fixes had *moved*: adding a **checked by** column to §7 made G1's "no assertion touched" newly falsifiable — and it is false, because `ONEUP-0054` plans three deliberate suite changes — and saying G1–G6 are met "at stage 7–8" gave a third answer to a question the spec's own table already answered. Two claims about gates were flattering: the marker count and the flag list were called contract-fixed with a gate behind them, and neither has one. §2 also had the ownership of the privileged-call figure backwards, in the sentence a later editor would trust |
 | 3 | 2026-07-27 | 4 high, 7 medium, 8 low — **17 verified, 2 dismissed** | No critical, and nothing structurally wrong — the loop's work was the gate's own wording. G1's "only these three changes" had become a closed list the engine spec's build plan already exceeds; G3 named a suite that never launches an engine at all; G8 said the OBS path "launches". §2's scenario-count command printed **0** rather than 76, because scenarios are `echo "TEST: …"` and the `^` anchor never matched — a figure whose command does not reproduce it being the exact failure §6b exists to stop |
 | 4 | 2026-07-27 | 1 critical, 4 high, 6 medium, 6 low — **15 verified, 2 dismissed** | The critical was this document's own G7: it promised a completion bar for the spec-less items and §6 gave one to only two of the three, so ONEUP-0063 sat on the closed §1 list with nothing to complete against — and was missing from §5.2's build order besides. §6.4 and a place beside 0004 close both. The `ToggleSwitch` right-to-left work was assigned here to ONEUP-0064 and by `ui-and-accessibility.md` to ONEUP-0032, in different release slots — the shape of a job that falls through both. It is 0032's: mirroring the window is what that item is |
+| 5 | 2026-07-27 | 1 critical, 3 high, 6 medium, 6 low — **14 verified, 2 dismissed** | The critical was §6.2 telling the implementer that ONEUP-0044 is already an acceptance condition of the rewrite, gated by G4. It is not: 0044's symptom is two dialogs from **one** authentication, and G4's scenario counts authentications — its mock keeps one timestamp per parent pid and there is no askpass in the sandbox at all. The suite is green today with the bug open, and would stay green if the rewrite reproduced it. §6.2 now says so and carries its own completion bar. Two more gate rows were overstated the same way: G5 was labelled "the privilege split" when it tests the dependency direction, which is half of it; and G8's OBS leg cannot be met before the tag it gates, because `_service` pins its revision to that tag |
