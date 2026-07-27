@@ -328,7 +328,7 @@ verification method, not a preference.
 | Item | Branch | Why |
 | --- | --- | --- |
 | **The 2.0.0 release itself** | `v2` merges **into** `main` | `release.sh` refuses any branch but `main` and pushes `origin main`, and `docs/standards/workflow.md` §2 otherwise forbids that direction — so the merge is a one-off, taken deliberately once G1–G10 pass, and it is the moment `main` unfreezes. Nothing automates it |
-| Documentation (this set) | `main` | The standards govern 1.x maintenance too, and `v2` inherits them by merge. Docs are not a release, so they are unaffected by the freeze |
+| Documentation (this set) | `main` | The standards govern 1.x maintenance too, and `v2` inherits them by merge. Docs are not a release, so they are unaffected by the freeze. A *later* doc edit that a rule binds to the same commit as 2.0-only code is the one exception, and goes to `v2` — `docs/standards/workflow.md` §9 owns it |
 | **Everything in §1** | **`v2`** | Under the freeze (§5.4) `main` takes nothing but qualifying bug fixes, so every 2.0 item — including the GUI split — belongs on the branch |
 | The one exception: a behaviour-neutral **test-harness** change | `main` first | `docs/standards/workflow.md` §1.2 defines the exception and its conditions. It exists for exactly one change — the `ONEUP_ENGINE_CMD` indirection (`ONEUP-0054` §4.4) — which must be shown to leave the suite green on `main` before either engine depends on it |
 

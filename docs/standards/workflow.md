@@ -79,7 +79,7 @@ people still install their updates?* has an answer; "is this important enough?" 
 
 | Branch | What it is |
 | --- | --- |
-| `main` | Released 1.x. Frozen (§1). Documentation, qualifying bug fixes, and the one test-harness change §1.2 names |
+| `main` | Released 1.x. Frozen (§1). Documentation, qualifying bug fixes, and the one test-harness change §1.2 names — the exception being documentation a rule binds to the same commit as 2.0-only code, which goes to `v2` (§9) |
 | `v2` | The 2.0 programme. Long-lived, shared with `origin`, and **never rebased** |
 
 Rules:
@@ -383,7 +383,9 @@ status *considered*, so the reasoning stays findable.
 While the freeze holds, the decision is short:
 
 ```
-Is it documentation?                     → main → merge main into v2 (§1.2, §2)
+Is it documentation?
+├── does a rule bind it to the same commit as 2.0-only code?  → v2 (below)
+└── no                                   → main → merge main into v2 (§1.2, §2)
 Is it *the* ONEUP_ENGINE_CMD harness
   change — the one exception §1.2 names?  → main first, then v2 (§1.2)
 Otherwise:
@@ -391,6 +393,15 @@ Can people still install system, Flatpak and firmware updates?
 ├── no  → it is a §1.1 fix → main → 1.4.x → merge main into v2
 └── yes → it is 2.0 work   → v2   → ships when the whole gate passes (design §7)
 ```
+
+**The documentation branch has one exception, and it is not a loophole.**
+`docs/reference/marker-protocol.md` §5 requires a marker change to touch the emitter, the
+window, both suites *and* the reference **in one commit** — that is what makes the change
+reviewable at all. Those code files are 2.0-only, so the reference edit goes with them, onto
+`v2`, and reaches `main` at the 2.0.0 merge (design §5.3). The reason is not convenience:
+`main` still ships the 1.4.0 engine, so a reference amended on `main` would describe a
+contract `main`'s own engine does not implement. **Documentation goes to `main` unless a
+rule binds it to code that cannot** — and today ONEUP-0032 is the only item that qualifies.
 
 **No partial 2.0 releases** — the user's rule, 2026-07-26. `docs/design/oneup-2.0.md` §7
 states it and owns what "complete" means.
@@ -421,7 +432,8 @@ states it and owns what "complete" means.
 - [ ] `CHANGELOG.md` has an `## [Unreleased]` entry with its plain-English line, if a user
       would notice this change.
 - [ ] The branch is right — §9's tree, not a guess. `main` takes a §1.1 fix, documentation,
-      and the one named test-harness change §1.2 grants. Nothing else.
+      and the one named test-harness change §1.2 grants. Nothing else — and not even
+      documentation, when a rule binds it to the same commit as 2.0-only code (§9).
 - [ ] `./local-CI.sh` is green — the whole thing, not the part you thought was affected.
 
 ## What checks this

@@ -33,8 +33,9 @@ no Python changes. The engine emits identifiers, so the half that runs as root c
 locale machinery and its output no longer decides what the user reads. The window renders
 every sentence itself, through Qt's translation layer, with plural forms and named
 placeholders. And `tests/gui-smoke.py` runs a second time with the layout direction forced
-right-to-left, so the day somebody adds a widget that only works in English, a gate says so
-rather than a Hebrew user discovering it.
+right-to-left, so a widget that hard-codes a side is caught by a gate rather than by a
+Hebrew user — with one honest limit, in §7: a *newly hand-painted* widget still needs
+somebody to write its own check.
 
 ## 2. Background
 
@@ -338,8 +339,10 @@ system tray, not a widget in a mirrored layout (§8.3).
   locale.
   *Test:* `tests/i18n-check.py`, the engine-purity check.
 - **INV-2** Every code matches `^[a-z0-9-]+$`, and every payload field the window renders as
-  words holds codes and nothing else — one code, or several space-separated as `@@REBOOT@@`
-  and `@@SERVICES@@` do. No field the window renders carries a sentence.
+  words holds codes and nothing else — one code, or several space-separated, `@@REBOOT@@`
+  being the only field that carries more than one. No field the window renders carries a
+  sentence. (`@@SERVICES@@` is the space-separated *format* this borrows; its own contents
+  are unit names, which are data — §4.4.)
   *Test:* `tests/run-tests.sh` splits each such field on spaces and asserts the shape of
   every element, on every `HINT`, `STEP_END` detail, `CHECK_UNKNOWN` reason, `REMEDY` action
   and `REBOOT` reason a scenario produces — the five families §4.4 routes to a code.
@@ -406,7 +409,8 @@ system tray, not a widget in a mirrored layout (§8.3).
 | A `\|` reaches a marker argument | Nothing — it arrives as `/` | INV-3, in one place in the emitter |
 | A translator is garbage-collected | Silent reversion to English mid-run | INV-7 is the guard; §2.3 measured that it happens without one |
 | Somebody adds a `setLayoutDirection` call | Nothing — and that is the danger: the right-to-left gate goes green while running left to right | INV-6 is the guard, and it exists because nothing else would notice. §2.3 measured that an explicit call beats `-reverse` |
-| A new widget hard-codes a left edge | A control on the wrong side, in Arabic and Hebrew only | INV-8's second pass fails on the switch's own pixel check, which samples the track half opposite the knob |
+| A new widget hard-codes a side in a stylesheet or an alignment flag | A control on the wrong side, in Arabic and Hebrew only | INV-9 catches it in the source, whatever the widget |
+| A new widget hard-codes a side in its own `paintEvent` | The same, and **nothing catches it** | The RTL pass only samples the pixels of the one painted widget that exists today. §7 |
 | A sentence is added without `tr()` | It stays English in every language | INV-10 catches it at the call site. A sentence assembled through a variable is not caught — §7 |
 | The window fails to build the timer's notification | No notification from an unattended run; the update itself is unaffected | INV-13. The engine's `--notify` still exists and a user who wants the old behaviour can call it directly (§10) |
 
@@ -425,7 +429,12 @@ nowhere** — `local-CI.sh` and `.github/workflows/release.yml` each name every 
 by hand (`docs/standards/files-and-naming.md` §2.2). It exits `77` to skip when the Qt
 translation tools are absent, matching how the GUI suite already skips without PySide6.
 
-**Two limits, stated rather than left to be discovered.** INV-10's check reads the argument
+**Three limits, stated rather than left to be discovered.** The RTL pass runs the whole
+window mirrored, but the only *painted* geometry it can judge is `ToggleSwitch`'s, through
+the pixel sample the suite already takes. A widget hand-painted after this item ships needs
+its own check written with it — `ui-and-accessibility.md` §8.3 states the rule, and its
+**What checks this** row is what has to change from `nothing` to that widget's check.
+INV-10's check reads the argument
 at the call site, so a sentence assembled into a variable and passed in is invisible to it —
 the wrapping half of gate **G10** stays a review against
 `wording-and-translation.md`, which design §7 already calls the weakest gate in the set. And
@@ -441,6 +450,12 @@ that is the argument for landing ONEUP-0067 first.
 
 ## 8. Docs & release
 
+**All of it lands on `v2`, documentation included**, which is the one case
+`docs/standards/workflow.md` §9 sends to the branch rather than to `main`: the reference
+edit is bound by `marker-protocol.md` §5 to the same commit as engine, window and both
+suites, and those are 2.0-only. A reference amended on `main` would describe a contract the
+1.4.0 engine `main` still ships does not implement.
+
 - **`docs/reference/marker-protocol.md`** — §3's field table; §4.1, whose four-field guard
   is the one this item has to move; §4.2, §4.6, §4.8 and §4.10 for the payloads that become
   codes; and §5.1/§5.2, which currently reserve this item for `HINT` and `REMEDY` alone
@@ -454,9 +469,11 @@ that is the argument for landing ONEUP-0067 first.
 - **`docs/standards/wording-and-translation.md`** — its **What checks this** table gains
   real catchers for §6.1 and §7, which say *nothing yet* today.
 - **`docs/standards/ui-and-accessibility.md`** — §8.1's known `text-align` site and §8.3's
-  two handed sites are resolved; the rows become guards rather than outstanding work.
-- **`docs/standards/files-and-naming.md`** — `oneup/translations/` and `tests/i18n-check.py`
-  join the file map.
+  two handed sites are resolved. §8.1's and §8.2's **What checks this** rows become guards
+  rather than outstanding work; §8.3's row goes from `nothing` to the RTL pass's pixel
+  sample **for `ToggleSwitch` only**, and says so, because that is all it covers (§7).
+- **`docs/standards/files-and-naming.md`** — `tests/i18n-check.py` joins the `tests/` row
+  and the test-naming table. `oneup/translations/` is already in its §4 package tree.
 - **`CHANGELOG.md`** — one entry under *Changed*, naming the payload conversion as a
   contract change, and saying plainly that **the retained Bash engine stops being a drop-in
   for the window**: it is frozen at the switch-over, so from this item onward it emits prose
@@ -501,8 +518,8 @@ that is the argument for landing ONEUP-0067 first.
 ## 10. Out of scope
 
 - **Any second language.** No `.ts` or `.qm` file for another language is written, reviewed
-  or shipped in 2.0 (design §5.1). `oneup/translations/` is created by the first
-  contribution.
+  or shipped in 2.0 (design §5.1). `oneup/translations/` has its slot in
+  `files-and-naming.md` §4 already, but nothing is tracked in it until a real `.ts` lands.
 - **Translating the engine's terminal output.** `./update_system.sh` run directly is a
   system tool's output and stays English (`wording-and-translation.md` §5). Its `--notify`
   notification is part of that output and stays with it — what changes is that the timers
@@ -521,3 +538,4 @@ that is the argument for landing ONEUP-0067 first.
 | --- | --- | --- | --- |
 | 1 | 2026-07-27 | 3 lanes; 3 critical, 3 high, 9 medium, 3 low — **17 verified, 1 dismissed** | The three worst were each a claim the tree contradicts. `@@CHECK@@`'s `label` and `@@REPO_SKIPPED@@`'s `reason` were routed to codes when the window reads neither — the reference says so of the first outright — which would have put a bare token in front of the only reader they have. §4.4 and §4.5 gave two different wire shapes for `@@REBOOT@@`'s components. And the right-to-left gate was wired to the wrong `QApplication`: `tests/gui-smoke.py` builds its own with an empty argument list and never calls the application's `main`, so `-reverse` would have reached nothing and INV-8 would have passed while proving the opposite. Two fixes landed outside this spec: `ui-and-accessibility.md` §8.3 was wrong that `_paint_state_shape` computes from the left edge as the knob does — it picks its edge from the *state*, so the two handed sites need different fixes — and the ROADMAP bullet repeating it. Dismissed: that §4.2 misattributes the no-`setLayoutDirection` rule to §8.4; the sentence says §8.4 owns the *reading* half and this is the writing half, which is what it says. |
 | 2 | 2026-07-27 | 3 lanes; 3 high, 5 medium, 4 low — **10 verified, 2 dismissed** | The gap worth the loop was one the marker protocol could never have shown: `notify_send` raises a desktop notification, in English, on the two timer paths — the only paths where no window is open — and it never travels as a marker, so none of §4.4's routes touched it. The timers now stop passing `--notify` and the window builds the sentence (INV-13). Two of loop 1's own fixes had defects: INV-2's `^[a-z0-9-]+$` could not match the space-separated field the same loop gave `@@REBOOT@@`, and §8's "§4.1 (including its four-field guard, §4.4)" reads as `marker-protocol.md` §4.4, which is `REFRESH` and unrelated. `oneup-2.0.md` §4 assigns this item a release-note sentence — the Bash fallback stops being a drop-in — that §8 was not carrying. Dismissed: that §4.2 does not describe a mechanism for "pair or neither" and §4.4 does not state the new guard value; both sentences already say it, and answering a finding with more prose is what makes the next loop cost more. |
+| 3 | 2026-07-27 | 3 lanes, two accepted clean; 1 critical, 2 high, 1 medium, 4 low — **5 verified, 3 dismissed** | The critical was a rule this spec invokes and cannot satisfy: `marker-protocol.md` §5 puts the reference edit in the same commit as the four code files, `workflow.md` §9 sends all documentation to `main`, and those code files are 2.0-only — so the tree as written offered a choice between breaking the same-commit rule and breaking the freeze. Fixed in `workflow.md` §9, where it belongs, along with the two places §2 and §11 restate the branch rule; the answer is that the reference goes to `v2`, because a reference amended on `main` would describe a contract `main`'s own 1.4.0 engine does not implement. Loop 2's own fix stranded a sibling again: INV-2 gained "space-separated as `@@REBOOT@@` and `@@SERVICES@@` do", but `SERVICES` carries unit names, which §4.4 routes to data. And §1 promised a gate for "a widget that only works in English" that only exists for the one painted widget the suite already samples. Dismissed: that §6 has no row for five invariants (they are source-level guards with no runtime failure mode), that §2.1's `grep -c` result is a raw count (`documentation.md` §6b's permitted form is exactly a command plus a past-tense measurement), and that §8 cites the wrong section for the same-commit rule (§5 is where it is written). |
