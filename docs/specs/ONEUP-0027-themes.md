@@ -1,0 +1,454 @@
+# ONEUP-0027 — selectable themes
+
+**Status:** Draft
+**Kind:** feature
+**Roadmap:** ONEUP-0027
+**Branch:** v2
+**Verified at:** `e7d3718` — every contrast figure below was computed against this tree,
+not recalled.
+
+**Sections:** 1 goal · 2 background · 3 scope decisions · 4 design · 5 correctness
+invariants · 6 failure modes · 7 tests · 8 docs & release · 9 alternatives · 10 out of
+scope · 11 cold-eyes log
+
+**In one sentence:** Settings gains a picker offering **Follow system** and eight themes,
+each a complete palette that a contrast check in the suite has to pass — including the two
+palettes that ship today, three of which fail it now.
+
+**`docs/standards/ui-and-accessibility.md` §7 already owns what a theme is** and what it
+must pass. This spec does not re-argue any of it. What it adds is the part §7 leaves to
+this item: the check itself, the tokens the painted widgets need, the picker, and a
+decision on every pair the check turns out to fail.
+
+## 1. Goal
+
+A user picks a theme in Settings and the whole application takes it at once — window,
+dialogs, message boxes, the on/off switches and the tray badge — with no restart. The
+choice survives a restart, and a stored value the application does not recognise starts in
+**Follow system** rather than failing. No theme can ship that a user cannot read: the check
+that decides that is a computation over the palette, so it covers themes added later
+without anyone remembering to run it.
+
+## 2. Background
+
+Theming today is one stylesheet, built once and set on the `QApplication`. `build_theme`
+substitutes either `_DARK` or `_LIGHT` into the `_QSS` template, `apply_app_theme` installs
+the result, and `main()` re-applies it on `colorSchemeChanged`. That machinery is sound and
+this spec keeps it — `docs/standards/ui-and-accessibility.md` §6.1 is why dialogs need no
+work of their own: the sheet lives on the application, so every `QDialog` and `QMessageBox`
+inherits it.
+
+**Two things are missing, and both were measured before this spec was written.**
+
+**The theme does not reach every colour.** A stylesheet cannot touch a widget that paints
+itself, and two of them do. `ToggleSwitch.paintEvent` fills its track from the module
+constants `GREEN` and `RED`, draws the state shape and the knob with a literal
+`QColor("#ffffff")`, and rims them with `#ffffff` and `#000000` under high contrast.
+`Updater._tray_icon` paints the idle disc `#888888`, the attention disc
+`TRAY_ATTENTION_COLOR`, its rim `#ffffff` and its `!` `#3a2600`. Ten colours in all, none
+of them reachable by any theme — and they are the surfaces carrying state meaning
+(`docs/standards/ui-and-accessibility.md` §3 names two of the three live cues here). A
+theme that could not change them would repaint the application around an unchanged switch.
+
+**The check §7 requires does not exist, and the palettes shipping today do not all pass
+it.** Computed at `e7d3718` with the WCAG 2.2 formula — relative luminance
+`0.2126R + 0.7152G + 0.0722B` over linearised sRGB, ratio `(L1 + 0.05) / (L2 + 0.05)`
+(*Source:* <https://www.w3.org/TR/WCAG20-TECHS/G18.html>):
+
+| Pair | Light | Dark | Needs |
+| --- | --- | --- | --- |
+| `lastrun` on `card` | **3.07:1** | 5.40:1 | 4.5:1 |
+| `lastrun` on `win` | **2.71:1** | 5.58:1 | 4.5:1 |
+| `amber` on `card` | **3.87:1** | 8.95:1 | 4.5:1 |
+| `ghostbd` on `card` | **1.62:1** | **1.76:1** | 3:1 |
+| `logbd` on `logbg` | **1.31:1** | **1.40:1** | 3:1 |
+| `disfg` on `disbg` | **1.83:1** | 7.02:1 | 4.5:1 |
+| switch track "on" vs its state shape | **2.10:1** | **2.10:1** | 3:1 |
+| switch track "on" vs `rowcard` | **1.94:1** | 7.87:1 | 3:1 |
+| accent, both gradient stops, vs `win` | **2.32:1**, **1.60:1** | 7.13:1, 10.39:1 | 3:1 |
+
+§7 already knew about `lastrun` and says it "must not be discovered by the check and
+quietly ignored". The rest are found here for the first time, and the same rule applies to
+each: §4.8 decides every one of them by name.
+
+The switch row is the one that matters most. The white bar-and-circle **is** the
+colour-blind cue, and at 2.10:1 on the green track it is the weakest thing on screen
+carrying meaning.
+
+## 3. Scope decisions (agreed with the user)
+
+| Decision | Who, when | Consequence |
+| --- | --- | --- |
+| **Eight** themes to start with | the user, 2026-07-27 | §4.2 lists them; the count is a starting point, not a ceiling — §4.1's contract is what makes a ninth cheap |
+| **Follow system** is the initial default | the user, 2026-07-27 | §4.5; it is not a theme but a mode, and it is what an unrecognised stored value falls back to |
+| The picker lives in **Settings** | the user, 2026-07-27 | §4.6 |
+| Themes are **required for 2.0**, not optional | the user, 2026-07-26 | `docs/design/oneup-2.0.md` §1; there is no "it is only optional" exemption from the check |
+| The on/off switch form is not reconsidered | the user, standing | `docs/standards/ui-and-accessibility.md` §3; a theme recolours the switch and may not replace it |
+
+**The eight names in §4.2 are this spec's proposal, not the user's.** They can be changed
+without touching anything else here — a name is a label and an id, and §4.1's contract is
+indifferent to both.
+
+### 3.1 What this spec does not decide
+
+What a theme *is*, that it supplies colours and never structure, that every key is
+supplied, the two contrast thresholds, that colour-never-alone is per-theme, and that high
+contrast stays an overlay — all six are `docs/standards/ui-and-accessibility.md` §7. This
+spec obeys them and discharges the two jobs §7 hands it: write the check, and settle the
+`lastrun` case.
+
+The ringless focus treatment is **ONEUP-0064**'s to pick. `docs/design/oneup-2.0.md` §5.2
+lands the redesign first for that reason. This spec re-takes the measurement for each
+palette it adds — `docs/standards/ui-and-accessibility.md` §5.4, and the design's own row
+for ONEUP-0027 — but does not choose the treatment.
+
+## 4. Design
+
+### 4.1 What a theme is here
+
+A theme is a `(id, label, palette)` triple. The palette is a dictionary of the same shape
+as `_DARK` and `_LIGHT`, plus the painted tokens §4.3 adds, and it is complete: every key
+the reference set names, every time. `docs/standards/ui-and-accessibility.md` §7 wants a
+missing key to raise at substitution rather than half-apply, and that stays true — the
+reference-set assertion in §5 fails first and more usefully.
+
+The `id` is a lowercase slug, is what gets stored, and never changes. The `label` is what
+Settings shows and is the only translatable part (ONEUP-0032).
+
+### 4.2 The eight
+
+Four dark and four light, because the picker's job is to be visibly different eight times
+over. The two shipped palettes are two of the eight, so six are authored rather than eight,
+and **Follow system chooses between `midnight` and `daylight`** exactly as light/dark works
+today — nothing changes for a user who never opens the picker.
+
+| id | Label | Base | Character |
+| --- | --- | --- | --- |
+| `midnight` | Midnight | dark | today's `_DARK`, unchanged but for §4.8's fixes |
+| `carbon` | Carbon | dark | neutral greys, no blue cast |
+| `forest` | Forest | dark | green-tinted surfaces |
+| `plum` | Plum | dark | violet-tinted surfaces |
+| `daylight` | Daylight | light | today's `_LIGHT`, unchanged but for §4.8's fixes |
+| `paper` | Paper | light | warm off-white, low blue |
+| `sky` | Sky | light | cool blue-tinted light |
+| `sand` | Sand | light | warm sand, higher warmth than Paper |
+
+**A named theme is one palette, not a light/dark pair.** Choosing one means choosing not to
+follow the desktop; that is what Follow system is for. The alternative — eight themes each
+with two variants — is §9.
+
+**The accent moves into the palette.** `ACCENT` and `BTN_ACCENT` are constant across
+light and dark today, and if they stayed constant across eight themes the most visible
+surface in the application would be identical in all of them. `midnight` and `daylight`
+keep today's azure→cyan, so the signature is preserved where it is the default.
+
+### 4.3 The painted tokens
+
+The palette gains keys for every colour §2 found outside it. These are not decoration:
+each is read by a `paintEvent` or an icon painter, and each is on §4.7's checked list.
+
+| Token | Replaces | Painted by |
+| --- | --- | --- |
+| `switchon` | `GREEN` | `ToggleSwitch.paintEvent` — track when on |
+| `switchoff` | `RED` | `ToggleSwitch.paintEvent` — track when off |
+| `switchmark` | the `#ffffff` pen in `_paint_state_shape` | the bar-and-circle state cue |
+| `switchknob` | the `#ffffff` brush in `paintEvent` | the knob |
+| `switchrim` | the `#ffffff` and `#000000` pens under high contrast | the HC track outline and knob rim |
+| `trayidle` | `#888888` | `Updater._tray_icon` — the quiet disc |
+| `trayattn` | `TRAY_ATTENTION_COLOR` | the amber "updates waiting" disc |
+| `trayrim` | the `#ffffff` pen | the disc's rim |
+| `traymark` | `#3a2600` | the `!` inside the disc |
+
+`GREEN`, `RED` and `TRAY_ATTENTION_COLOR` stop being module constants. Nothing else reads
+them — `GREEN`/`RED` have one call site between them, in `ToggleSwitch.paintEvent`.
+
+### 4.4 How a painted widget gets its colours
+
+`oneup/gui/theme.py` gains one function, `current_palette()`, returning the palette
+`apply_app_theme` last resolved. A painter calls it; nothing binds a colour at import.
+
+This is `docs/specs/ONEUP-0034-gui-modules.md` §4.4's rule applied to a second kind of
+value, and for the same reason: a name bound with `from … import` keeps its own copy, so a
+theme change would leave the binding on the old colour and the switch would stay the colour
+it was at start-up. A function has no binding to go stale.
+
+`apply_app_theme` stays the single entry point. It resolves the palette, stores it, sets
+the stylesheet, and then repaints what the stylesheet cannot reach — which is the tray
+icon: `Updater._tray_icon` builds a `QIcon` and the result is handed to `setIcon` at two
+call sites only, neither of which fires on a theme change. Verified at `e7d3718`. A window
+holding a tray icon rebuilds it when the theme changes; a window with no tray does nothing.
+
+### 4.5 The preference
+
+Stored in `QSettings("OneUp", "OneUp")` under `theme`, as the **id**, defaulting to
+`system`.
+
+**The default argument is not the fallback.** Qt returns whatever is stored, valid or not —
+a `theme` key holding `Forrest`, or an id from a later version, comes back verbatim
+(*Source:* <https://doc.qt.io/qt-6/qsettings.html>). So the value is looked up in the theme
+table and an unknown id resolves to `system`. The stored value is **not** rewritten: a user
+who downgrades, starts once, and upgrades again gets their theme back.
+
+Follow system keeps today's behaviour exactly — `current_is_dark(app)` chooses `midnight`
+or `daylight`, and `colorSchemeChanged` re-applies. Under a named theme that signal
+changes nothing, because there is nothing left to follow.
+
+### 4.6 The picker
+
+A combo box, built by the window and re-parented into `SettingsDialog` alongside the text
+size and contrast controls — the pattern that dialog already uses, and the reason
+`docs/specs/ONEUP-0034-gui-modules.md` §4.2 calls it a host rather than an owner. It lists
+**Follow system** first, then the eight in §4.2's order. Choosing an entry applies it
+immediately: there is no OK button to press, matching every other control in that dialog.
+
+The control carries an accessible name like every other
+(`docs/standards/ui-and-accessibility.md` §2), and the labels are the only strings this
+item adds.
+
+### 4.7 The check
+
+A pure computation over a palette: linearise, weight, ratio. No Qt, no rendering, no
+screenshot — which is what lets it run over every theme in the suite in negligible time and
+what makes it cover a theme nobody has written yet.
+
+It is driven by a **table of pairs**, and that table is the substance of the check — a
+contrast function with no table checks nothing. Each row names a foreground token, the
+background token it is drawn on, and its threshold:
+
+- **4.5:1** where the foreground renders text: `header` on `win`, `tag` on `win`, `tname`
+  and `tdesc` on `rowcard`, `badgefg` on `badgebg`, `logfg` on `logbg`, `status` and
+  `lastrun` and `ghostfg` and `amber` on `card`, `lastrun` on `win`, `tipfg` on `tip`.
+- **3:1** where the foreground carries meaning without being text: `switchon` and
+  `switchoff` against `rowcard` and against `switchmark` and `switchknob`; `trayattn` and
+  `trayidle` against both window colours; `traymark` against `trayattn`; `focus` against
+  `win` and `card`; `ghostbd` against `card`.
+
+The pair table is asserted against the palette's key set, so a token added to the palette
+and forgotten in the table fails rather than passing silently.
+
+**Every theme is checked twice** — with the high-contrast overlay off and on. §7 requires
+the overlay to keep working on top of every theme, and an overlay is only meaningful if
+what it produces is measured.
+
+**The focus measurement is separate and per-theme.** For each theme, each focusable
+control's focus colour is measured against its own rest colour, against the same 3:1
+(`docs/standards/ui-and-accessibility.md` §5.4). No shipped palette clears it today except
+the dark ghost button, so every theme starts with an exception entry against ONEUP-0064 —
+the measurement is taken and recorded from the first palette, and turns into a gate the
+moment that item deletes the entries. Taking it later would mean re-authoring eight
+palettes to a number nobody measured them against.
+
+**A token that is checked by nothing is declared, not omitted.** Every palette key is
+either in the pair table or on an explicit decorative list carrying its reason. A key in
+neither fails the check — which is what stops a new token being added and quietly escaping
+measurement.
+
+### 4.8 Every pair the check fails today, and what happens to it
+
+The check is written first, so this list is what it prints on the first run. Nothing here
+is left to be noticed later.
+
+The ratios are §2's; they are not restated here.
+
+| Pair | Decision |
+| --- | --- |
+| light `lastrun` on `card` and on `win` | **Darkened** until both clear 4.5:1. It is ordinary body text and there is no reason to except it. This is the choice §7 asked ONEUP-0027 to make |
+| light `amber` on `card` | **Darkened** until it clears 4.5:1. It is warning text |
+| switch track "on" vs `switchmark` | **Fixed by tokenising.** `switchmark` is chosen per theme to clear 3:1 against both tracks — today it is a literal white with no say in the matter |
+| light switch track "on" vs `rowcard` | **Fixed by tokenising**, same mechanism |
+| `ghostbd` on `card`, both palettes | **Exception, with a roadmap id.** The ghost button's border is its boundary and 3:1 is right, but changing it is a visual decision that belongs to the redesign. Recorded against **ONEUP-0064** |
+| `logbd` on `logbg`, both palettes | **Exception, decoration.** The log panel is identified by its own background, which differs from `card` in both palettes; the border adds nothing that identifies it |
+| `disfg` on `disbg`, light | **Exception, out of WCAG's scope.** SC 1.4.3 exempts inactive components |
+| the accent gradient against `win`, light | **Exception, decoration.** The row's gradient border is a hover cue, and hover also changes `rowcard` to `rowhov`, so the border is not the cue on its own |
+
+**An exception is data, not a comment.** Each entry carries the pair, the measured ratio,
+the reason, and a roadmap id where the reason is "not yet fixed" rather than "not in
+scope". An entry missing any of those fails the check — which is what stops the exception
+list becoming the place failures go to be forgotten.
+
+## 5. Correctness invariants
+
+- **INV-1** Every theme supplies every key in the reference set, and no extra. *Test:*
+  `tests/gui-smoke.py` compares each theme's palette keys against the reference set and
+  builds every theme through `build_theme`. Breaks when a theme is added by copying
+  another and one key is missed — today that surfaces as a `KeyError` deep inside
+  `Template.substitute`; this names the key and the theme.
+
+- **INV-2** Every theme passes the contrast check on every pair in §4.7's table, with the
+  high-contrast overlay off and on, or the pair is on the exception list. *Test:* the new
+  check, run over all eight from `tests/gui-smoke.py`. Breaks on a theme authored by eye.
+
+- **INV-3** Every exception entry names its pair, its measured ratio, its reason, and a
+  roadmap id where it is a deferral. *Test:* the check validates the entries' shape before
+  it uses them, and fails on one that is incomplete. Breaks when a failing pair is
+  silenced by appending it bare.
+
+- **INV-4** §4.7's pair table covers every token in the palette that carries text or
+  meaning. *Test:* the check asserts the tokens named in the table against the palette's
+  key set, and fails on a palette key that is in neither the table nor a declared
+  decorative list. Breaks when a token is added to the palette and forgotten in the table,
+  which would otherwise leave a new colour checked by nothing.
+
+- **INV-5** No colour literal is written anywhere under `oneup/gui/` outside `theme.py`.
+  *Test:* a grep gate in `local-CI.sh` fails on `QColor(` with a literal argument in any
+  form — a `#rrggbb` string, a colour name, numeric channels — and on `Qt.white`,
+  `Qt.black` and their siblings. **It does not catch a colour computed at run time**, a
+  `QColor` reconstructed from parts; nothing does, and INV-6's repaint check is what would
+  notice the effect. Breaks the moment someone adds a painted widget the way the two
+  existing ones were written.
+
+- **INV-6** A painted widget reads its colours through the module, never a name bound at
+  import. *Test:* the same gate fails on `from …theme import` of any palette token; and
+  `tests/gui-smoke.py` switches theme and samples the switch's rendered pixels, asserting
+  the track is the new theme's colour and not the start-up one — the suite already samples
+  a `ToggleSwitch`'s pixels for the colour-never-alone check, so the technique is in place.
+  Breaks silently otherwise: the app looks themed everywhere except the control that shows
+  state.
+
+- **INV-7** Switching theme applies to the window and to every open dialog at once, with
+  no restart. *Test:* `tests/gui-smoke.py` opens each dialog, switches theme, and asserts
+  the application stylesheet changed and that **no** widget among the application's
+  top-level windows and their children carries a stylesheet of its own. Breaks the way
+  `docs/standards/ui-and-accessibility.md` §6.1 names: a per-widget `setStyleSheet`.
+
+- **INV-8** A theme change rebuilds the tray icon. *Test:* `tests/gui-smoke.py` enables the
+  tray, captures the icon's pixmap, switches theme, and asserts the pixmap differs. Breaks
+  today by construction — `setIcon` is called on a check result and in `_ensure_tray`, and
+  by nothing else.
+
+- **INV-9** Under Follow system the desktop's light/dark switch still re-applies the theme
+  live; under a named theme it does not. *Test:* `tests/gui-smoke.py` drives
+  `colorSchemeChanged` under both settings and asserts the stylesheet changes only under
+  Follow system. Breaks by wiring the signal to re-read the desktop unconditionally, which
+  would override the user's choice every time they locked their screen.
+
+- **INV-10** An unrecognised stored theme id starts the application in Follow system, and
+  leaves the stored value alone. *Test:* `tests/gui-smoke.py` writes a junk id into
+  `QSettings`, constructs the window, asserts it starts in Follow system and that the
+  stored value is unchanged. Breaks because Qt returns a stored value in preference to the
+  default, so `value("theme", "system")` is not the fallback it looks like.
+
+- **INV-11** What is stored is the theme's id, never its displayed label. *Test:*
+  `tests/gui-smoke.py` selects a theme, reads the raw `QSettings` value, and asserts it is
+  the id. Breaks when the label is stored and the user then changes language: the stored
+  theme stops resolving, and INV-10 silently returns them to Follow system.
+
+- **INV-12** Every theme's focus cue is measured against its own rest state, and either
+  reaches 3:1 or carries an exception naming **ONEUP-0064**. *Test:* the focus measurement
+  in §4.7, over every theme, through §4.8's exception machinery. Breaks on a theme that is
+  added with neither a passing measurement nor an entry — which is the only outcome that
+  loses the number. It cannot yet be a bare 3:1 gate: all four of today's cues measure
+  between 1.14:1 and 3.91:1 (`docs/standards/ui-and-accessibility.md` §5.4), so gating on
+  it now would fail the suite for a gap this item does not own. When ONEUP-0064 picks its
+  treatment the entries are deleted and the gate bites without another spec.
+
+## 6. Failure modes
+
+- **A theme is authored by eye and one pair is unreadable.** A user picks it and cannot
+  read the last-run line. INV-2; and the reason the check is written before the first new
+  palette, not after the eighth.
+- **A painted widget keeps its old colour.** The application repaints around an unchanged
+  switch, which is the one control showing state. INV-5 and INV-6. The two ways in are a
+  new literal and a bound import, and there is a gate for each.
+- **The exception list becomes a silencer.** Each failure gets appended, the check goes
+  green, and it now proves nothing. INV-3 — an entry without a reason is itself a failure.
+- **A dialog sets its own stylesheet.** It desyncs from every later theme change and from
+  the light/dark switch. `docs/standards/ui-and-accessibility.md` §6.1 forbids it; INV-7
+  catches it.
+- **A stored theme id is unknown.** Either from a downgrade or a hand-edited config. The
+  application must start; it must not rewrite the value, or the downgrade is one-way.
+  INV-10.
+- **The label is stored instead of the id.** Nothing breaks until translation lands, and
+  then every user's theme resets on a language change. INV-11.
+- **The tray badge stays in the old palette.** It is small, it is the only thing on screen
+  when the window is closed, and nothing points at it. INV-8.
+
+## 7. Tests
+
+| Locks in | Test | New? |
+| --- | --- | --- |
+| INV-1 | `tests/gui-smoke.py` — the key-set and build sweep | new |
+| INV-2, INV-3, INV-4, INV-12 | the contrast check, driven from `tests/gui-smoke.py` | new |
+| INV-5, INV-6 | `local-CI.sh` grep gate, plus a repaint check in `tests/gui-smoke.py` | new gate, new check |
+| INV-7 | `tests/gui-smoke.py` — dialog open across a theme switch | new |
+| INV-8 | `tests/gui-smoke.py` — tray pixmap across a theme switch | new |
+| INV-9 | `tests/gui-smoke.py` — `colorSchemeChanged` under both settings | new |
+| INV-10, INV-11 | `tests/gui-smoke.py` — the stored-value checks | new |
+
+The check is a module under `oneup/gui/`, not a test helper, because it is a computation
+the application could also expose and because a helper living in `tests/` cannot be
+imported by anything else. `tests/gui-smoke.py` drives it.
+
+Two things the suite must keep doing while this lands, both from
+`docs/standards/testing.md`: the `HOME` redirect stays module-level and runs before
+`QApplication` is constructed (§2.2), and a passing run stays silent apart from the known
+teardown noise (§7). The theme tests write to `QSettings`, which the `HOME` redirect
+already sandboxes.
+
+**`./local-CI.sh` is green at every commit.** The check lands and passes — against the
+exception list §4.8 fixes — before the first new palette is authored.
+
+## 8. Docs & release
+
+- **`CHANGELOG.md`** — one `Added` entry for the picker, and one `Fixed` for the contrast
+  corrections §4.8 makes to the two shipped palettes. The second is a user-visible change
+  in a spec that is otherwise additive, and it should not hide inside the first.
+- **`docs/standards/ui-and-accessibility.md`** — §7's "**This check does not exist yet**"
+  paragraph, and its statement that ONEUP-0027 decides the `lastrun` case, both become
+  history. Two **What checks this** rows go stale together: §7's, which says the check is
+  this item's to write, and §5.4's, which says *"nothing computes contrast anywhere in the
+  suite"* — after this lands, something does, and 0064's remaining obligation is the
+  treatment rather than the measurement. §3's tray-badge row names `#3a2600` as a literal,
+  which becomes `traymark`.
+- **`docs/reference/`** — nothing. A theme is not a contract between the two halves.
+- **`docs/standards/testing.md`** §1's suite table gains nothing new: the check is driven
+  from `tests/gui-smoke.py` rather than being its own programme.
+- **`docs/design/oneup-2.0.md`** §1's one-line description of this item, and the ONEUP-0027
+  row naming the spec as *to be written*.
+- **`README.md`** — it describes OneUp as following *"your desktop's **light/dark** theme"*
+  and says the high-contrast mode "works with both the light and the dark scheme". Both
+  stay true and both stop being the whole truth.
+- **No version bump of its own.** This ships as part of 2.0.0, which the design's §7 gate
+  governs.
+
+## 9. Alternatives considered (and rejected)
+
+- **Eight themes each with a light and a dark variant.** Sixteen palettes, and Follow
+  system would then mean two things — which pair, and which half of it. Rejected as twice
+  the authoring and twice the check surface for a choice the picker already offers: a user
+  who wants the desktop followed picks Follow system.
+- **Deriving the eight from a base hue programmatically.** Attractive, and it fails exactly
+  where it matters: a generated palette has no way to satisfy a 3:1 boundary except by
+  luck, so every generated theme would need the same check, hand-corrected. Authoring six
+  palettes against a check is less work than debugging a generator against it.
+- **Handing painted colours to widgets as `qproperty-` assignments in the QSS**, the way
+  `highContrast` is handed to `ToggleSwitch` today. Rejected on two counts: the tray icon is
+  a `QIcon` built in a method, with no widget to carry a property; and, as the `_QSS`
+  comment records, a `qproperty-` assignment is not reverted when its rule stops matching,
+  so every theme would have to restate every one of them or inherit the last theme's.
+- **A `QPalette` per theme instead of a palette dictionary.** Qt's palette roles cover
+  window, base, text and highlight — not `rowcard`, `badgebg`, `switchmark` or nine tray
+  and switch tokens. Half the palette would live in `QPalette` and half in a dictionary,
+  which is the split that produces "themed everywhere except one widget".
+- **Shipping the check as a review step rather than a test.** Rejected by
+  `docs/standards/ui-and-accessibility.md` §7 in terms: a computation over the palette
+  covers themes added later, and a review step covers the themes somebody remembered.
+
+## 10. Out of scope
+
+- **Custom or user-authored themes.** Reading a palette from a file is a new input to
+  validate and a new failure mode at start-up. The eight are built in.
+- **Per-widget or per-dialog theming.** `docs/standards/ui-and-accessibility.md` §6.1
+  forbids it and INV-7 tests for it.
+- **Choosing the ringless focus treatment.** ONEUP-0064's, per the design's §5.2 ordering.
+  This spec provides the per-theme measurement it will be judged by.
+- **Changing any layout, spacing or wording.** A theme supplies colours only — §7's first
+  consequence. The redesign is ONEUP-0064.
+- **Translating the eight labels.** ONEUP-0032 comes last and wraps every string at once;
+  wrapping these now would mean wrapping them twice. §4.1 keeps the id separate from the
+  label so that item changes nothing but the label.
+
+## 11. Cold-eyes loop log
+
+| Loop | Date | Findings | Outcome |
+| --- | --- | --- | --- |
