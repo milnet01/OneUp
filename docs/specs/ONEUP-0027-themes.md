@@ -40,15 +40,27 @@ inherits it.
 
 **Two things are missing, and both were measured before this spec was written.**
 
-**The theme does not reach every colour.** A stylesheet cannot touch a widget that paints
-itself, and two of them do. `ToggleSwitch.paintEvent` fills its track from the module
-constants `GREEN` and `RED`, draws the state shape and the knob with a literal
-`QColor("#ffffff")`, and rims them with `#ffffff` and `#000000` under high contrast.
-`Updater._tray_icon` paints the idle disc `#888888`, the attention disc
-`TRAY_ATTENTION_COLOR`, its rim `#ffffff` and its `!` `#3a2600`. Ten colours in all, none
-of them reachable by any theme — and they are the surfaces carrying state meaning
-(`docs/standards/ui-and-accessibility.md` §3 names two of the three live cues here). A
-theme that could not change them would repaint the application around an unchanged switch.
+**The theme reaches only the `$tokens`, and a great many colours are not tokens.** Two
+places, both measured at `e7d3718`.
+
+A stylesheet cannot touch a widget that paints itself, and two of them do.
+`ToggleSwitch.paintEvent` fills its track from the module constants `GREEN` and `RED`,
+draws the state shape and the knob with a literal `QColor("#ffffff")`, and rims them with
+`#ffffff` and `#000000` under high contrast. `Updater._tray_icon` paints the idle disc
+`#888888`, the attention disc `TRAY_ATTENTION_COLOR`, its rim `#ffffff` and its `!`
+`#3a2600`. Ten colours, and they are the surfaces carrying state meaning — two of the three
+cue pairings `docs/standards/ui-and-accessibility.md` §3 lists are painted here, the third
+being an ordinary label.
+
+**And the stylesheet itself is not all tokens.** `_QSS` carries **thirty** hex literals,
+twelve of them distinct, that no substitution touches: the Run button's white label and its
+hover and pressed gradients, the link button's hover, the danger-button family, and
+`#4aa3ff` — the accent's own first stop — written out directly in eight places. A theme
+that set `accent` and left those would recolour the application around a button that stayed
+azure.
+
+Between them that is the whole of what a theme would fail to reach: the two controls that
+show state, and the one button the user presses.
 
 **The check §7 requires does not exist, and the palettes shipping today do not all pass
 it.** Computed at `e7d3718` with the WCAG 2.2 formula — relative luminance
@@ -82,7 +94,7 @@ carrying meaning.
 | **Eight** themes to start with | the user, 2026-07-27 | §4.2 lists them; the count is a starting point, not a ceiling — §4.1's contract is what makes a ninth cheap |
 | **Follow system** is the initial default | the user, 2026-07-27 | §4.5; it is not a theme but a mode, and it is what an unrecognised stored value falls back to |
 | The picker lives in **Settings** | the user, 2026-07-27 | §4.6 |
-| Themes are **required for 2.0**, not optional | the user, 2026-07-26 | `docs/design/oneup-2.0.md` §1; there is no "it is only optional" exemption from the check |
+| Themes are **required for 2.0**, not optional | the user, 2026-07-26 | `docs/design/oneup-2.0.md` §1. `docs/standards/ui-and-accessibility.md` §7 owns the consequence: a theme that cannot pass is not shipped, optional or not |
 | The on/off switch form is not reconsidered | the user, standing | `docs/standards/ui-and-accessibility.md` §3; a theme recolours the switch and may not replace it |
 
 **The eight names in §4.2 are this spec's proposal, not the user's.** They can be changed
@@ -99,18 +111,25 @@ spec obeys them and discharges the two jobs §7 hands it: write the check, and s
 
 The ringless focus treatment is **ONEUP-0064**'s to pick. `docs/design/oneup-2.0.md` §5.2
 lands the redesign first for that reason. This spec re-takes the measurement for each
-palette it adds — `docs/standards/ui-and-accessibility.md` §5.4, and the design's own row
-for ONEUP-0027 — but does not choose the treatment.
+palette it adds — `docs/standards/ui-and-accessibility.md` §5.4, and the design's
+**ONEUP-0064** row, which is where that obligation is written — but does not choose the
+treatment.
 
 ## 4. Design
 
 ### 4.1 What a theme is here
 
 A theme is a `(id, label, palette)` triple. The palette is a dictionary of the same shape
-as `_DARK` and `_LIGHT`, plus the painted tokens §4.3 adds, and it is complete: every key
-the reference set names, every time. `docs/standards/ui-and-accessibility.md` §7 wants a
-missing key to raise at substitution rather than half-apply, and that stays true — the
-reference-set assertion in §5 fails first and more usefully.
+as `_DARK` and `_LIGHT`, plus every token §4.3 adds — the nine painted ones and the two
+accents, which `build_theme` injects today rather than reading from the palette. That union
+is **the reference set**, and a palette is complete: every key in it, every time.
+`docs/standards/ui-and-accessibility.md` §7 wants a missing key to raise at substitution
+rather than half-apply, and that stays true — the reference-set assertion in §5 fails first
+and more usefully.
+
+The high-contrast overlay is **not** part of the reference set. §7 keeps it an overlay
+rather than a theme, so there are two of them — one dark, one light — shared by all eight,
+and they carry their own smaller key set. §4.7 says what checking them means.
 
 The `id` is a lowercase slug, is what gets stored, and never changes. The `label` is what
 Settings shows and is the only translatable part (ONEUP-0032).
@@ -144,8 +163,10 @@ keep today's azure→cyan, so the signature is preserved where it is the default
 
 ### 4.3 The painted tokens
 
-The palette gains keys for every colour §2 found outside it. These are not decoration:
-each is read by a `paintEvent` or an icon painter, and each is on §4.7's checked list.
+The palette gains keys for every colour §2 found outside it, and §4.7 places every one of
+them in one of its four lists. The nine below are read by a `paintEvent` or an icon
+painter; the two accents are read by the stylesheet, and are here because `build_theme`
+injects them rather than taking them from the palette.
 
 | Token | Replaces | Painted by |
 | --- | --- | --- |
@@ -153,14 +174,24 @@ each is read by a `paintEvent` or an icon painter, and each is on §4.7's checke
 | `switchoff` | `RED` | `ToggleSwitch.paintEvent` — track when off |
 | `switchmark` | the `#ffffff` pen in `_paint_state_shape` | the bar-and-circle state cue |
 | `switchknob` | the `#ffffff` brush in `paintEvent` | the knob |
-| `switchrim` | the `#ffffff` and `#000000` pens under high contrast | the HC track outline and knob rim |
+| `switchtrackrim` | the `#ffffff` pen under high contrast | the HC outline around the track |
+| `switchknobrim` | the `#000000` pen under high contrast | the HC rim around the knob |
 | `trayidle` | `#888888` | `Updater._tray_icon` — the quiet disc |
 | `trayattn` | `TRAY_ATTENTION_COLOR` | the amber "updates waiting" disc |
 | `trayrim` | the `#ffffff` pen | the disc's rim |
 | `traymark` | `#3a2600` | the `!` inside the disc |
+| `accent`, `btn_accent` | `ACCENT`, `BTN_ACCENT` | the gradient on a hovered row, and the fill of the Run button |
+
+**The two high-contrast rims are two tokens, not one.** They are different colours today
+and for a reason: the white pen outlines the track against a coloured fill, the black pen
+rims the knob against the white knob beneath it. One token would paint both the same, and
+against a light `switchknob` the knob's rim would vanish under exactly the setting it
+exists to serve.
 
 `GREEN`, `RED` and `TRAY_ATTENTION_COLOR` stop being module constants. Nothing else reads
 them — `GREEN`/`RED` have one call site between them, in `ToggleSwitch.paintEvent`.
+`ACCENT` and `BTN_ACCENT` stop being module constants too: `build_theme` injects them into
+the palette today, which is the seam this widens.
 
 ### 4.4 How a painted widget gets its colours
 
@@ -213,22 +244,45 @@ what makes it cover a theme nobody has written yet.
 
 It is driven by a **table of pairs**, and that table is the substance of the check — a
 contrast function with no table checks nothing. Each row names a foreground token, the
-background token it is drawn on, and its threshold:
+background token it is drawn on, and its threshold. **Where a token renders on more than
+one surface, every surface is a row**: the task labels are read on a hovered row as well as
+a resting one, and the progress bar's text is read on the bar, not on the card.
 
-- **4.5:1** where the foreground renders text: `header` on `win`, `tag` on `win`, `tname`
-  and `tdesc` on `rowcard`, `badgefg` on `badgebg`, `logfg` on `logbg`, `status` and
-  `lastrun` and `ghostfg` and `amber` on `card`, `lastrun` on `win`, `tipfg` on `tip`.
-- **3:1** where the foreground carries meaning without being text: `switchon` and
-  `switchoff` against `rowcard` and against `switchmark` and `switchknob`; `trayattn` and
-  `trayidle` against both window colours; `traymark` against `trayattn`; `focus` against
-  `win` and `card`; `ghostbd` against `card`.
+- **4.5:1**, the foreground renders text — `header` on `win`; `tag` on `win`; `tname` and
+  `tdesc` on `rowcard` and on `rowhov`; `badgefg` on `badgebg`; `logfg` on `logbg`;
+  `status`, `lastrun`, `ghostfg` and `amber` on `card`; `lastrun` on `win`; `status` on
+  `progbg`; `tipfg` on `tip`; and the Run button's label on `btn_accent`, against both
+  gradient stops.
+- **3:1**, the foreground carries meaning without being text — `switchon` and `switchoff`
+  against `rowcard`, against `rowhov`, and against `switchmark` and `switchknob`;
+  `switchtrackrim` against `switchon` and `switchoff`; `switchknobrim` against
+  `switchknob`; `trayattn` and `trayidle` against both window colours; `trayrim` against
+  `trayattn` and `trayidle`; `traymark` against `trayattn`; `focus` against `win` and
+  `card`; `ghostbd` against `card`.
+- **Declared decorative**, measured by nothing and each carrying its reason — `logbd` on
+  `logbg`, `accent` on `win`, `progbg`'s own fill, and the surface tokens that are only
+  ever a background (`win`, `card`, `rowcard`, `rowhov`, `badgebg`, `logbg`, `tip`).
+- **Declared exempt** — `disfg` on `disbg`. WCAG 2.2 SC 1.4.3 puts inactive components
+  outside its scope.
 
-The pair table is asserted against the palette's key set, so a token added to the palette
-and forgotten in the table fails rather than passing silently.
+**Every token in the reference set appears in exactly one of those four lists.** That is
+INV-4, and it is what stops a token being added and quietly escaping measurement. §4.8's
+decisions are decisions about rows in these lists, not about pairs the check never computes.
 
-**Every theme is checked twice** — with the high-contrast overlay off and on. §7 requires
-the overlay to keep working on top of every theme, and an overlay is only meaningful if
-what it produces is measured.
+**High contrast is checked separately, and it is not eight more runs of the same thing.**
+The overlay is appended after the base sheet and overrides nearly every selector the base
+styles, so with it on most surfaces come from the shared overlay rather than from the
+theme — and the overlay carries its own smaller key set (`text`, `border`, `btn`, `btntext`
+and the rest), which the lists above never name. Two consequences, and the check does both:
+
+- The overlay's own pairs are checked **once per base**, dark and light, because there are
+  only two overlays and all eight themes share them.
+- The surfaces the overlay does **not** reach are checked **per theme, with the overlay
+  on**. That is the painted set — the switch and the tray icon take no QSS at all — so a
+  theme whose switch track is legible on its own window can still fail against the
+  overlay's pure black or white. That combination is the one §7 means when it says a new
+  theme is checked with the overlay on as well as off, and it is the only part of the
+  high-contrast surface a theme can still break.
 
 **The focus measurement is separate and per-theme.** For each theme, each focusable
 control's focus colour is measured against its own rest colour, against the same 3:1
@@ -274,28 +328,30 @@ list becoming the place failures go to be forgotten.
   another and one key is missed — today that surfaces as a `KeyError` deep inside
   `Template.substitute`; this names the key and the theme.
 
-- **INV-2** Every theme passes the contrast check on every pair in §4.7's table, with the
-  high-contrast overlay off and on, or the pair is on the exception list. *Test:* the new
-  check, run over all eight from `tests/gui-smoke.py`. Breaks on a theme authored by eye.
+- **INV-2** Every theme passes the contrast check on every pair §4.7 gives it — the base
+  lists, and the painted set again with the high-contrast overlay on — or the pair carries
+  an exception. *Test:* the new check, run over all eight from `tests/gui-smoke.py`, plus
+  the two overlays checked once each. Breaks on a theme authored by eye.
 
 - **INV-3** Every exception entry names its pair, its measured ratio, its reason, and a
   roadmap id where it is a deferral. *Test:* the check validates the entries' shape before
   it uses them, and fails on one that is incomplete. Breaks when a failing pair is
   silenced by appending it bare.
 
-- **INV-4** §4.7's pair table covers every token in the palette that carries text or
-  meaning. *Test:* the check asserts the tokens named in the table against the palette's
-  key set, and fails on a palette key that is in neither the table nor a declared
-  decorative list. Breaks when a token is added to the palette and forgotten in the table,
-  which would otherwise leave a new colour checked by nothing.
+- **INV-4** Every token in the reference set appears in exactly one of §4.7's four lists —
+  4.5:1, 3:1, declared decorative, or declared exempt. *Test:* the check compares the union
+  of the four against the palette's key set and fails on a token in none of them, or in more
+  than one. Breaks when a token is added to the palette and forgotten, which would
+  otherwise leave a new colour measured by nothing while the check still reported green.
 
-- **INV-5** No colour literal is written anywhere under `oneup/gui/` outside `theme.py`.
-  *Test:* a grep gate in `local-CI.sh` fails on `QColor(` with a literal argument in any
-  form — a `#rrggbb` string, a colour name, numeric channels — and on `Qt.white`,
-  `Qt.black` and their siblings. **It does not catch a colour computed at run time**, a
-  `QColor` reconstructed from parts; nothing does, and INV-6's repaint check is what would
-  notice the effect. Breaks the moment someone adds a painted widget the way the two
-  existing ones were written.
+- **INV-5** No colour literal survives outside a palette: not in a painter, and not in the
+  stylesheet template either. *Test:* a grep gate in `local-CI.sh` fails on a `#rrggbb`
+  string, a `QColor(` with a literal argument in any form, and `Qt.white`/`Qt.black` and
+  their siblings — anywhere under `oneup/gui/` except inside the palette dictionaries
+  themselves. **It does not catch a colour computed at run time**; nothing does, and INV-6's
+  repaint check is what would notice the effect. Breaks two ways, and both exist today: a
+  painted widget written the way the two existing ones were, and a literal dropped into the
+  stylesheet where thirty already sit.
 
 - **INV-6** A painted widget reads its colours through the module, never a name bound at
   import. *Test:* the same gate fails on `from …theme import` of any palette token; and
@@ -347,9 +403,10 @@ list becoming the place failures go to be forgotten.
 - **A theme is authored by eye and one pair is unreadable.** A user picks it and cannot
   read the last-run line. INV-2; and the reason the check is written before the first new
   palette, not after the eighth.
-- **A painted widget keeps its old colour.** The application repaints around an unchanged
-  switch, which is the one control showing state. INV-5 and INV-6. The two ways in are a
-  new literal and a bound import, and there is a gate for each.
+- **A colour is left outside the palette.** The application repaints around an unchanged
+  switch, or around a Run button that stayed azure — the one control showing state, and the
+  one the user presses. INV-5 and INV-6. Three ways in, and a gate for each: a literal in a
+  painter, a literal in the stylesheet template, and a token bound by name at import.
 - **The exception list becomes a silencer.** Each failure gets appended, the check goes
   green, and it now proves nothing. INV-3 — an entry without a reason is itself a failure.
 - **A dialog sets its own stylesheet.** It desyncs from every later theme change and from
@@ -400,6 +457,11 @@ exception list §4.8 fixes — before the first new palette is authored.
   suite"* — after this lands, something does, and 0064's remaining obligation is the
   treatment rather than the measurement. §3's tray-badge row names `#3a2600` as a literal,
   which becomes `traymark`.
+- **`docs/specs/ONEUP-0034-gui-modules.md`** §4.2 — its module table is the contract for
+  where each module-level name lives, and this work deletes four of the names it places:
+  `GREEN`, `RED` and `ACCENT`/`BTN_ACCENT` from the `theme.py` row, and
+  `TRAY_ATTENTION_COLOR` from `tray.py`'s `TRAY_*`. `theme.py` gains `current_palette()`
+  and the palette table in their place.
 - **`docs/reference/`** — nothing. A theme is not a contract between the two halves.
 - **`docs/standards/testing.md`** §1's suite table gains nothing new: the check is driven
   from `tests/gui-smoke.py` rather than being its own programme.
@@ -452,3 +514,4 @@ exception list §4.8 fixes — before the first new palette is authored.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 1 | 2026-07-27 | 3 lanes; 2 critical, 3 high, 3 medium, 1 low — **9 verified, 0 dismissed** | Both criticals were the check's own reach. `switchrim` stood for two different colours — the white pen outlining the track and the black one rimming the knob — so one key could not hold it, under exactly the high-contrast setting the token exists to serve; it is two tokens now. And "checked twice, overlay off and on" was undefined: the overlay carries a disjoint key set and overrides nearly every selector, so a base-palette pair has no meaning with it on. §4.7 now says what it does mean — the overlay's own pairs once per base, and the painted set per theme, which is the only part of the high-contrast surface a theme can still break. §4.7's pair list also turned out to omit five pairs §2 and §4.8 both treat as checked, plus two the stylesheet has and nobody had named: the progress bar's text on its own fill, and the task labels on a hovered row. Verifying that found the larger miss — **§2 counted the ten literals in the painters and none of the thirty inside `_QSS`**, including `#4aa3ff` written out in eight places, so a theme could set `accent` and leave the Run button azure. INV-5 now covers the template as well as the painters |
