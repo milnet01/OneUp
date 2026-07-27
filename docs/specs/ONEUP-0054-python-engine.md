@@ -23,9 +23,9 @@ points at the design for the rest so the two cannot drift.
 ## 1. Goal
 
 `update_system.sh` is replaced by a Python package under `oneup/engine/`. The
-`@@MARKER@@` protocol, the command-line flags, the exit codes and the state files stay
-**byte-identical**, so the existing engine test suite proves the rewrite instead of being
-rewritten for it. v1 and v2 can be run side by side and compared, and the switch-over is a
+`@@MARKER@@` protocol and the command-line flags stay **byte-identical**, and the exit codes
+and the state-file layout are unchanged, so the existing engine test suite proves the
+rewrite instead of being rewritten for it. v1 and v2 can be run side by side and compared, and the switch-over is a
 one-line change in the window, reversible by reverting it.
 
 ## 2. Background
@@ -94,7 +94,7 @@ and works. *"It is hard"* is a cost, not an objection.
 ### 3.1 The relationship to the GUI split
 
 `ONEUP-0034` splits `updater.py` into `oneup/gui/`. It shares this rewrite's **package**
-(`docs/design/oneup-2.0.md` §4) and its **branch** (§5.3), and it is the first *substantial* work on that branch (§5.2) —
+(`docs/design/oneup-2.0.md` §4) and its **branch** (that document's §5.3), and it is the first *substantial* work on that branch (its §5.2) —
 but it is a separate roadmap item with a separate spec, and it is **not** part of this
 spec's gate. It is behaviour-preserving where this is not, so entangling the two would mean
 a failing test could not say which change broke it.
@@ -111,7 +111,7 @@ read as one item. It does share the package. It is not one item.
   than a one-line summary can be: §1.4 records the three `pkexec` actions the window may ask
   for (repository edits, service restarts, rollback) and the `systemctl reboot` that goes
   through neither, and §3.1 records that exactly one `sudo` in the engine passes `-A` and
-  `-p` — the other twenty are plain `sudo` deliberately. The rewrite preserves that shape
+  `-p`, and that the rest are plain `sudo` deliberately — that standard owns the split. The rewrite preserves that shape
   rather than tidying it.
 - **The marker protocol.** Every marker in `docs/reference/marker-protocol.md` §3 keeps
   its name, field order and semantics. A rewrite that also redesigns its own contract
@@ -133,9 +133,9 @@ read as one item. It does share the package. It is not one item.
 - **The engine's log directory.** The engine writes each run's log to
   `~/Documents/update-logs/`, where a user can find it. The *directory* has no override;
   the individual run's log file does, via `--log=FILE`, which every test scenario uses.
-  `docs/standards/files-and-naming.md` §7 Trap 2 (ONEUP-0058) obliges the rewrite to stop
-  creating that directory on the real machine during tests — either honour an override or
-  create it only when about to write.
+  (Trap 2 of that standard's §7 obliges the rewrite to stop creating that directory on the
+  real machine during tests. That is a change rather than a constant, so it is a §4.6
+  stage 2 deliverable — ONEUP-0058 — not part of this list.)
 - **Standalone terminal use.** `oneup-engine --steps=system,cache` must be as usable in a
   plain terminal as `./update_system.sh` is today.
 
@@ -205,14 +205,21 @@ split must obey. Paths are relative to `oneup/engine/`.
 | Module | Responsibility | Replaces |
 | --- | --- | --- |
 | `__main__.py` | drive one run: parse the flags, dispatch the steps in order, summarise | the top-level script body, `step_selected`, `usage` |
-| `markers.py` | every marker emitter — the protocol in **one** place | `marker`, `emit_progress`, and every `marker NAME` call site |
+| `markers.py` | every marker emitter — the protocol in **one** place | `marker`, `emit_progress`, `emit_check`, `notify_send`, and every `marker NAME` call site |
 | `privilege.py` | become root once, and stay root safely for the run | `sudo_init`, `sudo_capture`, `reap_orphaned_askpass`, `cleanup` |
 | `proc.py` | run a child process and stream it — deadline, incremental bytes, cooperative cancel | the ad-hoc pipelines, `progress_filter`, `stop_pending` |
 | `runstate.py` | own the two state files and the log paths (§4.1.1) | the logging `exec` preamble and the state writes around it |
-| `parsers.py` | turn zypper's text into values — **pure functions, no I/O, no privilege** | `to_bytes`, `lock_holder`'s parsing, the progress and download-size wordings, `lr` output |
-| `repos.py` | refresh, skip and disable repositories | `refresh_repos`, `enabled_repo_aliases`, `find_failing_repos`, `disable_repo`, `release_zypper_lock` |
+| `parsers.py` | turn zypper's text into values — **pure functions, no I/O, no privilege** | `to_bytes`, `lock_holder`'s parsing, the progress and download-size wordings, `lr` output, `reboot_reason_from_log` |
+| `repos.py` | refresh, skip and disable repositories | `refresh_repos`, `enabled_repo_aliases`, `find_failing_repos`, `disable_repo`, `release_zypper_lock`, `valid_alias`, `repo_scoped_failure` |
 | `steps.py` | run the five steps: `system, flatpak, firmware, orphans, cache` | `begin_step`, `end_step`, `run_system_upgrade`, the per-step bodies |
 | `actions.py` | the runs that are not an update: `--check`, `--size=`, the three auth actions, snapshots | `run_check`, `run_size`, `grant_auth`, `revoke_auth`, `auth_status`, `thin_snapshots`, `build_auth_rule` |
+
+The table places **every** function in `update_system.sh`; it is a map, not a sample. Two
+placements are worth calling out because losing them would be a real regression:
+`valid_alias` is the engine-side shape guard `docs/standards/security.md` §4 requires before
+an alias reaches a privileged command, and `reboot_reason_from_log` builds the optional
+reason field of `@@REBOOT@@` (`docs/reference/marker-protocol.md` §4.8) that INV-1 turns on.
+`oneup/engine/__init__.py` exists and is empty — `python3 -m oneup.engine` needs it.
 
 **`parsers.py` and `repos.py` are deliberately two modules, not one.** An earlier draft had
 a single `zypper.py` holding "pure parsers **plus** the repo refresh/skip/disable logic" —
@@ -222,10 +229,10 @@ importing the parsers to table-test them would drag in the code that calls `sudo
 ### 4.3 What the move to Python buys
 
 Each claim is falsifiable and names the test that would falsify it. This section is the
-whole justification for the branch — so it matters that **three of the four are demonstrated
-by the gate and the fourth is not**: §4.3.3 is deliberately deferred past the switch, which
+whole justification for the branch — so it matters that **four of the five are demonstrated
+by the gate and the fifth is not**: §4.3.3 is deliberately deferred past the switch, which
 means the branch may prove it works but 2.0 does not ship it. Weigh the case on §4.3.1,
-§4.3.2 and §4.3.5.
+§4.3.2, §4.3.4 and §4.3.5.
 
 #### 4.3.1 The seven-prompt bug class becomes structurally impossible
 
@@ -346,10 +353,10 @@ each stage is what makes the next one safe to attempt.
 | # | Work | What it satisfies |
 | --- | --- | --- |
 | 1 | `ONEUP_ENGINE_CMD` indirection at all three call sites, on `main` | §4.4 — the suite still green on `main`, unchanged |
-| 2 | `__main__.py`'s flag parsing, plus `markers.py`, `runstate.py`, `proc.py`, `privilege.py`; `--help` and `--auth-status` only. Plus the two new scenarios this stage owes: the replacement keep-alive test (§4.3.5) and the absent-tool skip test (INV-9) | the `--auth-status` scenario passes against v2; INV-9 gains its first test ever, and INV-7's SIGKILL leg is replaced |
+| 2 | `__main__.py`'s flag parsing, plus `markers.py`, `runstate.py`, `proc.py`, `privilege.py`, and `actions.py`'s `auth_status` — enough for `--help` and `--auth-status`, nothing more. `runstate.py` also discharges `files-and-naming.md` §7 Trap 2 (ONEUP-0058): create the log directory only when about to write it. Plus the two new scenarios this stage owes: the replacement keep-alive test (§4.3.5) and the absent-tool skip test (INV-9) | the `--auth-status` scenario passes against v2; INV-9 gains its first test ever, and INV-7's SIGKILL leg is replaced |
 | 3 | `actions.py`'s `--check` — read-only and needs no root, so the safest real behaviour to build first | every `--check` scenario green against v2 |
 | 4 | `parsers.py`, `repos.py`, and `actions.py`'s `--size=`; parser unit tests | §4.3.4; the `--size` scenarios green |
-| 5 | `steps.py` — the five steps; snapshots, remedies, repo skipping. The rest of `actions.py` (the three auth actions, snapshots). Plus §4.3.2's new scenario: a per-call deadline firing on a step other than the repo refresh | the remaining scenarios → G1 |
+| 5 | `steps.py` — the five steps; snapshots, remedies, repo skipping. The rest of `actions.py` (`--grant-auth`, `--revoke-auth`, snapshots). Plus §4.3.2's new scenario: a per-call deadline firing on a step other than the repo refresh | the remaining scenarios → G1 |
 | 6 | The differential harness | G2, and the list of what it cannot see |
 | 7 | The window pointed at v2 behind an environment switch | G3, G4, G5 |
 | 8 | A real run on the user's machine | G6 |
@@ -443,9 +450,17 @@ rewrite; this list is the index, not the mechanism. Scenario names are the ones 
   *Test:* a new scenario that runs the engine with PySide6 hidden from the import path —
   gate G5. New with this work.
 
+- **INV-13** The two state files keep the layout §4.1.1 pins, so a window can find and
+  follow a run the previous window started.
+  *Test:* the scenarios *"a real run records itself in a run-state file and clears it on
+  exit"* — which asserts lines 1–3 and the deletion — and *"a read-only --check run does NOT
+  touch the run-state file"*, which asserts the `RUN_STATE_OWNED` rule. **Line 4, the epoch
+  second, is asserted by nothing today**, so a v2 that dropped it would pass every gate; the
+  §4.6 stage 2 work that builds `runstate.py` owes that assertion.
+
 - **INV-12** A package-only change offers a service restart, not a reboot. This is the
-  fourth of `docs/standards/testing.md` §5's floor invariants, and the one the other eleven
-  here did not cover.
+  third of `docs/standards/testing.md` §5's four floor invariants, and the one the other
+  eleven here did not cover.
   *Test:* the scenario *"package-only change offers a SERVICE restart, not a reboot"*,
   whose `@@SERVICES@@` assertion is what proves it.
 
@@ -458,7 +473,7 @@ tests, not because the engine enforces it.
 
 | If this breaks | What happens | What limits the damage |
 | --- | --- | --- |
-| The rewrite re-introduces a fixed bug | a shipped regression | G1 plus G2: no assertion is rewritten, and the marker streams are diffed |
+| The rewrite re-introduces a fixed bug | a shipped regression | G1 plus G2: no existing assertion is weakened (`docs/design/oneup-2.0.md` §7), and the marker streams are diffed |
 | A behaviour lives only in Bash's semantics and nobody notices | v2 silently differs | the differential harness is *the* answer; what it cannot cover is listed in §4.5 and lands on G6 |
 | The branch stalls half-done | 2.0 never arrives | `main` ships frozen 1.4.0 throughout; abandoning costs nothing but the branch |
 | Scope creep — *"while we're rewriting, let's also…"* | the gate recedes | the protocol is frozen (§4.1) and §4.3.3 is explicitly deferred past the switch |
@@ -513,7 +528,7 @@ When the switch lands in stage 9:
 | Rewrite the engine and split the window together | same objection, different pair. The split is behaviour-preserving and the rewrite is not, so they must be separable (§3.1) |
 | Use Python bindings instead of shelling out to `zypper` | out of scope for all of 2.0 (`docs/design/oneup-2.0.md` §10). It would replace a proven call surface with an unproven one inside a rewrite that is already unproven |
 | Ship v2 as a beta alongside 1.4.0 | the user's rule: no partial 2.0 releases. Two engines in users' hands means bug reports nobody can attribute |
-| Rewrite the tests to suit the new engine | it removes the only evidence the rewrite is faithful. G1 requires that no assertion changes |
+| Rewrite the tests to suit the new engine | it removes the only evidence the rewrite is faithful. G1 permits additions and one named replacement, and nothing else (`docs/design/oneup-2.0.md` §7) |
 
 ## 10. Out of scope
 
@@ -531,4 +546,6 @@ When the switch lands in stage 9:
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| 1 | 2026-07-27 | 2 critical, 6 high, 6 medium, 7 low (this document's share of batch 2) | Both criticals were obligations this spec had accepted and not discharged. `docs/reference/marker-protocol.md` §8 says in terms that the state-file layout is pinned nowhere and that *this* spec must pin it; the spec instead cited §8 as the owner, so the contract existed in neither — now §4.1.1. And the SIGKILL keep-alive scenario, named twice as running "unchanged", `sed`s the keep-alive out of `update_system.sh` and executes it: against a Python engine it cannot run at all, so G1's "no assertion changed" had a hole nobody had written down. Also: `zypper.py` became `parsers.py` + `repos.py` (one responsibility each, and importing a parser no longer drags in `sudo`), INV-9's missing test became a stage-2 deliverable rather than an admission, and stage 9 stopped calling itself the 2.0.0 release |
+| 1 | 2026-07-27 | 2 critical, 6 high, 6 medium, 7 low — **19 verified, 2 dismissed** | Both criticals were obligations this spec had accepted and not discharged. `docs/reference/marker-protocol.md` §8 says in terms that the state-file layout is pinned nowhere and that *this* spec must pin it; the spec instead cited §8 as the owner, so the contract existed in neither — now §4.1.1. And the SIGKILL keep-alive scenario, named twice as running "unchanged", `sed`s the keep-alive out of `update_system.sh` and executes it: against a Python engine it cannot run at all, so G1's "no assertion changed" had a hole nobody had written down. Also: `zypper.py` became `parsers.py` + `repos.py` (one responsibility each, and importing a parser no longer drags in `sudo`), INV-9's missing test became a stage-2 deliverable rather than an admission, and stage 9 stopped calling itself the 2.0.0 release |
+| 2 | 2026-07-27 | 2 critical, 4 high, 5 medium, 6 low — **15 verified, 2 dismissed** | Nothing from loop 1 returned. What loop 2 found was mostly §4.1.1's own blast radius: the subsection written last loop to pin the state-file contract had the engine only *reading* `stop.request` when `cleanup` deletes it, and called line 3 the steps "in run order" when it is the `--steps=` value verbatim. §4.4 also forbade the two new scenarios §4.6 stage 2 commissions. Measured, not recalled: the window has **eight** hardcoded engine launches, not six — the two missed are the unattended headless timers |
+| 3 | 2026-07-27 | 4 high, 7 medium, 7 low — **16 verified, 2 dismissed** | Converging: no critical, and no structural claim wrong. The §4.2 module table turned out to be a partial map presented as a complete one — five engine functions had no home, two of them load-bearing (`valid_alias`, the alias guard `security.md` §4 requires, and `reboot_reason_from_log`, which feeds a marker field). §4.1.1 had been pinned as a contract with no invariant and no named test, so INV-13 now names the two scenarios that cover it and states plainly that line 4 is covered by neither. §4.3's own tally said "three of the four" of five |

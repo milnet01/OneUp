@@ -713,7 +713,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   that the existing engine suite then PROVES the rewrite instead of
   being rewritten for it.
 
-  Switch-over gate (all six): G1 engine suite green, no assertion changed; G2 v1 and
+  Switch-over gate (all six): G1 engine suite green, no existing assertion weakened; G2 v1 and
   v2 emit the same marker stream under identical mocks (new differential
   harness); G3 GUI suite green driving v2; G4 still exactly one password
   prompt per run; G5 engine imports no Qt and runs with PySide6 absent;
@@ -729,9 +729,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   (`tee -a -p` and the orphan-prone keep-alive loop). Python does NOT gain
   the ability to kill a root child — `sudo timeout` stays.
 
-  Nine stages, each ending with local-CI green on `v2`; phase 1 (an
-  ONEUP_ENGINE_CMD indirection in the test harness) lands on `main` first
-  and is a no-op there. `main` ships 1.x throughout; the switch is a 2.0.0
+  Nine stages; stage 1 (an ONEUP_ENGINE_CMD indirection in the test
+  harness) lands on `main` first and ends green there, and every stage
+  after it ends with local-CI green on `v2`. `main` ships 1.x throughout; the switch is a 2.0.0
   major bump. Keep ONEUP-0034 (splitting updater.py) separate — it is
   independent and must not be entangled with this gate.
   **Layman:** Rewrite the part of OneUp that does the actual updating in Python, the same language as the window, so the app has finer control over what it is running. Built on a side branch so the current version keeps working until the new one is provably better.

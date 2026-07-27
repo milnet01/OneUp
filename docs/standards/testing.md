@@ -294,7 +294,7 @@ with a line and inspect what it returns without running a whole scenario. The Py
   directly; the sandbox is for things that must spawn a process.
 
 The 2.0 release gates (`docs/design/oneup-2.0.md` §7) add **six** suite-level obligations:
-**G1** the engine suite passes with *no assertion changed*; **G2** v1 and v2 emit the same
+**G1** the engine suite passes with no existing assertion weakened (design §7 states exactly which suite changes it permits); **G2** v1 and v2 emit the same
 marker stream under identical mocks; **G3** the GUI suite is green with the window driving
 the new engine; **G4** a full run raises exactly one password prompt; **G5** the engine
 imports no Qt and runs with PySide6 absent, enforced by test; **G10** the GUI suite passes

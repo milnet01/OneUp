@@ -46,9 +46,9 @@ unless it is a defect in something already on the list.
 
 **2.0 replaces 1.4.0**, released from `main` at `dbef1a8`, after which `main` froze (§5.4).
 
-This section is the one place in the set that keeps dated measurements, because two
+This section is where **2.0's baseline** measurements live — other documents keep their own, for their own arguments — because two
 standards point here for them rather than repeat them — `docs/standards/coding.md` §4.1 for
-the module sizes and `docs/standards/testing.md` §2 for the suite tallies. The
+the module sizes and `docs/standards/testing.md` §1 for the suite tallies. The
 privileged-call total runs the other way: `docs/standards/security.md` §1.2 **owns** it and
 this section merely carries it, which is deliberate — the earlier arrangement, where two
 documents each derived the split, is what produced the contradiction that standard's first
@@ -61,15 +61,18 @@ every row, because the worst figure error this set has produced was an unnamed o
 | --- | --- | --- |
 | `update_system.sh` | 1,558 **lines** | `wc -l` |
 | `updater.py` | 3,719 **lines** — more than six times `coding.md` §4.1's 600-line ceiling, which is the whole case for ONEUP-0034 | `wc -l` |
-| Engine suite | 205 **assertions** over 76 **scenarios**, all passing | `./local-CI.sh` prints the assertion tally; the scenario figure is `grep -c '^TEST: ' tests/run-tests.sh` |
+| Engine suite | 205 **assertions** over 76 **scenarios**, all passing | `./local-CI.sh` prints the assertion tally; the scenario figure is `grep -c '^echo "TEST: ' tests/run-tests.sh` |
 | GUI smoke suite | 283 **assertions**, all passing | `./local-CI.sh` prints the tally |
 | `bump.py` functional test | 6 **assertions**, all passing | as above |
 | Privileged invocations in the engine | **34**, as measured at `58ea3bc` | `docs/standards/security.md` §1.2 owns the breakdown, the exclusions, and why `grep` alone gets it wrong. Unchanged since, because `update_system.sh` is |
 
-Three further figures are pinned by a decision rather than counted (`documentation.md`
-§6b.5) — but only one of the three has a gate under it, and saying which is the point:
+One further figure is exempt from §6b in the way `documentation.md` §6b.5 means — pinned by
+a decision *and* gated, so it cannot go stale unnoticed. The other two are pinned by a
+decision and gated by nothing, which by §6b.5's own test (*"if nothing fails when the number
+goes wrong, it is a measurement"*) makes them measurements. They are kept here, in §6b.4's
+form, with the gap named:
 
-| Pinned by | Value | What fails when the tree stops matching |
+| Pinned by | Value, as measured at `7a7afc1` | What fails when the tree stops matching |
 | --- | --- | --- |
 | `docs/standards/workflow.md` §5.1 — the six version sites | all six read **1.4.0** | `local-CI.sh`'s version-lockstep gate |
 | §3 below, via `docs/reference/marker-protocol.md` §3 | **23** markers | **the count, nothing.** `tests/docs-check.py` compares the marker *names* both ways, so a marker added to the engine *and* the table agrees with itself and leaves this figure stale |
@@ -86,7 +89,8 @@ if the thing under test still presents the same face.
 
 1. **The `@@MARKER@@` protocol** — 23 markers, their field order, their meanings.
    Documented in `docs/reference/marker-protocol.md`. **One** deliberate, versioned
-   exception, in §5.1 of *this* document: ONEUP-0032's conversion of the `@@HINT@@` and
+   exception, recorded in `docs/reference/marker-protocol.md` §5.1 and sequenced in §5.1
+   below: ONEUP-0032's conversion of the `@@HINT@@` and
    `@@REMEDY@@` payloads to codes. The byte counters the engine rewrite makes possible
    (`docs/specs/ONEUP-0054-python-engine.md` §4.3.3) need a marker too, and land **after the
    2.0.0 tag** — not a second exception inside 2.0. See §10.
@@ -364,21 +368,19 @@ nothing can check is not a gate.
 
 | # | Condition | Checked by |
 | --- | --- | --- |
-| **G1** | Engine suite passes with **no existing assertion weakened** — v2 satisfies the tests v1 was measured by. Three changes to the suite are permitted, and only these three: the `ONEUP_ENGINE_CMD` indirection (`ONEUP-0054` §4.4), the replacement of the one scenario that asserts Bash source rather than behaviour (§4.3.5), and the *new* absent-tool scenario INV-9 has always lacked | `ONEUP_ENGINE_CMD=… tests/run-tests.sh` green, plus a review of `git diff` on the suite confirming every change is one of those three |
+| **G1** | Engine suite passes with **no existing assertion weakened** — v2 satisfies the tests v1 was measured by. **Additions are permitted; weakening is not.** One existing scenario is *replaced* rather than carried, because it asserts Bash source rather than behaviour (`ONEUP-0054` §4.3.5), and the harness gains the `ONEUP_ENGINE_CMD` indirection (§4.4). Every other suite change must be a **new** scenario named by a stage in `ONEUP-0054` §4.6 | the suite green against the new engine, plus a review of `git diff` on the suite: one replacement, one harness change, and additions §4.6 names. Anything else fails the gate |
 | **G2** | v1 and v2 emit the **same marker stream** under identical mocks | `tests/differential.sh` (`ONEUP-0054` §4.5) |
-| **G3** | GUI suite green with the window driving the new engine | `python3 tests/gui-smoke.py` |
+| **G3** | GUI suite green with the window driving the new engine | `python3 tests/gui-smoke.py` — **but the suite as it stands feeds the window marker lines and never launches an engine at all**, so on its own it proves the window, not the pairing. G3 needs the run under `ONEUP-0054` §4.6 stage 7's environment switch, with the window actually resolving to v2 |
 | **G4** | A full run raises **exactly one** password prompt | the existing one-prompt scenario |
 | **G5** | The engine runs with **PySide6 absent** and imports no Qt — the privilege split, enforced by test | a new scenario with PySide6 hidden from the import path |
 | **G6** | A real run on the user's own machine | manual, against the explicit list `ONEUP-0054` §4.5 requires the differential phase to write — the list is a deliverable, not a judgement call |
-| **G7** | Every item on the §1 list is complete, its spec's invariants covered by tests | the §1 list is **closed at the start of the engine rewrite** (§5.2's last-but-one stage); anything raised after that is 2.1 by default |
-| **G8** | The three packaging paths (RPM, AppImage, OBS) build **and launch** from the new layout | `./local-CI.sh --full` builds the AppImage — it does not launch it. All three launches are manual, once each, and that is the honest state of this gate |
+| **G7** | Every item on the §1 list is complete — those with a spec, by their spec's invariants being covered by tests; the three without one (0044, 0004, 0063), by the acceptance line §6 gives each | **nothing automatic.** It is a release checklist walked by hand, over a list §1 closes at the start of the engine rewrite so that it can be walked at all |
+| **G8** | The three packaging paths build from the new layout, and what each delivers launches: the AppImage directly, the RPM and the OBS repository once installed | `./local-CI.sh --full` builds the AppImage — it does not launch it. All three launches are manual, once each, and that is the honest state of this gate |
 | **G9** | Docs current: README, CLAUDE.md, standards, marker reference, CHANGELOG | `tests/docs-check.py`, plus a `/cold-eyes` pass over anything 2.0 edited |
 | **G10** | Every user-facing string is translatable, and the GUI suite passes with the layout direction forced **right-to-left** | the RTL half is a GUI-suite pass. The wrapping half has **no automatic check** — `docs/standards/wording-and-translation.md`'s own table records that gap against its §6.1 — so it is a review of `oneup/gui/` against that standard, and it is the weakest gate here |
 
 **G1–G6 are the engine rewrite's**, and each is met at the stage that earns it —
-`ONEUP-0054` §4.6's table is the mapping, and this document does not restate it. The last of
-them is met at **stage 9, the switch-over**, and that is the commit they are all measured
-against. **G7–G10 are the release's**, met at the 2.0.0 tag.
+`ONEUP-0054` §4.6's table is the mapping, and this document does not restate it. Stage 9, the switch-over, is the commit they are all measured against. **G7–G10 are the release's**, met at the 2.0.0 tag.
 
 **Why that distinction is not pedantry.** ONEUP-0032 lands *after* the engine rewrite
 (§5.2) and, by §5.1, converts the `@@HINT@@` and `@@REMEDY@@` payloads to codes — changing

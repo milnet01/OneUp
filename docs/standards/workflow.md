@@ -23,9 +23,9 @@ because it decides where *every* change goes.
 *This section is canonical for the rule.* `docs/design/oneup-2.0.md` §5.4 carries the
 programme framing — why the freeze exists and what it costs — and defers here for the test.
 
-1.4.0 was released first on purpose, carrying eight finished improvements —
-`CHANGELOG.md`'s `## [1.4.0]` section is the list, and `docs/design/oneup-2.0.md` §5.4 is
-where the reasoning lives.
+1.4.0 was released first on purpose. `CHANGELOG.md`'s `## [1.4.0]` section is what it
+carried; `docs/design/oneup-2.0.md` §5.4 is why it went out before the freeze rather than
+after it.
 
 ### 1.1 What still qualifies for `main`
 
@@ -227,7 +227,7 @@ what the pre-push hook is for.
 | lint | `shellcheck`, then `ruff (F,B bug-class)` — best-effort |
 | packaging validation | desktop file and AppStream metainfo |
 | version lockstep | the **version numbers** at the six sites of §5.1 agree |
-| documentation | `tests/docs-check.py` — the rules of `docs/standards/documentation.md` that a script can settle, plus the `CHANGELOG.md` links §5.1's site 6 depends on |
+| documentation | `tests/docs-check.py` — the rules of `docs/standards/documentation.md` that a script can settle, the `CHANGELOG.md` links §5.1's site 6 depends on, and the marker table in `docs/reference/marker-protocol.md` §3 against both the engine's `marker NAME` call sites and the markers the engine suite asserts on |
 
 Listed in the order `local-CI.sh` runs them, so the table can be read against the script.
 
@@ -255,8 +255,6 @@ suites and the AppImage build — and nothing else. `local-CI.sh` runs those thr
 validation, version lockstep and documentation. Counted against §6's table, which is the
 list `local-CI.sh` actually executes.
 
-- **A new *test* gate goes in both.** Otherwise the first thing it catches is caught after
-  the tag is already pushed, which is the expensive moment.
 - **The five extras stay local**, so understand what that costs: **a lint failure is
   caught before a push or not at all.** The pre-push hook is what makes that reliable.
 
@@ -277,7 +275,8 @@ Adding a gate:
    gate that runs only locally catches its first regression after the tag is pushed.
 4. **Prove it fails.** Break the thing it checks, run it, see red, put the thing back. A gate
    nobody has seen fail is a gate nobody knows works — this is the same rule as
-   `docs/standards/testing.md` §4, applied to the gate itself.
+   `docs/standards/testing.md` §9's trap *"confirm a new test fails before it passes"*,
+   applied to the gate itself.
 
 **A gate reports, it does not repair.** `tests/docs-check.py` names the file, the line and the
 rule, and changes nothing; the author decides what the right text is. A gate that edits prose
@@ -313,8 +312,8 @@ Three things about that sequence are worth knowing before you run it:
   everything staged is exactly what `bump.py` wrote. Starting from a dirty tree would sweep
   unrelated edits into a release commit — which is why the check comes first and is fatal.
 - **The OBS step needs `osc` configured, and degrades rather than failing.** If `osc` is
-  missing or the commit fails, it says so and points at `packaging/obs/README.md` for the
-  web-UI route. The GitHub release has already happened by then and is unaffected.
+  missing, or the checkout fails, or the commit fails, it says so and points at
+  `packaging/obs/README.md` for the web-UI route. The GitHub release has already happened by then and is unaffected.
 
 **What the user still has to do by hand:** nothing on the GitHub side — CI builds and
 publishes. The OBS rebuild is the one step that can need finishing manually.
@@ -360,8 +359,8 @@ While the freeze holds, the decision is short:
 
 ```
 Is it documentation?                     → main (§1.2)
-Is it a test-only change that alters no
-  application behaviour?                 → main first, then v2 (§1.2)
+Is it *the* ONEUP_ENGINE_CMD harness
+  change — the one exception §1.2 names?  → main first, then v2 (§1.2)
 Otherwise:
 Can people still install system, Flatpak and firmware updates?
 ├── no  → it is a §1.1 fix → main → 1.4.x → merge main into v2
@@ -417,6 +416,9 @@ states it and owns what "complete" means.
 | §6 local CI is green before a push | `githooks/pre-push` — but only once per clone, after `git config core.hooksPath githooks`. **Nothing enforces that it is enabled**, so on a fresh clone this rule is a habit |
 | §7 push each commit once local CI is green | nothing automatic, and nothing needs to be — the repository is public, so a wasted push costs no runner minutes and an unpushed commit harms only its author |
 | §6.1 a new gate is proved to fail before it is trusted | nothing automatic |
+| §2 a feature branch is named `<ONEUP-id>-<topic>` | nothing automatic, and it has never been exercised — the repository has no feature branches |
+| §4 a bullet's shape, its `**Layman:**` / `Kind:` / `Source:` lines, and closing by annotation rather than deletion | **nothing.** `tests/docs-check.py` never reads `ROADMAP.md`. A malformed or deleted bullet is caught by a reader or not at all |
+| §5.2 a CHANGELOG entry's shape — bold summary, id, then the plain-English line | nothing automatic. `bump.py` reads the bold summaries to build the packaging notes, so a missing `**` silently drops an entry from the release notes rather than failing |
 | §6.1 step 3 — a new **test** gate goes in `release.yml` too | nothing automatic. Nothing compares the two gate sets, and the failure is silent by construction: the gate passes locally, so the omission only shows up as a regression that reached a tag |
 | §8 the release preconditions | `release.sh` — three fatal checks before it touches anything: a clean tree, on `main`, and the tag not already existing |
 | §8.1 no fourth distribution path | **nothing, and nothing should.** Adding a packaging path is a deliberate act by a person, not something that happens by accident, so there is no breach for a script to catch. What the row is for is the opposite failure: somebody proposing one without knowing it was already weighed. ONEUP-0071 is the answer to that |
@@ -436,3 +438,5 @@ clone where nobody ran that one command, a green push proves nothing at all.
 | 5 | 2026-07-26 | 2 medium — **2 verified** | §5.1 claimed the version-lockstep gate covers the CHANGELOG heading *and its link*. `bump.py` writes three things and the gate read one; a stale `[Unreleased]` compare base is ONEUP-0033, already shipped once. `tests/docs-check.py` now checks both links. The gate table also listed its rows in a different order from the script it documents. |
 | 6 | 2026-07-26 | none | converged. |
 | 7 | 2026-07-27 | 2 critical, 3 high, 4 medium, 4 low — **11 verified, 2 dismissed** (re-reviewed in batch 2, because §8.1 was written after loop 6 and no cold reader had seen it) | §8.1 itself survived intact — its Flatpak-sandbox argument checks out against `security.md` §1 and against what the engine does for each of the five steps. What did not: **both** descriptions of `tests/bump-test.py` were wrong in the reassuring direction — §6's table credited it with proving every version site advances, and the What-checks-this row had the synthetic and real files exactly backwards. And "it runs in about a second" was 34 seconds, measured, in the one figure that decides whether the gate gets run at all. §1.2 gained the behaviour-neutral test-harness exception (user's decision, 2026-07-27), which the engine spec had been granting itself |
+| 8 | 2026-07-27 | 3 high, 5 medium, 5 low — **11 verified, 2 dismissed** | Nothing from loop 7 returned. The freeze exception loop 7 added had already leaked: §9's decision tree offered it to *any* test-only change, where §1.2 grants it to one named change. §6.1's "prove it fails" pointed at `testing.md` §4 ("one invariant, one test") instead of §9's trap, which is worse than a broken link because it resolves. The gate table's documentation row omitted the marker check entirely, so the one change most likely to trip it — adding a marker — came with no warning |
+| 9 | 2026-07-27 | 2 high, 5 medium, 5 low — **10 verified, 2 dismissed** | Converged on the same two classes and nothing new: pointers and duplication. `testing.md` and `coding.md` each restated a §6 gate-policy fact without citing this document as the owner, and the What-checks-this table still had no row for the roadmap-bullet shape or the CHANGELOG entry shape — both rules this document states and nothing checks |

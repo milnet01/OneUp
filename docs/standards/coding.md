@@ -109,7 +109,7 @@ reasons.
 **Note what "the gate" means here.** Lint runs in `local-CI.sh` **only**. GitHub CI
 (`.github/workflows/release.yml`) runs the three test suites and the AppImage build — it
 has never run `ruff` or `shellcheck`. So the divergence is `ruff check .` versus
-`./local-CI.sh`, not versus CI; a lint failure is caught before a push or not at all.
+`./local-CI.sh`, not versus CI; a lint failure is caught before a push or not at all (`docs/standards/workflow.md` §6 owns that split and what it costs).
 
 **The settled decision:** 2.0 adds a `pyproject.toml` at the repo root carrying the rule
 set, so that a bare `ruff check` and the gate agree. `local-CI.sh` then drops its
