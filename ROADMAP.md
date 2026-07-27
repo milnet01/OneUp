@@ -656,10 +656,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   reading output as it arrives, cancellation and byte accounting are all
   fiddly in Bash — the per-repository budget had to be routed through
   `sudo timeout` because the shell cannot kill a root child itself, and
-  57 sudo call sites each have to stay out of a subshell or they cost
+  34 privileged call sites each have to stay out of a subshell or they cost
   another password prompt.
 
-  What makes it feasible: the 197 engine tests assert on the @@MARKER@@
+  What makes it feasible: the engine suite asserts on the @@MARKER@@
   output, not on Bash internals, so a Python engine could be validated
   against the same suite unchanged.
 
@@ -707,13 +707,13 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Decided in ONEUP-0052. Design: docs/specs/ONEUP-0054-python-engine.md
   (draft — must go through /cold-eyes before any code, global rule 14).
 
-  Shape: update_system.sh (1,486 lines, 57 sudo call sites) becomes eight
+  Shape: update_system.sh (34 privileged call sites) becomes eight
   Python modules under oneup/engine/, keeping the @@MARKER@@ protocol and
   all 13 CLI flags byte-identical. The point of freezing the contract is
-  that the existing 197 engine tests then PROVE the rewrite instead of
+  that the existing engine suite then PROVES the rewrite instead of
   being rewritten for it.
 
-  Switch-over gate (all six): G1 197/197 engine tests unchanged; G2 v1 and
+  Switch-over gate (all six): G1 engine suite green, no assertion changed; G2 v1 and
   v2 emit the same marker stream under identical mocks (new differential
   harness); G3 GUI suite green driving v2; G4 still exactly one password
   prompt per run; G5 engine imports no Qt and runs with PySide6 absent;
@@ -721,7 +721,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   What the rewrite actually buys, and nothing else is claimed: the
   seven-prompt bug class becomes structurally impossible (one parent pid
-  for every privileged child, instead of a discipline 57 call sites must
+  for every privileged child, instead of a discipline 34 call sites must
   each observe); timeouts and cancellation become bookkeeping in one
   runner; the metadata fetch becomes measurable at last, because Python
   can read bytes as they arrive and zypper's dots have no line ending;
@@ -1027,7 +1027,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   ONEUP-0054 spec (7), the 2.0 design doc (1) — 130 in total.
 
   Two of those counts are absorbed elsewhere rather than by this item:
-  ONEUP-0054's 7 are rewritten by ONEUP-0057 Task 12 (the spec revision),
+  ONEUP-0054's 7 were rewritten by ONEUP-0057 Task 12 on 2026-07-27 — done,
+  leaving 62 across four specs —
   and the ONEUP-0057 plan's 8 are verification commands rather than prose
   citations, which the standard permits.
 
@@ -1131,3 +1132,24 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** One of the messages the updater can send — the warning that your disk is nearly full — is never exercised by the automated tests, so a change could break it without anything noticing.
   Kind: test.
   Source: cold-eyes-2026-07-26 lane-6 (ONEUP-0057 documentation set).
+
+- 📋 [ONEUP-0070] **Cover the absent-tool skip path in the engine test suite.**
+  Found while revising the ONEUP-0054 spec (2026-07-27, verified at b6d37ed).
+  update_system.sh guards the Flatpak and firmware steps with `command -v
+  flatpak` and `command -v fwupdmgr`, and both CLAUDE.md and the spec state
+  the rule that an absent tool is skipped cleanly, never errored. No
+  scenario in tests/run-tests.sh arranges an absent tool: every mock
+  directory provides both, so the skip branch has never run under test.
+
+  Worth one scenario per tool: a mock PATH without the binary, asserting the
+  step reports skipped rather than failed and the run still ends ok. It is
+  also the branch a real user on a Flatpak-less machine takes on every run,
+  so it is not an edge case for them.
+
+  Carried into 2.0 as INV-9 of docs/specs/ONEUP-0054-python-engine.md, where
+  it is recorded honestly as having no test. Fix it on `main` if the freeze
+  allows, otherwise on `v2` before G1 — the rewrite must not inherit an
+  untested branch it is expected to reproduce byte-identically.
+  **Layman:** Prove that OneUp quietly skips the Flatpak and firmware steps on a machine that doesn't have those tools, instead of reporting a failure.
+  Kind: test.
+  Source: in-session-2026-07-27 (ONEUP-0057 Task 12).

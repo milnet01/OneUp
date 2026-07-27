@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # Specs written before 2026-07-26, when §3's header block became prescriptive. They are
 # brought to shape the next time each is edited for another reason, not in a sweep (§3).
-GRANDFATHERED = {"ONEUP-0018", "ONEUP-0022", "ONEUP-0025", "ONEUP-0028", "ONEUP-0054"}
+GRANDFATHERED = {"ONEUP-0018", "ONEUP-0022", "ONEUP-0025", "ONEUP-0028"}
 
 # Markers the engine emits that the engine suite does not assert on. Each needs a roadmap
 # id, so the exemption reads as a known gap rather than an oversight. DISK fires only when
@@ -117,8 +117,9 @@ def check_loop_tallies() -> None:
 
 # --- §6a: cite by name, never by line number --------------------------------
 def check_line_citations() -> None:
-    # docs/specs/ is exempt until ONEUP-0065 converts the citations the five pre-2026-07-26
-    # specs carry (69 of them). Widen this to include specs when that item ships.
+    # docs/specs/ is exempt until ONEUP-0065 converts the citations the four remaining
+    # pre-2026-07-26 specs carry (62 of them; ONEUP-0054's 7 went when ONEUP-0057 Task 12
+    # revised it). Widen this to include specs when that item ships.
     for path in docs("docs/standards", "docs/reference", "docs/design"):
         ignore = False
         for i, ln in enumerate(path.read_text().split("\n"), 1):

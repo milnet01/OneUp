@@ -103,11 +103,11 @@ those live in the log and nowhere else (§4, item 11). `Reviewed` is the whole v
 `Status` line and the log ever disagree, the log is right.
 
 **This is prescriptive from 2026-07-26, not a description of the tree.** The five specs
-written before it (`ONEUP-0018`, `0022`, `0025`, `0028`, `0054`) use their own shapes —
-`Status: design`, `Status: Cold-eyes converged (2 loops — …)`, `Kind: accessibility`. Only
-`ONEUP-0054` carries `Branch:`; none carries `Verified at:`. They are **grandfathered**:
-each is brought to this shape the next time it is edited for another reason, not in a
-sweep.
+written before it (`ONEUP-0018`, `0022`, `0025`, `0028`, `0054`) used their own shapes —
+`Status: design`, `Status: Cold-eyes converged (2 loops — …)`, `Kind: accessibility` — and
+none carried `Verified at:`. They are **grandfathered**: each is brought to this shape the
+next time it is edited for another reason, not in a sweep. `ONEUP-0054` was the first, on
+2026-07-27; the other four are still waiting for a reason.
 
 `Verified at` is not decoration. It is the only thing that lets a later reader know
 whether a figure is current — and §6b says how each figure was counted, so re-checking one
@@ -516,7 +516,7 @@ fact only to make a *different* point with it, and say where it came from.
 | §5 an invariant names its test | nothing automatic — a cold reader |
 | §6 a claim is checked against the tree | nothing automatic. `/cold-eyes` is the only catcher, which is why §7 is a gate and not advice |
 | §6 no `TODO` / `TBD` / `FIXME` left in a document | `tests/docs-check.py` |
-| §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design. `docs/specs/` is exempt until ONEUP-0065 converts the 69 citations the five older specs carry. The prose form — *"around line 786"* — is caught by nobody |
+| §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design. `docs/specs/` is exempt until ONEUP-0065 converts the 62 citations the four older specs carry. The prose form — *"around line 786"* — is caught by nobody |
 | §6b most counts taken from the code stay out of the document | nothing automatic — a cold reader |
 | §7 a loop tally balances | `tests/docs-check.py` |
 | §8 plain language | nothing automatic — a cold reader, and the author reading their own sentence as an opponent |

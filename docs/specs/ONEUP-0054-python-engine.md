@@ -1,277 +1,419 @@
-# ONEUP-0054 — OneUp 2.0: a Python engine
+# ONEUP-0054 — a Python engine
 
-**Status:** Draft — **not yet run through `/cold-eyes`.** No implementation may
-start until it has (global rule 14).
-**Roadmap:** ONEUP-0054 (📋) — supersedes the ONEUP-0052 investigation, which is
-now decided. (ID 0053 is an unused gap in the allocator, not a missing item.)
-**Kind:** implement (engine rewrite + the ONEUP-0034 GUI split landing in the same
-package)
-**Branch:** `v2` — long-lived. `main` keeps shipping 1.x until the gate in §3 is met.
+**Status:** Draft
+**Kind:** implement
+**Roadmap:** ONEUP-0054
+**Branch:** v2
+**Verified at:** `b6d37ed` — every figure below was measured against this tree, not recalled.
 
-All citations verified against the tree at commit `ea51adc` (`update_system.sh`
-1,486 lines, `updater.py` 3,680, `tests/run-tests.sh` 1,952, `tests/gui-smoke.py`
-1,317).
+**In one sentence:** the half of OneUp that actually installs the updates is rewritten from
+Bash into Python, saying exactly the same things and taking exactly the same flags, so the
+tests that pass today are what prove the new one.
+
+**The programme design owns everything 2.0's items share** — the `oneup/` package layout
+(`docs/design/oneup-2.0.md` §4), the decision that the engine emits codes and the window
+does the wording (§5.1), the order the items are built in (§5.2), the `main` freeze (§5.4),
+and the release gate (§7). This spec settles only what is particular to the engine, and
+points at the design for the rest so the two cannot drift.
 
 ## 1. Goal
 
-Replace the Bash engine (`update_system.sh`) with a Python one, keeping the
-`@@MARKER@@` protocol and the CLI surface **byte-identical**, so that:
+`update_system.sh` is replaced by a Python package under `oneup/engine/`. The
+`@@MARKER@@` protocol, the command-line flags, the exit codes and the state files stay
+**byte-identical**, so the existing engine test suite proves the rewrite instead of being
+rewritten for it. v1 and v2 can be run side by side and compared, and the switch-over is a
+one-line change in the window, reversible by reverting it.
 
-- the existing 197 engine tests prove the rewrite rather than being rewritten for it;
-- v1 and v2 can be run side by side and compared, on the same mocks and on a real machine;
-- the switch-over is a one-line change in the GUI, reversible by reverting it.
+## 2. Background
 
-## 2. The decision, honestly
+### 2.1 What the Bash engine costs today
 
-The user's call (2026-07-25), overruling the recommendation recorded in
-ONEUP-0052. Their argument is sound and is the reason this is safe: **v1 already
-exists and works.** A long-lived branch means the rewrite carries no delivery
-risk — if it stalls, 1.x keeps shipping; if it lands, we switch. "It is hard" is
-a cost, not an objection.
+Three costs, each measured rather than felt:
 
-For the record, the parts of ONEUP-0052 that still stand — a spec that oversells
-its own premise is worse than none:
+- **Every privileged call has to individually observe a rule.** With no terminal, `sudo`
+  keys its cached credential to the **parent process id**, and Bash forks a real subshell
+  for `$(cmd | other)` — so a `sudo` inside one authenticates again. A full run once
+  needed **seven** password prompts. The fix was a discipline, not a mechanism:
+  `sudo_capture` writes to a temporary file and reads it back outside any substitution,
+  and every privileged call site has to remember to use it.
 
-- **Nothing that went wrong in ONEUP-0048 was Bash's fault.** zypper's silence,
-  the mirror serving 18 MB at 930 B/s, and sudo's per-parent-pid credential cache
-  are all identical from Python — we would still be shelling out to `zypper`. The
-  dialog-placement bug (ONEUP-0049) was in the Python half already.
-- **Python does not let us kill a root child.** The per-repository budget in
-  `refresh_repos` (`update_system.sh:960`) is routed through `sudo timeout`
-  because only root can signal a root process. That constraint is the kernel's,
-  not Bash's, and it survives the rewrite. What improves is the bookkeeping
-  around it (§5.2), not the permission.
+  Measured at `b6d37ed`: **34 privileged call sites** — 14 `sudo_capture` calls plus 20
+  direct `sudo` at command position. `sudo_capture`'s own two `sudo` lines are the helper,
+  not call sites. `grep` is the wrong tool for the total on its own: the file also carries
+  the word `sudo` inside comments and inside hint strings the user is meant to paste, and
+  counting those gives 63.
 
-So the case rests on §5 and on nothing else. If §5 turns out to be thin in
-practice, this branch is allowed to be abandoned — that is what the branch is for.
+- **The engine cannot see a phase that prints no lines.** A zypper metadata refresh emits
+  undelimited dots with **no line ending**. Bash reads by lines, so during that phase the
+  engine sees nothing at all and has nothing to report. This is what made ONEUP-0048
+  possible: one mirror served a repository index at under a kilobyte a second, and the app
+  showed no sign of life for minutes.
 
-## 3. The switch-over gate — what "ready" means
+- **Two external dependencies hold the run together.** The logging `exec` pipes stdout
+  through `tee` with `-a -p` (`--output-error=warn-nopipe`) so that a quitting window
+  cannot `SIGPIPE` the engine mid-transaction; `-p` is probed rather than assumed, with a
+  `trap 'exit 141' PIPE` fallback for a `tee` that lacks it. Separately, a backgrounded
+  keep-alive loop re-validates the sudo credential and must poll `kill -0` on the engine's
+  own pid to avoid outliving it, because `cleanup`'s trap cannot run on `SIGKILL`.
+  Keep-alives were once found still running forty minutes after their run was killed.
 
-The user asked for "when it is ready to replace the current one, we can simply
-switch". This is that definition. **All six must hold.** Until then `main` is
-untouched.
+### 2.2 What Bash is not to blame for
 
-| # | Gate | How it is checked |
+A spec that oversells its own premise is worse than none. The parts of the ONEUP-0052
+investigation that still stand:
+
+- **Nothing that went wrong in ONEUP-0048 was Bash's fault.** zypper's silence, the slow
+  mirror, and sudo's per-parent-pid credential cache are all identical from Python — we
+  would still be shelling out to `zypper`. The dialog-placement bug (ONEUP-0049) was in
+  the Python half already.
+- **Python cannot kill a root child either.** The per-repository budget in `refresh_repos`
+  is routed through `sudo timeout` because only root can signal a root process. That
+  constraint is the kernel's, not Bash's, and it survives the rewrite. What improves is
+  the bookkeeping around it (§4.3.2), not the permission.
+
+So the case rests on §4.3 and on nothing else. If §4.3 turns out to be thin in practice,
+this branch is allowed to be abandoned — that is what the branch is for.
+
+## 3. Scope decisions (agreed with the user)
+
+| Decision | Who, when | Consequence |
 | --- | --- | --- |
-| **G1** | v2 passes **197/197** engine tests, with no change to any assertion | `ONEUP_ENGINE_CMD=… tests/run-tests.sh` (§4.3) |
-| **G2** | v1 and v2 emit the **same marker stream** under identical mocks | differential harness, §4.4 |
-| **G3** | GUI suite green with the GUI driving v2 | `tests/gui-smoke.py`, 277/277 |
-| **G4** | A full run still needs **exactly one** password prompt | the existing sudo-model test (§5.1) |
-| **G5** | Engine runs with **PySide6 absent** and imports no Qt | new test, §5.5 |
-| **G6** | A real run on the user's Tumbleweed box: `--check`, a real update, a rollback offer | manual, with the user |
+| Rewrite the engine in Python rather than keep hardening Bash | the user, 2026-07-25, overruling the ONEUP-0052 recommendation | this spec exists |
+| Build it on a long-lived `v2` branch | the user, 2026-07-25 | no delivery risk: if it stalls, frozen 1.4.0 keeps shipping |
+| The marker protocol is frozen for the duration | the user, 2026-07-25 | §4.1; the differential harness is only possible because of it |
+| The GUI split (ONEUP-0034) is a **separate item** with its own spec | the user, 2026-07-26 | §3.1 |
+| `--notify` stays in the engine for now | the user, 2026-07-26 | §10 |
 
-G2 deserves emphasis: any divergence is either a v2 bug **or** a deliberate
-improvement that gets written down here and given its own test. Divergence is
-never waved through.
+**The user's argument for the branch, which is the reason this is safe:** v1 already exists
+and works. *"It is hard"* is a cost, not an objection.
 
-## 4. Architecture
+### 3.1 The relationship to the GUI split
+
+`ONEUP-0034` splits `updater.py` into `oneup/gui/`. It shares this rewrite's **package**
+(`docs/design/oneup-2.0.md` §4) and its **branch** (§5.3), and it lands **first** (§5.2) —
+but it is a separate roadmap item with a separate spec, and it is **not** part of this
+spec's gate. It is behaviour-preserving where this is not, so entangling the two would mean
+a failing test could not say which change broke it.
+
+An earlier draft of this document said the split lands "in the same package" in a way that
+read as one item. It does share the package. It is not one item.
+
+## 4. Design
 
 ### 4.1 What does not change
 
-- **The privilege split.** The GUI never runs as root. The engine is the only
-  thing that touches root, and only through `sudo -A` with `SUDO_ASKPASS` and a
-  labelled `SUDO_PROMPT`.
-- **The marker protocol is frozen for the duration.** Every marker in
-  `docs/reference/marker-protocol.md` §3 keeps its name, field order and
-  semantics. A rewrite that
-  also redesigns its own contract cannot be differentially tested, which would
-  throw away the only real safety net this project has. Protocol changes come
-  *after* the switch, on `main`, one at a time.
-- **The CLI surface.** All 13 flags (`update_system.sh:127-139`): `--steps=`,
-  `--log=`, `--check`, `--size=`, `--grant-auth`, `--revoke-auth`,
+- **The privilege split.** The window never runs as root. The engine is the only thing
+  that touches root, and only through `sudo -A` with `SUDO_ASKPASS` and a labelled
+  `SUDO_PROMPT`. `docs/standards/security.md` owns this boundary.
+- **The marker protocol.** Every marker in `docs/reference/marker-protocol.md` §3 keeps
+  its name, field order and semantics. A rewrite that also redesigns its own contract
+  cannot be differentially tested, which would throw away the only real safety net this
+  project has. The reference's §5.1 records the freeze; protocol changes come *after* the
+  switch.
+- **The command-line surface.** All thirteen flags the argument loop in `update_system.sh`
+  accepts: `--steps=`, `--log=`, `--check`, `--size=`, `--grant-auth`, `--revoke-auth`,
   `--auth-status`, `--import-keys`, `--skip-repo=`, `--auto-skip-repos`,
   `--thin-snapshots`, `--notify`, `--help`.
-- **The file contracts.** `run.state` and `stop.request` keep their format,
-  location, and `ONEUP_RUN_STATE` / `ONEUP_STOP_FILE` overrides. So do
-  `history.json`, `~/.local/state/oneup/logs/`, and the mirror to
-  `~/Documents/update-logs/`.
-- **Standalone terminal use.** `oneup-engine --steps=system,cache` must be as
-  usable in a plain terminal as `./update_system.sh` is today.
+- **The exit codes.** The window takes its verdict from the engine's exit code —
+  `Updater.on_finished` sets `ok = exit_code == 0`, with `@@DONE@@` as belt and braces. The
+  codes stay identical, and the differential harness asserts it (§4.5).
+- **The two state files.** `run.state` and `stop.request` keep their format, their
+  location and their `ONEUP_RUN_STATE` / `ONEUP_STOP_FILE` overrides.
+  `docs/reference/marker-protocol.md` §8 owns that contract.
+- **The engine's log directory.** The engine writes each run's log to
+  `~/Documents/update-logs/`, where a user can find it. It has no override.
+- **Standalone terminal use.** `oneup-engine --steps=system,cache` must be as usable in a
+  plain terminal as `./update_system.sh` is today.
+
+**What is *not* an engine contract, though an earlier draft said so:** `history.json` and
+`~/.local/state/oneup/logs/` belong to the **window** — `updater.py`'s `HISTORY` and
+`LOG_DIR` constants. The engine never touches either. `docs/standards/files-and-naming.md`
+§5.1 is the owner of the full path table, and its §5 "Trap 1" is the one this rewrite must
+act on: `LOG_DIR` names two different directories in the two programs, which is harmless
+only while they are in different languages. Give them distinct names — `USER_LOG_DIR` and
+`STATE_LOG_DIR`, or equivalent — before either is imported anywhere.
 
 ### 4.2 Module layout
 
-Eight modules, each tracing to an existing cluster of the Bash file — not a
-speculative framework (global rule 2). Line estimates are budgets, not targets.
+Eight modules, each tracing to an existing cluster of the Bash file rather than to a
+speculative framework. `docs/standards/coding.md` §4 sets the module-size ceiling.
 
 | Module | Responsibility | Replaces |
 | --- | --- | --- |
-| `oneup/engine/__main__.py` | flag parsing, run order, per-step dispatch, final summary | the top-level script body, `step_selected` (`:144`), `usage` (`:90`) |
-| `markers.py` | every marker emitter — the protocol in **one** place | `marker` (`:201`), `emit_progress` (`:1028`), 59 call sites |
-| `privilege.py` | sudo bootstrap, keep-alive, `run_privileged()` | `sudo_init` (`:456`), `sudo_capture` (`:514`), `reap_orphaned_askpass` (`:546`), `cleanup` (`:570`) |
-| `proc.py` | streaming child runner: deadline, incremental bytes, cooperative cancel | the ad-hoc pipelines, `progress_filter` (`:1041`), `stop_pending` (`:279`) |
-| `runstate.py` | `run.state`, `stop.request`, log paths, history | the logging `exec` block (`:149-200`), state writes |
-| `zypper.py` | **pure** output parsers + the repo refresh/skip/disable logic | `to_bytes` (`:1012`), `refresh_repos` (`:960`), `enabled_repo_aliases` (`:911`), `find_failing_repos` (`:923`), `disable_repo` (`:902`), `lock_holder` (`:622`), `release_zypper_lock` (`:602`) |
-| `steps.py` | the five steps: `system, flatpak, firmware, orphans, cache` | `begin_step` (`:295`), `end_step` (`:306`), `run_system_upgrade` (`:1079`), the per-step bodies |
-| `actions.py` | `--check`, `--size=`, the three auth actions, snapshots | `run_check` (`:323`), `run_size` (`:383`), `grant_auth` (`:676`), `revoke_auth` (`:703`), `auth_status` (`:714`), `thin_snapshots` (`:732`), `build_auth_rule` (`:653`) |
+| `oneup/engine/__main__.py` | flag parsing, run order, per-step dispatch, final summary | the top-level script body, `step_selected`, `usage` |
+| `markers.py` | every marker emitter — the protocol in **one** place | `marker`, `emit_progress`, and every `marker NAME` call site |
+| `privilege.py` | sudo bootstrap, keep-alive, `run_privileged()` | `sudo_init`, `sudo_capture`, `reap_orphaned_askpass`, `cleanup` |
+| `proc.py` | streaming child runner: deadline, incremental bytes, cooperative cancel | the ad-hoc pipelines, `progress_filter`, `stop_pending` |
+| `runstate.py` | `run.state`, `stop.request`, log paths | the logging `exec` preamble and the state writes around it |
+| `zypper.py` | **pure** output parsers, plus the repo refresh/skip/disable logic | `to_bytes`, `refresh_repos`, `enabled_repo_aliases`, `find_failing_repos`, `disable_repo`, `lock_holder`, `release_zypper_lock` |
+| `steps.py` | the five steps: `system, flatpak, firmware, orphans, cache` | `begin_step`, `end_step`, `run_system_upgrade`, the per-step bodies |
+| `actions.py` | `--check`, `--size=`, the three auth actions, snapshots | `run_check`, `run_size`, `grant_auth`, `revoke_auth`, `auth_status`, `thin_snapshots`, `build_auth_rule` |
 
-The **GUI** split (ONEUP-0034) lands as `oneup/gui/` in the same package but is
-specified separately — it is behaviour-preserving and independent, and must not
-be entangled with the engine gate.
+### 4.3 What the move to Python buys
 
-### 4.3 Making the test suite engine-agnostic
+Each claim is falsifiable and gets a test. This section is the whole justification for the
+branch.
 
-`tests/run-tests.sh`'s `run_engine` invokes `bash "$ENGINE"`. It gains one
-indirection — an `ONEUP_ENGINE_CMD` array override, defaulting to the current
-`bash update_system.sh` — so the *same* suite runs either engine. This is the
-only change permitted to the test file before G1, and it must be committed to
-`main` first and shown to leave 197/197 green there, so the harness change is
-proven independent of v2.
+#### 4.3.1 The seven-prompt bug class becomes structurally impossible
 
-### 4.4 The differential harness
+In Python every privileged child is spawned by the engine process itself, so there is
+exactly one parent pid for the life of the run, and sudo's cached credential is keyed to
+it. The failure mode described in §2.1 cannot be expressed. This is the single strongest
+argument for the rewrite: it converts a rule that must be remembered at every privileged
+call site into a property of the design.
 
-New `tests/differential.sh`: for each scenario's mock set, run v1 and v2, capture
-only `@@MARKER@@` lines, normalise the fields that legitimately vary (`TIMING`
-seconds, log paths, pids, snapshot ids), and `diff`. Green = identical
-behaviour. This is the gate that makes the rewrite auditable rather than trusted.
+*Test:* the existing scenario *"a full run asks for the password exactly once (no per-step
+prompts)"*, unchanged — gate G4.
 
-## 5. What Python actually buys
+#### 4.3.2 Timeouts and cancellation become bookkeeping, not process trickery
 
-Each claim below is falsifiable and gets a test. This section is the whole
-justification for the branch; if these do not materialise, the branch has failed.
+Python still cannot signal a root child (§2.2), so `sudo timeout` and `sudo kill` remain.
+What changes is that deadlines, which child owns them, and what to do on expiry live in one
+`proc.py` runner with real state, instead of being spread across command lines. The
+per-repository budget generalises to any privileged call for free, and stop checks stop
+being a `stop_pending &&` sprinkled by hand.
 
-### 5.1 The seven-prompt bug class becomes structurally impossible
+*Test:* a new scenario asserting a per-call deadline fires on a step other than the repo
+refresh — behaviour v1 does not have.
 
-Today, with no terminal, sudo keys its cached credential to the **parent process
-id**, and Bash forks a real subshell for `$(cmd | other)` — so a `sudo` inside
-one authenticates again. A full run once needed **seven** prompts. The mitigation
-is a discipline (`sudo_capture`, never `sudo` in a subshell) that all **57**
-`sudo` call sites must individually observe, backed by a test that models sudo's
-cache.
+#### 4.3.3 The metadata fetch becomes measurable
 
-In Python every privileged child is spawned by the engine process itself, so
-there is exactly one parent pid for the life of the run. The failure mode cannot
-be expressed. This is the single strongest argument for the rewrite: it converts
-a rule that must be remembered at 57 sites into a property of the design.
+This is a genuinely new capability, not a tidier version of an old one. Python can read
+bytes as they arrive, so the engine itself can count them and report real progress on the
+phase that caused ONEUP-0048 — the one that today prints dots with no line ending (§2.1).
+Today the window can only infer liveness from raw chunk arrival: `Updater.on_output` stamps
+`_activity_at` on the chunk **before** splitting it into lines, precisely so that a stream
+of dots still counts as alive.
 
-**Test:** the existing one-prompt scenario, unchanged (G4).
+*Test:* a mock repository whose refresh dribbles dots produces increasing byte figures.
 
-### 5.2 Timeouts and cancellation become bookkeeping, not process trickery
+**This lands after the switch, not before it.** It needs a new marker, and §4.1 freezes the
+protocol until gate G2 has passed. The branch may prove it works; it must not ship it
+early.
 
-Python still cannot signal a root child (§2), so `sudo timeout` / `sudo kill`
-remain. What changes is that deadlines, which child owns them, and what to do on
-expiry live in one `proc.py` runner with real state, instead of being spread
-across command lines. The per-repository budget generalises to any privileged
-call for free, and stop checks stop being a `stop_pending &&` sprinkled by hand.
+#### 4.3.4 Parsers become unit-testable in isolation
 
-**Test:** a scenario asserting a per-call deadline fires on a step other than the
-repo refresh — behaviour v1 does not have.
+`to_bytes`, the zypper progress wordings, the two download-size wordings, `lr` output and
+`lock_holder` are today reachable only through a full engine run. As pure functions they
+get table-driven tests, which is the right shape for the stale-parser canary — the scenario
+*"a transaction with no recognisable progress lines says so"*, which exists to fire when
+zypper changes its wording under us.
 
-### 5.3 The metadata fetch becomes measurable
+*Test:* a new `tests/test_parsers.py`, table-driven over real captured zypper output.
 
-This is a genuinely new capability, not a tidier version of an old one. A
-metadata refresh prints undelimited dots **with no line ending**; Bash reads by
-lines, so the engine can see nothing and the GUI has to infer liveness from raw
-chunk arrival (`updater.py:2954`, stamping `_activity_at` before line splitting).
-Python can read bytes as they arrive, so the engine itself can count them and
-report actual progress on the phase that caused ONEUP-0048.
+#### 4.3.5 Two fragile dependencies disappear
 
-**Test:** a mock repo whose refresh dribbles dots produces increasing byte
-figures. **Note:** this needs a new marker, so it lands **after** the switch
-(§4.1) — the branch may prove it works, but must not ship it before G2.
+- **`tee -a -p`.** Python writes its own log file and catches `BrokenPipeError` on stdout.
+  No external tool, no probe, no fallback trap (§2.1).
+- **The orphan-prone keep-alive.** In Python it is a daemon thread, which the kernel reaps
+  with the process. No pid polling, and nothing left behind on `SIGKILL`.
 
-### 5.4 Parsers become unit-testable in isolation
+*Test:* the existing scenarios *"a run survives the GUI going away and still finishes
+(broken stdout pipe)"* and *"the keep-alive exits on its own once the engine is gone
+(SIGKILL-proof)"*, unchanged, plus gate G5.
 
-`to_bytes`, the three zypper progress wordings, the two download-size wordings,
-`lr` output, `lock_holder` — today all reachable only through a full engine run.
-As pure functions they get table-driven tests, which is the right shape for the
-ONEUP-0047 wording canary.
+### 4.4 Making the test suite engine-agnostic
 
-**Test:** a new `tests/test_parsers.py`, table-driven over real captured zypper
-output.
+`run_engine` in `tests/run-tests.sh` invokes `bash "$ENGINE"`. It gains one indirection —
+an `ONEUP_ENGINE_CMD` array override, defaulting to the current `bash update_system.sh` —
+so the *same* suite runs either engine.
 
-### 5.5 Two fragile dependencies disappear
+This is the only change permitted to the test file before G1, and it lands on `main` first
+and is shown to leave the suite green there, so the harness change is proven independent of
+`v2`. `main` is frozen (`docs/design/oneup-2.0.md` §5.4); this qualifies because it changes
+no behaviour on `main` by construction.
 
-- **`tee -a -p`.** The logging `exec` uses `tee -a -p`
-  (`--output-error=warn-nopipe`, probed not assumed, with a `PIPE` trap fallback
-  at `update_system.sh:592`) so that a quitting GUI does not SIGPIPE the engine
-  mid-transaction. Python writes its own log file and catches
-  `BrokenPipeError` on stdout — no external tool, no probe, no fallback trap.
-- **The orphan-prone keep-alive.** Today a background loop re-validates sudo and
-  must watch the engine's pid to avoid outliving it (`update_system.sh:483`),
-  because `cleanup`'s trap cannot run on SIGKILL. In Python it is a daemon
-  thread, which the kernel reaps with the process.
+### 4.5 The differential harness
 
-**Test:** the existing broken-pipe and orphaned-keep-alive scenarios, unchanged,
-plus G5 (engine imports no Qt, runs with PySide6 absent).
+New `tests/differential.sh`: for each scenario's mock set, run v1 and v2, capture only
+`@@MARKER@@` lines, normalise the fields that legitimately vary (`TIMING` seconds, log
+paths, pids, snapshot ids), and `diff` the rest along with the exit code. Green means
+identical behaviour.
 
-## 6. Invariants carried over
+This is what makes the rewrite auditable rather than trusted, and it is the reason the
+protocol is frozen. **Any divergence is either a v2 bug or a deliberate improvement that
+gets written down here and given its own test.** Divergence is never waved through.
 
-These encode bugs that cost real time. Each keeps its existing test; the test is
-what carries it across, not this list.
+**What it cannot see, stated so that nobody assumes otherwise:** timing-dependent behaviour,
+and anything reachable only on a real machine — real sudo, real snapper, real repositories.
+Gate G6 is what covers that, and the phase that builds the harness ends by writing the
+explicit list of what G6 has to check by hand.
 
-| Invariant | Origin |
-| --- | --- |
-| A step never claims success, or advises a reboot, it did not earn | the reason the suite exists |
-| A failed step is recorded, hints in plain English, and the run **continues** | so cache cleanup still happens |
-| `--check` is read-only, needs no root, never calls `dup`/`update` | mock exits 99 if violated |
-| Stop is **cooperative**, checked only at safe boundaries — never mid-transaction | ONEUP-0039/0042 |
-| A run survives the GUI going away | the `tee -a -p` reasoning, §5.5 |
-| Exactly one password prompt per run | §5.1 |
-| Nothing the engine spawns outlives it | §5.5 |
-| A slow server is never indistinguishable from a hang | ONEUP-0048 |
-| Absent tools (`flatpak`, `fwupd`) are skipped **cleanly**, not errored | — |
-| Tests never depend on, or damage, machine state | ONEUP-0045/0050 |
+### 4.6 The order the gate is met in
 
-## 7. Phases
+Build steps belong in a plan, written when the item starts
+(`docs/standards/documentation.md` §2). This is the ordering the plan must respect, because
+each stage is what makes the next one safe to attempt.
 
-Each phase ends with `./local-CI.sh` green on the `v2` branch. No phase is
-allowed to leave the branch red.
-
-| # | Work | Verify |
+| # | Work | What it satisfies |
 | --- | --- | --- |
-| **0** | This spec; `/cold-eyes` to convergence | zero substantive findings |
-| **1** | `ONEUP_ENGINE_CMD` indirection, committed to `main` | 197/197 on `main`, unchanged |
-| **2** | `markers.py`, `runstate.py`, `proc.py`, `privilege.py`; `--help` and `--auth-status` only | `--auth-status` scenarios pass against v2 |
-| **3** | `--check` — read-only, no root, so the safest real behaviour to build first | every `--check` scenario green against v2 |
-| **4** | `zypper.py` + `--size=`; parser unit tests | §5.4 tests; size scenarios green |
-| **5** | The five steps; snapshots, remedies, repo skipping | remaining scenarios → G1 (197/197) |
-| **6** | Differential harness | G2 |
-| **7** | GUI pointed at v2 behind an env switch | G3, G4, G5 |
-| **8** | Real-machine run with the user | G6 |
-| **9** | Switch: bump to 2.0.0, packaging, `update_system.sh` retired | six-site lockstep; release |
+| 1 | `ONEUP_ENGINE_CMD` indirection, on `main` | §4.4 — the suite still green on `main`, unchanged |
+| 2 | `markers.py`, `runstate.py`, `proc.py`, `privilege.py`; `--help` and `--auth-status` only | the `--auth-status` scenarios pass against v2 |
+| 3 | `--check` — read-only and needs no root, so the safest real behaviour to build first | every `--check` scenario green against v2 |
+| 4 | `zypper.py` and `--size=`; parser unit tests | §4.3.4; the `--size` scenarios green |
+| 5 | The five steps; snapshots, remedies, repo skipping | the remaining scenarios → G1 |
+| 6 | The differential harness | G2, and the list of what it cannot see |
+| 7 | The window pointed at v2 behind an environment switch | G3, G4, G5 |
+| 8 | A real run on the user's machine | G6 |
+| 9 | The switch: 2.0.0, packaging, `update_system.sh` retired | §4.7 |
 
-Phases 2–5 are the bulk. Nothing in 1–8 changes `main`'s behaviour except phase
-1, which is a no-op there by construction.
+Each stage ends with `./local-CI.sh` green on `v2`. Nothing in stages 1–8 changes `main`'s
+behaviour except stage 1, which is a no-op there.
 
-## 8. Packaging and the switch
+### 4.7 Packaging and the switch
 
-- **Entry points.** `python3 -m oneup.engine` from a checkout; an `oneup-engine`
-  console script when installed. The GUI resolves the engine the same way
-  `_find_engine` (`updater.py:106-116`) does now, and the **six** hardcoded
-  `p.start("bash", …)` call sites (`updater.py:2119`, `:2449`, `:2534`, `:2722`,
-  `:2832`, `:2952`) become one helper. That helper is the switch: an
-  `ONEUP_ENGINE=v1|v2` env var during phases 7–8, then a default flip. The
-  hardcoded `"bash"` is itself the tell — the GUI currently cannot launch a
+- **Entry points.** `python3 -m oneup.engine` from a checkout; an `oneup-engine` console
+  script when installed. The window resolves the engine the way `_find_engine` does now,
+  and its hardcoded `p.start("bash", …)` call sites become one helper. That helper *is* the
+  switch: an `ONEUP_ENGINE=v1|v2` environment variable during stages 7–8, then a default
+  flip. The hardcoded `"bash"` is itself the tell — the window currently cannot launch a
   non-Bash engine at all.
-- **RPM** (`packaging/rpm/oneup.spec`) ships the package directory instead of one
-  script; `BuildArch: noarch` still holds. **AppImage** already bundles Python.
-  **OBS** `_service` needs no structural change.
-- **`update_system.sh` is retired, not deleted, in phase 9** — kept one release
-  as a documented fallback, then removed in 2.1. Users who scripted against it
-  get a release's notice.
-- **Version.** The switch is a major bump to **2.0.0** (the six lockstep sites),
-  which is also the honest signal: the engine anyone shelling out to OneUp
-  depended on has changed.
+- **RPM.** `packaging/rpm/oneup.spec` installs exactly two files into
+  `%{_datadir}/oneup/` and launches the first. It needs a directory install and a
+  `Requires` review. `BuildArch: noarch` still holds.
+- **AppImage.** `packaging/appimage/build-appimage.sh` passes `update_system.sh` to
+  PyInstaller with `--add-data` and points the analysis at `updater.py`. It needs the
+  analysis to follow imports into the package instead.
+- **OBS.** `packaging/obs/_service` rolls a tarball whose layout the RPM spec expects; it
+  needs no structural change of its own.
+- **`update_system.sh` is retired, not deleted**, in stage 9 — kept one release as a
+  documented fallback, then removed in 2.1, so anyone who scripted against it gets a
+  release's notice.
 
-## 9. Risks
+## 5. Correctness invariants
 
-| Risk | Mitigation |
+These encode bugs that cost real time. The **test** is what carries each across the
+rewrite; this list is the index, not the mechanism. Scenario names are the ones printed by
+`tests/run-tests.sh`.
+
+- **INV-1** A step never claims success, or advises a reboot, that it did not earn.
+  *Test:* the scenarios *"up-to-date system does NOT advise a reboot (the original bug)"*,
+  *"a FAILED system step does not claim changes / reboot, and gives a hint"* and *"a FAILED
+  firmware update is reported as fail, not success, and does NOT reboot"*.
+
+- **INV-2** A failed step is recorded, emits a plain-English hint, and the run continues to
+  the next step — so cache cleanup still happens after a failed upgrade.
+  *Test:* *"a failed early step still lets a later step run; the run ends in errors"*.
+
+- **INV-3** `--check` is read-only: it needs no root, and never calls `dup` or `update`.
+  *Test:* *"--check reports counts read-only and never installs"* — the mock exits 99 if
+  violated — and *"--check performs NO privileged auth (never invokes sudo)"*.
+
+- **INV-4** Stopping is **cooperative**, checked only at safe boundaries, never mid-
+  transaction. `docs/standards/security.md` §6 owns the rule and why signalling is banned.
+  *Test:* *"a stop DURING the run lets the running transaction finish, then stops"* and
+  *"Stop is honoured DURING the refresh, before anything is installed"*.
+
+- **INV-5** A run survives the window going away, and still finishes.
+  *Test:* *"a run survives the GUI going away and still finishes (broken stdout pipe)"*.
+
+- **INV-6** A full run asks for the password exactly once.
+  *Test:* *"a full run asks for the password exactly once (no per-step prompts)"*.
+
+- **INV-7** Nothing the engine spawns outlives it.
+  *Test:* *"the keep-alive exits on its own once the engine is gone (SIGKILL-proof)"*, *"the
+  sudo keep-alive leaves no orphaned process when a run ends"* and *"an orphaned password
+  dialog is reaped when the run ends"*.
+
+- **INV-8** A slow server is never indistinguishable from a hang.
+  *Test:* *"a source too slow to refresh is bounded, named, and offers the skip"* and *"the
+  download reports bytes and a total, so a slow one is legible (ONEUP-0048)"*.
+
+- **INV-9** A step whose tool is absent is skipped **cleanly**, never errored. The engine
+  guards the Flatpak and firmware steps with `command -v flatpak` and `command -v fwupdmgr`.
+  *Test:* **none — this is a real gap.** No scenario in `tests/run-tests.sh` arranges an
+  absent `flatpak` or `fwupdmgr`, so the skip path has never been exercised. Filed as
+  ONEUP-0070; v2 must not inherit the gap.
+
+- **INV-10** v2 emits the same marker stream and the same exit code as v1, under identical
+  mocks.
+  *Test:* `tests/differential.sh` (§4.5) — gate G2. New with this work.
+
+- **INV-11** The engine imports no Qt and runs with PySide6 absent. This is the privilege
+  split made testable: the half that becomes root cannot depend on the half that draws
+  windows.
+  *Test:* a new scenario that runs the engine with PySide6 hidden from the import path —
+  gate G5. New with this work.
+
+**Not an invariant of this spec, though an earlier draft listed it:** *tests never depend
+on, or damage, machine state*. That is a rule about the suite, and
+`docs/standards/testing.md` §2 owns it. It binds the rewrite because the rewrite's tests are
+tests, not because the engine enforces it.
+
+## 6. Failure modes
+
+| If this breaks | What happens | What limits the damage |
+| --- | --- | --- |
+| The rewrite re-introduces a fixed bug | a shipped regression | G1 plus G2: no assertion is rewritten, and the marker streams are diffed |
+| A behaviour lives only in Bash's semantics and nobody notices | v2 silently differs | the differential harness is *the* answer; what it cannot cover is listed in §4.5 and lands on G6 |
+| The branch stalls half-done | 2.0 never arrives | `main` ships frozen 1.4.0 throughout; abandoning costs nothing but the branch |
+| Scope creep — *"while we're rewriting, let's also…"* | the gate recedes | the protocol is frozen (§4.1) and §4.3.3 is explicitly deferred past the switch |
+| The GUI split gets entangled with this gate | a failing test cannot say which change broke it | ONEUP-0034 is a separate item, specified and merged separately (§3.1) |
+| Python's start-up latency shows on a short `--check` | the check feels slower | measured in stage 3, not assumed. An interpreter start against a multi-second zypper call is expected to be noise — but it is a measurement |
+| A privileged call ends up inside a subshell equivalent | the seven-prompt bug returns | it cannot: §4.3.1 removes the mechanism. G4 still asserts it |
+
+## 7. Tests
+
+**The gate is `docs/design/oneup-2.0.md` §7**, which holds the conditions for all of 2.0.
+G1–G6 are this item's; G7–G10 belong to the release. Not restated here, so the two cannot
+drift. What this spec adds is **how each of its six is checked**:
+
+| # | How it is checked |
 | --- | --- |
-| The rewrite re-introduces a fixed bug | G1 + G2: no assertion is rewritten, and the marker streams are diffed |
-| The branch stalls half-done | `main` ships 1.x throughout; abandoning costs nothing but the branch |
-| A behaviour lives only in Bash's semantics and nobody notices | the differential harness is *the* answer; anything it cannot cover is listed in §10 |
-| Scope creep — "while we're rewriting, let's also…" | the protocol is frozen (§4.1); §5.3 is explicitly deferred past the switch |
-| `updater.py`'s split gets entangled with the engine gate | ONEUP-0034 is specified and merged separately |
-| Python startup latency on a short `--check` | measure in phase 3; ~30 ms interpreter start against a multi-second zypper call is expected to be noise, but it is a measurement, not an assumption |
+| **G1** | `ONEUP_ENGINE_CMD=… tests/run-tests.sh` — the same suite, the same assertions, the new engine (§4.4) |
+| **G2** | `tests/differential.sh` (§4.5) |
+| **G3** | `python3 tests/gui-smoke.py`, with the window driving v2 |
+| **G4** | the existing one-prompt scenario, unchanged (INV-6) |
+| **G5** | a new scenario, PySide6 hidden from the import path (INV-11) |
+| **G6** | manual, with the user: `--check`, a real update, a rollback offer — plus §4.5's list |
 
-## 10. Open questions
+`./local-CI.sh` prints the suite tallies; it is the gate for every push
+(`docs/standards/workflow.md` §6).
 
-1. **What can the differential harness not see?** Timing-dependent behaviour and
-   anything only reachable on a real machine (real sudo, real snapper). Phase 6
-   should end with an explicit list of what G6 has to cover by hand.
-2. **Do we keep Bash's exit codes?** The GUI takes its verdict from the engine's
-   exit code, with `@@DONE@@` as belt-and-braces. Assume yes — identical codes —
-   and assert it in the differential harness.
-3. **Does `--notify` stay in the engine?** It shells out to `notify-send` from a
-   non-root context; it may belong in the GUI. Not decided; keep as-is for G2 and
-   revisit after the switch.
+## 8. Docs & release
+
+When the switch lands in stage 9:
+
+- **`docs/reference/marker-protocol.md`** — §5.1 lifts the freeze; the "known drift in the
+  engine's own header comment" section (§7) dies with the Bash header it describes.
+- **`tests/docs-check.py`** — its marker gate reads `update_system.sh` for `marker NAME`
+  call sites. Point it at the Python emitters in the same commit, or the contract stops
+  being checked at the moment it is most likely to move.
+- **`CLAUDE.md`** — §4's two-file architecture and §5's Bash-specific traps
+  (`tee -a -p`, sudo in subshells) are rewritten for the package. The traps do not vanish:
+  the sudo one becomes a property (§4.3.1), the `tee` one becomes `BrokenPipeError`
+  handling.
+- **`README.md`** — the standalone-engine instructions name `update_system.sh`.
+- **`CHANGELOG.md`** and the **six version sites** — a major bump to **2.0.0**, which is
+  also the honest signal: the engine anyone shelling out to OneUp depended on has changed.
+  `docs/standards/workflow.md` §5.1 owns the lockstep.
+- **The three packaging paths** — §4.7.
+
+## 9. Alternatives considered (and rejected)
+
+| Alternative | Why not |
+| --- | --- |
+| Keep hardening the Bash engine | it works, and §2.2 concedes that none of ONEUP-0048's failures were Bash's fault. But §2.1's three costs are structural, and the first one is a rule 34 call sites must each remember. The user weighed this and chose the rewrite (ONEUP-0052) |
+| Rewrite and redesign the protocol in one step | it makes the differential harness impossible, which throws away the only safety net the rewrite has. A failing test could not say which change broke it |
+| Rewrite the engine and split the window together | same objection, different pair. The split is behaviour-preserving and the rewrite is not, so they must be separable (§3.1) |
+| Use Python bindings instead of shelling out to `zypper` | out of scope for all of 2.0 (`docs/design/oneup-2.0.md` §10). It would replace a proven call surface with an unproven one inside a rewrite that is already unproven |
+| Ship v2 as a beta alongside 1.4.0 | the user's rule: no partial 2.0 releases. Two engines in users' hands means bug reports nobody can attribute |
+| Rewrite the tests to suit the new engine | it removes the only evidence the rewrite is faithful. G1 requires that no assertion changes |
+
+## 10. Out of scope
+
+- **Any protocol change**, including the byte counters §4.3.3 makes possible. They come
+  after G2, on their own change.
+- **Turning `@@HINT@@` and `@@REMEDY@@` prose into codes.** That is ONEUP-0032, and
+  `docs/design/oneup-2.0.md` §5.1 explains why it must not ride along with the rewrite.
+- **Moving `--notify` into the window.** It shells out to `notify-send` from a non-root
+  context, so it arguably belongs there. Kept as-is, because moving it would break G2 for
+  no gain during the rewrite. Revisit after the switch.
+- **Any change to the five steps or their order.**
+- **The window's split into modules** — ONEUP-0034 (§3.1).
+
+## 11. Cold-eyes loop log
+
+| Loop | Date | Findings | Outcome |
+| --- | --- | --- | --- |
+| — | — | not yet run | this document is `Draft`; implementation is blocked until a pass converges |

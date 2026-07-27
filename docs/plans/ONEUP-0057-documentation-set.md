@@ -16,9 +16,22 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — resume at **Task 12**
+> ## ▶ You are here — resume at **Task 13**
 >
-> **Done:** Tasks 1–11 (2026-07-26). Nine standards, the marker-protocol reference,
+> **Task 12 done (2026-07-27).** `ONEUP-0054-python-engine.md` rewritten under the
+> standards: the §3 header block, the eleven template sections, INV-1…INV-11 each naming
+> the scenario that proves it, and no line-number citations left. Four claims were wrong
+> rather than stale — 57 sudo call sites (34), `history.json` as an engine contract (it is
+> the window's), the two log directories the wrong way round, and a "wording canary"
+> credited to the Stop button's roadmap id. One honest gap is now recorded rather than
+> implied: **INV-9 has no test** — nothing arranges an absent `flatpak`/`fwupdmgr`, so the
+> skip-cleanly path has never run. Filed as **ONEUP-0070**. The spec left
+> `docs-check.py`'s `GRANDFATHERED` set, so §3's header rules now gate it.
+>
+> **Next:** Task 13 — cold-eyes batch 2 over `docs/design/oneup-2.0.md` and the revised
+> engine spec. Then Tasks 14–19 in order.
+>
+> **Done earlier:** Tasks 1–11 (2026-07-26). Nine standards, the marker-protocol reference,
 > cold-eyes batch 1, and `CLAUDE.md`. All ten reviewed documents are `Status: Reviewed`
 > and carry their own loop log. Batch 1 ran to convergence over four loops; the last one
 > returned polish only. Three things came out of it that outlive it: `tests/docs-check.py`
@@ -26,9 +39,6 @@ absorbed and removed).
 > checks this** table, and `documentation.md` gained §6a (cite by name, never by line
 > number) and §6b (keep counts taken from the code out of a document). `./local-CI.sh`
 > green — it prints the tallies.
->
-> **Next:** Task 12 — revise `docs/specs/ONEUP-0054-python-engine.md` under the standards.
-> Then Tasks 13–19 in order.
 >
 > **Carry these forward — they are decisions, not suggestions:**
 > - **`main` is frozen at 1.4.0.** Anything found that cannot be fixed is *filed on the
@@ -701,23 +711,42 @@ git commit -m "ONEUP-0057: shrink CLAUDE.md to a map that still carries the trap
 
 **Files:** Modify `docs/specs/ONEUP-0054-python-engine.md` (276 lines, draft)
 
-- [ ] **Step 1: Refresh every figure.** The draft cites `ea51adc`; the tree is `dbef1a8`:
+- [x] **Step 1: Refresh every figure.** The draft cites `ea51adc`; the tree is `b6d37ed`:
 
 ```bash
 wc -l update_system.sh updater.py tests/run-tests.sh tests/gui-smoke.py
-bash tests/run-tests.sh 2>&1 | tail -3      # expected 205
-python3 tests/gui-smoke.py 2>&1 | tail -3   # expected 283
+bash tests/run-tests.sh 2>&1 | tail -3      # 205 assertions over 76 scenarios
+python3 tests/gui-smoke.py 2>&1 | tail -3   # 283
 ```
-      The draft's "197 engine tests" and "3,680 lines" are stale — correct them and say
-      which commit the new figures come from.
-- [ ] **Step 2: Reconcile the contradiction.** The draft's header says the ONEUP-0034 GUI
+      **Done, but not the way this step assumed.** §6b landed after this plan was written
+      and outranks it (`documentation.md` §1.1): most counts belong out of a document
+      altogether. So the line counts and suite tallies were **cut**, not refreshed; the
+      figures that stayed are the ones that carry an argument, in §6b.4's measured-and-
+      past-tense form. Three were wrong, not merely stale: **57 sudo call sites → 34**
+      (14 `sudo_capture` + 20 direct `sudo`, the helper's own two excluded); `history.json`
+      and `~/.local/state/oneup/logs/` are the **window's**, not engine contracts; and the
+      "ONEUP-0047 wording canary" is the Stop button — the canary is a scenario in
+      `tests/run-tests.sh`, with no roadmap id.
+- [x] **Step 2: Reconcile the contradiction.** The draft's header says the ONEUP-0034 GUI
       split lands "in the same package"; the roadmap says keep it separate. The design
       settles it: separate items, split first, both on `v2`. Fix the header.
-- [ ] **Step 3: Conform to Task 1's template** — add any missing section, and the Status
-      header with the verification commit.
-- [ ] **Step 4: Point at the design** for everything cross-cutting (§4 layout, §5.1
-      codes, §7 gate) instead of restating it, so the two cannot drift.
-- [ ] **Step 5: Commit.**
+      **Done** — `Kind:` is now plain `implement`, and new §3.1 states the relationship:
+      shared package, shared branch, split lands first, separate gate.
+- [x] **Step 3: Conform to Task 1's template** — add any missing section, and the Status
+      header with the verification commit. **Done.** Full §3 header block; the eleven
+      template sections in order; the ten-row invariant table rewritten as INV-1…INV-11,
+      each naming the scenario that proves it. Two by-products: the spec dropped out of
+      `docs-check.py`'s `GRANDFATHERED` set (§3 says a grandfathered spec is brought to
+      shape the next time it is edited — proved by seeding a bad `Status` and watching §3
+      fail), and its 7 line-number citations went, so ONEUP-0065 is down to 62 across four
+      specs. The tally is corrected in `docs-check.py`, `documentation.md` and the roadmap
+      bullet, per §9's *search for who cited it*.
+- [x] **Step 4: Point at the design** for everything cross-cutting (§4 layout, §5.1
+      codes, §7 gate) instead of restating it, so the two cannot drift. **Done, and the
+      drift was already real:** the draft's own gate table said "197/197" and "277/277"
+      where the design's says no assertion changed. The spec now keeps only the *how it is
+      checked* column and points at design §7 for the conditions.
+- [x] **Step 5: Commit.**
 
 ```bash
 git add docs/specs/ONEUP-0054-python-engine.md
