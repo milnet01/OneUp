@@ -8,7 +8,7 @@ gate it must pass green before it leaves this machine.
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `7a7afc1` — every command, path and figure below was run or read against
+**Verified at:** `4af1937` — every command, path and figure below was run or read against
 the tree on 2026-07-27, not recalled.
 
 **Sections:** 1 the v1 freeze · 2 branches · 3 commits · 4 roadmap IDs · 5 versions ·
@@ -217,7 +217,7 @@ notes from it, so there is nothing to derive.
 ## 6. The gate before a push
 
 **`./local-CI.sh` must be green before every push.** It covers more than GitHub CI does, and
-it is short enough to run every time: measured at `7a7afc1` on the development machine,
+it is short enough to run every time: measured at `4af1937` on the development machine,
 `time ./local-CI.sh` reported **34–38 seconds** across warm runs, of which the engine suite
 is the bulk.
 Under a minute, not under a second — long enough that skipping it feels tempting, which is
@@ -302,7 +302,9 @@ it to the GitHub release.
 
 `./release.sh X.Y.Z` does the whole thing. `--no-obs` stops after GitHub.
 
-Its preconditions are checks, not suggestions, and it exits on any of them:
+It validates its argument first — `X.Y.Z` or nothing happens — and `--no-obs` is read as the
+second argument. Then its preconditions, which are checks rather than suggestions, and it
+exits on any of them:
 
 1. a clean working tree,
 2. on `main`,
@@ -312,16 +314,20 @@ Then, in order: bump the six sites → `./local-CI.sh` → show the diffstat →
 confirmation** → commit `OneUp X.Y.Z`, tag, push → update the OBS package via `osc`.
 
 **A red gate stops it there, with the bump already written to your tree** — the same state a
-declined confirmation leaves, and the same recovery: fix and re-run, or `git checkout -- .`
-to discard.
+declined confirmation leaves. **The recovery is ordered, and the order matters**, because
+`release.sh`'s first precondition is a clean tree: discard the bump with `git checkout -- .`
+*first*, then fix what was wrong and re-run. Re-running on top of the bump is refused, not
+merged.
 
 **A refusal part-way through the bump leaves a partial one.** `bump.py` writes the six
 sites one at a time and stops at the first whose format has drifted, so the sites before it
-are already rewritten. `git checkout -- .` is still the recovery.
+are already rewritten. Same recovery, same order: discard, fix the drifted file, re-run.
 
-**A failed `git push` is the awkward one**, because it fires after the commit and the tag.
-`git checkout -- .` recovers nothing there; undoing it is `git tag -d vX.Y.Z` and
-`git reset --soft HEAD~1`, then re-run.
+**A failed `git push` is the awkward one**, because it fires after the commit *and* the tag.
+`git checkout -- .` recovers nothing there. Undo is `git tag -d vX.Y.Z`, then
+`git reset HEAD~1` — a mixed reset, so the bump lands back in the working tree — then
+`git checkout -- .` to discard it, and only then re-run. A `--soft` reset leaves everything
+staged, which the clean-tree precondition refuses just the same.
 
 Three things about that sequence are worth knowing before you run it:
 
@@ -377,7 +383,7 @@ status *considered*, so the reasoning stays findable.
 While the freeze holds, the decision is short:
 
 ```
-Is it documentation?                     → main (§1.2)
+Is it documentation?                     → main → merge main into v2 (§1.2, §2)
 Is it *the* ONEUP_ENGINE_CMD harness
   change — the one exception §1.2 names?  → main first, then v2 (§1.2)
 Otherwise:
@@ -431,15 +437,16 @@ states it and owns what "complete" means.
 | §9 no partial 2.0 releases | nothing automatic, and nothing could be: it is a decision not to cut a tag, and no gate can catch a tag that was cut |
 | §4 roadmap IDs come from `.roadmap-counter` | the allocator itself: on a fresh clone the file is absent and appending **refuses**, rather than restarting at 1 and colliding |
 | §5 the version increment matches the change | **nothing.** `release.sh` takes `X.Y.Z` as an argument and never questions it; calling a breaking change a patch release is caught by a person or not at all |
-| §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate — for the version **numbers**, at all six sites. `tests/bump-test.py` covers a *different* failure: it runs a real bump in a throwaway copy where five of the six sites are the real files copied verbatim, so a site whose format has drifted makes `bump.py` refuse ("no match … file drifted from the expected format") and the test fail. What it does **not** do is assert the new value at those five — five of its six assertions read the `CHANGELOG.md`, which is the one site it fakes; the sixth asserts `bump.py` exited 0, and that is the one a drifted format trips, because that is where ONEUP-0033 happened |
+| §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate — for the version **numbers**, at all six sites. `tests/bump-test.py` covers a *different* failure: it runs a real bump in a throwaway copy where five of the six sites are the real files copied verbatim, so a site whose format has drifted makes `bump.py` refuse ("no match … file drifted from the expected format") and the test fail. What it does **not** do is assert the new value at those five — five of its six assertions read the `CHANGELOG.md`, which is the one site it fakes; the sixth asserts `bump.py` exited 0, and that is the one a drifted format trips |
 | §5.1 site 6's two `CHANGELOG.md` links match its newest heading | `tests/docs-check.py`. Added 2026-07-26: the lockstep gate reads only the heading, and a hand-edit could leave the release link missing or the `[Unreleased]` compare base pointing at the previous tag — which is ONEUP-0033, a bug this project shipped once already |
 | §5.2 a release needs a non-empty `## [Unreleased]` | `bump.py` — it refuses outright: *"CHANGELOG.md has no non-empty '## [Unreleased]' section to release"*. One of the few rules here with a hard automatic stop |
 | §6 local CI is green before a push | `githooks/pre-push` — but only once per clone, after `git config core.hooksPath githooks`. **Nothing enforces that it is enabled**, so on a fresh clone this rule is a habit |
 | §7 push each commit once local CI is green | nothing automatic, and nothing needs to be — the repository is public, so a wasted push costs no runner minutes and an unpushed commit harms only its author |
+| §6.1 the same *class* of error caught twice becomes a gate | nothing automatic — it is a judgement made in a review pass, and the only evidence it was made is that the gate exists |
 | §6.1 a new gate is proved to fail before it is trusted | nothing automatic |
 | §6.1 step 2 — a new gate's row is named as the script labels it, in script order | nothing automatic. The table and the script are compared by a reader or not at all |
 | §6.1 a gate reports and does not repair | nothing automatic, but it is self-punishing: a gate that edited prose would be rewriting a claim it does not understand, and the next cold read finds it |
-| §6 a gate whose tool is absent is reported skipped, never silently passed | the `skip` helper each gate uses — but nothing checks that a *new* gate reaches for it rather than for a bare `ok` |
+| §6 a gate whose tool is absent is reported skipped, never silently passed | the `skip` helper each **optional-tool** gate uses — five of the eight have such a branch; the rest have no tool that can be missing. Nothing checks that a new optional-tool gate reaches for it rather than for a bare `ok` |
 | §6 `--no-verify` is not a way past a red gate | **nothing, by construction** — it is the flag that turns the check off. Only the author's intent stands behind this one |
 | §3 the body says *why*, and records any measurement | nothing automatic |
 | §4 a finding is filed the moment it is found | nothing automatic, and by its nature nothing could: an unfiled finding leaves no trace to check |
@@ -470,3 +477,4 @@ clone where nobody ran that one command, a green push proves nothing at all.
 | 9 | 2026-07-27 | 2 high, 5 medium, 5 low — **10 verified, 2 dismissed** | Converged on the same two classes and nothing new: pointers and duplication. `testing.md` and `coding.md` each restated a §6 gate-policy fact without citing this document as the owner, and the What-checks-this table still had no row for the roadmap-bullet shape or the CHANGELOG entry shape — both rules this document states and nothing checks |
 | 10 | 2026-07-27 | 2 high, 4 medium, 5 low — **9 verified, 2 dismissed** | §6 claimed GitHub CI "builds and verifies" the AppImage. It builds it and attaches it; nothing launches it, and design §7's G8 says as much in the opposite direction — so the sentence telling a reader `--full` is optional rested on a check that does not exist. §11's checklist had drifted the other way from §9's tree, giving `main` a §1.1 fix and documentation "and nothing else" where §1.2 grants one more. The five-gates-never-in-CI count, already stale once, is now written as a shape |
 | 11 | 2026-07-27 | 2 high, 5 medium, 6 low — **11 verified, 2 dismissed** | The freeze exception had leaked into a third form: §2's branch table still read "documentation and qualifying bug fixes only", which is the first place a reader looks and the one §1.2, §9 and §11 had all been corrected around. The shape that replaced the stale five-gates count was itself positionally false — the compile check sits above the third suite in the table, so "below the three suites" derives four. `Status` is now `Draft — cold-eyes in progress`, which is what `documentation.md` §3 requires of a document mid-review, and what this one should have said since batch 2 reopened it |
+| 12 | 2026-07-27 | 1 critical, 1 high, 2 medium, 8 low — **10 verified, 2 dismissed** | The critical was §8's recovery advice. All three failure paths said "fix and re-run", and `release.sh` refuses to re-run in every one of them: its first precondition is a clean tree, and every path leaves the bump in it. Verified by running it — dirty and staged both exit on "working tree not clean". The recovery is now an ordered sequence, and the failed-push case takes a mixed reset rather than `--soft`, which only stages what the precondition then refuses |

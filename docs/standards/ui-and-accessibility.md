@@ -391,7 +391,7 @@ today; the RTL work adds them, and this is the form they take.
 | §5.4 the 3:1 focus-indicator ratio | **nothing computes contrast anywhere in the suite.** The four measured ratios in §5.4 were taken by hand, and the shortfall is deliberate, and §5.4 makes closing it **ONEUP-0064's** obligation: a ringless treatment measuring ≥ 3:1 in every shipped theme, with the measurement added to the suite |
 | §7 themes | ONEUP-0027 — the contrast check is that item's to write, and the light theme's `lastrun` text sits at 3.07:1 today |
 | §8.1 no directional QSS property | nothing automatic |
-| §8.2 no hard-coded `AlignLeft` / `AlignRight` | nothing automatic — `#LinkBtn` violates it today |
+| §8.2 no hard-coded `AlignLeft` / `AlignRight` | nothing automatic. Nothing violates it today — the `#LinkBtn` violation is §8.1's `text-align: left`, not this rule |
 | §8.3 custom painting applies the direction | **nothing** — the toggle knob does not apply it (ONEUP-0032) |
 
 **The gated half is the half a script can see.** A name is present or absent; a font size is
