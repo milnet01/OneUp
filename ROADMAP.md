@@ -707,7 +707,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Decided in ONEUP-0052. Design: docs/specs/ONEUP-0054-python-engine.md
   (draft — must go through /cold-eyes before any code, global rule 14).
 
-  Shape: update_system.sh (34 privileged call sites) becomes eight
+  Shape: update_system.sh (34 privileged call sites) becomes nine
   Python modules under oneup/engine/, keeping the @@MARKER@@ protocol and
   all 13 CLI flags byte-identical. The point of freezing the contract is
   that the existing engine suite then PROVES the rewrite instead of
@@ -729,7 +729,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   (`tee -a -p` and the orphan-prone keep-alive loop). Python does NOT gain
   the ability to kill a root child — `sudo timeout` stays.
 
-  Ten phases, each ending with local-CI green on `v2`; phase 1 (an
+  Nine stages, each ending with local-CI green on `v2`; phase 1 (an
   ONEUP_ENGINE_CMD indirection in the test harness) lands on `main` first
   and is a no-op there. `main` ships 1.x throughout; the switch is a 2.0.0
   major bump. Keep ONEUP-0034 (splitting updater.py) separate — it is

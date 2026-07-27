@@ -316,9 +316,11 @@ with the layout direction forced right-to-left.
 - **A shared teardown.** Scenarios are commented out one at a time while debugging (there
   is no per-test selector); cleanup that lives outside the scenario body is skipped exactly
   when the debugging is happening.
-- **Adding a gate to one CI and not the other.** `local-CI.sh` and
-  `.github/workflows/release.yml` must stay in step; a gate in only one of them is a gate
-  that half of the pushes ignore.
+- **Adding a *test* gate to one CI and not the other.** A test gate belongs in both
+  `local-CI.sh` and `.github/workflows/release.yml`; one that runs only locally catches its
+  first regression after the tag is pushed. The five *non-test* gates staying local is a
+  deliberate split, not this trap — `docs/standards/workflow.md` §6 owns the policy and
+  says what it costs.
 
 ## 10. Before you commit a test change
 

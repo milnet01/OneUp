@@ -228,7 +228,7 @@ were true would have misled the 2.0 implementer.** What is actually true:
   reads the environment each call. Half-and-half is what breaks: a constant captured in
   one module while another reads the environment gives two different answers in the same
   process.
-- **Prefer `XDG_STATE_HOME` when it is set.** OneUp does not honour it today (§7, trap 2).
+- **Prefer `XDG_STATE_HOME` when it is set.** OneUp does not honour it today (§7, Trap 3).
 
 ---
 

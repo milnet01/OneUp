@@ -23,11 +23,9 @@ because it decides where *every* change goes.
 *This section is canonical for the rule.* `docs/design/oneup-2.0.md` §5.4 carries the
 programme framing — why the freeze exists and what it costs — and defers here for the test.
 
-1.4.0 was released first on purpose: it carries eight finished improvements — among them the
-Stop button, following a run already in progress, making a slow mirror legible, Wayland
-dialog placement, and the false "up to date" fix. (`CHANGELOG.md`'s `## [1.4.0]` section is
-the full list.) The version people sit on for the length of the 2.0 build should be the best
-one available.
+1.4.0 was released first on purpose, carrying eight finished improvements —
+`CHANGELOG.md`'s `## [1.4.0]` section is the list, and `docs/design/oneup-2.0.md` §5.4 is
+where the reasoning lives.
 
 ### 1.1 What still qualifies for `main`
 
@@ -61,8 +59,8 @@ Two things are not feature work and are unaffected:
 - **Documentation.** It is not a release. This whole standards set lands on `main` normally,
   because the rules govern 1.x maintenance too and `v2` inherits them by merge (design §5.3).
 - **A test-harness change that provably alters no application behaviour.** Added
-  2026-07-27, at the user's decision, and deliberately narrow: it covers a change to
-  `tests/` that touches neither `updater.py` nor `update_system.sh`, and whose whole
+  2026-07-27, at the user's decision, and deliberately narrow: it covers a change that
+  touches only files under `tests/`, and whose whole
   justification is that the suite must be *seen* to stay green on `main` before anything on
   `v2` depends on it. It exists for one known change — the `ONEUP_ENGINE_CMD` indirection
   that lets the suite drive either engine (`docs/specs/ONEUP-0054-python-engine.md` §4.4).
@@ -158,7 +156,7 @@ reader learns what was actually done, and it is frequently different from what w
 planned.
 
 **File a finding at the moment you find it.** A gotcha noticed mid-task and held until
-close-out is a gotcha that gets lost. This is why ONEUP-0058 through 0065 exist: each was
+close-out is a gotcha that gets lost. This is why ONEUP-0058 through 0063 exist: each was
 filed in the task that surfaced it, not in a tidy-up pass afterwards.
 
 ## 5. Versions
@@ -224,8 +222,8 @@ what the pre-push hook is for.
 | --- | --- |
 | `tests/run-tests.sh` | the engine suite — the markers `update_system.sh` prints |
 | `tests/gui-smoke.py` | the offscreen GUI suite — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip) |
-| Python syntax | `updater.py` and `bump.py` parse |
-| `tests/bump-test.py` | a real bump in a throwaway copy still parses every version site, and rewrites `CHANGELOG.md`'s heading and both links correctly |
+| `Python compile (updater.py)` | `py_compile updater.py bump.py` — both files parse |
+| `tests/bump-test.py` | a real bump in a throwaway copy still parses the five real version sites, and rewrites the (synthetic) `CHANGELOG.md`'s heading and both links correctly |
 | lint | `shellcheck`, then `ruff (F,B bug-class)` — best-effort |
 | packaging validation | desktop file and AppStream metainfo |
 | version lockstep | the **version numbers** at the six sites of §5.1 agree |
@@ -310,7 +308,7 @@ confirmation** → commit `OneUp X.Y.Z`, tag, push → update the OBS package vi
 Three things about that sequence are worth knowing before you run it:
 
 - **It stops and waits for a yes.** A release is not unattended. Answering anything but
-  `y` aborts and leaves the bump in your tree; `git checkout -- .` discards it.
+  `y` or `Y` aborts and leaves the bump in your tree; `git checkout -- .` discards it.
 - **The clean-tree precondition is what makes its `git add -A` safe.** With a clean tree,
   everything staged is exactly what `bump.py` wrote. Starting from a dirty tree would sweep
   unrelated edits into a release commit — which is why the check comes first and is fatal.
@@ -361,13 +359,17 @@ status *considered*, so the reasoning stays findable.
 While the freeze holds, the decision is short:
 
 ```
+Is it documentation?                     → main (§1.2)
+Is it a test-only change that alters no
+  application behaviour?                 → main first, then v2 (§1.2)
+Otherwise:
 Can people still install system, Flatpak and firmware updates?
 ├── no  → it is a §1.1 fix → main → 1.4.x → merge main into v2
 └── yes → it is 2.0 work   → v2   → ships when the whole gate passes (design §7)
 ```
 
-**No partial 2.0 releases.** No beta cut from the branch mid-way. Users stay on frozen
-1.4.0 until 2.0.0 arrives complete — the user's rule, 2026-07-26, recorded in design §7.
+**No partial 2.0 releases** — the user's rule, 2026-07-26. `docs/design/oneup-2.0.md` §7
+states it and owns what "complete" means.
 
 ## 10. Traps
 
@@ -402,16 +404,20 @@ Can people still install system, Flatpak and firmware updates?
 | Rule | What catches a breach |
 | --- | --- |
 | §1 the v1 freeze | nothing automatic — the branch a commit lands on is a human decision |
-| §1.2 the test-harness exception is not widened | nothing automatic. The narrowing condition — it touches no application file — is `git diff --name-only` away, but nothing runs it. This row exists so the exception cannot quietly become "changes I judge harmless" |
+| §1.2 the test-harness exception is not widened | nothing automatic. The narrowing condition — it touches only files under `tests/` — is one `git diff --name-only` away, but nothing runs it. This row exists so the exception cannot quietly become "changes I judge harmless" |
 | §2 `v2` is never rebased or force-pushed | **nothing, and the damage is off this machine.** No branch protection exists (the repository has none), so a `git push --force` on `v2` would succeed and break every clone. It is the one trap in this document with no net under it at all |
-| §3 the commit subject format | nothing automatic. There is no `commit-msg` hook, and adding one is cheap if the format ever drifts |
+| §2 `main` merges *into* `v2`, never the reverse | nothing automatic. A merge the wrong way would carry unfinished 2.0 work onto released `main`, and only the author's attention stands between the two |
+| §3 the commit subject format, the `Co-Authored-By:` trailer, and one thing per commit | nothing automatic, for all three. There is no `commit-msg` hook, and adding one is cheap if the format ever drifts |
+| §5.2 released CHANGELOG entries are never rewritten | nothing automatic — `git` will happily let you edit a shipped entry. The tag is the only record that contradicts you |
+| §9 no partial 2.0 releases | nothing automatic, and nothing could be: it is a decision not to cut a tag, and no gate can catch a tag that was cut |
 | §4 roadmap IDs come from `.roadmap-counter` | the allocator itself: on a fresh clone the file is absent and appending **refuses**, rather than restarting at 1 and colliding |
-| §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate — for the version **numbers**, at all six sites. `tests/bump-test.py` covers a *different* failure: it runs a real bump in a throwaway copy where five of the six sites are the real files copied verbatim, so a site whose format has drifted makes `bump.py` refuse ("no match … file drifted from the expected format") and the test fail. What it does **not** do is assert the new value at those five — all six of its assertions read the `CHANGELOG.md`, which is the one site it fakes, because that is where ONEUP-0033 happened |
+| §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate — for the version **numbers**, at all six sites. `tests/bump-test.py` covers a *different* failure: it runs a real bump in a throwaway copy where five of the six sites are the real files copied verbatim, so a site whose format has drifted makes `bump.py` refuse ("no match … file drifted from the expected format") and the test fail. What it does **not** do is assert the new value at those five — five of its six assertions read the `CHANGELOG.md`, which is the one site it fakes; the sixth asserts `bump.py` exited 0, and that is the one a drifted format trips, because that is where ONEUP-0033 happened |
 | §5.1 site 6's two `CHANGELOG.md` links match its newest heading | `tests/docs-check.py`. Added 2026-07-26: the lockstep gate reads only the heading, and a hand-edit could leave the release link missing or the `[Unreleased]` compare base pointing at the previous tag — which is ONEUP-0033, a bug this project shipped once already |
 | §5.2 a release needs a non-empty `## [Unreleased]` | `bump.py` — it refuses outright: *"CHANGELOG.md has no non-empty '## [Unreleased]' section to release"*. One of the few rules here with a hard automatic stop |
 | §6 local CI is green before a push | `githooks/pre-push` — but only once per clone, after `git config core.hooksPath githooks`. **Nothing enforces that it is enabled**, so on a fresh clone this rule is a habit |
 | §7 push each commit once local CI is green | nothing automatic, and nothing needs to be — the repository is public, so a wasted push costs no runner minutes and an unpushed commit harms only its author |
 | §6.1 a new gate is proved to fail before it is trusted | nothing automatic |
+| §6.1 step 3 — a new **test** gate goes in `release.yml` too | nothing automatic. Nothing compares the two gate sets, and the failure is silent by construction: the gate passes locally, so the omission only shows up as a regression that reached a tag |
 | §8 the release preconditions | `release.sh` — three fatal checks before it touches anything: a clean tree, on `main`, and the tag not already existing |
 | §8.1 no fourth distribution path | **nothing, and nothing should.** Adding a packaging path is a deliberate act by a person, not something that happens by accident, so there is no breach for a script to catch. What the row is for is the opposite failure: somebody proposing one without knowing it was already weighed. ONEUP-0071 is the answer to that |
 
@@ -429,4 +435,4 @@ clone where nobody ran that one command, a green push proves nothing at all.
 | 4 | 2026-07-26 | 1 medium — **1 verified** | the gate table named `check-docs.py`; the script is `tests/docs-check.py`. Five such references survived the rename, and the pointer gate cannot see a bare filename — a limit now recorded in `documentation.md`. |
 | 5 | 2026-07-26 | 2 medium — **2 verified** | §5.1 claimed the version-lockstep gate covers the CHANGELOG heading *and its link*. `bump.py` writes three things and the gate read one; a stale `[Unreleased]` compare base is ONEUP-0033, already shipped once. `tests/docs-check.py` now checks both links. The gate table also listed its rows in a different order from the script it documents. |
 | 6 | 2026-07-26 | none | converged. |
-| 7 | 2026-07-27 | 2 critical, 3 high, 4 medium, 4 low (re-reviewed in batch 2, because §8.1 was written after loop 6 and no cold reader had seen it) | §8.1 itself survived intact — its Flatpak-sandbox argument checks out against `security.md` §1 and against what the engine does for each of the five steps. What did not: **both** descriptions of `tests/bump-test.py` were wrong in the reassuring direction — §6's table credited it with proving every version site advances, and the What-checks-this row had the synthetic and real files exactly backwards. And "it runs in about a second" was 34 seconds, measured, in the one figure that decides whether the gate gets run at all. §1.2 gained the behaviour-neutral test-harness exception (user's decision, 2026-07-27), which the engine spec had been granting itself |
+| 7 | 2026-07-27 | 2 critical, 3 high, 4 medium, 4 low — **11 verified, 2 dismissed** (re-reviewed in batch 2, because §8.1 was written after loop 6 and no cold reader had seen it) | §8.1 itself survived intact — its Flatpak-sandbox argument checks out against `security.md` §1 and against what the engine does for each of the five steps. What did not: **both** descriptions of `tests/bump-test.py` were wrong in the reassuring direction — §6's table credited it with proving every version site advances, and the What-checks-this row had the synthetic and real files exactly backwards. And "it runs in about a second" was 34 seconds, measured, in the one figure that decides whether the gate gets run at all. §1.2 gained the behaviour-neutral test-harness exception (user's decision, 2026-07-27), which the engine spec had been granting itself |

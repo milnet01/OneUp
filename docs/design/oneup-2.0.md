@@ -32,7 +32,8 @@ thing can replace what they run today.
 | **ONEUP-0027** | Selectable colour themes beyond follow-the-desktop | `docs/specs/ONEUP-0027-themes.md` *(to be written)* |
 | **ONEUP-0032** | Wrap user-facing text for translation, and mirror the window for right-to-left languages — **groundwork only, English alone**, see §5.1 | `docs/specs/ONEUP-0032-i18n.md` *(to be written)* |
 | **ONEUP-0044** | The double password box | no spec — see §6.2 |
-| **ONEUP-0004** | Dependency refresh, incl. the Python floor | no spec — see §6.3 |
+| **ONEUP-0004** | Dependency refresh — chiefly the CI Python version | no spec — see §6.3 |
+| **ONEUP-0063** | Add `pyproject.toml`, so a bare `ruff check` and the gate agree | no spec — `docs/standards/coding.md` §2.1 settles it |
 
 The list is **open, but not forever.** More items may be added while 2.0 is being built;
 each addition gets a roadmap bullet and, if it needs design, a spec, and is judged against
@@ -46,9 +47,12 @@ unless it is a defect in something already on the list.
 **2.0 replaces 1.4.0**, released from `main` at `dbef1a8`, after which `main` froze (§5.4).
 
 This section is the one place in the set that keeps dated measurements, because two
-standards point here for them rather than repeat them —
-`docs/standards/coding.md` §4.1 for the module sizes and
-`docs/standards/security.md` §1.2 for the privileged-call total. Everything here was
+standards point here for them rather than repeat them — `docs/standards/coding.md` §4.1 for
+the module sizes and `docs/standards/testing.md` §2 for the suite tallies. The
+privileged-call total runs the other way: `docs/standards/security.md` §1.2 **owns** it and
+this section merely carries it, which is deliberate — the earlier arrangement, where two
+documents each derived the split, is what produced the contradiction that standard's first
+review had to unpick. Everything here was
 **measured at `7a7afc1` on 2026-07-27**, and is written as something that was measured, not
 as something that is true (`docs/standards/documentation.md` §6b.4). The unit is named in
 every row, because the worst figure error this set has produced was an unnamed one.
@@ -57,20 +61,19 @@ every row, because the worst figure error this set has produced was an unnamed o
 | --- | --- | --- |
 | `update_system.sh` | 1,558 **lines** | `wc -l` |
 | `updater.py` | 3,719 **lines** — more than six times `coding.md` §4.1's 600-line ceiling, which is the whole case for ONEUP-0034 | `wc -l` |
-| `tests/run-tests.sh` | 2,041 **lines** | `wc -l` |
-| Engine suite | 76 **scenarios**, 205 **assertions**, all passing | `./local-CI.sh` prints the tally on every run |
-| GUI smoke suite | 283 **assertions**, all passing | as above |
+| Engine suite | 205 **assertions** over 76 **scenarios**, all passing | `./local-CI.sh` prints the assertion tally; the scenario figure is `grep -c '^TEST: ' tests/run-tests.sh` |
+| GUI smoke suite | 283 **assertions**, all passing | `./local-CI.sh` prints the tally |
 | `bump.py` functional test | 6 **assertions**, all passing | as above |
-| Privileged invocations in the engine | **34** | `docs/standards/security.md` §1.2 owns the breakdown, the exclusions, and why `grep` alone gets it wrong |
+| Privileged invocations in the engine | **34**, as measured at `58ea3bc` | `docs/standards/security.md` §1.2 owns the breakdown, the exclusions, and why `grep` alone gets it wrong. Unchanged since, because `update_system.sh` is |
 
-Three further figures are **not** measurements — each is fixed by a contract with a gate
-that fails when the tree stops matching it (`documentation.md` §6b.5), so they do not rot:
+Three further figures are pinned by a decision rather than counted (`documentation.md`
+§6b.5) — but only one of the three has a gate under it, and saying which is the point:
 
-| Fixed by | Value |
-| --- | --- |
-| §3 below, via `docs/reference/marker-protocol.md` §3 | **23** markers |
-| §3 below — the engine's command-line surface | **13** flags: `--auth-status`, `--auto-skip-repos`, `--check`, `--grant-auth`, `--help`, `--import-keys`, `--log=`, `--notify`, `--revoke-auth`, `--size=`, `--skip-repo=`, `--steps=`, `--thin-snapshots` |
-| `docs/standards/workflow.md` §5.1 — the six version sites | all six read **1.4.0** |
+| Pinned by | Value | What fails when the tree stops matching |
+| --- | --- | --- |
+| `docs/standards/workflow.md` §5.1 — the six version sites | all six read **1.4.0** | `local-CI.sh`'s version-lockstep gate |
+| §3 below, via `docs/reference/marker-protocol.md` §3 | **23** markers | **the count, nothing.** `tests/docs-check.py` compares the marker *names* both ways, so a marker added to the engine *and* the table agrees with itself and leaves this figure stale |
+| §3 below — the engine's command-line surface | **13** flags: `--auth-status`, `--auto-skip-repos`, `--check`, `--grant-auth`, `--help` (and its `-h` alias), `--import-keys`, `--log=`, `--notify`, `--revoke-auth`, `--size=`, `--skip-repo=`, `--steps=`, `--thin-snapshots` | **nothing.** No gate reads the engine's flag list. The freeze in §3 is a human undertaking |
 
 The Python floor and the lint rule set are settled decisions rather than baselines, and
 `docs/standards/coding.md` §1 and §2.1 own them — see §6.3.
@@ -85,8 +88,8 @@ if the thing under test still presents the same face.
    Documented in `docs/reference/marker-protocol.md`. **One** deliberate, versioned
    exception, in §5.1 of *this* document: ONEUP-0032's conversion of the `@@HINT@@` and
    `@@REMEDY@@` payloads to codes. The byte counters the engine rewrite makes possible
-   (`docs/specs/ONEUP-0054-python-engine.md` §4.3.3) need a marker too, and are deliberately
-   **after 2.0**, not a second exception inside it.
+   (`docs/specs/ONEUP-0054-python-engine.md` §4.3.3) need a marker too, and land **after the
+   2.0.0 tag** — not a second exception inside 2.0. See §10.
 2. **The engine's command-line surface** — all 13 flags, their spellings and behaviour.
 3. **The five step keys and their order** — `system, flatpak, firmware, orphans, cache`.
 4. **The privilege split** — the window never runs as root; the engine is the only thing
@@ -113,9 +116,14 @@ oneup/
 updater.py         thin entry point — kept at the root, because the RPM's
                    /usr/bin/oneup wrapper (which the desktop file's Exec=oneup
                    runs), the AppImage and every user's launcher all name it
-update_system.sh   retained through 2.0 as a documented fallback, removed in
-                   2.1 — the schedule and the reason are ONEUP-0054 §4.7
+update_system.sh   retained through 2.0 as a documented fallback, removed in 2.1
 ```
+
+**`update_system.sh`'s retirement schedule is this document's**, decided with the user on
+2026-07-27: 2.0.0 still ships it, marked as a fallback, and 2.1 removes it — so anyone who
+scripted against the engine gets a release's notice, and a real-machine problem with the new
+engine has a way back. `ONEUP-0054` §4.7 and `docs/standards/files-and-naming.md` §4 carry
+the same schedule and point here for the reason.
 
 **Packaging is affected, in three places, and they must move together** — this is the
 part a restructure most easily forgets:
@@ -157,9 +165,9 @@ Three reasons, in order of weight:
 - The engine rewrite ships with the contract **byte-identical**, English prose included.
   It passes its gate against unchanged tests.
 - **Then**, as part of ONEUP-0032, the prose payloads become codes in **one deliberate,
-  versioned change**, with the marker reference, both suites and the GUI updated in
-  lockstep. It is a break, done once, with the rewrite already proven — not a break
-  smuggled inside one.
+  versioned change**, touching every file `docs/reference/marker-protocol.md` §5 lists —
+  the engine that emits them included — in the same commit. It is a break, done once, with
+  the rewrite already proven, not a break smuggled inside one.
 
 Never both at once: a rewrite and a contract change in the same step means a failing test
 can't tell you which one broke it.
@@ -175,12 +183,16 @@ So 2.0 ships the **machinery and no second language**:
 - **English only** in the release. No `.ts`/`.qm` locale file for another language is
   written, reviewed or shipped as part of 2.0.
 
-The reason this is the right cut, and not a hedge: wrapping strings is a change to
-**every file that shows text**, so it must happen while the modules are being written —
-retrofitting it later means touching all of them twice. Translating strings, by contrast,
-touches **no code at all**. One is structural and belongs inside the rewrite; the other is
-content and can arrive in 2.1 without reopening anything. Shipping the groundwork also
-means the first language contributed later is a data file, not a project.
+The reason this is the right cut, and not a hedge: wrapping strings is a change to **every
+file that shows text**, so it has to happen inside 2.0, while the window is already open —
+doing it in 2.1 means a second pass over every one of those files, after they have settled.
+Translating strings, by contrast, touches **no code at all**. One is structural and belongs
+inside the rewrite; the other is content and can arrive in 2.1 without reopening anything.
+Shipping the groundwork also means the first language contributed later is a data file, not
+a project.
+
+(This is why 0032 is *inside* 2.0 but *last* within it, §5.2: the redesign rewrites the
+wording anyway, so wrapping before it would mean wrapping twice.)
 
 Consequence for §7's gate: "a language is available" is **not** a release condition for
 2.0. "Every user-facing string is translatable" is.
@@ -211,17 +223,11 @@ mirror is what the app draws or aligns by hand: the two `ToggleSwitch` sites bel
 one `text-align` above.
 
 **The place custom painting will not mirror**: `ToggleSwitch` in `updater.py` draws the
-switch by hand, and Qt's mirroring cannot see inside a `paintEvent`. There are **two**
-handed computations in it, not one, and `ui-and-accessibility.md` §8.3 is the owner:
-
-- `ToggleSwitch.paintEvent` computes the knob position from the left edge
-  (`x = self._margin + self._pos * travel`).
-- `ToggleSwitch._paint_state_shape` derives its centre the same way, from `self._margin` on
-  one side and `self.width() - self._margin` on the other.
-
-Both must have the direction applied. Fixing only the knob is the trap: it leaves the
-colour-independent on/off cue on the wrong side in Hebrew and Arabic, and looks perfectly
-correct in English, so nothing you can see will tell you.
+switch by hand, and Qt's mirroring cannot see inside a `paintEvent`. There are **two** handed
+computations in it, not one — the knob's position and the state shape's centre — and the
+consequence for 2.0's shape is that the redesign (0064) must budget for both.
+`docs/standards/ui-and-accessibility.md` §8.3 owns the detail, names each site, and explains
+why fixing only the obvious one is worse than fixing neither.
 
 Two further consequences, both structural:
 
@@ -241,8 +247,10 @@ Two further consequences, both structural:
 1.4.0 released from main, then main freezes  ← §5.4
         │
         ▼
-dependency refresh (0004)      ← first: the Python floor decides what idioms the
-        │                        coding standard permits, so it precedes real code
+dependency refresh (0004)      ← first because it is nearly free: a one-line CI
+        │                        change with no code depending on it. (It does not
+        │                        move the Python floor — coding.md §1 settled that
+        │                        at 3.13, and §6.3 explains the difference.)
         ▼
 GUI split (0034)               ← first substantial work on v2, and alone: it is
         │                        behaviour-preserving, so the existing GUI
@@ -356,19 +364,21 @@ nothing can check is not a gate.
 
 | # | Condition | Checked by |
 | --- | --- | --- |
-| **G1** | Engine suite passes with **no assertion changed** — v2 satisfies the tests v1 was measured by | `ONEUP_ENGINE_CMD=… tests/run-tests.sh`, plus `git diff` on the suite showing no assertion touched |
+| **G1** | Engine suite passes with **no existing assertion weakened** — v2 satisfies the tests v1 was measured by. Three changes to the suite are permitted, and only these three: the `ONEUP_ENGINE_CMD` indirection (`ONEUP-0054` §4.4), the replacement of the one scenario that asserts Bash source rather than behaviour (§4.3.5), and the *new* absent-tool scenario INV-9 has always lacked | `ONEUP_ENGINE_CMD=… tests/run-tests.sh` green, plus a review of `git diff` on the suite confirming every change is one of those three |
 | **G2** | v1 and v2 emit the **same marker stream** under identical mocks | `tests/differential.sh` (`ONEUP-0054` §4.5) |
 | **G3** | GUI suite green with the window driving the new engine | `python3 tests/gui-smoke.py` |
 | **G4** | A full run raises **exactly one** password prompt | the existing one-prompt scenario |
 | **G5** | The engine runs with **PySide6 absent** and imports no Qt — the privilege split, enforced by test | a new scenario with PySide6 hidden from the import path |
 | **G6** | A real run on the user's own machine | manual, against the explicit list `ONEUP-0054` §4.5 requires the differential phase to write — the list is a deliverable, not a judgement call |
 | **G7** | Every item on the §1 list is complete, its spec's invariants covered by tests | the §1 list is **closed at the start of the engine rewrite** (§5.2's last-but-one stage); anything raised after that is 2.1 by default |
-| **G8** | The three packaging paths (RPM, AppImage, OBS) build and launch from the new layout | `./local-CI.sh --full` for the AppImage; an RPM build and an OBS build, each launched once |
+| **G8** | The three packaging paths (RPM, AppImage, OBS) build **and launch** from the new layout | `./local-CI.sh --full` builds the AppImage — it does not launch it. All three launches are manual, once each, and that is the honest state of this gate |
 | **G9** | Docs current: README, CLAUDE.md, standards, marker reference, CHANGELOG | `tests/docs-check.py`, plus a `/cold-eyes` pass over anything 2.0 edited |
-| **G10** | Every user-facing string is translatable, and the GUI suite passes with the layout direction forced **right-to-left** | the RTL half is a GUI-suite pass. The wrapping half has **no automatic check** — `ui-and-accessibility.md`'s own table records the same gap — so it is a review of `oneup/gui/` against `wording-and-translation.md`, and that is the weakest gate here |
+| **G10** | Every user-facing string is translatable, and the GUI suite passes with the layout direction forced **right-to-left** | the RTL half is a GUI-suite pass. The wrapping half has **no automatic check** — `docs/standards/wording-and-translation.md`'s own table records that gap against its §6.1 — so it is a review of `oneup/gui/` against that standard, and it is the weakest gate here |
 
-G1–G6 are the engine rewrite's and are met **at the switch-over** (`ONEUP-0054` §4.6
-stage 7–8), against the frozen contract. G7–G10 are the release's, met at the 2.0.0 tag.
+**G1–G6 are the engine rewrite's**, and each is met at the stage that earns it —
+`ONEUP-0054` §4.6's table is the mapping, and this document does not restate it. The last of
+them is met at **stage 9, the switch-over**, and that is the commit they are all measured
+against. **G7–G10 are the release's**, met at the 2.0.0 tag.
 
 **Why that distinction is not pedantry.** ONEUP-0032 lands *after* the engine rewrite
 (§5.2) and, by §5.1, converts the `@@HINT@@` and `@@REMEDY@@` payloads to codes — changing
@@ -410,6 +420,7 @@ table answers *which one wins* as well as *which one covers this*:
 | **this document** | Decisions the 2.0 items share or contend over |
 | `docs/specs/ONEUP-*.md` | One item's design, invariants and tests |
 | `docs/plans/ONEUP-*.md` | One item's build steps — written when that item starts, not before |
+| `CLAUDE.md` | A map of the above, plus the traps. Where it restates a rule, the rule's owner is canonical |
 
 ## 10. Out of scope for 2.0
 
@@ -420,6 +431,9 @@ table answers *which one wins* as well as *which one covers this*:
   out; only the shelling-out moves language.
 - A plugin or extension system.
 - Any change to the five steps or their order.
+- **The byte-counter marker** the Python engine makes possible
+  (`docs/specs/ONEUP-0054-python-engine.md` §4.3.3). It is a protocol change, so it waits
+  until after the 2.0.0 tag and arrives on its own.
 - **Any actual second language.** The translation *machinery* is in scope (§5.1); a
   translated locale file is not, and arrives after 2.0 is released — user's decision,
   2026-07-26.
@@ -428,4 +442,5 @@ table answers *which one wins* as well as *which one covers this*:
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| 1 | 2026-07-27 | 2 critical, 7 high, 8 medium, 8 low (this document's share of batch 2) | The two criticals were both claims the code and a higher-ranked standard already contradicted: `_paint_state_shape` called "symmetric by construction" when it is handed the same way the knob is (§5.1), and §6.3 presenting the Python floor and the lint configuration as open when `coding.md` §1 and §2.1 had settled both. §2's baseline table was rebuilt in `documentation.md` §6b.4's measured form with the unit named in every row; §5.4 stopped restating the freeze it says it does not restate; §7's gate gained a **checked by** column, which is what exposed that G1 and G2 cannot hold at the 2.0.0 tag once ONEUP-0032 changes the payloads |
+| 1 | 2026-07-27 | 2 critical, 7 high, 8 medium, 8 low — **23 verified, 2 dismissed** | The two criticals were both claims the code and a higher-ranked standard already contradicted: `_paint_state_shape` called "symmetric by construction" when it is handed the same way the knob is (§5.1), and §6.3 presenting the Python floor and the lint configuration as open when `coding.md` §1 and §2.1 had settled both. §2's baseline table was rebuilt in `documentation.md` §6b.4's measured form with the unit named in every row; §5.4 stopped restating the freeze it says it does not restate; §7's gate gained a **checked by** column, which is what exposed that G1 and G2 cannot hold at the 2.0.0 tag once ONEUP-0032 changes the payloads |
+| 2 | 2026-07-27 | 2 critical, 5 high, 7 medium, 7 low — **19 verified, 2 dismissed** | Nothing from loop 1 came back, which is the proof those fixes held. What loop 2 found was largely what loop 1's fixes had *moved*: adding a **checked by** column to §7 made G1's "no assertion touched" newly falsifiable — and it is false, because `ONEUP-0054` plans three deliberate suite changes — and saying G1–G6 are met "at stage 7–8" gave a third answer to a question the spec's own table already answered. Two claims about gates were flattering: the marker count and the flag list were called contract-fixed with a gate behind them, and neither has one. §2 also had the ownership of the privileged-call figure backwards, in the sentence a later editor would trust |
