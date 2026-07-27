@@ -16,7 +16,30 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — resume at **Task 14**
+> ## ▶ You are here — resume at **Task 15**
+>
+> **Task 14 done (2026-07-27).** `docs/specs/ONEUP-0034-gui-modules.md` — the GUI module
+> split — written and taken through `/cold-eyes` in **four loops**: 11 findings verified,
+> then 6, then 3, then 1. `Status: Reviewed`. Nothing a loop fixed came back.
+>
+> Two obstacles were measured before the spec was written, and both change what the first
+> commit has to be: `tests/gui-smoke.py`'s loader breaks the moment the root `updater.py`
+> imports the package, and a test that patches a re-exported name silently stops patching
+> anything — which is how the suite could stay green while the window deleted a live run's
+> `run.state`. The harness moves first, on its own.
+>
+> The loops found the same defect over and over in different sentences: **a claim worded
+> wider than the thing backing it.** "Nothing in `updater.py` is left unplaced" (true of
+> module-level names, not of `Updater`'s methods, and it hid a missing module for the update
+> check); "every `QDialog` subclass" (`QMessageBox` is one, and the next sentence exempted
+> it); "every focusable widget" (the sweep walks four roots). Three citations resolved to
+> sections that say something else, and one standard — `files-and-naming.md` §2.2 — was
+> itself wrong about how tests are run, which the spec had inherited. Fixed at the source.
+>
+> **Task 13's lesson held.** Loop 3's only substantive finding was loop 2's own fix stranding
+> a sibling: splitting two rows out of the §7 table left a third merged, so an invariant's
+> assertions appeared in no row. Auditing all twelve rows at once cost less than the loop
+> that would have found the next one.
 >
 > **Task 13 done (2026-07-27).** Cold-eyes batch 2 over the 2.0 design, the engine spec and
 > `workflow.md` — **nine loops to convergence**, eight full plus a cheap closing pass. Roughly
@@ -44,7 +67,9 @@ absorbed and removed).
 > fallback and goes in 2.1; and `workflow.md` §1.2 gains one narrow freeze exception, for the
 > `ONEUP_ENGINE_CMD` harness change only, written in the standard that owns the freeze.
 >
-> **Next:** Task 14 — `ONEUP-0034-gui-modules.md`, the GUI split. Then Tasks 15–19.
+> **Next:** Task 15 — `ONEUP-0027-themes.md`. Its Step 2 needs the user first: how many
+> themes, whether "Follow system" stays the default, and where the picker lives. Then
+> Tasks 16–19.
 >
 > **Done earlier:** Tasks 1–11 (2026-07-26). Nine standards, the marker-protocol reference,
 > cold-eyes batch 1, and `CLAUDE.md`. All ten reviewed documents are `Status: Reviewed`
@@ -795,7 +820,7 @@ git commit -m "ONEUP-0057: cold-eyes loop N on the 2.0 design and engine spec �
 
 **Files:** Create `docs/specs/ONEUP-0034-gui-modules.md`
 
-- [ ] **Step 1: Map the seams before proposing them:**
+- [x] **Step 1: Map the seams before proposing them:**
 
 ```bash
 grep -n '^class \|^def ' updater.py
@@ -803,20 +828,20 @@ grep -n '^class \|^def ' updater.py
       Group the result by responsibility: main window, dialogs (Settings, Repositories,
       About, Rollback), the marker parser, the QProcess launch layer, banner/remedy state,
       tray + autostart, and the pure helpers.
-- [ ] **Step 2: Write the spec** to the template. It must settle: the module list and what
+- [x] **Step 2: Write the spec** to the template. It must settle: the module list and what
       each owns; the import direction (no cycles; `gui/` may not be imported by `engine/`);
       which public names `tests/gui-smoke.py` imports and must keep working; and that the
       split is **behaviour-preserving** — no user-visible change, the 283 GUI tests
       unchanged.
-- [ ] **Step 3: Name the invariants**, at minimum: the marker parser's behaviour is
+- [x] **Step 3: Name the invariants**, at minimum: the marker parser's behaviour is
       identical; every accessible name survives; no dialog loses its centring; the app
       still launches from `updater.py` at the repo root (packaging depends on it).
-- [ ] **Step 4: Verify the test-imported names:**
+- [x] **Step 4: Verify the test-imported names:**
 
 ```bash
 grep -n '^from updater import\|^import updater\|updater\.[A-Za-z_]*' tests/gui-smoke.py | head -20
 ```
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add docs/specs/ONEUP-0034-gui-modules.md

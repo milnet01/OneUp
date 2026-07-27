@@ -1,6 +1,6 @@
 # ONEUP-0034 — splitting the window into modules
 
-**Status:** Draft
+**Status:** Reviewed
 **Kind:** refactor
 **Roadmap:** ONEUP-0034
 **Branch:** v2
@@ -22,7 +22,8 @@ drift.
 
 ## 1. Goal
 
-The window lives in `oneup/gui/`, as modules a reader can hold in their head one at a time.
+The window lives in `oneup/gui/`, as modules that each do one job and — `window.py` aside,
+for the reason §4.2 gives — are small enough to read one at a time.
 `updater.py` stays at the repo root and becomes the few lines that start it. Nothing the
 user can see changes: the same widgets, the same wording, the same accessible names, the
 same behaviour on every marker the engine prints. The existing GUI suite is what judges it,
@@ -255,9 +256,10 @@ build steps out of specs.
 
 - **INV-4** `HERE` and every path derived from it are computed in `paths.py` alone; no other
   module builds a path from its own `__file__`. *Test:* `tests/imports-test.py` fails on
-  `__file__` under `oneup/` outside `paths.py`; `tests/gui-smoke.py` asserts `paths.ENGINE`
-  resolves to the repo root's `update_system.sh` and that `_headless_command`'s last-resort
-  branch names the root entry point, not a package module.
+  `__file__` under `oneup/` outside `paths.py`; and two **new** assertions in
+  `tests/gui-smoke.py` — that `paths.ENGINE` resolves to the repo root's `update_system.sh`,
+  and that `_headless_command`'s last-resort branch names the root entry point rather than a
+  package module. The assertions there today pass either way, which §4.4 explains.
 
 - **INV-5** Every focusable widget in the window and in the three dialogs still reports a
   non-empty accessible name or visible text. *Test:* the existing sweep in
@@ -345,7 +347,8 @@ build steps out of specs.
 | --- | --- | --- |
 | INV-1 | `tests/gui-smoke.py` — the loader | changed |
 | INV-2 | `local-CI.sh` grep gate + `tests/gui-smoke.py` redirect checks | new gate, changed checks |
-| INV-3, INV-4 | `tests/imports-test.py` | new |
+| INV-3 | `tests/imports-test.py` | new |
+| INV-4 | `tests/imports-test.py`, plus `tests/gui-smoke.py` assertions on `paths.ENGINE` and on `_headless_command`'s last-resort branch | new file, new assertions |
 | INV-5 | `tests/gui-smoke.py` — the existing accessible-name sweep | unchanged, and that is the point |
 | INV-6 | `tests/gui-smoke.py` — the existing centring checks, plus a `showEvent` sweep | new check |
 | INV-7 | `tests/gui-smoke.py` — the locale checks | new |
@@ -439,3 +442,7 @@ argument is that each step is judged by assertions written before it.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 1 | 2026-07-27 | 7 high, 3 medium, 1 low — **11 verified, 0 dismissed** | §4.2 claimed nothing in `updater.py` was left unplaced and `_version_tuple` was — the visible edge of a whole missing row, since the app update check had no home either though §2 names it as one of the class's responsibilities. §7 said the new imports test would be called from `tests/run-tests.sh`, which calls no Python file at all; the spec inherited that from `files-and-naming.md` §2.2, fixed there too. Three citations resolved to sections that say something else — `documentation.md` §10 is this table, not the rule keeping build steps out of specs — and §4.4 read `files-and-naming.md` §5.2 as requiring module-level constants where it permits either those or an accessor and forbids only the mixture |
+| 2 | 2026-07-27 | 2 high, 4 medium, 1 low — **6 verified, 1 dismissed** | The same defect in three sentences: an invariant worded wider than its test. INV-6 said "every `QDialog` subclass" — `QMessageBox` is one, and the bullet's own next sentence exempts it, so it was false rather than unproven. INV-5 said "every focusable widget" where the sweep walks four roots. §4.2's completeness claim held for module-level names and not for `Updater`'s methods, so an implementer asking where `handle_marker` goes got no answer. §4.3's third import rule had a named consequence and nothing checking it, where both its siblings had invariants — now INV-12. Dismissed: that INV-4 cannot reach `_headless_command`'s last-resort branch; it turns on `$APPIMAGE` and `shutil.which`, and a test controls both |
+| 3 | 2026-07-27 | 1 medium, 2 low — **3 verified, 0 dismissed** | Converging: nothing structural, and nothing from earlier loops returned. Loop 2's fix to the §7 table had stranded a sibling — INV-6 and INV-9 got their own rows and INV-3/INV-4 stayed merged, so INV-4's two `gui-smoke.py` assertions appeared in no row. Audited all twelve rows against their `*Test:*` clauses rather than waiting for the next loop to find them one at a time; that was the only instance. §1 also promised modules "a reader can hold in their head one at a time" when §4.2 says plainly that `window.py` will not |
+| 4 | 2026-07-27 | 1 low — **1 verified, 0 dismissed** | **Converged.** Two lanes clean for the third loop running. The one finding was a convention slip: INV-4's new `gui-smoke.py` assertions were not marked "new" the way INV-6's and INV-7's are, so §5 alone read as though they existed. `Draft` → `Reviewed`; implementation of ONEUP-0034 is unblocked |

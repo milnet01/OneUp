@@ -344,6 +344,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   has none, so dropping that env kwarg while moving code stays green in
   CI and only breaks for non-English users. Add the GUI-side locale check
   before the split starts.
+  Spec written (2026-07-27): docs/specs/ONEUP-0034-gui-modules.md, Status
+  Reviewed after four cold-eyes loops (11 findings, then 6, 3, 1; none
+  resurfaced). It settles the module list, the import direction, what the
+  tests reach for, and twelve invariants. Three things the bullet above does
+  not say. The harness moves first, in its own commit: gui-smoke.py's loader
+  never puts the repo root on sys.path, so it raises ModuleNotFoundError the
+  moment the root updater.py imports the package. A test that patches a
+  re-exported name silently stops patching, which is how the suite could stay
+  green while the window deleted a live run's run.state — so path constants
+  are read through their module, never bound by name. And window.py will not
+  fit the 600-line ceiling; the spec says so rather than pretending, and
+  ONEUP-0064 is where that is attempted. ONEUP-0059 rides along, in one
+  commit across both halves.
 
 - ✅ [ONEUP-0035] **Fix "Show download size" always reporting 0 B, and never report a size the dry run didn't earn.**
   Two defects, one symptom. (1) Stale parse: run_size grepped zypper's
