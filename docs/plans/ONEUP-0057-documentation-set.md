@@ -16,7 +16,31 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — resume at **Task 15**
+> ## ▶ You are here — resume at **Task 16**
+>
+> **Task 15 done (2026-07-27).** `docs/specs/ONEUP-0027-themes.md` — selectable themes —
+> written and taken through `/cold-eyes` in **four loops**: 9 findings verified, then 9, 3,
+> 1. `Status: Reviewed`. Nothing a loop fixed came back.
+>
+> **The user's three answers:** eight themes to start, **Follow system** stays the default,
+> the picker lives in Settings. A named theme is one fixed palette — choosing one is
+> choosing not to follow the desktop — and the two palettes that ship today are two of the
+> eight, so six are authored rather than eight.
+>
+> **Writing the contrast check first is what made the item real.** `ui-and-accessibility.md`
+> §7 had already handed ONEUP-0027 that job and flagged one failing pair. Computing it found
+> nine, including the one that matters most: the white bar-and-circle on the switch — the
+> colour-blind cue itself — sits at **2.10:1** against its own green track. And the theme
+> cannot currently reach the surfaces that carry state at all: ten colour literals live in
+> the two painters, and **thirty more inside the stylesheet template**, twelve distinct,
+> including the accent's own first stop written out in eight places.
+>
+> **The lesson repeated, and it is the same one.** Loops 2 and 3 were almost entirely the
+> previous loop's blast radius: splitting a token left a count of "nine" over a table of
+> ten; naming four groups of literals left two of them with no home in the pair table;
+> saying `build_theme` reads a theme's base left `base` nowhere to live. The one finding
+> that was not self-inflicted was worth the whole run — the design lands **ONEUP-0064 before
+> this item**, and three passages deferred to it as though it were still to come.
 >
 > **Task 14 done (2026-07-27).** `docs/specs/ONEUP-0034-gui-modules.md` — the GUI module
 > split — written and taken through `/cold-eyes` in **four loops**: 11 findings verified,
@@ -67,9 +91,7 @@ absorbed and removed).
 > fallback and goes in 2.1; and `workflow.md` §1.2 gains one narrow freeze exception, for the
 > `ONEUP_ENGINE_CMD` harness change only, written in the standard that owns the freeze.
 >
-> **Next:** Task 15 — `ONEUP-0027-themes.md`. Its Step 2 needs the user first: how many
-> themes, whether "Follow system" stays the default, and where the picker lives. Then
-> Tasks 16–19.
+> **Next:** Task 16 — `ONEUP-0032-i18n.md`, translation groundwork. Then Tasks 17–19.
 >
 > **Done earlier:** Tasks 1–11 (2026-07-26). Nine standards, the marker-protocol reference,
 > cold-eyes batch 1, and `CLAUDE.md`. All ten reviewed documents are `Status: Reviewed`
@@ -857,23 +879,23 @@ git commit -m "ONEUP-0034: spec the GUI module split"
 **Confirmed by the user, 2026-07-26:** themes are **required for 2.0**, not optional. The
 item's place in the release is settled; only the design questions in Step 2 remain.
 
-- [ ] **Step 1: Read how theming works today:**
+- [x] **Step 1: Read how theming works today:**
 
 ```bash
 grep -n 'build_theme\|apply_theme\|current_is_dark\|colorSchemeChanged' updater.py
 ```
-- [ ] **Step 2: Ask the user the open questions** the roadmap already flags, because they
+- [x] **Step 2: Ask the user the open questions** the roadmap already flags, because they
       are preference, not fact: how many themes, whether "Follow system" stays the
       default, and where the picker lives. Do not invent answers.
-- [ ] **Step 3: Write the spec** to the template, settling: the theme list; where the
+- [x] **Step 3: Write the spec** to the template, settling: the theme list; where the
       preference is stored; that switching applies live to the main window **and every
       dialog** (they inherit the application stylesheet — Task 6); and that each theme is
       checked against the contrast and colour-never-alone rules before it ships.
-- [ ] **Step 4: Name the invariants**, at minimum: no theme signals state by colour alone;
+- [x] **Step 4: Name the invariants**, at minimum: no theme signals state by colour alone;
       every theme keeps every accessible name; "Follow system" still switches live on
       `colorSchemeChanged`; an unknown/corrupt stored theme name falls back rather than
       failing to start.
-- [ ] **Step 4a: Cover the painted widgets** — measured 2026-07-26 and recorded on the
+- [x] **Step 4a: Cover the painted widgets** — measured 2026-07-26 and recorded on the
       ONEUP-0027 bullet: **ten colours sit outside the theme machinery** and no stylesheet
       can reach them (`GREEN`/`RED` at `updater.py:222-223`, `TRAY_ATTENTION_COLOR` at 141,
       and seven `QColor` calls inside the `ToggleSwitch` and tray `paintEvent` overrides at
@@ -881,7 +903,7 @@ grep -n 'build_theme\|apply_theme\|current_is_dark\|colorSchemeChanged' updater.
       theme would leave the on/off switch and tray badge at their old colours — and those
       are precisely the surfaces carrying state meaning. The spec must define theme tokens
       the painters read, and the contrast check must cover painted surfaces too.
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add docs/specs/ONEUP-0027-themes.md

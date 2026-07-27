@@ -225,6 +225,26 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   define theme tokens the painters read, not only QSS variables, and the
   per-theme WCAG-AA contrast check must cover the painted surfaces too —
   they are exactly the ones carrying state meaning.
+  Spec written (2026-07-27): docs/specs/ONEUP-0027-themes.md, Status
+  Reviewed after four cold-eyes loops (9 findings, then 9, 3, 1). The three
+  open design questions are answered by the user: eight themes to start,
+  "Follow system" stays the default, the picker lives in Settings. A named
+  theme is one fixed palette, so choosing one is choosing not to follow the
+  desktop; the two shipped palettes are two of the eight.
+  Measured while writing the check ui-and-accessibility.md section 7 asks
+  this item for: nine pairs fail today, not one. The worst is the switch's
+  white state shape at 2.10:1 against its own green track - that shape is
+  the colour-blind cue, so the weakest thing on screen is the one carrying
+  meaning. Also light lastrun 3.07:1, light amber 3.87:1, and the ghost
+  button's border at 1.62:1.
+  The gotcha-sweep note above undercounted: ten literals sit in the two
+  painters, and THIRTY MORE inside the _QSS template itself, twelve
+  distinct, including #4aa3ff written out in eight places. Substitution
+  does not touch them, so a theme could set the accent and leave the Run
+  button azure. Every one becomes a token.
+  Two ordering facts the spec depends on: ONEUP-0034 creates
+  oneup/gui/theme.py, and ONEUP-0064 lands BEFORE this item, so the focus
+  measurement is inherited rather than built here.
 
 - ✅ [ONEUP-0028] **Make OneUp usable for blind, partially-sighted, and colour-blind users.**
   Cover the three groups: (1) blind — full screen-reader (Orca/AT-SPI) support: accessible names/roles on every control, the live log and progress announced, focus order sane, no unlabelled icon-only buttons; (2) partially sighted — scalable/large text, honour the desktop font scale, a high-contrast option, keyboard operability throughout; (3) colour-blind — never signal state by colour alone (the amber tray icon, red/green step badges) — pair every colour cue with text/shape/icon. Coordinates with ONEUP-0026 (dialog standard) and ONEUP-0027 (themes: any theme must keep WCAG-AA contrast). Likely warrants its own spec + an audit pass with Orca.
