@@ -142,11 +142,14 @@ read as one item. It does share the package. It is not one item.
 
 **What is *not* an engine contract, though an earlier draft said so:** `history.json` and
 `~/.local/state/oneup/logs/` belong to the **window** — `updater.py`'s `HISTORY` and
-`LOG_DIR` constants. The engine never touches either. `docs/standards/files-and-naming.md`
+`LOG_DIR` constants. The engine never *resolves* either path; it writes into that log directory only when the
+window's `--log=` points there. `docs/standards/files-and-naming.md`
 §5.1 is the owner of the full path table, and its §7 "Trap 1" is the one this rewrite must
 act on: `LOG_DIR` names two different directories in the two programs, which is harmless
 only while they are in different languages. Give them distinct names — `USER_LOG_DIR` and
-`STATE_LOG_DIR`, or equivalent — before either is imported anywhere.
+`STATE_LOG_DIR`, or equivalent — before either is imported anywhere. **This spec renames
+only the engine's**, at §4.6 stage 2 with `runstate.py`; the window's belongs to ONEUP-0034,
+which must land the matching name or the collision simply moves.
 
 ### 4.1.1 The state-file layout, written down
 
@@ -176,8 +179,9 @@ field nothing reads costs nothing and removing it would silently narrow the file
   only when `RUN_STATE_OWNED` is set — so a `--check` or `--size` run cannot erase a real
   run's record.
 - The **window** removes `run.state` when the run it names is gone: `_read_run_state`
-  probes the recorded pid with `os.kill(pid, 0)` and unlinks the file on
-  `ProcessLookupError`, and `_poll_attached_run` unlinks it when the run it was following
+  probes the recorded pid with `os.kill(pid, 0)`, unlinks the file on
+  `ProcessLookupError`, and on `PermissionError` treats the run as **alive** and keeps it —
+  a pid the window may not signal is still somebody's run — and `_poll_attached_run` unlinks it when the run it was following
   ends. That pid-liveness probe is part of the contract: it is what stops a `SIGKILL`ed
   engine leaving a record that makes every later window think a run is in flight.
 
@@ -215,7 +219,7 @@ split must obey. Paths are relative to `oneup/engine/`.
 | `parsers.py` | turn zypper's text into values — **pure functions, no I/O, no privilege** | `to_bytes`, `lock_holder`'s parsing, the progress and download-size wordings, `lr` output, `reboot_reason_from_log` |
 | `repos.py` | refresh, skip and disable repositories | `refresh_repos`, `enabled_repo_aliases`, `find_failing_repos`, `disable_repo`, `release_zypper_lock`, `valid_alias`, `repo_scoped_failure` |
 | `steps.py` | run the five steps: `system, flatpak, firmware, orphans, cache` | `begin_step`, `end_step`, `run_system_upgrade`, the per-step bodies |
-| `actions.py` | the runs that are not an update: `--check`, `--size=`, the three auth actions, snapshots | `run_check`, `run_size`, `grant_auth`, `revoke_auth`, `auth_status`, `thin_snapshots`, `build_auth_rule` |
+| `actions.py` | the runs that are not an update: `--check`, `--size=`, the three auth actions, `--thin-snapshots` | `run_check`, `run_size`, `grant_auth`, `revoke_auth`, `auth_status`, `thin_snapshots`, `build_auth_rule` |
 
 The table places every function in `update_system.sh`; it is a map, not a sample. **Two
 functions are deliberately split across two modules**, and the split is the point rather than
@@ -301,7 +305,8 @@ zypper changes its wording under us.
   with the process. No pid polling, and nothing left behind on `SIGKILL`.
 
 *Test:* the existing scenario *"a run survives the GUI going away and still finishes (broken
-stdout pipe)"*, unchanged.
+stdout pipe)"* — its assertions unchanged; its invocation line takes §4.4's override, since
+it calls the engine directly.
 
 **The keep-alive's scenario is the one place G1's "no assertion changed" cannot hold, and
 saying so is the point.** *"the keep-alive exits on its own once the engine is gone
@@ -337,7 +342,8 @@ what make this less trivial than it sounds.** All three must be handled together
 Beyond those, this is the only change permitted to an **existing assertion** before G1.
 *Additions* are a different matter and are expected: `docs/design/oneup-2.0.md` §7's G1 row
 permits any new scenario a §4.6 stage names, and several stages do — the replacement
-keep-alive test and the absent-tool test at stage 2, the parser unit tests at stage 4, the
+keep-alive test, the absent-tool test and the `run.state` fourth-line assertion at stage 2,
+the parser unit tests at stage 4, the
 per-call deadline test at stage 5, the differential harness at stage 6, the PySide6-absent
 test at stage 7. The rule G1 enforces is that **no existing assertion is weakened**, not that
 the suite stops growing. It lands on
@@ -347,7 +353,7 @@ exception is defined, and this change is the reason it exists.
 
 ### 4.5 The differential harness
 
-New `tests/differential.sh`: for each scenario's mock set, run v1 and v2, capture only
+New `tests/differential-test.sh` — `<subject>-<kind>`, per `docs/standards/files-and-naming.md` §2.1: for each scenario's mock set, run v1 and v2, capture only
 `@@MARKER@@` lines, normalise the fields that legitimately vary (`TIMING` seconds, log
 paths, pids, snapshot ids), and `diff` the rest along with the exit code. Green means
 identical behaviour.
@@ -373,7 +379,7 @@ each stage is what makes the next one safe to attempt.
 | 2 | `__main__.py`'s flag parsing, plus `markers.py`, `runstate.py`, `proc.py`, `privilege.py`, and `actions.py`'s `auth_status` — enough for `--help` and `--auth-status`, nothing more. `runstate.py` also discharges `files-and-naming.md` §7 Trap 2 (ONEUP-0058): create the log directory only when about to write it. Plus the three suite additions this stage owes: the replacement keep-alive test (§4.3.5), the absent-tool skip test (INV-9), and the assertion on `run.state`'s fourth line that INV-13 records as missing | the `--auth-status` scenario passes against v2; INV-9 gains its first test ever, and INV-7's SIGKILL leg is replaced |
 | 3 | `actions.py`'s `--check` — read-only and needs no root, so the safest real behaviour to build first | every `--check` scenario green against v2 |
 | 4 | `parsers.py`, `repos.py`, and `actions.py`'s `--size=`; parser unit tests | §4.3.4; the `--size` scenarios green |
-| 5 | `steps.py` — the five steps; snapshots, remedies, repo skipping. The rest of `actions.py` (`--grant-auth`, `--revoke-auth`, snapshots). Plus §4.3.2's new scenario: a per-call deadline firing on a step other than the repo refresh | the remaining scenarios → G1, and G4 with them — the one-prompt scenario is an engine-suite scenario and needs no window |
+| 5 | `steps.py` — the five steps, the pre-update snapshot block, remedies, repo skipping. The rest of `actions.py` (`--grant-auth`, `--revoke-auth`, `thin_snapshots`). Plus §4.3.2's new scenario: a per-call deadline firing on a step other than the repo refresh | the remaining scenarios → G1, and G4 with them — the one-prompt scenario is an engine-suite scenario and needs no window |
 | 6 | The differential harness | G2, and the list of what it cannot see |
 | 7 | The window pointed at v2 behind an environment switch, plus INV-11's new scenario: the engine run with PySide6 hidden from the import path | G3, G5 |
 | 8 | A real run on the user's machine | G6 |
@@ -398,8 +404,10 @@ engine changes hands. ONEUP-0032 still follows it (`docs/design/oneup-2.0.md` §
   the window currently cannot launch a non-Bash engine at all.
 - **Resolving the engine.** The helper replaces `_find_engine`, and must **not** reproduce
   it: `docs/standards/files-and-naming.md` §7 Trap 4 records that it returns its first
-  candidate path whether or not the file exists, so a packaging mistake surfaces as "the Run
-  button did nothing". The 2.0 resolver says which paths it tried.
+  candidate path whether or not the file exists — so what a missing engine looks like is
+  decided by each caller rather than by the resolver. `Updater.start_run` does check and
+  names the file; the tray check does not. The 2.0 resolver reports which paths it tried, so
+  no caller has to.
 - **The three packaging paths** — what each does today and what each therefore needs — are
   `docs/design/oneup-2.0.md` §4, which owns them because ONEUP-0034 must move with them.
   Nothing engine-specific to add beyond the entry points above.
@@ -459,13 +467,13 @@ rewrite; this list is the index, not the mechanism. Scenario names are the ones 
 
 - **INV-10** v2 emits the same marker stream and the same exit code as v1, under identical
   mocks.
-  *Test:* `tests/differential.sh` (§4.5) — gate G2. New with this work.
+  *Test:* `tests/differential-test.sh` (§4.5) — gate G2. New with this work.
 
 - **INV-11** The engine imports no Qt and runs with PySide6 absent. This is the privilege
   split made testable: the half that becomes root cannot depend on the half that draws
   windows.
-  *Test:* a new scenario that runs the engine with PySide6 hidden from the import path —
-  gate G5. New with this work.
+  *Test:* a new scenario in `tests/run-tests.sh` that runs the engine with PySide6 hidden
+  from the import path — gate G5, owed by §4.6 stage 7. New with this work.
 
 - **INV-12** A package-only change offers a service restart, not a reboot. This is the
   third of `docs/standards/testing.md` §5's four floor invariants, and the one the others
@@ -504,12 +512,9 @@ tests, not because the engine enforces it.
 since its own first review, the check behind each one. G1–G6 are this item's; G7–G10 belong
 to the release. Not restated here, so the two cannot drift.
 
-What this spec adds is the one condition the design cannot state for itself, because it is
-made of this item's work: **G6's manual pass is not a judgement call.** It runs `--check`, a
-real update and a rollback offer on the user's own machine, *plus* the explicit list of
-everything the differential harness cannot see — which §4.5 makes a deliverable of the phase
-that builds the harness, precisely so that G6 is a checklist somebody wrote down rather than
-a feeling that enough was tried.
+What this spec adds is the *content* of the checklist G6 leans on: §4.5 makes "everything
+the differential harness cannot see" a deliverable of stage 6, and G6's manual pass works
+through it alongside `--check`, a real update and a rollback offer.
 
 `./local-CI.sh` prints the suite tallies; it is the gate for every push
 (`docs/standards/workflow.md` §6).
@@ -518,8 +523,10 @@ a feeling that enough was tried.
 
 When the switch lands in stage 9:
 
-- **`docs/reference/marker-protocol.md`** — §5.1 lifts the freeze; the "known drift in the
-  engine's own header comment" section (§7) dies with the Bash header it describes. That
+- **`docs/reference/marker-protocol.md`** — the "known drift in the engine's own header
+  comment" section (§7) dies with the Bash header it describes. **§5.1's freeze survives
+  stage 9**: only ONEUP-0032 may move the contract before the 2.0.0 tag, and §5.1 is
+  rewritten at the tag, not at the switch-over. That
   section places one obligation on this work, and stage 9 discharges it: **ONEUP-0066** —
   carry the *corrected* marker list into the Python engine's own header, rather than
   copying the stale one forward.
@@ -575,3 +582,4 @@ When the switch lands in stage 9:
 | 2 | 2026-07-27 | 2 critical, 4 high, 5 medium, 6 low — **15 verified, 2 dismissed** | Nothing from loop 1 returned. What loop 2 found was mostly §4.1.1's own blast radius: the subsection written last loop to pin the state-file contract had the engine only *reading* `stop.request` when `cleanup` deletes it, and called line 3 the steps "in run order" when it is the `--steps=` value verbatim. §4.4 also forbade the two new scenarios §4.6 stage 2 commissions. Measured, not recalled: the window has **eight** hardcoded engine launches, not six — the two missed are the unattended headless timers |
 | 3 | 2026-07-27 | 4 high, 7 medium, 7 low — **16 verified, 2 dismissed** | Converging: no critical, and no structural claim wrong. The §4.2 module table turned out to be a partial map presented as a complete one — five engine functions had no home, two of them load-bearing (`valid_alias`, the alias guard `security.md` §4 requires, and `reboot_reason_from_log`, which feeds a marker field). §4.1.1 had been pinned as a contract with no invariant and no named test, so INV-13 now names the two scenarios that cover it and states plainly that line 4 is covered by neither. §4.3's own tally said "three of the four" of five |
 | 4 | 2026-07-27 | 1 critical, 3 high, 6 medium, 6 low — **14 verified, 2 dismissed** | The critical was one fact with three answers: §4.1 said protocol changes come "after the switch", §4.3.3 said the freeze lifts once G2 passes, and §10 said after the 2.0.0 tag. G2 passes at stage 9 with 2.0 still unreleased, so two of the three would have let the byte-counter marker ship inside a release the design forbids it from. §4.1.1 also stated the stop check as a modification-time comparison alone, where the engine requires `run.state` to exist as well — built to the spec as written, v2 would honour a request left over from a run that no longer exists |
+| 5 | 2026-07-27 | 1 high, 4 medium, 8 low — **11 verified, 2 dismissed** | No critical. §8 said stage 9 is where `marker-protocol.md` §5.1 lifts the freeze — a release early, and contradicting what §4.3.3 and §10 had just been corrected to say. The freeze survives the switch-over; only ONEUP-0032 moves the contract before the tag. §4.7 also justified replacing `_find_engine` with a symptom the code contradicts: `Updater.start_run` does check and names the missing file, and it is the tray check that fails silently — the requirement stands, its reason was wrong |

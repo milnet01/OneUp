@@ -388,7 +388,7 @@ today; the RTL work adds them, and this is the form they take.
 | §3 state is never signalled by colour alone | nothing automatic |
 | §4 no hard-coded `px` font size | `tests/gui-smoke.py` — every font size is in points, and derives from the desktop's own default |
 | §5 focus draws no ring | `tests/gui-smoke.py` — *"focus draws no outline ring"*, paired with *"focus still gives a cue by reusing the hover look"*, so the rule cannot be satisfied by removing the cue altogether |
-| §5.4 the 3:1 focus-indicator ratio | **nothing computes contrast anywhere in the suite.** The four measured ratios in §5.4 were taken by hand, and the shortfall is deliberate (ONEUP-0027) |
+| §5.4 the 3:1 focus-indicator ratio | **nothing computes contrast anywhere in the suite.** The four measured ratios in §5.4 were taken by hand, and the shortfall is deliberate, and §5.4 makes closing it **ONEUP-0064's** obligation: a ringless treatment measuring ≥ 3:1 in every shipped theme, with the measurement added to the suite |
 | §7 themes | ONEUP-0027 — the contrast check is that item's to write, and the light theme's `lastrun` text sits at 3.07:1 today |
 | §8.1 no directional QSS property | nothing automatic |
 | §8.2 no hard-coded `AlignLeft` / `AlignRight` | nothing automatic — `#LinkBtn` violates it today |

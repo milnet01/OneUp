@@ -4,7 +4,7 @@
 branch it belongs on, what the commit says, how it earns a version number, and the one
 gate it must pass green before it leaves this machine.
 
-**Status:** Reviewed
+**Status:** Draft — cold-eyes in progress
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
@@ -79,15 +79,16 @@ people still install their updates?* has an answer; "is this important enough?" 
 
 | Branch | What it is |
 | --- | --- |
-| `main` | Released 1.x. Frozen (§1). Documentation and qualifying bug fixes only |
+| `main` | Released 1.x. Frozen (§1). Documentation, qualifying bug fixes, and the one test-harness change §1.2 names |
 | `v2` | The 2.0 programme. Long-lived, shared with `origin`, and **never rebased** |
 
 Rules:
 
 - **`v2` is never rebased and never force-pushed.** It exists on the remote, so rewriting
   its history breaks every clone of it. Merge instead, always.
-- **`main` merges *into* `v2`, never the reverse.** After any 1.4.x release, merge `main`
-  into `v2` so the branch picks the fix up. Nothing travels the other way until 2.0 ships.
+- **`main` merges *into* `v2`, never the reverse.** Merge after any 1.4.x release, and after
+  anything else that lands on `main` — documentation, or the §1.2 exception — so the branch
+  picks it up. Nothing travels the other way until 2.0 ships.
 - **Feature branches are optional and short.** If one is used, name it
   `<ONEUP-id>-<topic>` and merge it into `v2` when its item is done. There is no
   requirement to branch for every item — the project has one developer and zero merge
@@ -217,7 +218,8 @@ notes from it, so there is nothing to derive.
 
 **`./local-CI.sh` must be green before every push.** It covers more than GitHub CI does, and
 it is short enough to run every time: measured at `7a7afc1` on the development machine,
-`time ./local-CI.sh` reported **34 seconds**, warm, of which the engine suite is the bulk.
+`time ./local-CI.sh` reported **34–38 seconds** across warm runs, of which the engine suite
+is the bulk.
 Under a minute, not under a second — long enough that skipping it feels tempting, which is
 what the pre-push hook is for.
 
@@ -255,12 +257,12 @@ git config core.hooksPath githooks
 itself is broken. A failing test is fixed, not bypassed.
 
 **The two gate sets are not identical, deliberately.** `release.yml` runs the three test
-suites and the AppImage build — and nothing else. So **every gate in §6's table below the
-three suites has never run in GitHub CI**: the compile check, lint, packaging validation,
+suites and the AppImage build — and nothing else. So **every gate in the §6 table above other
+than the three test suites has never run in GitHub CI**: the compile check, lint, packaging validation,
 version lockstep and documentation. Written as the shape rather than a count, because the
 count has gone stale here once already.
 
-- **The five extras stay local**, so understand what that costs: **a lint failure is
+- **The extras stay local**, so understand what that costs: **a lint failure is
   caught before a push or not at all.** The pre-push hook is what makes that reliable.
 
 ### 6.1 A gate is how a rule stops being a wish
@@ -293,7 +295,7 @@ would quietly rewrite a claim it does not understand.
 is no reason to batch pushes. Push each commit as it lands, once local CI is green.
 
 The only workflow is `release.yml`, and it triggers on `push: tags: ['v*']` — an ordinary
-commit push runs no CI at all. A tag push runs the suite, builds the AppImage and attaches
+commit push runs no CI at all. A tag push runs the three suites, builds the AppImage and attaches
 it to the GitHub release.
 
 ## 8. Releasing
@@ -312,6 +314,10 @@ confirmation** → commit `OneUp X.Y.Z`, tag, push → update the OBS package vi
 **A red gate stops it there, with the bump already written to your tree** — the same state a
 declined confirmation leaves, and the same recovery: fix and re-run, or `git checkout -- .`
 to discard.
+
+**A refusal part-way through the bump leaves a partial one.** `bump.py` writes the six
+sites one at a time and stops at the first whose format has drifted, so the sites before it
+are already rewritten. `git checkout -- .` is still the recovery.
 
 **A failed `git push` is the awkward one**, because it fires after the commit and the tag.
 `git checkout -- .` recovers nothing there; undoing it is `git tag -d vX.Y.Z` and
@@ -399,7 +405,7 @@ states it and owns what "complete" means.
   can still update, it is 2.0 work no matter how small it is.
 - **Adding a *test* gate to `local-CI.sh` but not to `release.yml`.** The release build is
   what actually ships; a test gate it does not run is a test gate that fires too late. (The
-  five non-test extras staying local is deliberate, not this trap — §6.)
+  non-test extras staying local is deliberate, not this trap — §6.)
 
 ## 11. Before you commit and push
 
@@ -424,6 +430,7 @@ states it and owns what "complete" means.
 | §5.2 released CHANGELOG entries are never rewritten | nothing automatic — `git` will happily let you edit a shipped entry. The tag is the only record that contradicts you |
 | §9 no partial 2.0 releases | nothing automatic, and nothing could be: it is a decision not to cut a tag, and no gate can catch a tag that was cut |
 | §4 roadmap IDs come from `.roadmap-counter` | the allocator itself: on a fresh clone the file is absent and appending **refuses**, rather than restarting at 1 and colliding |
+| §5 the version increment matches the change | **nothing.** `release.sh` takes `X.Y.Z` as an argument and never questions it; calling a breaking change a patch release is caught by a person or not at all |
 | §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate — for the version **numbers**, at all six sites. `tests/bump-test.py` covers a *different* failure: it runs a real bump in a throwaway copy where five of the six sites are the real files copied verbatim, so a site whose format has drifted makes `bump.py` refuse ("no match … file drifted from the expected format") and the test fail. What it does **not** do is assert the new value at those five — five of its six assertions read the `CHANGELOG.md`, which is the one site it fakes; the sixth asserts `bump.py` exited 0, and that is the one a drifted format trips, because that is where ONEUP-0033 happened |
 | §5.1 site 6's two `CHANGELOG.md` links match its newest heading | `tests/docs-check.py`. Added 2026-07-26: the lockstep gate reads only the heading, and a hand-edit could leave the release link missing or the `[Unreleased]` compare base pointing at the previous tag — which is ONEUP-0033, a bug this project shipped once already |
 | §5.2 a release needs a non-empty `## [Unreleased]` | `bump.py` — it refuses outright: *"CHANGELOG.md has no non-empty '## [Unreleased]' section to release"*. One of the few rules here with a hard automatic stop |
@@ -462,3 +469,4 @@ clone where nobody ran that one command, a green push proves nothing at all.
 | 8 | 2026-07-27 | 3 high, 5 medium, 5 low — **11 verified, 2 dismissed** | Nothing from loop 7 returned. The freeze exception loop 7 added had already leaked: §9's decision tree offered it to *any* test-only change, where §1.2 grants it to one named change. §6.1's "prove it fails" pointed at `testing.md` §4 ("one invariant, one test") instead of §9's trap, which is worse than a broken link because it resolves. The gate table's documentation row omitted the marker check entirely, so the one change most likely to trip it — adding a marker — came with no warning |
 | 9 | 2026-07-27 | 2 high, 5 medium, 5 low — **10 verified, 2 dismissed** | Converged on the same two classes and nothing new: pointers and duplication. `testing.md` and `coding.md` each restated a §6 gate-policy fact without citing this document as the owner, and the What-checks-this table still had no row for the roadmap-bullet shape or the CHANGELOG entry shape — both rules this document states and nothing checks |
 | 10 | 2026-07-27 | 2 high, 4 medium, 5 low — **9 verified, 2 dismissed** | §6 claimed GitHub CI "builds and verifies" the AppImage. It builds it and attaches it; nothing launches it, and design §7's G8 says as much in the opposite direction — so the sentence telling a reader `--full` is optional rested on a check that does not exist. §11's checklist had drifted the other way from §9's tree, giving `main` a §1.1 fix and documentation "and nothing else" where §1.2 grants one more. The five-gates-never-in-CI count, already stale once, is now written as a shape |
+| 11 | 2026-07-27 | 2 high, 5 medium, 6 low — **11 verified, 2 dismissed** | The freeze exception had leaked into a third form: §2's branch table still read "documentation and qualifying bug fixes only", which is the first place a reader looks and the one §1.2, §9 and §11 had all been corrected around. The shape that replaced the stale five-gates count was itself positionally false — the compile check sits above the third suite in the table, so "below the three suites" derives four. `Status` is now `Draft — cold-eyes in progress`, which is what `documentation.md` §3 requires of a document mid-review, and what this one should have said since batch 2 reopened it |

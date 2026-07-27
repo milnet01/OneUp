@@ -293,11 +293,12 @@ either. The isolation works only because `HOME` is redirected too. Two consequen
 app does not follow the XDG specification, and the two exports read as protection they do
 not provide. Filed as **ONEUP-0059**.
 
-**Trap 4 — `_find_engine`'s fallback hides a broken install.** It tries
+**Trap 4 — `_find_engine`'s fallback leaves each caller to notice.** It tries
 `HERE/update_system.sh`, then `~/Documents/update_system.sh`, then returns the first path
-regardless of whether it exists. A packaging mistake therefore surfaces as "the Run button
-did nothing", not as an error naming the missing file. Any 2.0 equivalent must say which
-paths it tried.
+regardless of whether it exists — so whether a packaging mistake is legible depends on the
+caller. `Updater.start_run` checks and names the missing file; the tray check does not, and
+there it surfaces as nothing happening. Any 2.0 equivalent must say which paths it tried, so
+that no caller has to.
 
 **Trap 5 — three of the four root scripts are not in any packaging list.** `bump.py`,
 `local-CI.sh` and `release.sh` are developer tools and are correctly absent from the RPM

@@ -36,10 +36,18 @@ thing can replace what they run today.
 | **ONEUP-0063** | Add `pyproject.toml`, so a bare `ruff check` and the gate agree — not a one-line config drop, see §6.4 | no spec — `docs/standards/coding.md` §2.1 settles it |
 | **ONEUP-0059** | Honour `XDG_STATE_HOME` and `XDG_CONFIG_HOME` instead of hard-coding `~/.local/state` | no spec — `docs/standards/files-and-naming.md` §5.2 settles it, and it is a path change, not a contract change |
 
+**This is the list of top-level items, each with its own slot in §5.2's order.** Work that a
+spec commissions inside one of them — ONEUP-0058, 0066 and 0070 are all deliverables of
+`ONEUP-0054`'s stages — is gated by that item's spec, not listed again here. Two open
+roadmap items a standard names as 2.0 work are deliberately not listed either, because they
+ride with work that is: ONEUP-0060 (pin PySide6 and PyInstaller) with the packaging G8
+covers, and ONEUP-0062 (the GUI suite's teardown tracebacks) with the split that causes
+them.
+
 The list is **open, but not forever.** More items may be added while 2.0 is being built;
 each addition gets a roadmap bullet and, if it needs design, a spec, and is judged against
 §7's gate like everything else. **The list closes when the engine rewrite starts** — the
-last-but-one stage of §5.2 — because §7's G7 ("every item on the list is complete") cannot
+last-but-one item of §5.2 — because §7's G7 ("every item on the list is complete") cannot
 be satisfied against a list that can still grow. Anything raised after that point is 2.1
 unless it is a defect in something already on the list.
 
@@ -89,14 +97,16 @@ These four are frozen for the duration. They are what makes a rewrite of this si
 provable rather than hopeful — the existing engine and GUI assertions only keep their power
 if the thing under test still presents the same face.
 
-1. **The `@@MARKER@@` protocol** — 23 markers, their field order, their meanings.
+1. **The `@@MARKER@@` protocol** — every marker `docs/reference/marker-protocol.md` §3
+   lists, its field order and its meaning.
    Documented in `docs/reference/marker-protocol.md`. **One** deliberate, versioned
    exception, recorded in `docs/reference/marker-protocol.md` §5.1 and sequenced in §5.1
    below: ONEUP-0032's conversion of the `@@HINT@@` and
    `@@REMEDY@@` payloads to codes. The byte counters the engine rewrite makes possible
    (`docs/specs/ONEUP-0054-python-engine.md` §4.3.3) need a marker too, and land **after the
    2.0.0 tag** — not a second exception inside 2.0. See §10.
-2. **The engine's command-line surface** — all 13 flags, their spellings and behaviour.
+2. **The engine's command-line surface** — every flag §2 enumerates, its spelling and its
+   behaviour.
 3. **The five step keys and their order** — `system, flatpak, firmware, orphans, cache`.
 4. **The privilege split** — the window never runs as root; the engine is the only thing
    that touches it, and authenticates once per run.
@@ -175,8 +185,8 @@ Three reasons, in order of weight:
   the engine that emits them included — in the same commit. It is a break, done once, with
   the rewrite already proven, not a break smuggled inside one.
 
-Never both at once: a rewrite and a contract change in the same step means a failing test
-can't tell you which one broke it.
+**`docs/reference/marker-protocol.md` §5.1 is canonical for that ordering** — it is rank 1,
+and it holds both the rule and the reason. Not restated here.
 
 **How much of this ships in 2.0 — decided by the user, 2026-07-26:** *"I would like to
 offer the app in different languages too, however, first point is to get to a working
@@ -258,12 +268,15 @@ dependency refresh (0004)      ← first because they set the tooling every late
    + lint config (0063)          is judged by: adopting the lint config changes what
         │                        the gate accepts, so doing it after the rewrites
         │                        means re-clearing it against far more code. Not
-        │                        free — §6.4 records the 47 errors measured. Neither
-        │                        moves the Python floor (coding.md §1, and §6.3).
+        │                        free — coding.md §2.1.1 measured the clean-up it
+        │                        brings with it. Neither moves the Python floor
+        │                        (coding.md §1, and §6.3).
         ▼
 GUI split (0034)               ← first substantial work on v2, and alone: it is
-        │                        behaviour-preserving, so the existing GUI
-        │                        assertions judge it with nothing else in flight
+   + XDG paths (0059)            behaviour-preserving, so the existing GUI
+        │                        assertions judge it with nothing else in flight.
+        │                        0059 rides with it — same module-level path
+        │                        constants, §6.5.
         ▼
 interface redesign (0064)      ← after the split, because redesigning a module
         │                        six times the size ceiling while also cutting
@@ -385,11 +398,25 @@ set, so a bare `ruff check` and the gate agree and `local-CI.sh` can drop its `-
 flags.
 
 **It is not a one-line config drop, and §2.1.1 of that standard is why**: adopting the
-config was measured at 47 reported errors, so the item includes the work of clearing them.
-An implementer who adds the file alone turns the gate red on the next commit.
+config reports errors that then have to be cleared, and that standard owns the measurement
+and the commit it was taken at. An implementer who adds the file alone turns the gate red
+on the next commit.
 
 **Complete when** `pyproject.toml` exists, `local-CI.sh` runs a bare `ruff check`, and that
 check is green.
+
+### 6.5 XDG state and config paths (ONEUP-0059)
+
+`docs/standards/files-and-naming.md` §5.2 and §7 Trap 3 settle it: honour `XDG_STATE_HOME`
+and `XDG_CONFIG_HOME` where they are set, rather than hard-coding `~/.local/state`. It is a
+path change, not a contract change — `ONEUP-0054` §4.1.1 pins the state files' *layout* and
+defers their *location* here.
+
+It lands with the GUI split (ONEUP-0034), because that is where the window's module-level
+path constants move anyway.
+
+**Complete when** both variables are honoured where set, the defaults are unchanged where
+they are not, and the GUI suite passes with its sandbox setting them.
 
 ## 7. The gate — what "ready" means
 
@@ -402,19 +429,21 @@ nothing can check is not a gate.
 
 | # | Condition | Checked by |
 | --- | --- | --- |
-| **G1** | Engine suite passes with **no existing assertion weakened** — v2 satisfies the tests v1 was measured by. **Additions are permitted; weakening is not.** One existing scenario is *replaced* rather than carried, because it asserts Bash source rather than behaviour (`ONEUP-0054` §4.3.5), and the harness gains the `ONEUP_ENGINE_CMD` indirection (§4.4). Every other suite change must be a **new** scenario named by a stage in `ONEUP-0054` §4.6 | the suite green against the new engine, plus a review of `git diff` on the suite: one replacement, one harness change, and additions §4.6 names. Anything else fails the gate |
-| **G2** | v1 and v2 emit the **same marker stream** under identical mocks | `tests/differential.sh` — new, and `ONEUP-0054` §4.5 owes it |
+| **G1** | Engine suite passes with **no existing assertion weakened** — v2 satisfies the tests v1 was measured by. **Additions are permitted; weakening is not.** One existing scenario is *replaced* rather than carried, because it asserts Bash source rather than behaviour (`ONEUP-0054` §4.3.5), and the harness gains the `ONEUP_ENGINE_CMD` indirection (that spec's §4.4, at the two call sites it names). Every other suite change must be a **new** scenario named by a stage in `ONEUP-0054` §4.6 | the suite green against the new engine, plus a review of `git diff` on the suite: one replacement, one harness change, and additions `ONEUP-0054` §4.6 names. Anything else fails the gate |
+| **G2** | v1 and v2 emit the **same marker stream** under identical mocks | `tests/differential-test.sh` — new, and `ONEUP-0054` §4.5 owes it |
 | **G3** | GUI suite green with the window driving the new engine | `python3 tests/gui-smoke.py` — **but the suite as it stands feeds the window marker lines and never launches an engine at all**, so on its own it proves the window, not the pairing. G3 needs the run under `ONEUP-0054` §4.6 stage 7's environment switch, with the window actually resolving to v2 |
 | **G4** | A full run raises **exactly one** password prompt | the existing one-prompt scenario |
 | **G5** | The engine runs with **PySide6 absent** and imports no Qt — the *dependency direction*, enforced by test. It is half of §3's privilege split, not the whole: `docs/standards/files-and-naming.md` §4.1 rule 2 names what it misses, an engine module importing a Qt-free helper out of `oneup/gui/` | a new scenario with PySide6 hidden from the import path |
-| **G6** | A real run on the user's own machine | manual, against the explicit list `ONEUP-0054` §4.5 requires the differential phase to write — the list is a deliverable, not a judgement call |
-| **G7** | Every item on the §1 list is complete — those with a spec, by their spec's invariants being covered by tests; those without one, by the **Complete when** line §6 gives each | **nothing automatic.** It is a release checklist walked by hand, over a list §1 closes at the start of the engine rewrite so that it can be walked at all |
+| **G6** | A real run on the user's own machine | manual, against the explicit list `ONEUP-0054` §4.5 requires stage 6 to write — the list is a deliverable, not a judgement call |
+| **G7** | Every item on the §1 list is complete — those with a spec, by their spec's invariants being covered by tests; those without one, by the **Complete when** line §6 gives each. The rewrite's once-measured invariants (INV-10 *is* G2) are read at the stage that earned them, not re-run here — the closing paragraph says why | **nothing automatic.** It is a release checklist walked by hand, over a list §1 closes at the start of the engine rewrite so that it can be walked at all |
 | **G8** | The three packaging paths build from the new layout, and what each delivers launches: the AppImage directly, the RPM and the OBS repository once installed | `./local-CI.sh --full` builds the AppImage — it does not launch it. All three launches are manual, once each. **The OBS leg cannot be met before the tag**: `packaging/obs/_service` pins its `revision` to the release tag, so that build only exists after 2.0.0 is cut. It is the one condition verified immediately *after* the tag and before the release is announced |
 | **G9** | Docs current: README, CLAUDE.md, standards, marker reference, CHANGELOG | `tests/docs-check.py`, plus a `/cold-eyes` pass over anything 2.0 edited |
 | **G10** | Every user-facing string is translatable, and the GUI suite passes with the layout direction forced **right-to-left** | the RTL half is a GUI-suite pass forced right-to-left — **new, and ONEUP-0032 owes it** (§5.1). The wrapping half has **no automatic check** — `docs/standards/wording-and-translation.md`'s own table records that gap against its §6.1 — so it is a review of `oneup/gui/` against that standard, and it is the weakest gate here |
 
 **G1–G6 are the engine rewrite's**, and each is met at the stage that earns it —
-`ONEUP-0054` §4.6's table is the mapping, and this document does not restate it. Stage 9, the switch-over, is the commit they are all measured against. **G7–G10 are the release's**, met at the 2.0.0 tag.
+`ONEUP-0054` §4.6's table is the mapping, and this document does not restate it. Stage 9, the switch-over, is the commit they are all measured against. **G7–G10 are the release's**, met at the 2.0.0 tag — except G8's OBS leg, which the tag is a
+precondition of, and which is therefore verified immediately after it and before the
+release is announced.
 
 **Why that distinction is not pedantry.** ONEUP-0032 lands *after* the engine rewrite
 (§5.2) and, by §5.1, converts the `@@HINT@@` and `@@REMEDY@@` payloads to codes — changing
@@ -483,3 +512,4 @@ table answers *which one wins* as well as *which one covers this*:
 | 3 | 2026-07-27 | 4 high, 7 medium, 8 low — **17 verified, 2 dismissed** | No critical, and nothing structurally wrong — the loop's work was the gate's own wording. G1's "only these three changes" had become a closed list the engine spec's build plan already exceeds; G3 named a suite that never launches an engine at all; G8 said the OBS path "launches". §2's scenario-count command printed **0** rather than 76, because scenarios are `echo "TEST: …"` and the `^` anchor never matched — a figure whose command does not reproduce it being the exact failure §6b exists to stop |
 | 4 | 2026-07-27 | 1 critical, 4 high, 6 medium, 6 low — **15 verified, 2 dismissed** | The critical was this document's own G7: it promised a completion bar for the spec-less items and §6 gave one to only two of the three, so ONEUP-0063 sat on the closed §1 list with nothing to complete against — and was missing from §5.2's build order besides. §6.4 and a place beside 0004 close both. The `ToggleSwitch` right-to-left work was assigned here to ONEUP-0064 and by `ui-and-accessibility.md` to ONEUP-0032, in different release slots — the shape of a job that falls through both. It is 0032's: mirroring the window is what that item is |
 | 5 | 2026-07-27 | 1 critical, 3 high, 6 medium, 6 low — **14 verified, 2 dismissed** | The critical was §6.2 telling the implementer that ONEUP-0044 is already an acceptance condition of the rewrite, gated by G4. It is not: 0044's symptom is two dialogs from **one** authentication, and G4's scenario counts authentications — its mock keeps one timestamp per parent pid and there is no askpass in the sandbox at all. The suite is green today with the bug open, and would stay green if the rewrite reproduced it. §6.2 now says so and carries its own completion bar. Two more gate rows were overstated the same way: G5 was labelled "the privilege split" when it tests the dependency direction, which is half of it; and G8's OBS leg cannot be met before the tag it gates, because `_service` pins its revision to that tag |
+| 6 | 2026-07-27 | 1 critical, 2 high, 6 medium, 9 low — **16 verified, 2 dismissed** | The critical was loop 4's own fix applied to one item and not its neighbour: ONEUP-0059 was added to §1's closed list in loop 5 with no completion bar and no slot in §5.2, which is exactly what loop 4 had just corrected for ONEUP-0063. §6.5 and a place beside the GUI split close it, and §1 now says what the list is *for*, so sub-deliverables of a spec (0058, 0066, 0070) and items riding with other work (0060, 0062) are visibly accounted for rather than silently absent. The 47-error figure was restated here undated, which dates it to this document's own commit and to a tree nobody measured; `coding.md` §2.1.1 owns it and now carries it alone |
