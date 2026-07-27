@@ -4,7 +4,7 @@
 **Kind:** implement
 **Roadmap:** ONEUP-0054
 **Branch:** v2
-**Verified at:** `4af1937` — every figure below was measured against this tree, not recalled.
+**Verified at:** `8d4c93e` — every figure below was measured against this tree, not recalled.
 
 **Sections:** 1 goal · 2 background · 3 scope decisions · 4 design · 5 correctness
 invariants · 6 failure modes · 7 tests · 8 docs & release · 9 alternatives · 10 out of
@@ -125,10 +125,16 @@ read as one item. It does share the package. It is not one item.
   repeated here, so the two lists cannot diverge.
 - **The exit codes.** The window takes its verdict from the engine's exit code —
   `Updater.on_finished` sets `ok = exit_code == 0`, with `@@DONE@@` as belt and braces. The
-  codes stay identical, and the differential harness asserts it (§4.5).
-- **The two state files.** `run.state` and `stop.request` keep their location and their
-  `ONEUP_RUN_STATE` / `ONEUP_STOP_FILE` overrides — as does every other `ONEUP_*` override
-  in `docs/standards/files-and-naming.md` §5.1, several of which the test suite depends on.
+  codes stay identical, and the differential harness asserts it (§4.5) — **for the codes a
+  scenario reaches**. Nothing pins the full set anywhere, and `exit 2` (unknown flag) and the
+  trap codes 130/143/141 are in no scenario, so v2 could change those three with every gate
+  green. Stage 2 writes them down beside §4.1.1, the same way and for the same reason.
+- **The two state files.** `run.state` and `stop.request` keep their **layout** (§4.1.1) and
+  their `ONEUP_RUN_STATE` / `ONEUP_STOP_FILE` overrides — as does every other `ONEUP_*`
+  override in `docs/standards/files-and-naming.md` §5.1, several of which the suite depends
+  on. Their **location** is not this item's to keep: `docs/design/oneup-2.0.md` §6.5 settles
+  it, and ONEUP-0059 has already moved both halves to `XDG_STATE_HOME` several items earlier.
+  `runstate.py` inherits wherever that left them.
   `docs/reference/marker-protocol.md` §8 names them and their purpose, and delegates their
   **field layout** to this spec, which pins it in §4.1.1.
 - **The engine's log directory.** The engine writes each run's log to
@@ -156,7 +162,7 @@ which must land the matching name or the collision simply moves.
 `docs/reference/marker-protocol.md` §8 delegates this layout here, warning that the Python
 engine "must reproduce it exactly or run-following breaks silently". Measured
 from `update_system.sh`'s `RUN_STATE_FILE` writer and `updater.py`'s `_read_run_state` at
-`4af1937`:
+`8d4c93e`:
 
 **`run.state`** — plain text, four lines, `\n`-terminated, written in one `printf` when the
 run commits.
@@ -196,12 +202,6 @@ and v2 must keep it rather than deleting stale requests at start-up, which would
 clicked in the same moment. `cleanup`'s deletion is tidiness and cannot be relied on: a
 `SIGKILL`ed engine never runs it, which is precisely the case the comparison exists for.
 
-**Where the two files live is a separate open question.** They sit under
-`~/.local/state/oneup/` and ignore `XDG_STATE_HOME`;
-`docs/standards/files-and-naming.md` §5.2 says 2.0 should honour it, and ONEUP-0059 is the
-item. That is a *path* change, not a layout change, so it does not touch this contract —
-but it must be settled with ONEUP-0059 rather than assumed either way here.
-
 ### 4.2 Module layout
 
 Nine modules, each tracing to an existing cluster of the Bash file rather than to a
@@ -212,16 +212,16 @@ split must obey. Paths are relative to `oneup/engine/`.
 | Module | Responsibility | Replaces |
 | --- | --- | --- |
 | `__main__.py` | drive one run: parse the flags, dispatch the steps in order, summarise | the top-level script body, `step_selected`, `usage` |
-| `markers.py` | every marker emitter — the protocol in **one** place | `marker`, `emit_progress`, `emit_check`, `notify_send`, and every `marker NAME` call site |
+| `markers.py` | every marker emitter — the protocol in **one** place | `marker`, `emit_progress`, `emit_check`, and every `marker NAME` call site |
 | `privilege.py` | become root once, and stay root safely for the run | `sudo_init`, `sudo_capture`, `reap_orphaned_askpass`, `cleanup` |
 | `proc.py` | run a child process and stream it — deadline, incremental bytes, cooperative cancel | the ad-hoc pipelines, `progress_filter`, `stop_pending` |
 | `runstate.py` | own the two state files and the log paths (§4.1.1) | the logging `exec` preamble and the state writes around it |
-| `parsers.py` | turn zypper's text into values — **pure functions, no I/O, no privilege** | `to_bytes`, `lock_holder`'s parsing, the progress and download-size wordings, `lr` output, `reboot_reason_from_log` |
+| `parsers.py` | turn zypper's text into values — **pure functions, no I/O, no privilege** | `to_bytes`, `lock_holder`'s parsing, the progress and download-size wordings, `lr` output, and `reboot_reason_from_log`'s phrase-building (its log **read** is `steps.py`'s — see the split table) |
 | `repos.py` | refresh, skip and disable repositories | `refresh_repos`, `enabled_repo_aliases`, `find_failing_repos`, `disable_repo`, `release_zypper_lock`, `valid_alias`, `repo_scoped_failure` |
 | `steps.py` | run the five steps: `system, flatpak, firmware, orphans, cache` | `begin_step`, `end_step`, `run_system_upgrade`, the per-step bodies |
-| `actions.py` | the runs that are not an update: `--check`, `--size=`, the three auth actions, `--thin-snapshots` | `run_check`, `run_size`, `grant_auth`, `revoke_auth`, `auth_status`, `thin_snapshots`, `build_auth_rule` |
+| `actions.py` | the runs that are not an update: `--check`, `--size=`, the three auth actions, `--thin-snapshots`, and `--notify`'s `notify_send` (a desktop notification, not a marker) | `run_check`, `run_size`, `grant_auth`, `revoke_auth`, `auth_status`, `thin_snapshots`, `build_auth_rule` |
 
-The table places every function in `update_system.sh`; it is a map, not a sample. **Four
+The table places every function in `update_system.sh`; it is a map, not a sample. **Five
 functions cross a module boundary**, and each split is deliberate:
 
 | Function | Split how |
@@ -230,6 +230,7 @@ functions cross a module boundary**, and each split is deliberate:
 | `progress_filter` | the streaming loop → `proc.py`; the wordings it recognises → `parsers.py` |
 | `cleanup` | it does four things across three modules: deleting the two state files → `runstate.py`; re-enabling every alias in `DISABLED_REPOS` → `repos.py`; reaping the askpass and killing the keep-alive → `privilege.py`. **The repo re-enable is the one to be careful with** — the scenario *"an interrupted --skip-repo run still re-enables the source (trap restore)"* is what asserts it, and it is easy to lose when one function is split three ways |
 | `stop_pending` | the decision (is a stop pending at this boundary?) → `proc.py`; reading the two state files it decides from → `runstate.py` |
+| `reboot_reason_from_log` | reading the run's log → `steps.py`; turning the lines it finds into the reason phrase → `parsers.py` |
 
 Keeping I/O out of `parsers.py` is what makes §4.3.4's table-driven tests possible at all.
 
@@ -348,8 +349,8 @@ what make this less trivial than it sounds.** All three must be handled together
 Beyond those, this is the only change permitted to an **existing assertion** before G1.
 *Additions* are a different matter and are expected: `docs/design/oneup-2.0.md` §7's G1 row
 permits any new scenario a §4.6 stage names, and several stages do — the replacement
-keep-alive test, the absent-tool test and the `run.state` fourth-line assertion at stage 2,
-the parser unit tests at stage 4, the
+keep-alive test, the absent-tool test, the `run.state` fourth-line assertion and the
+ONEUP-0058 log-directory scenario at stage 2, the parser unit tests at stage 4, the
 per-call deadline test at stage 5, the differential harness at stage 6, the PySide6-absent
 test at stage 7. The rule G1 enforces is that **no existing assertion is weakened**, not that
 the suite stops growing. It lands on
@@ -382,10 +383,10 @@ each stage is what makes the next one safe to attempt.
 | # | Work | What it satisfies |
 | --- | --- | --- |
 | 1 | `ONEUP_ENGINE_CMD` indirection at the two call sites that keep running the engine, on `main` (the third is replaced outright at stage 2 — §4.4) | §4.4 — the suite still green on `main`, unchanged |
-| 2 | `__main__.py`'s flag parsing, plus `markers.py`, `runstate.py`, `proc.py`, `privilege.py`, and `actions.py`'s `auth_status` — enough for `--help` and `--auth-status`, nothing more. `runstate.py` also discharges `files-and-naming.md` §7 Trap 2 (ONEUP-0058): create the log directory only when about to write it — with a scenario asserting no directory appears when `--log=` points elsewhere, because a fix nothing checks is a wish. Plus the three suite additions this stage owes: the replacement keep-alive test (§4.3.5), the absent-tool skip test (INV-9), and the assertion on `run.state`'s fourth line that INV-13 records as missing | the `--auth-status` scenario passes against v2; INV-9 gains its first test ever, and INV-7's SIGKILL leg is replaced |
+| 2 | `__main__.py`'s flag parsing, plus `markers.py`, `runstate.py`, `proc.py`, `privilege.py`, and `actions.py`'s `auth_status` — enough for `--help` and `--auth-status`, nothing more. `runstate.py` also renames the engine's `LOG_DIR` to `USER_LOG_DIR` (§4.1, Trap 1) and discharges `files-and-naming.md` §7 Trap 2 (ONEUP-0058): create the log directory only when about to write it — with a scenario asserting no directory appears when `--log=` points elsewhere, because a fix nothing checks is a wish. Plus the three suite additions this stage owes: the replacement keep-alive test (§4.3.5), the absent-tool skip test (INV-9), and the assertion on `run.state`'s fourth line that INV-13 records as missing | the `--auth-status` scenario passes against v2; INV-9 gains its first test ever, and INV-7's SIGKILL leg is replaced |
 | 3 | `actions.py`'s `--check` — read-only and needs no root, so the safest real behaviour to build first | every `--check` scenario green against v2 |
 | 4 | `parsers.py`, `repos.py`, and `actions.py`'s `--size=`; parser unit tests | §4.3.4; the `--size` scenarios green |
-| 5 | `steps.py` — the five steps, the pre-update snapshot block, remedies, repo skipping. The rest of `actions.py` (`--grant-auth`, `--revoke-auth`, `thin_snapshots`). Plus §4.3.2's new scenario: a per-call deadline firing on a step other than the repo refresh | the remaining scenarios → G1, and G4 with them — the one-prompt scenario is an engine-suite scenario and needs no window |
+| 5 | `__main__.py`'s run driver, pre-flight (`@@DISK@@`, `@@REPO@@`, `@@SNAPSHOTS@@`) and final summary. `steps.py` — the five steps, the pre-update snapshot block, remedies, repo skipping. The rest of `actions.py` (`--grant-auth`, `--revoke-auth`, `thin_snapshots`). Plus §4.3.2's new scenario: a per-call deadline firing on a step other than the repo refresh | the remaining scenarios → G1, and G4 with them — the one-prompt scenario is an engine-suite scenario and needs no window |
 | 6 | The differential harness | G2, and the list of what it cannot see |
 | 7 | The window pointed at v2 behind an environment switch, plus INV-11's new scenario: the engine run with PySide6 hidden from the import path | G3, G5 |
 | 8 | A real run on the user's machine | G6 |
@@ -400,7 +401,8 @@ engine changes hands. ONEUP-0032 still follows it (`docs/design/oneup-2.0.md` §
 ### 4.7 Packaging and the switch
 
 - **Entry points.** `python3 -m oneup.engine` from a checkout; an `oneup-engine` console
-  script when installed. Every hardcoded `bash`-plus-`ENGINE` launch in the window becomes
+  script when installed — created at stage 9, in the RPM's `%files` and the AppImage build
+  alongside the existing `oneup` wrapper. Every hardcoded `bash`-plus-`ENGINE` launch in the window becomes
   one helper, and that helper *is* the switch: an `ONEUP_ENGINE=v1|v2` environment variable
   during stages 7–8, then a default flip. **There are eight, not six** — the six `QProcess`
   sites (`.start("bash", …)`) and **two `subprocess.run(["bash", str(ENGINE), …])` calls in
@@ -597,3 +599,4 @@ When the switch lands in stage 9:
 | 4 | 2026-07-27 | 1 critical, 3 high, 6 medium, 6 low — **14 verified, 2 dismissed** | The critical was one fact with three answers: §4.1 said protocol changes come "after the switch", §4.3.3 said the freeze lifts once G2 passes, and §10 said after the 2.0.0 tag. G2 passes at stage 9 with 2.0 still unreleased, so two of the three would have let the byte-counter marker ship inside a release the design forbids it from. §4.1.1 also stated the stop check as a modification-time comparison alone, where the engine requires `run.state` to exist as well — built to the spec as written, v2 would honour a request left over from a run that no longer exists |
 | 5 | 2026-07-27 | 1 high, 4 medium, 8 low — **11 verified, 2 dismissed** | No critical. §8 said stage 9 is where `marker-protocol.md` §5.1 lifts the freeze — a release early, and contradicting what §4.3.3 and §10 had just been corrected to say. The freeze survives the switch-over; only ONEUP-0032 moves the contract before the tag. §4.7 also justified replacing `_find_engine` with a symptom the code contradicts: `Updater.start_run` does check and names the missing file, and it is the tray check that fails silently — the requirement stands, its reason was wrong |
 | 6 | 2026-07-27 | 4 high, 5 medium, 8 low — **15 verified, 2 dismissed** | No critical. §4.2 said two functions cross a module boundary; four do, and the one that matters is `cleanup` — it deletes the state files, re-enables every disabled repository and reaps the keep-alive, which is three of this spec's own modules. The repo re-enable has a scenario guarding it and is exactly what gets lost when one function is split three ways. §8 also listed no CI script, so the two test programmes this spec commissions would have run nowhere — `workflow.md` §10 names that as a trap by name. Two passages still described `marker-protocol.md` §8 as pinning the layout nowhere; it now points here |
+| 7 | 2026-07-27 | 1 critical, 4 high, 5 medium, 5 low — **13 verified, 2 dismissed** | The critical came from the design's own previous loop: §4.1 still froze the state files' *location* when ONEUP-0059 moves it, in both halves, four items before this one starts. An implementer building `runstate.py` would have hard-coded the path 0059 had just changed. Two module placements were wrong for the same reason — `reboot_reason_from_log` reads a file and `notify_send` emits no marker, so neither belonged where it sat — and `__main__.py`'s run driver and final summary, which emit half the markers INV-1 and INV-2 assert on, were owed by no stage at all |

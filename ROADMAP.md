@@ -26,7 +26,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: indie-review-2026-07-21 engine-lane.
   Resolved (2026-07-21): added three engine tests — (1) --check invokes sudo zero times (sentinel sudo mock exits 99 if called); (2) the sudo keep-alive leaves no orphaned process after a run (before/after `pgrep -xf 'sleep 50'` diff); (3) @@INSTALLED@@ keeps its positional count|yes/no|yes/no layout. Writing (2) surfaced a real orphan leak: cleanup did `kill <subshell>` which orphaned the loop's `sleep 50` (reparented to init ~50s). Fixed by running the keep-alive under setsid in its own process group and tearing it down with `kill -- -PGID`. Red/green verified. Orphans/non-102/firmware/locale/continue-on-fail were already covered by the 2026-07-21 audit. Suite 32→38.
 
-- 📋 [ONEUP-0004] **Re-test Python 3.14 for the AppImage build when PySide6 ships 3.14 wheels.**
+- 📋 [ONEUP-0004] **Refresh the dependencies; chiefly bump CI's Python to 3.14.**
   release.yml pins python-version 3.13 (not 3.14) pending confirmation that PySide6 publishes 3.14 wheels — see docs/standards/dependencies.md ledger. When newer wheels exist, bump and delete the ledger row.
   **Layman:** We're one Python version behind on purpose until the GUI toolkit supports the newest one.
   Kind: chore.
@@ -317,7 +317,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: in-session-2026-07-24.
   Resolved (2026-07-24): bump.py step 6 now runs a third CHANGELOG edit that rewrites the `[Unreleased]: .../compare/vPREV...HEAD` base to `vX.Y.Z` (regex `(\[Unreleased\]: \S+/compare/)v\d+\.\d+\.\d+(\.\.\.HEAD)`). Also fixed the already-stale committed footer (v1.1.0 → v1.2.0). Added tests/bump-test.py — a stdlib-only functional test that runs a real bump in a throwaway repo copy (5 real version files + a synthetic CHANGELOG) and asserts the compare base advances; wired into local-CI.sh and .github/workflows/release.yml. Reproduced the bug first (test failed on the compare-base assertion pre-fix), then fixed. Full local-CI green (108 engine + 165 GUI + 5 bump).
 
-- 📋 [ONEUP-0034] **Break up the ~2,150-line updater.py into focused modules where it helps readability.**
+- 📋 [ONEUP-0034] **Break up updater.py — six times the 600-line ceiling — into focused modules.**
   updater.py is a single ~2,150-line module holding the main window, several dialogs (Settings, Repository manager, About), the @@MARKER@@ protocol parser, the QProcess engine-launch plumbing (run/check/size/auth/thin), banner/remedy state, tray + autostart, and pure helpers (diagnostics, os-release, log discovery). Candidate seams, cohesion-first and behaviour-preserving: (a) pull the pure/stateless helpers into a small module; (b) split the dialogs out; (c) consider isolating the marker-parsing + engine-launch layer from the widget layer. Constraints: keep the marker contract and step-key lists intact (they mirror update_system.sh + the tests), keep the privilege split (GUI never root), and keep local-CI green at every step — gui-smoke imports symbols from updater.py, so preserve public names or update the tests in lockstep. Not urgent; do it opportunistically, in small reviewable commits, only where it genuinely aids the six-month-reader test. Source: user-request-2026-07-24.
   **Layman:** The app's main code file has grown very large. Split it into smaller, well-named pieces so it's easier to find and change things, without altering how the app behaves.
   Kind: refactor.
@@ -858,7 +858,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Lanes: engine, tests.
   Source: in-session-2026-07-26 (writing docs/standards/files-and-naming.md).
 
-- 📋 [ONEUP-0059] **Honour XDG_STATE_HOME and XDG_CONFIG_HOME instead of hard-coding ~/.local/state.**
+- 📋 [ONEUP-0059] **Honour XDG_STATE_HOME instead of hard-coding ~/.local/state.**
   updater.py:117 builds STATE_DIR from Path.home() / ".local" / "state" /
   "oneup" and never reads XDG_STATE_HOME; tests/gui-smoke.py:31-32 exports both
   XDG_CONFIG_HOME and XDG_STATE_HOME into its sandbox, so those two lines read as

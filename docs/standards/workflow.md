@@ -8,7 +8,7 @@ gate it must pass green before it leaves this machine.
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `4af1937` — every command, path and figure below was run or read against
+**Verified at:** `8d4c93e` — every command, path and figure below was run or read against
 the tree on 2026-07-27, not recalled.
 
 **Sections:** 1 the v1 freeze · 2 branches · 3 commits · 4 roadmap IDs · 5 versions ·
@@ -216,8 +216,8 @@ notes from it, so there is nothing to derive.
 
 ## 6. The gate before a push
 
-**`./local-CI.sh` must be green before every push.** It covers more than GitHub CI does, and
-it is short enough to run every time: measured at `4af1937` on the development machine,
+**`./local-CI.sh` must be green before every push.** It runs everything GitHub CI runs except
+the AppImage build, plus five gates CI never runs, and it is short enough to run every time: measured at `8d4c93e` on the development machine,
 `time ./local-CI.sh` reported **34–38 seconds** across warm runs, of which the engine suite
 is the bulk.
 Under a minute, not under a second — long enough that skipping it feels tempting, which is
@@ -242,8 +242,8 @@ Two deliberate design points:
   green run that quietly checked nothing is worse than a red one.
 - **The AppImage build is opt-in** (`./local-CI.sh --full`, wrapped in a 10-minute
   timeout). `appimagetool` downloads its runtime from GitHub on every run and can stall on
-  a slow or filtered link; GitHub CI builds the AppImage on every tag push and attaches it to the
-  release, so the local build is a convenience, not a gate. **Neither CI nor `--full`
+  a slow or filtered link; the tag workflow builds and attaches it anyway (§7), so the local build is a convenience,
+  not a gate. **Neither CI nor `--full`
   launches the result** — that check is a person, once, per `docs/design/oneup-2.0.md` §7's
   G8.
 
@@ -316,8 +316,8 @@ confirmation** → commit `OneUp X.Y.Z`, tag, push → update the OBS package vi
 **A red gate stops it there, with the bump already written to your tree** — the same state a
 declined confirmation leaves. **The recovery is ordered, and the order matters**, because
 `release.sh`'s first precondition is a clean tree: discard the bump with `git checkout -- .`
-*first*, then fix what was wrong and re-run. Re-running on top of the bump is refused, not
-merged.
+first, fix what was wrong, **commit the fix**, and only then re-run. The precondition applies
+to your fix exactly as it applies to the bump — an uncommitted fix is refused the same way.
 
 **A refusal part-way through the bump leaves a partial one.** `bump.py` writes the six
 sites one at a time and stops at the first whose format has drifted, so the sites before it
@@ -435,6 +435,7 @@ states it and owns what "complete" means.
 | §3 the commit subject format, the `Co-Authored-By:` trailer, and one thing per commit | nothing automatic, for all three. There is no `commit-msg` hook, and adding one is cheap if the format ever drifts |
 | §5.2 released CHANGELOG entries are never rewritten | nothing automatic — `git` will happily let you edit a shipped entry. The tag is the only record that contradicts you |
 | §9 no partial 2.0 releases | nothing automatic, and nothing could be: it is a decision not to cut a tag, and no gate can catch a tag that was cut |
+| §4 a commit's ID names a bullet that exists | **nothing.** `tests/docs-check.py` never opens `ROADMAP.md`, so a subject citing an ID nobody ever filed reads exactly like one that was |
 | §4 roadmap IDs come from `.roadmap-counter` | the allocator itself: on a fresh clone the file is absent and appending **refuses**, rather than restarting at 1 and colliding |
 | §5 the version increment matches the change | **nothing.** `release.sh` takes `X.Y.Z` as an argument and never questions it; calling a breaking change a patch release is caught by a person or not at all |
 | §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate — for the version **numbers**, at all six sites. `tests/bump-test.py` covers a *different* failure: it runs a real bump in a throwaway copy where five of the six sites are the real files copied verbatim, so a site whose format has drifted makes `bump.py` refuse ("no match … file drifted from the expected format") and the test fail. What it does **not** do is assert the new value at those five — five of its six assertions read the `CHANGELOG.md`, which is the one site it fakes; the sixth asserts `bump.py` exited 0, and that is the one a drifted format trips |
@@ -446,7 +447,7 @@ states it and owns what "complete" means.
 | §6.1 a new gate is proved to fail before it is trusted | nothing automatic |
 | §6.1 step 2 — a new gate's row is named as the script labels it, in script order | nothing automatic. The table and the script are compared by a reader or not at all |
 | §6.1 a gate reports and does not repair | nothing automatic, but it is self-punishing: a gate that edited prose would be rewriting a claim it does not understand, and the next cold read finds it |
-| §6 a gate whose tool is absent is reported skipped, never silently passed | the `skip` helper each **optional-tool** gate uses — five of the eight have such a branch; the rest have no tool that can be missing. Nothing checks that a new optional-tool gate reaches for it rather than for a bare `ok` |
+| §6 a gate whose tool is absent is reported skipped, never silently passed | the `skip` helper. Three of the eight gates reach for it — GUI smoke, Lint and Packaging validation — at five call sites between them; the rest depend only on `bash` and `python3`. Nothing checks that a new optional-tool gate reaches for it rather than a bare `ok` |
 | §6 `--no-verify` is not a way past a red gate | **nothing, by construction** — it is the flag that turns the check off. Only the author's intent stands behind this one |
 | §3 the body says *why*, and records any measurement | nothing automatic |
 | §4 a finding is filed the moment it is found | nothing automatic, and by its nature nothing could: an unfiled finding leaves no trace to check |
@@ -478,3 +479,4 @@ clone where nobody ran that one command, a green push proves nothing at all.
 | 10 | 2026-07-27 | 2 high, 4 medium, 5 low — **9 verified, 2 dismissed** | §6 claimed GitHub CI "builds and verifies" the AppImage. It builds it and attaches it; nothing launches it, and design §7's G8 says as much in the opposite direction — so the sentence telling a reader `--full` is optional rested on a check that does not exist. §11's checklist had drifted the other way from §9's tree, giving `main` a §1.1 fix and documentation "and nothing else" where §1.2 grants one more. The five-gates-never-in-CI count, already stale once, is now written as a shape |
 | 11 | 2026-07-27 | 2 high, 5 medium, 6 low — **11 verified, 2 dismissed** | The freeze exception had leaked into a third form: §2's branch table still read "documentation and qualifying bug fixes only", which is the first place a reader looks and the one §1.2, §9 and §11 had all been corrected around. The shape that replaced the stale five-gates count was itself positionally false — the compile check sits above the third suite in the table, so "below the three suites" derives four. `Status` is now `Draft — cold-eyes in progress`, which is what `documentation.md` §3 requires of a document mid-review, and what this one should have said since batch 2 reopened it |
 | 12 | 2026-07-27 | 1 critical, 1 high, 2 medium, 8 low — **10 verified, 2 dismissed** | The critical was §8's recovery advice. All three failure paths said "fix and re-run", and `release.sh` refuses to re-run in every one of them: its first precondition is a clean tree, and every path leaves the bump in it. Verified by running it — dirty and staged both exit on "working tree not clean". The recovery is now an ordered sequence, and the failed-push case takes a mixed reset rather than `--soft`, which only stages what the precondition then refuses |
+| 13 | 2026-07-27 | 3 high, 4 medium, 7 low — **11 verified, 3 dismissed** | No critical. The §8 recovery sequence, rewritten last loop, still dead-ended: discarding the bump and re-running leaves the *fix* uncommitted, which the clean-tree precondition refuses just the same. §6's opening claim that local CI "covers more than GitHub CI does" was false in the one direction that matters — CI builds the AppImage and a default local run does not, so neither set contains the other. And the skip-helper row counted five call sites as five gates, which is the unnamed-unit error `documentation.md` §6b.4 calls the worst this set has produced |
