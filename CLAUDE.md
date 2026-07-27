@@ -22,7 +22,7 @@ python3 updater.py                      # launch the GUI (needs PySide6 / Qt 6)
 ./update_system.sh --steps=system,cache # run only selected steps
 ./update_system.sh --check --notify     # read-only "updates available?" pass (no root)
 tests/run-tests.sh                      # full test suite; non-zero exit on any failure
-./local-CI.sh                           # every gate that runs before a push — about a second
+./local-CI.sh                           # every gate that runs before a push — about 30s
 ./local-CI.sh --full                    # also build the AppImage (needs a good connection)
 ```
 

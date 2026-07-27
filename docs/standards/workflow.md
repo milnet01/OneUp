@@ -8,8 +8,8 @@ gate it must pass green before it leaves this machine.
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `58ea3bc` — every command, path and figure below was run or read against
-the tree on 2026-07-26, not recalled.
+**Verified at:** `7a7afc1` — every command, path and figure below was run or read against
+the tree on 2026-07-27, not recalled.
 
 **Sections:** 1 the v1 freeze · 2 branches · 3 commits · 4 roadmap IDs · 5 versions ·
 6 the gate before a push · 7 pushing · 8 releasing · 9 where a 2.0 change goes · 10 traps ·
@@ -23,10 +23,11 @@ because it decides where *every* change goes.
 *This section is canonical for the rule.* `docs/design/oneup-2.0.md` §5.4 carries the
 programme framing — why the freeze exists and what it costs — and defers here for the test.
 
-1.4.0 was released first on purpose: it carries eight finished improvements — the Stop
-button, following a run already in progress, making a slow mirror legible, Wayland dialog
-placement, and the false "up to date" fix. The version people sit on for the length of the
-2.0 build should be the best one available.
+1.4.0 was released first on purpose: it carries eight finished improvements — among them the
+Stop button, following a run already in progress, making a slow mirror legible, Wayland
+dialog placement, and the false "up to date" fix. (`CHANGELOG.md`'s `## [1.4.0]` section is
+the full list.) The version people sit on for the length of the 2.0 build should be the best
+one available.
 
 ### 1.1 What still qualifies for `main`
 
@@ -55,9 +56,21 @@ update blinds 1.x, that qualifies and ships as a 1.4.x.
 Everything else. A misplaced dialog, awkward wording, a missing convenience, a nice idea —
 all wait for 2.0. **No feature work lands on `main` during the freeze.**
 
-Documentation is not a release and is unaffected: this whole standards set lands on `main`
-normally, because the rules govern 1.x maintenance too and `v2` inherits them by merge
-(design §5.3).
+Two things are not feature work and are unaffected:
+
+- **Documentation.** It is not a release. This whole standards set lands on `main` normally,
+  because the rules govern 1.x maintenance too and `v2` inherits them by merge (design §5.3).
+- **A test-harness change that provably alters no application behaviour.** Added
+  2026-07-27, at the user's decision, and deliberately narrow: it covers a change to
+  `tests/` that touches neither `updater.py` nor `update_system.sh`, and whose whole
+  justification is that the suite must be *seen* to stay green on `main` before anything on
+  `v2` depends on it. It exists for one known change — the `ONEUP_ENGINE_CMD` indirection
+  that lets the suite drive either engine (`docs/specs/ONEUP-0054-python-engine.md` §4.4).
+
+  The exception is written here, in the standard that owns the freeze, precisely so that it
+  is one exception rather than a precedent: a change that touches an application file is not
+  covered, however small, and "it changes no behaviour" is a claim the green suite has to
+  demonstrate, not a claim the author gets to make.
 
 **Why the freeze is stated as a testable question rather than a preference:** the failure
 mode of any freeze is a slow slide back into 1.x work, one "small" fix at a time. *Can
@@ -127,7 +140,8 @@ grep -oE 'ONEUP-[0-9]+' ROADMAP.md | grep -oE '[0-9]+' \
     | sort -n | tail -1 | sed 's/^0*//' > .roadmap-counter
 ```
 
-**A bullet's shape** — status emoji, ID, bold headline, body, then the four labelled lines:
+**A bullet's shape** — status emoji, ID, bold headline, body, then the labelled lines.
+An open bullet carries three; `Resolved` is added when it closes:
 
 ```markdown
 - 📋 [ONEUP-0065] **Convert the remaining line-number citations to symbol names.**
@@ -165,7 +179,7 @@ One version number lives in six places, and they must agree:
 | --- | --- |
 | 1 | `APP_VERSION` in `updater.py` — the in-app update check reads it |
 | 2 | `Version:` in `packaging/rpm/oneup.spec` |
-| 3 | the newest `%changelog` stanza in the same spec — rpmlint rejects a mismatch |
+| 3 | the newest `%changelog` stanza in the same spec — rpmlint rejects a mismatch, though nothing in this repository runs rpmlint; the lockstep gate is what catches it here |
 | 4 | `versionformat` **and** `revision` in `packaging/obs/_service` |
 | 5 | the newest `<release version="…">` in `data/za.co.antsprojectshub.OneUp.metainfo.xml` |
 | 6 | the newest `## [x.y.z]` heading in `CHANGELOG.md`, **and the two links at its foot** — the `[x.y.z]:` release link, and the `[Unreleased]:` compare base, which must point at the tag just cut |
@@ -200,16 +214,19 @@ notes from it, so there is nothing to derive.
 
 ## 6. The gate before a push
 
-**`./local-CI.sh` must be green before every push.** It runs in about a second and covers
-more than GitHub CI does:
+**`./local-CI.sh` must be green before every push.** It covers more than GitHub CI does, and
+it is short enough to run every time: measured at `7a7afc1` on the development machine,
+`time ./local-CI.sh` reported **34 seconds**, warm, of which the engine suite is the bulk.
+Under a minute, not under a second — long enough that skipping it feels tempting, which is
+what the pre-push hook is for.
 
 | Gate | What it proves |
 | --- | --- |
 | `tests/run-tests.sh` | the engine suite — the markers `update_system.sh` prints |
 | `tests/gui-smoke.py` | the offscreen GUI suite — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip) |
 | Python syntax | `updater.py` and `bump.py` parse |
-| `tests/bump-test.py` | a real bump in a throwaway copy advances every version site |
-| lint | `ruff` and `shellcheck`, best-effort |
+| `tests/bump-test.py` | a real bump in a throwaway copy still parses every version site, and rewrites `CHANGELOG.md`'s heading and both links correctly |
+| lint | `shellcheck`, then `ruff (F,B bug-class)` — best-effort |
 | packaging validation | desktop file and AppStream metainfo |
 | version lockstep | the **version numbers** at the six sites of §5.1 agree |
 | documentation | `tests/docs-check.py` — the rules of `docs/standards/documentation.md` that a script can settle, plus the `CHANGELOG.md` links §5.1's site 6 depends on |
@@ -243,8 +260,7 @@ list `local-CI.sh` actually executes.
 - **A new *test* gate goes in both.** Otherwise the first thing it catches is caught after
   the tag is already pushed, which is the expensive moment.
 - **The five extras stay local**, so understand what that costs: **a lint failure is
-  caught before a push or not at all.** The pre-push hook is what makes that reliable, and
-  is why `git push --no-verify` is not a way past a red gate (§6).
+  caught before a push or not at all.** The pre-push hook is what makes that reliable.
 
 ### 6.1 A gate is how a rule stops being a wish
 
@@ -256,7 +272,9 @@ Adding a gate:
 
 1. **Add the check to `local-CI.sh`**, using its `ok` / `bad` / `skip` helpers, so a missing
    tool is reported as skipped and never silently passed.
-2. **Add a row to §6's table** saying what it proves, in the same words the gate prints.
+2. **Add a row to §6's table** saying what it proves. Name the gate the way the script
+   labels it, so the table can be read against `local-CI.sh` line by line, and put the row
+   in the position the script runs it.
 3. **If it is a *test* gate, add it to `.github/workflows/release.yml` as well** — a test
    gate that runs only locally catches its first regression after the tag is pushed.
 4. **Prove it fails.** Break the thing it checks, run it, see red, put the thing back. A gate
@@ -365,8 +383,9 @@ Can people still install system, Flatpak and firmware updates?
   packaging notes from and stops. Write the entries as the work lands, not at release time.
 - **A "small fix" on `main` during the freeze.** Test it against §1.1 honestly. If people
   can still update, it is 2.0 work no matter how small it is.
-- **Adding a gate to `local-CI.sh` but not to `release.yml`.** The release build is what
-  actually ships; a gate it does not run is a gate that fires too late.
+- **Adding a *test* gate to `local-CI.sh` but not to `release.yml`.** The release build is
+  what actually ships; a test gate it does not run is a test gate that fires too late. (The
+  five non-test extras staying local is deliberate, not this trap — §6.)
 
 ## 11. Before you push
 
@@ -383,11 +402,15 @@ Can people still install system, Flatpak and firmware updates?
 | Rule | What catches a breach |
 | --- | --- |
 | §1 the v1 freeze | nothing automatic — the branch a commit lands on is a human decision |
+| §1.2 the test-harness exception is not widened | nothing automatic. The narrowing condition — it touches no application file — is `git diff --name-only` away, but nothing runs it. This row exists so the exception cannot quietly become "changes I judge harmless" |
+| §2 `v2` is never rebased or force-pushed | **nothing, and the damage is off this machine.** No branch protection exists (the repository has none), so a `git push --force` on `v2` would succeed and break every clone. It is the one trap in this document with no net under it at all |
 | §3 the commit subject format | nothing automatic. There is no `commit-msg` hook, and adding one is cheap if the format ever drifts |
 | §4 roadmap IDs come from `.roadmap-counter` | the allocator itself: on a fresh clone the file is absent and appending **refuses**, rather than restarting at 1 and colliding |
-| §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate — for the version **numbers**. `tests/bump-test.py` proves `bump.py` writes all six correctly, but against a synthetic fixture, not the real file |
+| §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate — for the version **numbers**, at all six sites. `tests/bump-test.py` covers a *different* failure: it runs a real bump in a throwaway copy where five of the six sites are the real files copied verbatim, so a site whose format has drifted makes `bump.py` refuse ("no match … file drifted from the expected format") and the test fail. What it does **not** do is assert the new value at those five — all six of its assertions read the `CHANGELOG.md`, which is the one site it fakes, because that is where ONEUP-0033 happened |
 | §5.1 site 6's two `CHANGELOG.md` links match its newest heading | `tests/docs-check.py`. Added 2026-07-26: the lockstep gate reads only the heading, and a hand-edit could leave the release link missing or the `[Unreleased]` compare base pointing at the previous tag — which is ONEUP-0033, a bug this project shipped once already |
+| §5.2 a release needs a non-empty `## [Unreleased]` | `bump.py` — it refuses outright: *"CHANGELOG.md has no non-empty '## [Unreleased]' section to release"*. One of the few rules here with a hard automatic stop |
 | §6 local CI is green before a push | `githooks/pre-push` — but only once per clone, after `git config core.hooksPath githooks`. **Nothing enforces that it is enabled**, so on a fresh clone this rule is a habit |
+| §7 push each commit once local CI is green | nothing automatic, and nothing needs to be — the repository is public, so a wasted push costs no runner minutes and an unpushed commit harms only its author |
 | §6.1 a new gate is proved to fail before it is trusted | nothing automatic |
 | §8 the release preconditions | `release.sh` — three fatal checks before it touches anything: a clean tree, on `main`, and the tag not already existing |
 | §8.1 no fourth distribution path | **nothing, and nothing should.** Adding a packaging path is a deliberate act by a person, not something that happens by accident, so there is no breach for a script to catch. What the row is for is the opposite failure: somebody proposing one without knowing it was already weighed. ONEUP-0071 is the answer to that |
@@ -406,3 +429,4 @@ clone where nobody ran that one command, a green push proves nothing at all.
 | 4 | 2026-07-26 | 1 medium — **1 verified** | the gate table named `check-docs.py`; the script is `tests/docs-check.py`. Five such references survived the rename, and the pointer gate cannot see a bare filename — a limit now recorded in `documentation.md`. |
 | 5 | 2026-07-26 | 2 medium — **2 verified** | §5.1 claimed the version-lockstep gate covers the CHANGELOG heading *and its link*. `bump.py` writes three things and the gate read one; a stale `[Unreleased]` compare base is ONEUP-0033, already shipped once. `tests/docs-check.py` now checks both links. The gate table also listed its rows in a different order from the script it documents. |
 | 6 | 2026-07-26 | none | converged. |
+| 7 | 2026-07-27 | 2 critical, 3 high, 4 medium, 4 low (re-reviewed in batch 2, because §8.1 was written after loop 6 and no cold reader had seen it) | §8.1 itself survived intact — its Flatpak-sandbox argument checks out against `security.md` §1 and against what the engine does for each of the five steps. What did not: **both** descriptions of `tests/bump-test.py` were wrong in the reassuring direction — §6's table credited it with proving every version site advances, and the What-checks-this row had the synthetic and real files exactly backwards. And "it runs in about a second" was 34 seconds, measured, in the one figure that decides whether the gate gets run at all. §1.2 gained the behaviour-neutral test-harness exception (user's decision, 2026-07-27), which the engine spec had been granting itself |

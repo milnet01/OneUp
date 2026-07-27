@@ -109,6 +109,10 @@ none carried `Verified at:`. They are **grandfathered**: each is brought to this
 next time it is edited for another reason, not in a sweep. `ONEUP-0054` was the first, on
 2026-07-27; the other four are still waiting for a reason.
 
+**`Branch:` names the branch the *work* lands on, not the branch this file is committed
+to.** They differ routinely and on purpose: every 2.0 document was written on `main` while
+describing work that happens on `v2`. Say `main` only when the work itself lands there.
+
 `Verified at` is not decoration. It is the only thing that lets a later reader know
 whether a figure is current — and §6b says how each figure was counted, so re-checking one
 is cheap. A document without `Verified at` is assumed stale. **The field has exactly one

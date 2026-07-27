@@ -27,7 +27,7 @@ three are the *only* gates GitHub CI also runs on a `v*` tag — everything else
 | --- | --- | --- |
 | Engine | `tests/run-tests.sh` | the `@@MARKER@@` lines `update_system.sh` prints |
 | GUI | `tests/gui-smoke.py` | the window's state after being fed those same marker lines |
-| Version bump | `tests/bump-test.py` | that `bump.py` rewrites all six version sites |
+| Version bump | `tests/bump-test.py` | that a real bump still parses every version site, and rewrites the CHANGELOG heading and both links correctly (`docs/standards/workflow.md` §5.1's row owns the exact split) |
 
 **No sizes or assertion counts appear here, deliberately**
 (`docs/standards/documentation.md` §6b). They are wrong the next time anybody adds a test,

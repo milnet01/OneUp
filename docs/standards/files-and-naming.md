@@ -126,7 +126,7 @@ oneup/
   gui/             the split-up updater.py
   translations/    oneup_<lang>.ts catalogues (ONEUP-0032)
 updater.py         thin entry point — stays at the root
-update_system.sh   stays until the switch-over gate passes, then goes
+update_system.sh   stays through 2.0 as a documented fallback, goes in 2.1
 ```
 
 `translations/` holds data rather than code, and sits inside the package so a plain
