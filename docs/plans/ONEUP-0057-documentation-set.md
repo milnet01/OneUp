@@ -757,8 +757,12 @@ git commit -m "ONEUP-0054: refresh the spec's figures and conform it to the stan
 
 ### Task 13: Cold-eyes batch 2 — the design and the engine spec
 
-- [ ] **Step 1: Run `/cold-eyes`** over `docs/design/oneup-2.0.md` and
-      `docs/specs/ONEUP-0054-python-engine.md`.
+- [ ] **Step 1: Run `/cold-eyes`** over `docs/design/oneup-2.0.md`,
+      `docs/specs/ONEUP-0054-python-engine.md` **and `docs/standards/workflow.md`**.
+      Workflow was added to this batch on 2026-07-27: it is `Reviewed`, but §8.1 (no
+      fourth distribution path, ONEUP-0071) was written after batch 1 and no cold reader
+      has seen it. Global rule 14 applies to an edited standard, and §8.1 makes a claim
+      about the Flatpak sandbox and the privilege boundary that is worth checking.
 - [ ] **Step 2–4:** verify, fix by severity, loop cold until clean, log as you go —
       exactly as Task 10.
 - [ ] **Step 5: Commit** per loop:
