@@ -341,12 +341,23 @@ Nobody was wrong on purpose: "test" meant three different things and no document
 
 ### 6b.5 What is exempt
 
-A number that is **fixed by a contract** is not a measurement and does not rot: the six
-version sites (`docs/standards/workflow.md` §5.1), the marker table
-(`docs/reference/marker-protocol.md` §3), the Python floor. Each is a decision rather than an
-observation, and each has a gate that fails when the tree stops matching it. **That is the
-test**: if nothing fails when the number goes wrong, it is a measurement, and §6b.1 to §6b.4
-apply.
+A number that is **fixed by a contract** is not a measurement and does not rot — *provided
+something fails when the tree stops matching it*. **That is the test**: if nothing fails when
+the number goes wrong, it is a measurement, and §6b.1 to §6b.4 apply, however contractual it
+feels.
+
+Applying that test honestly to this project leaves **one** clear exemption and two near
+misses, and the near misses are the useful part:
+
+| Number | Exempt? | Why |
+| --- | --- | --- |
+| The six version sites (`docs/standards/workflow.md` §5.1) | **yes** | `local-CI.sh`'s version-lockstep gate reads all six and fails on any disagreement |
+| The marker **names** (`docs/reference/marker-protocol.md` §3) | **yes** | `tests/docs-check.py` compares the table against the engine's call sites, both ways |
+| The marker **count** — "23 markers" | **no** | nothing reads the count. A marker added to the engine *and* the table agrees with itself, and every document quoting 23 goes quietly wrong |
+| The Python floor (`docs/standards/coding.md` §1) | **no** | no `python_requires` is declared anywhere in the tree; that standard's own table says so. ONEUP-0063's `pyproject.toml` is what would make it exempt |
+
+So write the count and the floor in §6b.4's form until something checks them. A number
+nobody checks is a measurement wearing a contract's clothes.
 
 ## 7. Review — the cold-eyes gate
 

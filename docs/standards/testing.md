@@ -27,7 +27,7 @@ three are the *only* gates GitHub CI also runs on a `v*` tag — everything else
 | --- | --- | --- |
 | Engine | `tests/run-tests.sh` | the `@@MARKER@@` lines `update_system.sh` prints |
 | GUI | `tests/gui-smoke.py` | the window's state after being fed those same marker lines |
-| Version bump | `tests/bump-test.py` | that a real bump still parses every version site, and rewrites the CHANGELOG heading and both links correctly (`docs/standards/workflow.md` §5.1's row owns the exact split) |
+| Version bump | `tests/bump-test.py` | that a real bump still parses the five real version sites, and rewrites the CHANGELOG heading and both links correctly (`docs/standards/workflow.md` §5.1's row owns the exact split) |
 
 **No sizes or assertion counts appear here, deliberately**
 (`docs/standards/documentation.md` §6b). They are wrong the next time anybody adds a test,
@@ -316,11 +316,9 @@ with the layout direction forced right-to-left.
 - **A shared teardown.** Scenarios are commented out one at a time while debugging (there
   is no per-test selector); cleanup that lives outside the scenario body is skipped exactly
   when the debugging is happening.
-- **Adding a *test* gate to one CI and not the other.** A test gate belongs in both
-  `local-CI.sh` and `.github/workflows/release.yml`; one that runs only locally catches its
-  first regression after the tag is pushed. The five *non-test* gates staying local is a
-  deliberate split, not this trap — `docs/standards/workflow.md` §6 owns the policy and
-  says what it costs.
+- **Adding a *test* gate to one CI and not the other.** `docs/standards/workflow.md` §10
+  owns this trap and §6 owns the policy behind it, including why the non-test gates stay
+  local deliberately.
 
 ## 10. Before you commit a test change
 

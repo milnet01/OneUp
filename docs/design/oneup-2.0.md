@@ -33,7 +33,7 @@ thing can replace what they run today.
 | **ONEUP-0032** | Wrap user-facing text for translation, and mirror the window for right-to-left languages — **groundwork only, English alone**, see §5.1 | `docs/specs/ONEUP-0032-i18n.md` *(to be written)* |
 | **ONEUP-0044** | The double password box | no spec — see §6.2 |
 | **ONEUP-0004** | Dependency refresh — chiefly the CI Python version | no spec — see §6.3 |
-| **ONEUP-0063** | Add `pyproject.toml`, so a bare `ruff check` and the gate agree | no spec — `docs/standards/coding.md` §2.1 settles it |
+| **ONEUP-0063** | Add `pyproject.toml`, so a bare `ruff check` and the gate agree — not a one-line config drop, see §6.4 | no spec — `docs/standards/coding.md` §2.1 settles it |
 
 The list is **open, but not forever.** More items may be added while 2.0 is being built;
 each addition gets a roadmap bullet and, if it needs design, a spec, and is judged against
@@ -79,7 +79,7 @@ form, with the gap named:
 | §3 below — the engine's command-line surface | **13** flags: `--auth-status`, `--auto-skip-repos`, `--check`, `--grant-auth`, `--help` (and its `-h` alias), `--import-keys`, `--log=`, `--notify`, `--revoke-auth`, `--size=`, `--skip-repo=`, `--steps=`, `--thin-snapshots` | **nothing.** No gate reads the engine's flag list. The freeze in §3 is a human undertaking |
 
 The Python floor and the lint rule set are settled decisions rather than baselines, and
-`docs/standards/coding.md` §1 and §2.1 own them — see §6.3.
+`docs/standards/coding.md` §1 and §2.1 own them — see §6.3 and §6.4.
 
 ## 3. What must not change
 
@@ -126,8 +126,8 @@ update_system.sh   retained through 2.0 as a documented fallback, removed in 2.1
 **`update_system.sh`'s retirement schedule is this document's**, decided with the user on
 2026-07-27: 2.0.0 still ships it, marked as a fallback, and 2.1 removes it — so anyone who
 scripted against the engine gets a release's notice, and a real-machine problem with the new
-engine has a way back. `ONEUP-0054` §4.7 and `docs/standards/files-and-naming.md` §4 carry
-the same schedule and point here for the reason.
+engine has a way back. `ONEUP-0054` §4.7 points here for the schedule and adds only which
+stage performs it; `docs/standards/files-and-naming.md` §4 carries the same one line.
 
 **Packaging is affected, in three places, and they must move together** — this is the
 part a restructure most easily forgets:
@@ -228,10 +228,10 @@ one `text-align` above.
 
 **The place custom painting will not mirror**: `ToggleSwitch` in `updater.py` draws the
 switch by hand, and Qt's mirroring cannot see inside a `paintEvent`. There are **two** handed
-computations in it, not one — the knob's position and the state shape's centre — and the
-consequence for 2.0's shape is that the redesign (0064) must budget for both.
-`docs/standards/ui-and-accessibility.md` §8.3 owns the detail, names each site, and explains
-why fixing only the obvious one is worse than fixing neither.
+computations in it, not one — the knob's position and the state shape's centre — and both
+belong to **ONEUP-0032**, because mirroring the window for right-to-left is what that item
+is. `docs/standards/ui-and-accessibility.md` §8.1 and §8.3 own the detail, name each site,
+and explain why fixing only the obvious one is worse than fixing neither.
 
 Two further consequences, both structural:
 
@@ -239,8 +239,9 @@ Two further consequences, both structural:
   fragments cannot be reordered by a translator, and in RTL the fragments can render in an
   order nobody intended. Whole sentences with named placeholders, always. The sweep is the
   rule, not its current result: measured at `7a7afc1`, `grep -cE '"\s*\+|\+\s*"' updater.py`
-  reported **10** string-concatenation sites — an upper bound, since it counts every `+` on
-  a double-quoted string and not only the ones that build a sentence a user reads.
+  reported **10** matching *lines*. That is a rough upper bound on the work rather than a
+  count of sites: it matches any `+` beside a double-quoted string, not only the ones
+  building a sentence a user reads, and two on one line count once.
 - **RTL is tested, not hoped for.** `tests/gui-smoke.py` gains a pass with the layout
   direction forced right-to-left. Without a test it will regress the first time somebody
   adds a widget, because on an English desktop nobody will ever see it.
@@ -251,10 +252,10 @@ Two further consequences, both structural:
 1.4.0 released from main, then main freezes  ← §5.4
         │
         ▼
-dependency refresh (0004)      ← first because it is nearly free: a one-line CI
-        │                        change with no code depending on it. (It does not
-        │                        move the Python floor — coding.md §1 settled that
-        │                        at 3.13, and §6.3 explains the difference.)
+dependency refresh (0004)      ← first because they are nearly free and touch tooling
+   + lint config (0063)          rather than the app, so one green run proves both.
+        │                        Neither moves the Python floor — coding.md §1
+        │                        settled that at 3.13; §6.3 explains the difference.
         ▼
 GUI split (0034)               ← first substantial work on v2, and alone: it is
         │                        behaviour-preserving, so the existing GUI
@@ -338,6 +339,10 @@ the engine authenticates — it earns a spec at that point.
 
 ### 6.3 Dependency refresh (ONEUP-0004)
 
+**Complete when** `release.yml`'s `python-version` reads 3.14 on `v2` and the suites are
+green against it.
+
+
 Governed by `docs/standards/dependencies.md`, which owns the ledger and the 2026-07-26
 sweep behind it — including why the Python row was deleted rather than deferred, and why the
 `ubuntu-22.04` runner pin stays. Not repeated here.
@@ -357,6 +362,19 @@ not take it.
   divergence is between `ruff check .` and `./local-CI.sh` — **not** between a developer and
   CI, because GitHub CI runs no lint at all (`workflow.md` §6).
 
+### 6.4 The lint configuration (ONEUP-0063)
+
+`docs/standards/coding.md` §2.1 settled it: 2.0 adds a `pyproject.toml` carrying the rule
+set, so a bare `ruff check` and the gate agree and `local-CI.sh` can drop its `--select`
+flags.
+
+**It is not a one-line config drop, and §2.1.1 of that standard is why**: adopting the
+config was measured at 47 reported errors, so the item includes the work of clearing them.
+An implementer who adds the file alone turns the gate red on the next commit.
+
+**Complete when** `pyproject.toml` exists, `local-CI.sh` runs a bare `ruff check`, and that
+check is green.
+
 ## 7. The gate — what "ready" means
 
 **Nothing ships as 2.0 until it can fully replace v1.** The user's rule, 2026-07-26:
@@ -369,12 +387,12 @@ nothing can check is not a gate.
 | # | Condition | Checked by |
 | --- | --- | --- |
 | **G1** | Engine suite passes with **no existing assertion weakened** — v2 satisfies the tests v1 was measured by. **Additions are permitted; weakening is not.** One existing scenario is *replaced* rather than carried, because it asserts Bash source rather than behaviour (`ONEUP-0054` §4.3.5), and the harness gains the `ONEUP_ENGINE_CMD` indirection (§4.4). Every other suite change must be a **new** scenario named by a stage in `ONEUP-0054` §4.6 | the suite green against the new engine, plus a review of `git diff` on the suite: one replacement, one harness change, and additions §4.6 names. Anything else fails the gate |
-| **G2** | v1 and v2 emit the **same marker stream** under identical mocks | `tests/differential.sh` (`ONEUP-0054` §4.5) |
+| **G2** | v1 and v2 emit the **same marker stream** under identical mocks | `tests/differential.sh` — new, and `ONEUP-0054` §4.5 owes it |
 | **G3** | GUI suite green with the window driving the new engine | `python3 tests/gui-smoke.py` — **but the suite as it stands feeds the window marker lines and never launches an engine at all**, so on its own it proves the window, not the pairing. G3 needs the run under `ONEUP-0054` §4.6 stage 7's environment switch, with the window actually resolving to v2 |
 | **G4** | A full run raises **exactly one** password prompt | the existing one-prompt scenario |
 | **G5** | The engine runs with **PySide6 absent** and imports no Qt — the privilege split, enforced by test | a new scenario with PySide6 hidden from the import path |
 | **G6** | A real run on the user's own machine | manual, against the explicit list `ONEUP-0054` §4.5 requires the differential phase to write — the list is a deliverable, not a judgement call |
-| **G7** | Every item on the §1 list is complete — those with a spec, by their spec's invariants being covered by tests; the three without one (0044, 0004, 0063), by the acceptance line §6 gives each | **nothing automatic.** It is a release checklist walked by hand, over a list §1 closes at the start of the engine rewrite so that it can be walked at all |
+| **G7** | Every item on the §1 list is complete — those with a spec, by their spec's invariants being covered by tests; those without one, by the **Complete when** line §6 gives each | **nothing automatic.** It is a release checklist walked by hand, over a list §1 closes at the start of the engine rewrite so that it can be walked at all |
 | **G8** | The three packaging paths build from the new layout, and what each delivers launches: the AppImage directly, the RPM and the OBS repository once installed | `./local-CI.sh --full` builds the AppImage — it does not launch it. All three launches are manual, once each, and that is the honest state of this gate |
 | **G9** | Docs current: README, CLAUDE.md, standards, marker reference, CHANGELOG | `tests/docs-check.py`, plus a `/cold-eyes` pass over anything 2.0 edited |
 | **G10** | Every user-facing string is translatable, and the GUI suite passes with the layout direction forced **right-to-left** | the RTL half is a GUI-suite pass. The wrapping half has **no automatic check** — `docs/standards/wording-and-translation.md`'s own table records that gap against its §6.1 — so it is a review of `oneup/gui/` against that standard, and it is the weakest gate here |
@@ -446,3 +464,5 @@ table answers *which one wins* as well as *which one covers this*:
 | --- | --- | --- | --- |
 | 1 | 2026-07-27 | 2 critical, 7 high, 8 medium, 8 low — **23 verified, 2 dismissed** | The two criticals were both claims the code and a higher-ranked standard already contradicted: `_paint_state_shape` called "symmetric by construction" when it is handed the same way the knob is (§5.1), and §6.3 presenting the Python floor and the lint configuration as open when `coding.md` §1 and §2.1 had settled both. §2's baseline table was rebuilt in `documentation.md` §6b.4's measured form with the unit named in every row; §5.4 stopped restating the freeze it says it does not restate; §7's gate gained a **checked by** column, which is what exposed that G1 and G2 cannot hold at the 2.0.0 tag once ONEUP-0032 changes the payloads |
 | 2 | 2026-07-27 | 2 critical, 5 high, 7 medium, 7 low — **19 verified, 2 dismissed** | Nothing from loop 1 came back, which is the proof those fixes held. What loop 2 found was largely what loop 1's fixes had *moved*: adding a **checked by** column to §7 made G1's "no assertion touched" newly falsifiable — and it is false, because `ONEUP-0054` plans three deliberate suite changes — and saying G1–G6 are met "at stage 7–8" gave a third answer to a question the spec's own table already answered. Two claims about gates were flattering: the marker count and the flag list were called contract-fixed with a gate behind them, and neither has one. §2 also had the ownership of the privileged-call figure backwards, in the sentence a later editor would trust |
+| 3 | 2026-07-27 | 4 high, 7 medium, 8 low — **17 verified, 2 dismissed** | No critical, and nothing structurally wrong — the loop's work was the gate's own wording. G1's "only these three changes" had become a closed list the engine spec's build plan already exceeds; G3 named a suite that never launches an engine at all; G8 said the OBS path "launches". §2's scenario-count command printed **0** rather than 76, because scenarios are `echo "TEST: …"` and the `^` anchor never matched — a figure whose command does not reproduce it being the exact failure §6b exists to stop |
+| 4 | 2026-07-27 | 1 critical, 4 high, 6 medium, 6 low — **15 verified, 2 dismissed** | The critical was this document's own G7: it promised a completion bar for the spec-less items and §6 gave one to only two of the three, so ONEUP-0063 sat on the closed §1 list with nothing to complete against — and was missing from §5.2's build order besides. §6.4 and a place beside 0004 close both. The `ToggleSwitch` right-to-left work was assigned here to ONEUP-0064 and by `ui-and-accessibility.md` to ONEUP-0032, in different release slots — the shape of a job that falls through both. It is 0032's: mirroring the window is what that item is |

@@ -302,7 +302,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   The one exception is custom painting, which Qt cannot mirror: the
   toggle's paintEvent (updater.py:699) computes its knob position from
   the left edge (line 712) and must apply the direction itself; its
-  painted state shapes are symmetric (lines 692-697) and are fine. Also
+  the painted state shape is NOT symmetric — `_paint_state_shape` derives its centre from the left edge exactly as the knob does, so there are two handed sites in `ToggleSwitch`, not one (corrected 2026-07-27, cold-eyes batch 2; `docs/standards/ui-and-accessibility.md` §8.3). Also
   10 string-concatenation sites to convert to whole sentences with named
   placeholders — a glued sentence cannot be reordered by a translator and
   renders unpredictably in RTL.
@@ -1147,9 +1147,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   so it is not an edge case for them.
 
   Carried into 2.0 as INV-9 of docs/specs/ONEUP-0054-python-engine.md, where
-  it is recorded honestly as having no test. Fix it on `main` if the freeze
-  allows, otherwise on `v2` before G1 — the rewrite must not inherit an
-  untested branch it is expected to reproduce byte-identically.
+  it is recorded honestly as having no test. Fix it on `v2`, at that spec's
+  §4.6 stage 2, before G1 — the freeze's one exception names a different
+  change (docs/standards/workflow.md 1.2), and the rewrite must not inherit
+  an untested branch it is expected to reproduce byte-identically.
   **Layman:** Prove that OneUp quietly skips the Flatpak and firmware steps on a machine that doesn't have those tools, instead of reporting a failure.
   Kind: test.
   Source: in-session-2026-07-27 (ONEUP-0057 Task 12).

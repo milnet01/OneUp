@@ -118,11 +118,10 @@ read as one item. It does share the package. It is not one item.
   cannot be differentially tested, which would throw away the only real safety net this
   project has. The reference's §5.1 records the freeze; protocol changes come *after* the
   switch.
-- **The command-line surface.** All thirteen flags the argument loop in `update_system.sh`
-  accepts: `--steps=`, `--log=`, `--check`, `--size=`, `--grant-auth`, `--revoke-auth`,
-  `--auth-status`, `--import-keys`, `--skip-repo=`, `--auto-skip-repos`,
-  `--thin-snapshots`, `--notify`, `--help` — and `-h`, which the same arm accepts as an
-  alias for `--help`. `docs/design/oneup-2.0.md` §3 froze this list.
+- **The command-line surface.** Every flag the argument loop in `update_system.sh` accepts,
+  with the same spelling and the same behaviour, including the `-h` alias that shares
+  `--help`'s arm. `docs/design/oneup-2.0.md` §2 enumerates them and §3 freezes them; not
+  repeated here, so the two lists cannot diverge.
 - **The exit codes.** The window takes its verdict from the engine's exit code —
   `Updater.on_finished` sets `ok = exit_code == 0`, with `@@DONE@@` as belt and braces. The
   codes stay identical, and the differential harness asserts it (§4.5).
@@ -133,8 +132,8 @@ read as one item. It does share the package. It is not one item.
 - **The engine's log directory.** The engine writes each run's log to
   `~/Documents/update-logs/`, where a user can find it. The *directory* has no override;
   the individual run's log file does, via `--log=FILE`, which every test scenario uses.
-  (Trap 2 of that standard's §7 obliges the rewrite to stop creating that directory on the
-  real machine during tests. That is a change rather than a constant, so it is a §4.6
+  (`docs/standards/files-and-naming.md` §7 Trap 2 obliges the rewrite to stop creating that
+  directory on the real machine during tests. That is a change rather than a constant, so it is a §4.6
   stage 2 deliverable — ONEUP-0058 — not part of this list.)
 - **Standalone terminal use.** `oneup-engine --steps=system,cache` must be as usable in a
   plain terminal as `./update_system.sh` is today.
@@ -214,11 +213,19 @@ split must obey. Paths are relative to `oneup/engine/`.
 | `steps.py` | run the five steps: `system, flatpak, firmware, orphans, cache` | `begin_step`, `end_step`, `run_system_upgrade`, the per-step bodies |
 | `actions.py` | the runs that are not an update: `--check`, `--size=`, the three auth actions, snapshots | `run_check`, `run_size`, `grant_auth`, `revoke_auth`, `auth_status`, `thin_snapshots`, `build_auth_rule` |
 
-The table places **every** function in `update_system.sh`; it is a map, not a sample. Two
-placements are worth calling out because losing them would be a real regression:
+The table places every function in `update_system.sh`; it is a map, not a sample. **Two
+functions are deliberately split across two modules**, and the split is the point rather than
+an oversight: `lock_holder` reads `$ZYPP_PID_FILE` and `/proc/<pid>/comm` — that probe belongs
+in `repos.py`, and only the text it parses belongs in `parsers.py`. `progress_filter` is the
+same shape: the streaming loop is `proc.py`'s, the wordings it recognises are `parsers.py`'s.
+Keeping I/O out of `parsers.py` is what makes §4.3.4's table-driven tests possible at all.
+
+Two placements are worth calling out because losing them would be a real regression:
 `valid_alias` is the engine-side shape guard `docs/standards/security.md` §4 requires before
 an alias reaches a privileged command, and `reboot_reason_from_log` builds the optional
-reason field of `@@REBOOT@@` (`docs/reference/marker-protocol.md` §4.8) that INV-1 turns on.
+reason field of `@@REBOOT@@` (`docs/reference/marker-protocol.md` §4.8) — cosmetic in itself,
+but it is the *marker* INV-1 governs, and losing the reason turns a correct verdict into an
+unexplained one.
 `oneup/engine/__init__.py` exists and is empty — `python3 -m oneup.engine` needs it.
 
 **`parsers.py` and `repos.py` are deliberately two modules, not one.** An earlier draft had
@@ -320,10 +327,13 @@ what make this less trivial than it sounds.** All three must be handled together
 | the broken-pipe scenario (INV-5) | invokes `bash "$ENGINE" --steps=system` directly, on purpose, so it can close the pipe on it | the same override, applied by hand at that site |
 | the SIGKILL keep-alive scenario (INV-7) | reads `$ENGINE` as a **file** and executes a fragment of its Bash | nothing — it is replaced outright, §4.3.5 |
 
-Beyond those, this is the only change permitted to an **existing assertion** before G1. Two
-*additions* are permitted and owed — the replacement keep-alive scenario (§4.3.5) and the
-absent-tool scenario (INV-9), both due at §4.6 stage 2 — and `docs/design/oneup-2.0.md` §7's
-G1 row names all three as the complete list. It lands on
+Beyond those, this is the only change permitted to an **existing assertion** before G1.
+*Additions* are a different matter and are expected: `docs/design/oneup-2.0.md` §7's G1 row
+permits any new scenario a §4.6 stage names, and several stages do — the replacement
+keep-alive test and the absent-tool test at stage 2, the parser unit tests at stage 4, the
+per-call deadline test at stage 5, the differential harness at stage 6, the PySide6-absent
+test at stage 7. The rule G1 enforces is that **no existing assertion is weakened**, not that
+the suite stops growing. It lands on
 `main` first and is shown to leave the suite green there, so the harness change is proven
 independent of `v2`. `main` is frozen — `docs/standards/workflow.md` §1.2 is where that
 exception is defined, and this change is the reason it exists.
@@ -352,13 +362,13 @@ each stage is what makes the next one safe to attempt.
 
 | # | Work | What it satisfies |
 | --- | --- | --- |
-| 1 | `ONEUP_ENGINE_CMD` indirection at all three call sites, on `main` | §4.4 — the suite still green on `main`, unchanged |
+| 1 | `ONEUP_ENGINE_CMD` indirection at the two call sites that keep running the engine, on `main` (the third is replaced outright at stage 2 — §4.4) | §4.4 — the suite still green on `main`, unchanged |
 | 2 | `__main__.py`'s flag parsing, plus `markers.py`, `runstate.py`, `proc.py`, `privilege.py`, and `actions.py`'s `auth_status` — enough for `--help` and `--auth-status`, nothing more. `runstate.py` also discharges `files-and-naming.md` §7 Trap 2 (ONEUP-0058): create the log directory only when about to write it. Plus the two new scenarios this stage owes: the replacement keep-alive test (§4.3.5) and the absent-tool skip test (INV-9) | the `--auth-status` scenario passes against v2; INV-9 gains its first test ever, and INV-7's SIGKILL leg is replaced |
 | 3 | `actions.py`'s `--check` — read-only and needs no root, so the safest real behaviour to build first | every `--check` scenario green against v2 |
 | 4 | `parsers.py`, `repos.py`, and `actions.py`'s `--size=`; parser unit tests | §4.3.4; the `--size` scenarios green |
-| 5 | `steps.py` — the five steps; snapshots, remedies, repo skipping. The rest of `actions.py` (`--grant-auth`, `--revoke-auth`, snapshots). Plus §4.3.2's new scenario: a per-call deadline firing on a step other than the repo refresh | the remaining scenarios → G1 |
+| 5 | `steps.py` — the five steps; snapshots, remedies, repo skipping. The rest of `actions.py` (`--grant-auth`, `--revoke-auth`, snapshots). Plus §4.3.2's new scenario: a per-call deadline firing on a step other than the repo refresh | the remaining scenarios → G1, and G4 with them — the one-prompt scenario is an engine-suite scenario and needs no window |
 | 6 | The differential harness | G2, and the list of what it cannot see |
-| 7 | The window pointed at v2 behind an environment switch | G3, G4, G5 |
+| 7 | The window pointed at v2 behind an environment switch, plus INV-11's new scenario: the engine run with PySide6 hidden from the import path | G3, G5 |
 | 8 | A real run on the user's machine | G6 |
 | 9 | The switch-over: the window defaults to v2, packaging follows the package layout, `update_system.sh` becomes the documented fallback | §4.7 |
 
@@ -450,6 +460,12 @@ rewrite; this list is the index, not the mechanism. Scenario names are the ones 
   *Test:* a new scenario that runs the engine with PySide6 hidden from the import path —
   gate G5. New with this work.
 
+- **INV-12** A package-only change offers a service restart, not a reboot. This is the
+  third of `docs/standards/testing.md` §5's four floor invariants, and the one the others
+  here did not cover.
+  *Test:* the scenario *"package-only change offers a SERVICE restart, not a reboot"*,
+  whose `@@SERVICES@@` assertion is what proves it.
+
 - **INV-13** The two state files keep the layout §4.1.1 pins, so a window can find and
   follow a run the previous window started.
   *Test:* the scenarios *"a real run records itself in a run-state file and clears it on
@@ -457,12 +473,6 @@ rewrite; this list is the index, not the mechanism. Scenario names are the ones 
   touch the run-state file"*, which asserts the `RUN_STATE_OWNED` rule. **Line 4, the epoch
   second, is asserted by nothing today**, so a v2 that dropped it would pass every gate; the
   §4.6 stage 2 work that builds `runstate.py` owes that assertion.
-
-- **INV-12** A package-only change offers a service restart, not a reboot. This is the
-  third of `docs/standards/testing.md` §5's four floor invariants, and the one the other
-  eleven here did not cover.
-  *Test:* the scenario *"package-only change offers a SERVICE restart, not a reboot"*,
-  whose `@@SERVICES@@` assertion is what proves it.
 
 **Not an invariant of this spec, though an earlier draft listed it:** *tests never depend
 on, or damage, machine state*. That is a rule about the suite, and
@@ -517,6 +527,12 @@ When the switch lands in stage 9:
 - **`CHANGELOG.md`** and the **six version sites** — a major bump to **2.0.0**, which is
   also the honest signal: the engine anyone shelling out to OneUp depended on has changed.
   `docs/standards/workflow.md` §5.1 owns the lockstep.
+- **The standards that describe the Bash engine as current.** Design §7's G9 requires them
+  current at the tag, and this work is what makes them stale: `docs/standards/testing.md` §1,
+  §2.2 and §3 (the engine suite asserts on what `update_system.sh` prints; the throwaway-
+  directory and mock-`PATH` figures; the keep-alive-guard scenario §4.3.5 replaces);
+  `docs/standards/security.md` §2.2 and §6.3, whose mechanisms — `sudo_capture` and
+  `tee -a -p` — this rewrite deletes; and `docs/standards/files-and-naming.md` §1 and §7.
 - **The three packaging paths** — §4.7.
 
 ## 9. Alternatives considered (and rejected)

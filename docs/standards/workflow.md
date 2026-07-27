@@ -58,17 +58,17 @@ Two things are not feature work and are unaffected:
 
 - **Documentation.** It is not a release. This whole standards set lands on `main` normally,
   because the rules govern 1.x maintenance too and `v2` inherits them by merge (design §5.3).
-- **A test-harness change that provably alters no application behaviour.** Added
-  2026-07-27, at the user's decision, and deliberately narrow: it covers a change that
-  touches only files under `tests/`, and whose whole
-  justification is that the suite must be *seen* to stay green on `main` before anything on
-  `v2` depends on it. It exists for one known change — the `ONEUP_ENGINE_CMD` indirection
-  that lets the suite drive either engine (`docs/specs/ONEUP-0054-python-engine.md` §4.4).
+- **One named test-harness change**, granted 2026-07-27 at the user's decision: the
+  `ONEUP_ENGINE_CMD` indirection that lets the suite drive either engine
+  (`docs/specs/ONEUP-0054-python-engine.md` §4.4). Its justification is that the suite must
+  be *seen* to stay green on `main` before anything on `v2` depends on it.
 
-  The exception is written here, in the standard that owns the freeze, precisely so that it
-  is one exception rather than a precedent: a change that touches an application file is not
-  covered, however small, and "it changes no behaviour" is a claim the green suite has to
-  demonstrate, not a claim the author gets to make.
+  **This exception names a change; it does not describe a category.** Touching only files
+  under `tests/` is a *necessary* condition, not a sufficient one — the absent-tool scenario
+  ONEUP-0070 owes is also tests-only, and it lands on `v2` like everything else. Written here,
+  in the standard that owns the freeze, precisely so that it stays one exception rather than
+  becoming a precedent: granting a second one is a decision to take with the user, in this
+  section, not an inference to draw from this one.
 
 **Why the freeze is stated as a testable question rather than a preference:** the failure
 mode of any freeze is a slow slide back into 1.x work, one "small" fix at a time. *Can
@@ -139,7 +139,9 @@ grep -oE 'ONEUP-[0-9]+' ROADMAP.md | grep -oE '[0-9]+' \
 ```
 
 **A bullet's shape** — status emoji, ID, bold headline, body, then the labelled lines.
-An open bullet carries three; `Resolved` is added when it closes:
+An open bullet carries three; `Resolved` is added when it closes. **Prescriptive from
+2026-07-26**: older ✅ bullets predate the rule and are left as they are, like
+`docs/standards/documentation.md` §3's grandfathered specs.
 
 ```markdown
 - 📋 [ONEUP-0065] **Convert the remaining line-number citations to symbol names.**
@@ -220,14 +222,14 @@ what the pre-push hook is for.
 
 | Gate | What it proves |
 | --- | --- |
-| `tests/run-tests.sh` | the engine suite — the markers `update_system.sh` prints |
-| `tests/gui-smoke.py` | the offscreen GUI suite — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip) |
+| `Engine test suite` | `tests/run-tests.sh` — the markers `update_system.sh` prints |
+| `GUI smoke test (offscreen)` | `tests/gui-smoke.py` — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip) |
 | `Python compile (updater.py)` | `py_compile updater.py bump.py` — both files parse |
-| `tests/bump-test.py` | a real bump in a throwaway copy still parses the five real version sites, and rewrites the (synthetic) `CHANGELOG.md`'s heading and both links correctly |
-| lint | `shellcheck`, then `ruff (F,B bug-class)` — best-effort |
-| packaging validation | desktop file and AppStream metainfo |
-| version lockstep | the **version numbers** at the six sites of §5.1 agree |
-| documentation | `tests/docs-check.py` — the rules of `docs/standards/documentation.md` that a script can settle, the `CHANGELOG.md` links §5.1's site 6 depends on, and the marker table in `docs/reference/marker-protocol.md` §3 against both the engine's `marker NAME` call sites and the markers the engine suite asserts on |
+| `bump.py functional test` | `tests/bump-test.py` — a real bump in a throwaway copy still parses the five real version sites, and rewrites the (synthetic) `CHANGELOG.md`'s heading and both links correctly |
+| `Lint` | `shellcheck`, then `ruff (F,B bug-class)` — best-effort |
+| `Packaging validation` | desktop file and AppStream metainfo |
+| `Version lockstep (six sites must agree)` | the **version numbers** at the six sites of §5.1 agree |
+| `Documentation` | `tests/docs-check.py` — the rules of `docs/standards/documentation.md` that a script can settle, the `CHANGELOG.md` links §5.1's site 6 depends on, and the marker table in `docs/reference/marker-protocol.md` §3 against both the engine's `marker NAME` call sites and the markers the engine suite asserts on |
 
 Listed in the order `local-CI.sh` runs them, so the table can be read against the script.
 
@@ -303,6 +305,10 @@ Its preconditions are checks, not suggestions, and it exits on any of them:
 
 Then, in order: bump the six sites → `./local-CI.sh` → show the diffstat → **ask for
 confirmation** → commit `OneUp X.Y.Z`, tag, push → update the OBS package via `osc`.
+
+**A red gate stops it there, with the bump already written to your tree** — the same state a
+declined confirmation leaves, and the same recovery: fix and re-run, or `git checkout -- .`
+to discard.
 
 Three things about that sequence are worth knowing before you run it:
 
@@ -395,7 +401,7 @@ states it and owns what "complete" means.
 - [ ] The roadmap bullet exists, and is annotated if this closes it.
 - [ ] `CHANGELOG.md` has an `## [Unreleased]` entry with its plain-English line, if a user
       would notice this change.
-- [ ] The branch is right: `main` only if §1.1 says so.
+- [ ] The branch is right — §9's tree, not a guess. `main` takes a §1.1 fix, documentation, and nothing else.
 - [ ] `./local-CI.sh` is green — the whole thing, not the part you thought was affected.
 
 ## What checks this
@@ -403,7 +409,7 @@ states it and owns what "complete" means.
 | Rule | What catches a breach |
 | --- | --- |
 | §1 the v1 freeze | nothing automatic — the branch a commit lands on is a human decision |
-| §1.2 the test-harness exception is not widened | nothing automatic. The narrowing condition — it touches only files under `tests/` — is one `git diff --name-only` away, but nothing runs it. This row exists so the exception cannot quietly become "changes I judge harmless" |
+| §1.2 the test-harness exception is not widened | nothing automatic. It names one change, so widening it means naming a second — a decision, not a diff. The `tests/`-only condition is one `git diff --name-only` away, but it is necessary, not sufficient, and nothing runs it either |
 | §2 `v2` is never rebased or force-pushed | **nothing, and the damage is off this machine.** No branch protection exists (the repository has none), so a `git push --force` on `v2` would succeed and break every clone. It is the one trap in this document with no net under it at all |
 | §2 `main` merges *into* `v2`, never the reverse | nothing automatic. A merge the wrong way would carry unfinished 2.0 work onto released `main`, and only the author's attention stands between the two |
 | §3 the commit subject format, the `Co-Authored-By:` trailer, and one thing per commit | nothing automatic, for all three. There is no `commit-msg` hook, and adding one is cheap if the format ever drifts |
@@ -416,6 +422,12 @@ states it and owns what "complete" means.
 | §6 local CI is green before a push | `githooks/pre-push` — but only once per clone, after `git config core.hooksPath githooks`. **Nothing enforces that it is enabled**, so on a fresh clone this rule is a habit |
 | §7 push each commit once local CI is green | nothing automatic, and nothing needs to be — the repository is public, so a wasted push costs no runner minutes and an unpushed commit harms only its author |
 | §6.1 a new gate is proved to fail before it is trusted | nothing automatic |
+| §6.1 step 2 — a new gate's row is named as the script labels it, in script order | nothing automatic. The table and the script are compared by a reader or not at all |
+| §6.1 a gate reports and does not repair | nothing automatic, but it is self-punishing: a gate that edited prose would be rewriting a claim it does not understand, and the next cold read finds it |
+| §6 a gate whose tool is absent is reported skipped, never silently passed | the `skip` helper each gate uses — but nothing checks that a *new* gate reaches for it rather than for a bare `ok` |
+| §6 `--no-verify` is not a way past a red gate | **nothing, by construction** — it is the flag that turns the check off. Only the author's intent stands behind this one |
+| §3 the body says *why*, and records any measurement | nothing automatic |
+| §4 a finding is filed the moment it is found | nothing automatic, and by its nature nothing could: an unfiled finding leaves no trace to check |
 | §2 a feature branch is named `<ONEUP-id>-<topic>` | nothing automatic, and it has never been exercised — the repository has no feature branches |
 | §4 a bullet's shape, its `**Layman:**` / `Kind:` / `Source:` lines, and closing by annotation rather than deletion | **nothing.** `tests/docs-check.py` never reads `ROADMAP.md`. A malformed or deleted bullet is caught by a reader or not at all |
 | §5.2 a CHANGELOG entry's shape — bold summary, id, then the plain-English line | nothing automatic. `bump.py` reads the bold summaries to build the packaging notes, so a missing `**` silently drops an entry from the release notes rather than failing |
