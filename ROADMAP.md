@@ -1252,3 +1252,26 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** OneUp stays an openSUSE app, installed the three ways it already is. It won't be put on Flathub, because the app needs to change the whole machine and a Flathub app is deliberately walled off from doing that — and the other Linux systems already update themselves fine.
   Kind: package.
   Source: user-request-2026-07-27.
+
+- 📋 [ONEUP-0072] **Turn the engine's prose marker payloads into stable codes the window words itself.**
+  Split out of ONEUP-0032 at its fifth cold-eyes loop: the item held two
+  contracts, and every finding in loops 4 and 5 sat on this side of the seam.
+  ONEUP-0032 keeps the catalogue machinery and right-to-left; this item takes
+  the engine-to-window payload conversion.
+
+  Every payload field the window renders as words becomes a stable code, and
+  the wording moves to the window. Wider than
+  docs/reference/marker-protocol.md section 5.1 currently reserves, and for a
+  reason that is not translation: the window already re-derives STEP_END's
+  meaning by matching English substrings in the engine's sentence, so the
+  coupling is a live defect on its own.
+
+  Also in scope: the desktop notification the two systemd timers raise, which
+  the engine composes in English today and which never travels as a marker at
+  all.
+
+  Spec to be written; the cold-eyes log in docs/specs/ONEUP-0032-i18n.md
+  loops 1 to 5 records what was already found and settled for it.
+  **Layman:** Right now the update engine writes the English sentences you see on screen. Move that wording into the app so it can be translated — and so a reworded engine message stops silently changing what a task's badge says.
+  Kind: refactor.
+  Source: split out of ONEUP-0032 during its cold-eyes review, 2026-07-27.
