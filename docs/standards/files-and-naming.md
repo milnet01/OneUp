@@ -79,9 +79,12 @@ rather than one subject's test file, and it reads as a command because it is one
 **`githooks/pre-push` has no extension and cannot get one** — git will only run a hook
 whose filename is exactly the hook's name.
 
-**Test files do not follow `test_*.py`.** There is no pytest here; `tests/run-tests.sh`
-is the entry point and calls the others by name. Do not add a pytest-style name expecting
-discovery to pick it up — nothing is discovering anything.
+**Test files do not follow `test_*.py`.** There is no pytest here, and nothing discovers
+anything: `tests/run-tests.sh` runs the engine scenarios and calls no Python file at all.
+`local-CI.sh` names every Python suite by hand, and `.github/workflows/release.yml` names
+again the ones a tag must run. Do not add a pytest-style name expecting discovery to pick it
+up — a suite in neither script runs nowhere, and one in `local-CI.sh` alone never runs in
+CI.
 
 ### 2.3 Roadmap IDs
 

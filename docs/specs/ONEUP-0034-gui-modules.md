@@ -25,8 +25,9 @@ drift.
 The window lives in `oneup/gui/`, as modules a reader can hold in their head one at a time.
 `updater.py` stays at the repo root and becomes the few lines that start it. Nothing the
 user can see changes: the same widgets, the same wording, the same accessible names, the
-same behaviour on every marker the engine prints. The existing GUI suite is what proves it,
-because a behaviour-preserving change is exactly the kind the current assertions can judge.
+same behaviour on every marker the engine prints. The existing GUI suite is what judges it,
+because a behaviour-preserving change is exactly the kind the current assertions can judge;
+INV-9 names the two markers it does not reach today, and requires a feed for each.
 
 ## 2. Background
 
@@ -71,7 +72,7 @@ here before, which is why it is a trap in `CLAUDE.md` §6 and an invariant below
 | Decision | Who, when | Consequence |
 | --- | --- | --- |
 | The split is a separate item from the engine rewrite, with its own spec | the user, 2026-07-26 | this spec exists; `ONEUP-0054` §3.1 states the other half |
-| It lands on `v2`, not `main`, and is the first substantial work there | the user, 2026-07-26 | `docs/design/oneup-2.0.md` §5.3; it lands alone, so the GUI assertions judge it with nothing else in flight |
+| It lands on `v2`, not `main`, and is the first substantial work there | the user, 2026-07-26 | `docs/design/oneup-2.0.md` §5.3 for the branch, §5.2 for the order: it lands alone, so the GUI assertions judge it with nothing else in flight |
 | It is **behaviour-preserving** — no user-visible change | the user, from the roadmap bullet | §5; the redesign is ONEUP-0064 and comes after |
 | The on/off switches stay | the user, standing | `ToggleSwitch` moves as it is; nothing about it is reconsidered here |
 | ONEUP-0059 (XDG paths) rides along | `docs/design/oneup-2.0.md` §6.5 | §4.6 |
@@ -121,6 +122,7 @@ every symbol named there has a home, and nothing in `updater.py` is left unplace
 | `oneup/gui/rollback.py` | `RollbackDialog`, snapshot thinning and the rollback call behind it | going back to a snapshot |
 | `oneup/gui/autostart.py` | the autostart desktop file, both systemd user timers, `_headless_command` | running OneUp without being asked to |
 | `oneup/gui/tray.py` | the tray icon, its background check, the single-instance socket, `TRAY_*` | living in the system tray |
+| `oneup/gui/app_update.py` | `_version_tuple`, the GitHub release check, its reply, and opening the release page | asking GitHub whether a newer OneUp exists |
 | `oneup/gui/auth.py` | reading, enabling and disabling passwordless authentication | the "don't ask for my password" setting |
 | `oneup/gui/banners.py` | the reboot, info and warning banners and their remedy actions | telling the user what went wrong and offering the one thing that fixes it |
 | `oneup/gui/run.py` | the run's `QProcess`, its argv, marker application, the activity clock, end-of-run, `STALL_SECONDS` | one update run, from Run to the summary |
@@ -165,7 +167,10 @@ is a dialog with a `showEvent`, not because it owns the settings.
 `paths.RUN_STATE`, not `from .paths import RUN_STATE`.
 
 `docs/standards/files-and-naming.md` §5.2 requires the `HOME`-rewriting trick to keep
-working, which means these stay module-level constants computed once at import. §2 above
+working, and allows two ways to do it — module-level constants computed once at import, or a
+single accessor that reads the environment each call. What it forbids is half of each. This
+spec takes the constants, because that is what the paths already are and the split changes
+no behaviour. §2 above
 shows what a `from … import` does to that: the reader keeps its own binding, the test's
 reassignment lands somewhere nobody reads, and the suite goes green while the window edits
 the real file. Reading through the module is what leaves exactly one place to redirect. The
@@ -225,8 +230,8 @@ settles their location.
 Only one ordering constraint is a contract, and it is the one §2 measured: **the test
 harness moves first**, in its own commit, proved green before any window code is extracted.
 Every other step is judged the same way — the GUI suite green, `./local-CI.sh` green — so
-the order they are taken in is a build plan, and `docs/standards/documentation.md` §10 keeps
-build plans out of specs.
+the order they are taken in is a build plan, and `docs/standards/documentation.md` §1 keeps
+build steps out of specs.
 
 ## 5. Correctness invariants
 
@@ -258,10 +263,13 @@ build plans out of specs.
   asserts a name is present. It is not modified by this work.
 
 - **INV-6** Every `QDialog` subclass still centres on its parent through `center_on_parent`
-  in its `showEvent`, and the hand-built `QMessageBox` call sites still centre through
-  `Updater._center_child` deferred one tick. *Test:* the existing centring checks in
-  `tests/gui-smoke.py`, plus a new check that every `QDialog` subclass under `oneup/gui/`
-  overrides `showEvent`.
+  in its own `showEvent`. *Test:* new in `tests/gui-smoke.py` — walk every `QDialog`
+  subclass defined under `oneup/gui/`, assert `showEvent` is in the class's own `__dict__`
+  and that its source names `center_on_parent`. The existing X11 and Wayland checks stay,
+  but they prove only the helper, on a dialog the test builds itself. **The hand-built
+  `QMessageBox` call sites are not covered.** They centre through `Updater._center_child`
+  deferred one tick, and no assertion reaches them; like INV-11 that half is judged in the
+  review of the commit that moves it.
 
 - **INV-7** `read_repos` still runs `zypper` with `LC_ALL=C`. *Test:* new in
   `tests/gui-smoke.py` — patch `repos.subprocess.run`, call `read_repos`, assert the `env`
@@ -279,9 +287,9 @@ build plans out of specs.
   whole protocol:** measured at `03435ba` by comparing the `@@…@@` tokens in the suite
   against `docs/reference/marker-protocol.md` §3's table, two markers the reference lists are
   never fed — `@@SIZE@@` and `@@CHECK_ITEM@@`. (`@@NAME@@` in that document is the generic
-  placeholder, not a marker.) The move of those two handlers is covered by review, not by a
-  test, unless a feed for each is added while the marker code is being moved — which is the
-  cheaper option and the recommended one.
+  placeholder, not a marker.) **A feed for each is added in the same commit that moves the
+  marker code**, so the invariant is judged by the suite rather than by review. Adding them
+  while the handler is under the hand is the cheapest moment there will ever be.
 
 - **INV-10** The six version sites still agree with `APP_VERSION` living in
   `oneup/__init__.py`. *Test:* `local-CI.sh`'s version-lockstep gate, updated to read the
@@ -324,15 +332,19 @@ build plans out of specs.
 | INV-1 | `tests/gui-smoke.py` — the loader | changed |
 | INV-2 | `local-CI.sh` grep gate + `tests/gui-smoke.py` redirect checks | new gate, changed checks |
 | INV-3, INV-4 | `tests/imports-test.py` | new |
-| INV-5, INV-6, INV-9 | `tests/gui-smoke.py` — the existing sweeps and marker feeds | unchanged, and that is the point |
+| INV-5 | `tests/gui-smoke.py` — the existing accessible-name sweep | unchanged, and that is the point |
+| INV-6 | `tests/gui-smoke.py` — the existing centring checks, plus a `showEvent` sweep | new check |
+| INV-9 | `tests/gui-smoke.py` — the existing marker feeds, plus one each for `@@SIZE@@` and `@@CHECK_ITEM@@` | two feeds added |
 | INV-7 | `tests/gui-smoke.py` — the locale checks | new |
 | INV-8 | `tests/gui-smoke.py` — the `--update` regression check | retargeted |
 | INV-10 | `local-CI.sh` version lockstep, `tests/bump-test.py` | changed |
 | INV-11 | nothing — review | — |
 
 `tests/imports-test.py` follows `docs/standards/files-and-naming.md` §2.1's
-`<subject>-<kind>` rule and is called by name from `tests/run-tests.sh`; nothing here
-discovers tests.
+`<subject>-<kind>` rule. **Nothing discovers tests**: `tests/run-tests.sh` runs the engine
+scenarios and calls no Python file at all, `local-CI.sh` names every Python suite by hand,
+and `.github/workflows/release.yml` names again the ones a tag must run. This one goes in
+both, or it never runs where it matters.
 
 Two things the suite must keep doing while the modules move, both from
 `docs/standards/testing.md`: the `HOME` redirect stays module-level and runs **before**
@@ -348,14 +360,19 @@ argument is that each step is judged by assertions written before it.
   ships in a release users install.
 - **`docs/standards/files-and-naming.md`** — §4's package block stops describing a directory
   that does not exist; its **What checks this** row for §4.1 currently reads *"nothing yet —
-  the package does not exist (ONEUP-0034)"* and gains the gates INV-3 and INV-4 add.
+  the package does not exist (ONEUP-0034)"* and gains the gates INV-3 and INV-4 add. Two
+  more passages go stale: §1's `tests/` row does not name `tests/imports-test.py`, and
+  §5.1's worked example still reassigns `updater.STOP_REQUEST`, which becomes
+  `paths.STOP_REQUEST`.
 - **`docs/standards/coding.md`** §4.1 says this spec *"is not written yet"*.
 - **`docs/standards/workflow.md`** §5.1 and **`bump.py`** — the `APP_VERSION` site moves to
   `oneup/__init__.py`, along with `local-CI.sh`'s lockstep gate. Six sites, still six.
 - **`CLAUDE.md`** §4 describes the app as two files; it becomes a package and an engine.
 - **`docs/reference/marker-protocol.md`** names `updater.py` as the parser's home.
-- **`local-CI.sh`** — the py_compile step compiles `updater.py` and `bump.py`; it must
-  compile the package too.
+- **`local-CI.sh` and `.github/workflows/release.yml`** — the py_compile step compiles
+  `updater.py` and `bump.py` and must compile the package too, and both files name every
+  suite by hand, so `tests/imports-test.py` is wired into both in the commit that creates
+  it. `docs/standards/workflow.md` §6.1 is the procedure for adding a gate.
 - **Packaging, all three paths, in the same commit as the layout change**
   (`docs/design/oneup-2.0.md` §4): `packaging/rpm/oneup.spec` installs exactly two files
   today and needs a directory install; `packaging/appimage/build-appimage.sh` points
@@ -397,9 +414,11 @@ argument is that each step is judged by assertions written before it.
 - **Type-annotating what moves.** `docs/standards/coding.md` §3 requires annotations on
   anything crossing a module boundary — that applies to the public surface of each new
   module, not to a sweep of every function that happens to move.
-- **Unit tests for the extracted helpers.** `docs/standards/testing.md` §8 makes them
-  possible and worthwhile; they are not what proves this change, and adding them here would
-  mean new assertions landing in the one commit whose argument is that the old ones suffice.
+- **Unit tests for the extracted helpers.** The split is what makes them cheap — a free
+  function in `markers.py` can be called with a line and asked what it returned, where a
+  method of the whole window could not. They are still not what proves this change, and
+  adding them here would mean new assertions landing in the one commit whose argument is
+  that the old ones suffice.
 
 ## 11. Cold-eyes loop log
 
