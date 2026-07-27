@@ -16,20 +16,35 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — resume at **Task 13**
+> ## ▶ You are here — resume at **Task 14**
 >
-> **Task 12 done (2026-07-27).** `ONEUP-0054-python-engine.md` rewritten under the
-> standards: the §3 header block, the eleven template sections, INV-1…INV-11 each naming
-> the scenario that proves it, and no line-number citations left. Four claims were wrong
-> rather than stale — 57 sudo call sites (34), `history.json` as an engine contract (it is
-> the window's), the two log directories the wrong way round, and a "wording canary"
-> credited to the Stop button's roadmap id. One honest gap is now recorded rather than
-> implied: **INV-9 has no test** — nothing arranges an absent `flatpak`/`fwupdmgr`, so the
-> skip-cleanly path has never run. Filed as **ONEUP-0070**. The spec left
-> `docs-check.py`'s `GRANDFATHERED` set, so §3's header rules now gate it.
+> **Task 13 done (2026-07-27).** Cold-eyes batch 2 over the 2.0 design, the engine spec and
+> `workflow.md` — **nine loops to convergence**, eight full plus a cheap closing pass. Roughly
+> 380 findings raised, ~330 verified and fixed; **nothing a loop fixed ever resurfaced**, which
+> is the proof the fixes held. All three now `Status: Reviewed`.
 >
-> **Next:** Task 13 — cold-eyes batch 2 over `docs/design/oneup-2.0.md` and the revised
-> engine spec. Then Tasks 14–19 in order.
+> The four that mattered most were each a document claiming cover it did not have: the design
+> called `ToggleSwitch._paint_state_shape` "symmetric by construction" when it is handed the
+> same way the knob is; the engine spec cited the marker reference as owning a state-file
+> contract the reference had explicitly delegated *to the spec*, so it existed in neither;
+> `workflow.md` credited `tests/bump-test.py` with proving all six version sites when five of
+> its six assertions read the CHANGELOG; and G4 was said to gate ONEUP-0044 while its scenario
+> counts authentications and the bug is two dialogs from one. Two genuine gaps were closed
+> rather than reworded: nothing said how 2.0.0 is released (`release.sh` refuses any branch but
+> `main`), and the retained Bash fallback stops being a drop-in the moment ONEUP-0032 lands.
+>
+> **A lesson for Tasks 14–19, learned expensively:** loops 5–8 were mostly reviewing *the
+> previous loop's edits*, not the documents. Every critical from loop 5 on was introduced by an
+> earlier fix — a fact rewritten in one document and left stale in its sibling, a list closed
+> that the build order exceeds, a coverage claim nobody checked. Fix by deleting and pointing;
+> sweep every citation of a fact you change, in the same pass; and do not answer a finding by
+> writing a new paragraph.
+>
+> **Two decisions taken with the user:** `update_system.sh` stays through 2.0 as a documented
+> fallback and goes in 2.1; and `workflow.md` §1.2 gains one narrow freeze exception, for the
+> `ONEUP_ENGINE_CMD` harness change only, written in the standard that owns the freeze.
+>
+> **Next:** Task 14 — `ONEUP-0034-gui-modules.md`, the GUI split. Then Tasks 15–19.
 >
 > **Done earlier:** Tasks 1–11 (2026-07-26). Nine standards, the marker-protocol reference,
 > cold-eyes batch 1, and `CLAUDE.md`. All ten reviewed documents are `Status: Reviewed`
@@ -757,15 +772,17 @@ git commit -m "ONEUP-0054: refresh the spec's figures and conform it to the stan
 
 ### Task 13: Cold-eyes batch 2 — the design and the engine spec
 
-- [ ] **Step 1: Run `/cold-eyes`** over `docs/design/oneup-2.0.md`,
+- [x] **Step 1: Run `/cold-eyes`** over `docs/design/oneup-2.0.md`,
       `docs/specs/ONEUP-0054-python-engine.md` **and `docs/standards/workflow.md`**.
       Workflow was added to this batch on 2026-07-27: it is `Reviewed`, but §8.1 (no
       fourth distribution path, ONEUP-0071) was written after batch 1 and no cold reader
       has seen it. Global rule 14 applies to an edited standard, and §8.1 makes a claim
       about the Flatpak sandbox and the privilege boundary that is worth checking.
-- [ ] **Step 2–4:** verify, fix by severity, loop cold until clean, log as you go —
-      exactly as Task 10.
-- [ ] **Step 5: Commit** per loop:
+- [x] **Step 2–4:** verify, fix by severity, loop cold until clean, log as you go —
+      exactly as Task 10. **Done — nine loops.** 8 full loops plus a cheap closing pass;
+      roughly 380 findings raised, ~330 verified and fixed. Nothing a loop fixed ever
+      resurfaced. All three flipped `Draft` → `Reviewed`.
+- [x] **Step 5: Commit** per loop: nine commits, one per loop.
 
 ```bash
 git add docs/design docs/specs

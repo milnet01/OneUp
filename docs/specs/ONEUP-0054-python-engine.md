@@ -1,6 +1,6 @@
 # ONEUP-0054 — a Python engine
 
-**Status:** Draft
+**Status:** Reviewed
 **Kind:** implement
 **Roadmap:** ONEUP-0054
 **Branch:** v2
@@ -600,3 +600,4 @@ When the switch lands in stage 9:
 | 5 | 2026-07-27 | 1 high, 4 medium, 8 low — **11 verified, 2 dismissed** | No critical. §8 said stage 9 is where `marker-protocol.md` §5.1 lifts the freeze — a release early, and contradicting what §4.3.3 and §10 had just been corrected to say. The freeze survives the switch-over; only ONEUP-0032 moves the contract before the tag. §4.7 also justified replacing `_find_engine` with a symptom the code contradicts: `Updater.start_run` does check and names the missing file, and it is the tray check that fails silently — the requirement stands, its reason was wrong |
 | 6 | 2026-07-27 | 4 high, 5 medium, 8 low — **15 verified, 2 dismissed** | No critical. §4.2 said two functions cross a module boundary; four do, and the one that matters is `cleanup` — it deletes the state files, re-enables every disabled repository and reaps the keep-alive, which is three of this spec's own modules. The repo re-enable has a scenario guarding it and is exactly what gets lost when one function is split three ways. §8 also listed no CI script, so the two test programmes this spec commissions would have run nowhere — `workflow.md` §10 names that as a trap by name. Two passages still described `marker-protocol.md` §8 as pinning the layout nowhere; it now points here |
 | 7 | 2026-07-27 | 1 critical, 4 high, 5 medium, 5 low — **13 verified, 2 dismissed** | The critical came from the design's own previous loop: §4.1 still froze the state files' *location* when ONEUP-0059 moves it, in both halves, four items before this one starts. An implementer building `runstate.py` would have hard-coded the path 0059 had just changed. Two module placements were wrong for the same reason — `reboot_reason_from_log` reads a file and `notify_send` emits no marker, so neither belonged where it sat — and `__main__.py`'s run driver and final summary, which emit half the markers INV-1 and INV-2 assert on, were owed by no stage at all |
+| 8 | 2026-07-27 | **none verified** (one raised and dropped — see the design's loop 9 row) | **Converged.** `Draft` → `Reviewed`; implementation of ONEUP-0054 is unblocked |

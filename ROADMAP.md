@@ -818,6 +818,37 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   most code-derived counts out of a document altogether; and one-owner-
   per-fact plus the blast-radius rule. `tests/docs-check.py` runs in
   `local-CI.sh` with eight checks, each proved to fail on a seeded fault.
+  Progress (2026-07-27): Task 13 done — cold-eyes batch 2 over the 2.0
+  design, the engine spec and workflow.md. Nine loops to convergence
+  (eight full, one cheap closing pass); ~380 findings raised, ~330
+  verified and fixed. Nothing a loop fixed ever resurfaced. All three
+  flipped Draft to Reviewed, so ONEUP-0054 is unblocked.
+
+  The four that mattered were each a document claiming cover it did not
+  have: _paint_state_shape called "symmetric by construction" when it is
+  handed like the knob; the engine spec citing the marker reference as
+  owning a state-file contract that reference had delegated TO the spec,
+  so it existed in neither; workflow.md crediting bump-test.py with
+  proving all six version sites when five of its six assertions read the
+  CHANGELOG; and G4 said to gate ONEUP-0044 while its scenario counts
+  authentications and the bug is two dialogs from one.
+
+  Two gaps closed rather than reworded: nothing said how 2.0.0 is
+  released (release.sh refuses any branch but main), and the retained
+  Bash fallback stops being a drop-in once ONEUP-0032 converts the
+  payloads to codes, which is inside 2.0.
+
+  Two decisions with the user: update_system.sh stays through 2.0 and
+  goes in 2.1; workflow.md 1.2 gains one narrow freeze exception, for the
+  ONEUP_ENGINE_CMD harness change only.
+
+  Lesson for Tasks 14-19: loops 5-8 mostly reviewed the previous loop's
+  edits, not the documents. Every critical from loop 5 on was introduced
+  by an earlier fix. Fix by deleting and pointing; sweep every citation
+  of a changed fact in the same pass; never answer a finding with a new
+  paragraph.
+
+  Still open: Task 14 (the GUI-split spec) through Task 19.
 
   Cold-eyes: 4 loops, 6 lanes, converged on polish. 27 findings raw, 22
   verified, 5 dismissed. The two that mattered most were both false

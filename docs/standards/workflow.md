@@ -4,7 +4,7 @@
 branch it belongs on, what the commit says, how it earns a version number, and the one
 gate it must pass green before it leaves this machine.
 
-**Status:** Draft — cold-eyes in progress
+**Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
@@ -480,3 +480,4 @@ clone where nobody ran that one command, a green push proves nothing at all.
 | 11 | 2026-07-27 | 2 high, 5 medium, 6 low — **11 verified, 2 dismissed** | The freeze exception had leaked into a third form: §2's branch table still read "documentation and qualifying bug fixes only", which is the first place a reader looks and the one §1.2, §9 and §11 had all been corrected around. The shape that replaced the stale five-gates count was itself positionally false — the compile check sits above the third suite in the table, so "below the three suites" derives four. `Status` is now `Draft — cold-eyes in progress`, which is what `documentation.md` §3 requires of a document mid-review, and what this one should have said since batch 2 reopened it |
 | 12 | 2026-07-27 | 1 critical, 1 high, 2 medium, 8 low — **10 verified, 2 dismissed** | The critical was §8's recovery advice. All three failure paths said "fix and re-run", and `release.sh` refuses to re-run in every one of them: its first precondition is a clean tree, and every path leaves the bump in it. Verified by running it — dirty and staged both exit on "working tree not clean". The recovery is now an ordered sequence, and the failed-push case takes a mixed reset rather than `--soft`, which only stages what the precondition then refuses |
 | 13 | 2026-07-27 | 3 high, 4 medium, 7 low — **11 verified, 3 dismissed** | No critical. The §8 recovery sequence, rewritten last loop, still dead-ended: discarding the bump and re-running leaves the *fix* uncommitted, which the clean-tree precondition refuses just the same. §6's opening claim that local CI "covers more than GitHub CI does" was false in the one direction that matters — CI builds the AppImage and a default local run does not, so neither set contains the other. And the skip-helper row counted five call sites as five gates, which is the unnamed-unit error `documentation.md` §6b.4 calls the worst this set has produced |
+| 14 | 2026-07-27 | **none** | **Converged**, and batch 2 closes. §8.1 — the section this document was pulled back into review for — survived every loop untouched |
