@@ -103,8 +103,10 @@ kept at the root — is `docs/design/oneup-2.0.md` §4, restated as rules in
 ### 4.2 The modules
 
 One responsibility each, named for what it does
-(`docs/standards/files-and-naming.md` §4.1 rule 3). The **owns** column is the contract:
-every symbol named there has a home, and nothing in `updater.py` is left unplaced.
+(`docs/standards/files-and-naming.md` §4.1 rule 3). The **owns** column is the contract for
+every module-level name in `updater.py`: each has exactly one home below, and none is left
+unplaced. `Updater`'s methods are not listed one by one — a method goes to the module that
+owns the subsystem it serves, and what stays in `window.py` is what the window itself does.
 
 | Module | Owns | In one sentence |
 | --- | --- | --- |
@@ -159,7 +161,7 @@ is a dialog with a `showEvent`, not because it owns the settings.
 3. **`updater.py` imports from `oneup.gui.app` and nothing else, and nothing in `oneup/`
    imports `updater`.** Run as `python3 updater.py` the entry point is `__main__`, so an
    `import updater` from inside the package would execute the file a second time under a
-   second name — two `QApplication` set-ups, two of everything.
+   second name — two `QApplication` set-ups, two of everything. INV-12 is the second half.
 
 ### 4.4 Two rules about module-level names, both of which have a bug behind them
 
@@ -257,13 +259,16 @@ build steps out of specs.
   resolves to the repo root's `update_system.sh` and that `_headless_command`'s last-resort
   branch names the root entry point, not a package module.
 
-- **INV-5** Every focusable widget still reports a non-empty accessible name or visible
-  text. *Test:* the existing sweep in `tests/gui-smoke.py`, which walks
-  `findChildren(QWidget)`, keeps those whose `focusPolicy()` is not `Qt.NoFocus`, and
-  asserts a name is present. It is not modified by this work.
+- **INV-5** Every focusable widget in the window and in the three dialogs still reports a
+  non-empty accessible name or visible text. *Test:* the existing sweep in
+  `tests/gui-smoke.py`, which walks `findChildren(QWidget)` from four roots — the window,
+  `RepoManagerDialog`, `SettingsDialog` and `RollbackDialog` — keeps those whose
+  `focusPolicy()` is not `Qt.NoFocus`, and asserts a name is present. It is not modified by
+  this work, and the hand-built `QMessageBox` dialogs are outside it, as they are today.
 
-- **INV-6** Every `QDialog` subclass still centres on its parent through `center_on_parent`
-  in its own `showEvent`. *Test:* new in `tests/gui-smoke.py` — walk every `QDialog`
+- **INV-6** Every `QDialog` subclass **defined under `oneup/gui/`** still centres on its
+  parent through `center_on_parent` in its own `showEvent`. *Test:* new in
+  `tests/gui-smoke.py` — walk every `QDialog`
   subclass defined under `oneup/gui/`, assert `showEvent` is in the class's own `__dict__`
   and that its source names `center_on_parent`. The existing X11 and Wayland checks stay,
   but they prove only the helper, on a dialog the test builds itself. **The hand-built
@@ -288,8 +293,9 @@ build steps out of specs.
   against `docs/reference/marker-protocol.md` §3's table, two markers the reference lists are
   never fed — `@@SIZE@@` and `@@CHECK_ITEM@@`. (`@@NAME@@` in that document is the generic
   placeholder, not a marker.) **A feed for each is added in the same commit that moves the
-  marker code**, so the invariant is judged by the suite rather than by review. Adding them
-  while the handler is under the hand is the cheapest moment there will ever be.
+  marker code**, so the invariant is judged by the suite rather than by review. Both
+  handlers exist today — the feeds are new, the behaviour is not — and adding them while the
+  handler is under the hand is the cheapest moment there will ever be.
 
 - **INV-10** The six version sites still agree with `APP_VERSION` living in
   `oneup/__init__.py`. *Test:* `local-CI.sh`'s version-lockstep gate, updated to read the
@@ -297,8 +303,16 @@ build steps out of specs.
   extraction returns empty and the comparison cannot pass.
 
 - **INV-11** A guard and the command it protects stay in the same module.
-  *Test:* **nothing** — this is judgement, and `docs/standards/security.md` §9.4 states it
-  as a trap for exactly that reason. It belongs in the review of each extraction commit.
+  `docs/standards/security.md` §1.4 tables all four pairs by name —
+  `RepoManagerDialog._build_apply_command`, `Updater.restart_services`, `Updater.rollback`
+  and `Updater.restart_now` — and each moves whole. *Test:* **nothing** — this is judgement,
+  and §9.4 states it as a trap for exactly that reason. It belongs in the review of each
+  extraction commit, against that table.
+
+- **INV-12** Nothing under `oneup/` imports `updater`. *Test:* `tests/imports-test.py` walks
+  `oneup/` and fails on any `import updater`. §4.3 rule 3 is why: the entry point runs as
+  `__main__`, so importing it by name executes the file a second time — two `QApplication`
+  set-ups, two of everything.
 
 ## 6. Failure modes
 
@@ -334,11 +348,12 @@ build steps out of specs.
 | INV-3, INV-4 | `tests/imports-test.py` | new |
 | INV-5 | `tests/gui-smoke.py` — the existing accessible-name sweep | unchanged, and that is the point |
 | INV-6 | `tests/gui-smoke.py` — the existing centring checks, plus a `showEvent` sweep | new check |
-| INV-9 | `tests/gui-smoke.py` — the existing marker feeds, plus one each for `@@SIZE@@` and `@@CHECK_ITEM@@` | two feeds added |
 | INV-7 | `tests/gui-smoke.py` — the locale checks | new |
 | INV-8 | `tests/gui-smoke.py` — the `--update` regression check | retargeted |
+| INV-9 | `tests/gui-smoke.py` — the existing marker feeds, plus one each for `@@SIZE@@` and `@@CHECK_ITEM@@` | two feeds added |
 | INV-10 | `local-CI.sh` version lockstep, `tests/bump-test.py` | changed |
-| INV-11 | nothing — review | — |
+| INV-11 | nothing — review, against `security.md` §1.4's table | — |
+| INV-12 | `tests/imports-test.py` | new |
 
 `tests/imports-test.py` follows `docs/standards/files-and-naming.md` §2.1's
 `<subject>-<kind>` rule. **Nothing discovers tests**: `tests/run-tests.sh` runs the engine
