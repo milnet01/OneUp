@@ -125,7 +125,10 @@ edits and the check re-measures when this item starts.
 
 ### 4.1 What a theme is here
 
-A theme is a `(id, label, palette)` triple. **The reference set is `midnight`'s key set** —
+A theme is `(id, label, base, palette)`. **`base`** is `dark` or `light` — §4.2's Base
+column — and it is what still decides which of the two high-contrast overlays is appended
+and what Follow system matches against; nothing else reads it.
+**The reference set is `midnight`'s key set** —
 not a list written down here, which would rot the first time a token was added. Every other
 theme carries exactly those keys, and §4.3 says what the set has to grow to cover.
 `docs/standards/ui-and-accessibility.md` §7 wants a missing key to raise at substitution
@@ -221,14 +224,19 @@ value, and for the same reason: a name bound with `from … import` keeps its ow
 theme change would leave the binding on the old colour and the switch would stay the colour
 it was at start-up. A function has no binding to go stale.
 
-**`build_theme` takes the resolved palette, not `dark: bool`.** Today it takes a boolean
-and picks `_DARK` or `_LIGHT` itself; with eight palettes chosen by id there is nothing for
-a boolean to select. It keeps `scale` and `high_contrast`, and it chooses between the two
-overlays from the theme's **Base** column in §4.2, which is the only thing light-versus-dark
-still decides.
+**`build_theme` takes the theme, not `dark: bool`.** Today it takes a boolean and picks
+`_DARK` or `_LIGHT` itself; with eight palettes chosen by id there is nothing for a boolean
+to select. It keeps `scale` and `high_contrast`, and it picks the overlay from the theme's
+`base` — §4.1's fourth field, which exists for exactly this.
 
-`apply_app_theme` stays the single entry point. It resolves the id to a palette, stores it,
-sets the stylesheet, and then repaints what the stylesheet cannot reach — which is the tray
+`apply_app_theme` stays the single entry point, and it does four things in order: resolve
+the id to a theme, store its palette where `current_palette()` will find it, set the
+stylesheet, and **repaint what the stylesheet does not repaint by itself.**
+
+That last step is not decoration. Setting the application stylesheet re-polishes the
+widgets it styles, but a painter reading `current_palette()` is not styled by it — nothing
+tells the switch its colours moved. So `apply_app_theme` calls `update()` on every
+top-level widget, which reaches the switches through their parents, and rebuilds the tray
 icon: `Updater._tray_icon` builds a `QIcon` and the result is handed to `setIcon` at two
 call sites only, neither of which fires on a theme change. Verified at `e7d3718`. A window
 holding a tray icon rebuilds it when the theme changes; a window with no tray does nothing.
@@ -275,17 +283,19 @@ a resting one, and the progress bar's text is read on the bar, not on the card.
 - **4.5:1**, the foreground renders text — `header` on `win`; `tag` on `win`; `tname` and
   `tdesc` on `rowcard` and on `rowhov`; `badgefg` on `badgebg`; `logfg` on `logbg`;
   `status`, `lastrun`, `ghostfg` and `amber` on `card`; `lastrun` on `win`; `status` on
-  `progbg`; `tipfg` on `tip`; and the Run button's label on `btn_accent`, against both
-  gradient stops.
+  `progbg`; `tipfg` on `tip`; the Run button's label on `btn_accent`, against both gradient
+  stops; the link button's text on `card` in both its rest and hover colours; and the
+  danger family's button label on its own fill.
 - **3:1**, the foreground carries meaning without being text — `switchon` and `switchoff`
   against `rowcard`, against `rowhov`, and against `switchmark` and `switchknob`;
   `switchtrackrim` against `switchon` and `switchoff`; `switchknobrim` against
   `switchknob`; `trayattn` and `trayidle` against both window colours; `trayrim` against
   `trayattn` and `trayidle`; `traymark` against `trayattn`; `focus` against `win` and
-  `card`; `ghostbd` against `card`.
+  `card`; `ghostbd` against `card`; and the danger family's banner borders against `win`
+  and `card`.
 - **Declared decorative**, measured by nothing and each carrying its reason — `logbd` on
-  `logbg`, `accent` on `win`, and the hover and pressed fills, which restate a state the
-  cursor and the press already carry.
+  `logbg`, `accent` on `win`, and the primary button's hover and pressed fills, which
+  restate a state the cursor and the press already carry.
 - **Declared exempt** — `disfg` on `disbg`. WCAG 2.2 SC 1.4.3 puts inactive components
   outside its scope.
 
@@ -554,3 +564,4 @@ exception list §4.8 fixes — before the first new palette is authored.
 | --- | --- | --- | --- |
 | 1 | 2026-07-27 | 3 lanes; 2 critical, 3 high, 3 medium, 1 low — **9 verified, 0 dismissed** | Both criticals were the check's own reach. `switchrim` stood for two different colours — the white pen outlining the track and the black one rimming the knob — so one key could not hold it, under exactly the high-contrast setting the token exists to serve; it is two tokens now. And "checked twice, overlay off and on" was undefined: the overlay carries a disjoint key set and overrides nearly every selector, so a base-palette pair has no meaning with it on. §4.7 now says what it does mean — the overlay's own pairs once per base, and the painted set per theme, which is the only part of the high-contrast surface a theme can still break. §4.7's pair list also turned out to omit five pairs §2 and §4.8 both treat as checked, plus two the stylesheet has and nobody had named: the progress bar's text on its own fill, and the task labels on a hovered row. Verifying that found the larger miss — **§2 counted the ten literals in the painters and none of the thirty inside `_QSS`**, including `#4aa3ff` written out in eight places, so a theme could set `accent` and leave the Run button azure. INV-5 now covers the template as well as the painters |
 | 2 | 2026-07-27 | 3 lanes; 1 critical, 4 high, 4 medium, 1 low — **9 verified, 1 dismissed** | Most of this loop was loop 1's own blast radius. Widening INV-5 to forbid a colour literal in the stylesheet left eleven of the twelve distinct literals with no token to become — the button label, both gradients, the link hover and the danger family — so the invariant demanded something the design never named; §4.3 now names the groups and lets the implementer name the keys. Splitting `switchrim` in two left "the nine painted tokens" over a table of ten, in two places. And "exactly one of four lists" was too rigid to be true: a surface like `card` or `switchknob` is covered by being something else's background, so INV-4 now asks for coverage rather than membership. Two findings were older than loop 1. `build_theme` still took `dark: bool` and picked between two module dicts — with eight palettes there is nothing for a boolean to select, and no section said so. And `trayidle`'s `#888888` is the disc drawn when the app icon **cannot be loaded**, not "the quiet disc": the ordinary idle tray icon is the app's own SVG, which no theme touches, so INV-8's test had to name the attention badge or it would have passed unchanged either way. Worst of all, the design lands ONEUP-0064 **before** this item, and three passages deferred to it as though it were still to come — INV-12 carried a whole exception mechanism for a gate that will already exist. Dismissed: that §8 should draft the README's replacement wording; §8 names what goes stale |
+| 3 | 2026-07-27 | 3 lanes; 3 medium — **3 verified, 0 dismissed** | Converging: no critical, no high, and the cross-document lane clean. All three were loop 2's own blast radius. Naming the four groups of stylesheet literals in §4.3 left two of them — the link button's hover and the danger family — with no home in §4.7, so §4.3's claim that "§4.7 places every one of them" had stopped being true the moment it was written. Saying `build_theme` picks the overlay "from the theme's Base column" left `base` nowhere to live: §4.1 defined a theme as a triple of id, label and palette, and a palette holds colours. It is a fourth field now. And §4.4 said `apply_app_theme` repaints "what the stylesheet cannot reach — which is the tray icon", which quietly assumed the switch repaints itself; nothing tells a painter reading `current_palette()` that its colours moved, and INV-6's whole test rests on it. `apply_app_theme` now calls `update()` on every top-level widget and says why |
