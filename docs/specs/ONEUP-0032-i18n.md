@@ -192,8 +192,9 @@ to it, each because the tree makes them necessary:
   which is the only one of the two forms with a slot for it.
 - **A sentence built by an f-string is a concatenation**, and INV-10's check is what catches
   it. `wording-and-translation.md` §6.2's own sweep — `grep -cE '"\s*\+|\+\s*"' oneup/` —
-  does not see f-strings at all; `Updater._announce`'s `f"{row.title}: {badge}"` and the
-  status line's `f"{label}…"` are both sentences a translator can never reach.
+  does not see f-strings at all; `handle_marker` builds both `f"{row.title}: {badge}"` (the
+  sentence it passes to `_announce`) and the status line's `f"{label}…"`, and neither is
+  reachable by a translator.
 - **Accessible names and descriptions are wrapped too.** They are read aloud, so they are
   user-facing in the most literal sense (`ui-and-accessibility.md` §2).
 
@@ -247,6 +248,20 @@ first and only the `alias` from the second, building its own wording in both cas
 `marker-protocol.md` §4.6 says so outright of the `label`. They are the engine's terminal
 output, which stays English (`wording-and-translation.md` §5). Converting them would put a
 bare token in front of the one reader they have.
+
+**And one user-facing sentence never travels as a marker at all.** `notify_send` raises a
+desktop notification — *"Updates available"*, *"Update complete"*, *"Already up to date"* —
+and the paths that reach it are the two systemd user timers, which run `updater.py --check`
+and `--update`. Both shell straight through to the engine with `--notify`, so today the
+English is the engine's and no window is involved. That is a user-facing string outside every
+route above, and leaving it there would make §1's goal false for exactly the user who never
+opens the window.
+
+**The timers stop passing `--notify`, and the window sends the notification.** It already
+launches the engine on those paths; it reads the run's `@@CHECK@@`, `@@STEP_END@@` and
+`@@DONE@@` markers to build the sentence, through the same tables as everything else. The
+engine keeps its `--notify` flag for somebody running `./update_system.sh` in a terminal,
+where the notification is part of its own English output (§10).
 
 ### 4.5 The shape of a code, and its arguments
 
@@ -322,11 +337,12 @@ system tray, not a widget in a mirrored layout (§8.3).
   `QTranslator`, `QCoreApplication.translate`, `tr`, `gettext`. The privileged half has no
   locale.
   *Test:* `tests/i18n-check.py`, the engine-purity check.
-- **INV-2** Every payload field the window renders as words is a code matching
-  `^[a-z0-9-]+$`; no field the window renders carries a sentence.
-  *Test:* `tests/run-tests.sh` asserts the shape of the payload on every `HINT`, `STEP_END`
-  detail, `CHECK_UNKNOWN` reason, `REMEDY` action and `REBOOT` reason a scenario produces —
-  the five families §4.4 routes to a code.
+- **INV-2** Every code matches `^[a-z0-9-]+$`, and every payload field the window renders as
+  words holds codes and nothing else — one code, or several space-separated as `@@REBOOT@@`
+  and `@@SERVICES@@` do. No field the window renders carries a sentence.
+  *Test:* `tests/run-tests.sh` splits each such field on spaces and asserts the shape of
+  every element, on every `HINT`, `STEP_END` detail, `CHECK_UNKNOWN` reason, `REMEDY` action
+  and `REBOOT` reason a scenario produces — the five families §4.4 routes to a code.
 - **INV-3** No marker field contains a `|`: the emitter rewrites it to `/` in every
   argument before the line is printed.
   *Test:* `tests/run-tests.sh` — a lock-holder scenario whose process name contains a `|`
@@ -334,12 +350,16 @@ system tray, not a widget in a mirrored layout (§8.3).
 - **INV-4** A code the window has no entry for renders a non-empty sentence that is not the
   code alone.
   *Test:* `tests/gui-smoke.py` feeds an unknown code to the marker handler once for each of
-  the five families §4.4 converts, and asserts the rendered text is non-empty, is longer
-  than the code, and contains it.
-- **INV-5** Both catalogues are installed, or neither is. The window is never mirrored while
-  its own text is untranslated.
-  *Test:* `tests/gui-smoke.py`, three loads — both present, one present, neither — asserting
-  installation only in the first.
+  the five families §4.4 converts, and asserts the rendered text contains the code, contains
+  a space, and is at least twice its length — the cheapest checkable proxy for "a sentence,
+  not the token with something stuck to it".
+- **INV-5** Both catalogues are installed, or neither is. A `qtbase` catalogue is never
+  installed on its own, because it alone sets the layout direction. It guarantees nothing
+  about how *complete* OneUp's catalogue is; a stale translation is a translator's problem,
+  not a loading one.
+  *Test:* `tests/gui-smoke.py` synthesises catalogues the way INV-11's check does and loads
+  three times — both present, one present, neither — asserting installation only in the
+  first.
 - **INV-6** The application never calls `setLayoutDirection`, and no widget reads its own
   `layoutDirection()`; the direction is Qt's to derive and `QApplication.isRightToLeft()`'s
   to report (`ui-and-accessibility.md` §8.4). Writing it would override `-reverse` and make
@@ -370,6 +390,11 @@ system tray, not a widget in a mirrored layout (§8.3).
   *Test:* **nothing automatic.** A rename is visible in review as a changed entry in
   `oneup/gui/markers.py` and a changed assertion in `tests/run-tests.sh`; a *reuse* is not
   distinguishable from a correct edit by any script. §7 records it.
+- **INV-13** No user-facing sentence is composed by the engine. The desktop notification the
+  two timers raise is built by the window, and neither timer passes `--notify`.
+  *Test:* `tests/i18n-check.py`, the notification check — `--notify` appears in no argument
+  list the window builds; `tests/gui-smoke.py` asserts the headless check paths produce the
+  notification text themselves.
 
 ## 6. Failure modes
 
@@ -380,8 +405,10 @@ system tray, not a widget in a mirrored layout (§8.3).
 | The window is newer than the engine | An engine payload the window still has an entry for | Entries are retired only when no supported engine emits them (§4.5) |
 | A `\|` reaches a marker argument | Nothing — it arrives as `/` | INV-3, in one place in the emitter |
 | A translator is garbage-collected | Silent reversion to English mid-run | INV-7 is the guard; §2.3 measured that it happens without one |
+| Somebody adds a `setLayoutDirection` call | Nothing — and that is the danger: the right-to-left gate goes green while running left to right | INV-6 is the guard, and it exists because nothing else would notice. §2.3 measured that an explicit call beats `-reverse` |
 | A new widget hard-codes a left edge | A control on the wrong side, in Arabic and Hebrew only | INV-8's second pass fails on the switch's own pixel check, which samples the track half opposite the knob |
 | A sentence is added without `tr()` | It stays English in every language | INV-10 catches it at the call site. A sentence assembled through a variable is not caught — §7 |
+| The window fails to build the timer's notification | No notification from an unattended run; the update itself is unaffected | INV-13. The engine's `--notify` still exists and a user who wants the old behaviour can call it directly (§10) |
 
 ## 7. Tests
 
@@ -390,7 +417,7 @@ system tray, not a widget in a mirrored layout (§8.3).
 | INV-2, INV-3 — payload shape and the `\|` guard | `tests/run-tests.sh`, per-scenario assertions on every marker carrying a code |
 | INV-4, INV-5, INV-7 — unknown code, the catalogue pair, translator lifetime | `tests/gui-smoke.py`, new checks |
 | INV-8 — the whole window under right-to-left | `tests/gui-smoke.py -reverse`, a second run wired into `local-CI.sh` and `.github/workflows/release.yml` |
-| INV-1, INV-6, INV-9, INV-10, INV-11 — the five source-level guards | `tests/i18n-check.py`, a new suite |
+| INV-1, INV-6, INV-9, INV-10, INV-11, INV-13 — the six source-level guards | `tests/i18n-check.py`, a new suite; INV-13's second half also in `tests/gui-smoke.py` |
 | INV-12 — a code is never reused | **nothing.** Review only |
 
 **`tests/i18n-check.py` is a new suite and must be named in both places or it runs
@@ -414,13 +441,13 @@ that is the argument for landing ONEUP-0067 first.
 
 ## 8. Docs & release
 
-- **`docs/reference/marker-protocol.md`** — §3's field table, §4.1 (including its four-field
-  guard, §4.4), §4.2, §4.6, §4.8, §4.10, and §5.1/§5.2 which currently reserve this item for
-  `HINT` and `REMEDY` alone (§3). All in the same commit as the engine and both suites, per
-  that document's §5.
+- **`docs/reference/marker-protocol.md`** — §3's field table; §4.1, whose four-field guard
+  is the one this item has to move; §4.2, §4.6, §4.8 and §4.10 for the payloads that become
+  codes; and §5.1/§5.2, which currently reserve this item for `HINT` and `REMEDY` alone
+  (§3). All in the same commit as the engine and both suites, per that document's §5.
 - **`local-CI.sh` and `.github/workflows/release.yml`** — both name `tests/i18n-check.py`,
   and both gain the second, `-reverse` run of `tests/gui-smoke.py`. A suite named in neither
-  runs nowhere (`docs/standards/files-and-naming.md` §2.2), and six of the twelve invariants
+  runs nowhere (`docs/standards/files-and-naming.md` §2.2), and over half the invariants
   here are carried by those two additions.
 - **`tests/gui-smoke.py`** — its own `QApplication` is constructed with `sys.argv`, or the
   `-reverse` run is silently left-to-right (§4.2).
@@ -431,10 +458,16 @@ that is the argument for landing ONEUP-0067 first.
 - **`docs/standards/files-and-naming.md`** — `oneup/translations/` and `tests/i18n-check.py`
   join the file map.
 - **`CHANGELOG.md`** — one entry under *Changed*, naming the payload conversion as a
-  contract change.
+  contract change, and saying plainly that **the retained Bash engine stops being a drop-in
+  for the window**: it is frozen at the switch-over, so from this item onward it emits prose
+  to a window that expects codes. It still runs an update in a terminal. `oneup-2.0.md` §4
+  assigns that sentence to this item rather than leaving it to be discovered.
 - **`README.md`** — a short note that OneUp ships in English and how to contribute a
   language.
-- **No version-site change.** This lands inside 2.0, not as a release of its own
+- **The two systemd user timer units** — the `--notify` flag comes off both, because the
+  window now raises the notification (§4.4, INV-13).
+- **No version-site change** — none of `docs/standards/workflow.md` §5.1's six sites moves.
+  This lands inside 2.0, not as a release of its own
   (`docs/standards/workflow.md` §5.1).
 
 ## 9. Alternatives considered (and rejected)
@@ -450,6 +483,10 @@ that is the argument for landing ONEUP-0067 first.
   Rejected on measurement: it clobbers `-reverse` (§2.3), which makes the only gate this
   item has prove nothing. Letting Qt derive the direction from the catalogues costs no code
   at all.
+- **Leave the timers' desktop notification with the engine.** Rejected: it is a sentence a
+  user reads, on the one path where no window is open to read anything else, so leaving it
+  would make §1's goal false for precisely the user the timers exist for — and it would put
+  wording back in the privileged half, which is the thing design §5.1 is about.
 - **Ship a German catalogue as proof the machinery works.** Rejected: the user's decision is
   English only in 2.0 (§3), and a machine-translated catalogue nobody can review is worse
   than none. INV-11 proves the pipeline instead.
@@ -467,7 +504,9 @@ that is the argument for landing ONEUP-0067 first.
   or shipped in 2.0 (design §5.1). `oneup/translations/` is created by the first
   contribution.
 - **Translating the engine's terminal output.** `./update_system.sh` run directly is a
-  system tool's output and stays English (`wording-and-translation.md` §5).
+  system tool's output and stays English (`wording-and-translation.md` §5). Its `--notify`
+  notification is part of that output and stays with it — what changes is that the timers
+  stop using it, not that the flag goes (§4.4).
 - **Translating log files, diagnostics or the bug-report clipboard payload.** They are read
   by a developer.
 - **Locale-aware number, date and byte formatting.** Worth doing, not this item; the sizes
@@ -481,3 +520,4 @@ that is the argument for landing ONEUP-0067 first.
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-07-27 | 3 lanes; 3 critical, 3 high, 9 medium, 3 low — **17 verified, 1 dismissed** | The three worst were each a claim the tree contradicts. `@@CHECK@@`'s `label` and `@@REPO_SKIPPED@@`'s `reason` were routed to codes when the window reads neither — the reference says so of the first outright — which would have put a bare token in front of the only reader they have. §4.4 and §4.5 gave two different wire shapes for `@@REBOOT@@`'s components. And the right-to-left gate was wired to the wrong `QApplication`: `tests/gui-smoke.py` builds its own with an empty argument list and never calls the application's `main`, so `-reverse` would have reached nothing and INV-8 would have passed while proving the opposite. Two fixes landed outside this spec: `ui-and-accessibility.md` §8.3 was wrong that `_paint_state_shape` computes from the left edge as the knob does — it picks its edge from the *state*, so the two handed sites need different fixes — and the ROADMAP bullet repeating it. Dismissed: that §4.2 misattributes the no-`setLayoutDirection` rule to §8.4; the sentence says §8.4 owns the *reading* half and this is the writing half, which is what it says. |
+| 2 | 2026-07-27 | 3 lanes; 3 high, 5 medium, 4 low — **10 verified, 2 dismissed** | The gap worth the loop was one the marker protocol could never have shown: `notify_send` raises a desktop notification, in English, on the two timer paths — the only paths where no window is open — and it never travels as a marker, so none of §4.4's routes touched it. The timers now stop passing `--notify` and the window builds the sentence (INV-13). Two of loop 1's own fixes had defects: INV-2's `^[a-z0-9-]+$` could not match the space-separated field the same loop gave `@@REBOOT@@`, and §8's "§4.1 (including its four-field guard, §4.4)" reads as `marker-protocol.md` §4.4, which is `REFRESH` and unrelated. `oneup-2.0.md` §4 assigns this item a release-note sentence — the Bash fallback stops being a drop-in — that §8 was not carrying. Dismissed: that §4.2 does not describe a mechanism for "pair or neither" and §4.4 does not state the new guard value; both sentences already say it, and answering a finding with more prose is what makes the next loop cost more. |
