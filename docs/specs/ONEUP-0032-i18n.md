@@ -215,9 +215,11 @@ engine keeps its own `LABEL` map for the terminal output a user sees when runnin
 
 This one is **not** free, and the reason is worth stating: `STEP_BEGIN` is one of the three
 markers with an explicit fixed-shape guard (`marker-protocol.md` §4.1), and both the
-reference and the window's parser floor it at four fields. Dropping to three means moving
-that floor in the same commit, or every well-formed `STEP_BEGIN` is silently ignored and the
-run appears to freeze while it is in fact updating.
+reference and the window's parser floor it at four fields. The marker becomes
+`key|index|total`, so the floor moves to three in the same commit — otherwise every
+well-formed `STEP_BEGIN` is silently ignored and the run appears to freeze while it is in
+fact updating. Nothing is lost in the terminal: `begin_step` already prints the label on its
+own line before emitting the marker.
 
 **2 — The window renders it as words, so it becomes a code.** `@@HINT@@`'s sentence;
 `@@REMEDY@@`'s action; `@@STEP_END@@`'s `detail`; `@@CHECK_UNKNOWN@@`'s `reason`;
@@ -225,9 +227,17 @@ run appears to freeze while it is in fact updating.
 `import-keys` and `skip-repo` are codes today and only need the rule written down.
 
 `@@STEP_END@@`'s `detail` carries a number today, and `_step_badge` recovers it with a
-regular expression (§2.2). Under codes the number is an **argument** (§4.5), so the window
-renders it through the plural form (`wording-and-translation.md` §6.3) — which is also how
-the badge stops saying `package(s)` in English.
+regular expression (§2.2). Under codes the number is an **argument** in its own trailing
+field — `key|status|code|count` — so the window renders it through the plural form
+(`wording-and-translation.md` §6.3), which is also how the badge stops saying `package(s)`
+in English.
+
+`@@CHECK_UNKNOWN@@`'s `reason` is three sentences in the engine, not one, and each becomes
+its own code: sources that could not be read (the aliases follow as one space-separated
+argument, replacing today's comma joining), zypper exiting with a code nobody can act on
+(the exit status is the argument), and the Flatpak remotes that could not be reached. The
+window joins a list of aliases the way the language joins lists, which is the point of
+sending them as data.
 
 `@@REBOOT@@`'s reason is the interesting one. `reboot_reason_from_log` composes a phrase
 today — joining up to three components and agreeing the verb — which no other language
@@ -237,9 +247,12 @@ several values of one kind, so they share one space-separated field like `@@SERV
 does (§4.5). ONEUP-0054 §4.2 places that composition in `parsers.py`; this item changes what
 it composes, from a phrase to a list.
 
-**3 — It is data, or the window never renders it, so it does not change.** Step keys,
-repository aliases, package names, counts, byte sizes, mount points, snapshot ids and dates,
-and a Btrfs snapshot's own description are data; a translator must never see them, and a
+**3 — It is data, an already-fixed token, or the window never renders it, so it does not
+change.** Step keys, repository aliases, package names, counts, byte sizes, mount points,
+snapshot ids and dates, and a Btrfs snapshot's own description are data. `STEP_END`'s
+`status`, `PROGRESS`'s `phase` and `INSTALLED`'s two `yes`/`no` flags are already tokens the
+window branches on rather than reads out; the English *it* chooses from them is wrapped
+under §4.3 like any other window string. A translator must never see any of these, and a
 code would be a lie about what they are.
 
 **Two fields carry English prose and still belong here**, which is the case worth naming
@@ -300,6 +313,14 @@ long as an older engine could still be installed.
 
 The tables live in `oneup/gui/markers.py`, one per marker family, each entry pairing the
 code with its `QT_TRANSLATE_NOOP`-marked English and its parameter names.
+
+**Two entries are not a template with placeholders, and the table has to admit it.**
+`@@REBOOT@@`'s reason and `@@CHECK_UNKNOWN@@`'s alias list both render a *variable number*
+of things into one sentence — which in English means a comma-and-`and` join and a `was`/
+`were` agreement, and in another language means whatever that language does. So those
+entries carry a small render function rather than a format string, and the sentence around
+the join goes through the plural form (`wording-and-translation.md` §6.3) so the agreement
+is the catalogue's to decide rather than English's.
 
 **A code with no entry renders a readable sentence, never the raw token and never an empty
 banner** (`marker-protocol.md` §5.2). It says that this version of OneUp has no wording for
@@ -539,3 +560,4 @@ suites, and those are 2.0-only. A reference amended on `main` would describe a c
 | 1 | 2026-07-27 | 3 lanes; 3 critical, 3 high, 9 medium, 3 low — **17 verified, 1 dismissed** | The three worst were each a claim the tree contradicts. `@@CHECK@@`'s `label` and `@@REPO_SKIPPED@@`'s `reason` were routed to codes when the window reads neither — the reference says so of the first outright — which would have put a bare token in front of the only reader they have. §4.4 and §4.5 gave two different wire shapes for `@@REBOOT@@`'s components. And the right-to-left gate was wired to the wrong `QApplication`: `tests/gui-smoke.py` builds its own with an empty argument list and never calls the application's `main`, so `-reverse` would have reached nothing and INV-8 would have passed while proving the opposite. Two fixes landed outside this spec: `ui-and-accessibility.md` §8.3 was wrong that `_paint_state_shape` computes from the left edge as the knob does — it picks its edge from the *state*, so the two handed sites need different fixes — and the ROADMAP bullet repeating it. Dismissed: that §4.2 misattributes the no-`setLayoutDirection` rule to §8.4; the sentence says §8.4 owns the *reading* half and this is the writing half, which is what it says. |
 | 2 | 2026-07-27 | 3 lanes; 3 high, 5 medium, 4 low — **10 verified, 2 dismissed** | The gap worth the loop was one the marker protocol could never have shown: `notify_send` raises a desktop notification, in English, on the two timer paths — the only paths where no window is open — and it never travels as a marker, so none of §4.4's routes touched it. The timers now stop passing `--notify` and the window builds the sentence (INV-13). Two of loop 1's own fixes had defects: INV-2's `^[a-z0-9-]+$` could not match the space-separated field the same loop gave `@@REBOOT@@`, and §8's "§4.1 (including its four-field guard, §4.4)" reads as `marker-protocol.md` §4.4, which is `REFRESH` and unrelated. `oneup-2.0.md` §4 assigns this item a release-note sentence — the Bash fallback stops being a drop-in — that §8 was not carrying. Dismissed: that §4.2 does not describe a mechanism for "pair or neither" and §4.4 does not state the new guard value; both sentences already say it, and answering a finding with more prose is what makes the next loop cost more. |
 | 3 | 2026-07-27 | 3 lanes, two accepted clean; 1 critical, 2 high, 1 medium, 4 low — **5 verified, 3 dismissed** | The critical was a rule this spec invokes and cannot satisfy: `marker-protocol.md` §5 puts the reference edit in the same commit as the four code files, `workflow.md` §9 sends all documentation to `main`, and those code files are 2.0-only — so the tree as written offered a choice between breaking the same-commit rule and breaking the freeze. Fixed in `workflow.md` §9, where it belongs, along with the two places §2 and §11 restate the branch rule; the answer is that the reference goes to `v2`, because a reference amended on `main` would describe a contract `main`'s own 1.4.0 engine does not implement. Loop 2's own fix stranded a sibling again: INV-2 gained "space-separated as `@@REBOOT@@` and `@@SERVICES@@` do", but `SERVICES` carries unit names, which §4.4 routes to data. And §1 promised a gate for "a widget that only works in English" that only exists for the one painted widget the suite already samples. Dismissed: that §6 has no row for five invariants (they are source-level guards with no runtime failure mode), that §2.1's `grep -c` result is a raw count (`documentation.md` §6b's permitted form is exactly a command plus a past-tense measurement), and that §8 cites the wrong section for the same-commit rule (§5 is where it is written). |
+| 4 | 2026-07-27 | 3 lanes, two accepted clean; 3 medium, 3 low, 1 info — **6 verified, 1 dismissed** | Nothing found was a wrong claim; every finding was the document not saying enough, and all in one section. `@@CHECK_UNKNOWN@@`'s `reason` is three engine sentences, not one, and one of them interpolates a comma-joined alias list — so it is three codes and a list argument, which §4.4 had not worked out. `@@REBOOT@@`'s components and that same alias list both render a *variable number* of things into a sentence, which §4.6's "code plus parameter names" table shape cannot express; those two entries carry a render function, and the agreement goes through the plural form rather than English's. `@@STEP_BEGIN@@`'s and `@@STEP_END@@`'s new field shapes are now written out rather than inferable. Dismissed: that §4.4's pointer to §4.5 for the space-separated format is misdirected — §4.5 states that rule. |
