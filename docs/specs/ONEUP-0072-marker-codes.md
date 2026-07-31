@@ -28,10 +28,10 @@ exception, and §5.2 reserves three questions to be answered here. §4.2 and §4
 
 ## 1. Goal
 
-After this ships, no marker payload the window renders **as wording** contains a word. Data
-the window renders — a package name, a snapshot description — is untouched (§4.1). The window holds
-every sentence, in tables it can translate, and the engine names situations rather than
-describing them. A user on a Hebrew desktop sees Hebrew task badges, not English ones; and a
+After this ships, no marker payload the window renders as its own wording contains any
+natural-language text. Data the window renders — a package name, a snapshot description — is
+untouched (§4.1). The window holds every sentence, in tables it can translate, and the engine
+names situations rather than describing them. A user on a Hebrew desktop sees Hebrew task badges, not English ones; and a
 developer who rewords an engine message can no longer change a badge by accident, because
 the badge no longer reads the message.
 
@@ -140,7 +140,7 @@ A step key with no entry in `TASKS` therefore falls back exactly as an unknown c
 same answer.
 
 This one is **not** free, and the reason is worth stating: `STEP_BEGIN` is one of the three
-markers with an explicit fixed-shape guard (`marker-protocol.md` §4.1), and both the
+markers with an explicit fixed-shape guard (`marker-protocol.md` §1.2, and §4.1 for its own), and both the
 reference and the window's parser floor it at four fields. The marker becomes
 `key|index|total`, so the floor moves to three in the same commit — otherwise every
 well-formed `STEP_BEGIN` is silently ignored and the run appears to freeze while it is in
@@ -193,13 +193,34 @@ name can hold anything but a pipe. This is the one place a code's argument list 
 deliberately variable-length; INV-3's arity rule (§4.3) exempts it, because here a differing
 count is the data rather than a version mismatch.
 
-`@@REBOOT@@`'s reason is the interesting one. `reboot_reason_from_log` composes a phrase
-today — joining up to three components and agreeing the verb — which no other language
-assembles the same way. Under codes it emits the **components**, and the window builds the
-sentence, so the joining and the agreement happen where the language is known. They are
-several values of one kind, so they share one space-separated field like `@@SERVICES@@`
-does (§4.2). ONEUP-0054 §4.2 places that composition in `parsers.py`; this item changes what
-it composes, from a phrase to a list.
+`@@REBOOT@@`'s reason is the interesting one, and it has **three** sources, not one — the
+easiest thing in this item to half-convert. `reboot_reason_from_log` composes a phrase from
+this run's transaction log, joining up to three components and agreeing the verb, which no
+other language assembles the same way. But the summary block also assigns the reason
+directly twice: a **generic fallback** when zypper advises a reboot the log did not explain
+(*"core system packages were updated"*), and a **firmware** reason when only the firmware
+changed (*"firmware was updated"*). Converting only the first leaves the other two emitting
+prose into a field the window now parses as components — which INV-1 then fails on, after
+showing the user three unknown components where a sentence belonged.
+
+So all three become codes. The composed phrase emits its **components** and the window
+builds the sentence, so the joining and the agreement happen where the language is known;
+they are several values of one kind, so they share one space-separated field like
+`@@SERVICES@@` does (§4.2), and they are engine-chosen tokens, which is what makes that
+field safe (§4.2). The other two are single codes with no arguments. The component
+vocabulary is closed and the engine owns it: a new kernel, an NVIDIA driver, a graphics
+driver, kernel driver modules, core system packages, firmware. ONEUP-0054 §4.2 places the
+log composition in `parsers.py`; this item changes what it composes, from a phrase to a
+list.
+
+**The window joins those components itself, which is the one place this item is allowed to
+assemble a sentence from parts.** `wording-and-translation.md` §6.2 says never to wrap a
+fragment, and each component is a fragment. The rule stands everywhere else; the carve-out
+is narrow and deliberate, because the alternative — one whole sentence per combination —
+is fifteen sentences for six components and grows combinatorially. Each component string
+carries a translator comment (`wording-and-translation.md` §6.4) saying it is joined into a
+"…was/were installed" sentence, and the render function and its plural form are what §4.3
+already requires of this entry. §8 carries the carve-out into that standard.
 
 **3 — It is data, an already-fixed token, or the window never renders it, so it does not
 change.** Step keys, repository aliases, package names, counts, byte sizes, mount points,
@@ -213,11 +234,11 @@ and a code would be a lie about what they are.
 
 **Done when no call site interpolates text into a converted payload.** The routing rule
 above decides each *field*; this is how an implementer knows the *work* is finished. Today
-that means 13 `marker HINT` call sites, `end_step`'s `detail` at every call, three
-`CHECK_UNKNOWN` reasons, `REMEDY`'s two actions and `reboot_reason_from_log`'s composed
-phrase — and the download-size failure's four sentences, which §4.2 splits into four codes.
-A converted call site passes a code and arguments; if it still builds a string, it is not
-done. INV-1 is the runtime half of the same test.
+that means the engine's **14** `marker HINT` call sites — one of which is the download-size
+failure, and §4.2 splits that one into four codes — `end_step`'s `detail` at every call,
+three `CHECK_UNKNOWN` reasons, `REMEDY`'s two actions, and all **three** sources of
+`@@REBOOT@@`'s reason. A converted call site passes a code and arguments; if it still builds
+a string, it is not done. INV-1 is the runtime half of the same test.
 
 **Two fields carry English prose and still belong here**, which is the case worth naming
 because it looks like an oversight: `@@CHECK@@`'s `label` and `@@REPO_SKIPPED@@`'s `reason`.
@@ -268,7 +289,9 @@ as the branch that emits it and the window entry that renders it; the three are 
 separated, and there is no register to reserve one from — the window's tables are the
 register. Once shipped, a code is never reused for a different meaning — the same discipline
 as a roadmap ID (`docs/standards/workflow.md` §4). Retiring one means the window keeps
-rendering it for as long as an older engine could still be installed.
+rendering it for as long as an older engine could still be installed, and its entry then
+stays in the table commented out rather than being deleted — the table is the register, so a
+deleted entry is a retired code nothing can check a later reuse against.
 
 ### 4.3 Where the wording lives, and what an unknown code shows
 
@@ -295,7 +318,7 @@ which is the only honest thing it can say. It is a bug in the window, not in the
 the run's own verdict is unaffected. The failure mode of the naive version is a blank
 warning banner on a run that actually failed, which is why `marker-protocol.md` §5.2
 requires the fallback outright rather than leaving it to taste. (All three packaging paths
-ship both halves together — `files-and-naming.md` §6 — so a mismatched pair comes from a
+ship both halves together — `oneup-2.0.md` §4 — so a mismatched pair comes from a
 development checkout or a part-applied upgrade, not from an ordinary install.)
 
 **The same fallback answers a code whose arguments do not fit its entry.** A known code can
@@ -309,7 +332,19 @@ no-wording-for-this sentence as an unknown code.
 **A table entry declares its arguments as a fixed list or as a variable tail**, and the
 arity rule applies only to the fixed part. The two list-bearing `CHECK_UNKNOWN` codes are
 the variable case (§4.1) — any number of trailing names is valid data there, and only zero
-of them is a defect. Every other converted code is fixed-arity.
+of them is a defect, which renders as the code's sentence with an empty list rather than as
+a fallback. Every other converted code is fixed-arity.
+
+**The fallback has two forms, because two of these codes render into a few words rather
+than a sentence.** The long form above is for anything with room for it — a hint, a warning
+banner, a remedy. A `@@STEP_END@@` code renders into a task row's badge, beside `3
+installed`, so its fallback is **the code itself** and nothing else: it is already a short
+lowercase token, it fits, and the row's verdict comes from `status`, not from the badge. And
+`@@REBOOT@@`'s components render **per element** — an unknown component does not discard the
+sentence, it appears in the join beside the ones the window knows, so a reboot advised for a
+new kernel and something unrecognised still says so. INV-3's "contains a space, at least
+twice the code's length" proxy therefore applies to the long form only; the short form is
+checked for being non-empty and containing the code.
 
 **Every reader of a converted marker goes through these tables, not just `handle_marker`.**
 `updater.py` unpacks `@@HINT@@` in three further places on the side channels —
@@ -363,26 +398,34 @@ records the ordering question the two raise together as open.
   carries a sentence, and every `@@STEP_END@@` carries a code even where its `detail` was
   empty (§4.1). (`@@SERVICES@@` is the space-separated *format* this borrows; its own
   contents are unit names, which are data — §4.1.)
-  *Test:* `tests/run-tests.sh` asserts the shape of **the code field only** — field 3 on
-  `@@STEP_END@@`, field 2 on `@@CHECK_UNKNOWN@@`, field 1 on `@@HINT@@` and `@@REMEDY@@`,
+  *Test:* `tests/run-tests.sh` asserts the shape of **the code field only** — counting the
+  payload's own fields, with the marker name not counted: field 3 on `@@STEP_END@@`, field 2
+  on `@@CHECK_UNKNOWN@@`, field 1 on `@@HINT@@` and `@@REMEDY@@`,
   and every space-separated element of `@@REBOOT@@`'s reason — on every marker of those five
   families a scenario produces. The argument fields beside them are deliberately **not**
   shape-checked: they carry data that legitimately breaks the pattern, such as a repository
   name with spaces and capitals (§4.1) or zypper's exit status.
-- **INV-2** No marker field contains a `|`: the emitter rewrites it to `/` in every argument
-  before the line is printed.
+- **INV-2** No marker field contains a `|`: the emitter rewrites it to `/` before the line is
+  printed. The guard sits in the emitter and therefore covers **every** field of every
+  marker, not only the converted ones — it is one function, and narrowing it to the payloads
+  this item touches would cost more code than applying it to all of them. That is a
+  strengthening of `marker-protocol.md` §1.1, not a change to any marker's shape, so §10's
+  exclusion is untouched.
   *Test:* `tests/run-tests.sh` — a lock-holder scenario whose process name contains a `|`
-  produces a line the window's parser splits into the expected number of fields.
-- **INV-3** A code the window has no entry for — or a known code whose arguments do not fit
-  its entry (§4.3), or a step key with no entry in `TASKS` (§4.1) — renders a non-empty
-  sentence that is not the code alone, at **every** site that reads that marker, and never
-  raises out of the read slot.
+  produces a line with the expected number of fields.
+- **INV-3** A code the window has no entry for — or a known code whose fixed arguments do not
+  fit its entry, or a step key with no entry in `TASKS` — renders **something readable and
+  non-empty** at **every** site that reads that marker, and never raises out of the read
+  slot. In the long form (§4.3) that is a sentence naming the code; in the short form, the
+  code itself; and for `@@REBOOT@@` it is per component, so the known ones still render.
   *Test:* `tests/gui-smoke.py` feeds an unknown code once for each of the five families §4.1
   converts, and once for each of the three side-channel `HINT` readers §4.3 names; feeds a
-  known code with one argument too few and one too many; and feeds a `@@STEP_BEGIN@@` whose
-  key is not in `TASKS`. Each asserts the rendered text contains the code (or key), contains
-  a space, and is at least twice its length — the cheapest checkable proxy for "a sentence,
-  not the token with something stuck to it" — and that parsing continues afterwards.
+  known code with one argument too few and one too many; feeds a `@@REBOOT@@` with one known
+  and one unknown component; and feeds a `@@STEP_BEGIN@@` whose key is not in `TASKS`. Each
+  asserts the rendered text is non-empty and contains the code (or key), that parsing
+  continues afterwards, and — **for the long form only** — that it contains a space and is
+  at least twice the code's length, the cheapest checkable proxy for "a sentence, not the
+  token with something stuck to it".
 - **INV-4** No sentence the window *renders as its own wording* is composed by the engine.
   The desktop notification the two headless paths raise is built by the window, and neither
   passes `--notify` to the engine. The engine's ordinary terminal output is **excluded and
@@ -400,11 +443,13 @@ records the ordering question the two raise together as open.
 
 | When this breaks | What the user sees | Why it is survivable |
 | --- | --- | --- |
-| The engine emits a code the window does not know | A readable sentence naming the code, and the log | INV-3. The run's verdict, badges and reboot advice are unaffected — only the explanation is |
+| The engine emits a `HINT`, `REMEDY` or `CHECK_UNKNOWN` code the window does not know | A readable sentence naming the code, and the log | INV-3. The run's verdict, badges and reboot advice are unaffected — only the explanation is |
+| The engine emits an unknown `STEP_END` code, whose wording *is* the badge | The badge shows the code itself, which is a short lowercase token and fits the slot; the row still reads `ok`/`skip`/`fail` from `status`, which is not a code | INV-3's short form (§4.3). The run's verdict is carried by `status`, never by the badge |
+| The engine emits an unknown `@@REBOOT@@` component, whose wording *is* the advice | The sentence renders with the components the window does know, and names the one it does not | INV-3 per element (§4.3). `REBOOT`'s `yes`/`no` is a token, not a code, so the *advice to reboot* survives an unrenderable reason |
 | The window is newer than the engine | An engine payload the window still has an entry for | Entries are retired only when no supported engine emits them (§4.2) |
 | A known code arrives with more or fewer arguments than its entry expects | The same readable sentence naming the code | INV-3. The alternative is a throw in the read slot, which `marker-protocol.md` §1.2 forbids because it drops the rest of the run's markers |
 | A step key arrives that the window has no title for | A readable sentence naming the key, in place of the step's title | INV-3. The step still runs, still badges and still counts toward the total (§4.1) |
-| A source name containing a space reaches `@@CHECK_UNKNOWN@@` | Nothing — it is the final field and arrives whole | §4.1. Splitting it on spaces would report one broken source as several |
+| A source name containing a space reaches `@@CHECK_UNKNOWN@@` | Nothing — each name has its own trailing field, so a space is never a separator | §4.1. A joined list split on spaces would report one broken source as several |
 | A `\|` reaches a marker argument | Nothing — it arrives as `/` | INV-2, in one place in the emitter |
 | The `STEP_BEGIN` guard is not moved with the field | The run appears to freeze while it is in fact updating | Caught the moment a scenario runs: no step ever begins. §4.1 says so because it is the one part of this item that fails loudly rather than quietly |
 | The window fails to build the headless run's notification | No notification from an unattended run; the update itself is unaffected | INV-4. The engine's `--notify` still exists and a user who wants the old behaviour can call it directly (§10) |
@@ -441,12 +486,16 @@ those are 2.0-only. A reference amended on `main` would describe a contract the 
 
 - **`docs/reference/marker-protocol.md`** — §3's field table; §4.1, whose four-field guard
   this item moves; §4.2, §4.6, §4.8 and §4.10 for the payloads that become codes; §5.1/§5.2,
-  which currently reserve this work for `HINT` and `REMEDY` alone (§3.1); and **§1.1 and §6's
+  which currently reserve this work for `HINT` and `REMEDY` alone (§3.1); **§1.1 and §6's
   free-text trap**, both of which state the `|` substitution for one field where §4.2 now
-  applies it to every argument. All in the same commit as the engine and both suites, per
-  that document's §5.
+  applies it to every argument; **§4.7**, which says `fw_changed` "is emitted and currently
+  unread" — §4.4 has the headless notification read it; and **§2's reading-order table**,
+  which lists four channels and gains a fifth, the headless paths that parse a run's markers
+  with no window (§4.4). All in the same commit as the engine and both suites, per that
+  document's §5.
 - **`docs/standards/wording-and-translation.md`** — §5's "today this is not yet true"
-  paragraph becomes the description of what shipped.
+  paragraph becomes the description of what shipped, and §6.2's "never wrap a fragment" gains
+  the one carve-out §4.1 takes for `@@REBOOT@@`'s joined components.
 - **`CHANGELOG.md`** — one entry under *Changed*, naming the payload conversion as a
   contract change, and saying plainly that **the retained Bash engine stops being a drop-in
   for the window**: it is frozen at the switch-over, so from this item onward it emits prose
@@ -500,4 +549,5 @@ table below records the loops run against **this** document.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 2 | 2026-07-31 | 2 lanes; 1 critical, 4 high, 6 medium, 9 low, 2 info — **22 verified, 0 dismissed** — 12 draft defects vs 10 fix collateral | The critical was a draft defect neither lane could have found without opening the engine: `@@REBOOT@@`'s reason has **three** sources, not the one §4.1 named. Besides `reboot_reason_from_log`'s composed phrase, the summary block assigns the reason directly twice — a generic *"core system packages were updated"* when zypper advises a reboot the transaction log did not explain, and *"firmware was updated"* when only the firmware changed. An implementer converting the function alone would have shipped two branches emitting prose into a field the window now splits into components, showing the user three unknown fragments and failing INV-1 after the fact. All three are codes now, and the component vocabulary is closed and written down. The other draft defect worth the loop was a rule collision: the window joins `@@REBOOT@@`'s components itself, and `wording-and-translation.md` §6.2 says *"Never wrap a fragment"* — so the carve-out is stated, justified (fifteen sentences for six components, growing combinatorially), and carried into that standard by §8. §8 was also missing two reference sections this item falsifies: §4.7 says `fw_changed` "is emitted and currently unread" and §4.4 now reads it, and §2's reading-order table lists four channels and gains a fifth. **Ten of the twenty-two were loop 1's own fixes**, which is why the sweep is worth more than the loop: §6's new space-in-a-name row still described the joined-list shape §4.1 had already replaced with one-name-per-field, and the "done when" criterion said 13 `marker HINT` call sites where the engine has 14. Dismissed: none. |
 | 1 | 2026-07-31 | 2 lanes; 2 critical, 5 high, 6 medium, 11 low, 1 info — **24 verified, 0 dismissed** | The first review of this document in its own right. The critical that only running the thing could settle: §4.1 sent `@@CHECK_UNKNOWN@@`'s unreadable-source list as one **space-separated** argument, but the engine recovers those names from zypper's `Skipping repository '…'` prose, and an isolated `zypper --root` run proved zypper puts the repository **name** there — this machine's stock repositories are `Main Repository (OSS)`, `Main Update Repository`, `Open H.264 Codec (openSUSE Tumbleweed)`. `valid_alias` forbids a space but guards only the `--skip-repo` path. One broken source would have been reported as three; the names now take one trailing field each. The second critical is **surfaced, not fixed** (§3.3): this spec defers the application object to ONEUP-0032 §4.4 and adds its check to that item's suite, while ONEUP-0032 §4.1 has *this* item building the tables it marks — and `oneup-2.0.md` §5.2, which owns the order of work, ends at ONEUP-0032 and never places this item at all. Three more were contract gaps an implementer would have had to invent an answer to: `detail` **may be empty** (`marker-protocol.md` §4.2, the cache step), which would have put INV-3's unknown-code banner on every successful run; a known code arriving with the wrong number of arguments had no rule, and the substitution that follows would throw inside the read slot, which §1.2 forbids outright; and retiring `STEP_BEGIN`'s `label` left an unknown step key with no wording at all. §4.4's notification list could not rebuild what it replaces — the count and both changed-flags ride on `@@INSTALLED@@` and the set-aside sources on `@@REPO_SKIPPED@@`, neither of which it named, while `@@STEP_END@@` (which it did) is unused — and §8 sent the implementer to the systemd units, which never carried `--notify` in the first place. Dismissed: none. One lane finding was checked and found **wrong** before it was acted on — that §7 cites the wrong section of `files-and-naming.md`; §2.2 does carry the suite-naming rule. |
