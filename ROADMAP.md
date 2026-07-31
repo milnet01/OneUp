@@ -1275,3 +1275,23 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Right now the update engine writes the English sentences you see on screen. Move that wording into the app so it can be translated — and so a reworded engine message stops silently changing what a task's badge says.
   Kind: refactor.
   Source: split out of ONEUP-0032 during its cold-eyes review, 2026-07-27.
+
+- 📋 [ONEUP-0073] **Skip the cache clean when an earlier step failed.**
+  The cache step is guarded by `step_selected cache && ! stop_pending` only —
+  it never consults whether an earlier step failed. So a `zypper dup` that
+  aborts mid-transaction is followed immediately by a clean that discards
+  every package the failed run had successfully downloaded.
+
+  Observed on a real run: the system step failed after preloading 73.2 MB,
+  and the cache step then reported `Reclaimed 74M from the package cache`.
+  The retry re-downloaded all of it.
+
+  The engine header states the deliberate intent that "the end-of-run summary
+  and cache cleanup still happen" after a step fails. That reasoning holds for
+  a flatpak or firmware failure; it does not hold when the *system* step failed,
+  because the cached packages are exactly the retry's input. Narrow the rule
+  rather than reversing it: skip the clean when the system step failed, and say
+  so in the summary so the skip is not mistaken for the step not running.
+  **Layman:** If the update fails, OneUp should keep the packages it already downloaded so retrying is quick, instead of deleting them.
+  Kind: fix.
+  Source: in-session-2026-07-31 (real run 2026-07-31_074230).
