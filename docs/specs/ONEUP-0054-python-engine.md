@@ -117,7 +117,7 @@ read as one item. It does share the package. It is not one item.
   its name, field order and semantics. A rewrite that also redesigns its own contract
   cannot be differentially tested, which would throw away the only real safety net this
   project has. The reference's §5.1 records the freeze. The one change it permits inside
-  2.0 is ONEUP-0032's; anything else waits for the 2.0.0 tag
+  2.0 is ONEUP-0072's; anything else waits for the 2.0.0 tag
   (`docs/design/oneup-2.0.md` §10).
 - **The command-line surface.** Every flag the argument loop in `update_system.sh` accepts,
   with the same spelling and the same behaviour, including the `-h` alias that shares
@@ -396,7 +396,7 @@ Every stage from 2 onwards ends with `./local-CI.sh` green on `v2`; stage 1 ends
 
 **Stage 9 is not the 2.0.0 release.** It is where this item's gate (G1–G6) is met and the
 engine changes hands. ONEUP-0032 still follows it (`docs/design/oneup-2.0.md` §5.2), and
-2.0.0 ships only when the whole of §7 there is satisfied. Each of G1–G6 is met at the stage above that earns it, and stage 9 is the commit they are measured against — they are **not** re-run at the 2.0.0 tag, because ONEUP-0032 lands in between and changes the marker payloads and the assertions that read them, in one versioned change, by design.
+2.0.0 ships only when the whole of §7 there is satisfied. Each of G1–G6 is met at the stage above that earns it, and stage 9 is the commit they are measured against — they are **not** re-run at the 2.0.0 tag, because ONEUP-0072 lands in between and changes the marker payloads and the assertions that read them, in one versioned change, by design.
 
 ### 4.7 Packaging and the switch
 
@@ -533,7 +533,7 @@ When the switch lands in stage 9:
 
 - **`docs/reference/marker-protocol.md`** — the "known drift in the engine's own header
   comment" section (§7) dies with the Bash header it describes. **§5.1's freeze survives
-  stage 9**: only ONEUP-0032 may move the contract before the 2.0.0 tag, and §5.1 is
+  stage 9**: only ONEUP-0072 may move the contract before the 2.0.0 tag, and §5.1 is
   rewritten at the tag, not at the switch-over. That
   section places one obligation on this work, and stage 9 discharges it: **ONEUP-0066** —
   carry the *corrected* marker list into the Python engine's own header, rather than
@@ -581,7 +581,7 @@ When the switch lands in stage 9:
 
 - **Any protocol change**, including the byte counters §4.3.3 makes possible. They land
   after the 2.0.0 tag, on their own change (`docs/design/oneup-2.0.md` §10).
-- **Turning `@@HINT@@` and `@@REMEDY@@` prose into codes.** That is ONEUP-0032, and
+- **Turning `@@HINT@@` and `@@REMEDY@@` prose into codes.** That is ONEUP-0072, and
   `docs/design/oneup-2.0.md` §5.1 explains why it must not ride along with the rewrite.
 - **Moving `--notify` into the window.** It shells out to `notify-send` from a non-root
   context, so it arguably belongs there. Kept as-is, because moving it would break G2 for

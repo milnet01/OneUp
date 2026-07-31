@@ -274,7 +274,7 @@ streams under identical mocks and requires them to be equal. A rewrite that chan
 protocol could not be tested this way at all.
 
 **One exception, deliberately sequenced after the rewrite has passed its gate:**
-ONEUP-0032 turns the `HINT` and `REMEDY` payloads from English prose into stable codes, so
+ONEUP-0072 turns the `HINT` and `REMEDY` payloads from English prose into stable codes, so
 the window can translate them. That is a single versioned change touching all four files
 plus this document
 (`docs/standards/wording-and-translation.md` §5).
@@ -284,7 +284,7 @@ cannot tell you which one broke it.
 
 ### 5.2 What the codes must define, when they land
 
-ONEUP-0032 turns `HINT` and `REMEDY` payloads into codes, and three questions have to be
+ONEUP-0072 turns `HINT` and `REMEDY` payloads into codes, and three questions have to be
 answered *in that spec* rather than discovered during implementation. They are reserved
 here so the reference is where a reader looks for them:
 

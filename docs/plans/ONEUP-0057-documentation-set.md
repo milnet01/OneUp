@@ -78,7 +78,7 @@ absorbed and removed).
 > its six assertions read the CHANGELOG; and G4 was said to gate ONEUP-0044 while its scenario
 > counts authentications and the bug is two dialogs from one. Two genuine gaps were closed
 > rather than reworded: nothing said how 2.0.0 is released (`release.sh` refuses any branch but
-> `main`), and the retained Bash fallback stops being a drop-in the moment ONEUP-0032 lands.
+> `main`), and the retained Bash fallback stops being a drop-in the moment ONEUP-0072 lands.
 >
 > **A lesson for Tasks 14–19, learned expensively:** loops 5–8 were mostly reviewing *the
 > previous loop's edits*, not the documents. Every critical from loop 5 on was introduced by an
@@ -954,7 +954,7 @@ grep -n '@@HINT@@\|@@REMEDY@@' update_system.sh | wc -l
 
 ```bash
 git add docs/specs/ONEUP-0032-i18n.md
-git commit -m "ONEUP-0032: spec translation, including the marker-payload change"
+git commit -m "ONEUP-0032: spec translation groundwork"
 ```
 
 ---

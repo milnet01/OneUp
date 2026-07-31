@@ -110,7 +110,7 @@ if the thing under test still presents the same face.
    lists, its field order and its meaning.
    Documented in `docs/reference/marker-protocol.md`. **One** deliberate, versioned
    exception, recorded in `docs/reference/marker-protocol.md` §5.1 and sequenced in §5.1
-   below: ONEUP-0032's conversion of the `@@HINT@@` and
+   below: ONEUP-0072's conversion of the `@@HINT@@` and
    `@@REMEDY@@` payloads to codes. The byte counters the engine rewrite makes possible
    (`docs/specs/ONEUP-0054-python-engine.md` §4.3.3) need a marker too, and land **after the
    2.0.0 tag** — not a second exception inside 2.0. See §10.
@@ -152,9 +152,9 @@ update_system.sh   retained through 2.0 as a documented fallback, removed in 2.1
 scripted against the engine gets a release's notice, and a real-machine problem with the new
 engine has a way back.
 
-**That way back has an expiry, and it is inside 2.0.** ONEUP-0032 converts the `@@HINT@@` and
+**That way back has an expiry, and it is inside 2.0.** ONEUP-0072 converts the `@@HINT@@` and
 `@@REMEDY@@` payloads to codes (§5.1) *after* the switch-over, and the retained Bash engine is
-not converted with them — it is frozen at the switch. So from 0032 onward the fallback emits
+not converted with them — it is frozen at the switch. So from 0072 onward the fallback emits
 English prose to a window that expects codes: still usable for running an update in a
 terminal, no longer a drop-in for the window. Say that in the release notes rather than
 discovering it. `ONEUP-0054` §4.7 points here for the schedule and adds only which
@@ -199,7 +199,7 @@ Three reasons, in order of weight:
 
 - The engine rewrite ships with the contract **byte-identical**, English prose included.
   It passes its gate against unchanged tests.
-- **Then**, as part of ONEUP-0032, the prose payloads become codes in **one deliberate,
+- **Then**, as part of ONEUP-0072, the prose payloads become codes in **one deliberate,
   versioned change**, touching every file `docs/reference/marker-protocol.md` §5 lists —
   the engine that emits them included — in the same commit. It is a break, done once, with
   the rewrite already proven, not a break smuggled inside one.
@@ -466,7 +466,7 @@ nothing can check is not a gate.
 | **G7** | Every item on the §1 list is complete — those with a spec, by their spec's invariants being covered by tests; those without one, by the **Complete when** line §6 gives each. The rewrite's once-measured invariants (INV-10 *is* G2) are read at the stage that earned them, not re-run here — the closing paragraph says why | **nothing automatic.** It is a release checklist walked by hand, over a list §1 closes at the start of the engine rewrite so that it can be walked at all |
 | **G8** | The three packaging paths build from the new layout, and what each delivers launches: the AppImage directly, the RPM and the OBS repository once installed | `./local-CI.sh --full` builds the AppImage — it does not launch it. All three launches are manual, once each. **The OBS leg cannot be met before the tag**: `packaging/obs/_service` pins its `revision` to the release tag, so that build only exists after 2.0.0 is cut. It is the one condition verified immediately *after* the tag and before the release is announced — and if it fails, the fix ships as 2.0.1 rather than by rewriting a released entry (`workflow.md` §5.2) |
 | **G9** | Docs current: README, CLAUDE.md, the standards, the marker reference, CHANGELOG — **and this design and every 2.0 spec flipped from `Reviewed` to `Implemented`** (`docs/standards/documentation.md` §3), which is the step that is easiest to forget because nothing reads those headers | `tests/docs-check.py`, plus a `/cold-eyes` pass over anything 2.0 edited |
-| **G10** | Every user-facing string is translatable, and the GUI suite passes with the layout direction forced **right-to-left** | the RTL half is a GUI-suite pass forced right-to-left — **new, and ONEUP-0032 owes it** (§5.1). Two of §5.1's three deliverables are gated by nothing here — the catalogue building, and the `@@HINT@@`/`@@REMEDY@@` conversion — and fall to G7 through ONEUP-0032's own spec. The wrapping half has **no automatic check** — `docs/standards/wording-and-translation.md`'s own table records that gap against its §6.1 — so it is a review of `oneup/gui/` against that standard, and it is the weakest gate here |
+| **G10** | Every user-facing string is translatable, and the GUI suite passes with the layout direction forced **right-to-left** | the RTL half is a GUI-suite pass forced right-to-left — **new, and ONEUP-0032 owes it** (§5.1). Two of §5.1's three deliverables are gated by nothing here — the catalogue building, and the `@@HINT@@`/`@@REMEDY@@` conversion — and fall to G7 through ONEUP-0032's and ONEUP-0072's own specs respectively. The wrapping half has **no automatic check** — `docs/standards/wording-and-translation.md`'s own table records that gap against its §6.1 — so it is a review of `oneup/gui/` against that standard, and it is the weakest gate here |
 
 **G1–G6 are the engine rewrite's**, and each is met at the stage that earns it —
 `ONEUP-0054` §4.6's table is the mapping, and this document does not restate it. Stage 9, the switch-over, is the commit they are all measured against. **G7–G10 are the release's**, met at the 2.0.0 tag — except G8's OBS leg, which the tag is a

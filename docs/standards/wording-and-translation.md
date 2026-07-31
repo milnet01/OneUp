@@ -137,7 +137,7 @@ quotation in §2.2 shows. The transition is deliberately ordered:
 
 1. The engine rewrite (ONEUP-0054) ships with the contract **byte-identical**, English prose
    included, and passes its gate against unchanged tests.
-2. **Then**, as part of ONEUP-0032, the prose payloads become codes in one deliberate,
+2. **Then**, as part of ONEUP-0072, the prose payloads become codes in one deliberate,
    versioned change — marker reference, both test suites and the GUI updated in lockstep.
 
 Never both at once — `docs/reference/marker-protocol.md` §5.1 is canonical for that rule

@@ -401,7 +401,7 @@ reviewable at all. Those code files are 2.0-only, so the reference edit goes wit
 `v2`, and reaches `main` at the 2.0.0 merge (design §5.3). The reason is not convenience:
 `main` still ships the 1.4.0 engine, so a reference amended on `main` would describe a
 contract `main`'s own engine does not implement. **Documentation goes to `main` unless a
-rule binds it to code that cannot** — and today ONEUP-0032 is the only item that qualifies.
+rule binds it to code that cannot** — and today ONEUP-0072 is the only item that qualifies.
 
 **No partial 2.0 releases** — the user's rule, 2026-07-26. `docs/design/oneup-2.0.md` §7
 states it and owns what "complete" means.

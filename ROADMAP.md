@@ -868,7 +868,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Two gaps closed rather than reworded: nothing said how 2.0.0 is
   released (release.sh refuses any branch but main), and the retained
-  Bash fallback stops being a drop-in once ONEUP-0032 converts the
+  Bash fallback stops being a drop-in once ONEUP-0072 converts the
   payloads to codes, which is inside 2.0.
 
   Two decisions with the user: update_system.sh stays through 2.0 and
