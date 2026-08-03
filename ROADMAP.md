@@ -1690,3 +1690,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The repository page now shows a Sponsor button, like every other Ants project does.
   Kind: chore.
   Source: user-request-2026-08-03.
+
+- 📋 [ONEUP-0082] **Nothing prunes the run-log directory, and ONEUP-0077 starts adding to it weekly.**
+  `~/.local/state/oneup/logs/` is only ever read by `updater.py` —
+  `_latest_run_log` globs it and nothing deletes anything. Harmless today
+  because a log is written only when the user runs an update from the
+  window. `docs/specs/ONEUP-0077-headless-notification.md` gives the two
+  headless timer paths a `--log=` under the same directory, so a weekly
+  timer starts adding ~52 files a year unattended. Small, but unbounded and
+  nobody's job. Decide a retention rule (age or count) and apply it where
+  the directory is created. Found while cold-eyeing 0077, which states the
+  gap rather than claiming cover it does not have.
+  **Layman:** Update logs pile up forever; once the weekly timer writes one each run, they need a tidy-up rule.
+  Kind: enhancement.
+  Source: cold-eyes-2026-08-03 ONEUP-0077 loop 2.
