@@ -16,7 +16,40 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — resume at **Task 17**
+> ## ▶ You are here — **Task 18, one of four specs gated**
+>
+> **`ONEUP-0077` is done (2026-08-03) — three loops, `Status: Reviewed`, converged by cap.**
+> 21 → 23 → 20 verified, all fixed; nothing left verified and unfixed, one INFO carried.
+> **The three still to gate are `ONEUP-0064`, `ONEUP-0072` and `ONEUP-0076`**, each from
+> loop 1 on its own bytes, then the cheap pass on `ONEUP-0027`. `ONEUP-0034` is untouched
+> since its own four-loop gate and needs nothing.
+>
+> **`ONEUP-0032` no longer qualifies as a cheap pass.** It took a substantive edit during
+> 0077's loop 3 — its §4.2 pointed at `ONEUP-0072 §4.4`, a section the split deleted, and it
+> now also records that it **retires 0077's INV-5** when it lands. Give it a real loop 1, not
+> a citation sweep.
+>
+> **The lesson 0077 cost, and it is the batch's operating instruction:** loop 1 found 21
+> draft defects and 0 collateral; loops 2 and 3 found 8 and 6 draft against 15 and 12
+> collateral. **Both of loop 2's criticals and loop 3's critical were my own previous fixes** —
+> an invariant rewritten into a conjunction that mandated silence on a broken repository, a
+> precedence rule that made a stopped run (which exits zero) read as success, and a table
+> pinned at five entries three sections above a §4 mandating eight. Sweep the whole document
+> after every fix pass, not per fix, and **never state a count without enumerating the list** —
+> that one defect appeared in two separate loops.
+>
+> **Two of my own claims were wrong and verification caught them, not review:** that the
+> window prunes `LOG_DIR` (nothing prunes anything — filed **ONEUP-0082**) and that the log
+> growth *starts* with this item (`_launch` already writes one per GUI run, so it is
+> inherited). Grep before asserting cover, every time.
+>
+> **What worked, and is worth repeating verbatim:** a ~91 KB bounded context packet built with
+> `sed`/section-extracts so the bytes never transit the orchestrator's context — lanes came in
+> at 107–115k tokens. Withhold the loop log with a scrubbed `/tmp` copy, not an instruction.
+> Rebuild the cross-reference part **from scratch** each loop: appending to it left two copies
+> of `oneup-2.0.md` §5.2 in the packet, and both lanes correctly hedged their findings on it.
+>
+> ## Superseded — the Task 17 block below is history
 >
 > **Task 16 done (2026-08-03), and it produced two specs, not one.**
 > `docs/specs/ONEUP-0032-i18n.md` was taken through `/cold-eyes` and **split at its fifth
@@ -1088,8 +1121,18 @@ git commit -m "ONEUP-0064: spec the interface redesign"
 
 ### Task 18: Cold-eyes batch 3 — the four new specs
 
-- [ ] **Step 1: Run `/cold-eyes`** over the specs from Tasks 14, 15, 16 and 17 — **five**
-      documents, because Task 17 split into ONEUP-0064 and ONEUP-0076.
+- [ ] **Step 1: Run `/cold-eyes`** over the four specs that have never been gated on their
+      current bytes — **ONEUP-0064**, **ONEUP-0072**, **ONEUP-0076**, **ONEUP-0077** — each
+      from **loop 1**, because every one carries a `0-split` provenance row and none of the
+      parents' loops transfer. Then **ONEUP-0032** (a real loop, not a cheap pass — see the
+      resume block) and a cheap citation pass over **ONEUP-0027**. **ONEUP-0034** needs
+      nothing: untouched since its own four-loop gate.
+      - [x] **ONEUP-0077** — done 2026-08-03, three loops (21, 23, 20 verified), converged by
+        cap, `Status: Reviewed`. Commits `b314c2e`, `a8c8f79`, `fe0beb9`, `a8f9cf3`. Added
+        INV-6 and INV-7; corrected `oneup-2.0.md` §5.2, `ONEUP-0072` §8 and `ONEUP-0032` §4.2;
+        filed **ONEUP-0082**.
+      - [ ] **ONEUP-0064** (268 lines) · [ ] **ONEUP-0072** (597) · [ ] **ONEUP-0076** (630)
+      - [ ] **ONEUP-0032** · [ ] **ONEUP-0027** (cheap)
 - [ ] **Step 2–4:** verify, fix by severity, loop cold until clean, log as you go.
 - [ ] **Step 5: Commit** per loop:
 
