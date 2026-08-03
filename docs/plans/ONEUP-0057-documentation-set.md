@@ -113,8 +113,40 @@ absorbed and removed).
 > fallback and goes in 2.1; and `workflow.md` §1.2 gains one narrow freeze exception, for the
 > `ONEUP_ENGINE_CMD` harness change only, written in the standard that owns the freeze.
 >
-> **Next:** Task 17 — `ONEUP-0064-interface-redesign.md`. It inherits one open decision: the
-> **1.14:1 ringless focus cue**. Then Tasks 18–19.
+> **Task 17 done (2026-08-03), and it produced two specs, not one.**
+> `docs/specs/ONEUP-0064-interface-redesign.md` was written and taken through `/cold-eyes`
+> in **three loops** (24, 34, 35 verified) and **converged by cap rather than clean** — then
+> **split**, on the user's decision, into the layout redesign (0064, 268 lines) and
+> `docs/specs/ONEUP-0076-ringless-focus-cue.md` (**ONEUP-0076**, new bullet, 636 lines).
+> Neither half has been gated on its own bytes; both enter Task 18 from loop 1.
+>
+> **The measurement settled the design and inverted the obvious answer.** Lightening cannot
+> reach SC 2.4.13's 3:1 on the accent at any shade — pure white is 2.63:1 against `#4aa3ff`
+> — so the cue **darkens**, which kills "focus reuses the hover look". Rather than author a
+> focus colour per theme, the app **derives** one: the smallest blend toward black, or toward
+> white where black cannot get there, clearing 3:1 against every one of a control's rest
+> pixels. Total for one surface (the max of contrast-vs-black and contrast-vs-white never
+> drops below 4.58:1), **not** total for a set — `#000000` and `#989898` admit none, 192 such
+> grey pairs exist — so the search fails loudly.
+>
+> **Two other documents are provably wrong and are corrected when this lands:**
+> `ui-and-accessibility.md` §5.4 claims SC 2.4.7 is "still met" when 16 of the window's 34
+> focusable widgets have no cue at all; and `ONEUP-0028` §5 promises `:focus` rules for eight
+> controls when three have none, and specifies a 2 px outline the no-focus-ring decision
+> forbids. ONEUP-0028's own §2 had already logged the absence as a "WCAG 2.4.7 failure".
+>
+> **The lesson, and it is the same one Task 16 recorded in a different shape:** the loops
+> stopped reviewing the document and started reviewing the previous loop's fixes. Draft
+> defects fell 24 → 13 → 8 while collateral rose 0 → 21 → 27; loop 3's unanimous critical was
+> pure arithmetic self-injury, an invariant added in loop 2 that a value also added in loop 2
+> made unsatisfiable at 1.00:1. Split at the cap rather than run a fourth loop.
+>
+> **Three bullets filed at discovery:** ONEUP-0074 (a stopped run notifies "Already up to
+> date"), ONEUP-0075 (`spec_query` reads zero invariants from every spec in `docs/specs/`),
+> ONEUP-0076 (the focus cue itself).
+>
+> **Next:** Task 18 — cold-eyes batch 3, now over **five** specs: 0034, 0027, 0032, 0064 and
+> 0076. Then Task 19.
 >
 > **Done earlier:** Tasks 1–11 (2026-07-26). Nine standards, the marker-protocol reference,
 > cold-eyes batch 1, and `CLAUDE.md`. All ten reviewed documents are `Status: Reviewed`
@@ -178,7 +210,8 @@ Copied verbatim from the design doc and the user's decisions. Every task inherit
 | `docs/specs/ONEUP-0034-gui-modules.md` | The GUI split | 14 |
 | `docs/specs/ONEUP-0027-themes.md` | Selectable themes | 15 |
 | `docs/specs/ONEUP-0032-i18n.md` | Translation, incl. the §5.1 contract change | 16 |
-| `docs/specs/ONEUP-0064-interface-redesign.md` | The interface redesign — ergonomics, clarity, accessibility, no borders | 17 |
+| `docs/specs/ONEUP-0064-interface-redesign.md` | The interface redesign — layout, ergonomics, clarity | 17 |
+| `docs/specs/ONEUP-0076-ringless-focus-cue.md` | The ringless focus cue, its derivation and its check (split from 0064) | 17 |
 
 ---
 
@@ -1048,7 +1081,8 @@ git commit -m "ONEUP-0064: spec the interface redesign"
 
 ### Task 18: Cold-eyes batch 3 — the four new specs
 
-- [ ] **Step 1: Run `/cold-eyes`** over the specs from Tasks 14, 15, 16 and 17.
+- [ ] **Step 1: Run `/cold-eyes`** over the specs from Tasks 14, 15, 16 and 17 — **five**
+      documents, because Task 17 split into ONEUP-0064 and ONEUP-0076.
 - [ ] **Step 2–4:** verify, fix by severity, loop cold until clean, log as you go.
 - [ ] **Step 5: Commit** per loop:
 

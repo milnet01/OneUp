@@ -243,7 +243,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   does not touch them, so a theme could set the accent and leave the Run
   button azure. Every one becomes a token.
   Two ordering facts the spec depends on: ONEUP-0034 creates
-  oneup/gui/theme.py, and ONEUP-0064 lands BEFORE this item, so the focus
+  oneup/gui/theme.py, and ONEUP-0076 lands BEFORE this item, so the focus
   measurement is inherited rather than built here.
 
 - ✅ [ONEUP-0028] **Make OneUp usable for blind, partially-sighted, and colour-blind users.**
@@ -1126,9 +1126,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Method: WCAG relative-luminance formula, sRGB, computed rather than eyeballed.
 
-  Task 17 of the ONEUP-0057 plan is otherwise unstarted: the id and path are
-  resolved (docs/specs/ONEUP-0064-interface-redesign.md) and the bullet is this
-  one, but no draft exists and the rule-14 cold-eyes gate has not run.
+  SPLIT 2026-08-03. The focus cue left this item for ONEUP-0076 after the spec
+  converged by cap rather than clean at three cold-eyes loops and 762 lines,
+  with fix collateral outrunning draft defects two loops running (24 -> 13 -> 8
+  draft against 0 -> 21 -> 27 collateral). Across three loops and nine lanes
+  essentially every finding fell in the focus half. This item keeps the LAYOUT
+  redesign -- header, Settings grouping, action row, the whole-row click target,
+  tab order and target sizes -- at docs/specs/ONEUP-0064-interface-redesign.md,
+  now 268 lines with five invariants. The measurement recorded above is
+  ONEUP-0076's and is restated there; it is kept here because it is the reason
+  the split happened. Neither half's gate has run against its own bytes yet:
+  both enter Task 18 of the ONEUP-0057 plan from loop 1.
   Spec written and gated 2026-08-03: docs/specs/ONEUP-0064-interface-redesign.md,
   Status Draft, converged BY CAP after three cold-eyes loops rather than clean
   (24, 34, 35 verified). Not blocked -- nothing verified is left unfixed -- but
@@ -1480,3 +1488,48 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The tool that is supposed to list a spec's promises reads zero of them, for every spec we have — so nothing automated can check that list.
   Kind: doc.
   Source: write-spec-doc-lint-2026-08-03.
+
+- 📋 [ONEUP-0076] **Derive a ringless focus cue that measures, in every theme.**
+  Split out of ONEUP-0064 on 2026-08-03, after that item's spec converged by cap
+  rather than clean at three cold-eyes loops and 762 lines. Across three loops and
+  nine lanes essentially every finding fell in this half; the layout half stayed
+  quiet. Draft defects fell 24 -> 13 -> 8 while fix collateral rose 0 -> 21 -> 27,
+  which is the documented signal that a document is past the review's design
+  point. ONEUP-0064 keeps the layout redesign and its own bullet unchanged.
+
+  The measurement that forces the design, reproduced at d18fbf2: a focus cue on
+  OneUp's blue buttons CANNOT be built by lightening. Pure white is only 2.63:1
+  against the rest fill #4aa3ff, so nothing lighter reaches SC 2.4.13's 3:1 at any
+  saturation. The cue must darken. That kills "focus reuses the hover look"
+  (CLAUDE.md, the 2026-07-25 decision), because hover lightens -- while leaving
+  the no-focus-BORDER constraint untouched, since darkening a fill draws no ring.
+
+  Rather than author a focus colour per theme, the app DERIVES one: the smallest
+  blend toward black -- or toward white where black cannot get there -- clearing
+  3:1 against every one of the control's rest pixels. Total for a single surface,
+  because max(contrast vs black, vs white) never drops below 4.58:1 for any sRGB
+  colour. So a palette nobody has written yet still gets a working cue, which is
+  what ONEUP-0027's six new themes need, and the same bound gives the label colour
+  for free. NOT total for a SET of surfaces -- #000000 and #989898 admit no fill
+  at all, and 192 such grey pairs exist -- so the search fails loudly rather than
+  returning a colour that does not clear.
+
+  Two other documents are wrong about this and are corrected when this lands:
+  ui-and-accessibility.md section 5.4 claims "SC 2.4.7 (Focus Visible) is still
+  met" when 16 of the window's 34 focusable widgets have no cue at all, including
+  all five toggle switches; and ONEUP-0028 section 5 promises :focus rules for
+  eight styled controls when three of them have none, and specifies a 2px accent
+  outline the no-focus-ring decision forbids. ONEUP-0028's own section 2 already
+  logged that absence as a "WCAG 2.4.7 failure".
+
+  Lands in the same slot ONEUP-0064 occupies in oneup-2.0.md section 5.2: after
+  the GUI split (0034), before themes (0027), which inherits the check and owes it
+  six passing palettes.
+
+  Test: the ratio computation ships in the suite rather than being asserted --
+  every derived pair measured against every rest pixel colour, in every theme,
+  with the high-contrast overlay on and off.
+  headline_only
+  **Layman:** Make it always obvious which control the keyboard is on — without drawing a box round it — and have the app prove it rather than claim it.
+  Kind: accessibility.
+  Source: split-from-oneup-0064-2026-08-03.

@@ -62,7 +62,7 @@ phone-style `ToggleSwitch` stays; checkboxes are not an alternative to propose. 
 chosen because on and off read at a glance, and the state *shape* below is what makes that
 true for a colour-blind user — so a redesign may restyle the switch, and may not replace
 it. (User's decision, standing; restated in `docs/design/oneup-2.0.md` §1 as a constraint
-on ONEUP-0064.)
+on ONEUP-0076.)
 
 | Cue | Pairing |
 | --- | --- |
@@ -156,7 +156,7 @@ changed area. Measured over the shipped palettes:
 | `#GhostBtn`, dark | border `#38414f` → `#4aa3ff` | **3.91:1** |
 
 Only the dark ghost button clears 3:1. **This is a real gap, not a rounding error**, and it
-is the redesign's to close: **ONEUP-0064** must pick a ringless focus treatment that
+is the redesign's to close: **ONEUP-0076** must pick a ringless focus treatment that
 measures ≥ 3:1 against its own rest state, in every shipped theme, and add the measurement
 to the test suite. Until it does, the honest statement is that OneUp's focus cue is visible
 but weak. Screen-reader focus reporting is unaffected — Qt still reports focus; only the
@@ -396,7 +396,7 @@ today; the RTL work adds them, and this is the form they take.
 | §3 state is never signalled by colour alone | nothing automatic |
 | §4 no hard-coded `px` font size | `tests/gui-smoke.py` — every font size is in points, and derives from the desktop's own default |
 | §5 focus draws no ring | `tests/gui-smoke.py` — *"focus draws no outline ring"*, paired with *"focus still gives a cue by reusing the hover look"*, so the rule cannot be satisfied by removing the cue altogether |
-| §5.4 the 3:1 focus-indicator ratio | **nothing computes contrast anywhere in the suite.** The four measured ratios in §5.4 were taken by hand, and the shortfall is deliberate, and §5.4 makes closing it **ONEUP-0064's** obligation: a ringless treatment measuring ≥ 3:1 in every shipped theme, with the measurement added to the suite |
+| §5.4 the 3:1 focus-indicator ratio | **nothing computes contrast anywhere in the suite.** The four measured ratios in §5.4 were taken by hand, and the shortfall is deliberate, and §5.4 makes closing it **ONEUP-0076's** obligation: a ringless treatment measuring ≥ 3:1 in every shipped theme, with the measurement added to the suite |
 | §7 themes | ONEUP-0027 — the contrast check is that item's to write, and the light theme's `lastrun` text sits at 3.07:1 today |
 | §8.1 no directional QSS property | nothing automatic |
 | §8.2 no hard-coded `AlignLeft` / `AlignRight` | nothing automatic. Nothing violates it today — the `#LinkBtn` violation is §8.1's `text-align: left`, not this rule |

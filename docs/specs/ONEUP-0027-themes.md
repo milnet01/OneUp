@@ -110,15 +110,15 @@ contrast stays an overlay — all six are `docs/standards/ui-and-accessibility.m
 spec obeys them and discharges the two jobs §7 hands it: write the check, and settle the
 `lastrun` case.
 
-The ringless focus treatment is **ONEUP-0064**'s to pick, and `docs/design/oneup-2.0.md`
+The ringless focus treatment is **ONEUP-0076**'s to pick, and `docs/design/oneup-2.0.md`
 §5.2 lands that item **before** this one. So by the time this work starts the treatment
 exists and its measurement is in the suite — `docs/standards/ui-and-accessibility.md` §5.4
-and the design's ONEUP-0064 row are where that obligation is written. This spec inherits
+and the design's interface-redesign row are where that obligation is written. This spec inherits
 the gate and owes it six more palettes; it does not choose the treatment, and it does not
 carry the gap as an exception.
 
 **The redesign landing first has a wider consequence.** Every figure in §2 was measured
-before it. ONEUP-0064 may move any of those colours, so §4.8 states rules rather than fixed
+before it. ONEUP-0076 and ONEUP-0064 may move any of those colours, so §4.8 states rules rather than fixed
 edits and the check re-measures when this item starts.
 
 ## 4. Design
@@ -325,7 +325,7 @@ no counterpart with the overlay on. Two consequences, and the check does both:
 
 **The focus measurement is separate and per-theme, and it is not this item's to invent.**
 `docs/standards/ui-and-accessibility.md` §5.4 makes the ringless treatment measuring ≥3:1
-rest-to-focus **ONEUP-0064**'s obligation, "with the measurement added to the suite" — and
+rest-to-focus **ONEUP-0076**'s obligation, "with the measurement added to the suite" — and
 `docs/design/oneup-2.0.md` §5.2 lands that item **before** this one. So the gate already
 exists when this work starts, and what this spec owes it is six more palettes that pass it.
 That is a different measurement from `focus` against `win` and `card` above: this one
@@ -342,7 +342,7 @@ measurement.
 The check is written first, so this list is what it prints on the first run. Nothing here
 is left to be noticed later.
 
-**These are the figures at `e7d3718`, and ONEUP-0064 lands first.** The redesign is free to
+**These are the figures at `e7d3718`, and ONEUP-0076 and ONEUP-0064 land first.** The redesign is free to
 move any colour in the two shipped palettes, so the check re-measures when this item starts
 and the decisions below are rules rather than fixed dispositions: a pair the redesign has
 already fixed needs nothing, and a pair it moved the wrong way is decided the same way its
@@ -354,7 +354,7 @@ neighbours are. The ratios are §2's; they are not restated here.
 | light `amber` on `card` | **Darkened** until it clears 4.5:1. It is warning text |
 | switch track "on" vs `switchmark` | **Fixed by tokenising.** `switchmark` is chosen per theme to clear 3:1 against both tracks — today it is a literal white with no say in the matter |
 | light switch track "on" vs `rowcard` | **Fixed by tokenising**, same mechanism |
-| `ghostbd` on `card`, both palettes | **Fixed, or raised.** The ghost button's border is its boundary and 3:1 is right. ONEUP-0064 lands first and may already have fixed it; if the redesigned button still fails, that is a defect in shipped work and gets its own roadmap bullet — it cannot be deferred to an item that has already shipped |
+| `ghostbd` on `card`, both palettes | **Fixed, or raised.** The ghost button's border is its boundary and 3:1 is right. ONEUP-0076 lands first and closes it (its INV-8); if the redesigned button still fails, that is a defect in shipped work and gets its own roadmap bullet — it cannot be deferred to an item that has already shipped |
 | `logbd` on `logbg`, both palettes | **Exception, decoration.** The log panel is identified by its own background, which differs from `card` in both palettes; the border adds nothing that identifies it |
 | `disfg` on `disbg`, light | **Exception, out of WCAG's scope.** SC 1.4.3 exempts inactive components |
 | the accent gradient against `win`, light | **Exception, decoration.** The row's gradient border is a hover cue, and hover also changes `rowcard` to `rowhov`, so the border is not the cue on its own |
@@ -437,11 +437,11 @@ list becoming the place failures go to be forgotten.
   theme stops resolving, and INV-10 silently returns them to Follow system.
 
 - **INV-12** Every theme's focus cue reaches 3:1 against its own rest state. *Test:* the
-  focus measurement ONEUP-0064 adds to the suite (`docs/standards/ui-and-accessibility.md`
+  focus measurement ONEUP-0076 adds to the suite (`docs/standards/ui-and-accessibility.md`
   §5.4), extended to run over all eight palettes rather than the two it was written
   against. Breaks on a palette whose focus colour sits close to the rest colour of the
   control it lands on. This is a plain gate and not an exception, because the design lands
-  ONEUP-0064 first: the treatment that can pass it already exists, and six new palettes
+  ONEUP-0076 first: the treatment that can pass it already exists, and six new palettes
   have to meet it.
 
 ## 6. Failure modes
@@ -472,7 +472,7 @@ list becoming the place failures go to be forgotten.
 | --- | --- | --- |
 | INV-1 | `tests/gui-smoke.py` — the key-set and build sweep | new |
 | INV-2, INV-3, INV-4 | the contrast check, driven from `tests/gui-smoke.py` | new |
-| INV-12 | ONEUP-0064's focus measurement, widened from two palettes to eight | inherited, widened |
+| INV-12 | ONEUP-0076's focus measurement, widened from two palettes to eight | inherited, widened |
 | INV-5, INV-6 | `local-CI.sh` grep gate, plus a repaint check in `tests/gui-smoke.py` | new gate, new check |
 | INV-7 | `tests/gui-smoke.py` — dialog open across a theme switch | new |
 | INV-8 | `tests/gui-smoke.py` — tray pixmap across a theme switch | new |
@@ -492,7 +492,7 @@ already sandboxes.
 **`./local-CI.sh` is green at every commit.** The contrast check — INV-2, INV-3, INV-4 —
 lands and passes against the exception list §4.8 settles, before the first new palette is
 authored. INV-12's focus measurement is a separate gate and not this item's to build: it
-arrives with ONEUP-0064 and is already green on two palettes, and each new palette has to
+arrives with ONEUP-0076 and is already green on two palettes, and each new palette has to
 keep it that way.
 
 ## 8. Docs & release
@@ -552,7 +552,7 @@ keep it that way.
   validate and a new failure mode at start-up. The eight are built in.
 - **Per-widget or per-dialog theming.** `docs/standards/ui-and-accessibility.md` §6.1
   forbids it and INV-7 tests for it.
-- **Choosing the ringless focus treatment.** ONEUP-0064's, and it lands before this item
+- **Choosing the ringless focus treatment.** ONEUP-0076's, and it lands before this item
   (design §5.2), so this spec inherits both the treatment and the measurement and only owes
   it six more palettes that pass.
 - **Changing any layout, spacing or wording.** A theme supplies colours only — §7's first
