@@ -1368,3 +1368,81 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** If the update fails, OneUp should keep the packages it already downloaded so retrying is quick, instead of deleting them.
   Kind: fix.
   Source: in-session-2026-07-31 (real run 2026-07-31_074230).
+
+- 📋 [ONEUP-0074] **A run the user stopped notifies "Already up to date".**
+  Found while writing docs/specs/ONEUP-0072-marker-codes.md; filed by that
+  spec's section 10 as out of its scope, because section 3.2 forbids it
+  re-wording anything it converts — its gate is that behaviour did not
+  change, so it carries the wrong sentence across unchanged.
+
+  The engine already knows. update_system.sh emits marker DONE "stopped"
+  when STOP_HONOURED is true, deliberately claiming neither success nor
+  failure. Twenty lines further on, the end-of-run notification block
+  falls through four cases -- errors, a non-zero installed count, either
+  changed flag, else "Already up to date" -- and has no stopped branch at
+  all. So an interrupted run that installed nothing before it stopped is
+  announced as needing nothing.
+
+  Small, because nothing needs discovering: the verdict exists at the
+  point the notification is built (the same function has STOP_HONOURED in
+  scope), and the window holds @@DONE@@'s verdict in _done_status. It
+  needs one more branch and its sentence -- something on the order of
+  "Update stopped -- the steps that ran are in the log."
+
+  Where it lands depends on the ONEUP-0072 decision: if that item's
+  section 4.4 (the headless notification path) is split out, this fix
+  belongs in the same place, because both touch the same four-case
+  fall-through and doing them separately means writing that branch twice.
+  main is frozen and this does not qualify (nobody is blocked from
+  updating), so it is 2.0 work either way.
+
+  Test: a scenario in tests/run-tests.sh that stops a run at a step
+  boundary and asserts the notification text is not "Already up to date";
+  today the suite's _notify_case coverage checks the three reachable
+  texts and never exercises the stopped path.
+  headline_only
+  **Layman:** If you stop an update part-way, the desktop notification says everything was already up to date — which is not what happened.
+  Kind: fix.
+  Source: oneup-0072-cold-eyes-loop-3-2026-08-03.
+
+- 📋 [ONEUP-0075] **No OneUp spec's invariant list can be read by spec_query.**
+  Found by /doc-lint's structure check while writing
+  docs/specs/ONEUP-0064-interface-redesign.md. Its checks.md calls this exact
+  signature a finding: invariants_count 0 together with a non-zero
+  possible_untabled_invariants means the parse failed, and "a doc whose
+  contract list no tool can read is not implementable".
+
+  It is not one spec. Measured 2026-08-03 against every spec in docs/specs/:
+  ONEUP-0064 reports invariants_count 0 with possible_untabled_invariants 10,
+  and ONEUP-0027 -- Status Reviewed after four cold-eyes loops -- reports 0 and
+  12. The verb reads title, status and kind correctly in both cases, so it is
+  the invariant list specifically that it cannot see.
+
+  Not caused by the specs being wrong. documentation.md section 5 mandates the
+  bullet form deliberately, on the stated grounds that "a table cell cannot hold
+  the detail a real invariant needs", and every spec follows it:
+
+    - **INV-1** Every theme supplies every key in the reference set, and no extra.
+      *Test:* ...
+
+  spec_query's own description names a bullet form of "- **INV-N** - body" with
+  an em-dash separator. That is NOT the cause: a scratch copy of ONEUP-0064 with
+  the em-dash inserted on all ten bullets still parses to 0. So the mismatch is
+  deeper than the separator and was not diagnosed further -- diagnosing it is
+  part of this item, not a precondition for filing it.
+
+  Three ways out, and picking one is the work: teach the parser this project's
+  form; add a machine-readable line per invariant alongside the prose; or accept
+  the gap and stop treating spec_query as a gate for this project, recording that
+  in documentation.md so the next session does not re-find it.
+
+  Costs nothing today because no gate depends on it -- tests/docs-check.py does
+  its own parsing and passes. It costs later, when a spec's invariants are meant
+  to be cross-checked against tests by anything other than a person reading both.
+
+  Test: spec_query on any file in docs/specs/ returns invariants_count equal to
+  the number of INV-N bullets it contains, rather than 0.
+  headline_only
+  **Layman:** The tool that is supposed to list a spec's promises reads zero of them, for every spec we have — so nothing automated can check that list.
+  Kind: doc.
+  Source: write-spec-doc-lint-2026-08-03.
