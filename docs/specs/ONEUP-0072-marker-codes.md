@@ -517,13 +517,14 @@ those are 2.0-only. A reference amended on `main` would describe a contract the 
   this item moves; §4.2, §4.6, §4.8 and §4.10 for the payloads that become codes; §5.1/§5.2,
   which currently reserve this work for `HINT` and `REMEDY` alone (§3.1); **§1.1 and §6's
   free-text trap**, both of which state the `|` substitution for one field where §4.2 now
-  applies it to every argument; **§4.7**, which says `fw_changed` "is emitted and currently
-  unread" — `docs/specs/ONEUP-0077-headless-notification.md` has the headless notification read it; **§2's reading-order table**, which
-  lists four channels and gains **two**, the headless paths that parse a run's markers with
-  no window (`docs/specs/ONEUP-0077-headless-notification.md`) and the tray check it already omits today (§4.3); and its **What checks
-  this** row for §1.1, which records the `|` substitution as *"caught by nobody"* — INV-2
-  makes it one guard in the emitter, with a test. All in the same commit as the engine and
-  both suites, per that document's §5.
+  applies it to every argument; **§2's reading-order table**, which lists four channels and
+  gains the **tray check** it already omits today (§4.3); and its **What checks this** row
+  for §1.1, which records the `|` substitution as *"caught by nobody"* — INV-2 makes it one
+  guard in the emitter, with a test. All in the same commit as the engine and both suites,
+  per that document's §5. **§4.7 (`fw_changed` "emitted and currently unread") and the two
+  headless readers §2's table also gains belong to
+  `docs/specs/ONEUP-0077-headless-notification.md`**, which is what reads that flag and adds
+  those readers; its §8 owns both, in its own commit.
 - **`docs/standards/wording-and-translation.md`** — §5's "today this is not yet true"
   paragraph becomes the description of what shipped, and §6.2's "never wrap a fragment" gains
   the one carve-out §4.1 takes for `@@REBOOT@@`'s joined components.
@@ -537,10 +538,9 @@ those are 2.0-only. A reference amended on `main` would describe a contract the 
   for the window**: it is frozen at the switch-over, so from this item onward it emits prose
   to a window that expects codes. It still runs an update in a terminal. `oneup-2.0.md` §4
   assigns that sentence to this item rather than leaving it to be discovered.
-- **The two headless entry points** — `--notify` comes out of the argument list each builds,
-  `--log=` goes in (`docs/specs/ONEUP-0077-headless-notification.md`, so the failed-run notification can name the file), and each gains
-  the marker capture the notification needs. **No systemd unit changes**, so nothing already
-  installed on a user's machine needs regenerating.
+- **The two headless entry points are not this item's** — `--notify` out, `--log=` in, and
+  the marker capture the notification needs all belong to
+  `docs/specs/ONEUP-0077-headless-notification.md`, which lands after this one.
 - **No version-site change** — none of `docs/standards/workflow.md` §5.1's six sites moves.
   This lands inside 2.0, not as a release of its own.
 

@@ -320,6 +320,10 @@ marker codes (0072)            ← after the rewrite and never inside it (§5.1)
         │                        changes what the wording *is* — it moves every
         │                        sentence out of the engine into the window
         ▼
+timer notification (0077)      ← split out of 0072 on 2026-08-03; needs the tables
+        │                        0072 builds, and is what puts sentence-rendering
+        │                        on a headless path at all, which 0032 then marks
+        ▼
 translation (0032)             ← last: wrapping strings before the split means
                                  wrapping them twice, the redesign rewrites
                                  the wording anyway, and §5.1 requires the
@@ -342,12 +346,13 @@ same rule that puts 0032 last decides it: wording is wrapped **once**, and 0072 
 item that changes what the wording is. It takes every user-facing sentence the engine
 composes today and moves it into the window, so translation running first would wrap a body
 of strings that 0072 then replaces wholesale, and would wrap none of the ones it creates.
-The consequence for 0072 is smaller than it looked: it lands its notification check in
-`tests/gui-smoke.py`, since `tests/i18n-check.py` does not exist yet, and it turns out to
-need no application object at all — its headless paths render plain Python tables and shell
-out to `notify-send`, so Qt is not involved until 0032 marks those tables and adds the
-`QCoreApplication` its own §4.2 describes. 0032's §4.1 already reads correctly under this
-order: it marks tables 0072 built.
+The consequence is smaller than it looked, and it falls mostly on **ONEUP-0077**, which was
+split out of 0072 on 2026-08-03 and takes the timer notification: that item lands its
+notification check in `tests/gui-smoke.py`, since `tests/i18n-check.py` does not exist yet,
+and it turns out to need no application object at all — its headless paths render plain
+Python tables and shell out to `notify-send`, so Qt is not involved until 0032 marks those
+tables and adds the `QCoreApplication` its own §4.2 describes. 0032's §4.1 already reads
+correctly under this order: it marks tables 0072 built.
 
 ### 5.3 Where each item lands
 
