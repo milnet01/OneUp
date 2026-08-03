@@ -19,8 +19,12 @@ window is proven to mirror for Hebrew and Arabic by a test rather than by hope.
 **This item was split in two** at its fifth review loop, because it held two contracts.
 **`docs/specs/ONEUP-0072-marker-codes.md`** now owns the engine→window payload conversion —
 turning the engine's prose into codes the window words itself. This spec keeps the
-translation machinery and right-to-left. They ship together and each depends on the other;
-neither restates the other.
+translation machinery and right-to-left. They ship as two changes, **this one second** —
+`docs/design/oneup-2.0.md` §5.2 owns that order and ONEUP-0072 §3.3 records why the pair
+once claimed to depend on each other in both directions. The dependency runs one way:
+ONEUP-0072 builds the sentence tables and puts sentence-rendering on the two headless paths,
+and this item then marks those tables and gives those paths the application object they need
+to render a translated one (§4.2). Neither spec restates the other.
 
 **Two documents already own most of this and are not re-argued here.**
 `docs/standards/wording-and-translation.md` §5–§7 owns where wording lives, how a

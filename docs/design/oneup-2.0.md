@@ -214,7 +214,10 @@ version first, release and then we can add additional languages."*
 So 2.0 ships the **machinery and no second language**:
 
 - every user-facing string wrapped for translation, the catalogue extracted and building,
-  and the engine's `@@HINT@@` / `@@REMEDY@@` payloads converted to codes;
+  and **every engine payload the window renders as its own wording** converted to codes —
+  wider than the `@@HINT@@` / `@@REMEDY@@` pair this paragraph once named, because task
+  badges, reboot advice and unreadable-source warnings are user-facing too
+  (`docs/specs/ONEUP-0072-marker-codes.md` §3.1 carries the argument);
 - **English only** in the release. No `.ts`/`.qm` locale file for another language is
   written, reviewed or shipped as part of 2.0.
 
@@ -227,7 +230,8 @@ Shipping the groundwork also means the first language contributed later is a dat
 a project.
 
 (This is why 0032 is *inside* 2.0 but *last* within it, §5.2: the redesign rewrites the
-wording anyway, so wrapping before it would mean wrapping twice.)
+wording anyway, and 0072 moves the engine's sentences into the window, so wrapping before
+either would mean wrapping twice.)
 
 Consequence for §7's gate: "a language is available" is **not** a release condition for
 2.0. "Every user-facing string is translatable" is.
@@ -308,6 +312,14 @@ themes (0027)                  ← after the redesign, for the same reason in
 engine rewrite (0054)          ← the long pole; gate in §7
         │
         ▼
+marker codes (0072)            ← after the rewrite and never inside it (§5.1):
+        │                        the rewrite has to be proven byte-identical
+        │                        first, or a payload that differs afterwards
+        │                        cannot be attributed to either change. Before
+        │                        translation because it is the last item that
+        │                        changes what the wording *is* — it moves every
+        │                        sentence out of the engine into the window
+        ▼
 translation (0032)             ← last: wrapping strings before the split means
                                  wrapping them twice, the redesign rewrites
                                  the wording anyway, and §5.1 requires the
@@ -322,6 +334,20 @@ else in flight (it changes no behaviour); doing the redesign next means themes s
 final layout rather than a doomed one; and leaving translation last means the redesign's
 new wording is wrapped once, not twice. The order is a consequence of each item's
 verification method, not a preference.
+
+**Why the codes go before translation, decided 2026-08-03.** The two specs each stated a
+dependency on the other landing first, and this section is where that is settled —
+`docs/specs/ONEUP-0072-marker-codes.md` §3.3 records the question and defers to here. The
+same rule that puts 0032 last decides it: wording is wrapped **once**, and 0072 is the last
+item that changes what the wording is. It takes every user-facing sentence the engine
+composes today and moves it into the window, so translation running first would wrap a body
+of strings that 0072 then replaces wholesale, and would wrap none of the ones it creates.
+The consequence for 0072 is smaller than it looked: it lands its notification check in
+`tests/gui-smoke.py`, since `tests/i18n-check.py` does not exist yet, and it turns out to
+need no application object at all — its headless paths render plain Python tables and shell
+out to `notify-send`, so Qt is not involved until 0032 marks those tables and adds the
+`QCoreApplication` its own §4.2 describes. 0032's §4.1 already reads correctly under this
+order: it marks tables 0072 built.
 
 ### 5.3 Where each item lands
 

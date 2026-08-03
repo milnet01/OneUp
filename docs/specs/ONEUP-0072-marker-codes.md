@@ -73,7 +73,7 @@ entirely, and it is the one string the user who never opens the window actually 
 | The conversion happens **after** the engine rewrite has passed its gate, never inside it | inherited — `docs/reference/marker-protocol.md` §5.1, design §5.1 |
 | It is **one** deliberate, versioned change touching every file `marker-protocol.md` §5 lists, in one commit | inherited — that document's §5 |
 | It converts **every payload the window renders as words**, not only `HINT` and `REMEDY` | this spec, and §3.1 says why |
-| Where this item sits **relative to ONEUP-0032** | **open — §3.3** |
+| This item lands **before ONEUP-0032**, between the engine rewrite and translation | user, 2026-08-03 — recorded in `docs/design/oneup-2.0.md` §5.2, which owns the order; §3.3 says what it costs this spec |
 
 ### 3.1 Why this is wider than the reference reserves
 
@@ -96,27 +96,33 @@ is a live defect whether or not a second language ever ships. `marker-protocol.m
 - **Whether the engine is Bash or Python.** ONEUP-0054 lands first, byte-identical, and this
   item changes what the rewritten engine emits.
 
-### 3.3 Open: this item and ONEUP-0032 each depend on the other landing first
+### 3.3 Settled: this item lands before ONEUP-0032
 
-**This is not yet decided, and it has to be before either is built.** The two specs
-currently state dependencies running in opposite directions:
+**Decided by the user on 2026-08-03, and recorded in `docs/design/oneup-2.0.md` §5.2**,
+which owns the order of work. This item sits between the engine rewrite and translation.
+That section holds the reasoning; the short form is that the same rule putting ONEUP-0032
+last decides this too — wording is wrapped once, and this is the last item that changes what
+the wording *is*.
 
-- This spec puts ONEUP-0032 first. §4.4 defers the application object to ONEUP-0032 §4.4,
-  and §7 adds its check to `tests/i18n-check.py`, calling it a suite already wired into
-  `local-CI.sh` "by then".
-- ONEUP-0032 puts this item first. Its §4.1 gives `oneup/gui/markers.py` "the marking of its
-  sentence tables for translation — ONEUP-0072 builds the tables", and `oneup/gui/steps.py`
-  the phrasing "which ONEUP-0072 stops the engine sending".
-- `docs/design/oneup-2.0.md` §5.2 owns the order of work and settles neither: its diagram
-  ends at translation (ONEUP-0032) as the last item and **does not place ONEUP-0072 at all**,
-  because it predates the split.
+It was raised here because the two specs had stated dependencies running in **opposite**
+directions, each unbuildable as written: this spec deferred the two headless paths'
+application object to ONEUP-0032 and put INV-4's check in that item's suite, while
+ONEUP-0032 §4.1 had *this* item building the sentence tables it then marks. The order chosen
+makes ONEUP-0032's claim true as it stands, and costs this spec one change and one
+non-change:
 
-Neither order works as both specs are currently written, so one of three things has to
-happen: this item lands first and owns its own application object and a home for INV-4's
-check; ONEUP-0032 lands first and stops claiming this item built the tables; or the two ship
-as one change, which `marker-protocol.md` §5 permits since it already requires the payload
-conversion to be a single versioned commit. **`docs/design/oneup-2.0.md` §5.2 is where the
-answer belongs**, and its diagram needs this item placed in it either way.
+- **INV-4's check goes in `tests/gui-smoke.py`** (§7), not `tests/i18n-check.py`, which is
+  ONEUP-0032's suite and does not exist yet.
+- **The application object was never this item's to defer.** §4.4 had deferred it on the
+  assumption that the headless paths render through Qt; they do not, until ONEUP-0032 marks
+  the tables. Checking that is what showed the deferral was unnecessary rather than
+  misdirected, and §4.4 now says so.
+
+The rejected third
+option was shipping the two as a single change — permitted by `marker-protocol.md` §5, since
+it already requires the payload conversion to be one versioned commit, but it re-merges work
+that ONEUP-0032's fifth review loop split apart for being too large to review (§11 of that
+spec).
 
 ## 4. Design
 
@@ -383,12 +389,15 @@ is not available to them. The window raises the notification the same way the en
 today, through the desktop's notification service, and builds its text through the same
 tables as everything else.
 
-Those two paths need an application object to render through, and `main` dispatches
-`--check` and `--update` before one exists — **ONEUP-0032 §4.4 owns that**, because it is a
-property of the translation machinery rather than of the protocol. This item depends on it
-and does not restate it. **That dependency runs the opposite way to ONEUP-0032 §4.1's**,
-which has this item building the sentence tables that item then marks for translation; §3
-records the ordering question the two raise together as open.
+**This item needs no application object, which is what makes landing first cheap.** Nothing
+on either headless path touches Qt: the sentences they render are ordinary Python tables
+until ONEUP-0032 marks them, and the notification is `notify-send` — the same subprocess
+`notify_send` in `update_system.sh` calls today, invoked with the same `-a`/`-i` arguments so
+it carries the app's name and icon. What ONEUP-0032 adds later is a `QCoreApplication` on
+both paths, because `QCoreApplication.translate` refuses without an instance and `main`
+dispatches `--check` and `--update` before one is built; that spec's §2.2 measured it and its
+§4.2 owns it. So the dependency runs **this item → ONEUP-0032**, matching the order §3.3
+settles: this item is what puts sentence-rendering on a headless path at all.
 
 ## 5. Correctness invariants
 
@@ -431,9 +440,9 @@ records the ordering question the two raise together as open.
   passes `--notify` to the engine. The engine's ordinary terminal output is **excluded and
   stays English** — the window shows it verbatim in the log pane (`marker-protocol.md` §1),
   which §10 keeps deliberately.
-  *Test:* `tests/i18n-check.py`, the notification check — `--notify` appears in no argument
-  list the window builds; `tests/gui-smoke.py` asserts the headless paths produce the
-  notification text themselves.
+  *Test:* `tests/gui-smoke.py` — `--notify` appears in no argument list the window builds,
+  and the headless paths produce the notification text themselves (§7 says why both halves
+  sit in that suite rather than ONEUP-0032's).
 - **INV-5** A shipped code is never reused for a different meaning.
   *Test:* **nothing automatic.** A rename is visible in review as a changed entry in
   `oneup/gui/markers.py` and a changed assertion in `tests/run-tests.sh`; a *reuse* is not
@@ -461,15 +470,16 @@ records the ordering question the two raise together as open.
 | --- | --- |
 | INV-1, INV-2 — the code field's shape and the `\|` guard | `tests/run-tests.sh`, per-scenario assertions on every marker carrying a code |
 | INV-3 — the fallback, at every reader of every converted family, and for an unfitting argument list and an unknown step key | `tests/gui-smoke.py`, new checks |
-| INV-4 — the notification is the window's | `tests/i18n-check.py` and `tests/gui-smoke.py` |
+| INV-4 — the notification is the window's | `tests/gui-smoke.py` |
 | INV-5 — a code is never reused | **nothing.** Review only |
 
-`tests/i18n-check.py` is ONEUP-0032's suite, and this item adds one check to it rather than
-standing up a second suite — a suite has to be named by hand in `local-CI.sh` and again in
-`.github/workflows/release.yml` or it runs nowhere
-(`docs/standards/files-and-naming.md` §2.2). **That assumes ONEUP-0032 has already landed,
-which §3.3 records as undecided**; if this item goes first, INV-4's check needs a home that
-exists at the time, and §3.3's resolution is what says which.
+**INV-4's checks go in `tests/gui-smoke.py`, and this item stands up no new suite.**
+`tests/i18n-check.py` is ONEUP-0032's, and §3.3 puts this item first, so it does not exist
+yet. That matters more than where a check reads best: a suite has to be named by hand in
+`local-CI.sh` and again in `.github/workflows/release.yml` or it runs nowhere
+(`docs/standards/files-and-naming.md` §2.2), and `tests/gui-smoke.py` is already named in
+both. A second suite added here would be two wiring sites to add and, once ONEUP-0032 lands
+its own, two suites checking one property.
 
 **The engine assertions are where the real coverage is**, because the conversion's failure
 mode is a payload that still carries prose, and only a scenario that actually runs a step
