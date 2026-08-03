@@ -925,6 +925,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Write down the design and the rules for version 2 before building it, so every piece is built to the same standard.
   Kind: doc.
   Source: user-request-2026-07-26.
+  Progress (2026-08-03): ONEUP-0064 gated — loop 1 done (30 verified, all fixed, Status still Draft), loop 2's findings verified but NOT yet fixed. Loop 2's 27 verified findings are written up at docs/reviews/ONEUP-0064-loop-2-findings.md — fold them in directly rather than re-running a loop to rediscover them. Loop 1 also corrected oneup-2.0.md §5.2 (it now carries ONEUP-0076) and repointed ONEUP-0076's three stale §4.5 citations at §4.1. Task 18 still owes: 0064 loops 2-3, then ONEUP-0072, ONEUP-0076, ONEUP-0032, and a cheap citation pass on ONEUP-0027.
 
 - 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether
