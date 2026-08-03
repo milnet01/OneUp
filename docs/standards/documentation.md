@@ -391,6 +391,21 @@ a test), those are exempt — they are too small to warrant it. OneUp has none t
 - **The tally must balance.** A row saying 8 findings and 6 outcomes is a row where two
   findings were dropped without a decision. `tests/docs-check.py` fails on it.
 
+  Two things about that check are worth knowing before you write a row, because both cost a
+  red `local-CI.sh` on 2026-08-03:
+
+  - **A dismissed finding still needs a severity.** The check compares the severity counts
+    against *verified + dismissed*, so four findings you checked and dropped have to appear
+    in the severity breakdown too. Writing `2 critical, 7 high, 8 medium, 5 low, 2 info —
+    24 verified, 4 dismissed` fails: 24 findings against 26 outcomes. The dismissed four
+    were all low, so `9 low` is what balances it.
+  - **Do not bold a bare number in the Outcome cell.** The check pairs `**…**` spans across
+    the whole row and then hunts `<number> verified|dismissed|info` inside them. A bolded
+    decimal sitting near a bolded disposition word — `**0.069**` a few clauses before
+    `**Dismissed: two.**` — pairs into one span and contributes a phantom `069 Dismissed`,
+    which read as 105 outcomes against 36 findings. Leave measurements unbolded in that
+    cell; bold the prose instead.
+
 **Spend a cold reader only on what a script cannot do.** The catchers, cheapest first:
 
 | Catcher | Cost | Use for |
