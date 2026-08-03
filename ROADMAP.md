@@ -1099,6 +1099,36 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Rework the window so it is easier and more comfortable to use — clearer wording, less reaching, everything usable by keyboard and screen reader — without drawing boxes around buttons and links.
   Kind: ux.
   Source: user-request-2026-07-26.
+  Ringless focus cue — measured 2026-08-03, before the spec is written, because
+  it changes what the spec can propose. ui-and-accessibility.md section 5.4
+  records the gap (SC 2.4.13 wants 3:1 between focused and unfocused states;
+  three of four shipped controls measure 1.14-1.62:1) and assigns closing it to
+  this item. Reproduced those four figures exactly, then measured the candidate
+  space, and the result rules out the obvious answer:
+
+    rest #4aa3ff -> #5cb0ff   1.14:1   (today: focus lightens, like hover)
+    rest #4aa3ff -> #ffffff   2.63:1   FAILS -- pure white is the limit
+    rest #4aa3ff -> #0d4d8c   3.24:1   passes
+    rest #4aa3ff -> #0a4278   3.86:1   passes
+
+  So a focus cue on the blue buttons CANNOT be built by lightening: white
+  itself is only 2.63:1 against the rest fill, so no lighter shade reaches 3:1
+  at any saturation. The cue must darken, or the rest colour has to change.
+  That inverts the current instinct, where focus lightens exactly as hover
+  does — and it means "focus reuses the hover look" (CLAUDE.md, the 2026-07-25
+  decision) cannot survive contact with SC 2.4.13 on these palettes. The
+  no-focus-BORDER constraint is untouched by this; darkening a fill draws no
+  ring.
+
+  The spec has to settle it across all eight themes ONEUP-0027 ships, not just
+  the default, and add the ratio computation to the suite rather than asserting
+  it -- section 5.4 already says the measurement is what was missing.
+
+  Method: WCAG relative-luminance formula, sRGB, computed rather than eyeballed.
+
+  Task 17 of the ONEUP-0057 plan is otherwise unstarted: the id and path are
+  resolved (docs/specs/ONEUP-0064-interface-redesign.md) and the bullet is this
+  one, but no draft exists and the rule-14 cold-eyes gate has not run.
 
 - 📋 [ONEUP-0065] **Convert the remaining line-number citations in the older documents to symbol names.**
   docs/standards/documentation.md 6a (added 2026-07-26, the user's
