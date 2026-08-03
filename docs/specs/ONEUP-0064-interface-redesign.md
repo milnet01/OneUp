@@ -24,7 +24,7 @@ sweep for it turned up reasons to change.
 ## 1. Goal
 
 A keyboard user can always see where they are, in every theme, without a ring or an outline
-ever being drawn — and the app can prove it rather than assert it. Sixteen controls that
+ever being drawn — and the app can prove it rather than assert it. Sixteen focusable widgets that
 show a keyboard user nothing today show them something. The window they appear in reads as
 one screen with an obvious next action, rather than a stack of buttons that all look
 equally important.
@@ -68,7 +68,9 @@ The class disagrees with itself about this, which is how it stayed unnoticed: th
 they are"*, and the closing comment in `paintEvent` says *"No focus ring is drawn, by
 explicit design decision"*. The second one is true.
 
-Neither WCAG exception in SC 2.4.13 covers this. The second exception applies only where
+**For a widget with no cue at all the binding criterion is SC 2.4.7 (Focus Visible, Level
+AA), not the AAA 2.4.13** — §8 carries that correction into the standard. Neither of
+2.4.13's exceptions rescues these either: the second applies only where
 *"the focus indicator and the indicator's background color are not modified by the
 author"*, and these widgets are styled and painted by us throughout
 (*Source:* <https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html>).
@@ -100,6 +102,8 @@ pure white:
 | accent cyan stop `#22d3ee` | 1.81:1 |
 | switch track on `#2ecc71` | 2.10:1 |
 | `#RestartBtn` top stop `#ef6a55` | 3.06:1 |
+| `btn_accent` bottom stop `#2f6fe0` | 4.70:1 |
+| switch track off `#e74c3c` | 3.82:1 |
 
 White itself is 2.63:1 against the Run button's **top** gradient stop, so **no lighter shade
 of anything reaches 3:1 there at any saturation** — and because a gradient is governed by
@@ -107,7 +111,7 @@ its worst pixel, that settles the button. (Its bottom stop `#2f6fe0` reaches 4.7
 white; the binding stop is the light one.) This is the measurement taken on the roadmap
 bullet before the spec was written, and it is why the design below darkens.
 
-**Three of these rows do clear 3:1 against white — the Restart button's top stop at 3.06:1,
+**Three of these six rows do clear 3:1 against white — the Restart button's top stop at 3.06:1,
 the Run button's bottom stop at 4.70:1, and the switch's off-track at 3.82:1 — and that is
 the argument for a rule rather than a colour.** A hand-picked lightening could be made to
 work on those and nowhere else; the ceiling binds hardest on the accent's top stop, which
@@ -180,15 +184,23 @@ more than one set of rest pixels when the thing behind it changes: the disclosur
 > **A focused control's own fill changes to a colour derived from the colour it replaces:
 > the smallest blend toward black — or toward white, when black cannot get there — that
 > measures at least 3:1 against every one of the control's rest pixels. Its text is redrawn
-> in whichever of black or white contrasts more with that fill. Where a control has several
-> rest colours, the blend is anchored on the first listed in §4.2 and then raised until it
-> clears the threshold against all of them.**
+> in whichever of black or white contrasts more with that fill.**
+
+**The procedure, stated once so two readings cannot diverge.** The blend fraction `t` runs
+from 0.01 to 1.00 in 1% steps, mixing each channel toward the target and rounding to the
+nearest integer — that quantisation is what makes §4.3's hexes reproducible, and a binary
+search or a finer step would print different ones. Try **both** directions against the
+**whole** set of the control's rest pixels, take the smallest `t` in either direction whose
+result clears the threshold against every one of them, and raise §6's error only when
+neither direction does. Anchoring on one surface and never retrying the other direction is
+how a satisfiable set gets reported as unsatisfiable.
 
 **A cue that already clears 3:1 is kept, never re-derived.** The rule supplies a cue where
 none passes; it is a floor, not a replacement. This matters concretely: under the
-high-contrast overlay `#GhostBtn` goes `#000000` → `#ffffff`, which is **21:1**, and
-"smallest blend reaching 3:1" would *weaken* it to 3.14:1 — in the one appearance mode that
-exists for low-vision users.
+high-contrast overlay `#GhostBtn` goes `$card` → `$btnhov`, which is `#000000` → `#ffd400`
+(**14.67:1**) dark and `#ffffff` → `#0000cc` (**11.22:1**) light, and "smallest blend
+reaching 3:1" would *weaken* those to 3.14:1 and 3.03:1 — roughly fourfold, in the one
+appearance mode that exists for low-vision users.
 
 Three properties matter, and each one is why it is a derivation and not a palette entry.
 
@@ -208,7 +220,7 @@ as a fill it passes on some surfaces and fails on others in the same theme:
 contrast against black is `(L+0.05)/0.05` and against white `1.05/(L+0.05)`. The larger of
 the two is smallest where they are equal, at `L = 0.1791`, where both are **4.58:1**. So
 every colour in sRGB can reach 3:1 in at least one of the two directions, and the search
-cannot fail. A complete sweep of a 3-step sRGB lattice (636,056 colours) evaluating that bound agrees
+cannot fail. A complete sweep of a stride-3 sRGB lattice (86³ = 636,056 colours) evaluating that bound agrees
 with it, worst case `#5d60ff` → 4.58:1. (Evaluating the bound is cheap; running the full
 *derivation* over the same lattice is the ~230 s figure INV-5 avoids.)
 
@@ -284,7 +296,7 @@ property, with the same mandatory explicit default the existing setter carries, 
 **The disclosure is the reason the rule says *every* rest colour.** Its row lightens to
 `rowhov` under the mouse, so a focused disclosure can sit on either. In the dark palette a
 fill derived from `rowcard` alone is `#66696e`, which measures 3.00:1 there and **2.83:1**
-on `rowhov` — a fail. Raising the blend from `t = 0.33` to `t = 0.35` gives `#6a6d73` at
+on `rowhov` — a fail. Raising `t` from 0.33 to 0.35 gives `#6a6d73` at
 3.01:1 against the worse of the two. Two extra percent of blend, and the rule that produces
 it is the one written in §4.1.
 
@@ -309,7 +321,9 @@ Computed, not chosen. Every figure is the output of the check in §4.4.
 | Link button rest text, light (§2.3's failing pair) | `#3779bd` on `#ffffff`, **4.53:1** | — | — | — |
 | High contrast, dark — primary buttons | `$btn` `#ffffff` | `#949494` | 3.03:1 | `#000000` 6.92:1 |
 | High contrast, light — primary buttons | `$btn` `#000000` | `#5c5c5c` | 3.14:1 | `#ffffff` 6.69:1 |
-| High contrast, either — `#GhostBtn` | `$card` | **unchanged**, `#000000`↔`#ffffff` | **21:1** | unchanged |
+| High contrast, dark — `#GhostBtn` | `$card` `#000000` | **unchanged**, `$btnhov` `#ffd400` | **14.67:1** | unchanged |
+| High contrast, light — `#GhostBtn` | `$card` `#ffffff` | **unchanged**, `$btnhov` `#0000cc` | **11.22:1** | unchanged |
+| High contrast — `#Log` / `#DetailScroll` border | `$border`, widened to 2 px in the overlay too | `#949494` / `#5c5c5c` | 3.03:1 / 3.14:1 | — |
 | Link button hover text, light | `#6fb6ff` on `#ffffff`, **2.14:1** | — | — | moves to `#4a7aab`, **4.50:1** |
 | `#LinkBtn` in the warning banner | the banner tint composited over `card` | derived from that composite | ≥3:1 | black or white |
 | `ghostbd` on `card` — the ghost button's rest border (`ONEUP-0027` §4.8 hands it here) | light `#c4ccd6` 1.62:1, dark `#38414f` 1.76:1 | moves to `#8f959c` / `#5e6570` | **3.02:1** / **3.09:1** | — |
@@ -320,12 +334,12 @@ track darkens rather than changing hue, so the red/green distinction and the bar
 shape both survive focus untouched — `ui-and-accessibility.md` §3 is not weakened by the cue
 landing on the same surface. **The Stop button's rest colour is per-palette, not one danger
 red**: `#d6412a` reads at 4.52:1 on the light card but only 4.02:1 on the dark one, so dark
-takes `#e0553f` at 4.79:1. **Its danger border survives focus**, which is what keeps it
-distinguishable: the derived focus fill for anything sitting on `card` is the same
-`#949494` / `#606367` whether the control is a stop button or an ordinary ghost button, so
-without the retained outline the one control that interrupts a running update would look
-identical to the rest at exactly the moment it matters. INV-2's triple measures that border
-against the new fill. And the light **link button's rest text moves** from `#4aa3ff` to
+takes `#e0553f` at 4.79:1. **The danger colour is a rest-state affordance and does not
+survive focus** — on focus the border takes the ink like every other retained outline,
+because a border kept at its rest colour would sit at 1.49:1 against the fill and be
+invisible. A focused stop button therefore looks like any other focused button on `card`,
+and what identifies it is its **label**, which is where a control's identity belongs
+(`ui-and-accessibility.md` §3 — never colour alone). And the light **link button's rest text moves** from `#4aa3ff` to
 `#3779bd`, which is what closes §2.3's 2.63:1 pair; on the dark card `#3779bd` measures
 4.00:1, so the dark palette keeps `#4aa3ff` at 6.89:1 rather than adopting it.
 
@@ -335,11 +349,20 @@ like mechanism B; but the pixels the overlay moves on focus are the *fill*
 (`background: $btnhov`), and recolouring that border would not work anyway — dark `$border`
 `#ffffff` → `$focus` `#ffd400` is **1.43:1** and light `#000000` → `#0000cc` is **1.87:1**.
 
-**Only the overlay's primary family fails, and its ghost button is left alone.** Under high
-contrast `#GhostBtn` goes `$card` → `$btn`, which is pure black to pure white either way:
-**21:1**. Deriving it would replace that with the smallest blend reaching 3:1 and *weaken*
-the cue sevenfold, in the appearance mode that exists for low-vision users. §4.1's floor is
-why it does not: an existing pair already clearing 3:1 is kept.
+**Only the overlay's primary family fails, and its ghost button is left alone.** The
+overlay groups `#GhostBtn:focus` with the primary buttons and sets `background: $btnhov`,
+so its focus pair is `$card` → `$btnhov` — `#000000` → `#ffd400` at **14.67:1** dark and
+`#ffffff` → `#0000cc` at **11.22:1** light. (`$btn`, pure white or pure black, is what
+`:hover` sets; it is not the focus value.) Deriving these would replace them with the
+smallest blend reaching 3:1 and cut the cue roughly fourfold, in the appearance mode that
+exists for low-vision users. §4.1's floor is why it does not: a pair already clearing 3:1
+is kept.
+
+**The overlay also has to widen the log border, or mechanism B silently fails under it.**
+`_HC_QSS` restates `QPlainTextEdit#Log` with `border: 1px solid $border`, which would
+override the 2 px rest border §4.2 requires and drop the cue below SC 2.4.13's area
+threshold in exactly the appearance mode that most needs it. Both overlay rules are widened
+to 2 px in the same commit, and §4.3 carries their derived colours.
 
 **Two rows above name colours that are not palette tokens, and both need a stated
 resolution.** The warning banner's background is a two-stop **alpha** gradient
@@ -447,7 +470,7 @@ out.
 ## 5. Correctness invariants
 
 - **INV-1** Every widget with `focusPolicy() != Qt.NoFocus` — in the main window **and in
-  every dialog the window opens** — is covered by a row of §4.2's mechanism table.
+  every dialog reachable from the window** — is covered by a row of §4.2's mechanism table.
   *Test:* `tests/gui-smoke.py` builds the window offscreen, opens each dialog in turn,
   collects those widgets, and fails naming any whose object name and class match no row. A row qualified by the
   overlay (the high-contrast entry) is matched as a variant of its object name, not as a
@@ -459,10 +482,13 @@ out.
 
 - **INV-2** For every row of §4.2, in every theme, with the high-contrast overlay on and
   off, the pixels the focus state changes — the fill under mechanism A, the border under
-  mechanism B — measure at least 3:1 against **every** rest surface named in that row.
-  Where a control keeps a rest **border** while its fill changes, that border also measures
-  at least 3:1 against the new fill — the pair is a triple, not a pair, wherever an outline
-  survives the transition.
+  mechanism B — measure at least 3:1 against **every** rest pixel colour named in that row.
+  Where a control keeps a rest **border** while its fill changes, that border **takes the
+  ink colour** and is measured against the new fill — a triple, not a pair. It cannot keep
+  its rest colour: `ghostbd`'s new value and the fill are both the smallest blend from
+  `card` in the same direction, so they land on the same colour and measure 1.00:1 (light)
+  and 1.03:1 (dark). Taking the ink instead inherits §4.1's 4.58 bound — 6.92:1 and 6.04:1
+  on the two shipped palettes.
   *Test:* the §4.4 computation, driven from `tests/gui-smoke.py`. Breaks on a fill derived
   from one rest colour but rendered over another — the disclosure-on-`rowhov` case, which
   measures 2.83:1 if the rule is written against `rowcard` alone — and breaks on a retained
@@ -495,8 +521,8 @@ out.
   multi-surface search either returns a pair clearing the threshold against every surface or
   fails with a named error identifying the control and the surfaces. It never returns a pair
   that fails.
-  *Test:* a unit check over a **16-step** sRGB lattice (4,096 colours, ~1.5 s;
-  the 3-step lattice costs ~230 s of derivation in pure Python — extrapolated from a
+  *Test:* a unit check over a **stride-16** sRGB lattice (16³ = 4,096 colours, ~1.5 s;
+  the stride-3 lattice costs ~230 s of derivation in pure Python — extrapolated from a
   measured 1,331-colour run — and is a one-off, not a suite check) asserting a pair is returned for each single-surface case and that both its ratios
   clear their thresholds; plus the pair `#000000` / `#989898`, which admits no fill at 3:1
   and must raise rather than return. Breaks if the search is written in one direction only —
@@ -555,9 +581,14 @@ out.
   smallest supported text scale. The set is not INV-1's: SC 2.5.8 is about things you click,
   so it excludes `#Log` and `#DetailScroll` (focusable, not targets) and includes the task
   row's newly clickable body (a target, not focusable).
-  *Test:* `tests/gui-smoke.py` builds the window offscreen at the smallest entry in
-  `TEXT_SCALES`, makes each banner visible so its buttons are laid out rather than carrying
-  a default geometry, walks that target set, and asserts both dimensions.
+  *Test:* `tests/gui-smoke.py` builds the window offscreen with the **application font
+  pinned to 6 pt** — `_font_metrics` clamps below that, so it is the smallest size the app
+  can render — makes each banner visible so its buttons are laid out rather than carrying a
+  default geometry, walks that target set, and asserts both dimensions. Breaks on today's
+  19×19 disclosure arrow, and on any control whose size is left to the font alone.
+  **Varying `TEXT_SCALES` instead would test nothing:** its smallest entry is `1.0`, the
+  default, so the run would sit at whatever point size the machine happens to use — and §6's
+  failure mode is a small *desktop* font, which is `QApplication.font()`, not a scale.
 
 - **INV-13** The ghost button's rest border measures at least 3:1 against the surface it is
   drawn on, in every theme.
@@ -565,8 +596,7 @@ out.
   `#ffffff` is 1.62:1 and `#38414f` on `#12161c` is 1.76:1 — which is the pair
   `ONEUP-0027` §4.8 hands to this item with the instruction that it cannot be deferred to an
   item that has already shipped. §4.3 closes it at 3.02:1 and 3.09:1.
-  Breaks on today's 19×19 disclosure arrow, and breaks on any control whose size is left to
-  the desktop font alone — §2.3's measurements are this machine's font, not a floor.
+
 
 ## 6. Failure modes
 
@@ -613,7 +643,7 @@ out.
 | --- | --- | --- |
 | INV-1, INV-6, INV-7, INV-8, INV-10, INV-12 | `tests/gui-smoke.py` | builds the window and each dialog offscreen and sweeps the widget tree |
 | INV-2, INV-3, INV-5, INV-11, INV-13 | `oneup/gui/theme.py` computation, driven from `tests/gui-smoke.py` | the ratio arithmetic, over every theme and both overlay states |
-| INV-4, INV-9 | `tests/gui-smoke.py` | parses the built stylesheet; INV-4's second half renders `ToggleSwitch` to compare its focused and unfocused bounds |
+| INV-4, INV-9 | `tests/gui-smoke.py` | parses the built stylesheet; INV-4's second half compares the focused and unfocused `ToggleSwitch` renders pixel for pixel |
 
 **The figures in §4.3 are the check's output, not transcriptions.** The computation prints
 every pair it measures, so the table is regenerated rather than re-derived by hand — which
@@ -641,6 +671,15 @@ does.
   only the four styled controls were in view. So the honest statement is that OneUp fails
   2.4.7 (AA) today for those sixteen, that this item is what makes 2.4.7 true, and that SC
   2.4.13 (Focus Appearance, Level **AAA**) is met on top of it.
+- **`docs/specs/ONEUP-0028-accessibility.md` §5 is stale in two ways and is corrected in the
+  same commit.** It promises *"QSS `:focus` rules for the **eight** styled focusable
+  controls"*, naming `#Disclose`, `#Log` and `#DetailScroll` among them — §2.1's sweep finds
+  no `:focus` rule for any of those three. And it specifies *"A 2 px accent outline (HC
+  overlay: 3 px, palette key `hcfocus`)"*, which the 2026-07-25 no-focus-ring decision
+  forbids outright and which was never built. That spec is shipped, so this is a correction
+  to a record rather than a change of plan — and its own §2 already recorded the underlying
+  defect, listing *"No `:focus` rule anywhere in the QSS"* as a *"WCAG 2.4.7 failure"*, the
+  same conclusion §8 draws above and independent corroboration of it.
 - **`CLAUDE.md` §6** repeats *"focus reuses the hover look"* in its trap list and is
   corrected in the same commit. The trap that stays is the one that cost the bug: no focus
   ring, because Qt draws it square and a focus border resizes the widget.
@@ -718,5 +757,6 @@ does.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 3 | 2026-08-03 | 3 lanes; 3 critical, 9 high, 14 medium, 10 low, 1 info — **35 verified, 2 dismissed** — 8 draft defects vs 27 fix collateral (34 actionable fixed, 1 info carried) | **Converged by cap, not clean, and the ratio is the reason this document should be split rather than reviewed a fourth time.** All three lanes led with the same defect and it was structural, introduced by loop 2: INV-2 had been given a *triple* clause requiring a retained rest border to clear 3:1 against the new focus fill — and loop 2 had also moved `ghostbd` to the smallest blend from `card` reaching 3:1, which is the same construction, in the same direction, as the focus fill derived from `card`. The two land on the same colour by arithmetic: **1.00:1** light and **1.03:1** dark, with the stop button's danger border at 1.49:1 and 1.59:1. The invariant was unsatisfiable on its first run and the ghost button's outline would have vanished into its own focus fill. A retained border now takes the **ink** colour, which inherits §4.1's 4.58 bound (6.92:1 and 6.04:1) — and the stop button's rationale went with it: its danger colour is a rest affordance, and what identifies it when focused is its label, not its tint. **The second finding all three lanes reached corrects a measurement of mine, not a claim of theirs.** Loop 2 recorded the high-contrast ghost button's focus pair as `$card` → `$btn`, pure black to pure white, 21:1 — but `_HC_QSS` groups `#GhostBtn:focus` with the primary buttons and sets `background: $btnhov`. `$btn` is what `:hover` sets. The real pairs are `#000000` → `#ffd400` (**14.67:1**) and `#ffffff` → `#0000cc` (**11.22:1**), so loop 2's row and the "weaken it sevenfold" arithmetic were both wrong while its *decision* — keep a pair that already clears 3:1 — stood. A lane also found that `_HC_QSS` restates `QPlainTextEdit#Log` with `border: 1px solid $border`, which would override mechanism B's 2 px rest border and drop the cue below SC 2.4.13's area threshold in exactly the appearance mode that needs it most; both overlay rules are widened in the same commit. **The most useful draft defect came from outside this document.** `docs/specs/ONEUP-0028-accessibility.md` §5 — shipped — promises `:focus` rules for eight styled controls including three that have none, and specifies a 2 px accent outline that the no-focus-ring decision forbids; §8 corrects it. Its own §2 had already logged *"No `:focus` rule anywhere in the QSS"* as a *"WCAG 2.4.7 failure"*, which independently corroborates the §8 correction loop 1 made to `ui-and-accessibility.md` §5.4. Smaller draft defects: the rule box stated two different algorithms (one anchored, one exhaustive) and `t` was never defined nor its 1% quantisation pinned, so two implementers would print different hexes; INV-12 varied `TEXT_SCALES`, whose smallest entry is the default `1.0`, so it tested nothing and the risk it names is the desktop font — it now pins 6 pt, `_font_metrics`' clamp floor; and a target-size clause had been filed under INV-13, a pure colour computation that cannot see a widget's size. **Dismissed: two.** A lane read §4.4's 101-point gradient sampling as unsourced; it is stated in §4.4 and produced §4.3's worst-pixel figures. And a lane asked whether the stride-3 lattice sweep was actually run rather than extrapolated — it was run; what is extrapolated is the *derivation* cost over that lattice, which is why INV-5 uses stride-16. **Trend across the three loops: draft defects 24 → 13 → 8, collateral 0 → 21 → 27.** The reads are finding less and the fixes are generating more, which is the documented signal that the document is past the review's design point rather than that it is bad. It left this loop at 762 lines. §11 recommends splitting the focus-cue contract (§4.1–§4.4) from the layout redesign (§4.5) before any further review. |
 | 2 | 2026-08-03 | 3 lanes; 3 critical, 6 high, 13 medium, 12 low, 2 info — **34 verified, 2 dismissed** — 13 draft defects vs 21 fix collateral (32 actionable fixed, 2 info carried) | **Nothing loop 1 fixed came back**, which is the proof those fixes held — one lane recomputed every ratio in §2.2, §4.1 and §4.3 and reported them matching. What it found instead was **loop 1's own damage, and it outnumbered the draft defects two to one.** All three lanes led with the same finding, and it was an invariant loop 1 had *added*: INV-11 said every user-facing text colour clears 4.5:1, which annexes work `ONEUP-0027` §4.8 owns — light `lastrun` at 3.07:1 on `card` and 2.71:1 on `win`, light `amber` — and a pair §4.7 declares exempt (`disfg` on `disbg`). As written it would have failed on day one against three pairs this item never touches. It is now scoped to the colours this item introduces or moves. Two more were loop-1 rows that named things the check cannot read: the banner link button's surface was given as "`#WarnBanner`, `#InfoBanner` — its banner is re-used for both roles", which is simply false (four separate banners exist; `warn_copy_btn` is inserted into one), and both are **alpha gradients** rather than tokens, so §4.4 now states how a translucent rest colour is composited before measurement. **The finding worth the loop was a cue this spec would have made worse.** Loop 1 added high-contrast rows deriving a focus fill for every overlay button — but the overlay's `#GhostBtn` already goes pure black to pure white, **21:1**, and "the smallest blend reaching 3:1" would have cut it to 3.14:1, weakening the focus cue sevenfold in the one appearance mode that exists for low-vision users. §4.1 now states the rule is a floor: a pair already clearing 3:1 is kept. The draft defects the loop turned up were mostly a term used two ways: §4.1 said the cue is derived from "every surface the control can rest on", which is right for a transparent ghost button and wrong for the Run button, whose cue derives from its own fill — an implementer following it literally would have measured the accent against `card`. **Rest pixels** is now defined once and used in the rule, the table header and §1. Also draft: "every one of these focus colours is a lighter version of its rest colour" is false for the light ghost button, which *darkens* (0.598 → 0.349) and still reaches 1.62:1; white is 2.63:1 against the Run button's **top** stop, not its fill (the bottom stop reaches 4.70:1, and the worst pixel governs); `ghostbd` on `card` is handed to this item by `ONEUP-0027` §4.8 with the note that it cannot be deferred to an already-shipped item, and the spec was silent — now INV-13, closed at 3.02:1 and 3.09:1. Two loop-1 figures were wrong again: the `rowcard`/`rowhov` luminance gap was written as 0.02 when it is 0.004 dark and 0.069 light, and the lattice cost was called "measured" when it is extrapolated from a 1,331-colour run (~230 s, not ~226 s). **Dismissed: two.** A lane held the base sheet may carry no explicit `qproperty-highContrast: false`, making the painted-widget seam unfounded — it does carry one, with a comment saying the explicit default is mandatory. And a lane read INV-4's painted half as vacuous because `setFixedSize` fixes the geometry; that is right about `sizeHint()` and the half is kept, rewritten to compare *which pixels are painted* rather than the size. The document left this loop at **718 lines**, up from 623. |
 | 1 | 2026-08-03 | 3 lanes; 2 critical, 7 high, 8 medium, 9 low, 2 info — **24 verified, 4 dismissed** — 22 actionable fixed, 2 info carried | The first review of this document. **Both criticals were the same defect seen from two sides: a claim about another document that this one had not earned.** §2.3 and §8 said the redesign fixed the light link button's 2.63:1 rest text and instructed `ONEUP-0027` §4.8 to record it closed — while §4 specified only a *focus* fill and never touched the rest colour, so §8 would have written a false row into a reviewed spec. §4.3 now carries `#3779bd` at 4.53:1 and INV-11 measures rest text, in every theme. The second was the mirror of it pointing at a standard: §8 called SC 2.4.7 *"already met"*, copying `ui-and-accessibility.md` §5.4 — but this document's own §2.1 measures sixteen focusable widgets with no cue at all, and a keyboard-operable control with no visible indicator fails 2.4.7, which is Level **AA**. The standard has been wrong since it was written for the four styled controls; §8 now corrects it rather than propagating it. **The most valuable finding was one all three lanes reached and the author had proved the opposite of:** §4.1 claimed the derivation "always succeeds", on an analytic bound that is only true for a *single* surface, while §4.1's own rule demands every surface a control rests on. Measured during verification — `#000000` and `#989898` admit no colour clearing 3:1 against both, and a coarse grey sweep finds **192** such pairs. The claim is now scoped, the search raises a named error instead of returning a best-effort colour, §6 carries the failure mode and INV-5 tests both halves. Three more were contract gaps an implementer would have had to invent: the high-contrast overlay was assigned mechanism B and mechanism A in one sentence, with no rows in either table (it is A, and the four rows exist); `#GhostBtn`/`#LinkBtn` derived from `card` alone when one link sits on the warning banner and another inside a task row, which is the exact defect §4.2 argues against for the disclosure; and `ToggleSwitch`'s row named `switchon`/`switchoff`, tokens `ONEUP-0027` creates *after* this item, with no seam stated for reaching a painted widget at all. **Two numbers were wrong and one was expensive.** The disclosure's 3.09:1/2.91:1 came from a derivation step the prose never describes — the reproduced figures are 3.00:1 and 2.83:1, and INV-2 had locked the wrong one into a test. And INV-5's 3-step lattice was measured at **~226 s** of pure Python inside the suite; it is now a 16-step lattice at ~1.5 s, with the fine sweep kept as a one-off. **Dismissed: four**, each checked rather than waved away. A lane held that Qt orders the focus chain by *creation*; a two-widget probe parenting them in reverse order showed the chain follows **parenting** order, so the document was right. A lane flagged `ONEUP-0034` §4.2 as cited for two different claims — both are in §4.2. *"Copy diagnostics"* was called undefined; it is `diag_btn` in the window. And an objection that §1's goal prose has no measurable referent was dropped: a Goal section is not an invariant. **Carried as INFO:** the switch's state shape is checked against its *resting* track by `ONEUP-0027` §4.7 but against no *focused* one (6.46:1 today, unchecked once `switchmark` becomes per-theme); and §4.5 making a whole row a click target would collapse §2.3's 47.0 px spacing-exception clearance, moot only because the arrow grows to 24×24. The document left this loop at **623 lines**, up from 495. |
