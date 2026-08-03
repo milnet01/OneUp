@@ -52,6 +52,12 @@ def check(cond: bool, path: Path, line: int, rule: str, msg: str) -> None:
 
 
 def docs(*subdirs: str) -> list[Path]:
+    # A missing directory makes glob() return nothing, which reads exactly like "every
+    # document here passes": the rules keyed to it stop checking and the run still goes
+    # green, only with a smaller tally nobody reads. Fail loudly instead.
+    for d in subdirs:
+        check((ROOT / d).is_dir(), ROOT / d, 0, "harness",
+              "documentation directory is missing; every rule keyed to it checked nothing")
     return sorted(p for d in subdirs for p in (ROOT / d).glob("*.md"))
 
 
@@ -105,7 +111,12 @@ def check_loop_tallies() -> None:
             # Outcome one — authors have used both, and a check that saw only the first
             # would skip the second in silence.
             bold = re.findall(r"\*\*(.+?)\*\*", " ".join(cells[2:]))
-            counts = [int(n) for n, _ in DISPOSITION_RE.findall(" ".join(bold))]
+            # Match each bold span on its own. Joining them first lets a number ending one
+            # span pair with a disposition word starting the next: a bolded "**0.069**"
+            # followed by "**Dismissed: two**" reads as "69 dismissed" and fails a row that
+            # balances perfectly. That is the second of this check's two recorded failure
+            # modes (the first being that a dismissed finding still needs a severity).
+            counts = [int(n) for span in bold for n, _ in DISPOSITION_RE.findall(span)]
             if not counts:
                 continue  # no numeric disposition clause — nothing to balance
             raw = [int(n) for n, _ in SEVERITY_RE.findall(findings.split("**")[0])]
