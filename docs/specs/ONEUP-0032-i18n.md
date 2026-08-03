@@ -174,7 +174,11 @@ unaffected.
 `QApplication` is built. §2.2 measured what that costs: with no instance `installTranslator`
 refuses outright and `translate` hands back the English. Those two paths construct a
 **`QCoreApplication`**, not a `QApplication`: it is enough for the catalogues and needs no
-display, which a timer may not have. ONEUP-0072 §4.4 is what makes them need it.
+display, which a timer may not have. `docs/specs/ONEUP-0077-headless-notification.md` is what
+makes them need it — it puts sentence-rendering on those two paths, and its own INV-5 forbids
+an application object until this item arrives, so **this item retires that invariant** as it
+adds the `QCoreApplication`. (That work was ONEUP-0072 §4.4 until the 2026-08-03 split moved
+it; that section no longer exists.)
 
 **A missing catalogue is not an error** (`wording-and-translation.md` §7). In 2.0 it is the
 *normal* case: no `.ts` file for any language is written, so `load()` returns `False` on
