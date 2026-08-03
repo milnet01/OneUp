@@ -329,6 +329,26 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   10 string-concatenation sites to convert to whole sentences with named
   placeholders — a glued sentence cannot be reordered by a translator and
   renders unpredictably in RTL.
+  Spec written and reviewed (2026-08-03): docs/specs/ONEUP-0032-i18n.md,
+  Status Reviewed. Seven cold-eyes loops. It was SPLIT at loop 5: the item held
+  two contracts, and every finding in loops 4 and 5 sat on one side of a clean
+  seam, so the engine-to-window payload conversion left for ONEUP-0072 and this
+  item kept the catalogue machinery and right-to-left. Loop 7 reviewed the split
+  document in its own right (20 verified, 2 dismissed) and most of what it found
+  was the split's own unswept blast radius.
+
+  Ordering settled by the user the same day: this item lands AFTER ONEUP-0072
+  and stays last in 2.0, which is where docs/design/oneup-2.0.md section 5.2 had
+  always put it. The dependency runs one way — ONEUP-0072 builds the sentence
+  tables and puts sentence-rendering on the two headless paths; this item then
+  marks those tables and gives those paths the QCoreApplication they need to
+  render a translated one. No change to its section 4.1 or 4.2 was needed; both
+  were already written for this order.
+
+  Scope confirmed with the user: 2.0 ships the machinery and English only. No
+  second-language catalogue is written, reviewed or shipped in 2.0 — that is a
+  data file contributed afterwards, not a project. Right-to-left IS in 2.0,
+  because a layout built the wrong way has to be rebuilt rather than translated.
 
 - ✅ [ONEUP-0033] **bump.py: advance the CHANGELOG [Unreleased] compare-link base to the new tag.**
   bump.py rewrites the six version sites and adds a new `[x.y.z]: .../releases/tag/vX.Y.Z` reference link, but leaves the `[Unreleased]: .../compare/vPREV...HEAD` link pointing at the PREVIOUS tag. After releasing 1.2.0 the link still reads `compare/v1.1.0...HEAD` (CHANGELOG.md:207) — it should read `compare/v1.2.0...HEAD`. Fix: in bump.py, when moving `## [Unreleased]` to `## [X.Y.Z]`, also rewrite the `[Unreleased]:` compare base from the old tag to `vX.Y.Z`. Cosmetic (the link 404s on the stale range only until the next commit), pre-existing since at least 1.1.0. Add/adjust a bump.py test to assert the Unreleased compare base advances. No version-lockstep impact (local-CI's lockstep gate doesn't check this link).
@@ -1275,6 +1295,29 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Right now the update engine writes the English sentences you see on screen. Move that wording into the app so it can be translated — and so a reworded engine message stops silently changing what a task's badge says.
   Kind: refactor.
   Source: split out of ONEUP-0032 during its cold-eyes review, 2026-07-27.
+  Spec written and reviewed (2026-08-03): docs/specs/ONEUP-0072-marker-codes.md,
+  Status Reviewed. Three cold-eyes loops of its own (24, 22, 20 verified;
+  1, 0, 1 dismissed), on top of loops 1-5 taken as part of ONEUP-0032 before
+  the split. Loop 3 converged BY CAP, not clean — section 11 carries the tail
+  and recommends splitting section 4 rather than running a fourth loop, since
+  the document reached 654 lines.
+
+  Ordering settled by the user the same day: this item lands BEFORE ONEUP-0032,
+  between the engine rewrite and translation. Both specs had claimed the other
+  must land first. docs/design/oneup-2.0.md section 5.2 owns the order and now
+  places this item in its diagram, which it had never done.
+
+  Three contract decisions an implementer needs and would otherwise invent:
+  the REBOOT reason carries two disjoint vocabularies (four joinable components
+  from the transaction log, plus two standalone reasons), status still decides
+  the badge for fail and skip while the code decides it only for ok, and the
+  marker emitter must take its fields as separate arguments — today's takes a
+  pre-joined payload, so the one-place pipe guard INV-2 requires is otherwise
+  unimplementable. That last one touches every marker call site.
+
+  Scope is wider than docs/reference/marker-protocol.md section 5.1 reserves;
+  that reference, oneup-2.0.md section 5.1 and testing.md section 5 are all
+  amended in the same commit as the code.
 
 - 📋 [ONEUP-0073] **Skip the cache clean when an earlier step failed.**
   The cache step is guarded by `step_selected cache && ! stop_pending` only —

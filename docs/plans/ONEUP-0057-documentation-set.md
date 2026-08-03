@@ -16,7 +16,29 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — resume at **Task 16**
+> ## ▶ You are here — resume at **Task 17**
+>
+> **Task 16 done (2026-08-03), and it produced two specs, not one.**
+> `docs/specs/ONEUP-0032-i18n.md` was taken through `/cold-eyes` and **split at its fifth
+> loop**: the payload conversion left for `docs/specs/ONEUP-0072-marker-codes.md` and 0032
+> kept the catalogue machinery and right-to-left. Every finding in loops 4 and 5 had sat on
+> one side of a clean seam, which is what made the seam obvious. 0032 then took a sixth
+> review as the split document (20 verified, 2 dismissed); 0072 took **three of its own**
+> (24, 22, 20 verified) and **converged by cap rather than clean** — its §11 carries the
+> tail and the recommendation to split §4 rather than run a fourth loop. Both are
+> `Status: Reviewed`.
+>
+> **The ordering was settled 2026-08-03 (user):** 0072 lands **before** 0032, between the
+> engine rewrite and translation. Each spec had claimed the other must land first;
+> `docs/design/oneup-2.0.md` §5.2 owns the order of work and now places 0072 in its diagram,
+> which it had never done. The rule is the one that already puts 0032 last — wording is
+> wrapped once, and 0072 is the last item that changes what the wording *is*.
+>
+> **Task 16's Step 3 was overtaken by its own spec.** It scoped the contract change to
+> `HINT` and `REMEDY`; 0072 §3.1 widened it to every payload the window renders as words,
+> because the window is *already* re-deriving `STEP_END`'s meaning from English substrings —
+> a live defect independent of translation. `marker-protocol.md` §5.1/§5.2 and
+> `oneup-2.0.md` §5.1 are amended to match.
 >
 > **Task 15 done (2026-07-27).** `docs/specs/ONEUP-0027-themes.md` — selectable themes —
 > written and taken through `/cold-eyes` in **four loops**: 9 findings verified, then 9, 3,
@@ -91,7 +113,8 @@ absorbed and removed).
 > fallback and goes in 2.1; and `workflow.md` §1.2 gains one narrow freeze exception, for the
 > `ONEUP_ENGINE_CMD` harness change only, written in the standard that owns the freeze.
 >
-> **Next:** Task 16 — `ONEUP-0032-i18n.md`, translation groundwork. Then Tasks 17–19.
+> **Next:** Task 17 — `ONEUP-0064-interface-redesign.md`. It inherits one open decision: the
+> **1.14:1 ringless focus cue**. Then Tasks 18–19.
 >
 > **Done earlier:** Tasks 1–11 (2026-07-26). Nine standards, the marker-protocol reference,
 > cold-eyes batch 1, and `CLAUDE.md`. All ten reviewed documents are `Status: Reviewed`
@@ -916,13 +939,13 @@ git commit -m "ONEUP-0027: spec selectable themes"
 
 **Files:** Create `docs/specs/ONEUP-0032-i18n.md`
 
-- [ ] **Step 1: Count the surface:**
+- [x] **Step 1: Count the surface:**
 
 ```bash
 grep -coE '"[A-Z][^"]{12,}"' updater.py
 grep -n '@@HINT@@\|@@REMEDY@@' update_system.sh | wc -l
 ```
-- [ ] **Step 2: Write the spec** to the template, settling: how strings are wrapped; the
+- [x] **Step 2: Write the spec** to the template, settling: how strings are wrapped; the
       `.ts`/`.qm` build step and where catalogues live; and how a missing catalogue
       degrades (English, never a blank label).
       **Answered by the user, 2026-07-26 — no longer an open question:** 2.0 ships the
@@ -930,18 +953,18 @@ grep -n '@@HINT@@\|@@REMEDY@@' update_system.sh | wc -l
       (design §5.1). The spec states that as a scope decision and puts a translated locale
       file in its own "Out of scope" section, so a later reader sees a decision rather than
       an omission.
-- [ ] **Step 3: Specify the contract change** from design §5.1 explicitly: `HINT` and
+- [x] **Step 3: Specify the contract change** from design §5.1 explicitly: `HINT` and
       `REMEDY` payloads become stable codes; the GUI holds the wording; the marker
       reference (Task 9), both test suites and the GUI parser change **in one commit**;
       and it happens **after** the engine rewrite has passed its gate, never inside it.
-- [ ] **Step 4: Specify right-to-left support** (design §5.1 — user's requirement,
+- [x] **Step 4: Specify right-to-left support** (design §5.1 — user's requirement,
       2026-07-26). Settle: where the application's layout direction is set and from what;
       that it is set **once**, at startup, not per widget; and that the toggle's custom
       `paintEvent` (`updater.py:699`, knob position at line 712) applies the direction to
       its knob arithmetic while leaving the symmetric state shapes alone. Verify Qt's own
       mechanism for deriving direction from the locale against the installed Qt's
       documentation before writing it down — do not state it from memory.
-- [ ] **Step 5: Name the invariants**, at minimum: the engine imports no translation
+- [x] **Step 5: Name the invariants**, at minimum: the engine imports no translation
       machinery (it is the root-privileged half); an unknown code renders as something
       readable rather than raw; no user-facing sentence is built by concatenation (there
       are 10 concatenation sites in `updater.py` today, verified at `ff4f4a7`); **no
@@ -950,7 +973,7 @@ grep -n '@@HINT@@\|@@REMEDY@@' update_system.sh | wc -l
       and every smoke assertion passes with the layout direction forced right-to-left** —
       a new pass in `tests/gui-smoke.py`, because on an English desktop nobody will ever
       see an RTL regression by eye.
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 ```bash
 git add docs/specs/ONEUP-0032-i18n.md
