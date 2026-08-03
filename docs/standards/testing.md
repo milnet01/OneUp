@@ -128,8 +128,20 @@ asserts the guard** — the suite does assert what the keep-alive *does* (it exi
 engine is gone, SIGKILL and all), but not that this scenario's extracted fragment stays
 harmless when it does not.)
 `setup_common` in `tests/run-tests.sh` supplies the ones every scenario needs — `sudo`,
-`systemctl`, `snapper`, `notify-send`, `flatpak`, `fwupdmgr` — and the scenario overwrites
-whichever it needs to behave differently, usually `zypper`.
+`systemctl`, `snapper`, `notify-send`, `flatpak`, `fwupdmgr`, `df` — and the scenario
+overwrites whichever it needs to behave differently, usually `zypper`.
+
+`df` is on that list for the same reason §2's three `ONEUP_*` paths are redirected, and it
+was added on 2026-08-03 for the same reason they were: the pre-flight low-disk check reads
+the real filesystem, so on a machine under the 2 GiB threshold every system-step scenario
+gained a real `@@DISK@@|warn` line sourced from whatever the developer's disk happened to
+be doing. A scenario that wants the warning overwrites the mock, exactly as it would
+`zypper`.
+
+`setup_cached_sudo` sits beside it and is the one variant several scenarios need: it
+replaces `setup_common`'s sudo with one whose `-n` probe *succeeds*, modelling a box where
+an earlier interactive validate already warmed the credential — which is what `cleanup()`'s
+restore relies on, since it must never block on a password dialog inside the trap.
 
 Three rules for writing a mock:
 

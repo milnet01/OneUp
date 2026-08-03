@@ -1291,6 +1291,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** One of the messages the updater can send — the warning that your disk is nearly full — is never exercised by the automated tests, so a change could break it without anything noticing.
   Kind: test.
   Source: cold-eyes-2026-07-26 lane-6 (ONEUP-0057 documentation set).
+  Progress (2026-08-03): the blocker is gone. This item needed a scenario to
+  arrange a mount under the pre-flight threshold, which was impossible while
+  `df` was unmocked — the engine read the real machine. The /test-audit sweep
+  added a `df` mock to `setup_common` (reporting ample space) for a different
+  reason: unmocked, a developer's nearly-full disk injected a real @@DISK@@|warn
+  line into every system-step scenario. A DISK scenario can now overwrite that
+  mock the way scenarios overwrite `zypper`, then drop DISK from
+  KNOWN_UNTESTED_MARKERS in tests/docs-check.py. Still open.
 
 - 📋 [ONEUP-0070] **Cover the absent-tool skip path in the engine test suite.**
   Found while revising the ONEUP-0054 spec (2026-07-27, verified at b6d37ed).
@@ -1604,3 +1612,70 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   tests/run-tests.sh, each verified red against the pre-fix engine. Local
   CI green (210 engine / 283 GUI). Not released — main stays at 1.4.0
   until the user calls a 1.4.1.
+
+- 📋 [ONEUP-0079] **Give the GUI smoke suite a partial tally when it aborts part-way.**
+  tests/gui-smoke.py runs its ~300 checks inside one unbroken main(). A real
+  exception anywhere aborts every check after it and the run ends on a bare
+  traceback instead of the "Passed: N Failed: M" summary at the foot, so the
+  output cannot say how many checks never ran. CI still correctly goes red —
+  this costs diagnosis, not correctness: a crash near the top and a crash near
+  the bottom look identical from the summary.
+
+  Raised INFO by the 2026-08-03 /test-audit sweep, so it is recorded rather
+  than fixed. The cheap version is a try/finally around main()'s body printing
+  the running tally plus "aborted after N checks" on the way out; the thorough
+  version is splitting main() into sections, which is the same change 2.0's
+  package split forces anyway (docs/design/oneup-2.0.md).
+  **Layman:** If the window's test run crashes half way, the summary at the end can't tell you how many checks never got to run.
+  Kind: test.
+  Lanes: tests.
+  Source: test-audit-2026-08-03.
+
+- ✅ [ONEUP-0080] **Close the 2026-08-03 test-audit findings across all four suites.**
+  A /test-audit sweep over the four test programmes, triaged against source.
+  Two HIGH, ten MEDIUM and five LOW fixed; one INFO filed as ONEUP-0079; one
+  finding dismissed as already-tracked (ONEUP-0062). Five pre-pass pattern hits
+  were logged as false positives rather than dropped.
+
+  The two that mattered:
+
+  - tests/docs-check.py ran its disposition pattern over every bold span in a
+    loop-log row joined together, so a number ending one span could pair with a
+    disposition word starting the next — a bolded timing figure beside a bolded
+    "Dismissed" read as 69 outcomes and failed a row that balanced. This is the
+    second failure mode recorded on 5df0703, which documented it for authors but
+    did not fix the check. Now matched per span.
+  - tests/run-tests.sh never mocked `df`, so the engine's pre-flight low-disk
+    check read the real machine in every system-step scenario. On a box under
+    the 2 GiB threshold that injected a real @@DISK@@|warn line into every one
+    of them — the same class as the /run/zypp.pid and run.state defaults that
+    §2 of the testing standard exists to prevent. It also unblocks ONEUP-0069.
+
+  Also: bump-test.py asserted only the CHANGELOG and trusted bump.py's exit
+  code for the other five sites, which proves its regexes matched but not that
+  they wrote the right value — it now reads every site back, against a target
+  version no shipped file contains (1.3.0 collided with real history, which
+  made two of the read-backs unfalsifiable). Two @@HINT@@ checks named a
+  specific hint while asserting only the bare marker. check_eq was defined
+  inside one scenario body and used by two others. Four copies of one sudo mock
+  became setup_cached_sudo. In the GUI suite: an unrestored dialog stub, a tray
+  setting leaked into shared QSettings, a day-count block reading the clock
+  twice, a temp-dir block missing the try/finally its sibling has, and a
+  teardown check that proved a reference was dropped rather than a timer
+  stopped. New GUI coverage for four paths that had none: the download-size
+  channel, the CHECK_ITEM package preview, the three snapshot-thinning
+  outcomes, and the engine failing to start.
+
+  Verified by re-audit: all fixes held, and the pass caught three vacuous
+  assertions among the newly-written GUI checks (a progress-bar range, a status
+  string and a button visibility that each matched their constructor default).
+  All three were rewritten and then sabotage-tested — removing the production
+  line each guards makes exactly those three fail and nothing else.
+
+  Resolved (2026-08-03): local-CI green at 210 / 301 / 12 engine, GUI and bump
+  assertions and 14,828 documentation checks. Landed on main under the second
+  freeze exception, recorded in docs/standards/workflow.md §1.2; owes a 1.4.x.
+  **Layman:** A review of OneUp's own tests found some that could not fail, and some that quietly depended on the machine they ran on. Both are fixed.
+  Kind: test.
+  Lanes: tests, docs.
+  Source: test-audit-2026-08-03.

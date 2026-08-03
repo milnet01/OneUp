@@ -6,7 +6,24 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Window-side test coverage for four paths that had none.**
+  The download-size channel, the per-package changed-package preview, the three outcomes of thinning old snapshots, and the engine failing to start. The size checks pin the rule that a failed probe must never report "nothing to download".
+
 ### Fixed
+
+- **Three ways the window's test run could leak state into later checks.**
+  A dialog stub was left installed for the rest of the run, a tray setting was persisted to shared storage and never reset, and the day-count checks read the clock twice so a run straddling midnight could shift every count by one.
+
+- **The version-bump test now proves all six version sites, not just the changelog.**
+  It asserted only the CHANGELOG rewrite and otherwise trusted bump.py's exit code, which proves its patterns matched but not that they wrote the right value. Every site is now read back and checked at its own pattern, against a target version no shipped file already contains.
+
+- **The engine test suite no longer reads the real machine's free disk space.**
+  The pre-flight low-disk check calls `df`, which `setup_common` did not mock, so on a machine under the 2 GiB threshold every system-step scenario picked up a real low-disk warning sourced from the developer's own disk. `df` is now mocked like every other system tool.
+
+- **The documentation loop-log tally check no longer fails a correctly-formed row.**
+  It ran its disposition pattern over every bold span joined together, so a number ending one span could pair with a disposition word starting the next — a bolded timing figure beside a bolded "Dismissed" read as a count of 69 and failed a row that balanced perfectly. Each span is now matched on its own.
 
 - **Stop the leftover-packages step going silent for minutes on a slow mirror.** (ONEUP-0078)
   With "System packages" switched off, this step quietly downloaded update

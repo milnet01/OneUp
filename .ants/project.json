@@ -5,6 +5,7 @@
     "source_roots": [
         "."
     ],
+    "specs_dir": "docs/specs",
     "test_roots": [
         "tests"
     ]

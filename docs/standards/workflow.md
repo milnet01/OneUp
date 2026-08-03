@@ -71,6 +71,17 @@ Two things are not feature work and are unaffected:
   becoming a precedent: granting a second one is a decision to take with the user, in this
   section, not an inference to draw from this one.
 
+- **The test-suite fixes from the 2026-08-03 `/test-audit` sweep** — the second exception,
+  granted that day at the user's decision, by the route the paragraph above requires. The
+  sweep found defects in the suites themselves: a documentation check that could fail a
+  correctly-formed row, an unmocked `df` letting the real machine's free space reach every
+  system-step scenario, and assertions weaker than the claims they carried. The user's
+  words: *"You can fix main, it just means we have to publish a new release for v1."* So
+  these land on `main` and owe a 1.4.x.
+
+  Same caveat, restated because it is the whole point: this names a batch of changes, not a
+  category. It does not make `tests/` generally open, and ONEUP-0070 still lands on `v2`.
+
 **Why the freeze is stated as a testable question rather than a preference:** the failure
 mode of any freeze is a slow slide back into 1.x work, one "small" fix at a time. *Can
 people still install their updates?* has an answer; "is this important enough?" does not.
@@ -450,7 +461,7 @@ states it and owns what "complete" means.
 | §4 a commit's ID names a bullet that exists | **nothing.** `tests/docs-check.py` never opens `ROADMAP.md`, so a subject citing an ID nobody ever filed reads exactly like one that was |
 | §4 roadmap IDs come from `.roadmap-counter` | the allocator itself: on a fresh clone the file is absent and appending **refuses**, rather than restarting at 1 and colliding |
 | §5 the version increment matches the change | **nothing.** `release.sh` takes `X.Y.Z` as an argument and never questions it; calling a breaking change a patch release is caught by a person or not at all |
-| §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate — for the version **numbers**, at all six sites. `tests/bump-test.py` covers a *different* failure: it runs a real bump in a throwaway copy where five of the six sites are the real files copied verbatim, so a site whose format has drifted makes `bump.py` refuse ("no match … file drifted from the expected format") and the test fail. What it does **not** do is assert the new value at those five — five of its six assertions read the `CHANGELOG.md`, which is the one site it fakes; the sixth asserts `bump.py` exited 0, and that is the one a drifted format trips |
+| §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate — for the version **numbers**, at all six sites. `tests/bump-test.py` covers a *different* failure: it runs a real bump in a throwaway copy where five of the six sites are the real files copied verbatim, so a site whose format has drifted makes `bump.py` refuse ("no match … file drifted from the expected format") and the test fail. Since 2026-08-03 it also reads every site back after the bump and asserts the new version landed at that site's own pattern (`APP_VERSION = "…"`, `^Version:`, the newest `%changelog` stanza, `versionformat`/`revision`, the newest `<release>`) — an exit code alone proves only that the regexes *matched*, not that they wrote the right value. Its target version is deliberately one no shipped file already contains, because `bump.py` prepends to the `%changelog` and `<releases>` lists and a colliding version makes those two read-backs match the old entry and pass regardless |
 | §5.1 site 6's two `CHANGELOG.md` links match its newest heading | `tests/docs-check.py`. Added 2026-07-26: the lockstep gate reads only the heading, and a hand-edit could leave the release link missing or the `[Unreleased]` compare base pointing at the previous tag — which is ONEUP-0033, a bug this project shipped once already |
 | §5.2 a release needs a non-empty `## [Unreleased]` | `bump.py` — it refuses outright: *"CHANGELOG.md has no non-empty '## [Unreleased]' section to release"*. One of the few rules here with a hard automatic stop |
 | §6 local CI is green before a push | `githooks/pre-push` — but only once per clone, after `git config core.hooksPath githooks`. **Nothing enforces that it is enabled**, so on a fresh clone this rule is a habit |
