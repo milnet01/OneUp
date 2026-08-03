@@ -1581,6 +1581,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The weekly background check and update currently let the engine write their desktop notification; the window will write it instead, so there is one place that turns results into sentences.
   Kind: implement.
   Source: split-from-oneup-0072-2026-08-03.
+  Cold-eyes gate run 2026-08-03: three loops on this document's own bytes
+  (the split's provenance row carries no assurance), 20 → 23 → 20 verified,
+  all fixed. `Status: Reviewed`, converged by cap rather than clean — draft
+  defects fell 21 → 8 → 6 while collateral ran 0 → 15 → 12, so it was filed
+  and shipped rather than looped a fourth time. At 377 lines size was not
+  the cause and no split was warranted. Nothing is left verified and
+  unfixed; the only carried item is INFO (no numeric streaming budget).
+  Two invariants were added by the review — INV-6 (capturing the engine's
+  output must not stop it reaching the terminal and the journal) and INV-7
+  (`@@DONE@@` outranks the exit status, because a stopped run exits zero).
+  ONEUP-0082 was filed from it.
 
 - ✅ [ONEUP-0078] **Bound and show the repository refresh the leftover-packages step triggers.**
   zypper auto-refreshes any stale repository before answering a `packages`
