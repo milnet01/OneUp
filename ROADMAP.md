@@ -1573,3 +1573,27 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The weekly background check and update currently let the engine write their desktop notification; the window will write it instead, so there is one place that turns results into sentences.
   Kind: implement.
   Source: split-from-oneup-0072-2026-08-03.
+
+- 🚧 [ONEUP-0078] **Bound and show the repository refresh the leftover-packages step triggers.**
+  zypper auto-refreshes any stale repository before answering a `packages`
+  query, so the orphans step's two `sudo_capture` queries could trigger a
+  full metadata fetch. That fetch got neither of ONEUP-0048's defences:
+  its output went into a shell variable instead of the log pane, and it
+  ran outside refresh_repos' per-source `REFRESH_TIMEOUT` budget — so a
+  crawling mirror hangs the run with the window drawing nothing, which is
+  the exact failure ONEUP-0048 exists to prevent. Reachable whenever the
+  system step is deselected, because nothing has refreshed by then.
+
+  Measured 2026-08-03 on `--steps=flatpak,orphans,cache`: the step took
+  1m41s, of which ~81s was one repository (`games`), the whole phase
+  silent, and the GUI's 45s stall warning fired on a run that was working.
+  Cache timestamps under /var/cache/zypp/{raw,solv} carry the evidence;
+  re-run warm, both queries take 1.5s.
+
+  Fix: call refresh_repos (guarded, named, stoppable) before the queries
+  when the run has not already refreshed, and pass --no-refresh to both
+  so the implicit one cannot happen. Same metadata, same cost, now
+  visible and bounded.
+  **Layman:** A run with "System packages" switched off could sit silent for minutes on "Removing leftover packages" — it was quietly downloading update lists, with nothing on screen and no time limit.
+  Kind: fix.
+  Source: user-report-2026-08-03 (screenshot: run appeared hung on step 2 of 3).

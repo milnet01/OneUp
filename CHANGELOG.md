@@ -6,6 +6,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Stop the leftover-packages step going silent for minutes on a slow mirror.** (ONEUP-0078)
+  With "System packages" switched off, this step quietly downloaded update
+  lists before it could answer — showing nothing on screen and with no time
+  limit, so a slow server looked exactly like a frozen app. It now names the
+  source it is fetching, gives up on one that is too slow, and can be stopped.
+
 ## [1.4.0] - 2026-07-26
 
 ### Added

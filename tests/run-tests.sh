@@ -1449,6 +1449,66 @@ check "failed orphan removal marked fail" "@@STEP_END@@|orphans|fail" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0078. zypper refreshes any stale repository before it will answer a
+# `packages` query, and this step captures those queries — so with the system
+# step deselected the fetch was both invisible (its output went to a variable,
+# not the log pane) and unbounded (outside refresh_repos' per-source budget).
+# That is the ONEUP-0048 failure in the one step that fix never reached, and it
+# is what the user saw: 1m41s on this step, ~81s of it one source, silent.
+echo "TEST: the leftover-packages step refreshes under the guard, named and bounded"
+d=$(mktemp -d); setup_common "$d"
+# Unquoted heredoc: $d is substituted now, so the mock can leave its witness at a
+# known absolute path. It cannot report by printing — the engine CAPTURES these two
+# queries, which is the other half of the bug, so anything echoed here would vanish
+# into a shell variable and the assertion could never fail.
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+# The packages cases come FIRST: their command line now contains "--no-refresh",
+# so a bare *refresh* pattern above them would swallow the query itself.
+case "\$*" in
+  *packages*--unneeded*|*packages*--orphaned*)
+    # A query left free to fetch its own metadata is the bug back again.
+    [[ "\$*" == *--no-refresh* ]] || touch "$d/unguarded-query"
+    exit 0 ;;
+  *lr*)
+    echo " 1 | oss   | Main OSS | Yes | (r ) Yes | Yes"
+    echo " 2 | games | Games    | Yes | (r ) Yes | Yes"
+    exit 0 ;;
+  *refresh*games*) sleep 30 ;;      # the stalled mirror, as in the system step
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(ONEUP_REFRESH_TIMEOUT=1 run_engine "$d" --steps=orphans 2>&1)
+check    "the source being fetched is named" "@@REFRESH@@|1|2|oss"     "$out"
+check    "a crawling mirror is given up on"  "Gave up on 'games'"      "$out"
+check    "and the step still finishes"       "@@STEP_END@@|orphans|ok" "$out"
+check_eq "neither query fetches its own metadata" "guarded" \
+         "$([[ -e "$d/unguarded-query" ]] && echo UNGUARDED || echo guarded)"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# The guard above must not cost a second full refresh on the ordinary run where
+# the system step already did one — that would turn a fix for a slow step into
+# a slower one (ONEUP-0078).
+echo "TEST: a run that already refreshed does not refresh a second time"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *packages*)     exit 0 ;;
+  *lr*)           echo " 1 | oss | Main OSS | Yes | (r ) Yes | Yes"; exit 0 ;;
+  *dup*|*update*) echo "Nothing to do."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system,orphans 2>&1)
+check_eq "the sources are fetched once for the whole run" "1" \
+         "$(grep -cF -- '@@REFRESH@@|1|1|oss' <<<"$out")"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: flatpak reports how many apps were updated"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/flatpak" <<'EOF'

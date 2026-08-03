@@ -1022,7 +1022,12 @@ repo_scoped_failure() {
 # The sudo stays a top-level command of THIS shell — never inside a subshell or a
 # backgrounded pipeline — so it reuses sudo_init's one credential (see sudo_capture).
 REFRESH_FAILED=false
+# Whether this run has refreshed the repositories yet. A later step needs to tell fresh
+# metadata from stale without paying for a second refresh — see the orphans step, which
+# is reached with this still false whenever the system step was not selected.
+REPOS_REFRESHED=false
 refresh_repos() {
+    REPOS_REFRESHED=true
     local -a aliases=() gpg=()
     mapfile -t aliases < <(enabled_repo_aliases)   # read-only, no sudo inside
     local total=${#aliases[@]} i=0 alias rc
@@ -1377,7 +1382,24 @@ fi
 # ---------------------------------------------------------------------------
 if step_selected orphans && ! stop_pending; then
     begin_step orphans
-    sudo_capture UNNEEDED_RAW zypper --non-interactive packages --unneeded
+    # zypper auto-refreshes any stale repository before it will answer a `packages`
+    # query, so with the system step deselected that fetch happens inside the
+    # sudo_capture below — where it loses both of ONEUP-0048's defences at once. Its
+    # output goes into a variable instead of the log pane, and it runs outside
+    # refresh_repos' per-source budget, so a crawling mirror hangs the whole run with
+    # the window showing nothing at all. Measured 2026-08-03 on --steps=flatpak,orphans,
+    # cache: 81 s on one source, silent, and the GUI's stall warning fired on a run that
+    # was working perfectly. Refresh here under the guard instead, then forbid the
+    # implicit one below — the same metadata, now named, bounded and stoppable.
+    $REPOS_REFRESHED || refresh_repos
+    if stop_pending; then
+        # refresh_repos returns between sources when a stop is asked for, and nothing has
+        # been removed yet — the same free boundary the system step stops at.
+        end_step orphans skip "stopped before removing anything"
+    else
+    # --no-refresh on both queries: the refresh above is the only one allowed to happen,
+    # because it is the only one the user can see and the run can escape from.
+    sudo_capture UNNEEDED_RAW zypper --non-interactive --no-refresh packages --unneeded
     mapfile -t UNNEEDED < <(awk -F'|' \
         'NR>2 && $3 !~ /^[[:space:]]*$/ {gsub(/ /,"",$3); print $3}' <<<"$UNNEEDED_RAW")
     if ((${#UNNEEDED[@]})); then
@@ -1393,12 +1415,13 @@ if step_selected orphans && ! stop_pending; then
         end_step orphans ok "nothing to remove"
     fi
     # Report-only: packages with no active repo (do NOT auto-remove these).
-    sudo_capture ORPHAN_RAW zypper --non-interactive packages --orphaned
+    sudo_capture ORPHAN_RAW zypper --non-interactive --no-refresh packages --orphaned
     ORPHAN_COUNT=$(awk -F'|' 'NR>2 && $3 !~ /^[[:space:]]*$/' <<<"$ORPHAN_RAW" | wc -l)
     if ((ORPHAN_COUNT > 0)); then
         echo
         echo "Note: $ORPHAN_COUNT package(s) have no active repository (possibly"
         echo "installed by hand). Left in place — review with:  zypper packages --orphaned"
+    fi
     fi
 fi
 
