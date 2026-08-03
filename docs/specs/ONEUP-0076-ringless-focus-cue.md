@@ -258,9 +258,9 @@ row for its object name.
 | --- | --- | --- |
 | `#RunBtn`, `#BannerBtn` | A | `btn_accent`, both gradient stops |
 | `#RestartBtn` | A | the danger gradient, both stops |
-| `#StopBtn` (introduced by `docs/specs/ONEUP-0064-interface-redesign.md` §4.5) | A | `card` |
+| `#StopBtn` (introduced by `docs/specs/ONEUP-0064-interface-redesign.md` §4.1) | A | `card` |
 | `#GhostBtn`, in the header and the action row | A | `card` |
-| `#GhostBtn`, moved into `SettingsDialog` by `docs/specs/ONEUP-0064-interface-redesign.md` §4.5 | A | the dialog's own surface, which is `card` — the sheet is set on the application, so the dialog inherits it |
+| `#GhostBtn`, moved into `SettingsDialog` by `docs/specs/ONEUP-0064-interface-redesign.md` §4.1 | A | the dialog's own surface, which is `card` — the sheet is set on the application, so the dialog inherits it |
 | `#LinkBtn`, on the card (`log_toggle`, `openlog_btn`, `rollback_btn`) | A | `card` |
 | `#LinkBtn` in a banner (`warn_copy_btn`) | A | `#WarnBanner` only — it is inserted into that one banner and no other |
 | `#LinkBtn` inside a row's detail panel (`size_btn`) | A | `rowcard` **and** `rowhov` |
@@ -400,7 +400,7 @@ per-theme loop above is what it passes them to.
   overlay (the high-contrast entry) is matched as a variant of its object name, not as a
   name of its own.
   Breaks the moment a control is added without a focus treatment — the state §2.1 measured
-  at sixteen widgets. The dialog half is not padding: `docs/specs/ONEUP-0064-interface-redesign.md` §4.5 moves *Repositories* and
+  at sixteen widgets. The dialog half is not padding: `docs/specs/ONEUP-0064-interface-redesign.md` §4.1 moves *Repositories* and
   *Recenter* into `SettingsDialog`, so a window-only sweep would stop covering two controls
   it covers today.
 

@@ -302,8 +302,12 @@ GUI split (0034)               ← first substantial work on v2, and alone: it i
         │                        constants, §6.5.
         ▼
 interface redesign (0064)      ← after the split, because redesigning a module
-        │                        six times the size ceiling while also cutting
-        │                        it up makes both changes unreviewable
+   + ringless focus cue (0076)   six times the size ceiling while also cutting
+        │                        it up makes both changes unreviewable. 0076 was
+        │                        split out of 0064 on 2026-08-03 and ships in the
+        │                        same slot: it derives each control's focus colour
+        │                        from the colours that control rests on, so it
+        │                        needs the layout and object names 0064 settles
         ▼
 themes (0027)                  ← after the redesign, for the same reason in
         │                        reverse: theming a layout that is about to
