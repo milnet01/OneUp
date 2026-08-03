@@ -120,10 +120,11 @@ non-change:
 
 - **INV-4's check goes in `tests/gui-smoke.py`** (§7), not `tests/i18n-check.py`, which is
   ONEUP-0032's suite and does not exist yet.
-- **The application object was never this item's to defer.** §4.4 had deferred it on the
+- **The application object was never this item's to defer.** The notification section had
+  deferred it on the
   assumption that the headless paths render through Qt; they do not, until ONEUP-0032 marks
   the tables. Checking that is what showed the deferral was unnecessary rather than
-  misdirected, and §4.4 now says so.
+  misdirected, and `docs/specs/ONEUP-0077-headless-notification.md` now says so.
 
 The rejected third
 option was shipping the two as a single change — permitted by `marker-protocol.md` §5, since
@@ -417,67 +418,6 @@ grepping for readers will find it and needs to be told that, rather than adding 
 lookup it has no use for. It is also a reader `marker-protocol.md` §2's table does not list
 at all, which §8 carries.
 
-### 4.4 The notification the timers raise
-
-**The headless paths stop passing `--notify`, and the window sends the notification.** The
-flag is not in either systemd unit — the unit's `ExecStart` is `oneup --check` or
-`oneup --update`, and `--notify` is added afterwards, inside the two headless entry points
-that shell out to the engine. So no installed unit changes and none needs regenerating; what
-changes is the argument list those two functions build. **The Python engine keeps its
-`--notify` flag** for somebody running it in a terminal, where the notification is part of
-its own English output (§10) — as does the retained Bash `update_system.sh`, which is frozen
-and keeps everything it has.
-
-**The markers it needs are not the ones a run's progress uses.** The engine's own
-notification is built from the error count, the installed-package count, the two
-system/firmware changed flags, and the set-aside sources — so the window reads `@@CHECK@@`
-(the `--check` path's totals), `@@INSTALLED@@` (the count and both flags), `@@REPO_SKIPPED@@`
-(each source set aside, which the engine's own comment calls the only place an unattended
-run reports what it skipped) and `@@DONE@@` (the verdict). `@@STEP_END@@` is not among them.
-
-**The failed-run notification names the log file, and neither path knows that name today —
-so both start passing `--log=`.** They are the only engine runs the window starts without
-one: `_tray_check_args` passes `--log=`, the auth, thin and size calls all pass `--log=`, and
-these two do not. Left alone, the engine picks its own — `$HOME/Documents/update-logs/` and a
-timestamped filename, a *different directory* from the window's own `LOG_DIR` — so the
-window cannot name in a sentence a file it never chose. Each path chooses the path it already
-would have and hands it over, which is existing practice everywhere else in the window.
-
-**Both entry points must therefore capture the engine's output**, which today they do not —
-they run it and read only its exit status. Reading the markers is new work this item adds,
-not existing behaviour it reuses.
-
-**The firing rules come across with the text, because they are not in the markers.** The
-engine does not notify on every run, and an implementer rebuilding only the wording would
-change behaviour by accident:
-
-- The `--check` notification fires **only when the total is above zero**. Without that a
-  timer would pop *"0 update(s) ready to install"* every week.
-- The end-of-run notification **always** fires, and picks one of four texts by falling
-  through: errors, then a non-zero installed count, then either changed flag, then
-  *"Already up to date"*.
-- A **stopped** run takes that same fall-through today — `@@DONE@@|stopped` with no errors
-  and nothing installed notifies *"Already up to date"*, which is wrong about a run the user
-  interrupted. **Carry it across unchanged.** §3.2 forbids this item rewording anything, and
-  a wrong sentence is still a sentence to be moved, not repaired, in a conversion whose gate
-  is that behaviour did not change. It is a real defect and it now has somewhere to go
-  (§10).
-
-**The notification must be raisable without a display**, because a timer may have no
-display. So a tray message is not available to these two paths: they raise it the same way
-the engine does today, through the desktop's notification service, and build its text
-through the same tables as everything else.
-
-**This item needs no application object, which is what makes landing first cheap.** Nothing
-on either headless path touches Qt: the sentences they render are ordinary Python tables
-until ONEUP-0032 marks them, and the notification is `notify-send` — the same subprocess
-`notify_send` in `update_system.sh` calls today, invoked with the same `-a`/`-i` arguments so
-it carries the app's name and icon. What ONEUP-0032 adds later is a `QCoreApplication` on
-both paths, because `QCoreApplication.translate` refuses without an instance and `main`
-dispatches `--check` and `--update` before one is built; that spec's §2.2 measured it and its
-§4.2 owns it. So the dependency runs **this item → ONEUP-0032**, matching the order §3.3
-settles: this item is what puts sentence-rendering on a headless path at all.
-
 ## 5. Correctness invariants
 
 - **INV-1** Every code matches `^[a-z0-9-]+$`, and every payload field the window renders as
@@ -578,9 +518,9 @@ those are 2.0-only. A reference amended on `main` would describe a contract the 
   which currently reserve this work for `HINT` and `REMEDY` alone (§3.1); **§1.1 and §6's
   free-text trap**, both of which state the `|` substitution for one field where §4.2 now
   applies it to every argument; **§4.7**, which says `fw_changed` "is emitted and currently
-  unread" — §4.4 has the headless notification read it; **§2's reading-order table**, which
+  unread" — `docs/specs/ONEUP-0077-headless-notification.md` has the headless notification read it; **§2's reading-order table**, which
   lists four channels and gains **two**, the headless paths that parse a run's markers with
-  no window (§4.4) and the tray check it already omits today (§4.3); and its **What checks
+  no window (`docs/specs/ONEUP-0077-headless-notification.md`) and the tray check it already omits today (§4.3); and its **What checks
   this** row for §1.1, which records the `|` substitution as *"caught by nobody"* — INV-2
   makes it one guard in the emitter, with a test. All in the same commit as the engine and
   both suites, per that document's §5.
@@ -598,7 +538,7 @@ those are 2.0-only. A reference amended on `main` would describe a contract the 
   to a window that expects codes. It still runs an update in a terminal. `oneup-2.0.md` §4
   assigns that sentence to this item rather than leaving it to be discovered.
 - **The two headless entry points** — `--notify` comes out of the argument list each builds,
-  `--log=` goes in (§4.4, so the failed-run notification can name the file), and each gains
+  `--log=` goes in (`docs/specs/ONEUP-0077-headless-notification.md`, so the failed-run notification can name the file), and each gains
   the marker capture the notification needs. **No systemd unit changes**, so nothing already
   installed on a user's machine needs regenerating.
 - **No version-site change** — none of `docs/standards/workflow.md` §5.1's six sites moves.
@@ -631,14 +571,15 @@ those are 2.0-only. A reference amended on `main` would describe a contract the 
   system tool's output and stays English (`wording-and-translation.md` §5) — including the
   ordinary log lines the window shows verbatim in its log pane, which INV-4 excludes for
   this reason. Its `--notify` notification is part of that output and stays with it: what
-  changes is that the headless paths stop using it, not that the flag goes (§4.4).
+  changes is that the headless paths stop using it, not that the flag goes (`docs/specs/ONEUP-0077-headless-notification.md`).
 - **Wrapping the window's own strings, loading catalogues, right-to-left.** ONEUP-0032.
 - **Re-wording any message.** The conversion carries each sentence across as it stands
   (§3.2).
-- **Fixing the stopped-run notification.** A run the user stopped notifies *"Already up to
-  date"* (§4.4), which is wrong, and this item moves that sentence without repairing it —
-  the gate is that behaviour did not change. Worth its own roadmap item; it needs a verdict
-  the window already has, so it is a small one.
+- **The notification the timers raise, and the stopped-run defect in it.** Split out to
+  `docs/specs/ONEUP-0077-headless-notification.md` (ONEUP-0077) on 2026-08-03, taking this document's
+  former §4.4 with it. A run the user stopped notifies *"Already up to date"*, which is
+  wrong; §3.2 forbids this item repairing it, and that item rebuilds the fall-through
+  anyway, so the branch is written once there. ONEUP-0074 is folded into it.
 - **Any change to a marker the window does not render as words.** The three fates are a
   routing rule, not an invitation to tidy the protocol (§4.1).
 
@@ -650,6 +591,7 @@ table below records the loops run against **this** document.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 0-split | 2026-08-03 | — | **Provenance, not a review — no reviewer was dispatched to produce this row.** On the user's decision this document's §4.4, the notification the timers raise, was split out to `docs/specs/ONEUP-0077-headless-notification.md` (ONEUP-0077), which also folds in ONEUP-0074. Loop 3 below had recommended exactly this rather than a fourth loop, and its evidence was that both of its criticals landed in §4.4 or the ordering paragraph beside it. This document keeps the payload conversion and its INV-1…INV-5, which are all about codes and were unaffected; it is now 595 lines, down from 654. **The rows below were run against the larger document**, so they describe work partly no longer here — they are kept because the conversion sections were present throughout and the record of what was asked of them is worth keeping. |
 | 3 | 2026-08-03 | 3 lanes; 2 critical, 4 high, 6 medium, 6 low, 3 info — **20 verified, 1 dismissed** — 15 draft defects vs 2 fix collateral (17 actionable fixed, 3 info carried) | **Converged by cap, not clean**, and the shape of what it found is the reason §11 ends here. All three lanes independently led with the same two criticals, and both were *collateral*: §4.4 still told the implementer to build a `QCoreApplication` that §3.3 had just established this item does not need — the ordering fix earlier the same day rewrote the closing paragraph and left the opening one — and §4.1's closed `@@REBOOT@@` vocabulary listed **six** members two clauses after saying two of them were standalone codes, against §4.2's "four" and a carve-out costed at "fifteen sentences for six components". The engine settles it: `reboot_reason_from_log` builds four component strings, the NVIDIA and generic graphics ones mutually exclusive, so eleven combinations are reachable and the two summary-block reasons are a disjoint second vocabulary — which is now a table, because the disjointness is what makes a one-element field unambiguous and no prose ordering of it survived two loops. The four HIGHs were all **draft defects two prior loops never reached**: §4.4 claimed the window "already knows" the log path when neither headless path passes `--log=` and the engine defaults to a different directory entirely; INV-2's one-place `\|` guard is unimplementable without an emitter signature change (today's takes a pre-joined payload, so a blanket substitution eats the separators) that neither this spec nor ONEUP-0054 stated; §8 omitted `testing.md` §5's "emits a plain-English `@@HINT@@`", a standard that outranks this spec and that this item falsifies; and §4.3's "every reader goes through these tables" was falsified by `_parse_tray_line`. One fix was reverted mid-pass for overreach — a firing-rules paragraph had this item *repair* the stopped-run notification, which §3.2 forbids outright; it carries the wrong sentence across unchanged and §10 now files the defect instead. **Dismissed: one** — a low finding that the section list numbers a loop-log heading the document leaves unnumbered, which turned out to be an artifact of the reviewer's own scrubbed copy rather than anything in the document. Separately, three lane *open questions* — the 14 `marker HINT` call sites, the three `CHECK_UNKNOWN` reasons, and `_on_auth_finished` vs `_query_auth_status` — were each checked against the engine and the window and resolved **in the document's favour**; they are not findings and are recorded here because a later loop would otherwise re-ask them. The document left this loop at **654 lines**, up from 563: three loops of contract-gap fixes have grown it past the size where a cold read reliably reaches every part, which is the argument for splitting §4 rather than looping a fourth time. |
 | 2 | 2026-07-31 | 2 lanes; 1 critical, 4 high, 6 medium, 9 low, 2 info — **22 verified, 0 dismissed** — 12 draft defects vs 10 fix collateral | The critical was a draft defect neither lane could have found without opening the engine: `@@REBOOT@@`'s reason has **three** sources, not the one §4.1 named. Besides `reboot_reason_from_log`'s composed phrase, the summary block assigns the reason directly twice — a generic *"core system packages were updated"* when zypper advises a reboot the transaction log did not explain, and *"firmware was updated"* when only the firmware changed. An implementer converting the function alone would have shipped two branches emitting prose into a field the window now splits into components, showing the user three unknown fragments and failing INV-1 after the fact. All three are codes now, and the component vocabulary is closed and written down. The other draft defect worth the loop was a rule collision: the window joins `@@REBOOT@@`'s components itself, and `wording-and-translation.md` §6.2 says *"Never wrap a fragment"* — so the carve-out is stated, justified (fifteen sentences for six components, growing combinatorially), and carried into that standard by §8. §8 was also missing two reference sections this item falsifies: §4.7 says `fw_changed` "is emitted and currently unread" and §4.4 now reads it, and §2's reading-order table lists four channels and gains a fifth. **Ten of the twenty-two were loop 1's own fixes**, which is why the sweep is worth more than the loop: §6's new space-in-a-name row still described the joined-list shape §4.1 had already replaced with one-name-per-field, and the "done when" criterion said 13 `marker HINT` call sites where the engine has 14. Dismissed: none. |
 | 1 | 2026-07-31 | 2 lanes; 2 critical, 5 high, 6 medium, 11 low, 1 info — **24 verified, 1 dismissed** | The first review of this document in its own right. The critical that only running the thing could settle: §4.1 sent `@@CHECK_UNKNOWN@@`'s unreadable-source list as one **space-separated** argument, but the engine recovers those names from zypper's `Skipping repository '…'` prose, and an isolated `zypper --root` run proved zypper puts the repository **name** there — this machine's stock repositories are `Main Repository (OSS)`, `Main Update Repository`, `Open H.264 Codec (openSUSE Tumbleweed)`. `valid_alias` forbids a space but guards only the `--skip-repo` path. One broken source would have been reported as three; the names now take one trailing field each. The second critical is **surfaced, not fixed** (§3.3): this spec defers the application object to ONEUP-0032 §4.4 and adds its check to that item's suite, while ONEUP-0032 §4.1 has *this* item building the tables it marks — and `oneup-2.0.md` §5.2, which owns the order of work, ends at ONEUP-0032 and never places this item at all. Three more were contract gaps an implementer would have had to invent an answer to: `detail` **may be empty** (`marker-protocol.md` §4.2, the cache step), which would have put INV-3's unknown-code banner on every successful run; a known code arriving with the wrong number of arguments had no rule, and the substitution that follows would throw inside the read slot, which §1.2 forbids outright; and retiring `STEP_BEGIN`'s `label` left an unknown step key with no wording at all. §4.4's notification list could not rebuild what it replaces — the count and both changed-flags ride on `@@INSTALLED@@` and the set-aside sources on `@@REPO_SKIPPED@@`, neither of which it named, while `@@STEP_END@@` (which it did) is unused — and §8 sent the implementer to the systemd units, which never carried `--notify` in the first place. **Dismissed: one** — a lane finding checked and found **wrong** before it was acted on, that §7 cites the wrong section of `files-and-naming.md`; §2.2 does carry the suite-naming rule. |

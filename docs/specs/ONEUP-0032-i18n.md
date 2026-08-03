@@ -22,7 +22,8 @@ turning the engine's prose into codes the window words itself. This spec keeps t
 translation machinery and right-to-left. They ship as two changes, **this one second** —
 `docs/design/oneup-2.0.md` §5.2 owns that order and ONEUP-0072 §3.3 records why the pair
 once claimed to depend on each other in both directions. The dependency runs one way:
-ONEUP-0072 builds the sentence tables and puts sentence-rendering on the two headless paths,
+ONEUP-0072 builds the sentence tables and ONEUP-0077 puts sentence-rendering on the two
+headless paths,
 and this item then marks those tables and gives those paths the application object they need
 to render a translated one (§4.2). Neither spec restates the other.
 

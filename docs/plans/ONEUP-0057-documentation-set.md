@@ -145,8 +145,15 @@ absorbed and removed).
 > date"), ONEUP-0075 (`spec_query` reads zero invariants from every spec in `docs/specs/`),
 > ONEUP-0076 (the focus cue itself).
 >
-> **Next:** Task 18 — cold-eyes batch 3, now over **five** specs: 0034, 0027, 0032, 0064 and
-> 0076. Then Task 19.
+> **ONEUP-0072 was split too (2026-08-03, user's decision).** Its §4.4 — the notification the
+> timers raise — became `docs/specs/ONEUP-0077-headless-notification.md`, which folds in
+> ONEUP-0074 (a stopped run notifies *"Already up to date"*); 0072 keeps the payload
+> conversion and is down to 595 lines from 654. Its own loop 3 had recommended exactly that.
+>
+> **Next:** Task 18 — cold-eyes batch 3, now over **seven** specs: 0034, 0027, 0032, 0064,
+> 0072, 0076 and 0077. Five have never been gated on their current bytes (0064, 0072, 0076,
+> 0077 by the two splits; 0032 and 0027 by the citation edits the splits required). Then
+> Task 19.
 >
 > **Done earlier:** Tasks 1–11 (2026-07-26). Nine standards, the marker-protocol reference,
 > cold-eyes batch 1, and `CLAUDE.md`. All ten reviewed documents are `Status: Reviewed`

@@ -1431,12 +1431,13 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   needs one more branch and its sentence -- something on the order of
   "Update stopped -- the steps that ran are in the log."
 
-  Where it lands depends on the ONEUP-0072 decision: if that item's
-  section 4.4 (the headless notification path) is split out, this fix
-  belongs in the same place, because both touch the same four-case
-  fall-through and doing them separately means writing that branch twice.
-  main is frozen and this does not qualify (nobody is blocked from
-  updating), so it is 2.0 work either way.
+  FOLDED INTO ONEUP-0077 on 2026-08-03. That decision went the way this
+  bullet anticipated: ONEUP-0072's section 4.4 was split out, and the new
+  item rebuilds the same four-case fall-through in the window, so the
+  stopped branch is written there rather than twice. This bullet stays as
+  the record of the defect and its measurement; the work is ONEUP-0077's
+  and its INV-1 is the test named below. main is frozen and this does not
+  qualify (nobody is blocked from updating), so it is 2.0 work either way.
 
   Test: a scenario in tests/run-tests.sh that stops a run at a step
   boundary and asserts the notification text is not "Already up to date";
@@ -1533,3 +1534,42 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Make it always obvious which control the keyboard is on — without drawing a box round it — and have the app prove it rather than claim it.
   Kind: accessibility.
   Source: split-from-oneup-0064-2026-08-03.
+
+- 📋 [ONEUP-0077] **The window builds the timer notification, instead of asking the engine for it.**
+  Split out of ONEUP-0072 on 2026-08-03, on the user's decision. That spec's
+  section 11 recommended splitting section 4.4 rather than running a fourth
+  cold-eyes loop: it had converged by cap at 654 lines, and every collateral
+  critical in its loop 3 landed in section 4.4 or the ordering paragraph beside
+  it. ONEUP-0072 keeps the payload conversion -- the three fates, the shape of a
+  code, where the wording lives.
+
+  This is a different job that happens to touch the same code. The conversion
+  turns engine payloads into codes; this item stops the two headless entry points
+  passing --notify and has the window compose the notification itself, from
+  @@CHECK@@, @@INSTALLED@@, @@REPO_SKIPPED@@ and @@DONE@@. Three consequences the
+  parent spec had already worked out and that come across intact: both paths must
+  start passing --log= (they are the only engine runs the window starts without
+  one, and the failed-run text names the log file); both must capture the
+  engine's output, which today they do not -- they read only its exit status; and
+  the firing rules travel with the text, because they are not in the markers.
+
+  ONEUP-0074 folds in here. A run the user stops notifies "Already up to date",
+  because the end-of-run fall-through has no stopped branch even though the
+  engine emits marker DONE "stopped" twenty lines above it. ONEUP-0072 section
+  3.2 forbade itself repairing that -- its gate was that behaviour did not change
+  -- but this item is rebuilding the same four-case fall-through in the window,
+  so fixing it here costs one branch instead of writing that code twice.
+
+  Needs no application object, which is what made it cheap to land early: nothing
+  on either headless path touches Qt. The sentences are ordinary Python tables
+  until ONEUP-0032 marks them, and the notification is notify-send. Same slot in
+  oneup-2.0.md section 5.2 as ONEUP-0072: after the engine rewrite, before
+  translation.
+
+  Test: a scenario asserting a stopped run's notification is not "Already up to
+  date" -- today the suite's _notify_case coverage exercises the three reachable
+  texts and never the stopped path.
+  headline_only
+  **Layman:** The weekly background check and update currently let the engine write their desktop notification; the window will write it instead, so there is one place that turns results into sentences.
+  Kind: implement.
+  Source: split-from-oneup-0072-2026-08-03.
