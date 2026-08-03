@@ -49,7 +49,37 @@ EOF
     printf '#!/usr/bin/env bash\nexit 0\n' > "$d/notify-send"
     printf '#!/usr/bin/env bash\nexit 0\n' > "$d/flatpak"
     printf '#!/usr/bin/env bash\nexit 0\n' > "$d/fwupdmgr"
+    # The engine's pre-flight reads `df -PB1 <mount>` for / and /var. Unmocked it reads
+    # the real machine, so on a box under the 2 GiB threshold every system-step scenario
+    # gains a real @@DISK@@|warn line sourced from whatever the developer's disk happens
+    # to be doing that afternoon. Report ample space; a scenario that wants the warning
+    # overwrites this mock the same way scenarios overwrite zypper.
+    cat > "$d/df" <<'EOF'
+#!/usr/bin/env bash
+# Mimics `df -PB1 <mount>`: header line, then the POSIX row whose 4th field is bytes free.
+echo "Filesystem     1B-blocks        Used   Available Capacity Mounted on"
+echo "/dev/mock  1099511627776 10995116277 500000000000       3% ${*: -1}"
+EOF
     chmod +x "$d"/*
+}
+
+# Overwrite setup_common's sudo with one whose credential is already warm.
+#
+# setup_common's shared mock always fails `sudo -n` to model a box WITHOUT the
+# ONEUP-0023 passwordless drop-in, so sudo_init falls through to the interactive
+# validate + keep-alive path. Some scenarios need the opposite: cleanup()'s restore
+# deliberately re-enables via `sudo -n` (it must never block on a popup inside the
+# trap), which only works when an earlier interactive `sudo -A … -v` has warmed the
+# credential. This mock is that box — `-n` succeeds too.
+setup_cached_sudo() {
+    local d="$1"
+    cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+while [[ $# -gt 0 ]]; do case "$1" in -A|-v|-k|-E|-n) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
+[[ $# -eq 0 ]] && exit 0
+exec "$@"
+EOF
+    chmod +x "$d/sudo"
 }
 
 # Run the engine with a given mock dir; echo its combined output.
@@ -85,6 +115,14 @@ check_absent() {  # name, forbidden-substring, haystack
         echo "  FAIL - $name (unexpected: $needle)"; FAIL=$((FAIL+1))
     else
         echo "  ok   - $name"; PASS=$((PASS+1))
+    fi
+}
+check_eq() {  # name, expected, actual
+    local name="$1" want="$2" got="$3"
+    if [[ "$got" == "$want" ]]; then
+        echo "  ok   - $name"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - $name (want '$want', got '$got')"; FAIL=$((FAIL+1))
     fi
 }
 check_re() {  # name, extended-regex, haystack
@@ -191,7 +229,7 @@ out=$(run_engine "$d" --steps=system)
 check        "dup success recorded ok despite refresh fail" "@@STEP_END@@|system|ok" "$out"
 check_absent "not recorded as a failed step"                "@@STEP_END@@|system|fail" "$out"
 check        "real change detected (installed, sys_changed)" "@@INSTALLED@@|3|yes" "$out"
-check        "stale-metadata note surfaced as a hint"        "@@HINT@@" "$out"
+check        "stale-metadata note surfaced as a hint"        "@@HINT@@|Couldn't refresh one or more repositories" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -466,7 +504,7 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --size=system); rc=$?
 check_absent "a failed dry run reports no size at all" "@@SIZE@@" "$out"
-check        "a failed dry run hints why"              "@@HINT@@" "$out"
+check        "a failed dry run hints why"              "@@HINT@@|Couldn't work out the download size" "$out"
 check        "a failed dry run logs what zypper said"  "zypper: sudo: a terminal is required" "$out"
 # Exit code asserted inline (the suite's convention — there is no check() for rc).
 if [[ $rc -ne 0 ]]; then echo "  ok   - a failed dry run exits non-zero"; PASS=$((PASS+1));
@@ -587,14 +625,6 @@ exit 0
 EOF
 chmod +x "$d/zypper" "$d/snapper"
 ONEUP_RUN_STATE="$d/run.state" run_engine "$d" --steps=system >/dev/null 2>&1
-check_eq() {  # name, expected, actual
-    local name="$1" want="$2" got="$3"
-    if [[ "$got" == "$want" ]]; then
-        echo "  ok   - $name"; PASS=$((PASS+1))
-    else
-        echo "  FAIL - $name (want '$want', got '$got')"; FAIL=$((FAIL+1))
-    fi
-}
 if [[ -f "$d/state-during-run" ]]; then
     echo "  ok   - the run is recorded while it is in flight"; PASS=$((PASS+1))
     mapfile -t st < "$d/state-during-run"
@@ -1750,18 +1780,7 @@ _notify_case "boom"                   "Update failed" 1
 # ---------------------------------------------------------------------------
 echo "TEST: --skip-repo disables the named source, upgrades the rest, re-enables on exit"
 d=$(mktemp -d); setup_common "$d"
-# cleanup()'s restore deliberately re-enables via `sudo -n` (never blocks on a
-# popup inside the trap). setup_common's shared sudo mock always fails `-n` to
-# model "no passwordless drop-in yet" for the auth-status tests; here we model a
-# credential the earlier interactive `sudo -A … -v` already warmed, so `-n`
-# succeeds too — the real-world behaviour `-n` relies on.
-cat > "$d/sudo" <<'EOF'
-#!/usr/bin/env bash
-while [[ $# -gt 0 ]]; do case "$1" in -A|-v|-k|-E|-n) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
-[[ $# -eq 0 ]] && exit 0
-exec "$@"
-EOF
-chmod +x "$d/sudo"
+setup_cached_sudo "$d"
 cat > "$d/zypper" <<'EOF'
 #!/usr/bin/env bash
 echo "zypper $*" >> "$MOCK_ZLOG"
@@ -1787,14 +1806,7 @@ rm -rf "$d"
 # ---------------------------------------------------------------------------
 echo "TEST: an interrupted --skip-repo run still re-enables the source (trap restore)"
 d=$(mktemp -d); setup_common "$d"
-# See the credential-cached sudo mock note in the previous test — same reason.
-cat > "$d/sudo" <<'EOF'
-#!/usr/bin/env bash
-while [[ $# -gt 0 ]]; do case "$1" in -A|-v|-k|-E|-n) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
-[[ $# -eq 0 ]] && exit 0
-exec "$@"
-EOF
-chmod +x "$d/sudo"
+setup_cached_sudo "$d"
 export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
 cat > "$d/zypper" <<'EOF'
 #!/usr/bin/env bash
@@ -1831,18 +1843,7 @@ rm -rf "$d"
 # ---------------------------------------------------------------------------
 echo "TEST: --auto-skip-repos sets a broken source aside, upgrades the rest, reports ok + notifies"
 d=$(mktemp -d); setup_common "$d"
-# cleanup()'s restore re-enables via `sudo -n` (never blocks on a popup inside the
-# trap). setup_common's shared sudo mock always fails `-n` to model "no
-# passwordless drop-in yet" for the auth-status tests; here we model a credential
-# the earlier interactive `sudo -A … -v` already warmed, so `-n` succeeds too —
-# the real-world behaviour `-n` relies on (same override as the --skip-repo tests).
-cat > "$d/sudo" <<'EOF'
-#!/usr/bin/env bash
-while [[ $# -gt 0 ]]; do case "$1" in -A|-v|-k|-E|-n) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
-[[ $# -eq 0 ]] && exit 0
-exec "$@"
-EOF
-chmod +x "$d/sudo"
+setup_cached_sudo "$d"
 export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
 cat > "$d/notify-send" <<'EOF'
 #!/usr/bin/env bash
@@ -1880,14 +1881,7 @@ rm -rf "$d"
 # ---------------------------------------------------------------------------
 echo "TEST: --auto-skip-repos classifies a corrupt-metadata refresh failure as 'metadata' (M1)"
 d=$(mktemp -d); setup_common "$d"
-# See the credential-cached sudo mock note on the --skip-repo tests above — same reason.
-cat > "$d/sudo" <<'EOF'
-#!/usr/bin/env bash
-while [[ $# -gt 0 ]]; do case "$1" in -A|-v|-k|-E|-n) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
-[[ $# -eq 0 ]] && exit 0
-exec "$@"
-EOF
-chmod +x "$d/sudo"
+setup_cached_sudo "$d"
 export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
 cat > "$d/notify-send" <<'EOF'
 #!/usr/bin/env bash
