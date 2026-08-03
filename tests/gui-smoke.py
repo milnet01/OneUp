@@ -80,8 +80,14 @@ def check(name: str, cond: bool):
         FAIL += 1
 
 
-def _wait_for_notify(timeout: float = 2.0) -> bool:
-    """Poll for the mock notify-send to record a call (Popen is asynchronous)."""
+def _wait_for_notify(timeout: float = 5.0) -> bool:
+    """Poll for the mock notify-send to record a call (Popen is asynchronous).
+
+    The deadline is racing two real process spawns (Popen → bash → the mock script
+    writing to disk), not an in-process signal, so it is set well clear of the time
+    that takes on an idle box. Timing out fails the caller's check red rather than
+    green, so a generous ceiling costs nothing but a loaded runner's patience.
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if os.path.exists(_NOTIFY_LOG) and os.path.getsize(_NOTIFY_LOG) > 0:
@@ -194,57 +200,61 @@ def main() -> int:
     _live_cache = tempfile.mkdtemp()
     _orig_live_cache = updater.ZYPP_PACKAGE_CACHE
     updater.ZYPP_PACKAGE_CACHE = Path(_live_cache)
-    wL = updater.Updater()
-    wL._run_active = True
-    wL._reset_activity()        # a real run always baselines before markers arrive
-    wL.handle_line("@@STEP_BEGIN@@|system|1|5|Updating system packages")
-    wL.handle_line("@@REFRESH@@|6|9|games")
-    check("the source being fetched is named, with its position",
-          wL.status.text() == "Checking for updates from games (6 of 9 sources)…")
-    check("the bar keeps the step caption and adds the source",
-          "Updating system packages" in wL.bar.format() and "games" in wL.bar.format())
-    check("the liveness line names what is being waited on",
-          "Fetching games" in wL.activity.text())
-    check("the liveness line is visible during a run", wL.activity.isVisibleTo(wL))
-    # Bytes: the download phase is the only place in a run where a figure exists at all.
-    wL.handle_line("@@PROGRESS@@|system|12|141|download|41943040|397410304")
-    check("the download says how much of how much", "40 MB of 379 MB" in wL.activity.text())
-    check("the byte total is remembered", wL._dl_total == 397410304)
-    # A rate needs both movement and elapsed time to divide by.
-    wL.handle_line("@@PROGRESS@@|system|24|141|download|83886080|397410304")
-    wL._dl_at -= 10
-    wL._tick_activity()
-    check("a rate appears once bytes have moved", "/s" in wL.activity.text())
-    # Going quiet is the signal that actually matters, and must be said in those terms.
-    wL._activity_at = time.monotonic() - (updater.STALL_SECONDS + 5)
-    wL._tick_activity()
-    check("a stalled server is named as such", "may have stalled" in wL.activity.text())
-    check("and the user is told stopping is safe", "safe" in wL.activity.text())
-    check("the stall is announced once", "No response" in wL._last_announcement)
-    wL._last_announcement = ""
-    wL._tick_activity()
-    check("a continuing stall is not re-announced every tick", wL._last_announcement == "")
-    # Output arriving again means slow, not stalled — the wording has to go back.
-    wL._activity_at = time.monotonic()
-    wL._tick_activity()
-    check("output arriving clears the stall wording",
-          "may have stalled" not in wL.activity.text())
-    # A new step is a new wait and a new download; neither figure may carry over.
-    wL.handle_line("@@STEP_BEGIN@@|flatpak|2|5|Updating Flatpak apps")
-    check("a new step drops the previous source", "games" not in wL.activity.text())
-    check("a new step resets the byte counters", wL._dl_bytes == 0 and wL._dl_total == 0)
-    # Same splice-safety contract as PROGRESS: merged stdout/stderr can cut a marker.
-    for bad in ("@@REFRESH@@|6", "@@REFRESH@@|x|9|games", "@@REFRESH@@|6|y|games",
-                "@@PROGRESS@@|system|1|2|download|notanumber"):
-        try:
-            wL.handle_line(bad)
-            check(f"malformed liveness marker handled: {bad[-12:]!r}", True)
-        except Exception as exc:  # noqa: BLE001 — any throw is the failure.
-            check(f"malformed liveness marker handled ({exc})", False)
-    wL.on_finished(0, None)
-    check("the liveness line goes away when the run ends", not wL.activity.isVisibleTo(wL))
-    updater.ZYPP_PACKAGE_CACHE = _orig_live_cache
-    shutil.rmtree(_live_cache, ignore_errors=True)
+    try:
+        wL = updater.Updater()
+        wL._run_active = True
+        wL._reset_activity()        # a real run always baselines before markers arrive
+        wL.handle_line("@@STEP_BEGIN@@|system|1|5|Updating system packages")
+        wL.handle_line("@@REFRESH@@|6|9|games")
+        check("the source being fetched is named, with its position",
+              wL.status.text() == "Checking for updates from games (6 of 9 sources)…")
+        check("the bar keeps the step caption and adds the source",
+              "Updating system packages" in wL.bar.format() and "games" in wL.bar.format())
+        check("the liveness line names what is being waited on",
+              "Fetching games" in wL.activity.text())
+        check("the liveness line is visible during a run", wL.activity.isVisibleTo(wL))
+        # Bytes: the download phase is the only place in a run where a figure exists at all.
+        wL.handle_line("@@PROGRESS@@|system|12|141|download|41943040|397410304")
+        check("the download says how much of how much", "40 MB of 379 MB" in wL.activity.text())
+        check("the byte total is remembered", wL._dl_total == 397410304)
+        # A rate needs both movement and elapsed time to divide by.
+        wL.handle_line("@@PROGRESS@@|system|24|141|download|83886080|397410304")
+        wL._dl_at -= 10
+        wL._tick_activity()
+        check("a rate appears once bytes have moved", "/s" in wL.activity.text())
+        # Going quiet is the signal that actually matters, and must be said in those terms.
+        wL._activity_at = time.monotonic() - (updater.STALL_SECONDS + 5)
+        wL._tick_activity()
+        check("a stalled server is named as such", "may have stalled" in wL.activity.text())
+        check("and the user is told stopping is safe", "safe" in wL.activity.text())
+        check("the stall is announced once", "No response" in wL._last_announcement)
+        wL._last_announcement = ""
+        wL._tick_activity()
+        check("a continuing stall is not re-announced every tick", wL._last_announcement == "")
+        # Output arriving again means slow, not stalled — the wording has to go back.
+        wL._activity_at = time.monotonic()
+        wL._tick_activity()
+        check("output arriving clears the stall wording",
+              "may have stalled" not in wL.activity.text())
+        # A new step is a new wait and a new download; neither figure may carry over.
+        wL.handle_line("@@STEP_BEGIN@@|flatpak|2|5|Updating Flatpak apps")
+        check("a new step drops the previous source", "games" not in wL.activity.text())
+        check("a new step resets the byte counters", wL._dl_bytes == 0 and wL._dl_total == 0)
+        # Same splice-safety contract as PROGRESS: merged stdout/stderr can cut a marker.
+        for bad in ("@@REFRESH@@|6", "@@REFRESH@@|x|9|games", "@@REFRESH@@|6|y|games",
+                    "@@PROGRESS@@|system|1|2|download|notanumber"):
+            try:
+                wL.handle_line(bad)
+                check(f"malformed liveness marker handled: {bad[-12:]!r}", True)
+            except Exception as exc:  # noqa: BLE001 — any throw is the failure.
+                check(f"malformed liveness marker handled ({exc})", False)
+        wL.on_finished(0, None)
+        check("the liveness line goes away when the run ends", not wL.activity.isVisibleTo(wL))
+    finally:
+        # Matches the identical block below: a throw in the body must not leave
+        # ZYPP_PACKAGE_CACHE pointing at a directory that is about to vanish.
+        updater.ZYPP_PACKAGE_CACHE = _orig_live_cache
+        shutil.rmtree(_live_cache, ignore_errors=True)
 
     # zypper's prefetch phase reports no sizes and no counter — one line per finished
     # package and nothing else — so the figure has to come from weighing its package
@@ -523,6 +533,91 @@ def main() -> int:
     w.on_finished(0, QProcess.ExitStatus.NormalExit)
     check("check: no reboot banner", not w.reboot_banner.isVisibleTo(w))
 
+    # --- 5b. CHECK_ITEM: the expandable per-package preview ---------------------
+    # CHECK_ITEM was the one marker in handle_marker's dispatch that no GUI scenario fed,
+    # so nothing proved the window still builds the detail rows --check emits for it.
+    wI = updater.Updater()
+    wI._check_mode = True
+    wI.handle_line("@@CHECK_ITEM@@|system|bash|5.2.21|5.2.37")
+    wI.handle_line("@@CHECK_ITEM@@|system|zypper")
+    _detail = wI.rows["system"]._items_label.text()
+    check("a changed package lands in the detail panel with both versions",
+          "bash" in _detail and "5.2.21" in _detail and "5.2.37" in _detail)
+    check("a package with no version pair still lists its name",
+          any(ln.strip() == "zypper" for ln in _detail.splitlines()))
+    check("the detail disclosure appears once there is something to show",
+          not wI.rows["system"].disclosure.isHidden())
+
+    # --- 5c. @@HINT@@ goes through the parser, not straight into _hints ---------
+    # Every other hint scenario assigns w._hints directly, so the dispatch line that
+    # actually populates it was never exercised by anything.
+    wH = updater.Updater()
+    wH.handle_line("@@HINT@@|A repository signing key is out of date.")
+    check("a @@HINT@@ line is parsed into _hints",
+          wH._hints == ["A repository signing key is out of date."])
+
+    # --- 5d. the download-size side channel ------------------------------------
+    # A separate QProcess from the main run, with its own parser. The engine half is
+    # covered in tests/run-tests.sh; this is the window half.
+    wS = updater.Updater()
+    wS._size_buf = ""
+    wS._size_proc = _StubProc("weighing things up\n@@SIZE@@|system|412 MB\n")
+    wS._on_size_output()
+    check("a SIZE marker reaches the system row",
+          "412 MB" in wS.rows["system"].size_result.text())
+    # isVisibleTo(row) would be False here whatever set_size_result did — size_btn lives
+    # inside the collapsed `details` frame, so the row is the wrong ancestor to ask about.
+    # Ask about the frame it actually sits in, which isolates the button's own visibility.
+    check("a SIZE marker retires the 'Show download size' link",
+          not wS.rows["system"].size_btn.isVisibleTo(wS.rows["system"].details))
+    check("a SIZE marker records that the row now carries a size",
+          wS.rows["system"].has_size())
+    check("a non-marker line from the size probe is logged",
+          "weighing things up" in wS.log.toPlainText())
+
+    # Exit 0 with no SIZE marker means the solver found nothing to fetch — but a
+    # non-zero exit must NEVER be reported as "nothing to download". Same
+    # never-claim-what-you-didn't-earn rule the engine's step tests enforce.
+    wS0 = updater.Updater()
+    wS0._on_size_finished(0, None)
+    check("size probe exiting 0 with no marker reports nothing to download",
+          wS0.rows["system"].size_result.text() == "Nothing to download")
+    wS1 = updater.Updater()
+    wS1._on_size_finished(1, None)
+    check("a failed size probe never claims a size it didn't earn",
+          not wS1.rows["system"].has_size())
+
+    # --- 5e. --thin-snapshots outcomes -----------------------------------------
+    # Three branches, and each decides whether the advisory banner stays up for a retry.
+    for _out, _want, _banner_stays in (("@@SNAPSHOTS@@|thinned|7\n", "7", False),
+                                       ("@@SNAPSHOTS@@|thinned|0\n", "No old snapshots", False),
+                                       ("", "Ready.", True)):
+        _label = _out.strip() or "(no marker — cancelled or error)"
+        wT = updater.Updater()
+        wT._warn_snapshots = True
+        wT.warn_banner.setVisible(True)
+        # Move the status off its constructor default first. It is built as QLabel("Ready."),
+        # which is exactly what the no-marker branch sets — so without this the third case
+        # would pass even if that branch never ran.
+        wT.status.setText("(the handler did not set this)")
+        wT._on_thin_finished(_StubProc(_out))
+        check(f"thin {_label}: status reports it", _want in wT.status.text())
+        check(f"thin {_label}: banner still up = {_banner_stays}",
+              wT.warn_banner.isVisibleTo(wT) is _banner_stays)
+
+    # --- 5f. the engine failing to start ---------------------------------------
+    wE = updater.Updater()
+    wE.proc = QProcess(wE)
+    wE.set_controls_enabled(False)
+    # A live run leaves the bar indeterminate; __init__ already leaves it at (0, 1), so
+    # without this the reset assertion below would pass without on_error doing anything.
+    wE.bar.setRange(0, 0)
+    wE.on_error(QProcess.ProcessError.FailedToStart)
+    check("a failed engine start says so in the status line",
+          "Could not start" in wE.status.text())
+    check("a failed engine start stops the indeterminate progress bar",
+          (wE.bar.minimum(), wE.bar.maximum()) == (0, 1))
+
     # --- headless command builder shared by both timers ------------------------
     check("headless --check command ends in --check",
           updater.Updater._headless_command("--check").endswith("--check"))
@@ -558,6 +653,11 @@ def main() -> int:
     check("Settings dialog hosts the auto-update toggle", w.autoupdate_btn in hosted)
 
     # --- coupling: auto-update never enables without passwordless ---------------
+    # Stubbed so the checks below never block on a modal. Captured and restored at the
+    # end of the block: every other module-level patch in this file is, and a dialog stub
+    # left installed would silently no-op a later scenario that wanted the real thing.
+    _orig_msg_info = updater.QMessageBox.information
+    _orig_msg_warn = updater.QMessageBox.warning
     updater.QMessageBox.information = staticmethod(lambda *a, **k: 0)
     updater.QMessageBox.warning = staticmethod(lambda *a, **k: 0)
 
@@ -601,6 +701,9 @@ def main() -> int:
     w.on_auth_toggled(False)                                 # user revokes
     check("revoke passwordless removes the update timer", "oneup-update" in removed_d)
     check("revoke passwordless clears the auto-update toggle", not w.autoupdate_btn.isChecked())
+
+    updater.QMessageBox.information = _orig_msg_info
+    updater.QMessageBox.warning = _orig_msg_warn
 
     # --- 6. the About dialog opens and closes without error --------------------
     w = updater.Updater()
@@ -791,8 +894,12 @@ def main() -> int:
     w._tray = object()                 # pretend a tray exists
     w._tray_timer = updater.QTimer(w)
     w._tray_timer.start(999999)
+    _timer = w._tray_timer             # _teardown_tray nulls the attribute; keep the object
     w._teardown_tray()
-    check("teardown stops the timer", w._tray_timer is None)
+    # Dropping the reference is not the same as stopping it — a regression that removed the
+    # .stop() call would leave the QTimer running (it is still parented to w) and sail past
+    # an `is None` check. Assert both halves.
+    check("teardown stops the timer", w._tray_timer is None and not _timer.isActive())
     check("teardown drops the tray reference", w._tray is None)
 
     # (6) Settings dialog hosts the two new toggles; both default off.
@@ -812,6 +919,10 @@ def main() -> int:
     w.on_startboot_toggled(True)
     check("boot-on turns the tray on", w.tray_btn.isChecked())
     check("boot-on persists tray_enabled", w.settings.value("tray_enabled", False, type=bool) is True)
+    # Every Updater() in this process shares QSettings("OneUp", "OneUp") and updater.py reads
+    # tray_enabled on construction, so leaving this True would silently arm the tray for any
+    # later scenario asserting the default-off state.
+    w.settings.setValue("tray_enabled", False)
 
     # (8) Coupling — turning the tray off removes start-at-boot.
     w = updater.Updater()
@@ -1104,6 +1215,22 @@ def main() -> int:
     from datetime import timedelta
     updater.STATE_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Both sides of the day-count read the clock independently: _seed_history stamps
+    # history.json from updater.datetime.now(), and refresh_last_run() subtracts calendar
+    # DATES using its own now(). Straddle local midnight between the two and every count
+    # below shifts by one, flipping the threshold assertions for a reason unconnected to
+    # the code under test. Freeze the clock for this block.
+    _real_datetime = updater.datetime
+
+    class _FrozenDatetime(_real_datetime):
+        _AT = _real_datetime.now()
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls._AT
+
+    updater.datetime = _FrozenDatetime
+
     def _seed_history(days_ago: int, status: str = "OK"):
         when = updater.datetime.now() - timedelta(days=days_ago)
         updater.HISTORY.write_text(updater.json.dumps(
@@ -1141,6 +1268,8 @@ def main() -> int:
     wN.refresh_last_run()
     check("no history shows 'Last run: never'", wN.last_run.text() == "Last run: never")
     check("the 'never' state is not flagged stale", wN.last_run.property("stale") == "false")
+
+    updater.datetime = _real_datetime
 
     # --- ONEUP-0028: accessibility ---------------------------------------------
     wA = updater.Updater()
