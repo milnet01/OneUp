@@ -1574,7 +1574,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: implement.
   Source: split-from-oneup-0072-2026-08-03.
 
-- 🚧 [ONEUP-0078] **Bound and show the repository refresh the leftover-packages step triggers.**
+- ✅ [ONEUP-0078] **Bound and show the repository refresh the leftover-packages step triggers.**
   zypper auto-refreshes any stale repository before answering a `packages`
   query, so the orphans step's two `sudo_capture` queries could trigger a
   full metadata fetch. That fetch got neither of ONEUP-0048's defences:
@@ -1597,3 +1597,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A run with "System packages" switched off could sit silent for minutes on "Removing leftover packages" — it was quietly downloading update lists, with nothing on screen and no time limit.
   Kind: fix.
   Source: user-report-2026-08-03 (screenshot: run appeared hung on step 2 of 3).
+  Resolved (2026-08-03): commit ae0b857. refresh_repos runs before the two
+  queries when REPOS_REFRESHED is still false, and both carry --no-refresh
+  so the implicit fetch cannot happen; a stop between sources now ends the
+  step instead of falling through to a removal. Three regression tests in
+  tests/run-tests.sh, each verified red against the pre-fix engine. Local
+  CI green (210 engine / 283 GUI). Not released — main stays at 1.4.0
+  until the user calls a 1.4.1.
