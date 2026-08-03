@@ -1129,6 +1129,40 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Task 17 of the ONEUP-0057 plan is otherwise unstarted: the id and path are
   resolved (docs/specs/ONEUP-0064-interface-redesign.md) and the bullet is this
   one, but no draft exists and the rule-14 cold-eyes gate has not run.
+  Spec written and gated 2026-08-03: docs/specs/ONEUP-0064-interface-redesign.md,
+  Status Draft, converged BY CAP after three cold-eyes loops rather than clean
+  (24, 34, 35 verified). Not blocked -- nothing verified is left unfixed -- but
+  its section 11 recommends a split before implementation, and that
+  recommendation is the main output of the run.
+
+  The measurement on this bullet held and became the design. Because lightening
+  cannot reach 3:1 on the accent at any shade, the app DERIVES a focus colour
+  instead of authoring one per theme: the smallest blend toward black, or toward
+  white where black cannot get there, clearing 3:1 against every one of the
+  control's rest pixels. That is total for a single surface -- max(contrast vs
+  black, vs white) never drops below 4.58:1 -- so a palette nobody has written
+  yet still gets a working cue, which is what ONEUP-0027's six new themes need.
+  The same bound gives the label colour for free.
+
+  What the loops changed most: the totality claim was single-surface while the
+  rule was multi-surface, and multi-surface is NOT always satisfiable (#000000
+  and #989898 admit no fill; 192 such grey pairs). The search now fails loudly.
+
+  Two corrections to OTHER documents came out of it, both verified:
+  ui-and-accessibility.md 5.4 says "SC 2.4.7 (Focus Visible) is still met" and
+  that is false -- 16 of the window's 34 focusable widgets have no cue at all,
+  including all five toggle switches -- and ONEUP-0028 section 5 promises :focus
+  rules for eight styled controls when three of them have none, and specifies a
+  2px accent outline the no-focus-ring decision forbids. ONEUP-0028's own
+  section 2 had already recorded the absence as a "WCAG 2.4.7 failure", which
+  corroborates it. Both edits are listed in the spec's section 8 and land with
+  implementation, not now (main is frozen; this is v2 work).
+
+  Split recommendation: the focus-cue contract (4.1-4.4, INV-1..5, 8, 11, 13) and
+  the layout redesign (4.5, INV-6, 7, 10, 12) are a clean seam. Across three
+  loops and nine lanes essentially every finding fell in the focus half. Trend:
+  draft defects 24 -> 13 -> 8, fix collateral 0 -> 21 -> 27, document 495 -> 762
+  lines. Awaiting the user's decision.
 
 - 📋 [ONEUP-0065] **Convert the remaining line-number citations in the older documents to symbol names.**
   docs/standards/documentation.md 6a (added 2026-07-26, the user's
