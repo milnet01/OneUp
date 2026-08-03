@@ -1679,3 +1679,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: test.
   Lanes: tests, docs.
   Source: test-audit-2026-08-03.
+
+- ✅ [ONEUP-0081] **Add the GitHub funding file, the only Ants project that lacked one.**
+  `.github/FUNDING.yml`, copied byte-identical from the eleven other Ants
+  projects that carry one (RetroArch's is upstream libretro's and is not a
+  sibling). Repository metadata rather than application code, so the 1.4.0
+  freeze in `docs/standards/workflow.md` §1.2 does not reach it — nothing
+  in the app, the engine or the packaging changes, and no version site
+  moves.
+  **Layman:** The repository page now shows a Sponsor button, like every other Ants project does.
+  Kind: chore.
+  Source: user-request-2026-08-03.
