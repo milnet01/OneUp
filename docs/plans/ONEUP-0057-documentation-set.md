@@ -16,7 +16,36 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18, one of four specs gated**
+> ## ▶ You are here — **Task 18, mid-gate on `ONEUP-0072` (2 of 3 loops)**
+>
+> **Start at `docs/reviews/ONEUP-0072-RESUME.md`.** It is the run state, committed at
+> `8fd3ca1`, and it holds everything this block would otherwise have to repeat: the resume
+> point, the loop-3 call, the measured PySide6 reproduction, and the source facts to put
+> straight into the next packet.
+>
+> **Two things need a human, and neither blocks the other work:**
+>
+> 1. **One open question for the user, written into `ONEUP-0072` §4.3 as a `⚠ OPEN`
+>    block.** §4.3 routes `@@REBOOT@@`'s *was/were* agreement through Qt's plural form.
+>    Measured against PySide6 6.11 with a compiled `.qm`: that works wherever a catalogue
+>    exists, but with **no** catalogue `translate()` returns the source string verbatim —
+>    and design §5.1 ships 2.0 with **no locale file for any language**. So on the only
+>    path 2.0 actually runs, one source string cannot yield both *was* and *were*, and the
+>    item as written would **regress** wording `reboot_reason_from_log` gets right today.
+>    Three ways out are in §4.3; the choice is the user's.
+> 2. **Whether loop 3 runs at all, or `§4` gets split instead.** The evidence points both
+>    ways and `RESUME.md` lays it out: criticals fell 3 → 0, but loop 2's findings were
+>    **15 collateral vs 10 draft**, and the document went **597 → 812 lines** across two
+>    loops. Its own pre-split loop 3 had already recommended splitting §4, which is now
+>    ~60% of the document. Recommendation: run loop 3, and if collateral again outruns
+>    draft defects, split rather than raise `--max-loops`.
+>
+> **The lesson loop 2 paid for, and it is the batch's standing instruction:** loop 1 fixed
+> 24 findings and *created* 15 of loop 2's 25. The single largest cause was **stating one
+> rule in four places** — the fallback form ended up in §4.1, §4.3, INV-3 and §6, and every
+> later edit moved one copy and stranded the others. Loop 2's remedy was to **delete N−1**
+> and leave §4.3 as the only owner. Reconciling copies is not a fix; it is the next loop's
+> findings.
 >
 > **`ONEUP-0077` is done (2026-08-03) — three loops, `Status: Reviewed`, converged by cap.**
 > 21 → 23 → 20 verified, all fixed; nothing left verified and unfixed, one INFO carried.
@@ -1136,7 +1165,13 @@ git commit -m "ONEUP-0064: spec the interface redesign"
         INV-7; corrected `oneup-2.0.md` §5.2 and `ONEUP-0076` §10. **Collateral outran draft
         defects two loops running** (30/0 → 8/20 → 4/19), which is the stop signal as well as
         the cap — both criticals in loop 3 were invariants loop 2 had itself written.
-      - [ ] **ONEUP-0072** (597) · [ ] **ONEUP-0076** (630)
+      - [~] **ONEUP-0072** — **two of three loops done 2026-08-05**, session ended cleanly.
+        Loop 1: 24 verified, all fixed (3 criticals, all split leftovers or claims the code
+        contradicts). Loop 2: 25 verified, 24 fixed, **1 surfaced**, 0 criticals. Commits
+        `9b1d75d`, `96b7621`, `8fd3ca1`. **Read `docs/reviews/ONEUP-0072-RESUME.md` before
+        doing anything** — it carries the loop-3 decision, the one open question for the
+        user, and the source facts for the next packet. Still `Status: Draft`.
+      - [ ] **ONEUP-0076** (630)
       - [ ] **ONEUP-0032** · [ ] **ONEUP-0027** (cheap)
 - [ ] **Step 2–4:** verify, fix by severity, loop cold until clean, log as you go.
 - [ ] **Step 5: Commit** per loop:
