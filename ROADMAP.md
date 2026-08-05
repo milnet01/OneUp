@@ -1172,6 +1172,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   loops and nine lanes essentially every finding fell in the focus half. Trend:
   draft defects 24 -> 13 -> 8, fix collateral 0 -> 21 -> 27, document 495 -> 762
   lines. Awaiting the user's decision.
+  Cold-eyes gate (2026-08-04): three loops on this document's own
+  bytes, 30 / 28 / 23 verified, all fixed, 3 dismissed. Converged by the
+  --max-loops 3 cap; Status: Reviewed. Added INV-6 (the moved controls
+  are where the spec says) and INV-7 (every object name styled in _QSS
+  has an _HC_QSS counterpart, less two named exemptions). Corrected
+  oneup-2.0.md §5.2 and ONEUP-0076 §10 on the 0064-before-0076 order.
+  Fix collateral outran draft defects two loops running (30/0, then
+  8/20, then 4/19) — both of loop 3's criticals were invariants loop 2
+  had itself written — so the cap and the trend agree. No verified
+  finding is outstanding.
 
 - 📋 [ONEUP-0065] **Convert the remaining line-number citations in the older documents to symbol names.**
   docs/standards/documentation.md 6a (added 2026-07-26, the user's

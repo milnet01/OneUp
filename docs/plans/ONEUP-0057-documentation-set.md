@@ -1131,7 +1131,12 @@ git commit -m "ONEUP-0064: spec the interface redesign"
         cap, `Status: Reviewed`. Commits `b314c2e`, `a8c8f79`, `fe0beb9`, `a8f9cf3`. Added
         INV-6 and INV-7; corrected `oneup-2.0.md` §5.2, `ONEUP-0072` §8 and `ONEUP-0032` §4.2;
         filed **ONEUP-0082**.
-      - [ ] **ONEUP-0064** (268 lines) · [ ] **ONEUP-0072** (597) · [ ] **ONEUP-0076** (630)
+      - [x] **ONEUP-0064** — done 2026-08-04, three loops (30, 28, 23 verified), converged by
+        cap, `Status: Reviewed`. Commits `d0eb6b8`, `a355419`, `633c85d`. Added INV-6 and
+        INV-7; corrected `oneup-2.0.md` §5.2 and `ONEUP-0076` §10. **Collateral outran draft
+        defects two loops running** (30/0 → 8/20 → 4/19), which is the stop signal as well as
+        the cap — both criticals in loop 3 were invariants loop 2 had itself written.
+      - [ ] **ONEUP-0072** (597) · [ ] **ONEUP-0076** (630)
       - [ ] **ONEUP-0032** · [ ] **ONEUP-0027** (cheap)
 - [ ] **Step 2–4:** verify, fix by severity, loop cold until clean, log as you go.
 - [ ] **Step 5: Commit** per loop:
