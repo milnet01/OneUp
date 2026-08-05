@@ -114,7 +114,7 @@ Three placements, and two of them are modules 2.0 already creates before this it
 | --- | --- |
 | `oneup/gui/i18n.py` *(new)* | loading the catalogues, and holding them for the process's lifetime |
 | `oneup/gui/markers.py` | the marking of its sentence tables for translation — ONEUP-0072 builds the tables |
-| `oneup/gui/steps.py` | the in-progress phrasing for each step, which ONEUP-0072 stops the engine sending |
+| `oneup/gui/steps.py` | the **marking** of the in-progress phrasing for each step — ONEUP-0072 stops the engine sending it and writes the window's own |
 
 `oneup/gui/markers.py` is where the sentence tables belong rather than a new module:
 ONEUP-0034 §4.2 already gives it *"reading what the engine said, and saying it in English"*.

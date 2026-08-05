@@ -152,8 +152,10 @@ update_system.sh   retained through 2.0 as a documented fallback, removed in 2.1
 scripted against the engine gets a release's notice, and a real-machine problem with the new
 engine has a way back.
 
-**That way back has an expiry, and it is inside 2.0.** ONEUP-0072 converts the `@@HINT@@` and
-`@@REMEDY@@` payloads to codes (§5.1) *after* the switch-over, and the retained Bash engine is
+**That way back has an expiry, and it is inside 2.0.** ONEUP-0072 converts **every engine
+payload the window renders as its own wording** to codes (§5.1 — wider than the
+`@@HINT@@` / `@@REMEDY@@` pair, and `docs/specs/ONEUP-0072-marker-codes.md` §3.1 carries the
+argument) *after* the switch-over, and the retained Bash engine is
 not converted with them — it is frozen at the switch. So from 0072 onward the fallback emits
 English prose to a window that expects codes: still usable for running an update in a
 terminal, no longer a drop-in for the window. Say that in the release notes rather than
