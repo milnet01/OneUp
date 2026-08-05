@@ -613,7 +613,10 @@ does.
 
 - **The layout redesign.** `ONEUP-0064`, which this was split from: where controls sit, what
   the header carries, the task row's click target, tab order, and target sizes. The two
-  land in the same slot of `oneup-2.0.md` §5.2 and neither depends on the other's internals.
+  land in the same slot of `oneup-2.0.md` §5.2, and that section states the dependency in
+  one direction: **this item needs the layout and object names `ONEUP-0064` settles**, so
+  0064 lands first. `ONEUP-0064` §10 carries the two named hooks; this is a pointer to it,
+  not a second statement of it.
 - **Authoring the six new palettes.** `ONEUP-0027`, which lands after this item and passes
   its palettes to this item's check.
 - **Ordinary rest-state text contrast across the whole palette.** `ONEUP-0027` §4.7 owns it,
