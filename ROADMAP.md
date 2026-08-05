@@ -1726,3 +1726,25 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Update logs pile up forever; once the weekly timer writes one each run, they need a tidy-up rule.
   Kind: enhancement.
   Source: cold-eyes-2026-08-03 ONEUP-0077 loop 2.
+
+- 📋 [ONEUP-0083] **Record the third loop-log tally trap in documentation.md §7.**
+  tests/docs-check.py's DISPOSITION_RE matches only `verified`,
+  `dismissed` and `info`. A row written as `28 verified, 1 dismissed,
+  1 carried` therefore offers 28 outcomes against 29 findings and
+  fails, because `carried` is not a word the check knows. A carried
+  INFO belongs INSIDE the verified number — ONEUP-0064's parent
+  loop-3 row is the precedent, `35 verified, 2 dismissed` with
+  `34 actionable fixed, 1 info carried` in the prose — or it is
+  written as `N info`.
+
+  §7 already documents two tally traps: a dismissed finding still
+  needs a severity, and a bare number must not be bolded in the
+  Outcome cell. This is the third, and it cost a red local-CI.sh on
+  2026-08-04 while writing ONEUP-0064's loop-2 row.
+
+  Editing documentation.md is a standards edit and so runs the
+  rule-14 /cold-eyes gate; that is why this is filed rather than
+  applied inline mid-review.
+  **Layman:** A rule about how to write review-log rows so the automated check stops rejecting them.
+  Kind: doc.
+  Source: in-session-2026-08-04.
