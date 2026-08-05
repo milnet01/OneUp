@@ -32,8 +32,10 @@ right of a row as wide as the window.
 
 ## 2. Background
 
-Both figures below were measured by building the window offscreen at `d18fbf2` — the
-measurement pass this item's roadmap bullet records — not read off the source.
+**§2.2's figures were measured** by building the window offscreen at `d18fbf2` — the
+measurement pass this item's roadmap bullet records — not read off the source. §2.1 carries
+no figure: it is a structural claim, established by reading `_make_banner` and confirmed by
+walking the built chain.
 
 ### 2.1 The warning banner's tab order runs backwards
 
@@ -56,17 +58,17 @@ an ergonomics defect, not a conformance one, and §4.1 treats it as such.
 
 ### 3.1 The three fixed points (the user, 2026-07-26)
 
-1. **No focus borders.** Ordinary borders are fine and always were; what must not appear is
-   a border or an outline drawn *to mark* the focused control. Restated at its original
-   width, not widened — `ui-and-accessibility.md` §5.2.
+1. **No focus borders.** `docs/standards/ui-and-accessibility.md` §5.2 states it and is
+   canonical; it is not restated here.
 2. **The phone-style on/off switches stay.** A long-standing preference over check boxes,
    because on/off reads at a glance. A fixed point, not a candidate.
 3. **Free rein otherwise** — propose and build, tweak afterwards. So this spec brings
    recommendations rather than questions.
 
-**Fixed point 1 belongs to both halves of the split and is not re-argued here.** `docs/specs/ONEUP-0076-ringless-focus-cue.md`
-owns what replaces the hover-based cue and why; this document must simply not introduce a
-border or outline to mark a focused control, which no layout change here does.
+**Fixed point 1 belongs to both halves of the split and is stated in neither.**
+`ui-and-accessibility.md` §5.2 is its home; `docs/specs/ONEUP-0076-ringless-focus-cue.md`
+owns what replaces the hover-based cue and why. All this document owes it is that no layout
+change here introduces a border or outline to mark a focused control, and none does.
 
 ### 3.2 What this spec does not decide
 
@@ -85,10 +87,11 @@ Free rein, with the reasons the sweep produced. Nothing here changes what a cont
 
 **The header carries two buttons instead of four.** *Settings* and *About* stay;
 *Repositories* and *Recenter* move inside Settings. Four buttons of identical weight beside
-the app title make none of them findable, and of the four only Settings is used routinely —
-*Recenter* exists because a Wayland compositor owns window placement and `move()` is
-silently ignored, as `Updater.recenter`'s own comment says. That is a workaround, not a
-feature that has earned a place in the header.
+the app title make none of them findable — the uniform weight is the complaint, not the
+count, and no usage figure is claimed for any of the four because none was measured.
+*Recenter* is the clearest case on its own merits: it exists because a Wayland compositor
+owns window placement and `move()` is silently ignored, as `Updater.recenter`'s own comment
+says. That is a workaround, not a feature that has earned a place in the header.
 
 **Settings gains three headings** rather than staying a flat column of ghost buttons.
 `SettingsDialog` today lays out eight rows in one column, and the grouping is **exhaustive
@@ -103,15 +106,43 @@ this list rather than a judgement call:
 | *This machine* | `repos_btn` (Repositories) and `recenter_btn` (Recenter), both moved from the header, plus `diag_btn` (Copy diagnostics) |
 
 The dialog stays a host, not an owner (`ONEUP-0034` §4.2): the window still builds and owns
-the controls. Its intro label — *"Background behaviours. Each is off until you turn it
-on."* — describes only the first heading and stops being true once the other two exist, so
-this item replaces it. That is the one string this item changes; §10 defers the rest.
+the controls.
+
+**This item changes six strings, not one.** The intro label describes only the first
+heading and stops being true once the other two exist; the three headings are new; and
+`SettingsDialog._row(description, button)` takes a description per row, so the two controls
+moving in from the header need one each — today they carry tooltips, which `_row` does not
+read. All six are given verbatim so §10's hand-off to `ONEUP-0032` covers them rather than
+just the one:
+
+| # | String | Where |
+| --- | --- | --- |
+| 1 | *"How OneUp behaves on its own, how it looks, and what it knows about this machine."* | the intro label, replacing *"Background behaviours. Each is off until you turn it on."* |
+| 2 | *"Automatic behaviour"* | heading |
+| 3 | *"Appearance"* | heading |
+| 4 | *"This machine"* | heading |
+| 5 | *"Choose which software sources OneUp updates from."* | `repos_btn`'s row description |
+| 6 | *"Put the window back in the middle of the screen."* | `recenter_btn`'s row description |
+
+The replacement intro drops *"Each is off until you turn it on"* deliberately: it is true
+of the first heading's five toggles and false of the other two headings' rows, which is the
+same defect the original string has once the groups exist.
 
 **The action row reads primary-first.** *Run selected updates* leads, *Check for updates*
-follows it, and *Stop* replaces *Check* in place while a run is going rather than appearing
-as a third button beside it. Today three identically-styled ghost buttons — *Check*, *Stop*
-and *Retry failed steps* — are indistinguishable from *About*, so the one that interrupts a
-running update looks exactly like the one that opens a version dialog.
+follows it, and *Stop* replaces *Check* in place while a run is going rather than sitting
+beside it as it does today. The row today is *Check*, *Run*, *Stop*, with *Retry failed
+steps* in its own full-width row beneath it; three of those four — *Check*, *Stop* and
+*Retry* — carry `#GhostBtn`, the same object name as *About*, so the button that interrupts
+a running update looks exactly like the one that opens a version dialog.
+
+**The replacement is a hide/show at one layout index, not an insert or a stack.**
+`check_btn` and `stop_btn` both stay in the action row for the window's whole life at the
+same index — `run_btn` at 0 with the stretch, the *Check*/*Stop* slot at 1 — and exactly
+one of the two is visible at any moment. `set_controls_enabled` therefore gains
+`self.check_btn.setVisible(not stoppable)` beside the `self.stop_btn.setVisible(stoppable)`
+it already carries; today it calls only `check_btn.setEnabled`, which is why *Check*
+currently stays on screen greyed out while *Stop* appears next to it. INV-6 asserts the
+index and both visibility states.
 
 *Stop* is shown for a real run only: `set_controls_enabled` computes `stoppable` as `(not
 enabled) and self._run_active and not self._check_mode`, because a `--check` installs
@@ -119,41 +150,103 @@ nothing and so has nothing to stop. During a check the slot therefore holds *Che
 disabled, as it does today — the replacement is a run-time swap, not a check-time one.
 
 *Stop* keeps the ghost outline and its transparent fill; what takes the danger family's
-colour is its **border and its label**, the family `#RestartBtn` on the reboot banner
-already uses. Leaving the fill transparent is what lets
-`docs/specs/ONEUP-0076-ringless-focus-cue.md` derive its focus cue from `card`, which is
-what that spec's row for it assumes. It becomes its own object name, `#StopBtn`, because
-that spec matches a styled control by object name and a restyled control still called
-`#GhostBtn` would be invisible to its check; its §4.2 and §4.3 carry the focus rows, and
-its rest colour differs by palette.
+colour is its **border and its label**. **The source of that colour is `#RebootBanner`, not
+`#RestartBtn`.** The banner is `border: 1px solid #e0553f` over an `rgba(231,76,60,0.22)` →
+`rgba(231,76,60,0.05)` wash — a red edge and red-tinted ink over an all-but-transparent
+ground, which is exactly the construction *Stop* wants. `#RestartBtn` is the opposite:
+`color: #ffffff; border: none;` over a solid `#ef6a55` → `#d6412a` fill. **It is explicitly
+not what `#StopBtn` copies** — a filled red Stop would contradict the transparent fill this
+paragraph requires and break the `card` derivation `docs/specs/ONEUP-0076-ringless-focus-cue.md`
+§4.2 assumes. `#StopBtn` takes `#e0553f` for its border and the same hue for its label;
+leaving the fill transparent is what lets 0076 derive its focus cue from `card`.
 
-***Retry failed steps* leaves the action row for the warning banner** — `#WarnBanner`,
-which is the banner a failed step already raises. A remedy belongs beside the thing it
-remedies, which is where every other remedy in this window already lives; §9 records why
-the alternative was rejected. It keeps its own object name so its styling does not change,
-and it is appended **last** in that banner's layout — after `warn_copy_btn`, `warn_btn` and
-`warn_btn2` — so it is last in the chain too, which is what INV-1 asserts. That banner now
+It becomes its own object name, `#StopBtn`, because that spec matches a styled control by
+object name and a restyled control still called `#GhostBtn` would be invisible to its
+check; its §4.2 and §4.3 carry the focus rows, and its rest colour differs by palette.
+
+**The rename obliges a rule set in both stylesheets, in the same commit.** Every rule in
+`_QSS` and in `_HC_QSS` is qualified by object name — neither sheet carries an unqualified
+`QPushButton` rule — so renaming *Stop* out of `#GhostBtn` drops it out of rest, `:hover`,
+`:checked`, `:disabled` and `:focus` in **both**, leaving it unstyled rather than
+mis-styled. That includes the high-contrast overlay, which is the one appearance mode that
+exists for low-vision users. `#StopBtn` therefore ships with a full set of rules in `_QSS`
+and a matching set in `_HC_QSS`; INV-7 asserts the parity.
+
+***Retry failed steps* moves into the warning banner.** It is not in the action row today —
+it is `root.addWidget`, its own full-width row beneath — and it moves into `#WarnBanner`. A
+remedy belongs beside the thing it remedies, which is where every other remedy in this
+window already lives; §9 records why the alternative was rejected.
+
+**The move needs a visibility contract, and today's code does not satisfy it.** `retry_btn`
+is revealed at the end of a run by `if self._failed_steps:`, independently of the banner —
+while `_show_warning` fires only when `self._hints or self._remedy_skips or
+self._remedy_keys`. **A run whose steps failed with no hint and no armed remedy therefore
+shows Retry today with `#WarnBanner` hidden.** Reparented unchanged, that run would leave
+the user no way to retry at all, and INV-6 asserting parentage would not see it. So this
+item also makes the banner's rule match Retry's: **`#WarnBanner` is raised whenever at
+least one step failed**, falling back to GUI-built text naming the failed steps when no
+hint is available — the same shape the remedy-without-hint path already uses — and
+`retry_btn` is shown inside it if and only if at least one step failed. INV-6 asserts both
+halves; §4.2 records this as the one behaviour this item changes.
+
+It keeps the object name it has, `#GhostBtn` — shared with seventeen other controls — so
+its styling does not change. It is appended **last** in that banner's layout, after
+`warn_copy_btn`, `warn_btn` and `warn_btn2`, **and an explicit `setTabOrder` call places it
+last in the chain, because layout order does not set the chain (§2.1)**. That banner now
 carries four buttons rather than three, which is the count INV-1's expected chain must
 state.
 
 **A whole task row toggles its task.** Today the only hit target in a row is the switch at
-its far right — measured 56×30 in a row 61 px tall spanning the full width of the window —
-and the name and description beside it do nothing. The row is the width of the window and
-the switch is a fixed 56 px of it, so the wider the user makes the window the smaller the
-fraction that responds to a click; the ratio, not any one width, is the argument.
-Clicking anywhere in the row toggles the switch **except** on the switch itself, the badge,
-the disclosure arrow, and anything inside the expanded detail panel — the switch is excluded
-because it already toggles itself, and a row handler that also fired would toggle twice and
-leave the primary control looking dead. INV-4 asserts each of those four cases. The switch
-stays what it is and remains the thing that shows the state — fixed point 2 — it simply
-stops being the only place you may click.
+its far right — measured 56×30 in a row 61 px tall — and the name and description beside it
+do nothing. A row spans the full width of `card`, which is the window less `#Frame`'s ring
+and the card's own margins, so a row is narrower than the window while still growing with
+it; the switch stays a fixed 56 px. The wider the user makes the window, the smaller the
+fraction of a row that responds to a click — that ratio, not any one width, is the
+argument.
+
+**Clicking a row's body toggles its switch.** Four regions inside a row are not body: the
+switch, the badge, the disclosure arrow, and anything inside the expanded detail panel.
+Each keeps the behaviour it has — **the switch still toggles when you click it, exactly as
+it does today**; it is excluded from the *row-level handler* so that one click is not
+counted twice, which would toggle and untoggle and leave the primary control looking dead.
+INV-4 asserts the body and all four regions. The switch stays what it is and remains the
+thing that shows the state — fixed point 2 — it simply stops being the only place you may
+click.
 
 **The disclosure arrow grows to 24×24**, which §2.2 establishes is an ergonomics fix rather
-than a conformance one, and gets the hover treatment the rest of the controls have. Its
-focus treatment is not this item's: `docs/specs/ONEUP-0076-ringless-focus-cue.md` §4.2
-carries the `QToolButton#Disclose` row, and §10 keeps the cue out of scope here.
-**24×24 is the floor for every pointer target**, width as well as height, over the set
-INV-5 defines — a minimum height alone settles only half of SC 2.5.8.
+than a conformance one, and **gains** the hover treatment the rest of the controls have —
+it has none today: `QToolButton#Disclose` carries one rule, `background: transparent;
+border: none; padding: 0px;`, with no `:hover` variant in either sheet. Its focus treatment
+is not this item's: `docs/specs/ONEUP-0076-ringless-focus-cue.md` §4.2 carries the
+`QToolButton#Disclose` row, and §10 keeps the cue out of scope here.
+
+**24×24 is the floor for every pointer target**, width as well as height — a minimum height
+alone settles only half of SC 2.5.8. The set is enumerated rather than described, because a
+set given as two exclusions and one inclusion is not one an implementer can build or INV-5
+can walk:
+
+| Control | In the set? | Why |
+| --- | --- | --- |
+| `run_btn` (`#RunBtn`) | in | already clears it — `setMinimumHeight(44)`, and it takes the action row's stretch |
+| `check_btn` / `stop_btn` (`#GhostBtn`, `#StopBtn`) | in | `padding: 8px 14px` with no minimum of any kind |
+| every other `#GhostBtn` — `settings_btn`, `about_btn`, `SettingsDialog`'s rows, `retry_btn` | in | same rule, same shortfall |
+| every `#LinkBtn` — `log_toggle`, `openlog_btn`, `rollback_btn`, each row's `size_btn`, `warn_copy_btn` | in | `padding: 4px 2px`, the tightest in the window |
+| `QToolButton#Disclose`, one per row | in | 19×19 today, `padding: 0px` |
+| `#BannerBtn`, `#RestartBtn` | in | `padding: 7px 15px`, same shortfall as `#GhostBtn` |
+| each row's `ToggleSwitch` | in | 56×30 — already clears it, walked so it cannot regress |
+| each row's **body** | in | newly clickable: a target, though not a focusable |
+| `QLabel#Badge` | out | not clickable at all — INV-4 asserts a click on it does nothing |
+| `#Log`, `#DetailScroll` | out | focusable, not pointer targets |
+| `RepoManagerDialog`'s per-repo `#LinkBtn` | out | that dialog is out of scope — §10, and INV-1's stated scope |
+
+Only `run_btn` and the switches clear the floor today; **everything else in the "in" column
+reaches it the same way, by a `min-width` and `min-height` of 24 px added to its rule in
+both sheets** — `#GhostBtn`, `#StopBtn`, `#LinkBtn`, `#BannerBtn`, `#RestartBtn` and
+`QToolButton#Disclose` each gain the pair. A stylesheet minimum rather than a per-widget
+`setMinimumSize` call keeps the floor in one place and applies it to controls the window
+builds in five different methods. Those are *box* dimensions, not text sizes, so INV-3 is
+not engaged and §4.2's rule about `px` for text stands unchanged. §2.2's spacing exception
+for the arrow then stops being load-bearing: it applied only while the arrow stayed 19×19.
 
 **The tab chain is set for every control, not the first eleven.** `setTabOrder` today
 covers the four header buttons, the five switches, *Check* and *Run* — eleven widgets — and
@@ -169,17 +262,30 @@ they are laid out.
   may be reworded by ONEUP-0032 later; none is removed here.
 - **The marker protocol, and every behaviour behind a control.** This item changes what the
   window looks like and where its controls sit. A button that ran a check still runs the
-  same check.
+  same check. **One exception, and §4.1 states it:** `#WarnBanner` is raised for *any*
+  failed step, not only for one carrying a hint or an armed remedy, because *Retry* now
+  lives inside it. That changes when a banner appears; it changes no control's action.
 - **Font sizes stay derived from the desktop point size.** No hard-coded `px` for text —
   `ui-and-accessibility.md` §4.
 
 ## 5. Correctness invariants
 
 - **INV-1** Tab order follows visual order for every focusable control in the window, in
-  each banner, and in each dialog reachable from the window.
+  each of its four banners, and in `SettingsDialog`.
   *Test:* `tests/gui-smoke.py` flattens the layout tree into visual order — top to bottom,
-  then left to right — and asserts the focus chain, walked end to end, is that exact
-  sequence. **A whole-chain comparison, not a within-parent one:** a per-parent check
+  then along the layout direction within a row, so a mirrored layout (`ONEUP-0032` §4)
+  reverses the second key instead of failing — and asserts the focus chain, walked end to
+  end, is that exact sequence.
+  **Scope is the window, its banners and `SettingsDialog`**, because §4.1 moves two named
+  controls into that dialog. `RepoManagerDialog` and `RollbackDialog` are out: this item
+  changes neither their chains nor their targets, and §10 keeps them out.
+  **The sweep reveals before it walks.** Every banner, and `stop_btn`, `retry_btn`,
+  `warn_copy_btn` and `warn_btn2`, is constructed hidden — visual order is undefined for a
+  widget that has never been laid out — so the test makes each banner and each
+  conditionally-shown button visible first, as INV-5's does. It then walks only widgets
+  that are visible and whose `focusPolicy() != Qt.NoFocus`, starting at `settings_btn` (the
+  chain's first widget) and stopping when the walk returns to it, so a cyclic chain
+  terminates rather than looping. **A whole-chain comparison, not a within-parent one:** a per-parent check
   cannot see an inversion *between* containers, which is what this redesign moves, and it
   passes a control omitted from `setTabOrder` whose parenting order happens to agree
   locally. Breaks on today's warning banner, whose chain visits *Show details* before
@@ -205,38 +311,71 @@ they are laid out.
 - **INV-4** Clicking a task row's body toggles that row's switch exactly once; clicking the
   switch itself also toggles exactly once; clicking its badge, its disclosure, or anything
   inside its expanded detail panel does not toggle it at all.
-  *Test:* `tests/gui-smoke.py` posts a mouse click at the row's text area and asserts
-  `isChecked()` flipped, clicks the switch directly and asserts it flipped once rather than
-  twice, then clicks the badge, the disclosure and — with the row expanded — a detail item,
-  and asserts none of the three moved it. All four exclusions §4.1 names are asserted
-  separately. Breaks if the row-level handler is attached to the whole frame without
+  *Test:* `tests/gui-smoke.py` counts each switch's `toggled` emissions rather than
+  comparing `isChecked()` before and after — a state comparison cannot tell one toggle from
+  three. It posts a mouse click at the row's text area and asserts the count is exactly 1,
+  clicks the switch directly and asserts exactly 1 rather than 2, then clicks the badge,
+  the disclosure and a detail item and asserts 0 for each. All four exclusions §4.1 names
+  are asserted separately.
+  **Preconditions, for all three excluded children and not just the panel:** `self.badge`
+  and `self.disclosure` are both `setVisible(False)` in `TaskRow.__init__`, as the detail
+  panel is. The test reveals all three — the badge and the arrow by making them visible,
+  the panel by expanding the row — before clicking, because a click at a hidden widget's
+  coordinates lands on the row body underneath and the assertion would pass vacuously.
+  Breaks if the row-level handler is attached to the whole frame without
   excluding its children — which for the switch shows up as a double toggle, leaving the
   primary control looking dead rather than throwing.
 
 - **INV-5** Every **pointer target** measures at least 24×24, width and height, at the
-  smallest desktop font size the app renders. The set is not this spec's INV-1's: SC 2.5.8
-  is about things you click, so it excludes `#Log` and `#DetailScroll` (focusable, not
-  targets) and includes the task row's newly clickable body (a target, not focusable).
-  *Test:* `tests/gui-smoke.py` builds the window **and each dialog** offscreen with the
+  smallest desktop font size the app renders. **The set is §4.1's table**, not this spec's
+  INV-1's: SC 2.5.8 is about things you click, so it excludes `#Log` and `#DetailScroll`
+  (focusable, not targets) and includes each task row's newly clickable body (a target, not
+  focusable).
+  *Test:* `tests/gui-smoke.py` builds the window **and `SettingsDialog`** offscreen with the
   application font pinned to **6 pt**, makes each banner visible so its buttons are laid
-  out rather than carrying a default geometry, walks that target set, and asserts both
+  out rather than carrying a default geometry, walks §4.1's table, and asserts both
   dimensions. 6 pt is the floor because `_font_metrics` accepts a base only in 6–30 pt and
   **substitutes 10.0 outright** outside that band — it does not clamp to the nearest edge,
-  so pinning 4 pt would silently test at 10 pt and prove less. Breaks on today's 19×19
+  so pinning 4 pt would silently test at 10 pt and prove less.
+  **The pin is on the application font, and for most of the set that is the only thing that
+  binds.** The 6–30 pt band governs the sizes `_font_metrics` substitutes into the
+  stylesheet, and `#GhostBtn`, `#LinkBtn` and `QToolButton#Disclose` carry no `font-size`
+  at all — their geometry follows `QApplication.font()` directly and would keep shrinking
+  below 6 pt if the pin were on a stylesheet size instead. Pinning the application font
+  exercises both paths at once, and 6 pt is chosen so the stylesheet path is at *its* floor
+  in the same run. Breaks on today's 19×19
   disclosure arrow, and on any control whose size is left to the font alone.
   **Varying `TEXT_SCALES` instead would test nothing:** its smallest entry is `1.0`, the
   default, so the run would sit at whatever point size the machine happens to use — and §6's
   failure mode is a small *desktop* font, which is `QApplication.font()`, not a scale.
 
-- **INV-6** The controls this redesign moves are where it says they are: `repos_btn` and
-  `recenter_btn` are children of `SettingsDialog` and not of the header; the header carries
-  exactly `settings_btn` and `about_btn`; `retry_btn` is a child of `warn_banner`; and the
-  action row's widget order is *Run*, then *Check*.
+- **INV-6** The controls this redesign moves are where it says they are, the two that swap
+  do so at one index, and *Retry* is reachable whenever it is offered: `repos_btn` and
+  `recenter_btn` are children of `SettingsDialog`; **`header_row`'s layout items are
+  exactly `titleblock`, `settings_btn` and `about_btn`**; `retry_btn` is a child of
+  `warn_banner`; the action row's items are `run_btn` at index 0 and the *Check*/*Stop*
+  slot at index 1, with exactly one of `check_btn` and `stop_btn` visible in each state;
+  `stop_btn.objectName()` is `StopBtn`; and after a run with at least one failed step,
+  `warn_banner` is visible and `retry_btn` is visible within it.
   *Test:* `tests/gui-smoke.py` builds the window, opens `SettingsDialog`, and asserts each
-  parent and the action row's layout order. Breaks if a move is half-done — the control
-  reparented but the header not rebuilt, or the reorder missed — which is the one class of
-  defect in this item that changes nothing measurable and everything visible, and which no
-  other invariant here would catch.
+  parent; `header_row`'s items **by layout index** — not "children of the header", which
+  names nothing testable, since `header` is the object-named `QLabel` and the buttons' Qt
+  parent is `card`; the action row's order and both visibility states around a simulated
+  run; the object name; and a finished run whose only failure carries no hint and no armed
+  remedy, which is the case §4.1 shows today's code gets wrong. Breaks if a move is
+  half-done — the control reparented but the header not rebuilt, or the reorder missed —
+  which is the one class of defect in this item that changes nothing measurable and
+  everything visible, and which no other invariant here would catch.
+
+- **INV-7** Every object name styled in `_QSS` has a counterpart rule in `_HC_QSS`.
+  *Test:* `tests/gui-smoke.py` extracts the set of object-name selectors from each
+  template's text and asserts the base sheet's set is a subset of the overlay's. Both
+  sheets are qualified by object name throughout — neither carries an unqualified
+  `QPushButton` rule — so a control styled in one and not the other is not mis-coloured in
+  high contrast, it is **unstyled** there. Breaks on `#StopBtn` if §4.1's rename lands in
+  `_QSS` alone, which is the regression this item would otherwise introduce in the one
+  appearance mode that exists for low-vision users; no invariant here or in
+  `docs/specs/ONEUP-0076-ringless-focus-cue.md` caught it before.
 
 ## 6. Failure modes
 
@@ -251,26 +390,40 @@ they are laid out.
   toggle twice and appear dead, and the disclosure would toggle the task instead of
   expanding it. INV-4 asserts each case separately for that reason.
 - **Moving a control into `SettingsDialog` takes it out of a sweep that covered it.**
-  *Repositories* and *Recenter* move, so every widget sweep in this spec opens each dialog
-  rather than stopping at the window — INV-1, INV-2 and INV-5 each say so in their own
-  *Test:* clause, because a scope stated only here is a scope no test inherits. The same
-  move is why `docs/specs/ONEUP-0076-ringless-focus-cue.md`'s INV-1 sweeps dialogs for the
-  focus cue.
+  *Repositories* and *Recenter* move, so every widget sweep in this spec opens
+  `SettingsDialog` rather than stopping at the window — INV-1, INV-2 and INV-5 each repeat
+  that scope inside their own *Test:* clause, because a scope stated only here is a scope
+  no test inherits. The same move is why `docs/specs/ONEUP-0076-ringless-focus-cue.md`'s
+  INV-1 sweeps dialogs for the focus cue.
+- **A failed step leaves its remedy unreachable.** *Retry* moves inside `#WarnBanner`,
+  which today is raised only for a failure carrying a hint or an armed remedy. §4.1 makes
+  the banner's condition match Retry's own; INV-6 asserts the case that has neither.
 
 ## 7. Tests
 
 | Invariant | Where | What it does |
 | --- | --- | --- |
-| INV-1 | `tests/gui-smoke.py` | **new** — flattens the layout tree to visual order and asserts the whole focus chain matches it, in the window, each banner and each dialog |
-| INV-2 | `tests/gui-smoke.py` | **existing** — ONEUP-0028's accessible-name sweep, re-run against the redesigned tree and extended to open each dialog |
+| INV-1 | `tests/gui-smoke.py` | **new** — flattens the layout tree to visual order and asserts the whole focus chain matches it, in the window, each banner and `SettingsDialog` |
+| INV-2 | `tests/gui-smoke.py` | **existing** — ONEUP-0028's accessible-name sweep, re-run against the redesigned tree and extended to open `SettingsDialog` |
 | INV-3 | `tests/gui-smoke.py` | **existing, unchanged** — the assertion that the built stylesheet carries no `font-size:` in `px` |
-| INV-4 | `tests/gui-smoke.py` | **new** — posts clicks at a row's body, its switch, its badge, its disclosure and a detail item, and counts the toggles |
-| INV-5 | `tests/gui-smoke.py` | **new** — builds the window and each dialog offscreen at a 6 pt application font, reveals each banner, and measures every pointer target |
-| INV-6 | `tests/gui-smoke.py` | **new** — asserts the parent of each moved control and the action row's widget order |
+| INV-4 | `tests/gui-smoke.py` | **new** — reveals a row's badge, disclosure and detail panel, then clicks each plus the body and the switch, counting `toggled` emissions per case |
+| INV-5 | `tests/gui-smoke.py` | **new** — builds the window and `SettingsDialog` offscreen at a 6 pt application font, reveals each banner, and measures every target in §4.1's table |
+| INV-6 | `tests/gui-smoke.py` | **new** — asserts each moved control's parent, `header_row`'s items by index, the action row's order and both swap states, and that a hintless failed run raises the banner with *Retry* inside it |
+| INV-7 | `tests/gui-smoke.py` | **new** — asserts every object name styled in `_QSS` has a rule in `_HC_QSS` |
 
-**No new test file.** `docs/standards/testing.md` §2 applies unchanged: the sweeps build a
-window, so they redirect `HOME` and the state paths the way `tests/gui-smoke.py` already
-does.
+**No new test file, and the sweeps redirect state as `testing.md` §2 requires** — they
+build a window, so `HOME` and the state paths are redirected the way `tests/gui-smoke.py`
+already does.
+
+**They also inherit a known cost that standard names.** `testing.md` §2.3 records that
+`Updater.__init__` calls `_check_app_update` unconditionally, issuing a live
+`api.github.com` GET, and that the suite already makes 49 of them per run — filed as
+**ONEUP-0067**. INV-1, INV-5 and INV-6 each build the window again, INV-5 and INV-6 with a
+dialog, so this item adds to that count. **It does not stub it:** ONEUP-0067 owns the fix
+and stubbing it here would put a second mechanism in the suite for the same defect. What
+this item owes is not to make it materially worse — the new sweeps reuse an
+already-constructed window where the assertion allows, and build a fresh one only where a
+pinned font or a simulated run requires it.
 
 ## 8. Docs & release
 
@@ -278,21 +431,19 @@ does.
   the new layout: the header loses two buttons, the action row reorders, and Settings gains
   headings. If it names a control by position, that sentence moves.
 - **The two screenshots are re-shot, and they are the part most easily missed.**
-  `screenshots/oneup.png` and `screenshots/oneup-light.png` show the window as it is today.
-  Both go stale the moment this item lands, and both are *published*: `README.md` embeds
-  the dark one, and `data/za.co.antsprojectshub.OneUp.metainfo.xml` points its
-  `<screenshot type="default">` at the same file over `raw.githubusercontent.com`, which is
-  what an AppStream store page and the software centres render. Re-shooting them ships in
-  the same commit as the layout change. The file names and the metainfo URL do not change,
-  so nothing else in packaging moves.
+  `screenshots/oneup.png` and `screenshots/oneup-light.png` show the window as it is today
+  and both go stale the moment this item lands. **The dark one is published twice:**
+  `README.md` embeds it, and `data/za.co.antsprojectshub.OneUp.metainfo.xml` points its one
+  `<screenshot type="default">` at that same file over `raw.githubusercontent.com`, which
+  is what an AppStream store page and the software centres render. **The light one is in
+  the tree only** — nothing in `README.md`, the metainfo or packaging references it — so it
+  is re-shot for consistency rather than because a published surface would go stale. Both
+  ship in the same commit as the layout change. The file names and the metainfo URL do not
+  change, so nothing else in packaging moves.
 - **`docs/standards/ui-and-accessibility.md` §5.6** states that tab order follows visual
   order and that a new control's place in the chain is set in the same commit. §2.1 records
   a live breach of it; nothing in the standard changes, but its **What checks this** row for
   §5.6 gains INV-1, which is the first thing to actually check it.
-- **`docs/specs/ONEUP-0076-ringless-focus-cue.md`** cited this document's §4.5 in three
-  places — its §4.2 rows for `#StopBtn` and for `#GhostBtn` moved into `SettingsDialog`, and
-  its INV-1 — from before the 2026-08-03 split renumbered that section to §4.1. All three
-  were repointed when this document was reviewed; nothing further is owed at release.
 - **`docs/specs/ONEUP-0034-gui-modules.md` §4.2** predicts `oneup/gui/window.py` will not
   fit the 600-line ceiling and hands the attempt here; §3.2 records what this spec does and
   does not promise about that.
@@ -314,23 +465,28 @@ does.
 - **Give *Stop* a completely different shape rather than the danger colour.** Rejected as
   over-correction: it is a button among buttons, and the shared ghost outline is what makes
   the action row read as a row. The colour and the label carry the distinction.
-- **Keep *Retry failed steps* beside *Check* and *Run*.** It is a third identically-styled
-  ghost button in the primary action row, present only after a failure. Rejected: folding it
-  into the warning banner — which §4.1 specifies — puts the remedy beside the thing it
-  remedies, which is where every other remedy in this window already lives.
+- **Leave *Retry failed steps* where it is.** It sits in its own full-width row directly
+  beneath the action row, styled `#GhostBtn` like *Check* and *Stop* above it and present
+  only after a failure — so it reads as a fourth member of that group while belonging to
+  none of it. Rejected: folding it into the warning banner — which §4.1 specifies — puts
+  the remedy beside the thing it remedies, which is where every other remedy in this window
+  already lives.
 
 ## 10. Out of scope
 
-- **The focus cue, its derivation and its check.** `docs/specs/ONEUP-0076-ringless-focus-cue.md`, split from this
-  document on 2026-08-03. Neither **blocks** the other, but they are not independent either,
-  and each names exactly one hook in the other: §4.1 gives *Stop* the object name `#StopBtn`
-  and keeps its fill transparent *because* 0076 matches by object name and derives that
-  control's cue from `card`; and 0076's INV-1 sweeps dialogs *because* §4.1 moves two
-  controls into `SettingsDialog`. They ship together or the second one to land fixes the
-  first one's rows. `docs/design/oneup-2.0.md` §5.2 owns the order of work and now places
-  0076 in the same slot as this item, which it had not done before the split.
-- **Any wording.** Translation is `ONEUP-0032` and comes last; strings this item changes are
-  wrapped once, there.
+- **The focus cue, its derivation and its check.** `docs/specs/ONEUP-0076-ringless-focus-cue.md`,
+  split from this document on 2026-08-03. **`docs/design/oneup-2.0.md` §5.2 owns the order
+  of work and states the dependency in one direction: 0076 "needs the layout and object
+  names 0064 settles."** That is the canonical wording and this section adopts it rather
+  than restating it. The dependency shows up as one named hook each way: §4.1 gives *Stop*
+  the object name `#StopBtn` and keeps its fill transparent *because* 0076 matches by
+  object name and derives that control's cue from `card`; and 0076's INV-1 sweeps each
+  dialog *because* §4.1 moves two controls into `SettingsDialog`. **This item lands first**, as
+  §5.2's ordering implies — 0076's rows are written against names that do not exist until
+  this one ships — and the two ship inside the same 2.0 slot.
+- **Any wording.** Translation is `ONEUP-0032` and comes last. **Every string this item
+  changes or introduces is wrapped once, there — all six of §4.1's table**, not only the
+  intro label.
 - **Right-to-left mirroring.** Also `ONEUP-0032` §4. The layout changes here use no
   directional stylesheet property, so they add nothing for that item to undo.
 - **Theming the redesigned layout.** `ONEUP-0027`, which lands after both halves of this
@@ -341,6 +497,7 @@ does.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 2 | 2026-08-04 | 3 lanes; 5 critical, 5 high, 6 medium, 11 low, 2 info — **28 verified, 1 dismissed** — 8 draft defects vs 20 fix collateral, one finding counted in both (27 actionable fixed, 1 info carried) | **The ratio inverted from loop 1's 30/0 and that is the finding about the review, not about the document:** two thirds of this loop landed on passages loop 1 had written, so the response was to sweep loop 1's blast radius rather than to read colder. **Three lanes independently reached the same critical, and it was a regression this document would have shipped into the one appearance mode that exists for low-vision users:** §4.1 renames *Stop* to `#StopBtn`, and **every** rule in `_QSS` and `_HC_QSS` is qualified by object name — neither sheet has an unqualified `QPushButton` rule — so the rename drops *Stop* out of rest, `:hover`, `:checked`, `:disabled` and `:focus` in the high-contrast overlay as well as the base sheet, leaving it unstyled rather than mis-styled. Nothing here or in `docs/specs/ONEUP-0076-ringless-focus-cue.md` caught it; **INV-7 is new** and asserts the two sheets' object-name sets agree. **The second critical was an exemplar that says the opposite of what it was cited for.** §4.1 told the implementer *Stop* takes the danger colour "the family `#RestartBtn` on the reboot banner already uses" — but `#RestartBtn` is `color: #ffffff; border: none;` over a solid `#ef6a55` → `#d6412a` fill: white label, no border, filled. The red border `#e0553f` and the tinted ink belong to `#RebootBanner`, the *frame*. An implementer copying the named exemplar builds a filled red Stop, contradicting the same sentence's "transparent fill" and breaking the `card` derivation 0076 §4.2 assumes; §4.1 now cites the banner, names the hex, and says explicitly that `#RestartBtn`'s filled form is not what `#StopBtn` copies. **A lane's open premise turned out to be a functional regression rather than a missing contract, which is the second loop running that verifying an open question paid more than verifying a finding.** §4.1 moves *Retry* into `#WarnBanner` and called it "the banner a failed step already raises". It is not: `_show_warning` fires only when `self._hints or self._remedy_skips or self._remedy_keys`, while `retry_btn` is revealed separately by `if self._failed_steps:` — so **a run whose steps failed with no hint and no armed remedy shows Retry today with the banner hidden**, and reparented unchanged that run would leave the user no way to retry at all, past an INV-6 that asserted parentage only. §4.1 now requires the banner for any failed step, §4.2 records it as this item's one behaviour change, §6 carries the failure mode, and INV-6 asserts the hintless case. **INV-5 could not have passed as written:** its target set was two exclusions and one inclusion rather than a set, and at its own pinned 6 pt every `#GhostBtn` (`padding: 8px 14px`), every `#LinkBtn` (`padding: 4px 2px`) and the disclosure arrow fall under 24 px with no minimum anywhere — `run_btn.setMinimumHeight(44)` is the only explicit one in the window — while §4.1 promised a resize for the arrow alone. The set is now an eleven-row table naming what is in, what is out and why, with the lifting mechanism stated: a `min-width`/`min-height` pair on six rules in both sheets, which is a box dimension and so does not engage INV-3. **"That is the one string this item changes" was false by five.** The three new headings are strings, and `SettingsDialog._row(description, button)` takes a description per row, so the two controls moving in from the header need one each — they carry tooltips today, which `_row` does not read. All six are now given verbatim in a table, and §10's hand-off to `ONEUP-0032` names all six rather than "strings this item changes". Also draft: §9 and §4.1 both placed *Retry* in the primary action row when `actions.addWidget` takes only `check_btn`, `run_btn` and `stop_btn` and `retry_btn` is `root.addWidget`, its own full-width row beneath; the "*Stop* replaces *Check* in place" mechanism was unstated, so a build appending Stop at the end passed INV-6 — it is now a hide/show at one layout index, with `set_controls_enabled` gaining the `check_btn.setVisible` call it lacks; "of the four only Settings is used routinely" was an unsourced usage claim in a document whose header warrants every figure measured, and is gone rather than sourced; fixed point 1 was stated verbatim in both split halves (`doc_dedup` 1.000) while the paragraph beneath said it "is not re-argued here", and is now a pointer to its canonical home; and §7 called `testing.md` §2 "unchanged" while that standard's §2.3 records `Updater.__init__` issuing a live `api.github.com` GET on every construction — **ONEUP-0067**, 49 per run — which three new window-building sweeps add to, so §7 now names it and states that this item does not stub it. **Collateral worth naming, because each was loop 1's own sentence:** "appended last in that banner's layout … so it is last in the chain too" reproduces the exact inference §2.1 exists to disprove; INV-1's *Test:* clause did not carry the dialog scope §6 claims all three sweeps state, lacked INV-5's reveal step against controls constructed hidden, and named neither the chain's start widget nor its termination rule; INV-1 and INV-5 bound "each dialog reachable from the window", which over-binds `RepoManagerDialog` and `RollbackDialog` whose chains and targets this spec never touches; INV-6's "children of the header" names nothing testable, since `header` is the object-named `QLabel` and the buttons' Qt parent is `card`; INV-4 gave a precondition for the detail panel and not for the badge and disclosure, which are equally `setVisible(False)` in `TaskRow.__init__`, so three of its five cases would have passed vacuously; the 6 pt justification covers only the stylesheet path when the three tightest controls carry no `font-size` at all; and §10's independence claim now disagreed with `docs/design/oneup-2.0.md` §5.2, which loop 1 had itself edited to say 0076 "needs the layout and object names 0064 settles" — §5.2's wording is adopted as canonical and §10 no longer offers two ship orders and decides neither. **§8's bullet recording the completed 0076 repoint was moved here**, where finished work belongs; §8 is six bullets, re-counted rather than assumed. Its screenshot bullet also claimed both images are published — verified false: `README.md` embeds the dark one and the metainfo's single `<screenshot>` points at that same file, while `screenshots/oneup-light.png` is referenced nowhere outside the tree. **Dismissed: one** — lines 299/301 being byte-identical to 0076's 578/580 is the per-spec "Docs & release" template `documentation.md` §4 mandates, dismissed on the same reasoning in loop 1 and recorded again because all three lanes reach it every loop. **Carried as INFO:** `recenter_btn` moved inside `SettingsDialog` still centres the *main* window (`_kwin_recenter` skips `transientFor`) and the open dialog does not follow it. The document left this loop at **504 lines**, up from 348. |
 | 1 | 2026-08-03 | 3 lanes; 5 critical, 6 high, 8 medium, 12 low, 0 info — **30 verified, 1 dismissed** — 30 draft defects vs 0 fix collateral (30 fixed, 0 carried) | The first review of this document on its own bytes. **The most valuable finding arrived as a lane's open question rather than as a finding**, which is the argument for verifying those too: §8 said *"`data/` carries no screenshot — the AppStream metainfo has none — so nothing in packaging shows the old layout."* Both halves are false. `screenshots/oneup.png` and `screenshots/oneup-light.png` are in the tree, `README.md` embeds the dark one, and the metainfo's `<screenshot type="default">` points at that same file over `raw.githubusercontent.com` — which is what a software centre renders. The redesign obsoletes two *published* images, and the release section said there was nothing to do; §8 now requires re-shooting both in the same commit. **Renumbering residue from the split took three shapes and one of them would have escaped this document:** two dead `§4.5` references, two dead `§2.3` references, and `INV-3` cited twice where `INV-1` was meant — the second of those inside §8's instruction to add a row to `ui-and-accessibility.md`'s **What checks this** table, which would have filed the `px`-check invariant against the tab-order rule. §2 also gained the `§2.2` its dead references had been pointing at. **§7's table was mis-mapped across every row** and credited a *"colour-never-alone"* sweep that is no invariant of this spec; it is the table an implementer builds tests from, so all six rows are restated and marked new or existing. **The central layout change was incomplete against the code it redesigns:** three Settings headings placed six of `SettingsDialog`'s eight rows and left `tray_btn` and `startboot_btn` with no home. The grouping is now a table, stated exhaustive, with the two header controls moving in — and its intro string, which describes only the first heading, is named as the one string this item changes. **A whole design decision lived only in §9 Alternatives** — *Retry failed steps* moving into the warning banner — so §4, the section an implementer reads, never mentioned it; it is now in §4.1 with the banner named `#WarnBanner` and its chain position stated after `warn_btn2`, which is a fourth button INV-1's expected chain has to carry. **The independence claim between the two split halves was false in both directions and unsupported by the section it cited:** each names exactly one hook in the other (`#StopBtn`'s transparent fill, and 0076's INV-1 sweeping the dialogs this item creates), and `docs/design/oneup-2.0.md` §5.2 did not mention 0076 at all — it now places it in this item's slot, as it had to for 0072. **Three figures were re-run offscreen rather than read:** 56×30, 19×19 and the 47.0 px arrow-to-switch clearance all reproduced exactly, and **760 px did not** — no `760` exists anywhere in `updater.py`, the window measures 560 wide with a 736 `sizeHint`, and two careful measurements disagreeing means delete, so §1 and §4.1 now carry the ratio the argument actually rests on. Also draft: INV-2 had dropped *"or visible text"* from the form `documentation.md` §5 and `ui-and-accessibility.md` §2 both state, so as written it would have failed on day one against every plain labelled button; INV-1's test compared position *within a parent*, which cannot see the cross-container inversions this redesign creates; INV-5's headline named the text scale its own test rejects, and called `_font_metrics` a clamp when it substitutes 10.0 outright outside 6–30 pt; and **INV-6 is new** — nothing asserted that the moved controls had actually moved. **Dismissed: one** — a lane reported the loop-log heading appearing twice, which was an artifact of the orchestrator's scrubbed copy, not of the document. The parent's rows below are relabelled `parent N` because this document's own loop 1 would otherwise collide with them. It left this loop at 347 lines, up from 268. |
 | 0-split | 2026-08-03 | — | **Provenance, not a review — no reviewer was dispatched to produce this row.** On 2026-08-03 this document was split: the focus cue, its derivation and its check left for `docs/specs/ONEUP-0076-ringless-focus-cue.md` and the layout stayed here. Before the split it had run three cold-eyes loops (24, 34, 35 verified) and converged **by cap rather than clean** at 762 lines, with fix collateral outrunning draft defects two loops running — 24 → 13 → 8 draft against 0 → 21 → 27 collateral — and across those loops and nine lanes essentially every finding fell in the half that left. **Those loops were run against a document that no longer exists, so none of their assurance transfers**: this spec runs the gate from loop 1 on its own bytes, and the rows below it are the parent's, kept because the layout sections were present throughout and the record of what was asked of them is worth keeping. Invariants were renumbered INV-1…INV-5 from the parent's INV-6, 7, 9, 10 and 12; nothing outside this document had cited them. |
 | parent 3 | 2026-08-03 | 3 lanes; 3 critical, 9 high, 14 medium, 10 low, 1 info — **35 verified, 2 dismissed** — 8 draft defects vs 27 fix collateral (34 actionable fixed, 1 info carried) | **Converged by cap, not clean, and the ratio is the reason this document should be split rather than reviewed a fourth time.** All three lanes led with the same defect and it was structural, introduced by loop 2: INV-2 had been given a *triple* clause requiring a retained rest border to clear 3:1 against the new focus fill — and loop 2 had also moved `ghostbd` to the smallest blend from `card` reaching 3:1, which is the same construction, in the same direction, as the focus fill derived from `card`. The two land on the same colour by arithmetic: **1.00:1** light and **1.03:1** dark, with the stop button's danger border at 1.49:1 and 1.59:1. The invariant was unsatisfiable on its first run and the ghost button's outline would have vanished into its own focus fill. A retained border now takes the **ink** colour, which inherits §4.1's 4.58 bound (6.92:1 and 6.04:1) — and the stop button's rationale went with it: its danger colour is a rest affordance, and what identifies it when focused is its label, not its tint. **The second finding all three lanes reached corrects a measurement of mine, not a claim of theirs.** Loop 2 recorded the high-contrast ghost button's focus pair as `$card` → `$btn`, pure black to pure white, 21:1 — but `_HC_QSS` groups `#GhostBtn:focus` with the primary buttons and sets `background: $btnhov`. `$btn` is what `:hover` sets. The real pairs are `#000000` → `#ffd400` (**14.67:1**) and `#ffffff` → `#0000cc` (**11.22:1**), so loop 2's row and the "weaken it sevenfold" arithmetic were both wrong while its *decision* — keep a pair that already clears 3:1 — stood. A lane also found that `_HC_QSS` restates `QPlainTextEdit#Log` with `border: 1px solid $border`, which would override mechanism B's 2 px rest border and drop the cue below SC 2.4.13's area threshold in exactly the appearance mode that needs it most; both overlay rules are widened in the same commit. **The most useful draft defect came from outside this document.** `docs/specs/ONEUP-0028-accessibility.md` §5 — shipped — promises `:focus` rules for eight styled controls including three that have none, and specifies a 2 px accent outline that the no-focus-ring decision forbids; §8 corrects it. Its own §2 had already logged *"No `:focus` rule anywhere in the QSS"* as a *"WCAG 2.4.7 failure"*, which independently corroborates the §8 correction loop 1 made to `ui-and-accessibility.md` §5.4. Smaller draft defects: the rule box stated two different algorithms (one anchored, one exhaustive) and `t` was never defined nor its 1% quantisation pinned, so two implementers would print different hexes; INV-12 varied `TEXT_SCALES`, whose smallest entry is the default `1.0`, so it tested nothing and the risk it names is the desktop font — it now pins 6 pt, `_font_metrics`' clamp floor; and a target-size clause had been filed under INV-13, a pure colour computation that cannot see a widget's size. **Dismissed: two.** A lane read §4.4's 101-point gradient sampling as unsourced; it is stated in §4.4 and produced §4.3's worst-pixel figures. And a lane asked whether the stride-3 lattice sweep was actually run rather than extrapolated — it was run; what is extrapolated is the *derivation* cost over that lattice, which is why INV-5 uses stride-16. **Trend across the three loops: draft defects 24 → 13 → 8, collateral 0 → 21 → 27.** The reads are finding less and the fixes are generating more, which is the documented signal that the document is past the review's design point rather than that it is bad. It left this loop at 762 lines. §11 recommends splitting the focus-cue contract (§4.1–§4.4) from the layout redesign (§4.5) before any further review. |
