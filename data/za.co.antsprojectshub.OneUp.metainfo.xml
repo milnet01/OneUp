@@ -48,6 +48,25 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.4.1" date="2026-08-07">
+      <description>
+        <p>Release 1.4.1.</p>
+        <ul>
+          <li>Window-side test coverage for four paths that had none.</li>
+          <li>The update check says what actually went wrong.</li>
+          <li>High-contrast mode is readable again in Settings and Repositories.</li>
+          <li>Only one copy of OneUp can run at a time.</li>
+          <li>A failed update no longer throws away everything it downloaded.</li>
+          <li>Rebooting during an update no longer hangs on a black screen.</li>
+          <li>Stop now works while packages are downloading.</li>
+          <li>Three ways the window's test run could leak state into later checks.</li>
+          <li>The version-bump test now proves all six version sites, not just the changelog.</li>
+          <li>The engine test suite no longer reads the real machine's free disk space.</li>
+          <li>The documentation loop-log tally check no longer fails a correctly-formed row.</li>
+          <li>Stop the leftover-packages step going silent for minutes on a slow mirror.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.4.0" date="2026-07-26">
       <description>
         <p>Release 1.4.0.</p>

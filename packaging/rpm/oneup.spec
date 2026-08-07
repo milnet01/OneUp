@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.4.0
+Version:        1.4.1
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -74,6 +74,19 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Fri Aug 07 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.1-0
+- Window-side test coverage for four paths that had none.
+- The update check says what actually went wrong.
+- High-contrast mode is readable again in Settings and Repositories.
+- Only one copy of OneUp can run at a time.
+- A failed update no longer throws away everything it downloaded.
+- Rebooting during an update no longer hangs on a black screen.
+- Stop now works while packages are downloading.
+- Three ways the window's test run could leak state into later checks.
+- The version-bump test now proves all six version sites, not just the changelog.
+- The engine test suite no longer reads the real machine's free disk space.
+- The documentation loop-log tally check no longer fails a correctly-formed row.
+- Stop the leftover-packages step going silent for minutes on a slow mirror.
 * Sun Jul 26 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.0-0
 - Warn when zypper's wording changes instead of silently showing no progress.
 - Add a Stop button that never interrupts an install half-way.
