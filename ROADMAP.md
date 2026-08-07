@@ -2044,6 +2044,20 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   is decided by something narrower than what a run performs.
   Specced as docs/specs/ONEUP-0092-passwordless-gaps.md, with ONEUP-0099.
   Specced and reviewed (2026-08-07): docs/specs/ONEUP-0092-passwordless-gaps.md, Status Reviewed. Three cold-eyes loops, 9 lanes, 87 findings raised and 80 verified and fixed; converged by cap with an empty deferred tail. Design: one definition per privileged shape shared by the call site and the rule; a root-owned download guard replacing the ungrantable `env LC_ALL=C bash -c` wrapper, which doubles as the drop-in's version stamp; and a currency check that decides passwordless is on from what a run actually needs. The `timeout` pattern was tested against the escalation string the bullet demanded before shipping.
+  Implemented (2026-08-07), commit 5567d47 — kept 🚧 only until the 1.4.3
+  release the spec's §8 requires; the code is done and pushed. Three
+  uncovered call sites, not two: the bullet named `timeout` and `du`, and
+  the third — the `env LC_ALL=C bash -c` download wrapper — is the one that
+  decided the shape, because sudo's warm credential means closing the two
+  filed gaps would have MOVED the prompt to the download rather than
+  removed it. That wrapper cannot be granted (a NOPASSWD entry for an
+  arbitrary `bash -c` is root), so it became a root-owned guard at
+  `/usr/libexec/oneup-download-guard` with a pinned argv, which doubles as
+  the drop-in's version stamp. The `timeout` pattern was tested against
+  `timeout 120 /bin/sh -c 'zypper x'` before shipping, per the bullet's
+  demand: not matched. Engine 280/0, GUI 313/0, local-CI green; both suites
+  also pass under `unshare -rn`. Existing users' Passwordless reads off
+  until they re-toggle — their live drop-in predates this.
 
 - 📋 [ONEUP-0093] **The download progress bar compares new bytes against the whole transaction.**
   _tick_activity computes what has arrived as `cache_bytes() - self._dl_base`
@@ -2392,3 +2406,13 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: user-request-2026-08-07.
   Specced with ONEUP-0092 (2026-08-07): docs/specs/ONEUP-0092-passwordless-gaps.md 4.7 owns it; no spec of its own, per documentation.md 2. Review found the stand-down must key on an explicit @@AUTH@@|off rather than a missing @@AUTH@@|on -- otherwise a crashed probe would delete a working weekly timer -- and that the pending-enable check belongs at the call site, not inside the shared helper, or a revoke racing an enable would leave the timer standing.
+  Implemented (2026-08-07), commit 5567d47 — kept 🚧 only until the 1.4.3
+  release ONEUP-0092's spec §8 requires; the code is done and pushed.
+  `_stand_down_autoupdate` in `updater.py` is the shared helper; the
+  click-path arm of `on_auth_toggled` and the discovery path in
+  `_on_auth_status_finished` both call it. Two review findings are load-
+  bearing and must not be "simplified" away: the discovery path keys on an
+  explicit `@@AUTH@@|off` (a missing `@@AUTH@@|on` would let a crashed probe
+  delete a working weekly timer), and the `_pending_autoupdate` guard sits
+  at the CALL SITE, not inside the helper — moving it in regresses the
+  click-path revoke, which `tests/gui-smoke.py` scenario (d) pins.
