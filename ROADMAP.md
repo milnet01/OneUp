@@ -2025,6 +2025,32 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Updates failed twice on the same package because openSUSE's mirrors were out of sync; OneUp could recover from that by itself.
   Kind: enhancement.
   Source: user-report-2026-08-07.
+  DIAGNOSED (2026-08-07) -- and the earlier hypotheses in this bullet were
+  wrong. It is not mirror striping and not a timeout. openSUSE serves packages
+  from two hosts, and MirrorCache routes some files to the slow one.
+  Measured, same file, same minute, from this machine:
+    downloadcontentcdn.opensuse.org  1,013,554 B/s  -- full 30 MB in 30 s
+    downloadcontent.opensuse.org       228,452 B/s  --  6.8 MB in 30 s
+  The CDN is 4.4x faster and HAS the file (HTTP 200, content-length
+  210194084, the correct size). Yet the metalink for kernel-default offers
+  exactly ONE source and it is the slow origin:
+    curl -s .../kernel-default-7.1.6-1.1.x86_64.rpm.metalink
+      -> http://downloadcontent.opensuse.org/...   (1 url, no mirrors)
+  while packages that downloaded fine in the same run are routed to the CDN:
+    MozillaFirefox-153.0.3  -> downloadcontentcdn.opensuse.org
+    git-2.55.0-3.1          -> downloadcontentcdn.opensuse.org
+  So "trying next mirror" has no next mirror to try, and a 200 MB file over a
+  long-haul link at ~228 KB/s takes ~15 minutes -- long enough that the
+  connection is dropped, which is what "end of response with N bytes missing"
+  reports. Every other package in the run succeeded because it came from the
+  CDN. The user's line is 500 Mbps, so nothing here is client-side.
+  This makes the retry proposed above the WRONG fix. The right one is host
+  preference: on a truncated download, retry the SAME file against
+  downloadcontentcdn.opensuse.org before giving up. Cheap, needs no mirror
+  list, and is exactly what a knowledgeable user does by hand.
+  Open question for the fix: whether libzypp can be told to prefer that host
+  (download.media_preference / a repo baseurl override) or whether OneUp must
+  re-fetch and place the file in /var/cache/zypp/packages itself.
 
 - 📋 [ONEUP-0095] **Disable Stop while stopping is not possible, instead of accepting a click that does nothing.**
   Today Stop is enabled for the whole of a real run (set_controls_enabled shows
@@ -2053,3 +2079,41 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The Stop button should go grey while the installer is running, so it never looks like it will work when it cannot.
   Kind: ux.
   Source: user-request-2026-08-07.
+
+- 📋 [ONEUP-0096] **Commit in heaps, so one unfetchable package cannot sink the whole update.**
+  Found by reading PackageKit's zypp backend at the user's request. It is the
+  ONE download-related thing that backend configures, in
+  zypp_perform_execution():
+      ZYppCommitPolicy policy;
+      if (only_download) policy.downloadMode(DownloadOnly);
+      else               policy.downloadMode(DownloadInHeaps);
+  It sets no ZConfig options at all -- no max_concurrent_connections, no
+  timeouts, no mirror or MediaSetAccess handling -- so the commit policy is
+  the whole of the difference.
+  OneUp passes no --download flag, and commit.downloadMode is UNSET on this
+  machine (checked /usr/etc/zypp/zypp.conf), so libzypp picks the task
+  default. zypp.conf(5):
+    DownloadInAdvance: "First download all packages to the local cache. Then
+      start to install. This is the safe and preferred default when installing
+      packages to the local system."
+    DownloadInHeaps:   "Similar to DownloadInAdvance, but try to split the
+      transaction into heaps, where at the end of each heap a consistent
+      system state is reached."
+  Consequence, observed twice on 2026-08-07: 82 packages preloaded, ONE
+  (kernel-default, routed to the slow non-CDN origin -- ONEUP-0094) could not
+  be fetched, and the transaction installed NOTHING. Under heaps the earlier
+  heaps would have committed and only the kernel's heap would have failed.
+  zypper exposes it directly: `zypper dup --download in-heaps` (modes: only,
+  in-advance, in-heaps, as-needed).
+  THE TRADE-OFF IS REAL AND MUST BE DECIDED, NOT ASSUMED. openSUSE documents
+  in-advance as "the safe and preferred default", and heaps means a failed run
+  can leave the system PARTLY upgraded -- consistent at each heap boundary,
+  but on Tumbleweed a partial dup is a state the project has so far avoided by
+  construction. Weigh that against the current behaviour, which is that a
+  single bad mirror route costs the user every update in the set.
+  Sequencing: pairs with ONEUP-0085 (the download pass) and ONEUP-0087 (the
+  cache is now kept). Prove it with a scenario whose mock zypper fails one
+  package and assert the others still install.
+  **Layman:** One package that will not download currently stops every other update from installing; it should not.
+  Kind: enhancement.
+  Source: user-request-2026-08-07 (review PackageKit's download handling).
