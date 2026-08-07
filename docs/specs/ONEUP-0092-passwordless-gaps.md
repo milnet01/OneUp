@@ -1,6 +1,6 @@
 # ONEUP-0092 — Passwordless actually runs without a password
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** fix
 **Roadmap:** ONEUP-0092
 **Branch:** main (1.4.x — qualifies under `workflow.md` §1.1: with automatic updates on, the
