@@ -2029,6 +2029,20 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   `/usr/bin/du` takes no sub-command so it carries no escalation risk.
   Sources: manpages.opensuse.org/Tumbleweed/libzypp/zypp.conf.5.en.html ;
   opensuse.github.io/libzypp/group__ZyppConfig.html
+  Measured 2026-08-07 with the drop-in live on the reporter's machine
+  (`sudo -k -n <argv>`, which runs the command only if it is password-free):
+  zypper, env LC_ALL=C zypper, snapper and flatpak are covered; `timeout 120
+  zypper --version` and `du -sB1 /var/cache/zypp` are not -- and neither is a
+  THIRD call this bullet did not name, `env LC_ALL=C bash -c` (run_system_download's
+  root-side stop wrapper, ONEUP-0085).
+  The third one is load-bearing: today's single prompt at the first refresh is
+  what warms the credential for the rest of the run, so closing only the two
+  filed gaps MOVES the prompt to the download pass rather than removing it.
+  Root cause is one level up from the list -- both the drop-in and the
+  `sudo -k -n zypper --version` probe that sudo_init and auth_status trust
+  enumerate a SUBSET of the engine's privileged calls, so "passwordless is on"
+  is decided by something narrower than what a run performs.
+  Specced as docs/specs/ONEUP-0092-passwordless-gaps.md, with ONEUP-0099.
 
 - 📋 [ONEUP-0093] **The download progress bar compares new bytes against the whole transaction.**
   _tick_activity computes what has arrived as `cache_bytes() - self._dl_base`
@@ -2353,3 +2367,26 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The tests no longer phone GitHub, but nothing would notice if that came back.
   Kind: test.
   Source: in-session-2026-08-07 (deferred while closing ONEUP-0090).
+
+- 📋 [ONEUP-0099] **Automatic updates keep running after passwordless stops working.**
+  The GUI stands the weekly update timer down when the user CLICKS Passwordless
+  off -- on_auth_toggled's "coupling rule 3" arm removes the timer, unchecks
+  the toggle and says why. It does NOT stand it down when the app merely
+  DISCOVERS passwordless is off: _query_auth_status -> _on_auth_status_finished
+  -> _set_auth_checked reflects the switch under blockSignals, precisely so the
+  reflect cannot fire grant/revoke -- so the coupling arm never runs.
+  Reachable two ways. (1) The drop-in is removed outside OneUp (`sudo rm
+  /etc/sudoers.d/oneup`, a reinstall, another admin). (2) After ONEUP-0092, a
+  drop-in installed by an OLDER OneUp is live but incomplete, so passwordless
+  does not actually work.
+  Either way oneup-update.timer stays enabled and fires weekly into a password
+  dialog nobody is looking at, installing nothing -- the silent wrong answer of
+  workflow.md 1.1, once a week, forever. The user's rule, stated 2026-08-07:
+  if Automatic Updates requires Passwordless, Automatic Updates must switch
+  itself off whenever Passwordless is off.
+  Specced with ONEUP-0092 (docs/specs/ONEUP-0092-passwordless-gaps.md): the two
+  share a cause -- the app deciding passwordless is "on" from something narrower
+  than what the run actually needs.
+  **Layman:** If the passwordless setting stops working, the weekly automatic update should switch itself off instead of silently doing nothing every week.
+  Kind: fix.
+  Source: user-request-2026-08-07.
