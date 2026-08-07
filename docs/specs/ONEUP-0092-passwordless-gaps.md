@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Kind:** fix
-**Roadmap:** ONEUP-0092, ONEUP-0099
+**Roadmap:** ONEUP-0092
 **Branch:** main (1.4.x — qualifies under `workflow.md` §1.1: with automatic updates on, the
 weekly run installs nothing and says nothing)
 **Verified at:** `9fe90e9` — every claim naming a symbol below was resolved against this
@@ -18,10 +18,12 @@ the rule OneUp installs finally covers every privileged command a run actually i
 and because OneUp now decides "passwordless is on" by checking that, rather than by asking
 about one command out of six.
 
-**Two roadmap items, one umbrella** (`documentation.md` §2 permits this where the items
-share a cause). ONEUP-0092 is the prompt itself. ONEUP-0099 is what that prompt does to
-automatic updates, which cannot run at all while one appears. Both come from the same
-mistake: deciding passwordless is on from something narrower than what a run performs.
+**ONEUP-0099 is implemented by §4.7 of this spec and has no spec of its own.** It is what
+the prompt does to automatic updates, which cannot run at all while one appears — the same
+mistake seen from the GUI side, so its one design question is answered in §4.7 and
+`documentation.md` §2 says an item with no open design question gets a bullet, not a spec.
+Its roadmap bullet points here. The header names one id because every sibling in
+`docs/specs/` does and `documentation.md` §3's template is singular.
 
 ## 1. Goal
 
@@ -137,21 +139,36 @@ the probe is replaced by one that cannot be satisfied by a subset.
 
 ### 4.2 One definition per shape
 
-Two new file-scope arrays, beside `REFRESH_TIMEOUT`'s existing declaration:
+Two new file-scope arrays, declared **after** `REFRESH_TIMEOUT` (the engine runs under
+`set -uo pipefail`, so the expansion must follow the assignment):
 
 ```bash
 # The refresh and the cache measurement both run under sudo, so the ONEUP-0023 drop-in
 # must grant the EXACT argv each types or passwordless silently keeps prompting
-# (ONEUP-0092). One definition each, used by the call site and by build_auth_rule, so
-# the rule cannot drift from the call.
-REFRESH_SUDO_ARGV=("$(command -v timeout || echo timeout)" "$REFRESH_TIMEOUT" zypper)
-CACHE_DU_ARGV=("$(command -v du || echo du)" -sB1 /var/cache/zypp)
+# (ONEUP-0092). One definition each, used by the call site and by auth_cmnds, so the
+# rule cannot drift from the call.
+REFRESH_SUDO_ARGV=("$(command -v timeout)" "$REFRESH_TIMEOUT" zypper)
+CACHE_DU_ARGV=("$(command -v du)" -sB1 /var/cache/zypp)
 ```
 
+**No bare-name fallback**, and that is measured rather than stylistic: a `Cmnd` that is
+not a fully-qualified path is a sudoers *parse error*, so a drop-in carrying one is
+rejected whole. Run 2026-08-07 against `visudo -cf`, which `grant_auth` already uses:
+
+```
+Cmnd_Alias ONEUP_BARE = timeout 120 zypper *, /usr/bin/du -sB1 /var/cache/zypp
+                        ^~~~~~~   expected a fully-qualified path name        (rc 1)
+```
+
+The same file with `/usr/bin/timeout` parses. So an unresolvable `timeout` or `du` must
+make `build_auth_rule` **fail** — the existing "zypper was not found" arm of `grant_auth`
+is the pattern — rather than emit a name that would take the whole rule down with it.
+
 `refresh_repos` becomes `sudo "${REFRESH_SUDO_ARGV[@]}" --non-interactive "${gpg[@]}"
-refresh "$alias"`; the cache step becomes `sudo_capture CACHE_DU "${CACHE_DU_ARGV[@]}"`.
-Neither changes behaviour — the argv is byte-identical to today's, with `timeout` and `du`
-now spelled as the absolute paths sudo resolves them to anyway.
+refresh "$alias"`; **both** cache call sites — before and after `zypper clean` — become
+`sudo_capture CACHE_DU "${CACHE_DU_ARGV[@]}"`. Neither changes behaviour: the command is
+the one that runs today, with `timeout` and `du` spelled as the absolute paths sudo
+resolves them to anyway.
 
 `auth_cmnds` (new) echoes the comma-joined `Cmnd` list and becomes the only place the
 granted scope is written:
@@ -161,7 +178,7 @@ granted scope is written:
 | `<zypper>`, `<snapper>`, `<flatpak>`, `<systemctl> stop packagekit`, `<env> LC_ALL=C zypper *` | unchanged, moved out of `build_auth_rule` |
 | `${REFRESH_SUDO_ARGV[*]} *` | the refresh call, verbatim, plus its arguments |
 | `${CACHE_DU_ARGV[*]}` | the cache measurement, verbatim. No wildcard — the argv is fixed |
-| `$GUARD_FILE` | §4.3 |
+| `$GUARD_FILE` | §4.3. **No argument spec at all**, which in sudoers permits *any* arguments — required, because the transaction argv varies. The guard restricts itself (§4.3); the entry does not, and must not be pinned by analogy with the `du` row above |
 
 **Why the refresh entry is safe**, and why it is written this way rather than as
 `/usr/bin/timeout * zypper *`: sudoers matches a command's arguments as one
@@ -194,14 +211,35 @@ an argument to `bash` and becomes a file: a small script, **root-owned and root-
 writable**, whose one job is the wrapper's job. The drop-in grants that path.
 
 `download_guard_src` (new) emits the text; it is the single source, and the same text is
-what runs. It differs from today's inline script in three ways, all of them the point:
+what runs.
 
-- it pins the interpreter and the locale itself (`#!/usr/bin/env bash`, `export LC_ALL=C`),
-  so the invocation needs no `env` wrapper;
-- it **hardcodes the zypper path resolved at grant time** and refuses any first argument
-  that is not the literal word `zypper` the engine's `system_txn_argv` builds, exiting 2
-  without running anything. So the guard's authority is exactly "run this zypper as root",
-  which the drop-in's first entry already grants — the wrapper adds no privilege;
+**The guard's argv, which is the contract an implementer builds against:**
+
+| Position | Value | Notes |
+| --- | --- | --- |
+| `$1` | the stop file | `$STOP_FILE` |
+| `$2` | the run-state file | `$RUN_STATE_FILE` |
+| `$3` | the poll interval | `$STOP_POLL_SECONDS` |
+| `$4` | the literal word `zypper` | validated; anything else exits **2**, running nothing |
+| `$5…` | the rest of `${SYS_TXN[@]}` | `--non-interactive`, any `--reposd-dir`, `dup`/`update`, … |
+
+So the engine's call is `sudo "$GUARD_FILE" "$STOP_FILE" "$RUN_STATE_FILE"
+"$STOP_POLL_SECONDS" "${SYS_TXN[@]}"`, and the guard does `shift 4` before running
+`"$ZYPPER" "$@" --download-only`. **The `_` placeholder is dropped**: it exists today only
+to fill `$0` for `bash -c`, and a script file has its own `$0`. Getting this wrong is
+silent — the guard would read the *poll interval* as its stop file and never see a stop —
+which is why the positions are tabulated rather than described.
+
+It differs from today's inline script in three ways, all of them the point:
+
+- it pins the interpreter and the locale itself — `#!/bin/bash`, an absolute path for the
+  same reason §4.2 pins the sudoers entries, and `export LC_ALL=C` — so the invocation
+  needs no `env` wrapper. (Not `#!/usr/bin/env bash`, which is a `PATH` lookup: the
+  opposite of pinning, however conventional it looks.)
+- it **carries the zypper path resolved at grant time**, frozen into the file when it is
+  written, and validates `$4` as above. So the guard's authority is exactly "run this
+  zypper as root", which the drop-in's first entry already grants — the wrapper adds no
+  privilege, which is the whole argument for granting it;
 - it carries `# oneup-auth-scope: <auth_cmnds output>` as a comment (§4.4).
 
 Everything else is preserved verbatim from the current wrapper, because each line was paid
@@ -213,32 +251,63 @@ openSUSE Tumbleweed adopted it in 2020, following FHS 3.0 — and `/usr/lib/…`
 Leap 15.x still works. The path is one variable, `GUARD_FILE`, overridable as
 `ONEUP_GUARD_FILE` so the suite never writes to a real system directory (`testing.md` §2).
 
-**Grant installs it; revoke removes it; the pair is atomic.** `grant_auth` writes the guard
-with `sudo install -o root -g root -m 0755` *before* the drop-in, and on failure writes no
-drop-in at all — a rule granting a path that does not exist would be a rule that silently
-never matches. `revoke_auth` removes both files in one `sudo rm -f`.
+**Grant installs it; revoke removes it; the pair is atomic in both directions.**
+`grant_auth` writes the guard with `sudo install -o root -g root -m 0755` *before* the
+drop-in, and on failure writes no drop-in at all — a rule granting a path that does not
+exist would be a rule that silently never matches. **If the drop-in step then fails, the
+guard is removed again**, because the failure leaves the user with the toggle reading off,
+which makes `on_auth_toggled`'s revoke arm unreachable — a root-owned executable they
+consented to and cannot withdraw. `revoke_auth` removes both files in one `sudo rm -f`.
 
 ### 4.4 The guard file is also the drop-in's version stamp
 
 The drop-in is `0440 root:root`, so the engine cannot read back what it granted. The guard
-can be read by anyone, and is written by the same grant — so *"the installed guard is
-byte-identical to what `download_guard_src` would emit now"* answers **"was this drop-in
-written by an OneUp that grants what this run needs?"** without reading it.
+can be read by anyone, and both files are written by the same grant — so *"the installed
+guard is byte-identical to what `download_guard_src` would emit now"* is evidence about
+the drop-in beside it.
 
-The `# oneup-auth-scope:` comment is what makes that true rather than approximate: it
-carries the whole `Cmnd` list, so a changed refresh budget, a moved binary, an added entry
-or a new OneUp version all break the match.
+**State the claim exactly, because it is an inference and not a reading.** A matching
+guard means: *this file was written by an OneUp whose `auth_cmnds` output, on this machine
+as it is configured right now, is the same as this engine's.* The `# oneup-auth-scope:`
+comment is what carries the second half — the whole `Cmnd` list, so a changed refresh
+budget, a moved binary, an added entry or a new OneUp version all break the match.
+
+Two things it is **not**, both of which §6 now carries as rows rather than leaving to be
+discovered:
+
+- It is not proof that sudo *matches* those entries. `visudo -cf` (§5.4) is what catches a
+  malformed rule, at grant time, and §4.2's no-bare-name rule is what keeps an unmatchable
+  entry from being generated in the first place.
+- It cannot see a drop-in **replaced** after the guard was written. An older OneUp — and
+  §9 notes AppImage, RPM and from-checkout installs coexist — re-granting would overwrite
+  the drop-in with its narrower five-entry rule and leave this guard untouched, and the
+  check would pass. This is a knowing blind spot, not an oversight: closing it needs the
+  drop-in itself to be readable, which its `0440` mode exists to prevent. §4.4's safety net
+  is that the *symptom* is today's bug, which is at worst one labelled prompt away from
+  being diagnosed, and re-toggling passwordless fixes it.
+
+Two functions, because the two readers need different halves:
 
 ```bash
+guard_current() {         # pure file comparison — no sudo, safe to call mid-run
+    [[ -r "$GUARD_FILE" ]] && [[ "$(<"$GUARD_FILE")" == "$(download_guard_src)" ]]
+}
+
 auth_current() {          # the drop-in is live AND it grants what this engine needs
     local zypper
     zypper=$(command -v zypper) || return 1
     sudo -k -n "$zypper" --version >/dev/null 2>&1 || return 1
-    [[ -r "$GUARD_FILE" ]] && [[ "$(<"$GUARD_FILE")" == "$(download_guard_src)" ]]
+    guard_current
 }
 ```
 
-Both existing readers switch to it:
+`sudo -k` here is the existing `auth_status` idiom and is safe to issue at any point in a
+run: measured 2026-08-07, a warm credential survives it. `sudo -A -v` to warm, `sudo -n
+true` → ok, `sudo -k -n true` → fails as designed, `sudo -n true` again → **still ok**. So
+`-k` suppresses the cache for its own invocation without invalidating it, which is what
+lets `auth_status` report real state without costing the next call a prompt.
+
+Both existing readers switch to `auth_current`:
 
 - **`sudo_init`** early-returns only when `auth_current` succeeds. A stale or absent
   drop-in now falls through to the ordinary path — one labelled prompt up front, plus the
@@ -249,37 +318,62 @@ Both existing readers switch to it:
   §5.6 already requires the toggle to report what *is* rather than what was stored; this
   extends "is" from "a rule exists" to "the rule works", which is what the toggle claims.
 
+**Both claims are scoped to an ordinary run.** `grant_auth` and `revoke_auth` issue `sudo
+visudo`, `sudo install` and `sudo rm`, none of which the drop-in grants and none of which
+it should — changing the authorization rule is exactly the act that ought to cost a
+password. So "no prompt" means the five update steps, never the settings actions.
+
 ### 4.5 What non-passwordless users run
 
-`run_system_download` uses the guard when `auth_current` says it is current, and otherwise
-runs **today's inline `sudo env LC_ALL=C bash -c` wrapper unchanged**. Users who never
+`run_system_download` uses the guard when **`guard_current`** says it is current, and
+otherwise runs **today's inline `sudo env LC_ALL=C bash -c` wrapper unchanged**. It asks
+`guard_current`, not `auth_current`: the only question at that point is whether the file on
+disk is the script this engine expects, and the drop-in probe would add a `sudo` call in
+the middle of a run for an answer nothing there uses. Users who never
 granted passwordless have a warm credential from `sudo_init`, so that path costs them
 nothing and is not new code. Both routes run the same script text and must behave
 identically, which INV-8 pins.
 
 ### 4.6 The grant is slightly wider, and the dialog must still say so
 
-Three entries are added to a rule the user consents to. Two are strictly narrower than what
-is already granted (`timeout <budget> zypper *` and `du -sB1 /var/cache/zypp` can each do
-less than the existing unrestricted `zypper` entry). The guard is equal to it, by §4.3's
-construction. So the honest summary — *approximately passwordless root, because zypper can
-install anything and a package can run code as root* — is unchanged, and
-`_confirm_passwordless`'s wording stands as written. `security.md` §5.2's table gains the
-three rows.
+Three entries are added to a rule the user consents to, and the argument has to be made per
+entry rather than in a sentence:
+
+- **`timeout <budget> zypper *`** grants strictly less than the existing unrestricted
+  `zypper` entry — the same binary, reachable only under a fixed time limit.
+- **`$GUARD_FILE`** is equal to it, by §4.3's construction: the guard can run that zypper
+  and nothing else.
+- **`du -sB1 /var/cache/zypp`** is genuinely new — `du` is a different binary, not a subset
+  of anything already granted. It is read-only, takes no sub-command, and its argv is
+  pinned whole, so what it adds is "may measure one directory as root".
+
+So the honest summary — *approximately passwordless root, because zypper can install
+anything and a package can run code as root* — is unchanged, and `_confirm_passwordless`'s
+wording stands as written rather than being softened (`security.md` §5.3). §5.2's table
+gains the three rows.
 
 ### 4.7 Automatic updates stand down whenever passwordless is off (ONEUP-0099)
 
-`on_auth_toggled`'s off arm and `_on_auth_status_finished` need the same three steps, so
-they get one helper rather than a second copy — `_stand_down_autoupdate`, holding the
-existing removal, uncheck and message box verbatim.
+`on_auth_toggled`'s off arm and `_on_auth_status_finished` need the same steps, so they get
+one helper rather than a second copy — `_stand_down_autoupdate`, holding the existing
+`if self._autoupdate_enabled():` guard, the `_remove_user_timer("oneup-update")` call, the
+uncheck and the message box verbatim. The `self._pending_autoupdate = False` line stays at
+the `on_auth_toggled` call site: it is about a revoke racing an enable, not about standing
+the timer down, and `_on_auth_status_finished` already consumes that latch itself.
 
-`_on_auth_status_finished` calls it whenever the probe comes back off **and a timer is
-actually enabled**. That condition is what keeps a failed *enable* quiet: during a pending
-enable no timer has been installed yet, so `_autoupdate_enabled()` is false, the helper does
-not run, and the existing "came back off" handling is untouched — no second dialog.
+`_on_auth_status_finished` calls the helper whenever the probe comes back off, **before**
+its existing `if self._pending_autoupdate:` block. The guard inside the helper is what
+keeps a failed *enable* quiet: during a pending enable no timer has been installed yet, so
+`_autoupdate_enabled()` is false, nothing is removed, no box appears, and the existing
+"came back off" handling runs untouched.
 
-Because `_query_auth_status` already runs at startup, a rule removed behind OneUp's back is
-caught the next time the app opens, not the next time someone opens Settings.
+Because `_query_auth_status` already runs in `Updater.__init__`, a rule removed behind
+OneUp's back is caught the next time the app opens, not the next time someone opens
+Settings. **That means the box can appear at launch**, which is intended — the user's
+weekly update has stopped working and nothing else would say so — but it is a modal at
+startup, so it must be the same informational box the click path shows and no more. It is
+also why INV-11 and INV-12 stub it: `QMessageBox.information` blocks, and the GUI suite
+constructs the window 56 times.
 
 ## 5. Correctness invariants
 
@@ -291,34 +385,49 @@ because no test may reproduce it.
 - **INV-1** Every privileged command shape the engine issues in a run is granted by the
   drop-in it installs.
   *Test:* `--grant-auth` under a redirected `ONEUP_AUTH_FILE`, then the generated rule is
-  asserted to contain each of: the resolved `zypper` path, `LC_ALL=C zypper *`, the refresh
-  argv followed by ` *`, the cache `du` argv, and the guard path. Breaks the moment a
-  granted shape is dropped, which is the defect this spec exists to close.
+  asserted to contain each of the shapes §4.2's table lists that the mock PATH provides:
+  the resolved `zypper` path, `LC_ALL=C zypper *`, `stop packagekit`, the refresh argv
+  followed by ` *`, the cache `du` argv, and the guard path — plus `snapper` and `flatpak`
+  when the scenario's mock directory carries them, since `auth_cmnds` skips an absent
+  optional binary by design. Breaks the moment a granted shape is dropped, which is the
+  defect this spec exists to close.
 
 - **INV-2** No privileged call site escapes that list unnoticed.
-  *Test (structural):* `grep -cE '\bsudo(_capture)? ' update_system.sh` returns a pinned
-  count, with this invariant named beside it, so a **new** privileged call fails the suite
-  until it is granted or explicitly recorded as interactive (grant/revoke's own
-  `visudo`/`install`/`rm`). Breaks on exactly the way ONEUP-0092 was introduced: a call site
-  added without a matching entry.
+  *Test (structural):* `grep -cE '^[[:space:]]*(sudo|sudo_capture) ' update_system.sh`
+  returns a count pinned at implementation time, with this invariant named beside it, so a
+  **new** privileged call fails the suite until it is granted or explicitly recorded as
+  interactive (grant/revoke's own `visudo`/`install`/`rm`). Breaks on exactly the way
+  ONEUP-0092 was introduced: a call site added without a matching entry.
+  **Anchored to command position on purpose.** The obvious pattern, `grep -cE
+  '\bsudo(_capture)? '`, returns **70** on `9fe90e9` against **26** at command position,
+  because the engine discusses sudo constantly in comments — 28 of the 70 matching lines
+  are comments. A count dominated by prose fails when a comment is reworded, which teaches
+  the next person to bump the number rather than read it. Two things the anchored form
+  still cannot see, stated so nobody reads it as complete: a `sudo` inside a pipeline or
+  substitution, and two calls on one line (`grep -c` counts lines).
 
-- **INV-3** The refresh grant and the refresh call cannot drift apart.
-  *Test (structural):* `grep -c 'REFRESH_SUDO_ARGV' update_system.sh` returns **3** — one
-  definition, one call site, one rule entry. Breaks if either side is respelled in place,
-  which is how a pinned budget silently stops matching.
+- **INV-3** A granted argv and the call that types it cannot drift apart.
+  *Test (structural):* `grep -c 'REFRESH_SUDO_ARGV' update_system.sh` returns **3** (one
+  definition, one call site, one rule entry) and `grep -c 'CACHE_DU_ARGV'` returns **4**
+  (one definition, *two* call sites — before and after `zypper clean` — one rule entry).
+  Breaks if either side is respelled in place, which is how a pinned budget silently stops
+  matching, and the `du` count is what catches only one of the two cache sites being
+  converted.
 
 - **INV-4** The drop-in never grants a general-purpose binary with an unpinned command slot.
   *Test:* the generated rule is asserted **not** to match `timeout \*`, ` bash`, ` sh -c`,
-  or an `env` entry whose assignment carries a wildcard; and the refresh entry is asserted to
-  match `timeout [0-9]+ zypper \*` exactly. Breaks on the escalation shape §4.2 measured —
-  `timeout * zypper *`, satisfiable by `timeout 5 /bin/sh -c 'zypper x'`.
+  or an `env` entry whose assignment carries a wildcard; and the refresh entry is asserted
+  to match `timeout [0-9]+ zypper \*` exactly. Breaks on the escalation shape §4.2 measured.
 
 - **INV-5** The guard runs zypper and nothing else.
-  *Test:* the text `download_guard_src` emits is written to a scratch file and run directly
-  with a first argument of `bash` — it exits **2**, and the mock records no invocation.
-  Run again with `zypper`, it invokes the mock zypper with `--download-only` appended.
-  Breaks if the guard ever executes `"$@"`, which would turn one sudoers entry into a root
-  shell.
+  *Test:* the text `download_guard_src` emits is written to a scratch file, made
+  executable, and run with the **real argv of §4.3** — `<guard> "$stop" "$state" 1 bash -c
+  id` — where `$4` is `bash` rather than `zypper`. It exits **2** and the mock records no
+  invocation. Run again as `<guard> "$stop" "$state" 1 zypper --non-interactive dup`, it
+  invokes zypper with `--download-only` appended. The scenario emits the guard text with
+  the scenario's mock directory first on `PATH`, so the path frozen into it is the mock
+  zypper, not the machine's. Breaks if the guard ever executes `"$@"` unvalidated, which
+  would turn one sudoers entry into a root shell.
 
 - **INV-6** A drop-in that does not cover this engine is treated as absent.
   *Test:* a scenario whose mock `sudo` models a live drop-in (the `-n` probe succeeds) but
@@ -334,14 +443,20 @@ because no test may reproduce it.
 
 - **INV-8** The download behaves identically whichever wrapper carries it.
   *Test:* the ONEUP-0085 stop scenario is run twice — once with a current guard installed,
-  once without — and both assert the same outcome: the step ends `stopped`, and the mock
-  zypper received `--download-only`. Breaks if the guard drops the stop poll, silently
+  once without — and both assert the same outcome: the system step ends `skip` with
+  `stopped before installing anything`, `@@DONE@@|stopped` is emitted, and the mock zypper
+  received `--download-only`. (`skip` is the *step* outcome ONEUP-0085 §4.4's table maps rc
+  143 to; `stopped` is the run value.) Breaks if the guard drops the stop poll, silently
   removing Stop for the users who enabled passwordless.
 
-- **INV-9** Granting is atomic: a guard that cannot be installed leaves no drop-in.
-  *Test:* a mock `install` that fails for the guard path only — `ONEUP_AUTH_FILE` does not
-  exist afterwards, `@@AUTH@@|on` is absent, and a `@@HINT@@` is emitted. Breaks on a grant
-  that writes a rule pointing at a file that was never created.
+- **INV-9** Granting is atomic in both directions: a half-installed pair leaves neither file.
+  *Test:* two scenarios, each starting from **no existing drop-in and no existing guard**,
+  so that "absent afterwards" means this grant wrote nothing rather than that a previous
+  one survived. (a) A mock `install` that fails for the guard path — `ONEUP_AUTH_FILE` and
+  `ONEUP_GUARD_FILE` are both absent, `@@AUTH@@|on` is absent, a `@@HINT@@` is emitted.
+  (b) A mock `install` that fails for the drop-in path only — **both** are absent again,
+  which is the half INV-9 gained after review: a stranded root-owned guard cannot be
+  revoked through the UI, because the toggle reads off and the revoke arm is unreachable.
 
 - **INV-10** Revoking removes both files.
   *Test:* grant then revoke under redirected paths — neither `ONEUP_AUTH_FILE` nor
@@ -349,25 +464,33 @@ because no test may reproduce it.
   root-owned executable behind after the user withdrew consent (`security.md` §5.5).
 
 - **INV-11** An enabled weekly update never outlives the passwordless rule it needs.
-  *Test (GUI):* with `_autoupdate_enabled` stubbed true, `_on_auth_status_finished` is fed
-  output **without** `@@AUTH@@|on`; the test asserts `_remove_user_timer` was called with
-  `oneup-update` and the toggle is unchecked. Breaks the ONEUP-0099 case exactly: a rule
-  removed outside OneUp leaves a timer firing weekly into a dialog nobody answers.
+  *Test (GUI):* with `_autoupdate_enabled` stubbed true, `_remove_user_timer` spied and
+  the informational box stubbed, `_on_auth_status_finished` is fed output **without**
+  `@@AUTH@@|on`; the test asserts `_remove_user_timer` was called with `oneup-update` and
+  the toggle is unchecked. Both stubs are required, not tidiness: the real
+  `_remove_user_timer` shells out to `systemctl --user disable --now` and would disable the
+  developer's own timer (`testing.md` §2), and `QMessageBox.information` blocks. Breaks the
+  ONEUP-0099 case exactly: a rule removed outside OneUp leaves a timer firing weekly into a
+  dialog nobody answers.
 
 - **INV-12** A failed *enable* does not trigger the stand-down.
   *Test (GUI):* with `_autoupdate_enabled` stubbed false and `_pending_autoupdate` set,
-  the same off-reply asserts `_remove_user_timer` was **not** called and the toggle is
-  unchecked once. Breaks a stand-down that fires on every off-reply, which would show a
-  "turned off" dialog for a feature the user had just failed to turn on.
+  the same off-reply asserts `_remove_user_timer` was **not** called, no box was raised,
+  and the toggle is unchecked once. Breaks a stand-down that fires on every off-reply,
+  which would show a "turned off" dialog for a feature the user had just failed to turn on.
 
 ## 6. Failure modes
 
 | Assumption | When it breaks | What happens |
 | --- | --- | --- |
-| `timeout` / `du` resolve at grant time | a stripped image lacking coreutils | the entry falls back to the bare name, never matches, and `auth_current` fails → one up-front labelled prompt (§4.4), never a mid-run one |
+| `timeout` / `du` resolve at grant time | a stripped image lacking coreutils | **the grant refuses** — `build_auth_rule` fails rather than emitting a bare name, because `visudo -cf` rejects a non-absolute `Cmnd` and would take the whole rule down (§4.2, measured). The user gets the existing "could not set up" `@@HINT@@`. Separately, a machine with no `timeout` cannot refresh at all, which is a bigger failure than a prompt |
 | The user's OneUp installed the live drop-in | upgrading OneUp with passwordless already on | the guard text no longer matches, so the toggle reads *off* and the timer stands down (INV-11); re-toggling grants the new scope. One visible, correctable state — not a silent half-grant |
+| …and no *older* OneUp re-granted since | an AppImage or checkout of 1.4.2 runs `--grant-auth` after this version did | the drop-in is narrowed back to five entries while this guard stays on disk, so `auth_current` wrongly returns true and the mid-run prompt returns. §4.4 states this blind spot; the symptom is exactly today's bug, and re-toggling on the newer build fixes it |
+| The granted scope reflects the machine at run time | `snapper` or `flatpak` is installed or removed after granting | `auth_cmnds` skips absent optional binaries, so the `# oneup-auth-scope:` line changes and the stamp stops matching. Installing one *should* re-grant (there is a new shape to cover); **removing** one is a false negative — nothing became uncovered, yet the toggle flips off and the timer stands down. Correctable by re-toggling, and it fails safe |
+| `REFRESH_TIMEOUT` is the same at grant and at run | a user or scenario sets `ONEUP_REFRESH_TIMEOUT` (`files-and-naming.md` §5.1) | the budget is pinned literally into the rule, so the two disagree — and the scope comment catches it: the stamp mismatches, `auth_current` fails, and the run takes the one-labelled-prompt path instead of prompting per repository. The override is a test hook, so this is the correct failure, but it is why the budget is in the stamp |
 | `/usr/libexec` exists | Leap 15.x | `GUARD_FILE` falls back to `/usr/lib`, and the rule is generated from the same variable |
 | The guard survives as root-owned | someone chmods it writable | it stops matching only if its *content* changes; a writable guard is a machine already compromised at root level — the drop-in's `zypper` entry is the larger hole either way |
+| `_remove_user_timer` succeeds | no user bus, or `systemctl --user disable` fails | `_autoupdate_enabled()` stays true, so the box re-appears on the next probe — visible and repeating rather than silent. Not made worse than the existing click path, which has always had this shape |
 | `sudo` honours `secure_path` | a site that disabled it | the bare `zypper` word in two entries could resolve elsewhere. Pre-existing (`env LC_ALL=C zypper *` has always relied on it) and recorded in `security.md` §5.2 rather than newly introduced |
 
 ## 7. Tests
@@ -399,14 +522,26 @@ shapes are password-free, not merely whether the drop-in file exists. The existi
 drop-in-aware mock (`tests/run-tests.sh`, the `--auth-status` scenario) is the pattern to
 extend, and it stays a mock — `testing.md` §2.3 forbids real `sudo` unconditionally.
 
+**`run_engine` gains a fourth default redirect, `ONEUP_GUARD_FILE`**, alongside the three
+`testing.md` §2.1 pins. This is not optional tidiness: `guard_current` **reads**
+`GUARD_FILE` on every run that reaches the download pass, so without a default the suite's
+result depends on whether the developer's own machine happens to have OneUp granted — the
+`/run/zypp.pid` bite `testing.md` §2 exists to prevent, in a new place. A scenario that
+invokes the engine outside `run_engine` repeats it by hand, like the other three.
+
 ## 8. Docs & release
 
 | Document | Change |
 | --- | --- |
-| `docs/standards/security.md` §5.2 | three rows: the refresh entry, the cache entry, the guard — with §4.2's reason the refresh entry pins its budget |
-| `docs/standards/security.md` §5.6 | the probe is now `auth_current`, not the bare zypper probe; say what "on" means |
+| `docs/standards/security.md` §2.1 | the early return is now conditioned on `auth_current`, so "**Zero** prompts, and no keep-alive at all, when §5's passwordless drop-in is active" becomes true only of a *current* drop-in — a stale one takes the prompt-plus-keep-alive path on purpose |
+| `docs/standards/security.md` §5.2 | three rows: the refresh entry, the cache entry, the guard — with §4.2's reason the refresh entry pins its budget, and the guard row's "no argument spec" note |
+| `docs/standards/security.md` §5.4 | "validate before installing" now describes an ordered pair — guard first, drop-in second, and neither survives the other's failure |
 | `docs/standards/security.md` §5.5 | revocation removes the guard as well as the rule |
+| `docs/standards/security.md` §5.6 | the probe is now `auth_current`, not the bare zypper probe; say what "on" means, and that `sudo -k` does not invalidate a warm credential (§4.4, measured) |
+| `docs/standards/testing.md` §2.1 | the redirect list becomes four — `ONEUP_GUARD_FILE` joins it |
+| `docs/standards/testing.md` §2.3 | the "creates **75** throwaway directories and removes 75" count, which this spec's new scenarios change |
 | `docs/standards/files-and-naming.md` | the paths table gains `GUARD_FILE` / `ONEUP_GUARD_FILE` |
+| `README.md` | the two passages naming the Passwordless setting: automatic updates now switch themselves off when it stops working |
 | `CLAUDE.md` §6 | one trap: a privileged call added without a drop-in entry is invisible until a passwordless user meets it |
 | `CHANGELOG.md` | an `### Fixed` entry under `[Unreleased]`, in the user's words |
 | the six version sites | a 1.4.3 release via `./release.sh` — this is user-facing and `workflow.md` §1.1 says a qualifying fix ships |
@@ -449,8 +584,9 @@ extend, and it stays a mock — `testing.md` §2.3 forbids real `sudo` unconditi
   reverting its toggle on a failed install is untouched; the weekly *check* needs no
   passwordless rule.
 - **Making `sudo_init` warm a credential when the drop-in is current.** It deliberately does
-  not, and with §4.2 and §4.3 in place there is nothing left for a cached credential to
-  cover.
+  not, and with §4.2 and §4.3 in place there is nothing left in an ordinary run for a
+  cached credential to cover. `--grant-auth` and `--revoke-auth` still authenticate, by
+  design (§4.4).
 - **ONEUP-0098's network guard** for the GUI suite — deferred separately, and its freeze
   question is the user's to answer.
 
@@ -458,3 +594,4 @@ extend, and it stays a mock — `testing.md` §2.3 forbids real `sudo` unconditi
 
 | Loop | Date | Findings | Verified | Fixed | Notes |
 | --- | --- | --- | --- | --- | --- |
+| 1 | 2026-08-07 | 27 (CRITICAL 2 · HIGH 9 · MEDIUM 6 · LOW 7 · dismissed 3) | 24 | 24 | 3 lanes. Dimensions: 10×7, 5×5, 6×3, 15×2, 7×2, 2×2, 4×1, 8×1, 12×1. All three lanes independently found the same CRITICAL — §4.3's guard had no argv contract and contradicted the wrapper it claimed to preserve. Two claims were settled by running them rather than reading them: `visudo -cf` **rejects** a non-absolute `Cmnd` (so §6's bare-name fallback row described an impossible state), and `sudo -k` does **not** invalidate a warm credential. INV-2's grep was measured at 70 matches against 26 at command position — 28 of them comments. Dismissed: an unowned `/usr/libexec` file (the drop-in already has that property), the exhaustiveness of §2.2's three call sites (re-scanned: it is exhaustive), and a probe-cost observation (INFO) |
