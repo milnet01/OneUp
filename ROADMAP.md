@@ -2327,3 +2327,29 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   The general lesson, written into files-and-naming.md: an inherited default is
   not a decision. A script that calls the owning run inherits its opt-ins
   silently, and no amount of naming the owning run prevents that.
+
+- 📋 [ONEUP-0098] **Nothing stops the GUI suite reaching the network again.**
+  ONEUP-0090 stopped the GUI suite firing 56 requests at api.github.com by
+  setting Updater._check_app_update to a no-op in gui-smoke.py's main(). The
+  fix works -- the suite was measured at 307/0 inside an empty network
+  namespace -- but it holds only because that one line sits above the first
+  updater.Updater(). Two regressions restore the defect silently: a window
+  constructed above the stub, and any NEW network call added elsewhere in the
+  GUI, which the stub does not cover at all. Neither reddens anything;
+  docs/standards/testing.md 2.3 and its "What checks this" row both say so in
+  as many words.
+
+  Fix shape: stop stubbing the method and stub the transport instead. Replace
+  updater.QNetworkAccessManager with a fake whose get() records the call, then
+  assert at the end of the run that it recorded none. That covers every GUI
+  network path rather than the one known caller, and it converts a rule the
+  standard can only assert into a gate that fails.
+
+  Deferred, not skipped: this is a tests-only change on frozen main, and
+  workflow.md 1.2 is explicit that tests-only is necessary but not sufficient
+  -- a further exception is the user's decision, not an inference. It is
+  cheap enough (~10 lines) to fold into ONEUP-0064 or ONEUP-0032, both of
+  which already rework this suite, or to take on v2 with the rest.
+  **Layman:** The tests no longer phone GitHub, but nothing would notice if that came back.
+  Kind: test.
+  Source: in-session-2026-08-07 (deferred while closing ONEUP-0090).
