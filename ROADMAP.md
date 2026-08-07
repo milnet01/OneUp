@@ -1769,7 +1769,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: doc.
   Source: in-session-2026-08-04.
 
-- 🚧 [ONEUP-0084] **Enforce one instance unconditionally, and stop the guard deleting its own lock.**
+- ✅ [ONEUP-0084] **Enforce one instance unconditionally, and stop the guard deleting its own lock.**
   The single-instance QLocalServer is armed only inside _ensure_tray, so it exists
   only when the tray setting is on; and _arm_single_instance calls
   QLocalServer.removeServer(name) unconditionally before listen(), which unlinks the
@@ -1784,6 +1784,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Two OneUp icons appeared in the tray because two copies were running at once.
   Kind: fix.
   Source: user-report-2026-08-07.
+  Resolved (2026-08-07): shipped in 1.4.1 and cited in that release's CHANGELOG entry; the bullet was left at in-progress. Flipped during the 1.4.2 release sweep, same slip as ONEUP-0085.
 
 - ✅ [ONEUP-0085] **Make Stop work during the package download, not only between steps.**
   stop_pending is checked between steps, between repositories, and once more just
@@ -1808,7 +1809,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   the commit, where it cannot work. That is ONEUP-0095, and it is 2.0 work under the
   freeze because people can still update.
 
-- 🚧 [ONEUP-0086] **Hold a shutdown inhibitor for the length of a run.**
+- ✅ [ONEUP-0086] **Hold a shutdown inhibitor for the length of a run.**
   Evidence, journal boot -1 on the user's machine:
     systemd[1285]: Failed to kill control group /user.slice/.../OneUp-tray@autostart.service,
                    ignoring: Operation not permitted
@@ -1824,8 +1825,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Rebooting during an update left a black screen that never rebooted, forcing a hard power-off.
   Kind: fix.
   Source: user-report-2026-08-07.
+  Resolved (2026-08-07): shipped in 1.4.1 and cited in that release's CHANGELOG entry; the bullet was left at in-progress. Flipped during the 1.4.2 release sweep, same slip as ONEUP-0085.
 
-- 🚧 [ONEUP-0087] **Do not clean the package cache when the system step failed.**
+- ✅ [ONEUP-0087] **Do not clean the package cache when the system step failed.**
   The cache step is gated only on step_selected cache && ! stop_pending, so it runs
   after a FAILED system step and deletes exactly the packages a retry needs. Measured
   on the user's run 2026-08-07 08:35: kernel-default aborted mid-download
@@ -1836,8 +1838,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A failed download threw away the 424 MB that had already downloaded, so retrying started from scratch.
   Kind: fix.
   Source: user-report-2026-08-07.
+  Resolved (2026-08-07): shipped in 1.4.1 and cited in that release's CHANGELOG entry; the bullet was left at in-progress. Flipped during the 1.4.2 release sweep, same slip as ONEUP-0085.
 
-- 🚧 [ONEUP-0088] **Settings and Repositories rows are unreadable in high contrast.**
+- ✅ [ONEUP-0088] **Settings and Repositories rows are unreadable in high contrast.**
   The high-contrast overlay paints `#RowBorder { background: $border; }` -- white in
   HC dark -- because in the main window RowBorder is an OUTER frame whose `#RowCard`
   child paints over it, leaving white showing only as the 2px border. Both dialogs
@@ -1853,8 +1856,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Turning on high contrast made the Settings rows solid white with near-invisible text.
   Kind: accessibility.
   Source: user-report-2026-08-07.
+  Resolved (2026-08-07): shipped in 1.4.1 and cited in that release's CHANGELOG entry; the bullet was left at in-progress. Flipped during the 1.4.2 release sweep, same slip as ONEUP-0085.
 
-- 🚧 [ONEUP-0089] **Report what GitHub actually said, instead of "couldn't reach" for every failure.**
+- ✅ [ONEUP-0089] **Report what GitHub actually said, instead of "couldn't reach" for every failure.**
   _on_app_update_reply branches on reply.error() != NoError and shows one string,
   "Couldn't reach GitHub to check for a newer OneUp." Qt reports an HTTP 403 as
   ContentAccessDenied, so a perfectly successful round trip that GitHub answered is
@@ -1867,6 +1871,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The update check blamed the network when GitHub had answered clearly.
   Kind: fix.
   Source: user-report-2026-08-07.
+  Resolved (2026-08-07): shipped in 1.4.1 and cited in that release's CHANGELOG entry; the bullet was left at in-progress. Flipped during the 1.4.2 release sweep, same slip as ONEUP-0085.
 
 - 🚧 [ONEUP-0090] **Stop the GUI suite making 56 live GitHub API calls per run.**
   Updater.__init__ calls _check_app_update(), and tests/gui-smoke.py constructs 56
