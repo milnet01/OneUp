@@ -144,6 +144,38 @@ done
 step_selected() { [[ ",$STEPS," == *",$1,"* ]]; }
 
 # ---------------------------------------------------------------------------
+# Shutdown inhibitor: hold one for the whole run (ONEUP-0086).
+# ---------------------------------------------------------------------------
+# zypper runs as ROOT inside the user's session cgroup, and `systemd --user` is not
+# permitted to kill root processes — the journal says so in as many words:
+#   Failed to kill control group /user.slice/.../OneUp-tray@autostart.service,
+#   ignoring: Operation not permitted
+# So a logout or reboot asked for mid-run waits on something it can never stop, long
+# after the desktop has been torn down: the user sees a black screen that never
+# reboots, and eventually holds the power button — which is the worst possible moment
+# to cut power to an rpm transaction. A block-mode inhibitor turns that silent hang
+# into a visible prompt naming OneUp, which the user can still override.
+#
+# Re-exec rather than a background lock-holder, because the lock then lives exactly as
+# long as this process and there is nothing left behind if we are SIGKILLed (§2.4:
+# nothing the engine spawns may outlive it). Arg parsing above uses `for arg in "$@"`
+# and never shifts, so "$@" is still the original command line here.
+#
+# Probed, not assumed — same reasoning as the tee -p probe below. `systemd-inhibit`
+# exits WITHOUT running its command if it cannot take the lock (no logind, a container,
+# a locked-down session), which would turn a missing convenience into a failed update.
+# A missing or non-working tool must degrade to "no inhibitor", never to "no run".
+if [[ -z "${ONEUP_INHIBITED:-}" && -z "$AUTH_ACTION" && -z "$SIZE_STEP" ]] \
+   && ! $CHECK_ONLY \
+   && systemd-inhibit --what=shutdown --who=OneUp --why=probe true >/dev/null 2>&1; then
+    export ONEUP_INHIBITED=1
+    exec systemd-inhibit \
+        --what=shutdown:sleep --mode=block --who="OneUp" \
+        --why="Installing updates — interrupting now can leave packages half-installed" \
+        "$0" "$@"
+fi
+
+# ---------------------------------------------------------------------------
 # Logging: mirror everything to the log file as well as the console/GUI.
 # ---------------------------------------------------------------------------
 mkdir -p "$LOG_DIR"
@@ -1430,6 +1462,19 @@ fi
 # ---------------------------------------------------------------------------
 if step_selected cache && ! stop_pending; then
     begin_step cache
+    # A system step that failed almost always failed PART-WAY THROUGH THE DOWNLOAD,
+    # which means the cache now holds most of what the retry needs. Clearing it turns
+    # one flaky mirror into a full re-download. Measured 2026-08-07: kernel-default
+    # aborted with 194 MB missing, the step failed, and this step then reclaimed
+    # 424 MB — so the retry started again from zero, over the same mirror that had
+    # just dropped the connection (ONEUP-0087). Disk space is worth far less than a
+    # download that finally completes.
+    if [[ "${RESULT[system]:-}" == "fail" ]]; then
+        note="Kept the already-downloaded packages, so retrying the update doesn't fetch them all over again."
+        echo "  $note"
+        marker HINT "$note"
+        end_step cache skip "kept the downloads for a retry"
+    else
     # Measure the package cache before/after the clean so we can report what it
     # freed — the cache step is otherwise the one task with no visible payoff.
     # du needs root for some subdirs; this step's sudo credential is already warm.
@@ -1458,6 +1503,7 @@ if step_selected cache && ! stop_pending; then
     else
         end_step cache fail "clean failed"
     fi
+    fi      # closes the "system step failed — keep the downloads" guard above
 fi
 
 # ---------------------------------------------------------------------------

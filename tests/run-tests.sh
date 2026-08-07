@@ -94,10 +94,15 @@ run_engine() {
     #     so running the suite during a real update deleted that run's record, and the
     #     window could no longer find the run it was following (ONEUP-0045).
     # A test must never depend on, or damage, the state of the box it runs on.
+    #   * the shutdown inhibitor re-execs the engine under the REAL systemd-inhibit,
+    #     so every scenario would take a genuine block-mode lock on the tester's own
+    #     session (ONEUP-0086). Pre-set here, and note the `-` rather than `:-`: a
+    #     scenario opts back IN by setting it to the empty string.
     PATH="$mockdir:$PATH" \
         ONEUP_ZYPP_PID_FILE="${ONEUP_ZYPP_PID_FILE:-$mockdir/no-zypp.pid}" \
         ONEUP_RUN_STATE="${ONEUP_RUN_STATE:-$mockdir/run.state}" \
         ONEUP_STOP_FILE="${ONEUP_STOP_FILE:-$mockdir/stop.request}" \
+        ONEUP_INHIBITED="${ONEUP_INHIBITED-1}" \
         bash "$ENGINE" "$@" --log="$mockdir/run.log" 2>&1
 }
 
@@ -186,6 +191,64 @@ check         "cache emits the FREED marker"      "@@FREED@@|cache|"     "$out"
 check         "FREED reports the reclaimed size"  "@@FREED@@|cache|1.0G" "$out"
 check         "cache prints a plain reclaimed line" "Reclaimed 1.0G"     "$out"
 unset MOCK_DUCOUNT
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: a real run holds a shutdown inhibitor; a --check does not (ONEUP-0086)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *clean*)           exit 0 ;;
+  *needs-rebooting*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+# Records how it was invoked, then runs the command — so the engine proceeds exactly
+# as it would under the real tool and we can read back the lock it asked for.
+cat > "$d/systemd-inhibit" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$d/inhibit.args"
+while [[ "\$1" == --* ]]; do shift; done
+exec "\$@"
+EOF
+chmod +x "$d/zypper" "$d/systemd-inhibit"
+out=$(ONEUP_INHIBITED="" run_engine "$d" --steps=cache)
+args=$(cat "$d/inhibit.args" 2>/dev/null)
+check "the run is wrapped in an inhibitor"      "--mode=block"           "$args"
+check "it blocks shutdown and sleep, not idle"  "--what=shutdown:sleep"  "$args"
+check "the prompt names OneUp so the user knows what to override" "--who=OneUp" "$args"
+check "the run itself still completes normally" "@@STEP_END@@|cache|ok"  "$out"
+# A read-only check installs nothing, so blocking the user's shutdown for it would be
+# rude and pointless.
+rm -f "$d/inhibit.args"
+out=$(ONEUP_INHIBITED="" run_engine "$d" --check)
+check_absent "a --check takes no shutdown lock" "--mode=block" "$(cat "$d/inhibit.args" 2>/dev/null)"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: a broken or absent systemd-inhibit degrades to no lock, never a failed run"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *clean*)           exit 0 ;;
+  *needs-rebooting*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+# systemd-inhibit exits WITHOUT running its command when it cannot take the lock (no
+# logind, a container, a locked-down session). If the engine trusted it, a missing
+# convenience would become a failed update — so the probe must catch this.
+cat > "$d/systemd-inhibit" <<'EOF'
+#!/usr/bin/env bash
+echo "Failed to inhibit: Connection refused" >&2
+exit 1
+EOF
+chmod +x "$d/zypper" "$d/systemd-inhibit"
+out=$(ONEUP_INHIBITED="" run_engine "$d" --steps=cache)
+check "the update still runs when the lock can't be taken" "@@STEP_END@@|cache|ok" "$out"
+check "and the run still reports a clean finish"           "@@DONE@@|ok"           "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -1382,7 +1445,11 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system,cache)
 check "system step failed"         "@@STEP_END@@|system|fail" "$out"
-check "cache step still ran after" "@@STEP_END@@|cache|ok"    "$out"
+# The step is still REACHED — that is what continue-on-failure means — but it now
+# declines to clean, because a failed system step usually failed mid-download and
+# the cache holds what the retry needs (ONEUP-0087).
+check "cache step still ran after" "@@STEP_END@@|cache|skip"  "$out"
+check "and says why it kept them"  "retrying the update"      "$out"
 check "run reports errors overall" "@@DONE@@|errors"          "$out"
 rm -rf "$d"
 
@@ -1698,7 +1765,7 @@ check_absent "strict run never imports keys unprompted" "BUG: imported keys with
 check        "key error fails the system step"          "@@STEP_END@@|system|fail" "$out"
 check        "key error offers the one-click remedy"    "@@REMEDY@@|import-keys" "$out"
 check_re     "the hint carries a 'run:' command the GUI can copy" '@@HINT@@\|.*run: ' "$out"
-check        "the run continues to later steps after the key failure" "@@STEP_END@@|cache|ok" "$out"
+check        "the run continues to later steps after the key failure" "@@STEP_END@@|cache|skip" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
