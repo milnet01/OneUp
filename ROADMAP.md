@@ -1749,3 +1749,152 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A rule about how to write review-log rows so the automated check stops rejecting them.
   Kind: doc.
   Source: in-session-2026-08-04.
+
+- 🚧 [ONEUP-0084] **Enforce one instance unconditionally, and stop the guard deleting its own lock.**
+  The single-instance QLocalServer is armed only inside _ensure_tray, so it exists
+  only when the tray setting is on; and _arm_single_instance calls
+  QLocalServer.removeServer(name) unconditionally before listen(), which unlinks the
+  socket of a copy that is already running. At login KDE starts two copies -- the
+  autostart entry (oneup --tray) and Plasma's session restore of the window that was
+  open at logout -- and neither sees the other. Confirmed on the user's machine:
+  app-...OneUp-tray@autostart.service and app-...OneUp@<id>.service both live, two
+  tray icons.
+  Fix: arm the guard on every GUI launch (not just tray); connect-as-client first,
+  listen second, and removeServer only after a connect has PROVEN the socket stale.
+  A --tray client must not force the resident copy's window open.
+  **Layman:** Two OneUp icons appeared in the tray because two copies were running at once.
+  Kind: fix.
+  Source: user-report-2026-08-07.
+
+- 🚧 [ONEUP-0085] **Make Stop work during the package download, not only between steps.**
+  stop_pending is checked between steps and once more after refresh_repos, just
+  before the transaction (update_system.sh, the `if stop_pending` guard above
+  run_system_upgrade). The download happens INSIDE zypper dup, so a stop asked for
+  during it cannot land until the whole step ends -- which on a stalled mirror is
+  never. Meanwhile _tick_activity prints "the server may have stalled. Stopping now
+  is safe.", which in that phase is false.
+  Fix: split the transaction into `zypper dup --download-only` (nothing is installed,
+  so it is genuinely interruptible) then a stop boundary then the commit, which runs
+  from cache. Preserves ONEUP-0047: the rpm transaction itself is still never
+  interrupted. Needs a spec + cold-eyes gate before implementation (global rule 14).
+  **Layman:** Stop did nothing while packages were downloading, even though the screen said stopping was safe.
+  Kind: fix.
+  Source: user-report-2026-08-07.
+
+- 🚧 [ONEUP-0086] **Hold a shutdown inhibitor for the length of a run.**
+  Evidence, journal boot -1 on the user's machine:
+    systemd[1285]: Failed to kill control group /user.slice/.../OneUp-tray@autostart.service,
+                   ignoring: Operation not permitted
+  zypper runs as root inside the user's app cgroup, so systemd --user cannot kill it.
+  A logout or reboot requested mid-run therefore waits on a process it has no
+  permission to stop, after plasmashell has already gone -- the user sees a black
+  screen and must hard-reset, which is the worst possible moment to cut power to an
+  rpm transaction.
+  Fix: wrap the run in systemd-inhibit --what=shutdown:sleep with a --why string, so
+  the desktop reports "OneUp is installing updates" and offers the choice instead of
+  hanging. Degrade cleanly when systemd-inhibit is absent (same tolerance as a
+  missing flatpak/fwupd).
+  **Layman:** Rebooting during an update left a black screen that never rebooted, forcing a hard power-off.
+  Kind: fix.
+  Source: user-report-2026-08-07.
+
+- 🚧 [ONEUP-0087] **Do not clean the package cache when the system step failed.**
+  The cache step is gated only on step_selected cache && ! stop_pending, so it runs
+  after a FAILED system step and deletes exactly the packages a retry needs. Measured
+  on the user's run 2026-08-07 08:35: kernel-default aborted mid-download
+  ("end of response with 194225024 bytes missing"), the step failed, and the cache
+  step then reported "Reclaimed 424M" -- so the retry re-downloads the full 572.7 MiB
+  over the same mirror that just dropped.
+  Fix: skip the cache clean when the system step did not succeed, and say why.
+  **Layman:** A failed download threw away the 424 MB that had already downloaded, so retrying started from scratch.
+  Kind: fix.
+  Source: user-report-2026-08-07.
+
+- 🚧 [ONEUP-0088] **Settings and Repositories rows are unreadable in high contrast.**
+  The high-contrast overlay paints `#RowBorder { background: $border; }` -- white in
+  HC dark -- because in the main window RowBorder is an OUTER frame whose `#RowCard`
+  child paints over it, leaving white showing only as the 2px border. Both dialogs
+  reuse the RowBorder object name for the row itself with NO RowCard child, so the
+  whole row fills solid white (`SettingsDialog._row`, `RepoManagerDialog._row`).
+  SettingsDialog's description labels also carry no object name, so the HC rule
+  `QLabel#TaskDesc { color: $text; }` never reaches them and they keep the base
+  sheet's dim grey -- grey on white, which is the exact combination HC exists to
+  prevent (the palette comment says HC deliberately has no dimmed secondary text).
+  Fix: nest a `#RowCard` inside the RowBorder frame in both dialogs, matching TaskRow,
+  and name the description labels TaskDesc / the intro Tagline. Add a gui-smoke
+  assertion that every RowBorder has a RowCard child.
+  **Layman:** Turning on high contrast made the Settings rows solid white with near-invisible text.
+  Kind: accessibility.
+  Source: user-report-2026-08-07.
+
+- 🚧 [ONEUP-0089] **Report what GitHub actually said, instead of "couldn't reach" for every failure.**
+  _on_app_update_reply branches on reply.error() != NoError and shows one string,
+  "Couldn't reach GitHub to check for a newer OneUp." Qt reports an HTTP 403 as
+  ContentAccessDenied, so a perfectly successful round trip that GitHub answered is
+  presented to the user as an outage. Measured on the user's machine 2026-08-07:
+    HTTP/2 403 ... x-ratelimit-limit: 60, x-ratelimit-remaining: 0
+    {"message":"API rate limit exceeded for <ip>"}
+  Fix: read the HTTP status attribute; say the check is rate-limited and when it
+  resets (the x-ratelimit-reset header) for 403/429, and keep the network wording
+  only for genuine transport errors.
+  **Layman:** The update check blamed the network when GitHub had answered clearly.
+  Kind: fix.
+  Source: user-report-2026-08-07.
+
+- 🚧 [ONEUP-0090] **Stop the GUI suite making 56 live GitHub API calls per run.**
+  Updater.__init__ calls _check_app_update(), and tests/gui-smoke.py constructs 56
+  Updater windows, so one suite run fires 56 unauthenticated requests at
+  api.github.com. The unauthenticated cap is 60/hour per IP, so a few runs exhaust
+  it -- observed for real: four runs during this session left the user's own "Check
+  for updates" button returning 403 until the reset. The suite is also network-
+  dependent and slower for it, which docs/standards/testing.md 2 forbids on its own
+  terms (a test must not depend on the state of the machine it runs on).
+  Fix: stub _check_app_update in gui-smoke before any window is built. Nothing is
+  lost -- the suite has no assertion on the update check or its reply handler.
+  **Layman:** Running the tests used up the daily allowance that the app's own update check needs.
+  Kind: test.
+  Source: in-session-2026-08-07.
+
+- 💭 [ONEUP-0091] **Investigate driving libzypp natively in 2.0 instead of shelling out to zypper.**
+  The pull is real: the engine parses zypper's OUTPUT, and that wording is not a
+  promised interface -- ONEUP-0035 and ONEUP-0046 are both cases of it changing
+  underneath us. A library call returns data instead of prose.
+  Four findings from the 2026-08-07 check, all verified with rpm/zypper on the
+  build machine, that decide whether this is worth doing:
+    * LICENCE IS THE BLOCKER, not feasibility. zypper and libzypp are both
+      GPL-2.0-or-later; OneUp is MIT (LICENSE, packaging/rpm/oneup.spec). Linking
+      libzypp or vendoring zypper source makes the combined work GPL-2.0-or-later,
+      so this item is a decision to RELICENSE OneUp, not just a refactor. That is
+      the user's call and nothing else here matters until it is made.
+    * IT INVERTS THE DEPENDENCY GOAL. zypper is already present on every openSUSE
+      system -- it IS the package manager -- so shelling out costs no dependency at
+      all. libzypp is a 9.9 MB C++ library (17.38.14-1.2) whose C++ API carries no
+      stability promise, so this ADDS a hard build- and run-time dependency plus
+      API churn, rather than removing one.
+    * NO PYTHON BINDING EXISTS. python313/314-zypp-plugin is the wrong direction --
+      it lets zypp call INTO Python plugins, not Python drive zypp. 2.0's engine is
+      Python (docs/design/oneup-2.0.md), so this needs C++, or bindings we would
+      then own and maintain.
+    * IT WOULD NOT COVER THE OTHER STEPS. Flatpak and fwupd are separate projects
+      with their own libraries, so the shell-out and its output parsing stay for
+      two of the five steps regardless.
+  Cheaper alternative to price first: zypper's machine-readable modes (--xmlout,
+  and the ZYPP_ machine interfaces) remove the prose-parsing fragility -- the
+  actual problem -- at none of the licence or dependency cost. Measure that before
+  pricing a rewrite.
+  **Layman:** Use openSUSE's own update code directly inside OneUp, rather than running the zypper command and reading its text.
+  Kind: research.
+  Source: user-request-2026-08-07.
+  Decision (2026-08-07, user): stay with the shell-out and accept that OneUp
+  tracks zypper's changes -- "that is fine, we can continue doing that but we
+  need to be smart about how we do it." So this item is NOT a rewrite to
+  libzypp; it is the narrower question of making the coupling cheap to
+  maintain. Two mechanisms already exist and are the shape to build on:
+    * the stale-parser canary in the system step -- a transaction that
+      installed packages while progress_filter recognised nothing emits a HINT
+      saying so, rather than silently showing an empty bar (ONEUP-0046). That
+      turns a silent break into a reported one.
+    * --xmlout, which removes the prose parsing for the transaction entirely,
+      at no licence or dependency cost.
+  Price --xmlout first; keep the canary regardless, since Flatpak and fwupd
+  output stays prose whatever zypper does.
