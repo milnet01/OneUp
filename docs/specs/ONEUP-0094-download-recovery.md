@@ -14,15 +14,16 @@ scope · 11 cold-eyes log
 
 **In one sentence:** When the package download fails because openSUSE routed a file to a
 host that will not serve it, the engine fetches the same packages once more from the
-content CDN — which answers directly instead of selecting a mirror that may not have the
+content delivery network — which answers directly instead of selecting a mirror that may not have the
 file yet — and the update completes, instead of installing nothing.
 
 ## 1. Goal
 
 A run whose download pass fails with a *transfer* error completes anyway, without the user
 doing anything, learning anything, or being told to retry. When recovery is impossible the
-run still fails — but names the package that could not be fetched, rather than offering
-"check your internet connection" to someone whose connection is fine.
+run still fails — but names the package that could not be fetched, wherever one can be
+identified from the log, rather than offering "check your internet connection" to someone
+whose connection is fine.
 
 ## 2. Background
 
@@ -40,8 +41,9 @@ the same repository downloaded fine, so disabling it would throw away a working 
 work around one file. The failure therefore falls through to the hint chain, matches
 `Download.*failed`, and the user is told to check a connection that is not the problem.
 
-Nothing is installed. On a `zypper dup` with 82 packages queued, 81 of them already
-downloaded, one unfetchable file discards the entire transaction.
+Nothing is installed. Measured on the 2026-08-07 run and recorded in ROADMAP `ONEUP-0096`:
+82 packages preloaded, **one** — `kernel-default`, routed to the slow origin — could not
+be fetched, and the transaction installed nothing at all.
 
 ### 2.2 The measured failure
 
@@ -108,12 +110,15 @@ downloadcontentcdn.opensuse.org 206 996083 B/s
 downloadcontent.opensuse.org    206 246000 B/s
 ```
 
-**The comparison is host-vs-host on a neighbouring build, not on the file that failed.**
-`7.1.6` had been superseded by the time the measurement was taken, so `7.1.5` — the
-current build of the same package, the same size class, from the same trees — is what both
-hosts were asked for. That is enough to establish the routing difference, which is the
-claim; it is not a re-measurement of the failure itself, and this spec does not present it
-as one.
+**The file that actually failed was measured too, on the day, and that measurement is the
+stronger one.** ROADMAP `ONEUP-0094`'s `DIAGNOSED (2026-08-07)` note records
+`kernel-default-7.1.6` itself: `downloadcontentcdn.opensuse.org` at 1,013,554 B/s against
+`downloadcontent.opensuse.org` at 228,452 B/s, the CDN answering `HTTP 200` with the
+correct `content-length: 210194084` — while the metalink for that file offered **exactly
+one** source, the slow origin, with no mirrors to fall back to. That is the failure's own
+routing, not an inference from it. The `7.1.5` figures above are the same comparison
+re-run on the current build once `7.1.6` had been superseded, and they corroborate it
+rather than stand in for it.
 
 4.0× on throughput, and — the property that actually matters — the CDN host answers
 directly rather than redirecting, so "no mirror has this file yet" cannot arise. It serves
@@ -124,6 +129,23 @@ $ curl -s -o /dev/null -m 20 -w '%{http_code} %{size_download}\n' \
     http://downloadcontentcdn.opensuse.org/tumbleweed/repo/oss/repodata/repomd.xml
 200 14119
 ```
+
+**Over HTTPS as well as HTTP** — which matters because most of this machine's openSUSE
+baseurls are `https://`, and the §4.2 rewrite preserves the scheme:
+
+```
+$ curl -s -o /dev/null -m 25 -r 0-10000000 \
+    -w 'code=%{http_code} speed=%{speed_download} ssl_verify=%{ssl_verify_result}\n' \
+    "https://downloadcontentcdn.opensuse.org/tumbleweed/repo/oss/x86_64/$K"
+code=206 speed=1951181 ssl_verify=0
+$ curl -s -o /dev/null -m 20 -w '%{http_code} %{size_download} %{ssl_verify_result}\n' \
+    https://downloadcontentcdn.opensuse.org/tumbleweed/repo/oss/repodata/repomd.xml
+200 14119 0
+```
+
+`ssl_verify_result=0` is a valid certificate chain. A rewrite that produced an `https://`
+URL the host could not serve would leave recovery inert on most repositories while
+appearing to work, so this is measured rather than assumed.
 
 For completeness, the geoip service already points this machine at a CDN entry point, and
 that entry point is a *redirector* — it hands back a mirror, which is the routing this
@@ -169,20 +191,36 @@ existing early return. All five conditions must hold:
    another download pass.
 4. Recovery has not already run this run (`DL_RECOVERED` false).
 5. There is something to redirect —
-   `grep -qE '^baseurl.*download\.opensuse\.org' "$REPOS_DIR"/*.repo` succeeds. Checked
+   `grep -qiE '^baseurl[[:space:]]*=[[:space:]]*https?://download\.opensuse\.org' "$REPOS_DIR"/*.repo`
+   succeeds, where `REPOS_DIR` is the repository directory defined in §4.2. Checked
    *before* the copy, so a machine on a local mirror skips recovery without the §4.2 `sed`
    ever running against an unexpanded glob.
+   **This probe and §4.2's substitution must match the same strings, and are written to.**
+   A looser probe (`^baseurl.*download\.opensuse\.org`) also accepts
+   `baseurl=http://mirror.local/download.opensuse.org/tumbleweed/…`, where the substitution
+   rewrites nothing — so recovery would fire and run a byte-identical second attempt, the
+   plain retry §9 rejects, on exactly the local-mirror machines §6's first row means to
+   skip. Both patterns are case-insensitive (`-i` / `sed` `I`), matching the `grep -qiE`
+   the engine's own hint chain and `repo_scoped_failure` already use.
 
 Then: snapshot `$SYS_LOG` (§4.4 needs it), build the redirected repository directory
 (§4.2), set `REPOSD_OVERRIDE`, set `DL_RECOVERED=true`, and call `run_system_download`
 again. If it now succeeds, the step continues into `run_system_commit` exactly as a
 first-time success would.
 
-**If the retry fails, `REPOSD_OVERRIDE` is cleared before returning.** The caller's
-existing repo-skip path can call `run_system_upgrade` a third time after disabling a
-repository, and that attempt must run against the user's own repository set, not against a
-redirected copy it never asked for. `DL_RECOVERED` stays true, so that third attempt gets
-no second recovery.
+**`REPOSD_OVERRIDE` is cleared at the end of `run_system_upgrade`, on every path, not just
+the retry-failed one.** The caller's repo-skip path can call `run_system_upgrade` a third
+time after disabling a repository, and that attempt must run against the user's own
+repository set. Two routes reach it and only one is obvious: the retry failing, and — the
+one a narrower rule misses — the retry *succeeding* and `run_system_commit` then failing,
+which also leaves `$ok` false and admits the step to the repo-skip probe. Clearing at the
+function's end covers both. `DL_RECOVERED` stays true, so no third attempt gets a second
+recovery.
+
+That interaction is also why the clearing is not optional bookkeeping: `disable_repo`
+edits the **real** repository directory, so a third attempt still reading the redirected
+copy would not see the repository the caller had just disabled, and would repeat the
+failure the disable was meant to route around.
 
 `REPOSD_OVERRIDE`, `DL_RECOVERED` and `SYS_LOG_FIRST` are file-scope globals declared and
 reset beside `SYS_TXN` and `SYS_DL_RC`, for the same reason those are: the engine runs them
@@ -217,6 +255,13 @@ assumed (2026-08-07, `zypper --reposd-dir "$T" lr -u`):
 - **Third-party repositories are untouched.** The pattern names one host, so `packman`
   (`ftp.gwdg.de`) and `repo-openh264` (`codecs.opensuse.org`) keep their own baseurls.
   OneUp has no basis for assuming any other host has a CDN twin.
+
+**Only `baseurl=` is in scope.** A `.repo` file may also carry `metalink=` or `mirrorlist=`
+naming the same host, and those are deliberately left alone: they are the mirror-selection
+mechanism this item is recovering *from*, so redirecting them would either be a no-op or
+would point libzypp at a mirror list the CDN host does not publish. A repository defined
+*only* by `metalink=`/`mirrorlist=` has no `baseurl` to match, so §4.1 condition 5 declines
+recovery for it — correctly, and without a special case.
 
 **The engine prints the copied directory's path** as an ordinary log line
 (`Recovery: retrying downloads via downloadcontentcdn.opensuse.org (repositories copied to
@@ -271,16 +316,24 @@ On recovery success, after the step ends `ok`:
 > Recovered from a failed download — some packages were fetched from openSUSE's content
 > delivery network instead of the mirror that failed.
 
-On recovery failure, a **new first arm** in the caller's existing hint ladder — before the
-`systemic_repo_fail` arm, and therefore before the generic `Download.*failed` arm that
-would otherwise claim this failure — names the file, because "check your internet
-connection" is actively misleading when 81 of 82 packages arrived:
+On recovery failure, a new arm in the caller's existing hint ladder names the file, because
+"check your internet connection" is actively misleading when 81 of 82 packages arrived:
 
 > Could not download <package> — openSUSE's servers are still catching up with this
 > update. Nothing was installed and everything already downloaded has been kept; try again
 > later.
 
-Both go through `marker HINT`, which the window already renders, and which the engine
+**The arm's guard is `$DL_RECOVERED`, and its position is second — immediately after
+`systemic_repo_fail`, before every log-pattern arm.** Both halves are decisions, not
+details. The guard must be the flag rather than a log signature: condition 5 can decline
+recovery entirely, and an arm keyed on the log would then tell a user "openSUSE's servers
+are still catching up" about a retry that never happened. And it sits *after*
+`systemic_repo_fail` because a multi-repository outage is transfer-shaped by definition
+(`Curl`, `Download.*failed`), so a first-position arm would answer a whole-network failure
+with a single-package sentence — the more specific-sounding message being the less true
+one. Every remaining arm is a log-pattern arm and is therefore less specific than this one.
+
+Both hints go through `marker HINT`, which the window already renders, and which the engine
 already emits on a *successful* step for the set-aside-repository note — so a HINT on
 success is existing behaviour, not a new marker usage (§8 records the one row of
 `marker-protocol.md` that describes it too narrowly).
@@ -343,7 +396,9 @@ INV-6, which is structural and is marked as such.
   *Test:* the scenario's `ONEUP_REPOS_DIR` holds a `.repo` file whose alias contains the
   host name (`[download.opensuse.org-oss]`, `baseurl=http://download.opensuse.org/…`).
   The mock `zypper`'s `--download-only` branch **copies its `--reposd-dir` argument's
-  contents to a fixture path on its second call**, and the scenario asserts against that
+  contents to a fixture path on its second `--download-only` invocation** (not its second
+  invocation overall — a refresh call would consume the count), and the scenario asserts
+  against that
   fixture — the alias line **unchanged**, the baseurl line naming
   `downloadcontentcdn.opensuse.org`. The capture-during-the-run shape is required, not
   stylistic: INV-9 deletes the directory before the engine exits, so a post-run assertion
@@ -352,10 +407,12 @@ INV-6, which is structural and is marked as such.
   every package ONEUP-0087 kept.
 
 - **INV-4** The engine never writes to the real repository directory.
-  *Test:* the scenario records `md5sum "$ONEUP_REPOS_DIR"/*.repo` before and after a
-  recovered run and asserts the two digests match — `md5sum` over the directory itself
-  errors rather than hashing it. Breaks if the rewrite is applied in place instead of to a
-  copy, which would permanently repoint the user's machine at one host.
+  *Test:* the scenario records `ls -1 "$ONEUP_REPOS_DIR"` **and** `md5sum
+  "$ONEUP_REPOS_DIR"/*.repo` before and after a recovered run, and asserts both match —
+  `md5sum` over the directory itself errors rather than hashing it, and digests alone
+  would not notice a file added to or removed from the directory. Breaks if the rewrite is
+  applied in place instead of to a copy, which would permanently repoint the user's
+  machine at one host.
 
 - **INV-5** Only openSUSE's own host is redirected.
   *Test:* the scenario's repository directory also holds a third-party repo
@@ -386,23 +443,39 @@ INV-6, which is structural and is marked as such.
   *Test:* the INV-2 mock, extended so its `--download-only` branch **touches
   `$ONEUP_STOP_FILE` itself** before printing `bytes missing` and exiting 1. The scenario
   asserts the counter file holds exactly **1** line, and that the step ends **`fail`**.
-  Two things this clause had wrong in draft, both settled against the engine: a stop file
-  created *before* the engine starts is older than the `run.state` the engine writes, and
-  `stop_pending`'s staleness rule is `"$stop_file" -nt "$run_state"` — so a pre-touched
-  file is never pending and the scenario would exercise nothing. And the outcome is `fail`,
-  not `skip`: the download exited 1 rather than 143, so `$ok` is false and
-  `run_system_upgrade`'s `$ok || return 0` fires before `SYS_STOPPED` can be set. The
-  invariant is that recovery is *suppressed*, which the counter proves; the step outcome is
-  the engine's existing behaviour and this item does not change it. Breaks if the trigger
-  checks only the log signature — a user who pressed Stop would be answered with another
-  download.
+  The mock must create the stop file, not the scenario: `stop_pending`'s staleness rule is
+  `"$stop_file" -nt "$run_state"`, so a stop file touched before the engine starts is older
+  than the `run.state` the engine writes and is never pending. And the outcome is `fail`
+  rather than `skip` because the download exited 1, not 143, so `$ok` is false and
+  `run_system_upgrade`'s `$ok || return 0` fires before `SYS_STOPPED` can be set — existing
+  engine behaviour this item does not change. What the invariant asserts is that recovery
+  was *suppressed*, which the counter proves. Breaks if the trigger checks only the log
+  signature — a user who pressed Stop would be answered with another download.
 
-- **INV-9** The temporary repository directory does not outlive the run.
-  *Test:* the INV-7 scenario reads the copied directory's path from the `Recovery:` log
-  line §4.2 requires the engine to print, and asserts it does not exist after the engine
-  exits. Breaks if the cleanup is placed on the success path only, or written as `rm -f`,
-  which cannot remove a directory — either leaves one directory per recovered run in
-  `/tmp`.
+- **INV-9** The temporary repository directory does not outlive the run — on **every**
+  outcome.
+  *Test:* three scenarios, each reading the copied directory's path from the `Recovery:`
+  log line §4.2 requires the engine to print, then asserting the directory is gone after
+  the engine exits: INV-7's (recovery succeeded), INV-2's (recovery ran and the retry
+  failed), and INV-8's (a stop, which leaves via the `$SYS_STOPPED` branch's separate
+  cleanup site). All three are required because the break-mode this invariant exists to
+  catch — a cleanup written on the success path only — **passes** a test bound to the
+  success scenario alone. A test that cannot fail on the bug it names is the shape
+  `documentation.md` §5 calls a wish. Also breaks on `rm -f`, which cannot remove a
+  directory.
+
+- **INV-10** The retry does not re-download what the first attempt already fetched.
+  *Test:* the INV-7 mock records, per call, the package files present in its fake cache
+  directory; the scenario seeds that directory before the run and asserts the retry's
+  invocation still sees the seeded files. This is the invariant behind §4.2's alias
+  argument, and it is stated as an invariant because the argument rests on an
+  **assumption this spec does not measure**: that libzypp keys `/var/cache/zypp/packages`
+  by repository alias, so an unchanged alias keeps the cache across a changed baseurl.
+  What *is* measured is that the anchored `sed` leaves aliases unchanged; the cache
+  consequence is inferred from it. If the assumption is false the item still works — the
+  retry re-downloads — but it stops being cheap, and §9's rejection of the plain retry
+  weakens with it. Breaks if the implementation renames aliases, or points
+  `--reposd-dir` at definitions whose alias differs from the user's in any way.
 
 ## 6. Failure modes
 
@@ -415,7 +488,9 @@ INV-6, which is structural and is marked as such.
 | The retry re-downloads repository metadata because the URL changed | Accepted cost. It happens once, only on a run that has already failed, and only for openSUSE-hosted repositories. **It is not silent:** the retry is an ordinary `run_system_download`, so `@@PROGRESS@@` and the GUI's stall clock cover it exactly as they cover the first pass — which is what keeps ONEUP-0048's rule (a slow server must never be indistinguishable from a hang) true across a doubled download phase. No separate time budget is imposed for the same reason none is imposed on the first pass: the per-repository refresh timeout and the liveness line are the budget. |
 | The retry rewrites `PROGRESS_SEEN_FILE` | Correct, and deliberate. That file is truncated by whichever download pass writes last, and the retry's tally is the one that describes the packages actually fetched. A recovered run therefore ends with a non-zero count, so ONEUP-0046's stale-parser canary ("packages installed but no progress recognised") stays quiet on a healthy recovery. |
 | The user presses Stop *during* the retry | The retry is an ordinary `run_system_download`, so ONEUP-0085's stop path applies unchanged — `SYS_DL_RC` 143, nothing installed. |
-| Recovery succeeds but the commit then fails | The commit's own failure is reported. The HINT for a recovered download is emitted only on a step that ended `ok` (§4.4). |
+| Recovery succeeds but the commit then fails | The commit's own failure is reported. The HINT for a recovered download is emitted only on a step that ended `ok` (§4.4), and `REPOSD_OVERRIDE` is cleared on this path like every other (§4.1) — the caller's repo-skip retry must not inherit it. |
+| The failure really was repo-scoped (a dead third-party repo) | Recovery fires first and costs one extra download pass before `repo_scoped_failure` reaches the remedy that works. Accepted, and the ordering is still right: an unreachable repository is transfer-shaped by any regex that can see a truncated download, so distinguishing the two before trying is not possible from the log alone — and the repo-skip path is not lost, only deferred by one pass. The reverse order would send every transfer failure through `find_failing_repos`, which refreshes each repository under `sudo` and is far more expensive than one retry. |
+| Recovery failed **and** several repositories are failing at once | `systemic_repo_fail` wins — its arm sits ahead of the recovery arm in the ladder (§4.4). A whole-network failure answered with a single-package sentence would be the more specific-sounding message and the less true one. |
 
 ## 7. Tests
 
@@ -423,7 +498,13 @@ INV-6, which is structural and is marked as such.
 fact the invariants assume.
 
 **`run_engine` must pre-set `ONEUP_REPOS_DIR`, alongside `ONEUP_STOP_FILE`,
-`ONEUP_RUN_STATE`, `ONEUP_ZYPP_PID_FILE` and `ONEUP_INHIBITED`.** Not just in the recovery
+`ONEUP_RUN_STATE`, `ONEUP_ZYPP_PID_FILE` and `ONEUP_INHIBITED`**, and `setup_common` must
+seed that directory with **one `.repo` file carrying a `download.opensuse.org` baseurl and
+one carrying a third-party host**. The seed is not decoration: §4.1 condition 5 declines
+recovery when no openSUSE baseurl is present, so against an empty directory INV-2's counter
+reads 1 instead of 2 and every recovery scenario silently tests the skip path while
+appearing to test recovery. Stating the fixture once in the harness is what stops each
+invariant restating it. Not just in the recovery
 scenarios — in the harness, so every scenario inherits it. Two reasons, and the second is
 the one that bites: `testing.md` §2 and `CLAUDE.md` §6 forbid a test that reads the state of
 the machine it runs on, and without the redirection every recovery scenario would read the
@@ -437,8 +518,13 @@ twice (ONEUP-0050, ONEUP-0055).
   `downloadcontentcdn.opensuse.org` and requests `repodata/repomd.xml`, asserting HTTP
   200. It is **network-dependent, so it is gated on `ONEUP_TEST_NETWORK=1` and SKIPs
   loudly otherwise** — `testing.md` §2 forbids a test that depends on the machine's
-  state, and a silent skip is the ONEUP-0068 shape. Its value is that it fails loudly the
-  day openSUSE retires the host, rather than leaving recovery quietly inert.
+  state, and a silent skip is the ONEUP-0068 shape. **`local-CI.sh` sets
+  `ONEUP_TEST_NETWORK=1`; the pre-push hook and the release workflow do not.** An opt-in
+  nobody opts into catches nothing, so the run that owns it is named here rather than left
+  to whoever writes the scenario. Its value is that it fails loudly the day openSUSE
+  retires the host, rather than leaving recovery quietly inert. It requests
+  `repodata/repomd.xml` over **`https://`**, the scheme §2.4 measured and the one most of
+  the machine's baseurls carry.
 
 The suite's mock `zypper` already dispatches on `"$*"` with `*download-only*` matched
 before the general `*dup*` case; the recovery scenarios add a per-call counter file to
@@ -449,11 +535,13 @@ yet — every one of them ships with the implementation.
 
 - `CHANGELOG.md` — a `Fixed` entry under `[Unreleased]`, in the user's language: an update
   that failed because one package would not download now fetches it from openSUSE's
-  content network instead of giving up.
+  content delivery network instead of giving up.
 - **ROADMAP ONEUP-0094 carries a claim this spec disproves** — that `ZYPP_MULTICURL=0` was
   verified to fix a run. §2.3 shows the variable is absent from libzypp 17.38.14. The
   bullet is annotated, not rewritten: the measurement it records is real, its attribution
-  is not.
+  is not. The same annotation corrects its opening count — the bullet says "Observed twice
+  on 2026-08-07", where the failure reproduced four times (§2.2), two of them through
+  OneUp.
 - **The bullet's `Kind:` must change from `enhancement` to `fix`, in the same annotation.**
   It is not clerical: `workflow.md` §1.2 bars feature work from `main` during the freeze, so
   a bullet reading `enhancement` and a spec reading `fix` is a live contradiction about
@@ -491,10 +579,8 @@ yet — every one of them ships with the implementation.
   (`ONEUP-0085` §2.2): a retry down the same route is a second wait for the same outcome.
   Changing the host is what makes the second attempt different from the first.
 - **Point the retry at `cdn.opensuse.org`** — the host openSUSE's own geoip service names
-  for this machine (§2.4). Rejected because it is a redirector: it hands back a mirror,
-  which is the selection this item is recovering *from*. Measured 2026-08-07, it redirected
-  to `opensuse.mirror.liteserver.nl`. Fast when it works, and no guarantee the file is
-  there — which is precisely the property that failed.
+  for this machine. Rejected on the measurement in §2.4: it is a redirector, so it offers
+  no guarantee the file is there, which is precisely the property that failed.
 - **Rewrite the user's `/etc/zypp/repos.d` baseurls permanently** — option (b) in the
   ROADMAP bullet. Rejected: a permanent, invisible change to the user's machine, forfeiting
   mirror redundancy for every future update to fix one failed one, and one that outlives
@@ -521,4 +607,5 @@ yet — every one of them ships with the implementation.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 2 | 2026-08-07 | 2 lanes; 0 critical, 7 high, 6 medium, 9 low — **22 verified, 0 dismissed** — 14 draft defects vs 8 fix collateral (all fixed). Dimensions: dim 5×8, dim 6×3, dim 4×2, dim 10×2, dim 11×2, dim 15×2, dim 1×1, dim 2×1, dim 8×1 | **No criticals, and the sharpest finding was a test that could not fail on the bug it named.** Both lanes independently caught INV-9: it asserted the temporary directory was gone using the *recovery-succeeded* scenario, so a cleanup written on the success path only — the exact break-mode the clause named — would ship green. It now binds to three scenarios covering success, failed retry and stop. The most consequential draft defect was a scheme gap: every CDN measurement in §2.4 was HTTP, the §4.2 rewrite preserves the scheme, and **nine of this machine's ten openSUSE baseurls are `https://`** — so recovery could have been inert on almost every repository while appearing to work. Measured before fixing: HTTPS returns 206 at 1,951,181 B/s with `ssl_verify_result=0`, repodata 200. Two more contract holes closed: `REPOSD_OVERRIDE` was cleared only when the *retry* failed, missing the reachable retry-succeeds-then-commit-fails path into the repo-skip retry; and condition 5's probe (`^baseurl.*download\.opensuse\.org`) accepted strings the §4.2 substitution would not rewrite, which would have fired recovery as the byte-identical plain retry §9 rejects. One assumption was demoted rather than defended — that libzypp keys the package cache by alias — and is now INV-10 with its inference stated as an inference. |
 | 1 | 2026-08-07 | 2 lanes; 4 critical, 3 high, 8 medium, 7 low — **22 verified, 2 dismissed** — 22 draft defects vs 0 fix collateral (all fixed). Dimensions: dim 5×6, dim 2×5, dim 7×4, dim 15×2, dim 6×2, dim 1×1, dim 4×1, dim 9×1, dim 10×1 | **The draft patched one branch of a two-branch function, and wrote three invariants that could not all pass.** §4.3 inserted `--reposd-dir` into the Tumbleweed `dup` line only, leaving Leap with a retry byte-identical to the attempt that had just failed — the exact "plain retry" §9 rejects, and a breach of ONEUP-0085's INV-5 "on both distros". Both lanes led with it. Separately, INV-3 and INV-5 asserted against the copied repository directory *after* the run while INV-9 required it deleted before the engine exits; the fix captures the copy from inside the mock instead. Three more the packet's code windows settled and no careful read would have: `run_system_download` uses `tee` **without** `-a`, so the retry truncates the first failure's log and the named-package hint needed a snapshot; `rm -f` cannot remove a directory; and INV-8's stop fixture was doubly wrong — a stop file touched before the engine starts is older than `run.state`, so `stop_pending`'s `-nt` test never fires, and the expected outcome was `fail`, not `skip`. Two lane claims were **dismissed on measurement**, not on judgement: `conflict`/`signature` as "ordinary noise" in a dup log (zero occurrences across two real run logs) and word-splitting in `${VAR:+…}` (bash preserves the inner quotes — executed both branches under the engine's own `set -uo pipefail` before the replacement landed). |
