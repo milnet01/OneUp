@@ -55,16 +55,22 @@ skip-cleanly-for-an-absent-tool convention the engine uses for `flatpak` and `fw
 
 This is the rule with the most scar tissue behind it, so it is first.
 
-### 2.1 The three redirects
+### 2.1 The four redirects
 
-`run_engine` in `tests/run-tests.sh` rewrites three paths before every engine
+`run_engine` in `tests/run-tests.sh` rewrites four paths before every engine
 invocation, each only if the scenario has not set it itself:
 
 ```bash
 ONEUP_ZYPP_PID_FILE="${ONEUP_ZYPP_PID_FILE:-$mockdir/no-zypp.pid}"
 ONEUP_RUN_STATE="${ONEUP_RUN_STATE:-$mockdir/run.state}"
 ONEUP_STOP_FILE="${ONEUP_STOP_FILE:-$mockdir/stop.request}"
+ONEUP_GUARD_FILE="${ONEUP_GUARD_FILE:-$mockdir/oneup-download-guard}"
 ```
+
+The fourth is ONEUP-0092's, and it is here for the same reason as the first: `guard_current`
+**reads** that path on every run that reaches the download pass, so without a default the
+suite's result would depend on whether the developer's own machine happens to have OneUp's
+passwordless setting granted.
 
 Both defaults bit for real, which is why the rule is not theoretical:
 
@@ -116,7 +122,7 @@ with a stated one:
 
 - **The engine suite does not redirect `HOME`.** *A defect.* `update_system.sh` runs
   `mkdir -p "$LOG_DIR"` with `LOG_DIR="$HOME/Documents/update-logs"`, so every scenario
-  creates that directory on the real machine. The three `ONEUP_*` paths are redirected;
+  creates that directory on the real machine. The four `ONEUP_*` paths are redirected;
   `HOME` is not. Filed as **ONEUP-0058**.
 - **One engine scenario reaches the network on purpose.** *A carve-out.* ONEUP-0094's T-1
   asks the real openSUSE content CDN for a repository-metadata file and asserts HTTP 200,
@@ -133,8 +139,12 @@ with a stated one:
   real external service, an opt-in gate, and a loud SKIP — or it is a breach, not a
   precedent.
 
-The engine suite creates **75 throwaway directories and removes 75** — one per scenario
-except the keep-alive-guard scenario, which needs none. A scenario adds `rm -rf "$d"` as
+The engine suite creates **one throwaway directory per scenario and removes every one** —
+the keep-alive-guard scenario is the only one that needs none. The invariant is the
+*pairing*, not a total: `grep -c 'mktemp -d' tests/run-tests.sh` and `grep -c 'rm -rf
+"$d"'` must agree, and a scenario that adds the first without the second is the leak this
+rule exists to catch. (The two counts were quoted here as a figure until 2026-08-07, by
+which time the figure was wrong by fourteen — §6b.2 is why it is a sweep now.) A scenario adds `rm -rf "$d"` as
 its last line, in the same block, not in a shared teardown — a shared teardown does not run
 when a scenario is commented out during debugging.
 
@@ -367,7 +377,7 @@ with the layout direction forced right-to-left.
 
 | Rule | What catches a breach |
 | --- | --- |
-| §2.1 the three redirects | `run_engine` applies them itself, so a scenario that goes through it cannot forget. A scenario that invokes the engine directly must repeat them by hand, and **nothing catches that** |
+| §2.1 the four redirects | `run_engine` applies them itself, so a scenario that goes through it cannot forget. A scenario that invokes the engine directly must repeat them by hand, and **nothing catches that** |
 | §2.2 the GUI suite redirects `HOME` | the redirect is unconditional and module-level in `tests/gui-smoke.py`, so no individual test can forget it. **Nothing checks it still runs *before* `QApplication` is constructed** — and that ordering is the whole point, because `QSettings` resolves its path once and keeps it |
 | §2.3 no root | the mock `PATH`: a real `sudo` is not on it, so a scenario that reaches for one gets the mock or nothing |
 | §2.3 a test writes only inside its own temporary directory | **nothing — the engine suite breaks this.** `update_system.sh` builds `LOG_DIR` from `$HOME`, which `tests/run-tests.sh` does not redirect, so every scenario creates `~/Documents/update-logs` on the real machine (ONEUP-0058) |

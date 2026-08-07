@@ -121,6 +121,7 @@ run_engine() {
         ONEUP_ZYPP_PID_FILE="${ONEUP_ZYPP_PID_FILE:-$mockdir/no-zypp.pid}" \
         ONEUP_RUN_STATE="${ONEUP_RUN_STATE:-$mockdir/run.state}" \
         ONEUP_STOP_FILE="${ONEUP_STOP_FILE:-$mockdir/stop.request}" \
+        ONEUP_GUARD_FILE="${ONEUP_GUARD_FILE:-$mockdir/oneup-download-guard}" \
         ONEUP_INHIBITED="${ONEUP_INHIBITED-1}" \
         ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}" \
         bash "$ENGINE" "$@" --log="$mockdir/run.log" 2>&1
@@ -1099,6 +1100,22 @@ fi
 check_absent "the step after the stop does not run"   "CACHE-CLEAN-RAN" "$out"
 check        "the run reports stopped"                "@@DONE@@|stopped" "$out"
 check_absent "a stop is never reported as an error"   "@@DONE@@|errors" "$out"
+# ONEUP-0092 INV-8: the same scenario over the OTHER wrapper. A passwordless user's
+# download runs through the installed guard instead of the inline `bash -c` script, and
+# the two are separate texts implementing one contract — so Stop has to survive the swap.
+# Without this, the guard could silently drop the stop poll and only passwordless users
+# would find out, which is precisely who ONEUP-0092 is for.
+rm -f "$d/COMMIT-RAN" "$d/stop.request"
+run_engine "$d" --emit-guard > "$d/oneup-download-guard"; chmod +x "$d/oneup-download-guard"
+out=$(ONEUP_STOP_FILE="$d/stop.request" run_engine "$d" --steps=system,cache 2>&1)
+check        "via the guard: the step is skipped, not failed" "@@STEP_END@@|system|skip" "$out"
+check        "via the guard: nothing was installed"           "stopped before installing anything" "$out"
+check        "via the guard: the run reports stopped"         "@@DONE@@|stopped" "$out"
+if [[ ! -e "$d/COMMIT-RAN" ]]; then
+    echo "  ok   - via the guard: the commit pass never ran"; PASS=$((PASS+1))
+else
+    echo "  FAIL - via the guard: the commit pass ran after the user stopped"; FAIL=$((FAIL+1))
+fi
 rm -rf "$d"
 
 echo "TEST: a stop during the COMMIT is ignored until the step ends (ONEUP-0085 INV-2)"
@@ -1345,6 +1362,29 @@ check "drop-in is password-free (NOPASSWD)"               "NOPASSWD:"        "$r
 check "drop-in scopes zypper"                             "$d/zypper"        "$rule"
 check "drop-in scopes only 'systemctl stop packagekit'"  "stop packagekit"  "$rule"
 check "drop-in covers the 'env LC_ALL=C zypper' wrapper"  "LC_ALL=C zypper"  "$rule"
+# ONEUP-0092 INV-1: the three shapes a run issues that the drop-in used to miss. Each was
+# measured prompting on a machine with passwordless ON, which is the whole bug.
+check "drop-in covers the per-repo refresh timeout"       "timeout 120 zypper *"        "$rule"
+check "drop-in covers the cache measurement"              "du -sB1 /var/cache/zypp"     "$rule"
+check "drop-in covers the download guard"                 "oneup-download-guard"        "$rule"
+# INV-4: no general-purpose binary with an unpinned command slot. `timeout * zypper *`
+# reads as scoped and is satisfied by `timeout 5 /bin/sh -c 'zypper x'` — a root shell.
+check_absent "no unpinned timeout entry"                  "timeout *"        "$rule"
+check_absent "drop-in never grants bash"                  " bash"            "$rule"
+check_absent "drop-in never grants sh -c"                 " sh -c"           "$rule"
+if grep -qE '/timeout [0-9]+ zypper \*' <<<"$rule"; then
+    echo "  ok   - the timeout entry pins its budget to digits"; PASS=$((PASS+1))
+else
+    echo "  FAIL - the timeout entry does not pin its budget"; FAIL=$((FAIL+1))
+fi
+# The guard is installed by the same grant, and is what lets a later run tell whether this
+# drop-in is the one it needs (the drop-in itself is 0440 root-only and unreadable).
+if [[ -s "$d/oneup-download-guard" ]]; then
+    echo "  ok   - grant installed the download guard"; PASS=$((PASS+1))
+else
+    echo "  FAIL - grant left no download guard"; FAIL=$((FAIL+1))
+fi
+check "the guard carries the granted scope as its stamp" "# oneup-auth-scope:" "$(cat "$d/oneup-download-guard" 2>/dev/null)"
 # Bonus: if a real visudo is on the box, prove the generated rule is truly valid
 # (not just accepted by the mock). Absolute paths dodge the mock visudo in $PATH.
 # Skipped silently where visudo isn't installed.
@@ -1363,12 +1403,20 @@ echo "TEST: --revoke-auth removes the drop-in and reports off"
 d=$(mktemp -d); setup_common "$d"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"; chmod +x "$d/zypper"
 authfile="$d/oneup-sudoers"; printf 'placeholder\n' > "$authfile"
+printf '#!/bin/bash\n' > "$d/oneup-download-guard"
 out=$(ONEUP_AUTH_FILE="$authfile" run_engine "$d" --revoke-auth)
 check "revoke reports authorization off" "@@AUTH@@|off" "$out"
 if [[ -e "$authfile" ]]; then
     echo "  FAIL - revoke left the drop-in behind"; FAIL=$((FAIL+1))
 else
     echo "  ok   - revoke deleted the drop-in"; PASS=$((PASS+1))
+fi
+# The guard is a root-owned executable the user consented to; withdrawing consent has to
+# take it away too, or "revocation is immediate and complete" (security.md §5.5) is false.
+if [[ -e "$d/oneup-download-guard" ]]; then
+    echo "  FAIL - revoke left the download guard behind"; FAIL=$((FAIL+1))
+else
+    echo "  ok   - revoke deleted the download guard too"; PASS=$((PASS+1))
 fi
 rm -rf "$d"
 
@@ -1398,8 +1446,133 @@ authfile="$d/oneup-sudoers"
 out=$(ONEUP_AUTH_FILE="$authfile" run_engine "$d" --auth-status)
 check "status is off when no drop-in exists" "@@AUTH@@|off" "$out"
 printf 'placeholder\n' > "$authfile"
+# ONEUP-0092 INV-7: a live drop-in is no longer enough. One installed by an OLDER OneUp
+# grants five entries and still leaves three calls prompting, so "on" now means the rule
+# covers what THIS engine issues — proved by the guard beside it matching this engine's.
 out=$(ONEUP_AUTH_FILE="$authfile" run_engine "$d" --auth-status)
-check "status is on when the drop-in exists" "@@AUTH@@|on" "$out"
+check "status is off when the drop-in is live but stale" "@@AUTH@@|off" "$out"
+printf '#!/bin/bash\n# a guard from some older OneUp\n' > "$d/oneup-download-guard"
+out=$(ONEUP_AUTH_FILE="$authfile" run_engine "$d" --auth-status)
+check "status is off when the guard is from another version" "@@AUTH@@|off" "$out"
+run_engine "$d" --emit-guard > "$d/oneup-download-guard"
+out=$(ONEUP_AUTH_FILE="$authfile" run_engine "$d" --auth-status)
+check "status is on when the drop-in AND the guard are current" "@@AUTH@@|on" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: the download guard runs zypper and nothing else, and stops on request"
+d=$(mktemp -d); setup_common "$d"
+# A zypper that outlives the stop, so a guard that failed to signal would hang the check.
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == "--version" ]] && { echo v; exit 0; }
+echo "mock zypper: $*"
+sleep 10
+EOF
+chmod +x "$d/zypper"
+guard="$d/oneup-download-guard"; run_engine "$d" --emit-guard > "$guard"; chmod +x "$guard"
+check "the guard pins the zypper it may run" "$d/zypper" "$(cat "$guard")"
+# INV-5a: the guard is granted with no argument spec, so its own check is the only barrier
+# between one sudoers entry and a root shell.
+out=$("$guard" "$d/stop.request" "$d/run.state" 1 bash -c id 2>&1); rc=$?
+check "the guard refuses a command that is not zypper" "refusing to run 'bash'" "$out"
+if (( rc == 2 )); then
+    echo "  ok   - refusing exits 2 without running anything"; PASS=$((PASS+1))
+else
+    echo "  FAIL - refusing exited $rc, not 2"; FAIL=$((FAIL+1))
+fi
+# INV-5b: it appends --download-only, so the guard cannot be used to run the install pass.
+touch "$d/run.state"
+( sleep 1; touch "$d/stop.request" ) &
+out=$("$guard" "$d/stop.request" "$d/run.state" 0.2 zypper --non-interactive dup 2>&1); rc=$?
+check "the guard runs zypper with --download-only" "--non-interactive dup --download-only" "$out"
+# INV-5c: the halves with the most scar tissue — kill the child only, and reap it. The
+# first two runs never create a stop file, so only this one reaches the signal path.
+if (( rc == 143 )); then
+    echo "  ok   - a stop request TERMs the download and exits 143"; PASS=$((PASS+1))
+else
+    echo "  FAIL - stopped guard exited $rc, not 143"; FAIL=$((FAIL+1))
+fi
+if pgrep -f "$d/zypper" >/dev/null 2>&1; then
+    echo "  FAIL - the guard left its zypper child running"; FAIL=$((FAIL+1))
+else
+    echo "  ok   - the guard reaped its child, leaving nothing behind"; PASS=$((PASS+1))
+fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: a drop-in that doesn't cover this engine authenticates up front, never mid-run"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == "--version" ]] && { echo v; exit 0; }
+exit 0
+EOF
+chmod +x "$d/zypper"
+# Same drop-in-aware sudo as the status test, plus a record of the interactive bootstrap:
+# `sudo -A … -v` is the one labelled prompt, and its absence is what ONEUP-0092 was.
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+nonint=false
+for a in "$@"; do [[ "$a" == "-A" ]] && echo "BOOTSTRAP" >> "$ONEUP_TEST_SUDOLOG"; done
+while [[ $# -gt 0 ]]; do case "$1" in -n) nonint=true; shift;; -A|-v|-k|-E) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
+[[ $# -eq 0 ]] && exit 0
+if $nonint && [[ -n "${ONEUP_AUTH_FILE:-}" && ! -e "$ONEUP_AUTH_FILE" ]]; then
+    echo "sudo: a password is required" >&2; exit 1
+fi
+exec "$@"
+EOF
+chmod +x "$d/sudo"
+authfile="$d/oneup-sudoers"; printf 'placeholder\n' > "$authfile"
+printf '#!/bin/bash\n# a guard from some older OneUp\n' > "$d/oneup-download-guard"
+: > "$d/sudolog"
+ONEUP_TEST_SUDOLOG="$d/sudolog" ONEUP_AUTH_FILE="$authfile" run_engine "$d" --steps=cache >/dev/null 2>&1
+check "a stale drop-in still takes the up-front labelled prompt" "BOOTSTRAP" "$(cat "$d/sudolog")"
+: > "$d/sudolog"
+ONEUP_TEST_SUDOLOG="$d/sudolog" run_engine "$d" --emit-guard > "$d/oneup-download-guard"
+: > "$d/sudolog"
+ONEUP_TEST_SUDOLOG="$d/sudolog" ONEUP_AUTH_FILE="$authfile" run_engine "$d" --steps=cache >/dev/null 2>&1
+check_absent "a current drop-in skips the bootstrap entirely" "BOOTSTRAP" "$(cat "$d/sudolog")"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: granting is all-or-nothing — a half-installed pair leaves neither file"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == "--version" ]] && { echo v; exit 0; }
+exit 0
+EOF
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/visudo"
+# An install that refuses the drop-in but accepts the guard: the branch that would strand
+# a root-owned executable the user can no longer revoke (the toggle reads off afterwards,
+# so the GUI's revoke arm is unreachable).
+cat > "$d/install" <<'EOF'
+#!/usr/bin/env bash
+args=(); while [[ $# -gt 0 ]]; do case "$1" in -o|-g|-m) shift 2;; *) args+=("$1"); shift;; esac; done
+[[ "${args[1]}" == *oneup-sudoers* ]] && exit 1
+cp "${args[0]}" "${args[1]}"
+EOF
+chmod +x "$d/zypper" "$d/visudo" "$d/install"
+authfile="$d/oneup-sudoers"
+out=$(ONEUP_AUTH_FILE="$authfile" run_engine "$d" --grant-auth 2>&1)
+check_absent "a failed grant never reports authorization on" "@@AUTH@@|on" "$out"
+check "a failed grant says so"                               "@@HINT@@"    "$out"
+if [[ -e "$authfile" ]]; then
+    echo "  FAIL - failed grant left a drop-in behind"; FAIL=$((FAIL+1))
+else
+    echo "  ok   - failed grant left no drop-in"; PASS=$((PASS+1))
+fi
+if [[ -e "$d/oneup-download-guard" ]]; then
+    echo "  FAIL - failed grant stranded the root-owned guard"; FAIL=$((FAIL+1))
+else
+    echo "  ok   - failed grant removed the guard it had installed"; PASS=$((PASS+1))
+fi
+# A budget that is not a whole number of seconds reaches the one sudoers slot a wildcard
+# would make exploitable, so the grant refuses rather than writing it.
+out=$(ONEUP_REFRESH_TIMEOUT='5 *' ONEUP_AUTH_FILE="$authfile" run_engine "$d" --grant-auth 2>&1)
+check_absent "a non-numeric refresh budget never reaches the rule" "@@AUTH@@|on" "$out"
+check "a non-numeric refresh budget is refused with a hint"        "@@HINT@@"    "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -1426,6 +1599,11 @@ while [[ $# -gt 0 ]]; do case "$1" in -n|-v|-k|-E) shift;; -p) shift 2;; --) shi
 exec "$@"
 EOF
 chmod +x "$d/sudo"
+# "Active" now means active AND covering what this engine issues (ONEUP-0092): the guard
+# beside the drop-in is what says so, since the drop-in itself is 0440 and unreadable. A
+# drop-in without it is the stale case, which deliberately DOES take the bootstrap — that
+# scenario is "a drop-in that doesn't cover this engine authenticates up front" above.
+run_engine "$d" --emit-guard > "$d/oneup-download-guard"
 out=$(run_engine "$d" --steps=system,cache)
 check_absent "drop-in active: no interactive sudo -A -v" "BUG: interactive sudo -A invoked" "$out"
 
@@ -2396,6 +2574,38 @@ fi
 check        "the original failure is still reported"  "@@STEP_END@@|system|fail" "$out"
 rm -rf "$d"
 
+echo "TEST: no privileged call escapes the drop-in unnoticed (ONEUP-0092 INV-2, INV-3)"
+# Structural, and deliberately so. ONEUP-0092 was three call sites the sudoers rule did not
+# grant, and nothing behavioural can catch the FOURTH one: a new `sudo …` line is correct
+# code that simply prompts, and only a passwordless user ever finds out.
+#
+# Anchored to command position. The obvious pattern, `grep -cE '\bsudo(_capture)? '`,
+# returns 70 against 26 here, because the engine discusses sudo constantly in comments — a
+# count dominated by prose fails on a reworded comment, which teaches the next person to
+# bump the number instead of reading it. Two things it still cannot see, so that nobody
+# reads it as complete: a sudo inside a pipeline or substitution, and two calls on one line.
+n=$(grep -cE '^[[:space:]]*(sudo|sudo_capture) ' "$ENGINE")
+if [[ "$n" == "29" ]]; then
+    echo "  ok   - the engine has its known 29 privileged call sites"; PASS=$((PASS+1))
+else
+    echo "  FAIL - privileged call sites moved: $n, expected 29. A NEW one needs a matching"; FAIL=$((FAIL+1))
+    echo "         entry in auth_cmnds, or passwordless silently starts prompting again."
+fi
+# The shared-definition halves. Each array is written once and read by both the call site
+# and the rule that grants it, so a respelling on either side cannot drift unnoticed.
+# Comments stripped for the reason above.
+stripped=$(grep -vE '^[[:space:]]*#' "$ENGINE")
+for pair in "REFRESH_SUDO_ARGV:5" "CACHE_DU_ARGV:5"; do
+    var="${pair%%:*}"; want="${pair##*:}"
+    got=$(grep -c "$var" <<<"$stripped")
+    if [[ "$got" == "$want" ]]; then
+        echo "  ok   - $var is referenced $want times (definition, checks, rule, call sites)"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - $var referenced $got times, expected $want (call and rule may have drifted)"; FAIL=$((FAIL+1))
+    fi
+done
+
+# ---------------------------------------------------------------------------
 echo "TEST: the recovery host openSUSE serves is still there (ONEUP-0094 T-1)"
 # Network-dependent, so it is opt-in — testing.md §2 forbids a test that depends on the
 # state of the machine it runs on, and that includes its connection. local-CI.sh defaults

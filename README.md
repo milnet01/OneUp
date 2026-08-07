@@ -45,7 +45,9 @@ OneUp can:
 - **Update automatically every week** — optionally (off by default). An "Automatic
   updates" setting runs the whole update on a weekly schedule in the background,
   keeping the snapshot/rollback safety net. It needs the "Passwordless" setting, so
-  an unattended run doesn't stop to ask for a password.
+  an unattended run doesn't stop to ask for a password — and if that setting ever
+  stops working, the weekly update switches itself off and tells you, rather than
+  quietly doing nothing every week.
 - **Restart just the affected services** instead of rebooting, when a full reboot
   isn't actually required.
 - **Survive a single broken software source** instead of failing the whole update —
@@ -54,7 +56,8 @@ OneUp can:
 - **Skip the password prompt** — optionally (off by default). A "Passwordless"
   toggle stops OneUp asking for your password on every update. It stores **no
   password**: the system just remembers the decision for OneUp's update commands,
-  and switching it off revokes it instantly.
+  and switching it off revokes it instantly. The one exception is firmware, which
+  asks the system for permission its own way and may still show a prompt.
 - **Explain failures** in plain English, warn about low disk space or duplicate
   repos before starting, and follow your desktop's **light/dark** theme.
 

@@ -204,6 +204,7 @@ Every environment override that exists, and every path that has none:
 | Stop request | `~/.local/state/oneup/stop.request` | both | `ONEUP_STOP_FILE` — **engine only** |
 | zypper lock probe | `/run/zypp.pid` | engine | `ONEUP_ZYPP_PID_FILE` |
 | Passwordless-auth drop-in | `/etc/sudoers.d/oneup` | engine | `ONEUP_AUTH_FILE` |
+| Download guard | `/usr/libexec/oneup-download-guard`, or `/usr/lib/oneup-download-guard` where `/usr/libexec` does not exist (Leap 15.x) | engine | `ONEUP_GUARD_FILE` |
 | Graphical password helper | `/usr/libexec/ssh/ksshaskpass` | engine | `ONEUP_ASKPASS` |
 | Per-repository refresh budget | `120` seconds | engine | `ONEUP_REFRESH_TIMEOUT` |
 | Repository definitions | `/etc/zypp/repos.d` | engine | `ONEUP_REPOS_DIR` — **engine only** |

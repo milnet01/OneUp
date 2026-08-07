@@ -6,6 +6,30 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Automatic weekly updates switch themselves off if Passwordless stops working.** (ONEUP-0099)
+  Automatic updates need the Passwordless setting to run unattended, and
+  OneUp already turned them off when you switched that setting off
+  yourself. It did not notice the other ways the permission can go away —
+  removed outside OneUp, or left behind by an older version. The weekly
+  update then kept firing into a password box nobody was looking at and
+  installed nothing, every week, silently. Now OneUp stands the schedule
+  down as soon as it notices, and tells you why.
+
+- **Turning on Passwordless now really does stop the password box.** (ONEUP-0092)
+  The setting told the system to trust five of OneUp's commands, but an
+  update runs three more it had never been told about — checking each
+  software source, downloading the packages, and measuring the cleanup. So
+  the password box still appeared, usually at "Checking for updates from…"
+  right at the start. All three are covered now, and OneUp decides whether
+  the setting is working by checking what a real update actually does,
+  rather than asking about one command out of six. If the permission was
+  set up by an older OneUp, the app notices and asks you once, up front,
+  instead of surprising you in the middle of a run. Firmware is the one
+  exception: it asks the system for permission its own way, and no setting
+  of OneUp's can speak for it.
+
 ## [1.4.2] - 2026-08-07
 
 ### Fixed

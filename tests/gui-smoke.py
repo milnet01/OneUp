@@ -109,6 +109,15 @@ def main() -> int:
     # before the first Updater() below.
     updater.Updater._check_app_update = lambda self, manual=False: None
 
+    # Same argument, same place, for the same reason (ONEUP-0099). Every Updater() runs
+    # _query_auth_status, whose settle can now reach _stand_down_autoupdate — and that
+    # calls the REAL _remove_user_timer, which shells out to `systemctl --user disable
+    # --now` against the developer's own session. Across 56 constructions, "the scenarios
+    # that care are careful" is not the same property as "the suite cannot touch the
+    # machine" (testing.md §2). Scenarios that assert on it re-enable it locally with a spy.
+    _real_stand_down = updater.Updater._stand_down_autoupdate
+    updater.Updater._stand_down_autoupdate = lambda self, lead="": None
+
     # Likewise the single-instance socket: left alone, the guard would connect to the
     # user's LIVE OneUp and pop its window open mid-test (testing.md §2).
     os.environ["ONEUP_INSTANCE_NAME"] = f"OneUp-test-{os.getpid()}"
@@ -709,6 +718,7 @@ def main() -> int:
     # (d) revoking passwordless while auto-update is on clears the schedule
     w = updater.Updater()
     removed_d = []
+    w._stand_down_autoupdate = _real_stand_down.__get__(w)   # neutralised suite-wide
     w._autoupdate_enabled = lambda: True
     w._remove_user_timer = lambda name: removed_d.append(name)
     w._run_auth = lambda *a, **k: None                       # don't spawn a real process
@@ -716,6 +726,51 @@ def main() -> int:
     w.on_auth_toggled(False)                                 # user revokes
     check("revoke passwordless removes the update timer", "oneup-update" in removed_d)
     check("revoke passwordless clears the auto-update toggle", not w.autoupdate_btn.isChecked())
+
+    # (e) ONEUP-0099 INV-11: the timer must also stand down when the app merely DISCOVERS
+    # passwordless is off — the rule removed outside OneUp, or one too old to cover what
+    # this OneUp needs. The reflect runs under blockSignals precisely so it cannot fire
+    # grant/revoke, so (d)'s coupling arm never sees this route. Without it, a weekly timer
+    # keeps firing into a password dialog nobody is looking at and installs nothing.
+    # The real helper is neutralised suite-wide (see main()); restore it on this instance.
+    w = updater.Updater()
+    removed_e = []
+    w._stand_down_autoupdate = _real_stand_down.__get__(w)
+    w._autoupdate_enabled = lambda: True
+    w._remove_user_timer = lambda name: removed_e.append(name)
+    w._set_autoupdate_checked(True)
+    w._on_auth_status_finished(_StubProc("@@AUTH@@|off\n"))
+    check("a discovered passwordless-off removes the update timer", "oneup-update" in removed_e)
+    check("a discovered passwordless-off clears the auto-update toggle",
+          not w.autoupdate_btn.isChecked())
+
+    # (f) INV-12: a failed ENABLE must not answer with "we turned it off". Two halves, and
+    # the second is the one a false-only fixture misses: _autoupdate_enabled shells out to
+    # systemctl, so it reports the MACHINE, and a timer enabled outside OneUp would make it
+    # true while the user's own enable is still in flight.
+    for label, enabled in (("no timer present", False), ("a timer the toggle didn't know about", True)):
+        w = updater.Updater()
+        removed_f = []
+        w._stand_down_autoupdate = _real_stand_down.__get__(w)
+        w._autoupdate_enabled = lambda e=enabled: e
+        w._remove_user_timer = lambda name, acc=removed_f: acc.append(name)
+        w._pending_autoupdate = True
+        w._on_auth_status_finished(_StubProc("@@AUTH@@|off\n"))
+        check(f"a failed enable ({label}) removes no timer", not removed_f)
+
+    # (g) INV-13: a probe that failed to SPEAK is not a probe that said "off". A crashed
+    # engine, a killed QProcess or truncated output all produce output without the marker,
+    # and deleting the user's weekly timer because a subprocess did not start is
+    # destructive where the toggle reflect is merely cosmetic and self-correcting.
+    w = updater.Updater()
+    removed_g = []
+    w._stand_down_autoupdate = _real_stand_down.__get__(w)
+    w._autoupdate_enabled = lambda: True
+    w._remove_user_timer = lambda name: removed_g.append(name)
+    w._on_auth_status_finished(_StubProc(""))
+    check("a probe that emitted nothing removes no timer", not removed_g)
+    check("a probe that emitted nothing still reflects passwordless as off",
+          not w.auth_btn.isChecked())
 
     updater.QMessageBox.information = _orig_msg_info
     updater.QMessageBox.warning = _orig_msg_warn

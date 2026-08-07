@@ -93,8 +93,16 @@ without validation is a root shell injection, full stop.
 **2.1 — The engine authenticates once, up front.** `sudo_init` in `update_system.sh`
 raises a single graphical prompt via `sudo -A -v`, then starts a keep-alive that refreshes
 the credential every 50 seconds for the life of the run. **Zero** prompts, and no
-keep-alive at all, when §5's passwordless drop-in is active — `sudo_init` probes for it
-and returns early.
+keep-alive at all, when §5's passwordless drop-in is active **and covers what this engine
+issues** — `sudo_init` asks `auth_current`, not merely whether a rule exists, and returns
+early only then.
+
+That distinction is ONEUP-0092. A drop-in installed by an older OneUp is live, satisfies a
+`sudo -n zypper --version` probe, and still leaves three calls prompting — so the old early
+return skipped the bootstrap and the user met sudo's own bare prompt in the middle of step
+1, on a run they had told OneUp to do without one. Falling through instead costs one
+labelled prompt up front, which is the honest failure and the safety net for anything the
+rule turns out not to cover.
 
 **2.2 — Privileged output is captured with `sudo_capture`, never a subshell.** This is the
 most expensive trap in the project's history and the reason the helper exists:
@@ -253,6 +261,9 @@ not in a keyring, not in a file, not in memory.
 | `flatpak` (any arguments) | flatpak update/uninstall — likewise unrestricted by subcommand |
 | `systemctl stop packagekit` | releases the package lock |
 | `env LC_ALL=C zypper *` | the engine pins the locale via `sudo env …`, and sudo matches the rest of the argv literally, so the wrapper form needs its own entry |
+| `timeout <budget> zypper *` | `refresh_repos` bounds each repository with `sudo timeout`, because zypper has none of its own. **The budget is a literal, never a wildcard**: sudoers matches arguments as one space-joined string, so `timeout * zypper *` is satisfied by `timeout 5 /bin/sh -c 'zypper x'` — a root shell. Measured against that exact string before it shipped (ONEUP-0092) |
+| `du -sB1 /var/cache/zypp` | the cache step measures the package cache before and after the clean. Fixed argv, no wildcard: `du` takes no sub-command, so there is nothing to escape into |
+| the download guard (`/usr/libexec/oneup-download-guard`, `/usr/lib/…` on Leap) | §5.7. **No argument spec**, so any arguments are permitted — required, because the transaction argv varies. The guard restricts itself instead |
 
 **5.3 — State the risk plainly, in the UI, before granting.** This is approximately
 passwordless root for OneUp's commands: `zypper` can install arbitrary packages, and a
@@ -269,15 +280,47 @@ entirely.** The rule is written to a temp file, checked with `visudo -cf` **in i
 and only then placed with `install -o root -g root -m 0440` — atomic, root-owned, and the
 mode sudo requires. If validation fails, nothing is changed.
 
-**5.5 — Revocation is immediate and complete**: `--revoke-auth` deletes the file. There is
-no "disabled but retained" state.
+**The grant installs two files, and the order is part of the rule.** Validate first, then
+the guard (§5.7), then the drop-in — and **any failure after the guard lands removes it
+again**. A stranded root-owned executable is worse than a failed grant: afterwards the
+toggle reads off, which makes the GUI's revoke arm unreachable, so the user has consented
+to a file they can no longer withdraw. Equally, a `Cmnd` that is not a fully-qualified path
+is a sudoers *parse error* that takes the whole rule down, so an unresolvable binary makes
+the grant **refuse** rather than emit a bare name.
 
-**5.6 — Report real state, never a saved preference.** `--auth-status` probes with
-`sudo -k -n <zypper> --version`: `-k` ignores any cached credential so a recent run cannot
-produce a false positive, and `-n` refuses to prompt, so the probe succeeds only when the
-NOPASSWD rule is genuinely active. If the rule were removed outside OneUp, the toggle must
-show off. A settings toggle that reports what it *stored* rather than what *is* is a
-security bug.
+**5.5 — Revocation is immediate and complete**: `--revoke-auth` deletes the drop-in **and
+the download guard** — both candidate paths, since `/usr/libexec` may have appeared after
+the grant and moved it. There is no "disabled but retained" state, and no root-owned file
+left behind after consent is withdrawn.
+
+**5.6 — Report real state, never a saved preference.** `--auth-status` reports `on` only
+when `auth_current` succeeds, which is two questions rather than one: the rule is live —
+`sudo -k -n <zypper> --version`, where `-k` ignores any cached credential so a recent run
+cannot produce a false positive and `-n` refuses to prompt — **and** it grants what this
+engine issues, which §5.7's guard is the evidence for. If the rule were removed outside
+OneUp, or was written by a OneUp that granted less, the toggle must show off. A settings
+toggle that reports what it *stored* rather than what *is* is a security bug, and so is one
+that reports a rule's existence rather than its sufficiency.
+
+`sudo -k` suppresses the cache for its own invocation without invalidating it — measured,
+so the probe costs the next call nothing.
+
+**5.7 — The download guard: a scoped script, never a general-purpose binary.** The download
+pass needs a root-side wrapper that can signal its own zypper child, and `env LC_ALL=C bash
+-c *` cannot be granted — it is a root shell in sudoers clothing. So the wrapper is a file
+instead: root-owned, `0755`, installed by the grant and removed by the revoke, carrying a
+zypper path frozen at grant time and refusing any argument that is not that zypper. Its
+authority is therefore exactly the drop-in's own `zypper` entry, and no more.
+
+It doubles as the drop-in's **version stamp**. The drop-in is `0440 root:root`, so the
+engine cannot read back what it granted; the guard is world-readable, written by the same
+grant, and carries the whole granted scope in a `# oneup-auth-scope:` comment. "The
+installed guard is the text this engine would emit" therefore answers "was this rule
+written by a OneUp that grants what this run needs". Two things it cannot see, both
+recorded rather than papered over: it is not proof that sudo *matches* the entries
+(`visudo -cf` is), and it cannot detect a drop-in **replaced** afterwards by an older
+OneUp. **Editing the guard's text is a re-grant for every existing user**, because the
+comparison is over the whole text.
 
 ---
 
@@ -423,6 +466,12 @@ incidents and the rule are `docs/standards/testing.md` §2, which is canonical.
 | §3 every prompt says who is asking | nothing automatic |
 | §4 validate at the boundary, by shape | `tests/run-tests.sh` — an unsafe repo alias is refused and never reaches a privileged command |
 | §5 the passwordless drop-in | `tests/run-tests.sh` — grant, revoke and status, and the generated file is put through a real `visudo -cf` |
+| §5.2 the rule covers every shape a run issues | `tests/run-tests.sh` — the grant scenario asserts each entry by name, **and** a structural check pins the engine's privileged call-site count, so a *new* `sudo …` line fails the suite until it is granted. Nothing behavioural can catch that: an ungranted call is correct code that merely prompts, and only a passwordless user ever finds out |
+| §5.2 no general-purpose binary with an unpinned command slot | `tests/run-tests.sh` — the generated rule is asserted not to match `timeout *`, ` bash` or ` sh -c`, and the timeout entry is asserted to pin its budget to digits. The real-sudo evidence is the ONEUP-0092 measurement, which no test may reproduce (`testing.md` §2.3 forbids real `sudo`) |
+| §5.4 the grant is all-or-nothing | `tests/run-tests.sh` — an `install` that refuses the drop-in leaves neither file, and a non-numeric refresh budget is refused with a hint |
+| §5.5 revocation removes the guard too | `tests/run-tests.sh` — revoke deletes both files |
+| §5.6 "on" means passwordless works | `tests/run-tests.sh` — `--auth-status` across live-and-current, live-but-stale, and absent |
+| §5.7 the guard runs zypper and nothing else | `tests/run-tests.sh` — it refuses a non-zypper argv with exit 2, appends `--download-only`, TERMs its child on a stop request and reaps it. The stop scenario also runs over **both** wrappers, so the guard cannot silently drop the stop poll for the users who enabled passwordless |
 | §5 `--check` authenticates zero times | `tests/run-tests.sh` — *"`--check` performs NO privileged auth"*, backed by a mock that exits 99 if a transaction is attempted |
 | §6 stopping is cooperative | `tests/run-tests.sh` |
 | §7 logs carry no secrets | `tests/gui-smoke.py` — the diagnostics bundle has its hostname scrubbed |

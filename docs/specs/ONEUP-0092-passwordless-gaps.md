@@ -544,7 +544,7 @@ evidence is §4.2's measurement, recorded there because no test may reproduce it
 
 - **INV-2** No privileged call site escapes that list unnoticed.
   *Test (structural):* `grep -cE '^[[:space:]]*(sudo|sudo_capture) ' update_system.sh`
-  returns a count pinned at implementation time, with this invariant named beside it, so a
+  returns the count the scenario pins, with this invariant named beside it, so a
   **new** privileged call fails the suite until it is granted or explicitly recorded as
   interactive (grant/revoke's own `visudo`/`install`/`rm`). Breaks on exactly the way
   ONEUP-0092 was introduced: a call site added without a matching entry.
@@ -558,10 +558,14 @@ evidence is §4.2's measurement, recorded there because no test may reproduce it
 
 - **INV-3** A granted argv and the call that types it cannot drift apart.
   *Test (structural):* counted with comment lines stripped, for the reason INV-2 gives —
-  `grep -vE '^[[:space:]]*#' update_system.sh | grep -c 'REFRESH_SUDO_ARGV'` returns **3**
-  (one definition, one call site, one rule entry) and the same form for `CACHE_DU_ARGV`
-  returns **4** (one definition, *two* call sites — before and after `zypper clean` — one
-  rule entry). Breaks if either side is respelled in place, which is how a pinned budget
+`grep -vE '^[[:space:]]*#' update_system.sh | grep -c '<array>'` for each of the two
+  arrays returns the count the scenario pins. The numbers live in the test, which fails when
+  they move, and **not also here** — a spec that restates a figure the test owns has two
+  copies of it and only one gate (`documentation.md` §6b.3). What the reader needs is the
+  shape: each array is written once and read by its call site, by the rule that grants it,
+  and by `auth_cmnds`' validation, so a respelling on either side cannot drift unnoticed —
+  and the cache array has *two* call sites, before and after `zypper clean`, which is what
+  catches only one of them being converted. Breaks if either side is respelled in place, which is how a pinned budget
   silently stops matching, and the `du` count is what catches only one of the two cache
   sites being converted. Without the strip these counts would fail on a reworded comment,
   which is the failure INV-2 exists to name.
@@ -754,7 +758,7 @@ invokes the engine outside `run_engine` repeats it by hand, like the other three
 | `docs/standards/security.md` §5.5 | revocation removes the guard as well as the rule |
 | `docs/standards/security.md` §5.6 | the probe is now `auth_current`, not the bare zypper probe; say what "on" means, and that `sudo -k` does not invalidate a warm credential (§4.4, measured) |
 | `docs/standards/testing.md` §2.1 | the redirect list becomes four — `ONEUP_GUARD_FILE` joins it, and the heading itself reads "The three redirects", so it is renamed rather than only extended |
-| `docs/standards/testing.md` §2.3 | the "creates **75** throwaway directories and removes 75" count, which this spec's new scenarios change |
+| `docs/standards/testing.md` §2.3 | the throwaway-directory claim, which this spec's new scenarios change — rewritten as the sweep (create/remove must agree) rather than a total, per `documentation.md` §6b.2, since the figure there had already gone stale |
 | `docs/standards/files-and-naming.md` | the paths table gains `GUARD_FILE` / `ONEUP_GUARD_FILE`, with both defaults spelled out |
 | `security.md` and `testing.md` **`What checks this`** | a row per new rule, naming the INV that catches it — the revoke removing the guard, the ordered install, "on" meaning `auth_current`, the fourth redirect. `documentation.md` §4 requires the section and `tests/docs-check.py` gates its presence; a new rule with no row is the shape it exists to prevent |
 | `ROADMAP.md` | ONEUP-0092 and ONEUP-0099 both flip to shipped |
@@ -819,6 +823,7 @@ invokes the engine outside `run_engine` repeats it by hand, like the other three
 
 | Loop | Date | Findings | Verified | Fixed | Notes |
 | --- | --- | --- | --- | --- | --- |
+| impl | 2026-08-07 | 2 (both MEDIUM) | 2 | 2 | **No reviewer dispatched — this row records what building the spec found, not a review loop.** INV-3's clause pinned `REFRESH_SUDO_ARGV` at 3 and `CACHE_DU_ARGV` at 4; a conforming implementation returns **5 and 5**, because the validation §4.2 requires (`auth_cmnds` testing both arrays for emptiness, and the budget for digits) is itself a reference to each array that the clause had not counted. INV-2's count was left unpinned by design. Both clauses now name the command and leave the number to the test that fails when it moves, rather than carrying a second copy the suite cannot gate (`documentation.md` §6b.3) — a change the user asked for on the same day, after the stale directory count in `testing.md` surfaced. No design decision moved, so §9 is untouched |
 | 3 | 2026-08-07 | 26 (CRITICAL 1 · HIGH 6 · MEDIUM 11 · LOW 8) | 24 | 24 | 3 lanes, briefed cold. Dimensions: 5×8, 10×6, 4×5, 2×3, 6×3, 15×3. **Collateral-dominated, which is why the run stops here** (`/cold-eyes` loop economics): all three lanes independently found the same CRITICAL, and it was loop 2's own fix — §4.7 gained "and no enable is in flight" beside a sentence saying the helper holds the click path's statements verbatim, and the in-helper reading would have made a revoke racing an enable leave the weekly timer standing. The `--emit-guard` mechanism loop 2 introduced had the same shape of defect: it never pinned `ONEUP_GUARD_FILE`, so every "current guard" clause would have passed through the stale branch. Verified by opening the tree: the `AUTH_ACTION` dispatch sits **above** the `sudo_init` bootstrap (so loop 2's function-placement sentence was wrong), and `run_engine` **prefixes** `PATH` (so grant scenarios do resolve the real `timeout`/`du`). Dismissed with evidence: `release_zypper_lock` types `systemctl stop packagekit`, matching the drop-in exactly — no fourth uncovered shape; and the `Branch:` header's parenthetical follows sibling ONEUP-0094 rather than breaching the template. Deferred: INFO only — no anchor list on an 800-line doc. A fourth cold pass over loop 3's own fixes was not run |
 | 2 | 2026-08-07 | 34 (CRITICAL 2 · HIGH 8 · MEDIUM 11 · LOW 13) | 32 | 32 | 3 lanes, briefed cold. Dimensions: 5×11, 10×9, 4×4, 15×4, 7×3, 6×3, 2×2, 1×1. No loop-1 finding was raised again. Two lanes independently found the CRITICAL: §4.3's guard invocation had dropped `2>&1 \| tee "$SYS_LOG" \| progress_filter` and `SYS_DL_RC=${PIPESTATUS[0]}` — collateral from loop 1's own argv rewrite, and it would have cost the download log, ONEUP-0040's progress markers and ONEUP-0085's rc-143 discrimination. Draft defects the loop also caught: the Goal promised no password box for **firmware**, which elevates through polkit and cannot be covered by a sudoers rule; the stand-down fired on any probe that emitted nothing, not on an explicit `@@AUTH@@\|off`; and the GUI suite's 56 window constructions could reach the real `systemctl --user disable`. Verified by running: `local x=$(false)` masks the status where a split assignment preserves it, and `make_cdn_reposd` contains no `sudo` (so §2.2's enumeration stands — dismissed) |
 | 1 | 2026-08-07 | 27 (CRITICAL 2 · HIGH 9 · MEDIUM 6 · LOW 7 · dismissed 3) | 24 | 24 | 3 lanes. Dimensions: 10×7, 5×5, 6×3, 15×2, 7×2, 2×2, 4×1, 8×1, 12×1. All three lanes independently found the same CRITICAL — §4.3's guard had no argv contract and contradicted the wrapper it claimed to preserve. Two claims were settled by running them rather than reading them: `visudo -cf` **rejects** a non-absolute `Cmnd` (so §6's bare-name fallback row described an impossible state), and `sudo -k` does **not** invalidate a warm credential. INV-2's grep was measured at 70 matches against 26 at command position — 28 of them comments. Dismissed: an unowned `/usr/libexec` file (the drop-in already has that property), the exhaustiveness of §2.2's three call sites (re-scanned: it is exhaustive), and a probe-cost observation (INFO) |

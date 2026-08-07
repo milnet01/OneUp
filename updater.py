@@ -2515,6 +2515,19 @@ for (var i = 0; i < wins.length; i++) {{
         out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
         is_on = "@@AUTH@@|on" in out
         self._set_auth_checked(is_on)
+        # ONEUP-0099: an enabled weekly update must not outlive the rule it needs, and the
+        # reflect above cannot do it — it runs under blockSignals precisely so it can't
+        # fire grant/revoke, so on_auth_toggled's coupling arm never sees this route.
+        #
+        # Keyed on an EXPLICIT off marker, not on a missing "on". Every way the probe can
+        # fail to speak — a crashed engine, a killed QProcess, truncated output — reads as
+        # "not on", and deleting the user's weekly timer because a subprocess didn't start
+        # is destructive where the toggle reflect above is merely cosmetic and self-
+        # correcting. Not while an enable is in flight either: _autoupdate_enabled() shells
+        # out to systemctl and so reports the machine, not the toggle, so a timer enabled
+        # outside OneUp would answer the user's "on" click with "we switched it off".
+        if "@@AUTH@@|off" in out and not self._pending_autoupdate:
+            self._stand_down_autoupdate("OneUp's passwordless rule is no longer active.\n\n")
         # Re-enable the auto-update toggle if a pending enable had disabled it.
         self.autoupdate_btn.setEnabled(True)
         if self._pending_autoupdate:
@@ -2557,6 +2570,25 @@ for (var i = 0; i < wins.length; i++) {{
         QTimer.singleShot(0, lambda: self._center_child(box))
         return box.exec() == QMessageBox.Ok
 
+    def _stand_down_autoupdate(self, lead: str = ""):
+        """Remove the weekly update timer, uncheck it, and say why — the three steps both
+        routes that learn passwordless is off must take (ONEUP-0099). `lead` prepends a
+        route-specific opening sentence; the shared one explains the coupling, so neither
+        route rewrites the other's wording (mirrors _confirm_passwordless).
+
+        The `_pending_autoupdate` test deliberately does NOT live here. The click path
+        stands the timer down regardless of the latch and clears it afterwards, so moving
+        the check inside would let a revoke racing an enable leave an enabled weekly timer
+        behind — the exact coupling this method exists to guarantee."""
+        if not self._autoupdate_enabled():
+            return
+        self._remove_user_timer("oneup-update")
+        self._set_autoupdate_checked(False)
+        QMessageBox.information(
+            self, "Automatic updates turned off", lead +
+            "Automatic weekly updates were switched off because they need "
+            "the passwordless setting to run unattended.")
+
     def on_auth_toggled(self, on: bool):
         if not ENGINE.exists():
             self._set_auth_checked(False)
@@ -2571,13 +2603,7 @@ for (var i = 0; i < wins.length; i++) {{
             # Hooked to the revoke ACTION (not the toggle signal), so the programmatic
             # blockSignals reflects can't trip it. Removal is a local systemd-user op,
             # independent of the revoke process's own outcome.
-            if self._autoupdate_enabled():
-                self._remove_user_timer("oneup-update")
-                self._set_autoupdate_checked(False)
-                QMessageBox.information(
-                    self, "Automatic updates turned off",
-                    "Automatic weekly updates were switched off because they need "
-                    "the passwordless setting to run unattended.")
+            self._stand_down_autoupdate()
             self._pending_autoupdate = False    # a revoke mid-enable can't leave a stale latch
             self._run_auth("--revoke-auth", "Revoking authorization…")
 

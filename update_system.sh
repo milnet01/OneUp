@@ -110,6 +110,22 @@ REFRESH_TIMEOUT="${ONEUP_REFRESH_TIMEOUT:-120}"   # per-repository refresh budge
                       # 1 KB/s once held a run for hours with nothing on screen. Overridable
                       # so the tests don't have to wait out a real one (ONEUP-0048).
 
+# The refresh and the cache measurement both run under sudo, so the ONEUP-0023 drop-in must
+# grant the EXACT argv each types or passwordless silently keeps prompting (ONEUP-0092).
+# One definition each, used by the call site AND by auth_cmnds, so the rule cannot drift
+# from the call. Absolute paths because sudoers refuses a bare command name outright
+# ("expected a fully-qualified path name") — a rule carrying one is rejected whole.
+REFRESH_SUDO_ARGV=("$(command -v timeout)" "$REFRESH_TIMEOUT" zypper)
+CACHE_DU_ARGV=("$(command -v du)" -sB1 /var/cache/zypp)
+
+# The root-side download wrapper, as a root-owned file rather than an argument to bash
+# (ONEUP-0092 §4.3). `env LC_ALL=C bash -c *` cannot be granted — it is a root shell in
+# sudoers clothing — but a script that can only exec one pinned zypper grants exactly what
+# the drop-in's first entry already does. Installed by --grant-auth, removed by
+# --revoke-auth. /usr/libexec per FHS 3.0 (Tumbleweed since 2020), /usr/lib on Leap 15.x.
+GUARD_DIR=$([[ -d /usr/libexec ]] && echo /usr/libexec || echo /usr/lib)
+GUARD_FILE="${ONEUP_GUARD_FILE:-$GUARD_DIR/oneup-download-guard}"
+
 usage() {
     cat <<EOF
 System Updater engine
@@ -154,6 +170,7 @@ for arg in "$@"; do
         --grant-auth)  AUTH_ACTION="grant" ;;
         --revoke-auth) AUTH_ACTION="revoke" ;;
         --auth-status) AUTH_ACTION="status" ;;
+        --emit-guard)  AUTH_ACTION="emit-guard" ;;
         --import-keys) IMPORT_KEYS=true ;;
         --skip-repo=*)     SKIP_REPOS+=("${arg#*=}") ;;
         --auto-skip-repos) AUTO_SKIP=true ;;
@@ -597,15 +614,18 @@ fi
 # ---------------------------------------------------------------------------
 SUDO_KEEPALIVE=""
 sudo_init() {
-    # If the ONEUP-0023 passwordless drop-in is active, every privileged command
-    # below is individually NOPASSWD, so no cached credential is needed — and the
-    # interactive `sudo -A … -v` here would prompt ANYWAY: sudo's `verifypw` defaults
-    # to `all`, so a bare `-v` validate is only password-free when EVERY one of the
-    # user's sudoers entries is NOPASSWD (a normal %wheel user's isn't). Skipping it
-    # is what lets a headless timer run authenticate. Same non-interactive scoped
-    # probe --auth-status uses (auth_status, ~line 416).
-    local _zypper
-    if _zypper=$(command -v zypper) && sudo -k -n "$_zypper" --version >/dev/null 2>&1; then
+    # If the ONEUP-0023 passwordless drop-in is active AND grants what this engine needs,
+    # every privileged command below is individually NOPASSWD, so no cached credential is
+    # needed — and the interactive `sudo -A … -v` here would prompt ANYWAY: sudo's
+    # `verifypw` defaults to `all`, so a bare `-v` validate is only password-free when
+    # EVERY one of the user's sudoers entries is NOPASSWD (a normal %wheel user's isn't).
+    # Skipping it is what lets a headless timer run authenticate.
+    #
+    # auth_current, not the bare zypper probe: a drop-in from an older OneUp is live and
+    # still leaves three calls prompting, and this early return is what turned that into a
+    # surprise dialog in the middle of step 1 (ONEUP-0092). Falling through instead costs
+    # one labelled prompt up front, which is the honest failure.
+    if auth_current; then
         return 0
     fi
     if ! SUDO_ASKPASS="$ASKPASS" sudo -A \
@@ -790,12 +810,12 @@ lock_holder() {          # echoes "<pid> <name>" of the process holding the lock
 # Overridable so the test suite points it at a throwaway path, never real /etc.
 AUTH_FILE="${ONEUP_AUTH_FILE:-/etc/sudoers.d/oneup}"
 
-# Build the drop-in text from the binaries actually present on THIS machine
-# (command -v, not a hardcoded /usr/bin) so each rule matches the exact path sudo
-# will resolve. zypper is required; the rest are optional (skipped if absent).
-build_auth_rule() {
-    local user zypper cmd cmds=()
-    user=$(id -un)
+# The granted scope, written in ONE place (ONEUP-0092). Echoes the comma-joined Cmnd list.
+# Built from the binaries actually present on THIS machine (command -v, not a hardcoded
+# /usr/bin) so each rule matches the exact path sudo will resolve. zypper is required; the
+# optional ones are skipped when absent.
+auth_cmnds() {
+    local zypper cmd cmds=()
     zypper=$(command -v zypper) || return 1
     cmds+=("$zypper")                                   # any zypper subcommand
     cmd=$(command -v snapper)   && cmds+=("$cmd")        # snapper create/list
@@ -805,47 +825,144 @@ build_auth_rule() {
     # command (env) to a path but matches the REST of the argv literally, so this
     # pattern's second word must be the bare `zypper` the engine typed, not its path.
     cmd=$(command -v env)       && cmds+=("$cmd LC_ALL=C zypper *")
+    # The three ONEUP-0092 entries. Empty means `command -v` failed at file scope, where a
+    # failure leaves an empty element rather than a non-zero status — so test the element,
+    # never the substitution. Emitting a bare name here would make visudo reject the file.
+    [[ -n "${REFRESH_SUDO_ARGV[0]}" && -n "${CACHE_DU_ARGV[0]}" ]] || return 1
+    # The budget lands in the one slot a wildcard would make exploitable, and it arrives
+    # from the environment ($ONEUP_REFRESH_TIMEOUT), so it is pinned to digits here rather
+    # than trusted: `5 *` would generate `timeout 5 * zypper *`, which visudo accepts and
+    # which `timeout 5 /bin/sh -c 'zypper x'` then satisfies.
+    [[ "${REFRESH_SUDO_ARGV[1]}" =~ ^[0-9]+$ ]] || return 1
+    cmds+=("${REFRESH_SUDO_ARGV[*]} *")                 # timeout <budget> zypper …
+    cmds+=("${CACHE_DU_ARGV[*]}")                       # du -sB1 /var/cache/zypp, exactly
+    cmds+=("$GUARD_FILE")                               # any args: the guard restricts itself
     local joined
     printf -v joined '%s, ' "${cmds[@]}"
+    echo "${joined%, }"
+}
+
+# The download guard's text — the single source, and the same bytes that get installed.
+# Compared byte-for-byte by guard_current, so every edit here re-grants for every user.
+download_guard_src() {
+    local zypper scope
+    zypper=$(command -v zypper) || return 1
+    scope=$(auth_cmnds) || return 1
+    # `# oneup-auth-scope:` is what makes this file a version stamp for the drop-in beside
+    # it: the drop-in is 0440 root-only, so the engine cannot read back what it granted,
+    # but both files are written by the same grant and this one is world-readable.
+    cat <<EOF
+#!/bin/bash
+# Installed by OneUp's "remember my authorization" setting (ONEUP-0092). Runs the package
+# download as root so a Stop request can reach zypper, which an unprivileged parent cannot
+# signal. It can exec exactly one program — the zypper below — so granting it in sudoers
+# grants no more than the drop-in's own zypper entry.
+# Delete it (or turn the setting off in OneUp) to revoke.
+# oneup-auth-scope: $scope
+export LC_ALL=C
+stop_file="\$1"; run_state="\$2"; poll="\$3"
+[[ "\$4" == zypper ]] || { echo "oneup-download-guard: refusing to run '\$4'" >&2; exit 2; }
+shift 4
+"$zypper" "\$@" --download-only &
+z=\$!
+while kill -0 "\$z" 2>/dev/null; do
+    # Same staleness rule as stop_pending: a request older than run.state is a leftover.
+    # Re-implemented because a shell function cannot cross sudo.
+    if [[ -e "\$stop_file" && -e "\$run_state" && "\$stop_file" -nt "\$run_state" ]]; then
+        kill -TERM "\$z" 2>/dev/null
+        break
+    fi
+    sleep "\$poll"
+done
+wait "\$z"        # never exit without reaping — an unreaped root child is the
+exit \$?          # ONEUP-0041 orphan shape, one level down
+EOF
+}
+
+# Is the installed guard the one THIS engine expects? A pure file comparison — no sudo, so
+# it is safe to call mid-run, which is why run_system_download asks this rather than
+# auth_current. (Command substitution strips trailing newlines on both sides, so this
+# compares the text rather than the bytes; nothing else differs.)
+guard_current() {
+    [[ -r "$GUARD_FILE" ]] && [[ "$(<"$GUARD_FILE")" == "$(download_guard_src)" ]]
+}
+
+# Is passwordless actually working for THIS engine? Both halves are needed: the drop-in is
+# live, AND it grants what this run needs. The old check asked only the first question of
+# one command out of six, which is how ONEUP-0092's three uncovered calls went unseen.
+auth_current() {
+    local zypper
+    zypper=$(command -v zypper) || return 1
+    # `-k` ignores any cached credential (so a recent run can't false-positive) and `-n`
+    # refuses to prompt. Measured: -k does NOT invalidate a warm credential, so this is
+    # safe to issue at any point in a run.
+    sudo -k -n "$zypper" --version >/dev/null 2>&1 || return 1
+    guard_current
+}
+
+build_auth_rule() {
+    local user cmnds
+    user=$(id -un)
+    cmnds=$(auth_cmnds) || return 1     # split assignment: `local x=$(…)` masks the status
     cat <<EOF
 # Installed by OneUp's "remember my authorization" setting — stores NO password.
 # Lets $user run OneUp's update commands as root without a password prompt.
 # Delete this file (or turn the setting off in OneUp) to revoke immediately.
-Cmnd_Alias ONEUP_UPDATE = ${joined%, }
+Cmnd_Alias ONEUP_UPDATE = $cmnds
 $user ALL=(root) NOPASSWD: ONEUP_UPDATE
 EOF
 }
 
+# The order below is fixed and each step's position is load-bearing (ONEUP-0092 §4.3):
+# validate FIRST so a malformed rule costs nothing, then the guard, then the drop-in — and
+# any failure after the guard lands removes it again. A stranded root-owned executable is
+# worse than a failed grant: afterwards the toggle reads off, which makes the GUI's revoke
+# arm unreachable, so the user has consented to a file they can no longer withdraw.
 grant_auth() {
-    local tmp
+    local tmp guard
     tmp=$(mktemp) || { marker HINT "Could not create a temporary file."; return 1; }
-    if ! build_auth_rule > "$tmp"; then
-        rm -f "$tmp"
-        marker HINT "zypper was not found, so passwordless authorization can't be set up."
+    guard=$(mktemp) || { rm -f "$tmp"; marker HINT "Could not create a temporary file."; return 1; }
+    if ! build_auth_rule > "$tmp" || ! download_guard_src > "$guard"; then
+        rm -f "$tmp" "$guard"
+        marker HINT "Passwordless authorization can't be set up on this machine: zypper, timeout or du was not found, or the refresh budget is not a whole number of seconds."
         return 1
     fi
     sudo_init
     # Validate the generated rule in isolation BEFORE it can affect the live policy:
     # a syntactically broken file under /etc/sudoers.d can lock you out of sudo.
     if ! sudo visudo -cf "$tmp" >/dev/null 2>&1; then
-        rm -f "$tmp"
+        rm -f "$tmp" "$guard"
         marker HINT "The generated authorization rule failed validation — nothing was changed."
+        return 1
+    fi
+    # 0755: the GUI and the engine both read it back to tell whether the drop-in beside it
+    # is the one this OneUp needs, and only root may write it.
+    if ! sudo install -o root -g root -m 0755 "$guard" "$GUARD_FILE"; then
+        rm -f "$tmp" "$guard"
+        marker HINT "Could not write the download helper ($GUARD_FILE)."
         return 1
     fi
     # install(1) atomically places it root-owned and 0440, the mode sudo requires.
     if ! sudo install -o root -g root -m 0440 "$tmp" "$AUTH_FILE"; then
-        rm -f "$tmp"
+        rm -f "$tmp" "$guard"
+        sudo rm -f "$GUARD_FILE"     # never leave the guard behind without its rule
         marker HINT "Could not write the authorization rule ($AUTH_FILE)."
         return 1
     fi
-    rm -f "$tmp"
+    rm -f "$tmp" "$guard"
     echo "Passwordless authorization for OneUp's update commands is now enabled."
     marker AUTH "on"
 }
 
 revoke_auth() {
     sudo_init
-    if sudo rm -f "$AUTH_FILE"; then
+    # Both candidate guard paths, not just today's: GUARD_DIR is recomputed per run, so a
+    # /usr/libexec created by another package after the grant would move it and leave the
+    # /usr/lib copy beyond reach. When ONEUP_GUARD_FILE is set the sweep collapses to that
+    # one path — the override exists so the suite never touches a real system directory.
+    local -a guards=("$GUARD_FILE")
+    [[ -z "${ONEUP_GUARD_FILE:-}" ]] && guards=(/usr/libexec/oneup-download-guard /usr/lib/oneup-download-guard)
+    if sudo rm -f "$AUTH_FILE" "${guards[@]}"; then
         echo "Passwordless authorization has been revoked."
         marker AUTH "off"
     else
@@ -855,12 +972,10 @@ revoke_auth() {
 }
 
 auth_status() {
-    local zypper
-    zypper=$(command -v zypper) || { marker AUTH "off"; return 0; }
-    # `-k` ignores any cached credential (so a recent run can't false-positive) and
-    # `-n` refuses to prompt, so this harmless `zypper --version` runs as root ONLY
-    # when the NOPASSWD drop-in is active. No root file-read needed (it's root-only).
-    if sudo -k -n "$zypper" --version >/dev/null 2>&1; then
+    # "on" means passwordless WORKS for this engine, not merely that a rule exists: a
+    # drop-in installed by an older OneUp is live and still leaves a run prompting
+    # (security.md §5.6 — report real state, never a saved preference).
+    if auth_current; then
         marker AUTH "on"
     else
         marker AUTH "off"
@@ -896,9 +1011,10 @@ thin_snapshots() {
 
 if [[ -n "$AUTH_ACTION" ]]; then
     case "$AUTH_ACTION" in
-        grant)  grant_auth ;;
-        revoke) revoke_auth ;;
-        status) auth_status ;;
+        grant)      grant_auth ;;
+        revoke)     revoke_auth ;;
+        status)     auth_status ;;
+        emit-guard) download_guard_src ;;
     esac
     exit $?
 fi
@@ -1124,7 +1240,7 @@ refresh_repos() {
         i=$((i+1))
         stop_pending && return 0
         marker REFRESH "$i|$total|$alias"
-        sudo timeout "$REFRESH_TIMEOUT" zypper --non-interactive "${gpg[@]}" refresh "$alias"
+        sudo "${REFRESH_SUDO_ARGV[@]}" --non-interactive "${gpg[@]}" refresh "$alias"
         rc=$?
         (( rc == 0 )) && continue
         # 124 is timeout's "I killed it" — a slow server, not a broken repository, so say
@@ -1248,6 +1364,21 @@ run_system_download() {
     # `$!` names the pipeline's LAST element rather than zypper, and this shell is
     # unprivileged so it cannot signal a root process at all. Inside the wrapper all three
     # vanish. Keeping the pipeline in the FOREGROUND is what preserves PIPESTATUS[0].
+    #
+    # Two routes, one contract (ONEUP-0092 §4.5). When the ONEUP-0023 grant installed a
+    # guard this engine recognises, run THAT — `env LC_ALL=C bash -c *` is the one shape a
+    # sudoers rule cannot grant without handing over a root shell, so a passwordless run
+    # would otherwise meet a password dialog right here. Otherwise run the inline wrapper
+    # below, unchanged: users who never granted have a warm credential from sudo_init, so
+    # it costs them nothing. The two texts differ (the guard pins its own interpreter and
+    # zypper, and shifts 4 where this shifts 3) — never feed one into the other's call.
+    if guard_current; then
+        sudo "$GUARD_FILE" "$STOP_FILE" "$RUN_STATE_FILE" "$STOP_POLL_SECONDS" \
+             "${SYS_TXN[@]}" 2>&1 | tee "$SYS_LOG" | progress_filter system download
+        SYS_DL_RC=${PIPESTATUS[0]}
+        (( SYS_DL_RC == 0 || SYS_DL_RC == 143 )) || ok=false
+        return 0
+    fi
     sudo env LC_ALL=C bash -c '
         stop_file="$1"; run_state="$2"; poll="$3"; shift 3
         "$@" --download-only &
@@ -1679,7 +1810,8 @@ if step_selected cache && ! stop_pending; then
     # Measure the package cache before/after the clean so we can report what it
     # freed — the cache step is otherwise the one task with no visible payoff.
     # du needs root for some subdirs; this step's sudo credential is already warm.
-    sudo_capture CACHE_DU du -sB1 /var/cache/zypp
+    # One definition, shared with the sudoers rule that grants it (ONEUP-0092).
+    sudo_capture CACHE_DU "${CACHE_DU_ARGV[@]}"
     cache_before=$(awk '{print $1}' <<<"$CACHE_DU")
     # Packages only — deliberately NOT `clean --all`, which also wipes the repository
     # METADATA cache. Two reasons, and the first is a correctness bug: the rootless
@@ -1690,7 +1822,7 @@ if step_selected cache && ! stop_pending; then
     # downloaded-package cache"; now it clears exactly that.
     if sudo zypper --non-interactive clean; then
         end_step cache ok
-        sudo_capture CACHE_DU du -sB1 /var/cache/zypp
+        sudo_capture CACHE_DU "${CACHE_DU_ARGV[@]}"
         cache_after=$(awk '{print $1}' <<<"$CACHE_DU")
         # Only report a genuine reclamation — skip the marker when nothing shrank
         # so the GUI never shows a misleading "Reclaimed 0B".
