@@ -2398,8 +2398,10 @@ rm -rf "$d"
 
 echo "TEST: the recovery host openSUSE serves is still there (ONEUP-0094 T-1)"
 # Network-dependent, so it is opt-in — testing.md §2 forbids a test that depends on the
-# state of the machine it runs on, and that includes its connection. local-CI.sh sets
-# ONEUP_TEST_NETWORK=1; the pre-push hook and the release workflow do not. The SKIP is
+# state of the machine it runs on, and that includes its connection. local-CI.sh defaults
+# it to 1; the release workflow leaves it unset and the pre-push hook passes 0 explicitly,
+# because the hook runs local-CI.sh and would otherwise inherit its default (ONEUP-0097).
+# So the run that owns T-1 is ./local-CI.sh typed by hand, and only that one. The SKIP is
 # LOUD on purpose (ONEUP-0068): an opt-in nobody opts into catches nothing, and a silent
 # skip would let recovery go quietly inert the day openSUSE retires the host.
 if [[ "${ONEUP_TEST_NETWORK:-0}" == "1" ]]; then

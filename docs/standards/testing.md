@@ -119,19 +119,19 @@ with a stated one:
   creates that directory on the real machine. The three `ONEUP_*` paths are redirected;
   `HOME` is not. Filed as **ONEUP-0058**.
 - **One engine scenario reaches the network on purpose.** *A carve-out.* ONEUP-0094's T-1
-  asks the real openSUSE content CDN for a byte range, because the item's whole claim is
-  that a named third-party host answers a request of that shape — a mock would assert only
-  that the mock was written correctly. It is gated on `ONEUP_TEST_NETWORK=1` and SKIPs
-  loudly without it, so the rule above holds for every run that does not opt in — including
-  the release workflow, which invokes `tests/run-tests.sh` directly. **`local-CI.sh` opts
-  in, and `githooks/pre-push` therefore opts in too**, because the hook runs `local-CI.sh`.
-  Three places currently say the hook does *not* — `local-CI.sh`'s own comment, the
-  scenario's comment in `tests/run-tests.sh`, and
-  `docs/specs/ONEUP-0094-download-recovery.md` §7 — and they are wrong: an openSUSE CDN
-  outage fails a push today, which is the outcome all three say they were avoiding. Filed as
-  **ONEUP-0097**; the freeze (`workflow.md` §1.2) is why it is filed rather than fixed here.
-  **A second such scenario needs the same three properties** — a claim about a real external
-  service, an opt-in gate, and a loud SKIP — or it is a breach, not a precedent.
+  asks the real openSUSE content CDN for a repository-metadata file and asserts HTTP 200,
+  because the item's whole claim is that a named third-party host is still there — a mock
+  would assert only that the mock was written correctly. It is gated on
+  `ONEUP_TEST_NETWORK=1` and SKIPs loudly without it, so the rule above holds for every run
+  that does not opt in. **Exactly one run opts in: `./local-CI.sh` invoked by hand.** The
+  release workflow calls `tests/run-tests.sh` directly, and `githooks/pre-push` passes
+  `ONEUP_TEST_NETWORK=0` to the `local-CI.sh` it runs — **which it did not do until
+  2026-08-07**, so until then a push was gated on somebody else's server being up, the one
+  outcome the split exists to prevent (**ONEUP-0097**). That is the shape to watch for: the
+  hook did not opt in anywhere you could read, it inherited the opt-in by running a script
+  that had one. **A second such scenario needs the same three properties** — a claim about a
+  real external service, an opt-in gate, and a loud SKIP — or it is a breach, not a
+  precedent.
 
 The engine suite creates **75 throwaway directories and removes 75** — one per scenario
 except the keep-alive-guard scenario, which needs none. A scenario adds `rm -rf "$d"` as

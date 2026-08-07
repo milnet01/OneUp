@@ -2278,7 +2278,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Reopen this only if 0085 is ever withdrawn, or if libzypp gains a way to
   distinguish the download and commit phases of a heaps run from outside.
 
-- 📋 [ONEUP-0097] **The pre-push hook opts into the network test it is documented as opting out of.**
+- ✅ [ONEUP-0097] **The pre-push hook opts into the network test it is documented as opting out of.**
   ONEUP-0094 T-1 asks the real openSUSE content CDN for repository metadata
   and is gated on ONEUP_TEST_NETWORK=1 so that somebody else's outage cannot
   fail a run. Three places state the intended split -- local-CI.sh's comment,
@@ -2305,3 +2305,25 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A push can now be blocked by an openSUSE server being down, which is exactly what the setup was meant to prevent.
   Kind: test.
   Source: in-session-2026-08-07 (found while closing ONEUP-0090).
+  Resolved (2026-08-07): two lines. local-CI.sh now writes
+  ONEUP_TEST_NETWORK="${ONEUP_TEST_NETWORK:-1}" -- a default rather than a forced
+  value -- and githooks/pre-push passes 0 explicitly. So the split the four
+  comments describe is now real: ./local-CI.sh typed by hand is the only run that
+  opts in, the release workflow leaves it unset, and the hook declines.
+
+  Both halves verified by running them, not by reading the diff. Hook path
+  (ONEUP_TEST_NETWORK=0 ./local-CI.sh): engine 246/0 with T-1 printing its loud
+  SKIP. Default path (./local-CI.sh): engine 247/0 with T-1 running and passing.
+  Docs 16825/0, whole gate green.
+
+  All four sites that stated the intent were corrected to say HOW it holds rather
+  than merely that it does, because "the hook does not set it" was true of the
+  hook's own text and false of its behaviour: local-CI.sh, tests/run-tests.sh,
+  ONEUP-0094 7, files-and-naming.md. testing.md 2.3 keeps the dated record.
+  workflow.md 1.2 records this as the freeze's THIRD named exception, granted at
+  the user's decision by the route that section requires -- and notes that no
+  1.4.x is owed, since nothing user-facing changed.
+
+  The general lesson, written into files-and-naming.md: an inherited default is
+  not a decision. A script that calls the owning run inherits its opt-ins
+  silently, and no amount of naming the owning run prevents that.

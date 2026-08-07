@@ -30,11 +30,14 @@ skip() { printf '  --   skip %s (%s)\n' "$1" "$2"; }
 
 # --- engine test suite (same script CI should gate on) ----------------------
 # ONEUP_TEST_NETWORK=1 opts in to the network-dependent checks (ONEUP-0094 T-1: the
-# download-recovery host is still served). This is the run that owns them — the pre-push
-# hook and the release workflow deliberately do not set it, so neither can be broken by
-# somebody else's outage.
+# download-recovery host is still served). This is the run that owns them — the release
+# workflow deliberately does not opt in, so it cannot be failed by somebody else's outage.
+#
+# The default is honoured rather than forced, because githooks/pre-push runs THIS script
+# and so inherited the opt-in it is documented as declining: an openSUSE CDN outage failed
+# a push, which is the outcome the split exists to prevent. The hook passes 0 (ONEUP-0097).
 step "Engine test suite"
-if ONEUP_TEST_NETWORK=1 bash tests/run-tests.sh >/tmp/local-ci-tests.log 2>&1; then
+if ONEUP_TEST_NETWORK="${ONEUP_TEST_NETWORK:-1}" bash tests/run-tests.sh >/tmp/local-ci-tests.log 2>&1; then
     ok "tests/run-tests.sh — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' /tmp/local-ci-tests.log | tail -1)"
 else
     bad "tests/run-tests.sh"; tail -25 /tmp/local-ci-tests.log

@@ -582,10 +582,14 @@ twice (ONEUP-0050, ONEUP-0055).
   `downloadcontentcdn.opensuse.org` and requests `repodata/repomd.xml`, asserting HTTP
   200. It is **network-dependent, so it is gated on `ONEUP_TEST_NETWORK=1` and SKIPs
   loudly otherwise** — `testing.md` §2 forbids a test that depends on the machine's
-  state, and a silent skip is the ONEUP-0068 shape. **`local-CI.sh` sets
-  `ONEUP_TEST_NETWORK=1`; the pre-push hook and the release workflow do not.** An opt-in
-  nobody opts into catches nothing, so the run that owns it is named here rather than left
-  to whoever writes the scenario. Its value is that it fails loudly the day openSUSE
+  state, and a silent skip is the ONEUP-0068 shape. **`local-CI.sh` defaults
+  `ONEUP_TEST_NETWORK` to 1; the release workflow leaves it unset and `githooks/pre-push`
+  passes 0.** An opt-in nobody opts into catches nothing, so the run that owns it is named
+  here rather than left to whoever writes the scenario. **The hook's 0 is explicit and has
+  to be**: it runs `local-CI.sh`, so until 2026-08-07 it inherited the opt-in this sentence
+  said it declined, and a CDN outage would have failed a push (ONEUP-0097). Naming the
+  owning run is not enough on its own — a script that *calls* the owning run inherits it
+  silently. Its value is that it fails loudly the day openSUSE
   retires the host, rather than leaving recovery quietly inert. It requests
   `repodata/repomd.xml` over **`https://`**, the scheme §2.4 measured and the one most of
   the machine's baseurls carry.

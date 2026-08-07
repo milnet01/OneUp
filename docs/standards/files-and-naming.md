@@ -223,8 +223,11 @@ were true would have misled the 2.0 implementer.** What is actually true:
   test recovery.
 - **`ONEUP_TEST_NETWORK` is not in the table above, because it is not an engine
   override.** It is read by `tests/run-tests.sh` alone, and opts in to the network-dependent
-  checks (ONEUP-0094 T-1). `local-CI.sh` sets it; the pre-push hook and the release
-  workflow deliberately do not, so neither can be failed by somebody else's outage.
+  checks (ONEUP-0094 T-1). `local-CI.sh` defaults it to 1, the release workflow leaves it
+  unset, and `githooks/pre-push` passes 0 — explicitly, because the hook runs `local-CI.sh`
+  and inherited its default until 2026-08-07, which meant a push could be failed by
+  somebody else's outage (ONEUP-0097). **An inherited default is not a decision**; the hook
+  states its own.
 - **The GUI is isolated by rewriting `HOME`.** `tests/gui-smoke.py`'s sandbox block sets
   `HOME` to a throwaway directory *before* `updater` is imported, because the GUI's paths
   are module-level constants (`STATE_DIR`, `LOG_DIR`, `RUN_STATE`, `STOP_REQUEST`)

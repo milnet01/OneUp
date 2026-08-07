@@ -82,6 +82,21 @@ Two things are not feature work and are unaffected:
   Same caveat, restated because it is the whole point: this names a batch of changes, not a
   category. It does not make `tests/` generally open, and ONEUP-0070 still lands on `v2`.
 
+- **ONEUP-0097, the pre-push hook's inherited network opt-in** — the third exception,
+  granted 2026-08-07 at the user's decision, by the same route. `githooks/pre-push` runs
+  `local-CI.sh`, which opted into ONEUP-0094's live CDN check, so a push was gated on a
+  third party's server being up — while four documents stated the hook declined it. The fix
+  is two lines: `local-CI.sh` honours `ONEUP_TEST_NETWORK` instead of forcing it, and the
+  hook passes 0.
+
+  **What made this one qualify is not that it is small.** It is that the *push gate itself*
+  was unreliable for a reason outside the project, and a gate that fails on somebody else's
+  outage teaches people to reach for `--no-verify` — which disarms every other gate too
+  (§6.1). Nothing user-facing changed, so **no 1.4.x is owed**, unlike the second exception.
+
+  Same caveat, third time: a batch of changes, not a category. `tests/` is still not
+  generally open and ONEUP-0070 still lands on `v2`.
+
 **Why the freeze is stated as a testable question rather than a preference:** the failure
 mode of any freeze is a slow slide back into 1.x work, one "small" fix at a time. *Can
 people still install their updates?* has an answer; "is this important enough?" does not.

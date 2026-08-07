@@ -9,12 +9,18 @@
 # link, and GitHub CI builds + verifies the AppImage itself on every tag push. To
 # check the build locally when you have a good connection: ./local-CI.sh --full
 #
+# It also declines the one network-dependent check (ONEUP-0094 T-1, which asks the real
+# openSUSE CDN whether the download-recovery host still answers). Nothing about a push
+# should depend on somebody else's server being up, and a push is the worst moment to
+# discover it is not — so the hook passes ONEUP_TEST_NETWORK=0 and local-CI.sh honours it.
+# Run ./local-CI.sh by hand to include T-1; that run owns it (ONEUP-0097).
+#
 # Enable once per clone:  git config core.hooksPath githooks
 set -uo pipefail
 root=$(git rev-parse --show-toplevel)
 
 echo "pre-push: running local CI gates…"
-if ! bash "$root/local-CI.sh"; then
+if ! ONEUP_TEST_NETWORK=0 bash "$root/local-CI.sh"; then
     echo "pre-push: local CI failed — push aborted. (Override with 'git push --no-verify' only if you are certain.)" >&2
     exit 1
 fi
