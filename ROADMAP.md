@@ -1984,7 +1984,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Sources: en.opensuse.org/openSUSE:Standards_Zypper_Xml ;
   github.com/openSUSE/zypper/issues/126
 
-- 📋 [ONEUP-0092] **Passwordless still prompts: the sudoers drop-in misses timeout and du.**
+- 🚧 [ONEUP-0092] **Passwordless still prompts: the sudoers drop-in misses timeout and du.**
   The drop-in grants NOPASSWD for /usr/bin/zypper, /usr/bin/snapper,
   /usr/bin/flatpak, /usr/bin/systemctl stop packagekit and
   /usr/bin/env LC_ALL=C zypper * -- but two privileged calls in the engine are
@@ -2043,6 +2043,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   enumerate a SUBSET of the engine's privileged calls, so "passwordless is on"
   is decided by something narrower than what a run performs.
   Specced as docs/specs/ONEUP-0092-passwordless-gaps.md, with ONEUP-0099.
+  Specced and reviewed (2026-08-07): docs/specs/ONEUP-0092-passwordless-gaps.md, Status Reviewed. Three cold-eyes loops, 9 lanes, 87 findings raised and 80 verified and fixed; converged by cap with an empty deferred tail. Design: one definition per privileged shape shared by the call site and the rule; a root-owned download guard replacing the ungrantable `env LC_ALL=C bash -c` wrapper, which doubles as the drop-in's version stamp; and a currency check that decides passwordless is on from what a run actually needs. The `timeout` pattern was tested against the escalation string the bullet demanded before shipping.
 
 - 📋 [ONEUP-0093] **The download progress bar compares new bytes against the whole transaction.**
   _tick_activity computes what has arrived as `cache_bytes() - self._dl_base`
@@ -2368,7 +2369,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: test.
   Source: in-session-2026-08-07 (deferred while closing ONEUP-0090).
 
-- 📋 [ONEUP-0099] **Automatic updates keep running after passwordless stops working.**
+- 🚧 [ONEUP-0099] **Automatic updates keep running after passwordless stops working.**
   The GUI stands the weekly update timer down when the user CLICKS Passwordless
   off -- on_auth_toggled's "coupling rule 3" arm removes the timer, unchecks
   the toggle and says why. It does NOT stand it down when the app merely
@@ -2390,3 +2391,4 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** If the passwordless setting stops working, the weekly automatic update should switch itself off instead of silently doing nothing every week.
   Kind: fix.
   Source: user-request-2026-08-07.
+  Specced with ONEUP-0092 (2026-08-07): docs/specs/ONEUP-0092-passwordless-gaps.md 4.7 owns it; no spec of its own, per documentation.md 2. Review found the stand-down must key on an explicit @@AUTH@@|off rather than a missing @@AUTH@@|on -- otherwise a crashed probe would delete a working weekly timer -- and that the pending-enable check belongs at the call site, not inside the shared helper, or a revoke racing an enable would leave the timer standing.
