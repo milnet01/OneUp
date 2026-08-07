@@ -6,6 +6,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-08-07
+
 ### Fixed
 
 - **An update no longer fails because one package refused to download.** (ONEUP-0094)
@@ -400,7 +402,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/milnet01/OneUp/releases/tag/v1.4.2
 [1.4.1]: https://github.com/milnet01/OneUp/releases/tag/v1.4.1
 [1.4.0]: https://github.com/milnet01/OneUp/releases/tag/v1.4.0
 [1.3.0]: https://github.com/milnet01/OneUp/releases/tag/v1.3.0

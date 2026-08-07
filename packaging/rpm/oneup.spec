@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.4.1
+Version:        1.4.2
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -74,6 +74,8 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Fri Aug 07 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.2-0
+- An update no longer fails because one package refused to download.
 * Fri Aug 07 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.1-0
 - Window-side test coverage for four paths that had none.
 - The update check says what actually went wrong.
