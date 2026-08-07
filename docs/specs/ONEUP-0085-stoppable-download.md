@@ -338,11 +338,13 @@ behavioural test that cannot exist.
 
 - **INV-5** The download pass, the commit pass and the `--size` probe state the transaction
   command in exactly one place — **on both distros**.
-  *Test:* `grep -c 'system_txn_argv' update_system.sh` returns **4** — one definition plus
-  the three callers (download pass, commit pass, `--size` probe).
-  → today it returns **0**, so the clause discriminates absolutely.
-  **Two earlier drafts of this clause were wrong, and both failed when run**, which is why
-  it is now structural rather than a text search. The first asserted
+  *Test:* `grep -cE '^\s*system_txn_argv' update_system.sh` returns **4** — one definition
+  plus the three callers (download pass, commit pass, `--size` probe).
+  → before the change it returned **0**; after it returns **4**. The `^\s*` anchor is
+  required: a bare `grep -c` returns 5, because the `SYS_TXN` declaration's trailing
+  comment names the function.
+  **Three earlier drafts of this clause were wrong, and every one failed when run** —
+  which is the argument for the two-run rule, not an aside. The first asserted
   `grep -c 'allow-vendor-change' … == 1`; that is Tumbleweed-only, so a probe keeping its
   own `zypper update` branch would score clean while the Leap paths diverged. The second
   widened the pattern to both verbs and predicted 4; it returns **3**, because the

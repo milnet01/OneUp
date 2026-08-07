@@ -1727,6 +1727,25 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Update logs pile up forever; once the weekly timer writes one each run, they need a tidy-up rule.
   Kind: enhancement.
   Source: cold-eyes-2026-08-03 ONEUP-0077 loop 2.
+  Decision (2026-08-07, user): the retention rule this bullet asks for is a
+  SETTING, not a hard-coded constant -- "auto-deletes after X number of days
+  that the user can specify". So the open question above (age or count) is
+  answered: AGE, in days, user-editable.
+  Shape it as the other background behaviours are (SettingsDialog rows, a
+  QSettings key, a plain-English description), with a sane default so the
+  control is a refinement rather than a requirement -- a user who never opens
+  Settings must still get pruning. 30 days is the obvious default and covers
+  ~4 weekly timer runs plus manual ones.
+  Two things to get right, both cheap and both easy to miss:
+    * prune where the directory is created, so it runs on EVERY path that
+      writes a log (window run, --check timer, --update timer), not only the
+      GUI one.
+    * never delete the log of a run that is still going, nor the one
+      _latest_run_log is about to read; age alone does not exclude either,
+      since a long run's log is old by its own start time.
+  Measured 2026-08-07 on the reporter's machine: 6,278 bytes of directory
+  entries in ~/.local/state/oneup/logs, from a handful of days of manual runs
+  -- so the growth is real before the weekly timer adds to it.
 
 - 📋 [ONEUP-0083] **Record the third loop-log tally trap in documentation.md §7.**
   tests/docs-check.py's DISPOSITION_RE matches only `verified`,
@@ -2051,6 +2070,32 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Open question for the fix: whether libzypp can be told to prefer that host
   (download.media_preference / a repo baseurl override) or whether OneUp must
   re-fetch and place the file in /var/cache/zypp/packages itself.
+  Scope raised (2026-08-07, user): "This should all be seamless -- we are
+  offering this to other users and they shouldn't have to struggle through
+  this." So the deliverable is NOT advice, a documented workaround, or a
+  setting the user has to find. OneUp handles it or it is not handled.
+  New measurement that makes the fix bigger than a retry, taken the same day:
+  the CDN host is not merely faster per file, it can serve the WHOLE
+  repository.
+    http://downloadcontentcdn.opensuse.org/tumbleweed/repo/oss/
+        repodata/repomd.xml -> HTTP/1.1 200 OK
+        package fetch        -> 10,940 KB/s
+    http://download.opensuse.org/tumbleweed/repo/oss/
+        package fetch        ->    264 KB/s
+  41x, on the same file, in the same minute, on a 500 Mbps line. 10.7 MB/s is
+  the first figure all day consistent with the user's actual connection.
+  So there are two candidate fixes and they are not the same size:
+    (a) narrow -- on a truncated download, re-fetch that ONE package from the
+        CDN host and place it in /var/cache/zypp/packages. Self-contained, no
+        repo changes, invisible to the user.
+    (b) broad -- point the repo baseurls at the CDN so MirrorCache routing is
+        bypassed entirely and the slow origin is never selected. Much larger
+        win, but it edits the user's repo configuration, which OneUp has so
+        far only ever done for a repo the RUN itself disabled, and it forfeits
+        mirror redundancy.
+  Price (a) first: it is reversible, needs no consent, and fixes the observed
+  failure. Treat (b) as a separate decision with its own bullet if (a) proves
+  insufficient.
 
 - 📋 [ONEUP-0095] **Disable Stop while stopping is not possible, instead of accepting a click that does nothing.**
   Today Stop is enabled for the whole of a real run (set_controls_enabled shows
@@ -2080,7 +2125,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: ux.
   Source: user-request-2026-08-07.
 
-- 📋 [ONEUP-0096] **Commit in heaps, so one unfetchable package cannot sink the whole update.**
+- 💭 [ONEUP-0096] **Commit in heaps, so one unfetchable package cannot sink the whole update.**
   Found by reading PackageKit's zypp backend at the user's request. It is the
   ONE download-related thing that backend configures, in
   zypp_perform_execution():
@@ -2117,3 +2162,23 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** One package that will not download currently stops every other update from installing; it should not.
   Kind: enhancement.
   Source: user-request-2026-08-07 (review PackageKit's download handling).
+  Not adopted (2026-08-07, user deferred to recommendation). The reason is
+  not the partial-upgrade risk -- it is that in-heaps CONFLICTS with
+  ONEUP-0085, which shipped the same day.
+  0085's safety rests on there being a phase where only downloading happens:
+  no rpm process, so a SIGTERM is provably free, which is the entire basis for
+  letting Stop work at all. DownloadInHeaps deliberately INTERLEAVES download
+  and install, so that phase stops existing and the engine can no longer tell
+  whether a stop is safe. Adopting it would trade a working Stop for partial
+  progress.
+  It also gains less than it appears to under 0085: the download pass fetches
+  everything before any install, so one unfetchable package still blocks the
+  set. The failure it was proposed to soften is better addressed at its cause
+  -- ONEUP-0094, host routing -- than by salvaging a half-finished upgrade.
+  For the record, the trade-off itself, since a future reader will re-ask:
+  Tumbleweed ships tested SNAPSHOTS. in-advance leaves you wholly on the old
+  or wholly on the new one. in-heaps can leave a mixture -- dependency-
+  consistent at every heap boundary, but a combination openSUSE never tested
+  as a set.
+  Reopen this only if 0085 is ever withdrawn, or if libzypp gains a way to
+  distinguish the download and commit phases of a heaps run from outside.

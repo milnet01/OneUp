@@ -82,6 +82,13 @@ THIN_SNAPSHOTS=false  # --thin-snapshots: run snapper's own retention cleanup to
                       # expendable Btrfs restore points (guarded; never a hand-pick).
 SNAP_WARN_COUNT=25    # pre-flight: warn once this many Btrfs snapshots have piled up
                       # (each zypper transaction leaves a pre/post pair, so they add up).
+STOP_POLL_SECONDS="${ONEUP_STOP_POLL_SECONDS:-2}"  # how often the download pass looks for a
+                      # stop request (ONEUP-0085). "Stop within seconds" means this plus
+                      # zypper's own exit; overridable so the suite need not wait one out.
+SYS_STOPPED=false     # set when the user stopped during/after the download pass, which is
+                      # a SKIP rather than a failure — nothing was installed.
+SYS_DL_RC=0           # the download pass's exit status; 143 (128+SIGTERM) means stopped.
+declare -a SYS_TXN=() # the transaction argv, built once by system_txn_argv (INV-5).
 REFRESH_TIMEOUT="${ONEUP_REFRESH_TIMEOUT:-120}"   # per-repository refresh budget, seconds.
                       # zypper has no timeout of its own: a mirror trickling metadata at
                       # 1 KB/s once held a run for hours with nothing on screen. Overridable
@@ -477,6 +484,25 @@ run_check() {
 # unprivileged. Kept separate so the rootless weekly --check stays password-free.
 # Mirrors the system step's command so the figure matches what a real run fetches.
 # ---------------------------------------------------------------------------
+# The transaction argv, stated ONCE (ONEUP-0085 INV-5). Three callers need it — the
+# download pass, the commit pass and the --size probe — and a flag added to one and not
+# the others would download one set of packages, install a second and quote the size of a
+# third, with all three still succeeding. Fills the global SYS_TXN array; not echoed,
+# because a command substitution would run it in a subshell.
+#
+# Defined HERE, above run_size, for the same reason the comment at the --size dispatch
+# gives about sudo_init: that dispatch calls run_size and then exits, so anything defined
+# further down the file has never been executed and does not exist yet.
+system_txn_argv() {
+    if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
+        SYS_TXN=(zypper --non-interactive update)
+    else
+        # Tumbleweed: --allow-vendor-change lets Packman codec packages update
+        # cleanly; without it the upgrade stalls on vendor conflicts.
+        SYS_TXN=(zypper --non-interactive dup --allow-vendor-change)
+    fi
+}
+
 run_size() {
     local step="$1" out size rc
     if [[ "$step" != "system" ]]; then
@@ -488,12 +514,10 @@ run_size() {
     echo "Calculating download size (dry run)…"
     # sudo_capture, not `out=$(sudo …)`: a substitution can run sudo in a subshell,
     # which re-authenticates and pops a second password box (ONEUP-0037/0038).
-    if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
-        sudo_capture -e out env LC_ALL=C zypper --non-interactive update --dry-run
-    else
-        sudo_capture -e out env LC_ALL=C zypper --non-interactive dup \
-            --allow-vendor-change --dry-run
-    fi
+    # Same argv the run itself will use (ONEUP-0085 INV-5) — a flag here that the
+    # transaction does not have would quote the size of a different transaction.
+    system_txn_argv
+    sudo_capture -e out env LC_ALL=C "${SYS_TXN[@]}" --dry-run
     rc=$?
     # Two wordings, because zypper renamed this line and OneUp supports both distros:
     #   older (Leap):        "Overall download size: 1.3 GiB. Already cached: 0 B."
@@ -1140,8 +1164,15 @@ emit_progress() {        # step-key, "n/m" (zypper pads it: "( 1/77)"), phase, [
 }
 PROGRESS_SEEN_FILE=""    # progress_filter runs as a pipeline element, i.e. in a subshell,
                          # so it reports back through a file rather than a variable
-progress_filter() {      # step-key; passes every line through, adding @@PROGRESS@@
-    local step="$1" line frac preloaded=0 seen=0 got=0 want=0
+progress_filter() {      # step-key [phase]; passes every line through, adding @@PROGRESS@@
+    # `phase` is which pass we are filtering — "download" or "install" (ONEUP-0085).
+    # It matters because the Preloading:/Retrieving: cases used to hard-code "download",
+    # and the COMMIT pass re-reads every cached package and prints `Preloading: …
+    # [already in cache]` for each. Left hard-coded, the commit pass re-emits
+    # download-phase markers after the download has finished — flipping the GUI back to
+    # "Downloading" and, because `want` is a per-invocation local, resetting its byte
+    # total to zero at the exact moment installing begins.
+    local step="$1" phase="${2:-download}" line frac preloaded=0 seen=0 got=0 want=0
     # `|| [[ -n $line ]]` so a final line with no trailing newline is not swallowed.
     while IFS= read -r line || [[ -n "$line" ]]; do
         printf '%s\n' "$line"
@@ -1161,39 +1192,87 @@ progress_filter() {      # step-key; passes every line through, adding @@PROGRES
                 # bytes itself (zypper's package cache is world-readable), which is the
                 # only way this phase gets a figure at all.
                 preloaded=$((preloaded+1)); seen=$((seen+1))
-                marker PROGRESS "$step|$preloaded|0|download|0|$want" ;;
+                marker PROGRESS "$step|$preloaded|0|$phase|0|$want" ;;
             Retrieving:*)
                 frac=${line##*\(}; frac=${frac%%)*}      # last (…) is the counter
                 # Each line ends with that package's size: "…(1/77),  31.0 KiB". Summing
                 # them is the only byte count available — zypper reports no running total.
                 [[ "$line" =~ ,\ *([0-9.]+)\ *([KMG]?i?B) ]] \
                     && got=$(( got + $(to_bytes "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}") ))
-                emit_progress "$step" "$frac" download "$got" "$want" && seen=$((seen+1)) ;;
+                emit_progress "$step" "$frac" "$phase" "$got" "$want" && seen=$((seen+1)) ;;
             \(*Installing:*|\(*Removing:*|\(*Upgrading:*)
                 frac=${line#*\(}; frac=${frac%%)*}       # leading (…) is the counter
                 emit_progress "$step" "$frac" install && seen=$((seen+1)) ;;
         esac
     done
-    [[ -n "$PROGRESS_SEEN_FILE" ]] && printf '%s' "$seen" > "$PROGRESS_SEEN_FILE"
+    # The DOWNLOAD pass owns this file. The write truncates, so letting the commit pass
+    # write too would erase the download pass's tally and trip the ONEUP-0046 stale-parser
+    # canary ("packages installed but no progress recognised") on a perfectly healthy run.
+    [[ -n "$PROGRESS_SEEN_FILE" && "$phase" == "download" ]] \
+        && printf '%s' "$seen" > "$PROGRESS_SEEN_FILE"
     return 0        # our status is the pipeline's last, and a failed match must not
 }                   # make the transaction itself look like it failed
 
-run_system_upgrade() {   # runs the transaction into $SYS_LOG (truncates it); sets global `ok`
+# Pass 1 of 2. Downloads every package and installs NOTHING, so it is the one phase of a
+# run that can be interrupted for free — and the stop the user asked for lands DURING it
+# rather than after (ONEUP-0085). Sets `ok`; leaves rc 143 in SYS_DL_RC when the user
+# stopped it, which §4.4 uses to tell "stopped" from "failed".
+run_system_download() {
     ok=true
-    # tee BEFORE the progress filter, so $SYS_LOG holds zypper's output alone — the
-    # change-detection and reboot-reason parsing read it and must not see our markers.
-    # sudo stays the pipeline's first element, so it keeps this shell as its parent and
-    # reuses sudo_init's credential (see sudo_capture) — and PIPESTATUS[0] is zypper's.
-    if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
-        sudo env LC_ALL=C zypper --non-interactive update 2>&1 \
-            | tee "$SYS_LOG" | progress_filter system
-    else
-        # Tumbleweed: --allow-vendor-change lets Packman codec packages update
-        # cleanly; without it the upgrade stalls on vendor conflicts.
-        sudo env LC_ALL=C zypper --non-interactive dup --allow-vendor-change 2>&1 \
-            | tee "$SYS_LOG" | progress_filter system
-    fi
+    system_txn_argv
+    # The engine never signals anything: a root-side wrapper owns zypper and signals its
+    # OWN child. Three measured facts force this shape — a background pipeline gets no
+    # process group of its own (so a group kill would hit the engine, forbidden by §6.3),
+    # `$!` names the pipeline's LAST element rather than zypper, and this shell is
+    # unprivileged so it cannot signal a root process at all. Inside the wrapper all three
+    # vanish. Keeping the pipeline in the FOREGROUND is what preserves PIPESTATUS[0].
+    sudo env LC_ALL=C bash -c '
+        stop_file="$1"; run_state="$2"; poll="$3"; shift 3
+        "$@" --download-only &
+        z=$!
+        while kill -0 "$z" 2>/dev/null; do
+            # Same staleness rule as stop_pending: a request older than run.state is a
+            # leftover. Re-implemented because a shell function cannot cross sudo.
+            if [[ -e "$stop_file" && -e "$run_state" && "$stop_file" -nt "$run_state" ]]; then
+                kill -TERM "$z" 2>/dev/null
+                break
+            fi
+            sleep "$poll"
+        done
+        wait "$z"        # never exit without reaping — an unreaped root child is the
+        exit $?          # ONEUP-0041 orphan shape, one level down
+    ' _ "$STOP_FILE" "$RUN_STATE_FILE" "$STOP_POLL_SECONDS" "${SYS_TXN[@]}" 2>&1 \
+        | tee "$SYS_LOG" | progress_filter system download
+    SYS_DL_RC=${PIPESTATUS[0]}
+    # 143 is 128+SIGTERM: the user stopped it. Nothing is installed either way, so this is
+    # not a failure — and it must not set ok=false, or the caller admits the step to the
+    # repo-scoped-failure probe and re-runs the whole transaction the user just stopped.
+    (( SYS_DL_RC == 0 || SYS_DL_RC == 143 )) || ok=false
+}
+
+# Pass 2 of 2. Every package is already cached, so this performs no network I/O — it is
+# the rpm transaction and nothing else, which is exactly why it is NEVER signalled
+# (security.md §6.1). Appends to $SYS_LOG: `tee` truncates, and the download pass's output
+# is where a download failure's evidence lives.
+run_system_commit() {
+    ok=true
+    system_txn_argv
+    sudo env LC_ALL=C "${SYS_TXN[@]}" 2>&1 \
+        | tee -a "$SYS_LOG" | progress_filter system install
     [[ ${PIPESTATUS[0]} -eq 0 ]] || ok=false
+}
+
+run_system_upgrade() {   # runs the transaction into $SYS_LOG (truncates it); sets global `ok`
+    # Split into a download pass and a commit pass so a stop can land during the long,
+    # network-bound half. The rpm transaction itself is as uninterruptible as it ever was.
+    SYS_DL_RC=0
+    run_system_download
+    $ok || return 0                      # a real download failure — caller reports it
+    if (( SYS_DL_RC == 143 )) || stop_pending; then
+        SYS_STOPPED=true                 # the third safe boundary (ONEUP-0085 §4.2)
+        return 0
+    fi
+    run_system_commit
 }
 
 echo
@@ -1243,6 +1322,14 @@ if step_selected system && ! stop_pending; then
     # and matching the English text keeps the change-detection reliable everywhere.
     # (`sudo env VAR=…` sets it in the child cleanly, regardless of sudoers env rules.)
     run_system_upgrade
+    # Third safe boundary (ONEUP-0085): the user stopped during or just after the
+    # download. Nothing was installed, so this is a skip — and it returns BEFORE the
+    # repo-scoped-failure probe below, which would otherwise re-run the whole
+    # transaction the user just stopped.
+    if $SYS_STOPPED; then
+        end_step system skip "stopped before installing anything"
+        rm -f "$SYS_LOG" "$PROGRESS_SEEN_FILE"
+    else
     # Repo resilience: a repo-scoped failure (bad signature / unreachable / corrupt
     # metadata on ONE source) need not sink the whole run. Only probe when we
     # weren't already told which to skip (a --skip-repo run already named them —
@@ -1344,6 +1431,7 @@ if step_selected system && ! stop_pending; then
         end_step system fail "zypper reported an error"
     fi
     rm -f "$SYS_LOG" "$PROGRESS_SEEN_FILE"
+    fi      # closes the SYS_STOPPED guard (ONEUP-0085's third safe boundary)
     fi      # closes the stop_pending guard above the transaction
 fi
 

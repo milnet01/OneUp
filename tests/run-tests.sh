@@ -1042,16 +1042,58 @@ check "stopping before the transaction is recorded honestly" \
       "@@STEP_END@@|system|skip|stopped before installing anything" "$out"
 rm -rf "$d"
 
-echo "TEST: a stop DURING the run lets the running transaction finish, then stops"
+echo "TEST: a stop DURING the download ends the run without installing (ONEUP-0085 INV-1)"
 d=$(mktemp -d); setup_common "$d"
-# The transaction requests the stop itself, mid-flight — the engine must still see it
-# through and only then skip the remaining steps.
+# The download pass requests the stop itself, mid-flight. The engine must end the step
+# WITHOUT running the commit pass — which is the whole point of the split: the download is
+# the long, stall-prone half, and interrupting it installs nothing.
+# The --download-only pattern must come FIRST: it is the narrower one, and *dup* matches
+# both passes.
 cat > "$d/zypper" <<EOF
 #!/usr/bin/env bash
 case "\$*" in
-  *refresh*) exit 0 ;;
+  *refresh*)        exit 0 ;;
+  *download-only*)
+      touch "$d/stop.request"          # user hits Stop while packages are downloading
+      echo "Preloading: demo-1.0.x86_64.rpm [done]"
+      exit 0 ;;
   *dup*|*update*)
-      touch "$d/stop.request"          # user hits Stop while the install is running
+      touch "$d/COMMIT-RAN"            # sentinel: the commit pass must NOT be reached
+      echo "( 1/1) Installing: demo-1.0.x86_64 [...done]"
+      exit 0 ;;
+  *clean*) echo "CACHE-CLEAN-RAN"; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(ONEUP_STOP_FILE="$d/stop.request" run_engine "$d" --steps=system,cache 2>&1)
+check        "the step is skipped, not failed"        "@@STEP_END@@|system|skip" "$out"
+check        "and it says nothing was installed"      "stopped before installing anything" "$out"
+# The sentinel is what makes this INV-1 rather than a restatement of the marker: asserting
+# only on STEP_END would pass against an engine that emitted skip and installed anyway.
+if [[ ! -e "$d/COMMIT-RAN" ]]; then
+    echo "  ok   - the commit pass never ran (nothing was installed)"; PASS=$((PASS+1))
+else
+    echo "  FAIL - the commit pass ran after the user stopped"; FAIL=$((FAIL+1))
+fi
+check_absent "the step after the stop does not run"   "CACHE-CLEAN-RAN" "$out"
+check        "the run reports stopped"                "@@DONE@@|stopped" "$out"
+check_absent "a stop is never reported as an error"   "@@DONE@@|errors" "$out"
+rm -rf "$d"
+
+echo "TEST: a stop during the COMMIT is ignored until the step ends (ONEUP-0085 INV-2)"
+d=$(mktemp -d); setup_common "$d"
+# ONEUP-0047, restated as a test: the rpm transaction is NEVER interrupted. A stop that
+# arrives once installing has begun must let the commit finish and report ok — the exact
+# opposite of the download case above, and the most plausible regression if someone later
+# extends the download poll across both passes.
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *refresh*)        exit 0 ;;
+  *download-only*)  echo "Preloading: demo-1.0.x86_64.rpm [done]"; exit 0 ;;
+  *dup*|*update*)
+      touch "$d/stop.request"          # user hits Stop while the INSTALL is running
       echo "( 1/1) Installing: demo-1.0.x86_64 [...done]"
       echo "1 packages to upgrade."
       exit 0 ;;
