@@ -1767,7 +1767,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: user-report-2026-08-07.
 
 - 🚧 [ONEUP-0085] **Make Stop work during the package download, not only between steps.**
-  stop_pending is checked between steps and once more after refresh_repos, just
+  stop_pending is checked between steps, between repositories, and once more just
   before the transaction (update_system.sh, the `if stop_pending` guard above
   run_system_upgrade). The download happens INSIDE zypper dup, so a stop asked for
   during it cannot land until the whole step ends -- which on a stalled mirror is
@@ -1898,3 +1898,158 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
       at no licence or dependency cost.
   Price --xmlout first; keep the canary regardless, since Flatpak and fwupd
   output stays prose whatever zypper does.
+  Research (2026-08-07) confirms the cheaper alternative is real and shipped.
+  `--xmlout` exists to be parsed by exactly this kind of front-end -- upstream
+  describes it as letting "scripts, graphical front-ends or other types of
+  applications parse zypper's output in a well-defined, standard way" -- and
+  its RNC schema is installed on this machine at
+  /usr/share/zypper/xml/xmlout.rnc, so the contract can be pinned and diffed
+  between zypper versions instead of being rediscovered when wording changes.
+  Two limits to price before committing:
+    * "Not all (but most of) the output is currently in XML", so some prose
+      parsing survives regardless.
+    * XML output must be parsed in REAL TIME while zypper runs to keep the
+      progress display, which is the same streaming discipline the engine
+      already has -- not a new constraint, but not a free one either.
+  Neither limit touches the licence or the dependency count, which is what
+  made the libzypp route expensive. This stays the thing to try first.
+  Sources: en.opensuse.org/openSUSE:Standards_Zypper_Xml ;
+  github.com/openSUSE/zypper/issues/126
+
+- 📋 [ONEUP-0092] **Passwordless still prompts: the sudoers drop-in misses timeout and du.**
+  The drop-in grants NOPASSWD for /usr/bin/zypper, /usr/bin/snapper,
+  /usr/bin/flatpak, /usr/bin/systemctl stop packagekit and
+  /usr/bin/env LC_ALL=C zypper * -- but two privileged calls in the engine are
+  neither:
+    * refresh_repos runs `sudo timeout "$REFRESH_TIMEOUT" zypper ... refresh
+      "$alias"`, so EVERY repo refresh prompts. Reported with a screenshot at
+      "Checking for updates from devel-tools (1 of 10)" -- the first refresh.
+    * the cache step runs `sudo_capture CACHE_DU du -sB1 /var/cache/zypp`, so
+      step 5 prompts again.
+  CARE REQUIRED, this is why it is filed rather than patched in place: a bare
+  `/usr/bin/timeout` entry is a privilege-escalation hole, because timeout runs
+  an ARBITRARY command -- `sudo timeout 1 /bin/sh` would then be root. The
+  entry must pin the wrapped command, and sudoers wildcard matching is
+  fnmatch over the whole argument string, so a loose pattern like
+  `/usr/bin/timeout * zypper *` can still be satisfied by
+  `timeout 5 /bin/sh -c 'zypper x'`. Whatever pattern is chosen must be tested
+  against that exact string before it ships.
+  Also price the alternative: making the refresh timeout zypper's own (a
+  ZYPP_ transfer timeout) removes the need for `sudo timeout` entirely, and
+  with it the whole escalation question.
+  **Layman:** Turning on Passwordless did not stop the password box appearing during an update.
+  Kind: fix.
+  Source: user-report-2026-08-07.
+  Research (2026-08-07): the escalation question can be DELETED rather than
+  solved -- libzypp already owns the facility `sudo timeout` was added for.
+    * `download.transfer_timeout` -- "maximum time in seconds that you allow a
+      transfer operation to take ... useful for preventing your batch jobs from
+      hanging for hours due to slow networks", valid [0,3600], default 180.
+    * `download.max_silent_tries` -- media-backend retries before the error
+      reaches the application, default 5.
+    * Settable per-invocation via `ZYPP_CONF=<path>` (an alternate config file),
+      so OneUp can ship its own without touching /etc/zypp/zypp.conf.
+  Checked on this machine: neither option is set, so the engine is running the
+  180 s default AND wrapping it in its own 120 s `sudo timeout` -- two timeouts
+  for one job, and only the outer one costs a sudoers entry.
+  If refresh_repos uses ZYPP_CONF instead, `sudo timeout` disappears, the
+  sudoers drop-in needs no `/usr/bin/timeout`, and the escalation risk never
+  has to be reasoned about. That also matches the sudoers guidance found in the
+  same pass: never wildcard a command path; where a wrapper is unavoidable,
+  grant a tightly-scoped script rather than a general-purpose binary.
+  `sudo du` (the cache step) is the separate half and still needs an entry, but
+  `/usr/bin/du` takes no sub-command so it carries no escalation risk.
+  Sources: manpages.opensuse.org/Tumbleweed/libzypp/zypp.conf.5.en.html ;
+  opensuse.github.io/libzypp/group__ZyppConfig.html
+
+- 📋 [ONEUP-0093] **The download progress bar compares new bytes against the whole transaction.**
+  _tick_activity computes what has arrived as `cache_bytes() - self._dl_base`
+  -- deliberately, so packages already cached sit inside the baseline and do
+  not flatter the rate (the comment says as much). But the total it divides
+  by is zypper's `Package download size`, which counts the ENTIRE
+  transaction, cached packages included. Measured 2026-08-07 on run
+  2026-08-07_093045.log: 21 packages `[already in cache]`, 60 freshly
+  `[done]`, screen reading "167 MB of 604 MB".
+  So numerator and denominator count different populations, and on a warm
+  cache the figure under-reports and can never reach 100%. That is a defect
+  in exactly the display ONEUP-0048 added to answer "is this progressing?",
+  and it misleads in the direction that matters -- it makes a healthy run
+  look stalled.
+  Fix: subtract the already-cached bytes from the total, or count arrivals
+  rather than bytes. The `[already in cache]` lines are already in the
+  stream, so the engine can report the two figures separately rather than the
+  GUI inferring one.
+  **Layman:** The progress bar showed 167 MB of 604 MB when much of it was already downloaded, so it can never reach the end.
+  Kind: fix.
+  Source: user-report-2026-08-07.
+  Research (2026-08-07): zypper already emits the exact figure the GUI is
+  currently inferring. `zypper --xmlout` produces a `<download-result>` node
+  for EVERY package zypper tried to download, so "was this one fetched or was
+  it already cached" becomes a field rather than something deduced by counting
+  `[already in cache]` strings in prose. That is the honest fix for the
+  mismatched numerator/denominator, and it removes the guess instead of
+  correcting it.
+  The schema is on disk here: /usr/share/zypper/xml/xmlout.rnc (9,308 bytes),
+  so the contract is inspectable rather than reverse-engineered from output.
+  Caveat that decides the scope: upstream says "not all (but most of) the
+  output is currently in XML", so this is a targeted use for the download
+  phase, NOT a migration of the whole parser -- which keeps it separable from
+  ONEUP-0091.
+  Sources: en.opensuse.org/openSUSE:Standards_Zypper_Xml ;
+  github.com/openSUSE/zypper/blob/master/src/output/xmlout.rnc
+
+- 📋 [ONEUP-0094] **Retry a truncated download with mirror striping disabled.**
+  Observed twice on 2026-08-07, both times on kernel-default-7.1.6:
+    [Error: "end of response with 194225024 bytes missing", trying next mirror.]
+    [Error: "The requested URL returned error: 404"]
+  while the SAME file returned HTTP 200 from downloadcontent.opensuse.org.
+  This is a known openSUSE failure mode, not a local one: zypper stripes a
+  download across several mirrors using HTTP range requests, so one mirror
+  holding a stale or absent copy of a just-published snapshot truncates the
+  transfer or 404s. Dead mirrors in the routed pool are documented as 404ing
+  essentially every current file while MirrorCache still ranks them, and
+  Tumbleweed CI hits the same sync-lag on fresh snapshots (systemd/mkosi#4365).
+  `ZYPP_MULTICURL=0` is the documented workaround -- it stops the striping and
+  follows the primary redirect. Verified on this machine: the run that failed
+  twice through OneUp completed under ZYPP_MULTICURL=0.
+  Proposal: when the system step fails and the log carries the truncation or
+  404 signature, retry ONCE with ZYPP_MULTICURL=0 and say so in a HINT, rather
+  than reporting a failed update the user cannot act on. Pairs naturally with
+  ONEUP-0087 (the cache is now kept, so the retry is cheap) and with
+  ONEUP-0085 (the retry belongs in the download pass, before anything is
+  installed).
+  Do NOT set it unconditionally -- striping is a real throughput win when the
+  mirrors are healthy.
+  Sources: github.com/systemd/mkosi/issues/4365 ;
+  github.com/openSUSE/zypper/issues/478 ; github.com/Firstyear/mirrorsorcerer
+  **Layman:** Updates failed twice on the same package because openSUSE's mirrors were out of sync; OneUp could recover from that by itself.
+  Kind: enhancement.
+  Source: user-report-2026-08-07.
+
+- 📋 [ONEUP-0095] **Disable Stop while stopping is not possible, instead of accepting a click that does nothing.**
+  Today Stop is enabled for the whole of a real run (set_controls_enabled shows
+  it whenever `_run_active and not _check_mode`), so during the rpm transaction
+  the user can press a button that is guaranteed to do nothing until the step
+  ends. That is what happened on 2026-08-07: pressed, "Stopping..." appeared,
+  and nothing followed.
+  ONEUP-0085 makes stopping genuinely possible during the DOWNLOAD and still
+  impossible during the COMMIT -- by design, because interrupting rpm is the
+  one thing this project refuses to do (security.md 6.1). So after 0085 the
+  honest control is phase-aware:
+    * download phase  -> Stop enabled, and it works within a poll interval.
+    * commit phase    -> Stop DISABLED, with a tooltip saying installation
+      cannot be interrupted safely and will finish shortly.
+  The GUI already tracks this: `_progress_phase` carries download/install from
+  the @@PROGRESS@@ marker, so no new marker is needed.
+  This also settles a contradiction cold-eyes loop 1 found in the 0085 spec --
+  6 said the liveness line must stop claiming "Stopping now is safe" during
+  the commit, while 8 said no updater.py change was needed. Both are answered
+  by gating the CONTROL rather than rewording the sentence: `_tick_activity`'s
+  stall message is not gated on phase either, so it can currently promise a
+  safe stop mid-install.
+  Sequenced AFTER ONEUP-0085: until the download pass exists there is no phase
+  in which Stop works, and disabling it everywhere would be worse than the
+  current state.
+  **Layman:** The Stop button should go grey while the installer is running, so it never looks like it will work when it cannot.
+  Kind: ux.
+  Source: user-request-2026-08-07.

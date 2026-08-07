@@ -25,11 +25,12 @@ downloaded. After this item, that sentence is true in every phase in which it is
 
 ### 2.1 What happens today
 
-`stop_pending` (`update_system.sh`) is consulted at exactly two kinds of place: in each
-step's `if step_selected <key> && ! stop_pending` guard, and once more inside the system
-step between `refresh_repos` and the transaction. The transaction itself is
-`run_system_upgrade`, a single `zypper dup` (`zypper update` on Leap) whose output is piped
-through `tee` into `progress_filter`.
+`stop_pending` (`update_system.sh`) is consulted at three kinds of place: in each step's
+`if step_selected <key> && ! stop_pending` guard; **inside `refresh_repos`, between
+repositories** (`stop_pending && return 0`); and once more inside the system step between
+`refresh_repos` and the transaction. The transaction itself is `run_system_upgrade`, a
+single `zypper dup` (`zypper update` on Leap) whose output is piped through `tee` into
+`progress_filter`.
 
 The download therefore happens **inside** `run_system_upgrade`, past the last stop
 boundary. A stop requested during it cannot be honoured until the whole step finishes.
@@ -46,11 +47,25 @@ Installation has completed with error.
 @@TIMING@@|system|296
 ```
 
-The mirror stopped sending 194 MB into a 573 MB download. The GUI showed *"nothing received
-for 1m 12s — the server may have stalled. Stopping now is safe."* — the liveness line from
-`_tick_activity` in `updater.py`, gated on `STALL_SECONDS`. The user pressed Stop. Nothing
-happened, because the run was inside `zypper dup`. The user then logged out and rebooted,
-which is how ONEUP-0086 and ONEUP-0084 were found.
+The transfer ended **194 MB short** — `bytes missing`, not bytes received. The GUI showed
+*"nothing received for 1m 12s — the server may have stalled. Stopping now is safe."* — the
+liveness line from `_tick_activity` in `updater.py`, gated on `STALL_SECONDS`. The user
+pressed Stop. Nothing happened, because the run was inside `zypper dup`. The user then
+logged out and rebooted, which is how ONEUP-0086 and ONEUP-0084 were found.
+
+**What this item does NOT claim: that the download failure has been diagnosed.** It
+reproduced four times on 2026-08-07 and two hypotheses were tested and falsified —
+mirror striping (`ZYPP_MULTICURL=0`: failed identically) and libzypp's 180-second
+`download.transfer_timeout` (raised to 3600: failed identically, 180 MB short). What is
+established is only the shape: a large package repeatedly truncates and its fallback mirror
+404s, while the same URL serves `HTTP/1.1 200` with `content-length: 210194084` and a
+range request pulls 5 MB at 448 KB/s.
+
+That gap is the whole argument for this item, and it is stronger than a diagnosis would be.
+**OneUp cannot fix openSUSE's download layer, and does not need to.** What it owes the user
+when a download will not complete — for any reason, diagnosed or not — is the ability to
+stop waiting. Today it offers a button that does nothing. The underlying failure is filed
+separately as ONEUP-0094; this item is deliberately independent of its outcome.
 
 **The claim on screen is the defect this item removes.** `request_stop` writes
 `STOP_REQUEST` and sets the button to *"Stopping…"*; during the transaction that promise
@@ -65,14 +80,24 @@ into `/var/cache/zypp/packages`.
 
 Measured rather than assumed, 2026-08-07, on zypper 1.14.98:
 
+All commands below were run as root (`sudo …`), which these operations require; the `sudo`
+is omitted from the table only to keep the column readable.
+
 | Question | Command | Result |
 | --- | --- | --- |
-| Does `dup` accept download-only? | `zypper dup --help \| grep download-only` | `-d, --download-only  Only download the packages, do not install.` |
+| Does `dup` accept download-only? | `zypper dup --help \| grep -i download.only` | `-d, --download-only  Only download the packages, do not install.` |
+| Does `update` (the Leap verb) accept it? | `zypper update --help \| grep -i download.only` | identical line — so **both** distro branches split |
 | Does SIGTERM end it? | `setsid zypper …dup --download-only &` then `kill -TERM -- -$!` | No zypper process remained |
 | Is the lock released? | `cat /run/zypp.pid` before and after | Held `47595`; empty afterwards |
 | Is the next run blocked? | `zypper --no-refresh dup --dry-run` afterwards | Computed `75 packages to upgrade` — no stale lock |
 | Are partial files left? | `find /var/cache/zypp/packages -name '*.rpm.part*'` | None |
 | Is fetched work kept? | `du -sh /var/cache/zypp/packages` | `217M` retained |
+
+**The SIGTERM row proves less than it appears to, and the gap is closed elsewhere.** It
+signalled a *bare* `zypper` from a *root* shell, so it establishes that zypper survives the
+signal cleanly — but not that the engine can deliver it, since the engine is unprivileged
+and the real zypper runs under `sudo`. §4.3 is where that half is settled, and it is settled
+by a different measurement.
 
 The last row is what makes stopping *free* rather than merely possible: an interrupted
 download loses nothing, so the retry resumes rather than restarting. ONEUP-0087 is its
@@ -91,10 +116,25 @@ partner — it stops the cache step discarding those bytes after a failed system
   helper: the download runs as a background job of the engine and the engine's own
   foreground loop polls. Nothing is spawned, so nothing can be orphaned.
 - **Leap keeps parity.** `run_system_upgrade` branches on `/etc/os-release` for
-  `update` vs `dup`; both accept `--download-only`, so both are split.
+  `update` vs `dup`; both accept `--download-only` (measured, §2.3), so both are split.
 - **Stop resolution is a poll interval, not instant.** A file-watch would be tighter and
   needs `inotify`; the existing stop mechanism is a file whose mtime is compared, and a
   short poll matches it with no new dependency.
+
+- **The user is assumed to have no terminal and no expertise. This is a constraint on the
+  design, not a note about the audience.** Diagnosing the 2026-08-07 failure took
+  `ZYPP_MULTICURL=0`, a `download.transfer_timeout` override via a `zypp.conf.d` drop-in, a
+  `curl -r` range probe, reading `/run/zypp.pid`, and a hand-delivered `SIGTERM` to a
+  root-owned process — and **two of those hypotheses were wrong anyway**. None of it is
+  available to someone who installed OneUp to avoid the command line, which is the entire
+  reason OneUp exists (`README.md`).
+
+  So an outcome an ordinary user cannot act on is not an acceptable outcome. Concretely,
+  three things follow and each is testable: a failure the user cannot fix must still be
+  **stoppable** (this item); it must leave the machine **no worse** and the download
+  **not discarded** (ONEUP-0087, shipped); and where a recovery exists that a knowledgeable
+  user would apply, the app should apply it rather than describe it (ONEUP-0094). "Tell the
+  user to run a command" is the failure mode this bullet forbids.
 
 ## 4. Design
 
@@ -131,13 +171,24 @@ the global `ok` and writes the transaction output to `$SYS_LOG`. Its existing ca
 the first call in the system step and the `--auto-skip-repos` retry after
 `find_failing_repos` — are unchanged.
 
+**`$SYS_LOG` is written by both passes, and the second must append.** `tee "$SYS_LOG"`
+truncates, so a commit pass using the same redirection would erase the download pass's
+output. Three consumers read that file after the step — the `Nothing to do.` /
+`N packages to upgrade` change detection, `reboot_reason_from_log`, and the failure-hint
+`grep`s — and the download half is where a download failure's evidence lives. So the
+download pass uses `tee "$SYS_LOG"` (truncating, as today, since it runs first) and the
+commit pass uses `tee -a "$SYS_LOG"`.
+
 ### 4.2 The stop boundary
 
-Three boundaries exist after this item, where two do today:
+Four boundaries exist after this item, where three do today:
 
 1. Before `refresh_repos` — unchanged.
-2. After `refresh_repos`, before the transaction — unchanged.
-3. **New:** after the download pass, before the commit pass.
+2. Between repositories inside `refresh_repos` — unchanged.
+3. After `refresh_repos`, before the transaction — unchanged.
+4. **New:** after the download pass, before the commit pass — plus, uniquely, the ability
+   to land *during* the pass that precedes it (§4.3). Every existing boundary is a gap
+   between operations; this is the first that interrupts one.
 
 Boundary 3 is reached both when the download completes normally and when it is interrupted.
 In either case, if `stop_pending` is true the step ends `skip` with
@@ -146,47 +197,111 @@ user-visible fact is identical.
 
 ### 4.3 Interrupting the download
 
-The download runs as a background job so the engine keeps a foreground loop:
+**The engine does not signal anything. A root-side wrapper owns the download and signals
+its own child.** The pipeline stays in the foreground, in exactly the shape
+`run_system_upgrade` uses today:
 
-- The job is started **without** command substitution. `security.md` §2.2 forbids a
-  privileged call inside `$(…)` because sudo's tty-less credential is keyed to the parent
-  pid; a background job's parent is still this shell, exactly as a pipeline element's is,
-  which is why `run_system_upgrade`'s comment says sudo must stay the pipeline's first
-  element. The same reasoning admits `&`, and this is the assumption the implementation
-  must confirm first (§7, T-1).
-- The loop polls `stop_pending` every `STOP_POLL_SECONDS`, exits when the job does, and on
-  a stop sends `SIGTERM` to the download's **process group**, so zypper's curl children go
-  with it rather than being reparented.
-- `STOP_POLL_SECONDS` is overridable by environment, matching `ONEUP_REFRESH_TIMEOUT`, so
-  the suite need not wait out a real interval.
+```bash
+sudo env LC_ALL=C bash -c '<wrapper>' _ "$STOP_FILE" "$RUN_STATE_FILE" "$STOP_POLL_SECONDS" \
+    2>&1 | tee "$SYS_LOG" | progress_filter system download
+```
 
-A stop seen here sets a flag distinguishing *interrupted* from *failed*, so §4.4 does not
-report a stop as an error.
+The wrapper starts zypper, polls for the stop request, `SIGTERM`s zypper when it sees one,
+then `wait`s and exits with zypper's status.
+
+**Three measured facts forced this shape, and the obvious design fails all three.** The
+first draft backgrounded the pipeline and had the engine signal a process group. Measured
+2026-08-07 on this machine's bash:
+
+| Question | Command | Result |
+| --- | --- | --- |
+| Does a background pipeline get its own process group? | `sleep 30 \| cat &` then compare `ps -o pgid=` | **No** — job pgid `56117` = engine pgid `56117` |
+| What does `$!` identify? | `sleep 9 \| head -c0 &` then `ps -o comm= -p $!` | the pipeline's **last** element, not zypper |
+| Does backgrounding change sudo's parent? | `sh -c 'echo $PPID' \| cat &` | **No** — ppid is still the engine |
+
+So `kill -TERM -- -$pgid` from the engine would have signalled **the engine itself**, which
+`security.md` §6.3 forbids outright; `kill $!` would have signalled `progress_filter`; and
+the engine runs unprivileged while zypper runs as root, so a direct `kill` earns `EPERM`
+regardless. Only the third row came out in the design's favour — and it is the one the
+first draft bothered to argue, which is why the other two are tabulated here rather than
+reasoned about again.
+
+Inside the wrapper all three problems vanish: it is already root, so signalling its own
+child needs no privilege; it holds zypper's pid directly, so no process group is involved;
+and because the pipeline is in the **foreground**, `${PIPESTATUS[0]}` still carries
+zypper's status exactly as today (§4.4 depends on this entirely).
+
+**Verified end to end before this section was written** — a stop file created 3 s into a
+run produced `[root] stop seen -> SIGTERM`, `child rc=143`, and `PIPESTATUS[0] = 143` in
+the engine. 143 is `128 + SIGTERM`, which is how §4.4 tells an interrupted download from a
+failed one; it needs no separate flag.
+
+- **`STOP_POLL_SECONDS="${ONEUP_STOP_POLL_SECONDS:-2}"`**, in the engine's existing idiom
+  (`REFRESH_TIMEOUT="${ONEUP_REFRESH_TIMEOUT:-120}"`). §1's "within seconds" means this
+  interval plus zypper's own exit, and the suite overrides it rather than waiting one out.
+- The wrapper re-implements `stop_pending`'s staleness rule — a request older than
+  `run.state` is a leftover (`security.md` §6.2) — because it cannot call an engine
+  function across `sudo bash -c`. That duplication is deliberate and is why both paths take
+  the two file paths as arguments rather than reading globals.
+- **Nothing outlives the engine.** The wrapper is `sudo`'s child, `sudo` is the foreground
+  pipeline's first element, and the engine `wait`s on the pipeline — the same lifetime the
+  transaction has today. This is not the `security.md` §2.4 case: no helper is detached, so
+  there is no pid to watch.
 
 ### 4.4 Outcome mapping
 
-| What happened | Step outcome | Why |
-| --- | --- | --- |
-| Download ok, commit ok | `ok` | unchanged from today |
-| Download ok, stop pending at boundary 3 | `skip` — `stopped before installing anything` | nothing installed |
-| Download interrupted by a stop | `skip` — `stopped before installing anything` | nothing installed; bytes kept |
-| Download failed (mirror, disk, signature) | `fail` | as today, but the hint can now say the *download* failed |
-| Commit failed | `fail` | as today |
+The download pass's `${PIPESTATUS[0]}` is the discriminator: **143** (`128 + SIGTERM`) is
+an interrupted download, anything else non-zero is a failed one.
 
-A stop must not increment `ERRORS`, or `@@DONE@@` reports `errors` for a run the user chose
-to end — the failure ONEUP-0074 exists to prevent.
+| What happened | `ok` | Step outcome | Repo probe + `--auto-skip-repos` retry |
+| --- | --- | --- | --- |
+| Download ok, commit ok | true | `ok` | not reached |
+| Download ok, stop pending at boundary 3 | true | `skip` — `stopped before installing anything` | **skipped** |
+| Download interrupted (rc 143) | true | `skip` — `stopped before installing anything` | **skipped** |
+| Download failed (rc ≠ 0, ≠ 143) | false | `fail` | runs, as today |
+| Commit failed | false | `fail` | runs, as today |
+
+**The `ok` column is load-bearing and is the reason this table gained it.** `ok=false`
+is what admits the system step to `repo_scoped_failure` → `find_failing_repos` →
+a second `run_system_upgrade` under `--auto-skip-repos`. If an interrupted download set
+`ok=false`, pressing Stop would **restart the transaction the user just stopped** — a
+worse outcome than the bug this item fixes. So rc 143 sets `ok=true` and short-circuits
+before the probe.
+
+A stop must also not increment `ERRORS`, or `@@DONE@@` reports `errors` for a run the user
+chose to end (`end_step … skip` already avoids this; the row above is what keeps it true).
 
 ### 4.5 Progress continuity
 
 `progress_filter` reads zypper's own wording and emits `@@PROGRESS@@|system|<n>|…`. Both
-passes pipe through it. The download pass emits the `download` phase; the commit pass emits
-`install`. Because the commit pass finds everything cached, its own preload lines are
-`[already in cache]` and pass through as they do today. The GUI's `_progress_phase` already
-distinguishes the two phases, so no marker or parser change is required.
+passes pipe through it, and **it needs a second argument to stay correct**, which the first
+draft denied.
+
+Its `Preloading:*)` and `Retrieving:*)` cases emit the `download` phase **unconditionally**
+— the function has no idea which pass invoked it. Since the commit pass re-reads every
+cached package and prints `Preloading: … [already in cache]` for each, it would re-emit
+`download`-phase markers *after* the download finished, flipping the GUI's
+`_progress_phase` back and resetting its byte total (`want` is a per-invocation local, so
+the commit pass emits `…|download|0|0`). The user would watch the progress display restart
+from zero at the exact moment the install began.
+
+So `progress_filter` takes the pass as a parameter — `progress_filter system download` and
+`progress_filter system install` — and the `Preloading:`/`Retrieving:` cases emit that
+phase rather than a hard-coded one. **No marker changes**: the field already exists in the
+protocol and the GUI already distinguishes the two values. What changes is one function
+signature and its two call sites.
+
+`PROGRESS_SEEN_FILE` is written with a truncating `>` at the end of each invocation, so the
+commit pass would erase the download pass's count and trip the ONEUP-0046 stale-parser
+canary on a healthy run. The **download** pass owns that file; the commit pass does not
+write it.
 
 ## 5. Correctness invariants
 
-The suite is `tests/run-tests.sh` throughout — every clause below is engine behaviour.
+The suite is `tests/run-tests.sh` throughout. All but one clause below assert engine
+*behaviour*; **INV-5 is a structural check over the source** and is called out as such
+where it appears, because a reader who takes the preamble literally will look for a
+behavioural test that cannot exist.
 
 - **INV-1** A stop requested while packages are downloading ends the run without installing
   anything.
@@ -199,17 +314,22 @@ The suite is `tests/run-tests.sh` throughout — every clause below is engine be
   pass against an engine that emitted `skip` and installed anyway.
 
 - **INV-2** The commit pass is never signalled, whatever the stop file says.
-  *Test:* a mock `zypper` whose commit invocation records every signal it receives to a file
-  and then exits 0. The scenario creates the stop request *after* the commit has begun and
-  asserts the recorded signal list is empty and the step still ends `ok`. Breaks if a later
-  change extends the download poll across both passes — the single most plausible
-  regression, and the one ONEUP-0047 forbids.
+  *Test:* a mock `zypper` whose commit invocation traps and records every signal it
+  receives, touches a `commit-started` sentinel, then sleeps briefly and exits 0. The
+  scenario **waits for that sentinel** before creating the stop request, then asserts the
+  recorded signal list is empty and the step still ends `ok`. The barrier is the whole
+  test: without it the scenario races the mock's start-up and can write the stop file
+  before the commit exists, which passes while exercising nothing. Breaks if a later change
+  extends the download poll across both passes — the single most plausible regression, and
+  the one ONEUP-0047 forbids.
 
-- **INV-3** A stopped download leaves no process behind.
+- **INV-3** A stopped download leaves no process behind — neither zypper nor the wrapper.
   *Test:* the scenario records `pgrep` output before the run and after it, and asserts no
   new process survives — the shape the existing keep-alive orphan test already uses. Breaks
-  if the download is spawned into its own session and the group signal misses it, which is
-  precisely how the keep-alive leak in ONEUP-0003 happened.
+  if the wrapper `SIGTERM`s zypper and exits without `wait`ing, leaving a root-owned child
+  reparented to init: the same leak shape as ONEUP-0041, where two keep-alives were found
+  still running 40 minutes after the runs that spawned them had been killed
+  (`security.md` §2.4).
 
 - **INV-4** A stopped run is not reported as a failed one.
   *Test:* the INV-1 scenario also asserts `@@DONE@@|stopped` and `check_absent`
@@ -217,13 +337,21 @@ The suite is `tests/run-tests.sh` throughout — every clause below is engine be
   which is the natural way to write it and is wrong.
 
 - **INV-5** The download pass, the commit pass and the `--size` probe state the transaction
-  command in exactly one place.
-  *Test:* `grep 'allow-vendor-change' update_system.sh | grep -vc '^\s*#'` returns 1.
-  → today it returns **2** (the probe at §4.1 and the transaction), so the clause
-  discriminates; the comment filter is required because a third match is prose. Breaks the
-  moment someone adds a flag to one caller and not another — a divergence that would
-  download one set of packages, install a second and quote the size of a third, and which
-  no behavioural test would catch because all three would still succeed.
+  command in exactly one place — **on both distros**.
+  *Test:* `grep -c 'system_txn_argv' update_system.sh` returns **4** — one definition plus
+  the three callers (download pass, commit pass, `--size` probe).
+  → today it returns **0**, so the clause discriminates absolutely.
+  **Two earlier drafts of this clause were wrong, and both failed when run**, which is why
+  it is now structural rather than a text search. The first asserted
+  `grep -c 'allow-vendor-change' … == 1`; that is Tumbleweed-only, so a probe keeping its
+  own `zypper update` branch would score clean while the Leap paths diverged. The second
+  widened the pattern to both verbs and predicted 4; it returns **3**, because the
+  Tumbleweed probe wraps across two lines (`… dup \` / `--allow-vendor-change --dry-run`)
+  and a line-based grep cannot see it. Counting the callers avoids both traps: it does not
+  care how the argv is spelled or wrapped. Breaks the moment someone adds a flag to one
+  caller and not another, which would download one set of packages, install a second and
+  quote the size of a third — and which no behavioural test would catch, because all three
+  would still succeed.
 
 - **INV-6** The user sees one step, not two.
   *Test:* a successful run asserts exactly one `@@STEP_BEGIN@@|system` and one
@@ -241,10 +369,10 @@ The suite is `tests/run-tests.sh` throughout — every clause below is engine be
 
 | Situation | Behaviour |
 | --- | --- |
-| `--download-only` unsupported (an older or forked zypper) | The download pass fails with a usage error and the step fails, having installed nothing. Recovery is a hint naming the flag. §7 T-2 pins that a usage failure is not mistaken for a mirror failure. |
+| `--download-only` unsupported (an older or forked zypper) | **The engine falls back to today's single un-split pass for the rest of the run**, emits a HINT saying Stop will only work between steps, and completes the update normally. Turning a working update into a total failure over a missing convenience would be a worse bug than the one this item fixes. No minimum zypper version is imposed, because the fallback makes one unnecessary. §7 T-2 pins the fallback and that the usage failure is not mistaken for a mirror failure. |
 | Download interrupted, user retries | The cache still holds what was fetched (§2.3), so the retry resumes. Requires ONEUP-0087, which is why the two ship together. |
 | Stop arrives in the window between the download ending and the commit starting | Boundary 3 catches it; this is the normal path, not an edge. |
-| Stop arrives during the commit | Ignored until the step ends (INV-2). The GUI's liveness line must not claim otherwise — §8. |
+| Stop arrives during the commit | Ignored until the step ends (INV-2) — by design, and permanently. The GUI still says "Stopping now is safe" in this phase, which stays wrong after this item; **ONEUP-0095** closes it by disabling the control rather than rewording the sentence, and §8 records why that is not folded in here. |
 | SIGTERM does not end zypper | The poll loop stops signalling after the job exits; if it never exits, the run behaves as today. Deliberately no `SIGKILL` escalation: a `SIGKILL`ed zypper is the abandoned-lock case, and waiting is strictly safer than that. |
 | Disk fills during the download | zypper fails the download pass; nothing is installed. Better than today, where the same failure can occur part-way through a commit. |
 
@@ -252,15 +380,17 @@ The suite is `tests/run-tests.sh` throughout — every clause below is engine be
 
 §5 owns the invariant clauses. Two further scenarios exist for facts the invariants assume:
 
-- **T-1 — the background-job credential assumption.** Before implementing §4.3, confirm that
-  `sudo cmd &` reuses the warm credential as `sudo cmd | …` does. The claim in §4.3 is
-  reasoning from `run_system_upgrade`'s comment, not a measurement, and it is the one
-  assumption in this spec that has not been run. If it is false, §9's third alternative
-  (keep the pipeline in the foreground, poll from a `SIGCHLD`-free subshell) becomes the
-  design. **This test gates the implementation, not the spec.**
-- **T-2 — a usage failure is not a mirror failure.** A mock zypper rejecting
-  `--download-only` must produce a hint naming the flag, not the "check your internet
-  connection" hint `repo_scoped_failure` would otherwise reach for.
+- **T-1 — one password prompt, not two.** The wrapper adds a `bash -c` between `sudo` and
+  zypper, and `security.md` §2.2 is the rule this project has re-learned most often. A
+  scenario counts the mock `sudo`'s interactive validations across a full run and asserts
+  the split did not add one. This replaces a draft T-1 that proposed measuring whether
+  `sudo cmd &` keeps its parent — a question §4.3 no longer asks, because the pipeline is
+  no longer backgrounded. (The measurement was run anyway: it does keep its parent. The
+  design changed for the *other* two reasons, not that one.)
+- **T-2 — an unsupported flag degrades, it does not fail.** A mock zypper that rejects
+  `--download-only` with a usage error must leave the run **succeeding** via the §6
+  fallback, emit the HINT naming the flag, and not reach the "check your internet
+  connection" hint `repo_scoped_failure` would otherwise produce.
 
 The suite's mock `zypper` already dispatches on `"$*"`, so both passes are distinguishable
 by matching `*download-only*` before the general `*dup*` case — order matters, and the
@@ -277,9 +407,35 @@ existing scenarios put the narrower pattern first for the same reason.
   pass now is. Left as-is it reads as forbidding this item.
 - **`docs/standards/security.md` §6** — same sharpening, in the document that owns the
   rule. §6 is the home; `CLAUDE.md` gets the pointer.
-- **`updater.py`** — the liveness line's *"Stopping now is safe"* is the sentence this item
-  makes true. It stays, and no wording change is needed once the engine honours it.
+- **`updater.py`** — the liveness line's *"Stopping now is safe"* becomes true **in the
+  download phase only**, and this item does not make it true in the commit phase, where
+  INV-2 guarantees the opposite. `_tick_activity` appends that clause whenever `stalled`,
+  with no reference to `_progress_phase`, so after this item the sentence is right when the
+  bar says *Downloading* and still wrong when it says *Installing*.
+
+  **This item does not fix that, and says so rather than implying otherwise.** The honest
+  fix is to gate the *control* rather than reword the sentence — Stop disabled during the
+  commit, with a tooltip — which is **ONEUP-0095**, sequenced after this one because until
+  the download pass exists there is no phase in which Stop works at all. §1's promise is
+  therefore scoped to the download phase, and §6's row for a stop during the commit records
+  the residual gap as belonging to 0095.
 - **`CHANGELOG.md`** — under **Fixed**, with ONEUP-0086 and ONEUP-0087, as 1.4.1.
+
+- **`docs/specs/ONEUP-0054-python-engine.md`** — **§5 of this document binds the Python
+  engine, not just the Bash one.** 2.0 replaces `update_system.sh` outright, so §4.3's
+  mechanism — a `sudo bash -c` wrapper, `${PIPESTATUS[0]}`, a shell poll loop — does **not**
+  port and should not be transcribed. The seven invariants do, unchanged, because every one
+  is stated as observable behaviour rather than as shell: a Python engine still owes a stop
+  that lands during the download (INV-1), a commit that is never signalled (INV-2), no
+  orphan (INV-3), a stop that is not an error (INV-4), one argv (INV-5), one step (INV-6),
+  and one authentication (INV-7).
+
+  Recorded because the natural failure is silent: 2.0 rewrites the file this item edits, and
+  a rewrite that satisfies its own spec while quietly dropping a 1.4.x fix regresses a
+  shipped bug with nothing to catch it. Verified 2026-08-07 that this is presently a
+  documentation obligation only — `v2` is a strict ancestor of `main` with no commits of its
+  own, so today's fixes reach it by fast-forward rather than by porting. That stops being
+  true the moment 2.0 work begins, which is why the obligation is written down now.
 
 ## 9. Alternatives considered (and rejected)
 
@@ -293,9 +449,18 @@ existing scenarios put the narrower pattern first for the same reason.
   timer the user cannot influence, so Stop still does nothing, and picking a threshold that
   never aborts a merely-slow mirror means picking one far longer than a user will wait. It
   remains a reasonable *addition* later.
-- **Poll from a spawned watcher rather than the engine's foreground.** Rejected under
-  `security.md` §2.4: a helper that signals must itself be watched, and the keep-alive
-  already demonstrates the cost of getting that wrong. Kept as the fallback if T-1 fails.
+- **Poll from a detached watcher process rather than inside the privileged wrapper.**
+  Rejected under `security.md` §2.4 and **not kept as a fallback** — an earlier draft named
+  it as one while also rejecting it, which left an implementer two incompatible
+  instructions. A helper that signals must itself be watched, and ONEUP-0041 is what that
+  costs when it goes wrong. §4.3's wrapper needs no watcher because it *is* the parent of
+  the thing it signals.
+- **Background the pipeline and signal from the engine.** This was the first draft of
+  §4.3 and it is recorded because it is the design a reader will reach for. It fails three
+  ways, all measured in §4.3: the job stays in the engine's own process group, so the group
+  kill hits the engine; `$!` names the pipeline's last element rather than zypper; and the
+  unprivileged engine cannot signal a root process anyway. It also destroys `PIPESTATUS`,
+  which §4.4 depends on entirely.
 - **`zypper --xmlout` for the whole transaction.** Would remove the prose parsing that
   ONEUP-0035 and ONEUP-0046 both punished. Out of scope here and genuinely attractive —
   filed as part of ONEUP-0091.
@@ -314,3 +479,4 @@ existing scenarios put the narrower pattern first for the same reason.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 1 | 2026-08-07 | 2 lanes; 4 critical, 6 high, 5 medium, 5 low — **20 verified, 1 dismissed** — 20 draft defects vs 0 fix collateral (all fixed). Dimensions: dim 5×6, dim 2×5, dim 7×2, dim 15×2, dim 6×2, dim 4×1, dim 8×1, dim 9×1, dim 10×1 | **The whole of §4.3 was wrong, and both lanes led with it.** The draft backgrounded the transaction pipeline and had the engine signal the job's process group. Measured during verification: a background pipeline in a non-interactive script gets **no process group of its own** (job pgid `56117` = engine pgid `56117`), so the prescribed `kill -TERM -- -$pgid` would have signalled **the engine itself** — which `security.md` §6.3 forbids in as many words. `$!` names the pipeline's **last** element (`progress_filter`), not zypper. And the engine is unprivileged while zypper runs as root, so a direct kill earns `EPERM` regardless. Backgrounding also destroys `PIPESTATUS`, and `progress_filter` ends in an unconditional `return 0` — so **every download would have reported success**, collapsing four rows of §4.4 into one. An implementer following the draft would have shipped a bug strictly worse than the one this item fixes. §4.3 is rebuilt around a root-side wrapper that owns and signals its own child inside a **foreground** pipeline: sudo stays the first element (the shape §2.2 requires), the signal needs no privilege, no process group is involved, and `${PIPESTATUS[0]}` survives — verified end to end before the section was rewritten (`stop seen -> SIGTERM`, `child rc=143`, `PIPESTATUS[0]=143`). **One lane claim was dismissed on measurement**: both lanes asserted that backgrounding reparents sudo under an intermediate subshell, breaking the tty-less credential; it does not — child ppid stayed the engine's in all three shapes tested. The design changed for the other two reasons, and the dismissal is recorded because the draft's one *defended* assumption turned out to be its only correct one. **The most consequential finding neither lane led with was §4.4's missing `ok` column**: an interrupted download setting `ok=false` admits the step to `repo_scoped_failure` → `--auto-skip-repos`, so pressing Stop would have **restarted the transaction the user just stopped**. **Three draft defects died during context-packet construction**, before a lane was spent — two `sed` windows landed on the wrong code and the security.md extraction returned nothing, each caught by checking that every packet window was non-empty. **INV-5's clause was wrong twice and both were caught by running it**: `allow-vendor-change` alone is Tumbleweed-only (a Leap probe would score clean while diverging), and the widened pattern predicted 4 but returns 3, because the Tumbleweed probe wraps across two lines where a line-based grep cannot see it. It is structural now (`grep -c 'system_txn_argv'`, 0 today → 4 after). Also corrected: the boundary census omitted `refresh_repos`' own between-repository check (three today, not two); INV-3 cited ONEUP-0003 for the keep-alive leak, which is **ONEUP-0041**; `progress_filter` emits the `download` phase unconditionally, so the commit pass would have reset the GUI's progress to zero at the moment installing began; `$SYS_LOG`'s `tee` truncates, so the second pass would have erased the first's evidence; and §2.2 read `194225024 bytes missing` as bytes *received*. **§6 and §8 flatly contradicted each other** on whether `updater.py` changes — settled by gating the control rather than rewording the sentence, filed as **ONEUP-0095** at the user's request during the loop. **Two of the author's own hypotheses about the motivating failure were falsified mid-loop** (mirror striping, then libzypp's 180 s `download.transfer_timeout` — both reproduced the failure unchanged), so §2.2 now states the shape of the failure and explicitly declines to claim a diagnosis; the item is deliberately independent of ONEUP-0094's outcome. The document left this loop at 465 lines, up from 316. |
