@@ -148,6 +148,15 @@ measurement and the exact shape of the rule are in the document named beside eac
   user-facing design decision, and it is about focus *highlighting* only — ordinary
   borders are fine. `docs/standards/ui-and-accessibility.md` §5.
 
+- **Rewriting a repository URL must never touch the alias — the alias is the cache key.**
+  libzypp keys `/var/cache/zypp/packages/<alias>/` by repository alias, and an openSUSE
+  repo's alias usually *contains* the host name (`download.opensuse.org-oss`), so a
+  blanket substitution renames it and silently discards every package already downloaded —
+  defeating ONEUP-0087 on the one path where the kept cache matters most. Anchor the
+  substitution to `baseurl=` lines. Nothing in the code announces this; it was found by
+  running `zypper --reposd-dir` against a copy and reading the aliases back —
+  `docs/specs/ONEUP-0094-download-recovery.md` §4.2.
+
 - **`.roadmap-counter` is git-ignored on purpose**, because a tracked one-line counter
   makes every branch that allocates an ID conflict. On a fresh clone it is absent and
   appending a bullet refuses rather than restarting at 1 —

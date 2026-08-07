@@ -2017,8 +2017,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Sources: en.opensuse.org/openSUSE:Standards_Zypper_Xml ;
   github.com/openSUSE/zypper/blob/master/src/output/xmlout.rnc
 
-- 📋 [ONEUP-0094] **Retry a truncated download with mirror striping disabled.**
-  Observed twice on 2026-08-07, both times on kernel-default-7.1.6:
+- 🚧 [ONEUP-0094] **Retry a truncated download with mirror striping disabled.**
+  Observed twice THROUGH ONEUP on 2026-08-07 (four reproductions in total --
+  ONEUP-0085 section 2.2), both times on kernel-default-7.1.6:
     [Error: "end of response with 194225024 bytes missing", trying next mirror.]
     [Error: "The requested URL returned error: 404"]
   while the SAME file returned HTTP 200 from downloadcontent.opensuse.org.
@@ -2042,7 +2043,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Sources: github.com/systemd/mkosi/issues/4365 ;
   github.com/openSUSE/zypper/issues/478 ; github.com/Firstyear/mirrorsorcerer
   **Layman:** Updates failed twice on the same package because openSUSE's mirrors were out of sync; OneUp could recover from that by itself.
-  Kind: enhancement.
+  Kind: fix.
   Source: user-report-2026-08-07.
   DIAGNOSED (2026-08-07) -- and the earlier hypotheses in this bullet were
   wrong. It is not mirror striping and not a timeout. openSUSE serves packages
@@ -2096,6 +2097,30 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Price (a) first: it is reversible, needs no consent, and fixes the observed
   failure. Treat (b) as a separate decision with its own bullet if (a) proves
   insufficient.
+  Specced 2026-08-07 as docs/specs/ONEUP-0094-download-recovery.md; converged by cap
+  after 3 cold-eyes loops (22 + 22 + 22 verified, 2 dismissed, all fixed).
+
+  Two corrections this bullet owes, both established by that spec's section 2.3:
+  * ZYPP_MULTICURL does NOT exist in libzypp 17.38.14 -- `strings /usr/lib64/libzypp.so.*
+    | grep -c '^ZYPP_MULTICURL$'` returns 0. The claim above that "the run that failed
+    twice through OneUp completed under ZYPP_MULTICURL=0" cannot be a causal one: the
+    variable is inert on this libzypp, and ONEUP-0085 section 2.2 independently records
+    the same setting failing identically. The measurement is real; the attribution is not.
+    The retry-with-striping-disabled proposal is therefore withdrawn.
+  * Kind is corrected from `enhancement` to `fix`. Under the freeze (workflow.md 1.2) that
+    distinction decides where the work may land, and the 1.1 test is met: the update
+    installs nothing at all, so people cannot use OneUp to install system updates.
+  * "Observed twice on 2026-08-07" is right for runs through OneUp and undercounts the
+    four reproductions ONEUP-0085 section 2.2 records. ONEUP-0096 carries the same
+    phrasing.
+
+  What ships instead: on a transfer-shaped download failure, the engine retries the
+  download pass ONCE against downloadcontentcdn.opensuse.org, by copying the repository
+  definitions to a temporary directory, rewriting only `baseurl=` lines for that one host,
+  and pointing zypper at the copy with --reposd-dir. Aliases are untouched, so the package
+  cache ONEUP-0087 keeps is reused. This is option (a)'s intent without OneUp ever
+  fetching or placing an rpm itself -- zypper does the fetch, so libzypp still verifies
+  every checksum and signature.
 
 - 📋 [ONEUP-0095] **Disable Stop while stopping is not possible, instead of accepting a click that does nothing.**
   Today Stop is enabled for the whole of a real run (set_controls_enabled shows
@@ -2144,7 +2169,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
     DownloadInHeaps:   "Similar to DownloadInAdvance, but try to split the
       transaction into heaps, where at the end of each heap a consistent
       system state is reached."
-  Consequence, observed twice on 2026-08-07: 82 packages preloaded, ONE
+  Consequence, observed twice through OneUp on 2026-08-07: 82 packages preloaded, ONE
   (kernel-default, routed to the slow non-CDN origin -- ONEUP-0094) could not
   be fetched, and the transaction installed NOTHING. Under heaps the earlier
   heaps would have committed and only the kernel's heap would have failed.

@@ -61,6 +61,25 @@ echo "Filesystem     1B-blocks        Used   Available Capacity Mounted on"
 echo "/dev/mock  1099511627776 10995116277 500000000000       3% ${*: -1}"
 EOF
     chmod +x "$d"/*
+    # ONEUP-0094: the download-recovery trigger reads the repository definitions, and
+    # run_engine points ONEUP_REPOS_DIR here. Seeded rather than left empty on purpose —
+    # recovery declines when no download.opensuse.org baseurl is present, so an empty
+    # directory would make every recovery scenario silently exercise the SKIP path while
+    # looking like it tested recovery. The alias deliberately contains the host name: an
+    # unanchored rewrite renames it, which is the cache-losing bug INV-3 exists to catch.
+    mkdir -p "$d/repos.d"
+    cat > "$d/repos.d/oss.repo" <<'EOF'
+[download.opensuse.org-oss]
+name=Main Repository (OSS)
+enabled=1
+baseurl=http://download.opensuse.org/tumbleweed/repo/oss/
+EOF
+    cat > "$d/repos.d/packman.repo" <<'EOF'
+[packman]
+name=Packman
+enabled=1
+baseurl=https://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Tumbleweed/
+EOF
 }
 
 # Overwrite setup_common's sudo with one whose credential is already warm.
@@ -103,6 +122,7 @@ run_engine() {
         ONEUP_RUN_STATE="${ONEUP_RUN_STATE:-$mockdir/run.state}" \
         ONEUP_STOP_FILE="${ONEUP_STOP_FILE:-$mockdir/stop.request}" \
         ONEUP_INHIBITED="${ONEUP_INHIBITED-1}" \
+        ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}" \
         bash "$ENGINE" "$@" --log="$mockdir/run.log" 2>&1
 }
 
@@ -2196,6 +2216,203 @@ check "picker lists an older snapshot" \
     "@@SNAPSHOT_ITEM@@|98|2026-07-20 09:00:00|OneUp pre-update 2026-07-20 09:00" "$out"
 check_absent "picker skips snapshot 0 (the live 'current' entry)" "@@SNAPSHOT_ITEM@@|0|" "$out"
 rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0094 — a truncated download recovers itself instead of failing the update
+# ---------------------------------------------------------------------------
+# One mock shape serves every scenario below. $1 is what the FIRST --download-only prints,
+# $2 its exit status, $3/$4 the same for the second. Every --download-only call appends a
+# line to dl-calls, and every call records its full argv in argv.log — the two files the
+# invariants assert on.
+mk_recovery_zypper() {   # dir, first-output, first-rc, second-output, second-rc
+    local d="$1" o1="$2" rc1="$3" o2="$4" rc2="$5"
+    cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$d/argv.log"
+case "\$*" in
+  *refresh*) exit 0 ;;
+  *download-only*)
+      echo "call" >> "$d/dl-calls"
+      n=\$(wc -l < "$d/dl-calls")
+      if [[ "\$n" == "1" ]]; then
+          echo "$o1"; exit $rc1
+      else
+          # Capture the repository directory the retry was pointed at, BEFORE the engine
+          # deletes it — INV-9 requires it gone by the time the run ends, so a post-run
+          # assertion against it could only pass by INV-9 being broken.
+          for ((i=1; i<=\$#; i++)); do
+              if [[ "\${!i}" == "--reposd-dir" ]]; then
+                  j=\$((i+1)); cp -r "\${!j}" "$d/reposd-capture"
+                  echo "\${!j}" > "$d/reposd-path"
+              fi
+          done
+          echo "$o2"; exit $rc2
+      fi ;;
+  *dup*|*update*) echo "1 packages to upgrade."; echo "( 1/1) Installing: demo-1.0.x86_64 [...done]"; exit 0 ;;
+  *clean*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+    chmod +x "$d/zypper"
+}
+dl_calls() { wc -l < "$1/dl-calls" 2>/dev/null | tr -d ' '; }
+
+echo "TEST: a transfer failure recovers via the CDN and says so (ONEUP-0094 INV-7)"
+d=$(mktemp -d); setup_common "$d"
+mk_recovery_zypper "$d" "Preloading: demo-1.0.x86_64.rpm [end of response with 999 bytes missing]" 1 \
+                        "Preloading: demo-1.0.x86_64.rpm [done]" 0
+# INV-4's before-picture. Listing AND digests: the digests name each .repo, so the listing
+# is what covers a non-.repo file being added or removed.
+repos_before="$(ls -1 "$d/repos.d"; md5sum "$d/repos.d"/*.repo)"
+out=$(run_engine "$d" --steps=system)
+check        "the step succeeds after the retry"      "@@STEP_END@@|system|ok" "$out"
+check        "and the user is told how"               "@@HINT@@|Recovered from a failed download" "$out"
+check        "the hint names the CDN in plain words"  "content delivery network" "$out"
+if [[ "$(dl_calls "$d")" == "2" ]]; then
+    echo "  ok   - the download pass ran exactly twice"; PASS=$((PASS+1))
+else
+    echo "  FAIL - expected 2 download passes, got $(dl_calls "$d")"; FAIL=$((FAIL+1))
+fi
+# INV-6's behavioural half: the count of system_txn_argv callers cannot see a retry that
+# inlines its own argv, but this can — the flag must reach BOTH passes, or the engine
+# downloads one set of packages and installs another.
+if [[ "$(grep -c -- '--reposd-dir' "$d/argv.log")" == "2" ]]; then
+    echo "  ok   - both the retry download and the commit carry --reposd-dir"; PASS=$((PASS+1))
+else
+    echo "  FAIL - --reposd-dir reached $(grep -c -- '--reposd-dir' "$d/argv.log") invocation(s), expected 2"; FAIL=$((FAIL+1))
+fi
+# INV-3 / INV-5 / INV-10: the alias is the cache key, so it must survive the rewrite.
+if grep -q '^\[download.opensuse.org-oss\]' "$d/reposd-capture/oss.repo"; then
+    echo "  ok   - the repository alias is unchanged (the package cache is kept)"; PASS=$((PASS+1))
+else
+    echo "  FAIL - the rewrite renamed the alias, which moves the package cache"; FAIL=$((FAIL+1))
+fi
+check        "the openSUSE baseurl points at the CDN" \
+    "baseurl=http://downloadcontentcdn.opensuse.org/tumbleweed/repo/oss/" "$(cat "$d/reposd-capture/oss.repo")"
+check        "the third-party baseurl is untouched" \
+    "baseurl=https://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Tumbleweed/" "$(cat "$d/reposd-capture/packman.repo")"
+# INV-4: the real directory is never written to. A rewrite applied in place instead of to
+# a copy would permanently repoint the user's machine at one host.
+if [[ "$(ls -1 "$d/repos.d"; md5sum "$d/repos.d"/*.repo)" == "$repos_before" ]]; then
+    echo "  ok   - the real repository directory was never modified"; PASS=$((PASS+1))
+else
+    echo "  FAIL - the engine rewrote the user's own repository files"; FAIL=$((FAIL+1))
+fi
+# INV-9: the temporary directory does not outlive the run — success path.
+if [[ ! -e "$(cat "$d/reposd-path")" ]]; then
+    echo "  ok   - the temporary repository directory is gone (success path)"; PASS=$((PASS+1))
+else
+    echo "  FAIL - a temporary repository directory leaked into /tmp"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+
+echo "TEST: recovery is attempted once, and names the package when it fails (INV-2, INV-11)"
+d=$(mktemp -d); setup_common "$d"
+mk_recovery_zypper "$d" "Preloading: demo-1.0.x86_64.rpm [end of response with 999 bytes missing]" 1 \
+                        "Preloading: other-2.0.x86_64.rpm [end of response with 999 bytes missing]" 1
+out=$(run_engine "$d" --steps=system)
+check        "a failed recovery still fails the step"  "@@STEP_END@@|system|fail" "$out"
+if [[ "$(dl_calls "$d")" == "2" ]]; then
+    echo "  ok   - recovery is attempted exactly once, never in a loop"; PASS=$((PASS+1))
+else
+    echo "  FAIL - expected 2 download passes, got $(dl_calls "$d")"; FAIL=$((FAIL+1))
+fi
+# INV-11: the name comes from the FIRST attempt, which only the snapshot still holds —
+# the retry's `tee` truncated the live log.
+check        "the hint names the package from the first attempt" \
+    "Could not download demo-1.0.x86_64.rpm" "$out"
+check_absent "and not the generic connection advice" \
+    "check your internet connection" "$out"
+if [[ ! -e "$(cat "$d/reposd-path")" ]]; then
+    echo "  ok   - the temporary repository directory is gone (failure path)"; PASS=$((PASS+1))
+else
+    echo "  FAIL - a temporary repository directory leaked after a failed recovery"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+
+echo "TEST: recovery only fires on a transfer-shaped failure (ONEUP-0094 INV-1)"
+# (a) a signature in NEITHER list — only the positive test can suppress recovery here.
+d=$(mktemp -d); setup_common "$d"
+mk_recovery_zypper "$d" "Installation aborted by user" 1 "unused" 0
+out=$(run_engine "$d" --steps=system)
+check        "a non-transfer failure fails the step"   "@@STEP_END@@|system|fail" "$out"
+if [[ "$(dl_calls "$d")" == "1" ]]; then
+    echo "  ok   - no retry for a failure recovery cannot help"; PASS=$((PASS+1))
+else
+    echo "  FAIL - retried a non-transfer failure ($(dl_calls "$d") passes)"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+# (b) BOTH signatures present — the exclusion must still win, which a single-signature
+# fixture can never show.
+d=$(mktemp -d); setup_common "$d"
+mk_recovery_zypper "$d" "Preloading: demo.rpm [end of response with 999 bytes missing]
+No space left on device" 1 "unused" 0
+out=$(run_engine "$d" --steps=system)
+if [[ "$(dl_calls "$d")" == "1" ]]; then
+    echo "  ok   - the exclusion wins when both signatures appear"; PASS=$((PASS+1))
+else
+    echo "  FAIL - retried a disk-full failure ($(dl_calls "$d") passes)"; FAIL=$((FAIL+1))
+fi
+check        "and the disk-full hint still reaches the user" "Ran out of disk space" "$out"
+rm -rf "$d"
+
+echo "TEST: a stop is not answered with another download (ONEUP-0094 INV-8)"
+d=$(mktemp -d); setup_common "$d"
+# The mock creates the stop request itself: stop_pending's staleness rule is
+# `$stop_file -nt $run_state`, so a stop file touched before the engine starts is OLDER
+# than the run.state the engine writes and would never register.
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *refresh*) exit 0 ;;
+  *download-only*)
+      echo "call" >> "$d/dl-calls"
+      touch "$d/stop.request"
+      echo "Preloading: demo-1.0.x86_64.rpm [end of response with 999 bytes missing]"
+      exit 1 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(ONEUP_STOP_FILE="$d/stop.request" run_engine "$d" --steps=system)
+if [[ "$(dl_calls "$d")" == "1" ]]; then
+    echo "  ok   - a user who pressed Stop is not given a second download"; PASS=$((PASS+1))
+else
+    echo "  FAIL - retried after the user asked to stop ($(dl_calls "$d") passes)"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+
+echo "TEST: nothing to redirect means no retry (ONEUP-0094 §6, first row)"
+d=$(mktemp -d); setup_common "$d"
+# A machine on a purely local mirror: no download.opensuse.org baseurl anywhere.
+rm -f "$d/repos.d/oss.repo"
+mk_recovery_zypper "$d" "Preloading: demo.rpm [end of response with 999 bytes missing]" 1 "unused" 0
+out=$(run_engine "$d" --steps=system)
+if [[ "$(dl_calls "$d")" == "1" ]]; then
+    echo "  ok   - recovery declines when there is no openSUSE baseurl to redirect"; PASS=$((PASS+1))
+else
+    echo "  FAIL - retried with nothing to redirect ($(dl_calls "$d") passes)"; FAIL=$((FAIL+1))
+fi
+check        "the original failure is still reported"  "@@STEP_END@@|system|fail" "$out"
+rm -rf "$d"
+
+echo "TEST: the recovery host openSUSE serves is still there (ONEUP-0094 T-1)"
+# Network-dependent, so it is opt-in — testing.md §2 forbids a test that depends on the
+# state of the machine it runs on, and that includes its connection. local-CI.sh sets
+# ONEUP_TEST_NETWORK=1; the pre-push hook and the release workflow do not. The SKIP is
+# LOUD on purpose (ONEUP-0068): an opt-in nobody opts into catches nothing, and a silent
+# skip would let recovery go quietly inert the day openSUSE retires the host.
+if [[ "${ONEUP_TEST_NETWORK:-0}" == "1" ]]; then
+    code=$(curl -s -o /dev/null -m 20 -w '%{http_code}' \
+        https://downloadcontentcdn.opensuse.org/tumbleweed/repo/oss/repodata/repomd.xml 2>/dev/null || echo 000)
+    if [[ "$code" == "200" ]]; then
+        echo "  ok   - downloadcontentcdn.opensuse.org still serves repository metadata"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - the recovery host answered HTTP $code; download recovery is now inert"; FAIL=$((FAIL+1))
+    fi
+else
+    echo "  SKIP - T-1 needs the network; set ONEUP_TEST_NETWORK=1 to run it"
+fi
 
 echo
 echo "======================================"

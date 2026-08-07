@@ -99,7 +99,7 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@DISK@@` | `warn\|mount\|free` | pre-flight | `handle_marker` |
 | `@@REPO@@` | `warn\|duplicate\|urls` | pre-flight | `handle_marker` |
 | `@@REPO_SKIPPED@@` | `alias\|reason` | the skip path | `handle_marker` |
-| `@@HINT@@` | `plain-English sentence` | anywhere a failure is reported | `handle_marker` |
+| `@@HINT@@` | `plain-English sentence` | anywhere a step outcome needs explaining — **either** outcome | `handle_marker` |
 | `@@REMEDY@@` | `import-keys` *or* `skip-repo\|alias` | the system step; `refresh_repos` | `handle_marker` |
 | `@@SERVICES@@` | `svc1 svc2 …` | the summary | `handle_marker` |
 | `@@INSTALLED@@` | `count\|sys_changed\|fw_changed` | the summary | `handle_marker` |

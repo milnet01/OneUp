@@ -29,8 +29,12 @@ bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=1; }
 skip() { printf '  --   skip %s (%s)\n' "$1" "$2"; }
 
 # --- engine test suite (same script CI should gate on) ----------------------
+# ONEUP_TEST_NETWORK=1 opts in to the network-dependent checks (ONEUP-0094 T-1: the
+# download-recovery host is still served). This is the run that owns them — the pre-push
+# hook and the release workflow deliberately do not set it, so neither can be broken by
+# somebody else's outage.
 step "Engine test suite"
-if bash tests/run-tests.sh >/tmp/local-ci-tests.log 2>&1; then
+if ONEUP_TEST_NETWORK=1 bash tests/run-tests.sh >/tmp/local-ci-tests.log 2>&1; then
     ok "tests/run-tests.sh — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' /tmp/local-ci-tests.log | tail -1)"
 else
     bad "tests/run-tests.sh"; tail -25 /tmp/local-ci-tests.log

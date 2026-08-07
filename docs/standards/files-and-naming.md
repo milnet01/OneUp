@@ -206,6 +206,7 @@ Every environment override that exists, and every path that has none:
 | Passwordless-auth drop-in | `/etc/sudoers.d/oneup` | engine | `ONEUP_AUTH_FILE` |
 | Graphical password helper | `/usr/libexec/ssh/ksshaskpass` | engine | `ONEUP_ASKPASS` |
 | Per-repository refresh budget | `120` seconds | engine | `ONEUP_REFRESH_TIMEOUT` |
+| Repository definitions | `/etc/zypp/repos.d` | engine | `ONEUP_REPOS_DIR` — **engine only** |
 | Engine's user-visible log dir | `~/Documents/update-logs` | engine | **none** |
 | GUI's log dir | `~/.local/state/oneup/logs` | GUI | **none** |
 | Run history | `~/.local/state/oneup/history.json` | GUI | **none** |
@@ -214,8 +215,16 @@ Every environment override that exists, and every path that has none:
 were true would have misled the 2.0 implementer.** What is actually true:
 
 - **The engine is isolated by environment variable.** `run_engine` in
-  `tests/run-tests.sh` sets the first three unless the scenario sets them itself;
-  scenarios that need `ONEUP_AUTH_FILE` set it themselves.
+  `tests/run-tests.sh` sets the first three, plus `ONEUP_REPOS_DIR`, unless the scenario
+  sets them itself; scenarios that need `ONEUP_AUTH_FILE` set it themselves.
+  `ONEUP_REPOS_DIR` is seeded by `setup_common` rather than left empty, because download
+  recovery declines when no `download.opensuse.org` baseurl is present — an empty
+  directory would make every recovery scenario exercise the skip path while appearing to
+  test recovery.
+- **`ONEUP_TEST_NETWORK` is not in the table above, because it is not an engine
+  override.** It is read by `tests/run-tests.sh` alone, and opts in to the network-dependent
+  checks (ONEUP-0094 T-1). `local-CI.sh` sets it; the pre-push hook and the release
+  workflow deliberately do not, so neither can be failed by somebody else's outage.
 - **The GUI is isolated by rewriting `HOME`.** `tests/gui-smoke.py`'s sandbox block sets
   `HOME` to a throwaway directory *before* `updater` is imported, because the GUI's paths
   are module-level constants (`STATE_DIR`, `LOG_DIR`, `RUN_STATE`, `STOP_REQUEST`)

@@ -6,6 +6,19 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **An update no longer fails because one package refused to download.** (ONEUP-0094)
+  openSUSE spreads its packages across mirrors, and for a brand-new update
+  it can send one file to a server that is too slow to finish sending it.
+  When that happened the whole update was thrown away — 82 packages
+  downloaded, one that would not arrive, and nothing installed. OneUp now
+  notices that kind of failure and quietly fetches the packages again from
+  openSUSE's content delivery network, which always has them, and the
+  update finishes. If that does not work either, it names the package that
+  would not come down instead of telling you to check an internet
+  connection that is fine.
+
 ## [1.4.1] - 2026-08-07
 
 ### Added

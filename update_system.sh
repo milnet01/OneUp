@@ -89,6 +89,22 @@ SYS_STOPPED=false     # set when the user stopped during/after the download pass
                       # a SKIP rather than a failure — nothing was installed.
 SYS_DL_RC=0           # the download pass's exit status; 143 (128+SIGTERM) means stopped.
 declare -a SYS_TXN=() # the transaction argv, built once by system_txn_argv (INV-5).
+REPOS_DIR="${ONEUP_REPOS_DIR:-/etc/zypp/repos.d}"  # where repository definitions are read
+                      # from. Overridable so the suite never reads — or depends on — the
+                      # repository list of the machine it runs on (testing.md §2).
+REPOSD_OVERRIDE=""    # non-empty only during download recovery: the temporary copy of
+                      # REPOS_DIR whose openSUSE baseurls point at the content CDN
+                      # (ONEUP-0094). Cleared on every exit from run_system_upgrade.
+CDN_REPOSD_DIR=""     # the same directory, kept for CLEANUP after REPOSD_OVERRIDE is
+                      # cleared — two variables because the flag's lifetime (one
+                      # transaction) is shorter than the directory's (the whole step).
+DL_RECOVERY_TRIED=false  # recovery was ATTEMPTED this run — not that it succeeded.
+DL_RETRY_FAILED=false    # recovery ran and its download pass failed. What the hint arm
+                      # guards on: DL_RECOVERY_TRIED is still true when the retry worked
+                      # and the commit then failed, and announcing "nothing was installed"
+                      # there would be a silent wrong answer (workflow.md §1.1).
+SYS_LOG_FIRST=""      # snapshot of the first attempt's log. The retry's `tee` truncates
+                      # SYS_LOG, so the failing package's name only survives here.
 REFRESH_TIMEOUT="${ONEUP_REFRESH_TIMEOUT:-120}"   # per-repository refresh budget, seconds.
                       # zypper has no timeout of its own: a mirror trickling metadata at
                       # 1 KB/s once held a run for hours with nothing on screen. Overridable
@@ -494,12 +510,18 @@ run_check() {
 # gives about sudo_init: that dispatch calls run_size and then exits, so anything defined
 # further down the file has never been executed and does not exist yet.
 system_txn_argv() {
+    # BOTH arms take --reposd-dir, or download recovery would be a no-op on Leap while
+    # working on Tumbleweed — a retry byte-identical to the attempt that just failed
+    # (ONEUP-0094 §4.3). An explicitly-empty array rather than ${VAR:+…}: it keeps a
+    # spaced path intact and is safe under `set -u`.
+    local -a reposd=()
+    [[ -n "$REPOSD_OVERRIDE" ]] && reposd=(--reposd-dir "$REPOSD_OVERRIDE")
     if [[ -f /etc/os-release ]] && grep -q "Leap" /etc/os-release; then
-        SYS_TXN=(zypper --non-interactive update)
+        SYS_TXN=(zypper --non-interactive "${reposd[@]}" update)
     else
         # Tumbleweed: --allow-vendor-change lets Packman codec packages update
         # cleanly; without it the upgrade stalls on vendor conflicts.
-        SYS_TXN=(zypper --non-interactive dup --allow-vendor-change)
+        SYS_TXN=(zypper --non-interactive "${reposd[@]}" dup --allow-vendor-change)
     fi
 }
 
@@ -1262,17 +1284,78 @@ run_system_commit() {
     [[ ${PIPESTATUS[0]} -eq 0 ]] || ok=false
 }
 
-run_system_upgrade() {   # runs the transaction into $SYS_LOG (truncates it); sets global `ok`
+# Build a copy of REPOS_DIR whose openSUSE baseurls point at the content CDN, and echo its
+# path. Empty output means there was nothing to redirect, or the copy failed — either way
+# the caller reports the original failure (ONEUP-0094 §4.5).
+#
+# Only `baseurl=` lines are rewritten, and the `I` flags are the case-insensitivity the
+# probe above assumes. Rewriting the whole file would also rename the [alias] header, and
+# libzypp keys /var/cache/zypp/packages by ALIAS — so a renamed repository throws away
+# every package already downloaded, which is exactly what ONEUP-0087 exists to keep.
+# metalink=/mirrorlist= are deliberately untouched: they ARE the mirror selection this is
+# recovering from.
+make_cdn_reposd() {
+    local dir
+    dir=$(mktemp -d) || return 0                      # 0700 by default; root only reads it
+    cp "$REPOS_DIR"/*.repo "$dir"/ 2>/dev/null || { rm -rf "$dir"; return 0; }
+    sed -i -E '/^baseurl[[:space:]]*=/I s#(https?://)download\.opensuse\.org#\1downloadcontentcdn.opensuse.org#I' \
+        "$dir"/*.repo 2>/dev/null || { rm -rf "$dir"; return 0; }
+    printf '%s' "$dir"
+}
+
+_run_system_upgrade_inner() {
     # Split into a download pass and a commit pass so a stop can land during the long,
     # network-bound half. The rpm transaction itself is as uninterruptible as it ever was.
     SYS_DL_RC=0
     run_system_download
-    $ok || return 0                      # a real download failure — caller reports it
+    if ! $ok; then
+        # ONEUP-0094: openSUSE's mirror routing can send one package to a host that will
+        # not serve it, and one unfetchable file discards the whole transaction. Retry the
+        # DOWNLOAD pass once against the content CDN, which answers directly instead of
+        # selecting a mirror that may not have the file yet. Runs BEFORE the caller's
+        # repo-scoped probe: that probe's remedy is to disable a repository, and a transfer
+        # failure is the one case where doing so throws away a working source.
+        if ! $DL_RECOVERY_TRIED && ! stop_pending \
+           && grep -qiE 'bytes missing|returned error: 404|Download.*failed|Curl error|connection failed' "$SYS_LOG" \
+           && ! grep -qiE 'No space left|disk full|conflict|nothing provides|not installable|signature|GPG' "$SYS_LOG" \
+           && grep -qiE '^baseurl[[:space:]]*=[[:space:]]*https?://download\.opensuse\.org' \
+                        "$REPOS_DIR"/*.repo 2>/dev/null
+        then
+            # Command substitution is safe here only because make_cdn_reposd runs NOTHING
+            # privileged — a sudo inside a subshell re-authenticates (security.md §2.2).
+            local cdn_dir
+            cdn_dir=$(make_cdn_reposd)
+            if [[ -n "$cdn_dir" ]]; then
+                CDN_REPOSD_DIR="$cdn_dir"     # cleanup handle; outlives REPOSD_OVERRIDE
+                DL_RECOVERY_TRIED=true
+                SYS_LOG_FIRST=$(mktemp)   # the retry's `tee` truncates SYS_LOG
+                cp "$SYS_LOG" "$SYS_LOG_FIRST" 2>/dev/null || true
+                REPOSD_OVERRIDE="$cdn_dir"
+                echo "  Recovery: retrying downloads via downloadcontentcdn.opensuse.org (repositories copied to $cdn_dir)"
+                SYS_DL_RC=0
+                run_system_download
+                $ok || DL_RETRY_FAILED=true
+            fi
+        fi
+        $ok || return 0                  # a real download failure — caller reports it
+    fi
     if (( SYS_DL_RC == 143 )) || stop_pending; then
         SYS_STOPPED=true                 # the third safe boundary (ONEUP-0085 §4.2)
         return 0
     fi
     run_system_commit
+}
+
+# The wrapper exists for one reason: the inner function has three exits, and
+# REPOSD_OVERRIDE must be cleared on all of them. The caller's repo-skip path can call this
+# a third time after disabling a repository — and `disable_repo` edits the REAL directory,
+# so an attempt still reading the redirected copy would not see the repository that was
+# just disabled (ONEUP-0094 §4.1).
+run_system_upgrade() {   # runs the transaction into $SYS_LOG (truncates it); sets global `ok`
+    _run_system_upgrade_inner
+    local rc=$?
+    REPOSD_OVERRIDE=""
+    return $rc
 }
 
 echo
@@ -1328,7 +1411,8 @@ if step_selected system && ! stop_pending; then
     # transaction the user just stopped.
     if $SYS_STOPPED; then
         end_step system skip "stopped before installing anything"
-        rm -f "$SYS_LOG" "$PROGRESS_SEEN_FILE"
+        rm -f "$SYS_LOG" "$PROGRESS_SEEN_FILE" "$SYS_LOG_FIRST"
+        [[ -n "$CDN_REPOSD_DIR" ]] && rm -rf "$CDN_REPOSD_DIR"   # rm -f cannot remove a dir
     else
     # Repo resilience: a repo-scoped failure (bad signature / unreachable / corrupt
     # metadata on ONE source) need not sink the whole run. Only probe when we
@@ -1401,11 +1485,39 @@ if step_selected system && ! stop_pending; then
             echo "  Note: $note"
             marker HINT "$note"
         fi
+        # ONEUP-0094: the update only completed because the download was retried against
+        # the CDN. Say so — this hint reports a run that already succeeded, so unlike the
+        # failure hints it has nothing for the user to do.
+        if $DL_RECOVERY_TRIED && ! $DL_RETRY_FAILED; then
+            note="Recovered from a failed download — some packages were fetched from openSUSE's content delivery network instead of the mirror that failed."
+            echo "  Note: $note"
+            marker HINT "$note"
+        fi
     else
         # Turn the most common zypper failures into one plain-English line.
         hint=""
         if $systemic_repo_fail; then
             hint="Several repositories are failing at once — likely a network or system problem, not a single bad source. Check your connection and retry."
+        elif $DL_RETRY_FAILED \
+             && grep -qiE 'bytes missing|returned error: 404|Download.*failed|Curl error|connection failed' "$SYS_LOG"; then
+            # ONEUP-0094: recovery ran and the download still failed. Guarded on
+            # DL_RETRY_FAILED rather than DL_RECOVERY_TRIED — the latter is still true when
+            # the retry SUCCEEDED and the commit then failed, where "nothing was installed"
+            # would be a lie. The log is re-tested so a retry that died of a full disk still
+            # reaches the disk-full arm below.
+            #
+            # Name the package from the FIRST attempt's snapshot: the retry's `tee`
+            # truncated SYS_LOG. A bracketed clause that is neither "done" nor "already in
+            # cache" is the failure; anything else and we drop the clause rather than
+            # print an empty one.
+            failed_pkg=$(grep -oE '^(Preloading|Retrieving): [^ ]+ \[[^]]*\]' "$SYS_LOG_FIRST" 2>/dev/null \
+                         | grep -viE '\[(done|already in cache)\]' \
+                         | head -1 | awk '{print $2}')
+            if [[ -n "$failed_pkg" ]]; then
+                hint="Could not download $failed_pkg — openSUSE's servers are still catching up with this update. Nothing was installed and everything already downloaded has been kept; try again later."
+            else
+                hint="A package could not be downloaded — openSUSE's servers are still catching up with this update. Nothing was installed and everything already downloaded has been kept; try again later."
+            fi
         elif grep -qiE 'No space left|disk full' "$SYS_LOG"; then
             hint="Ran out of disk space — free some room (clear the package cache, delete old snapshots) and retry."
         elif grep -qiE 'signature|GPG|key.*(expired|reject)' "$SYS_LOG"; then
@@ -1430,7 +1542,8 @@ if step_selected system && ! stop_pending; then
         fi
         end_step system fail "zypper reported an error"
     fi
-    rm -f "$SYS_LOG" "$PROGRESS_SEEN_FILE"
+    rm -f "$SYS_LOG" "$PROGRESS_SEEN_FILE" "$SYS_LOG_FIRST"
+    [[ -n "$CDN_REPOSD_DIR" ]] && rm -rf "$CDN_REPOSD_DIR"   # rm -f cannot remove a dir
     fi      # closes the SYS_STOPPED guard (ONEUP-0085's third safe boundary)
     fi      # closes the stop_pending guard above the transaction
 fi
