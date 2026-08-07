@@ -327,10 +327,12 @@ source line numbers, so a freshness gate would fail on every unrelated edit.
 
 **The second GUI pass is a second process, not a second function.** A `QApplication` exists
 once per process and `-reverse` is read at construction, so the suite is run twice from the
-outside. That doubles everything the suite already does per run — including the live
-`api.github.com` requests `docs/standards/testing.md` §2.3 records as a defect
-(ONEUP-0067). Fixing that is not this item's, but doubling it is this item's doing, and
-that is the argument for landing ONEUP-0067 first.
+outside. That doubles everything the suite already does per run — which used to include the
+live `api.github.com` requests `docs/standards/testing.md` §2.3 recorded as a defect, and
+was the argument for landing ONEUP-0067 before this item. **That argument is discharged:**
+ONEUP-0090 fixed it, the suite stubs `_check_app_update` before its first window, and
+doubling a run now doubles no network traffic. What doubles is the run's wall-clock cost
+and its teardown noise, and this item owns both.
 
 ## 8. Docs & release
 

@@ -1238,7 +1238,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: doc-fix.
   Source: in-session-2026-07-26 (ONEUP-0057 Task 9, writing the marker reference).
 
-- 📋 [ONEUP-0067] **Stop the GUI smoke suite making live GitHub requests.**
+- ✅ [ONEUP-0067] **Stop the GUI smoke suite making live GitHub requests.**
   Updater.__init__ calls _check_app_update() unconditionally, which issues
   a QNetworkAccessManager GET to api.github.com/repos/<slug>/releases/latest.
   tests/gui-smoke.py constructs updater.Updater() 49 times and stubs
@@ -1259,6 +1259,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The window's test run quietly phones GitHub 49 times to ask whether a newer OneUp exists.
   Kind: test.
   Source: cold-eyes-2026-07-26 batch 1, testing-standard lane CRITICAL.
+  Resolved (2026-08-07): fixed, but not under this ID — the same defect was
+  re-filed as ONEUP-0090 when it bit for real (four suite runs exhausted the
+  user's own 60/hour GitHub budget), and 0090 carries the fix. tests/gui-smoke.py
+  now sets Updater._check_app_update to a no-op before its first window, so the
+  count this bullet worried about (49 then, 56 now) is zero. The "fix belongs on
+  v2" line above was overtaken: the stub landed on main inside a6b08b2 and shipped
+  in 1.4.1. Closed as a duplicate rather than deleted, because two IDs described
+  one defect and the record should say which one paid.
 
 - 📋 [ONEUP-0068] **Replace the orphaned-dialog scenario's sleep with a poll, and make its SKIP branch loud.**
   The scenario "an orphaned password dialog is reaped when the run ends"
@@ -1873,7 +1881,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: user-report-2026-08-07.
   Resolved (2026-08-07): shipped in 1.4.1 and cited in that release's CHANGELOG entry; the bullet was left at in-progress. Flipped during the 1.4.2 release sweep, same slip as ONEUP-0085.
 
-- 🚧 [ONEUP-0090] **Stop the GUI suite making 56 live GitHub API calls per run.**
+- ✅ [ONEUP-0090] **Stop the GUI suite making 56 live GitHub API calls per run.**
   Updater.__init__ calls _check_app_update(), and tests/gui-smoke.py constructs 56
   Updater windows, so one suite run fires 56 unauthenticated requests at
   api.github.com. The unauthenticated cap is 60/hour per IP, so a few runs exhaust
@@ -1886,6 +1894,34 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Running the tests used up the daily allowance that the app's own update check needs.
   Kind: test.
   Source: in-session-2026-08-07.
+  Resolved (2026-08-07): tests/gui-smoke.py's main() sets
+  Updater._check_app_update to a no-op before its first updater.Updater(), so a
+  run makes zero requests to api.github.com instead of 56. The stub landed on main
+  inside a6b08b2 and shipped in 1.4.1; what remained, and is what this closure
+  did, was the documentation the fix invalidated.
+
+  Verified rather than assumed: each suite was run inside an empty network
+  namespace (unshare -rn). GUI 307 passed / 0 failed -- identical to its networked
+  result, so nothing in it depended on the connection. Engine 246/0, one below its
+  networked 247 because ONEUP-0094's opt-in T-1 SKIPped loudly, which is T-1
+  working as designed.
+
+  Docs swept: testing.md 2.3 no longer lists the GUI suite as a no-network
+  exception and now records where the stub sits and why that position is the whole
+  of it, plus its "What checks this" row; ONEUP-0064 7 and ONEUP-0032 7 dropped
+  the live-GET cost they inherited (0064 keeps the one obligation that survives --
+  new windows go below the stub, never above); oneup-2.0.md 5 no longer carries
+  ONEUP-0067 as an uncovered gap. ONEUP-0067 was the same defect under an earlier
+  ID and is closed as a duplicate.
+
+  Not fixed here, filed instead: nothing catches a regression -- a window built
+  above the stub line, or a new network call anywhere in the GUI, restores the
+  defect silently. The guard that would catch it (fake QNetworkAccessManager,
+  assert zero requests) is a tests-only change on frozen main, and workflow.md 1.2
+  is explicit that tests-only is a necessary but not sufficient condition and that
+  a third exception is the user's decision, not an inference. Also found while
+  verifying: ONEUP-0097, the pre-push hook opting into T-1's network check that
+  three comments say it opts out of.
 
 - 💭 [ONEUP-0091] **Investigate driving libzypp natively in 2.0 instead of shelling out to zypper.**
   The pull is real: the engine parses zypper's OUTPUT, and that wording is not a
@@ -2241,3 +2277,31 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   as a set.
   Reopen this only if 0085 is ever withdrawn, or if libzypp gains a way to
   distinguish the download and commit phases of a heaps run from outside.
+
+- 📋 [ONEUP-0097] **The pre-push hook opts into the network test it is documented as opting out of.**
+  ONEUP-0094 T-1 asks the real openSUSE content CDN for repository metadata
+  and is gated on ONEUP_TEST_NETWORK=1 so that somebody else's outage cannot
+  fail a run. Three places state the intended split -- local-CI.sh's comment,
+  the scenario's comment in tests/run-tests.sh, and
+  docs/specs/ONEUP-0094-download-recovery.md 7 -- and all three say the same
+  thing: "local-CI.sh sets ONEUP_TEST_NETWORK=1; the pre-push hook and the
+  release workflow do not."
+
+  The release workflow genuinely does not; it runs `bash tests/run-tests.sh`
+  directly. The pre-push hook does, transitively: githooks/pre-push runs
+  `bash "$root/local-CI.sh"`, and local-CI.sh hardcodes
+  `ONEUP_TEST_NETWORK=1 bash tests/run-tests.sh`. So every push through the
+  hook is gated on downloadcontentcdn.opensuse.org being up -- the outcome all
+  three comments say they were avoiding. Nothing has failed yet, which is why
+  it went unnoticed: the host has been up.
+
+  Fix shape (one line, but a push-gate behaviour change, so it is not a
+  freeze-eligible drive-by): make local-CI.sh honour an override --
+  `ONEUP_TEST_NETWORK=${ONEUP_TEST_NETWORK:-1}` -- and have the hook pass 0,
+  or drop the opt-in from local-CI.sh and run T-1 from the release workflow
+  instead. Whichever is chosen, the three comments and the spec change with
+  it; docs/standards/testing.md 2.3 already records the true behaviour and
+  points here.
+  **Layman:** A push can now be blocked by an openSUSE server being down, which is exactly what the setup was meant to prevent.
+  Kind: test.
+  Source: in-session-2026-08-07 (found while closing ONEUP-0090).

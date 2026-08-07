@@ -43,8 +43,11 @@ is better than implying cover.** ONEUP-0060 (pin PySide6 and PyInstaller in the 
 build) is called a 2.0 fix by `docs/standards/security.md`, and **G8 does not check it** — an
 unpinned build builds and launches exactly like a pinned one. ONEUP-0062 (the GUI suite's
 teardown tracebacks) is called a 2.0 fix by `docs/standards/testing.md`, whose §7 traces them
-to `QProcess` parenting that exists today. ONEUP-0067, 0068 and 0069 are test-suite gaps that
+to `QProcess` parenting that exists today. ONEUP-0068 and 0069 are test-suite gaps that
 the freeze will not take on `main` (`workflow.md` §1.2) and that no 2.0 item carries either.
+(ONEUP-0067 was on that list until 2026-08-07, when the GUI suite's live GitHub calls were
+fixed on `main` as ONEUP-0090 — carried in, exactly as this paragraph predicts, by whoever
+was touching the surrounding code.)
 ONEUP-0061 (migrate `QSettings` if the organisation string changes) states its own
 *"requirement for 2.0"* and is likewise on neither list.
 

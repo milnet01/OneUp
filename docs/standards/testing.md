@@ -99,19 +99,39 @@ No test in this repository may:
 - reach the network, including a package mirror, GitHub, or a DNS lookup;
 - write outside its own `mktemp -d` directory or the redirected `HOME`.
 
-**Two known exceptions exist today, and both are defects rather than carve-outs.** They
-are named here because a rule with a silent exception is worse than a rule with a stated
-one:
+**The GUI suite meets the network rule by stubbing, and where the stub sits is the whole of
+it.** `Updater.__init__` calls `_check_app_update`, which issues a `QNetworkAccessManager`
+GET to `api.github.com` for the latest release, and `tests/gui-smoke.py` constructs the
+window 56 times. So `main()` replaces `Updater._check_app_update` with a no-op **before its
+first `updater.Updater()`**. Unauthenticated GitHub allows 60 calls an hour per address:
+before the stub, one run spent 56 of them and a few runs exhausted for real the budget the
+app's own *Check for updates* button needs (**ONEUP-0090**, which also closed the earlier
+duplicate ONEUP-0067). Nothing in the suite asserts on the check or its reply handler, so
+the stub costs no coverage — but a window constructed above that line restores the defect
+silently, and nothing catches that.
 
-- **The GUI suite does reach the network.** `Updater.__init__` calls `_check_app_update`
-  unconditionally, which issues a `QNetworkAccessManager` GET to `api.github.com` for the
-  latest release. `tests/gui-smoke.py` constructs the window **49 times** and stubs
-  nothing, so a run makes 49 live requests — rate-limitable, and silently dependent on a
-  working connection. Filed as **ONEUP-0067**.
-- **The engine suite does not redirect `HOME`.** `update_system.sh` runs
+**Two exceptions exist today. One is a defect and one is a deliberate carve-out**, and the
+difference between those is the point — a rule with a silent exception is worse than a rule
+with a stated one:
+
+- **The engine suite does not redirect `HOME`.** *A defect.* `update_system.sh` runs
   `mkdir -p "$LOG_DIR"` with `LOG_DIR="$HOME/Documents/update-logs"`, so every scenario
   creates that directory on the real machine. The three `ONEUP_*` paths are redirected;
   `HOME` is not. Filed as **ONEUP-0058**.
+- **One engine scenario reaches the network on purpose.** *A carve-out.* ONEUP-0094's T-1
+  asks the real openSUSE content CDN for a byte range, because the item's whole claim is
+  that a named third-party host answers a request of that shape — a mock would assert only
+  that the mock was written correctly. It is gated on `ONEUP_TEST_NETWORK=1` and SKIPs
+  loudly without it, so the rule above holds for every run that does not opt in — including
+  the release workflow, which invokes `tests/run-tests.sh` directly. **`local-CI.sh` opts
+  in, and `githooks/pre-push` therefore opts in too**, because the hook runs `local-CI.sh`.
+  Three places currently say the hook does *not* — `local-CI.sh`'s own comment, the
+  scenario's comment in `tests/run-tests.sh`, and
+  `docs/specs/ONEUP-0094-download-recovery.md` §7 — and they are wrong: an openSUSE CDN
+  outage fails a push today, which is the outcome all three say they were avoiding. Filed as
+  **ONEUP-0097**; the freeze (`workflow.md` §1.2) is why it is filed rather than fixed here.
+  **A second such scenario needs the same three properties** — a claim about a real external
+  service, an opt-in gate, and a loud SKIP — or it is a breach, not a precedent.
 
 The engine suite creates **75 throwaway directories and removes 75** — one per scenario
 except the keep-alive-guard scenario, which needs none. A scenario adds `rm -rf "$d"` as
@@ -351,7 +371,7 @@ with the layout direction forced right-to-left.
 | §2.2 the GUI suite redirects `HOME` | the redirect is unconditional and module-level in `tests/gui-smoke.py`, so no individual test can forget it. **Nothing checks it still runs *before* `QApplication` is constructed** — and that ordering is the whole point, because `QSettings` resolves its path once and keeps it |
 | §2.3 no root | the mock `PATH`: a real `sudo` is not on it, so a scenario that reaches for one gets the mock or nothing |
 | §2.3 a test writes only inside its own temporary directory | **nothing — the engine suite breaks this.** `update_system.sh` builds `LOG_DIR` from `$HOME`, which `tests/run-tests.sh` does not redirect, so every scenario creates `~/Documents/update-logs` on the real machine (ONEUP-0058) |
-| §2.3 no network | **nothing** — the GUI suite makes 49 live GitHub requests per run (ONEUP-0067) |
+| §2.3 no network | **nothing automated, but the rule now holds.** Verified 2026-08-07 by running each suite inside an empty network namespace (`unshare -rn`): engine **246 passed / 0 failed** with T-1 SKIPping loudly, GUI **307 / 0** — identical to their networked results but for T-1. That is one measurement, not a gate: a *new* network call, or a window constructed above `gui-smoke.py`'s `_check_app_update` stub, would not be caught |
 | §3 a mock fails loudly rather than quietly | several scenarios carry an `exit 99` trap. Nothing checks that a *new* mock has one |
 | §4 one invariant, one test | nothing automatic |
 | §5 the four correctness invariants | `tests/run-tests.sh` — this is what the suite is for, and the reason it exists |

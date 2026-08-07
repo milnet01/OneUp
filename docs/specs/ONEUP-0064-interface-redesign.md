@@ -458,17 +458,16 @@ they are laid out.
 build a window, so `HOME` and the state paths are redirected the way `tests/gui-smoke.py`
 already does.
 
-**They also inherit a known cost that standard names.** `testing.md` §2.3 records that
-`Updater.__init__` calls `_check_app_update` unconditionally, issuing a live
-`api.github.com` GET, and that the suite already makes 49 of them per run — filed as
-**ONEUP-0067**. INV-1, INV-5 and INV-6 each build the window again, INV-5 and INV-6 with a
-dialog, so this item adds to that count. **It does not stub it:** ONEUP-0067 owns the fix
-and stubbing it here would put a second mechanism in the suite for the same defect. What
-this item owes is a bound rather than a promise: **the new sweeps add at most three window
-constructions**, one each for INV-1, INV-5 and INV-6, taking the suite's live GitHub
-requests from 49 to at most 52. They reuse an already-constructed window wherever the
-assertion allows and build a fresh one only where a pinned font or a simulated run
-requires it.
+**The cost this passage used to inherit is gone, and the one obligation it left is not.**
+It formerly recorded that each new window construction added another live `api.github.com`
+GET, because `Updater.__init__` calls `_check_app_update` and nothing stubbed it —
+**ONEUP-0067**, later re-filed and fixed as **ONEUP-0090**. `tests/gui-smoke.py` now
+replaces `_check_app_update` with a no-op before its first window, so INV-1, INV-5 and
+INV-6 may build as many windows as their assertions need and none of them reaches the
+network. **What survives is where the stub sits** (`testing.md` §2.3): these sweeps add
+their window constructions *below* that line, never above it, and nothing catches it if
+they do not. They still reuse an already-constructed window wherever the assertion allows
+and build a fresh one only where a pinned font or a simulated run requires it.
 
 ## 8. Docs & release
 
