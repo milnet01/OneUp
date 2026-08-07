@@ -13,6 +13,49 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The update check says what actually went wrong.**
+  "Couldn't reach GitHub" was shown for every failure, including ones
+  where GitHub answered perfectly well to say the hourly check limit was
+  used up — sending people to check their internet over something that
+  fixes itself on the hour. (ONEUP-0089)
+
+- **High-contrast mode is readable again in Settings and Repositories.**
+  Turning on high contrast made the rows in both windows solid white with
+  near-invisible text — the exact combination high contrast exists to
+  prevent. (ONEUP-0088)
+
+- **Only one copy of OneUp can run at a time.**
+  Two tray icons could appear after logging out and back in, because the
+  guard against a second copy was only active when the tray setting was
+  on — and it deleted its own lock on startup, so two copies launched
+  together both survived. Two copies mean two background checks and two
+  updates able to collide. (ONEUP-0084)
+
+- **A failed update no longer throws away everything it downloaded.**
+  When the system step failed, the cache-cleaning step still ran and
+  deleted the packages that had downloaded successfully, so retrying
+  started again from zero over the same connection that had just failed.
+  Measured on a real run: 424 MB discarded after a download failure. The
+  cache is now kept when the update failed, and still cleared when it
+  succeeded. (ONEUP-0087)
+
+- **Rebooting during an update no longer hangs on a black screen.**
+  A reboot or logout asked for mid-update waited on a process the desktop
+  had no permission to stop, long after the screen had been torn down —
+  leaving a hard power-off as the only way out, at the worst possible
+  moment. OneUp now holds a shutdown lock for the length of a run, so the
+  desktop tells you an update is in progress and lets you decide.
+  (ONEUP-0086)
+
+- **Stop now works while packages are downloading.**
+  Pressing Stop during a download did nothing until the whole step
+  finished, which on a stalled mirror meant never — while the screen said
+  "Stopping now is safe". The update is now fetched in one pass and
+  installed in another, so a stop lands during the download, within
+  seconds, with nothing installed and every downloaded package kept.
+  Installing itself is still never interrupted, because cutting an install
+  half-way can leave programs broken. (ONEUP-0085)
+
 - **Three ways the window's test run could leak state into later checks.**
   A dialog stub was left installed for the rest of the run, a tray setting was persisted to shared storage and never reset, and the day-count checks read the clock twice so a run straddling midnight could shift every count by one.
 
