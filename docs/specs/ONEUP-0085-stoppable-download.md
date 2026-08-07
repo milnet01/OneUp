@@ -1,6 +1,6 @@
 # ONEUP-0085 — Stop works while packages are downloading
 
-**Status:** Draft
+**Status:** Implemented
 **Kind:** fix
 **Roadmap:** ONEUP-0085
 **Branch:** main (1.4.x — qualifies under `workflow.md` §1.1)

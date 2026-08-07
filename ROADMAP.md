@@ -1785,7 +1785,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: user-report-2026-08-07.
 
-- 🚧 [ONEUP-0085] **Make Stop work during the package download, not only between steps.**
+- ✅ [ONEUP-0085] **Make Stop work during the package download, not only between steps.**
   stop_pending is checked between steps, between repositories, and once more just
   before the transaction (update_system.sh, the `if stop_pending` guard above
   run_system_upgrade). The download happens INSIDE zypper dup, so a stop asked for
@@ -1799,6 +1799,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Stop did nothing while packages were downloading, even though the screen said stopping was safe.
   Kind: fix.
   Source: user-report-2026-08-07.
+  Resolved (2026-08-07): shipped in 2622c18 and released in 1.4.1 — CHANGELOG's
+  [1.4.1] carries it ("Stop now works while packages are downloading"). The bullet
+  was left at in-progress when the release went out; flipped here by the ONEUP-0094
+  session, which found it while reading the download path. No code changed.
+
+  The GUI half is deliberately NOT part of this item: Stop is still enabled during
+  the commit, where it cannot work. That is ONEUP-0095, and it is 2.0 work under the
+  freeze because people can still update.
 
 - 🚧 [ONEUP-0086] **Hold a shutdown inhibitor for the length of a run.**
   Evidence, journal boot -1 on the user's machine:
