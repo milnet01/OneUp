@@ -128,6 +128,10 @@ STOP_REQUEST = STATE_DIR / "stop.request"
 # (ONEUP-0048). Generously past a normal gap — a big repository's cache rebuild is quiet
 # for a while — so the wording is trustworthy when it does appear.
 STALL_SECONDS = 45
+# Single-instance handshake budget (ONEUP-0084). Both ends are local sockets on the
+# same machine, so this is generous; it only has to be long enough that a copy still
+# working through its own startup can still answer before we conclude it isn't there.
+SINGLE_INSTANCE_TIMEOUT_MS = 500
 # zypper's package cache, which is world-readable — so OneUp can weigh it without root.
 # This is the ONLY byte figure available during the prefetch phase: zypper prints one line
 # per finished package and nothing else, so an 86 MB download from a slow mirror produced
@@ -402,7 +406,7 @@ QPushButton#RestartBtn:focus {
 _HC_QSS = Template(r"""
 ToggleSwitch { qproperty-highContrast: true; }
 
-QMainWindow { background: $win; }
+QMainWindow, QDialog { background: $win; }
 #Frame { background: $border; }
 #Card  { background: $card; }
 #RowBorder { background: $border; }
@@ -410,6 +414,11 @@ QMainWindow { background: $win; }
 #RowBorder:hover { background: $focus; }
 #RowBorder:hover #RowCard { background: $card; }
 
+/* Catch-all FIRST, so a label nobody remembered to name still gets full-contrast
+   text instead of the base sheet's dim grey — the exact failure HC exists to
+   prevent, and the one that made the Settings rows unreadable (ONEUP-0088). The
+   named rules below still win: an ID selector outranks a bare type selector. */
+QLabel { color: $text; }
 QLabel#Header, QLabel#TaskName, QLabel#SizeResult, QLabel#BannerText { color: $text; }
 QLabel#Tagline, QLabel#TaskDesc, QLabel#Status, QLabel#LastRun, QLabel#DetailList { color: $text; }
 QLabel#LastRun[stale="true"] { color: $text; font-weight: 700; }
@@ -992,6 +1001,24 @@ def read_repos() -> list[dict]:
     return _parse_repos(out)
 
 
+def card_inside(border: QFrame) -> QFrame:
+    """Nest the #RowCard that paints a #RowBorder's interior, and return it.
+
+    RowBorder is a BORDER, not a surface: the high-contrast sheet fills it solid
+    ($border — white in HC dark) and only the RowCard child painting over it leaves
+    the 1px edge showing. A row that uses RowBorder alone therefore renders as a
+    solid white block with unreadable text (ONEUP-0088). Put every row's content
+    inside the frame this returns, never in the RowBorder itself.
+    """
+    outer = QVBoxLayout(border)
+    outer.setContentsMargins(1, 1, 1, 1)   # 1px gradient border
+    outer.setSpacing(0)
+    inner = QFrame()
+    inner.setObjectName("RowCard")
+    outer.addWidget(inner)
+    return inner
+
+
 class RepoManagerDialog(QDialog):
     """Turn repositories on/off, and remove ones whose URL duplicates another's.
     Listing is read-only; applying the changes needs one admin (pkexec) prompt."""
@@ -1052,7 +1079,7 @@ class RepoManagerDialog(QDialog):
     def _make_row(self, repo: dict, is_dup: bool) -> QFrame:
         fr = QFrame()
         fr.setObjectName("RowBorder")
-        lay = QHBoxLayout(fr)
+        lay = QHBoxLayout(card_inside(fr))
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(10)
 
@@ -1214,7 +1241,7 @@ class SettingsDialog(QDialog):
     def _row(self, description: str, button: QPushButton) -> QFrame:
         fr = QFrame()
         fr.setObjectName("RowBorder")
-        lay = QHBoxLayout(fr)
+        lay = QHBoxLayout(card_inside(fr))
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(10)
         lbl = QLabel(description)
@@ -2172,32 +2199,49 @@ for (var i = 0; i < wins.length; i++) {{
         self._tray.setToolTip(tip)
 
     # ---- resident tray lifecycle (ONEUP-0018) -----------------------------
-    def _single_instance_name(self) -> str:
-        return f"OneUp-{os.getuid()}"
-
     def _arm_single_instance(self):
-        """Listen so a later second launch raises THIS copy instead of duplicating.
-        Armed here — the single point where OneUp becomes resident — so it covers
-        both an autostart/normal-enabled launch and a mid-session Settings enable."""
+        """Listen so a later launch raises THIS copy instead of starting a second.
+
+        Armed on EVERY GUI launch, not only a resident one, and never torn down
+        while the process lives: two copies are two check timers and two engines
+        racing for the zypper lock whether or not a tray icon is involved.
+
+        The order below is the whole fix. removeServer() unlinks whatever socket is
+        there, including a LIVE one, so calling it up front made a second launch
+        evict the first instead of deferring to it — at login KDE starts two copies
+        (the autostart entry, plus Plasma restoring the window that was open at
+        logout) and both survived, which is the two-tray-icon bug (ONEUP-0084). So:
+        listen first, and clear the address only once a connect has PROVEN nobody
+        is answering it.
+        """
         if self._local_server is not None:
             return
-        name = self._single_instance_name()
-        QLocalServer.removeServer(name)          # clear a stale socket from a crash
+        name = single_instance_name()
         server = QLocalServer(self)
-        if server.listen(name):
-            server.newConnection.connect(self._on_single_instance_connection)
-            self._local_server = server
+        if not server.listen(name):
+            probe = QLocalSocket()
+            probe.connectToServer(name)
+            if probe.waitForConnected(SINGLE_INSTANCE_TIMEOUT_MS):
+                probe.disconnectFromServer()     # a live copy owns it — leave it be
+                return
+            QLocalServer.removeServer(name)      # proven stale (a crash left it)
+            if not server.listen(name):
+                return
+        server.newConnection.connect(self._on_single_instance_connection)
+        self._local_server = server
 
     def _on_single_instance_connection(self):
         conn = self._local_server.nextPendingConnection()
-        if conn is not None:
-            conn.close()
-        self._show_window()
-
-    def _close_single_instance(self):
-        if self._local_server is not None:
-            self._local_server.close()
-            self._local_server = None
+        if conn is None:
+            return
+        intent = ""
+        if conn.waitForReadyRead(SINGLE_INSTANCE_TIMEOUT_MS):
+            intent = bytes(conn.readAll()).decode(errors="replace").strip()
+        conn.close()
+        # The autostart entry only needs to learn that someone is already resident.
+        # Anything else is a person launching OneUp, and wants the window.
+        if intent != "tray":
+            self._show_window()
 
     def _on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.Trigger:    # left-click
@@ -2240,11 +2284,16 @@ for (var i = 0; i < wins.length; i++) {{
         QApplication.setQuitOnLastWindowClosed(False)
 
     def _teardown_tray(self):
-        """Reverse every _ensure_tray step. Never leaves the app invisible + unquittable."""
+        """Reverse every _ensure_tray step. Never leaves the app invisible + unquittable.
+
+        Deliberately does NOT release the single-instance server: that guard belongs
+        to the process, not to residency (ONEUP-0084). Switching the tray off must
+        not make a second copy launchable. It is parented to the window, so it dies
+        with the process either way.
+        """
         if self._tray_timer is not None:
             self._tray_timer.stop()
             self._tray_timer = None
-        self._close_single_instance()
         if self._tray is not None:
             if isinstance(self._tray, QSystemTrayIcon):
                 self._tray.hide()
@@ -3599,7 +3648,7 @@ for (var i = 0; i < wins.length; i++) {{
             if reply.error() != QNetworkReply.NetworkError.NoError:
                 if manual:
                     QMessageBox.warning(self, "Check for updates",
-                                        "Couldn't reach GitHub to check for a newer OneUp.")
+                                        _update_check_error(reply))
                 return
             data = json.loads(bytes(reply.readAll()).decode(errors="replace"))
             tag = str(data.get("tag_name", "")).lstrip("vV")
@@ -3627,6 +3676,29 @@ for (var i = 0; i < wins.length; i++) {{
 
     def _open_release(self):
         QDesktopServices.openUrl(QUrl(f"https://github.com/{REPO_SLUG}/releases/latest"))
+
+
+def _update_check_error(reply: QNetworkReply) -> str:
+    """Say what actually stopped the update check, in the user's terms.
+
+    Qt surfaces an HTTP 403 through error() just like a dead network, so branching
+    on error() alone told the user GitHub was unreachable when GitHub had answered
+    perfectly well — nearly always to say the unauthenticated 60-per-hour budget for
+    this address is spent (ONEUP-0089). Blaming the connection sends someone to
+    check their wifi over a problem that fixes itself on the hour.
+    """
+    status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+    if status in (403, 429):
+        reset = bytes(reply.rawHeader(b"x-ratelimit-reset")).decode(errors="replace")
+        when = (time.strftime(" Try again after %H:%M.", time.localtime(int(reset)))
+                if reset.isdigit() else "")
+        return ("GitHub limits how often OneUp may check for a new version — 60 times "
+                "an hour from one address, shared with anything else here that uses "
+                f"GitHub.{when}\n\nThis doesn't affect updating your system.")
+    if status:
+        return (f"GitHub answered with an error (HTTP {status}) when asked for the "
+                "latest OneUp version.")
+    return "Couldn't reach GitHub to check for a newer OneUp."
 
 
 def _app_icon() -> QIcon:
@@ -3663,16 +3735,32 @@ def _headless_update() -> int:
     return subprocess.run(["bash", str(ENGINE), "--notify", "--auto-skip-repos"]).returncode
 
 
-def _raise_existing_instance() -> bool:
-    """True if a resident OneUp answered the socket (and was asked to show its window)."""
+def single_instance_name() -> str:
+    """Per-user, so two people logged into the same machine each get their own copy.
+
+    Overridable so the suite can exercise the guard without connecting to the user's
+    LIVE OneUp — which would pop their window open mid-test, and would make the
+    result depend on whether they happen to have it running
+    (docs/standards/testing.md §2).
+    """
+    return os.environ.get("ONEUP_INSTANCE_NAME") or f"OneUp-{os.getuid()}"
+
+
+def _raise_existing_instance(intent: str) -> bool:
+    """True if another OneUp for this user answered, and was told what we wanted.
+
+    `intent` is "show" for a person launching OneUp — raise the running window — or
+    "tray" for the autostart entry, which must NOT throw a window up over whatever
+    the user is doing at login; it only needs to learn that someone is resident.
+    """
     sock = QLocalSocket()
-    sock.connectToServer(f"OneUp-{os.getuid()}")
-    if sock.waitForConnected(300):
-        sock.write(b"1")
-        sock.waitForBytesWritten(300)
-        sock.disconnectFromServer()
-        return True
-    return False
+    sock.connectToServer(single_instance_name())
+    if not sock.waitForConnected(SINGLE_INSTANCE_TIMEOUT_MS):
+        return False
+    sock.write(intent.encode())
+    sock.waitForBytesWritten(SINGLE_INSTANCE_TIMEOUT_MS)
+    sock.disconnectFromServer()
+    return True
 
 
 def main():
@@ -3695,10 +3783,16 @@ def main():
         pass
 
     argv = sys.argv[1:]
+    # Defer to a copy that is already running — ALWAYS, not only when the tray is on.
+    # At login KDE starts two (the autostart entry and Plasma's session restore of
+    # the window left open at logout); previously neither deferred and the user got
+    # two tray icons, two check timers, and two engines able to race for the zypper
+    # lock (ONEUP-0084).
+    if _raise_existing_instance("tray" if "--tray" in argv else "show"):
+        sys.exit(0)   # the running copy has been told; nothing left for us to do
+
     tray_wanted = (QSettings("OneUp", "OneUp").value("tray_enabled", False, type=bool)
                    and QSystemTrayIcon.isSystemTrayAvailable())
-    if tray_wanted and _raise_existing_instance():
-        sys.exit(0)   # a resident copy is already running — it raised its window
 
     icon = _app_icon()
     if not icon.isNull():
@@ -3706,6 +3800,10 @@ def main():
     win = Updater()
     if not icon.isNull():
         win.setWindowIcon(icon)
+    # Claim the socket for the whole life of the process, tray or no tray, so the
+    # NEXT launch has something to defer to (ONEUP-0084). Idempotent — _ensure_tray
+    # calls it too, for a mid-session Settings enable.
+    win._arm_single_instance()
     if tray_wanted:
         win._ensure_tray()                 # owns quit-behaviour, server, and the check timer
         if "--tray" not in argv:

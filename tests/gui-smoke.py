@@ -47,6 +47,7 @@ try:
     from PySide6.QtGui import QAccessible, QCloseEvent, QFontInfo
     from PySide6.QtWidgets import (
         QApplication,
+        QFrame,
         QLabel,
         QMessageBox,
         QPushButton,
@@ -98,6 +99,20 @@ def _wait_for_notify(timeout: float = 5.0) -> bool:
 
 def main() -> int:
     updater = _load_updater()
+
+    # Updater.__init__ asks GitHub whether a newer OneUp exists, and this file builds
+    # 56 windows — so an unstubbed run fires 56 unauthenticated requests at
+    # api.github.com, whose limit is 60 an hour PER ADDRESS. A few runs therefore
+    # exhaust the budget the user's own "Check for updates" button needs, and the
+    # suite fails outright with no network (ONEUP-0090). Nothing here asserts on the
+    # check or its reply handler, so stubbing it costs no coverage. Must happen
+    # before the first Updater() below.
+    updater.Updater._check_app_update = lambda self, manual=False: None
+
+    # Likewise the single-instance socket: left alone, the guard would connect to the
+    # user's LIVE OneUp and pop its window open mid-test (testing.md §2).
+    os.environ["ONEUP_INSTANCE_NAME"] = f"OneUp-test-{os.getpid()}"
+
     app = QApplication.instance() or QApplication([])
     app  # noqa: B018 — keep a reference so it isn't GC'd mid-test.
 
@@ -1413,6 +1428,29 @@ def main() -> int:
           "qproperty-highContrast: false" in qss_norm)
     check("high contrast restates the hover rules it must beat on specificity",
           "QPushButton#RunBtn:hover" in qss_hc.replace(qss_norm, ""))
+
+    # ONEUP-0088: #RowBorder is a BORDER, not a surface. The HC overlay fills it
+    # solid ($border — white in HC dark) and only a #RowCard child painting over it
+    # leaves the 1px edge showing, so a row built on RowBorder alone renders as a
+    # solid white block with unreadable text. Both dialogs did exactly that.
+    overlay = qss_hc.replace(qss_norm, "")
+    check("high contrast colours labels nobody gave an object name",
+          "\nQLabel { color:" in overlay)
+    check("high contrast paints dialog backgrounds, not only the main window",
+          "QDialog { background:" in overlay)
+    repo_rows = [
+        {"alias": "oss", "name": "Main Repository (OSS)", "enabled": True,
+         "url": "http://download.opensuse.org/tumbleweed/repo/oss/"},
+        # Same URL twice, so the duplicate branch of _make_row is exercised too.
+        {"alias": "oss-copy", "name": "Main Repository (copy)", "enabled": False,
+         "url": "http://download.opensuse.org/tumbleweed/repo/oss/"},
+    ]
+    for title, dlg in (("Settings", updater.SettingsDialog(wA)),
+                       ("Repositories", updater.RepoManagerDialog(wA, repo_rows))):
+        borders = [f for f in dlg.findChildren(QFrame) if f.objectName() == "RowBorder"]
+        check(f"{title} builds rows at all", len(borders) > 0)
+        check(f"every {title} RowBorder paints a RowCard over itself",
+              all(f.findChild(QFrame, "RowCard") is not None for f in borders))
 
     # INV-7: progress and outcome are spoken. _announce records unconditionally,
     # since QAccessible.isActive() is False offscreen.
