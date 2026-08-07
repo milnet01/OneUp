@@ -2017,7 +2017,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Sources: en.opensuse.org/openSUSE:Standards_Zypper_Xml ;
   github.com/openSUSE/zypper/blob/master/src/output/xmlout.rnc
 
-- 🚧 [ONEUP-0094] **Retry a truncated download with mirror striping disabled.**
+- ✅ [ONEUP-0094] **Retry a truncated download with mirror striping disabled.**
   Observed twice THROUGH ONEUP on 2026-08-07 (four reproductions in total --
   ONEUP-0085 section 2.2), both times on kernel-default-7.1.6:
     [Error: "end of response with 194225024 bytes missing", trying next mirror.]
@@ -2121,6 +2121,27 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   cache ONEUP-0087 keeps is reused. This is option (a)'s intent without OneUp ever
   fetching or placing an rpm itself -- zypper does the fetch, so libzypp still verifies
   every checksum and signature.
+  Resolved (2026-08-07): shipped in 5b810c9, on main, owing a 1.4.2 release.
+
+  The engine retries the DOWNLOAD pass once against
+  downloadcontentcdn.opensuse.org when it fails transfer-shaped, by copying the
+  repository definitions to a temporary directory and rewriting only `baseurl=`
+  lines for download.opensuse.org, then pointing zypper at the copy with
+  --reposd-dir. Aliases are untouched, so the kept package cache is reused; the
+  user's own /etc/zypp/repos.d is never written to; zypper does the fetch, so
+  libzypp still verifies every checksum and signature.
+
+  Bounded at one attempt, suppressed when a stop is pending, and declined
+  entirely when no openSUSE baseurl is present. A recovered run says so; an
+  unrecovered one names the package that would not come down, taken from a
+  snapshot of the first attempt's log because the retry truncates the live one.
+
+  Engine suite 247 passed / 0 failed (11 new assertions across 6 scenarios);
+  local-CI.sh green. INV-4's assertion was watched failing against a
+  deliberately-broken engine before it was trusted.
+
+  NOT done here, and deliberately: ONEUP-0093 (the progress bar's numerator),
+  ONEUP-0095 (phase-aware Stop) and ONEUP-0096 (heaps) are untouched.
 
 - 📋 [ONEUP-0095] **Disable Stop while stopping is not possible, instead of accepting a click that does nothing.**
   Today Stop is enabled for the whole of a real run (set_controls_enabled shows
