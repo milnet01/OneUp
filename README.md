@@ -119,11 +119,21 @@ sandboxed app cannot do, and the distributions we tested already update themselv
 
 ### openSUSE repository — recommended (auto-updates)
 
-On Tumbleweed, add the repo once and install — OneUp then updates along with the
-rest of your system:
+Add the repo once and install — OneUp then updates along with the rest of your
+system.
+
+**Tumbleweed:**
 
 ```bash
 sudo zypper addrepo https://download.opensuse.org/repositories/home:/milnet/openSUSE_Tumbleweed/home:milnet.repo
+sudo zypper refresh
+sudo zypper install oneup
+```
+
+**Leap 16.0:**
+
+```bash
+sudo zypper addrepo https://download.opensuse.org/repositories/home:/milnet/openSUSE_Leap_16.0/home:milnet.repo
 sudo zypper refresh
 sudo zypper install oneup
 ```

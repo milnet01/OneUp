@@ -19,7 +19,8 @@ so you never run `osc service manualrun`.
    - `packaging/rpm/oneup.spec`
    - `packaging/obs/_service`
 3. Add a build target: **project** `home:milnet` → **Repositories** →
-   **Add from a distribution** → **openSUSE Tumbleweed** (and Leap if you want).
+   **Add from a distribution** → **openSUSE Tumbleweed** and **openSUSE Leap 16.0**
+   (both are already configured — see *Build targets* below).
 4. On the package page → **Trigger Services** (runs `obs_scm` server-side to fetch
    the tag; it also runs automatically when you upload/change `_service`).
 
@@ -104,25 +105,50 @@ setup below). It's a one-time wiring — verified 2026-07-21 (home:milnet, token
 > a bigger one-time restructure, worth it only if you routinely tag without
 > `release.sh`.
 
-## Adding openSUSE Leap as a build target
+## Build targets
 
-OneUp already supports Leap at runtime — the engine runs `zypper update` on Leap
-and `zypper dup` on Tumbleweed — so serving Leap is just adding a second OBS build
-target. In the OBS web UI:
+Two, both live since 1.4.1 (2026-08-07):
 
-1. Open the package's **project** `home:milnet` → **Repositories** →
-   **Add from a distribution** → pick the current **openSUSE Leap** (e.g.
-   `openSUSE_Leap_15.6`) → **Add**.
-2. OBS rebuilds the same `noarch` RPM against Leap automatically. Once green, the
-   Leap repo is live alongside Tumbleweed:
-   `https://download.opensuse.org/repositories/home:/milnet/openSUSE_Leap_15.6/`.
+| Target | Repository for users |
+| --- | --- |
+| `openSUSE_Tumbleweed` (i586, x86_64) | `https://download.opensuse.org/repositories/home:/milnet/openSUSE_Tumbleweed/` |
+| `openSUSE_Leap_16.0` (x86_64) | `https://download.opensuse.org/repositories/home:/milnet/openSUSE_Leap_16.0/` |
 
-**One thing to verify:** the RPM `Requires: python3-pyside6`. That package is in
-Tumbleweed's repos; on Leap it may be older or absent depending on the release. If
-the Leap build's install check fails on `python3-pyside6` (or a Leap user hits an
-unresolvable dependency), point Leap users at the **AppImage** instead — it bundles
-its own Qt/PySide6 and doesn't depend on the distro's Python at all. Check with
-`zypper info python3-pyside6` on a Leap box before advertising the Leap RPM.
+OneUp supports both at runtime — the engine runs `zypper update` on Leap and
+`zypper dup` on Tumbleweed — and `oneup.spec` is `BuildArch: noarch`, so the same
+package serves each. The Leap build is tagged `lp160`
+(`oneup-1.4.1-lp160.1.1.noarch.rpm`).
+
+**Leap means 16.0 only.** Leap 15.6 reached end of life on 2026-04-30, and
+`docs/standards/coding.md` §1 sets the Python floor at 3.13 on the strength of
+that — 16.0 ships 3.13, 15.6 never did. Do not re-add a 15.x target without
+revisiting the floor. Leap 16.0 also drops i586, which is why that arch is
+Tumbleweed-only.
+
+**The `Requires: python3-pyside6` question is settled, and the answer is not
+obvious.** Leap 16.0 has no package of that name — it ships `python313-pyside6`.
+It resolves anyway, because that package carries the unversioned provide:
+
+```
+$ rpm -qp --provides python313-pyside6-6.9.1-bp160.1.9.x86_64.rpm
+python3-pyside6 = 6.9.1-bp160.1.9
+python313-pyside6 = 6.9.1-bp160.1.9
+```
+
+So the spec needs no Leap-specific `Requires`. Re-check this if Leap ever moves its
+primary Python flavour, since the unversioned provide follows whichever flavour is
+primary. If it ever stops resolving, point Leap users at the **AppImage** — it
+bundles its own Qt/PySide6 and does not depend on the distro's Python at all.
+
+### Adding a further target
+
+Project meta rather than the web UI, so the change is reviewable:
+
+```bash
+osc meta prj home:milnet > prj.xml     # edit: add a <repository> block
+osc meta prj home:milnet -F prj.xml
+osc results home:milnet oneup          # watch it build
+```
 
 ## Notes
 
