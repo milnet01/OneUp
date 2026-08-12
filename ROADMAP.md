@@ -1984,7 +1984,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Sources: en.opensuse.org/openSUSE:Standards_Zypper_Xml ;
   github.com/openSUSE/zypper/issues/126
 
-- 🚧 [ONEUP-0092] **Passwordless still prompts: the sudoers drop-in misses timeout and du.**
+- ✅ [ONEUP-0092] **Passwordless still prompts: the sudoers drop-in misses timeout and du.**
   The drop-in grants NOPASSWD for /usr/bin/zypper, /usr/bin/snapper,
   /usr/bin/flatpak, /usr/bin/systemctl stop packagekit and
   /usr/bin/env LC_ALL=C zypper * -- but two privileged calls in the engine are
@@ -2058,6 +2058,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   demand: not matched. Engine 280/0, GUI 313/0, local-CI green; both suites
   also pass under `unshare -rn`. Existing users' Passwordless reads off
   until they re-toggle — their live drop-in predates this.
+  Resolved (2026-08-12): shipped in 1.4.3 (tag v1.4.3, commit 343e982). GitHub release published with the AppImage attached; OBS home:milnet/oneup committed at revision 19.
 
 - 📋 [ONEUP-0093] **The download progress bar compares new bytes against the whole transaction.**
   _tick_activity computes what has arrived as `cache_bytes() - self._dl_base`
@@ -2383,7 +2384,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: test.
   Source: in-session-2026-08-07 (deferred while closing ONEUP-0090).
 
-- 🚧 [ONEUP-0099] **Automatic updates keep running after passwordless stops working.**
+- ✅ [ONEUP-0099] **Automatic updates keep running after passwordless stops working.**
   The GUI stands the weekly update timer down when the user CLICKS Passwordless
   off -- on_auth_toggled's "coupling rule 3" arm removes the timer, unchecks
   the toggle and says why. It does NOT stand it down when the app merely
@@ -2416,3 +2417,4 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   delete a working weekly timer), and the `_pending_autoupdate` guard sits
   at the CALL SITE, not inside the helper — moving it in regresses the
   click-path revoke, which `tests/gui-smoke.py` scenario (d) pins.
+  Resolved (2026-08-12): shipped in 1.4.3 (tag v1.4.3, commit 343e982) alongside ONEUP-0092.
