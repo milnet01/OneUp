@@ -200,7 +200,8 @@ own line before emitting the marker.
 a banner button — it renders no part of the payload. So it takes §4.2's shape rule and
 §4.2's allocation rule, and nothing else; the button's wording is a window string like any
 other. **An unknown `REMEDY` code arms no button** — there is no action the window knows
-how to perform — and INV-3's obligation is discharged in the banner instead: the run's
+how to perform — and `docs/specs/ONEUP-0108-window-wording.md` INV-1's obligation is
+discharged in the banner instead: the run's
 `HINT` still explains the failure, and the banner says in the long form that this version
 of OneUp has no fix for what the run reported. It is the one converted family whose
 fallback is not a substitute for wording it would otherwise have shown.
@@ -230,7 +231,8 @@ the same one with the field left off:
 **Every `STEP_END` carries a code**, including the case `marker-protocol.md` §4.2 names as
 carrying an empty `detail` — the cache step's success, which emits `done`. An empty code
 field is not a legal payload, and without this rule the cache step of every successful run
-would render INV-3's unknown-code fallback in its badge. **No `STEP_END` code is
+would render `docs/specs/ONEUP-0108-window-wording.md` INV-1's unknown-code fallback in its
+badge. **No `STEP_END` code is
 variable-arity**, which is what keeps `docs/specs/ONEUP-0108-window-wording.md` §4.1's
 arity rule from firing on an ordinary run.
 
@@ -405,7 +407,7 @@ vocabulary is closed by the protocol and whose meaning the window expresses in w
 its own choosing; it is never looked up and never rendered. A **code** is a value the window
 *looks up in a table* to obtain wording it would otherwise have had to be told. Both are
 opaque identifiers on the wire; only the second has an entry, and only the second can be
-unknown in the sense INV-3 means. Fate 3's fields are tokens, and calling one a code would
+unknown in the sense `docs/specs/ONEUP-0108-window-wording.md` INV-1 means. Fate 3's fields are tokens, and calling one a code would
 be a lie about what it is.
 
 **Arguments are data and travel in trailing fields.** A hint that names a repository sends
@@ -577,7 +579,7 @@ The rows below are the ones the engine owns.
 | A source name containing a space reaches `@@CHECK_UNKNOWN@@` | Nothing — each name has its own trailing field, so a space is never a separator | §4.1. A joined list split on spaces would report one broken source as several |
 | A `\|` reaches a marker argument | Nothing — it arrives as `/` | INV-2, in one place in the emitter |
 | The `STEP_BEGIN` guard is not moved with the field | The run appears to freeze while it is in fact updating | Caught the moment a scenario runs: no step ever begins. §4.1 says so because it is the one part of this item that fails loudly rather than quietly |
-| The retained Bash engine is run against a converted window | Prose where the window expects a code, so INV-3's fallback sentence | Deliberate and known: the fallback is frozen at the switch-over. `oneup-2.0.md` §4 requires it in the release notes, and §8 carries that |
+| The retained Bash engine is run against a converted window | Prose where the window expects a code, so `ONEUP-0108` INV-1's fallback sentence | Deliberate and known: the fallback is frozen at the switch-over. `oneup-2.0.md` §4 requires it in the release notes, and §8 carries that |
 
 ## 7. Tests
 
