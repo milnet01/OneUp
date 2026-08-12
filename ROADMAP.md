@@ -2426,3 +2426,30 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   at the CALL SITE, not inside the helper — moving it in regresses the
   click-path revoke, which `tests/gui-smoke.py` scenario (d) pins.
   Resolved (2026-08-12): shipped in 1.4.3 (tag v1.4.3, commit 343e982) alongside ONEUP-0092.
+
+- 📋 [ONEUP-0100] **The loop-log tally check cannot balance a four-question review row.**
+  Found 2026-08-12 writing ONEUP-0072's loop-3 row. `check_loop_tallies`
+  in `tests/docs-check.py` balances SEVERITY_RE (`N critical|high|medium|
+  low|info`) against DISPOSITION_RE (`N verified|dismissed|info`) inside
+  bold spans. The review gate was rewritten on 2026-08-08 to ask four
+  questions with NO severity scale, so a conforming row has no severities
+  to balance and fails with "0 findings against 8 outcomes" — while a row
+  that simply leaves its disposition clause unbolded is skipped entirely
+  (`counts` empty, `continue`). So the check now either fails a correct
+  row or silently ignores it, and neither is a check.
+
+  What it should do: recognise a Q tally (`Q1 a · Q2 b · Q3 c · Q4 d`) as
+  the finding count and balance it against verified+dismissed exactly as
+  it does severities, keeping the old form working for the historical
+  rows above it — every existing row in this project predates the rewrite.
+
+  Blocked by the v1 freeze: this is `tests/`, and `workflow.md` §1.2 is
+  explicit that tests-only is a necessary and NOT a sufficient condition.
+  Needs either the freeze to lift or a fourth exception, which is the
+  user's call. Loop-3's row is worded to skip the check meanwhile, and
+  says so in the row itself rather than looking like a row that balanced.
+
+  Related: ONEUP-0083 records an earlier trap in the same check.
+  **Layman:** Our documentation checker was written for the old review scoring and quietly skips rows written under the new one.
+  Kind: test.
+  Source: in-session-2026-08-12.
