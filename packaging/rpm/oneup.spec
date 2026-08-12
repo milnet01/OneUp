@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.4.2
+Version:        1.4.3
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -74,6 +74,9 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Wed Aug 12 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.3-0
+- Automatic weekly updates switch themselves off if Passwordless stops working.
+- Turning on Passwordless now really does stop the password box.
 * Fri Aug 07 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.2-0
 - An update no longer fails because one package refused to download.
 * Fri Aug 07 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.1-0

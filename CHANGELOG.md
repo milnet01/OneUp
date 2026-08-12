@@ -6,6 +6,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-08-12
+
 ### Fixed
 
 - **Automatic weekly updates switch themselves off if Passwordless stops working.** (ONEUP-0099)
@@ -426,7 +428,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.2...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.3...HEAD
+[1.4.3]: https://github.com/milnet01/OneUp/releases/tag/v1.4.3
 [1.4.2]: https://github.com/milnet01/OneUp/releases/tag/v1.4.2
 [1.4.1]: https://github.com/milnet01/OneUp/releases/tag/v1.4.1
 [1.4.0]: https://github.com/milnet01/OneUp/releases/tag/v1.4.0
