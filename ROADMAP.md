@@ -2712,3 +2712,27 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A stricter review found a dozen real errors in a document we thought was finished; the others have not had that review yet.
   Kind: doc-fix.
   Source: in-session-2026-08-12.
+
+- 📋 [ONEUP-0108] **The window's wording tables, and what it shows for a code it has never heard of.**
+  The window half of ONEUP-0072, split out on 2026-08-12 under
+  ONEUP-0101 because the combined document stopped being reviewable —
+  its fourth cold loop spent 4 of 6 findings repairing loop 3's own
+  fixes.
+
+  Contract: `docs/specs/ONEUP-0108-window-wording.md`. It owns where
+  the English lives (`oneup/gui/markers.py`), the two fallback forms
+  and the rule for choosing between them, the arity rule, and every
+  reader of a converted marker — including the three side-channel
+  `@@HINT@@` readers that sit nowhere near the marker handler.
+  ONEUP-0072 keeps the engine half: which field becomes a code (§4.1)
+  and the wire shape of one (§4.2).
+
+  **Lands in the same commit as ONEUP-0072, never on its own.**
+  `docs/reference/marker-protocol.md` §5 requires the payload
+  conversion to be one deliberate versioned change across engine,
+  window and both suites; two bullets, one commit, both flip together.
+  A window that words codes an engine still sends as prose renders the
+  no-wording-for-this fallback on every run.
+  **Layman:** The app keeps every sentence a user reads in one place, and always says something readable even when the update engine reports something this version doesn't recognise.
+  Kind: refactor.
+  Source: in-session-2026-08-12, splitting ONEUP-0101.

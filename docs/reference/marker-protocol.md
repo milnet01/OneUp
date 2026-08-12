@@ -285,8 +285,11 @@ cannot tell you which one broke it.
 ### 5.2 What the codes must define, when they land
 
 ONEUP-0072 turns `HINT` and `REMEDY` payloads into codes, and three questions have to be
-answered *in that spec* rather than discovered during implementation. They are reserved
-here so the reference is where a reader looks for them:
+answered *in that item's specs* rather than discovered during implementation. They are
+reserved here so the reference is where a reader looks for them. **The item is specified in
+two documents** since the 2026-08-12 split: `docs/specs/ONEUP-0072-marker-codes.md` holds
+the engine side and `docs/specs/ONEUP-0108-window-wording.md` the window side, and they land
+in one commit. Question 2 is the window's; 1 and 3 are the engine's.
 
 1. **The shape of a code** — a stable identifier, ASCII, no spaces or `|`, chosen so it
    never needs translating and never reads as prose.

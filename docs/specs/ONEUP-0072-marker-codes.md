@@ -24,9 +24,20 @@ halves are two contracts: ONEUP-0032 keeps the catalogue machinery and right-to-
 this one takes the protocol change. `docs/specs/ONEUP-0032-i18n.md` §11 records what was
 already found and settled for this content before the split.
 
+**The window half was split out to `docs/specs/ONEUP-0108-window-wording.md` on
+2026-08-12**, under roadmap item ONEUP-0101, which holds the measurement: this document's
+fourth review loop spent four of its six verified findings repairing the third loop's own
+fixes, and §4 had grown to 54% of 859 lines. That document took the former §4.3 — where the
+wording lives and what an unknown code shows — and this document's former INV-3, which is
+its INV-1. **The two land in the same commit**, because `marker-protocol.md` §5 requires the
+conversion to be one versioned change; splitting the document does not split the commit.
+This document keeps the engine side: which field becomes a code (§4.1) and the wire shape of
+one (§4.2).
+
 **`docs/reference/marker-protocol.md` outranks this spec** and owns the protocol itself. §5
 sets how the contract is changed, §5.1 freezes it for 2.0 with this conversion as the one
-exception, and §5.2 reserves three questions to be answered here. §4.2 and §4.3 answer them.
+exception, and §5.2 reserves three questions. **§4.2 answers the two about the wire**; the
+third — what an unrecognised code shows — is `docs/specs/ONEUP-0108-window-wording.md` §4.3.
 
 ## 1. Goal
 
@@ -143,7 +154,7 @@ fields exist.
 `@@STEP_BEGIN@@`'s trailing `label`. The window holds a title for every step key in `TASKS`;
 **this item adds the in-progress phrasing beside it** and looks both up by `key`. **Both
 live in `oneup/gui/steps.py`**, not with the code tables in `oneup/gui/markers.py`
-(§4.3) — they are keyed by step, not by code. `docs/specs/ONEUP-0032-i18n.md` §4.1 gives
+(`docs/specs/ONEUP-0108-window-wording.md` §4.1) — they are keyed by step, not by code. `docs/specs/ONEUP-0032-i18n.md` §4.1 gives
 that module "the **marking** of the in-progress phrasing for each step — ONEUP-0072 stops
 the engine sending it and writes the window's own", the same division its neighbouring row
 states for the sentence tables: **this item writes the phrasing, that item only marks it
@@ -156,8 +167,9 @@ so a newer engine adding a step would leave the status line, the progress captio
 screen-reader announcement** blank — `handle_marker`'s `STEP_BEGIN` branch calls
 `self._announce(f"{label}, step {index} of {total}")`, which is the third site and the one
 easiest to miss, because nothing on screen shows it is missing.
-A step key with no entry in `TASKS` therefore falls back as an unknown code does — **§4.3
-owns the two fallback forms and the rule for choosing between them**; what is specific to
+A step key with no entry in `TASKS` therefore falls back as an unknown code does —
+**`docs/specs/ONEUP-0108-window-wording.md` §4.3 owns the two fallback forms and the rule
+for choosing between them**; what is specific to
 the step key is that its three sites have different room, so they do not all take the same
 form, and which string each site renders:
 
@@ -219,7 +231,8 @@ the same one with the field left off:
 carrying an empty `detail` — the cache step's success, which emits `done`. An empty code
 field is not a legal payload, and without this rule the cache step of every successful run
 would render INV-3's unknown-code fallback in its badge. **No `STEP_END` code is
-variable-arity**, which is what keeps §4.3's arity rule from firing on an ordinary run.
+variable-arity**, which is what keeps `docs/specs/ONEUP-0108-window-wording.md` §4.1's
+arity rule from firing on an ordinary run.
 
 **`status` still outranks the code for `fail`, and the code decides the badge for `ok` and
 `skip`.** `_step_badge` returns on `status == "fail"` before reading `detail` at all; on
@@ -275,8 +288,9 @@ is (`@@PROGRESS@@`'s optional pair works this way), they need no separator and t
 character that a name must not contain, and the window gets the list's length by counting
 fields rather than parsing text. The `|` substitution still applies to each (§4.2), so a
 name can hold anything but a pipe. This is the one place a code's argument list is
-deliberately variable-length; INV-3's arity rule (§4.3) exempts it, because here a differing
-count is the data rather than a version mismatch.
+deliberately variable-length; `docs/specs/ONEUP-0108-window-wording.md` §4.1 declares it a
+variable tail and exempts it, because here a differing count is the data rather than a
+version mismatch.
 
 `@@REBOOT@@`'s reason is the interesting one, and it has **three** sources, not one — the
 easiest thing in this item to half-convert. `reboot_reason_from_log` composes a phrase from
@@ -289,7 +303,8 @@ prose into a field the window now parses as components, and **nothing catches th
 shape**: every word of *"core system packages were updated"* is lowercase ASCII, so each
 element passes `^[a-z0-9-]+$` one at a time and the suite stays green. That is why INV-1
 checks this one field by **membership** of the closed vocabulary below rather than by shape.
-What the user gets meanwhile is §4.3's long fallback, since no element is a component the
+What the user gets meanwhile is `docs/specs/ONEUP-0108-window-wording.md` §4.3's long
+fallback, since no element is a component the
 window knows — so a machine that genuinely needs rebooting is told only that this version of
 OneUp has no wording for what the run reported.
 
@@ -321,8 +336,9 @@ today's wording, carried across unchanged (§3.2); it is the window's from here 
 **Disjointness settles the field only for codes the window knows**, and an unrecognised
 token belongs to neither vocabulary — classifying it by guess is how *"firmware-updated was
 installed"* reaches a user, the standalone reason rendered inside the components' join
-frame. **§4.3 states the rule** (it turns on how many *known* components the field holds,
-not on how many elements it has).
+frame. **`docs/specs/ONEUP-0108-window-wording.md` §4.4 states the rule** (it turns on
+which vocabulary the field matches and how much of it the window knows, not on how many
+elements it has).
 
 The engine reaches **at most three components at once**, not four: it picks the NVIDIA
 driver *or* the generic graphics driver, never both, so of the sixteen subsets only eleven
@@ -335,8 +351,8 @@ is narrow and deliberate, because the alternative — one whole sentence per com
 is **eleven** sentences for **four** components, and grows combinatorially the moment a
 fifth is added. Each component string
 carries a translator comment (`wording-and-translation.md` §6.4) saying it is joined into a
-"…was/were installed" sentence, and the render function and its plural form are what §4.3
-already requires of this entry. §8 carries the carve-out into that standard.
+"…was/were installed" sentence, and the render function and its plural form are what
+`docs/specs/ONEUP-0108-window-wording.md` §4.2 already requires of this entry. §8 carries the carve-out into that standard.
 
 **3 — It is data, an already-fixed token, or the window never renders it, so it does not
 change.** Step keys, repository aliases, package names, counts, byte sizes, mount points,
@@ -473,129 +489,6 @@ matters is the rule, not the roster: one code per branch, allocated with the bra
 carrying that branch's existing sentence across unchanged (§3.2). An implementer who has
 converted every `marker HINT` call site has the set.
 
-### 4.3 Where the wording lives, and what an unknown code shows
-
-The tables live in `oneup/gui/markers.py` — ONEUP-0034 §4.2 already gives that module
-*"reading what the engine said, and saying it in English"*, and ONEUP-0034 lands
-`_step_badge` there — it is in `updater.py` today — so this replaces its substring matching
-with a lookup rather than adding a layer beside it. One table per marker family the window
-renders as wording — four of the five §4.1 converts, `@@REMEDY@@` having none (above). Each
-entry pairs the code with its English and its parameter names. ONEUP-0032 owns how that English is marked for translation.
-
-**Some entries are not a template with placeholders, and the table has to admit it.** Three
-render a *variable number* of things into one sentence — `@@REBOOT@@`'s components, and both
-of `@@CHECK_UNKNOWN@@`'s list-bearing codes, `sources-unreadable` and
-`flatpak-remotes-unreachable`. In another language a list is joined however that language
-joins one, so all three carry a small render function rather than a format string. **What
-differs between them is the agreement, and only one has it.** `@@REBOOT@@`'s sentence ends
-*"was/were installed"*, so its entry goes through the plural form
-(`wording-and-translation.md` §6.3) and the agreement becomes the catalogue's to decide
-rather than English's — which is also what the engine does today.
-
-**The plural form alone does not cover English, so `@@REBOOT@@`'s render function carries an
-explicit English branch beside the plural call.** Decided with the user 2026-08-12, from the
-three options the measurement below left open.
-
-Measured against PySide6 6.11 on 2026-08-05, with a compiled `.qm` loaded:
-`QCoreApplication.translate(ctx, src, "", n)` **does** select a numerus form even when the
-source string contains no `%n` — so for any language with a catalogue, the agreement works
-exactly as described above. With **no** catalogue loaded it returns the source string
-verbatim for every `n`. Design §5.1 ships 2.0 with **no locale file for any language**, so
-the English path is the only path that runs at launch, and on it a single source string
-cannot yield both *was* and *were* — there is no `(s)` idiom for a verb. Left at the plural
-call alone, this item would **regress** wording the engine gets right today
-(`reboot_reason_from_log` computes the verb from the component count).
-
-So the entry keeps the plural call as its mechanism — every language with a catalogue still
-gets its own forms decided there — and the render function selects *was* or *were* from the
-component count when no translator is installed. **This item lands before ONEUP-0032
-(§3.3), which builds `oneup/gui/i18n.py` and every catalogue load there is**, so at this
-item's landing no translator can be installed and the branch is simply unconditional.
-Making it conditional is ONEUP-0032's, in the commit that first installs one; this spec
-requires only that the branch be written where that condition can later be added, and not
-inside the plural call. **This is not the English branching
-`wording-and-translation.md` §6.3 forbids.** That rule forbids branching *instead of* the
-plural form, because branching cannot produce a language's third and fourth forms; it names
-`(s)` as the English fallback the source string carries. A verb has no `(s)` idiom, so for
-this one sentence the branch **is** that fallback. The two ways out not taken are recorded
-in §9.
-
-The two `CHECK_UNKNOWN` lists carry **no verb after the list**: today they read *"OneUp
-couldn't read these software sources: A, B"*, and §3.2 forbids this item re-wording them, so
-their render functions join and stop. `CHECK_UNKNOWN`'s third code,
-`sources-unknown-error`, carries zypper's exit status and is an ordinary substitution.
-
-**A code with no entry renders a readable sentence, never the raw token and never an empty
-banner** (`marker-protocol.md` §5.2). It says that this version of OneUp has no wording for
-what the run reported, names **every** code it did not recognise — all of them where a
-`@@REBOOT@@` reason carried several unknown elements, since a bug report needs the ones the
-window dropped as much as the first — and points at the log —
-which is the only honest thing it can say. It is a bug in the window, not in the run, and
-the run's own verdict is unaffected. The failure mode of the naive version is a blank
-warning banner on a run that actually failed, which is why `marker-protocol.md` §5.2
-requires the fallback outright rather than leaving it to taste. (All three packaging paths
-ship both halves together — `oneup-2.0.md` §4 — so a mismatched pair comes from a
-development checkout or a part-applied upgrade, not from an ordinary install.)
-
-**The same fallback answers a code whose arguments do not fit its entry.** A known code can
-arrive with more or fewer arguments than the window's table expects, for exactly the reason
-§6 already contemplates a newer engine: an argument was added or dropped on the engine side.
-Substituting a placeholder that has no value must not raise — `marker-protocol.md` §1.2
-forbids a throw in the read slot outright, and §6 ranks it as a trap, because it aborts
-parsing and drops the rest of the run's markers. A mismatch renders the same
-no-wording-for-this sentence as an unknown code.
-
-**A table entry declares its arguments as a fixed list or as a variable tail**, and the
-arity rule applies only to the fixed part. The two list-bearing `CHECK_UNKNOWN` codes are
-the variable case (§4.1): any number of trailing names is valid data there, so no count of
-them is an arity mismatch. Zero names is the one that should never happen — the engine
-emits the code only when it has at least one — but it is a defect in the engine, not a
-version mismatch, so it renders as the code's sentence with an empty list rather than as the
-fallback. Every other converted code is fixed-arity, `@@STEP_END@@`'s included: a step with
-no number emits a different code, not the same one with the field left off (§4.1).
-
-**The fallback has two forms, because some of these families render into a few words rather
-than a sentence. This section is the only place the choice between them is stated; §4.1,
-§6 and INV-3 point here rather than restating it.**
-
-- **Long** — the sentence above. Anywhere with room for one: a hint, a warning banner, a
-  remedy, the status line, the screen-reader announcement.
-- **Short** — the bare code, and nothing else. It is already a short lowercase token, so it
-  fits where a sentence would not: a `@@STEP_END@@` badge (beside `3 installed`), the
-  progress-bar caption, and each element of a `@@REBOOT@@` join.
-
-`@@REBOOT@@` is the one that applies the short form **element-wise** rather than to the
-whole field, and the rule turns on **which vocabulary the field matches and how much of it
-the window knows**, not on how many elements arrived. The rows are tried in order:
-
-| The reason field | Renders |
-| --- | --- |
-| exactly one element, and it is a **known standalone reason** | that entry's own sentence, with no join frame at all — the standalone set is tested first, because it is disjoint from the components (§4.1) and holds zero of them by definition |
-| one or more **known components** | the join, with each unknown element appearing **as its own bare code** beside the ones it knows — *"a new kernel and gpu-firmware-blob were installed"*: ugly, honest, and still advice |
-| neither vocabulary matches, whatever the element count | the **long** form, never the join — joining would assert the unknown tokens are components, which is how *"firmware-updated was installed"* reaches a user (§4.1) |
-
-INV-3's *"contains a space and is at least twice the combined length of the codes or key it
-names"* proxy
-therefore applies to the long form only; the short form is checked for being non-empty and
-containing that code or key.
-
-**Every reader of a converted marker goes through these tables, not just `handle_marker`.**
-`updater.py` unpacks `@@HINT@@` in three further places on the side channels —
-`_on_auth_finished` and `_on_thin_finished` put the payload straight into a `QMessageBox`,
-and `_on_size_output` appends it to the log — each with `line.split("|", 1)[1]`. Left alone,
-those three would show the user a bare `auth-write-failed` in a message box, which is the
-raw token `marker-protocol.md` §5.2 forbids and INV-3 exists to prevent. They are the
-easiest site in this item to miss, because they are nowhere near the marker handler.
-
-**One further reader touches a converted family and deliberately needs no table.** The tray
-check runs the engine's `--check` on its own `QProcess` and parses the result in
-`_parse_tray_line`, outside `handle_marker` entirely. It reads `@@CHECK_UNKNOWN@@` only to
-set a boolean — it never renders the payload — and takes `@@CHECK@@`'s count, which is data.
-So it survives the conversion untouched, and it is named here because an implementer
-grepping for readers will find it and needs to be told that, rather than adding a table
-lookup it has no use for. It is also a reader `marker-protocol.md` §2's table does not list
-at all, which §8 carries.
-
 ## 5. Correctness invariants
 
 - **INV-1** Every code matches `^[a-z0-9-]+$`, and every **code field** holds codes and
@@ -642,26 +535,13 @@ at all, which §8 carries.
   middle position raises rather than emitting an empty field. That last one is a direct call
   because no end-to-end scenario can produce it — an engine branch that passes a middle
   `None` is the programming error being guarded against, not a run the suite can drive.
-- **INV-3** A code the window has no entry for — or a known code whose fixed arguments do not
-  fit its entry, or a step key with no entry in `TASKS` — renders **something readable and
-  non-empty** at **every** site that renders that marker, and never raises out of the read
-  slot. **Which of the two forms each site takes is §4.3's**, not restated here. The one
-  case that is about *where* the obligation is discharged rather than which form it takes:
-  **`@@REMEDY@@`**, whose payload the window renders nowhere — an unknown code arms no
-  button, and the banner carries the long form instead (§4.1). It is the only family whose
-  fallback appears somewhere other than where the wording would have gone.
+- **INV-3** *withdrawn — moved to `docs/specs/ONEUP-0108-window-wording.md` INV-1.*
+  Withdrawn on 2026-08-12 with the §4.3 it belonged to. The unknown-code fallback is the
+  window's contract, and it is
+  stated there in full rather than summarised here. **The number is not reused** —
+  `docs/standards/documentation.md` §5 forbids renumbering, INV-4 and INV-5 below keep
+  theirs, and `CLAUDE.md` §6 cites this document's INV-1 by number.
 
-  *Test:* `tests/gui-smoke.py` feeds an unknown code once for each of the five families §4.1
-  converts, and once for each of the three side-channel `HINT` readers §4.3 names; feeds a
-  known code with one argument too few and one too many; feeds a `@@REBOOT@@` with one known
-  and one unknown component **and** one with a single unknown element; and feeds a
-  `@@STEP_BEGIN@@` whose key is not in `TASKS`; and a `@@REBOOT@@` whose elements are **all**
-  unknown. Each asserts the rendered text is non-empty and contains **every** unknown code
-  it was fed (or the key), and that parsing continues afterwards. **Wherever §4.3 says long
-  form**, it also asserts the text contains a space and is at least twice the combined
-  length of the codes or key it names — the
-  cheapest checkable proxy for "a sentence, not the token with something stuck to it". The
-  `@@REMEDY@@` case additionally asserts **no button was armed**.
 - **INV-4** No sentence the window *renders as its own wording* is composed by the engine —
   and the boundary holds in both directions. The engine's ordinary terminal output is
   **excluded and stays English**: the window shows it verbatim in the log pane
@@ -675,7 +555,8 @@ at all, which §8 carries.
   verbatim in the log pane, that **no log line is looked up in a code table**, and that no
   **code field's** raw text reaches any widget other than the log pane — argument fields are
   data and are rendered into the window's own wording by design (§4.2), and the bare-code
-  fallbacks INV-3 and §4.3 define are the deliberate exception.
+  fallbacks `docs/specs/ONEUP-0108-window-wording.md` §4.3 defines are the deliberate
+  exception.
   Breaks the moment an implementation starts routing log text through the code tables, which
   is the natural over-reach once every *other* sentence has moved into the window.
 - **INV-5** A shipped code is never reused for a different meaning.
@@ -685,16 +566,14 @@ at all, which §8 carries.
 
 ## 6. Failure modes
 
+**Every window-side failure mode is `docs/specs/ONEUP-0108-window-wording.md` §6's** — a
+code the window has no entry for, an argument list that does not fit one, an unknown step
+key. They moved with §4.3 and the invariant that governs them, and are not restated here.
+The rows below are the ones the engine owns.
+
 | When this breaks | What the user sees | Why it is survivable |
 | --- | --- | --- |
-| The engine emits a `HINT` or `CHECK_UNKNOWN` code the window does not know | A readable sentence naming the code, and the log | INV-3. The run's verdict, badges and reboot advice are unaffected — only the explanation is |
-| The engine emits a `REMEDY` code the window does not know | No button is offered; the banner says in the long form that this version has no fix for what the run reported, beside the run's own `HINT` | INV-3 (§4.1). A remedy the window cannot perform is one it must not offer — arming a button for an unknown action is the worse failure |
-| The engine emits an unknown `STEP_END` code, whose wording *is* the badge | The badge shows the code itself, which is a short lowercase token and fits the slot; the row still reads `ok`/`skip`/`fail` from `status`, which is a token, not a code | INV-3's short form (§4.3). The run's verdict is carried by `status`, never by the badge — and `fail` is decided by `status` alone (§4.1) |
-| The engine emits an unknown `@@REBOOT@@` component beside known ones | The sentence renders with the components the window does know, and names the one it does not | INV-3 per element (§4.3). `REBOOT`'s `yes`/`no` is a token, not a code, so the *advice to reboot* survives an unrenderable reason |
-| The `@@REBOOT@@` reason is a **single** element the window does not know | The long fallback sentence naming the code — never the components' *"…was/were installed"* frame | §4.1. An unknown one-element reason belongs to neither vocabulary, so joining it would assert it is a component and print *"firmware-updated was installed"* |
 | The window is newer than the engine | An engine payload the window still has an entry for | Entries are retired only when no supported engine emits them (§4.2) |
-| A known code arrives with more or fewer arguments than its entry expects | The same readable sentence naming the code | INV-3. The alternative is a throw in the read slot, which `marker-protocol.md` §1.2 forbids because it drops the rest of the run's markers |
-| A step key arrives that the window has no title for | A readable sentence naming the key in the status line and the announcement; the bare key in the progress-bar caption, which has no room for a sentence | INV-3, per site (§4.1's table). The step still runs, still badges and still counts toward the total |
 | A source name containing a space reaches `@@CHECK_UNKNOWN@@` | Nothing — each name has its own trailing field, so a space is never a separator | §4.1. A joined list split on spaces would report one broken source as several |
 | A `\|` reaches a marker argument | Nothing — it arrives as `/` | INV-2, in one place in the emitter |
 | The `STEP_BEGIN` guard is not moved with the field | The run appears to freeze while it is in fact updating | Caught the moment a scenario runs: no step ever begins. §4.1 says so because it is the one part of this item that fails loudly rather than quietly |
@@ -705,7 +584,6 @@ at all, which §8 carries.
 | What it locks in | Where |
 | --- | --- |
 | INV-1, INV-2 — the code field's shape, `@@REBOOT@@`'s two vocabularies, and the `\|` guard | `tests/run-tests.sh`, per-scenario assertions on every marker carrying a code — **plus a scenario for each of the five families**, since the assertion is vacuous for one no scenario emits (INV-1) — and one direct emitter call for the middle-`None` raise (INV-2) |
-| INV-3 — the fallback, at every reader of every converted family, and for an unfitting argument list and an unknown step key | `tests/gui-smoke.py`, new checks |
 | INV-4 — the log pane still shows the engine's English verbatim | `tests/gui-smoke.py` |
 | INV-5 — a code is never reused | **nothing.** Review only |
 
@@ -749,8 +627,7 @@ those are 2.0-only. A reference amended on `main` would describe a contract the 
   this item moves; §4.2, §4.6, §4.8 and §4.10 for the payloads that become codes; §5.1/§5.2,
   which currently reserve this work for `HINT` and `REMEDY` alone (§3.1); **§1.1 and §6's
   free-text trap**, both of which state the `|` substitution for one field where §4.2 now
-  applies it to every argument; **§2's reading-order table**, which lists four channels and
-  gains the **tray check** it already omits today (§4.3); and its **What checks this** row
+  applies it to every argument; and its **What checks this** row
   for §1.1, which records the `|` substitution as *"caught by nobody"* — INV-2 makes it one
   guard in the emitter, with a test. All in the same commit as the engine and both suites,
   per that document's §5. **§4.7 (`fw_changed` "emitted and currently unread") and the two
@@ -814,14 +691,10 @@ version site moves** — none of `docs/standards/workflow.md` §5.1's six; this 
 - **Send `@@CHECK_UNKNOWN@@`'s source names space-separated, as `@@SERVICES@@` does.**
   Rejected: zypper names repositories in prose that routinely contains spaces (§4.1), so the
   window would report one broken source as several.
-- **Ship a compiled English `.qm`, so English reaches its *was/were* forms by the same
-  route every other language does.** Rejected with the user 2026-08-12: it makes 2.0 build
-  and ship a translation artifact for the one language that needs none, and design §5.1
-  ships no locale file at all. §4.3 takes the English branch instead.
-- **Re-word `@@REBOOT@@`'s sentence so no agreement is needed** (*"Installed: a new
-  kernel, your graphics driver"*). Rejected with the user the same day, and §3.2 forbids
-  this item deciding it alone: it changes what a user reads, so it belongs to ONEUP-0064,
-  not here.
+- **Two alternatives about `@@REBOOT@@`'s *was/were* agreement** — shipping a compiled
+  English `.qm`, and re-wording the sentence so no agreement is needed — were rejected with
+  the user on 2026-08-12 and moved to `docs/specs/ONEUP-0108-window-wording.md` §9 with the
+  decision they settle. Both are about what the *window* renders, which is that document's.
 
 ## 10. Out of scope
 
@@ -849,6 +722,7 @@ table below records the loops run against **this** document.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 4-split | 2026-08-12 | — | **Provenance, not a review — no reviewer was dispatched to produce this row.** Acting on loop 4's stop signal and roadmap item ONEUP-0101, the window half of this document was split out to `docs/specs/ONEUP-0108-window-wording.md`: the former §4.3 (where the wording lives, the two fallback forms, `@@REBOOT@@`'s element-wise render table, and every reader of a converted marker), the former INV-3, seven of §6's rows, §7's INV-3 row, §8's reading-order-table edit and two of §9's alternatives. **INV-3's number is tombstoned rather than reused** — `CLAUDE.md` §6 cites INV-1 by number, so nothing here is renumbered. This document keeps the engine side, §4.1 and §4.2, and INV-1, INV-2, INV-4 and INV-5. It left the split at 732 lines, down from 859, with §4 at 348 of them — 47%, against 54% before (`wc -l`, and the line span from the `## 4.` heading to the `## 5.` one). **The loops above are not inherited by the new document**, which runs the gate from loop 1 on its own bytes; the rows below still describe §4.3 because they ran while it was here. This document's own next loop is 5. |
 | 4 | 2026-08-12 | 2 lanes; Q1 1 · Q2 3 · Q3 2, all 6 verified, 0 dismissed — 2 draft defects vs 4 fix collateral (no severity scale under the four-question gate, so nothing here for §7's tally check to balance; ONEUP-0100) | **The stop signal, and it was written down in advance.** Loop 2's run state said to split §4 if collateral again outran draft defects; it did, 4 to 2, so this document does not get a fifth loop — the remaining work is `docs/specs/ONEUP-0101`, splitting §4, not another cold read. Both lanes independently led with the same two, and both were loop 3's: INV-1's new membership rule named only the **component** vocabulary, so it would have failed a legitimate `@@REBOOT@@\|yes\|firmware-updated` — the commonest non-kernel reboot — and INV-4's new "raw field text" clause forbade what §4.2 requires, since argument fields like a repository name are data the window renders by design. Both are now scoped to what they meant. Loop 3's deletion of the stale `17` had also missed a second, unbolded instance three lines away, which is the shape of collateral a subject sweep catches and a citation sweep does not. The two genuine draft defects neither earlier loop reached were both in the same seam this document keeps failing on — the two disjoint `@@REBOOT@@` vocabularies. §4.3's render table keyed on *how many components the window knows*, and a known standalone reason holds **zero** components by definition, so every firmware-only and generic-advisory reboot would have rendered the no-wording-for-this fallback on a machine that genuinely needed rebooting; the table now tests the standalone set first and has three rows. And the English *was/were* branch settled with the user this morning said it is "reached only when no catalogue is loaded" while §3.3 lands this item **before** ONEUP-0032, which builds every catalogue load there is — so the predicate was unaskable at landing. It is now stated as unconditional here, with ONEUP-0032 owning the condition. Also closed: §7 said this item "retires" `tests/differential-test.sh` without saying whether the file is deleted (it is) or that `testing.md` §1's suite row goes with it. Lane open questions resolved clean: three were packet holes again, and `begin_step`, the download-size four-arm `case` and `valid_alias` stay unverified from windows rather than from the document. |
 | 3 | 2026-08-12 | 2 lanes, first loop under the four-question gate, which has no severity scale — so this row carries a Q tally and nothing for §7's severity check to balance: Q1 4 · Q2 1 · Q3 1 · Q4 2, all 8 verified, 0 dismissed (2 of the Q1s raised by the packet build, not a lane) | **The two that would have shipped a green suite over a real defect were both false assurances, and one of them was provable by running the check rather than reading it.** §4.1 said a half-converted `@@REBOOT@@` reason is caught by INV-1 and shows the user three unknown components: neither holds. Every word of *"core system packages were updated"* matches `^[a-z0-9-]+$`, so element-wise the prose passes the shape check and the suite stays green — INV-1 now pins that one field to §4.1's closed component vocabulary by **membership** — and §4.3's own table renders the long fallback when no element is known, so the user is told OneUp has no wording for the run rather than shown fragments. Second, §4.2 said the emitter's middle-`None` raise is asserted by the suite while INV-2 named only two obligations and §7 provisioned no test; it is now INV-2's third, as a **direct** emitter call, because no end-to-end scenario can drive the programming error it guards. Two more contract gaps: the long form "names the code" with no rule for a `@@REBOOT@@` reason carrying several unknown elements (it now names every one, and INV-3's proxy measures their combined length), and "one table per marker family" against five converted families of which `@@REMEDY@@` has no table. The packet build found what no lane could: **§4.1's "14 `marker HINT` call sites" and §4.3's "17 codes" went stale when 1.4.3 shipped** — the engine has 18 — and `tests/docs-check.py` was green across all 17807 claims because a prose count of call sites is not a shape it checks. Both figures are deleted rather than re-numbered (`documentation.md` §6b). Also corrected: the badge was said to "stop saying `package(s)`", which `_step_badge` never says. Blast-radius sweep caught two of its own: §4.3 quoted INV-3's proxy verbatim and §7's row described INV-1 and INV-2 before this loop widened them. Four lane open questions resolved clean, three of them holes in the **packet** rather than the document — the two direct `@@REBOOT@@` assignments, `valid_alias`, and the branch bodies were outside the windows, and both lanes flagged the same gap. |
 | 2 | 2026-08-05 | 3 lanes; 0 critical, 7 high, 8 medium, 9 low, 1 info — **25 verified, 0 dismissed** — 10 draft defects vs 15 fix collateral | **No lane found a critical**, down from three, and the shape of what it did find is the reason this row matters more than its count. **Fifteen of the twenty-five were loop 1's own fixes**: the closed `@@STEP_END@@` code table loop 1 added had no code for a failed step, which INV-1 makes mandatory; the §8 restructure left "Two edits are already made" heading a **five**-bullet list, so the `CHANGELOG.md` entry read as already written; the cross-doc correction to `ONEUP-0032` §4.1 was made but §4.1 still quoted the superseded row and called the fix pending; the one-unknown-`@@REBOOT@@`-element rule covered one element and not two; and the new INV-4 test forbade raw payload text in any widget, which INV-3's own short-form fallback requires. That ratio — collateral outrunning draft defects on the first split — is the documented signal to **sweep harder rather than loop harder**, so the fallback rule, which loop 1 had left stated in full in four places, was **deleted down to one owner** (§4.3) with §4.1, §6 and INV-3 reduced to pointers; duplication was the engine generating the findings. The best draft defect no lane could have found without opening the engine: **the conversion cannot remove English from the privileged half at all**, because the engine composes each of these sentences once and uses it **twice** — `marker HINT "…: $why"` is followed immediately by `echo "  Download size: unavailable — $why"`, both `CHECK_UNKNOWN` branches are echoed the same way, and `end_step`'s `detail` is stored in `DETAIL[$key]` and printed by the summary block. §10 keeps that terminal output English, so the engine **retains** every sentence and sends a code beside it; an implementer who deleted them would have gutted `./update_system.sh` run directly. §4.2's "keeps English out of the privileged half" is now "out of the **payload**". Two further draft defects were gates nobody had costed: `tests/differential-test.sh` implements gate **G2**, which requires v1 and v2 to emit equal marker streams and which this item breaks by construction, so §7 now retires it in the same commit rather than letting it start failing; and design §7's **G10** row still carried the narrow `@@HINT@@`/`@@REMEDY@@` framing that §3.1 exists to overturn, while §3.1 cites G10 by name. **One finding is surfaced, not fixed** — §4.3's plural-form mechanism for `@@REBOOT@@`'s was/were agreement. Measured against PySide6 6.11 with a compiled `.qm`: `translate(ctx, src, "", n)` selects a numerus form even with no `%n` in the source, so it works for any language with a catalogue — but with no catalogue it returns the source verbatim, and 2.0 ships English only, so a single source string cannot yield both *was* and *were*. Left as written the item would regress wording the engine gets right today. Three ways out are stated in §4.3; the choice is the user's. The document left this loop at **812 lines**, up from 718 — and that growth, on a loop whose findings were 60% self-inflicted, is the number the loop-or-split call now rests on. |

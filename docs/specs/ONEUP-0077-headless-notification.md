@@ -80,7 +80,8 @@ states what each of those costs and what replaces it.
 owns wording — not a visible window: neither headless path opens one, and neither touches Qt
 at all (below). It is
 built in `oneup/gui/markers.py`, in a **notification table of its own**, sitting beside the
-per-marker-family tables `ONEUP-0072` §4.3 puts in the same module, and raised by the two
+per-marker-family tables `docs/specs/ONEUP-0108-window-wording.md` §4.1 puts in the same
+module, and raised by the two
 entry points in `oneup/gui/app.py`. **The table has eight entries** — the end-of-run
 fall-through's five and the check path's three — and every one of them is here, because a
 count without the list is what an implementer builds short:
@@ -276,8 +277,8 @@ this item does not touch (§10), so it cannot assert any of these.
 
 ## 6. Failure modes
 
-- **The engine emits a marker the window has no entry for.** `ONEUP-0072` §4.3's
-  unknown-code rule applies unchanged; the notification degrades to something readable rather
+- **The engine emits a marker the window has no entry for.**
+  `docs/specs/ONEUP-0108-window-wording.md` §4.3's unknown-code rule applies unchanged; the notification degrades to something readable rather
   than raising inside a headless path with nobody watching.
 - **The engine produces no `@@DONE@@` at all** — killed, or the machine lost power. Unlike a
   *followed* run, a headless path also has the engine's **exit status**, so the precedence
@@ -329,7 +330,8 @@ two disagree until the code lands.
 **Made when the code lands:**
 
 - **`docs/reference/marker-protocol.md`** — **§2's reading-order table**. It lists four
-  channels today; `ONEUP-0072` lands first and adds the tray check, so by the time this item
+  channels today; `docs/specs/ONEUP-0108-window-wording.md` §8 adds the tray check in the
+  ONEUP-0072 landing commit, so by the time this item
   edits it the table reads **five**, and this item takes it to **seven** with the two headless
   paths, which parse a run's markers with no window. And **§4.7**, which records `fw_changed`
   as *"emitted and currently unread"* — this item is what reads it. And **§4.9**, which says

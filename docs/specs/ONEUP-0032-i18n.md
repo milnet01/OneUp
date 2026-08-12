@@ -118,7 +118,8 @@ Three placements, and two of them are modules 2.0 already creates before this it
 
 `oneup/gui/markers.py` is where the sentence tables belong rather than a new module:
 ONEUP-0034 §4.2 already gives it *"reading what the engine said, and saying it in English"*.
-ONEUP-0072 §4.3 builds them; what this item adds is that their English is marked for
+`docs/specs/ONEUP-0108-window-wording.md` §4.1 builds them, in ONEUP-0072's landing commit;
+what this item adds is that their English is marked for
 translation like any other string (§4.3).
 
 `oneup/gui/i18n.py` is separate because it is the one thing that must happen **before any

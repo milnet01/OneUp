@@ -16,41 +16,45 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: `ONEUP-0072`'s gate ran four loops and stopped on the split signal**
+> ## ▶ You are here — **Task 18: `ONEUP-0072` is split; `ONEUP-0108` needs its first loop**
 >
-> **Start at `ONEUP-0101`**, which owns the split of that spec's §4 and is the next action.
-> The run state that used to sit under `docs/reviews/` was deleted when its run finished
-> (`documentation.md` §7.1); what it held is now in the spec's own §11 loop log — both later
-> loops' findings, the measured PySide6 reproduction behind the *was/were* decision, and why
-> the run stopped rather than looping a fifth time.
+> **Start with `review-contract` on `docs/specs/ONEUP-0108-window-wording.md`, loop 1.**
+> `ONEUP-0101` is done: the window half of `ONEUP-0072` — its §4.3 and its INV-3, plus seven
+> of §6's rows, §7's INV-3 row and two of §9's alternatives — is now that document, and
+> `ONEUP-0072` is 732 lines with §4 at 47% rather than 859 and 54%. Both specs carry a
+> provenance row saying no reviewer produced it, and **neither inherits the other's loops**:
+> `ONEUP-0108` runs from loop 1 on its own bytes, `ONEUP-0072`'s own next loop is 5.
 >
-> **One thing needed a human and has been answered; one still does:**
+> **Both questions that needed a human are answered:**
 >
-> 1. **Answered 2026-08-12 — `@@REBOOT@@`'s *was/were* agreement.** §4.3 routed it through
->    Qt's plural form, which (measured against PySide6 6.11) selects a form only where a
->    catalogue exists, while design §5.1 ships 2.0 with **no locale file for any
+> 1. **Answered 2026-08-12 — `@@REBOOT@@`'s *was/were* agreement.** The old §4.3 routed it
+>    through Qt's plural form, which (measured against PySide6 6.11) selects a form only
+>    where a catalogue exists, while design §5.1 ships 2.0 with **no locale file for any
 >    language** — so English would have regressed wording `reboot_reason_from_log` gets
->    right today. The user chose the **explicit English branch beside the plural call**,
->    of the three ways out §4.3 offered. §4.3 now states it as settled and §9 records the
->    two rejected; there is no `⚠ OPEN` block left in that document.
-> 2. **Whether loop 3 runs at all, or `§4` gets split instead.** The evidence points both
->    ways and `RESUME.md` lays it out: criticals fell 3 → 0, but loop 2's findings were
->    **15 collateral vs 10 draft**, and the document went **597 → 812 lines** across two
->    loops. Its own pre-split loop 3 had already recommended splitting §4, which is now
->    ~60% of the document. Recommendation: run loop 3, and if collateral again outruns
->    draft defects, split rather than raise `--max-loops`.
+>    right today. The user chose the **explicit English branch beside the plural call**, of
+>    the three ways out on offer. It is `ONEUP-0108` §4.2, settled, with §9 recording the
+>    two rejected and INV-2 holding it in place; there is no `⚠ OPEN` block in either
+>    document.
+> 2. **Answered 2026-08-12 — split rather than a fifth loop.** The condition was written
+>    down two loops in advance: run loop 3, and if collateral again outruns draft defects,
+>    split §4 rather than raise `--max-loops`. Loop 4 came back 4 collateral to 2 draft, so
+>    it fired. `ONEUP-0101`'s bullet holds the measurement.
 >
 > **The lesson loop 2 paid for, and it is the batch's standing instruction:** loop 1 fixed
 > 24 findings and *created* 15 of loop 2's 25. The single largest cause was **stating one
 > rule in four places** — the fallback form ended up in §4.1, §4.3, INV-3 and §6, and every
 > later edit moved one copy and stranded the others. Loop 2's remedy was to **delete N−1**
-> and leave §4.3 as the only owner. Reconciling copies is not a fix; it is the next loop's
-> findings.
+> and leave one owner. Reconciling copies is not a fix; it is the next loop's findings. The
+> split applied the same rule at document scale: one rule, one owner, and every pointer
+> into the moved text rewritten in the same commit — `ONEUP-0077` §4.2 and §6,
+> `ONEUP-0032` §4.1 and `marker-protocol.md` §5.2, which was the class that broke after
+> the 2026-08-03 split and was found a loop later.
 >
 > **`ONEUP-0077` is done (2026-08-03) — three loops, `Status: Reviewed`, converged by cap.**
 > 21 → 23 → 20 verified, all fixed; nothing left verified and unfixed, one INFO carried.
-> **The three still to gate are `ONEUP-0064`, `ONEUP-0072` and `ONEUP-0076`**, each from
-> loop 1 on its own bytes, then the cheap pass on `ONEUP-0027`. `ONEUP-0034` is untouched
+> **The four still to gate are `ONEUP-0064`, `ONEUP-0076`, `ONEUP-0108` and `ONEUP-0072`**
+> — the first three from loop 1 on their own bytes, `ONEUP-0072` from loop 5 — then the
+> cheap pass on `ONEUP-0027`. `ONEUP-0034` is untouched
 > since its own four-loop gate and needs nothing.
 >
 > **`ONEUP-0032` no longer qualifies as a cheap pass.** It took a substantive edit during
