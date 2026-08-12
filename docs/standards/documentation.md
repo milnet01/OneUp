@@ -430,6 +430,28 @@ The log format:
 | 2 | 2026-07-27 | none | converged |
 ```
 
+### 7.1 A run-state note lives only as long as its run
+
+A review stopped part-way may leave a hand-off note under `docs/reviews/` — where it
+resumes, what the packet held, which findings are still open. **That note is deleted by the
+commit that finishes the run.** Not archived, not left for reference.
+
+The durable record is elsewhere and is already checked: the loop log above, in the reviewed
+document, and the run's fix ledger. A note that outlives its run duplicates both and is
+gated by neither, so nothing makes it wrong out loud when the code moves underneath it.
+
+**The failure mode is not that it goes stale — it is that it goes stale while claiming to be
+verified.** ONEUP-0072's own run-state note — deleted 2026-08-12 under this rule, which is
+why no path is given for it — carried a *"Verified source facts worth carrying forward"*
+section telling the next session to reuse its figures rather than re-derive them. One of
+them counted the engine's `marker HINT` call sites, and 1.4.3 had already added four. The
+note bought exactly the trust that stops anyone checking, which is worse than saying
+nothing.
+
+**Delete when the run ends, not when the session ends.** A run genuinely still in flight
+needs its note — that is what the file is for, and the next session cannot resume without
+it. What is forbidden is the note that survives its own run.
+
 ## 8. Plain language
 
 ### 8.1 Write it so it can be checked
@@ -549,11 +571,12 @@ fact only to make a *different* point with it, and say where it came from.
 | §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design. `docs/specs/` is exempt until ONEUP-0065 converts the 62 citations the four older specs carry. The prose form — *"around line 786"* — is caught by nobody |
 | §6b most counts taken from the code stay out of the document | nothing automatic — a cold reader |
 | §7 a loop tally balances | `tests/docs-check.py` |
+| §7.1 a run-state note is deleted when its run ends | nothing automatic — whether a run has ended is not a fact on disk. The catcher is the closing commit itself, and the note's own absence next time |
 | §8 plain language | nothing automatic — a cold reader, and the author reading their own sentence as an opponent |
 | §9 a pointer resolves | `tests/docs-check.py`, over the documents that describe the tree as it is: standards, reference, `CLAUDE.md`, `README.md`. A spec, design document or plan is excluded, because each legitimately names files it is going to create. **Only paths containing a `/` are checked** — a bare `foo.py` is not, because the same form is used for naming-pattern examples (`snake_case.py`), for 2.0 modules that do not exist yet, and for runtime files that are never in git. A renamed script therefore leaves residue this gate cannot see; the 2026-07-26 review found five such references after `check-docs.py` became `tests/docs-check.py` |
 | §9 one owner per fact | nothing automatic. This is the gap the review loop exists to cover, and the most expensive one to leave uncovered |
 
-**Five of the eleven rows have nothing automatic behind them**, and that is the honest state
+**Six of the twelve rows have nothing automatic behind them**, and that is the honest state
 rather than a to-do list: a gate for *"is this claim true?"* would have to read the code and
 decide. Two are worth building anyway, because both would have caught errors this set has
 actually produced — a check for a tree-derived count written in the present tense with no

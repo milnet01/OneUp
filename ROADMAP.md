@@ -1794,6 +1794,13 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   politely the longer it runs, because by then people have thousands of files
   and any cleanup has to decide what it is allowed to delete. Raised as a
   suggestion to the user; they have not ruled on the ordering.
+  Ordering decided by the user 2026-08-12: this moves EARLY in 2.0,
+  ahead of its previous position. The reasoning they accepted is the
+  asymmetry, not the severity — pruning written before ONEUP-0077 starts its
+  weekly writes is "delete files older than N", while pruning written after a
+  year of them has to decide which of a user's thousands of files it may
+  delete, on their machine. Same outcome, harder problem. The work still
+  waits its turn to be built; what is settled is where it sits in the queue.
 
 - 📋 [ONEUP-0083] **Record the third loop-log tally trap in documentation.md §7.**
   tests/docs-check.py's DISPOSITION_RE matches only `verified`,
