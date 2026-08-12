@@ -934,6 +934,31 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: doc.
   Source: user-request-2026-07-26.
   Progress (2026-08-03): ONEUP-0064 gated — loop 1 done (30 verified, all fixed, Status still Draft), loop 2's findings verified but NOT yet fixed. Loop 2's 27 verified findings are written up at docs/reviews/ONEUP-0064-loop-2-findings.md — fold them in directly rather than re-running a loop to rediscover them. Loop 1 also corrected oneup-2.0.md §5.2 (it now carries ONEUP-0076) and repointed ONEUP-0076's three stale §4.5 citations at §4.1. Task 18 still owes: 0064 loops 2-3, then ONEUP-0072, ONEUP-0076, ONEUP-0032, and a cheap citation pass on ONEUP-0027.
+  Progress (2026-08-12): Task 18's ONEUP-0072 gate ran two more loops
+  (the document's 3rd and 4th) under the rewritten four-question gate. 14
+  verified findings, all fixed, 0 dismissed. The two worth the run were both
+  false assurances that would have shipped a green suite over a real defect:
+  INV-1's shape check does not catch a half-converted @@REBOOT@@ reason —
+  every word of "core system packages were updated" matches ^[a-z0-9-]+$, so
+  element-wise the prose passes, proved by running the regex rather than
+  reading it — and §4.2 claimed a test for the emitter's middle-None raise
+  that no invariant provisioned. Also: §4.3's render table sent every
+  firmware-only reboot to the no-wording fallback, because it keyed on known
+  *components* and a standalone reason holds none.
+
+  The was/were OPEN block is closed — the user chose the explicit English
+  branch (2026-08-12); §9 records the two rejected.
+
+  STOPPED, not converged, and the reason is measured: loop 4's collateral (4)
+  outran its draft defects (2), which is exactly the condition the loop-2 run
+  state named as the signal to split §4 rather than loop again. §4 is 466 of
+  859 lines. Filed as ONEUP-0101; Status stays Draft. docs/reviews/
+  ONEUP-0072-RESUME.md is deleted — its run is finished, and it carried the
+  stale "14 marker HINT call sites" as a fact to carry forward when 1.4.3 had
+  already made it 18.
+
+  Task 18 still owes: ONEUP-0101 then ONEUP-0072's close, ONEUP-0076,
+  ONEUP-0032, and a cheap citation pass on ONEUP-0027.
 
 - 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether
@@ -2452,4 +2477,39 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Related: ONEUP-0083 records an earlier trap in the same check.
   **Layman:** Our documentation checker was written for the old review scoring and quietly skips rows written under the new one.
   Kind: test.
+  Source: in-session-2026-08-12.
+
+- 📋 [ONEUP-0101] **Split ONEUP-0072's §4 — the review keeps repairing its own repairs.**
+  The stop condition a previous session wrote down has been met and
+  measured. Its rule: run loop 3, and if collateral again outruns draft
+  defects, split §4 rather than raise the loop cap.
+
+  Measured 2026-08-12 across two loops. Loop 3: 8 verified, 6 draft
+  defects, 0 collateral (2 raised by the packet build). Loop 4: 6
+  verified, 2 draft defects, **4 collateral** — every one of them
+  loop 3's own fixes. So the condition fired, and this document does
+  not get a fifth cold read.
+
+  The size signal agrees: 859 lines, of which §4 is 466 — **54%**. Two
+  specs in this project over 1000 lines took nine and eleven loops. A
+  cold read stops reliably reaching every part of a document this
+  shape, which is why the same seam (`@@REBOOT@@`'s two disjoint
+  vocabularies) has now produced findings in three separate loops.
+
+  What the split is: §4 holds three separable contracts — the routing
+  rule that decides each field's fate (§4.1), the wire shape of a code
+  and its arguments (§4.2), and where the wording lives plus what an
+  unknown code renders (§4.3). §4.3 is the one every other section
+  points at, and it is the natural first document.
+
+  Status stays **Draft**: the gate never returned an empty loop, so
+  calling it Reviewed would be the false-assurance defect this very
+  review found twice. No findings are outstanding — all 14 verified
+  across both loops are fixed — but the last fix pass has not itself
+  been read cold, and the split is how it should be.
+
+  Blocks ONEUP-0072 implementation, and therefore Task 18 of
+  docs/plans/ONEUP-0057-documentation-set.md.
+  **Layman:** One design document has grown too big to check reliably; splitting it is now cheaper than reviewing it again.
+  Kind: doc.
   Source: in-session-2026-08-12.
