@@ -349,6 +349,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   second-language catalogue is written, reviewed or shipped in 2.0 — that is a
   data file contributed afterwards, not a project. Right-to-left IS in 2.0,
   because a layout built the wrong way has to be rebuilt rather than translated.
+  Re-confirmed by the user 2026-08-12 ("add support for multiple
+  languages, including RTL"). Nothing new is owed: this bullet already carries
+  both halves, and right-to-left has been in scope since 2026-07-26. Where each
+  half lives, so a later session does not open a duplicate item: the machinery
+  (string wrapping, .ts/.qm workflow, RTL mirroring, gate G10) is this item,
+  inside 2.0; a translated catalogue for a specific language is a data file
+  contributed after 2.0 ships (docs/design/oneup-2.0.md section 5.1), which is
+  why no bullet exists for "ship German" and none should be opened.
 
 - ✅ [ONEUP-0033] **bump.py: advance the CHANGELOG [Unreleased] compare-link base to the new tag.**
   bump.py rewrites the six version sites and adds a new `[x.y.z]: .../releases/tag/vX.Y.Z` reference link, but leaves the `[Unreleased]: .../compare/vPREV...HEAD` link pointing at the PREVIOUS tag. After releasing 1.2.0 the link still reads `compare/v1.1.0...HEAD` (CHANGELOG.md:207) — it should read `compare/v1.2.0...HEAD`. Fix: in bump.py, when moving `## [Unreleased]` to `## [X.Y.Z]`, also rewrite the `[Unreleased]:` compare base from the old tag to `vX.Y.Z`. Cosmetic (the link 404s on the stale range only until the next commit), pre-existing since at least 1.1.0. Add/adjust a bump.py test to assert the Unreleased compare base advances. No version-lockstep impact (local-CI's lockstep gate doesn't check this link).

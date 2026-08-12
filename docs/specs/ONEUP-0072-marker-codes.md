@@ -488,24 +488,33 @@ differs between them is the agreement, and only one has it.** `@@REBOOT@@`'s sen
 (`wording-and-translation.md` §6.3) and the agreement becomes the catalogue's to decide
 rather than English's — which is also what the engine does today.
 
-> **⚠ OPEN — this mechanism does not cover English, and 2.0 ships English only. A decision
-> is needed before this item is built.** Measured against PySide6 6.11 on 2026-08-05, with a
-> compiled `.qm` loaded: `QCoreApplication.translate(ctx, src, "", n)` **does** select a
-> numerus form even when the source string contains no `%n` — so for any language with a
-> catalogue, the agreement works exactly as described above. With **no** catalogue loaded it
-> returns the source string verbatim for every `n`. Design §5.1 ships 2.0 with **no locale
-> file for any language**, so the English path is the only path that runs at launch, and on
-> it a single source string cannot yield both *was* and *were* — there is no `(s)` idiom for
-> a verb. Left as written, this item would **regress** wording the engine gets right today
-> (`reboot_reason_from_log` computes the verb from the component count). Three ways out, and
-> the choice is the user's, not this spec's: ship an English `.qm` (a catalogue for the
-> language 2.0 does ship, which design §5.1 does not currently contemplate); give the render
-> function an explicit English branch beside the plural call; or re-word the sentence so no
-> agreement is needed, which §3.2 forbids this item doing on its own. The two `CHECK_UNKNOWN`
-lists carry **no verb after the list**: today they read *"OneUp couldn't read these software
-sources: A, B"*, and §3.2 forbids this item re-wording them, so their render functions join
-and stop. `CHECK_UNKNOWN`'s third code, `sources-unknown-error`, carries zypper's exit
-status and is an ordinary substitution.
+**The plural form alone does not cover English, so `@@REBOOT@@`'s render function carries an
+explicit English branch beside the plural call.** Decided with the user 2026-08-12, from the
+three options the measurement below left open.
+
+Measured against PySide6 6.11 on 2026-08-05, with a compiled `.qm` loaded:
+`QCoreApplication.translate(ctx, src, "", n)` **does** select a numerus form even when the
+source string contains no `%n` — so for any language with a catalogue, the agreement works
+exactly as described above. With **no** catalogue loaded it returns the source string
+verbatim for every `n`. Design §5.1 ships 2.0 with **no locale file for any language**, so
+the English path is the only path that runs at launch, and on it a single source string
+cannot yield both *was* and *were* — there is no `(s)` idiom for a verb. Left at the plural
+call alone, this item would **regress** wording the engine gets right today
+(`reboot_reason_from_log` computes the verb from the component count).
+
+So the entry keeps the plural call as its mechanism — every language with a catalogue still
+gets its own forms decided there — and the render function selects *was* or *were* from the
+component count only on the catalogue-less path. **This is not the English branching
+`wording-and-translation.md` §6.3 forbids.** That rule forbids branching *instead of* the
+plural form, because branching cannot produce a language's third and fourth forms; it names
+`(s)` as the English fallback the source string carries. A verb has no `(s)` idiom, so for
+this one sentence the branch **is** that fallback, and it is reached only when no catalogue
+is loaded. The two ways out not taken are recorded in §9.
+
+The two `CHECK_UNKNOWN` lists carry **no verb after the list**: today they read *"OneUp
+couldn't read these software sources: A, B"*, and §3.2 forbids this item re-wording them, so
+their render functions join and stop. `CHECK_UNKNOWN`'s third code,
+`sources-unknown-error`, carries zypper's exit status and is an ordinary substitution.
 
 **A code with no entry renders a readable sentence, never the raw token and never an empty
 banner** (`marker-protocol.md` §5.2). It says that this version of OneUp has no wording for
@@ -777,6 +786,14 @@ version site moves** — none of `docs/standards/workflow.md` §5.1's six; this 
 - **Send `@@CHECK_UNKNOWN@@`'s source names space-separated, as `@@SERVICES@@` does.**
   Rejected: zypper names repositories in prose that routinely contains spaces (§4.1), so the
   window would report one broken source as several.
+- **Ship a compiled English `.qm`, so English reaches its *was/were* forms by the same
+  route every other language does.** Rejected with the user 2026-08-12: it makes 2.0 build
+  and ship a translation artifact for the one language that needs none, and design §5.1
+  ships no locale file at all. §4.3 takes the English branch instead.
+- **Re-word `@@REBOOT@@`'s sentence so no agreement is needed** (*"Installed: a new
+  kernel, your graphics driver"*). Rejected with the user the same day, and §3.2 forbids
+  this item deciding it alone: it changes what a user reads, so it belongs to ONEUP-0064,
+  not here.
 
 ## 10. Out of scope
 

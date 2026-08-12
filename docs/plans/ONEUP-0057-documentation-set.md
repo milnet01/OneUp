@@ -23,16 +23,15 @@ absorbed and removed).
 > point, the loop-3 call, the measured PySide6 reproduction, and the source facts to put
 > straight into the next packet.
 >
-> **Two things need a human, and neither blocks the other work:**
+> **One thing needed a human and has been answered; one still does:**
 >
-> 1. **One open question for the user, written into `ONEUP-0072` §4.3 as a `⚠ OPEN`
->    block.** §4.3 routes `@@REBOOT@@`'s *was/were* agreement through Qt's plural form.
->    Measured against PySide6 6.11 with a compiled `.qm`: that works wherever a catalogue
->    exists, but with **no** catalogue `translate()` returns the source string verbatim —
->    and design §5.1 ships 2.0 with **no locale file for any language**. So on the only
->    path 2.0 actually runs, one source string cannot yield both *was* and *were*, and the
->    item as written would **regress** wording `reboot_reason_from_log` gets right today.
->    Three ways out are in §4.3; the choice is the user's.
+> 1. **Answered 2026-08-12 — `@@REBOOT@@`'s *was/were* agreement.** §4.3 routed it through
+>    Qt's plural form, which (measured against PySide6 6.11) selects a form only where a
+>    catalogue exists, while design §5.1 ships 2.0 with **no locale file for any
+>    language** — so English would have regressed wording `reboot_reason_from_log` gets
+>    right today. The user chose the **explicit English branch beside the plural call**,
+>    of the three ways out §4.3 offered. §4.3 now states it as settled and §9 records the
+>    two rejected; there is no `⚠ OPEN` block left in that document.
 > 2. **Whether loop 3 runs at all, or `§4` gets split instead.** The evidence points both
 >    ways and `RESUME.md` lays it out: criticals fell 3 → 0, but loop 2's findings were
 >    **15 collateral vs 10 draft**, and the document went **597 → 812 lines** across two
