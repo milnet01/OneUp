@@ -37,9 +37,9 @@ githooks`.
 
 ## 3. Where the rules live
 
-Read the one that covers what you are about to change. Each ends with a **What checks
-this** table naming what catches a breach of each of its rules — and, honestly, which
-rules nothing catches.
+Read the one that covers what you are about to change. Each carries a **What checks this**
+table, just before its loop log, naming what catches a breach of each of its rules — and,
+honestly, which rules nothing catches.
 
 | Subject | Document |
 | --- | --- |

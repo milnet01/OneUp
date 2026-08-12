@@ -7,8 +7,9 @@ nobody has to guess where a decision belongs or whether it has been reviewed.
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
-**Verified at:** `58ea3bc` — every path and claim below was checked against the tree on
-2026-07-26, not recalled.
+**Verified at:** `07a4b2d` — every path and claim below was checked against the tree on
+2026-08-12, not recalled: two cold review loops read the whole document against the tree
+that day, and `tests/docs-check.py` passes over it.
 
 **Applies to:** every document in the repository, including the component `README.md`
 files under `packaging/obs/` and `screenshots/` (they follow §8's writing rules; they need
@@ -188,9 +189,9 @@ Rules:
 
 **This generalises past invariants, and it is the governing idea of the whole set: a rule
 with no check is a wish.** Whether a rule holds is settled by whether something cheap
-catches it failing, not by how firmly it is written. So every standard and reference ends
-with a **What checks this** section naming what catches each of its rules — and naming, in
-the same table, the rules nothing catches. An unchecked rule recorded as unchecked gets
+catches it failing, not by how firmly it is written. So every standard and reference carries
+a **What checks this** section, immediately before its loop log (§4), naming what catches
+each of its rules — and naming, in the same table, the rules nothing catches. An unchecked rule recorded as unchecked gets
 fixed. An unchecked rule left silent reads as covered.
 
 Which catcher to reach for is §7's ordering, and adding one is
@@ -346,7 +347,7 @@ something fails when the tree stops matching it*. **That is the test**: if nothi
 the number goes wrong, it is a measurement, and §6b.1 to §6b.4 apply, however contractual it
 feels.
 
-Applying that test honestly to this project leaves **one** clear exemption and two near
+Applying that test honestly to this project leaves **two** clear exemptions and two near
 misses, and the near misses are the useful part:
 
 | Number | Exempt? | Why |
@@ -397,7 +398,7 @@ a test), those are exempt — they are too small to warrant it. OneUp has none t
   - **A dismissed finding still needs a severity.** The check compares the severity counts
     against *verified + dismissed*, so four findings you checked and dropped have to appear
     in the severity breakdown too. Writing `2 critical, 7 high, 8 medium, 5 low, 2 info —
-    24 verified, 4 dismissed` fails: 24 findings against 26 outcomes. The dismissed four
+    24 verified, 4 dismissed` fails: 24 findings against 28 outcomes. The dismissed four
     were all low, so `9 low` is what balances it.
   - **Do not bold a bare number in the Outcome cell.** The check pairs `**…**` spans across
     the whole row and then hunts `<number> verified|dismissed|info` inside them. A bolded
@@ -411,7 +412,7 @@ a test), those are exempt — they are too small to warrant it. OneUp has none t
 | Catcher | Cost | Use for |
 | --- | --- | --- |
 | a gate in `local-CI.sh` | seconds, every run, forever | anything countable or greppable |
-| a checklist (each standard's *Before you commit*) | a minute, when you remember | judgement a script cannot make, with a fixed trigger |
+| a checklist (the *Before you commit* section most standards carry; this one and `dependencies.md` do not) | a minute, when you remember | judgement a script cannot make, with a fixed trigger |
 | a cold reader (`/cold-eyes`) | a review pass | reasoning, contradictions, an approach that is wrong |
 | the user | a bug report | the failure the first three missed |
 
@@ -577,6 +578,8 @@ fact only to make a *different* point with it, and say where it came from.
 
 | Rule | What catches a breach |
 | --- | --- |
+| §1.1 the losing document is fixed in the same session | **nothing** automatic — a cold reader. The contradiction is what gets found; whether it was fixed then or noted for later is not visible to anything |
+| §2 which document each kind of work requires | **nothing** automatic — a cold reader. Nothing can tell that a spec which should exist does not |
 | §3 the header block, and the four `Status` values | `tests/docs-check.py` |
 | §4 every standard carries this section and a loop log | `tests/docs-check.py` |
 | §5 an invariant names its test | **nothing** automatic — a cold reader |
@@ -586,13 +589,17 @@ fact only to make a *different* point with it, and say where it came from.
 | §6b most counts taken from the code stay out of the document | **nothing** automatic — a cold reader. ONEUP-0104 would gate it |
 | §7 a loop tally balances | `tests/docs-check.py` |
 | §7.1 a run-state note is deleted when its run ends | **nothing** automatic — whether a run has ended is not a fact on disk. The catcher is the closing commit itself; a later reader can only spot a breach by the `-run-state.md` name §7.1 pins |
-| §8 plain language | **nothing** automatic — a cold reader, and the author reading their own sentence as an opponent |
+| §7.1 a file under `docs/reviews/` is named `-run-state.md` or `-fix-ledger.md` | **nothing** automatic — no gate scans that directory at all, which is the same gap the row above rests on |
+| §8.2 every standard opens with an `**In one sentence:**` line | `tests/docs-check.py` |
+| §8 the rest of plain language | **nothing** automatic — a cold reader, and the author reading their own sentence as an opponent |
 | §9 a pointer resolves | `tests/docs-check.py`, over the documents that describe the tree as it is: standards, reference, `CLAUDE.md`, `README.md`. A spec, design document or plan is excluded, because each legitimately names files it is going to create. **Only paths containing a `/` are checked** — a bare `foo.py` is not, because the same form is used for naming-pattern examples (`snake_case.py`), for 2.0 modules that do not exist yet, and for runtime files that are never in git. A renamed script therefore leaves residue this gate cannot see; the 2026-07-26 review found five such references after `check-docs.py` became `tests/docs-check.py` |
 | §9 one owner per fact | **nothing** automatic. This is the gap the review loop exists to cover, and the most expensive one to leave uncovered. ONEUP-0105 would gate it |
 
-**Six of the twelve rows have nothing automatic behind them**, and that is the honest state
-rather than a to-do list: a gate for *"is this claim true?"* would have to read the code and
-decide. Two are worth building anyway, because both would have caught errors this set has
+**More than half these rows have nothing automatic behind them**, and that is the honest
+state rather than a to-do list: a gate for *"is this claim true?"* would have to read the
+code and decide. (The proportion is stated rather than counted on purpose — §6b's own rule.
+The exact figure was written here twice and went stale both times, once within a single
+session, because every row added to the table moves it.) Two are worth building anyway, because both would have caught errors this set has
 actually produced — a check for a tree-derived count written in the present tense with no
 command beside it (§6b, filed as **ONEUP-0104**), and a check for the same figure appearing
 in two documents at once (§9, filed as **ONEUP-0105**). Both are approximations. Both are
@@ -603,6 +610,7 @@ them.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 8 | 2026-08-12 | 2 lanes, second loop of the §7.1 amendment review: Q1 3 · Q2 3 · Q3 1 — 7 verified, 1 dismissed, of which only 2 were the previous loop's collateral | **Five of the seven were pre-existing, in a document seven loops had already passed** — which is what a differently-shaped gate is for, not evidence the earlier loops were careless. The two that were mine: the header still said every claim was verified at `58ea3bc` on 2026-07-26 while §7.1 had been measured 17 days later (§3 makes that field the only signal a figure is current, so it was actively misleading), and the §8 row still said **nothing** automatic after loop 7 gave §8.2's opener a gate — §4 calls that shape "worse than a row that is missing". The pre-existing five: §7's worked example for the tally check computed `24 verified + 4 dismissed` as **26** where it is 28, so an author debugging a red gate would have worked the example and mistrusted themselves or balanced to the wrong total; §6b.5's prose said **one** clear exemption over a table with two; §4 and §5 gave the document set two different layouts (loop log last vs What-checks-this last) and §5 now defers to §4; §7's catcher table claimed each standard has a *Before you commit* section when this one and `dependencies.md` do not; and the What-checks-this table had no row at all for §1.1 or §2, which §4 itself calls "a rule nobody has thought about". **Dismissed: one** — that the log-format example states no verified/dismissed counts. Checked against `check_loop_tallies`: a row with no numeric disposition clause is skipped, not failed, so the example is valid as written. The table's own row-count sentence was **converted to a proportion rather than re-numbered**: the exact figure was written twice and went stale both times inside one session, which is §6b's rule applied to the document that states it. Swept `CLAUDE.md`, which made the same layout claim §5 did, and corrected it there. |
 | 7 | 2026-08-12 | 2 lanes, amendment review for the new §7.1, under the four-question gate — no severity scale, so nothing here for §7's tally check to balance (ONEUP-0100): Q1 1 · Q2 3 · Q3 2, all 6 verified, 0 dismissed | **Half the findings were in the new section and half were things it walked past.** Both lanes independently led with the same Q1: §7.1 said the durable record "is already checked", naming the loop log *and* the run's fix ledger — and no gate in this project scans `docs/reviews/` at all, so the ledger is checked by nothing. A conformer would have deleted the note believing the surviving ledger was gated, keeping exactly the unchecked artefact the rule was written to remove. It now says which half is checked and which is not, and turns that into a reason to keep the directory small. Two contract gaps in the new rule: an **abandoned** run has neither a closing commit nor "still in flight" status, so the note could sit forever with nobody able to show a breach — an abandoned run now ends in the session that decides not to resume; and `docs/reviews/` holds two file kinds with opposite lifetimes and no way to tell them apart, so the names are pinned (`-run-state.md` deleted, `-fix-ledger.md` kept). The three the lanes found *outside* the amendment were all §4's own form being broken by the document that states it: `nothing` unbolded in all six cells (now bolded — and **ONEUP-0106** files the same breach across the other eight standards, where a rule nothing obeys is more likely wrong than eight documents are); a required roadmap id missing from the two cells this document itself calls buildable gates (filed as **ONEUP-0104** and **ONEUP-0105**); and two present-tense tree counts breaching §6b — *"All nine do"*, which is really a gate and now says so, and §6a's *"62 citations"*, which the tree had already moved to 65. Blast-radius sweep found the plan for ONEUP-0057 still opening by sending the reader to ONEUP-0072's run-state note — the file this very rule had just had deleted, so no path for it is given here either; repointed at the spec's own loop log. Lane open question, verified and filed as **ONEUP-0103**: `/cold-eyes` no longer exists on this machine, and 25 files here still send a reader to it. |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: the tie-break rule contradicted §1's table, the header block was missing from the standard that mandates it, the `Status`/`Kind` enums matched no document in the tree, and "standards never hold anything version-specific" contradicted six of the nine |
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
