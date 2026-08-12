@@ -2783,3 +2783,49 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   the mixed case is what distinguishes them. INV-3 pins a single known
   standalone reason rendering its own sentence. Both guard seams the
   parent's review kept re-finding.
+
+- 📋 [ONEUP-0109] **Extend documentation.md §6a from code citations to citations inside a document.**
+  §6a says cite code by name, never by line number, because a line
+  number rots on the next edit. **A row ordinal inside a document rots
+  exactly the same way, and §6a does not cover it.**
+
+  Measured, not assumed. ONEUP-0108's §4.4 render table was edited in
+  all three of its review loops, and an ordinal pointer into it broke
+  three separate times:
+
+  - loop 1 added a row, which invalidated "§4.4's second row" and
+    "§4.4's third row" elsewhere in the document, plus a "three-row
+    render table" phrase in the loop log;
+  - loop 2 added a row at the TOP, which shifted every ordinal again and
+    turned "the sentence row 1 exists to prevent" — correct when written
+    in loop 1 — into a pointer at the wrong row;
+  - the fix each time was mechanical, but it consumed findings in a
+    cold-review loop at lane prices.
+
+  The remedy already applied inside that document is the rule worth
+  promoting: **name the row by its content** ("the standalone row",
+  "§4.4's last row, the one for a field matching neither vocabulary"),
+  never by its position. Same for a numbered list item or a bullet
+  someone else points at.
+
+  Where it goes: `docs/standards/documentation.md` §6a, as a short
+  paragraph beside the existing line-number rule — the two are the same
+  rule about two kinds of address. §6a.1 already covers "when there is
+  no symbol to name", which is the shape this needs.
+
+  **Not done in-session because it is an authoring edit to a standard**,
+  and rule 14 sends that through the review-contract gate. Filing it is
+  the cheaper habit; the gate is a real cost and this is not urgent.
+
+  Second, smaller item for the same edit or its own: `spec_lint`'s
+  tombstone exemption (`*withdrawn — moved to X*`) only matches when the
+  emphasis span sits on ONE physical line. Every spec here hard-wraps,
+  so the natural way to withdraw an invariant during a split reports a
+  bare `invariant_no_test` — indistinguishable from an untested
+  invariant. Cost three attempts on ONEUP-0072's INV-3. Reported to the
+  Ants MCP maintainers in
+  /mnt/Games/Scripts/Linux/OneUp_Ants_MCP_Feedback.md; worth a line in
+  `files-and-naming.md` or the trap list only if it bites a second time.
+  **Layman:** A rule that stops one kind of stale cross-reference already exists; the same mistake keeps happening in a place the rule does not cover.
+  Kind: doc.
+  Source: in-session-2026-08-12, measured across ONEUP-0108's three review loops.
