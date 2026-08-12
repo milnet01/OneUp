@@ -16,14 +16,21 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: `ONEUP-0072` is split; `ONEUP-0108` needs its first loop**
+> ## ▶ You are here — **Task 18: `ONEUP-0072` split and `ONEUP-0108` gated; `ONEUP-0072` owes loop 5**
 >
-> **Start with `review-contract` on `docs/specs/ONEUP-0108-window-wording.md`, loop 1.**
-> `ONEUP-0101` is done: the window half of `ONEUP-0072` — its §4.3 and its INV-3, plus seven
-> of §6's rows, §7's INV-3 row and two of §9's alternatives — is now that document, and
-> `ONEUP-0072` is 732 lines with §4 at 47% rather than 859 and 54%. Both specs carry a
-> provenance row saying no reviewer produced it, and **neither inherits the other's loops**:
-> `ONEUP-0108` runs from loop 1 on its own bytes, `ONEUP-0072`'s own next loop is 5.
+> **Next: `ONEUP-0064`, `ONEUP-0076`, then `ONEUP-0072` from loop 5.** `ONEUP-0101` is
+> done — the window half of `ONEUP-0072` is now
+> `docs/specs/ONEUP-0108-window-wording.md`, and that document has had three loops of its
+> own (17 verified, all fixed, 0 dismissed, no deferred tail). **Both specs are still
+> `Draft`**, because neither gate has returned an empty loop; `ONEUP-0072` has not been
+> read cold since the split took a third of it away.
+>
+> **The split paid for itself and the numbers say so.** `ONEUP-0108`'s first three loops
+> found 17 findings in content that had already passed four loops inside the parent —
+> among them a sentence that had contradicted `ONEUP-0072` §6's own last row throughout,
+> and a §6 row illustrating an *unknown* reboot element with `firmware-updated`, which is
+> a known one. A cold read was not reaching that text while it lived in an 859-line
+> document.
 >
 > **Both questions that needed a human are answered:**
 >
@@ -52,9 +59,9 @@ absorbed and removed).
 >
 > **`ONEUP-0077` is done (2026-08-03) — three loops, `Status: Reviewed`, converged by cap.**
 > 21 → 23 → 20 verified, all fixed; nothing left verified and unfixed, one INFO carried.
-> **The four still to gate are `ONEUP-0064`, `ONEUP-0076`, `ONEUP-0108` and `ONEUP-0072`**
-> — the first three from loop 1 on their own bytes, `ONEUP-0072` from loop 5 — then the
-> cheap pass on `ONEUP-0027`. `ONEUP-0034` is untouched
+> **The three still to gate are `ONEUP-0064`, `ONEUP-0076` and `ONEUP-0072`** — the first
+> two from loop 1 on their own bytes, `ONEUP-0072` from loop 5 — then the cheap pass on
+> `ONEUP-0027`. `ONEUP-0034` is untouched
 > since its own four-loop gate and needs nothing.
 >
 > **`ONEUP-0032` no longer qualifies as a cheap pass.** It took a substantive edit during

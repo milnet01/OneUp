@@ -2493,7 +2493,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: test.
   Source: in-session-2026-08-12.
 
-- 📋 [ONEUP-0101] **Split ONEUP-0072's §4 — the review keeps repairing its own repairs.**
+- ✅ [ONEUP-0101] **Split ONEUP-0072's §4 — the review keeps repairing its own repairs.**
   The stop condition a previous session wrote down has been met and
   measured. Its rule: run loop 3, and if collateral again outruns draft
   defects, split §4 rather than raise the loop cap.
@@ -2527,6 +2527,31 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** One design document has grown too big to check reliably; splitting it is now cheaper than reviewing it again.
   Kind: doc.
   Source: in-session-2026-08-12.
+  Resolved (2026-08-12): split done. The window half — the former §4.3
+  and INV-3, plus seven of §6's rows, §7's INV-3 row, §8's
+  reading-order edit and two of §9's alternatives — is now
+  docs/specs/ONEUP-0108-window-wording.md (ONEUP-0108). ONEUP-0072
+  keeps the engine side at 735 lines with §4 at 47%, down from 859 and
+  54%; INV-3's number is tombstoned, not reused.
+
+  Only §4.3 moved, not the three-way split the bullet sketched. The
+  seam that mattered was engine-side vs window-side, and §4.1 and §4.2
+  are both engine-side; splitting them from each other would have put
+  the routing rule and the wire shape in separate documents while every
+  code in one is defined by the other.
+
+  Evidence the split was the right call rather than a fifth loop:
+  ONEUP-0108's own gate then ran three loops and found 17 verified
+  findings on content that had passed four loops inside the parent —
+  including one sentence that had contradicted ONEUP-0072 §6's own last
+  row throughout, and a §6 row illustrating an UNKNOWN reboot element
+  with `firmware-updated`, which is a known one.
+
+  Every pointer into the moved text was rewritten in the split commit
+  (ONEUP-0077 §4.2 and §6, ONEUP-0032 §4.1, marker-protocol.md §5.2) —
+  the class the 2026-08-03 split got wrong. Loop 3 still found four
+  residual `INV-3` references the tombstone left behind in ONEUP-0072;
+  those are now repaired too.
 
 - ✅ [ONEUP-0102] **Delete a review run-state note when its run finishes.**
   Proposed to the user 2026-08-12; NOT yet accepted, which is why this is
@@ -2736,3 +2761,25 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The app keeps every sentence a user reads in one place, and always says something readable even when the update engine reports something this version doesn't recognise.
   Kind: refactor.
   Source: in-session-2026-08-12, splitting ONEUP-0101.
+  Progress (2026-08-12): spec written and gated the same day.
+  review-contract ran three loops, 2 cold lanes each — Q1 5 · Q2 5 ·
+  Q3 6 · Q4 1, all 17 verified, 0 dismissed, all fixed, no deferred
+  tail. **Status stays Draft: no loop returned empty**, so calling it
+  Reviewed would be the false assurance the gate itself caught twice in
+  ONEUP-0072.
+
+  The run stopped at the loop cap, and the shape says why that is not
+  a size problem: at 473 lines it is well under the parent's 859, and
+  four of loop 3's five findings were this run's own collateral, all
+  four in one structure — §4.4's render table and the §4.3 bullets
+  describing it. An ordinal reference into that table rotted three
+  times across three loops; every row is now cited by content instead,
+  which is the structural remedy.
+
+  Worth knowing before implementing: three of the invariants are new
+  and have never been through a fourth loop. INV-2 pins @@REBOOT@@'s
+  was/were agreement on the number of elements RENDERED (known
+  components plus inlined unknown codes), not on known components —
+  the mixed case is what distinguishes them. INV-3 pins a single known
+  standalone reason rendering its own sentence. Both guard seams the
+  parent's review kept re-finding.
