@@ -2553,3 +2553,110 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Hand-off notes left behind after a job is done go stale and mislead the next session; delete them when the job ends.
   Kind: doc.
   Source: in-session-2026-08-12.
+
+- 📋 [ONEUP-0103] **Every document still sends the reader to /cold-eyes, which no longer exists.**
+  Raised as a lane open question during documentation.md's review gate
+  2026-08-12, then verified: /home/ants/.claude/skills/cold-eyes does not
+  exist. The global rules record that `review-contract` replaced it on
+  2026-08-12 and that each predecessor was deleted in the commit that
+  promoted its replacement. 25 files under docs/, CLAUDE.md and ROADMAP.md
+  still name it.
+
+  Why it is a real defect and not cosmetics: documentation.md §7 IS the
+  review gate, and it instructs a conformer to run a skill that is not on
+  the machine. Every "goes through /cold-eyes" is now a false claim about
+  a tool. A reader who follows it gets nothing and has no way to know what
+  to run instead, because the replacement's name appears nowhere here.
+
+  Not fixed in that review because it is a policy choice with a wide blast
+  radius, not a sentence: the section headings ("## 10. Cold-eyes loop
+  log"), the Status vocabulary ("Cold-eyes converged"), and every loop-log
+  title share the name. `tests/docs-check.py` matches the heading string
+  "Cold-eyes loop log" to find those sections, so a rename touches tests/
+  and is FREEZE-BLOCKED under workflow.md 1.2 — tests-only is explicitly
+  not sufficient grounds.
+
+  Two ways to take it, and the choice is the user's. Rename everything to
+  `review-contract` (correct, needs a freeze exception for the one string
+  in docs-check.py); or keep "cold-eyes" as this project's internal name
+  for the gate and say ONCE, in documentation.md §7, which skill actually
+  implements it now. The second is much cheaper and needs no exception.
+
+  Recommend the second.
+  **Layman:** Our docs tell you to run a review tool that has been renamed and deleted; anyone following them hits nothing.
+  Kind: doc-fix.
+  Source: in-session-2026-08-12.
+
+- 📋 [ONEUP-0104] **Gate a tree-derived count written in the present tense with no command beside it.**
+  documentation.md §6b forbids most code-derived counts in a document, and
+  nothing automatic catches a breach. The standard itself has said since
+  2026-07-26 that this check is worth building; §4 requires a roadmap id in
+  any What-checks-this cell whose gap is a defect rather than a limit, and
+  this is the id for §6b's row.
+
+  That it is a real defect and not a theoretical one was demonstrated twice
+  on 2026-08-12, both times by a cold reader rather than a gate: ONEUP-0072
+  said the engine had 14 `marker HINT` call sites when 1.4.3 had made it 18,
+  and §6a's own row said the older specs carry 62 `path:line` citations when
+  the tree has 65.
+
+  Shape: flag a bolded or bare integer in prose that sits next to a code
+  identifier or a path, with no command, no past-tense date and no commit
+  beside it. §6b.5 lists what is exempt. An approximation — it will have
+  false positives, and §6b.4's measured form is the escape hatch.
+
+  Freeze-blocked: this is tests/, and workflow.md 1.2 makes tests-only a
+  necessary and not a sufficient condition.
+  **Layman:** Catch numbers copied out of the code into a document, which quietly go wrong the moment the code changes.
+  Kind: test.
+  Source: in-session-2026-08-12.
+
+- 📋 [ONEUP-0105] **Gate the same figure appearing in two documents at once.**
+  documentation.md §9's one-owner-per-fact rule has nothing automatic behind
+  it, and the standard calls it "the most expensive one to leave uncovered".
+  §4 requires a roadmap id in a What-checks-this cell whose gap is a defect;
+  this is the id for that row.
+
+  The failure it catches is the one every review loop in this project keeps
+  paying for: a fact stated in N places, one of which is updated. ONEUP-0072's
+  loop 2 deleted a rule that had been stated in four places for exactly this
+  reason, and its loop 3 still found a figure that had been fixed in one
+  sentence and left three lines away in another.
+
+  Shape: collect integers appearing next to the same identifier across two
+  documents and report disagreement. Cheaper and narrower than it sounds,
+  because §6b should be keeping most counts out of documents in the first
+  place — the two gates are complements.
+
+  Freeze-blocked, same as its sibling: tests/ is not an automatic exception.
+  **Layman:** Catch a number stated in two places, because the two will disagree the moment one is updated.
+  Kind: test.
+  Source: in-session-2026-08-12.
+
+- 📋 [ONEUP-0106] **Every standard breaches documentation.md §4's bold-nothing form.**
+  Found by a cold lane during documentation.md's gate 2026-08-12. §4
+  requires a What-checks-this cell with no gate to write "**`nothing`, in
+  bold**, followed by why". Not one row in the project did, across every
+  standard: files-and-naming, dependencies, coding, testing, security,
+  ui-and-accessibility, wording-and-translation, workflow.
+
+  documentation.md's own six rows were fixed in that review, on the ground
+  that the document stating a rule should obey it. That leaves the other
+  standards inconsistent with it, which is why this is filed rather than
+  swept: each is a contract with its own review gate, and editing eight of
+  them inside a review of a ninth is the blast radius that rule exists to
+  prevent.
+
+  The decision to take first, because it changes which way the fix runs: a
+  rule that EVERY document breaches is usually the wrong rule, not eight
+  wrong documents. §4's reason for the bold is that the gate and no-gate
+  cases "never blur" — worth asking whether bolding one word achieves that,
+  given the cells already begin with the word "nothing" either way.
+
+  So: either bold it in the remaining eight, or drop the bold from §4 and
+  let documentation.md's rows go back. Nothing gates the form either way
+  (docs-check.py checks the section exists, not its cell shape), which is
+  itself part of the answer.
+  **Layman:** A formatting rule that no document actually follows — decide whether to follow it or drop it.
+  Kind: doc-fix.
+  Source: in-session-2026-08-12.

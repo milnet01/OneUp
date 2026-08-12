@@ -436,9 +436,13 @@ A review stopped part-way may leave a hand-off note under `docs/reviews/` — wh
 resumes, what the packet held, which findings are still open. **That note is deleted by the
 commit that finishes the run.** Not archived, not left for reference.
 
-The durable record is elsewhere and is already checked: the loop log above, in the reviewed
-document, and the run's fix ledger. A note that outlives its run duplicates both and is
-gated by neither, so nothing makes it wrong out loud when the code moves underneath it.
+The durable record is elsewhere: the loop log above, in the reviewed document, which
+`tests/docs-check.py` checks — and the run's fix ledger, which **nothing checks**, because
+no gate in this project scans `docs/reviews/` at all. A note that outlives its run
+duplicates both while being gated like the weaker of them, so nothing makes it wrong out
+loud when the code moves underneath it. **That the ledger is ungated is a reason to keep
+`docs/reviews/` small, not a reason to keep the note**: two unchecked files rot faster than
+one, and only the note claims to be a hand-off.
 
 **The failure mode is not that it goes stale — it is that it goes stale while claiming to be
 verified.** ONEUP-0072's own run-state note — deleted 2026-08-12 under this rule, which is
@@ -451,6 +455,15 @@ nothing.
 **Delete when the run ends, not when the session ends.** A run genuinely still in flight
 needs its note — that is what the file is for, and the next session cannot resume without
 it. What is forbidden is the note that survives its own run.
+
+**A run abandoned rather than finished has ended too**, and it is the case that would
+otherwise never trigger: there is no closing commit, and "still in flight" can be claimed
+forever. The session that decides not to resume deletes the note, in that decision's commit.
+
+**The two kinds of file under `docs/reviews/` are told apart by name, because they have
+opposite lifetimes**: `<ID>-run-state.md` is the note and is deleted, `<ID>-fix-ledger.md`
+is the ledger and is kept. A file there matching neither is a breach of this section — that
+is the only way a later reader can tell a stray note from a ledger doing its job.
 
 ## 8. Plain language
 
@@ -513,7 +526,8 @@ The primary reader is not a programmer. Accordingly:
 - **Every roadmap bullet carries a `**Layman:**` line** — one sentence saying what the
   work means for someone using the app.
 - **Every standard opens with a single `**In one sentence:**` line** saying what the
-  standard is for, in words a non-programmer understands. All nine do.
+  standard is for, in words a non-programmer understands. `tests/docs-check.py` fails one
+  that does not, so this is a gate rather than a habit.
 - **Define jargon inline on first use**, or use a plainer word. "The window never runs
   with administrator powers" beats "the GUI is unprivileged".
 - **Name the actual thing** — the file, the button, the command. Not "the relevant
@@ -565,29 +579,31 @@ fact only to make a *different* point with it, and say where it came from.
 | --- | --- |
 | §3 the header block, and the four `Status` values | `tests/docs-check.py` |
 | §4 every standard carries this section and a loop log | `tests/docs-check.py` |
-| §5 an invariant names its test | nothing automatic — a cold reader |
-| §6 a claim is checked against the tree | nothing automatic. `/cold-eyes` is the only catcher, which is why §7 is a gate and not advice |
+| §5 an invariant names its test | **nothing** automatic — a cold reader |
+| §6 a claim is checked against the tree | **nothing** automatic. The review gate is the only catcher, which is why §7 is a gate and not advice |
 | §6 no `TODO` / `TBD` / `FIXME` left in a document | `tests/docs-check.py` |
-| §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design. `docs/specs/` is exempt until ONEUP-0065 converts the 62 citations the four older specs carry. The prose form — *"around line 786"* — is caught by nobody |
-| §6b most counts taken from the code stay out of the document | nothing automatic — a cold reader |
+| §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design. `docs/specs/` is exempt until ONEUP-0065 converts the `path:line` citations the older specs carry. The prose form — *"around line 786"* — is caught by nobody |
+| §6b most counts taken from the code stay out of the document | **nothing** automatic — a cold reader. ONEUP-0104 would gate it |
 | §7 a loop tally balances | `tests/docs-check.py` |
-| §7.1 a run-state note is deleted when its run ends | nothing automatic — whether a run has ended is not a fact on disk. The catcher is the closing commit itself, and the note's own absence next time |
-| §8 plain language | nothing automatic — a cold reader, and the author reading their own sentence as an opponent |
+| §7.1 a run-state note is deleted when its run ends | **nothing** automatic — whether a run has ended is not a fact on disk. The catcher is the closing commit itself; a later reader can only spot a breach by the `-run-state.md` name §7.1 pins |
+| §8 plain language | **nothing** automatic — a cold reader, and the author reading their own sentence as an opponent |
 | §9 a pointer resolves | `tests/docs-check.py`, over the documents that describe the tree as it is: standards, reference, `CLAUDE.md`, `README.md`. A spec, design document or plan is excluded, because each legitimately names files it is going to create. **Only paths containing a `/` are checked** — a bare `foo.py` is not, because the same form is used for naming-pattern examples (`snake_case.py`), for 2.0 modules that do not exist yet, and for runtime files that are never in git. A renamed script therefore leaves residue this gate cannot see; the 2026-07-26 review found five such references after `check-docs.py` became `tests/docs-check.py` |
-| §9 one owner per fact | nothing automatic. This is the gap the review loop exists to cover, and the most expensive one to leave uncovered |
+| §9 one owner per fact | **nothing** automatic. This is the gap the review loop exists to cover, and the most expensive one to leave uncovered. ONEUP-0105 would gate it |
 
 **Six of the twelve rows have nothing automatic behind them**, and that is the honest state
 rather than a to-do list: a gate for *"is this claim true?"* would have to read the code and
 decide. Two are worth building anyway, because both would have caught errors this set has
 actually produced — a check for a tree-derived count written in the present tense with no
-command beside it (§6b), and a check for the same figure appearing in two documents at once
-(§9). Both are approximations. Both are cheaper than the review pass that currently catches
+command beside it (§6b, filed as **ONEUP-0104**), and a check for the same figure appearing
+in two documents at once (§9, filed as **ONEUP-0105**). Both are approximations. Both are
+cheaper than the review pass that currently catches
 them.
 
 ## 10. Cold-eyes loop log
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 8 | 2026-08-12 | 2 lanes, amendment review for the new §7.1, under the four-question gate — no severity scale, so nothing here for §7's tally check to balance (ONEUP-0100): Q1 1 · Q2 3 · Q3 2, all 6 verified, 0 dismissed | **Half the findings were in the new section and half were things it walked past.** Both lanes independently led with the same Q1: §7.1 said the durable record "is already checked", naming the loop log *and* the run's fix ledger — and no gate in this project scans `docs/reviews/` at all, so the ledger is checked by nothing. A conformer would have deleted the note believing the surviving ledger was gated, keeping exactly the unchecked artefact the rule was written to remove. It now says which half is checked and which is not, and turns that into a reason to keep the directory small. Two contract gaps in the new rule: an **abandoned** run has neither a closing commit nor "still in flight" status, so the note could sit forever with nobody able to show a breach — an abandoned run now ends in the session that decides not to resume; and `docs/reviews/` holds two file kinds with opposite lifetimes and no way to tell them apart, so the names are pinned (`-run-state.md` deleted, `-fix-ledger.md` kept). The three the lanes found *outside* the amendment were all §4's own form being broken by the document that states it: `nothing` unbolded in all six cells (now bolded — and **ONEUP-0106** files the same breach across the other eight standards, where a rule nothing obeys is more likely wrong than eight documents are); a required roadmap id missing from the two cells this document itself calls buildable gates (filed as **ONEUP-0104** and **ONEUP-0105**); and two present-tense tree counts breaching §6b — *"All nine do"*, which is really a gate and now says so, and §6a's *"62 citations"*, which the tree had already moved to 65. Blast-radius sweep found the plan for ONEUP-0057 still opening with **"Start at `docs/reviews/ONEUP-0072-RESUME.md`"** — a file this very rule had just had deleted; repointed at the spec's own loop log. Lane open question, verified and filed as **ONEUP-0103**: `/cold-eyes` no longer exists on this machine, and 25 files here still send a reader to it. |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: the tie-break rule contradicted §1's table, the header block was missing from the standard that mandates it, the `Status`/`Kind` enums matched no document in the tree, and "standards never hold anything version-specific" contradicted six of the nine |
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
 | 3 | 2026-07-26 | 5 high, 4 medium, 7 low — **all verified** | §8 (plain language) was added at the user's request and re-reviewed on its own. The section did not obey itself: its showcase example inverted the very error it described, and it used semicolons in the paragraph banning them. Also fixed set-wide: the `Status` line carried loop history that §4 item 11 reserves for the log (ten files), §7 defined convergence as zero findings when the practice is zero *substantive* findings, and §3 claimed no pre-existing spec carries `Branch:` (ONEUP-0054 does) |

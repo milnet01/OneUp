@@ -16,12 +16,13 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18, mid-gate on `ONEUP-0072` (2 of 3 loops)**
+> ## ▶ You are here — **Task 18: `ONEUP-0072`'s gate ran four loops and stopped on the split signal**
 >
-> **Start at `docs/reviews/ONEUP-0072-RESUME.md`.** It is the run state, committed at
-> `8fd3ca1`, and it holds everything this block would otherwise have to repeat: the resume
-> point, the loop-3 call, the measured PySide6 reproduction, and the source facts to put
-> straight into the next packet.
+> **Start at `ONEUP-0101`**, which owns the split of that spec's §4 and is the next action.
+> The run state that used to sit under `docs/reviews/` was deleted when its run finished
+> (`documentation.md` §7.1); what it held is now in the spec's own §11 loop log — both later
+> loops' findings, the measured PySide6 reproduction behind the *was/were* decision, and why
+> the run stopped rather than looping a fifth time.
 >
 > **One thing needed a human and has been answered; one still does:**
 >
@@ -1167,9 +1168,12 @@ git commit -m "ONEUP-0064: spec the interface redesign"
       - [~] **ONEUP-0072** — **two of three loops done 2026-08-05**, session ended cleanly.
         Loop 1: 24 verified, all fixed (3 criticals, all split leftovers or claims the code
         contradicts). Loop 2: 25 verified, 24 fixed, **1 surfaced**, 0 criticals. Commits
-        `9b1d75d`, `96b7621`, `8fd3ca1`. **Read `docs/reviews/ONEUP-0072-RESUME.md` before
-        doing anything** — it carries the loop-3 decision, the one open question for the
-        user, and the source facts for the next packet. Still `Status: Draft`.
+        `9b1d75d`, `96b7621`, `8fd3ca1`. Loops 3 and 4 ran 2026-08-12: 14 verified, all
+        fixed, and the run then stopped because loop 4's collateral outran its draft
+        defects — the split signal, filed as **ONEUP-0101**. The open question is closed
+        (the user chose the English branch). **Read the spec's own §11 loop log**; the
+        run-state note is gone under `documentation.md` §7.1. Still `Status: Draft`,
+        deliberately — the gate never returned an empty loop.
       - [ ] **ONEUP-0076** (630)
       - [ ] **ONEUP-0032** · [ ] **ONEUP-0027** (cheap)
 - [ ] **Step 2–4:** verify, fix by severity, loop cold until clean, log as you go.
