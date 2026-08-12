@@ -1215,6 +1215,29 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   8/20, then 4/19) — both of loop 3's criticals were invariants loop 2
   had itself written — so the cap and the trend agree. No verified
   finding is outstanding.
+  Progress (2026-08-13): three more review-contract loops on the spec —
+  loops 4, 5 and 6 in its own log — under the four-question gate. Q totals
+  Q1 7 · Q2 5 · Q3 6 · Q4 2, 20 verified, 2 dismissed out of scope, 19 fixed.
+  The gate had re-armed: ONEUP-0090 rewrote §7 on 2026-08-07, after the
+  Reviewed stamp, and that paragraph had never been read cold.
+
+  Worth naming, because each would have shipped: §4.1 gave #StopBtn one
+  literal #e0553f "in both palettes" where ONEUP-0076 §4.3 had measured the
+  rest colour as per-palette — #e0553f on the light card is 3.79:1 against a
+  4.5:1 bar. INV-7's Test clause had the high-contrast overlay backwards,
+  calling a base-only rule "unstyled" when build_theme APPENDS the overlay, so
+  it is mis-coloured; the exception criterion rested on the same wrong model.
+  And a loop-4 fix nearly deleted live coverage by telling an implementer two
+  dialogs "stay out" of a sweep that already covers all three.
+
+  Status: Reviewed -> Draft. No loop came back empty, and §4.1 now carries the
+  one open decision: the :hover colours for QToolButton#Disclose (its ink) and
+  #StopBtn (its border and label). Both rules are required and their property
+  is pinned; only the values are the user's call.
+
+  The document is 626 lines, up from 556, and still yielding build-changing
+  findings on its sixth cold read. Splitting §4.1 — layout narrative, string
+  table, target-size table — is the call to make before a seventh.
 
 - 📋 [ONEUP-0065] **Convert the remaining line-number citations in the older documents to symbol names.**
   docs/standards/documentation.md 6a (added 2026-07-26, the user's

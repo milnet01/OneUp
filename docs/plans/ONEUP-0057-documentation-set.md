@@ -16,9 +16,24 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: `ONEUP-0072` split and `ONEUP-0108` gated; `ONEUP-0072` owes loop 5**
+> ## ▶ You are here — **Task 18: `ONEUP-0064` re-gated (loops 4–6); `ONEUP-0076` and `ONEUP-0072` still owed**
 >
-> **Next: `ONEUP-0064`, `ONEUP-0076`, then `ONEUP-0072` from loop 5.** `ONEUP-0101` is
+> **`ONEUP-0064` came back to the gate and should not have needed to.** It was stamped
+> `Reviewed` when loops 1–3 converged by cap on 2026-08-05; `ONEUP-0090` then rewrote its §7
+> on 2026-08-07 while closing a defect elsewhere, and that paragraph was never read cold. A
+> fresh run on 2026-08-12/13 found **20 verified** across three loops (Q1 7 · Q2 5 · Q3 6 ·
+> Q4 2, 2 dismissed out of scope, 19 fixed) — among them a light-palette contrast regression
+> `ONEUP-0076` had already measured against, and an INV-7 whose whole *Test:* clause had the
+> high-contrast overlay backwards. **Its `Status` is back to `Draft`**, because no loop came
+> back empty and §4.1 now carries one open decision — the `:hover` colours for
+> `QToolButton#Disclose` and `#StopBtn`. It is 626 lines and still yielding findings on its
+> sixth cold read; **splitting §4.1 is the call to make before a seventh.**
+>
+> **The lesson, and it generalises past this document:** a `Reviewed` stamp does not survive
+> an edit made by another item. Anything that rewrites a gated spec in passing re-arms its
+> gate, and nothing on this machine notices.
+>
+> **Next: `ONEUP-0076`, then `ONEUP-0072` from loop 5.** `ONEUP-0101` is
 > done — the window half of `ONEUP-0072` is now
 > `docs/specs/ONEUP-0108-window-wording.md`, and that document has had three loops of its
 > own (17 verified, all fixed, 0 dismissed, no deferred tail). **Both specs are still
@@ -59,9 +74,9 @@ absorbed and removed).
 >
 > **`ONEUP-0077` is done (2026-08-03) — three loops, `Status: Reviewed`, converged by cap.**
 > 21 → 23 → 20 verified, all fixed; nothing left verified and unfixed, one INFO carried.
-> **The three still to gate are `ONEUP-0064`, `ONEUP-0076` and `ONEUP-0072`** — the first
-> two from loop 1 on their own bytes, `ONEUP-0072` from loop 5 — then the cheap pass on
-> `ONEUP-0027`. `ONEUP-0034` is untouched
+> **The two still to gate are `ONEUP-0076` and `ONEUP-0072`** — 0076 from loop 1 on its own
+> bytes, `ONEUP-0072` from loop 5 — then the cheap pass on `ONEUP-0027`. `ONEUP-0064` has
+> had its run and owes a decision rather than a loop. `ONEUP-0034` is untouched
 > since its own four-loop gate and needs nothing.
 >
 > **`ONEUP-0032` no longer qualifies as a cheap pass.** It took a substantive edit during
