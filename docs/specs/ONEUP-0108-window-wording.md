@@ -141,6 +141,13 @@ both of `@@CHECK_UNKNOWN@@`'s list-bearing codes, `sources-unreadable` and
 `flatpak-remotes-unreachable`. In another language a list is joined however that language
 joins one, so all three carry a small render function rather than a format string.
 
+**The English join is today's, reproduced exactly** — §3.1 forbids this item re-wording these
+sentences, and a list separator is wording. `reboot_reason_from_log` joins one component
+bare, two with ` and `, and three as `a, b, and c` with the serial comma; the two
+`@@CHECK_UNKNOWN@@` lists join with `, ` (`unreadable+="${unreadable:+, }$remote"`). An
+implementer who joins everything with `", "` has re-worded the reboot sentence, and nothing
+but this paragraph and INV-2's test would catch it.
+
 **What differs between them is the agreement, and only one has it.** `@@REBOOT@@`'s
 sentence ends *"was/were installed"*, so its entry goes through the plural form
 (`docs/standards/wording-and-translation.md` §6.3) and the agreement becomes the
@@ -200,21 +207,32 @@ fallback. The two ways out not taken are in §9.
 
 **A code with no entry renders a readable sentence, never the raw token and never an empty
 banner** (`marker-protocol.md` §5.2). It says that this version of OneUp has no wording for
-what the run reported, names **every** code it did not recognise — all of them where a
-`@@REBOOT@@` reason carried several unknown elements, since a bug report needs the ones the
-window dropped as much as the first — and points at the log, which is the only honest thing
-it can say. It is a bug in the window, not in the run, and the run's own verdict is
-unaffected. (All three packaging paths ship both halves together — `docs/design/oneup-2.0.md`
-§4 — so a mismatched pair comes from a development checkout or a part-applied upgrade, not
-from an ordinary install.)
+what the run reported, names the codes behind it, and points at the log — which is the only
+honest thing it can say. **Which codes it names has two cases**, because the fallback is
+reached two ways:
+
+- **Something was unrecognised** — it names **every** code it did not recognise, all of them
+  where a `@@REBOOT@@` reason carried several unknown elements, since a bug report needs the
+  ones the window dropped as much as the first.
+- **Everything was recognised and the field is still unrenderable** — the mixed-vocabulary
+  row of §4.4 is the only case, and there is no unrecognised code to name, so it names
+  **every element of the field**. Without this the sentence would name nothing and INV-1's
+  length proxy would measure against an empty set. It is a bug in the window, not in the run, and the run's own verdict is
+unaffected. **A mismatched pair is not an exotic state: an ordinary 2.0 install ships one.**
+`docs/design/oneup-2.0.md` §4 retains `update_system.sh` through 2.0 as a documented
+fallback, frozen emitting prose, so running it against a converted window puts this fallback
+on every worded line — which ONEUP-0072 §6's last row already records as deliberate and
+known. That is the reason this rule has to be good enough to read, not merely safe.
 
 **The same fallback answers a code whose arguments do not fit its entry.** A known code can
 arrive with more or fewer arguments than the window's table expects, for the reason §6
 already contemplates a newer engine: an argument was added or dropped on the engine side.
 Substituting a placeholder that has no value must not raise — `marker-protocol.md` §1.2
 forbids a throw in the read slot outright, and its §6 ranks it as a trap, because it aborts
-parsing and drops the rest of the run's markers. A mismatch renders the same
-no-wording-for-this sentence as an unknown code.
+parsing and drops the rest of the run's markers. A mismatch renders the same fallback as an
+unknown code, **in whichever of the two forms that site takes** — so an arity-mismatched
+`@@STEP_END@@` shows the bare code in its badge, exactly as an unknown one does, and never a
+sentence in a slot with no room for one.
 
 Zero names on a list-bearing `@@CHECK_UNKNOWN@@` code is the one case that should never
 happen — the engine emits the code only when it has at least one — but it is a defect in
@@ -245,10 +263,11 @@ in order:
 
 | The reason field | Renders |
 | --- | --- |
+| **absent** — `@@REBOOT@@\|yes` carrying no reason at all, which the engine emits whenever it advises a reboot it cannot explain: `marker REBOOT "$REBOOT${REBOOT_REASON:+\|$REBOOT_REASON}"` appends the field only when it has one | the reboot advice **with no reason sentence**, and never the fallback. Nothing was reported, so there is nothing the window failed to word — saying otherwise fabricates a bug report on an ordinary reboot |
 | exactly one element, and it is a **known standalone reason** | that entry's own sentence, with no join frame at all — the standalone set is tested first, because it is disjoint from the components and holds zero of them by definition |
 | **more than one element, and any of them is a known standalone reason** | the **long** form. The two vocabularies are disjoint by construction (ONEUP-0072 §4.1), so a field holding both is a newer engine or a bug, not data — and the join would print *"firmware-updated and a new kernel were installed"*, which is the sentence row 1 exists to prevent, reached the long way round |
 | one or more **known components**, and no standalone reason among them | the join, with each unknown element appearing **as its own bare code** beside the ones it knows — *"a new kernel and gpu-firmware-blob were installed"*: ugly, honest, and still advice |
-| neither vocabulary matches, whatever the element count | the **long** form, never the join — joining would assert the unknown tokens are components, which is how *"firmware-updated was installed"* reaches a user |
+| one or more elements, and neither vocabulary matches any of them | the **long** form, never the join — joining would assert the unknown tokens are components, which is how *"firmware-updated was installed"* reaches a user |
 
 **Testing the standalone set first is what makes the common non-kernel reboot work.** A
 firmware-only run emits `@@REBOOT@@|yes|firmware-updated`, which holds **zero** components;
@@ -298,7 +317,9 @@ and both guard behaviour that spec's invariants never asserted.
   ONEUP-0072 §4.1 converts, and once for each of the three side-channel `@@HINT@@` readers
   §4.5 names; feeds a known code with one argument too few and one too many; feeds a
   `@@REBOOT@@` with one known and one unknown component, and one whose elements are **all**
-  unknown; and feeds a `@@STEP_BEGIN@@` whose key is not in `TASKS`. Each asserts the
+  unknown; feeds `@@REBOOT@@|yes|firmware-updated kernel-new`, the mixed-vocabulary case
+  where nothing is unrecognised, and asserts the long form names **both** elements; and feeds
+  a `@@STEP_BEGIN@@` whose key is not in `TASKS`. Each asserts the
   rendered text is non-empty and contains **every** unknown code it was fed (or the key),
   and that parsing continues afterwards. **Wherever §4.3 says long form**, it also asserts
   the text contains a space and is at least twice the combined length of the codes or key
@@ -315,7 +336,9 @@ and both guard behaviour that spec's invariants never asserted.
   `@@REBOOT@@|yes|kernel-new gpu-firmware-blob` — one known component, one unknown — and
   asserts *were*, which is the case that distinguishes rendered-element agreement from
   known-component agreement. All three are needed: a hard-coded *were* passes the last two,
-  and known-component counting passes the first two.
+  and known-component counting passes the first two. The two-element case additionally
+  asserts the elements are joined with ` and ` rather than `, `, which is the join the engine
+  produces today (§4.2) and which §3.1 forbids this item changing.
 - **INV-3** A `@@REBOOT@@` reason that is a single **known standalone reason** renders that
   reason's own sentence — never the components' join frame, and never INV-1's fallback.
   Breaks the moment the render rule is keyed on how many components the field holds, since
@@ -336,7 +359,7 @@ and both guard behaviour that spec's invariants never asserted.
 | The engine emits an unknown `@@REBOOT@@` component beside known ones | The sentence renders with the components the window does know, and names the one it does not | INV-1 per element (§4.4). `REBOOT`'s `yes`/`no` is a token, not a code, so the *advice to reboot* survives an unrenderable reason |
 | The `@@REBOOT@@` reason is a **single** element the window does not know | The long fallback sentence naming the code — never the components' *"…was/were installed"* frame | §4.4's last row, the one for a field matching neither vocabulary. An unknown one-element reason belongs to neither, so joining it would assert it is a component and print *"firmware-updated was installed"* |
 | A known code arrives with more or fewer arguments than its entry expects | The same readable sentence naming the code | INV-1. The alternative is a throw in the read slot, which `marker-protocol.md` §1.2 forbids because it drops the rest of the run's markers |
-| A step key arrives that the window has no title for | A readable sentence naming the key in the status line and the announcement; the bare key in the progress-bar caption, which has no room for a sentence | INV-1, per site — ONEUP-0072 §4.1's table says which site takes which form. The step still runs, still badges and still counts toward the total |
+| A step key arrives that the window has no title for | A readable sentence naming the key in the status line and the announcement; the bare key in the progress-bar caption, which has no room for a sentence | INV-1, per site — ONEUP-0072 §4.1's table says which site takes which form, and those three are the whole of it. The step still runs and still counts toward the total. **It gets no task row and therefore no badge**: rows are built from `TASKS` and `handle_marker` reads them with `self.rows.get(key)`, which misses and returns. That is unchanged by this item, and the three sites above are the ones where the fallback has somewhere to go |
 | A list-bearing `CHECK_UNKNOWN` code arrives with no names | That code's own sentence with an empty list, not the fallback | §4.3. Zero names is an engine defect, not a version mismatch, and rendering the fallback would misattribute it |
 
 ## 7. Tests
@@ -435,4 +458,5 @@ document's §4.2 relies on it and does not re-amend it.
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 0-split | 2026-08-12 | — | **Provenance, not a review — no reviewer was dispatched to produce this row.** This document was split out of `docs/specs/ONEUP-0072-marker-codes.md` under roadmap item ONEUP-0101, taking that document's §4.3 and its INV-3. The parent's four loops ran against a document that no longer exists and **are not inherited**: this one runs the gate from loop 1 on its own bytes. Three things are new here and have never been reviewed in any form — INV-2, INV-3, and §9's last three alternatives. Two are carried across as they converged: §4.2's English-branch decision (settled with the user 2026-08-12) and §4.4's render table, whose components-join and neither-vocabulary rows were the parent's loop 4 fix and is therefore the newest text in the document. The parent keeps §4.1, §4.2, INV-1, INV-2, INV-4 and INV-5, and its §11 records the split from its side. |
-| 1 | 2026-08-12 | 2 lanes; Q1 2 · Q2 2 · Q3 1 · Q4 1, all 6 verified, 0 dismissed (1 of the Q1s raised by the packet build, not a lane) — no severity scale under the four-question gate, so nothing here for §7's tally check to balance (ONEUP-0100) | **Both lanes independently led with the same three, and the most valuable had survived four loops inside the parent.** §4.2 said the two `@@CHECK_UNKNOWN@@` lists' render functions *"join and stop"*; the engine puts the list **mid-sentence** — `unreadable+=" — this list may be incomplete. Running an update refreshes them."` — and ONEUP-0072 §4.1 already called that tail part of each code's wording, so an implementer would have silently dropped it, re-wording a message §3.1 forbids re-wording. Second, the verb rule was stated on the **known-component** count while §4.4's own example renders *were* for one known component beside one unknown; both readings passed INV-2's test, which fed no unknown elements. Agreement is now on **rendered** elements, and the mixed case is the third assertion in the test. Third, a reason field holding a known standalone reason **beside** known components matched no row — row 1 needs exactly one element and the join row only defined *unknown* ones — so `firmware-updated kernel-new` from a newer engine would have printed *"firmware-updated and a new kernel were installed"*, the exact sentence the table exists to prevent; §4.4 has a fourth row for it. A lane-only Q1: §4.2 said the plural form makes agreement the catalogue's *"which is also what the engine does today"* — `reboot_reason_from_log` computes the verb itself and delegates nothing, and the paragraph four lines below rests on the opposite. And a Q4: *"the branch be written where the condition can later be added"* was a requirement nothing could falsify; deleted, with INV-2's observable behaviour left as the whole obligation. The packet build caught one no lane could: `oneup-2.0.md` §5.1 says no locale file **for another language**, which this document had twice rendered as *any* language — the distinction the whole English-branch argument turns on. **Blast-radius sweep caught four of its own**, one created inside this loop: adding §4.4's fourth row invalidated two ordinal citations (*"§4.4's second row"*, *"§4.4's third row"*) and the 0-split row's *"three-row render table"*, and §9 still carried the second copy of the locale-file overstatement. All four now cite rows by content rather than by number, which is what made them rot. Four lane open questions resolved clean: `tests/gui-smoke.py` is named in both `local-CI.sh` and `release.yml`, its `_StubProc` already drives `_on_thin_finished` so INV-1's side-channel clause is reachable, `oneup-2.0.md` §4 does support the packaging claim, and the PySide6 6.11 numerus measurement is a past-tense stamped measurement (`documentation.md` §6b.4) carried from the parent, not re-run here. |
+| 1 | 2026-08-12 | 2 lanes; Q1 2 · Q2 2 · Q3 1 · Q4 1, all 6 verified, 0 dismissed (1 of the Q1s raised by the packet build, not a lane) — no severity scale under the four-question gate, so nothing here for §7's tally check to balance (ONEUP-0100) | **Both lanes independently led with the same three, and the most valuable had survived four loops inside the parent.** §4.2 said the two `@@CHECK_UNKNOWN@@` lists' render functions *"join and stop"*; the engine puts the list **mid-sentence** — `unreadable+=" — this list may be incomplete. Running an update refreshes them."` — and ONEUP-0072 §4.1 already called that tail part of each code's wording, so an implementer would have silently dropped it, re-wording a message §3.1 forbids re-wording. Second, the verb rule was stated on the **known-component** count while §4.4's own example renders *were* for one known component beside one unknown; both readings passed INV-2's test, which fed no unknown elements. Agreement is now on **rendered** elements, and the mixed case is the third assertion in the test. Third, a reason field holding a known standalone reason **beside** known components matched no row — row 1 needs exactly one element and the join row only defined *unknown* ones — so `firmware-updated kernel-new` from a newer engine would have printed *"firmware-updated and a new kernel were installed"*, the exact sentence the table exists to prevent; §4.4 gained a row of its own for it. A lane-only Q1: §4.2 said the plural form makes agreement the catalogue's *"which is also what the engine does today"* — `reboot_reason_from_log` computes the verb itself and delegates nothing, and the paragraph four lines below rests on the opposite. And a Q4: *"the branch be written where the condition can later be added"* was a requirement nothing could falsify; deleted, with INV-2's observable behaviour left as the whole obligation. The packet build caught one no lane could: `oneup-2.0.md` §5.1 says no locale file **for another language**, which this document had twice rendered as *any* language — the distinction the whole English-branch argument turns on. **Blast-radius sweep caught four of its own**, one created inside this loop: adding §4.4's fourth row invalidated two ordinal citations (*"§4.4's second row"*, *"§4.4's third row"*) and the 0-split row's *"three-row render table"*, and §9 still carried the second copy of the locale-file overstatement. All four now cite rows by content rather than by number, which is what made them rot. Four lane open questions resolved clean: `tests/gui-smoke.py` is named in both `local-CI.sh` and `release.yml`, its `_StubProc` already drives `_on_thin_finished` so INV-1's side-channel clause is reachable, `oneup-2.0.md` §4 does support the packaging claim, and the PySide6 6.11 numerus measurement is a past-tense stamped measurement (`documentation.md` §6b.4) carried from the parent, not re-run here. |
+| 2 | 2026-08-12 | 2 lanes; Q1 2 · Q2 1 · Q3 3, all 6 verified, 0 dismissed — no severity scale under the four-question gate, so nothing here for §7's tally check to balance (ONEUP-0100) | **Both lanes independently led with the same gap, and it was the one case the render table never had a row for: an absent reason field.** The engine emits `marker REBOOT "$REBOOT${REBOOT_REASON:+\|$REBOOT_REASON}"`, appending the reason only when it has one, so `@@REBOOT@@\|yes` with nothing after it is an ordinary emission — and every row of §4.4 was keyed on elements present, so it fell through to *neither vocabulary matches, whatever the element count* and rendered the no-wording-for-this banner on a machine that simply needed rebooting. A fabricated bug report, on the commonest reboot there is. The table now opens with that row and the fallback row is scoped to *one or more* elements. **One finding was this document's own loop-1 collateral**: the mixed-vocabulary row added last loop renders the long form, and the long form was defined as naming *every code it did not recognise* — in that row every element can be known, so the sentence named nothing and INV-1's length proxy measured against an empty set. §4.3 now states both ways the fallback is reached and what it names in each, and INV-1's test feeds the case. Two Q1s neither lane could have found without opening the window: *"the step still runs, still badges and still counts toward the total"* was false for an unknown step key — rows are built from `TASKS` and `handle_marker` reads them with `self.rows.get(key)`, which misses and returns, so there is no badge site at all; and the parenthetical claiming a mismatched engine/window pair *"comes from a development checkout … not from an ordinary install"* contradicted ONEUP-0072 §6's own last row, since `oneup-2.0.md` §4 retains the Bash engine through 2.0 as a documented fallback — an ordinary install ships exactly that pair, which makes this rule's readability load-bearing rather than a safety net. That sentence had been carried across from the parent, where it contradicted the same row for four loops. Also closed: an arity mismatch was said to render *the same sentence*, which puts a sentence in a `@@STEP_END@@` badge that §4.3 gives the short form; and the English **join** was nowhere pinned, so an implementer joining with `", "` would have re-worded *"a new kernel, your graphics driver, and kernel driver modules"* — §3.1 forbids that, and nothing checked it. Two lane open questions resolved clean: `handle_marker` does render `@@CHECK_UNKNOWN@@` (its dispatch has a branch for it), so that family's table is not dead; and the PySide6 numerus measurement remains a stamped past-tense measurement rather than something this run re-ran. |
