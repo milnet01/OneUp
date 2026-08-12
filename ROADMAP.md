@@ -2528,7 +2528,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: doc.
   Source: in-session-2026-08-12.
 
-- 💭 [ONEUP-0102] **Delete a review run-state note when its run finishes.**
+- ✅ [ONEUP-0102] **Delete a review run-state note when its run finishes.**
   Proposed to the user 2026-08-12; NOT yet accepted, which is why this is
   considered rather than planned. Do not implement it without their say-so.
 
@@ -2553,6 +2553,18 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Hand-off notes left behind after a job is done go stale and mislead the next session; delete them when the job ends.
   Kind: doc.
   Source: in-session-2026-08-12.
+  Resolved (2026-08-12): accepted by the user and written as
+  documentation.md §7.1, with their qualifier as the operative distinction —
+  delete when the RUN ends, not when the session ends, because a run genuinely
+  in flight still needs its note. Three loops of the review gate then hardened
+  it: the rule originally called the fix ledger part of the "already checked"
+  durable record when nothing in this project scans docs/reviews/ at all; an
+  abandoned run had no deletion trigger at all and now ends in the session
+  that decides not to resume; and the directory's two file kinds, which have
+  opposite lifetimes, are now told apart by name (-run-state.md deleted,
+  -fix-ledger.md kept). What-checks-this carries two rows for it, both
+  honestly "nothing automatic" — whether a run has ended is not a fact on
+  disk.
 
 - 📋 [ONEUP-0103] **Every document still sends the reader to /cold-eyes, which no longer exists.**
   Raised as a lane open question during documentation.md's review gate
