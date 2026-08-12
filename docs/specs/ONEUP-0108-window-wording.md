@@ -144,13 +144,21 @@ joins one, so all three carry a small render function rather than a format strin
 **What differs between them is the agreement, and only one has it.** `@@REBOOT@@`'s
 sentence ends *"was/were installed"*, so its entry goes through the plural form
 (`docs/standards/wording-and-translation.md` §6.3) and the agreement becomes the
-catalogue's to decide rather than English's — which is also what the engine does today, in
-`reboot_reason_from_log`.
+catalogue's to decide rather than a hard-coded English rule's. **Today the engine decides
+it itself** — `reboot_reason_from_log` sets `verb="were"` and then `(( ${#parts[@]} == 1 ))
+&& verb="was"` — so this entry has to reproduce that behaviour, not delegate it away. That
+is what the paragraph below turns on.
 
-The two `@@CHECK_UNKNOWN@@` lists carry **no verb after the list**: today they read *"OneUp
-couldn't read these software sources: A, B"*, and §3.1 forbids this item re-wording them,
-so their render functions join and stop. That family's third code, `sources-unknown-error`,
-carries zypper's exit status and is an ordinary substitution.
+The two `@@CHECK_UNKNOWN@@` lists carry **no verb after the list, but they do carry
+wording after it** — the list sits mid-sentence. Today the system one reads *"OneUp couldn't
+read these software sources: A, B — this list may be incomplete. Running an update refreshes
+them."* and the Flatpak one *"OneUp couldn't reach these Flatpak sources: A, B — this list
+may be incomplete."* That trailing text is **part of each code's own wording**, not a fourth
+code (ONEUP-0072 §4.1), so the render function joins the names **into** the entry's sentence
+rather than terminating at them; §3.1 forbids this item dropping or re-wording the tail.
+What these two lack, unlike `@@REBOOT@@`, is a verb that has to agree with the list. That
+family's third code, `sources-unknown-error`, carries zypper's exit status and is an ordinary
+substitution.
 
 **The plural form alone does not cover English, so `@@REBOOT@@`'s render function carries
 an explicit English branch beside the plural call.** Decided with the user 2026-08-12, from
@@ -160,18 +168,27 @@ Measured against PySide6 6.11 on 2026-08-05, with a compiled `.qm` loaded:
 `QCoreApplication.translate(ctx, src, "", n)` **does** select a numerus form even when the
 source string contains no `%n` — so for any language with a catalogue, the agreement works
 exactly as described above. With **no** catalogue loaded it returns the source string
-verbatim for every `n`. `docs/design/oneup-2.0.md` §5.1 ships 2.0 with **no locale file for
-any language**, so the English path is the only path that runs at launch, and on it a single
-source string cannot yield both *was* and *were* — there is no `(s)` idiom for a verb. Left
-at the plural call alone, this item would **regress** wording the engine gets right today.
+verbatim for every `n`. `docs/design/oneup-2.0.md` §5.1 ships 2.0 **English only** — *"No
+`.ts`/`.qm` locale file for another language is written, reviewed or shipped as part of
+2.0"* — and §9 records the user's decision not to build one for English either. So no
+catalogue is loaded at launch, the English path is the only path that runs, and on it a
+single source string cannot yield both *was* and *were* — there is no `(s)` idiom for a
+verb. Left at the plural call alone, this item would **regress** wording the engine gets
+right today.
 
 So the entry keeps the plural call as its mechanism — every language with a catalogue still
-gets its own forms decided there — and the render function selects *was* or *were* from the
-component count. **This item lands before `docs/specs/ONEUP-0032-i18n.md`, which builds
-`oneup/gui/i18n.py` and every catalogue load there is**, so at this item's landing no
-translator can be installed and the branch is simply unconditional. Making it conditional
-is that item's, in the commit that first installs one; this spec requires only that the
-branch be written where the condition can later be added, and not inside the plural call.
+gets its own forms decided there — and the render function selects *was* or *were* from **the
+number of elements it renders into the sentence**: known components and inlined unknown codes
+alike, because agreement follows what the sentence actually lists. §4.4's components-join
+row is the case that settles it — *"a new kernel and gpu-firmware-blob were installed"* lists two things
+and takes *were*, though only one of them is a component the window knows.
+
+**This item lands before `docs/specs/ONEUP-0032-i18n.md`, which builds `oneup/gui/i18n.py`
+and every catalogue load there is**, so at this item's landing no translator can be installed
+and the branch is unconditional. Making it conditional is that item's, in the commit that
+first installs one. **What this spec requires is INV-2's observable behaviour and nothing
+more** — where the branch sits relative to the plural call is a review matter, and stating it
+as a requirement would put a clause in this document that nothing could falsify.
 
 **This is not the English branching `wording-and-translation.md` §6.3 forbids.** That rule
 forbids branching *instead of* the plural form, because branching cannot produce a
@@ -229,7 +246,8 @@ in order:
 | The reason field | Renders |
 | --- | --- |
 | exactly one element, and it is a **known standalone reason** | that entry's own sentence, with no join frame at all — the standalone set is tested first, because it is disjoint from the components and holds zero of them by definition |
-| one or more **known components** | the join, with each unknown element appearing **as its own bare code** beside the ones it knows — *"a new kernel and gpu-firmware-blob were installed"*: ugly, honest, and still advice |
+| **more than one element, and any of them is a known standalone reason** | the **long** form. The two vocabularies are disjoint by construction (ONEUP-0072 §4.1), so a field holding both is a newer engine or a bug, not data — and the join would print *"firmware-updated and a new kernel were installed"*, which is the sentence row 1 exists to prevent, reached the long way round |
+| one or more **known components**, and no standalone reason among them | the join, with each unknown element appearing **as its own bare code** beside the ones it knows — *"a new kernel and gpu-firmware-blob were installed"*: ugly, honest, and still advice |
 | neither vocabulary matches, whatever the element count | the **long** form, never the join — joining would assert the unknown tokens are components, which is how *"firmware-updated was installed"* reaches a user |
 
 **Testing the standalone set first is what makes the common non-kernel reboot work.** A
@@ -286,15 +304,18 @@ and both guard behaviour that spec's invariants never asserted.
   the text contains a space and is at least twice the combined length of the codes or key
   it names — the cheapest checkable proxy for "a sentence, not the token with something
   stuck to it". The `@@REMEDY@@` case additionally asserts **no button was armed**.
-- **INV-2** With no catalogue loaded, a `@@REBOOT@@` reason carrying **one** known
-  component renders *was* and one carrying **two or more** renders *were*. Breaks the
-  moment the render function is left at the plural call alone, which is the shape §4.2
-  measured and which would silently regress wording `reboot_reason_from_log` gets right
-  today.
-  *Test:* `tests/gui-smoke.py` feeds `@@REBOOT@@|yes|kernel-new` and
-  `@@REBOOT@@|yes|kernel-new kernel-modules` with no translator installed, and asserts the
-  first reads *was* and the second *were*. Both assertions are needed: a hard-coded *were*
-  passes the second alone.
+- **INV-2** With no catalogue loaded, a joined `@@REBOOT@@` sentence agrees its verb with
+  the number of elements it **renders** — one element reads *was*, two or more read *were* —
+  counting inlined unknown codes alongside known components, because agreement follows what
+  the sentence lists (§4.2, §4.4). Breaks the moment the render function is left at the
+  plural call alone, which is the shape §4.2 measured and which would silently regress
+  wording `reboot_reason_from_log` gets right today.
+  *Test:* `tests/gui-smoke.py`, with no translator installed, feeds `@@REBOOT@@|yes|kernel-new`
+  and asserts *was*; `@@REBOOT@@|yes|kernel-new kernel-modules` and asserts *were*; and
+  `@@REBOOT@@|yes|kernel-new gpu-firmware-blob` — one known component, one unknown — and
+  asserts *were*, which is the case that distinguishes rendered-element agreement from
+  known-component agreement. All three are needed: a hard-coded *were* passes the last two,
+  and known-component counting passes the first two.
 - **INV-3** A `@@REBOOT@@` reason that is a single **known standalone reason** renders that
   reason's own sentence — never the components' join frame, and never INV-1's fallback.
   Breaks the moment the render rule is keyed on how many components the field holds, since
@@ -313,7 +334,7 @@ and both guard behaviour that spec's invariants never asserted.
 | The engine emits a `REMEDY` code the window does not know | No button is offered; the banner says in the long form that this version has no fix for what the run reported, beside the run's own `HINT` | INV-1 (ONEUP-0072 §4.1). A remedy the window cannot perform is one it must not offer — arming a button for an unknown action is the worse failure |
 | The engine emits an unknown `STEP_END` code, whose wording *is* the badge | The badge shows the code itself, which is a short lowercase token and fits the slot; the row still reads `ok`/`skip`/`fail` from `status`, which is a token, not a code | INV-1's short form (§4.3). The run's verdict is carried by `status`, never by the badge |
 | The engine emits an unknown `@@REBOOT@@` component beside known ones | The sentence renders with the components the window does know, and names the one it does not | INV-1 per element (§4.4). `REBOOT`'s `yes`/`no` is a token, not a code, so the *advice to reboot* survives an unrenderable reason |
-| The `@@REBOOT@@` reason is a **single** element the window does not know | The long fallback sentence naming the code — never the components' *"…was/were installed"* frame | §4.4's third row. An unknown one-element reason belongs to neither vocabulary, so joining it would assert it is a component and print *"firmware-updated was installed"* |
+| The `@@REBOOT@@` reason is a **single** element the window does not know | The long fallback sentence naming the code — never the components' *"…was/were installed"* frame | §4.4's last row, the one for a field matching neither vocabulary. An unknown one-element reason belongs to neither, so joining it would assert it is a component and print *"firmware-updated was installed"* |
 | A known code arrives with more or fewer arguments than its entry expects | The same readable sentence naming the code | INV-1. The alternative is a throw in the read slot, which `marker-protocol.md` §1.2 forbids because it drops the rest of the run's markers |
 | A step key arrives that the window has no title for | A readable sentence naming the key in the status line and the announcement; the bare key in the progress-bar caption, which has no room for a sentence | INV-1, per site — ONEUP-0072 §4.1's table says which site takes which form. The step still runs, still badges and still counts toward the total |
 | A list-bearing `CHECK_UNKNOWN` code arrives with no names | That code's own sentence with an empty list, not the fallback | §4.3. Zero names is an engine defect, not a version mismatch, and rendering the fallback would misattribute it |
@@ -374,9 +395,10 @@ document's §4.2 relies on it and does not re-amend it.
 
 - **Ship a compiled English `.qm`, so English reaches its *was/were* forms by the same
   route every other language does.** Rejected with the user 2026-08-12: it makes 2.0 build
-  and ship a translation artifact for the one language that needs none, and
-  `docs/design/oneup-2.0.md` §5.1 ships no locale file at all. §4.2 takes the English
-  branch instead.
+  and ship a translation artifact for the one language that needs none, against a §5.1 that
+  ships 2.0 English-only and writes no locale file for another language. This is the
+  decision that closes the gap §5.1 itself leaves open — it rules out an English one too.
+  §4.2 takes the English branch instead.
 - **Re-word `@@REBOOT@@`'s sentence so no agreement is needed** (*"Installed: a new kernel,
   your graphics driver"*). Rejected with the user the same day, and §3.1 forbids this item
   deciding it alone: it changes what a user reads, so it belongs to ONEUP-0064.
@@ -412,4 +434,5 @@ document's §4.2 relies on it and does not re-amend it.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| 0-split | 2026-08-12 | — | **Provenance, not a review — no reviewer was dispatched to produce this row.** This document was split out of `docs/specs/ONEUP-0072-marker-codes.md` under roadmap item ONEUP-0101, taking that document's §4.3 and its INV-3. The parent's four loops ran against a document that no longer exists and **are not inherited**: this one runs the gate from loop 1 on its own bytes. Three things are new here and have never been reviewed in any form — INV-2, INV-3, and §9's last three alternatives. Two are carried across as they converged: §4.2's English-branch decision (settled with the user 2026-08-12) and §4.4's three-row render table, which was the parent's loop 4 fix and is therefore the newest text in the document. The parent keeps §4.1, §4.2, INV-1, INV-2, INV-4 and INV-5, and its §11 records the split from its side. |
+| 0-split | 2026-08-12 | — | **Provenance, not a review — no reviewer was dispatched to produce this row.** This document was split out of `docs/specs/ONEUP-0072-marker-codes.md` under roadmap item ONEUP-0101, taking that document's §4.3 and its INV-3. The parent's four loops ran against a document that no longer exists and **are not inherited**: this one runs the gate from loop 1 on its own bytes. Three things are new here and have never been reviewed in any form — INV-2, INV-3, and §9's last three alternatives. Two are carried across as they converged: §4.2's English-branch decision (settled with the user 2026-08-12) and §4.4's render table, whose components-join and neither-vocabulary rows were the parent's loop 4 fix and is therefore the newest text in the document. The parent keeps §4.1, §4.2, INV-1, INV-2, INV-4 and INV-5, and its §11 records the split from its side. |
+| 1 | 2026-08-12 | 2 lanes; Q1 2 · Q2 2 · Q3 1 · Q4 1, all 6 verified, 0 dismissed (1 of the Q1s raised by the packet build, not a lane) — no severity scale under the four-question gate, so nothing here for §7's tally check to balance (ONEUP-0100) | **Both lanes independently led with the same three, and the most valuable had survived four loops inside the parent.** §4.2 said the two `@@CHECK_UNKNOWN@@` lists' render functions *"join and stop"*; the engine puts the list **mid-sentence** — `unreadable+=" — this list may be incomplete. Running an update refreshes them."` — and ONEUP-0072 §4.1 already called that tail part of each code's wording, so an implementer would have silently dropped it, re-wording a message §3.1 forbids re-wording. Second, the verb rule was stated on the **known-component** count while §4.4's own example renders *were* for one known component beside one unknown; both readings passed INV-2's test, which fed no unknown elements. Agreement is now on **rendered** elements, and the mixed case is the third assertion in the test. Third, a reason field holding a known standalone reason **beside** known components matched no row — row 1 needs exactly one element and the join row only defined *unknown* ones — so `firmware-updated kernel-new` from a newer engine would have printed *"firmware-updated and a new kernel were installed"*, the exact sentence the table exists to prevent; §4.4 has a fourth row for it. A lane-only Q1: §4.2 said the plural form makes agreement the catalogue's *"which is also what the engine does today"* — `reboot_reason_from_log` computes the verb itself and delegates nothing, and the paragraph four lines below rests on the opposite. And a Q4: *"the branch be written where the condition can later be added"* was a requirement nothing could falsify; deleted, with INV-2's observable behaviour left as the whole obligation. The packet build caught one no lane could: `oneup-2.0.md` §5.1 says no locale file **for another language**, which this document had twice rendered as *any* language — the distinction the whole English-branch argument turns on. **Blast-radius sweep caught four of its own**, one created inside this loop: adding §4.4's fourth row invalidated two ordinal citations (*"§4.4's second row"*, *"§4.4's third row"*) and the 0-split row's *"three-row render table"*, and §9 still carried the second copy of the locale-file overstatement. All four now cite rows by content rather than by number, which is what made them rot. Four lane open questions resolved clean: `tests/gui-smoke.py` is named in both `local-CI.sh` and `release.yml`, its `_StubProc` already drives `_on_thin_finished` so INV-1's side-channel clause is reachable, `oneup-2.0.md` §4 does support the packaging claim, and the PySide6 6.11 numerus measurement is a past-tense stamped measurement (`documentation.md` §6b.4) carried from the parent, not re-run here. |
