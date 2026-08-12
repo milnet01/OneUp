@@ -1787,6 +1787,13 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Measured 2026-08-07 on the reporter's machine: 6,278 bytes of directory
   entries in ~/.local/state/oneup/logs, from a handful of days of manual runs
   -- so the growth is real before the weekly timer adds to it.
+  Priority note (2026-08-12, in-session): worth doing EARLY in 2.0
+  rather than at its position. ONEUP-0077 starts writing a run log every week
+  on machines where nobody opens the app, and nothing prunes the directory —
+  so this is a slow leak on real users' disks that gets harder to fix
+  politely the longer it runs, because by then people have thousands of files
+  and any cleanup has to decide what it is allowed to delete. Raised as a
+  suggestion to the user; they have not ruled on the ordering.
 
 - 📋 [ONEUP-0083] **Record the third loop-log tally trap in documentation.md §7.**
   tests/docs-check.py's DISPOSITION_RE matches only `verified`,
@@ -2511,5 +2518,31 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Blocks ONEUP-0072 implementation, and therefore Task 18 of
   docs/plans/ONEUP-0057-documentation-set.md.
   **Layman:** One design document has grown too big to check reliably; splitting it is now cheaper than reviewing it again.
+  Kind: doc.
+  Source: in-session-2026-08-12.
+
+- 💭 [ONEUP-0102] **Delete a review run-state note when its run finishes.**
+  Proposed to the user 2026-08-12; NOT yet accepted, which is why this is
+  considered rather than planned. Do not implement it without their say-so.
+
+  What prompted it: docs/reviews/ONEUP-0072-RESUME.md was written to hand an
+  unfinished review to the next session. It carried a "Verified source facts
+  worth carrying forward" section explicitly telling that session to reuse
+  the figures rather than re-derive them — and one of them ("marker HINT x
+  14 call sites") had been false since 1.4.3 shipped, which added four. A
+  note that presents itself as verified is worse than no note, because it
+  buys exactly the trust that stops anyone checking.
+
+  The proposal: docs/reviews/ holds run state only while a run is in flight.
+  When the run ends the note is deleted in the closing commit — the loop log
+  in the document and the fix ledger are the durable record, and they are
+  already checked. A note that outlives its run has no owner and nothing
+  gates it.
+
+  Scope check if it is taken up: documentation.md would own the rule, and
+  the freeze does not block it (workflow.md 1.2 exempts documentation).
+  Deleting the ONEUP-0072 note has already happened as part of that run's
+  close; this bullet is about making it the rule rather than one instance.
+  **Layman:** Hand-off notes left behind after a job is done go stale and mislead the next session; delete them when the job ends.
   Kind: doc.
   Source: in-session-2026-08-12.

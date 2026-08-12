@@ -131,6 +131,14 @@ measurement and the exact shape of the rule are in the document named beside eac
   Keep-alives were once found still running 40 minutes after their run was killed —
   `docs/standards/security.md` §2.4.
 
+- **A shape check on a field of codes does not catch English — check membership instead.**
+  A `^[a-z0-9-]+$` test looks like it forbids prose, and against a *space-separated* field it
+  does not: every word of *"core system packages were updated"* matches it one at a time, so
+  a half-converted payload passes and the suite stays green. Where a closed vocabulary
+  exists, assert membership of it; shape only tells you a token is well-formed, never that it
+  is one of yours. Caught in review rather than in production, by running the regex instead
+  of reading it — `docs/specs/ONEUP-0072-marker-codes.md` INV-1.
+
 - **A test must never depend on, or damage, the state of the machine it runs on.** Both
   defaults have bitten for real: the lock probe reads `/run/zypp.pid`, and `run.state`
   defaults to the user's own — so the suite once deleted a live run's record. A scenario
