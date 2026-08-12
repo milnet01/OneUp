@@ -2660,3 +2660,43 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A formatting rule that no document actually follows — decide whether to follow it or drop it.
   Kind: doc-fix.
   Source: in-session-2026-08-12.
+
+- 📋 [ONEUP-0107] **Re-gate the standards set under the four-question review, one document at a time.**
+  Evidence, measured 2026-08-12. documentation.md had been through seven
+  review loops and was long settled. Amending it for ONEUP-0102 triggered
+  the gate, and two loops found 13 verified findings, of which only three
+  were the amendment's own collateral. The rest were pre-existing, and they
+  were not cosmetic: a worked example whose arithmetic was wrong in the
+  section that teaches the tally check; prose saying "one exemption" over a
+  table of two; two sections prescribing different document layouts; a rule
+  whose scope list omitted a document class the gate has always scanned,
+  such that a maintainer reading the rule could have narrowed the check and
+  un-gated the highest-ranked class in the set; and seven rules with no
+  What-checks-this row at all, which §4 itself calls "a rule nobody has
+  thought about". The table went from 12 rows to 20.
+
+  Why that is a claim about the OTHER standards and not just this one: the
+  earlier loops were run under the fifteen-dimension severity gate, which
+  was replaced on 2026-08-08 by four questions (is a claim false; do two
+  passages contradict; is a required behaviour unspecified; is a test clause
+  unfalsifiable). Those questions look for a different class of defect, and
+  the eight remaining standards plus the marker-protocol reference have
+  never been read under them.
+
+  Scope: one document per run, genre "standard", each with its own loop-log
+  rows. Do NOT batch them — the measured lesson from ONEUP-0072 is that a
+  document's own size and a fix pass's collateral are what drive these runs,
+  and a batch hides both.
+
+  Cost is real and should be taken deliberately: this one document cost six
+  cold lanes across three loops. Nine documents at that rate is a project,
+  not a tidy-up. Order by what is most built-against: coding.md, testing.md,
+  security.md first; wording-and-translation.md and dependencies.md last.
+
+  Two findings already filed against the set from this run, and either may
+  be folded into the first document's pass rather than done separately:
+  ONEUP-0106 (the bold-nothing form, breached by every standard) and
+  ONEUP-0103 (every document names /cold-eyes, which no longer exists).
+  **Layman:** A stricter review found a dozen real errors in a document we thought was finished; the others have not had that review yet.
+  Kind: doc-fix.
+  Source: in-session-2026-08-12.

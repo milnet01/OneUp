@@ -8,8 +8,7 @@ nobody has to guess where a decision belongs or whether it has been reviewed.
 **Roadmap:** ONEUP-0057
 **Branch:** main
 **Verified at:** `07a4b2d` — every path and claim below was checked against the tree on
-2026-08-12, not recalled: two cold review loops read the whole document against the tree
-that day, and `tests/docs-check.py` passes over it.
+2026-08-12, not recalled.
 
 **Applies to:** every document in the repository, including the component `README.md`
 files under `packaging/obs/` and `screenshots/` (they follow §8's writing rules; they need
@@ -143,8 +142,9 @@ leaving a heading with nothing under it.
     `Status` line names the current state and never the loops that got there.
 
 **Every standard and reference carries a `Cold-eyes loop log` section too**, as its last
-numbered section. A document subject to the §7 gate with no loop-log section has not been
-through the gate.
+section — numbered or not, following whatever scheme that document already uses
+(`dependencies.md` numbers no heading at all). A document subject to the §7 gate with no
+loop-log section has not been through the gate.
 
 **Every standard and reference also carries an unnumbered `## What checks this` section**,
 immediately before the loop log, holding one table: each rule the document sets, and what
@@ -152,12 +152,16 @@ catches a breach of it. It is unnumbered so that adding it renumbered nothing (�
 whose row says *nothing yet* is honest and gets fixed; a rule with no row at all is a rule
 nobody has thought about. `tests/docs-check.py` fails a standard that lacks the section.
 
-**The right-hand cell says one of two things, and never blurs them:**
+**The right-hand cell says one of three things, and never blurs the first two:**
 
 - **a gate** — the file that catches a breach, named exactly, plus the assertion or scenario
   if the file is large.
 - **`nothing`, in bold, followed by why** — and a roadmap id when the gap is a defect rather
   than a limit of what a script can decide.
+- **a gate, plus what that gate does not catch**, in the same cell — for a rule covered in
+  part. Two rows below need it, and the carve-out is the point of them: a partly-gated rule
+  written as though fully gated is the "row that is wrong" this section warns about, and
+  dropping the carve-out to fit one of the first two forms is how that happens.
 
 Keep the row about the rule the *left* cell names. The 2026-07-26 review found a row that
 said the GUI suite does not redirect `HOME` — it does; the engine suite is the one that does
@@ -264,8 +268,8 @@ A citation is well-formed when a reader can find the code with one search and no
 
 Nothing durable. They are fine in a **commit message**, a **review comment**, or a
 **conversation** — all three are pinned to a moment in time and are never re-read as
-current. They do not belong in a standard, a spec, a design document, `CLAUDE.md` or the
-roadmap.
+current. They do not belong in a standard, a reference, a spec, a design document,
+`CLAUDE.md` or the roadmap.
 
 **A count is a separate problem, and a worse one** — §6b, which says to keep most of them
 out of a document entirely. A line number cannot even be rescued that way: it is stale the
@@ -584,8 +588,8 @@ fact only to make a *different* point with it, and say where it came from.
 | §4 every standard carries this section and a loop log | `tests/docs-check.py` |
 | §5 an invariant names its test | **nothing** automatic — a cold reader |
 | §6 a claim is checked against the tree | **nothing** automatic. The review gate is the only catcher, which is why §7 is a gate and not advice |
-| §6 no `TODO` / `TBD` / `FIXME` left in a document | `tests/docs-check.py` |
-| §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design. `docs/specs/` is exempt until ONEUP-0065 converts the `path:line` citations the older specs carry. The prose form — *"around line 786"* — is caught by nobody |
+| §6 no `TODO` / `TBD` / `FIXME` / `XXX` left in a document | `tests/docs-check.py` |
+| §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design — and **that is the whole of its reach**. `docs/specs/` is exempt until ONEUP-0065 converts the `path:line` citations the older specs carry; `CLAUDE.md` and `ROADMAP.md` are inside §6a.2's scope and are scanned by **nothing**, as is the prose form — *"around line 786"* |
 | §6b most counts taken from the code stay out of the document | **nothing** automatic — a cold reader. ONEUP-0104 would gate it |
 | §7 a loop tally balances | `tests/docs-check.py` |
 | §7.1 a run-state note is deleted when its run ends | **nothing** automatic — whether a run has ended is not a fact on disk. The catcher is the closing commit itself; a later reader can only spot a breach by the `-run-state.md` name §7.1 pins |
@@ -593,6 +597,10 @@ fact only to make a *different* point with it, and say where it came from.
 | §8.2 every standard opens with an `**In one sentence:**` line | `tests/docs-check.py` |
 | §8 the rest of plain language | **nothing** automatic — a cold reader, and the author reading their own sentence as an opponent |
 | §9 a pointer resolves | `tests/docs-check.py`, over the documents that describe the tree as it is: standards, reference, `CLAUDE.md`, `README.md`. A spec, design document or plan is excluded, because each legitimately names files it is going to create. **Only paths containing a `/` are checked** — a bare `foo.py` is not, because the same form is used for naming-pattern examples (`snake_case.py`), for 2.0 modules that do not exist yet, and for runtime files that are never in git. A renamed script therefore leaves residue this gate cannot see; the 2026-07-26 review found five such references after `check-docs.py` became `tests/docs-check.py` |
+| §7 implementation does not start before the gate has run | `tests/docs-check.py` proves a gated document has a `Status` and a loop log — it cannot prove anyone **waited** for them. That half is **nothing** automatic |
+| §8.2 every roadmap bullet carries a `**Layman:**` line | **nothing** automatic — `ROADMAP.md` is outside this gate's scope entirely, though the rule is mechanical enough to check |
+| §9 never rewrite `CHANGELOG.md` history | **nothing** automatic — a released entry rewritten looks exactly like one written correctly the first time. Git history is the only record, and nothing reads it |
+| §9 a superseded document is marked, not deleted | **nothing** automatic — a deleted file leaves nothing behind to check |
 | §9 one owner per fact | **nothing** automatic. This is the gap the review loop exists to cover, and the most expensive one to leave uncovered. ONEUP-0105 would gate it |
 
 **More than half these rows have nothing automatic behind them**, and that is the honest
@@ -610,6 +618,7 @@ them.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 9 | 2026-08-12 | 2 lanes, third and final loop of this run (the default cap): Q1 1 · Q2 3 · Q3 2 — 6 verified, 0 dismissed, of which **only one** was the previous loop's collateral | **Stopped at the cap with findings still arriving, and that is the result worth recording.** The one collateral was mine and the fix was deletion: loop 8's re-stamped `Verified at:` line had grown a clause naming the two review loops behind it, which §3 forbids outright — history lives in the log and nowhere else. The five pre-existing were all §4's own rules failing in the document that sets them, the same shape as loop 8's: §4 said a What-checks-this cell "says one of **two** things, and never blurs them" while two of this table's rows have always needed a third — a gate **plus** what it does not catch — so an author following §4 would drop an honest carve-out and leave a partly-gated rule reading as covered (§4 now permits the third form and says why); §4 called the loop log the "last **numbered** section" when `dependencies.md`, the one standard that numbers no heading at all, has never had one; §6a.2's scope list omitted a reference while the gate has always scanned `docs/reference/`, so a maintainer reading the rule could have narrowed the check and silently un-gated the highest-ranked document class; the §6a row implied its gate reached everything in that scope, while `CLAUDE.md` and `ROADMAP.md` are scanned by nothing; and four more rules had no row at all — §7's own "implementation does not start before that", §8.2's `**Layman:**` line, and both of §9's (never rewrite CHANGELOG history, mark a superseded document rather than delete it). The table went 12 rows to 20 across this run. **The proportion form earned itself**: the sentence beneath it still reads true at 12 of 20 without being touched, where a figure would have gone stale a third time. Fixed in passing, below finding threshold: the `TODO` row named three markers where the rule and `MARKER_RE` both have four. **Filed rather than looped: ONEUP-0107** — 13 pre-existing defects in two loops of a document eight loops had already passed says the four-question gate finds a different class than the severity gate did, and the other eight standards have not been read under it. |
 | 8 | 2026-08-12 | 2 lanes, second loop of the §7.1 amendment review: Q1 3 · Q2 3 · Q3 1 — 7 verified, 1 dismissed, of which only 2 were the previous loop's collateral | **Five of the seven were pre-existing, in a document seven loops had already passed** — which is what a differently-shaped gate is for, not evidence the earlier loops were careless. The two that were mine: the header still said every claim was verified at `58ea3bc` on 2026-07-26 while §7.1 had been measured 17 days later (§3 makes that field the only signal a figure is current, so it was actively misleading), and the §8 row still said **nothing** automatic after loop 7 gave §8.2's opener a gate — §4 calls that shape "worse than a row that is missing". The pre-existing five: §7's worked example for the tally check computed `24 verified + 4 dismissed` as **26** where it is 28, so an author debugging a red gate would have worked the example and mistrusted themselves or balanced to the wrong total; §6b.5's prose said **one** clear exemption over a table with two; §4 and §5 gave the document set two different layouts (loop log last vs What-checks-this last) and §5 now defers to §4; §7's catcher table claimed each standard has a *Before you commit* section when this one and `dependencies.md` do not; and the What-checks-this table had no row at all for §1.1 or §2, which §4 itself calls "a rule nobody has thought about". **Dismissed: one** — that the log-format example states no verified/dismissed counts. Checked against `check_loop_tallies`: a row with no numeric disposition clause is skipped, not failed, so the example is valid as written. The table's own row-count sentence was **converted to a proportion rather than re-numbered**: the exact figure was written twice and went stale both times inside one session, which is §6b's rule applied to the document that states it. Swept `CLAUDE.md`, which made the same layout claim §5 did, and corrected it there. |
 | 7 | 2026-08-12 | 2 lanes, amendment review for the new §7.1, under the four-question gate — no severity scale, so nothing here for §7's tally check to balance (ONEUP-0100): Q1 1 · Q2 3 · Q3 2, all 6 verified, 0 dismissed | **Half the findings were in the new section and half were things it walked past.** Both lanes independently led with the same Q1: §7.1 said the durable record "is already checked", naming the loop log *and* the run's fix ledger — and no gate in this project scans `docs/reviews/` at all, so the ledger is checked by nothing. A conformer would have deleted the note believing the surviving ledger was gated, keeping exactly the unchecked artefact the rule was written to remove. It now says which half is checked and which is not, and turns that into a reason to keep the directory small. Two contract gaps in the new rule: an **abandoned** run has neither a closing commit nor "still in flight" status, so the note could sit forever with nobody able to show a breach — an abandoned run now ends in the session that decides not to resume; and `docs/reviews/` holds two file kinds with opposite lifetimes and no way to tell them apart, so the names are pinned (`-run-state.md` deleted, `-fix-ledger.md` kept). The three the lanes found *outside* the amendment were all §4's own form being broken by the document that states it: `nothing` unbolded in all six cells (now bolded — and **ONEUP-0106** files the same breach across the other eight standards, where a rule nothing obeys is more likely wrong than eight documents are); a required roadmap id missing from the two cells this document itself calls buildable gates (filed as **ONEUP-0104** and **ONEUP-0105**); and two present-tense tree counts breaching §6b — *"All nine do"*, which is really a gate and now says so, and §6a's *"62 citations"*, which the tree had already moved to 65. Blast-radius sweep found the plan for ONEUP-0057 still opening by sending the reader to ONEUP-0072's run-state note — the file this very rule had just had deleted, so no path for it is given here either; repointed at the spec's own loop log. Lane open question, verified and filed as **ONEUP-0103**: `/cold-eyes` no longer exists on this machine, and 25 files here still send a reader to it. |
 | 1 | 2026-07-26 | 9 critical, 19 high, 28 medium, 30 low (set-wide, batch 1) | all verified findings fixed; this document's share: the tie-break rule contradicted §1's table, the header block was missing from the standard that mandates it, the `Status`/`Kind` enums matched no document in the tree, and "standards never hold anything version-specific" contradicted six of the nine |
