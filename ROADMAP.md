@@ -3160,3 +3160,42 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** OneUp will be able to update itself: it spots a new version, downloads it, closes, applies the update and reopens — instead of telling you a new version exists and leaving you to fetch it.
   Kind: feature.
   Source: user-request-2026-08-18.
+
+- 📋 [ONEUP-0113] **Decide whether OneUp's standards owe the global version marker.**
+  Raised by a review lane during the 2026-08-18 standards-alignment gate on
+  docs/standards/documentation.md, and filed rather than fixed because the gate hit
+  its cap (3 loops for a standard) and the fix is a nine-file mechanical change
+  with a checker implication.
+
+  The facts, verified: ~/.claude/standards/README.md § Versioning says "Each
+  standard carries a version marker in its first-line HTML comment", with the form
+  `<!-- ants-coding-standards: 1 -->`. The global standards do carry one —
+  coding.md and testing.md both open with theirs. NONE of OneUp's nine standards
+  does; docs/standards/coding.md opens with `# Coding Standard`.
+
+  The question is whether that rule reaches a project-owned standard at all.
+  documentation.md §1.2 now says the global set governs where this project states
+  nothing, and this project states nothing about version markers — which argues it
+  binds and all nine are in breach. Against that: § Versioning reads as a rule
+  about the global set's OWN files, and the marker's purpose there is that tooling
+  reads it. Nothing in OneUp reads one.
+
+  Settling it needs a decision, not a sweep:
+
+  1. If it binds — add the marker to all nine, pick each file's version, and decide
+     whether tests/docs-check.py should enforce presence (which would make the
+     whole set red until the markers land, so the order matters).
+  2. If it does not — say so in documentation.md §1.2's list of what OneUp
+     inherits, so the next reader does not re-derive the question. That list
+     already names what binds; this would be the first entry recorded as NOT
+     binding, and the reason belongs with it.
+  3. Or ask upstream whether § Versioning is scoped to the global set, which is the
+     cheapest route to a correct answer and the one that fixes it for every project
+     rather than for this one.
+
+  Not urgent: nothing is broken today and no check fires either way. It is filed so
+  the question is not rediscovered by the next gate, which is what a filed tail is
+  for.
+  **Layman:** A question the docs review turned up and could not settle in the time it had: whether our rule files need a small version stamp at the top, the way the machine-wide ones do.
+  Kind: doc.
+  Source: review-contract-2026-08-18 loop 3, filed at the cap.
