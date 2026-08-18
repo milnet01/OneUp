@@ -211,9 +211,9 @@ absorbed and removed).
 > **The measurement settled the design and inverted the obvious answer.** Lightening cannot
 > reach SC 2.4.13's 3:1 on the accent at any shade — pure white is 2.63:1 against `#4aa3ff`
 > — so the cue **darkens**, which kills "focus reuses the hover look". Rather than author a
-> focus colour per theme, the app **derives** one: the smallest blend toward black, or toward
-> white where black cannot get there, clearing 3:1 against every one of a control's rest
-> pixels. Total for one surface (the max of contrast-vs-black and contrast-vs-white never
+> focus colour per theme, the app **derives** one: the smallest blend toward black or toward
+> white — whichever reaches it at the lower blend fraction — clearing 3:1 against every one of
+> a control's rest pixels. Total for one surface (the max of contrast-vs-black and contrast-vs-white never
 > drops below 4.58:1), **not** total for a set — `#000000` and `#989898` admit none, 192 such
 > grey pairs exist — so the search fails loudly.
 >

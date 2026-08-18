@@ -1179,9 +1179,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   The measurement on this bullet held and became the design. Because lightening
   cannot reach 3:1 on the accent at any shade, the app DERIVES a focus colour
-  instead of authoring one per theme: the smallest blend toward black, or toward
-  white where black cannot get there, clearing 3:1 against every one of the
-  control's rest pixels. That is total for a single surface -- max(contrast vs
+  instead of authoring one per theme: the smallest blend toward black or toward
+  white -- whichever reaches it at the lower blend fraction -- clearing 3:1
+  against every one of the control's rest pixels. That is total for a single surface -- max(contrast vs
   black, vs white) never drops below 4.58:1 -- so a palette nobody has written
   yet still gets a working cue, which is what ONEUP-0027's six new themes need.
   The same bound gives the label colour for free.
@@ -1588,8 +1588,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   the no-focus-BORDER constraint untouched, since darkening a fill draws no ring.
 
   Rather than author a focus colour per theme, the app DERIVES one: the smallest
-  blend toward black -- or toward white where black cannot get there -- clearing
-  3:1 against every one of the control's rest pixels. Total for a single surface,
+  blend toward black or toward white -- whichever reaches it at the lower blend
+  fraction -- clearing 3:1 against every one of the control's rest pixels. Total for a single surface,
   because max(contrast vs black, vs white) never drops below 4.58:1 for any sRGB
   colour. So a palette nobody has written yet still gets a working cue, which is
   what ONEUP-0027's six new themes need, and the same bound gives the label colour

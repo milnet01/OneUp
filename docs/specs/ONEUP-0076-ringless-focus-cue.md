@@ -4,8 +4,10 @@
 **Kind:** accessibility
 **Roadmap:** ONEUP-0076
 **Branch:** v2
-**Verified at:** `d18fbf2` — every figure below was computed or measured against this tree,
-on PySide6 6.11.0, not recalled.
+**Verified at:** `d18fbf2`, and re-confirmed at `c8fb3f2` — every figure below was computed
+or measured against the tree, on PySide6 6.11.0, not recalled. The two commits differ in
+`updater.py`; every figure and the §2.1 census reproduce unchanged at both, and the measured
+notes in §4.2 and §4.4 cite `c8fb3f2` because that is where they were taken.
 
 **Sections:** 1 goal · 2 background · 3 scope decisions · 4 design · 5 correctness
 invariants · 6 failure modes · 7 tests · 8 docs & release · 9 alternatives · 10 out of
@@ -166,9 +168,10 @@ more than one set of rest pixels when the thing behind it changes: the disclosur
 `rowcard` or on `rowhov` depending on the mouse.
 
 > **A focused control's own fill changes to a colour derived from the colour it replaces:
-> the smallest blend toward black — or toward white, when black cannot get there — that
-> measures at least 3:1 against every one of the control's rest pixels. Its text is redrawn
-> in whichever of black or white contrasts more with that fill.**
+> the smallest blend toward black or toward white — whichever of the two reaches it at the
+> lower blend fraction — that measures at least 3:1 against every one of the control's rest
+> pixels. Its text is redrawn in whichever of black or white contrasts more with that
+> fill.**
 
 **The procedure, stated once so two readings cannot diverge.** The blend fraction `t` runs
 from 0.01 to 1.00 in 1% steps, mixing each channel toward the target and rounding to the
@@ -261,6 +264,7 @@ row for its object name.
 | `#StopBtn` (introduced by `docs/specs/ONEUP-0064-interface-redesign.md` §4.1) | A | `card` |
 | `#GhostBtn`, in the header and the action row | A | `card` |
 | `#GhostBtn`, moved into `SettingsDialog` by `docs/specs/ONEUP-0064-interface-redesign.md` §4.1 | A | the dialog's own surface, which is `card` — the sheet is set on the application, so the dialog inherits it |
+| `#GhostBtn` in the warning banner (`retry_btn`), moved there by `docs/specs/ONEUP-0064-interface-redesign.md` §4.1, which keeps the object name | A | `#WarnBanner` only — the same composited tint `warn_copy_btn` takes, resolved the same way in §4.4 |
 | `#LinkBtn`, on the card (`log_toggle`, `openlog_btn`, `rollback_btn`) | A | `card` |
 | `#LinkBtn` in a banner (`warn_copy_btn`) | A | `#WarnBanner` only — it is inserted into that one banner and no other |
 | `#LinkBtn` inside a row's detail panel (`size_btn`) | A | `rowcard` **and** `rowhov` |
@@ -269,6 +273,21 @@ row for its object name.
 | `QPlainTextEdit#Log` | B | `logbd`, widened to 2 px |
 | `QScrollArea#DetailScroll` | B | `logbd`, at 2 px — the panel gains a rest border |
 | The primary button family, high-contrast overlay on | A | `$btn`. The overlay's `#GhostBtn` rule already clears 3:1 and is kept unchanged — §4.1's floor, §4.3's note |
+| `#StopBtn`, `QToolButton#Disclose` and `#LinkBtn`, high-contrast overlay on | A | `$card`. Every control the overlay does not give a `$btn` fill rests on `$card`, so all three take the `$card` → `$btnhov` pair §4.1's floor already keeps for `#GhostBtn`. `ONEUP-0064` §4.1 creates the overlay rules for the first two and delegates their focus colour here |
+
+**⚠ OPEN — how one object name carries three derivations.** `#LinkBtn` has three rows above
+with three different rest-pixel sets, and `#GhostBtn` now has three as well. But §4.4 matches
+a styled widget to a row **by object name**, and `_QSS` keys its rules the same way — so
+nothing here says how one name resolves to three fills.
+`docs/specs/ONEUP-0064-interface-redesign.md` §4.1 hit this and answered it by *renaming*
+(*Stop* became `#StopBtn`) "because `docs/specs/ONEUP-0076-ringless-focus-cue.md` matches a
+styled control by object name". Two ways out, and the choice is not this document's to make
+alone: **rename per surface**, which changes object names `ONEUP-0064` has just fixed and
+`ONEUP-0027` keys palette entries to; or **descendant selectors**
+(`#WarnBanner QPushButton#LinkBtn:focus`), which renames nothing but means INV-1's matcher
+has to resolve a row by surface as well as by name. Until it is settled an implementer
+would write one `#LinkBtn:focus` derived from `card` and render it over `rowcard`, `rowhov`
+and the banner tint — the 2.83:1 shape §4.2 warns about two paragraphs down.
 
 **The painted switch needs a seam, and there is exactly one that already works.** A
 stylesheet cannot colour what `paintEvent` draws, but it can set a Qt property on the class:
@@ -307,8 +326,11 @@ Computed, not chosen. Every figure is the output of the check in §4.4.
 | High contrast, light — primary buttons | `$btn` `#000000` | `#5c5c5c` | 3.14:1 | `#ffffff` 6.69:1 |
 | High contrast, dark — `#GhostBtn` | `$card` `#000000` | **unchanged**, `$btnhov` `#ffd400` | **14.67:1** | unchanged |
 | High contrast, light — `#GhostBtn` | `$card` `#ffffff` | **unchanged**, `$btnhov` `#0000cc` | **11.22:1** | unchanged |
+| High contrast — `#StopBtn`, `#Disclose`, `#LinkBtn` | `$card` | `$btnhov` — the kept pair, not a derivation | **14.67:1** dark / **11.22:1** light | `$btntext`, 14.67:1 / 11.22:1 |
 | High contrast — `#Log` / `#DetailScroll` border | `$border`, widened to 2 px in the overlay too | `#949494` / `#5c5c5c` | 3.03:1 / 3.14:1 | — |
 | Link button hover text, light | `#6fb6ff` on `#ffffff`, **2.14:1** | — | — | moves to `#4a7aab`, **4.50:1** |
+| Ghost button `:hover` / `:checked` ink, light | `#4aa3ff` on `#ffffff`, **2.63:1** | — | — | moves to `#3779bd`, **4.53:1** |
+| Ghost button `:hover` / `:checked` ink, dark | `#4aa3ff` on `#12161c`, **6.89:1** | — | — | unchanged — it already clears 4.5:1 |
 | `#LinkBtn` in the warning banner | the banner tint composited over `card` | derived from that composite | ≥3:1 | black or white |
 | `ghostbd` on `card` — the ghost button's rest border (`ONEUP-0027` §4.8 hands it here) | light `#c4ccd6` 1.62:1, dark `#38414f` 1.76:1 | moves to `#8f959c` / `#5e6570` | **3.02:1** / **3.09:1** | — |
 
@@ -333,7 +355,13 @@ like mechanism B; but the pixels the overlay moves on focus are the *fill*
 (`background: $btnhov`), and recolouring that border would not work anyway — dark `$border`
 `#ffffff` → `$focus` `#ffd400` is **1.43:1** and light `#000000` → `#0000cc` is **1.87:1**.
 
-**Only the overlay's primary family fails, and its ghost button is left alone.** The
+**The overlay's `#LinkBtn:focus` is replaced rather than kept, and it is the one overlay
+rule that fails outright.** It moves text alone (`color: $text` over the rest `$link`), which
+measures **1.65:1** dark and **1.87:1** light — below 3:1 in both, so no recolour of that
+text can carry the cue. It takes a fill on focus like every other overlay control, which is
+the `$card` → `$btnhov` pair above.
+
+**Only the overlay's primary family is derived, and its ghost button is left alone.** The
 overlay groups `#GhostBtn:focus` with the primary buttons and sets `background: $btnhov`,
 so its focus pair is `$card` → `$btnhov` — `#000000` → `#ffd400` at **14.67:1** dark and
 `#ffffff` → `#0000cc` at **11.22:1** light. (`$btn`, pure white or pure black, is what
@@ -345,8 +373,10 @@ is kept.
 **The overlay also has to widen the log border, or mechanism B silently fails under it.**
 `_HC_QSS` restates `QPlainTextEdit#Log` with `border: 1px solid $border`, which would
 override the 2 px rest border §4.2 requires and drop the cue below SC 2.4.13's area
-threshold in exactly the appearance mode that most needs it. Both overlay rules are widened
-to 2 px in the same commit, and §4.3 carries their derived colours.
+threshold in exactly the appearance mode that most needs it. That rule is widened to 2 px in
+the same commit, and §4.3 carries its derived colour. `_HC_QSS` carries no
+`QScrollArea#DetailScroll` rule at all, so the overlay's 2 px rest border for that panel is
+**created** here rather than widened.
 
 **Two rows above name colours that are not palette tokens, and both need a stated
 resolution.** The warning banner's background is a two-stop **alpha** gradient
@@ -381,11 +411,31 @@ cannot cause:
    compositing it over the token beneath it at its own alpha, at each stop; no rendering is
    involved, so the check stays a pure computation.
 2. **Every focusable widget is accounted for.** The window is built offscreen **and each
-   dialog it can open is opened in turn** — Settings, Repositories, Rollback and About —
+   dialog it can open is opened in turn** — Settings, Repositories and Rollback, which are
+   `QDialog` subclasses the check constructs directly, and About, which is **not**: it is a
+   `QMessageBox` built and `exec()`d inside `Updater.show_about`, so the check builds the
+   equivalent box rather than calling that method, which would block —
    every widget with `focusPolicy() != Qt.NoFocus` is collected, and each must be covered by
    a row of §4.2's table — by object name for a styled one, by class for a painted one. A widget
    matching nothing fails the check. This is what stops a control being added later with no
    cue, which is exactly how the sixteen in §2.1 accumulated.
+
+**⚠ OPEN — the dialog half of that sweep is red on day one, and by how much is measured.**
+Built offscreen at `c8fb3f2` and swept the way half 2 describes, the three dialogs and the
+About box hold **21 focusable widgets**, of which **six match no row of §4.2**:
+`RepoManagerDialog` has a `QScrollArea` with no object name (its other four are `#GhostBtn`,
+`#RunBtn` and two `ToggleSwitch`); `RollbackDialog` has an unnamed `QListWidget` (its other
+two are covered); and the About box contributes two unnamed `QPushButton`s and Qt's own
+`QLabel#qt_msgbox_label` and `QLabel#qt_msgbox_informativelabel`. `SettingsDialog`'s nine
+are all `#GhostBtn` and are covered.
+None of the six is a control OneUp styles or paints — they are Qt-supplied chrome — and
+`docs/specs/ONEUP-0064-interface-redesign.md` §10 excludes `RepoManagerDialog` and
+`RollbackDialog` from its own sweeps, so no other item covers them either. §6 says
+over-covering is the safe direction and costs "a row in §4.2 and nothing else", but a row
+means deriving a focus fill for chrome the application does not own. The decision is
+whether INV-1 **covers** those six with rows, or **excludes** unstyled Qt-supplied chrome by
+a stated rule and §10 records it. It is not settled here because it changes what the check
+asserts on day one.
 
 **It is deliberately a superset of what `ONEUP-0027` needs.** That spec's §4.7 defers the
 focus measurement here and says its own job is to supply palettes that pass it; the
@@ -431,10 +481,16 @@ per-theme loop above is what it passes them to.
   `tests/gui-smoke.py` parses the built stylesheet, expands every `border` shorthand into
   its width, style and colour parts, and for each selector carrying a `:focus` rule asserts
   that rule sets no `outline` at all and no border width, style or radius its rest rule does
-  not already set to the same value — colour is the only thing a focus rule may move. For
+  not already set to the same value — colour is the only thing a focus rule may move — and
+  that each `:focus` rule is emitted **after** that same selector's `:hover` and `:checked`
+  rules, which is the ordering §6 relies on this parse to catch. For
   the painted controls, which no stylesheet parse can see, it renders `ToggleSwitch` to an
-  image focused and unfocused and asserts the two differ **only** in pixel colour, never in
-  which pixels are painted. Asserting `sizeHint()` alone would be vacuous — `__init__` calls
+  image focused and unfocused and asserts the focused render introduces **no colour the
+  unfocused one does not already contain** — a recolour of the track maps every pixel onto
+  the existing palette of the image, where a ring drawn inside the fixed rect necessarily
+  adds one. Asserting instead that the two "differ only in pixel colour, never in which
+  pixels are painted" would be vacuous: an inset ring repaints pixels the track had already
+  painted, so it changes only their colour and passes. Asserting `sizeHint()` alone would be vacuous — `__init__` calls
   `setFixedSize(56, 30)`, so the size cannot move whatever the painter does; the thing worth
   guarding is a ring drawn *inside* that fixed rect. Breaks on a
   focus ring in either path, on a border present only when focused, and on a `2px` focus
@@ -470,14 +526,21 @@ per-theme loop above is what it passes them to.
   *Test:* the §4.4 computation, extended to those rest and hover pairs. Breaks on the light
   link button as it stands today — `#4aa3ff` on `#ffffff` is 2.63:1 at rest and `#6fb6ff` is
   **2.14:1** on hover — the pair §2.3 measured, which §4.3 closes with `#3779bd` (4.53:1) and
-  `#4a7aab` (4.50:1). **Scoped deliberately:** the whole-palette 4.5:1 sweep belongs to
+  `#4a7aab` (4.50:1). It breaks equally on the ghost button's `:hover` and `:checked` ink,
+  which is `#4aa3ff` on the same light `card` — the same colour on the same surface as the
+  link's rest defect — so §4.3 closes all three the same way.
+  **Scoped deliberately:** the whole-palette 4.5:1 sweep belongs to
   `ONEUP-0027` §4.7, which owns light `lastrun` (3.07:1 on `card`, 2.71:1 on `win`) and light
-  `amber` under its §4.8, and which declares `disfg` on `disbg` exempt. An unscoped version
+  `amber` under its §4.8, and which declares `disfg` on `disbg` exempt. That section also owns
+  every non-text 3:1 pair this item does not introduce — the ghost's `:hover` **border**
+  among them, which moves to the same `#4aa3ff` and is a border rather than ink. An unscoped version
   of this invariant would fail on day one against three pairs this item never touches.
 
 - **INV-8** The ghost button's rest border measures at least 3:1 against the surface it is
   drawn on, in every theme.
-  *Test:* the §4.4 computation. Breaks on both shipped palettes as they stand — `#c4ccd6` on
+  *Test:* the §4.4 computation, extended to that rest pair — §4.4's two halves measure a
+  focus fill against its rest surfaces and an ink against that fill, and a rest border
+  against the surface behind it is neither. Breaks on both shipped palettes as they stand — `#c4ccd6` on
   `#ffffff` is 1.62:1 and `#38414f` on `#12161c` is 1.76:1 — which is the pair
   `ONEUP-0027` §4.8 hands to this item with the instruction that it cannot be deferred to an
   item that has already shipped. §4.3 closes it at 3.02:1 and 3.09:1.
@@ -522,7 +585,8 @@ per-theme loop above is what it passes them to.
 | Invariant | Where | What it does |
 | --- | --- | --- |
 | INV-1 | `tests/gui-smoke.py` | builds the window and each dialog offscreen and sweeps the widget tree |
-| INV-2, INV-3, INV-5, INV-7 | `oneup/gui/theme.py` computation, driven from `tests/gui-smoke.py` | the ratio arithmetic, over every theme and both overlay states |
+| INV-2, INV-3, INV-7 | `oneup/gui/theme.py` computation, driven from `tests/gui-smoke.py` | the ratio arithmetic, over every theme and both overlay states |
+| INV-5 | `oneup/gui/theme.py` unit check | the stride-16 sRGB lattice, plus the `#000000` / `#989898` pair that must raise rather than return — neither is per-theme |
 | INV-4 | `tests/gui-smoke.py` | parses the built stylesheet; its second half compares the focused and unfocused `ToggleSwitch` renders pixel for pixel |
 | INV-6 | `tests/gui-smoke.py` | asserts the switch's state shape survives, against the focused track as well as the resting one |
 | INV-8 | `oneup/gui/theme.py` computation | the ghost button's rest border against its surface |
@@ -553,12 +617,16 @@ does.
   only the four styled controls were in view. So the honest statement is that OneUp fails
   2.4.7 (AA) today for those sixteen, that this item is what makes 2.4.7 true, and that SC
   2.4.13 (Focus Appearance, Level **AAA**) is met on top of it.
-- **`docs/specs/ONEUP-0028-accessibility.md` §5 is stale in two ways and is corrected in the
-  same commit.** It promises *"QSS `:focus` rules for the **eight** styled focusable
+- **`docs/specs/ONEUP-0028-accessibility.md` §5 is stale in three ways and is corrected in
+  the same commit.** It promises *"QSS `:focus` rules for the **eight** styled focusable
   controls"*, naming `#Disclose`, `#Log` and `#DetailScroll` among them — §2.1's sweep finds
   no `:focus` rule for any of those three. And it specifies *"A 2 px accent outline (HC
   overlay: 3 px, palette key `hcfocus`)"*, which the 2026-07-25 no-focus-ring decision
-  forbids outright and which was never built. That spec is shipped, so this is a correction
+  forbids outright and which was never built. Third, it states that `ToggleSwitch.paintEvent`
+  draws a *"**double** ring (white outer, dark inner) when `hasFocus()`"* — `hasFocus` appears
+  nowhere in `updater.py`, and that method's own closing comment says no focus ring is drawn.
+  That is the claim closest to this item's subject, and it is the one a reader would most
+  reasonably trust. That spec is shipped, so this is a correction
   to a record rather than a change of plan — and its own §2 already recorded the underlying
   defect, listing *"No `:focus` rule anywhere in the QSS"* as a *"WCAG 2.4.7 failure"*, the
   same conclusion this section draws above and independent corroboration of it.
@@ -566,8 +634,8 @@ does.
   corrected in the same commit. The trap that stays is the one that cost the bug: no focus
   ring, because Qt draws it square and a focus border resizes the widget.
 - **`docs/specs/ONEUP-0027-themes.md`.** Its §4.7 defers the focus measurement to this item
-  and its §4.8 hands over `ghostbd` on `card`; both name `ONEUP-0064` and are repointed
-  here. §4.7 also gains a row for `logbd` drawn on `rowcard` and on `rowhov` — §4.2 gives
+  and its §4.8 hands over `ghostbd` on `card`; both already name this item, so neither needs
+  repointing. §4.7 does gain a row for `logbd` drawn on `rowcard` and on `rowhov` — §4.2 gives
   `#DetailScroll` a border in that token and the panel is `background: transparent`, so it
   is the row beneath that it is read against, not `logbg`. That adds a pair the existing
   decorative disposition does not cover; the `logbd`-on-`logbg` row stands unchanged.
@@ -631,3 +699,4 @@ does.
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 0-split | 2026-08-03 | — | **Provenance, not a review — no reviewer was dispatched to produce this row.** This document was split out of `docs/specs/ONEUP-0064-interface-redesign.md` on 2026-08-03, taking the focus cue, its derivation and its check; that item kept the layout redesign. The parent had run three cold-eyes loops (24, 34, 35 verified) and converged **by cap rather than clean** at 762 lines, with fix collateral outrunning draft defects two loops running — 24 → 13 → 8 draft against 0 → 21 → 27 collateral. Across those three loops and nine lanes essentially every finding fell in this half. **Those loops were run against a document that no longer exists, so none of their assurance transfers**: this spec runs the gate from loop 1 on its own bytes. Invariants were renumbered INV-1…INV-8 from the parent's INV-1, 2, 3, 4, 5, 8, 11 and 13; nothing outside the parent had cited them, and the parent's own numbering stays with it. |
+| 1 | 2026-08-18 | 2 lanes, cold; genre pinned spec; Q1 4 · Q2 4 · Q3 5 · Q4 1 — all 14 verified, 0 dismissed, of which 12 fixed and 2 surfaced rather than fixed (no severity scale under the four-question gate, so nothing here for §7's tally check to balance; ONEUP-0100) | **The first gate on this document's own bytes, and the 0-split row was right that none of the parent's assurance transfers.** Both lanes independently led with the same defect, and it is a recurrence rather than a new one: §4.1 stated two different algorithms — the boxed rule preferred black (*"or toward white, when black cannot get there"*) while the procedure two paragraphs below took *"the smallest `t` in either direction"*. Reproduced: the two agree on all eleven surfaces the shipped palettes use, because every one has a single viable direction, and diverge on any mid-luminance surface — `#5c5c5c` derives `#070707` under the rule and `#aeaeae` under the procedure. `ONEUP-0027` authors six more palettes. The parent's own parent-3 row records fixing *"the rule box stated two different algorithms"* on 2026-08-03; it survived the split, which is the case for gating a split document from loop 1. **The findings the lanes could raise but not settle were settled by running the thing.** Both asked what the dialogs actually contain, neither having `Bash`. Built offscreen: the three dialogs and the About box hold 21 focusable widgets, six of which match no row of §4.2 — an unnamed `QScrollArea`, an unnamed `QListWidget`, and the About box's two unnamed `QPushButton`s plus Qt's own two message-box labels. So INV-1's dialog half is red on day one, and `ONEUP-0064` §10 excludes both dialogs from its sweeps, so nothing else owns them. **Three more came from measuring what the document only described.** The overlay's `#LinkBtn:focus` moves text alone, `$link` → `$text`, which is 1.65:1 dark and 1.87:1 light — below 3:1, so the overlay carried a control whose cue could not work at any colour, and §4.3 had no row for it. `_HC_QSS` carries no `QScrollArea#DetailScroll` rule at all, so *"both overlay rules are widened to 2 px"* named one rule that exists and one that has to be created. And §8 called `ONEUP-0028` §5 stale in two ways when it is stale in three — it also claims `ToggleSwitch.paintEvent` draws a double ring *"when `hasFocus()`"*, and `hasFocus` appears nowhere in `updater.py`. **Two were surfaced rather than fixed, both because they change what the check asserts and both reaching sibling items.** How one object name carries three rest-pixel sets, given §4.4 matches by object name and `ONEUP-0064` §4.1 answered the same question by renaming; and whether INV-1 covers the six uncovered dialog widgets with rows or excludes unstyled Qt chrome by a stated rule. Each now carries a ⚠ OPEN block holding the measurement. **Collateral swept and moved in the same commit:** the rewritten rule sentence was restated in `ROADMAP.md` twice and in `docs/plans/ONEUP-0057-documentation-set.md` once. `ONEUP-0064`'s loop-log rows carry the old wording and were deliberately left — a loop log records what that pass found. Status stays Draft: the run did not return an empty loop and two decisions are open. |
