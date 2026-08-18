@@ -16,7 +16,42 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: `ONEUP-0076` closed; next is `ONEUP-0072` from loop 5**
+> ## ▶ You are here — **Task 18: `ONEUP-0076` re-gated after the fold-in; it owes ONE decision, then `ONEUP-0072` from loop 5**
+>
+> **The fold-in below changed direction, so the gate re-armed and was run — loop 3, first of a
+> fresh run, 2 cold lanes, `--max-loops 1`. Q1 2 · Q2 3 · Q3 2 · Q4 1, 8 verified, 0
+> dismissed, 7 fixed, 1 surfaced.** Gating a decision fold-in paid: the strongest finding was
+> a live contrast failure the fold-in had restated rather than caused.
+>
+> **`ONEUP-0076` now owes one decision — the surface a dialog actually paints.** §4.2 said
+> `SettingsDialog`'s is `card` *"because the sheet is set on the application"*. A dialog
+> inherits the **sheet**, not a `background` written for `QMainWindow`, and `_QSS` has no
+> `QDialog` rule. Measured offscreen: a bare `QDialog` paints **`#efefef` in both themes**
+> under the base sheet, and only `_HC_QSS` pins it. The light ghost focus fill measures
+> **2.64:1** there against a 3:1 floor; dark passes by accident at 5.25:1. The two routes are
+> in the spec's `⚠ OPEN` block, and one of them edits `_QSS`, which is why it was surfaced.
+>
+> **The lesson, and it is the one this batch keeps re-learning in new clothes: a fix that
+> restates a neighbouring claim inherits that claim's defects.** The fold-in did not invent
+> the `card` error — §4.2 carried it — but it repeated it in new prose, which is how a wrong
+> sentence acquires a second home. The run's one Q4 was the same shape: the fold-in's
+> unconditional matcher fallback made INV-1's surface clause unfalsifiable, and that is
+> precisely what let an uncovered `#LinkBtn` in `RepoManagerDialog` read as covered.
+>
+> **A calm cap.** One of eight landed on text this run wrote, and the run stopped on its
+> `--max-loops 1` argument rather than the document's cap of 2 — **a second cold loop is
+> available and unspent.**
+>
+> **Two findings were filed rather than fixed**, both in documents with their own gates ahead
+> of them and both resting on the refuted model above: `ONEUP-0027`'s *"why dialogs need no
+> work of their own"*, and `ui-and-accessibility.md` §6.1's *"theme comes free"*. Pick them up
+> with the `ONEUP-0027` citation pass.
+>
+> **Next: the dialog-surface decision, then `ONEUP-0072` from loop 5**, then `ONEUP-0032` (a
+> real loop 1 — see below), then the `ONEUP-0027` citation pass. `ONEUP-0064` still owes a
+> decision rather than a loop.
+
+> ## Previously — **Task 18: `ONEUP-0076`'s two decisions settled and folded in**
 >
 > **`ONEUP-0076`'s two open decisions were settled by the user on 2026-08-18 and folded in.**
 > The document carries no `⚠ OPEN` block outside its loop-log rows. It stays `Status: Draft`

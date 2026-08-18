@@ -1052,6 +1052,59 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Task 18 still owes: ONEUP-0076's close, then ONEUP-0072 from loop 5,
   ONEUP-0032 (a real loop 1, not a citation pass), and the cheap citation pass on
   ONEUP-0027. ONEUP-0064 still owes a decision rather than a loop.
+  Progress (2026-08-18, later): the decision fold-in above changed direction, so
+  ONEUP-0076 was gated again — loop 3, first of a fresh run, 2 cold lanes,
+  --max-loops 1. Q1 2 · Q2 3 · Q3 2 · Q4 1 — 8 verified, 0 dismissed, 7 fixed,
+  1 surfaced. Status stays Draft. Full row in that spec's §11.
+
+  ONE NEW OPEN DECISION, and it is the run's strongest finding — measured, not
+  read. §4.2 said SettingsDialog's surface "is card — the sheet is set on the
+  application, so the dialog inherits it". A dialog inherits the SHEET, not a
+  background declaration written for QMainWindow, and _QSS carries no QDialog
+  rule at all. Built offscreen through build_theme and read at the centre pixel:
+  a bare QDialog paints #efefef in BOTH themes under the base sheet; only
+  _HC_QSS's "QMainWindow, QDialog { background: $win; }" pins it. The light
+  #GhostBtn focus fill #949494, derived from card #ffffff, measures 2.64:1 there
+  against this spec's own 3:1 floor. Dark passes by accident at 5.25:1 — which is
+  how a dark-mode-only check would miss it — and adding the missing QDialog rule
+  does not rescue light either (2.68:1 on win). ONEUP-0064 §4.1 moves nine
+  #GhostBtn into that dialog, so it is bound by whichever route is chosen:
+  (a) give _QSS the QDialog background rule _HC_QSS already has and derive from
+  win — a code edit plus a new §4.3 row and a value ONEUP-0027 keys a palette
+  entry to; or (b) leave _QSS alone and name Qt's painted default as the rest
+  pixel — no code change, but a surface no palette controls. Only (a) keeps every
+  rest pixel a palette token, which is §4.1's premise. NOT decided here.
+
+  Fixed this loop: a fourth #LinkBtn surface no row covered (RepoManagerDialog's
+  Remove button, one per duplicate-URL repo, inside #RowCard — ONEUP-0064 §4.2's
+  out-of-scope table corroborates it); the census of 21 is machine-dependent and
+  now says so; INV-1's surface clause could never fail because the fold-in's
+  fallback was unconditional (this run's own collateral, and what let the
+  uncovered button read as covered); §8 left ui-and-accessibility.md §5.3's two
+  worked examples saying a :focus rule is "same as hover", which §4.3
+  contradicts at 1.43:1; §8 omitted ONEUP-0064, whose §4.1 blocks the
+  disclosure's :hover rule on a §5.1 sentence this item deletes; §4.1 never said
+  which rest pixel the blend starts from (rowcard t=0.35 gives #6a6d73, rowhov
+  gives #6d7177, both clearing); INV-2's justification said ghostbd and the fill
+  are "both the smallest blend from card" where §4.3 publishes different hexes;
+  and §4.3's light ghost hover moved the ink and not the border-color set beside
+  it in the same rule.
+
+  FILED, NOT FIXED — two, both in documents with their own gates ahead of them,
+  both resting on the same refuted model:
+  - ONEUP-0027-themes.md line ~37: "ui-and-accessibility.md §6.1 is why dialogs
+    need no work of their own: the sheet lives on the application, so every
+    QDialog and QMessageBox inherits it." Measured false in dark mode.
+  - docs/standards/ui-and-accessibility.md §6.1 "Theme comes free — do not fight
+    it". True that the sheet reaches every child; misleading that a dialog is
+    therefore themed, since no base-sheet rule paints its background. Pick up
+    with 0027's citation pass.
+
+  Task 18 still owes: ONEUP-0076's dialog-surface decision, then ONEUP-0072 from
+  loop 5, ONEUP-0032 (a real loop 1), and the ONEUP-0027 citation pass — which
+  now also carries the filed finding above. A second cold loop on ONEUP-0076 is
+  available and unspent; the run stopped on its --max-loops argument, not on the
+  document's cap of 2.
 
 - 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether
