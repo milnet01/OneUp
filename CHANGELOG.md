@@ -8,6 +8,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Restart services never restarts something that would log you out** (ONEUP-0111)
+  After a big update the list of services to restart can include the ones running
+  your desktop — the display manager, your own session, the system message bus.
+  Restarting those would have ended your session and closed OneUp part-way
+  through. The window now restarts only what is safe and tells you plainly that
+  the rest need a reboot, and the banner stays up while any of them are
+  outstanding. Running the update script in a terminal gives the same warning.
+
 - **Restart services now actually restarts them** (ONEUP-0110)
   The button did nothing at all when clicked. The window validates each service
   name before handing it to a root systemctl, and that check required a

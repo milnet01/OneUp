@@ -393,14 +393,26 @@ case "$*" in
   *refresh*)         exit 0 ;;
   *dup*|*update*)    echo "3 packages to upgrade."; exit 0 ;;
   *needs-rebooting*) exit 0 ;;             # no kernel/core change
-  *ps\ -sss*|*"ps -sss"*) printf 'foo.service\nbar.service\n'; exit 0 ;;
+  *ps\ -sss*|*"ps -sss"*) printf 'sshd\ncups\ndisplay-manager\nuser@1000\ndbus\n'; exit 0 ;;
   *) exit 0 ;;
 esac
 EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system)
-check        "services listed for restart" "@@SERVICES@@|foo.service bar.service" "$out"
+# The mock prints BARE unit names, which is what `zypper ps -sss` really emits — libzypp
+# captures the name before ".service". It used to print "foo.service bar.service", a shape
+# no real system produces, and that fiction is what hid ONEUP-0110 for months.
+check        "services listed for restart" "@@SERVICES@@|sshd cups display-manager user@1000 dbus" "$out"
 check        "no reboot for package-only"  "@@REBOOT@@|no" "$out"
+# ONEUP-0111: the printed advice splits them. The marker above is deliberately unchanged
+# and still carries every name — the split is advice, not a contract change, because
+# docs/reference/marker-protocol.md §5.1 freezes the field during 2.0.
+check        "safe services offered for restart" \
+             "libraries:  sshd cups" "$out"
+check        "session-critical services routed to a reboot instead" \
+             "Reboot instead:  display-manager user@1000 dbus" "$out"
+check_absent "no session-critical service in the restart-now line" \
+             "libraries:  sshd cups display-manager" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

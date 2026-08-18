@@ -63,7 +63,7 @@ update run:
 | Site | Command | Guard |
 | --- | --- | --- |
 | `RepoManagerDialog._build_apply_command` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must match `_ALIAS_RE`, else the whole command is `None` and nothing runs |
-| `Updater.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped |
+| `Updater.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped; and every **session-critical** unit removed before the command is built (§4.6) |
 | `Updater.rollback` | `pkexec sh -c "snapper rollback <id> && systemctl reboot"` | `id` must satisfy `str.isdigit()` |
 
 One more privileged action does not go through `pkexec` at all and must not be forgotten
@@ -244,6 +244,34 @@ pattern was rejecting every name the engine actually sends, and the fix removed 
 backslash in the same edit. The pattern now leads with `[A-Za-z0-9]`, which is the shape
 `_ALIAS_RE` already used and which excludes a leading `-` structurally rather than by the
 separate test alone.
+
+**4.6 — A privileged command may be correct and still be unsafe to run.** Validation
+answers *can this value hurt me on the way to root*. It does not answer *should this run at
+all*, and `Updater.restart_services` is where the difference bites: `systemctl restart
+display-manager` is perfectly well-formed and ends the user's session.
+
+`zypper ps -sss` reports whatever holds a replaced library, so after a glibc, systemd, Qt or
+dbus update it names the longest-running processes on the box — which are the ones that *are*
+the session. The window therefore removes them before building the command, rather than
+warning about them:
+
+- the **display manager**, resolved from `/etc/systemd/system/display-manager.service`
+  rather than guessed, with a literal fallback list;
+- **`user@<uid>`**, the user's own systemd session — which contains the window, so a restart
+  kills OneUp while its own `startDetached` command is still running;
+- the system **`dbus`** and **`systemd-logind`**;
+- **`polkit`**, which is the agent that just authorised the `pkexec` carrying the command.
+
+**They are not offered behind a confirmation.** A dialog cannot make losing unsaved work a
+reasonable thing to click, and the window already owns a reboot affordance, which is the
+honest advice. Decided with the user 2026-08-18 (ONEUP-0111). `NetworkManager` and `wickedd`
+are deliberately *not* in the set: disruptive, recoverable, and legitimate to restart.
+
+**The general rule this instances: a guard that only checks shape will pass a
+well-formed command that should never be issued.** When a privileged call takes a *name*
+supplied by another program, ask what the worst legal name does.
+
+---
 
 ---
 
@@ -469,6 +497,7 @@ incidents and the rule are `docs/standards/testing.md` §2, which is canonical.
 | §2 no `sudo` inside a subshell | the same scenario, because a subshell **is** a second prompt. The rule and its symptom are the same thing, which is what makes this the strongest gate in the set |
 | §3 every prompt says who is asking | nothing automatic |
 | §4 validate at the boundary, by shape — the engine's alias guard | `tests/run-tests.sh` — an unsafe repo alias is refused and never reaches a privileged command |
+| §4.6 no session-critical service is ever restarted | `tests/gui-smoke.py` — a mixed list restarts the safe units and **no** critical one, and an all-critical list restarts nothing; `tests/run-tests.sh` asserts the engine's printed advice splits them the same way |
 | §4 validate at the boundary, by shape — the window's service-unit guard | `tests/gui-smoke.py` — the units the engine really sends reach `systemctl`, and an option-shaped token does not. **Added 2026-08-18 (ONEUP-0110); until then this half had no gate**, and the guard rejected every real name for months while the alias row above stayed green. A validator is only as good as the population it was tested against: the one scenario that fed this field used `foo.service`, a shape `zypper ps -sss` never prints |
 | §5 the passwordless drop-in | `tests/run-tests.sh` — grant, revoke and status, and the generated file is put through a real `visudo -cf` |
 | §5.2 the rule covers every shape a run issues | `tests/run-tests.sh` — the grant scenario asserts each entry by name, **and** a structural check pins the engine's privileged call-site count, so a *new* `sudo …` line fails the suite until it is granted. Nothing behavioural can catch that: an ungranted call is correct code that merely prompts, and only a passwordless user ever finds out |

@@ -1880,6 +1880,24 @@ if $SYS_CHANGED && [[ "$REBOOT" == "no" ]] && command -v zypper &>/dev/null; the
     sudo_capture SERVICES_RAW zypper ps -sss
     SERVICES=$(tr '\n' ' ' <<<"$SERVICES_RAW" | sed 's/[[:space:]]*$//')
     [[ -n "$SERVICES" ]] && marker SERVICES "$SERVICES"
+
+    # Split the list for the printed advice below (ONEUP-0111). Restarting one of these
+    # ends the user's graphical session, so a reboot is the honest advice; the marker
+    # above is deliberately UNCHANGED and still carries every name, because the window
+    # does its own split and `docs/reference/marker-protocol.md` §5.1 freezes the field
+    # during 2.0. Kept in step with updater.py's _SESSION_CRITICAL by a test.
+    SERVICES_SAFE=""; SERVICES_RISKY=""
+    dm_unit=$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)
+    dm_unit=${dm_unit##*/}; dm_unit=${dm_unit%.service}
+    for svc in $SERVICES; do
+        base=${svc%.service}
+        if [[ "$base" =~ ^(display-manager|sddm|gdm|gdm3|lightdm|xdm|kdm|lxdm|greetd|dbus|dbus-broker|systemd-logind|polkit|polkitd|user@[0-9]+)$ ]] \
+           || { [[ -n "$dm_unit" ]] && [[ "$base" == "$dm_unit" ]]; }; then
+            SERVICES_RISKY+="${SERVICES_RISKY:+ }$svc"
+        else
+            SERVICES_SAFE+="${SERVICES_SAFE:+ }$svc"
+        fi
+    done
 fi
 
 # ---------------------------------------------------------------------------
@@ -1931,9 +1949,16 @@ if [[ "$REBOOT" == "yes" ]]; then
     echo
     echo "  ! A REBOOT is recommended — $REBOOT_REASON."
 elif [[ -n "$SERVICES" ]]; then
-    echo
-    echo "  ! No reboot needed, but these services should restart to use the new"
-    echo "    libraries:  $SERVICES"
+    if [[ -n "$SERVICES_SAFE" ]]; then
+        echo
+        echo "  ! No reboot needed, but these services should restart to use the new"
+        echo "    libraries:  $SERVICES_SAFE"
+    fi
+    if [[ -n "$SERVICES_RISKY" ]]; then
+        echo
+        echo "  ! These also hold replaced libraries, but restarting them would BREAK OR"
+        echo "    END your desktop session. Reboot instead:  $SERVICES_RISKY"
+    fi
 fi
 
 # End-of-run desktop notification (full runs only; --check has its own at line ~229).

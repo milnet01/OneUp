@@ -936,6 +936,48 @@ class TaskRow(QFrame):
 _ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
 
 
+# --- services that must never be restarted from the window -------------------
+# Restarting one of these ends the user's graphical session, kills this window, or
+# breaks the authorisation agent carrying out the restart. `zypper ps -sss` reports
+# whatever holds a replaced library, so after a glibc, systemd, Qt or dbus update these
+# are exactly what it names — they are the longest-running processes on the box and they
+# link everything. `Updater.restart_services` restarts none of them on any path
+# (ONEUP-0111); a reboot is the honest advice, and the window already has that button.
+#
+# NetworkManager and wickedd are deliberately absent: disruptive, recoverable, and a
+# legitimate thing to restart without a reboot.
+_SESSION_CRITICAL = frozenset({
+    "display-manager", "sddm", "gdm", "gdm3", "lightdm", "xdm", "kdm", "lxdm", "greetd",
+    "dbus", "dbus-broker", "systemd-logind", "polkit", "polkitd",
+})
+# `user@1000` and friends — the user's own systemd session, which contains this window.
+_USER_MANAGER_RE = re.compile(r"user@\d+")
+
+
+def _split_session_critical(svcs: list[str]) -> tuple[list[str], list[str]]:
+    """Split validated unit names into (safe to restart, would end the session).
+
+    The display manager is RESOLVED rather than guessed: `/etc/systemd/system/
+    display-manager.service` is a symlink to whichever one the distro installed, so its
+    target's name is added at call time. The literal names above are the fallback for a
+    system without that symlink. A hardcoded list on its own would be the same shape of
+    defect ONEUP-0110 fixed — a guard written against an assumed name — which is why the
+    symlink is the mechanism and the list is the backstop.
+    """
+    critical = set(_SESSION_CRITICAL)
+    try:
+        target = os.path.realpath("/etc/systemd/system/display-manager.service")
+        if target.endswith(".service"):
+            critical.add(os.path.basename(target)[:-len(".service")])
+    except OSError:
+        pass                      # no symlink, or an unreadable /etc — the set stands
+    safe, risky = [], []
+    for s in svcs:
+        base = s[:-len(".service")] if s.endswith(".service") else s
+        (risky if base in critical or _USER_MANAGER_RE.fullmatch(base) else safe).append(s)
+    return safe, risky
+
+
 def _parse_repos(text: str) -> list[dict]:
     """Parse `zypper lr -u` table output into [{alias, name, enabled, url}].
     Rows look like '# | Alias | Name | Enabled | GPG Check | Refresh | URI'; the
@@ -3601,11 +3643,26 @@ for (var i = 0; i < wins.length; i++) {{
                 and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9:@._-]*", s)]
         if not svcs:
             return
-        if QMessageBox.question(
-                self, "Restart services?",
-                "Restart these services now?\n\n" + ", ".join(svcs)) == QMessageBox.Yes:
-            QProcess.startDetached("pkexec", ["systemctl", "restart", *svcs])
-            self.services_banner.setVisible(False)
+        # Never restart a service that would end the session (ONEUP-0111). The banner
+        # stays up while anything is left needing a reboot, so the reminder survives.
+        safe, critical = _split_session_critical(svcs)
+        if not safe:
+            QMessageBox.information(
+                self, "A reboot is needed",
+                "Everything that needs restarting is part of what runs your desktop "
+                "session, so restarting it here would break or end that session.\n\n"
+                + ", ".join(critical)
+                + "\n\nReboot when you are ready and they will start on the new "
+                  "libraries.")
+            return
+        body = "These will be restarted now:\n\n" + ", ".join(safe)
+        if critical:
+            body += ("\n\nThese need a reboot instead, because restarting them would "
+                     "break or end your desktop session:\n\n" + ", ".join(critical))
+        if QMessageBox.question(self, "Restart services?", body) == QMessageBox.Yes:
+            QProcess.startDetached("pkexec", ["systemctl", "restart", *safe])
+            if not critical:
+                self.services_banner.setVisible(False)
 
     def rollback(self):
         # The rollback target defaults to the pre-update snapshot, but when the

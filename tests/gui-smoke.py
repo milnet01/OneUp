@@ -543,10 +543,15 @@ def main() -> int:
     # so it passed throughout. This one feeds what the engine really sends. Do not delete:
     # it is the only assertion that the button does anything, and the last two checks are
     # what stop the fix widening the guard into an argument-injection hole.
+    #
+    # Every name here is deliberately one ONEUP-0111 considers SAFE — `getty@tty1` carries
+    # the '@' coverage that `user@1000` used to, without being the user's own session
+    # manager. Feeding a session-critical name here would assert the behaviour ONEUP-0111
+    # exists to prevent; that split is covered by the scenario below.
     w = updater.Updater()
     for line in ("@@STEP_END@@|system|ok|packages updated",
                  "@@INSTALLED@@|2|yes|no",
-                 "@@SERVICES@@|sshd dbus NetworkManager user@1000 -f",
+                 "@@SERVICES@@|sshd cups getty@tty1 avahi-daemon -f",
                  "@@REBOOT@@|no"):
         w.handle_line(line)
     launched = []
@@ -564,12 +569,61 @@ def main() -> int:
     check("restart services passes every bare unit name to systemctl",
           bool(launched)
           and launched[0][1][:2] == ["systemctl", "restart"]
-          and ["sshd", "dbus", "NetworkManager", "user@1000"] == [
+          and ["sshd", "cups", "getty@tty1", "avahi-daemon"] == [
               a for a in launched[0][1][2:]])
     check("restart services still drops an option-shaped token",
           all("-f" not in call[1] for call in launched))
     check("restart services hides the banner once it has launched",
           bool(launched) and not w.services_banner.isVisibleTo(w))
+
+    # --- 4a-ii. A session-critical service is never restarted (ONEUP-0111) -----
+    # Asked by the user the day ONEUP-0110 made this button work: what if it restarts
+    # something that logs you out? It would have. `zypper ps -sss` reports whatever holds
+    # a deleted library, and after a glibc/systemd/Qt/dbus update that includes the
+    # processes that ARE the session — display-manager tears down the desktop, user@<uid>
+    # is the user's whole systemd session (OneUp included, so the window dies mid-restart),
+    # dbus and systemd-logind break a running session, and polkit is the agent that just
+    # authorised the pkexec carrying the command.
+    #
+    # Decided with the user: never restart these, on any path. Not behind a confirmation,
+    # not behind a warning. The safe ones are restarted and a reboot is advised for the
+    # rest. These assertions are what stop that being softened later.
+    def _run_restart(marker_payload):
+        """Feed a SERVICES payload, accept the dialog, and return what was launched."""
+        win = updater.Updater()
+        for ln in ("@@STEP_END@@|system|ok|packages updated",
+                   "@@INSTALLED@@|2|yes|no",
+                   f"@@SERVICES@@|{marker_payload}",
+                   "@@REBOOT@@|no"):
+            win.handle_line(ln)
+        win.proc = QProcess(win)
+        win.on_finished(0, QProcess.ExitStatus.NormalExit)   # draws the banner
+        calls = []
+        _q, _i, _d = (updater.QMessageBox.question, updater.QMessageBox.information,
+                      updater.QProcess.startDetached)
+        updater.QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
+        updater.QMessageBox.information = staticmethod(lambda *a, **k: 0)
+        updater.QProcess.startDetached = staticmethod(
+            lambda prog, args=None, *a, **k: (calls.append(list(args or [])), True)[1])
+        try:
+            win.restart_services()
+        finally:
+            (updater.QMessageBox.question, updater.QMessageBox.information,
+             updater.QProcess.startDetached) = _q, _i, _d
+        return win, [a for call in calls for a in call]
+
+    CRITICAL = ["display-manager", "user@1000", "dbus", "systemd-logind", "polkit"]
+
+    _w, args = _run_restart("sshd cups " + " ".join(CRITICAL))
+    check("mixed list still restarts the safe services",
+          "sshd" in args and "cups" in args)
+    check("mixed list restarts NO session-critical service",
+          not any(c in args for c in CRITICAL))
+
+    _w2, args2 = _run_restart(" ".join(CRITICAL))
+    check("an all-critical list restarts nothing at all", args2 == [])
+    check("an all-critical list leaves the services banner up",
+          _w2.services_banner.isVisibleTo(_w2))
 
     # --- 4b. A reason-bearing REBOOT marker names the culprit in the banner ----
     w = updater.Updater()

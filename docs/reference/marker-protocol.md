@@ -273,6 +273,16 @@ why the engine's own printed advice works.
 **Do not add the suffix in the engine to make a consumer's guard pass.** The field is what
 `zypper ps -sss` prints; a consumer that wants a suffix appends one.
 
+**The field carries every affected service, including ones no consumer should act on.**
+That is deliberate and the contract does not change (§5.1 freezes it during 2.0), but a
+consumer that *restarts* what it reads has a second obligation the field does not express:
+after a glibc, systemd, Qt or dbus update this list names the longest-running processes on
+the machine, which are the ones running the user's session. Restarting the display manager,
+`user@<uid>`, the system `dbus`, `systemd-logind` or `polkit` ends the session, and
+`user@<uid>` takes the window with it. **The window filters those out before it restarts
+anything** (`docs/standards/security.md` §4.6, ONEUP-0111) and the engine's printed advice
+routes them to a reboot; neither changes what this field contains.
+
 ## 5. Changing the contract
 
 **A marker's name and field layout are a contract between four files.** Changing one means

@@ -2987,3 +2987,55 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** After an update, the "Restart services" button did nothing at all when clicked. It now restarts them.
   Kind: fix.
   Source: user-report-2026-08-18.
+
+- 🚧 [ONEUP-0111] **Restart services must never restart a service that ends the user's session.**
+  Asked by the user 2026-08-18, immediately after ONEUP-0110 made this button work:
+  what happens if it restarts something that logs the user out?
+
+  It would have. `zypper ps -sss` reports whatever holds a deleted library, and after a
+  glibc, systemd, Qt or dbus update that includes the processes that ARE the session.
+  ONEUP-0110 restored the button to full function with no exclusion list and no warning
+  in the dialog, which listed every name flatly under "Restart these services now?".
+
+  Verified active on the reporting machine at the time of the report:
+  display-manager (display-manager-legacy.service), user@1000, dbus, systemd-logind,
+  NetworkManager and polkit. Restarting the first tears down the graphical session;
+  user@1000 is the user's whole systemd session, which includes OneUp, so the window
+  would be killed WHILE its own fire-and-forget restart was still running
+  (QProcess.startDetached), leaving no way to see whether it finished. Restarting the
+  system dbus breaks a running desktop; polkit is the authorisation agent that just
+  authorised the pkexec carrying the command.
+
+  Note the shape: the defect was masked. While the guard was broken the button did
+  nothing, so the hazard was unreachable. Fixing the guard is what made it live — the
+  case that was the exception became the norm and nothing had been written for it.
+
+  DECIDED with the user 2026-08-18, two questions, both answered:
+  1. Restart the safe ones and advise a reboot for the rest. Session-critical units are
+     never restarted by this button, on any path — not behind a confirmation, not behind
+     a warning. The app already owns a reboot affordance and that is the honest advice.
+  2. The engine's terminal advice gets the same distinction, so someone running
+     update_system.sh standalone is not handed the same trap.
+
+  Session-critical, and the definition is what matters rather than the list: any unit
+  whose restart would end the user's graphical session, kill OneUp itself, or break the
+  authorisation agent running the restart. That is the display manager, `user@<uid>`,
+  the system dbus, systemd-logind and polkit. NetworkManager and wickedd are deliberately
+  NOT in it — disruptive, recoverable, and a legitimate thing to restart.
+
+  The display manager is resolved rather than guessed: /etc/systemd/system/display-manager.service
+  is a symlink to the real unit, so its target's basename is added to the set at call time.
+  A hardcoded list of display-manager names would be the same class of defect ONEUP-0110
+  just fixed — a guard written against an assumed shape — so the list is a fallback for
+  when the symlink is absent, not the mechanism.
+
+  Test: a GUI scenario feeding a mixed list of safe and session-critical names, asserting
+  the safe ones are restarted, that no session-critical name reaches systemctl on any
+  path, and the all-critical case restarts nothing. Plus an engine scenario for the
+  printed advice.
+
+  Lands on main (1.4.x) under the user's 2026-08-18 ruling: a fix belongs in v1. This is
+  a safety defect in behaviour ONEUP-0110 made live, not a feature request.
+  **Layman:** The "Restart services" button could have logged you out and closed the window mid-restart. It now restarts only what is safe and tells you when a reboot is the clean way.
+  Kind: fix.
+  Source: user-question-2026-08-18.
