@@ -2,7 +2,8 @@
 
 Guidance for Claude Code (claude.ai/code) when working in this repository.
 
-**This file is a map and a trap list.** It is the lowest-ranked document in the set
+**This file is a map and a trap list.** It is the second-lowest-ranked document in the set,
+above only the global default set at `~/.claude/standards/`
 (`docs/standards/documentation.md` §1.1): where it restates a rule, the standard is
 canonical and this file is wrong. What it holds that nothing else does is §6 — the traps,
 each of which cost a real bug to learn.

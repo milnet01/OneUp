@@ -3,7 +3,7 @@
 **In one sentence:** every document here has one job, and this file says which job, so
 nobody has to guess where a decision belongs or whether it has been reviewed.
 
-**Status:** Reviewed
+**Status:** Draft — cold-eyes in progress
 **Kind:** doc
 **Roadmap:** ONEUP-0057
 **Branch:** main
@@ -91,16 +91,27 @@ not resolved here. **What is measured and what is claimed are separate**: four o
 share nothing but structure and are project-owned; `security.md` also shares a content
 heading and is the one genuine overlap.
 
-**`security.md` §8 is a deferral, not a contradiction** — this file's §8.1 sends version
-policy to `docs/standards/dependencies.md`, and the global §8's first bullet routes it the
-same way. The two do not disagree; they cover different ground under one title. Anyone
-changing a dependency or a CI action should read **both**.
+**`security.md` §8 is a deferral, not a contradiction** — **`docs/standards/security.md`'s
+own §8.1** sends version policy to `docs/standards/dependencies.md`, and the global §8's
+first bullet routes it the same way. (Not *this* file's §8.1, which is a plain-language
+rule.) The two do not disagree; they cover different ground under one title.
+
+**And this is the exception to the displacement rule below.** `security.md` §8.1 declares
+itself partial — *"This section covers only what is security-specific"* — so the global §8
+still binds on the ground it does not cover: scanning for known vulnerabilities on a cadence,
+and committing lockfiles. **A project section that declares itself partial does not displace
+the global file; it narrows what it displaces.** Anyone changing a dependency or a CI action
+reads both.
 
 **Owned under a different filename.** The global set splits into `commits.md`,
 `releases.md` and `changelog-format.md`; OneUp states those subjects in `workflow.md` — §3
 commits, §5.2 the changelog, §8 releasing. This file's §4 is the spec template and §5 the
 invariant format, which is what OneUp keeps of global `spec-format.md`. **OneUp pins no
-plan shape at all**; `docs/plans/` is required by §2 and its layout is not specified here.
+plan shape**, and by the rule above that silence is not a displacement: global
+`~/.claude/standards/spec-format.md` §8 does pin one — every step verified, no design
+rationale, a `not started` / `in progress` / `done (DATE)` status vocabulary and a
+**Definition of done** heading — and `~/.claude/standards/skeletons/plan-skeleton.md` is its
+starting point. Both bind here until this file says otherwise.
 
 **Displacement is per subject, not per rule.** Where a project file states a subject, it is
 read as the whole rule on it — do not merge in the global file's extra clauses. Where the
@@ -115,7 +126,8 @@ locally. **This one rule outranks §1.1's whole table**, which row 7 says.
 
 **Global files this section does not place, and they still bind where OneUp is silent** —
 `~/.claude/standards/languages/` (python, qt, cpp), `~/.claude/standards/domains/database.md`,
-the three `~/.claude/standards/skeletons/`, `~/.claude/foundation.md` and
+the three `~/.claude/standards/skeletons/`,
+`~/.claude/standards/roadmap-store-decisions-2026-08-09.md`, `~/.claude/foundation.md` and
 `~/.claude/workflow.md`. **The Python and Qt language files are the live ones**: OneUp is
 Python and PySide6, and they carry a version
 floor, casing, current idioms and retired Qt 5 spellings that this project's `coding.md`
@@ -168,8 +180,12 @@ read two ways:
 | `Implemented` | the work shipped; the document is now a record |
 | `Superseded by <id>` | replaced. Kept, not deleted (§9) |
 
-A document mid-review is `Draft`, and may carry a short note saying so — `Draft —
-cold-eyes in progress`. It is never `Reviewed`.
+A document mid-review is `Draft`, and may carry a short note saying so — and **the note has
+exactly one permitted spelling, `Draft — cold-eyes in progress`**, because
+`tests/docs-check.py`'s `STATUS_RE` matches that literal and nothing else. It still names the
+old gate; `review-contract` replaced it, and ONEUP-0100 owns the mismatch. Until that closes,
+write the literal above or the bare `Draft` — anything else reds `local-CI.sh`.
+It is never `Reviewed`.
 
 **The `Status` line carries state, never history.** No loop counts, no dates, no findings:
 those live in the log and nowhere else (§4, item 11). `Reviewed` is the whole value. If the
@@ -232,7 +248,7 @@ nobody has thought about. `tests/docs-check.py` fails a standard that lacks the 
 - **`nothing`, in bold, followed by why** — and a roadmap id when the gap is a defect rather
   than a limit of what a script can decide.
 - **a gate, plus what that gate does not catch**, in the same cell — for a rule covered in
-  part. Two rows below need it, and the carve-out is the point of them: a partly-gated rule
+  part. The partly-gated rows need it, and the carve-out is the point of them: a partly-gated rule
   written as though fully gated is the "row that is wrong" this section warns about, and
   dropping the carve-out to fit one of the first two forms is how that happens.
 
@@ -464,8 +480,11 @@ a test), those are exempt — they are too small to warrant it. OneUp has none t
 - **The severity scale below is the OLD gate's, and `review-contract` does not emit one** —
   its findings carry the question they answer (`[Q1]`–`[Q4]`) instead. The mismatch reaches
   `tests/docs-check.py`, whose loop-log tally balances severity counts against dispositions,
-  so a row written from a current run has to be worded to skip that check. **ONEUP-0100 owns
-  it**; renaming the gate here does not fix it, and this paragraph exists so the next reader
+  so a row written from a current run has to be worded to skip that check. **The compliant
+  form is to leave the disposition clause unbolded** — `check_loop_tallies` skips a row only
+  when no **bolded** span contains `<digits> verified|dismissed|info`, so
+  `Q1 4 · Q2 1 · Q3 3 — all 8 verified, 0 dismissed` passes while `**8 verified**` fails.
+  §10's newest rows are written that way. **ONEUP-0100 owns the mismatch itself**; renaming the gate here does not fix it, and this paragraph exists so the next reader
   is not left to rediscover why. Rows 7 and 8 of §10 were written under the old scale and
   stay as written — a loop log records what each pass found.
 - **Fix every actionable severity** — critical, high, medium, low. Only informational
@@ -633,7 +652,11 @@ said once.
 Every contradiction the first review loop found existed because a fact lived in two places:
 the privileged-call count in `security.md` and in the design document (21 of 22 against 14 of
 34), and the cause of the GUI suite's teardown crash, given differently in two standards. A
-pointer can go stale in exactly one way, and `tests/docs-check.py` catches it. A restatement can go
+pointer can go stale in exactly one way, and `tests/docs-check.py` catches **some** of it:
+only a path containing a `/`, and only in a standard, the reference, `CLAUDE.md` or
+`README.md`. Its `PATH_RE` requires the slash, so a bare `foo.py` — and the `security.md`
+§9.6 form this section itself recommends — is caught by nothing, and no spec, plan or design
+document is scanned. The hand search below is the only catcher there. A restatement can go
 stale in every way, silently.
 
 The owners: `docs/reference/` owns the marker contract, and each standard owns its own
@@ -699,6 +722,7 @@ them.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 11 | 2026-08-18 | 2 lanes, cold; genre standard; Q1 4 · Q2 4 · Q3 1 — all 9 verified, 1 dismissed, all fixed (disposition clause left unbolded so §7's tally check skips it; ONEUP-0100) | **Both lanes led with the same defect for the second loop running, and it was mine again.** §1.2 said *"this file's §8.1 sends version policy to `dependencies.md`"* — but *this* file's §8.1 is a plain-language rule; the routing lives in `security.md`'s §8.1. A reader checking whether the one content-heading overlap was a real conflict landed on the wrong document, which is the single question §1.2 exists to answer. **Both lanes also found the displacement rule arguing with itself**: *"do not merge in the global file's extra clauses"* sat four lines from *"should read both"*, and global `security.md` §8 carries real obligations — lockfiles committed, scan on a cadence — that the project's §8 never restates. Resolved with a rule rather than a reword: **a project section that declares itself partial narrows what it displaces rather than displacing wholesale**, and `security.md` §8.1 does declare itself partial. The same rule then falsified a neighbouring claim of mine — *"OneUp pins no plan shape at all"* reads as settled, when by that rule the silence means global `spec-format.md` §8 binds, and it does pin one. **The two findings worth the loop were verified against the checker rather than inferred from it.** `PATH_RE` requires a `/`, so §9's own recommended pointer form — a bare filename plus §N — is caught by nothing, while §9 claimed `docs-check.py` catches staleness outright; and `STATUS_RE` permits exactly one note, `— cold-eyes in progress`, so the natural wording after loop 1's rename would have redded `local-CI.sh`. Loop 1 made that trap live and did not notice. **Loop 1's other unswept blast radius**: `CLAUDE.md` still called itself *the lowest-ranked document in the set* after row 7 was added beneath it. Also fixed: §7 told an author to word a row to skip the tally check without saying how, which this row now demonstrates; a written-down count of a current result (*"two rows below need it"*, and three take that form) deleted per §6b.2; and `roadmap-store-decisions-2026-08-09.md` was in neither of §1.2's lists. **Dismissed, one**: a lane reported `files-and-naming.md` carries no *Before you commit* section, so §7's exclusion list was short — it carries §8, *Quick check before you commit a new file*, under another title, and the list is correct. **Status: Reviewed → Draft** — the run has not returned an empty loop. |
 | 10 | 2026-08-18 | 2 lanes, cold; genre standard; Q1 4 · Q2 1 · Q3 3 — all 8 verified, 0 dismissed, all fixed (no severity scale under the four-question gate, so nothing here for §7's tally check to balance; ONEUP-0100) | **Gate on a new §1.2 stating this project's relationship to `~/.claude/standards/`, and both lanes led with the same defect — mine.** §1.2 claimed the five same-named pairs share **zero content headings**, false for `security.md`: both files carry `## 8. Supply chain`. It also quietly reworded the global test from *zero `##` headings* to *zero content headings*, narrowing the rule it cited. §1.2 now prints the per-pair measurement, states that NO pair can score zero because this file's own §4 mandates `## What checks this` on every standard, and records that `security.md`'s overlap is a deferral rather than a contradiction — its §8.1 and the global §8 route version policy to the same place. **The second, also found by both lanes, was a contradiction I introduced**: §1.1's new row 7 said the global set governs *only where this project states nothing*, while §1.2 said `roadmap-format.md`'s bullet grammar is not overridable at all — and `workflow.md` §4 states that grammar locally, so a conformer adding a trailer was conforming and in breach at once. Row 7 now carries the carve-out. **The most valuable finding was pre-existing**: this standard mandated `/cold-eyes` in five live places and that skill does not exist — `review-contract` replaced it on 2026-08-12. The `Draft` and `Reviewed` statuses §3 defines were keyed to an uninvocable gate. Seven invocations across three standards are renamed; loop-log rows and the section name are left as written. Renaming it exposed the severity mismatch ONEUP-0100 already owns, which §7 now states rather than leaving to be rediscovered. Also fixed: §1.2 claimed the plan format lives in §§4-5 and no plan shape is stated anywhere; it omitted `~/.claude/standards/languages/`, which binds a Python and PySide6 project through row 7 and has never been reconciled against this project's `coding.md`; it had no **What checks this** row, which §4 calls a rule nobody has thought about; and the header claimed every claim below was checked on 2026-08-12 while §1.2's measurements are 2026-08-18. |
 | 9 | 2026-08-12 | 2 lanes, third and final loop of this run (the default cap): Q1 1 · Q2 3 · Q3 2 — 6 verified, 0 dismissed, of which **only one** was the previous loop's collateral | **Stopped at the cap with findings still arriving, and that is the result worth recording.** The one collateral was mine and the fix was deletion: loop 8's re-stamped `Verified at:` line had grown a clause naming the two review loops behind it, which §3 forbids outright — history lives in the log and nowhere else. The five pre-existing were all §4's own rules failing in the document that sets them, the same shape as loop 8's: §4 said a What-checks-this cell "says one of **two** things, and never blurs them" while two of this table's rows have always needed a third — a gate **plus** what it does not catch — so an author following §4 would drop an honest carve-out and leave a partly-gated rule reading as covered (§4 now permits the third form and says why); §4 called the loop log the "last **numbered** section" when `dependencies.md`, the one standard that numbers no heading at all, has never had one; §6a.2's scope list omitted a reference while the gate has always scanned `docs/reference/`, so a maintainer reading the rule could have narrowed the check and silently un-gated the highest-ranked document class; the §6a row implied its gate reached everything in that scope, while `CLAUDE.md` and `ROADMAP.md` are scanned by nothing; and four more rules had no row at all — §7's own "implementation does not start before that", §8.2's `**Layman:**` line, and both of §9's (never rewrite CHANGELOG history, mark a superseded document rather than delete it). The table went 12 rows to 20 across this run. **The proportion form earned itself**: the sentence beneath it still reads true at 12 of 20 without being touched, where a figure would have gone stale a third time. Fixed in passing, below finding threshold: the `TODO` row named three markers where the rule and `MARKER_RE` both have four. **Filed rather than looped: ONEUP-0107** — 13 pre-existing defects in two loops of a document eight loops had already passed says the four-question gate finds a different class than the severity gate did, and the other eight standards have not been read under it. |
 | 8 | 2026-08-12 | 2 lanes, second loop of the §7.1 amendment review: Q1 3 · Q2 3 · Q3 1 — 7 verified, 1 dismissed, of which only 2 were the previous loop's collateral | **Five of the seven were pre-existing, in a document seven loops had already passed** — which is what a differently-shaped gate is for, not evidence the earlier loops were careless. The two that were mine: the header still said every claim was verified at `58ea3bc` on 2026-07-26 while §7.1 had been measured 17 days later (§3 makes that field the only signal a figure is current, so it was actively misleading), and the §8 row still said **nothing** automatic after loop 7 gave §8.2's opener a gate — §4 calls that shape "worse than a row that is missing". The pre-existing five: §7's worked example for the tally check computed `24 verified + 4 dismissed` as **26** where it is 28, so an author debugging a red gate would have worked the example and mistrusted themselves or balanced to the wrong total; §6b.5's prose said **one** clear exemption over a table with two; §4 and §5 gave the document set two different layouts (loop log last vs What-checks-this last) and §5 now defers to §4; §7's catcher table claimed each standard has a *Before you commit* section when this one and `dependencies.md` do not; and the What-checks-this table had no row at all for §1.1 or §2, which §4 itself calls "a rule nobody has thought about". **Dismissed: one** — that the log-format example states no verified/dismissed counts. Checked against `check_loop_tallies`: a row with no numeric disposition clause is skipped, not failed, so the example is valid as written. The table's own row-count sentence was **converted to a proportion rather than re-numbered**: the exact figure was written twice and went stale both times inside one session, which is §6b's rule applied to the document that states it. Swept `CLAUDE.md`, which made the same layout claim §5 did, and corrected it there. |
