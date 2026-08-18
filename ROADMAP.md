@@ -1105,6 +1105,49 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   now also carries the filed finding above. A second cold loop on ONEUP-0076 is
   available and unspent; the run stopped on its --max-loops argument, not on the
   document's cap of 2.
+  Progress (2026-08-18, third): the dialog-surface decision loop 3 surfaced was
+  settled by the user the same session and folded in. ONEUP-0076 carries no open
+  decision; it is Draft only because no loop has come back empty.
+
+  DECIDED: _QSS gains "QMainWindow, QDialog { background: $win; }" — the rule
+  _HC_QSS already carries. Two reasons: every rest pixel in ONEUP-0076 is a
+  palette token, which is §4.1's premise and what lets ONEUP-0027 author six more
+  palettes against a check rather than a screenshot; and it closes a defect of
+  its own, since every dialog is light grey (#efefef) in dark mode today. It is a
+  one-line base-sheet edit and belongs to whichever of ONEUP-0064 or ONEUP-0027
+  lands the sheet edit first; ONEUP-0076 owns only the derivation.
+
+  The fold-in found the lane's picture was too coarse, by opening the
+  constructor. SettingsDialog._row nests each of its EIGHT buttons in a #RowCard
+  inside a #RowBorder, so those rest on rowcard AND rowhov — the disclosure's
+  pair — and only close_btn sits on the dialog. So #GhostBtn has FOUR surfaces,
+  not three: card (header + action row), #WarnBanner (retry_btn), rowcard/rowhov
+  (the eight SettingsDialog rows), and win (each dialog's own Close/Cancel).
+  RepoManagerDialog's and RollbackDialog's primary buttons are #RunBtn, whose
+  rest pixels are its own gradient, not the surface. This is the clearest case
+  yet for the ancestor-qualified selector scheme over a rename — four rows under
+  one object name.
+
+  Derived per §4.1 and executed, not asserted:
+  - dialog Close/Cancel, light: win #eef1f5 -> #88898c at t=0.43, 3.09:1,
+    black ink 6.00:1
+  - dialog Close/Cancel, dark:  win #0f1216 -> #616365 at t=0.34, 3.11:1,
+    white ink 6.03:1
+  - the eight SettingsDialog rows reproduce the disclosure's published values
+    exactly (#868789 light, #6a6d73 dark), which is independent confirmation
+    that the derivation in §4.1 is reproducible.
+
+  §8 gains two bullets: the _QSS rule, and ONEUP-0027 §4.7 gaining win as a
+  measured 3:1 surface — its current list has the danger family's banner borders
+  against win but no focus pair there, because until this item nothing rested on
+  it. That bullet also carries the ONEUP-0027 correction filed earlier today, so
+  the filed finding now has a named home rather than only a roadmap note.
+
+  Task 18 still owes: ONEUP-0072 from loop 5, ONEUP-0032 (a real loop 1), and the
+  ONEUP-0027 citation pass. ONEUP-0076 has a second cold loop available and
+  unspent — the run stopped on --max-loops 1, not on the document's cap of 2, and
+  this fold-in added assertive text, which 4a-min says is where the next loop's
+  findings come from.
 
 - 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether

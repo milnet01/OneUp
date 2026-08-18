@@ -16,7 +16,33 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: `ONEUP-0076` re-gated after the fold-in; it owes ONE decision, then `ONEUP-0072` from loop 5**
+> ## ▶ You are here — **Task 18: `ONEUP-0076` has no open decision left; next is `ONEUP-0072` from loop 5**
+>
+> **The dialog-surface decision loop 3 surfaced was settled the same session and folded in.**
+> `_QSS` gains `QMainWindow, QDialog { background: $win; }` — the rule `_HC_QSS` already
+> carries. It keeps every rest pixel a palette token, which is §4.1's premise, and closes a
+> defect of its own: every dialog is light grey in dark mode today. The sheet edit belongs to
+> whichever of `ONEUP-0064` or `ONEUP-0027` lands first; this document owns the derivation.
+>
+> **The fold-in found the lanes' picture was too coarse, and the correction came from opening
+> the constructor rather than re-reading the spec.** `SettingsDialog._row` nests each of its
+> **eight** buttons in a `#RowCard`, so those rest on `rowcard`/`rowhov` and only `close_btn`
+> sits on the dialog. `#GhostBtn` therefore has **four** surfaces, not three — and that is the
+> clearest case yet for the ancestor-qualified selector over a rename. Derived and executed:
+> light `win` → `#88898c` at 3.09:1, dark → `#616365` at 3.11:1, while the eight row buttons
+> reproduce the disclosure's published hexes exactly, which independently confirms §4.1's
+> procedure is reproducible.
+>
+> **`ONEUP-0076` is `Status: Draft` for one reason only — no loop has come back empty.** It
+> carries no open decision. A second cold loop is **available and unspent**: the run stopped
+> on its `--max-loops 1` argument, not on the document's cap of 2, and this fold-in added
+> assertive text, which is where 4a-min says the next loop's findings come from.
+>
+> **Next: `ONEUP-0072` from loop 5**, then `ONEUP-0032` (a real loop 1 — see below), then the
+> `ONEUP-0027` citation pass, which now also carries the filed *"dialogs need no work of their
+> own"* correction. `ONEUP-0064` still owes a decision rather than a loop.
+
+> ## Previously — **Task 18: `ONEUP-0076` re-gated after the fold-in (loop 3)**
 >
 > **The fold-in below changed direction, so the gate re-armed and was run — loop 3, first of a
 > fresh run, 2 cold lanes, `--max-loops 1`. Q1 2 · Q2 3 · Q3 2 · Q4 1, 8 verified, 0

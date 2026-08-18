@@ -285,7 +285,8 @@ the base `card` would be wrong, and why §4.1's floor keeps that pair instead.
 | `#RestartBtn` | A | the danger gradient, both stops |
 | `#StopBtn` (introduced by `docs/specs/ONEUP-0064-interface-redesign.md` §4.1) | A | `card` |
 | `#GhostBtn`, in the header and the action row | A | `card` |
-| `#GhostBtn`, moved into `SettingsDialog` by `docs/specs/ONEUP-0064-interface-redesign.md` §4.1 | A | **⚠ OPEN** — the dialog's own surface, which is neither `card` nor `win` under the base sheet. See the block below the table |
+| `#GhostBtn` in a `SettingsDialog` **row** — the eight `_row` builds, into which `docs/specs/ONEUP-0064-interface-redesign.md` §4.1 moves *Repositories* and *Recenter* | A | `rowcard` **and** `rowhov` — `_row` nests each button in a `#RowCard` inside a `#RowBorder`, so it takes the same pair as the disclosure and the same derived values |
+| `#GhostBtn` as a dialog's own *Close* / *Cancel* — one each in `SettingsDialog`, `RepoManagerDialog` and `RollbackDialog`, added to the button strip rather than to a row | A | `win` — see the rule below the table |
 | `#GhostBtn` in the warning banner (`retry_btn`), moved there by `docs/specs/ONEUP-0064-interface-redesign.md` §4.1, which keeps the object name | A | `#WarnBanner` only — the same composited tint `warn_copy_btn` takes, resolved the same way in §4.4 |
 | `#LinkBtn`, on the card (`log_toggle`, `openlog_btn`, `rollback_btn`) | A | `card` |
 | `#LinkBtn` in a banner (`warn_copy_btn`) | A | `#WarnBanner` only — it is inserted into that one banner and no other |
@@ -295,51 +296,46 @@ the base `card` would be wrong, and why §4.1's floor keeps that pair instead.
 | `ToggleSwitch` | A, in `paintEvent` | its own track — `GREEN` / `RED` today, which `ONEUP-0027` §4.3 renames `switchon` / `switchoff` |
 | `QPlainTextEdit#Log` | B | `logbd`, widened to 2 px |
 | `QScrollArea#DetailScroll` | B | `logbd`, at 2 px — the panel gains a rest border |
-| `QScrollArea#RepoScroll` (`RepoManagerDialog`) and `QListWidget#RollbackList` (`RollbackDialog`) | B | `logbd`, at 2 px — both gain a rest border. Both are unnamed in `updater.py` today; this item names them, §8 |
+| `QScrollArea#RepoScroll` (`RepoManagerDialog`) and `QListWidget#RollbackList` (`RollbackDialog`) | B | `logbd`, at 2 px — both gain a rest border. Both are unnamed in `updater.py` today; this item names them, §8. Their surface is `win`, per the rule below the table, which is what makes a `logbd` border visible on them |
 | `QPlainTextEdit#Log`, `QScrollArea#DetailScroll`, `QScrollArea#RepoScroll` and `QListWidget#RollbackList`, high-contrast overlay on | B | `$border`, at 2 px. `logbd` is a base key the overlay does not carry, so the overlay row is the one that applies when it is on |
 | The primary button family, high-contrast overlay on | A | `$btn`. The overlay's `#GhostBtn` rule already clears 3:1 and is kept unchanged — §4.1's floor, §4.3's note |
 | `#StopBtn`, `QToolButton#Disclose` and `#LinkBtn`, high-contrast overlay on | A | `$card`. Every control the overlay does not give a `$btn` fill rests on `$card`, so all three take the `$card` → `$btnhov` pair §4.1's floor already keeps for `#GhostBtn`. `ONEUP-0064` §4.1 creates the overlay rules for the first two and delegates their focus colour here |
 
-**⚠ OPEN — a dialog's surface is not `card`, and under the base sheet it is not a palette
-token at all.** This row said the surface *"is `card` — the sheet is set on the application,
-so the dialog inherits it"*. The dialog inherits the *sheet*; it does not inherit a
-`background` declaration written for another selector. Measured rather than reasoned —
-`build_theme` applied to a `QApplication`, a bare `QDialog` shown offscreen and its centre
-pixel read:
+**A dialog's surface is `win`, and the base sheet is given the rule that makes it so.**
+This row said the surface *"is `card` — the sheet is set on the application, so the dialog
+inherits it"*. A dialog inherits the *sheet*; it does not inherit a `background` declaration
+written for another selector, and `_QSS` carries `QMainWindow { background: $win; }` and **no
+`QDialog` rule**. Measured rather than reasoned — `build_theme` applied to a `QApplication`,
+a bare `QDialog` shown offscreen and its centre pixel read:
 
-| Sheet | `QDialog` | `QMainWindow` | `#Card` | tokens |
-| --- | --- | --- | --- | --- |
-| base, light | **`#efefef`** | `#eef1f5` | `#ffffff` | `win` `#eef1f5`, `card` `#ffffff` |
-| base, dark | **`#efefef`** | `#0f1216` | `#12161c` | `win` `#0f1216`, `card` `#12161c` |
-| + overlay, light | `#ffffff` | `#ffffff` | `#ffffff` | `win` `#ffffff` |
-| + overlay, dark | `#000000` | `#000000` | `#000000` | `win` `#000000` |
+| Sheet | `QDialog` | `QMainWindow` | `#Card` |
+| --- | --- | --- | --- |
+| base, light | **`#efefef`** | `#eef1f5` | `#ffffff` |
+| base, dark | **`#efefef`** | `#0f1216` | `#12161c` |
+| + overlay, light | `#ffffff` | `#ffffff` | `#ffffff` |
+| + overlay, dark | `#000000` | `#000000` | `#000000` |
 
-`_QSS` carries `QMainWindow { background: $win; }` and **no `QDialog` rule**, so under the
-base sheet a dialog paints Qt's own platform grey in *both* themes. `_HC_QSS` carries
-`QMainWindow, QDialog { background: $win; }`, which is why only the overlay rows are sound.
+So under the base sheet a dialog paints Qt's own platform grey in *both* themes, and only
+`_HC_QSS`'s `QMainWindow, QDialog { background: $win; }` pins it. Deriving a fill from `card`
+and rendering it there gave the light ghost buttons **2.64:1**, against the 3:1 floor this
+document exists to guarantee; dark passed by accident at 5.25:1, which is how a dark-only
+check would have missed it.
 
-**What it costs, and it is light-only, which is how it would survive a dark-mode check.** The
-light `#GhostBtn` focus fill derived from `card` is `#949494`; on `#efefef` that measures
-**2.64:1**, against the 3:1 floor this document exists to guarantee. Dark passes by accident
-at 5.25:1 — the derivation aimed at a near-black surface and landed on a light one. Adding
-`QDialog { background: $win; }` to the base sheet does not rescue it either: `#949494` on
-`#eef1f5` is **2.68:1**.
+**`_QSS` gains `QMainWindow, QDialog { background: $win; }` — the rule `_HC_QSS` already
+carries** (the user, 2026-08-18). Two reasons it is this rather than describing the grey.
+Every rest pixel in this document is a palette token, which is §4.1's premise and what lets
+`ONEUP-0027` author six more palettes against a check rather than against a screenshot; and
+a dialog that is light grey in dark mode is a defect in its own right, which this closes as
+a side effect. **It is a one-line change to the base sheet and belongs to whichever of
+`ONEUP-0064` or `ONEUP-0027` lands the sheet edit first**; this document owns only the
+derivation that follows from it.
 
-**Two ways out, and the choice is not this document's to make alone**, because one of them
-edits `_QSS`. **Pin the surface** — give the base sheet the `QDialog` background rule
-`_HC_QSS` already has, then derive the dialog's ghost fill from `win` rather than `card`,
-which is a new §4.3 row and a value `ONEUP-0027` keys a palette entry to. Or **qualify the
-row** — leave `_QSS` alone, name Qt's painted default as the dialog's rest pixel, and accept
-a surface no palette controls. The first is the only one that keeps every rest pixel a
-palette token, which is §4.1's premise; the second is the only one that changes no code.
-`ONEUP-0064` §4.1 is what moves nine `#GhostBtn`s into that dialog, so it is bound by
-whichever is chosen.
-
-**It reaches the two mechanism-B dialog rows as the same question in a weaker form.**
-`#RepoScroll` and `#RollbackList` derive their focus border from `logbd`, a token, so the
-derivation is unaffected — but whether a `logbd` border is visible against the dialog's
-surface is measured by nothing here and by no row of `ONEUP-0027` §4.7, whose `logbd` entry
-is *"declared decorative"* on `logbg`.
+**Only three `#GhostBtn` actually rest there, and the split is finer than "the dialogs".**
+`SettingsDialog._row` nests each of its eight buttons in a `#RowCard`, so those take
+`rowcard` and `rowhov` — the disclosure's pair, and its published values. What rests on `win`
+is each dialog's own *Close* / *Cancel* in the button strip, plus `#RepoScroll` and
+`#RollbackList`. `RepoManagerDialog`'s and `RollbackDialog`'s primary buttons are `#RunBtn`,
+whose rest pixels are its own gradient and not the surface at all.
 
 **One object name, three surfaces — the selector is qualified by an ancestor, not by a
 rename.** `#LinkBtn` has three rows above with three different rest-pixel sets, and
@@ -355,9 +351,10 @@ Three things it obliges.
 
 - **The default row is the one with no qualifier**, and it is the surface most instances
   rest on. For `#LinkBtn` that is `card` — `log_toggle`, `openlog_btn`, `rollback_btn`. For
-  `#GhostBtn` it is `card`, which covers the header and the action row; the banner instance
-  (`retry_btn`) takes a qualifier, and the nine in `SettingsDialog` rest on the surface the
-  ⚠ OPEN block below has not settled.
+  `#GhostBtn` it is `card`, which covers the header and the action row; the other three
+  surfaces — the banner, a `SettingsDialog` row, and a dialog's own button strip — each take
+  a qualifier, which is four rows under one name and the clearest case for this scheme over a
+  rename.
 - **The qualifier must name the nearest container unique to that surface**, because Qt
   resolves competing rules by CSS specificity and an ancestor that also contains the default
   case would capture it too. `#Card` contains all three `#LinkBtn` surfaces and is therefore
@@ -403,8 +400,10 @@ Computed, not chosen. Every figure is the output of the check in §4.4.
 | Restart button | `#ef6a55`→`#d6412a` | `#5d2921`→`#531910` | 3.07:1 (worst pixel) | `#ffffff` 11.64:1 |
 | Ghost / link, dark | `#12161c` | `#606367` | 3.01:1 | `#ffffff` 6.04:1 |
 | Ghost / link, light | `#ffffff` | `#949494` | 3.03:1 | `#000000` 6.92:1 |
-| Disclosure, dark | `#1a1f27`/`#1e242e` | `#6a6d73` | 3.01:1 | `#ffffff` 5.19:1 |
-| Disclosure, light | `#f4f6f9`/`#eaeef3` | `#868789` | 3.09:1 | `#000000` 5.84:1 |
+| Disclosure **and a `SettingsDialog` row's `#GhostBtn`**, dark | `#1a1f27`/`#1e242e` | `#6a6d73` | 3.01:1 | `#ffffff` 5.19:1 |
+| Dialog *Close* / *Cancel* `#GhostBtn`, dark | `win` `#0f1216` | `#616365` | 3.11:1 | `#ffffff` 6.03:1 |
+| Disclosure **and a `SettingsDialog` row's `#GhostBtn`**, light | `#f4f6f9`/`#eaeef3` | `#868789` | 3.09:1 | `#000000` 5.84:1 |
+| Dialog *Close* / *Cancel* `#GhostBtn`, light | `win` `#eef1f5` | `#88898c` | 3.09:1 | `#000000` 6.00:1 |
 | Switch track on | `#2ecc71` | `#186c3c` | 3.08:1 | — |
 | Switch track off | `#e74c3c` | `#66211a` | 3.06:1 | — |
 | Log / details / dialog-panel border, dark | `#262d38` | `#72767e` | 3.04:1 | — |
@@ -775,6 +774,20 @@ does.
   *Partially sighted*, **not** in its §2, which is *Announcements*: that document leaves its
   `##` sections unnumbered and numbers only the `###` subsections under *Design*, so a bare
   "§2" resolves to the wrong place.
+- **`_QSS` gains `QMainWindow, QDialog { background: $win; }`** — the rule `_HC_QSS` already
+  carries, and the one code change outside this item's own rules that §4.2 depends on.
+  Without it a dialog paints Qt's platform grey in both themes and the derivations in §4.3
+  are measured against a surface no palette controls. It belongs to whichever of
+  `docs/specs/ONEUP-0064-interface-redesign.md` or `docs/specs/ONEUP-0027-themes.md` lands
+  the sheet edit first; this item owns the derivation, not the rule. It also closes a defect
+  of its own — every dialog is light grey in dark mode today.
+- **`docs/specs/ONEUP-0027-themes.md` §4.7 gains `win` as a measured 3:1 surface.** Its
+  current list carries `ghostbd` against `card` and the danger family's banner borders
+  against `win`, but no focus pair on `win`, because until this item nothing rested there.
+  The pair is §4.3's two new rows. Its §4.8 note that *"`ui-and-accessibility.md` §6.1 is why
+  dialogs need no work of their own"* rests on the model the measurement above refutes and is
+  corrected with it.
+
 - **Two dialog widgets are given object names, in the same commit as the rules that key
   off them.** `RepoManagerDialog`'s `QScrollArea` becomes `#RepoScroll` and
   `RollbackDialog`'s `QListWidget` becomes `#RollbackList` — `setObjectName` calls beside
