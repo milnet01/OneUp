@@ -3199,3 +3199,46 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A question the docs review turned up and could not settle in the time it had: whether our rule files need a small version stamp at the top, the way the machine-wide ones do.
   Kind: doc.
   Source: review-contract-2026-08-18 loop 3, filed at the cap.
+
+- 🚧 [ONEUP-0114] **A documentation-only push runs the documentation gates, not the whole suite.**
+  Requested by the user 2026-08-18: "That pre-push hook for documents should only
+  relate to documents and in theory should be a very quick run."
+
+  githooks/pre-push runs ./local-CI.sh unconditionally. For a markdown-only push
+  that spends roughly ninety seconds on the engine suite, the GUI smoke test,
+  py_compile, shellcheck, ruff and packaging validation — none of which can read a
+  .md file — to reach the one gate that can.
+
+  There is no remote pipeline behind it either: .github/workflows/ holds only
+  release.yml, triggered on tags ['v*'], so a push to main fires no GitHub CI at
+  all. The whole gate for a branch push is the local one.
+
+  WHAT THE FAST PATH RUNS, and the rule is "every gate that can read a markdown
+  file", not "the docs one":
+
+  - tests/docs-check.py — the documentation rules. 0.07 s.
+  - The version lockstep — CHANGELOG.md is one of the six version sites, so a
+    markdown edit can break it.
+  - tests/bump-test.py — bump.py rewrites the CHANGELOG heading and both compare
+    links, so a malformed [Unreleased] surfaces here. 0.05 s.
+
+  Measured, all three together are well under a second, which is why none is traded
+  away for speed. Skipped: the engine suite, the GUI smoke test, py_compile,
+  shellcheck, ruff, desktop/AppStream validation and the AppImage build.
+
+  WHERE THE LOGIC LIVES. local-CI.sh gains a --docs mode and keeps owning what each
+  gate is; the hook only decides which mode to ask for. Putting the gate list in
+  the hook would be a second copy of a fact local-CI.sh already owns
+  (docs/standards/documentation.md §9), and the two would drift.
+
+  FAIL-SAFE DIRECTION. The hook takes the fast path only when it can prove every
+  changed path ends in .md. A new remote branch, an unreadable range, a push it
+  cannot resolve — all fall back to the full run. A wrong guess must cost time
+  rather than coverage, which is the only safe way round for a gate.
+
+  Test: exercise the hook against two real ranges from this repo's history — a
+  markdown-only one and one touching updater.py — and assert the first takes the
+  fast path and the second does not.
+  **Layman:** Pushing a documentation change no longer waits about a minute and a half for the app's tests to run. It checks the documents instead, which takes under a second.
+  Kind: chore.
+  Source: user-request-2026-08-18.

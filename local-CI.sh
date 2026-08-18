@@ -14,13 +14,26 @@
 #   ./local-CI.sh          fast gates — tests, lint, packaging validation, version
 #                          lockstep, documentation (seconds). The reliable pre-push check.
 #   ./local-CI.sh --full   also run the AppImage build (wrapped in a 10-min timeout).
+#   ./local-CI.sh --docs   ONLY the gates that can read a markdown file — the version
+#                          lockstep (CHANGELOG.md is one of the six sites), bump.py's
+#                          functional test (bump rewrites the CHANGELOG heading and both
+#                          compare links) and tests/docs-check.py. Measured under a second
+#                          all together, against ~90 s for the full run.
 #
-# A pre-push hook (githooks/pre-push) runs the fast gates automatically before a push.
+# A pre-push hook (githooks/pre-push) runs the fast gates automatically before a push, and
+# picks --docs when every path in the push ends in .md (ONEUP-0114). The hook decides the
+# MODE; this script stays the one place that says what each gate is.
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
 
 FULL=false
-[[ "${1:-}" == "--full" ]] && FULL=true
+DOCS=false
+case "${1:-}" in
+    --full) FULL=true ;;
+    --docs) DOCS=true ;;
+    "")     ;;
+    *)      printf 'local-CI: unknown argument %s (expected --full or --docs)\n' "$1" >&2; exit 2 ;;
+esac
 
 fail=0
 step() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
@@ -36,6 +49,8 @@ skip() { printf '  --   skip %s (%s)\n' "$1" "$2"; }
 # The default is honoured rather than forced, because githooks/pre-push runs THIS script
 # and so inherited the opt-in it is documented as declining: an openSUSE CDN outage failed
 # a push, which is the outcome the split exists to prevent. The hook passes 0 (ONEUP-0097).
+if ! $DOCS; then
+
 step "Engine test suite"
 if ONEUP_TEST_NETWORK="${ONEUP_TEST_NETWORK:-1}" bash tests/run-tests.sh >/tmp/local-ci-tests.log 2>&1; then
     ok "tests/run-tests.sh — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' /tmp/local-ci-tests.log | tail -1)"
@@ -62,7 +77,11 @@ fi
 step "Python compile (updater.py)"
 if python3 -m py_compile updater.py bump.py; then ok "py_compile updater.py bump.py"; else bad "py_compile"; fi
 
+fi   # end of the first code-gate block skipped by --docs
+
 # --- bump.py functional test ------------------------------------------------
+# NOT skipped by --docs: bump.py rewrites the CHANGELOG heading and both compare links, so
+# a malformed [Unreleased] is a markdown edit that fails here and nowhere else.
 # Runs a real bump in a throwaway repo copy and asserts every version site
 # advances (incl. the CHANGELOG [Unreleased] compare base). Stdlib-only, exit 0/1.
 step "bump.py functional test"
@@ -71,6 +90,8 @@ if python3 tests/bump-test.py >/tmp/local-ci-bump.log 2>&1; then
 else
     bad "tests/bump-test.py"; tail -25 /tmp/local-ci-bump.log
 fi
+
+if ! $DOCS; then
 
 # --- lint (best-effort) -----------------------------------------------------
 step "Lint"
@@ -98,7 +119,10 @@ if command -v appstreamcli >/dev/null 2>&1; then
     else bad "appstreamcli validate"; cat /tmp/local-ci-appstream.log; fi
 else skip "appstreamcli" "not installed"; fi
 
+fi   # end of the code gates skipped by --docs
+
 # --- version lockstep (the six sites docs/standards/workflow.md §5.1 documents) ---
+# NOT skipped by --docs: CHANGELOG.md is markdown AND one of the six sites.
 step "Version lockstep (six sites must agree)"
 v_py=$(grep -oP 'APP_VERSION = "\K[^"]+' updater.py)
 v_spec=$(grep -oP '^Version:\s+\K\S+' packaging/rpm/oneup.spec)

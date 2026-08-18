@@ -15,12 +15,53 @@
 # discover it is not — so the hook passes ONEUP_TEST_NETWORK=0 and local-CI.sh honours it.
 # Run ./local-CI.sh by hand to include T-1; that run owns it (ONEUP-0097).
 #
+# A DOCUMENTATION-ONLY push takes ./local-CI.sh --docs instead (ONEUP-0114): the version
+# lockstep, bump.py's functional test and tests/docs-check.py — every gate that can read a
+# markdown file, and nothing else. Measured at 0.14 s against ~90 s for the full run. The
+# engine suite, the GUI smoke test, py_compile, lint and packaging validation cannot be
+# reached by a .md edit, so running them proves nothing and costs the wait.
+#
+# This hook decides the MODE only; local-CI.sh stays the one place that says what each gate
+# IS (docs/standards/documentation.md §9 — one owner per fact).
+#
+# It takes the fast path only when it can PROVE every changed path ends in .md. A new remote
+# branch, a range git cannot resolve, a push it cannot read — all fall back to the full run.
+# A wrong guess has to cost time rather than coverage; that is the only safe way round for a
+# gate, and it is why every uncertain branch below sets docs_only=false.
+#
 # Enable once per clone:  git config core.hooksPath githooks
 set -uo pipefail
 root=$(git rev-parse --show-toplevel)
 
-echo "pre-push: running local CI gates…"
-if ! ONEUP_TEST_NETWORK=0 bash "$root/local-CI.sh"; then
+# stdin carries one line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>
+docs_only=true
+saw_commits=false
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+    [[ "$local_sha" =~ ^0+$ ]] && continue            # deleting a ref — nothing to test
+    if [[ "$remote_sha" =~ ^0+$ ]]; then              # new remote branch — no base to diff
+        docs_only=false; break
+    fi
+    if ! changed=$(git diff --name-only "$remote_sha..$local_sha" 2>/dev/null); then
+        docs_only=false; break                        # unresolvable range
+    fi
+    [[ -z "$changed" ]] && continue
+    saw_commits=true
+    while IFS= read -r f; do
+        [[ "$f" == *.md ]] && continue
+        docs_only=false; break
+    done <<< "$changed"
+    $docs_only || break
+done
+$saw_commits || docs_only=false                       # determined nothing — run everything
+
+if $docs_only; then
+    echo "pre-push: documentation-only push — running the markdown gates…"
+    mode=--docs
+else
+    echo "pre-push: running local CI gates…"
+    mode=
+fi
+if ! ONEUP_TEST_NETWORK=0 bash "$root/local-CI.sh" $mode; then
     echo "pre-push: local CI failed — push aborted. (Override with 'git push --no-verify' only if you are certain.)" >&2
     exit 1
 fi

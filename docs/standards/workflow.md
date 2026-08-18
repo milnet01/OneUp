@@ -274,6 +274,20 @@ is the bulk.
 Under a minute, not under a second — long enough that skipping it feels tempting, which is
 what the pre-push hook is for.
 
+**A documentation-only push runs the markdown gates instead, and takes 0.14 s** (ONEUP-0114).
+`githooks/pre-push` reads the refs on its stdin and, when it can prove every changed path
+ends in `.md`, calls `./local-CI.sh --docs`: the version lockstep, `bump.py`'s functional
+test and `tests/docs-check.py`. That set is *"every gate that can read a markdown file"*
+rather than *"the documentation one"* — `CHANGELOG.md` is one of §5.1's six version sites,
+and `bump.py` rewrites its heading and both compare links, so a malformed `[Unreleased]`
+fails there and nowhere else. The engine suite, the GUI smoke test, `py_compile`, lint and
+packaging validation cannot be reached by a `.md` edit.
+
+**The fallback direction is the point.** A new remote branch, a range git cannot resolve, an
+unreadable stdin — every uncertain case runs the full suite. A wrong guess must cost time
+rather than coverage. The hook chooses the *mode*; `local-CI.sh` remains the one place that
+says what each gate is.
+
 | Gate | What it proves |
 | --- | --- |
 | `Engine test suite` | `tests/run-tests.sh` — the markers `update_system.sh` prints |
