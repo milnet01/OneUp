@@ -16,7 +16,45 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: `ONEUP-0064` re-gated (loops 4–6); `ONEUP-0076` and `ONEUP-0072` still owed**
+> ## ▶ You are here — **Task 18: `ONEUP-0076` gated (loops 1–2, capped); it owes two decisions, then `ONEUP-0072` from loop 5**
+>
+> **`ONEUP-0076` has had its first gate on its own bytes — 22 verified across two loops, 20
+> fixed, 2 surfaced, capped rather than converged, `Status: Draft`.** The 0-split row was
+> right that none of the parent's assurance transfers: loop 1's strongest finding was a
+> *recurrence* of one the parent's parent-3 row records fixing on 2026-08-03 — the rule box
+> stating two different derivation algorithms — which survived the split untouched. **Gate a
+> split document from loop 1; do not count the parent's loops.**
+>
+> **Five findings came from RUNNING the document rather than reading it**, and every one was
+> raised by a lane as an open question it could not settle, because `review-lane` holds no
+> `Bash`. That division worked well and is worth repeating: the lanes find the contradiction,
+> the orchestrator settles the measurement. INV-1's dialog sweep is red on day one (six of
+> 21 dialog widgets match no row); the overlay's `#LinkBtn:focus` cannot reach 3:1 at any
+> colour; `_HC_QSS` has no `DetailScroll` rule to widen; the light link ink failed on three
+> of its four surfaces; and five `size_btn` objects exist but only one is parented, so the
+> census is right and §2.1's claim about it was not.
+>
+> **Loop 2's strongest finding was loop 1's own fix**, for the third gate running in this
+> batch — INV-4's rewritten assertion was red against the very design it tests. The lesson
+> from `ONEUP-0077` and `ONEUP-0072` holds unchanged: **a fix that adds assertive text is
+> where the next loop's findings come from.**
+>
+> **`ONEUP-0076` now owes two decisions, not a loop**, both carrying their measurement in a
+> `⚠ OPEN` block and both reaching `ONEUP-0064` and `ONEUP-0027`: how one object name carries
+> three rest-pixel sets when §4.4 matches by object name, and whether INV-1 covers the six
+> uncovered dialog widgets or excludes unstyled Qt chrome by a stated rule.
+>
+> **Next: `ONEUP-0072` from loop 5**, then `ONEUP-0032` (a real loop 1 — see below), then the
+> cheap citation pass on `ONEUP-0027`. `ONEUP-0064` still owes a decision rather than a loop.
+>
+> **A tool now answers the question this batch kept paying for.** `spec_query
+> mode:"gate_drift"` cross-references each spec's last loop-log row against its git history in
+> one call. It reports `ONEUP-0027`, `ONEUP-0054` and `ONEUP-0077` as `Reviewed` while
+> carrying post-review edits — 4 to 11 lines each, all citation repoints from the two splits
+> rather than the §7 rewrite that made `ONEUP-0064` dangerous. Check it before trusting a
+> stamp.
+
+> ## Previously — **Task 18: `ONEUP-0064` re-gated (loops 4–6)**
 >
 > **`ONEUP-0064` came back to the gate and should not have needed to.** It was stamped
 > `Reviewed` when loops 1–3 converged by cap on 2026-08-05; `ONEUP-0090` then rewrote its §7

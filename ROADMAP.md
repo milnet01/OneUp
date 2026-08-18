@@ -1,3 +1,5 @@
+<!-- ants-roadmap-format: 1 -->
+
 # OneUp Roadmap
 
 Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
@@ -679,12 +681,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Found while validating the work above, and both halves bit for real in
   the same session:
 
-    * the package-lock probe defaults to /run/zypp.pid, so 40 scenarios
-      failed merely because the machine happened to be running zypper —
-      precisely when someone is working on an update tool;
-    * run.state defaults to the user's own and cleanup() deletes the file
-      it owns, so running the suite during a live update DELETED that
-      run's record and the window could no longer follow it (ONEUP-0045).
+  * the package-lock probe defaults to /run/zypp.pid, so 40 scenarios
+  failed merely because the machine happened to be running zypper —
+  precisely when someone is working on an update tool;
+  * run.state defaults to the user's own and cleanup() deletes the file
+  it owns, so running the suite during a live update DELETED that
+  run's record and the window could no longer follow it (ONEUP-0045).
 
   run_engine now redirects ONEUP_ZYPP_PID_FILE, ONEUP_RUN_STATE and
   ONEUP_STOP_FILE into the mock dir unless the scenario sets them itself.
@@ -815,28 +817,28 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   on its own, all measured on the reporter's box:
 
   1. Flatpak: `flatpak remote-ls --updates` abandons the WHOLE listing
-     (exit 1, empty stdout) when any one remote lacks a summary file —
-     and a local `--no-enumerate` origin, which `flatpak install
-     ./app.flatpak` leaves behind, never has one. Six such leftovers
-     hid the real Discord update. Now queried per remote, so one dead
-     source costs only itself; a no-enumerate origin failing is not
-     counted as a failed check, since it serves no listing by design.
+  (exit 1, empty stdout) when any one remote lacks a summary file —
+  and a local `--no-enumerate` origin, which `flatpak install
+  ./app.flatpak` leaves behind, never has one. Six such leftovers
+  hid the real Discord update. Now queried per remote, so one dead
+  source costs only itself; a no-enumerate origin failing is not
+  counted as a failed check, since it serves no listing by design.
 
   2. System: zypper exits 106 (ZYPPER_EXIT_INF_REPO_SKIPPED) and warns
-     on stderr when it sets a repository aside. Both were thrown away,
-     so a skipped repo silently contributed zero updates. Verified live:
-     microsoft-prod is being skipped on this machine right now for
-     "No permission to write repository cache", and nobody was told.
+  on stderr when it sets a repository aside. Both were thrown away,
+  so a skipped repo silently contributed zero updates. Verified live:
+  microsoft-prod is being skipped on this machine right now for
+  "No permission to write repository cache", and nobody was told.
 
   3. The cache step was wiping the metadata its own check depends on.
-     `zypper clean --all` cleans metadata AND packages; the rootless
-     --check reads that metadata and cannot rebuild it. So the first
-     check after any successful run answered "up to date" regardless
-     of truth — which is exactly what happened here: the 22:05 run
-     cleaned the cache, and the 10:18 tray check reported 0 into an
-     empty directory. Now cleans packages only, matching the step's
-     own label ("the downloaded-package cache"). The metadata was
-     93 MB of purely re-downloadable data.
+  `zypper clean --all` cleans metadata AND packages; the rootless
+  --check reads that metadata and cannot rebuild it. So the first
+  check after any successful run answered "up to date" regardless
+  of truth — which is exactly what happened here: the 22:05 run
+  cleaned the cache, and the 10:18 tray check reported 0 into an
+  empty directory. Now cleans packages only, matching the step's
+  own label ("the downloaded-package cache"). The metadata was
+  93 MB of purely re-downloadable data.
 
   New marker `CHECK_UNKNOWN|key|reason` carries "this answer is not
   trustworthy" to the GUI, which now shows "couldn't check" on the row,
@@ -959,6 +961,64 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Task 18 still owes: ONEUP-0101 then ONEUP-0072's close, ONEUP-0076,
   ONEUP-0032, and a cheap citation pass on ONEUP-0027.
+  Progress (2026-08-18): Task 18's ONEUP-0076 gate ran its first two loops —
+  the document's own, since the 0-split row transfers none of the parent's
+  assurance. 22 verified findings, 0 dismissed; 20 fixed, 2 surfaced as open
+  decisions. Cap reached (2 for a spec), so the run filed and shipped;
+  Status stays Draft.
+
+  Loop 1 (14) and loop 2 (8). Both loops had both lanes independently leading
+  with the same defect, which is the strongest signal either produced.
+
+  Loop 1's was a recurrence, not a new defect: §4.1's boxed rule preferred black
+  ("or toward white, when black cannot get there") while the procedure two
+  paragraphs below took "the smallest t in either direction". They agree on all
+  eleven surfaces the shipped palettes use — each has one viable direction — and
+  diverge on any mid-luminance one, where #5c5c5c derives #070707 under the rule
+  and #aeaeae under the procedure. ONEUP-0027 authors six more palettes. The
+  parent's own parent-3 row records fixing "the rule box stated two different
+  algorithms" on 2026-08-03; it survived the split. That is the argument for
+  gating a split document from loop 1 rather than inheriting the parent's loops.
+
+  Loop 2's was mine: loop 1's INV-4 fix asserted the focused switch render
+  "introduces no colour the unfocused one does not already contain", which is red
+  against the design this spec mandates (#2ecc71 -> #186c3c is a new colour) and
+  blind to a ring drawn in a colour already on screen. The 4a-min pattern exactly
+  — the fix added assertive text and that text was loop 2's strongest finding.
+
+  Five findings came from RUNNING what the document only describes, which the
+  lanes correctly raised as open questions rather than guessing (they have no
+  Bash). INV-1's dialog sweep is red on day one: 21 focusable widgets across the
+  three dialogs and the About box, six matching no §4.2 row. The overlay's
+  #LinkBtn:focus moves text alone at 1.65:1 / 1.87:1, below 3:1, so that control
+  had no workable cue at any colour. _HC_QSS carries no DetailScroll rule, so
+  "both overlay rules are widened" named one that exists and one to be created.
+  §4.3's light link ink was measured on card alone and fails on rowcard (4.19),
+  rowhov (3.89) and the banner tint (4.01) — both inks now derive against the
+  worst surface, #326dab and #446f9c. And five size_btn objects exist, one per
+  TaskRow, but only the system row's is parented, so the census of 34 is right
+  while §2.1's "whether or not they are showing" was not: the sweep cannot see an
+  unparented widget, which is a hole in INV-1's guarantee.
+
+  TWO OPEN DECISIONS FOR THE USER, both carrying their measurement in a ⚠ OPEN
+  block, both reaching ONEUP-0064 and ONEUP-0027, and neither takeable by the
+  gate. (1) How one object name carries three rest-pixel sets, when §4.4 matches
+  by object name and ONEUP-0064 §4.1 answered the same question by renaming Stop:
+  rename per surface, or descendant selectors. (2) Whether INV-1 covers the six
+  uncovered dialog widgets with rows, or excludes unstyled Qt-supplied chrome by
+  a stated rule with §10 recording it.
+
+  Task 18 still owes: ONEUP-0076's two decisions and its close, then ONEUP-0072
+  from loop 5, ONEUP-0032 (a real loop 1, not a citation pass), and the cheap
+  citation pass on ONEUP-0027. ONEUP-0064 still owes a decision rather than a
+  loop — the :hover colours for QToolButton#Disclose and #StopBtn.
+
+  Separately, spec_query mode:"gate_drift" now answers "has this gated document
+  been edited since its last review loop?" in one call. It reports ONEUP-0027,
+  ONEUP-0054 and ONEUP-0077 as stamped Reviewed while carrying post-review edits
+  of 4 to 11 lines, all citation repoints from the two splits rather than the §7
+  rewrite that made ONEUP-0064 dangerous. Worth a look before trusting those
+  stamps, but none looks like a re-gate.
 
 - 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether
@@ -1104,24 +1164,24 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Two further decisions from the user (2026-07-26):
   - FREE REIN on the redesign itself. No layout question needs to be
-    asked up front; propose and build, and we tweak afterwards. This
-    removes the "how far may the layout move" question the spec task
-    was going to ask.
+  asked up front; propose and build, and we tweak afterwards. This
+  removes the "how far may the layout move" question the spec task
+  was going to ask.
   - KEEP the phone-style on/off switches. The user has always preferred
-    them to checkboxes, specifically because on/off is easy to see at a
-    glance. They are a fixed point of the design, not a candidate for
-    replacement — and their state must stay readable without relying on
-    colour alone (ONEUP-0028), which the current high-contrast property
-    already handles.
+  them to checkboxes, specifically because on/off is easy to see at a
+  glance. They are a fixed point of the design, not a candidate for
+  replacement — and their state must stay readable without relying on
+  colour alone (ONEUP-0028), which the current high-contrast property
+  already handles.
 
   Interacts with three other 2.0 items and the sequencing matters:
   - ONEUP-0034 (GUI split) comes FIRST — redesigning a 3,719-line module
-    and splitting it at the same time makes both unreviewable.
+  and splitting it at the same time makes both unreviewable.
   - ONEUP-0027 (themes) comes AFTER — theming a layout that is about to
-    change means doing it twice.
+  change means doing it twice.
   - ONEUP-0032 (translation) comes after both, unchanged: the redesign
-    rewrites user-facing strings, and wrapping them for translation
-    before that means wrapping them twice.
+  rewrites user-facing strings, and wrapping them for translation
+  before that means wrapping them twice.
 
   Governed by docs/standards/ui-and-accessibility.md (ONEUP-0057 plan,
   Task 6) and specced at Task 17. ONEUP-0028's three groups (blind,
@@ -1140,10 +1200,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   this item. Reproduced those four figures exactly, then measured the candidate
   space, and the result rules out the obvious answer:
 
-    rest #4aa3ff -> #5cb0ff   1.14:1   (today: focus lightens, like hover)
-    rest #4aa3ff -> #ffffff   2.63:1   FAILS -- pure white is the limit
-    rest #4aa3ff -> #0d4d8c   3.24:1   passes
-    rest #4aa3ff -> #0a4278   3.86:1   passes
+  rest #4aa3ff -> #5cb0ff   1.14:1   (today: focus lightens, like hover)
+  rest #4aa3ff -> #ffffff   2.63:1   FAILS -- pure white is the limit
+  rest #4aa3ff -> #0d4d8c   3.24:1   passes
+  rest #4aa3ff -> #0a4278   3.86:1   passes
 
   So a focus cue on the blue buttons CANNOT be built by lightening: white
   itself is only 2.63:1 against the rest fill, so no lighter shade reaches 3:1
@@ -1179,9 +1239,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   The measurement on this bullet held and became the design. Because lightening
   cannot reach 3:1 on the accent at any shade, the app DERIVES a focus colour
-  instead of authoring one per theme: the smallest blend toward black or toward
-  white -- whichever reaches it at the lower blend fraction -- clearing 3:1
-  against every one of the control's rest pixels. That is total for a single surface -- max(contrast vs
+  instead of authoring one per theme: the smallest blend toward black, or toward
+  white where black cannot get there, clearing 3:1 against every one of the
+  control's rest pixels. That is total for a single surface -- max(contrast vs
   black, vs white) never drops below 4.58:1 -- so a palette nobody has written
   yet still gets a working cue, which is what ONEUP-0027's six new themes need.
   The same bound gives the label colour for free.
@@ -1275,13 +1335,13 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   would make somebody write a broken parser:
 
   - STEP_END is listed as `key|ok|skip|fail|detail`, implying five
-    fields. It is three: `key|status|detail`, where status is one OF
-    ok/skip/fail.
+  fields. It is three: `key|status|detail`, where status is one OF
+  ok/skip/fail.
   - REPO is listed as `warn|reason`. It is `warn|duplicate|urls`, and
-    the GUI reads that third field.
+  the GUI reads that third field.
   - DONE is listed as `ok|errors`. `stopped` is a third value — and the
-    one with a behaviour rule attached (the GUI must claim neither
-    success nor failure).
+  one with a behaviour rule attached (the GUI must claim neither
+  success nor failure).
 
   Not fixed at discovery: main is frozen (workflow standard 1), and none
   of the three is a defect in running code — the emitters and the parser
@@ -1548,8 +1608,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   bullet form deliberately, on the stated grounds that "a table cell cannot hold
   the detail a real invariant needs", and every spec follows it:
 
-    - **INV-1** Every theme supplies every key in the reference set, and no extra.
-      *Test:* ...
+  - **INV-1** Every theme supplies every key in the reference set, and no extra.
+  *Test:* ...
 
   spec_query's own description names a bullet form of "- **INV-N** - body" with
   an em-dash separator. That is NOT the cause: a scratch copy of ONEUP-0064 with
@@ -1588,8 +1648,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   the no-focus-BORDER constraint untouched, since darkening a fill draws no ring.
 
   Rather than author a focus colour per theme, the app DERIVES one: the smallest
-  blend toward black or toward white -- whichever reaches it at the lower blend
-  fraction -- clearing 3:1 against every one of the control's rest pixels. Total for a single surface,
+  blend toward black -- or toward white where black cannot get there -- clearing
+  3:1 against every one of the control's rest pixels. Total for a single surface,
   because max(contrast vs black, vs white) never drops below 4.58:1 for any sRGB
   colour. So a palette nobody has written yet still gets a working cue, which is
   what ONEUP-0027's six new themes need, and the same bound gives the label colour
@@ -1723,16 +1783,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   The two that mattered:
 
   - tests/docs-check.py ran its disposition pattern over every bold span in a
-    loop-log row joined together, so a number ending one span could pair with a
-    disposition word starting the next — a bolded timing figure beside a bolded
-    "Dismissed" read as 69 outcomes and failed a row that balanced. This is the
-    second failure mode recorded on 5df0703, which documented it for authors but
-    did not fix the check. Now matched per span.
+  loop-log row joined together, so a number ending one span could pair with a
+  disposition word starting the next — a bolded timing figure beside a bolded
+  "Dismissed" read as 69 outcomes and failed a row that balanced. This is the
+  second failure mode recorded on 5df0703, which documented it for authors but
+  did not fix the check. Now matched per span.
   - tests/run-tests.sh never mocked `df`, so the engine's pre-flight low-disk
-    check read the real machine in every system-step scenario. On a box under
-    the 2 GiB threshold that injected a real @@DISK@@|warn line into every one
-    of them — the same class as the /run/zypp.pid and run.state defaults that
-    §2 of the testing standard exists to prevent. It also unblocks ONEUP-0069.
+  check read the real machine in every system-step scenario. On a box under
+  the 2 GiB threshold that injected a real @@DISK@@|warn line into every one
+  of them — the same class as the /run/zypp.pid and run.state defaults that
+  §2 of the testing standard exists to prevent. It also unblocks ONEUP-0069.
 
   Also: bump-test.py asserted only the CHANGELOG and trusted bump.py's exit
   code for the other five sites, which proves its regexes matched but not that
@@ -1797,12 +1857,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Settings must still get pruning. 30 days is the obvious default and covers
   ~4 weekly timer runs plus manual ones.
   Two things to get right, both cheap and both easy to miss:
-    * prune where the directory is created, so it runs on EVERY path that
-      writes a log (window run, --check timer, --update timer), not only the
-      GUI one.
-    * never delete the log of a run that is still going, nor the one
-      _latest_run_log is about to read; age alone does not exclude either,
-      since a long run's log is old by its own start time.
+  * prune where the directory is created, so it runs on EVERY path that
+  writes a log (window run, --check timer, --update timer), not only the
+  GUI one.
+  * never delete the log of a run that is still going, nor the one
+  _latest_run_log is about to read; age alone does not exclude either,
+  since a long run's log is old by its own start time.
   Measured 2026-08-07 on the reporter's machine: 6,278 bytes of directory
   entries in ~/.local/state/oneup/logs, from a handful of days of manual runs
   -- so the growth is real before the weekly timer adds to it.
@@ -1885,8 +1945,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
 - ✅ [ONEUP-0086] **Hold a shutdown inhibitor for the length of a run.**
   Evidence, journal boot -1 on the user's machine:
-    systemd[1285]: Failed to kill control group /user.slice/.../OneUp-tray@autostart.service,
-                   ignoring: Operation not permitted
+  systemd[1285]: Failed to kill control group /user.slice/.../OneUp-tray@autostart.service,
+  ignoring: Operation not permitted
   zypper runs as root inside the user's app cgroup, so systemd --user cannot kill it.
   A logout or reboot requested mid-run therefore waits on a process it has no
   permission to stop, after plasmashell has already gone -- the user sees a black
@@ -1937,8 +1997,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   "Couldn't reach GitHub to check for a newer OneUp." Qt reports an HTTP 403 as
   ContentAccessDenied, so a perfectly successful round trip that GitHub answered is
   presented to the user as an outage. Measured on the user's machine 2026-08-07:
-    HTTP/2 403 ... x-ratelimit-limit: 60, x-ratelimit-remaining: 0
-    {"message":"API rate limit exceeded for <ip>"}
+  HTTP/2 403 ... x-ratelimit-limit: 60, x-ratelimit-remaining: 0
+  {"message":"API rate limit exceeded for <ip>"}
   Fix: read the HTTP status attribute; say the check is rate-limited and when it
   resets (the x-ratelimit-reset header) for 403/429, and keep the network wording
   only for genuine transport errors.
@@ -1995,23 +2055,23 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   underneath us. A library call returns data instead of prose.
   Four findings from the 2026-08-07 check, all verified with rpm/zypper on the
   build machine, that decide whether this is worth doing:
-    * LICENCE IS THE BLOCKER, not feasibility. zypper and libzypp are both
-      GPL-2.0-or-later; OneUp is MIT (LICENSE, packaging/rpm/oneup.spec). Linking
-      libzypp or vendoring zypper source makes the combined work GPL-2.0-or-later,
-      so this item is a decision to RELICENSE OneUp, not just a refactor. That is
-      the user's call and nothing else here matters until it is made.
-    * IT INVERTS THE DEPENDENCY GOAL. zypper is already present on every openSUSE
-      system -- it IS the package manager -- so shelling out costs no dependency at
-      all. libzypp is a 9.9 MB C++ library (17.38.14-1.2) whose C++ API carries no
-      stability promise, so this ADDS a hard build- and run-time dependency plus
-      API churn, rather than removing one.
-    * NO PYTHON BINDING EXISTS. python313/314-zypp-plugin is the wrong direction --
-      it lets zypp call INTO Python plugins, not Python drive zypp. 2.0's engine is
-      Python (docs/design/oneup-2.0.md), so this needs C++, or bindings we would
-      then own and maintain.
-    * IT WOULD NOT COVER THE OTHER STEPS. Flatpak and fwupd are separate projects
-      with their own libraries, so the shell-out and its output parsing stay for
-      two of the five steps regardless.
+  * LICENCE IS THE BLOCKER, not feasibility. zypper and libzypp are both
+  GPL-2.0-or-later; OneUp is MIT (LICENSE, packaging/rpm/oneup.spec). Linking
+  libzypp or vendoring zypper source makes the combined work GPL-2.0-or-later,
+  so this item is a decision to RELICENSE OneUp, not just a refactor. That is
+  the user's call and nothing else here matters until it is made.
+  * IT INVERTS THE DEPENDENCY GOAL. zypper is already present on every openSUSE
+  system -- it IS the package manager -- so shelling out costs no dependency at
+  all. libzypp is a 9.9 MB C++ library (17.38.14-1.2) whose C++ API carries no
+  stability promise, so this ADDS a hard build- and run-time dependency plus
+  API churn, rather than removing one.
+  * NO PYTHON BINDING EXISTS. python313/314-zypp-plugin is the wrong direction --
+  it lets zypp call INTO Python plugins, not Python drive zypp. 2.0's engine is
+  Python (docs/design/oneup-2.0.md), so this needs C++, or bindings we would
+  then own and maintain.
+  * IT WOULD NOT COVER THE OTHER STEPS. Flatpak and fwupd are separate projects
+  with their own libraries, so the shell-out and its output parsing stay for
+  two of the five steps regardless.
   Cheaper alternative to price first: zypper's machine-readable modes (--xmlout,
   and the ZYPP_ machine interfaces) remove the prose-parsing fragility -- the
   actual problem -- at none of the licence or dependency cost. Measure that before
@@ -2024,12 +2084,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   need to be smart about how we do it." So this item is NOT a rewrite to
   libzypp; it is the narrower question of making the coupling cheap to
   maintain. Two mechanisms already exist and are the shape to build on:
-    * the stale-parser canary in the system step -- a transaction that
-      installed packages while progress_filter recognised nothing emits a HINT
-      saying so, rather than silently showing an empty bar (ONEUP-0046). That
-      turns a silent break into a reported one.
-    * --xmlout, which removes the prose parsing for the transaction entirely,
-      at no licence or dependency cost.
+  * the stale-parser canary in the system step -- a transaction that
+  installed packages while progress_filter recognised nothing emits a HINT
+  saying so, rather than silently showing an empty bar (ONEUP-0046). That
+  turns a silent break into a reported one.
+  * --xmlout, which removes the prose parsing for the transaction entirely,
+  at no licence or dependency cost.
   Price --xmlout first; keep the canary regardless, since Flatpak and fwupd
   output stays prose whatever zypper does.
   Research (2026-08-07) confirms the cheaper alternative is real and shipped.
@@ -2040,11 +2100,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   /usr/share/zypper/xml/xmlout.rnc, so the contract can be pinned and diffed
   between zypper versions instead of being rediscovered when wording changes.
   Two limits to price before committing:
-    * "Not all (but most of) the output is currently in XML", so some prose
-      parsing survives regardless.
-    * XML output must be parsed in REAL TIME while zypper runs to keep the
-      progress display, which is the same streaming discipline the engine
-      already has -- not a new constraint, but not a free one either.
+  * "Not all (but most of) the output is currently in XML", so some prose
+  parsing survives regardless.
+  * XML output must be parsed in REAL TIME while zypper runs to keep the
+  progress display, which is the same streaming discipline the engine
+  already has -- not a new constraint, but not a free one either.
   Neither limit touches the licence or the dependency count, which is what
   made the libzypp route expensive. This stays the thing to try first.
   Sources: en.opensuse.org/openSUSE:Standards_Zypper_Xml ;
@@ -2055,11 +2115,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   /usr/bin/flatpak, /usr/bin/systemctl stop packagekit and
   /usr/bin/env LC_ALL=C zypper * -- but two privileged calls in the engine are
   neither:
-    * refresh_repos runs `sudo timeout "$REFRESH_TIMEOUT" zypper ... refresh
-      "$alias"`, so EVERY repo refresh prompts. Reported with a screenshot at
-      "Checking for updates from devel-tools (1 of 10)" -- the first refresh.
-    * the cache step runs `sudo_capture CACHE_DU du -sB1 /var/cache/zypp`, so
-      step 5 prompts again.
+  * refresh_repos runs `sudo timeout "$REFRESH_TIMEOUT" zypper ... refresh
+  "$alias"`, so EVERY repo refresh prompts. Reported with a screenshot at
+  "Checking for updates from devel-tools (1 of 10)" -- the first refresh.
+  * the cache step runs `sudo_capture CACHE_DU du -sB1 /var/cache/zypp`, so
+  step 5 prompts again.
   CARE REQUIRED, this is why it is filed rather than patched in place: a bare
   `/usr/bin/timeout` entry is a privilege-escalation hole, because timeout runs
   an ARBITRARY command -- `sudo timeout 1 /bin/sh` would then be root. The
@@ -2076,13 +2136,13 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: user-report-2026-08-07.
   Research (2026-08-07): the escalation question can be DELETED rather than
   solved -- libzypp already owns the facility `sudo timeout` was added for.
-    * `download.transfer_timeout` -- "maximum time in seconds that you allow a
-      transfer operation to take ... useful for preventing your batch jobs from
-      hanging for hours due to slow networks", valid [0,3600], default 180.
-    * `download.max_silent_tries` -- media-backend retries before the error
-      reaches the application, default 5.
-    * Settable per-invocation via `ZYPP_CONF=<path>` (an alternate config file),
-      so OneUp can ship its own without touching /etc/zypp/zypp.conf.
+  * `download.transfer_timeout` -- "maximum time in seconds that you allow a
+  transfer operation to take ... useful for preventing your batch jobs from
+  hanging for hours due to slow networks", valid [0,3600], default 180.
+  * `download.max_silent_tries` -- media-backend retries before the error
+  reaches the application, default 5.
+  * Settable per-invocation via `ZYPP_CONF=<path>` (an alternate config file),
+  so OneUp can ship its own without touching /etc/zypp/zypp.conf.
   Checked on this machine: neither option is set, so the engine is running the
   180 s default AND wrapping it in its own 120 s `sudo timeout` -- two timeouts
   for one job, and only the outer one costs a sudoers entry.
@@ -2165,8 +2225,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 - ✅ [ONEUP-0094] **Retry a truncated download with mirror striping disabled.**
   Observed twice THROUGH ONEUP on 2026-08-07 (four reproductions in total --
   ONEUP-0085 section 2.2), both times on kernel-default-7.1.6:
-    [Error: "end of response with 194225024 bytes missing", trying next mirror.]
-    [Error: "The requested URL returned error: 404"]
+  [Error: "end of response with 194225024 bytes missing", trying next mirror.]
+  [Error: "The requested URL returned error: 404"]
   while the SAME file returned HTTP 200 from downloadcontent.opensuse.org.
   This is a known openSUSE failure mode, not a local one: zypper stripes a
   download across several mirrors using HTTP range requests, so one mirror
@@ -2194,16 +2254,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   wrong. It is not mirror striping and not a timeout. openSUSE serves packages
   from two hosts, and MirrorCache routes some files to the slow one.
   Measured, same file, same minute, from this machine:
-    downloadcontentcdn.opensuse.org  1,013,554 B/s  -- full 30 MB in 30 s
-    downloadcontent.opensuse.org       228,452 B/s  --  6.8 MB in 30 s
+  downloadcontentcdn.opensuse.org  1,013,554 B/s  -- full 30 MB in 30 s
+  downloadcontent.opensuse.org       228,452 B/s  --  6.8 MB in 30 s
   The CDN is 4.4x faster and HAS the file (HTTP 200, content-length
   210194084, the correct size). Yet the metalink for kernel-default offers
   exactly ONE source and it is the slow origin:
-    curl -s .../kernel-default-7.1.6-1.1.x86_64.rpm.metalink
-      -> http://downloadcontent.opensuse.org/...   (1 url, no mirrors)
+  curl -s .../kernel-default-7.1.6-1.1.x86_64.rpm.metalink
+  -> http://downloadcontent.opensuse.org/...   (1 url, no mirrors)
   while packages that downloaded fine in the same run are routed to the CDN:
-    MozillaFirefox-153.0.3  -> downloadcontentcdn.opensuse.org
-    git-2.55.0-3.1          -> downloadcontentcdn.opensuse.org
+  MozillaFirefox-153.0.3  -> downloadcontentcdn.opensuse.org
+  git-2.55.0-3.1          -> downloadcontentcdn.opensuse.org
   So "trying next mirror" has no next mirror to try, and a 200 MB file over a
   long-haul link at ~228 KB/s takes ~15 minutes -- long enough that the
   connection is dropped, which is what "end of response with N bytes missing"
@@ -2223,22 +2283,22 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   New measurement that makes the fix bigger than a retry, taken the same day:
   the CDN host is not merely faster per file, it can serve the WHOLE
   repository.
-    http://downloadcontentcdn.opensuse.org/tumbleweed/repo/oss/
-        repodata/repomd.xml -> HTTP/1.1 200 OK
-        package fetch        -> 10,940 KB/s
-    http://download.opensuse.org/tumbleweed/repo/oss/
-        package fetch        ->    264 KB/s
+  http://downloadcontentcdn.opensuse.org/tumbleweed/repo/oss/
+  repodata/repomd.xml -> HTTP/1.1 200 OK
+  package fetch        -> 10,940 KB/s
+  http://download.opensuse.org/tumbleweed/repo/oss/
+  package fetch        ->    264 KB/s
   41x, on the same file, in the same minute, on a 500 Mbps line. 10.7 MB/s is
   the first figure all day consistent with the user's actual connection.
   So there are two candidate fixes and they are not the same size:
-    (a) narrow -- on a truncated download, re-fetch that ONE package from the
-        CDN host and place it in /var/cache/zypp/packages. Self-contained, no
-        repo changes, invisible to the user.
-    (b) broad -- point the repo baseurls at the CDN so MirrorCache routing is
-        bypassed entirely and the slow origin is never selected. Much larger
-        win, but it edits the user's repo configuration, which OneUp has so
-        far only ever done for a repo the RUN itself disabled, and it forfeits
-        mirror redundancy.
+  (a) narrow -- on a truncated download, re-fetch that ONE package from the
+  CDN host and place it in /var/cache/zypp/packages. Self-contained, no
+  repo changes, invisible to the user.
+  (b) broad -- point the repo baseurls at the CDN so MirrorCache routing is
+  bypassed entirely and the slow origin is never selected. Much larger
+  win, but it edits the user's repo configuration, which OneUp has so
+  far only ever done for a repo the RUN itself disabled, and it forfeits
+  mirror redundancy.
   Price (a) first: it is reversible, needs no consent, and fixes the observed
   failure. Treat (b) as a separate decision with its own bullet if (a) proves
   insufficient.
@@ -2247,17 +2307,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Two corrections this bullet owes, both established by that spec's section 2.3:
   * ZYPP_MULTICURL does NOT exist in libzypp 17.38.14 -- `strings /usr/lib64/libzypp.so.*
-    | grep -c '^ZYPP_MULTICURL$'` returns 0. The claim above that "the run that failed
-    twice through OneUp completed under ZYPP_MULTICURL=0" cannot be a causal one: the
-    variable is inert on this libzypp, and ONEUP-0085 section 2.2 independently records
-    the same setting failing identically. The measurement is real; the attribution is not.
-    The retry-with-striping-disabled proposal is therefore withdrawn.
+  | grep -c '^ZYPP_MULTICURL$'` returns 0. The claim above that "the run that failed
+  twice through OneUp completed under ZYPP_MULTICURL=0" cannot be a causal one: the
+  variable is inert on this libzypp, and ONEUP-0085 section 2.2 independently records
+  the same setting failing identically. The measurement is real; the attribution is not.
+  The retry-with-striping-disabled proposal is therefore withdrawn.
   * Kind is corrected from `enhancement` to `fix`. Under the freeze (workflow.md 1.2) that
-    distinction decides where the work may land, and the 1.1 test is met: the update
-    installs nothing at all, so people cannot use OneUp to install system updates.
+  distinction decides where the work may land, and the 1.1 test is met: the update
+  installs nothing at all, so people cannot use OneUp to install system updates.
   * "Observed twice on 2026-08-07" is right for runs through OneUp and undercounts the
-    four reproductions ONEUP-0085 section 2.2 records. ONEUP-0096 carries the same
-    phrasing.
+  four reproductions ONEUP-0085 section 2.2 records. ONEUP-0096 carries the same
+  phrasing.
 
   What ships instead: on a transfer-shaped download failure, the engine retries the
   download pass ONCE against downloadcontentcdn.opensuse.org, by copying the repository
@@ -2298,9 +2358,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   impossible during the COMMIT -- by design, because interrupting rpm is the
   one thing this project refuses to do (security.md 6.1). So after 0085 the
   honest control is phase-aware:
-    * download phase  -> Stop enabled, and it works within a poll interval.
-    * commit phase    -> Stop DISABLED, with a tooltip saying installation
-      cannot be interrupted safely and will finish shortly.
+  * download phase  -> Stop enabled, and it works within a poll interval.
+  * commit phase    -> Stop DISABLED, with a tooltip saying installation
+  cannot be interrupted safely and will finish shortly.
   The GUI already tracks this: `_progress_phase` carries download/install from
   the @@PROGRESS@@ marker, so no new marker is needed.
   This also settles a contradiction cold-eyes loop 1 found in the 0085 spec --
@@ -2320,21 +2380,21 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Found by reading PackageKit's zypp backend at the user's request. It is the
   ONE download-related thing that backend configures, in
   zypp_perform_execution():
-      ZYppCommitPolicy policy;
-      if (only_download) policy.downloadMode(DownloadOnly);
-      else               policy.downloadMode(DownloadInHeaps);
+  ZYppCommitPolicy policy;
+  if (only_download) policy.downloadMode(DownloadOnly);
+  else               policy.downloadMode(DownloadInHeaps);
   It sets no ZConfig options at all -- no max_concurrent_connections, no
   timeouts, no mirror or MediaSetAccess handling -- so the commit policy is
   the whole of the difference.
   OneUp passes no --download flag, and commit.downloadMode is UNSET on this
   machine (checked /usr/etc/zypp/zypp.conf), so libzypp picks the task
   default. zypp.conf(5):
-    DownloadInAdvance: "First download all packages to the local cache. Then
-      start to install. This is the safe and preferred default when installing
-      packages to the local system."
-    DownloadInHeaps:   "Similar to DownloadInAdvance, but try to split the
-      transaction into heaps, where at the end of each heap a consistent
-      system state is reached."
+  DownloadInAdvance: "First download all packages to the local cache. Then
+  start to install. This is the safe and preferred default when installing
+  packages to the local system."
+  DownloadInHeaps:   "Similar to DownloadInAdvance, but try to split the
+  transaction into heaps, where at the end of each heap a consistent
+  system state is reached."
   Consequence, observed twice through OneUp on 2026-08-07: 82 packages preloaded, ONE
   (kernel-default, routed to the slow non-CDN origin -- ONEUP-0094) could not
   be fetched, and the transaction installed NOTHING. Under heaps the earlier
@@ -2813,13 +2873,13 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   three separate times:
 
   - loop 1 added a row, which invalidated "§4.4's second row" and
-    "§4.4's third row" elsewhere in the document, plus a "three-row
-    render table" phrase in the loop log;
+  "§4.4's third row" elsewhere in the document, plus a "three-row
+  render table" phrase in the loop log;
   - loop 2 added a row at the TOP, which shifted every ordinal again and
-    turned "the sentence row 1 exists to prevent" — correct when written
-    in loop 1 — into a pointer at the wrong row;
+  turned "the sentence row 1 exists to prevent" — correct when written
+  in loop 1 — into a pointer at the wrong row;
   - the fix each time was mechanical, but it consumed findings in a
-    cold-review loop at lane prices.
+  cold-review loop at lane prices.
 
   The remedy already applied inside that document is the rule worth
   promoting: **name the row by its content** ("the standalone row",
