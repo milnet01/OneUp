@@ -275,7 +275,7 @@ ships in none of them:
   place that list is written out, so nothing else needs editing with it.
 
 **Any new document** — `docs/standards/documentation.md` says which directory, and
-whether it needs a `/cold-eyes` pass before it counts as written.
+whether it needs a `review-contract` pass before it counts as written.
 
 **Any new interactive widget** — an accessible name, or `tests/gui-smoke.py` fails the
 build. See the UI standard.

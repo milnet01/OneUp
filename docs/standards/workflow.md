@@ -122,7 +122,7 @@ Rules:
 
 **No pull-request gate.** The repository has no `CODEOWNERS`, no branch protection, and
 no merge commits; commits land directly on their branch. Reviews happen through
-`/cold-eyes` on the documents and `local-CI.sh` on the code, not through GitHub review.
+`review-contract` on the documents and `local-CI.sh` on the code, not through GitHub review.
 
 ## 3. Commits
 
@@ -135,7 +135,12 @@ ONEUP-0056: never report "up to date" for a source the check couldn't read
 Exceptions, both real and both narrow:
 
 - **A release commit is `OneUp X.Y.Z`** — the version is the identifier. `release.sh`
-  writes it.
+  writes it (`release.sh`, the `git commit` on the bump). **This deliberately differs from
+  `~/.claude/standards/commits.md` §1.2**, which gives a release commit as
+  `X.Y.Z: theme — short summary`. OneUp owns its commit rules — this section is read
+  instead of that file (`docs/standards/documentation.md` §1.2) — and the form here is what
+  five releases used and what the script writes. Recorded so that neither reader is
+  surprised, rather than left as silent drift.
 - **A commit that closes several items names them all**, slash-separated:
   `ONEUP-0048/0049/0050: make a slow mirror legible; centre dialogs on Wayland`.
 
