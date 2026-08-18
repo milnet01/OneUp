@@ -3078,3 +3078,85 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The "Restart services" button could have logged you out and closed the window mid-restart. It now restarts only what is safe and tells you when a reboot is the clean way.
   Kind: fix.
   Source: user-question-2026-08-18.
+
+- 📋 [ONEUP-0112] **In-app auto-update: download, verify, apply and relaunch.**
+  Requested by the user 2026-08-18, for v2. The app checks for a new version,
+  downloads it, closes itself, applies the update and re-opens.
+
+  HALF OF IT ALREADY EXISTS. `Updater._check_app_update` and
+  `_on_app_update_reply` already read `api.github.com/repos/<REPO_SLUG>/releases/
+  latest`, compare with `_version_tuple`, and raise `appupdate_banner` when a newer
+  tag exists — at startup and from the About dialog's "Check for updates" button.
+  This item does NOT rebuild the check. It adds download, verify, apply, relaunch,
+  and it replaces the banner's dead end with an offer.
+
+  REFERENCE IMPLEMENTATION: /mnt/Games/Scripts/Linux/finbreak, which shipped this
+  and paid for the failure modes. Read `tests/features/auto_update/spec.md` first —
+  it is the whole contract in one page — then `docs/specs/FIBR-0054.md`. The code
+  is `src/finbreak/services/update.py`, `update_fetch.py`, `update_installer.py`,
+  `update_key.py`, and `ui/update_dialog.py` + `ui/_update_worker.py`.
+
+  THE ONEUP-SPECIFIC CONSTRAINT, and it is the first design decision: only the
+  AppImage may self-update. The RPM and the OBS package are managed by zypper, and
+  OneUp IS the tool that runs zypper — self-updating a zypper-managed install
+  behind zypper's back would corrupt the package database and is exactly the class
+  of thing this app exists to do properly. Off an AppImage the feature must be
+  inert, not merely hidden: finbreak's INV-7 shape ($APPIMAGE unset ->
+  detect_installer() is None, the Settings control disabled and tooltipped). An RPM
+  user's upgrade path is `zypper up`, which OneUp already performs.
+
+  TWO TRAPS ALREADY PAID FOR, and BOTH transfer, because
+  `packaging/appimage/build-appimage.sh` freezes with `pyinstaller --onefile`
+  exactly as finbreak does:
+
+  1. The relaunch cannot be `os.execv`. An in-place exec cannot replace the running
+     image's busy FUSE mount, and the onefile bootloader mistakes the result for a
+     worker subprocess of the old run, reusing an extraction dir that has just been
+     deleted. finbreak shipped this as the 0.1.2 -> 0.1.3 "closed but didn't
+     reopen" bug. The working shape is a DETACHED relaunch
+     (`subprocess.Popen(..., start_new_session=True)`) carrying
+     `PYINSTALLER_RESET_ENVIRONMENT=1` — PyInstaller 6.10+'s official restart
+     signal — with the stale `APPDIR` / `APPIMAGE` / `ARGV0` dropped, then
+     `os._exit(0)`.
+  2. The relaunch waiter must not inherit the frozen app's loader path. A `/bin/sh`
+     waiter inheriting `LD_LIBRARY_PATH` pointing into the private `_MEI`
+     extraction dir makes the SYSTEM shell load bundled libraries — finbreak hit an
+     `_MEI` libreadline.so.8 incompatible with `/bin/sh` — and it dies on a symbol
+     lookup BEFORE it can relaunch anything. That was their 0.1.6 -> 0.1.7 repeat
+     of the same user-visible symptom from a different cause. PyInstaller preserves
+     the pre-launch value in `<VAR>_ORIG`; restore each loader var from that, or
+     drop it where there was none. The waiter also has to block until the OLD pid
+     has fully exited, so the FUSE mount is unmounted and `_MEI` cleaned, before it
+     execs the swapped image.
+
+  SIGNING IS NOT OPTIONAL HERE, and OneUp's case is stronger than finbreak's. This
+  app authenticates as root and runs zypper; an unverified self-update is a
+  privilege-escalation vector wearing a convenience feature. Ed25519 over the
+  downloaded asset, verified BEFORE anything is installed, with the asset's `.sig`
+  published beside it. Install the bytes that were verified rather than re-reading
+  the download afterwards — finbreak closed that gap separately as FIBR-0170, which
+  is a TOCTOU fix, not a tidy-up. `docs/standards/security.md` §8.2 already records
+  that this project's AppImage build installs `pyinstaller` and `PySide6` unpinned,
+  so the build is not yet reproducible; that is ONEUP-0060 and it is a prerequisite
+  for trusting anything this item ships.
+
+  Also worth taking from finbreak, each already an invariant there: opt-in and off
+  by default; Later / Skip this version / Update now, where Skip persists and Later
+  does not; staging the temp on the same filesystem as the target so the swap is an
+  atomic `os.replace`, and leaving the original byte-for-byte intact if anything
+  raises before it; a resource cap on the download; a non-blocking dialog; and
+  confining all network code to one module with a test that greps for network
+  imports anywhere else.
+
+  Needs a spec before implementation (`spec-format.md` §1 — a contract other code
+  binds to, several subsystems, a real design choice, and expensive to get wrong).
+  Lands in or after 2.0; `docs/design/oneup-2.0.md` §5.2 owns the ordering, and
+  this item is not currently in it.
+
+  Test: the conformance shape finbreak uses — an injected fake fetcher, synthetic
+  bytes, a throwaway signing key monkeypatched in, and no network anywhere in the
+  suite (`docs/standards/testing.md` §2). The relaunch itself is AppImage-runtime
+  only and the tests should say so rather than pretending to cover it.
+  **Layman:** OneUp will be able to update itself: it spots a new version, downloads it, closes, applies the update and reopens — instead of telling you a new version exists and leaving you to fetch it.
+  Kind: feature.
+  Source: user-request-2026-08-18.
