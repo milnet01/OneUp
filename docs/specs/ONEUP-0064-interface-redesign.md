@@ -182,8 +182,11 @@ color: $text;` — with `border: 2px solid $errbd` in place of `$border`, plus t
 to invent the one appearance mode this paragraph says exists for low-vision users.
 
 It becomes its own object name, `#StopBtn`, because
-`docs/specs/ONEUP-0076-ringless-focus-cue.md` matches a styled control by object name and a
+`docs/specs/ONEUP-0076-ringless-focus-cue.md` matches a styled control by object name — a
+qualified selector where one name rests on several surfaces, but a name either way — and a
 restyled control still called `#GhostBtn` would be invisible to that spec's check. That
+spec's §4.2 records why a qualifier is not the answer here: `#StopBtn`'s whole appearance
+differs from `#GhostBtn`'s, not only the surface under it. That
 spec's §4.2 and §4.3 carry `#StopBtn`'s focus rows, and the *focus* colour it derives
 differs between the dark and light palettes because `card` does.
 
@@ -592,7 +595,8 @@ and build a fresh one only where a pinned font or a simulated run requires it.
   names 0064 settles."** That is the canonical wording and this section adopts it rather
   than restating it. The dependency shows up as one named hook each way: §4.1 gives *Stop*
   the object name `#StopBtn` and keeps its fill transparent *because* 0076 matches by
-  object name and derives that control's cue from `card`; and 0076's INV-1 sweeps each
+  object name — qualified by surface where one name rests on several, 0076 §4.2 — and
+  derives that control's cue from `card`; and 0076's INV-1 sweeps each
   dialog *because* §4.1 moves two controls into `SettingsDialog`. **This item lands first**, as
   §5.2's ordering implies — 0076's rows are written against names that do not exist until
   this one ships — and the two ship inside the same 2.0 slot.

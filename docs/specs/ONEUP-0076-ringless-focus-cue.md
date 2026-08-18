@@ -255,15 +255,17 @@ Mechanism A is §4.1: **the fill and its ink change.** It suits anything whose w
 chrome, and it satisfies SC 2.4.13's area half without arithmetic — the requirement is an
 area at least that of a 2 px perimeter of the component, and a whole fill exceeds it.
 
-Mechanism B is for the two kinds of widget that hold their own scrolling text — one
-`#Log` and five `#DetailScroll` panels, where recolouring
-every pixel would recolour the content: **an existing rest border changes colour.** No
+Mechanism B is for the widgets that hold their own scrolling content — one `#Log`, five
+`#DetailScroll` panels, and one each of `#RepoScroll` and `#RollbackList` in the dialogs,
+where recolouring every pixel would recolour the content: **an existing rest border changes
+colour.** No
 border is added *on focus*, so fixed point 1 holds and §5.3 of the standard already permits
 it. The area half is what makes this work only at width: a 1 px border is *less* than a 2 px
 perimeter and would not qualify, so both panels carry a **2 px** border at rest. Both are
-rest-state changes this item makes and neither is a focus cue in itself — `#Log` carries
-`border: 1px solid $logbd` today and is widened, and `#DetailScroll` carries `border: none`
-and gains one. Present focused or not; only the colour moves.
+rest-state changes this item makes and none is a focus cue in itself — `#Log` carries
+`border: 1px solid $logbd` today and is widened, while `#DetailScroll`, `#RepoScroll` and
+`#RollbackList` carry no border and gain one. Present focused or not; only the colour
+moves.
 
 **The surface column is the whole contract, because the rule is "every surface the control
 can rest on".** A control that appears in more than one place has a row per surface, not one
@@ -288,23 +290,48 @@ the base `card` would be wrong, and why §4.1's floor keeps that pair instead.
 | `ToggleSwitch` | A, in `paintEvent` | its own track — `GREEN` / `RED` today, which `ONEUP-0027` §4.3 renames `switchon` / `switchoff` |
 | `QPlainTextEdit#Log` | B | `logbd`, widened to 2 px |
 | `QScrollArea#DetailScroll` | B | `logbd`, at 2 px — the panel gains a rest border |
-| `QPlainTextEdit#Log` and `QScrollArea#DetailScroll`, high-contrast overlay on | B | `$border`, at 2 px. `logbd` is a base key the overlay does not carry, so the overlay row is the one that applies when it is on |
+| `QScrollArea#RepoScroll` (`RepoManagerDialog`) and `QListWidget#RollbackList` (`RollbackDialog`) | B | `logbd`, at 2 px — both gain a rest border. Both are unnamed in `updater.py` today; this item names them, §8 |
+| `QPlainTextEdit#Log`, `QScrollArea#DetailScroll`, `QScrollArea#RepoScroll` and `QListWidget#RollbackList`, high-contrast overlay on | B | `$border`, at 2 px. `logbd` is a base key the overlay does not carry, so the overlay row is the one that applies when it is on |
 | The primary button family, high-contrast overlay on | A | `$btn`. The overlay's `#GhostBtn` rule already clears 3:1 and is kept unchanged — §4.1's floor, §4.3's note |
 | `#StopBtn`, `QToolButton#Disclose` and `#LinkBtn`, high-contrast overlay on | A | `$card`. Every control the overlay does not give a `$btn` fill rests on `$card`, so all three take the `$card` → `$btnhov` pair §4.1's floor already keeps for `#GhostBtn`. `ONEUP-0064` §4.1 creates the overlay rules for the first two and delegates their focus colour here |
 
-**⚠ OPEN — how one object name carries three derivations.** `#LinkBtn` has three rows above
-with three different rest-pixel sets, and `#GhostBtn` now has three as well. But §4.4 matches
-a styled widget to a row **by object name**, and `_QSS` keys its rules the same way — so
-nothing here says how one name resolves to three fills.
-`docs/specs/ONEUP-0064-interface-redesign.md` §4.1 hit this and answered it by *renaming*
-(*Stop* became `#StopBtn`) "because `docs/specs/ONEUP-0076-ringless-focus-cue.md` matches a
-styled control by object name". Two ways out, and the choice is not this document's to make
-alone: **rename per surface**, which changes object names `ONEUP-0064` has just fixed and
-`ONEUP-0027` keys palette entries to; or **descendant selectors**
-(`#WarnBanner QPushButton#LinkBtn:focus`), which renames nothing but means INV-1's matcher
-has to resolve a row by surface as well as by name. Until it is settled an implementer
-would write one `#LinkBtn:focus` derived from `card` and render it over `rowcard`, `rowhov`
-and the banner tint — the 2.83:1 shape §4.2 warns about two paragraphs down.
+**One object name, three surfaces — the selector is qualified by an ancestor, not by a
+rename.** `#LinkBtn` has three rows above with three different rest-pixel sets, and
+`#GhostBtn` has three as well, while `_QSS` keys its rules by object name. The rule that
+resolves them, settled by the user on 2026-08-18: **a control's unqualified row is its
+default, and every other surface takes a row whose selector names the container it rests
+in** — `#WarnBanner QPushButton#LinkBtn:focus`, `#RowDetails QPushButton#LinkBtn:focus`.
+Nothing is renamed, so the object names `docs/specs/ONEUP-0064-interface-redesign.md` §4.1
+settles, and that `docs/specs/ONEUP-0027-themes.md` keys palette entries to, are
+untouched.
+
+Three things it obliges.
+
+- **The default row is the one with no qualifier**, and it is the surface most instances
+  rest on. For `#LinkBtn` that is `card` — `log_toggle`, `openlog_btn`, `rollback_btn`. For
+  `#GhostBtn` it is `card` as well, which covers the header, the action row *and*
+  `SettingsDialog`, since the dialog inherits the application sheet; only the banner
+  instance (`retry_btn`) needs a qualifier.
+- **The qualifier must name the nearest container unique to that surface**, because Qt
+  resolves competing rules by CSS specificity and an ancestor that also contains the default
+  case would capture it too. `#Card` contains all three `#LinkBtn` surfaces and is therefore
+  useless here; `#WarnBanner` (built by `Updater._make_banner`) and `#RowDetails` (built in
+  `TaskRow.__init__`) each contain exactly one.
+- **§4.4's matcher resolves a row by object name *and* by surface.** Given a focusable
+  widget it walks up the parent chain for the first ancestor named by a qualified row for
+  that object name, and falls back to the unqualified row when it reaches the top. That
+  walk is the whole cost of this choice over renaming, and INV-1 states it.
+
+**Rejected: rename per surface** — `#BannerLinkBtn`, `#RowLinkBtn` — which keeps the
+matcher a flat name lookup, and is what `docs/specs/ONEUP-0064-interface-redesign.md` §4.1
+did for *Stop*. It moves object names 0064 has just settled and `ONEUP-0027` keys palette
+entries to, so three documents change together for a problem one selector solves. **The
+*Stop* rename stands**: that control's whole appearance differs from `#GhostBtn`'s, not only
+the surface under it, so it needs rules of its own rather than a qualified focus row.
+
+Getting this wrong is not cosmetic: one unqualified `#LinkBtn:focus` derived from `card` and
+rendered over `rowcard`, `rowhov` and the banner tint is the **2.83:1** shape the disclosure
+paragraph below measures.
 
 **The painted switch needs a seam, and there is exactly one that already works.** A
 stylesheet cannot colour what `paintEvent` draws, but it can set a Qt property on the class:
@@ -334,8 +361,8 @@ Computed, not chosen. Every figure is the output of the check in §4.4.
 | Disclosure, light | `#f4f6f9`/`#eaeef3` | `#868789` | 3.09:1 | `#000000` 5.84:1 |
 | Switch track on | `#2ecc71` | `#186c3c` | 3.08:1 | — |
 | Switch track off | `#e74c3c` | `#66211a` | 3.06:1 | — |
-| Log / details border, dark | `#262d38` | `#72767e` | 3.04:1 | — |
-| Log / details border, light | `#d5dbe2` | `#777b7f` | 3.06:1 | — |
+| Log / details / dialog-panel border, dark | `#262d38` | `#72767e` | 3.04:1 | — |
+| Log / details / dialog-panel border, light | `#d5dbe2` | `#777b7f` | 3.06:1 | — |
 | Stop button, light — ghost text and border on `card` | `#d6412a` at rest, 4.52:1 | `#949494` | 3.03:1 | `#000000` 6.92:1 |
 | Stop button, dark — ghost text and border on `card` | `#e0553f` at rest, 4.79:1 | `#606367` | 3.01:1 | `#ffffff` 6.04:1 |
 | Link button rest text, light (§2.3's failing pair — see below) | `#4aa3ff`, 2.63:1 on `card` | — | — | moves to `#326dab`: 5.37:1 on `card`, 4.96:1 on `rowcard`, **4.61:1** on `rowhov`, 4.75:1 on the banner tint |
@@ -344,7 +371,7 @@ Computed, not chosen. Every figure is the output of the check in §4.4.
 | High contrast, dark — `#GhostBtn` | `$card` `#000000` | **unchanged**, `$btnhov` `#ffd400` | **14.67:1** | unchanged |
 | High contrast, light — `#GhostBtn` | `$card` `#ffffff` | **unchanged**, `$btnhov` `#0000cc` | **11.22:1** | unchanged |
 | High contrast — `#StopBtn`, `#Disclose`, `#LinkBtn` | `$card` | `$btnhov` — the kept pair, not a derivation | **14.67:1** dark / **11.22:1** light | `$btntext`, 14.67:1 / 11.22:1 |
-| High contrast — `#Log` / `#DetailScroll` border | `$border`, widened to 2 px in the overlay too | `#949494` / `#5c5c5c` | 3.03:1 / 3.14:1 | — |
+| High contrast — every mechanism-B border (`#Log`, `#DetailScroll`, `#RepoScroll`, `#RollbackList`) | `$border`, widened to 2 px in the overlay too | `#949494` / `#5c5c5c` | 3.03:1 / 3.14:1 | — |
 | Link button hover text, light | `#6fb6ff` on `#ffffff`, **2.14:1** | — | — | moves to `#446f9c`: 5.25:1 on `card`, 4.85:1 on `rowcard`, **4.51:1** on `rowhov`, 4.64:1 on the banner tint |
 | Ghost button `:hover` / `:checked` ink, light | `#4aa3ff` on `#ffffff`, **2.63:1** | — | — | moves to `#326dab`, the same ink as the link — `retry_btn` puts a ghost button on the banner tint too, so it takes the same worst surface |
 | Ghost button `:hover` / `:checked` ink, dark | `#4aa3ff` on `#12161c`, **6.89:1** | — | — | unchanged — it already clears 4.5:1 |
@@ -437,26 +464,43 @@ cannot cause:
    `QMessageBox` built and `exec()`d inside `Updater.show_about`, so the check builds the
    equivalent box rather than calling that method, which would block —
    every widget with `focusPolicy() != Qt.NoFocus` is collected, and each must be covered by
-   a row of §4.2's table — by object name for a styled one, by class for a painted one. A widget
-   matching nothing fails the check. This is what stops a control being added later with no
+   a row of §4.2's table — by object name for a styled one, by class for a painted one, and
+   **by surface as well where a name carries qualified rows**: the matcher walks up the
+   parent chain for the first ancestor a qualified row names, and falls back to the
+   unqualified row for that name when it reaches the top. A widget matching nothing fails
+   the check, unless it meets the Qt-chrome exclusion stated below. This is what stops a control being added later with no
    cue, which is exactly how the sixteen in §2.1 accumulated.
 
-**⚠ OPEN — the dialog half of that sweep is red on day one, and by how much is measured.**
-Built offscreen at `c8fb3f2` and swept the way half 2 describes, the three dialogs and the
-About box hold **21 focusable widgets**, of which **six match no row of §4.2**:
-`RepoManagerDialog` has a `QScrollArea` with no object name (its other four are `#GhostBtn`,
-`#RunBtn` and two `ToggleSwitch`); `RollbackDialog` has an unnamed `QListWidget` (its other
-two are covered); and the About box contributes two unnamed `QPushButton`s and Qt's own
-`QLabel#qt_msgbox_label` and `QLabel#qt_msgbox_informativelabel`. `SettingsDialog`'s nine
-are all `#GhostBtn` and are covered.
-None of the six is a control OneUp styles or paints — they are Qt-supplied chrome — and
-`docs/specs/ONEUP-0064-interface-redesign.md` §10 excludes `RepoManagerDialog` and
-`RollbackDialog` from its own sweeps, so no other item covers them either. §6 says
-over-covering is the safe direction and costs "a row in §4.2 and nothing else", but a row
-means deriving a focus fill for chrome the application does not own. The decision is
-whether INV-1 **covers** those six with rows, or **excludes** unstyled Qt-supplied chrome by
-a stated rule and §10 records it. It is not settled here because it changes what the check
-asserts on day one.
+**What that sweep covers, and the one thing it excludes.** Built offscreen at `c8fb3f2`
+and swept the way half 2 describes, the three dialogs and the About box hold **21 focusable
+widgets**, of which six matched no row of §4.2: `RepoManagerDialog`'s unnamed `QScrollArea`
+(its other four are `#GhostBtn`, `#RunBtn` and two `ToggleSwitch`); `RollbackDialog`'s
+unnamed `QListWidget` (its other two are covered); and the About box's two unnamed
+`QPushButton`s plus Qt's own `QLabel#qt_msgbox_label` and
+`QLabel#qt_msgbox_informativelabel`. `SettingsDialog`'s nine are all `#GhostBtn` and were
+covered already. The split, settled by the user on 2026-08-18, follows who built the widget:
+
+- **The two OneUp builds are covered.** The scroll area and the list are this application's
+  own widgets that merely lack object names. This item gives them the names `#RepoScroll`
+  and `#RollbackList` (§8) and the mechanism-B row §4.2 now carries. Excluding them would
+  have left two OneUp-owned focusable widgets outside the very check that exists to stop a
+  control arriving with no cue — §2.1's failure, reintroduced by exemption.
+- **Qt-supplied chrome is excluded by a stated rule**, and it is the only exclusion INV-1
+  has: *a focusable widget with no object name, constructed by a Qt convenience class rather
+  than by OneUp, and carrying no rule in either stylesheet, is out of the checked set.* That
+  is the About box's four — a `QMessageBox` builds its own buttons and labels, and covering
+  them would mean OneUp deriving focus fills for, and styling by name, internals it does not
+  construct and Qt is free to rename. §10 records the exclusion. Nothing in 2.0 replaces
+  that box — `docs/specs/ONEUP-0034-gui-modules.md` §4.2 keeps the hand-built `QMessageBox`
+  call sites outside its split, *"as they are today"* — so the exclusion is not a deferral
+  waiting on another item. Should one ever be hand-built, it falls under the rule's first
+  clause and comes back into the set with no change here.
+
+The exclusion is deliberately narrow. It turns on **construction**, not on appearance: an
+unnamed widget OneUp builds is a missing name and fails the check, which is the outcome the
+two dialog widgets above just had. §6 says over-covering is the safe direction; this keeps
+that direction everywhere OneUp owns the widget and gives up only where the name it would
+have to match is Qt's private one.
 
 **It is deliberately a superset of what `ONEUP-0027` needs.** That spec's §4.7 defers the
 focus measurement here and says its own job is to supply palettes that pass it; the
@@ -467,9 +511,14 @@ per-theme loop above is what it passes them to.
 - **INV-1** Every widget with `focusPolicy() != Qt.NoFocus` — in the main window **and in
   every dialog reachable from the window** — is covered by a row of §4.2's mechanism table.
   *Test:* `tests/gui-smoke.py` builds the window offscreen, opens each dialog in turn,
-  collects those widgets, and fails naming any whose object name and class match no row. A row qualified by the
+  collects those widgets, and fails naming any whose object name, class and containing
+  surface match no row. A row qualified by the
   overlay (the high-contrast entry) is matched as a variant of its object name, not as a
-  name of its own.
+  name of its own; a row qualified by a container (`#WarnBanner QPushButton#LinkBtn`) is
+  matched by the parent walk §4.4 states, with the unqualified row as the fallback.
+  **The one exclusion is §4.4's:** a focusable widget with no object name, constructed by a
+  Qt convenience class rather than by OneUp, and carrying no rule in either stylesheet. It
+  covers the four widgets inside the About `QMessageBox` and nothing else.
   Breaks the moment a control is added without a focus treatment — the state §2.1 measured
   at sixteen widgets. The dialog half is not padding: `docs/specs/ONEUP-0064-interface-redesign.md` §4.1 moves *Repositories* and
   *Recenter* into `SettingsDialog`, so a window-only sweep would stop covering two controls
@@ -664,6 +713,13 @@ does.
   *Partially sighted*, **not** in its §2, which is *Announcements*: that document leaves its
   `##` sections unnumbered and numbers only the `###` subsections under *Design*, so a bare
   "§2" resolves to the wrong place.
+- **Two dialog widgets are given object names, in the same commit as the rules that key
+  off them.** `RepoManagerDialog`'s `QScrollArea` becomes `#RepoScroll` and
+  `RollbackDialog`'s `QListWidget` becomes `#RollbackList` — `setObjectName` calls beside
+  the `setAccessibleName` each already carries. Both are new names in both stylesheets, so
+  `docs/specs/ONEUP-0064-interface-redesign.md` INV-7's object-name parity check between
+  `_QSS` and `_HC_QSS` covers them from the moment they exist.
+
 - **`CLAUDE.md` §6** repeats *"focus reuses the hover look"* in its trap list and is
   corrected in the same commit. The trap that stays is the one that cost the bug: no focus
   ring, because Qt draws it square and a focus border resizes the widget.
@@ -731,6 +787,18 @@ does.
   including light `lastrun` and light `amber` under its §4.8, and the `disfg`/`disbg`
   exemption. This item measures only the colours it introduces or moves.
 - **Wrapping any string for translation.** `ONEUP-0032`, last (`oneup-2.0.md` §5.2).
+- **The focus treatment of Qt-supplied chrome.** INV-1's one exclusion, stated in §4.4: a
+  focusable widget with no object name, constructed by a Qt convenience class rather than by
+  OneUp, and carrying no rule in either stylesheet. Today that is exactly the four widgets
+  inside the About `QMessageBox` — its two buttons and Qt's `qt_msgbox_label` and
+  `qt_msgbox_informativelabel`. Covering them would mean deriving focus fills for, and
+  styling by private name, internals this application does not construct and Qt is free to
+  rename. `docs/specs/ONEUP-0034-gui-modules.md` §4.2 keeps the hand-built `QMessageBox`
+  call sites outside the module split *"as they are today"*, so no 2.0 item takes this back;
+  a box hand-built later is OneUp's own and re-enters the checked set with no change to this
+  rule. **Out of the checked set, not out of the change** — the application sheet is set on
+  the application, so it still reaches anything Qt exposes.
+
 - **A new theme, or any change to what the app *does*.** This item changes how focus is
   drawn and nothing else.
 

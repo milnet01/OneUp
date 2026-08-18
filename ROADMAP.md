@@ -1019,6 +1019,39 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   of 4 to 11 lines, all citation repoints from the two splits rather than the §7
   rewrite that made ONEUP-0064 dangerous. Worth a look before trusting those
   stamps, but none looks like a re-gate.
+  Progress (2026-08-18): Task 18's ONEUP-0076 owed two decisions rather than a
+  loop, and the user settled both. They are folded in; the document carries no
+  ⚠ OPEN block outside its loop-log rows.
+
+  (1) One object name on three surfaces resolves by an ANCESTOR-QUALIFIED
+  selector, not by a rename. #WarnBanner QPushButton#LinkBtn:focus and
+  #RowDetails QPushButton#LinkBtn:focus; the unqualified row stays the default
+  (card). Nothing is renamed, so ONEUP-0064's object names and ONEUP-0027's
+  palette keys are untouched. The cost is that §4.4's matcher now resolves a row
+  by name AND surface — a parent walk to the first ancestor a qualified row
+  names, falling back to the unqualified row. The qualifier must be the nearest
+  container unique to the surface: #Card holds all three #LinkBtn surfaces and is
+  useless, #WarnBanner and #RowDetails hold exactly one each. The Stop rename
+  stands — that control's whole appearance differs, not only its surface.
+
+  (2) The six uncovered dialog widgets SPLIT by who built them. The two OneUp
+  builds are covered: RepoManagerDialog's QScrollArea becomes #RepoScroll and
+  RollbackDialog's QListWidget becomes #RollbackList, both mechanism B from
+  logbd, and §8 names them. The About QMessageBox's four are excluded by a stated
+  rule — no object name, built by a Qt convenience class, no rule in either sheet
+  — recorded in §10. Covering those would mean styling Qt's private internals by
+  name; excluding the other two would have reintroduced §2.1's failure by
+  exemption. Nothing in 2.0 rebuilds that box (ONEUP-0034 §4.2 keeps hand-built
+  QMessageBox call sites outside its split), so the exclusion is not a deferral.
+
+  Collateral: ONEUP-0064's two "0076 matches by object name" statements now say
+  "qualified by surface where one name rests on several"; the false claim that
+  ONEUP-0032 §4 rebuilds the About box was caught and replaced with ONEUP-0034
+  §4.2, which says the opposite.
+
+  Task 18 still owes: ONEUP-0076's close, then ONEUP-0072 from loop 5,
+  ONEUP-0032 (a real loop 1, not a citation pass), and the cheap citation pass on
+  ONEUP-0027. ONEUP-0064 still owes a decision rather than a loop.
 
 - 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether

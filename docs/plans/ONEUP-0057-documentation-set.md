@@ -16,33 +16,36 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: `ONEUP-0076` gated (loops 1–2, capped); it owes two decisions, then `ONEUP-0072` from loop 5**
+> ## ▶ You are here — **Task 18: `ONEUP-0076` closed; next is `ONEUP-0072` from loop 5**
 >
-> **`ONEUP-0076` has had its first gate on its own bytes — 22 verified across two loops, 20
-> fixed, 2 surfaced, capped rather than converged, `Status: Draft`.** The 0-split row was
-> right that none of the parent's assurance transfers: loop 1's strongest finding was a
-> *recurrence* of one the parent's parent-3 row records fixing on 2026-08-03 — the rule box
-> stating two different derivation algorithms — which survived the split untouched. **Gate a
-> split document from loop 1; do not count the parent's loops.**
+> **`ONEUP-0076`'s two open decisions were settled by the user on 2026-08-18 and folded in.**
+> The document carries no `⚠ OPEN` block outside its loop-log rows. It stays `Status: Draft`
+> — its gate reached its cap at loop 2 without an empty loop, and settling a decision is not
+> a review.
 >
-> **Five findings came from RUNNING the document rather than reading it**, and every one was
-> raised by a lane as an open question it could not settle, because `review-lane` holds no
-> `Bash`. That division worked well and is worth repeating: the lanes find the contradiction,
-> the orchestrator settles the measurement. INV-1's dialog sweep is red on day one (six of
-> 21 dialog widgets match no row); the overlay's `#LinkBtn:focus` cannot reach 3:1 at any
-> colour; `_HC_QSS` has no `DetailScroll` rule to widen; the light link ink failed on three
-> of its four surfaces; and five `size_btn` objects exist but only one is parented, so the
-> census is right and §2.1's claim about it was not.
+> **One object name on three surfaces resolves by an ancestor-qualified selector, not by a
+> rename.** `#WarnBanner QPushButton#LinkBtn:focus`, `#RowDetails QPushButton#LinkBtn:focus`,
+> with the unqualified row (`card`) as the default. Nothing is renamed, so `ONEUP-0064`'s
+> object names and `ONEUP-0027`'s palette keys are untouched; the cost is that §4.4's matcher
+> resolves a row by name **and** surface, walking the parent chain to the first ancestor a
+> qualified row names. **The qualifier must be the nearest container unique to that surface**
+> — `#Card` holds all three `#LinkBtn` surfaces and is useless as one. The *Stop* rename
+> stands: that control's whole appearance differs, not only the surface under it.
 >
-> **Loop 2's strongest finding was loop 1's own fix**, for the third gate running in this
-> batch — INV-4's rewritten assertion was red against the very design it tests. The lesson
-> from `ONEUP-0077` and `ONEUP-0072` holds unchanged: **a fix that adds assertive text is
-> where the next loop's findings come from.**
+> **The six uncovered dialog widgets split by who built them.** The two OneUp builds are
+> covered — `RepoManagerDialog`'s `QScrollArea` becomes `#RepoScroll`, `RollbackDialog`'s
+> `QListWidget` becomes `#RollbackList`, both mechanism B from `logbd`. The About
+> `QMessageBox`'s four are excluded by a stated rule: no object name, built by a Qt
+> convenience class, no rule in either sheet. Covering them would mean styling Qt's private
+> internals by name; excluding the other two would have reintroduced §2.1's failure by
+> exemption. **The exclusion is not a deferral** — `docs/specs/ONEUP-0034-gui-modules.md`
+> §4.2 keeps hand-built `QMessageBox` call sites outside its split, so no 2.0 item takes it
+> back.
 >
-> **`ONEUP-0076` now owes two decisions, not a loop**, both carrying their measurement in a
-> `⚠ OPEN` block and both reaching `ONEUP-0064` and `ONEUP-0027`: how one object name carries
-> three rest-pixel sets when §4.4 matches by object name, and whether INV-1 covers the six
-> uncovered dialog widgets or excludes unstyled Qt chrome by a stated rule.
+> **The fold-in found its own defect, and it was a citation.** The draft sent a reader to
+> `ONEUP-0032` §4 for the About box's rebuild; that spec does not mention the About box at
+> all, and `ONEUP-0034` §4.2 says the opposite — those call sites stay hand-built. Checked
+> rather than recalled, which is the only reason it was caught.
 >
 > **Next: `ONEUP-0072` from loop 5**, then `ONEUP-0032` (a real loop 1 — see below), then the
 > cheap citation pass on `ONEUP-0027`. `ONEUP-0064` still owes a decision rather than a loop.
@@ -53,6 +56,29 @@ absorbed and removed).
 > carrying post-review edits — 4 to 11 lines each, all citation repoints from the two splits
 > rather than the §7 rewrite that made `ONEUP-0064` dangerous. Check it before trusting a
 > stamp.
+
+> ## Previously — **Task 18: `ONEUP-0076` gated (loops 1–2, capped)**
+>
+> **`ONEUP-0076` had its first gate on its own bytes — 22 verified across two loops, 20
+> fixed, 2 surfaced, capped rather than converged.** The 0-split row was
+> right that none of the parent's assurance transfers: loop 1's strongest finding was a
+> *recurrence* of one the parent's parent-3 row records fixing on 2026-08-03 — the rule box
+> stating two different derivation algorithms — which survived the split untouched. **Gate a
+> split document from loop 1; do not count the parent's loops.**
+>
+> **Five findings came from RUNNING the document rather than reading it**, and every one was
+> raised by a lane as an open question it could not settle, because `review-lane` holds no
+> `Bash`. That division worked well and is worth repeating: the lanes find the contradiction,
+> the orchestrator settles the measurement. INV-1's dialog sweep was red on day one (six of
+> 21 dialog widgets matched no row); the overlay's `#LinkBtn:focus` cannot reach 3:1 at any
+> colour; `_HC_QSS` has no `DetailScroll` rule to widen; the light link ink failed on three
+> of its four surfaces; and five `size_btn` objects exist but only one is parented, so the
+> census is right and §2.1's claim about it was not.
+>
+> **Loop 2's strongest finding was loop 1's own fix**, for the third gate running in this
+> batch — INV-4's rewritten assertion was red against the very design it tests. The lesson
+> from `ONEUP-0077` and `ONEUP-0072` holds unchanged: **a fix that adds assertive text is
+> where the next loop's findings come from.**
 
 > ## Previously — **Task 18: `ONEUP-0064` re-gated (loops 4–6)**
 >
