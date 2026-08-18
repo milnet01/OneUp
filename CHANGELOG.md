@@ -6,6 +6,16 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Restart services now actually restarts them** (ONEUP-0110)
+  The button did nothing at all when clicked. The window validates each service
+  name before handing it to a root systemctl, and that check required a
+  ".service" suffix — but `zypper ps -sss` reports bare unit names, so every
+  name was rejected and the handler gave up silently. The check now accepts a
+  bare name and still refuses anything that could be read as a command-line
+  option.
+
 ## [1.4.3] - 2026-08-12
 
 ### Fixed

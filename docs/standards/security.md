@@ -215,10 +215,12 @@ _ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
 # Updater.rollback — the rollback target is interpolated into a root shell.
 if not target.isdigit(): return          # isdigit() also rejects empty
 
-# Updater.restart_services — service units, argv form. Leading '-' rejected separately so a
-# spliced token cannot become a systemctl option.
+# Updater.restart_services — service units, argv form. The first character class excludes
+# '-' so a spliced token cannot be read as a systemctl option; the startswith test repeats
+# that structurally. No ".service" suffix is required, because `zypper ps -sss` prints bare
+# unit names (ONEUP-0110).
 svcs = [s for s in self._services.split()
-        if not s.startswith("-") and re.fullmatch(r"[A-Za-z0-9:@._\\-]+\.[a-z]+", s)]
+        if not s.startswith("-") and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9:@._-]*", s)]
 ```
 
 **4.2 — Fail closed.** `_build_apply_command` returns `None` — cancelling the *entire*
@@ -234,12 +236,14 @@ such in a comment at the site.
 **4.4 — Validation is not sanitisation.** Reject; do not clean up and continue. There is no
 "escape it and pass it on" path in this codebase and there should not be one.
 
-**4.5 — One observation, recorded rather than filed.** The unit-name pattern in 4.1 is
-`[A-Za-z0-9:@._\\-]`, which inside a character class permits a literal **backslash** —
-almost certainly a typo for `\-`. It is **not exploitable**: that site is argv-form, so a
-backslash reaches `systemctl` as an ordinary character and the unit simply does not exist.
-Worth tidying when the file is next touched for another reason; not worth a change to
-frozen `main`.
+**4.5 — Resolved 2026-08-18 (ONEUP-0110).** The unit-name pattern in 4.1 permitted a
+literal **backslash** — a typo for `\-`, never exploitable, since that site is argv-form and
+a backslash simply names a unit that does not exist. It was recorded here rather than filed,
+to be tidied when the file was next touched for another reason. That happened: the same
+pattern was rejecting every name the engine actually sends, and the fix removed the
+backslash in the same edit. The pattern now leads with `[A-Za-z0-9]`, which is the shape
+`_ALIAS_RE` already used and which excludes a leading `-` structurally rather than by the
+separate test alone.
 
 ---
 
@@ -464,7 +468,8 @@ incidents and the rule are `docs/standards/testing.md` §2, which is canonical.
 | §2 one authentication per run | `tests/run-tests.sh` — *"a full run asks for the password exactly once"*, against a mock that models sudo's per-parent-pid credential cache |
 | §2 no `sudo` inside a subshell | the same scenario, because a subshell **is** a second prompt. The rule and its symptom are the same thing, which is what makes this the strongest gate in the set |
 | §3 every prompt says who is asking | nothing automatic |
-| §4 validate at the boundary, by shape | `tests/run-tests.sh` — an unsafe repo alias is refused and never reaches a privileged command |
+| §4 validate at the boundary, by shape — the engine's alias guard | `tests/run-tests.sh` — an unsafe repo alias is refused and never reaches a privileged command |
+| §4 validate at the boundary, by shape — the window's service-unit guard | `tests/gui-smoke.py` — the units the engine really sends reach `systemctl`, and an option-shaped token does not. **Added 2026-08-18 (ONEUP-0110); until then this half had no gate**, and the guard rejected every real name for months while the alias row above stayed green. A validator is only as good as the population it was tested against: the one scenario that fed this field used `foo.service`, a shape `zypper ps -sss` never prints |
 | §5 the passwordless drop-in | `tests/run-tests.sh` — grant, revoke and status, and the generated file is put through a real `visudo -cf` |
 | §5.2 the rule covers every shape a run issues | `tests/run-tests.sh` — the grant scenario asserts each entry by name, **and** a structural check pins the engine's privileged call-site count, so a *new* `sudo …` line fails the suite until it is granted. Nothing behavioural can catch that: an ungranted call is correct code that merely prompts, and only a passwordless user ever finds out |
 | §5.2 no general-purpose binary with an unpinned command slot | `tests/run-tests.sh` — the generated rule is asserted not to match `timeout *`, ` bash` or ` sh -c`, and the timeout entry is asserted to pin its budget to digits. The real-sudo evidence is the ONEUP-0092 measurement, which no test may reproduce (`testing.md` §2.3 forbids real `sudo`) |

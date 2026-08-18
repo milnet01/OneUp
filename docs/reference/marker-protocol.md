@@ -250,6 +250,29 @@ themselves:
 
 **`--no-gpg-checks` is never a remedy** and no marker will ever offer it.
 
+### 4.11 `SERVICES|svc1 svc2 …` — the units are **bare**, with no `.service` suffix
+
+The field is a space-separated list of systemd unit names, and every name arrives
+**without a type suffix**: `sshd dbus NetworkManager user@1000`, never `sshd.service`.
+
+That is not the engine's choice. It runs `zypper ps -sss`, and libzypp derives the name by
+matching the process's cgroup path against
+`(0::|[0-9]+:name=systemd:)/system.slice/(.*/)?(.*)\.service(/.*)?$` — capturing the text
+*before* `.service`. The suffix is gone before zypper prints anything. A name may contain
+`@`, `-`, `_`, `:` and `.` (`user@1000`, `getty@tty1`, `systemd-logind`), so a dot in the
+middle is possible while a trailing `.service` is not.
+
+**The trap, and it cost a real bug (ONEUP-0110).** The window validates every token before
+it reaches a root `systemctl` (`docs/standards/security.md` §4.1). That guard required a
+`name.suffix` shape — which no real token has — so it rejected the entire list, the handler
+returned early, and *Restart services* did nothing at all: no dialog, no error, no log line.
+The banner still appeared, because it is drawn from the raw field. **A guard on this field
+must match a bare name.** `systemctl` resolves one to the `.service` unit itself, which is
+why the engine's own printed advice works.
+
+**Do not add the suffix in the engine to make a consumer's guard pass.** The field is what
+`zypper ps -sss` prints; a consumer that wants a suffix appends one.
+
 ## 5. Changing the contract
 
 **A marker's name and field layout are a contract between four files.** Changing one means

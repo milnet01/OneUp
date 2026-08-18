@@ -3589,9 +3589,16 @@ for (var i = 0; i < wins.length; i++) {{
         # so keep only well-formed unit names: a spliced token (e.g. a leading-dash
         # option) must not reach the root `systemctl` as an argument. Mirrors the
         # snapshot-id guard in rollback().
+        #
+        # The name is matched WITHOUT requiring a ".service" suffix, because
+        # `zypper ps -sss` does not print one: libzypp captures the unit name from the
+        # cgroup path with (.*)\.service, so what reaches us is bare — "sshd", "dbus",
+        # "user@1000". Requiring the suffix here emptied this list on every real run and
+        # the button silently did nothing (ONEUP-0110). `systemctl` resolves a bare name
+        # to the .service unit itself, which is why the engine's own advice works.
         svcs = [s for s in self._services.split()
                 if not s.startswith("-")
-                and re.fullmatch(r"[A-Za-z0-9:@._\\-]+\.[a-z]+", s)]
+                and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9:@._-]*", s)]
         if not svcs:
             return
         if QMessageBox.question(

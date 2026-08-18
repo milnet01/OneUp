@@ -609,7 +609,9 @@ grep -n 'SUDO_ASKPASS\|SUDO_PROMPT\|sudo -v\|keepalive' update_system.sh | head 
       recorded in place rather than filed (§4.5): the service-unit pattern permits a
       literal backslash, almost certainly a typo for `\-`, **not exploitable** because
       that site is argv-form — tidy it when the file is next touched, not on frozen
-      `main`. No roadmap bullet was warranted from this task.
+      `main`. No roadmap bullet was warranted from this task. **Tidied 2026-08-18 under
+      ONEUP-0110**, which found the same pattern was rejecting every unit name the engine
+      sends; §4.5 now records it resolved.
 
 - [x] **Step 4: Commit.**
 

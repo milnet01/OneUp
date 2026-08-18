@@ -2908,3 +2908,57 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A rule that stops one kind of stale cross-reference already exists; the same mistake keeps happening in a place the rule does not cover.
   Kind: doc.
   Source: in-session-2026-08-12, measured across ONEUP-0108's three review loops.
+
+- 🚧 [ONEUP-0110] **Restart services does nothing — the guard rejects every name zypper emits.**
+  Reported by the user 2026-08-18. The reboot path works; the lighter
+  "restart these services instead" path does not. Clicking the button produces
+  no dialog, no error and no log line.
+
+  updater.py's restart_services() filters the service list before handing it to
+  a root systemctl, keeping only tokens matching
+
+      re.fullmatch(r"[A-Za-z0-9:@._\\-]+\.[a-z]+", s)
+
+  which requires a dot plus a lowercase suffix, i.e. "sshd.service". The list is
+  filled from `zypper ps -sss` (update_system.sh:1880), which prints BARE unit
+  names with no suffix. libzypp's own extractor settles it — the regex compiled
+  into /usr/lib64/libzypp.so captures the name BEFORE ".service":
+
+      (0::|[0-9]+:name=systemd:)/system.slice/(.*/)?(.*).service(/.*)?$
+
+  So every real token — sshd, dbus, NetworkManager, user@1000 — fails the guard,
+  svcs comes out empty, and `if not svcs: return` exits silently. Verified by
+  running the guard against both inputs: all seven realistic names rejected,
+  only the suite's synthetic "foo.service" accepted.
+
+  The guard is not junk — it landed in 4a8faff ("gui: harden marker parsing,
+  validate root commands, fix process lifecycle") to stop a spliced token (a
+  leading-dash option) reaching root systemctl. It was written against an assumed
+  name shape rather than the observed one, so the hardening silently disabled the
+  feature it was protecting. The fix must keep the injection guard and accept a
+  bare unit name; dropping the mandatory suffix does that, because a leading "-"
+  is rejected by the separate startswith check and "/" is outside the character
+  class.
+
+  Why nothing caught it: tests/gui-smoke.py:525 feeds
+  "@@SERVICES@@|foo.service bar.service" — a shape the engine never emits — and
+  asserts only that the banner appears. No test invokes restart_services or
+  services_btn at all. The banner check passes because the visibility branch
+  (updater.py:3514) reads the RAW marker string while the handler reads the
+  filtered one, so the two can disagree silently. Same family as the CLAUDE.md §6
+  trap about shape checks on a field whose real payload never had that shape.
+
+  docs/reference/marker-protocol.md:104 defines @@SERVICES@@|svc1 svc2 … but does
+  not say what a token looks like, so the guard contradicted no written contract.
+  The protocol gains that grammar with this fix.
+
+  Test: a GUI scenario feeding bare names the way the engine really does, then
+  invoking the handler and asserting a restart is attempted — the assertion that
+  fails today. Kept separate from the banner-visibility check, which passes now
+  and would keep passing.
+
+  Lands on main (1.4.x): the user ruled 2026-08-18 that a fix belongs in v1 and
+  only a feature request waits for 2.0.
+  **Layman:** After an update, the "Restart services" button did nothing at all when clicked. It now restarts them.
+  Kind: fix.
+  Source: user-report-2026-08-18.

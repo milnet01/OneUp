@@ -530,6 +530,47 @@ def main() -> int:
     check("services banner shown for a package-only change", w.services_banner.isVisibleTo(w))
     check("no reboot banner for a package-only change", not w.reboot_banner.isVisibleTo(w))
 
+    # --- 4a. The services button actually restarts them (ONEUP-0110) -----------
+    # Regression, reported 2026-08-18: clicking "Restart services" did nothing at all.
+    # restart_services() guards what reaches a root systemctl, and the guard demanded a
+    # "name.suffix" shape — but `zypper ps -sss` prints BARE unit names, because libzypp
+    # captures the name BEFORE ".service" when it reads the cgroup. So every real token
+    # was filtered out, svcs came back empty, and the handler returned before doing
+    # anything: no dialog, no error, no log line. The banner still appeared, because its
+    # branch reads the raw marker string while the handler reads the filtered one.
+    #
+    # Scenario 4 above feeds "foo.service bar.service" — a shape the engine never emits —
+    # so it passed throughout. This one feeds what the engine really sends. Do not delete:
+    # it is the only assertion that the button does anything, and the last two checks are
+    # what stop the fix widening the guard into an argument-injection hole.
+    w = updater.Updater()
+    for line in ("@@STEP_END@@|system|ok|packages updated",
+                 "@@INSTALLED@@|2|yes|no",
+                 "@@SERVICES@@|sshd dbus NetworkManager user@1000 -f",
+                 "@@REBOOT@@|no"):
+        w.handle_line(line)
+    launched = []
+    _orig_question = updater.QMessageBox.question
+    _orig_detached = updater.QProcess.startDetached
+    updater.QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
+    updater.QProcess.startDetached = staticmethod(
+        lambda prog, args=None, *a, **k: (launched.append((prog, list(args or []))), True)[1])
+    try:
+        w.restart_services()
+    finally:
+        updater.QMessageBox.question = _orig_question
+        updater.QProcess.startDetached = _orig_detached
+    check("restart services launches something for bare unit names", bool(launched))
+    check("restart services passes every bare unit name to systemctl",
+          bool(launched)
+          and launched[0][1][:2] == ["systemctl", "restart"]
+          and ["sshd", "dbus", "NetworkManager", "user@1000"] == [
+              a for a in launched[0][1][2:]])
+    check("restart services still drops an option-shaped token",
+          all("-f" not in call[1] for call in launched))
+    check("restart services hides the banner once it has launched",
+          bool(launched) and not w.services_banner.isVisibleTo(w))
+
     # --- 4b. A reason-bearing REBOOT marker names the culprit in the banner ----
     w = updater.Updater()
     for line in ("@@STEP_END@@|system|ok|7 packages updated",
