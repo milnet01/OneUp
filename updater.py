@@ -91,7 +91,7 @@ from PySide6.QtWidgets import (
 
 APP_ID = "za.co.antsprojectshub.OneUp"
 APP_NAME = "OneUp"
-APP_VERSION = "1.4.3"
+APP_VERSION = "1.4.4"
 REPO_SLUG = "milnet01/OneUp"
 
 # Where our bundled files (update_system.sh, the icon) live. Normally next to
