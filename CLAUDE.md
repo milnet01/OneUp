@@ -185,3 +185,16 @@ measurement and the exact shape of the rule are in the document named beside eac
   makes every branch that allocates an ID conflict. On a fresh clone it is absent and
   appending a bullet refuses rather than restarting at 1 —
   `docs/standards/workflow.md` §4.
+
+- **`ROADMAP.md` is generated output — do not hand-edit it.** Migrated to the Ants roadmap
+  store on 2026-08-18, which is now the source of truth. Every `roadmap_log` write renders
+  all of it from the store over the file, so a hand edit survives only until the next write
+  and then vanishes with no error and no diff to explain it. Use `roadmap_log`
+  (`append` / `flip` / `annotate`); read with `roadmap_query`, which answers `source:"store"`.
+  Two consequences that are not visible in the file. **`roadmap_log op:"amend_headline"` no
+  longer works here** — it refuses with `unsupported_format`, because the headline is a store
+  column and its locate key; to change one, edit the store. And **the store is machine-global**
+  (`~/.local/share/ants-terminal/roadmap.sqlite`), not in this repo, so a fresh clone has the
+  markdown and not the history behind it. The migration was verified lossless: normalising
+  whitespace makes the rendered file character-for-character identical to its pre-migration
+  content. Recorded on `ONEUP-0057`.
