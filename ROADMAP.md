@@ -2909,7 +2909,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: doc.
   Source: in-session-2026-08-12, measured across ONEUP-0108's three review loops.
 
-- 🚧 [ONEUP-0110] **Restart services does nothing — the guard rejects every name zypper emits.**
+- ✅ [ONEUP-0110] **Restart services does nothing — the guard rejects every name zypper emits.**
   Reported by the user 2026-08-18. The reboot path works; the lighter
   "restart these services instead" path does not. Clicking the button produces
   no dialog, no error and no log line.
@@ -2959,6 +2959,31 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Lands on main (1.4.x): the user ruled 2026-08-18 that a fix belongs in v1 and
   only a feature request waits for 2.0.
+  Resolved (2026-08-18) in ae3bc04. The guard is now
+  [A-Za-z0-9][A-Za-z0-9:@._-]* — the shape _ALIAS_RE already uses in the same
+  file, whose leading character class excludes '-' structurally rather than by
+  the startswith test alone. That also removed the stray backslash security.md
+  §4.5 had recorded as "worth tidying when the file is next touched for another
+  reason"; §4.5 now records it resolved.
+
+  The injection guard is preserved, and this was measured rather than argued.
+  Diffing the old and new matcher over 33 tokens — 13 real unit names and 17
+  hostile inputs — moved 13 verdicts, every one to ACCEPT and every one a real
+  unit name; nothing moved to REJECT. Still refused: -f, --now, ../../etc/passwd,
+  /usr/bin/rm, foo;rm -rf /, foo$(id), foo`id`, foo&bar, foo|bar, foo>out,
+  "quoted", 'a b', the empty string, '.' and '..'.
+
+  Test written first and proved red before the fix existed: three failing
+  assertions with the defect live, all four green after. tests/gui-smoke.py
+  317/0, engine 280/0, local-CI.sh green.
+
+  Two documentation gaps closed in the same commit, and they are why this
+  survived. marker-protocol.md never stated @@SERVICES@@'s token grammar, so the
+  guard contradicted no written contract when it was written — it now has §4.11,
+  carrying libzypp's own extraction regex as the evidence. And security.md's
+  "What checks this" credited §4 solely to the engine's alias guard: the window's
+  service-unit half had NO gate at all, so the alias row stayed green for months
+  while this guard rejected every real name.
   **Layman:** After an update, the "Restart services" button did nothing at all when clicked. It now restarts them.
   Kind: fix.
   Source: user-report-2026-08-18.
