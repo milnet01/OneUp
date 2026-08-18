@@ -1093,12 +1093,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   FILED, NOT FIXED — two, both in documents with their own gates ahead of them,
   both resting on the same refuted model:
   - ONEUP-0027-themes.md line ~37: "ui-and-accessibility.md §6.1 is why dialogs
-    need no work of their own: the sheet lives on the application, so every
-    QDialog and QMessageBox inherits it." Measured false in dark mode.
+  need no work of their own: the sheet lives on the application, so every
+  QDialog and QMessageBox inherits it." Measured false in dark mode.
   - docs/standards/ui-and-accessibility.md §6.1 "Theme comes free — do not fight
-    it". True that the sheet reaches every child; misleading that a dialog is
-    therefore themed, since no base-sheet rule paints its background. Pick up
-    with 0027's citation pass.
+  it". True that the sheet reaches every child; misleading that a dialog is
+  therefore themed, since no base-sheet rule paints its background. Pick up
+  with 0027's citation pass.
 
   Task 18 still owes: ONEUP-0076's dialog-surface decision, then ONEUP-0072 from
   loop 5, ONEUP-0032 (a real loop 1), and the ONEUP-0027 citation pass — which
@@ -1130,12 +1130,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Derived per §4.1 and executed, not asserted:
   - dialog Close/Cancel, light: win #eef1f5 -> #88898c at t=0.43, 3.09:1,
-    black ink 6.00:1
+  black ink 6.00:1
   - dialog Close/Cancel, dark:  win #0f1216 -> #616365 at t=0.34, 3.11:1,
-    white ink 6.03:1
+  white ink 6.03:1
   - the eight SettingsDialog rows reproduce the disclosure's published values
-    exactly (#868789 light, #6a6d73 dark), which is independent confirmation
-    that the derivation in §4.1 is reproducible.
+  exactly (#868789 light, #6a6d73 dark), which is independent confirmation
+  that the derivation in §4.1 is reproducible.
 
   §8 gains two bullets: the _QSS rule, and ONEUP-0027 §4.7 gaining win as a
   measured 3:1 surface — its current list has the danger family's banner borders
@@ -1148,6 +1148,32 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   unspent — the run stopped on --max-loops 1, not on the document's cap of 2, and
   this fold-in added assertive text, which 4a-min says is where the next loop's
   findings come from.
+  Infrastructure (2026-08-18): ROADMAP.md is migrated to the Ants roadmap store,
+  which is now the source of truth for this project's roadmap. Recorded here
+  rather than as a bullet of its own because it changes no file in this repo.
+
+  roadmap_migrate reported: 112 elements written, 0 inserted, 106 unchanged,
+  6 updated, 0 orphaned, 0 ids allocated, 1 section, 11 history rows.
+  export_slug "oneup", project_id 6, store at
+  ~/.local/share/ants-terminal/roadmap.sqlite (machine-global, not per-project).
+  Verified against a pre-migration count of the markdown: 40 planned + 2
+  in-progress + 66 shipped + 4 considered = 112. roadmap_query now answers with
+  source:"store" and its section index reconciles to the same 112.
+
+  Two consequences a later session needs.
+
+  1. roadmap_log op:"amend_headline" NO LONGER WORKS here. It refuses with
+     unsupported_format: the headline is a store column and its locate key, so a
+     markdown-only patch would be reverted by the next render. Verified by dry
+     run. Status flips and body annotations are unaffected. To change a headline,
+     edit the store.
+  2. Every roadmap_log write now RENDERS all 112 items from the store over
+     ROADMAP.md. So a hand edit to that file is not durable — it survives only
+     until the next write. Treat ROADMAP.md as generated output.
+
+  The migration itself did NOT rewrite ROADMAP.md: the file was byte-identical
+  afterwards (sha256 11a66b2f…1bd42 before and after), because roadmap_migrate
+  imports the markdown into the store and does not re-render on the way back.
 
 - 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether
@@ -3046,14 +3072,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   updater.py's restart_services() filters the service list before handing it to
   a root systemctl, keeping only tokens matching
 
-      re.fullmatch(r"[A-Za-z0-9:@._\\-]+\.[a-z]+", s)
+  re.fullmatch(r"[A-Za-z0-9:@._\\-]+\.[a-z]+", s)
 
   which requires a dot plus a lowercase suffix, i.e. "sshd.service". The list is
   filled from `zypper ps -sss` (update_system.sh:1880), which prints BARE unit
   names with no suffix. libzypp's own extractor settles it — the regex compiled
   into /usr/lib64/libzypp.so captures the name BEFORE ".service":
 
-      (0::|[0-9]+:name=systemd:)/system.slice/(.*/)?(.*).service(/.*)?$
+  (0::|[0-9]+:name=systemd:)/system.slice/(.*/)?(.*).service(/.*)?$
 
   So every real token — sshd, dbus, NetworkManager, user@1000 — fails the guard,
   svcs comes out empty, and `if not svcs: return` exits silently. Verified by
@@ -3141,10 +3167,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   DECIDED with the user 2026-08-18, two questions, both answered:
   1. Restart the safe ones and advise a reboot for the rest. Session-critical units are
-     never restarted by this button, on any path — not behind a confirmation, not behind
-     a warning. The app already owns a reboot affordance and that is the honest advice.
+  never restarted by this button, on any path — not behind a confirmation, not behind
+  a warning. The app already owns a reboot affordance and that is the honest advice.
   2. The engine's terminal advice gets the same distinction, so someone running
-     update_system.sh standalone is not handed the same trap.
+  update_system.sh standalone is not handed the same trap.
 
   Session-critical, and the definition is what matters rather than the list: any unit
   whose restart would end the user's graphical session, kill OneUp itself, or break the
@@ -3239,24 +3265,24 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   exactly as finbreak does:
 
   1. The relaunch cannot be `os.execv`. An in-place exec cannot replace the running
-     image's busy FUSE mount, and the onefile bootloader mistakes the result for a
-     worker subprocess of the old run, reusing an extraction dir that has just been
-     deleted. finbreak shipped this as the 0.1.2 -> 0.1.3 "closed but didn't
-     reopen" bug. The working shape is a DETACHED relaunch
-     (`subprocess.Popen(..., start_new_session=True)`) carrying
-     `PYINSTALLER_RESET_ENVIRONMENT=1` — PyInstaller 6.10+'s official restart
-     signal — with the stale `APPDIR` / `APPIMAGE` / `ARGV0` dropped, then
-     `os._exit(0)`.
+  image's busy FUSE mount, and the onefile bootloader mistakes the result for a
+  worker subprocess of the old run, reusing an extraction dir that has just been
+  deleted. finbreak shipped this as the 0.1.2 -> 0.1.3 "closed but didn't
+  reopen" bug. The working shape is a DETACHED relaunch
+  (`subprocess.Popen(..., start_new_session=True)`) carrying
+  `PYINSTALLER_RESET_ENVIRONMENT=1` — PyInstaller 6.10+'s official restart
+  signal — with the stale `APPDIR` / `APPIMAGE` / `ARGV0` dropped, then
+  `os._exit(0)`.
   2. The relaunch waiter must not inherit the frozen app's loader path. A `/bin/sh`
-     waiter inheriting `LD_LIBRARY_PATH` pointing into the private `_MEI`
-     extraction dir makes the SYSTEM shell load bundled libraries — finbreak hit an
-     `_MEI` libreadline.so.8 incompatible with `/bin/sh` — and it dies on a symbol
-     lookup BEFORE it can relaunch anything. That was their 0.1.6 -> 0.1.7 repeat
-     of the same user-visible symptom from a different cause. PyInstaller preserves
-     the pre-launch value in `<VAR>_ORIG`; restore each loader var from that, or
-     drop it where there was none. The waiter also has to block until the OLD pid
-     has fully exited, so the FUSE mount is unmounted and `_MEI` cleaned, before it
-     execs the swapped image.
+  waiter inheriting `LD_LIBRARY_PATH` pointing into the private `_MEI`
+  extraction dir makes the SYSTEM shell load bundled libraries — finbreak hit an
+  `_MEI` libreadline.so.8 incompatible with `/bin/sh` — and it dies on a symbol
+  lookup BEFORE it can relaunch anything. That was their 0.1.6 -> 0.1.7 repeat
+  of the same user-visible symptom from a different cause. PyInstaller preserves
+  the pre-launch value in `<VAR>_ORIG`; restore each loader var from that, or
+  drop it where there was none. The waiter also has to block until the OLD pid
+  has fully exited, so the FUSE mount is unmounted and `_MEI` cleaned, before it
+  execs the swapped image.
 
   SIGNING IS NOT OPTIONAL HERE, and OneUp's case is stronger than finbreak's. This
   app authenticates as root and runs zypper; an unverified self-update is a
@@ -3312,15 +3338,15 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Settling it needs a decision, not a sweep:
 
   1. If it binds — add the marker to all nine, pick each file's version, and decide
-     whether tests/docs-check.py should enforce presence (which would make the
-     whole set red until the markers land, so the order matters).
+  whether tests/docs-check.py should enforce presence (which would make the
+  whole set red until the markers land, so the order matters).
   2. If it does not — say so in documentation.md §1.2's list of what OneUp
-     inherits, so the next reader does not re-derive the question. That list
-     already names what binds; this would be the first entry recorded as NOT
-     binding, and the reason belongs with it.
+  inherits, so the next reader does not re-derive the question. That list
+  already names what binds; this would be the first entry recorded as NOT
+  binding, and the reason belongs with it.
   3. Or ask upstream whether § Versioning is scoped to the global set, which is the
-     cheapest route to a correct answer and the one that fixes it for every project
-     rather than for this one.
+  cheapest route to a correct answer and the one that fixes it for every project
+  rather than for this one.
 
   Not urgent: nothing is broken today and no check fires either way. It is filed so
   the question is not rediscovered by the next gate, which is what a filed tail is
@@ -3347,9 +3373,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   - tests/docs-check.py — the documentation rules. 0.07 s.
   - The version lockstep — CHANGELOG.md is one of the six version sites, so a
-    markdown edit can break it.
+  markdown edit can break it.
   - tests/bump-test.py — bump.py rewrites the CHANGELOG heading and both compare
-    links, so a malformed [Unreleased] surfaces here. 0.05 s.
+  links, so a malformed [Unreleased] surfaces here. 0.05 s.
 
   Measured, all three together are well under a second, which is why none is traded
   away for speed. Skipped: the engine suite, the GUI smoke test, py_compile,
