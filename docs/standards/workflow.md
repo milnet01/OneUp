@@ -49,6 +49,26 @@ break OneUp from underneath it.** The engine reads zypper's output, and zypper's
 not a promised interface — ONEUP-0046 exists precisely because it can change. If a zypper
 update blinds 1.x, that qualifies and ships as a 1.4.x.
 
+**Widened by the user 2026-08-18, and this reading now governs:**
+
+> This is a fix, so we can still update the v1 code to fix any issue. If it were a feature
+> request, that goes in v2.
+
+**So the test is the change's KIND, not its severity.** A fix lands on `main` whether or not
+it blocks installing updates; a feature request waits for 2.0 however small it looks. The
+2026-07-26 definition above is not withdrawn — it still explains *why* the freeze exists and
+it still settles the hard cases it was written for — but it is no longer the bar a fix has
+to clear.
+
+**The precedent is ONEUP-0110.** The *Restart services* button did nothing at all, and under
+the 2026-07-26 definition alone it did not qualify: system, Flatpak and firmware updates all
+installed correctly. It was raised as not qualifying and the user ruled otherwise, which is
+what produced the wording above. ONEUP-0111 followed it on the same ground.
+
+**What has not changed:** a feature request is still 2.0's, and *"it is only a small
+feature"* is not an argument. `docs/design/oneup-2.0.md` §5.4 carries the programme framing
+and defers here for the test.
+
 ### 1.2 What does not
 
 Everything else. A misplaced dialog, awkward wording, a missing convenience, a nice idea —
