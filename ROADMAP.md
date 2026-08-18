@@ -1527,7 +1527,6 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   boundary and asserts the notification text is not "Already up to date";
   today the suite's _notify_case coverage checks the three reachable
   texts and never exercises the stopped path.
-  headline_only
   **Layman:** If you stop an update part-way, the desktop notification says everything was already up to date — which is not what happened.
   Kind: fix.
   Source: oneup-0072-cold-eyes-loop-3-2026-08-03.
@@ -1569,7 +1568,6 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Test: spec_query on any file in docs/specs/ returns invariants_count equal to
   the number of INV-N bullets it contains, rather than 0.
-  headline_only
   **Layman:** The tool that is supposed to list a spec's promises reads zero of them, for every spec we have — so nothing automated can check that list.
   Kind: doc.
   Source: write-spec-doc-lint-2026-08-03.
@@ -1614,7 +1612,6 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Test: the ratio computation ships in the suite rather than being asserted --
   every derived pair measured against every rest pixel colour, in every theme,
   with the high-contrast overlay on and off.
-  headline_only
   **Layman:** Make it always obvious which control the keyboard is on — without drawing a box round it — and have the app prove it rather than claim it.
   Kind: accessibility.
   Source: split-from-oneup-0064-2026-08-03.
@@ -1653,7 +1650,6 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Test: a scenario asserting a stopped run's notification is not "Already up to
   date" -- today the suite's _notify_case coverage exercises the three reachable
   texts and never the stopped path.
-  headline_only
   **Layman:** The weekly background check and update currently let the engine write their desktop notification; the window will write it instead, so there is one place that turns results into sentences.
   Kind: implement.
   Source: split-from-oneup-0072-2026-08-03.
