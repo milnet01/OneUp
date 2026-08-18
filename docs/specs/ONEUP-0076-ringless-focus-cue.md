@@ -58,7 +58,13 @@ stylesheet carries a `:focus` rule for its object name.
 
 Thirty-four focusable, eighteen with a rule, **sixteen without** — counted over the window
 as constructed, before any run, so the conditional banners and their buttons are included
-whether or not they are showing. The sixteen are not
+whether or not they are showing. **Hidden is not the same as unparented, and the sweep sees
+only the first.** Measured at `c8fb3f2`: five `size_btn` objects exist, one per `TaskRow`,
+all `#LinkBtn` — but only the system row's is parented, so `findChildren` returns that one
+and the count above is 34 rather than 38. The four others are real, focusable and invisible
+to this sweep. It changes none of the figures here, because `#LinkBtn` already carries a
+`:focus` rule and the sixteen-without figure is unaffected; what it changes is INV-1's
+guarantee, which cannot break on a control added without a parent. The sixteen are not
 leftovers: five of them are the on/off switches, which are the primary control of the
 application, and they are painted rather than styled — **no stylesheet colour rule reaches
 what `ToggleSwitch` paints.** The one QSS declaration that does reach the class is
@@ -128,7 +134,9 @@ against a 4.5:1 requirement, and its hover colour `#6fb6ff` is worse at **2.14:1
 `docs/specs/ONEUP-0027-themes.md` §4.7 checks both pairs and its §4.8, which lists every
 pair the check fails today, includes neither. It is in scope here rather than in the layout
 item because it is a contrast defect and this is the contrast contract: §4.3 gives the light
-link `#3779bd` (4.53:1) and `#4a7aab` (4.50:1), and INV-7 measures them.
+link `#326dab` (4.61:1 on its worst surface) and `#446f9c` (4.51:1), and INV-7 measures
+them against **every** surface a link rests on, not only `card` — §4.2 puts one on `rowcard`
+and `rowhov` and one on the warning banner's tint.
 
 ## 3. Scope decisions
 
@@ -182,8 +190,12 @@ result clears the threshold against every one of them, and raise §6's error onl
 neither direction does. Anchoring on one surface and never retrying the other direction is
 how a satisfiable set gets reported as unsatisfiable.
 
-**A cue that already clears 3:1 is kept, never re-derived.** The rule supplies a cue where
-none passes; it is a floor, not a replacement. This matters concretely: under the
+**A cue that already clears 3:1 *on pixels that meet SC 2.4.13's area half* is kept, never
+re-derived.** The rule supplies a cue where none passes; it is a floor, not a replacement.
+**Both halves of that qualification are load-bearing.** The dark `#GhostBtn`'s existing
+rest→focus pair measures 3.91:1 (§2.2) and would be kept on ratio alone — but it is a 1 px
+border recolour, which is less than the 2 px perimeter SC 2.4.13 requires, so it is
+re-derived as a fill and §4.3 carries the result. A bare ratio floor would have kept it. This matters concretely: under the
 high-contrast overlay `#GhostBtn` goes `$card` → `$btnhov`, which is `#000000` → `#ffd400`
 (**14.67:1**) dark and `#ffffff` → `#0000cc` (**11.22:1**) light, and "smallest blend
 reaching 3:1" would *weaken* those to 3.14:1 and 3.03:1 — roughly fourfold, in the one
@@ -256,6 +268,10 @@ and gains one. Present focused or not; only the colour moves.
 **The surface column is the whole contract, because the rule is "every surface the control
 can rest on".** A control that appears in more than one place has a row per surface, not one
 row for its object name.
+**An overlay row REPLACES its control's base row while the overlay is on; it does not add to
+it.** The overlay restates most selectors, so a control's rest pixels under it come from the
+overlay's own tokens — which is why deriving a fill for the high-contrast `#GhostBtn` from
+the base `card` would be wrong, and why §4.1's floor keeps that pair instead.
 
 | Control | Mechanism | Rest pixels the cue is derived from (§4.1) |
 | --- | --- | --- |
@@ -272,6 +288,7 @@ row for its object name.
 | `ToggleSwitch` | A, in `paintEvent` | its own track — `GREEN` / `RED` today, which `ONEUP-0027` §4.3 renames `switchon` / `switchoff` |
 | `QPlainTextEdit#Log` | B | `logbd`, widened to 2 px |
 | `QScrollArea#DetailScroll` | B | `logbd`, at 2 px — the panel gains a rest border |
+| `QPlainTextEdit#Log` and `QScrollArea#DetailScroll`, high-contrast overlay on | B | `$border`, at 2 px. `logbd` is a base key the overlay does not carry, so the overlay row is the one that applies when it is on |
 | The primary button family, high-contrast overlay on | A | `$btn`. The overlay's `#GhostBtn` rule already clears 3:1 and is kept unchanged — §4.1's floor, §4.3's note |
 | `#StopBtn`, `QToolButton#Disclose` and `#LinkBtn`, high-contrast overlay on | A | `$card`. Every control the overlay does not give a `$btn` fill rests on `$card`, so all three take the `$card` → `$btnhov` pair §4.1's floor already keeps for `#GhostBtn`. `ONEUP-0064` §4.1 creates the overlay rules for the first two and delegates their focus colour here |
 
@@ -321,15 +338,15 @@ Computed, not chosen. Every figure is the output of the check in §4.4.
 | Log / details border, light | `#d5dbe2` | `#777b7f` | 3.06:1 | — |
 | Stop button, light — ghost text and border on `card` | `#d6412a` at rest, 4.52:1 | `#949494` | 3.03:1 | `#000000` 6.92:1 |
 | Stop button, dark — ghost text and border on `card` | `#e0553f` at rest, 4.79:1 | `#606367` | 3.01:1 | `#ffffff` 6.04:1 |
-| Link button rest text, light (§2.3's failing pair — see below) | `#3779bd` on `#ffffff`, **4.53:1** | — | — | — |
+| Link button rest text, light (§2.3's failing pair — see below) | `#4aa3ff`, 2.63:1 on `card` | — | — | moves to `#326dab`: 5.37:1 on `card`, 4.96:1 on `rowcard`, **4.61:1** on `rowhov`, 4.75:1 on the banner tint |
 | High contrast, dark — primary buttons | `$btn` `#ffffff` | `#949494` | 3.03:1 | `#000000` 6.92:1 |
 | High contrast, light — primary buttons | `$btn` `#000000` | `#5c5c5c` | 3.14:1 | `#ffffff` 6.69:1 |
 | High contrast, dark — `#GhostBtn` | `$card` `#000000` | **unchanged**, `$btnhov` `#ffd400` | **14.67:1** | unchanged |
 | High contrast, light — `#GhostBtn` | `$card` `#ffffff` | **unchanged**, `$btnhov` `#0000cc` | **11.22:1** | unchanged |
 | High contrast — `#StopBtn`, `#Disclose`, `#LinkBtn` | `$card` | `$btnhov` — the kept pair, not a derivation | **14.67:1** dark / **11.22:1** light | `$btntext`, 14.67:1 / 11.22:1 |
 | High contrast — `#Log` / `#DetailScroll` border | `$border`, widened to 2 px in the overlay too | `#949494` / `#5c5c5c` | 3.03:1 / 3.14:1 | — |
-| Link button hover text, light | `#6fb6ff` on `#ffffff`, **2.14:1** | — | — | moves to `#4a7aab`, **4.50:1** |
-| Ghost button `:hover` / `:checked` ink, light | `#4aa3ff` on `#ffffff`, **2.63:1** | — | — | moves to `#3779bd`, **4.53:1** |
+| Link button hover text, light | `#6fb6ff` on `#ffffff`, **2.14:1** | — | — | moves to `#446f9c`: 5.25:1 on `card`, 4.85:1 on `rowcard`, **4.51:1** on `rowhov`, 4.64:1 on the banner tint |
+| Ghost button `:hover` / `:checked` ink, light | `#4aa3ff` on `#ffffff`, **2.63:1** | — | — | moves to `#326dab`, the same ink as the link — `retry_btn` puts a ghost button on the banner tint too, so it takes the same worst surface |
 | Ghost button `:hover` / `:checked` ink, dark | `#4aa3ff` on `#12161c`, **6.89:1** | — | — | unchanged — it already clears 4.5:1 |
 | `#LinkBtn` in the warning banner | the banner tint composited over `card` | derived from that composite | ≥3:1 | black or white |
 | `ghostbd` on `card` — the ghost button's rest border (`ONEUP-0027` §4.8 hands it here) | light `#c4ccd6` 1.62:1, dark `#38414f` 1.76:1 | moves to `#8f959c` / `#5e6570` | **3.02:1** / **3.09:1** | — |
@@ -346,8 +363,12 @@ because a border kept at its rest colour would sit at 1.49:1 against the fill an
 invisible. A focused stop button therefore looks like any other focused button on `card`,
 and what identifies it is its **label**, which is where a control's identity belongs
 (`ui-and-accessibility.md` §3 — never colour alone). And the light **link button's rest text moves** from `#4aa3ff` to
-`#3779bd`, which is what closes §2.3's 2.63:1 pair; on the dark card `#3779bd` measures
-4.00:1, so the dark palette keeps `#4aa3ff` at 6.89:1 rather than adopting it.
+`#326dab`, which is what closes §2.3's 2.63:1 pair. **The light ink is one value for every
+surface rather than one per row**, chosen as the smallest blend toward black clearing 4.5:1
+against the worst of them — `rowhov` `#eaeef3` — which is what stops the object-name question
+in §4.2 reaching the ink. The dark palette adopts nothing: `#4aa3ff` already measures 4.60:1
+on its own worst surface (the banner tint over `card`) and `#326dab` would measure 2.26:1
+there, so dark keeps `#4aa3ff` and `#6fb6ff`.
 
 **High contrast takes mechanism A, like every other button — its rest border is not the
 cue.** The overlay's buttons do carry a 2 px border at rest, which is why this looks at first
@@ -485,12 +506,18 @@ per-theme loop above is what it passes them to.
   that each `:focus` rule is emitted **after** that same selector's `:hover` and `:checked`
   rules, which is the ordering §6 relies on this parse to catch. For
   the painted controls, which no stylesheet parse can see, it renders `ToggleSwitch` to an
-  image focused and unfocused and asserts the focused render introduces **no colour the
-  unfocused one does not already contain** — a recolour of the track maps every pixel onto
-  the existing palette of the image, where a ring drawn inside the fixed rect necessarily
-  adds one. Asserting instead that the two "differ only in pixel colour, never in which
-  pixels are painted" would be vacuous: an inset ring repaints pixels the track had already
-  painted, so it changes only their colour and passes. Asserting `sizeHint()` alone would be vacuous — `__init__` calls
+  image focused and unfocused and asserts the focused image is the unfocused one under a
+  **consistent colour-to-colour mapping**: any two pixels sharing a colour in the unfocused
+  render still share one in the focused render. Darkening the track satisfies that by
+  construction, and a ring drawn inside the fixed rect breaks it, because two pixels that
+  were both track become one track and one ring.
+  **Neither weaker form works, and both are worth naming because both look right.**
+  "Introduces no colour the unfocused render does not contain" is red against this very
+  design — §4.3 moves the on-track from `#2ecc71` to `#186c3c`, which is a new colour — and
+  it is also blind to a ring drawn in a colour already on screen, such as the white knob or
+  the white `_paint_state_shape` pen. "Differ only in pixel colour, never in which pixels
+  are painted" is vacuous the other way: an inset ring repaints pixels the track had already
+  painted, so it moves only their colour and passes. Asserting `sizeHint()` alone would be vacuous — `__init__` calls
   `setFixedSize(56, 30)`, so the size cannot move whatever the painter does; the thing worth
   guarding is a ring drawn *inside* that fixed rect. Breaks on a
   focus ring in either path, on a border present only when focused, and on a `2px` focus
@@ -525,8 +552,11 @@ per-theme loop above is what it passes them to.
   derived focus ink.
   *Test:* the §4.4 computation, extended to those rest and hover pairs. Breaks on the light
   link button as it stands today — `#4aa3ff` on `#ffffff` is 2.63:1 at rest and `#6fb6ff` is
-  **2.14:1** on hover — the pair §2.3 measured, which §4.3 closes with `#3779bd` (4.53:1) and
-  `#4a7aab` (4.50:1). It breaks equally on the ghost button's `:hover` and `:checked` ink,
+  **2.14:1** on hover — the pair §2.3 measured, which §4.3 closes with `#326dab` and
+  `#446f9c`. **Every surface counts, not just `card`:** `#3779bd` would have read 4.53:1 on
+  `card` and only 4.19:1 on `rowcard`, 3.89:1 on `rowhov` and 4.01:1 on the banner tint, so
+  an ink measured against `card` alone is red on day one for `size_btn` and `warn_copy_btn`.
+  It breaks equally on the ghost button's `:hover` and `:checked` ink,
   which is `#4aa3ff` on the same light `card` — the same colour on the same surface as the
   link's rest defect — so §4.3 closes all three the same way.
   **Scoped deliberately:** the whole-palette 4.5:1 sweep belongs to
@@ -587,7 +617,7 @@ per-theme loop above is what it passes them to.
 | INV-1 | `tests/gui-smoke.py` | builds the window and each dialog offscreen and sweeps the widget tree |
 | INV-2, INV-3, INV-7 | `oneup/gui/theme.py` computation, driven from `tests/gui-smoke.py` | the ratio arithmetic, over every theme and both overlay states |
 | INV-5 | `oneup/gui/theme.py` unit check | the stride-16 sRGB lattice, plus the `#000000` / `#989898` pair that must raise rather than return — neither is per-theme |
-| INV-4 | `tests/gui-smoke.py` | parses the built stylesheet; its second half compares the focused and unfocused `ToggleSwitch` renders pixel for pixel |
+| INV-4 | `tests/gui-smoke.py` | parses the built stylesheet, including `:focus` rule ordering; its second half checks the focused and unfocused `ToggleSwitch` renders are related by a consistent colour-to-colour mapping |
 | INV-6 | `tests/gui-smoke.py` | asserts the switch's state shape survives, against the focused track as well as the resting one |
 | INV-8 | `oneup/gui/theme.py` computation | the ghost button's rest border against its surface |
 
@@ -627,9 +657,13 @@ does.
   nowhere in `updater.py`, and that method's own closing comment says no focus ring is drawn.
   That is the claim closest to this item's subject, and it is the one a reader would most
   reasonably trust. That spec is shipped, so this is a correction
-  to a record rather than a change of plan — and its own §2 already recorded the underlying
-  defect, listing *"No `:focus` rule anywhere in the QSS"* as a *"WCAG 2.4.7 failure"*, the
-  same conclusion this section draws above and independent corroboration of it.
+  to a record rather than a change of plan — and that document already recorded the
+  underlying defect itself, listing *"No `:focus` rule anywhere in the QSS"* as a
+  *"WCAG 2.4.7 failure"*, the same conclusion this section draws above and independent
+  corroboration of it. It is in its **Background — what is broken today** section, under
+  *Partially sighted*, **not** in its §2, which is *Announcements*: that document leaves its
+  `##` sections unnumbered and numbers only the `###` subsections under *Design*, so a bare
+  "§2" resolves to the wrong place.
 - **`CLAUDE.md` §6** repeats *"focus reuses the hover look"* in its trap list and is
   corrected in the same commit. The trap that stays is the one that cost the bug: no focus
   ring, because Qt draws it square and a focus border resizes the widget.
@@ -642,7 +676,13 @@ does.
 - **The palettes gain keys.** `_QSS` is one template substituted with either `_DARK` or
   `_LIGHT`, so a colour that differs by palette cannot be a literal in the sheet:
   `ghostbd`'s new value and every derived focus pair are palette keys. `ONEUP-0027` §4.7
-  requires every key to be covered by its pair table or declared decorative.
+  requires every key to be covered by its pair table or declared decorative, and says a key
+  in neither **fails** its check — so this item owes that classification rather than leaving
+  it to be found. The derived keys are named `focusfill` and `focusink` per control family,
+  and are declared to `ONEUP-0027` as a named class **measured elsewhere**, carrying this
+  item's INV-2 and INV-3 as the reason. They cannot sit in that spec's pair table, whose
+  pairs are fixed, because their values are recomputed per palette by the §4.4 computation;
+  and they are not decorative, because they are measured.
 - **`CHANGELOG.md`** gains an `[Unreleased]` entry under **Changed**. It ships inside 2.0;
   there is no 1.4.x release of it, and no version site moves.
 - **No marker, no engine change, no packaging change.** The window's argv to the engine is
@@ -700,3 +740,4 @@ does.
 | --- | --- | --- | --- |
 | 0-split | 2026-08-03 | — | **Provenance, not a review — no reviewer was dispatched to produce this row.** This document was split out of `docs/specs/ONEUP-0064-interface-redesign.md` on 2026-08-03, taking the focus cue, its derivation and its check; that item kept the layout redesign. The parent had run three cold-eyes loops (24, 34, 35 verified) and converged **by cap rather than clean** at 762 lines, with fix collateral outrunning draft defects two loops running — 24 → 13 → 8 draft against 0 → 21 → 27 collateral. Across those three loops and nine lanes essentially every finding fell in this half. **Those loops were run against a document that no longer exists, so none of their assurance transfers**: this spec runs the gate from loop 1 on its own bytes. Invariants were renumbered INV-1…INV-8 from the parent's INV-1, 2, 3, 4, 5, 8, 11 and 13; nothing outside the parent had cited them, and the parent's own numbering stays with it. |
 | 1 | 2026-08-18 | 2 lanes, cold; genre pinned spec; Q1 4 · Q2 4 · Q3 5 · Q4 1 — all 14 verified, 0 dismissed, of which 12 fixed and 2 surfaced rather than fixed (no severity scale under the four-question gate, so nothing here for §7's tally check to balance; ONEUP-0100) | **The first gate on this document's own bytes, and the 0-split row was right that none of the parent's assurance transfers.** Both lanes independently led with the same defect, and it is a recurrence rather than a new one: §4.1 stated two different algorithms — the boxed rule preferred black (*"or toward white, when black cannot get there"*) while the procedure two paragraphs below took *"the smallest `t` in either direction"*. Reproduced: the two agree on all eleven surfaces the shipped palettes use, because every one has a single viable direction, and diverge on any mid-luminance surface — `#5c5c5c` derives `#070707` under the rule and `#aeaeae` under the procedure. `ONEUP-0027` authors six more palettes. The parent's own parent-3 row records fixing *"the rule box stated two different algorithms"* on 2026-08-03; it survived the split, which is the case for gating a split document from loop 1. **The findings the lanes could raise but not settle were settled by running the thing.** Both asked what the dialogs actually contain, neither having `Bash`. Built offscreen: the three dialogs and the About box hold 21 focusable widgets, six of which match no row of §4.2 — an unnamed `QScrollArea`, an unnamed `QListWidget`, and the About box's two unnamed `QPushButton`s plus Qt's own two message-box labels. So INV-1's dialog half is red on day one, and `ONEUP-0064` §10 excludes both dialogs from its sweeps, so nothing else owns them. **Three more came from measuring what the document only described.** The overlay's `#LinkBtn:focus` moves text alone, `$link` → `$text`, which is 1.65:1 dark and 1.87:1 light — below 3:1, so the overlay carried a control whose cue could not work at any colour, and §4.3 had no row for it. `_HC_QSS` carries no `QScrollArea#DetailScroll` rule at all, so *"both overlay rules are widened to 2 px"* named one rule that exists and one that has to be created. And §8 called `ONEUP-0028` §5 stale in two ways when it is stale in three — it also claims `ToggleSwitch.paintEvent` draws a double ring *"when `hasFocus()`"*, and `hasFocus` appears nowhere in `updater.py`. **Two were surfaced rather than fixed, both because they change what the check asserts and both reaching sibling items.** How one object name carries three rest-pixel sets, given §4.4 matches by object name and `ONEUP-0064` §4.1 answered the same question by renaming; and whether INV-1 covers the six uncovered dialog widgets with rows or excludes unstyled Qt chrome by a stated rule. Each now carries a ⚠ OPEN block holding the measurement. **Collateral swept and moved in the same commit:** the rewritten rule sentence was restated in `ROADMAP.md` twice and in `docs/plans/ONEUP-0057-documentation-set.md` once. `ONEUP-0064`'s loop-log rows carry the old wording and were deliberately left — a loop log records what that pass found. Status stays Draft: the run did not return an empty loop and two decisions are open. |
+| 2 | 2026-08-18 | 2 lanes, cold; identical brief, packet rebuilt from disk; Q1 2 · Q2 3 · Q3 2 · Q4 1 — all 8 verified, 0 dismissed, all fixed. Cap reached (2 for a spec); the run files its tail and exits | **Both lanes independently led with the same defect, and it was loop 1's own fix.** Loop 1 rewrote INV-4's painted half to assert the focused render *"introduces no colour the unfocused one does not already contain"*. That is false against the design this document mandates — §4.3 moves the on-track from `#2ecc71` to `#186c3c`, which is a new colour — so the assertion is red on a correct implementation, and one lane added the other half: a ring drawn in a colour already on screen (the white knob, the white `_paint_state_shape` pen) adds nothing new, so the one failure it exists to catch passes. Both weaker forms are now stated and rejected by name, and the assertion is a consistent colour-to-colour mapping, which a recolour satisfies by construction and a ring breaks. §7 restated the rejected form and was aligned. **This is the 4a-min pattern exactly: loop 1's fix added assertive text, and the added text was what loop 2 spent its strongest finding on.** **The best pre-existing finding needed arithmetic no lane could run.** One lane worked out by hand that §4.3's light link ink `#3779bd` — measured only on `card` — fails on the row surfaces, estimating 4.19:1 and 3.89:1; executed, those are exactly right, and the banner tint is 4.01:1. §4.2 puts a `#LinkBtn` on `rowcard`/`rowhov` (`size_btn`) and one on the banner (`warn_copy_btn`), so INV-7 was red on day one against a pair this item moves. Both inks are now one value derived against the worst surface — `#326dab` and `#446f9c`, worst 4.61:1 and 4.51:1 on `rowhov` — which also keeps the object-name question in §4.2 away from the ink. The dark palette adopts neither: `#4aa3ff` already measures 4.60:1 on its own worst surface and `#326dab` would measure 2.26:1 there. **A lane's open question turned into the run's most interesting fact.** It asked whether five `size_btn` instances exist, which would make the census 38 rather than 34. Executed: five distinct objects do exist, one per `TaskRow`, all named `#LinkBtn` — but only the system row's is parented, so `findChildren` returns one and 34 is correct. Hidden is not the same as unparented, and §2.1 claimed the count included everything *"whether or not they are showing"*. The four others are real, focusable and invisible to the sweep, which is a hole in INV-1's guarantee rather than in the figures. **Two more contradictions with teeth.** §4.1's floor — *"a cue that already clears 3:1 is kept"* — is a bare ratio test, and the dark `#GhostBtn`'s existing 3.91:1 clears it while being a 1 px border that fails SC 2.4.13's area half; the floor now carries that qualification. And §4.2 had no overlay row for the two mechanism-B panels while §4.3 had one, so a builder would derive their overlay border from `logbd`, a base key the overlay does not carry; the row is added, with the general rule that an overlay row replaces its control's base row rather than adding to it. **One citation was wrong in a way worth recording:** §8 sent a reader to `ONEUP-0028` §2 for the corroborating defect record. Both quoted strings are verbatim, but they live in that document's *Background — what is broken today* section; its §2 is *Announcements*, because it leaves `##` sections unnumbered and numbers only the `###` subsections. My own packet window for that section was mis-cut the same way, which is how the lane reached the right conclusion by the wrong route. **Status stays Draft.** The run reached its cap rather than an empty loop, and the two ⚠ OPEN decisions from loop 1 are still open. |
