@@ -2988,7 +2988,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: user-report-2026-08-18.
 
-- 🚧 [ONEUP-0111] **Restart services must never restart a service that ends the user's session.**
+- ✅ [ONEUP-0111] **Restart services must never restart a service that ends the user's session.**
   Asked by the user 2026-08-18, immediately after ONEUP-0110 made this button work:
   what happens if it restarts something that logs the user out?
 
@@ -3036,6 +3036,45 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Lands on main (1.4.x) under the user's 2026-08-18 ruling: a fix belongs in v1. This is
   a safety defect in behaviour ONEUP-0110 made live, not a feature request.
+  Resolved (2026-08-18) in 4040e00. The window splits the validated list and
+  restarts only the safe half; the engine's printed advice makes the same split.
+  The @@SERVICES@@ marker is unchanged — §5.1 freezes it during 2.0 and the split
+  is advice, not a contract change.
+
+  Session-critical is a definition rather than a list: any unit whose restart
+  would end the graphical session, kill OneUp itself, or break the authorisation
+  agent running the restart. The display manager is resolved from the
+  /etc/systemd/system/display-manager.service symlink at call time, with literal
+  names as a fallback — a hardcoded list alone would repeat ONEUP-0110's defect,
+  and this machine resolves to display-manager-legacy, which no list of mine
+  would have contained.
+
+  Test first and red before green on both halves. The GUI scenario failed on
+  three assertions with the hazard live: a mixed list restarts the safe units and
+  no critical one, and an all-critical list restarts nothing and leaves the banner
+  up. The engine scenario asserts the split in the printed advice, and its mock
+  now prints BARE unit names where it printed "foo.service bar.service" — a shape
+  no real system produces, and the same fiction that hid ONEUP-0110 for months.
+
+  ONEUP-0110's own scenario had to change: it asserted dbus and user@1000 reach
+  systemctl, which is now precisely what must not happen. It feeds safe bare names
+  instead and keeps the '@' coverage through getty@tty1. A test written two hours
+  earlier was pinning behaviour this item forbids, which is worth remembering the
+  next time a fix looks self-contained.
+
+  Wording corrected before commit rather than after: the draft said restarting
+  these "would log you out and close this window", which is true of
+  display-manager and user@1000, false of polkit, and loose for dbus and
+  systemd-logind. All three strings now say "break or end your desktop session".
+  wording-and-translation.md §4 treats an unearned claim as a correctness bug.
+
+  Docs: security.md gains §4.6 — a privileged command may be correct and still be
+  unsafe to run, with the general rule that a guard checking only shape will pass
+  a well-formed command that should never be issued. Its call-site table names the
+  exclusion and What checks this gains a row. marker-protocol.md §4.11 records
+  that the field carries names a consumer must not act on.
+
+  local-CI.sh green — engine 283/0, GUI 321/0, bump 12/0, docs 18641/0.
   **Layman:** The "Restart services" button could have logged you out and closed the window mid-restart. It now restarts only what is safe and tells you when a reboot is the clean way.
   Kind: fix.
   Source: user-question-2026-08-18.
