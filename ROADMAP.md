@@ -3674,3 +3674,21 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The instructions for pulling OneUp's translatable sentences out of the code name a command that quietly finds nothing.
   Kind: doc-fix.
   Source: review-contract loop 8 on ONEUP-0032, 2026-08-19.
+
+- 📋 [ONEUP-0119] **Correct oneup-2.0.md's G1/G2 passage, which credits the payload conversion to ONEUP-0032.**
+  Found by the ONEUP-0072 gate (loop 6) while verifying that spec's §8 doc-edit
+  list. Filed rather than fixed because it is a neighbouring document's defect
+  and that run's subject was ONEUP-0072.
+
+  The passage headed "Why that distinction is not pedantry" reads "ONEUP-0032
+  lands *after* the engine rewrite (§5.2) and, by §5.1, converts the `@@HINT@@`
+  and `@@REMEDY@@` payloads to codes". The payload conversion is ONEUP-0072's,
+  not ONEUP-0032's — stale from before the 2026-08-03 split that created
+  ONEUP-0072 out of ONEUP-0032. It also carries the narrow HINT/REMEDY framing
+  that ONEUP-0072 §3.1 overturns and that §4, §7's G10 row and (as of
+  2026-08-19) §3 item 1 of the same document have all been widened past.
+
+  Rule 14: corrected provenance, so the No branch — no gate re-arms.
+  **Layman:** One sentence in the 2.0 design plan names the wrong work item as the one that changes the engine's messages.
+  Kind: doc-fix.
+  Source: review-contract loop 6 on ONEUP-0072, 2026-08-19.

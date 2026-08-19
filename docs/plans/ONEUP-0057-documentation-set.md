@@ -16,7 +16,44 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: `ONEUP-0064`'s two hover colours are settled; no document in the batch has an open decision**
+> ## ▶ You are here — **Task 18: both unspent cold loops are spent; the batch owes no gate at all**
+
+> **`ONEUP-0072` loop 6 and `ONEUP-0076` loop 4 both ran on 2026-08-19, each the second and
+> final loop of its run, and each reached the spec cap of 2.** Both are **calm** caps —
+> `ONEUP-0072` had none of its four findings on text that run wrote, `ONEUP-0076` two of nine
+> — so both ship rather than looping again. Commits `e7436c4` and `c91d089`.
+> `./local-CI.sh --docs` green, 19432 claims / 0 failed.
+
+> **`ONEUP-0072`: 4 verified and fixed, 3 dismissed.** The Q1 is the one worth carrying: §4.1's
+> *"The engine keeps its English"* paragraph claimed it applies to **three** of the five
+> families and it is four — `$REBOOT_REASON` feeds both `marker REBOOT` and the summary's own
+> `echo`, and `@@REBOOT@@` is the family §4.1 most tells the implementer to convert, so the one
+> paragraph protecting the terminal output excluded exactly the case that needed it. The three
+> Q2s were all missing entries in **§8**, the commit-time doc-edit list: `oneup-2.0.md` §3
+> item 1, `testing.md` §1's suite-table row, and the scoping of `marker-protocol.md` §5.2's
+> *"never as the raw token"*.
+
+> **`ONEUP-0076`: 9 verified and fixed, 0 dismissed — and not one arithmetic error in the
+> document.** Every published figure was recomputed against the tree before the lanes ran: all
+> twelve derived fills hex-for-hex, both gradients' worst pixels, the 4.58 bound, the
+> composited banner tint, and the §2.1 census at 34 / 18 / 16. What was wrong was **scope**.
+> INV-6 required the switch's white state mark to clear 3:1 against the *resting* track, where
+> white on `#2ecc71` is **2.10:1** — red on day one, against a pair its own closing sentence
+> hands to `ONEUP-0027` §4.7. And all three lanes reached §4.2's qualifier scheme: `_row` and
+> `_make_row` both build a `#RowBorder` holding a `#RowCard` exactly as `TaskRow` does, and a
+> dialog's button strip has no container at all, so two surfaces had no unique ancestor to key
+> a selector on. `#DialogButtons` is named to close the second.
+
+> **`ONEUP-0076` is now 954 lines**, past the range two cold reads comfortably cover. The cap
+> was calm so shipping is right, but if that document is ever gated again, split it first.
+
+> **Every spec in the batch is `Status: Draft` on purpose** — 0027 is Reviewed; 0032, 0064,
+> 0072 and 0076 each reached a cap without an empty loop. Do not stamp any of them Reviewed.
+
+> **Task 18 owes no gate.** The batch is done. What is left is `ONEUP-0119` (a one-line
+> correction in `oneup-2.0.md`, filed rather than fixed) and then building from the 2.0 specs.
+
+> ## Previously — **Task 18: `ONEUP-0064`'s two hover colours are settled; no document in the batch has an open decision**
 
 > **The user settled both on 2026-08-19 and they are folded in. `ONEUP-0064`'s `⚠ OPEN`
 > block is gone.** `./local-CI.sh --docs` green, 19364 claims / 0 failed.
