@@ -1174,6 +1174,20 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   The migration itself did NOT rewrite ROADMAP.md: the file was byte-identical
   afterwards (sha256 11a66b2f…1bd42 before and after), because roadmap_migrate
   imports the markdown into the store and does not re-render on the way back.
+  Progress (2026-08-19): review-contract loop 5 on ONEUP-0072 — the
+  first cold read since the ONEUP-0101 split. 2 lanes, --max-loops 1.
+  Q1 1 · Q2 2 · Q3 0 · Q4 0; 3 verified, 1 dismissed, 3 fixed, 1 filed to
+  ONEUP-0108. Both lanes independently found INV-1 selecting @@REBOOT@@'s
+  vocabulary by element COUNT, which §4.1 rules out — a kernel-only
+  transaction is a one-element components field, so the prescribed
+  assertion would have gone red on the commonest reboot there is. Also
+  fixed: §4.1's "@@REMEDY@@ needs no call-site change" against §4.2's
+  "touches every marker call site" — the live pre-joined payload emerges
+  from the mandated emitter as one field, so the Skip-this-source button
+  silently stops arming. Filed to ONEUP-0108: the retained Bash engine's
+  empty cache code field, which INV-1's fallback there cannot word.
+  ONEUP-0072 stays Draft with no open decision; a second cold loop is
+  available and unspent. Next: ONEUP-0032 loop 1.
 
 - 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether
