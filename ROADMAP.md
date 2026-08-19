@@ -3465,3 +3465,45 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** When the only things left to restart would log you out, OneUp now offers the Restart-computer button instead of listing them and leaving you stuck.
   Kind: fix.
   Source: user-request-2026-08-19.
+
+- 📋 [ONEUP-0116] **The release workflow has no timeout, so a stuck runner hangs the release indefinitely.**
+  Found while releasing 1.4.5 on 2026-08-19. Two consecutive attempts of the
+  v1.4.5 tag workflow hung inside `sudo apt-get update` in the "GUI smoke test
+  (offscreen)" step — the runner's Ubuntu mirror was refusing every request
+  (`Ign: http://azure.archive.ubuntu.com/...` repeating), apt fell back to
+  archive.ubuntu.com and then stopped producing output entirely. Measured:
+  attempt 1 sat 27 minutes and attempt 2 about 10, both cancelled by hand;
+  attempt 3 ran clean in ~6 minutes once the mirror recovered. A normal run of
+  this workflow is 4-5 minutes (1.4.4 was 4m19s, 1.4.3 4m33s).
+
+  .github/workflows/release.yml sets no `timeout-minutes` on the `appimage` job,
+  so GitHub's 6-hour default applies. Nothing fails, nothing retries, and the
+  release simply never publishes — the state is indistinguishable from a slow
+  build unless somebody opens the log. The AppImage, and therefore the in-app
+  update check that points users at it, wait on a person noticing.
+
+  The failure is not ours and cannot be fixed here — an Ubuntu mirror outage on a
+  GitHub-hosted runner is somebody else's infrastructure. What is ours is how long
+  it takes to find out. A `timeout-minutes` in the low tens on the job turns a
+  silent hang into a red run a re-run clears.
+
+  Two things to settle when this is picked up, rather than assumed now:
+
+  1. Whether the number goes on the job or per step. A step-level timeout on the
+     two apt-bearing steps is more precise and fails faster; a job-level one is a
+     single line and cannot be forgotten when a step is added. The engine tests
+     took 2m27s of the 4-5 minute total on this runner, so the whole job has real
+     headroom to allow for.
+  2. Whether the apt calls are worth making resilient at all (a retry loop, or
+     dropping `apt-get update` where the runner image already carries the four
+     libraries). That is a bigger change than a timeout and may not be worth it —
+     a timeout plus a re-run is the cheap answer, and this has happened once.
+
+  A fix cannot be proved against a live outage, so the verification is that the
+  workflow still passes on a healthy runner and that the value is above the
+  slowest observed good run. Note that a workflow edit only takes effect for tags
+  pushed AFTER it lands: re-running an existing tag uses the workflow file from
+  that tag's commit.
+  **Layman:** If GitHub's build machine gets stuck, the release just sits there instead of failing quickly so it can be retried.
+  Kind: chore.
+  Source: in-session-2026-08-19 (v1.4.5 release).
