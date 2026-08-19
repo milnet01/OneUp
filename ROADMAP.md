@@ -28,7 +28,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: indie-review-2026-07-21 engine-lane.
   Resolved (2026-07-21): added three engine tests — (1) --check invokes sudo zero times (sentinel sudo mock exits 99 if called); (2) the sudo keep-alive leaves no orphaned process after a run (before/after `pgrep -xf 'sleep 50'` diff); (3) @@INSTALLED@@ keeps its positional count|yes/no|yes/no layout. Writing (2) surfaced a real orphan leak: cleanup did `kill <subshell>` which orphaned the loop's `sleep 50` (reparented to init ~50s). Fixed by running the keep-alive under setsid in its own process group and tearing it down with `kill -- -PGID`. Red/green verified. Orphans/non-102/firmware/locale/continue-on-fail were already covered by the 2026-07-21 audit. Suite 32→38.
 
-- 📋 [ONEUP-0004] **Refresh the dependencies; chiefly bump CI's Python to 3.14.**
+- ✅ [ONEUP-0004] **Refresh the dependencies; chiefly bump CI's Python to 3.14.**
   release.yml pins python-version 3.13 (not 3.14) pending confirmation that PySide6 publishes 3.14 wheels — see docs/standards/dependencies.md ledger. When newer wheels exist, bump and delete the ledger row.
   **Layman:** We're one Python version behind on purpose until the GUI toolkit supports the newest one.
   Kind: chore.
@@ -44,6 +44,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   release.yml's python-version 3.13 -> 3.14 is deferred to the 2.0
   dependency refresh on the v2 branch, because main is frozen at 1.4.0 and
   takes only qualifying bug fixes.
+  Resolved (2026-08-19): `release.yml`'s `python-version` reads 3.14 on `v2`
+  (commit e6d77b6). `main` stays 3.13 under the freeze; the two converge at the
+  2.0.0 merge. oneup-2.0.md §6.3's Complete-when bar is met — the bump is on v2
+  and ./local-CI.sh is green against it (engine 289/0, GUI 327/0, bump 12/0).
+  Re-verified at the bump rather than recalled, as dependencies.md's snapshot was
+  dated 2026-07-26: Python 3.14 is the current stable series (3.14.7); PySide6
+  6.11.2 still ships cp310-abi3 wheels at requires_python <3.15,>=3.10, so the
+  2026-07-26 sweep's reasoning holds; and actions/checkout v7.0.1,
+  actions/setup-python v7.0.0 and softprops/action-gh-release v3.0.2 are all
+  still current. The floor is unmoved — coding.md §1 keeps it at 3.13.
+  dependencies.md's snapshot row now names both branches.
 
 - ✅ [ONEUP-0005] **Decide refresh-failure semantics for the system step (dup on stale metadata).**
   update_system.sh: when `zypper refresh` fails, `ok=false` but `dup` still runs; a dup that then succeeds is recorded fail with SYS_CHANGED unset, so real changes get no reboot/service advice. Errs on the SAFE side (never a false reboot), hence deferred. Options: abort the step before dup when refresh failed, or evaluate change-detection on the dup exit code independently of the refresh result. Pick one and add a test.
@@ -1345,7 +1356,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   `docs/standards/testing.md` §7 owns the measurement and its derivation;
   treat this bullet's number as the symptom that opened the item.
 
-- 📋 [ONEUP-0063] **Add pyproject.toml so local lint and CI check the same rules.**
+- ✅ [ONEUP-0063] **Add pyproject.toml so local lint and CI check the same rules.**
   Verified 2026-07-26: the repo has no pyproject.toml, no requirements
   file and no setup.py. local-CI.sh:78 runs `ruff check . --select F,B
   --exclude screenshots -q`, so the rule set lives only in that one
@@ -1364,6 +1375,25 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Running the code checker yourself gives different answers than the build server does, and six safety comments in the code silence a rule that isn't switched on — one small config file fixes both.
   Kind: chore.
   Source: in-session-2026-07-26 (ONEUP-0057 Task 3).
+  Resolved (2026-08-19): `pyproject.toml` is at the repo root on `v2` carrying
+  coding.md §2.1's rule set verbatim, and `local-CI.sh` calls a bare `ruff check`
+  (commit 1cdf361). oneup-2.0.md §6.4's Complete-when bar is met on all three
+  clauses: the file exists, the gate runs bare, and it is green.
+
+  Re-measured before acting, as §2.1.1 requires: 48 errors with ruff 0.15.11,
+  against the 47 that section measured at 58ea3bc — the breakdown matches row for
+  row bar one extra RUF005. All 48 cleared, and no line was rewritten for any
+  reason other than the error on it.
+
+  §2.1.1's predicted trap was real, and it is why RUF100 fired three times: ruff
+  anchors S607 to the line carrying the executable literal, which is the line
+  after the subprocess.run( / Popen( the noqa sat on — so the directive suppressed
+  nothing and the S607 beneath it fired unsuppressed. Re-anchored at all three
+  sites, keeping S603 on the call line where it does bind. None of the six
+  existing noqa comments was deleted.
+
+  Suite tallies identical to the pre-change baseline on the same branch, which is
+  what says the wrapping and splitting changed no behaviour.
 
 - 📋 [ONEUP-0064] **Redesign the interface around ergonomics, plain-language clarity and accessibility.**
   Requested by the user (2026-07-26) as part of 2.0, not as polish
@@ -3702,3 +3732,28 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** One sentence in the 2.0 design plan names the wrong work item as the one that changes the engine's messages.
   Kind: doc-fix.
   Source: review-contract loop 6 on ONEUP-0072, 2026-08-19.
+
+- ✅ [ONEUP-0120] **Drop "(to be written)" from oneup-2.0.md §1's four spec rows — all four exist.**
+  Found while picking up §5.2's build order. §1's table annotated
+  ONEUP-0034, ONEUP-0064, ONEUP-0027 and ONEUP-0032 as
+  *(to be written)*. All four specs exist — ONEUP-0034 and ONEUP-0027
+  are Status: Reviewed, ONEUP-0032 and ONEUP-0064 are Status: Draft.
+
+  Nothing caught it because the cited paths resolve: docs-check.py
+  checks that a cited path exists, and each of these now does. The
+  false part is the parenthetical beside it, which no check reads.
+
+  It matters because documentation.md §3 makes Status the thing that
+  decides whether implementation may start, and §1 is the table a
+  session reads first. A reader taking it at face value would set out
+  to write ONEUP-0034's spec — the next item in §5.2's order — instead
+  of implementing against the Reviewed one that is already there.
+
+  Rule 14: corrected status, no instruction changed — the path each row
+  cites is unchanged and still correct. The No branch; no gate.
+
+  Resolved (2026-08-19): the four annotations removed, nothing else in
+  those rows touched.
+  **Layman:** The 2.0 plan's contents table said four design documents still had to be written; all four have existed for a while.
+  Kind: doc-fix.
+  Source: in-session-2026-08-19, found while starting the 2.0 build order.

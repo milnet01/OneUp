@@ -47,6 +47,12 @@ needs a reason written in the commit message. Everything else has a directory.
 **There is no `src/`, no `lib/`, and no `bin/`** — do not create one out of habit. 2.0
 introduces exactly one new source directory, `oneup/` (§4).
 
+**2.0 also adds exactly one new root file: `pyproject.toml`** (ONEUP-0063, on `v2` since
+2026-08-19 — `docs/standards/coding.md` §2.1 settles its contents). It is lint
+configuration only, with no `[project]` table, and OneUp stays not-pip-installable. It is
+at the root for the same reason §1's table already grants the root dotfiles: `ruff` finds
+it by walking up from the working directory, so anywhere else and it is not found.
+
 ---
 
 ## 2. Naming
