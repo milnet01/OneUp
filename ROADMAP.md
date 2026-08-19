@@ -3757,3 +3757,61 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The 2.0 plan's contents table said four design documents still had to be written; all four have existed for a while.
   Kind: doc-fix.
   Source: in-session-2026-08-19, found while starting the 2.0 build order.
+
+- 💭 [ONEUP-0121] **OneUp has no stated signs of success for the two things it exists to do.**
+  Filed as considered, not planned: `adopt-project` diagnoses and obliges
+  nobody, and whether to act on this is the user's call, not a session's.
+
+  Run twice on 2026-08-19 with independent cold readers and different
+  candidate sets (2 files, then 14). Both returned the same verdict:
+  purpose YES, signs of success NO — which puts the project in state 1 by
+  `~/.claude/workflow.md` §1, against a claim of state 5 (two items in
+  flight). Full report, including what the two runs measure about the
+  skill itself: `~/.claude/docs/adopt-project-oneup-2026-08-19.md`.
+
+  The second reader enumerated nine product dimensions of the stated
+  purpose. Four are covered by real criteria — a subject, a condition and
+  a bar the shipped product could be tested against:
+
+    - never claim an outcome it did not earn (`testing.md` §5)
+    - the window never becomes root, one authentication
+      (`security.md` §1.1, `oneup-2.0.md` G4)
+    - usable without sight (`ui-and-accessibility.md` §1, §7)
+    - plain language (`wording-and-translation.md` §1 — weakly; a
+      pass/fail with no method)
+
+  Three are covered by nothing at all:
+
+    - running the five tasks THE WAY openSUSE documents. README specifies
+      what each task runs; no bar says that is right, or that it stays
+      right as zypper's output changes — which `workflow.md` §1.1 already
+      names as a live risk.
+    - working unattended on the weekly timer. The self-disabling failure
+      path is specified in detail and judged by nothing.
+    - the engine being usable standalone in a terminal.
+
+  And two are partial: the freeze test in `workflow.md` §1.1 is a genuine
+  product-level bar but names three of the five tasks (orphans and cache
+  have none), and `oneup-2.0.md` G8's packaging bar is scoped to the 2.0
+  tag rather than to what users run today.
+
+  The point worth keeping: the supporting qualities are well specified and
+  the headline claims are not. README says "It's the knowledge, not the
+  GUI, that's the point", and the knowledge is the one dimension with no
+  criterion. The documentation is not thin — twelve standards, and the
+  accessibility bars are strong enough that the shipped product measurably
+  fails them and the document says so. The gap is not volume.
+
+  Not a defect and not a criticism. A project can be shipped, working and
+  useful in state 1. What it blocks is `check-queue` (`workflow.md` §5's
+  3→4 gate), which matches signs of success to roadmap items on an `S&lt;n&gt;`
+  id — and this project has no signs carrying ids, so that gate cannot run
+  here at all.
+
+  What would close it is a conversation, not an edit: `workflow.md` §3
+  discovery. Deliberately not started — `adopt-project` forbids chaining,
+  on the grounds that the project's first real session on this should not
+  be one that has already formed a view.
+  **Layman:** Nothing written down says how we would know OneUp actually updates a machine correctly — which is the whole point of it.
+  Kind: investigate.
+  Source: adopt-project, two independent runs, 2026-08-19.
