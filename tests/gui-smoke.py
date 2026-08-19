@@ -58,6 +58,14 @@ except ImportError as exc:  # PySide6 absent — skip, don't fail the suite.
     sys.exit(77)
 
 REPO = Path(__file__).resolve().parent.parent
+# The repo root must be importable BEFORE updater.py is loaded. Run as
+# `python3 tests/gui-smoke.py`, sys.path[0] is tests/, so the root shim's
+# `from oneup.gui.app import main` would raise ModuleNotFoundError. Inserting the
+# root here is the whole of INV-1 (docs/specs/ONEUP-0034-gui-modules.md); a
+# failure to import `oneup` then fails the suite rather than skipping it, because
+# the ImportError handler above covers the PySide6 imports only.
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
 
 
 def _load_updater():
