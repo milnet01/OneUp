@@ -3341,7 +3341,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: feature.
   Source: user-request-2026-08-18.
 
-- 📋 [ONEUP-0113] **Decide whether OneUp's standards owe the global version marker.**
+- ✅ [ONEUP-0113] **Decide whether OneUp's standards owe the global version marker.**
   Raised by a review lane during the 2026-08-18 standards-alignment gate on
   docs/standards/documentation.md, and filed rather than fixed because the gate hit
   its cap (3 loops for a standard) and the fix is a nine-file mechanical change
@@ -3379,6 +3379,30 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A question the docs review turned up and could not settle in the time it had: whether our rule files need a small version stamp at the top, the way the machine-wide ones do.
   Kind: doc.
   Source: review-contract-2026-08-18 loop 3, filed at the cap.
+  Resolved (2026-08-19): it does NOT bind, and option 3's "ask upstream" was
+  not needed — the upstream documents answer it between them. Settled on the
+  global README's own test, "does a parser bind to it?"
+
+  The only consumer of a first-line marker on this machine is
+  .githooks/check-copied-standards, and on a PROJECT file it reads a mirror
+  marker or an OWNED-HERE marker, never a version. The version marker is what
+  that check strips from the OWNER's side when diffing a mirror
+  (README § The public-repo mirror: "It is verbatim, less the owner's
+  first-line version marker"). So § Versioning is the global set's own
+  bookkeeping.
+
+  Two further facts, both verified rather than reasoned. README § The three
+  cases names wording-and-translation.md — OneUp's own file, by name — as an
+  example of a standard a project owns outright, and calls that case correct.
+  And running the hook against this repo reports "clean": no OneUp standard
+  scores as a copy or a partial, so none owes an OWNED-HERE marker either.
+
+  Recorded in docs/standards/documentation.md §1.2, which needed it because
+  that section's own displacement rule makes silence mean the global file
+  binds — so leaving it unstated was itself an answer, and the wrong one. It
+  is the first global rule that section records as NOT binding, so it carries
+  its evidence rather than a bare verdict. No marker was added to any of the
+  nine, and tests/docs-check.py gained no rule.
 
 - 🚧 [ONEUP-0114] **A documentation-only push runs the documentation gates, not the whole suite.**
   Requested by the user 2026-08-18: "That pre-push hook for documents should only

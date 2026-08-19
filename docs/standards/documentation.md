@@ -124,6 +124,22 @@ is a *dialect* from the supported set. OneUp declares **`ants-v1`** in `ROADMAP.
 line (`<!-- ants-roadmap-format: 1 -->`), and `workflow.md` §4 states the bullet shape
 locally. **This one rule outranks §1.1's whole table**, which row 7 says.
 
+**Inherited, and it does NOT bind: the global set's first-line version marker.**
+`~/.claude/standards/README.md` § *Versioning* says each standard carries one — the form is
+an HTML comment reading `ants-coding-standards: 1` — and none of OneUp's nine does. Settled
+2026-08-19 (ONEUP-0113) on the global README's own test, *does a parser bind to it?* The
+only consumer on this machine is the `check-copied-standards` hook, and what it reads on a
+**project** file is a mirror marker or an `OWNED-HERE` marker, never a version; the version
+is what that check **strips from the owner's side** when it diffs a mirror
+(§ *The public-repo mirror*). So it is the global set's own bookkeeping, and nothing would
+read nine more of them. § *The three cases* names `wording-and-translation.md` — this
+project's file, by name — as an example of a standard a project owns outright, and run
+against OneUp on 2026-08-19 that hook reports `clean`: no standard here scores as a copy or
+a partial, so none owes an `OWNED-HERE` marker either. **This is the first global rule
+recorded here as not binding**, which is why it carries its evidence rather than a verdict.
+The contrast with the paragraph above is the whole point: `ROADMAP.md` carries a first-line
+marker because a parser reads it, and these nine carry none because nothing does.
+
 **Global files this section does not place, and they still bind where OneUp is silent** —
 `~/.claude/standards/languages/` (python, qt, cpp), `~/.claude/standards/domains/database.md`,
 the three `~/.claude/standards/skeletons/`,
