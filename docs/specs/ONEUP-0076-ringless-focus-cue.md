@@ -291,9 +291,9 @@ the base `card` would be wrong, and why §4.1's floor keeps that pair instead.
 | `#LinkBtn`, on the card (`log_toggle`, `openlog_btn`, `rollback_btn`) | A | `card` |
 | `#LinkBtn` in a banner (`warn_copy_btn`) | A | `#WarnBanner` only — it is inserted into that one banner and no other |
 | `#LinkBtn` inside a row's detail panel (`size_btn`) | A | `rowcard` **and** `rowhov` |
-| `#LinkBtn` inside a `RepoManagerDialog` row (`rm`, the *Remove* button `_make_row` builds for each duplicate-URL repo) | A | `rowcard` — that dialog's rows use the same `#RowCard` frame the task rows do, and they carry no `:hover` variant, so this is one surface rather than two |
+| `#LinkBtn` inside a `RepoManagerDialog` row (`rm`, the *Remove* button `_make_row` builds for each duplicate-URL repo) | A | `rowcard` **and** `rowhov` — that dialog's rows use the same `#RowCard` frame the task rows do, so it qualifies on `#RowCard` and takes the disclosure's pair and published value. Its own rows carry no `:hover` variant, so `rowhov` is one surface more than it needs; covering it costs nothing and is what lets one derived colour serve both (the rule below the table) |
 | `QToolButton#Disclose` | A | `rowcard` **and** `rowhov` |
-| `ToggleSwitch` | A, in `paintEvent` | its own track — `GREEN` / `RED` today, which `ONEUP-0027` §4.3 renames `switchon` / `switchoff` |
+| `ToggleSwitch` | A, in `paintEvent` | its own track — `GREEN` / `RED` today, which `ONEUP-0027` §4.3 renames `switchon` / `switchoff`. **The one control whose derived fill carries a second constraint:** the state shape is painted *on* the track, so the fill must also clear 3:1 against `switchmark` and `switchknob`, or INV-6 is red with no route. Today both tracks darken and the white mark reads 6.46:1 and 11.68:1 on them; a palette whose "on" track is light enough to blend toward white would swallow it |
 | `QPlainTextEdit#Log` | B | `logbd`, widened to 2 px |
 | `QScrollArea#DetailScroll` | B | `logbd`, at 2 px — the panel gains a rest border |
 | `QScrollArea#RepoScroll` (`RepoManagerDialog`) and `QListWidget#RollbackList` (`RollbackDialog`) | B | `logbd`, at 2 px — both gain a rest border. Both are unnamed in `updater.py` today; this item names them, §8. Their surface is `win`, per the rule below the table, which is what makes a `logbd` border visible on them |
@@ -337,9 +337,9 @@ is each dialog's own *Close* / *Cancel* in the button strip, plus `#RepoScroll` 
 `#RollbackList`. `RepoManagerDialog`'s and `RollbackDialog`'s primary buttons are `#RunBtn`,
 whose rest pixels are its own gradient and not the surface at all.
 
-**One object name, three surfaces — the selector is qualified by an ancestor, not by a
-rename.** `#LinkBtn` has three rows above with three different rest-pixel sets, and
-`#GhostBtn` has three as well, while `_QSS` keys its rules by object name. The rule that
+**One object name, several surfaces — the selector is qualified by an ancestor, not by a
+rename.** `#LinkBtn` has four rows above and `#GhostBtn` four, while `_QSS` keys its rules
+by object name. The rule that
 resolves them, settled by the user on 2026-08-18: **a control's unqualified row is its
 default, and every other surface takes a row whose selector names the container it rests
 in** — `#WarnBanner QPushButton#LinkBtn:focus`, `#RowDetails QPushButton#LinkBtn:focus`.
@@ -357,13 +357,23 @@ Three things it obliges.
   rename.
 - **The qualifier must name the nearest container unique to that surface**, because Qt
   resolves competing rules by CSS specificity and an ancestor that also contains the default
-  case would capture it too. `#Card` contains all three `#LinkBtn` surfaces and is therefore
-  useless here; `#WarnBanner` (built by `Updater._make_banner`) and `#RowDetails` (built in
-  `TaskRow.__init__`) each contain exactly one.
-- **§4.4's matcher resolves a row by object name *and* by surface.** Given a focusable
-  widget it walks up the parent chain for the first ancestor named by a qualified row for
-  that object name, and falls back to the unqualified row when it reaches the top. That
-  walk is the whole cost of this choice over renaming, and INV-1 states it.
+  case would capture it too. `#Card` contains every on-card `#LinkBtn` surface and is
+  therefore useless here; `#WarnBanner` (built by `Updater._make_banner`) and `#RowDetails`
+  (built in `TaskRow.__init__`) each contain exactly one.
+  **Two surfaces have no unique ancestor, and each is answered rather than left to the
+  builder.** `SettingsDialog._row` and `RepoManagerDialog._make_row` both build a
+  `#RowBorder` holding a `#RowCard`, exactly as `TaskRow` does, so no name distinguishes a
+  repository row from a task row: the `rm` button therefore takes **`rowcard` and `rowhov`**
+  like the disclosure, qualifies on `#RowCard`, and shares that row's published value —
+  over-covering by one surface, which §6 says is the safe direction, and which makes the
+  specificity overlap with `#RowDetails` harmless because both resolve to one colour. And a
+  dialog's button strip has no container at all, so **this item names one, `#DialogButtons`**
+  (§8), giving `#DialogButtons QPushButton#GhostBtn:focus` the `win` row.
+- **§4.4's matcher resolves a row by object name *and* by surface**, walking up the parent
+  chain for the first ancestor a qualified row names. **§4.4 owns what happens when the walk
+  reaches the top, and its answer is conditional** — restating it here as a plain fallback is
+  how the check becomes decorative. That walk is the whole cost of this choice over
+  renaming, and INV-1 states it.
 
 **Rejected: rename per surface** — `#BannerLinkBtn`, `#RowLinkBtn` — which keeps the
 matcher a flat name lookup, and is what `docs/specs/ONEUP-0064-interface-redesign.md` §4.1
@@ -545,8 +555,14 @@ covered already. The split, settled by the user on 2026-08-18, follows who built
   that box: `docs/specs/ONEUP-0034-gui-modules.md` §4.2 leaves *"the dialog openers"* in
   `oneup/gui/window.py` and gives the hand-built boxes no module of their own, and its INV-5
   puts them outside the accessible-name sweep *"as they are today"* — so the exclusion is
-  not a deferral waiting on another item. Should one ever be hand-built, it falls under the
-  rule's first clause and comes back into the set with no change here.
+  not a deferral waiting on another item.
+  **What the replica costs, said plainly rather than claimed away.** Because the check
+  builds an equivalent box instead of the one `show_about` builds, **no assertion here can
+  fail on the real About box** — this half of the check covers the exclusion *rule*, not
+  that dialog's contents. So a box hand-built later does fall under the rule's first clause,
+  but it does **not** re-enter the swept set on its own: §4.4's dialog list names the
+  dialogs it opens, and adding one is an edit to this section. Anyone replacing that
+  `QMessageBox` adds it to the list in the same commit.
 
 The exclusion is deliberately narrow. It turns on **construction**, not on appearance: an
 unnamed widget OneUp builds is a missing name and fails the check, which is the outcome the
@@ -645,11 +661,16 @@ per-theme loop above is what it passes them to.
   shape, and every badge keeps its text.
   *Test:* `tests/gui-smoke.py` asserts `ToggleSwitch._paint_state_shape` is reached in both
   checked states, that each badge's text is non-empty, and that the state shape measures at
-  least 3:1 against the **focused** track as well as the resting one — 6.46:1 and 11.68:1
-  today. Breaks if the focus treatment is implemented by replacing the painter rather than
-  recolouring its track, and breaks if a later theme darkens a track until the white mark on
-  it stops reading. `ONEUP-0027` §4.7 checks that shape against resting tracks only, so the
-  focused pair has no other home.
+  least 3:1 against the **focused** track — 6.46:1 and 11.68:1 today.
+  **Scoped to the focused track, and the scope is what makes it green:** the *resting*
+  tracks are `ONEUP-0027` §4.7's, which measures `switchon` and `switchoff` against
+  `switchmark`, and on the shipped palette the white mark reads **2.10:1** on the resting
+  `#2ecc71` — a real defect, and that spec's to close while it authors the palettes. An
+  unscoped version of this invariant would be red on day one for a pair this item never
+  touches, exactly as INV-7's own scoping note describes. The focused pair has no other
+  home, which is why it is here. Breaks if the focus treatment is implemented by replacing
+  the painter rather than recolouring its track, and breaks if a later theme darkens a track
+  until the white mark on it stops reading.
 
 - **INV-7** Every text colour **this item introduces or moves** measures at least 4.5:1
   against the pixels behind it, in each of its states — rest, hover and focus — in every
@@ -667,13 +688,19 @@ per-theme loop above is what it passes them to.
   **Scoped deliberately:** the whole-palette 4.5:1 sweep belongs to
   `ONEUP-0027` §4.7, which owns light `lastrun` (3.07:1 on `card`, 2.71:1 on `win`) and light
   `amber` under its §4.8, and which declares `disfg` on `disbg` exempt. That section also owns
-  every non-text 3:1 pair this item does not introduce — the ghost's `:hover` **border**
-  among them, which moves to the same `#4aa3ff` and is a border rather than ink. An unscoped version
+  every non-text 3:1 pair this item does not introduce. **The ghost's `:hover` border is not
+  one of them** — §4.3 moves it with the ink, because `QPushButton#GhostBtn:hover` sets
+  `border-color` and `color` to one literal, so it is a pair this item does introduce and
+  INV-8 measures it. An unscoped version
   of this invariant would fail on day one against three pairs this item never touches.
 
-- **INV-8** The ghost button's rest border measures at least 3:1 against the surface it is
-  drawn on, in every theme.
-  *Test:* the §4.4 computation, extended to that rest pair — §4.4's two halves measure a
+- **INV-8** The ghost button's border measures at least 3:1 against the surface it is
+  drawn on, in every theme, **at rest and on `:hover` / `:checked`** — the hover state
+  because §4.3 moves that `border-color` with the ink it shares a literal with, which makes
+  it a pair this item introduces rather than one `ONEUP-0027` §4.7 inherits (INV-7).
+  On the shipped palettes the hover pair is `#326dab` on light `card` at 5.37:1 and
+  `#4aa3ff` on dark `card` at 6.89:1, so the hover half passes where the rest half does not.
+  *Test:* the §4.4 computation, extended to those pairs — §4.4's two halves measure a
   focus fill against its rest surfaces and an ink against that fill, and a rest border
   against the surface behind it is neither. Breaks on both shipped palettes as they stand — `#c4ccd6` on
   `#ffffff` is 1.62:1 and `#38414f` on `#12161c` is 1.76:1 — which is the pair
@@ -711,6 +738,12 @@ per-theme loop above is what it passes them to.
   more. The direction is therefore chosen **once per gradient**, from the stop with the
   tighter constraint, and if that direction cannot carry the other stop to 3:1 the check
   fails the theme by the same route as the unsatisfiable surface set above.
+- **A palette's switch track cannot be darkened or lightened far enough to keep its own
+  state mark readable.** The switch is the one control whose fill is constrained by
+  something drawn on top of it (§4.2), so its search takes `switchmark` and `switchknob` as
+  extra surfaces and can therefore fail where a plain fill would not. It takes the same
+  route as the unsatisfiable surface set above — raise, name the control and the surfaces,
+  the theme does not ship — rather than returning a fill that leaves INV-6 red.
 - **`Qt` reports a widget as focusable that the user can never reach**, such as a scroll
   area inside a collapsed panel. INV-1 covers it anyway, which costs a row in §4.2 and
   nothing else. Over-covering is the safe direction.
@@ -723,8 +756,8 @@ per-theme loop above is what it passes them to.
 | INV-2, INV-3, INV-7 | `oneup/gui/theme.py` computation, driven from `tests/gui-smoke.py` | the ratio arithmetic, over every theme and both overlay states |
 | INV-5 | `oneup/gui/theme.py` unit check | the stride-16 sRGB lattice, plus the `#000000` / `#989898` pair that must raise rather than return — neither is per-theme |
 | INV-4 | `tests/gui-smoke.py` | parses the built stylesheet, including `:focus` rule ordering; its second half checks the focused and unfocused `ToggleSwitch` renders are related by a consistent colour-to-colour mapping |
-| INV-6 | `tests/gui-smoke.py` | asserts the switch's state shape survives, against the focused track as well as the resting one |
-| INV-8 | `oneup/gui/theme.py` computation | the ghost button's rest border against its surface |
+| INV-6 | `tests/gui-smoke.py` | asserts the switch's state shape survives, against the **focused** track — the resting tracks are `ONEUP-0027` §4.7's |
+| INV-8 | `oneup/gui/theme.py` computation | the ghost button's border against its surface, at rest and on `:hover` / `:checked` |
 
 **The figures in §4.3 are the check's output, not transcriptions.** The computation prints
 every pair it measures, so the table is regenerated rather than re-derived by hand — which
@@ -781,20 +814,28 @@ does.
   `docs/specs/ONEUP-0064-interface-redesign.md` or `docs/specs/ONEUP-0027-themes.md` lands
   the sheet edit first; this item owns the derivation, not the rule. It also closes a defect
   of its own — every dialog is light grey in dark mode today.
-- **`docs/specs/ONEUP-0027-themes.md` §4.7 gains `win` as a measured 3:1 surface.** Its
-  current list carries `ghostbd` against `card` and the danger family's banner borders
-  against `win`, but no focus pair on `win`, because until this item nothing rested there.
-  The pair is §4.3's two new rows. Its §2 note that *"`ui-and-accessibility.md` §6.1 is
+- **`docs/specs/ONEUP-0027-themes.md` §4.7 gains the dialog Close / Cancel focus pair.**
+  Its current 3:1 list already measures the **authored** `focus` token against `win` and
+  `card` — §9 says so too — so what is new is not the surface but the pair: §4.3's two
+  derived rows for a `#GhostBtn` resting on `win`. **They arrive as `focusfill` / `focusink`
+  keys in the *measured elsewhere* class the last bullet of this section defines, not as
+  rows of §4.7's pair table**, whose pairs are fixed while these are recomputed per palette.
+  Saying which of the two it is matters because §4.7 **fails** a key in neither its pair
+  table nor its decorative list. Its §2 note that *"`ui-and-accessibility.md` §6.1 is
   why dialogs need no work of their own"* rested on the model the measurement above
   refutes; it was corrected on 2026-08-19, together with §6.1 itself, ahead of this item,
   so both are already true and neither is owed here. That correction also gave
   `ONEUP-0027` §8 the `_QSS` bullet above as its own deliverable, for the case where 0064
   does not land the sheet edit first.
 
-- **Two dialog widgets are given object names, in the same commit as the rules that key
-  off them.** `RepoManagerDialog`'s `QScrollArea` becomes `#RepoScroll` and
+- **Three dialog widgets are given object names, in the same commit as the rules that key
+  off them.** `RepoManagerDialog`'s `QScrollArea` becomes `#RepoScroll`,
   `RollbackDialog`'s `QListWidget` becomes `#RollbackList` — `setObjectName` calls beside
-  the `setAccessibleName` each already carries. Both are new names in both stylesheets, so
+  the `setAccessibleName` each already carries — and **each dialog's button strip becomes
+  `#DialogButtons`**, which is what gives its *Close* / *Cancel* `#GhostBtn` a qualifier for
+  the `win` row (§4.2). Without that third name the strip has no unique ancestor and its
+  buttons reach §4.4's matcher on a surface no row lists, which is a check failure rather
+  than a fallback. All three are new names in both stylesheets, so
   `docs/specs/ONEUP-0064-interface-redesign.md` INV-7's object-name parity check between
   `_QSS` and `_HC_QSS` covers them from the moment they exist.
 
@@ -818,10 +859,16 @@ does.
   ring, because Qt draws it square and a focus border resizes the widget.
 - **`docs/specs/ONEUP-0027-themes.md`.** Its §4.7 defers the focus measurement to this item
   and its §4.8 hands over `ghostbd` on `card`; both already name this item, so neither needs
-  repointing. §4.7 does gain a row for `logbd` drawn on `rowcard` and on `rowhov` — §4.2 gives
-  `#DetailScroll` a border in that token and the panel is `background: transparent`, so it
-  is the row beneath that it is read against, not `logbg`. That adds a pair the existing
-  decorative disposition does not cover; the `logbd`-on-`logbg` row stands unchanged.
+  repointing. §4.7 does gain rows for `logbd` drawn on **three** further surfaces, and each
+  is **declared decorative** alongside the existing `logbd`-on-`logbg` row, which stands
+  unchanged. They are `rowcard` and `rowhov` — §4.2 gives `#DetailScroll` a border in that
+  token and the panel is `background: transparent`, so it is the row beneath that it is read
+  against, not `logbg` — and **`win`**, which is where §4.2 puts `#RepoScroll` and
+  `#RollbackList`. Decorative rather than 3:1 because under mechanism B the cue is the
+  border's **change** of colour, which INV-2 measures against `logbd` itself; how far the
+  resting border stands out from the panel behind it carries no state and is the same
+  judgement §4.7 already made for `logbd` on `logbg`. Naming the disposition matters because
+  §4.7 fails a key that sits in neither its pair table nor its decorative list.
 - **The palettes gain keys.** `_QSS` is one template substituted with either `_DARK` or
   `_LIGHT`, so a colour that differs by palette cannot be a literal in the sheet:
   `ghostbd`'s new value and every derived focus pair are palette keys. `ONEUP-0027` §4.7
@@ -889,8 +936,9 @@ does.
   rename. `docs/specs/ONEUP-0034-gui-modules.md` §4.2 leaves *"the dialog openers"* in
   `oneup/gui/window.py` and gives the hand-built boxes no module, and its INV-5 puts them
   outside the accessible-name sweep *"as they are today"*, so no 2.0 item takes this back;
-  a box hand-built later is OneUp's own and re-enters the checked set with no change to this
-  rule. **Out of the checked set, not out of the change** — the application sheet is set on
+  a box hand-built later is OneUp's own and falls under the rule, but re-entering the *swept*
+  set takes an edit to §4.4's dialog list, which that section states.
+  **Out of the checked set, not out of the change** — the application sheet is set on
   the application, so it still reaches anything Qt exposes.
 
 - **A new theme, or any change to what the app *does*.** This item changes how focus is
@@ -904,3 +952,4 @@ does.
 | 1 | 2026-08-18 | 2 lanes, cold; genre pinned spec; Q1 4 · Q2 4 · Q3 5 · Q4 1 — all 14 verified, 0 dismissed, of which 12 fixed and 2 surfaced rather than fixed (no severity scale under the four-question gate, so nothing here for §7's tally check to balance; ONEUP-0100) | **The first gate on this document's own bytes, and the 0-split row was right that none of the parent's assurance transfers.** Both lanes independently led with the same defect, and it is a recurrence rather than a new one: §4.1 stated two different algorithms — the boxed rule preferred black (*"or toward white, when black cannot get there"*) while the procedure two paragraphs below took *"the smallest `t` in either direction"*. Reproduced: the two agree on all eleven surfaces the shipped palettes use, because every one has a single viable direction, and diverge on any mid-luminance surface — `#5c5c5c` derives `#070707` under the rule and `#aeaeae` under the procedure. `ONEUP-0027` authors six more palettes. The parent's own parent-3 row records fixing *"the rule box stated two different algorithms"* on 2026-08-03; it survived the split, which is the case for gating a split document from loop 1. **The findings the lanes could raise but not settle were settled by running the thing.** Both asked what the dialogs actually contain, neither having `Bash`. Built offscreen: the three dialogs and the About box hold 21 focusable widgets, six of which match no row of §4.2 — an unnamed `QScrollArea`, an unnamed `QListWidget`, and the About box's two unnamed `QPushButton`s plus Qt's own two message-box labels. So INV-1's dialog half is red on day one, and `ONEUP-0064` §10 excludes both dialogs from its sweeps, so nothing else owns them. **Three more came from measuring what the document only described.** The overlay's `#LinkBtn:focus` moves text alone, `$link` → `$text`, which is 1.65:1 dark and 1.87:1 light — below 3:1, so the overlay carried a control whose cue could not work at any colour, and §4.3 had no row for it. `_HC_QSS` carries no `QScrollArea#DetailScroll` rule at all, so *"both overlay rules are widened to 2 px"* named one rule that exists and one that has to be created. And §8 called `ONEUP-0028` §5 stale in two ways when it is stale in three — it also claims `ToggleSwitch.paintEvent` draws a double ring *"when `hasFocus()`"*, and `hasFocus` appears nowhere in `updater.py`. **Two were surfaced rather than fixed, both because they change what the check asserts and both reaching sibling items.** How one object name carries three rest-pixel sets, given §4.4 matches by object name and `ONEUP-0064` §4.1 answered the same question by renaming; and whether INV-1 covers the six uncovered dialog widgets with rows or excludes unstyled Qt chrome by a stated rule. Each now carries a ⚠ OPEN block holding the measurement. **Collateral swept and moved in the same commit:** the rewritten rule sentence was restated in `ROADMAP.md` twice and in `docs/plans/ONEUP-0057-documentation-set.md` once. `ONEUP-0064`'s loop-log rows carry the old wording and were deliberately left — a loop log records what that pass found. Status stays Draft: the run did not return an empty loop and two decisions are open. |
 | 2 | 2026-08-18 | 2 lanes, cold; identical brief, packet rebuilt from disk; Q1 2 · Q2 3 · Q3 2 · Q4 1 — all 8 verified, 0 dismissed, all fixed. Cap reached (2 for a spec); the run files its tail and exits | **Both lanes independently led with the same defect, and it was loop 1's own fix.** Loop 1 rewrote INV-4's painted half to assert the focused render *"introduces no colour the unfocused one does not already contain"*. That is false against the design this document mandates — §4.3 moves the on-track from `#2ecc71` to `#186c3c`, which is a new colour — so the assertion is red on a correct implementation, and one lane added the other half: a ring drawn in a colour already on screen (the white knob, the white `_paint_state_shape` pen) adds nothing new, so the one failure it exists to catch passes. Both weaker forms are now stated and rejected by name, and the assertion is a consistent colour-to-colour mapping, which a recolour satisfies by construction and a ring breaks. §7 restated the rejected form and was aligned. **This is the 4a-min pattern exactly: loop 1's fix added assertive text, and the added text was what loop 2 spent its strongest finding on.** **The best pre-existing finding needed arithmetic no lane could run.** One lane worked out by hand that §4.3's light link ink `#3779bd` — measured only on `card` — fails on the row surfaces, estimating 4.19:1 and 3.89:1; executed, those are exactly right, and the banner tint is 4.01:1. §4.2 puts a `#LinkBtn` on `rowcard`/`rowhov` (`size_btn`) and one on the banner (`warn_copy_btn`), so INV-7 was red on day one against a pair this item moves. Both inks are now one value derived against the worst surface — `#326dab` and `#446f9c`, worst 4.61:1 and 4.51:1 on `rowhov` — which also keeps the object-name question in §4.2 away from the ink. The dark palette adopts neither: `#4aa3ff` already measures 4.60:1 on its own worst surface and `#326dab` would measure 2.26:1 there. **A lane's open question turned into the run's most interesting fact.** It asked whether five `size_btn` instances exist, which would make the census 38 rather than 34. Executed: five distinct objects do exist, one per `TaskRow`, all named `#LinkBtn` — but only the system row's is parented, so `findChildren` returns one and 34 is correct. Hidden is not the same as unparented, and §2.1 claimed the count included everything *"whether or not they are showing"*. The four others are real, focusable and invisible to the sweep, which is a hole in INV-1's guarantee rather than in the figures. **Two more contradictions with teeth.** §4.1's floor — *"a cue that already clears 3:1 is kept"* — is a bare ratio test, and the dark `#GhostBtn`'s existing 3.91:1 clears it while being a 1 px border that fails SC 2.4.13's area half; the floor now carries that qualification. And §4.2 had no overlay row for the two mechanism-B panels while §4.3 had one, so a builder would derive their overlay border from `logbd`, a base key the overlay does not carry; the row is added, with the general rule that an overlay row replaces its control's base row rather than adding to it. **One citation was wrong in a way worth recording:** §8 sent a reader to `ONEUP-0028` §2 for the corroborating defect record. Both quoted strings are verbatim, but they live in that document's *Background — what is broken today* section; its §2 is *Announcements*, because it leaves `##` sections unnumbered and numbers only the `###` subsections. My own packet window for that section was mis-cut the same way, which is how the lane reached the right conclusion by the wrong route. **Status stays Draft.** The run reached its cap rather than an empty loop, and the two ⚠ OPEN decisions from loop 1 are still open. |
 | 3 | 2026-08-18 | 2 lanes, cold; genre pinned spec; first loop of a FRESH run, triggered by the two decisions being settled and folded in; --max-loops 1, so the run files and exits at one loop rather than at the document's cap of 2; Q1 2 · Q2 3 · Q3 2 · Q4 1 — all 8 verified, 0 dismissed, of which 7 fixed and 1 surfaced as a new open decision | **The strongest finding was measured rather than read, and it is a live contrast failure in the light palette only.** §4.2 said `SettingsDialog`'s surface *"is `card` — the sheet is set on the application, so the dialog inherits it"*. A dialog inherits the *sheet*, not a `background` declaration written for `QMainWindow`, and `_QSS` carries no `QDialog` rule at all. Built offscreen through `build_theme` and read at the centre pixel: a bare `QDialog` paints **`#efefef` in BOTH themes** under the base sheet, while `_HC_QSS`'s `QMainWindow, QDialog { background: $win; }` correctly pins it under the overlay. The light `#GhostBtn` focus fill `#949494`, derived from `card` `#ffffff`, measures **2.64:1** there against this document's own 3:1 floor; dark passes by accident at 5.25:1, which is exactly how it would survive a dark-mode-only check, and adding the missing `QDialog` rule does not rescue light either (2.68:1 on `win`). Surfaced rather than fixed: one route edits `_QSS`, which is not this document's to decide. **A fourth `#LinkBtn` surface exists and no row covered it.** `RepoManagerDialog._make_row` builds a *Remove* `#LinkBtn` inside a `#RowCard` for every duplicate-URL repository; `ONEUP-0064` §4.2's own out-of-scope table names those dialogs' `#LinkBtn` controls, so the gap was corroborated from the other side. It also makes the census a variable — that dialog builds one `ToggleSwitch` per repository — so the 21 is a property of the measuring machine and the document now says so. **The Q4 was this run's own collateral, and it is what let the finding above hide.** The loop-2 decision fold-in wrote a matcher that falls back to the unqualified row *whenever* the parent walk reaches the top; under an unconditional fallback any name with a default row matches on every surface, so INV-1's "containing surface" clause could never fail and the uncovered repo-dialog button would have been reported covered. The fallback is now conditional. **Two pre-existing Q2s with teeth, both about what §8 leaves standing.** §8 amends `ui-and-accessibility.md` §5.3 by *adding* the area half of SC 2.4.13 while leaving its two worked examples and its high-contrast paragraph saying a `:focus` rule is *"same as hover"* / *"a copy of hover"* — which §4.3 contradicts in every palette, so a control added after this ships copies the overlay's hover and lands a cue at 1.43:1. And §8 enumerates every document this item corrects and omits `ONEUP-0064`, whose §4.1 makes the disclosure's `:hover` rule *required* on the grounds that §5.1 derives every focus cue from the hover appearance — a sentence §3.1 deletes — when §4.2 derives that control from `rowcard` and `rowhov` instead; 0064 lands first, so its builder was blocked on an open design choice by a requirement this item does not impose. **Two more the lanes reached by arithmetic.** §4.1 pinned direction, step and rounding *"so two readings cannot diverge"* and never said which rest pixel the blend STARTS from: reproduced, `#6a6d73` is `rowcard` at t=0.35 and `rowhov` at the same t gives `#6d7177`, a different palette value that clears the threshold just as well. And INV-2 justified its border rule by saying `ghostbd` and the fill are *"both the smallest blend from `card`"*, where §4.3 publishes `#8f959c` / `#5e6570` against fills of `#949494` / `#606367` — the border blends from `ghostbd` itself, and following INV-2 literally would ship the fill's hex as the border's. **One lane open question became the eighth finding:** §4.3 moves the light ghost hover *ink* to `#326dab` while `QPushButton#GhostBtn:hover` sets `border-color` and `color` to one literal, so moving the ink alone leaves a 2.63:1 border beside a 4.61:1 label. **Filed rather than fixed, two, both in documents with their own gates ahead of them:** `ONEUP-0027`'s *"why dialogs need no work of their own"* and `ui-and-accessibility.md` §6.1's *"theme comes free"* rest on the same model the measurement above refutes. **A calm cap, not an oscillating one:** one of the eight landed squarely on text this run wrote, and the run stopped on its `--max-loops 1` argument rather than on the document's cap, so a second cold loop is available and unspent. Status stays Draft — no empty loop, and one decision open. |
+| 4 | 2026-08-19 | 3 lanes, cold; second and final loop of this run, so the spec cap of 2 binds; Q1 2 · Q2 3 · Q3 3 · Q4 1, 9 verified, 0 dismissed | **A calm cap: two of the nine landed on text a gate loop of this run wrote** — loop 3's unconditional-fallback sentence and its About-box self-healing claim — with the rest pre-existing or in the 2026-08-18 dialog-surface authoring. The document simply held more defects than the cap held loops, so it ships; it is now **954 lines**, well past the range where two cold reads comfortably reach every part, which is the number to weigh if it is ever gated again. **Not one arithmetic error exists in this document.** Every published figure was recomputed against the tree before the lanes ran — §2.2, §2.3, §4.1's `$focus` table and its 4.58 bound at `L` = 0.1791, all twelve of §4.3's derived fills hex-for-hex, both gradients' worst pixels, the composited banner tint, INV-2's 1.00:1 / 1.03:1 pair and INV-6's 6.46:1 / 11.68:1 — and the §2.1 census reproduces at 34 focusable, 18 with a `:focus` rule, 16 without. **The two Q1s are both scoping failures wearing a fact's clothes.** INV-6 required the state shape to clear 3:1 against the resting track as well as the focused one, and white on the resting `#2ecc71` is **2.10:1** — red on day one, against a pair its own closing sentence assigns to `ONEUP-0027` §4.7; it is now scoped to the focused track, exactly as INV-7's neighbouring note already scopes itself. And §8 claimed §4.7 carries *"no focus pair on `win`, because until this item nothing rested there"* when that section's 3:1 list measures the authored `focus` token against `win` — a claim §9 of this same document contradicts. **The three Q2s were all one passage arguing with another.** §4.3 moves `QPushButton#GhostBtn:hover`'s `border-color` with the ink it shares a literal with, while INV-7 handed that same border to `ONEUP-0027` as a pair *"this item does not introduce"* — so whichever a builder believed, the pair shipped unmeasured; INV-8 now owns it at rest and on hover. §4.2 restated §4.4's matcher fallback as unconditional, which §4.4 itself calls decorative. And §8 said the `win` pairs are rows of §4.7's pair table in one bullet and *"cannot sit in that spec's pair table"* in another, where a key in neither category fails that spec's check. **The best Q3 is the one all three lanes reached from different directions:** §4.2's qualifier scheme leaves two surfaces with no unique ancestor — `_row` and `_make_row` both build a `#RowBorder` holding a `#RowCard`, exactly as `TaskRow` does, and a dialog's button strip has no container at all — so the `rm` button would have taken a `card`-derived fill over `rowcard`, the 2.83:1 shape §4.2 warns about. The prose also said *"three rows"* against a four-row table. Both surfaces are now answered rather than left to the builder, the second by naming `#DialogButtons`. The remaining two: the switch's fill was derived against its track alone while INV-6 measures a white mark painted *on* that track, so its search now takes `switchmark` and `switchknob` and §6 carries the failure route — verified not to move either published fill; and §8's new `logbd` rows named two surfaces of three and no disposition, now three and declared decorative with the reason. The Q4 is the About box: the check builds a replica rather than what `show_about` builds, so no assertion can fail on the real one, and the claim that a hand-built box *"comes back into the set with no change here"* was false — §4.4 enumerates its dialogs by name. Said plainly instead. |
