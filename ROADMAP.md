@@ -3521,3 +3521,37 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** If GitHub's build machine gets stuck, the release just sits there instead of failing quickly so it can be retried.
   Kind: chore.
   Source: in-session-2026-08-19 (v1.4.5 release).
+
+- 📋 [ONEUP-0117] **Give ONEUP-0108 INV-1 a case for an empty code field.**
+  Filed by ONEUP-0072's loop 5 rather than fixed, because it is a contract
+  addition to a document with its own gate, not a sentence that can be
+  corrected in passing.
+
+  The facts, verified today. `update_system.sh` has 21 `end_step` call sites
+  and exactly one passes no `detail`: `end_step cache ok` (the cache step's
+  success). It therefore emits `@@STEP_END@@|cache|ok|` — an EMPTY third
+  field. ONEUP-0072 §4.1 rules that out for the converted engine ("an empty
+  code field is not a legal payload", the cache step emits `done`), so the
+  case only arises in the combination ONEUP-0072 §6's last row describes:
+  the retained Bash engine run against a converted window, which is frozen
+  at the switch-over and deliberately supported.
+
+  The gap. ONEUP-0108 INV-1 requires a code with no entry to render
+  "something readable and non-empty", and its test asserts the rendered text
+  "contains every unknown code it was fed". With an empty field there is no
+  code to name, so both §4.3 fallback forms — which name the code — are
+  unsatisfiable, and the assertion is vacuous rather than failing. Neither
+  document says what the badge shows.
+
+  ONEUP-0072 §6's row is already narrowed to state the empty field and to
+  name ONEUP-0108 INV-1 as the owner, so the pointer exists; what is missing
+  is a decision about what the window renders. Likely shapes: treat an empty
+  code field as its own case with a fixed sentence, or fold it into the long
+  form with wording that does not depend on naming a code.
+
+  Pick this up with ONEUP-0108's next gate. That document is Status: Draft
+  with four loop rows and is not currently queued for one, which is why this
+  is a bullet rather than a note in a plan block.
+  **Layman:** The frozen old engine sends one blank answer the new window has no words for. Decide what it should say.
+  Kind: doc.
+  Source: review-contract-2026-08-19 loop 5 on ONEUP-0072, filed not fixed.

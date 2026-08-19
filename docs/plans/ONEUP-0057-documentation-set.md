@@ -47,7 +47,9 @@ absorbed and removed).
 > **One finding is filed rather than fixed**, in a document with its own gate: the retained
 > Bash engine's `end_step cache ok` sends an **empty** code field, and `ONEUP-0108` INV-1's
 > fallback requires text naming a code there is none of. §6's row is narrowed here and names
-> `ONEUP-0108` as the owner; picking it up needs that document, not this one.
+> `ONEUP-0108` as the owner; picking it up needs that document, not this one. Queued as
+> **ONEUP-0117**, because `ONEUP-0108` is `Status: Draft` with four loop rows and is not
+> otherwise scheduled for a gate.
 >
 > **Next: `ONEUP-0032`** (a real loop 1, not a citation pass), then the `ONEUP-0027` citation
 > pass, which carries the two findings filed from the `ONEUP-0076` run. `ONEUP-0064` still
