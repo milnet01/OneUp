@@ -1188,6 +1188,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   empty cache code field, which INV-1's fallback there cannot word.
   ONEUP-0072 stays Draft with no open decision; a second cold loop is
   available and unspent. Next: ONEUP-0032 loop 1.
+  Progress (2026-08-19): ONEUP-0032 gated — review-contract loop 8, 2 cold
+  lanes, --max-loops 1. Q1 2 · Q2 3 · Q3 1 · Q4 2, 8 verified, 1 dismissed,
+  8 fixed, 1 filed as ONEUP-0118. The first read since the ONEUP-0101 split
+  reshaped its siblings; all eight were pre-existing draft defects. Both lanes
+  led with §4.2 resolving OneUp's catalogue "beside" rather than inside the
+  package. INV-8 was wrong twice over and running it settled both halves:
+  pyside6-lupdate given a directory extracts nothing, and pyside6-lrelease
+  drops every unfinished message, so its "non-empty catalogue" criterion
+  passed on a 33-byte file that translates nothing. A second cold loop is
+  available and unspent; the document stays Status: Draft. Next is the
+  ONEUP-0027 citation pass; ONEUP-0064 owes a decision rather than a loop.
 
 - 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether

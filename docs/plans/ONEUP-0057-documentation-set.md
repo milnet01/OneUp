@@ -16,7 +16,44 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: `ONEUP-0072` gated (loop 5); next is `ONEUP-0032`**
+> ## ▶ You are here — **Task 18: `ONEUP-0032` gated (loop 8); next is the `ONEUP-0027` citation pass**
+>
+> **Loop 8 ran — 2 cold lanes, `--max-loops 1`. Q1 2 · Q2 3 · Q3 1 · Q4 2, 8 verified, 1
+> dismissed, 8 fixed, 1 filed as `ONEUP-0118`.** The real loop 1 this document was owed: its
+> last read was 2026-07-31, before the `ONEUP-0101` split reshaped its siblings. Eight
+> pre-existing draft defects and no collateral, because this was the run's first loop.
+>
+> **Both lanes independently led with the same one-word path error.** §4.2 resolved OneUp's
+> catalogue *"through the `translations/` directory **beside** the `oneup` package"* — while
+> §8, §10, `files-and-naming.md` §4 (*"sits inside the package"*) and
+> `wording-and-translation.md` §7 (*"inside the one package directory"*) all say **inside**.
+> An implementer writes `Path(oneup.__file__).parent.parent`, `load()` misses on every
+> installed copy, and §4.2's pair rule then keeps the app English forever.
+>
+> **The catalogue-build invariant was wrong twice over, and running it settled both halves.**
+> `pyside6-lupdate oneup/ -ts …` reports `Found 0 source text(s)` — with or without
+> `-recursive`, and for `oneup/gui/` too; only a file list extracts anything. And
+> `pyside6-lrelease` drops every unfinished message, so a freshly extracted catalogue
+> compiles to a **33-byte `.qm` carrying zero translations**, which satisfies *"produces a
+> non-empty catalogue"* while proving nothing. The repaired criterion was measured too: a
+> finished translation round-trips to `'ÜBERSETZT'` through `QCoreApplication.translate`.
+> That second measurement also killed INV-2, which built its fixture *"the way INV-8's check
+> does"* and then asked INV-4 to assert a **translated** string still translates.
+>
+> **A second cold loop is available and unspent** — the run stopped on `--max-loops 1`, not
+> on the document's cap of 2, and this loop's fixes added assertive text in six places.
+> `ONEUP-0032` stays `Status: Draft` for the usual reason: no loop has come back empty. It
+> carries **no** open decision.
+>
+> **One finding is filed rather than fixed.** `wording-and-translation.md` §7's Extract row
+> carries the same over-a-directory `pyside6-lupdate` command. Correcting a standard changes
+> what a conformer runs, so it re-arms that document's own gate rather than taking a passing
+> edit. Queued as **ONEUP-0118**.
+>
+> **Next: the `ONEUP-0027` citation pass**, which carries three filed findings. `ONEUP-0064`
+> still owes a decision rather than a loop.
+
+> ## Previously — **Task 18: `ONEUP-0072` gated (loop 5); next is `ONEUP-0032`**
 >
 > **Loop 5 ran — 2 cold lanes, `--max-loops 1`. Q1 1 · Q2 2 · Q3 0 · Q4 0, 3 verified, 1
 > dismissed, 3 fixed, 1 filed to `ONEUP-0108`.** The first cold read of this document since
@@ -1367,7 +1404,11 @@ git commit -m "ONEUP-0064: spec the interface redesign"
         run-state note is gone under `documentation.md` §7.1. Still `Status: Draft`,
         deliberately — the gate never returned an empty loop.
       - [ ] **ONEUP-0076** (630)
-      - [ ] **ONEUP-0032** · [ ] **ONEUP-0027** (cheap)
+      - [~] **ONEUP-0032** — loop 8 ran 2026-08-19, `review-contract`, 2 lanes,
+        `--max-loops 1`: 8 verified, 8 fixed, 1 dismissed, 1 filed as **ONEUP-0118**.
+        Commit `44b8677`. The document's cap is 2 and only one was spent, so **a second
+        cold loop is available**. Still `Status: Draft` — no loop has come back empty.
+      - [ ] **ONEUP-0027** (cheap)
 - [ ] **Step 2–4:** verify, fix by severity, loop cold until clean, log as you go.
 - [ ] **Step 5: Commit** per loop:
 
