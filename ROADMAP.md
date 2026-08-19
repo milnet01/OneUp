@@ -1244,6 +1244,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   / 0 failed. Next: ONEUP-0064's open decision (the disclosure arrow's
   hover ink), and the unspent second cold loops on ONEUP-0072 and
   ONEUP-0076 whenever the user wants them spent.
+  Progress (2026-08-19): ONEUP-0072 second cold loop run (document row 6, loop 2 of the run) — 3 lanes, Q1 1 · Q2 3 · Q3 0 · Q4 0, 4 verified and fixed, 3 dismissed. The spec cap of 2 binds and it is a CALM cap: none of the four findings landed on text this run wrote. The Q1: §4.1's "The engine keeps its English" claimed three of the five families and it is four — $REBOOT_REASON feeds both the marker and the summary's own echo, and REBOOT is the family §4.1 most tells the implementer to convert. All three Q2s were missing entries in §8, the commit-time doc-edit list: oneup-2.0.md §3 item 1 (the protocol-freeze clause, still narrow), testing.md §1's suite-table row for the retired differential-test.sh, and the scoping of marker-protocol.md §5.2's "never as the raw token". ONEUP-0072 stays Status: Draft — the run reached its cap without an empty loop. Filed not fixed: oneup-2.0.md's G1/G2 passage credits the payload conversion to ONEUP-0032. Commit e7436c4.
 
 - 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether
