@@ -1523,7 +1523,13 @@ git commit -m "ONEUP-0064: spec the interface redesign"
         (the user chose the English branch). **Read the spec's own §11 loop log**; the
         run-state note is gone under `documentation.md` §7.1. Still `Status: Draft`,
         deliberately — the gate never returned an empty loop.
-      - [ ] **ONEUP-0076** (630)
+      - [x] **ONEUP-0076** — gated 2026-08-18, three loops on its own bytes. Loops 1 and 2
+        were one run (14 then 8 verified, capped); loop 3 opened a fresh run after its two
+        decisions were settled and folded in (8 verified, 7 fixed, 1 surfaced), and stopped
+        on `--max-loops 1` rather than on the document's cap of 2 — **a second cold loop is
+        available and unspent.** `Status: Draft`: no loop came back empty. Its one surfaced
+        decision, the dialog surface, was settled the same session. This line read `[ ]`
+        until 2026-08-19, which contradicted the state blocks above it.
       - [x] **ONEUP-0032** — **converged by cap** 2026-08-19, `review-contract`, two loops,
         2 lanes each. Loop 8: 8 verified, 8 fixed, 1 dismissed, 1 filed as **ONEUP-0118**
         (`44b8677`). Loop 9: 6 verified, 6 fixed, 1 dismissed, added **INV-9** (`39f2b25`).
