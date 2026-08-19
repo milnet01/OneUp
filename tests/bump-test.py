@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # bump.py itself is copied only so the subprocess's ROOT resolves to the temp tree — it
 # never edits itself. The other four are the real version-bearing files it rewrites
-# (steps 1–5), copied verbatim so their real formats are exercised.
+# (steps 1-5), copied verbatim so their real formats are exercised.
 REAL_FILES = [
     "bump.py",
     "updater.py",
@@ -79,7 +79,7 @@ def main() -> int:
 
         # bump.py resolves ROOT from its own location, so running the copy makes
         # it edit the temp tree, never the real checkout.
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 — fixed argv, temp-tree paths.
             [sys.executable, str(tmp / "bump.py"), NEW],
             capture_output=True, text=True,
         )

@@ -151,8 +151,8 @@ def check_pointers() -> None:
     # Only the documents that describe the tree as it is today. A spec, a design document
     # and a plan all legitimately name files they are going to create (§2), so a dangling
     # path in one of those is a forward reference, not a stale pointer.
-    for path in docs("docs/standards", "docs/reference") + [ROOT / "CLAUDE.md",
-                                                            ROOT / "README.md"]:
+    for path in [*docs("docs/standards", "docs/reference"), ROOT / "CLAUDE.md",
+                 ROOT / "README.md"]:
         for i, ln in enumerate(path.read_text().split("\n"), 1):
             # A markdown link is relative to the document; a backticked path is a command
             # or a repo path, so it is relative to the root and may carry a leading "./".

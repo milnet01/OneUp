@@ -3,8 +3,9 @@
 
 Usage:  ./bump.py X.Y.Z
 
-Edits the six lockstep sites docs/standards/workflow.md §5.1 documents — updater.py APP_VERSION, the RPM
-spec Version + %changelog, the OBS _service versionformat + revision, the AppStream
+Edits the six lockstep sites docs/standards/workflow.md §5.1 documents — updater.py
+APP_VERSION, the RPM spec Version + %changelog, the OBS _service versionformat +
+revision, the AppStream
 <release>, and the CHANGELOG heading + link — and derives the spec/metainfo release
 notes from the CHANGELOG's `## [Unreleased]` bullets, so that section is the single
 source of truth. Afterwards, review `git diff` and run ./local-CI.sh (its

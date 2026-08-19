@@ -1,0 +1,20 @@
+# Lint configuration only — OneUp is not a pip-installable package and has no
+# [project] table. The file exists so that a bare `ruff check` and local-CI.sh's
+# Lint gate give the same answer on the same code; before it, the gate passed
+# `--select F,B` and a developer's bare run got ruff's defaults instead.
+# docs/standards/coding.md §2.1 settles the contents; ONEUP-0063 adopted them.
+
+[tool.ruff]
+target-version = "py313"          # matches the floor in coding.md §1
+line-length = 100                 # §2.1 measured why, not ruff's default 88
+exclude = ["screenshots"]
+
+[tool.ruff.lint]
+select = ["F", "B", "S", "E", "W", "I", "UP", "RUF", "BLE"]
+# F  pyflakes — real bugs (undefined name, unused import)
+# B  bugbear — mutable default args, loop-variable capture
+# S  bandit — subprocess/shell safety; see coding.md §5 and the noqa comments
+# E,W pycodestyle; I import sorting; UP pyupgrade — keeps idioms at the floor
+# RUF ruff's own, incl. RUF100 which flags a noqa that no longer suppresses anything
+# BLE blind-except — enabled because tests/gui-smoke.py already carries
+#     `# noqa: BLE001` comments; without BLE, RUF100 flags every one of them

@@ -39,7 +39,7 @@ _NOTIFY_LOG = os.path.join(_SANDBOX, "notify.log")
 _notify_mock = os.path.join(_BIN, "notify-send")
 with open(_notify_mock, "w") as _f:
     _f.write(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> {_NOTIFY_LOG}\n')
-os.chmod(_notify_mock, 0o755)
+os.chmod(_notify_mock, 0o755)  # noqa: S103 — a PATH mock must be executable.
 os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
@@ -161,7 +161,8 @@ def main() -> int:
     check("_format_duration formats minutes", updater.Updater._format_duration(65) == "1m 5s")
     check("_format_duration handles sub-second", updater.Updater._format_duration(0) == "<1s")
     check("flatpak row badge = 'Up to date'", w.rows["flatpak"].badge.text() == "Up to date")
-    check("firmware skip badge = 'Not installed'", w.rows["firmware"].badge.text() == "Not installed")
+    check("firmware skip badge = 'Not installed'",
+          w.rows["firmware"].badge.text() == "Not installed")
     check("orphans fail badge = 'Failed'", w.rows["orphans"].badge.text() == "Failed")
     check("cache FREED badge shows reclaimed size + timing, overriding 'Done'",
           w.rows["cache"].badge.text() == "Reclaimed 1.0G  ·  3s")
@@ -383,7 +384,7 @@ def main() -> int:
     attach_dir = tempfile.mkdtemp()
     attach_log = os.path.join(attach_dir, "run.log")
     # A stand-in engine: alive, so the pid check passes, and writing real marker lines.
-    holder = _sp.Popen(["sleep", "60"])
+    holder = _sp.Popen(["sleep", "60"])  # noqa: S607 — fixed argv.
     with open(attach_log, "w") as fh:
         fh.write("@@STEP_BEGIN@@|system|1|2|Updating system packages\n"
                  "@@PROGRESS@@|system|12|141|download\n")
@@ -409,7 +410,8 @@ def main() -> int:
         # its @@DONE@@ line. This must not throw (it did: on_finished assumed self.proc).
         with open(attach_log, "a") as fh:
             fh.write("@@DONE@@|ok\n")
-        holder.terminate(); holder.wait()
+        holder.terminate()
+        holder.wait()
         try:
             wA._poll_attached_run()
             check("a followed run finishing is handled without a process object", True)
@@ -425,7 +427,8 @@ def main() -> int:
         check("a stale record is deleted", not updater.RUN_STATE.exists())
     finally:
         if holder.poll() is None:
-            holder.terminate(); holder.wait()
+            holder.terminate()
+            holder.wait()
         updater.RUN_STATE = orig_state
         shutil.rmtree(attach_dir, ignore_errors=True)
 
@@ -876,7 +879,8 @@ def main() -> int:
     # the second is the one a false-only fixture misses: _autoupdate_enabled shells out to
     # systemctl, so it reports the MACHINE, and a timer enabled outside OneUp would make it
     # true while the user's own enable is still in flight.
-    for label, enabled in (("no timer present", False), ("a timer the toggle didn't know about", True)):
+    for label, enabled in (("no timer present", False),
+                           ("a timer the toggle didn't know about", True)):
         w = updater.Updater()
         removed_f = []
         w._stand_down_autoupdate = _real_stand_down.__get__(w)
@@ -931,7 +935,8 @@ def main() -> int:
     )
     repos = updater._parse_repos(sample)
     check("parse reads all repositories", len(repos) == 3)
-    check("parse reads the enabled flag", repos[0]["enabled"] is True and repos[1]["enabled"] is False)
+    check("parse reads the enabled flag",
+          repos[0]["enabled"] is True and repos[1]["enabled"] is False)
     check("parse reads the URL", repos[0]["url"] == "http://d.o/oss/")
 
     dlg = updater.RepoManagerDialog(None, repos)
@@ -949,11 +954,13 @@ def main() -> int:
     check("purpose: debug detected before oss",
           "Debug symbols" in P({"alias": "x-debug-oss", "name": "D", "url": "u", "enabled": False}))
     check("purpose: non-oss detected before oss",
-          "Non-open-source" in P({"alias": "repo-non-oss", "name": "N", "url": "u", "enabled": True}))
+          "Non-open-source" in P({"alias": "repo-non-oss", "name": "N", "url": "u",
+                                  "enabled": True}))
     check("purpose: main oss collection",
           "Main openSUSE" in P({"alias": "repo-oss", "name": "O", "url": "u", "enabled": True}))
     check("purpose: unknown repo falls back",
-          P({"alias": "zzz", "name": "Z", "url": "http://ex/", "enabled": True}) == "Software package repository.")
+          P({"alias": "zzz", "name": "Z", "url": "http://ex/", "enabled": True})
+          == "Software package repository.")
 
     # No change -> empty command; a disable + a remove -> one validated pkexec call.
     check("no changes yields an empty apply command", dlg._build_apply_command() == [])
@@ -1051,7 +1058,8 @@ def main() -> int:
     finally:
         updater.sys.executable = _orig_exe
         updater.shutil.which = _orig_which
-    check("Exec escapes '$' as backslash-backslash-'$' (not $$ or bare $)", r"\\$" in line and "$$" not in line)
+    check("Exec escapes '$' as backslash-backslash-'$' (not $$ or bare $)",
+          r"\\$" in line and "$$" not in line)
     check("Exec escapes '%' as '%%'", "%%up" in line)
 
     # (3) The tray icon renders in both states and is never null.
@@ -1066,7 +1074,7 @@ def main() -> int:
 
     # (4) The periodic check is silent and parses the real THREE-field TOTAL line.
     w = updater.Updater()
-    args = w._tray_check_args("/tmp/x.log")
+    args = w._tray_check_args("/tmp/x.log")  # noqa: S108 — an argument value, never opened.
     check("tray check runs --check", "--check" in args)
     check("tray check is silent (no --notify)", "--notify" not in args)
     w._parse_tray_line("@@CHECK@@|TOTAL|3|updates available")
@@ -1102,7 +1110,8 @@ def main() -> int:
 
     # (6) Settings dialog hosts the two new toggles; both default off.
     w = updater.Updater()
-    check("tray toggle defaults off", not w.tray_btn.isChecked() and w.tray_btn.text() == "Tray icon: off")
+    check("tray toggle defaults off",
+          not w.tray_btn.isChecked() and w.tray_btn.text() == "Tray icon: off")
     check("start-at-boot toggle defaults off",
           not w.startboot_btn.isChecked() and w.startboot_btn.text() == "Start at boot: off")
     dlg = updater.SettingsDialog(w)
@@ -1116,7 +1125,8 @@ def main() -> int:
     w._ensure_tray = lambda: None
     w.on_startboot_toggled(True)
     check("boot-on turns the tray on", w.tray_btn.isChecked())
-    check("boot-on persists tray_enabled", w.settings.value("tray_enabled", False, type=bool) is True)
+    check("boot-on persists tray_enabled",
+          w.settings.value("tray_enabled", False, type=bool) is True)
     # Every Updater() in this process shares QSettings("OneUp", "OneUp") and updater.py reads
     # tray_enabled on construction, so leaving this True would silently arm the tray for any
     # later scenario asserting the default-off state.
@@ -1160,11 +1170,13 @@ def main() -> int:
         def accept(self): pass
     w.show()   # show first so isHidden() below meaningfully proves closeEvent hid it
     check("window is visible before the tray-close", not w.isHidden())
-    e1 = _Evt(); w.closeEvent(e1)
+    e1 = _Evt()
+    w.closeEvent(e1)
     check("close-to-tray ignores the close event", e1.ignored)
     check("close-to-tray hides the window", w.isHidden())
     check("close-to-tray fires the hint once", hints == [True])
-    e2 = _Evt(); w.closeEvent(e2)
+    e2 = _Evt()
+    w.closeEvent(e2)
     check("close-to-tray does not re-hint on a second close", hints == [True])
 
     # (12) on_finished refreshes the tray: a successful run -> neutral; a check -> the count.
@@ -1212,7 +1224,8 @@ def main() -> int:
     # (12c) The tray makes the same claim from the same markers, so it needs the same
     # guard: CHECK_UNKNOWN arrives before the TOTAL it qualifies.
     w = updater.Updater()
-    w._parse_tray_line("@@CHECK_UNKNOWN@@|system|OneUp couldn't read these software sources: packman")
+    w._parse_tray_line(
+        "@@CHECK_UNKNOWN@@|system|OneUp couldn't read these software sources: packman")
     w._parse_tray_line("@@CHECK@@|TOTAL|0|updates available")
     check("tray records the qualified total", w._tray_total == 0)
     check("tray flagged the check as uncertain", w._traycheck_unknown is True)

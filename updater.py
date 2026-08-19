@@ -15,6 +15,7 @@ what the optional weekly systemd-user timer calls.
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import re
@@ -539,7 +540,7 @@ def current_is_dark(app: QApplication) -> bool:
     """Follow the desktop's colour scheme (Qt 6.5+); default to dark if unknown."""
     try:
         return app.styleHints().colorScheme() != Qt.ColorScheme.Light
-    except Exception:
+    except Exception:  # noqa: BLE001 — any failure here just means "assume dark".
         return True
 
 
@@ -586,13 +587,13 @@ def run_kwin_script(js: str) -> None:
             f.write(js)
         base = ["dbus-send", "--session", "--dest=org.kde.KWin",
                 "--print-reply", "/Scripting"]
-        subprocess.run(base + ["org.kde.kwin.Scripting.loadScript",  # noqa: S603 — fixed argv.
-                               f"string:{script_path}", f"string:{name}"],
+        subprocess.run([*base, "org.kde.kwin.Scripting.loadScript",  # noqa: S603 — fixed argv.
+                        f"string:{script_path}", f"string:{name}"],
                        capture_output=True, timeout=3)
-        subprocess.run(base + ["org.kde.kwin.Scripting.start"],  # noqa: S603
+        subprocess.run([*base, "org.kde.kwin.Scripting.start"],  # noqa: S603
                        capture_output=True, timeout=3)
-        subprocess.run(base + ["org.kde.kwin.Scripting.unloadScript",  # noqa: S603
-                               f"string:{name}"],
+        subprocess.run([*base, "org.kde.kwin.Scripting.unloadScript",  # noqa: S603
+                        f"string:{name}"],
                        capture_output=True, timeout=3)
     except (OSError, subprocess.SubprocessError):
         pass
@@ -1033,8 +1034,8 @@ def read_repos() -> list[dict]:
     if not shutil.which("zypper"):
         return []
     try:
-        out = subprocess.run(  # noqa: S603,S607 — fixed argv, no shell.
-            ["zypper", "--non-interactive", "lr", "-u"],
+        out = subprocess.run(
+            ["zypper", "--non-interactive", "lr", "-u"],  # noqa: S607 — fixed argv.
             capture_output=True, text=True, timeout=15,
             env={**os.environ, "LC_ALL": "C"},  # pin the 'Yes'/'No' + column text
         ).stdout
@@ -1222,7 +1223,8 @@ class RepoManagerDialog(QDialog):
         center_on_parent(self)
 
     def done(self, result: int):
-        # done() is the funnel for Apply/Close/× — persist the size on the way out.
+        # done() is the funnel for Apply, Close and the title-bar close — persist
+        # the size on the way out.
         self._settings.setValue("repos_geometry", self.saveGeometry())
         super().done(result)
 
@@ -1452,7 +1454,8 @@ class Updater(QMainWindow):
         self.auto_btn.setObjectName("GhostBtn")
         self.auto_btn.setCheckable(True)
         self.auto_btn.setCursor(Qt.PointingHandCursor)
-        self.auto_btn.setToolTip("Check weekly in the background and notify you when updates are ready")
+        self.auto_btn.setToolTip(
+            "Check weekly in the background and notify you when updates are ready")
         self.auto_btn.setChecked(self._autocheck_enabled())
         self._refresh_autocheck_label()
         self.auto_btn.toggled.connect(self.on_autocheck_toggled)
@@ -1749,8 +1752,8 @@ class Updater(QMainWindow):
         self.setTabOrder(self.recenter_btn, self.about_btn)
         keys = [k for k, _t, _d in TASKS]
         self.setTabOrder(self.about_btn, self.rows[keys[0]].switch)
-        # zip stops at the shorter list on purpose — it walks consecutive pairs.
-        for key, nxt in zip(keys, keys[1:], strict=False):
+        # pairwise walks the consecutive pairs: (k0, k1), (k1, k2), ...
+        for key, nxt in itertools.pairwise(keys):
             self.setTabOrder(self.rows[key].switch, self.rows[nxt].switch)
         self.setTabOrder(self.rows[keys[-1]].switch, self.check_btn)
         self.setTabOrder(self.check_btn, self.run_btn)
@@ -1991,8 +1994,8 @@ class Updater(QMainWindow):
         if not shutil.which("notify-send"):
             return
         try:
-            subprocess.Popen(  # noqa: S603,S607 — fixed argv, no shell.
-                ["notify-send", "-a", APP_NAME, "-i", APP_ID, APP_NAME,
+            subprocess.Popen(  # noqa: S603 — fixed argv, no shell.
+                ["notify-send", "-a", APP_NAME, "-i", APP_ID, APP_NAME,  # noqa: S607
                  "OneUp is still running in the tray — right-click the icon to quit."],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except OSError:
@@ -2202,7 +2205,8 @@ for (var i = 0; i < wins.length; i++) {{
 
     def _on_traycheck_output(self):
         chunk = bytes(self._traycheck_proc.readAllStandardOutput()).decode(errors="replace")
-        self._traycheck_buf = (self._traycheck_buf + chunk).replace("\r\n", "\n").replace("\r", "\n")
+        self._traycheck_buf = ((self._traycheck_buf + chunk)
+                               .replace("\r\n", "\n").replace("\r", "\n"))
         while "\n" in self._traycheck_buf:
             line, self._traycheck_buf = self._traycheck_buf.split("\n", 1)
             self._parse_tray_line(line)
@@ -2345,7 +2349,7 @@ for (var i = 0; i < wins.length; i++) {{
             self._show_window()
 
     def _timer_enabled(self, timer: str) -> bool:
-        r = subprocess.run(["systemctl", "--user", "is-enabled", timer],
+        r = subprocess.run(["systemctl", "--user", "is-enabled", timer],  # noqa: S603,S607
                            capture_output=True, text=True)
         return r.stdout.strip() == "enabled"
 
@@ -2371,8 +2375,8 @@ for (var i = 0; i < wins.length; i++) {{
                 "[Timer]\nOnCalendar=weekly\nPersistent=true\n\n"
                 "[Install]\nWantedBy=timers.target\n"
             )
-            subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
-            subprocess.run(["systemctl", "--user", "enable", "--now",
+            subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)  # noqa: S607
+            subprocess.run(["systemctl", "--user", "enable", "--now",  # noqa: S603,S607
                             f"{basename}.timer"], check=False)
         except OSError as exc:
             QMessageBox.warning(self, "Could not change the schedule", str(exc))
@@ -2381,14 +2385,14 @@ for (var i = 0; i < wins.length; i++) {{
 
     def _remove_user_timer(self, basename: str):
         units = self._user_units_dir()
-        subprocess.run(["systemctl", "--user", "disable", "--now",
+        subprocess.run(["systemctl", "--user", "disable", "--now",  # noqa: S603,S607
                         f"{basename}.timer"], check=False)
         for name in (f"{basename}.timer", f"{basename}.service"):
             try:
                 (units / name).unlink()
             except OSError:
                 pass
-        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)  # noqa: S607
 
     def _refresh_autocheck_label(self):
         on = self.auto_btn.isChecked()
@@ -3447,8 +3451,9 @@ for (var i = 0; i < wins.length; i++) {{
         if self.isActiveWindow() or not shutil.which("notify-send"):
             return
         try:
-            subprocess.Popen(  # noqa: S603,S607 — fixed argv, no shell.
-                ["notify-send", "-a", APP_NAME, "-i", APP_ID, "-u", urgency, APP_NAME, body],
+            subprocess.Popen(  # noqa: S603 — fixed argv, no shell.
+                ["notify-send", "-a", APP_NAME, "-i", APP_ID,  # noqa: S607
+                 "-u", urgency, APP_NAME, body],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except OSError:
             pass
@@ -3555,7 +3560,8 @@ for (var i = 0; i < wins.length; i++) {{
                     f"⚠  {r[0].upper()}{r[1:]} — restart so everything uses the latest version.")
             elif n and n not in ("", "0"):
                 self.reboot_label.setText(
-                    f"⚠  {n} update(s) installed — restart so everything uses the latest libraries.")
+                    f"⚠  {n} update(s) installed — restart so everything uses "
+                    "the latest libraries.")
             else:
                 self.reboot_label.setText(
                     "⚠  Updates were installed — a restart is recommended so everything "
@@ -3846,7 +3852,9 @@ def _headless_check() -> int:
     if not ENGINE.exists():
         print(f"OneUp: update script not found at {ENGINE}", file=sys.stderr)
         return 1
-    return subprocess.run(["bash", str(ENGINE), "--check", "--notify"]).returncode
+    return subprocess.run(  # noqa: S603
+        ["bash", str(ENGINE), "--check", "--notify"]  # noqa: S607
+    ).returncode
 
 
 def _headless_update() -> int:
@@ -3859,7 +3867,9 @@ def _headless_update() -> int:
     if not ENGINE.exists():
         print(f"OneUp: update script not found at {ENGINE}", file=sys.stderr)
         return 1
-    return subprocess.run(["bash", str(ENGINE), "--notify", "--auto-skip-repos"]).returncode
+    return subprocess.run(  # noqa: S603
+        ["bash", str(ENGINE), "--notify", "--auto-skip-repos"]  # noqa: S607
+    ).returncode
 
 
 def single_instance_name() -> str:
@@ -3936,7 +3946,7 @@ def main():
         if "--tray" not in argv:
             win.show()                     # autostart (--tray) starts hidden; a normal launch shows
     else:
-        win.show()                         # no tray wanted/available (incl. --tray with no tray): degrade
+        win.show()   # no tray wanted/available (incl. --tray with no tray): degrade
     app.exec()
 
 

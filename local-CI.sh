@@ -103,8 +103,8 @@ if command -v shellcheck >/dev/null 2>&1; then
         ok "shellcheck"; else bad "shellcheck"; fi
 else skip "shellcheck" "not installed"; fi
 if command -v ruff >/dev/null 2>&1; then
-    if ruff check . --select F,B --exclude screenshots -q; then ok "ruff (F,B bug-class)"
-    else bad "ruff (F,B bug-class)"; fi
+    if ruff check . -q; then ok "ruff (pyproject.toml rule set)"
+    else bad "ruff (pyproject.toml rule set)"; fi
 else skip "ruff" "not installed"; fi
 
 # --- packaging validation (best-effort) -------------------------------------
