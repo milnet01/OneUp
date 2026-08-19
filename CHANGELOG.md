@@ -6,6 +6,19 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Offers the restart instead of telling you one is needed** (ONEUP-0115)
+  When the only services left to restart are the ones running your
+  desktop, OneUp used to show a "Restart services" button whose dialog
+  listed them, said they would log you out, and gave you nothing but an
+  OK — the restart it recommended was a different button you had to find
+  for yourself. Now it shows the Restart-now banner in that case, and
+  nothing else. When some services are safe and some are not you get
+  both: restart the safe ones straight away, and the restart button is
+  right there for the rest. Running the update script in a terminal gives
+  the same recommendation.
+
 ## [1.4.4] - 2026-08-18
 
 ### Fixed

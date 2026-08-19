@@ -409,10 +409,46 @@ check        "no reboot for package-only"  "@@REBOOT@@|no" "$out"
 # docs/reference/marker-protocol.md §5.1 freezes the field during 2.0.
 check        "safe services offered for restart" \
              "libraries:  sshd cups" "$out"
-check        "session-critical services routed to a reboot instead" \
-             "Reboot instead:  display-manager user@1000 dbus" "$out"
+# ONEUP-0115: where the advice is a reboot, the terminal advice RECOMMENDS one in the
+# same words the reboot path uses, rather than naming the units under a heading that
+# has just said no reboot is needed.
+check        "session-critical services are answered with a reboot recommendation" \
+             "A REBOOT is recommended" "$out"
+check        "the reboot recommendation names the services that earned it" \
+             "display-manager user@1000 dbus" "$out"
 check_absent "no session-critical service in the restart-now line" \
              "libraries:  sshd cups display-manager" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: an ALL session-critical service list recommends a reboot, and offers no restart"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)    echo "3 packages to upgrade."; exit 0 ;;
+  *needs-rebooting*) exit 0 ;;             # no kernel/core change
+  *ps\ -sss*|*"ps -sss"*) printf 'display-manager\nuser@1000\ndbus\n'; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+# ONEUP-0115: nothing here can be restarted without ending the session, so the advice is
+# a reboot and nothing else. Printing a "these services should restart" heading with an
+# empty list, or with names the advice has just refused, is the dead end this removes.
+check        "all-critical list recommends a reboot" "A REBOOT is recommended" "$out"
+check_absent "all-critical list offers no service restart" \
+             "should restart to use the" "$out"
+check        "the SERVICES marker still carries every name" \
+             "@@SERVICES@@|display-manager user@1000 dbus" "$out"
+# Invariant 3 (testing.md §5) is about the MARKERS, and it still holds: a package-only
+# change emits @@SERVICES@@ and @@REBOOT@@|no. ONEUP-0115 changed the printed advice
+# only — `zypper needs-rebooting` did not ask for a reboot and the engine does not say
+# it did.
+check        "the reboot MARKER is still no" "@@REBOOT@@|no" "$out"
+check_absent "no reboot marker was earned"   "@@REBOOT@@|yes" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

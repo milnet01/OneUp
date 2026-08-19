@@ -283,6 +283,13 @@ the machine, which are the ones running the user's session. Restarting the displ
 anything** (`docs/standards/security.md` §4.6, ONEUP-0111) and the engine's printed advice
 routes them to a reboot; neither changes what this field contains.
 
+**A consumer that reads this field decides what to OFFER, not just what to run**
+(ONEUP-0115). Where every name in the payload is one the consumer refuses to act on, the
+advice left is a reboot — so the window draws its reboot banner rather than a services
+banner, and the engine prints *"A REBOOT is recommended"*. `@@REBOOT@@` is untouched on that
+path: `zypper needs-rebooting` did not ask for one, the presentation did, and §5.1 freezes
+this contract during 2.0.
+
 ## 5. Changing the contract
 
 **A marker's name and field layout are a contract between four files.** Changing one means

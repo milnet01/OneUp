@@ -267,6 +267,19 @@ reasonable thing to click, and the window already owns a reboot affordance, whic
 honest advice. Decided with the user 2026-08-18 (ONEUP-0111). `NetworkManager` and `wickedd`
 are deliberately *not* in the set: disruptive, recoverable, and legitimate to restart.
 
+**And where the honest advice is a reboot, the reboot is what the window offers**
+(ONEUP-0115, user 2026-08-19). Removing a unit from the command is only half the job: an
+exclusion the user cannot act on is a dead end. So the split is made when the banners are
+drawn, not only inside the handler — every unit session-critical shows the **reboot** banner
+and not the services one; a mixed list shows both, because the safe half can genuinely be
+restarted now. Recommending a restart and then leaving the user to find the control is the
+failure this closes.
+
+**The split is made once, from one list.** `Updater._service_units` filters the marker
+payload and both the banner and the handler read it. ONEUP-0110 was invisible for months
+because the banner was drawn from the raw payload while the handler acted on a filtered
+copy, so the two could disagree with nothing on screen to show it.
+
 **The general rule this instances: a guard that only checks shape will pass a
 well-formed command that should never be issued.** When a privileged call takes a *name*
 supplied by another program, ask what the worst legal name does.
@@ -498,6 +511,8 @@ incidents and the rule are `docs/standards/testing.md` §2, which is canonical.
 | §3 every prompt says who is asking | nothing automatic |
 | §4 validate at the boundary, by shape — the engine's alias guard | `tests/run-tests.sh` — an unsafe repo alias is refused and never reaches a privileged command |
 | §4.6 no session-critical service is ever restarted | `tests/gui-smoke.py` — a mixed list restarts the safe units and **no** critical one, and an all-critical list restarts nothing; `tests/run-tests.sh` asserts the engine's printed advice splits them the same way |
+| §4.6 where the advice is a reboot, the reboot is offered | `tests/gui-smoke.py` — an all-critical list draws the reboot banner and not the services banner, a mixed list draws both, and the handler's all-critical path launches `systemctl reboot` rather than an information dialog; `tests/run-tests.sh` asserts the engine prints the same recommendation |
+| §4.6 the banner and the handler read the same filtered list | **nothing directly.** `_service_units` is the shared source, and the tests exercise both sides of it, but nothing fails if a future edit re-reads the raw payload in one of them — which is exactly how ONEUP-0110 hid |
 | §4 validate at the boundary, by shape — the window's service-unit guard | `tests/gui-smoke.py` — the units the engine really sends reach `systemctl`, and an option-shaped token does not. **Added 2026-08-18 (ONEUP-0110); until then this half had no gate**, and the guard rejected every real name for months while the alias row above stayed green. A validator is only as good as the population it was tested against: the one scenario that fed this field used `foo.service`, a shape `zypper ps -sss` never prints |
 | §5 the passwordless drop-in | `tests/run-tests.sh` — grant, revoke and status, and the generated file is put through a real `visudo -cf` |
 | §5.2 the rule covers every shape a run issues | `tests/run-tests.sh` — the grant scenario asserts each entry by name, **and** a structural check pins the engine's privileged call-site count, so a *new* `sudo …` line fails the suite until it is granted. Nothing behavioural can catch that: an ungranted call is correct code that merely prompts, and only a passwordless user ever finds out |

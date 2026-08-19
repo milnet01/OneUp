@@ -1951,13 +1951,19 @@ if [[ "$REBOOT" == "yes" ]]; then
 elif [[ -n "$SERVICES" ]]; then
     if [[ -n "$SERVICES_SAFE" ]]; then
         echo
-        echo "  ! No reboot needed, but these services should restart to use the new"
-        echo "    libraries:  $SERVICES_SAFE"
+        echo "  ! No reboot needed for these services, but they should restart to use the"
+        echo "    new libraries:  $SERVICES_SAFE"
     fi
+    # ONEUP-0115: where the honest answer is a reboot, SAY so in the same words the
+    # reboot path uses, rather than naming units under a heading that has just said no
+    # reboot is needed. `zypper needs-rebooting` did not ask for one, so this stays a
+    # recommendation in the printed advice and the @@REBOOT@@ marker is untouched —
+    # docs/reference/marker-protocol.md §5.1 freezes the contract during 2.0.
     if [[ -n "$SERVICES_RISKY" ]]; then
         echo
-        echo "  ! These also hold replaced libraries, but restarting them would BREAK OR"
-        echo "    END your desktop session. Reboot instead:  $SERVICES_RISKY"
+        echo "  ! A REBOOT is recommended — these hold replaced libraries, and restarting"
+        echo "    them would BREAK OR END your desktop session:"
+        echo "      $SERVICES_RISKY"
     fi
 fi
 

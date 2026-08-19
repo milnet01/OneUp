@@ -3537,6 +3537,14 @@ for (var i = 0; i < wins.length; i++) {{
         self.save_last_run("OK" if ok else "errors")
 
         # Reboot vs the lighter "just restart these services" path.
+        #
+        # The service list is split HERE as well as in the button (ONEUP-0115). A unit
+        # this window will never restart (ONEUP-0111) is not advice the user can act on
+        # from the services banner, so where the honest answer is a reboot the reboot is
+        # what gets offered — rather than a banner whose button opens a dialog naming
+        # what it refuses to touch. Both halves can be true at once, and then both
+        # banners show: restart the safe ones now, reboot for the rest.
+        svc_safe, svc_risky = _split_session_critical(self._service_units())
         if self._reboot:
             if self._reboot_reason:
                 # Name what triggered it, e.g. "A new kernel and your NVIDIA graphics
@@ -3553,12 +3561,23 @@ for (var i = 0; i < wins.length; i++) {{
                     "⚠  Updates were installed — a restart is recommended so everything "
                     "uses the latest libraries.")
             self.reboot_banner.setVisible(True)
-        elif self._services:
-            count = len(self._services.split())
-            self.services_label.setText(
-                f"No reboot needed — but {count} service(s) should restart to use the new libraries.")
-            self.services_btn.setToolTip(self._services)
-            self.services_banner.setVisible(True)
+        else:
+            if svc_safe:
+                n_s = len(svc_safe)
+                self.services_label.setText(
+                    f"{n_s} service(s) should restart to use the new libraries."
+                    if svc_risky else
+                    f"No reboot needed — but {n_s} service(s) should restart to use the "
+                    "new libraries.")
+                self.services_btn.setToolTip(" ".join(svc_safe))
+                self.services_banner.setVisible(True)
+            if svc_risky:
+                n_r = len(svc_risky)
+                self.reboot_label.setText(
+                    f"⚠  {n_r} service(s) still using the old libraries are part of your "
+                    "desktop session — restart the computer to finish.")
+                self.restart_btn.setToolTip(" ".join(svc_risky))
+                self.reboot_banner.setVisible(True)
 
         # Rollback offer once the system actually changed.
         if self._sys_changed and self._snapshot:
@@ -3620,49 +3639,67 @@ for (var i = 0; i < wins.length; i++) {{
             self._apply_tray_total(0)
 
     # ---- actions ----------------------------------------------------------
-    def restart_now(self):
-        if QMessageBox.question(self, "Restart now?",
-                                "Save your work first. Restart the computer now?") \
-                == QMessageBox.Yes:
-            QProcess.startDetached("systemctl", ["reboot"])
+    def _service_units(self) -> list[str]:
+        r"""The `@@SERVICES@@` payload, filtered to names safe to hand to `systemctl`.
 
-    def restart_services(self):
-        # _services is sourced from an @@SERVICES@@ marker on the merged output stream,
-        # so keep only well-formed unit names: a spliced token (e.g. a leading-dash
-        # option) must not reach the root `systemctl` as an argument. Mirrors the
-        # snapshot-id guard in rollback().
-        #
-        # The name is matched WITHOUT requiring a ".service" suffix, because
-        # `zypper ps -sss` does not print one: libzypp captures the unit name from the
-        # cgroup path with (.*)\.service, so what reaches us is bare — "sshd", "dbus",
-        # "user@1000". Requiring the suffix here emptied this list on every real run and
-        # the button silently did nothing (ONEUP-0110). `systemctl` resolves a bare name
-        # to the .service unit itself, which is why the engine's own advice works.
-        svcs = [s for s in self._services.split()
+        Shared by the banner and the button deliberately. ONEUP-0110 was invisible for
+        months because the banner was drawn from the RAW marker while the handler acted
+        on a filtered copy, so the two could disagree with nothing on screen to show it.
+
+        A spliced token (a leading-dash option, a path) must never reach a root
+        `systemctl` as an argument — the same guard shape as the snapshot id in
+        rollback(). The name is matched WITHOUT requiring a ".service" suffix, because
+        `zypper ps -sss` does not print one: libzypp captures the unit name from the
+        cgroup path with (.*)\.service, so what reaches us is bare — "sshd", "dbus",
+        "user@1000". Requiring the suffix emptied this list on every real run and the
+        button silently did nothing (ONEUP-0110). `systemctl` resolves a bare name to
+        the .service unit itself, which is why the engine's own advice works.
+        """
+        return [s for s in self._services.split()
                 if not s.startswith("-")
                 and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9:@._-]*", s)]
+
+    def _confirm_reboot(self, title: str, body: str):
+        """Ask, and restart the machine on yes — the one place the window reboots."""
+        if QMessageBox.question(self, title, body) == QMessageBox.Yes:
+            QProcess.startDetached("systemctl", ["reboot"])
+
+    def restart_now(self):
+        self._confirm_reboot("Restart now?",
+                             "Save your work first. Restart the computer now?")
+
+    def restart_services(self):
+        svcs = self._service_units()
         if not svcs:
             return
-        # Never restart a service that would end the session (ONEUP-0111). The banner
-        # stays up while anything is left needing a reboot, so the reminder survives.
+        # Never restart a service that would end the session (ONEUP-0111).
         safe, critical = _split_session_critical(svcs)
         if not safe:
-            QMessageBox.information(
-                self, "A reboot is needed",
+            # ONEUP-0115: where the advice is a reboot, OFFER the reboot. This used to be
+            # an information dialog naming units this button refuses to touch, whose only
+            # control was OK — a recommendation the user then had to go and act on
+            # somewhere else. on_finished now shows the reboot banner instead of this one
+            # in that state, so reaching here means something went round the banner.
+            self._confirm_reboot(
+                "Restart the computer?",
                 "Everything that needs restarting is part of what runs your desktop "
-                "session, so restarting it here would break or end that session.\n\n"
+                "session, so restarting it here would break or end that session:\n\n"
                 + ", ".join(critical)
-                + "\n\nReboot when you are ready and they will start on the new "
-                  "libraries.")
+                + "\n\nRestarting the computer is the clean way to pick up the new "
+                  "libraries. Save your work first. Restart now?")
             return
         body = "These will be restarted now:\n\n" + ", ".join(safe)
         if critical:
-            body += ("\n\nThese need a reboot instead, because restarting them would "
-                     "break or end your desktop session:\n\n" + ", ".join(critical))
+            body += ("\n\nThese need a restart of the computer instead, because "
+                     "restarting them here would break or end your desktop session:"
+                     "\n\n" + ", ".join(critical)
+                     + "\n\nThe Restart now button above will do that when you are "
+                       "ready.")
         if QMessageBox.question(self, "Restart services?", body) == QMessageBox.Yes:
             QProcess.startDetached("pkexec", ["systemctl", "restart", *safe])
-            if not critical:
-                self.services_banner.setVisible(False)
+            # Nothing is left for this button to do. Anything still needing a reboot is
+            # carried by the reboot banner, which on_finished has already shown.
+            self.services_banner.setVisible(False)
 
     def rollback(self):
         # The rollback target defaults to the pre-update snapshot, but when the

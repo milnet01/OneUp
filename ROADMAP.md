@@ -3397,3 +3397,71 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Pushing a documentation change no longer waits about a minute and a half for the app's tests to run. It checks the documents instead, which takes under a second.
   Kind: chore.
   Source: user-request-2026-08-18.
+
+- ✅ [ONEUP-0115] **Offer the reboot instead of naming services the app refuses to restart.**
+  Asked by the user 2026-08-19, following ONEUP-0111.
+
+  ONEUP-0111 made the window refuse to restart a session-critical unit and advise a
+  reboot in words. Where the whole list is session-critical that leaves a dead end:
+  the *Services should restart* banner appears, its button opens an information
+  dialog naming units the app will never touch, and the only control is OK. The
+  reboot the dialog recommends is a button the user has to notice for themselves —
+  and in that state the reboot banner is not even shown, because on_finished
+  treats REBOOT and SERVICES as mutually exclusive.
+
+  The rule the user gave: where the honest advice is a reboot, offer the reboot.
+  Do not recommend a restart and then make the user find the control.
+
+  What changes, and nothing in the marker contract does — the split stays advice
+  (marker-protocol.md §5.1 freezes @@SERVICES@@ during 2.0):
+
+  1. The window splits the service list at banner-drawing time, not only inside
+     the button handler. All units session-critical -> the reboot banner is shown
+     and the services banner is not. Some safe, some not -> both banners, so the
+     safe half can be restarted now and the reboot is one click away for the rest.
+     Only-safe -> unchanged.
+  2. restart_services()'s all-critical branch stops being an information dead end.
+     It asks, and Yes reboots.
+  3. The engine's printed advice makes the same recommendation for someone running
+     update_system.sh in a terminal: a REBOOT is recommended, rather than a bare
+     "Reboot instead:" list under a "no reboot needed" heading.
+
+  Test: GUI scenarios for the all-critical and mixed banner states and for the
+  all-critical handler offering a reboot, plus the engine's printed wording.
+  ONEUP-0111's own all-critical assertions change — they pin the dead end this
+  item removes.
+
+  Lands on main (1.4.x): a fix under workflow.md §1.1's 2026-08-18 widening.
+  Resolved (2026-08-19). The window splits the service list when the banners
+  are drawn, not only inside the button handler, and offers what the user can
+  actually act on: every unit session-critical -> the reboot banner and not the
+  services banner; a mixed list -> both, so the safe half restarts now and the
+  reboot is one click away. restart_services()'s all-critical branch asks and
+  reboots instead of dead-ending in an information dialog. The engine prints
+  "A REBOOT is recommended" in the same words the reboot path uses.
+
+  The marker contract is untouched: @@SERVICES@@ still carries every name and
+  @@REBOOT@@ still says no, because `zypper needs-rebooting` did not ask for one.
+  The new engine scenario asserts both, so testing.md §5's invariant 3 is proved
+  still to hold rather than assumed — the change is to the advice, not to what
+  the engine claims it earned.
+
+  One reuse rather than a second copy: Updater._service_units is now the single
+  filtered list both the banner and the button read. ONEUP-0110 hid for months
+  precisely because the banner was drawn from the RAW marker while the handler
+  acted on a filtered copy, and the two could disagree with nothing on screen to
+  show it. security.md's What-checks-this records that nothing catches a future
+  edit re-reading the raw payload in one of them.
+
+  Test first and red before green on both halves: five GUI assertions failed with
+  the dead end live (the all-critical banner state, the mixed banner state, the
+  safe-only count, and the handler offering a reboot), two engine assertions
+  failed on the printed advice. ONEUP-0111's own all-critical assertions changed —
+  they pinned the dead end this item removes; what they now assert is the part
+  that must never soften, that no session-critical unit reaches systemctl.
+
+  local-CI.sh green: engine 289/0, GUI 327/0, bump 12/0, lint, packaging, version
+  lockstep and documentation all pass.
+  **Layman:** When the only things left to restart would log you out, OneUp now offers the Restart-computer button instead of listing them and leaving you stuck.
+  Kind: fix.
+  Source: user-request-2026-08-19.

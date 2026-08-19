@@ -588,8 +588,12 @@ def main() -> int:
     # Decided with the user: never restart these, on any path. Not behind a confirmation,
     # not behind a warning. The safe ones are restarted and a reboot is advised for the
     # rest. These assertions are what stop that being softened later.
-    def _run_restart(marker_payload):
-        """Feed a SERVICES payload, accept the dialog, and return what was launched."""
+    def _run_restart(marker_payload, click=True):
+        """Feed a SERVICES payload, accept the dialog, and return what was launched.
+
+        `click=False` stops at the drawn banners, which is the state ONEUP-0115 is
+        about: what the window OFFERS before anything is clicked.
+        """
         win = updater.Updater()
         for ln in ("@@STEP_END@@|system|ok|packages updated",
                    "@@INSTALLED@@|2|yes|no",
@@ -598,13 +602,15 @@ def main() -> int:
             win.handle_line(ln)
         win.proc = QProcess(win)
         win.on_finished(0, QProcess.ExitStatus.NormalExit)   # draws the banner
+        if not click:
+            return win, []
         calls = []
         _q, _i, _d = (updater.QMessageBox.question, updater.QMessageBox.information,
                       updater.QProcess.startDetached)
         updater.QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
         updater.QMessageBox.information = staticmethod(lambda *a, **k: 0)
         updater.QProcess.startDetached = staticmethod(
-            lambda prog, args=None, *a, **k: (calls.append(list(args or [])), True)[1])
+            lambda prog, args=None, *a, **k: (calls.append([prog, *(args or [])]), True)[1])
         try:
             win.restart_services()
         finally:
@@ -621,9 +627,36 @@ def main() -> int:
           not any(c in args for c in CRITICAL))
 
     _w2, args2 = _run_restart(" ".join(CRITICAL))
-    check("an all-critical list restarts nothing at all", args2 == [])
-    check("an all-critical list leaves the services banner up",
-          _w2.services_banner.isVisibleTo(_w2))
+    check("an all-critical list restarts no service at all",
+          not any(c in args2 for c in CRITICAL) and "restart" not in args2)
+
+    # --- 4a-iii. Where the advice is a reboot, OFFER the reboot (ONEUP-0115) --
+    # Asked by the user 2026-08-19. ONEUP-0111 refuses to restart a session-critical
+    # unit and says a reboot is the honest advice; where the WHOLE list is critical
+    # that left the services banner up over a button whose only outcome was an
+    # information dialog naming units the app will never touch. The reboot the dialog
+    # recommends must be the thing on offer, not something the user has to go and find.
+    _w3, _ = _run_restart(" ".join(CRITICAL), click=False)
+    check("an all-critical list offers the reboot banner",
+          _w3.reboot_banner.isVisibleTo(_w3))
+    check("an all-critical list does NOT offer the services banner",
+          not _w3.services_banner.isVisibleTo(_w3))
+
+    _w4, _ = _run_restart("sshd cups " + " ".join(CRITICAL), click=False)
+    check("a mixed list offers the services banner for the safe half",
+          _w4.services_banner.isVisibleTo(_w4))
+    check("a mixed list ALSO offers the reboot for the rest",
+          _w4.reboot_banner.isVisibleTo(_w4))
+    check("a mixed list counts only the safe services in the services banner",
+          "2 service(s)" in _w4.services_label.text())
+
+    _w5, _ = _run_restart("sshd cups", click=False)
+    check("an all-safe list offers no reboot", not _w5.reboot_banner.isVisibleTo(_w5))
+
+    # The button on the all-critical path reboots rather than dead-ending in an
+    # information dialog. QMessageBox.question is patched to Yes above.
+    check("the all-critical path offers a reboot instead of a dead end",
+          "systemctl" in args2 and "reboot" in args2)
 
     # --- 4b. A reason-bearing REBOOT marker names the culprit in the banner ----
     w = updater.Updater()
