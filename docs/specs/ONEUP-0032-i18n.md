@@ -253,12 +253,16 @@ system tray, not a widget in a mirrored layout (§8.3).
   `pyside6-lrelease` — **not** the way INV-8's check builds one, whose freshly extracted
   messages are all unfinished and compile to a catalogue that translates nothing — and loads
   three times, with §4.2's two directory arguments pointed at `mktemp` copies: both
-  catalogues present, one present, neither, asserting installation only in the first. Skips,
+  catalogues present, **`qtbase` only**, ours only, neither — asserting installation only in
+  the first. The `qtbase`-only case is the one that falsifies the rule above and is named
+  rather than left to a choice of "one present"; ours-only cannot fail it. Skips,
   with the rest of the suite still running, when `pyside6-lrelease` is absent (§7).
 - **INV-3** The application never calls `setLayoutDirection`, and no widget reads its own
   `layoutDirection()`; the direction is Qt's to derive and `QApplication.isRightToLeft()`'s
   to report (`ui-and-accessibility.md` §8.4). Writing it would override `-reverse` and make
-  INV-5's pass vacuous.
+  INV-5's pass vacuous — so the check reads `tests/` as well as `oneup/`, because a
+  `setLayoutDirection` in the suite defeats `-reverse` exactly as one in the application
+  does, and INV-5 would then pass on a window that was never mirrored.
   *Test:* `tests/i18n-check.py`, the direction check.
 - **INV-4** An installed translator is referenced for the process's lifetime.
   *Test:* `tests/gui-smoke.py` asserts a translated string still translates after
@@ -280,9 +284,13 @@ system tray, not a widget in a mirrored layout (§8.3).
   `setWindowTitle`, `setAccessibleName`, `setAccessibleDescription`, `setPlaceholderText`,
   `addItem`, `setInformativeText`, `setStatusTip`, `setWhatsThis`, `setTitle`, the
   `QMessageBox` class methods (`warning`, `critical`, `information`, `question`) and
-  `QSystemTrayIcon.showMessage`. The last two matter most: the 1.x window already has 23
-  `QMessageBox` call sites, and `wording-and-translation.md` §6.1 names notification bodies
-  explicitly.
+  `QSystemTrayIcon.showMessage` — 23 `QMessageBox` call sites exist in the 1.x window
+  already. **The list is not Qt-API-shaped: it is every call that hands a sentence to a
+  user**, so it also carries the two that reach one without a setter — the screen-reader
+  announcement (`_announce`'s 2.0 equivalent, which is the very site §4.3 offers as its
+  example) and the `notify-send` body `ONEUP-0077` composes, which
+  `wording-and-translation.md` §6.1 names explicitly. Both deliver prose a user reads or
+  hears, and neither passes through any setter above.
   *Test:* `tests/i18n-check.py`, the wrapping check. It reads the call's argument, so it
   catches a literal, an f-string and a `+` expression; it cannot follow a string through a
   variable, and §7 says so.
@@ -297,6 +305,15 @@ system tray, not a widget in a mirrored layout (§8.3).
   `QCoreApplication.translate`.
   *Test:* `tests/i18n-check.py`, the catalogue-build check. It alone skips when the Qt
   translation tools are absent; the suite's four grep checks still run (§7).
+- **INV-9** Both headless entry points construct a `QCoreApplication` and load the
+  catalogues **before** the first sentence is rendered. This replaces `ONEUP-0077`'s INV-5,
+  which §8 deletes: that invariant asserted the opposite and is the only thing guarding the
+  path, so retiring it without this leaves §2.2's third measured bug — *"a timer path with no
+  application object silently renders English whatever the catalogues say"* — covered by
+  nothing at all.
+  *Test:* `tests/gui-smoke.py`, INV-5's own subprocess harness inverted — each entry point
+  run in a subprocess, asserting the application object exists by the time a sentence is
+  composed.
 
 ## 6. Failure modes
 
@@ -316,6 +333,7 @@ system tray, not a widget in a mirrored layout (§8.3).
 | INV-2, INV-4 — the catalogue pair and the translator's lifetime | `tests/gui-smoke.py`, new checks |
 | INV-5 — the whole window under right-to-left | `tests/gui-smoke.py -reverse`, a second run wired into `local-CI.sh` and `.github/workflows/release.yml` |
 | INV-1, INV-3, INV-6, INV-7, INV-8 — the five source-level guards | `tests/i18n-check.py`, a new suite |
+| INV-9 — an application object on both headless paths | `tests/gui-smoke.py`, replacing `ONEUP-0077`'s INV-5 case |
 
 **`tests/i18n-check.py` is a new suite and must be named in both places or it runs
 nowhere** — `local-CI.sh` and `.github/workflows/release.yml` each name every Python suite
@@ -332,7 +350,10 @@ the suite runs, and its existing exit `77` keeps its one meaning — PySide6 is 
 
 **Three limits, stated rather than left to be discovered.** The right-to-left pass runs the whole
 window mirrored, but the only *painted* geometry it can judge is `ToggleSwitch`'s, through
-the pixel sample the suite already takes. A widget hand-painted after this item ships needs
+the pixel sample the suite already takes — and **that sample judges nothing until §8's change
+to it lands**, because `shape_pixels` picks its sampled third from `checked` alone
+(*"Knob sits right when on, so inspect the LEFT third"*), so a correctly mirrored switch puts
+the state shape in the third it does not look at. A widget hand-painted after this item ships needs
 its own check written with it — `ui-and-accessibility.md` §8.3 states the rule, and its
 **What checks this** row is what has to change from `nothing` to that widget's check.
 INV-7's check reads the argument
@@ -360,30 +381,40 @@ same commit as 2.0-only code.
 
 - **`local-CI.sh` and `.github/workflows/release.yml`** — both name `tests/i18n-check.py`,
   and both gain the second, `-reverse` run of `tests/gui-smoke.py`. A suite named in neither
-  runs nowhere (`docs/standards/files-and-naming.md` §2.2), and six of the eight invariants
-  here are carried by those two additions.
+  runs nowhere (`docs/standards/files-and-naming.md` §2.2), and six of the nine invariants
+  here are carried by those two additions — INV-1, INV-3, INV-6, INV-7 and INV-8 by the new
+  suite, INV-5 by the second run. INV-2, INV-4 and INV-9 ride the ordinary
+  `tests/gui-smoke.py` pass.
 - **`oneup/gui/app.py` and `tests/gui-smoke.py`** — both construct their `QApplication` with
   `sys.argv`, or the `-reverse` run is silently left-to-right (§4.2). `app.py`'s two headless
   entry points also gain the `QCoreApplication` the catalogues install onto (§4.2), and
   `tests/gui-smoke.py` **loses ONEUP-0077's INV-5 case in the same commit** — its subprocess
   assertion is that no Qt application is constructed on either headless path, which is
-  exactly what §4.2 now adds, so leaving it turns the suite red.
-- **`docs/standards/wording-and-translation.md`** — its **What checks this** table gains
-  real catchers for §6.1 and §7, which say *nothing yet* today.
+  exactly what §4.2 now adds, so leaving it turns the suite red. **`shape_pixels` also picks
+  its sampled third from `QApplication.isRightToLeft()` rather than from `checked` alone** —
+  §4.4 moves the state shape to the other end, and the existing sample would either go red
+  on a correct mirror or pass without having looked at the shape (§7).
+- **`docs/standards/wording-and-translation.md`** — its **What checks this** table gains a
+  real catcher for §7, which INV-8 supplies. **§6.1's row does not become a guard**: INV-7
+  catches a literal, an f-string and a `+` at the listed call sites and nothing assembled
+  through a variable, so that row gains a *partial* catcher and keeps the review beside it —
+  `oneup-2.0.md` §7 still calls the wrapping half of **G10** the weakest gate in the set, and
+  §7 above says why.
 - **`docs/standards/ui-and-accessibility.md`** — §8.1's known `text-align` site and §8.3's
   two handed sites are resolved. §8.1's and §8.2's **What checks this** rows become guards
   rather than outstanding work; §8.3's row goes from `nothing` to the RTL pass's pixel
   sample **for `ToggleSwitch` only**, and says so, because that is all it covers (§7).
 - **`docs/standards/files-and-naming.md`** — `tests/i18n-check.py` joins the `tests/` row
   and the test-naming table. `oneup/translations/` is already in its §4 package tree.
-- **`packaging/appimage/build-appimage.sh` and `packaging/rpm/oneup.spec`** — neither ships
-  `oneup/translations/` today, and both must, or a catalogue that loads from a checkout is
-  missing from every installed copy. The RPM already lands the app in `%{_datadir}/oneup/`,
-  which is the absolute form of the package-relative path §4.2 resolves. **Both must also
-  make Qt's own `qtbase_<lang>.qm` resolvable at `QLibraryInfo.path(TranslationsPath)`** —
-  bundled for the AppImage, required by the RPM — because §4.2 installs the two as a pair,
-  so a missing Qt catalogue leaves the app English however good ours is. Neither names any
-  translation file today.
+- **`packaging/appimage/build-appimage.sh` and `packaging/rpm/oneup.spec`** — **neither
+  changes for 2.0, and that is correct**: §10 ships no `.ts` for any language, git carries no
+  empty directory, and the RPM installs named files rather than trees, so an install line
+  over `oneup/translations/` would fail the build on a missing source. What both owe is
+  stated here because the first contributed language is when it bites: that change ships
+  OneUp's `.qm` under `%{_datadir}/oneup/` — the absolute form of the package-relative path
+  §4.2 resolves — **and Qt's matching `qtbase_<lang>.qm`, or neither installs** (§4.2's pair
+  rule). Nothing supplies Qt's today: the RPM requires `python3-pyside6` and no translations
+  package, and the AppImage names no translation file at all.
 - **`README.md`** — a short note that OneUp ships in English and how to contribute a
   language.
 - **No version-site change** — none of `docs/standards/workflow.md` §5.1's six sites moves.
@@ -438,3 +469,4 @@ same commit as 2.0-only code.
 | 6 | 2026-07-27 | **the split** — no new review; the loops above are why | Loop 5 was the fifth in a row to find something substantive, which `/cold-eyes` treats as evidence that the document is oversized rather than that the review is thorough. Every finding in loops 4 and 5 sat on one side of a clean seam, so the payload conversion left for `docs/specs/ONEUP-0072-marker-codes.md` and this spec kept the machinery and right-to-left. The rows above describe the combined document and use **its** section and invariant numbers, which no longer match either half — they are left exactly as written, because a loop log rewritten after the fact stops being evidence. The eight invariants here were renumbered in the split; nothing cited them, and five gaps in a never-accepted spec would cost a reader more than the renumber does. |
 | 7 | 2026-07-31 | 2 lanes, both escalated; 5 high, 7 medium, 9 low, 1 info — **20 verified, 2 dismissed** | The first review of the split document, and most of what it found was the split's own unswept blast radius. Both lanes independently led with the same gap: §4.2 governed *how* the pair loads and never said **which language** — no locale source, no fallback rule — and never said how OneUp's own catalogue directory resolves, so `load()` could not be written at all. Sixteen sites in seven documents still named ONEUP-0032 as the owner of the `HINT`/`REMEDY` payload conversion the split moved to ONEUP-0072, including `marker-protocol.md` §5.1 and §5.2 and `workflow.md` §9's same-commit exception — a reference that outranks this spec telling an implementer the wrong item owns the contract change. Three findings were settled by running the thing rather than reading it: `QT_TRANSLATE_NOOP3` returns **only** the source string, so a table built from it silently loses the disambiguation half of its own lookup key; `-reverse` does set right-to-left with no catalogue installed, which is the case the gate actually runs in and was nowhere measured; and Qt leaves `sys.argv` unmutated, which §4.2 asserted without a measurement. INV-7's list was closed and omitted `QMessageBox` — 23 call sites in the 1.x window — and `QSystemTrayIcon.showMessage`, which `wording-and-translation.md` §6.1 requires wrapped. §7 exited `77` for the whole suite when the Qt tools were absent, which would have silently disabled the four grep guards that need no Qt. Dismissed: that `wording-and-translation.md` §7 gives two catalogue homes — the RPM installs the app to `%{_datadir}/oneup/`, so the absolute and package-relative paths name the same directory; and that a `Draft` status after six loops is itself a finding. |
 | 8 | 2026-08-19 | 2 lanes, first loop of a fresh run — the first read of this document since the ONEUP-0101 split reshaped its siblings; Q1 2 · Q2 3 · Q3 1 · Q4 2, 8 verified, 1 dismissed (no severity scale under the four-question gate, so nothing here for §7's tally check to balance; ONEUP-0100) | **Both lanes independently led with the same defect, and it is a one-word path error that would have installed nothing.** §4.2 resolved OneUp's catalogue "through the `translations/` directory **beside** the `oneup` package" — while §8, §10, `files-and-naming.md` §4 ("sits inside the package") and `wording-and-translation.md` §7 ("inside the one package directory") all say *inside*. An implementer writes `Path(oneup.__file__).parent.parent`, `load()` misses on every installed copy, and §4.2's pair rule then keeps the app English forever. **The catalogue-build invariant was wrong twice over, and running it is what settled both.** `pyside6-lupdate oneup/ -ts …` reports `Found 0 source text(s)` — with or without `-recursive`, and for `oneup/gui/` too; only a file list extracts anything, so INV-8's prescribed command extracted nothing. And `pyside6-lrelease` drops every unfinished message, so a freshly extracted catalogue compiles to a **33-byte `.qm` carrying zero translations** — which satisfies "produces a non-empty catalogue" while proving nothing. Both measured on PySide6 6.11, and the repaired criterion was measured too: a finished translation round-trips to `'ÜBERSETZT'` through `QCoreApplication.translate`. That second measurement also killed INV-2, which built its fixture "the way INV-8's check does" and then asked INV-4 to assert a *translated* string still translates — impossible on a catalogue with no translations. It compiles a hand-written `.ts` now, which as a side effect makes §7's skip guard (naming `pyside6-lrelease` alone) correct again. **INV-2's other half could not run at all**: exercising "one present" and "neither" needs a synthetic `qtbase_<lang>.qm` at `QLibraryInfo.path(TranslationsPath)`, measured here as `…/site-packages/PySide6/Qt/translations` — outside the suite's redirected `HOME` (`tests/gui-smoke.py:30`), so the test as written breaches `testing.md` §2.3 or invents a loader override nothing named. §4.2's loading function now takes both directories as arguments. **The Q3 was the pair rule's unowned half:** §8 obliges both packaging paths to ship `oneup/translations/` and neither mentions Qt's `qtbase_<lang>.qm`, which the pair rule makes equally load-bearing — `grep -rn translation packaging/` returns nothing, and the AppImage is PyInstaller over a venv. So a contributor's German catalogue could never load, against §1. **Two smaller ones.** §4.2 says this item retires ONEUP-0077's INV-5, and §8's checklist — the place an implementer works from — never said its subprocess assertion is deleted, so the suite ships red. And §4.3 credited `wording-and-translation.md` §6.2 with a `+`-concatenation sweep it does not have (its **What checks this** row reads `nothing automatic`; the only sweep in the tree is `oneup-2.0.md` §5.1's, over `updater.py`, and that section calls it a measurement rather than a gate) — which mattered because INV-7's check listed a literal and an f-string and **not** `+`, so nothing anywhere would have caught the concatenation §6.2 forbids. Both now named. **Dismissed:** §7's "the live `api.github.com` requests `testing.md` §2.3 recorded as a defect" — §2.3 does record them and the harm, and reserves the word *defect* for the engine suite's un-redirected `HOME`; loose, and it changes no line anyone writes. **Filed, not fixed:** `wording-and-translation.md` §7's Extract row carries the same `pyside6-lupdate` over-a-directory command, and correcting a standard changes what a conformer runs, so it owes its own gate rather than a passing edit. **Four lane open questions resolved clean and are recorded so no later loop re-asks them:** `QT_TRANSLATE_NOOP3` does return only `'Lock'` (§4.3's measurement holds); `tests/gui-smoke.py` parses no `argv` of its own, so `-reverse` reaches Qt cleanly; ONEUP-0108 §8 does put its tables in ONEUP-0072's landing commit, as §4.1 claims; and a synthesised catalogue cannot bleed into the `-reverse` pass, because §7 makes that a separate process. |
+| 9 | 2026-08-19 | 2 lanes, the document's second loop and the first spent on loop 8's own fixes; Q1 1 · Q2 3 · Q3 1 · Q4 1, 6 verified, 1 dismissed (no severity scale under the four-question gate, so nothing here for §7's tally check to balance; ONEUP-0100) | **The best finding is a test that would have gone red on a correct implementation, and it is one eight loops walked past.** §7 leans the whole right-to-left gate on "the pixel sample the suite already takes" — and `tests/gui-smoke.py`'s `shape_pixels` picks its sampled third from `checked` alone, commented *"Knob sits right when on, so inspect the LEFT third"*. §4.4 moves the state shape to the other end, so after a correct mirror the sample looks at the third the shape is no longer in: red on a right implementation, or green having judged nothing. §8's file list named the `sys.argv` change and nothing else, so an implementer was told to wire a second run around a sample that cannot survive it. §7 and §8 now both say the third comes from `QApplication.isRightToLeft()`. **Three of the six landed on text loop 8 wrote**, which is 4a-min's pattern and the honest character of this loop. Loop 8's packaging bullet required both paths to ship `oneup/translations/` **and** Qt's `qtbase_<lang>.qm` — while §10 ships no `.ts` at all in 2.0, git carries no empty directory, and the RPM installs named files (`install -Dm0644 updater.py …`), so the instruction was an install line over a path that does not exist. Both lanes found it, from opposite ends. It now says neither packager changes for 2.0 and states what the first contributed language owes, including Qt's half — verified as unmet today: the RPM requires `python3-pyside6` and no translations package, and the AppImage names no translation file. Loop 8's INV-2 rewrite said "one present" of two materially different cases, and only the `qtbase`-alone one can falsify the rule it sits under; both lanes found that too, and it is four loads now with the cases named. **The Q1's sibling was loop 8's other half.** §4.2 retires `ONEUP-0077`'s INV-5 and §8 deletes its case, and nothing replaced it: no invariant asserted the headless paths build a `QCoreApplication`, leaving §2.2's third measured bug — *"a timer path with no application object silently renders English"* — covered by nothing. **INV-9** now asserts it, on INV-5's own subprocess harness inverted; §7 and §8's count moved with it. **Two pre-existing Q2s.** §8 claimed `wording-and-translation.md`'s **What checks this** gains "real catchers for §6.1 and §7" — but §7 above and `oneup-2.0.md` §7 both say the wrapping half of **G10** keeps its review, so §6.1's row gains a *partial* catcher and an implementer would otherwise have retired a gap the design still records. And INV-7's closed list was Qt-setter-shaped while §4.3's own motivating example is `self._announce(f"{row.title}: {badge}")` — a screen-reader call on no setter, so the document's example passed the check the same paragraph calls "the only thing that catches either". The list is now every call that hands a sentence to a user, naming the announcement and `ONEUP-0077`'s `notify-send` body. **Found while resolving a lane's open question and fixed as a finding:** INV-3 alone among the source-level guards stated no scope, and a `setLayoutDirection` in the suite defeats `-reverse` exactly as one in the application does — measured both ways here: with `-reverse` `isRightToLeft()` is `True`, `setLayoutDirection(LeftToRight)` makes it `False`, and `setLayoutDirection(RightToLeft)` makes it `True` with no `-reverse` at all, so INV-5 can be defeated or passed vacuously from test code. The check reads `tests/` as well as `oneup/`. **Dismissed:** that INV-8 does not say where its check writes its `.ts` and `.qm` — `testing.md` §2.3 already binds every test here and §4.2 cites it, so no line changes. **Three lane open questions resolved clean:** `qproperty-alignment` is at **0** in `updater.py` and `text-align: left` is the only directional property left, so §4.4's "reach zero" holds; §4.3's two f-strings are two distinct sites (`self.status.setText(f"{label}…")` at one, `_announce` at the other), not one described twice; and `ONEUP-0077` notifies through `notify-send` rather than `QSystemTrayIcon.showMessage`, which is why INV-7 now names the body rather than relying on the tray entry. |
