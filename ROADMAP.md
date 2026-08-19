@@ -3555,3 +3555,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The frozen old engine sends one blank answer the new window has no words for. Decide what it should say.
   Kind: doc.
   Source: review-contract-2026-08-19 loop 5 on ONEUP-0072, filed not fixed.
+
+- 📋 [ONEUP-0118] **Correct the catalogue Extract command in wording-and-translation.md §7.**
+  §7's workflow table gives Extract as "`pyside6-lupdate` over the
+  `oneup/` package". Measured on PySide6 6.11: given a directory,
+  `pyside6-lupdate` reports `Found 0 source text(s)` — with or without
+  `-recursive`, and for a nested directory too. Only a file list extracts
+  anything. So a conformer writing the CI extraction step §7 requires gets
+  a catalogue with no messages in it and no error to explain why.
+
+  Filed rather than fixed during ONEUP-0032's loop 8, which found the same
+  command in that spec's INV-8 and repaired it there. Correcting a standard
+  changes what a conformer runs, so this edit re-arms that document's own
+  review gate and is not a passing fix.
+  **Layman:** The instructions for pulling OneUp's translatable sentences out of the code name a command that quietly finds nothing.
+  Kind: doc-fix.
+  Source: review-contract loop 8 on ONEUP-0032, 2026-08-19.
