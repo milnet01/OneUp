@@ -806,10 +806,12 @@ does.
   arrow with no hover state leaves that spec's row underivable."* Both halves are wrong:
   §3.1 deletes that §5.1 sentence, and §4.2 derives the disclosure from `rowcard` and
   `rowhov` — the row's own surfaces — never from the arrow's hover appearance. Nothing here
-  is underivable without it. 0064 lands first, so left uncorrected its builder treats the
-  rule as blocking and must settle 0064's open *"design choice for the user"* — the arrow's
-  hover ink — to unblock a requirement this item does not impose. The rule remains 0064's to
-  make on its own ergonomic grounds.
+  is underivable without it. 0064 lands first, so left uncorrected its builder treated the
+  rule as blocking and had to settle 0064's *"design choice for the user"* — the arrow's
+  hover ink — to unblock a requirement this item does not impose. **Corrected in that
+  document on 2026-08-19, ahead of this item, so nothing is owed here**; the rule stayed
+  0064's to make on its own ergonomic grounds, and it made it — the arrow rests in `tdesc`
+  and hovers to `tname`, both existing keys.
 
 - **`CLAUDE.md` §6** repeats *"focus reuses the hover look"* in its trap list and is
   corrected in the same commit. The trap that stays is the one that cost the bug: no focus

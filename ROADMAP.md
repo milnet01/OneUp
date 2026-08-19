@@ -1523,6 +1523,27 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   The document is 626 lines, up from 556, and still yielding build-changing
   findings on its sixth cold read. Splitting §4.1 — layout narrative, string
   table, target-size table — is the call to make before a seventh.
+  Progress (2026-08-19): the two hover colours — the only thing this
+  spec had open — were settled by the user and folded in. The disclosure
+  arrow rests in tdesc and hovers to tname, both existing palette keys,
+  so no palette gains a colour and ONEUP-0027's six themes get it free:
+  dark 7.56 -> 14.73 on rowcard and 7.12 -> 13.88 on rowhov, light 5.38
+  -> 15.12 and 5.00 -> 14.05. The overlay needs the pair too (_HC_QSS
+  collapses both to $text and has no QToolButton#Disclose rule at all),
+  resting in $text and hovering to $btnhov — 21:1 -> 14.67:1 dark, 21:1
+  -> 11.22:1 light on $card. #StopBtn:hover deepens the danger colour on
+  border and label together, fill transparent in both states so
+  ONEUP-0076 §4.2 keeps deriving its focus cue from card: dark #e0553f
+  4.79 -> #ef6a55 5.93, light #d6412a 4.52 -> #b5321d 6.11. That is a
+  second per-palette key, so §8 now records the three rows ONEUP-0027
+  §4.7 gains. Two corrections were derivable and made first: §4.1's
+  claim that the hover rule was "required rather than optional" rested
+  on a ui-and-accessibility.md §5.1 sentence ONEUP-0076 §3.1 deletes
+  (0076 §8 owed the fix, 0064 lands first, so it was made here), and the
+  OPEN block asked for a #StopBtn:checked colour while §4.1 says four
+  paragraphs above that stop_btn is never setCheckable(True) — verified
+  in updater.py. Status stays Draft: the gate reached its cap without an
+  empty loop. docs-check 19364 claims / 0 failed.
 
 - 📋 [ONEUP-0065] **Convert the remaining line-number citations in the older documents to symbol names.**
   docs/standards/documentation.md 6a (added 2026-07-26, the user's

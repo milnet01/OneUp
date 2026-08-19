@@ -264,19 +264,64 @@ padding: 0px;`, with no `:hover` variant in either sheet. **There is no single "
 treatment the rest of the controls have" to copy**: `#GhostBtn` moves its border *and* its
 label, `#LinkBtn` its label alone, and `#RunBtn`, `#BannerBtn` and `#RestartBtn` each swap a
 gradient fill. The arrow has neither fill nor border, so **the only pixels it can move are
-its ink** — that is the property, and the rule is required rather than optional because
-`docs/specs/ONEUP-0076-ringless-focus-cue.md` §4.2 gives this control mechanism A and
-`ui-and-accessibility.md` §5.1 derives every focus cue from the hover appearance, so an
-arrow with no hover state leaves that spec's row underivable. Its focus treatment is not
-this item's: §4.2 of that spec carries the `QToolButton#Disclose` row, and §10 keeps the
-cue out of scope here.
+its ink** — that is the property. Its focus treatment is not this item's: §4.2 of
+`docs/specs/ONEUP-0076-ringless-focus-cue.md` carries the `QToolButton#Disclose` row, and
+§10 keeps the cue out of scope here.
 
-**⚠ Open, and the only thing in this document that is: the two hover *colours*.** A rule is
-required for `QToolButton#Disclose` (ink) and for `#StopBtn` (`:hover` and `:checked`, which
-§4.1's rename drops it out of), and neither value is derivable from anything already
-written — `#GhostBtn`'s `#4aa3ff` would turn the danger control blue, and holding a control
-at its rest colour leaves hover indistinguishable from rest. The values are a design choice
-for the user; everything else about both rules is settled above.
+**The hover rule is this item's to make on its own ergonomic grounds, and nothing
+downstream forces it.** This paragraph read *"required rather than optional"* because that
+spec's §4.2 gives this control mechanism A and `ui-and-accessibility.md` §5.1 derives every
+focus cue from the hover appearance. Both halves are wrong, and that spec's §8 says so: its
+§3.1 **deletes** the §5.1 sentence — hover lightens, and lightening cannot reach 3:1 on
+these palettes — and its §4.2 derives the disclosure from `rowcard` and `rowhov`, the row's
+own surfaces, never from the arrow's hover appearance. Nothing there is underivable without
+a hover rule. Corrected here rather than there because this item lands first
+(`docs/design/oneup-2.0.md` §5.2), and left uncorrected it made an elective rule read as
+blocking.
+
+**Settled by the user, 2026-08-19: both hover colours.** This document has nothing open.
+
+**`QToolButton#Disclose` — the arrow rests in `tdesc` and hovers to `tname`.** Both are
+existing palette keys, so the rule adds no colour to any palette and every theme
+`docs/specs/ONEUP-0027-themes.md` authors gets it for free. The arrow carries no `color`
+today, so the rest half is new too. Measured at `e7d3718`, on the two surfaces
+`docs/specs/ONEUP-0076-ringless-focus-cue.md` §4.2 gives this control:
+
+| State | Dark on `rowcard` / `rowhov` | Light on `rowcard` / `rowhov` |
+| --- | --- | --- |
+| rest, `tdesc` | `#a7b0be` — **7.56:1** / **7.12:1** | `#5c6673` — **5.38:1** / **5.00:1** |
+| hover, `tname` | `#eef2f8` — **14.73:1** / **13.88:1** | `#1b2027` — **15.12:1** / **14.05:1** |
+
+The arrow carries meaning without being text, so 3:1 is its floor; every figure clears
+4.5:1 as well. **The overlay needs the matching pair and does not have the tokens** —
+`_HC_QSS` collapses both to `$text` and carries no `QToolButton#Disclose` rule at all, so
+the rename obligation two paragraphs up applies here too: the overlay rests in `$text` and
+hovers to `$btnhov`, which is **21:1** → **14.67:1** dark and **21:1** → **11.22:1** light
+on `$card`. Without it the arrow has no hover state in the one appearance mode that exists
+for low-vision users.
+
+**`#StopBtn:hover` — the danger colour deepens, and nothing else moves.** The fill stays
+transparent in both states, which is what lets `ONEUP-0076` §4.2 keep deriving this
+control's focus cue from `card`. Border and label move together, as `#GhostBtn:hover`
+already does in blue. It is a **second** per-palette key beside the rest one this section
+already requires, for the same reason: `_QSS` is one template, so a value that differs by
+palette cannot be a literal.
+
+| State | Dark on `card` `#12161c` | Light on `card` `#ffffff` |
+| --- | --- | --- |
+| rest | `#e0553f` — **4.79:1** | `#d6412a` — **4.52:1** |
+| hover | `#ef6a55` — **5.93:1** | `#b5321d` — **6.11:1** |
+
+Both hover values clear 4.5:1 for the label and 3:1 for the border, in both palettes, and
+both move *away* from the surface rather than toward it — holding a control at its rest
+colour leaves hover indistinguishable from rest, which is why `#GhostBtn`'s `#4aa3ff` was
+rejected here: it would turn the danger control blue. **In `_HC_QSS` neither key appears**:
+the overlay's danger colour is `$errbd` at rest, as the paragraph above says, and its hover
+takes the overlay's own `$btnhov` like every other overlay button.
+
+**Both rules oblige `docs/specs/ONEUP-0027-themes.md`,** whose §4.7 fails a palette key
+that no pair covers. The two new danger keys are checked as text on `card` at 4.5:1 and as
+a border on `card` at 3:1; `tdesc` and `tname` are already in that table. §8 records it.
 
 **24×24 is the floor for every pointer target**, width as well as height — a minimum height
 alone settles only half of SC 2.5.8. The set is enumerated rather than described, because a
@@ -562,6 +607,15 @@ and build a fresh one only where a pinned font or a simulated run requires it.
 - **`docs/specs/ONEUP-0034-gui-modules.md` §4.2** predicts `oneup/gui/window.py` will not
   fit the 600-line ceiling and hands the attempt here; §3.2 records what this spec does and
   does not promise about that.
+- **`docs/specs/ONEUP-0027-themes.md` §4.7 gains three rows, because this item adds two
+  palette keys.** *Stop*'s danger colour and its hover colour are per-palette, so both are
+  keys rather than literals, and that spec's §4.7 **fails** a key its pair table does not
+  cover. Both are checked as text on `card` at 4.5:1 and as a border on `card` at 3:1 —
+  rest `#e0553f` / `#d6412a` at 4.79:1 / 4.52:1, hover `#ef6a55` / `#b5321d` at 5.93:1 /
+  6.11:1, all measured at `e7d3718`. The arrow's `tdesc` and `tname` are already in that
+  table and add nothing. §4.7's existing *"the danger family's button label on its own
+  fill"* row does **not** cover these: *Stop*'s fill is transparent, so its label is read
+  against `card`.
 - **`CHANGELOG.md`** gains an `[Unreleased]` entry under **Changed**. It ships inside 2.0;
   there is no 1.4.x release of it, and no version site moves.
 - **No marker, no engine change, no packaging change.** The window's argv to the engine is

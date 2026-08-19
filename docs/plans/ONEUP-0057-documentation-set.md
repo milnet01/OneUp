@@ -16,7 +16,47 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: the `ONEUP-0027` citation pass is done; Task 18 has no gate left to run**
+> ## ▶ You are here — **Task 18: `ONEUP-0064`'s two hover colours are settled; no document in the batch has an open decision**
+
+> **The user settled both on 2026-08-19 and they are folded in. `ONEUP-0064`'s `⚠ OPEN`
+> block is gone.** `./local-CI.sh --docs` green, 19364 claims / 0 failed.
+
+> **The disclosure arrow rests in `tdesc` and hovers to `tname`.** Both are existing palette
+> keys, so the rule adds no colour to any palette and the six themes `ONEUP-0027` authors
+> get it for free. Measured on the two surfaces `ONEUP-0076` §4.2 gives this control: dark
+> **7.56:1 → 14.73:1** on `rowcard` and **7.12:1 → 13.88:1** on `rowhov`; light **5.38:1 →
+> 15.12:1** and **5.00:1 → 14.05:1**. The arrow carries no `color` today, so the rest half is
+> new too, and the overlay needs the pair as well — `_HC_QSS` collapses both tokens to
+> `$text` and carries no `QToolButton#Disclose` rule at all, so it rests in `$text` and
+> hovers to `$btnhov` (**21:1 → 14.67:1** dark, **21:1 → 11.22:1** light on `$card`).
+
+> **`#StopBtn:hover` deepens the danger colour and moves nothing else.** Border and label
+> together, as `#GhostBtn:hover` already does in blue; the fill stays transparent in both
+> states, which is what lets `ONEUP-0076` §4.2 keep deriving this control's focus cue from
+> `card`. Dark `#e0553f` **4.79:1** → `#ef6a55` **5.93:1**; light `#d6412a` **4.52:1** →
+> `#b5321d` **6.11:1**. It is a second per-palette key beside the rest one, so `ONEUP-0027`
+> §4.7 gains three rows and `ONEUP-0064` §8 now records that.
+
+> **Two corrections were derivable and were made before the question was asked.** §4.1 said
+> the arrow's hover rule was *"required rather than optional"* because `ui-and-accessibility.md`
+> §5.1 derives every focus cue from the hover appearance — a sentence `ONEUP-0076` §3.1
+> **deletes**, against a control its §4.2 derives from `rowcard` and `rowhov` instead. 0076 §8
+> owed that correction and 0064 lands first, so it was made here; the rule was elective all
+> along. And the `⚠ OPEN` block asked for a `#StopBtn:checked` colour while §4.1 says four
+> paragraphs above that `stop_btn` is **never** `setCheckable(True)` — verified in
+> `updater.py`, where the only `setCheckable` calls are the switch, the disclosure and six
+> Settings toggles. One section contradicting itself, and it made the open decision look
+> bigger than it was.
+
+> **A stale ledger line fixed while here:** this plan's own Task 18 checklist called
+> `ONEUP-0064` `Status: Reviewed`. The file says **Draft** — its gate reached its cap
+> without an empty loop, the same reason 0032, 0072 and 0076 are Draft.
+
+> **Task 18 now owes nothing that is blocked.** What is left is elective: the unspent second
+> cold loops on `ONEUP-0072` and `ONEUP-0076`, each stopped on `--max-loops 1` rather than on
+> its cap. No document in the batch carries an open decision, and none is verified-and-unfixed.
+
+> ## Previously — **Task 18: the `ONEUP-0027` citation pass is done; Task 18 has no gate left to run**
 
 > **The cheap pass ran and applied all three filed findings, plus one it found itself.
 > `ONEUP-0027` stays `Status: Reviewed` — a citation pass is not a gate loop, so §11 gains
@@ -1467,7 +1507,10 @@ git commit -m "ONEUP-0064: spec the interface redesign"
         INV-6 and INV-7; corrected `oneup-2.0.md` §5.2, `ONEUP-0072` §8 and `ONEUP-0032` §4.2;
         filed **ONEUP-0082**.
       - [x] **ONEUP-0064** — done 2026-08-04, three loops (30, 28, 23 verified), converged by
-        cap, `Status: Reviewed`. Commits `d0eb6b8`, `a355419`, `633c85d`. Added INV-6 and
+        cap. **`Status: Draft`**, not `Reviewed` as this line read until 2026-08-19: the run
+        reached its cap without an empty loop, which is the same reason 0032, 0072 and 0076
+        are Draft. Its one open decision — the two hover colours — was settled by the user
+        on 2026-08-19 and folded in, so the document now has nothing open. Commits `d0eb6b8`, `a355419`, `633c85d`. Added INV-6 and
         INV-7; corrected `oneup-2.0.md` §5.2 and `ONEUP-0076` §10. **Collateral outran draft
         defects two loops running** (30/0 → 8/20 → 4/19), which is the stop signal as well as
         the cap — both criticals in loop 3 were invariants loop 2 had itself written.
