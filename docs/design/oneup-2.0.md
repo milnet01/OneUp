@@ -514,8 +514,10 @@ nothing can check is not a gate.
 precondition of, and which is therefore verified immediately after it and before the
 release is announced.
 
-**Why that distinction is not pedantry.** ONEUP-0032 lands *after* the engine rewrite
-(§5.2) and, by §5.1, converts the `@@HINT@@` and `@@REMEDY@@` payloads to codes — changing
+**Why that distinction is not pedantry.** ONEUP-0072 lands *after* the engine rewrite
+(§5.2) and, by §5.1, converts **every** engine payload the window renders as its own wording
+to codes — wider than the `@@HINT@@` / `@@REMEDY@@` pair
+(`docs/specs/ONEUP-0072-marker-codes.md` §3.1) — changing
 the marker stream and the assertions that read it, in one versioned change touching all four
 files (`docs/reference/marker-protocol.md` §5). Re-run at the 2.0.0 tag, G1 and G2 would
 then be false by construction. They are gates on the *rewrite*, measured once, at the commit

@@ -3675,7 +3675,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: doc-fix.
   Source: review-contract loop 8 on ONEUP-0032, 2026-08-19.
 
-- 📋 [ONEUP-0119] **Correct oneup-2.0.md's G1/G2 passage, which credits the payload conversion to ONEUP-0032.**
+- ✅ [ONEUP-0119] **Correct oneup-2.0.md's G1/G2 passage, which credits the payload conversion to ONEUP-0032.**
   Found by the ONEUP-0072 gate (loop 6) while verifying that spec's §8 doc-edit
   list. Filed rather than fixed because it is a neighbouring document's defect
   and that run's subject was ONEUP-0072.
@@ -3689,6 +3689,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   2026-08-19) §3 item 1 of the same document have all been widened past.
 
   Rule 14: corrected provenance, so the No branch — no gate re-arms.
+  Resolved (2026-08-19): the passage now credits ONEUP-0072 and carries
+  the wide framing — "**every** engine payload the window renders as its own
+  wording", with the narrow `@@HINT@@` / `@@REMEDY@@` pair named as what it is
+  wider than, citing ONEUP-0072 §3.1. That matches §5.1, §5.2's build order and
+  §7's G10 row, all three of which already read the wide way.
+  The two loop-log rows (1 and 8) that also say ONEUP-0032 were left as written:
+  a loop log records what each pass found, and back-dating it destroys the thing
+  it is kept for (`documentation.md`).
+  Rule 14: corrected provenance — the No branch, no gate re-armed. Nobody builds
+  a different line from the fix; §5.2 and G10 already named ONEUP-0072.
   **Layman:** One sentence in the 2.0 design plan names the wrong work item as the one that changes the engine's messages.
   Kind: doc-fix.
   Source: review-contract loop 6 on ONEUP-0072, 2026-08-19.
