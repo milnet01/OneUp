@@ -378,7 +378,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: in-session-2026-07-24.
   Resolved (2026-07-24): bump.py step 6 now runs a third CHANGELOG edit that rewrites the `[Unreleased]: .../compare/vPREV...HEAD` base to `vX.Y.Z` (regex `(\[Unreleased\]: \S+/compare/)v\d+\.\d+\.\d+(\.\.\.HEAD)`). Also fixed the already-stale committed footer (v1.1.0 → v1.2.0). Added tests/bump-test.py — a stdlib-only functional test that runs a real bump in a throwaway repo copy (5 real version files + a synthetic CHANGELOG) and asserts the compare base advances; wired into local-CI.sh and .github/workflows/release.yml. Reproduced the bug first (test failed on the compare-base assertion pre-fix), then fixed. Full local-CI green (108 engine + 165 GUI + 5 bump).
 
-- 🚧 [ONEUP-0034] **Break up updater.py — six times the 600-line ceiling — into focused modules.**
+- ✅ [ONEUP-0034] **Break up updater.py — six times the 600-line ceiling — into focused modules.**
   updater.py is a single ~2,150-line module holding the main window, several dialogs (Settings, Repository manager, About), the @@MARKER@@ protocol parser, the QProcess engine-launch plumbing (run/check/size/auth/thin), banner/remedy state, tray + autostart, and pure helpers (diagnostics, os-release, log discovery). Candidate seams, cohesion-first and behaviour-preserving: (a) pull the pure/stateless helpers into a small module; (b) split the dialogs out; (c) consider isolating the marker-parsing + engine-launch layer from the widget layer. Constraints: keep the marker contract and step-key lists intact (they mirror update_system.sh + the tests), keep the privilege split (GUI never root), and keep local-CI green at every step — gui-smoke imports symbols from updater.py, so preserve public names or update the tests in lockstep. Not urgent; do it opportunistically, in small reviewable commits, only where it genuinely aids the six-month-reader test. Source: user-request-2026-07-24.
   **Layman:** The app's main code file has grown very large. Split it into smaller, well-named pieces so it's easier to find and change things, without altering how the app behaves.
   Kind: refactor.
@@ -422,6 +422,21 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   The harness moved first and alone, as §4.7 requires — tests/gui-smoke.py now
   puts the repo root on sys.path (INV-1), proved green at 327/0 before any
   symbol was extracted.
+  Resolved (2026-08-20, on v2 at f0d13e7): updater.py is a 21-line shim over an
+  oneup/ package of 20 modules. Bodies were extracted verbatim rather than
+  retyped; a subsystem method became a module-level function taking the window,
+  so the window's own attributes -- and every test that reaches for one -- are
+  untouched. Qt slots use functools.partial, the one semantic difference, safe
+  because every sender is parented to the window.
+  Judged by the assertions written before it: the GUI suite's 327 pre-existing
+  checks all still pass, and the engine suite is unchanged at 289/0. Eight new
+  assertions cover the invariants nothing reached, each verified red by breaking
+  what it guards. Beyond the gate: the app was launched through the shim, and
+  frozen with PyInstaller and launched again, because neither the suite nor the
+  compiler reaches main().
+  Five deviations from the spec are recorded in the commit body -- chiefly
+  _app_icon, which the spec places where it would invert the import direction
+  rule 2 exists to keep one-way.
 
 - ✅ [ONEUP-0035] **Fix "Show download size" always reporting 0 B, and never report a size the dry run didn't earn.**
   Two defects, one symptom. (1) Stale parse: run_size grepped zypper's
@@ -1278,7 +1293,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Lanes: engine, tests.
   Source: in-session-2026-07-26 (writing docs/standards/files-and-naming.md).
 
-- 🚧 [ONEUP-0059] **Honour XDG_STATE_HOME instead of hard-coding ~/.local/state.**
+- ✅ [ONEUP-0059] **Honour XDG_STATE_HOME instead of hard-coding ~/.local/state.**
   updater.py:117 builds STATE_DIR from Path.home() / ".local" / "state" /
   "oneup" and never reads XDG_STATE_HOME; tests/gui-smoke.py:31-32 exports both
   XDG_CONFIG_HOME and XDG_STATE_HOME into its sandbox, so those two lines read as
@@ -1295,6 +1310,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   §6.5 requires — the window's XDG_STATE_HOME support and the Bash engine's
   RUN_STATE_FILE / STOP_FILE land in the same commit, because moving one side
   alone makes Stop quietly stop working with nothing failing anywhere.
+  Resolved (2026-08-20, on v2 at f0d13e7): both halves honour XDG_STATE_HOME when
+  it is set to an ABSOLUTE path, and fall back to the specification's default when
+  it is unset, empty or relative.
+  The agreement between the two halves is now a test rather than an intention: the
+  GUI suite reads the engine's own resolution lines out of update_system.sh, runs
+  them and the window's against the same three inputs, and asserts the answers are
+  equal. Verified red -- reverting the engine half alone fails that check and
+  nothing else, which is the failure the design warned would otherwise ship
+  silently (Stop writing where the engine never looks).
+  The suite's own XDG_STATE_HOME export is now load-bearing rather than decorative,
+  which is the second half of what the bullet asked for.
 
 - 📋 [ONEUP-0060] **Pin PySide6 and PyInstaller in the AppImage build.**
   packaging/appimage/build-appimage.sh:22 runs `pip install --quiet

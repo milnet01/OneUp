@@ -60,6 +60,18 @@ honestly, which rules nothing catches.
 
 ## 4. Architecture: a thin window driving a privileged engine
 
+**Read the branch you are on.** On `main` the app is the two files below. On `v2`, as of
+ONEUP-0034, the window is a package — `oneup/gui/`, a module per job, behind a shim still
+called `updater.py` — and the engine's state paths honour `XDG_STATE_HOME` (ONEUP-0059).
+The privilege split, the marker contract, the step keys and everything else in this
+section are unchanged by that; only the file boundaries moved.
+
+**Every standard in `docs/standards/` still describes `main`'s layout, and does so on
+purpose.** The 2.0 versions live on `v2`, because `tests/docs-check.py` fails any pointer
+that does not resolve and the package files do not exist here — which is
+`docs/standards/workflow.md` §9's stated exception, not drift. They reach `main` at the
+2.0.0 merge.
+
 Two files, split by privilege:
 
 - **`update_system.sh`** — the engine. Does all the real work and is the only part that
@@ -85,9 +97,12 @@ must never claim success or advise a reboot it did not earn — are
 `docs/standards/testing.md` §5. Add a regression test for any engine behaviour change.
 
 Runtime state lives in `~/.local/state/oneup/`, and two files there are a contract between
-the two halves rather than mere state: `docs/reference/marker-protocol.md` §8.
+the two halves rather than mere state: `docs/reference/marker-protocol.md` §8. (On `v2`
+that directory follows `XDG_STATE_HOME` where it is set — in **both** halves, in one
+commit, because moving one side alone leaves Stop writing where the engine never looks.)
 
-**2.0 replaces both files** — the engine becomes Python, the window becomes a package.
+**2.0 replaces both files** — the engine becomes Python, the window has become a package
+(ONEUP-0034, on `v2`).
 `docs/design/oneup-2.0.md` is the programme; `main` is frozen at 1.4.0 and takes only
 qualifying bug fixes (`docs/standards/workflow.md` §1).
 
