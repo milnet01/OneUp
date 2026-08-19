@@ -21,8 +21,14 @@ python3 -m venv "$work/venv"
 "$work/venv/bin/pip" install --quiet --upgrade pip
 "$work/venv/bin/pip" install --quiet pyinstaller PySide6
 
+# --paths puts the repo root on the analysis path so PyInstaller resolves the
+# root shim's `from oneup.gui.app import main` and follows it through the whole
+# package. Without it the freeze succeeds and the binary fails at launch with
+# ModuleNotFoundError, because the shim's own directory is not the analysis root
+# when the entry point is given by absolute path.
 "$work/venv/bin/pyinstaller" --noconfirm --clean --onefile --windowed \
     --name oneup \
+    --paths "$here" \
     --add-data "$here/update_system.sh:." \
     --add-data "$here/data/$app_id.svg:data" \
     --distpath "$work/dist" --workpath "$work/build" --specpath "$work" \

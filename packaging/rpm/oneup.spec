@@ -45,8 +45,18 @@ privileged work behind a single password prompt.
 
 %install
 # Application payload (GUI + engine live side by side).
+#
+# updater.py is a shim over the oneup/ package, so the package must be installed
+# beside it and NOT flattened: it is imported as `oneup.gui.app`, which resolves
+# relative to the directory updater.py sits in. A directory copy rather than a
+# file list, because a module added to the package would otherwise be missing
+# from the RPM with nothing failing at build time.
 install -Dm0644 updater.py        %{buildroot}%{_datadir}/oneup/updater.py
 install -Dm0755 update_system.sh  %{buildroot}%{_datadir}/oneup/update_system.sh
+cp -a oneup %{buildroot}%{_datadir}/oneup/oneup
+find %{buildroot}%{_datadir}/oneup/oneup -name '__pycache__' -type d -prune -exec rm -rf {} +
+find %{buildroot}%{_datadir}/oneup/oneup -type f -exec chmod 0644 {} +
+find %{buildroot}%{_datadir}/oneup/oneup -type d -exec chmod 0755 {} +
 
 # Launcher on PATH. Supports `oneup` (GUI) and `oneup --check` (headless).
 install -dm0755 %{buildroot}%{_bindir}

@@ -58,13 +58,25 @@ LOG_FILE=""
 # it, say so, and follow the log instead of letting the user launch a second run that
 # can only fail on the package lock (ONEUP-0045). Runs now deliberately outlive the
 # window (ONEUP-0042), which is exactly what makes this necessary. Overridable for tests.
-RUN_STATE_FILE="${ONEUP_RUN_STATE:-$HOME/.local/state/oneup/run.state}"
+# XDG state base (ONEUP-0059). XDG_STATE_HOME wins when it is set to an ABSOLUTE
+# path; anything else — unset, empty, or relative — falls back to the
+# specification's own default. `oneup/gui/paths.py`'s _state_home applies the
+# IDENTICAL rule: run.state and stop.request are a contract between the two
+# halves, so a disagreement here has the window writing stop.request where this
+# engine never looks, and Stop quietly stops working with nothing failing
+# anywhere (docs/design/oneup-2.0.md §6.5).
+if [[ ${XDG_STATE_HOME:-} == /* ]]; then
+    ONEUP_STATE_DIR="$XDG_STATE_HOME/oneup"
+else
+    ONEUP_STATE_DIR="$HOME/.local/state/oneup"
+fi
+RUN_STATE_FILE="${ONEUP_RUN_STATE:-$ONEUP_STATE_DIR/run.state}"
 # The GUI asks for a stop by creating this file. Deliberately COOPERATIVE rather than a
 # signal: the engine honours it only at a safe boundary — between steps, and after the
 # repo refresh but before the transaction starts. Signalling the engine mid-transaction
 # would leave rpm half-applied, or orphan a zypper that carries on regardless, which is
 # the failure this project takes most seriously (ONEUP-0047). Overridable for tests.
-STOP_FILE="${ONEUP_STOP_FILE:-$HOME/.local/state/oneup/stop.request}"
+STOP_FILE="${ONEUP_STOP_FILE:-$ONEUP_STATE_DIR/stop.request}"
 STOP_HONOURED=false
 CHECK_ONLY=false   # --check: report what WOULD update, install nothing, no root
 NOTIFY=false       # --notify: fire a desktop notification if updates are found

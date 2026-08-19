@@ -73,9 +73,26 @@ else
     bad "tests/gui-smoke.py"; tail -25 /tmp/local-ci-gui.log
 fi
 
+# --- package structure (docs/specs/ONEUP-0034-gui-modules.md §5) ------------
+# INV-2/3/4/12: the four rules that pass review by looking correct and fail later
+# somewhere that looks unrelated — a path constant bound by name so a test's
+# redirect stops redirecting, an engine module importing oneup.gui, a second
+# module computing its own HERE, and the entry point imported from inside the
+# package. Stdlib-only, so it never skips.
+step "Package structure (oneup/)"
+if python3 tests/imports-test.py >/tmp/local-ci-imports.log 2>&1; then
+    ok "tests/imports-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' /tmp/local-ci-imports.log | tail -1)"
+else
+    bad "tests/imports-test.py"; cat /tmp/local-ci-imports.log
+fi
+
 # --- Python syntax ----------------------------------------------------------
-step "Python compile (updater.py)"
-if python3 -m py_compile updater.py bump.py; then ok "py_compile updater.py bump.py"; else bad "py_compile"; fi
+# compileall over the package, not py_compile over one file: a module nobody has
+# imported yet is exactly the one a split leaves broken.
+step "Python compile (updater.py, bump.py, oneup/)"
+if python3 -m py_compile updater.py bump.py && python3 -m compileall -q oneup; then
+    ok "py_compile updater.py bump.py + compileall oneup/"
+else bad "py_compile"; fi
 
 fi   # end of the first code-gate block skipped by --docs
 
@@ -124,14 +141,14 @@ fi   # end of the code gates skipped by --docs
 # --- version lockstep (the six sites docs/standards/workflow.md §5.1 documents) ---
 # NOT skipped by --docs: CHANGELOG.md is markdown AND one of the six sites.
 step "Version lockstep (six sites must agree)"
-v_py=$(grep -oP 'APP_VERSION = "\K[^"]+' updater.py)
+v_py=$(grep -oP 'APP_VERSION = "\K[^"]+' oneup/__init__.py)
 v_spec=$(grep -oP '^Version:\s+\K\S+' packaging/rpm/oneup.spec)
 v_speclog=$(grep -oP '^\* .* - \K[0-9]+\.[0-9]+\.[0-9]+' packaging/rpm/oneup.spec | head -1)
 v_fmt=$(grep -oP 'versionformat">\K[^<]+' packaging/obs/_service)
 v_rev=$(grep -oP 'revision">v?\K[^<]+' packaging/obs/_service)
 v_meta=$(grep -oP '<release version="\K[^"]+' data/za.co.antsprojectshub.OneUp.metainfo.xml | head -1)
 v_chg=$(grep -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | head -1)
-printf '  updater.py=%s spec=%s spec%%changelog=%s _service.fmt=%s _service.rev=%s metainfo=%s CHANGELOG=%s\n' \
+printf '  oneup/__init__.py=%s spec=%s spec%%changelog=%s _service.fmt=%s _service.rev=%s metainfo=%s CHANGELOG=%s\n' \
     "$v_py" "$v_spec" "$v_speclog" "$v_fmt" "$v_rev" "$v_meta" "$v_chg"
 if [[ "$v_py" == "$v_spec" && "$v_py" == "$v_speclog" && "$v_py" == "$v_fmt" \
       && "$v_py" == "$v_rev" && "$v_py" == "$v_meta" && "$v_py" == "$v_chg" ]]; then

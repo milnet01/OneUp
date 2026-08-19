@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # (steps 1-5), copied verbatim so their real formats are exercised.
 REAL_FILES = [
     "bump.py",
-    "updater.py",
+    "oneup/__init__.py",
     "packaging/rpm/oneup.spec",
     "packaging/obs/_service",
     "data/za.co.antsprojectshub.OneUp.metainfo.xml",
@@ -109,7 +109,7 @@ def main() -> int:
         # "NEW appears somewhere in the file" would pass on the release-notes text too.
         v = re.escape(NEW)
         sites = [
-            ("updater.py", "APP_VERSION", rf'APP_VERSION = "{v}"'),
+            ("oneup/__init__.py", "APP_VERSION", rf'APP_VERSION = "{v}"'),
             ("packaging/rpm/oneup.spec", "Version:", rf"^Version:\s+{v}$"),
             ("packaging/rpm/oneup.spec", "%changelog stanza", rf"^\* .+ - {v}-0$"),
             ("packaging/obs/_service", "versionformat", rf'versionformat">{v}<'),

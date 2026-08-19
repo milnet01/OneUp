@@ -27,6 +27,12 @@ jobs:
       - name: bump.py functional test
         run: python tests/bump-test.py
 
+      # Stdlib-only structural gate on the oneup/ package (mirrors local-CI.sh).
+      # Named here as well because nothing in this project discovers tests: both
+      # files list every suite by hand, so a suite added to one only runs there.
+      - name: Package structure
+        run: python tests/imports-test.py
+
       # Headless GUI smoke test (offscreen Qt). Mirrors local-CI.sh. A real
       # assertion failure blocks the release; exit 77 (PySide6/Qt unavailable) is
       # treated as a skip so an environment quirk can't hold up a tag.

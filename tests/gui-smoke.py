@@ -14,9 +14,12 @@ engine's own skip-cleanly-for-absent-tools convention.
 Run directly, or via tests/run-tests.sh / local-CI.sh.
 """
 import importlib.util
+import inspect
 import os
+import pkgutil
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -47,6 +50,7 @@ try:
     from PySide6.QtGui import QAccessible, QCloseEvent, QFontInfo
     from PySide6.QtWidgets import (
         QApplication,
+        QDialog,
         QFrame,
         QLabel,
         QMessageBox,
@@ -69,11 +73,47 @@ if str(REPO) not in sys.path:
 
 
 def _load_updater():
+    """Load the window the way a user launches it — through the root shim.
+
+    Deliberately still the root `updater.py` and not `oneup.gui.app` directly:
+    that file is what the desktop entry, the RPM wrapper, the AppImage and every
+    hand-made launcher name, so loading it is what proves the entry point still
+    works. Executing it imports the whole package, so the modules imported below
+    are the same objects this returns a view of.
+    """
     spec = importlib.util.spec_from_file_location("updater", REPO / "updater.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
+
+# The window's subsystems, each reached through its own module. A name is NEVER
+# bound by value here: the redirects below (paths.RUN_STATE, paths.STOP_REQUEST,
+# paths.ZYPP_PACKAGE_CACHE) work only because every reader goes through the
+# module too, and a `from … import` on either side would leave the redirect
+# landing somewhere nobody reads — green suite, real file deleted
+# (docs/specs/ONEUP-0034-gui-modules.md §4.4, INV-2).
+from oneup.gui import (  # noqa: E402 — must follow the sandbox + sys.path block above.
+    app as gui_app,  # `app` is the QApplication in main(); the module needs its own name
+)
+from oneup.gui import (  # noqa: E402 — same reason.
+    app_update,
+    auth,
+    autostart,
+    banners,
+    diagnostics,
+    markers,
+    paths,
+    placement,
+    repos,
+    rollback,
+    run,
+    settings_dialog,
+    theme,
+    toggle_switch,
+    tray,
+    window,
+)
 
 PASS = 0
 FAIL = 0
@@ -87,6 +127,29 @@ def check(name: str, cond: bool):
     else:
         print(f"  FAIL - {name}")
         FAIL += 1
+
+
+_PATCHES = []
+
+
+def _patch(mod, name, fn):
+    """Replace a module-level function for the scenario in hand.
+
+    The split turned the window's subsystem methods into module-level functions
+    taking the window (docs/specs/ONEUP-0034-gui-modules.md §4.2), so setting an
+    attribute on the instance intercepts nothing — every caller goes through the
+    module now. Patching the module is what a spy means here, and because that
+    is process-wide it has to be undone: _unpatch_all() closes each scenario, in
+    reverse order, so a stub can never leak into the next one.
+    """
+    _PATCHES.append((mod, name, getattr(mod, name)))
+    setattr(mod, name, fn)
+
+
+def _unpatch_all():
+    while _PATCHES:
+        mod, name, orig = _PATCHES.pop()
+        setattr(mod, name, orig)
 
 
 def _wait_for_notify(timeout: float = 5.0) -> bool:
@@ -106,7 +169,10 @@ def _wait_for_notify(timeout: float = 5.0) -> bool:
 
 
 def main() -> int:
-    updater = _load_updater()
+    # The shim is loaded for what loading it PROVES — that the thing every launcher
+    # names still starts the app — not for anything read off the module afterwards;
+    # the package modules imported above are where the names live now.
+    _load_updater()
 
     # Updater.__init__ asks GitHub whether a newer OneUp exists, and this file builds
     # 56 windows — so an unstubbed run fires 56 unauthenticated requests at
@@ -115,7 +181,7 @@ def main() -> int:
     # suite fails outright with no network (ONEUP-0090). Nothing here asserts on the
     # check or its reply handler, so stubbing it costs no coverage. Must happen
     # before the first Updater() below.
-    updater.Updater._check_app_update = lambda self, manual=False: None
+    app_update._check_app_update = lambda self, manual=False: None
 
     # Same argument, same place, for the same reason (ONEUP-0099). Every Updater() runs
     # _query_auth_status, whose settle can now reach _stand_down_autoupdate — and that
@@ -123,8 +189,8 @@ def main() -> int:
     # --now` against the developer's own session. Across 56 constructions, "the scenarios
     # that care are careful" is not the same property as "the suite cannot touch the
     # machine" (testing.md §2). Scenarios that assert on it re-enable it locally with a spy.
-    _real_stand_down = updater.Updater._stand_down_autoupdate
-    updater.Updater._stand_down_autoupdate = lambda self, lead="": None
+    _real_stand_down = auth._stand_down_autoupdate
+    auth._stand_down_autoupdate = lambda self, lead="": None
 
     # Likewise the single-instance socket: left alone, the guard would connect to the
     # user's LIVE OneUp and pop its window open mid-test (testing.md §2).
@@ -134,20 +200,20 @@ def main() -> int:
     app  # noqa: B018 — keep a reference so it isn't GC'd mid-test.
 
     # --- 1. A malformed / spliced marker never throws out of the read slot ------
-    w = updater.Updater()
+    w = window.Updater()
     for bad in ("@@STEP_BEGIN@@|system",          # too few fields
                 "@@STEP_BEGIN@@|system|x|3|Label",  # non-numeric index
                 "@@ -1,4 +1,4 @@ a diff hunk",       # looks like a marker, isn't
                 "@@NOPE@@ no pipe at all",
                 "an ordinary log line"):
         try:
-            w.handle_line(bad)
+            run.handle_line(w, bad)
             check(f"malformed line handled: {bad[:22]!r}", True)
         except Exception as exc:  # noqa: BLE001 — any throw is the failure.
             check(f"malformed line handled: {bad[:22]!r} ({exc})", False)
 
     # --- 2. A real run's markers land the right per-row badges + state ----------
-    w = updater.Updater()
+    w = window.Updater()
     for line in ("@@STEP_BEGIN@@|system|1|3|Updating system packages",
                  "@@STEP_END@@|system|ok|3 packages updated",
                  "@@TIMING@@|system|42",
@@ -161,13 +227,13 @@ def main() -> int:
                  "@@INSTALLED@@|3|yes|no",
                  "@@REBOOT@@|yes",
                  "@@DISK@@|warn|/|512 MiB"):
-        w.handle_line(line)
+        run.handle_line(w, line)
 
     check("system row badge shows outcome + timing",
           w.rows["system"].badge.text() == "3 installed  ·  42s")
-    check("_format_duration formats seconds", updater.Updater._format_duration(42) == "42s")
-    check("_format_duration formats minutes", updater.Updater._format_duration(65) == "1m 5s")
-    check("_format_duration handles sub-second", updater.Updater._format_duration(0) == "<1s")
+    check("_format_duration formats seconds", markers._format_duration(42) == "42s")
+    check("_format_duration formats minutes", markers._format_duration(65) == "1m 5s")
+    check("_format_duration handles sub-second", markers._format_duration(0) == "<1s")
     check("flatpak row badge = 'Up to date'", w.rows["flatpak"].badge.text() == "Up to date")
     check("firmware skip badge = 'Not installed'",
           w.rows["firmware"].badge.text() == "Not installed")
@@ -183,27 +249,27 @@ def main() -> int:
     check("disk warning banner shown", w.warn_banner.isVisibleTo(w))
 
     # --- @@PROGRESS@@: a long download must never look like a hang (ONEUP-0040) ---
-    wP = updater.Updater()
-    wP.handle_line("@@STEP_BEGIN@@|system|1|5|Updating system packages")
+    wP = window.Updater()
+    run.handle_line(wP, "@@STEP_BEGIN@@|system|1|5|Updating system packages")
     caption = wP.bar.format()
     # zypper's preload phase gives no total, so the GUI must show a running tally
     # rather than inventing a denominator it doesn't have.
-    wP.handle_line("@@PROGRESS@@|system|34|0|download")
+    run.handle_line(wP, "@@PROGRESS@@|system|34|0|download")
     check("unknown total shows a running tally, not a fake ratio",
           "34 so far" in wP.status.text() and "of 0" not in wP.status.text())
     check("the bar keeps the step caption and adds the detail",
           caption in wP.bar.format() and "34 so far" in wP.bar.format())
-    wP.handle_line("@@PROGRESS@@|system|12|141|download")
+    run.handle_line(wP, "@@PROGRESS@@|system|12|141|download")
     check("a counted download reads as 'Downloading 12 of 141 packages'",
           wP.status.text() == "Downloading 12 of 141 packages…")
     check("the row badge tracks progress", wP.rows["system"].badge.text() == "12/141")
-    wP.handle_line("@@PROGRESS@@|system|7|141|install")
+    run.handle_line(wP, "@@PROGRESS@@|system|7|141|install")
     check("the install phase says Installing", wP.status.text() == "Installing 7 of 141 packages…")
     # One announcement per phase, not per package: 141 spoken lines would bury
     # everything else, but silence through the longest phase is what looked hung.
     check("a phase change is announced once", wP._last_announcement == "Installing packages.")
     wP._last_announcement = ""
-    wP.handle_line("@@PROGRESS@@|system|8|141|install")
+    run.handle_line(wP, "@@PROGRESS@@|system|8|141|install")
     check("further packages in the same phase are not re-announced",
           wP._last_announcement == "")
     # Same splice-safety contract as STEP_BEGIN: merged stdout/stderr can cut a marker.
@@ -211,12 +277,12 @@ def main() -> int:
                 "@@PROGRESS@@|system|x|141|download",
                 "@@PROGRESS@@|system|12|y|download"):
         try:
-            wP.handle_line(bad)
+            run.handle_line(wP, bad)
             check(f"malformed progress marker handled: {bad[-14:]!r}", True)
         except Exception as exc:  # noqa: BLE001 — any throw is the failure.
             check(f"malformed progress marker handled ({exc})", False)
     # A later step's caption must replace the previous one, not accumulate.
-    wP.handle_line("@@STEP_BEGIN@@|cache|5|5|Cleaning package cache")
+    run.handle_line(wP, "@@STEP_BEGIN@@|cache|5|5|Cleaning package cache")
     check("a new step resets the progress caption",
           "141" not in wP.bar.format() and "Cleaning package cache" in wP.bar.format())
 
@@ -231,14 +297,14 @@ def main() -> int:
     # asserted below. It bit for real — 44 MB of leftovers turned "40 MB of 379 MB"
     # into "44 MB of 379 MB" and the suite went red on an unrelated commit (ONEUP-0055).
     _live_cache = tempfile.mkdtemp()
-    _orig_live_cache = updater.ZYPP_PACKAGE_CACHE
-    updater.ZYPP_PACKAGE_CACHE = Path(_live_cache)
+    _orig_live_cache = paths.ZYPP_PACKAGE_CACHE
+    paths.ZYPP_PACKAGE_CACHE = Path(_live_cache)
     try:
-        wL = updater.Updater()
+        wL = window.Updater()
         wL._run_active = True
-        wL._reset_activity()        # a real run always baselines before markers arrive
-        wL.handle_line("@@STEP_BEGIN@@|system|1|5|Updating system packages")
-        wL.handle_line("@@REFRESH@@|6|9|games")
+        run._reset_activity(wL)        # a real run always baselines before markers arrive
+        run.handle_line(wL, "@@STEP_BEGIN@@|system|1|5|Updating system packages")
+        run.handle_line(wL, "@@REFRESH@@|6|9|games")
         check("the source being fetched is named, with its position",
               wL.status.text() == "Checking for updates from games (6 of 9 sources)…")
         check("the bar keeps the step caption and adds the source",
@@ -247,78 +313,78 @@ def main() -> int:
               "Fetching games" in wL.activity.text())
         check("the liveness line is visible during a run", wL.activity.isVisibleTo(wL))
         # Bytes: the download phase is the only place in a run where a figure exists at all.
-        wL.handle_line("@@PROGRESS@@|system|12|141|download|41943040|397410304")
+        run.handle_line(wL, "@@PROGRESS@@|system|12|141|download|41943040|397410304")
         check("the download says how much of how much", "40 MB of 379 MB" in wL.activity.text())
         check("the byte total is remembered", wL._dl_total == 397410304)
         # A rate needs both movement and elapsed time to divide by.
-        wL.handle_line("@@PROGRESS@@|system|24|141|download|83886080|397410304")
+        run.handle_line(wL, "@@PROGRESS@@|system|24|141|download|83886080|397410304")
         wL._dl_at -= 10
-        wL._tick_activity()
+        run._tick_activity(wL)
         check("a rate appears once bytes have moved", "/s" in wL.activity.text())
         # Going quiet is the signal that actually matters, and must be said in those terms.
-        wL._activity_at = time.monotonic() - (updater.STALL_SECONDS + 5)
-        wL._tick_activity()
+        wL._activity_at = time.monotonic() - (run.STALL_SECONDS + 5)
+        run._tick_activity(wL)
         check("a stalled server is named as such", "may have stalled" in wL.activity.text())
         check("and the user is told stopping is safe", "safe" in wL.activity.text())
         check("the stall is announced once", "No response" in wL._last_announcement)
         wL._last_announcement = ""
-        wL._tick_activity()
+        run._tick_activity(wL)
         check("a continuing stall is not re-announced every tick", wL._last_announcement == "")
         # Output arriving again means slow, not stalled — the wording has to go back.
         wL._activity_at = time.monotonic()
-        wL._tick_activity()
+        run._tick_activity(wL)
         check("output arriving clears the stall wording",
               "may have stalled" not in wL.activity.text())
         # A new step is a new wait and a new download; neither figure may carry over.
-        wL.handle_line("@@STEP_BEGIN@@|flatpak|2|5|Updating Flatpak apps")
+        run.handle_line(wL, "@@STEP_BEGIN@@|flatpak|2|5|Updating Flatpak apps")
         check("a new step drops the previous source", "games" not in wL.activity.text())
         check("a new step resets the byte counters", wL._dl_bytes == 0 and wL._dl_total == 0)
         # Same splice-safety contract as PROGRESS: merged stdout/stderr can cut a marker.
         for bad in ("@@REFRESH@@|6", "@@REFRESH@@|x|9|games", "@@REFRESH@@|6|y|games",
                     "@@PROGRESS@@|system|1|2|download|notanumber"):
             try:
-                wL.handle_line(bad)
+                run.handle_line(wL, bad)
                 check(f"malformed liveness marker handled: {bad[-12:]!r}", True)
             except Exception as exc:  # noqa: BLE001 — any throw is the failure.
                 check(f"malformed liveness marker handled ({exc})", False)
-        wL.on_finished(0, None)
+        run.on_finished(wL, 0, None)
         check("the liveness line goes away when the run ends", not wL.activity.isVisibleTo(wL))
     finally:
         # Matches the identical block below: a throw in the body must not leave
         # ZYPP_PACKAGE_CACHE pointing at a directory that is about to vanish.
-        updater.ZYPP_PACKAGE_CACHE = _orig_live_cache
+        paths.ZYPP_PACKAGE_CACHE = _orig_live_cache
         shutil.rmtree(_live_cache, ignore_errors=True)
 
     # zypper's prefetch phase reports no sizes and no counter — one line per finished
     # package and nothing else — so the figure has to come from weighing its package
     # cache. That is world-readable, so no root is involved.
     cache_dir = tempfile.mkdtemp()
-    _orig_cache = updater.ZYPP_PACKAGE_CACHE
-    updater.ZYPP_PACKAGE_CACHE = Path(cache_dir)
+    _orig_cache = paths.ZYPP_PACKAGE_CACHE
+    paths.ZYPP_PACKAGE_CACHE = Path(cache_dir)
     try:
-        check("an empty cache weighs nothing", updater.cache_bytes() == 0)
-        wC = updater.Updater()
+        check("an empty cache weighs nothing", diagnostics.cache_bytes() == 0)
+        wC = window.Updater()
         wC._run_active = True
-        wC._reset_activity()        # baseline taken before anything is fetched
-        wC.handle_line("@@STEP_BEGIN@@|system|1|5|Updating system packages")
-        wC.handle_line("@@PROGRESS@@|system|1|0|download|0|90596966")
+        run._reset_activity(wC)        # baseline taken before anything is fetched
+        run.handle_line(wC, "@@STEP_BEGIN@@|system|1|5|Updating system packages")
+        run.handle_line(wC, "@@PROGRESS@@|system|1|0|download|0|90596966")
         check("a prefetch tally still invents no denominator",
               "1 so far" in wC.status.text() and "of 0" not in wC.status.text())
         (Path(cache_dir) / "pkg.rpm").write_bytes(b"x" * (20 * 1024 * 1024))
-        wC._tick_activity()
+        run._tick_activity(wC)
         check("the download is measured even though zypper reported no size",
               "20 MB of 86 MB" in wC.activity.text())
         # Packages already cached sit inside the baseline: zypper won't re-fetch them, so
         # counting them would overstate progress and flatter the rate.
-        wC2 = updater.Updater()
+        wC2 = window.Updater()
         wC2._run_active = True
-        wC2._reset_activity()       # baseline now includes the 20 MB above
-        wC2.handle_line("@@PROGRESS@@|system|1|0|download|0|90596966")
-        wC2._tick_activity()
+        run._reset_activity(wC2)       # baseline now includes the 20 MB above
+        run.handle_line(wC2, "@@PROGRESS@@|system|1|0|download|0|90596966")
+        run._tick_activity(wC2)
         check("already-cached packages are excluded from this run's figure",
               "20 MB" not in wC2.activity.text())
     finally:
-        updater.ZYPP_PACKAGE_CACHE = _orig_cache
+        paths.ZYPP_PACKAGE_CACHE = _orig_cache
         shutil.rmtree(cache_dir, ignore_errors=True)
 
     # --- dialogs open over the window, on Wayland too (ONEUP-0049) --------------
@@ -329,19 +395,19 @@ def main() -> int:
     _orig_session = os.environ.get("XDG_SESSION_TYPE", "")
     try:
         os.environ["XDG_SESSION_TYPE"] = "x11"
-        check("the session type is read from the environment", not updater._on_wayland())
-        host = updater.QWidget()
+        check("the session type is read from the environment", not placement._on_wayland())
+        host = QWidget()
         host.setGeometry(100, 100, 800, 600)
-        dlg = updater.QDialog(host)
+        dlg = QDialog(host)
         dlg.resize(200, 100)
-        updater.center_on_parent(dlg)
+        placement.center_on_parent(dlg)
         check("on X11 a dialog is moved onto its parent's centre",
               abs(dlg.frameGeometry().center().x() - host.frameGeometry().center().x()) <= 2
               and abs(dlg.frameGeometry().center().y() - host.frameGeometry().center().y()) <= 2)
         os.environ["XDG_SESSION_TYPE"] = "wayland"
-        check("Wayland is detected", updater._on_wayland())
+        check("Wayland is detected", placement._on_wayland())
         moved_to = dlg.pos()
-        updater.center_on_parent(dlg)   # queues a KWin request; must not move it itself
+        placement.center_on_parent(dlg)   # queues a KWin request; must not move it itself
         check("on Wayland placement is left to the compositor, not a futile move()",
               dlg.pos() == moved_to)
     finally:
@@ -350,29 +416,29 @@ def main() -> int:
     # --- Stop button (ONEUP-0047) -----------------------------------------------
     # Stop is deliberately cooperative: it asks, and the engine honours it at a safe
     # point. The UI must promise exactly that and never imply an instant abort.
-    wS = updater.Updater()
+    wS = window.Updater()
     check("Stop is hidden while idle", not wS.stop_btn.isVisibleTo(wS))
     check("Stop explains it waits for the current step",
           "after the current step" in wS.stop_btn.toolTip()
           and "never cut off half-way" in wS.stop_btn.toolTip())
     stop_dir = tempfile.mkdtemp()
-    orig_stop, orig_rs = updater.STOP_REQUEST, updater.RUN_STATE
-    updater.STOP_REQUEST = Path(stop_dir) / "stop.request"
-    updater.RUN_STATE = Path(stop_dir) / "run.state"
+    orig_stop, orig_rs = paths.STOP_REQUEST, paths.RUN_STATE
+    paths.STOP_REQUEST = Path(stop_dir) / "stop.request"
+    paths.RUN_STATE = Path(stop_dir) / "run.state"
     try:
         wS._run_active, wS._check_mode = True, False
         wS.set_controls_enabled(False)
         check("Stop appears once a real run is going", wS.stop_btn.isVisibleTo(wS))
-        wS.request_stop()
+        run.request_stop(wS)
         check("asking to stop creates the file the engine watches",
-              updater.STOP_REQUEST.exists())
+              paths.STOP_REQUEST.exists())
         check("the button reflects that the request is in", wS.stop_btn.text() == "Stopping…")
         check("it cannot be clicked twice", not wS.stop_btn.isEnabled())
         check("the status says what will actually happen",
               "after the current step" in wS.status.text())
         # A stopped run must claim neither success nor failure.
-        wS.handle_line("@@DONE@@|stopped")
-        wS.on_finished(0, None)
+        run.handle_line(wS, "@@DONE@@|stopped")
+        run.on_finished(wS, 0, None)
         check("a stopped run is reported as stopped", wS.bar.format() == "Stopped")
         check("a stopped run never says 'All done'", "All done" not in wS.status.text())
         check("a stopped run says what survived",
@@ -382,7 +448,7 @@ def main() -> int:
         wS.set_controls_enabled(False)
         check("Stop is not offered for a read-only check", not wS.stop_btn.isVisibleTo(wS))
     finally:
-        updater.STOP_REQUEST, updater.RUN_STATE = orig_stop, orig_rs
+        paths.STOP_REQUEST, paths.RUN_STATE = orig_stop, orig_rs
         shutil.rmtree(stop_dir, ignore_errors=True)
 
     # --- attaching to a run started by an earlier window (ONEUP-0045) -----------
@@ -396,11 +462,11 @@ def main() -> int:
     with open(attach_log, "w") as fh:
         fh.write("@@STEP_BEGIN@@|system|1|2|Updating system packages\n"
                  "@@PROGRESS@@|system|12|141|download\n")
-    orig_state = updater.RUN_STATE
-    updater.RUN_STATE = Path(attach_dir) / "run.state"
-    updater.RUN_STATE.write_text(f"{holder.pid}\n{attach_log}\nsystem,cache\n0\n")
+    orig_state = paths.RUN_STATE
+    paths.RUN_STATE = Path(attach_dir) / "run.state"
+    paths.RUN_STATE.write_text(f"{holder.pid}\n{attach_log}\nsystem,cache\n0\n")
     try:
-        wA = updater.Updater()
+        wA = window.Updater()
         check("a run already in flight is picked up", wA._run_active is True)
         check("the window says it is following an earlier run",
               "still running" in wA.status.text() or "141" in wA.status.text())
@@ -427,23 +493,23 @@ def main() -> int:
             check(f"a followed run finishing is handled ({exc})", False)
         check("the followed run's own verdict is used", wA._run_active is False)
         check("the record is cleared once the followed run ends",
-              not updater.RUN_STATE.exists())
+              not paths.RUN_STATE.exists())
         # A stale record (pid long gone) must not lock a fresh window out.
-        updater.RUN_STATE.write_text(f"{holder.pid}\n{attach_log}\nsystem\n0\n")
-        wB = updater.Updater()
+        paths.RUN_STATE.write_text(f"{holder.pid}\n{attach_log}\nsystem\n0\n")
+        wB = window.Updater()
         check("a stale record does not lock the app", wB._run_active is False)
-        check("a stale record is deleted", not updater.RUN_STATE.exists())
+        check("a stale record is deleted", not paths.RUN_STATE.exists())
     finally:
         if holder.poll() is None:
             holder.terminate()
             holder.wait()
-        updater.RUN_STATE = orig_state
+        paths.RUN_STATE = orig_state
         shutil.rmtree(attach_dir, ignore_errors=True)
 
     # --- quitting mid-run warns first (ONEUP-0042) ------------------------------
     # The dialog itself is modal, so the decision is tested and _ask_quit_during_run
     # is stubbed — that split is why the method exists separately.
-    wQ = updater.Updater()
+    wQ = window.Updater()
     asked = []
     wQ._ask_quit_during_run = lambda: (asked.append(1), False)[1]
     wQ._run_active = False
@@ -464,25 +530,25 @@ def main() -> int:
 
     # --- passwordless-authorization toggle (opt-in) ----------------------------
     check("auth toggle defaults to off", w.auth_btn.text() == "Passwordless: off")
-    w._set_auth_checked(True)
+    auth._set_auth_checked(w, True)
     check("auth toggle reflects 'on' without firing grant",
           w.auth_btn.isChecked() and w.auth_btn.text() == "Passwordless: on")
-    w._set_auth_checked(False)
+    auth._set_auth_checked(w, False)
     check("auth toggle reflects 'off'",
           not w.auth_btn.isChecked() and w.auth_btn.text() == "Passwordless: off")
 
     class _StubProc:  # stands in for the finished QProcess, returns canned stdout
         def __init__(self, text): self._b = text.encode()
         def readAllStandardOutput(self): return self._b
-    w._on_auth_status_finished(_StubProc("log noise\n@@AUTH@@|on\n"))
+    auth._on_auth_status_finished(w, _StubProc("log noise\n@@AUTH@@|on\n"))
     check("status marker 'on' turns the toggle on", w.auth_btn.isChecked())
-    w._on_auth_status_finished(_StubProc("@@AUTH@@|off\n"))
+    auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|off\n"))
     check("status marker 'off' turns the toggle off", not w.auth_btn.isChecked())
 
     # A REPO marker names the duplicate URL and flips the banner button to the
     # repo manager.
-    w2 = updater.Updater()
-    w2.handle_line("@@REPO@@|warn|duplicate|http://x.example/repo")
+    w2 = window.Updater()
+    run.handle_line(w2, "@@REPO@@|warn|duplicate|http://x.example/repo")
     check("repo warning names the duplicate URL",
           "http://x.example/repo" in w2.warn_label.text())
     check("repo warning arms the repo-manager action", w2._warn_repo_dup is True)
@@ -490,8 +556,8 @@ def main() -> int:
           w2.warn_btn.text() == "Manage repositories…")
 
     # A SNAPSHOTS pre-flight advisory names the count and arms the "thin" action.
-    w3 = updater.Updater()
-    w3.handle_line("@@SNAPSHOTS@@|warn|30")
+    w3 = window.Updater()
+    run.handle_line(w3, "@@SNAPSHOTS@@|warn|30")
     check("snapshot advisory arms the thin action", w3._warn_snapshots is True)
     check("snapshot advisory captures the count", w3._snapshot_count == 30)
     check("snapshot advisory names the count", "30 system restore points" in w3.warn_label.text())
@@ -502,17 +568,17 @@ def main() -> int:
     # SNAPSHOT_ITEM markers feed the rollback picker (ONEUP-0020): well-formed ids
     # are captured, a non-numeric id is dropped, and the dialog lists them
     # newest-first with the pre-update snapshot pre-selected.
-    w4 = updater.Updater()
+    w4 = window.Updater()
     for line in ("@@SNAPSHOT@@|100",
                  "@@SNAPSHOT_ITEM@@|98|2026-07-20 09:00:00|OneUp pre-update 2026-07-20 09:00",
                  "@@SNAPSHOT_ITEM@@|99|2026-07-22 09:00:00|zypp(zypper)",
                  "@@SNAPSHOT_ITEM@@|100|2026-07-24 09:00:00|OneUp pre-update 2026-07-24 09:00",
                  "@@SNAPSHOT_ITEM@@|bogus|x|y"):
-        w4.handle_line(line)
+        run.handle_line(w4, line)
     check("rollback picker captures well-formed snapshots", len(w4._snapshots) == 3)
     check("rollback picker drops a non-numeric snapshot id",
           all(sid.isdigit() for sid, _, _ in w4._snapshots))
-    dlg = updater.RollbackDialog(w4, w4._snapshots, w4._snapshot)
+    dlg = rollback.RollbackDialog(w4, w4._snapshots, w4._snapshot)
     check("picker lists the newest snapshot first", dlg.list.item(0).data(Qt.UserRole) == "100")
     check("picker pre-selects the pre-update snapshot", dlg.selected_id() == "100")
     dlg.list.setCurrentRow(dlg.list.count() - 1)   # choose the oldest listed
@@ -521,7 +587,7 @@ def main() -> int:
 
     # --- 3. on_finished promotes the accumulated state into the right banners ---
     w.proc = QProcess(w)   # on_finished releases self.proc; give it a real one.
-    w.on_finished(0, QProcess.ExitStatus.NormalExit)
+    run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("reboot banner shown after a real install", w.reboot_banner.isVisibleTo(w))
     check("rollback offered after a system change", w.rollback_btn.isVisibleTo(w))
     check("retry offered after a failed step", w.retry_btn.isVisibleTo(w))
@@ -530,14 +596,14 @@ def main() -> int:
     check("finished run fires a desktop notification", _wait_for_notify())
 
     # --- 4. A package-only change offers services, not a reboot ----------------
-    w = updater.Updater()
+    w = window.Updater()
     for line in ("@@STEP_END@@|system|ok|packages updated",
                  "@@INSTALLED@@|2|yes|no",
                  "@@SERVICES@@|foo.service bar.service",
                  "@@REBOOT@@|no"):
-        w.handle_line(line)
+        run.handle_line(w, line)
     w.proc = QProcess(w)
-    w.on_finished(0, QProcess.ExitStatus.NormalExit)
+    run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("services banner shown for a package-only change", w.services_banner.isVisibleTo(w))
     check("no reboot banner for a package-only change", not w.reboot_banner.isVisibleTo(w))
 
@@ -559,23 +625,23 @@ def main() -> int:
     # the '@' coverage that `user@1000` used to, without being the user's own session
     # manager. Feeding a session-critical name here would assert the behaviour ONEUP-0111
     # exists to prevent; that split is covered by the scenario below.
-    w = updater.Updater()
+    w = window.Updater()
     for line in ("@@STEP_END@@|system|ok|packages updated",
                  "@@INSTALLED@@|2|yes|no",
                  "@@SERVICES@@|sshd cups getty@tty1 avahi-daemon -f",
                  "@@REBOOT@@|no"):
-        w.handle_line(line)
+        run.handle_line(w, line)
     launched = []
-    _orig_question = updater.QMessageBox.question
-    _orig_detached = updater.QProcess.startDetached
-    updater.QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
-    updater.QProcess.startDetached = staticmethod(
+    _orig_question = QMessageBox.question
+    _orig_detached = QProcess.startDetached
+    QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
+    QProcess.startDetached = staticmethod(
         lambda prog, args=None, *a, **k: (launched.append((prog, list(args or []))), True)[1])
     try:
-        w.restart_services()
+        banners.restart_services(w)
     finally:
-        updater.QMessageBox.question = _orig_question
-        updater.QProcess.startDetached = _orig_detached
+        QMessageBox.question = _orig_question
+        QProcess.startDetached = _orig_detached
     check("restart services launches something for bare unit names", bool(launched))
     check("restart services passes every bare unit name to systemctl",
           bool(launched)
@@ -605,28 +671,28 @@ def main() -> int:
         `click=False` stops at the drawn banners, which is the state ONEUP-0115 is
         about: what the window OFFERS before anything is clicked.
         """
-        win = updater.Updater()
+        win = window.Updater()
         for ln in ("@@STEP_END@@|system|ok|packages updated",
                    "@@INSTALLED@@|2|yes|no",
                    f"@@SERVICES@@|{marker_payload}",
                    "@@REBOOT@@|no"):
-            win.handle_line(ln)
+            run.handle_line(win, ln)
         win.proc = QProcess(win)
-        win.on_finished(0, QProcess.ExitStatus.NormalExit)   # draws the banner
+        run.on_finished(win, 0, QProcess.ExitStatus.NormalExit)   # draws the banner
         if not click:
             return win, []
         calls = []
-        _q, _i, _d = (updater.QMessageBox.question, updater.QMessageBox.information,
-                      updater.QProcess.startDetached)
-        updater.QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
-        updater.QMessageBox.information = staticmethod(lambda *a, **k: 0)
-        updater.QProcess.startDetached = staticmethod(
+        _q, _i, _d = (QMessageBox.question, QMessageBox.information,
+                      QProcess.startDetached)
+        QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
+        QMessageBox.information = staticmethod(lambda *a, **k: 0)
+        QProcess.startDetached = staticmethod(
             lambda prog, args=None, *a, **k: (calls.append([prog, *(args or [])]), True)[1])
         try:
-            win.restart_services()
+            banners.restart_services(win)
         finally:
-            (updater.QMessageBox.question, updater.QMessageBox.information,
-             updater.QProcess.startDetached) = _q, _i, _d
+            (QMessageBox.question, QMessageBox.information,
+             QProcess.startDetached) = _q, _i, _d
         return win, [a for call in calls for a in call]
 
     CRITICAL = ["display-manager", "user@1000", "dbus", "systemd-logind", "polkit"]
@@ -670,39 +736,39 @@ def main() -> int:
           "systemctl" in args2 and "reboot" in args2)
 
     # --- 4b. A reason-bearing REBOOT marker names the culprit in the banner ----
-    w = updater.Updater()
+    w = window.Updater()
     for line in ("@@STEP_END@@|system|ok|7 packages updated",
                  "@@INSTALLED@@|7|yes|no",
                  "@@REBOOT@@|yes|a new kernel and your NVIDIA graphics driver were installed"):
-        w.handle_line(line)
+        run.handle_line(w, line)
     check("reboot reason captured from the marker",
           w._reboot_reason == "a new kernel and your NVIDIA graphics driver were installed")
     w.proc = QProcess(w)
-    w.on_finished(0, QProcess.ExitStatus.NormalExit)
+    run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("reboot banner names the kernel + driver, keeping NVIDIA casing",
           "NVIDIA graphics driver" in w.reboot_label.text()
           and w.reboot_label.text().lstrip("⚠ ").startswith("A new kernel"))
 
     # --- 5. --check mode summarises available updates without banners ----------
-    w = updater.Updater()
+    w = window.Updater()
     w._check_mode = True
     for line in ("@@CHECK@@|system|2",
                  "@@CHECK@@|flatpak|0",
                  "@@CHECK@@|TOTAL|2"):
-        w.handle_line(line)
+        run.handle_line(w, line)
     check("check: system row shows availability", w.rows["system"].badge.text() == "2 available")
     check("check: flatpak row shows up to date", w.rows["flatpak"].badge.text() == "up to date")
     w.proc = QProcess(w)
-    w.on_finished(0, QProcess.ExitStatus.NormalExit)
+    run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("check: no reboot banner", not w.reboot_banner.isVisibleTo(w))
 
     # --- 5b. CHECK_ITEM: the expandable per-package preview ---------------------
     # CHECK_ITEM was the one marker in handle_marker's dispatch that no GUI scenario fed,
     # so nothing proved the window still builds the detail rows --check emits for it.
-    wI = updater.Updater()
+    wI = window.Updater()
     wI._check_mode = True
-    wI.handle_line("@@CHECK_ITEM@@|system|bash|5.2.21|5.2.37")
-    wI.handle_line("@@CHECK_ITEM@@|system|zypper")
+    run.handle_line(wI, "@@CHECK_ITEM@@|system|bash|5.2.21|5.2.37")
+    run.handle_line(wI, "@@CHECK_ITEM@@|system|zypper")
     _detail = wI.rows["system"]._items_label.text()
     check("a changed package lands in the detail panel with both versions",
           "bash" in _detail and "5.2.21" in _detail and "5.2.37" in _detail)
@@ -714,18 +780,18 @@ def main() -> int:
     # --- 5c. @@HINT@@ goes through the parser, not straight into _hints ---------
     # Every other hint scenario assigns w._hints directly, so the dispatch line that
     # actually populates it was never exercised by anything.
-    wH = updater.Updater()
-    wH.handle_line("@@HINT@@|A repository signing key is out of date.")
+    wH = window.Updater()
+    run.handle_line(wH, "@@HINT@@|A repository signing key is out of date.")
     check("a @@HINT@@ line is parsed into _hints",
           wH._hints == ["A repository signing key is out of date."])
 
     # --- 5d. the download-size side channel ------------------------------------
     # A separate QProcess from the main run, with its own parser. The engine half is
     # covered in tests/run-tests.sh; this is the window half.
-    wS = updater.Updater()
+    wS = window.Updater()
     wS._size_buf = ""
     wS._size_proc = _StubProc("weighing things up\n@@SIZE@@|system|412 MB\n")
-    wS._on_size_output()
+    run._on_size_output(wS)
     check("a SIZE marker reaches the system row",
           "412 MB" in wS.rows["system"].size_result.text())
     # isVisibleTo(row) would be False here whatever set_size_result did — size_btn lives
@@ -741,12 +807,12 @@ def main() -> int:
     # Exit 0 with no SIZE marker means the solver found nothing to fetch — but a
     # non-zero exit must NEVER be reported as "nothing to download". Same
     # never-claim-what-you-didn't-earn rule the engine's step tests enforce.
-    wS0 = updater.Updater()
-    wS0._on_size_finished(0, None)
+    wS0 = window.Updater()
+    run._on_size_finished(wS0, 0, None)
     check("size probe exiting 0 with no marker reports nothing to download",
           wS0.rows["system"].size_result.text() == "Nothing to download")
-    wS1 = updater.Updater()
-    wS1._on_size_finished(1, None)
+    wS1 = window.Updater()
+    run._on_size_finished(wS1, 1, None)
     check("a failed size probe never claims a size it didn't earn",
           not wS1.rows["system"].has_size())
 
@@ -756,26 +822,26 @@ def main() -> int:
                                        ("@@SNAPSHOTS@@|thinned|0\n", "No old snapshots", False),
                                        ("", "Ready.", True)):
         _label = _out.strip() or "(no marker — cancelled or error)"
-        wT = updater.Updater()
+        wT = window.Updater()
         wT._warn_snapshots = True
         wT.warn_banner.setVisible(True)
         # Move the status off its constructor default first. It is built as QLabel("Ready."),
         # which is exactly what the no-marker branch sets — so without this the third case
         # would pass even if that branch never ran.
         wT.status.setText("(the handler did not set this)")
-        wT._on_thin_finished(_StubProc(_out))
+        rollback._on_thin_finished(wT, _StubProc(_out))
         check(f"thin {_label}: status reports it", _want in wT.status.text())
         check(f"thin {_label}: banner still up = {_banner_stays}",
               wT.warn_banner.isVisibleTo(wT) is _banner_stays)
 
     # --- 5f. the engine failing to start ---------------------------------------
-    wE = updater.Updater()
+    wE = window.Updater()
     wE.proc = QProcess(wE)
     wE.set_controls_enabled(False)
     # A live run leaves the bar indeterminate; __init__ already leaves it at (0, 1), so
     # without this the reset assertion below would pass without on_error doing anything.
     wE.bar.setRange(0, 0)
-    wE.on_error(QProcess.ProcessError.FailedToStart)
+    run.on_error(wE, QProcess.ProcessError.FailedToStart)
     check("a failed engine start says so in the status line",
           "Could not start" in wE.status.text())
     check("a failed engine start stops the indeterminate progress bar",
@@ -783,33 +849,93 @@ def main() -> int:
 
     # --- headless command builder shared by both timers ------------------------
     check("headless --check command ends in --check",
-          updater.Updater._headless_command("--check").endswith("--check"))
+          autostart._headless_command("--check").endswith("--check"))
     check("headless --update command ends in --update",
-          updater.Updater._headless_command("--update").endswith("--update"))
+          autostart._headless_command("--update").endswith("--update"))
     check("headless command quotes the executable path",
-          updater.Updater._headless_command("--check").startswith('"'))
+          autostart._headless_command("--check").startswith('"'))
+
+    # --- ONEUP-0034 INV-4: HERE is computed in exactly one place ---------------
+    # Both of these pass whatever the answer is under the assertions above, which is
+    # why they are written out. A module under oneup/gui/ that computes the parent of
+    # its own file gets oneup/gui/, so ENGINE would name a file that does not exist and
+    # Run would fail; and a systemd unit built from a package module's __file__ would
+    # run `python3 …/oneup/gui/autostart.py --check`, which does nothing whatever, on a
+    # weekly timer nobody watches.
+    check("paths.ENGINE resolves to the repo root's update_system.sh",
+          paths.ENGINE == REPO / "update_system.sh" and paths.ENGINE.exists())
+    check("paths.HERE is the repo root, not the package directory", paths.HERE == REPO)
+    # The last-resort branch: no $APPIMAGE, no `oneup` launcher on PATH. It is the one
+    # branch that names a file rather than a launcher, and on a developer machine with
+    # the launcher installed nothing else reaches it.
+    _orig_which2 = autostart.shutil.which
+    _orig_appimage = autostart.os.environ.pop("APPIMAGE", None)
+    autostart.shutil.which = lambda name: None
+    try:
+        _cmd = autostart._headless_command("--check")
+    finally:
+        autostart.shutil.which = _orig_which2
+        if _orig_appimage is not None:
+            autostart.os.environ["APPIMAGE"] = _orig_appimage
+    check("the last-resort headless command names the ROOT entry point, not a package module",
+          str(REPO / "updater.py") in _cmd and "oneup/gui" not in _cmd)
+
+    # --- ONEUP-0059: both halves must resolve the state directory identically ---
+    # run.state and stop.request are a contract between the window and the engine
+    # (docs/design/oneup-2.0.md §6.5). Move one side alone and, on a machine with
+    # XDG_STATE_HOME set, the window writes stop.request where the engine never
+    # looks: Stop quietly stops working and nothing fails anywhere. So this asserts
+    # AGREEMENT rather than either answer, and it reads the engine's own lines out
+    # of update_system.sh instead of restating the rule a third time.
+    _engine_lines, _taking = [], False
+    for _ln in (REPO / "update_system.sh").read_text().splitlines():
+        if _ln.startswith("if [[ ${XDG_STATE_HOME"):
+            _taking = True
+        if _taking:
+            _engine_lines.append(_ln)
+        if _taking and _ln.startswith("STOP_FILE="):
+            break
+    _engine_block = "\n".join(_engine_lines)
+    check("the engine's state-path resolution was found in update_system.sh",
+          "XDG_STATE_HOME" in _engine_block and "STOP_FILE=" in _engine_block)
+    _report = '\nprintf "%s\\n%s\\n" "$RUN_STATE_FILE" "$STOP_FILE"'
+    _read_paths = (f"import sys;sys.path.insert(0, {str(REPO)!r});"
+                   "import oneup.gui.paths as P;print(P.RUN_STATE);print(P.STOP_REQUEST)")
+    for _label, _xdg in (("unset", None), ("absolute", str(Path(_SANDBOX) / "xdg-probe")),
+                         ("relative — must be ignored", "not/absolute")):
+        _env = {"HOME": "/home/oneup-probe", "PATH": os.environ["PATH"]}
+        if _xdg is not None:
+            _env["XDG_STATE_HOME"] = _xdg
+        _engine = subprocess.run(  # noqa: S603
+            ["bash", "-c", _engine_block + _report],  # noqa: S607 — fixed argv.
+            capture_output=True, text=True, env=_env).stdout.split()
+        _win = subprocess.run(  # noqa: S603
+            [sys.executable, "-c", _read_paths],
+            capture_output=True, text=True, env=_env).stdout.split()
+        check(f"window and engine agree on run.state / stop.request ({_label})",
+              len(_engine) == 2 and _engine == _win)
 
     # Regression guard: the GUI-only --update token must NEVER be forwarded to the
     # engine (it exits 2 on unknown flags, which would make the 2am weekly run
     # silently fail). _headless_update() runs the engine with --notify only.
     _captured = {}
-    _orig_run = updater.subprocess.run
-    updater.subprocess.run = lambda a, *args, **kw: (
+    _orig_run = gui_app.subprocess.run          # the module _headless_update lives in
+    gui_app.subprocess.run = lambda a, *args, **kw: (
         _captured.update(argv=a) or type("R", (), {"returncode": 0})())
     try:
-        updater._headless_update()
+        gui_app._headless_update()
     finally:
-        updater.subprocess.run = _orig_run
+        gui_app.subprocess.run = _orig_run
     check("headless --update invokes the engine with --notify, not --update",
           "--notify" in _captured.get("argv", []) and "--update" not in _captured.get("argv", []))
 
     # --- Settings popup groups the three background toggles --------------------
-    w = updater.Updater()
+    w = window.Updater()
     check("Settings button exists in the header", hasattr(w, "settings_btn"))
     check("auto-update toggle defaults to off",
           hasattr(w, "autoupdate_btn") and not w.autoupdate_btn.isChecked()
           and w.autoupdate_btn.text() == "Automatic updates: off")
-    dlg = updater.SettingsDialog(w)
+    dlg = settings_dialog.SettingsDialog(w)
     hosted = dlg.findChildren(QPushButton)
     check("Settings dialog hosts the weekly-check toggle", w.auto_btn in hosted)
     check("Settings dialog hosts the passwordless toggle", w.auth_btn in hosted)
@@ -819,52 +945,56 @@ def main() -> int:
     # Stubbed so the checks below never block on a modal. Captured and restored at the
     # end of the block: every other module-level patch in this file is, and a dialog stub
     # left installed would silently no-op a later scenario that wanted the real thing.
-    _orig_msg_info = updater.QMessageBox.information
-    _orig_msg_warn = updater.QMessageBox.warning
-    updater.QMessageBox.information = staticmethod(lambda *a, **k: 0)
-    updater.QMessageBox.warning = staticmethod(lambda *a, **k: 0)
+    _orig_msg_info = QMessageBox.information
+    _orig_msg_warn = QMessageBox.warning
+    QMessageBox.information = staticmethod(lambda *a, **k: 0)
+    QMessageBox.warning = staticmethod(lambda *a, **k: 0)
 
     # (a) enabling with passwordless OFF and cancelling the combined dialog installs nothing
-    w = updater.Updater()
+    w = window.Updater()
     installed_a = []
-    w._install_user_timer = lambda *a, **k: (installed_a.append(a) or True)
-    w._confirm_passwordless = lambda lead="": False          # user cancels
-    w._set_auth_checked(False)                               # passwordless off
-    w.on_autoupdate_toggled(True)
+    _patch(autostart, "_install_user_timer", lambda *a, **k: (installed_a.append(a) or True))
+    _patch(auth, "_confirm_passwordless", lambda win, lead="": False)   # user cancels
+    auth._set_auth_checked(w, False)                               # passwordless off
+    autostart.on_autoupdate_toggled(w, True)
     check("cancel combined-enable installs no update timer", not installed_a)
     check("cancel combined-enable leaves auto-update off", not w.autoupdate_btn.isChecked())
     check("cancel combined-enable clears the pending latch", w._pending_autoupdate is False)
+    _unpatch_all()
 
     # (b) a settle reporting passwordless OFF while a latch is pending must NOT install
-    w = updater.Updater()
+    w = window.Updater()
     installed_b = []
-    w._install_user_timer = lambda *a, **k: (installed_b.append(a) or True)
+    _patch(autostart, "_install_user_timer", lambda *a, **k: (installed_b.append(a) or True))
     w._pending_autoupdate = True
-    w._on_auth_status_finished(_StubProc("@@AUTH@@|off\n"))
+    auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|off\n"))
     check("settle passwordless-off does not install the update timer (stale-switch guard)",
           not installed_b)
     check("settle passwordless-off consumes the latch", w._pending_autoupdate is False)
+    _unpatch_all()
 
     # (c) a settle reporting passwordless ON with a pending latch installs + turns on
-    w = updater.Updater()
+    w = window.Updater()
     installed_c = []
-    w._install_user_timer = lambda *a, **k: (installed_c.append(a) or True)
+    _patch(autostart, "_install_user_timer", lambda *a, **k: (installed_c.append(a) or True))
     w._pending_autoupdate = True
-    w._on_auth_status_finished(_StubProc("@@AUTH@@|on\n"))
+    auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|on\n"))
     check("settle passwordless-on installs the update timer", bool(installed_c))
     check("settle passwordless-on turns the auto-update toggle on", w.autoupdate_btn.isChecked())
+    _unpatch_all()
 
     # (d) revoking passwordless while auto-update is on clears the schedule
-    w = updater.Updater()
+    w = window.Updater()
     removed_d = []
-    w._stand_down_autoupdate = _real_stand_down.__get__(w)   # neutralised suite-wide
-    w._autoupdate_enabled = lambda: True
-    w._remove_user_timer = lambda name: removed_d.append(name)
-    w._run_auth = lambda *a, **k: None                       # don't spawn a real process
-    w._set_autoupdate_checked(True)
-    w.on_auth_toggled(False)                                 # user revokes
+    _patch(auth, "_stand_down_autoupdate", _real_stand_down)   # neutralised suite-wide
+    _patch(autostart, "_autoupdate_enabled", lambda: True)
+    _patch(autostart, "_remove_user_timer", lambda name: removed_d.append(name))
+    _patch(auth, "_run_auth", lambda *a, **k: None)          # don't spawn a real process
+    autostart._set_autoupdate_checked(w, True)
+    auth.on_auth_toggled(w, False)                                 # user revokes
     check("revoke passwordless removes the update timer", "oneup-update" in removed_d)
     check("revoke passwordless clears the auto-update toggle", not w.autoupdate_btn.isChecked())
+    _unpatch_all()
 
     # (e) ONEUP-0099 INV-11: the timer must also stand down when the app merely DISCOVERS
     # passwordless is off — the rule removed outside OneUp, or one too old to cover what
@@ -872,16 +1002,17 @@ def main() -> int:
     # grant/revoke, so (d)'s coupling arm never sees this route. Without it, a weekly timer
     # keeps firing into a password dialog nobody is looking at and installs nothing.
     # The real helper is neutralised suite-wide (see main()); restore it on this instance.
-    w = updater.Updater()
+    w = window.Updater()
     removed_e = []
-    w._stand_down_autoupdate = _real_stand_down.__get__(w)
-    w._autoupdate_enabled = lambda: True
-    w._remove_user_timer = lambda name: removed_e.append(name)
-    w._set_autoupdate_checked(True)
-    w._on_auth_status_finished(_StubProc("@@AUTH@@|off\n"))
+    _patch(auth, "_stand_down_autoupdate", _real_stand_down)
+    _patch(autostart, "_autoupdate_enabled", lambda: True)
+    _patch(autostart, "_remove_user_timer", lambda name: removed_e.append(name))
+    autostart._set_autoupdate_checked(w, True)
+    auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|off\n"))
     check("a discovered passwordless-off removes the update timer", "oneup-update" in removed_e)
     check("a discovered passwordless-off clears the auto-update toggle",
           not w.autoupdate_btn.isChecked())
+    _unpatch_all()
 
     # (f) INV-12: a failed ENABLE must not answer with "we turned it off". Two halves, and
     # the second is the one a false-only fixture misses: _autoupdate_enabled shells out to
@@ -889,34 +1020,36 @@ def main() -> int:
     # true while the user's own enable is still in flight.
     for label, enabled in (("no timer present", False),
                            ("a timer the toggle didn't know about", True)):
-        w = updater.Updater()
+        w = window.Updater()
         removed_f = []
-        w._stand_down_autoupdate = _real_stand_down.__get__(w)
-        w._autoupdate_enabled = lambda e=enabled: e
-        w._remove_user_timer = lambda name, acc=removed_f: acc.append(name)
+        _patch(auth, "_stand_down_autoupdate", _real_stand_down)
+        _patch(autostart, "_autoupdate_enabled", lambda e=enabled: e)
+        _patch(autostart, "_remove_user_timer", lambda name, acc=removed_f: acc.append(name))
         w._pending_autoupdate = True
-        w._on_auth_status_finished(_StubProc("@@AUTH@@|off\n"))
+        auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|off\n"))
         check(f"a failed enable ({label}) removes no timer", not removed_f)
+        _unpatch_all()
 
     # (g) INV-13: a probe that failed to SPEAK is not a probe that said "off". A crashed
     # engine, a killed QProcess or truncated output all produce output without the marker,
     # and deleting the user's weekly timer because a subprocess did not start is
     # destructive where the toggle reflect is merely cosmetic and self-correcting.
-    w = updater.Updater()
+    w = window.Updater()
     removed_g = []
-    w._stand_down_autoupdate = _real_stand_down.__get__(w)
-    w._autoupdate_enabled = lambda: True
-    w._remove_user_timer = lambda name: removed_g.append(name)
-    w._on_auth_status_finished(_StubProc(""))
+    _patch(auth, "_stand_down_autoupdate", _real_stand_down)
+    _patch(autostart, "_autoupdate_enabled", lambda: True)
+    _patch(autostart, "_remove_user_timer", lambda name: removed_g.append(name))
+    auth._on_auth_status_finished(w, _StubProc(""))
     check("a probe that emitted nothing removes no timer", not removed_g)
     check("a probe that emitted nothing still reflects passwordless as off",
           not w.auth_btn.isChecked())
+    _unpatch_all()
 
-    updater.QMessageBox.information = _orig_msg_info
-    updater.QMessageBox.warning = _orig_msg_warn
+    QMessageBox.information = _orig_msg_info
+    QMessageBox.warning = _orig_msg_warn
 
     # --- 6. the About dialog opens and closes without error --------------------
-    w = updater.Updater()
+    w = window.Updater()
     check("About button exists in the header", hasattr(w, "about_btn"))
     # show_about() runs a modal exec(); schedule a close so the test doesn't block.
     def _dismiss_about():
@@ -941,13 +1074,36 @@ def main() -> int:
         " 2 | debug      | Debug     | No      | ----      | ----    | http://d.o/debug/\n"
         " 3 | debug-dup  | Debug 2   | No      | ----      | ----    | http://d.o/debug/\n"
     )
-    repos = updater._parse_repos(sample)
-    check("parse reads all repositories", len(repos) == 3)
+    parsed = repos._parse_repos(sample)
+    check("parse reads all repositories", len(parsed) == 3)
     check("parse reads the enabled flag",
-          repos[0]["enabled"] is True and repos[1]["enabled"] is False)
-    check("parse reads the URL", repos[0]["url"] == "http://d.o/oss/")
+          parsed[0]["enabled"] is True and parsed[1]["enabled"] is False)
+    check("parse reads the URL", parsed[0]["url"] == "http://d.o/oss/")
 
-    dlg = updater.RepoManagerDialog(None, repos)
+    # --- ONEUP-0034 INV-7: the locale pin read_repos has always carried ---------
+    # _parse_repos decides enabled from the FIRST LETTER of a column, so a German
+    # desktop's "Ja" reads as "j" and every repository shows as disabled. The engine
+    # has a non-English regression test; the GUI had none, so dropping the env kwarg
+    # while moving this code would stay green in CI and break only for the users who
+    # cannot read the English it silently assumed.
+    _seen_env = {}
+    _orig_repos_run = repos.subprocess.run
+    repos.subprocess.run = lambda a, *ar, **kw: (
+        _seen_env.update(kw.get("env") or {})
+        or type("R", (), {"stdout": sample})())
+    try:
+        _localised = repos.read_repos()
+    finally:
+        repos.subprocess.run = _orig_repos_run
+    check("read_repos pins zypper's output language to C",
+          _seen_env.get("LC_ALL") == "C")
+    check("read_repos still parses the table it asked for", len(_localised) == 3)
+    # What the pin prevents, shown rather than asserted about: the same table in German.
+    _german = repos._parse_repos(sample.replace("| Yes ", "| Ja  ").replace("| No  ", "| Nein"))
+    check("without the pin a localised 'Ja' would read as disabled — the pin is load-bearing",
+          _german and _german[0]["enabled"] is False)
+
+    dlg = repos.RepoManagerDialog(None, parsed)
     check("manager builds a row per repository", len(dlg._rows) == 3)
     check("repos dialog is wide enough not to clip URLs", dlg.minimumWidth() >= 720)
     # Only the two repos sharing a URL get a Remove button.
@@ -958,7 +1114,7 @@ def main() -> int:
     row_labels = [b.text() for b in dlg.findChildren(QLabel)]
     check("manager row shows a repo description",
           any("Main openSUSE" in t for t in row_labels))
-    P = updater._repo_purpose
+    P = repos._repo_purpose
     check("purpose: debug detected before oss",
           "Debug symbols" in P({"alias": "x-debug-oss", "name": "D", "url": "u", "enabled": False}))
     check("purpose: non-oss detected before oss",
@@ -983,13 +1139,13 @@ def main() -> int:
     # An unsafe alias must never reach the root shell.
     unsafe = [{"alias": "evil; rm -rf /", "name": "x", "enabled": False, "url": "u"},
               {"alias": "y", "name": "y", "enabled": False, "url": "u"}]
-    dlg_bad = updater.RepoManagerDialog(None, unsafe)
+    dlg_bad = repos.RepoManagerDialog(None, unsafe)
     dlg_bad._rows[0]["switch"].setChecked(True)
     check("an unsafe repo alias refuses to build a command",
           dlg_bad._build_apply_command() is None)
 
     # --- failure-hint "Copy command" fallback ---------------------------------
-    E = updater.Updater._extract_command
+    E = banners._extract_command
     check("extract_command pulls the runnable command",
           E("A repository signing key is still rejected after an automatic import — "
             "as a last resort run: sudo zypper --gpg-auto-import-keys refresh, then "
@@ -997,119 +1153,121 @@ def main() -> int:
           == "sudo zypper --gpg-auto-import-keys refresh")
     check("extract_command returns empty when there is no command",
           E("A package conflict — check the log.") == "")
-    w = updater.Updater()
-    w._show_warning("Something failed — run: sudo zypper refresh, then retry.")
+    w = window.Updater()
+    banners._show_warning(w, "Something failed — run: sudo zypper refresh, then retry.")
     check("copy button appears when a hint carries a command",
           w.warn_copy_btn.isVisibleTo(w.warn_banner)
           and w._hint_command == "sudo zypper refresh")
-    w._show_warning("Low disk space — free some room and retry.")
+    banners._show_warning(w, "Low disk space — free some room and retry.")
     check("copy button hidden when a hint carries no command",
           not w.warn_copy_btn.isVisibleTo(w.warn_banner))
     try:
-        w._show_warning("run: sudo zypper refresh, then retry.")
-        w._copy_hint_command()   # must not throw under offscreen Qt
+        banners._show_warning(w, "run: sudo zypper refresh, then retry.")
+        banners._copy_hint_command(w)   # must not throw under offscreen Qt
         check("copy command runs without error", True)
     except Exception as exc:  # noqa: BLE001
         check(f"copy command runs without error ({exc})", False)
 
     # --- signing-key remedy: the app fixes it, but only after a warned confirm ---
-    w = updater.Updater()
-    w.handle_line("@@REMEDY@@|import-keys")
+    w = window.Updater()
+    run.handle_line(w, "@@REMEDY@@|import-keys")
     check("REMEDY marker arms the key-import remedy", w._remedy_keys is True)
     w._failed_steps = ["system"]
     w._hints = ['A repository signing key is out of date. Use "Import signing key & '
                 'retry" to fix it, or run: sudo zypper --gpg-auto-import-keys refresh.']
     w.proc = QProcess(w)
-    w.on_finished(1, QProcess.ExitStatus.NormalExit)
+    run.on_finished(w, 1, QProcess.ExitStatus.NormalExit)
     check("warn button offers the key-import fix",
           w.warn_btn.text() == "Import signing key & retry")
 
     launched = {}
-    w._launch = lambda steps, check=False, import_keys=False: launched.update(
-        steps=list(steps), import_keys=import_keys)
-    w._confirm_key_import = lambda: False          # user cancels the trust confirmation
-    w._fix_keys_and_retry()
+    _patch(run, "_launch",
+           lambda win, steps, check=False, import_keys=False, skip_repos=None:
+           launched.update(steps=list(steps), import_keys=import_keys))
+    _patch(banners, "_confirm_key_import", lambda win: False)  # user cancels the trust dialog
+    banners._fix_keys_and_retry(w)
     check("cancelling the key-import confirmation does not retry", not launched)
-    w._confirm_key_import = lambda: True           # user approves
-    w._fix_keys_and_retry()
+    _patch(banners, "_confirm_key_import", lambda win: True)   # user approves
+    banners._fix_keys_and_retry(w)
     check("confirming imports keys and retries the failed steps",
           launched.get("import_keys") is True and "system" in launched.get("steps", []))
+    _unpatch_all()
 
     # --- ONEUP-0018: system-tray icon ------------------------------------------
     # (1) Autostart Exec targets --tray and quotes the executable.
-    _orig_which = updater.shutil.which
-    updater.shutil.which = lambda name: None            # force the sys.executable branch
-    updater.os.environ.pop("APPIMAGE", None)
+    _orig_which = autostart.shutil.which
+    autostart.shutil.which = lambda name: None            # force the sys.executable branch
+    autostart.os.environ.pop("APPIMAGE", None)
     try:
-        exec_line = updater.Updater._autostart_exec()
+        exec_line = autostart._autostart_exec()
     finally:
-        updater.shutil.which = _orig_which
+        autostart.shutil.which = _orig_which
     check("autostart Exec ends in --tray", exec_line.endswith(" --tray"))
     check("autostart Exec double-quotes the executable", exec_line.startswith('"'))
 
     # (2) install/remove round-trips a real file under the sandbox HOME.
-    w_tmp = updater.Updater()
-    check("start-at-boot starts disabled", w_tmp._startboot_enabled() is False)
-    ok_install = w_tmp._install_autostart()
-    check("install_autostart writes the file", ok_install and w_tmp._startboot_enabled())
-    body = w_tmp._autostart_path().read_text()
+    w_tmp = window.Updater()
+    check("start-at-boot starts disabled", autostart._startboot_enabled() is False)
+    ok_install = autostart._install_autostart(w_tmp)
+    check("install_autostart writes the file", ok_install and autostart._startboot_enabled())
+    body = autostart._autostart_path().read_text()
     check("autostart file targets --tray", "--tray" in body and "[Desktop Entry]" in body)
-    w_tmp._remove_autostart()
-    check("remove_autostart deletes the file", not w_tmp._startboot_enabled())
+    autostart._remove_autostart()
+    check("remove_autostart deletes the file", not autostart._startboot_enabled())
 
-    _orig_exe = updater.sys.executable
-    updater.sys.executable = "/opt/o$ne%up/oneup"
-    updater.shutil.which = lambda name: None
-    updater.os.environ.pop("APPIMAGE", None)
+    _orig_exe = autostart.sys.executable
+    autostart.sys.executable = "/opt/o$ne%up/oneup"
+    autostart.shutil.which = lambda name: None
+    autostart.os.environ.pop("APPIMAGE", None)
     try:
-        line = updater.Updater._autostart_exec()
+        line = autostart._autostart_exec()
     finally:
-        updater.sys.executable = _orig_exe
-        updater.shutil.which = _orig_which
+        autostart.sys.executable = _orig_exe
+        autostart.shutil.which = _orig_which
     check("Exec escapes '$' as backslash-backslash-'$' (not $$ or bare $)",
           r"\\$" in line and "$$" not in line)
     check("Exec escapes '%' as '%%'", "%%up" in line)
 
     # (3) The tray icon renders in both states and is never null.
-    w = updater.Updater()
-    check("neutral tray icon is non-null", not w._tray_icon(False).isNull())
-    check("attention tray icon is non-null", not w._tray_icon(True).isNull())
+    w = window.Updater()
+    check("neutral tray icon is non-null", not tray._tray_icon(False).isNull())
+    check("attention tray icon is non-null", not tray._tray_icon(True).isNull())
     try:
-        w._show_window()   # must not throw under offscreen Qt
+        tray._show_window(w)   # must not throw under offscreen Qt
         check("_show_window runs without error", True)
     except Exception as exc:  # noqa: BLE001
         check(f"_show_window runs without error ({exc})", False)
 
     # (4) The periodic check is silent and parses the real THREE-field TOTAL line.
-    w = updater.Updater()
-    args = w._tray_check_args("/tmp/x.log")  # noqa: S108 — an argument value, never opened.
+    w = window.Updater()
+    args = tray._tray_check_args("/tmp/x.log")  # noqa: S108 — an argument value, never opened.
     check("tray check runs --check", "--check" in args)
     check("tray check is silent (no --notify)", "--notify" not in args)
-    w._parse_tray_line("@@CHECK@@|TOTAL|3|updates available")
+    tray._parse_tray_line(w, "@@CHECK@@|TOTAL|3|updates available")
     check("tray parses field 1 of the three-field TOTAL line", w._tray_total == 3)
-    w._parse_tray_line("@@CHECK@@|TOTAL|0|updates available")
+    tray._parse_tray_line(w, "@@CHECK@@|TOTAL|0|updates available")
     check("tray parses zero updates as neutral", w._tray_total == 0)
-    w._parse_tray_line("@@STEP_BEGIN@@|system|1|3|x")   # non-CHECK line ignored
+    tray._parse_tray_line(w, "@@STEP_BEGIN@@|system|1|3|x")   # non-CHECK line ignored
     check("tray parser ignores non-TOTAL lines", w._tray_total == 0)
     # (4b) The tray check reuses ONE rolling log, overwritten each run, so a resident
     # session doesn't accumulate a new file ~4x/day (ONEUP-0024).
-    p1 = w._traycheck_log()
+    p1 = tray._traycheck_log()
     p1.write_text("stale output from a previous tray check\n")
-    p2 = w._traycheck_log()
+    p2 = tray._traycheck_log()
     check("tray check reuses one fixed log file", p1 == p2 and p2.name == "traycheck.log")
     check("tray check rolls (truncates) the log each run", p2.read_text() == "")
 
     # (5) _ensure_tray no-ops when no system tray is available (offscreen CI case).
-    w = updater.Updater()
+    w = window.Updater()
     check("no system tray under offscreen Qt", w._tray_available is False)
-    w._ensure_tray()
+    tray._ensure_tray(w)
     check("_ensure_tray builds nothing without a tray", w._tray is None)
     # Force the 'available' path with a stub tray so teardown logic is exercised.
     w._tray = object()                 # pretend a tray exists
-    w._tray_timer = updater.QTimer(w)
+    w._tray_timer = QTimer(w)
     w._tray_timer.start(999999)
     _timer = w._tray_timer             # _teardown_tray nulls the attribute; keep the object
-    w._teardown_tray()
+    tray._teardown_tray(w)
     # Dropping the reference is not the same as stopping it — a regression that removed the
     # .stop() call would leave the QTimer running (it is still parented to w) and sail past
     # an `is None` check. Assert both halves.
@@ -1117,21 +1275,21 @@ def main() -> int:
     check("teardown drops the tray reference", w._tray is None)
 
     # (6) Settings dialog hosts the two new toggles; both default off.
-    w = updater.Updater()
+    w = window.Updater()
     check("tray toggle defaults off",
           not w.tray_btn.isChecked() and w.tray_btn.text() == "Tray icon: off")
     check("start-at-boot toggle defaults off",
           not w.startboot_btn.isChecked() and w.startboot_btn.text() == "Start at boot: off")
-    dlg = updater.SettingsDialog(w)
+    dlg = settings_dialog.SettingsDialog(w)
     hosted = dlg.findChildren(QPushButton)
     check("Settings dialog hosts the tray toggle", w.tray_btn in hosted)
     check("Settings dialog hosts the start-at-boot toggle", w.startboot_btn in hosted)
 
     # (7) Coupling — enabling start-at-boot turns the tray on.
-    w = updater.Updater()
-    w._install_autostart = lambda: True
-    w._ensure_tray = lambda: None
-    w.on_startboot_toggled(True)
+    w = window.Updater()
+    _patch(autostart, "_install_autostart", lambda win: True)
+    _patch(tray, "_ensure_tray", lambda win: None)
+    autostart.on_startboot_toggled(w, True)
     check("boot-on turns the tray on", w.tray_btn.isChecked())
     check("boot-on persists tray_enabled",
           w.settings.value("tray_enabled", False, type=bool) is True)
@@ -1139,39 +1297,43 @@ def main() -> int:
     # tray_enabled on construction, so leaving this True would silently arm the tray for any
     # later scenario asserting the default-off state.
     w.settings.setValue("tray_enabled", False)
+    _unpatch_all()
 
     # (8) Coupling — turning the tray off removes start-at-boot.
-    w = updater.Updater()
+    w = window.Updater()
     removed = []
-    w._remove_autostart = lambda: removed.append(True)
-    w._teardown_tray = lambda: None
-    w._set_startboot_checked(True)
-    w.on_tray_toggled(False)
+    _patch(autostart, "_remove_autostart", lambda: removed.append(True))
+    _patch(tray, "_teardown_tray", lambda win: None)
+    autostart._set_startboot_checked(w, True)
+    tray.on_tray_toggled(w, False)
     check("tray-off removes autostart", removed == [True])
     check("tray-off clears the start-at-boot toggle", not w.startboot_btn.isChecked())
+    _unpatch_all()
 
     # (9) Coupling — turning start-at-boot off leaves the tray on.
-    w = updater.Updater()
+    w = window.Updater()
     removed2 = []
-    w._remove_autostart = lambda: removed2.append(True)
-    w._set_tray_checked(True)
-    w.on_startboot_toggled(False)
+    _patch(autostart, "_remove_autostart", lambda: removed2.append(True))
+    tray._set_tray_checked(w, True)
+    autostart.on_startboot_toggled(w, False)
     check("boot-off removes autostart", removed2 == [True])
     check("boot-off leaves the tray on", w.tray_btn.isChecked())
+    _unpatch_all()
 
     # (10) A failed autostart write reverts start-at-boot only (tray stays on).
-    w = updater.Updater()
-    w._install_autostart = lambda: False
-    w._ensure_tray = lambda: None
-    w.on_startboot_toggled(True)
+    w = window.Updater()
+    _patch(autostart, "_install_autostart", lambda win: False)
+    _patch(tray, "_ensure_tray", lambda win: None)
+    autostart.on_startboot_toggled(w, True)
     check("failed install reverts start-at-boot", not w.startboot_btn.isChecked())
     check("failed install leaves the tray on", w.tray_btn.isChecked())
+    _unpatch_all()
 
     # (11) Close-to-tray: with a tray live, closeEvent hides (not quits) and hints once.
-    w = updater.Updater()
+    w = window.Updater()
     w._tray = object()                       # pretend resident
     hints = []
-    w._notify_tray_hint = lambda: hints.append(True)
+    _patch(tray, "_notify_tray_hint", lambda win: hints.append(True))
     class _Evt:
         def __init__(self): self.ignored = False
         def ignore(self): self.ignored = True
@@ -1186,75 +1348,79 @@ def main() -> int:
     e2 = _Evt()
     w.closeEvent(e2)
     check("close-to-tray does not re-hint on a second close", hints == [True])
+    _unpatch_all()
 
     # (12) on_finished refreshes the tray: a successful run -> neutral; a check -> the count.
-    w = updater.Updater()
+    w = window.Updater()
     applied = []
-    w._apply_tray_total = lambda n, uncertain=False: applied.append(n)
+    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False: applied.append(n))
     w.proc = QProcess(w)
     w._installed_count = "2"
-    w.on_finished(0, QProcess.ExitStatus.NormalExit)     # a run
+    run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)     # a run
     check("successful run sets the tray neutral", applied and applied[-1] == 0)
-    w = updater.Updater()
+    w = window.Updater()
     applied2 = []
-    w._apply_tray_total = lambda n, uncertain=False: applied2.append(n)
+    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False: applied2.append(n))
     w._check_mode = True
     w._installed_count = "5"
     w.proc = QProcess(w)
-    w.on_finished(0, QProcess.ExitStatus.NormalExit)     # a check
+    run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)     # a check
     check("finished check pushes the count to the tray", applied2 and applied2[-1] == 5)
+    _unpatch_all()
 
     # (12b) ONEUP-0056: a check that couldn't read a source knows nothing about it,
     # and "I don't know" must never reach the user as "Everything is up to date. 🎉".
     # That exact false all-clear shipped: the window said it while 8 updates waited,
     # because the sources holding them had been silently skipped.
-    w = updater.Updater()
-    w._apply_tray_total = lambda n, uncertain=False: None
+    w = window.Updater()
+    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False: None)
     w._check_mode = True
     w._installed_count = "0"
     w._unchecked = ["OneUp couldn't read these software sources: packman"]
     w.proc = QProcess(w)
-    w.on_finished(0, QProcess.ExitStatus.NormalExit)
+    run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("no false all-clear when a source was unreadable",
           "up to date" not in w.status.text())
     check("says it couldn't check instead", "ouldn't check" in w.status.text())
     check("the unreadable source is named in the warning",
           w.warn_banner.isVisibleTo(w) and "packman" in w.warn_label.text())
     # A clean check still gets its cheerful summary — the fix must not cry wolf.
-    w = updater.Updater()
-    w._apply_tray_total = lambda n, uncertain=False: None
+    w = window.Updater()
+    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False: None)
     w._check_mode = True
     w._installed_count = "0"
     w.proc = QProcess(w)
-    w.on_finished(0, QProcess.ExitStatus.NormalExit)
+    run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("a complete check still reports up to date", "up to date" in w.status.text())
+    _unpatch_all()
 
     # (12c) The tray makes the same claim from the same markers, so it needs the same
     # guard: CHECK_UNKNOWN arrives before the TOTAL it qualifies.
-    w = updater.Updater()
-    w._parse_tray_line(
+    w = window.Updater()
+    tray._parse_tray_line(
+        w,
         "@@CHECK_UNKNOWN@@|system|OneUp couldn't read these software sources: packman")
-    w._parse_tray_line("@@CHECK@@|TOTAL|0|updates available")
+    tray._parse_tray_line(w, "@@CHECK@@|TOTAL|0|updates available")
     check("tray records the qualified total", w._tray_total == 0)
     check("tray flagged the check as uncertain", w._traycheck_unknown is True)
 
     # --- ONEUP-0025: repo resilience — skip_repos threads through to the engine ---
-    args = updater.Updater._engine_args(["system"], check=False, import_keys=False,
+    args = run._engine_args(["system"], check=False, import_keys=False,
                                         skip_repos=["google-chrome"])
     check("skip_repos adds one --skip-repo per alias", "--skip-repo=google-chrome" in args)
     check("no skip_repos → no --skip-repo flag",
-          "--skip-repo" not in " ".join(updater.Updater._engine_args(["system"], check=False)))
+          "--skip-repo" not in " ".join(run._engine_args(["system"], check=False)))
 
     # Unattended update passes --auto-skip-repos, additively alongside --notify (and
     # still never forwards the GUI-only --update token — mirrors the guard above).
     _cap = {}
-    _orig = updater.subprocess.run
-    updater.subprocess.run = lambda a, *ar, **kw: (
+    _orig = gui_app.subprocess.run              # same module as _headless_update
+    gui_app.subprocess.run = lambda a, *ar, **kw: (
         _cap.update(argv=a) or type("R", (), {"returncode": 0})())
     try:
-        updater._headless_update()
+        gui_app._headless_update()
     finally:
-        updater.subprocess.run = _orig
+        gui_app.subprocess.run = _orig
     check("headless update auto-skips broken sources",
           "--auto-skip-repos" in _cap.get("argv", []))
     check("headless update still passes --notify, not --update",
@@ -1262,20 +1428,20 @@ def main() -> int:
 
     # --- ONEUP-0025: REPO_SKIPPED is recorded; skip-repo remedy arms a named
     # banner action ("Skip <source> & update the rest") -------------------------
-    _orig_read_repos = updater.read_repos
-    updater.read_repos = lambda: [{"alias": "google-chrome", "name": "Google Chrome",
+    _orig_read_repos = repos.read_repos
+    repos.read_repos = lambda: [{"alias": "google-chrome", "name": "Google Chrome",
                                    "enabled": True, "url": "http://c/"}]
     try:
-        w = updater.Updater()
-        w.handle_line("@@REPO_SKIPPED@@|google-chrome|signature")
+        w = window.Updater()
+        run.handle_line(w, "@@REPO_SKIPPED@@|google-chrome|signature")
         check("REPO_SKIPPED recorded", "google-chrome" in w._skipped_repos)
 
-        w.handle_line("@@REMEDY@@|skip-repo|google-chrome")
+        run.handle_line(w, "@@REMEDY@@|skip-repo|google-chrome")
         check("skip-repo remedy stores the alias", w._remedy_skips == ["google-chrome"])
         w._failed_steps = ["system"]
         w._hints = ["The 'google-chrome' repository failed — the rest can still update."]
         w.proc = QProcess(w)
-        w.on_finished(1, QProcess.ExitStatus.NormalExit)
+        run.on_finished(w, 1, QProcess.ExitStatus.NormalExit)
         check("banner offers a NAMED skip action",
               "Google Chrome" in w.warn_btn.text() and "Skip" in w.warn_btn.text())
         check("second banner button stays hidden when only one remedy is armed",
@@ -1284,21 +1450,23 @@ def main() -> int:
         # Clicking it re-launches with skip_repos = the alias, re-running the
         # failed steps.
         launched = {}
-        w._launch = lambda steps, check=False, import_keys=False, skip_repos=None: (
-            launched.update(steps=list(steps), skip=list(skip_repos or [])))
-        w._skip_repo_and_retry()
+        _patch(run, "_launch",
+               lambda win, steps, check=False, import_keys=False, skip_repos=None: (
+                   launched.update(steps=list(steps), skip=list(skip_repos or []))))
+        banners._skip_repo_and_retry(w)
         check("skip action re-launches with the alias", launched.get("skip") == ["google-chrome"])
         check("skip action re-runs the failed steps", launched.get("steps") == ["system"])
+        _unpatch_all()
 
         # --- expired key: BOTH remedies armed at once — skip stays primary, the
         # key-import fix is reachable via a genuine second button --------------
-        w2 = updater.Updater()
-        w2.handle_line("@@REMEDY@@|skip-repo|google-chrome")
-        w2.handle_line("@@REMEDY@@|import-keys")
+        w2 = window.Updater()
+        run.handle_line(w2, "@@REMEDY@@|skip-repo|google-chrome")
+        run.handle_line(w2, "@@REMEDY@@|import-keys")
         w2._failed_steps = ["system"]
         w2._hints = ["A repository signing key is out of date."]
         w2.proc = QProcess(w2)
-        w2.on_finished(1, QProcess.ExitStatus.NormalExit)
+        run.on_finished(w2, 1, QProcess.ExitStatus.NormalExit)
         check("both remedies armed: primary button is the named skip action",
               w2.warn_btn.text() == "Skip Google Chrome & update the rest")
         check("both remedies armed: second button offers the key-import fix",
@@ -1308,91 +1476,95 @@ def main() -> int:
         # The second button still goes through the same warned confirmation as
         # the single-remedy import-keys path (mirrors _fix_keys_and_retry's guard).
         launched2 = {}
-        w2._launch = lambda steps, check=False, import_keys=False, skip_repos=None: (
-            launched2.update(steps=list(steps), import_keys=import_keys))
-        w2._confirm_key_import = lambda: True
+        _patch(run, "_launch",
+               lambda win, steps, check=False, import_keys=False, skip_repos=None: (
+                   launched2.update(steps=list(steps), import_keys=import_keys)))
+        _patch(banners, "_confirm_key_import", lambda win: True)
         w2.warn_btn2.click()
         check("clicking the second button imports keys and retries",
               launched2.get("import_keys") is True and "system" in launched2.get("steps", []))
+        _unpatch_all()
 
         # --- only import-keys armed: single-action path is unchanged, no 2nd btn -
-        w3 = updater.Updater()
-        w3.handle_line("@@REMEDY@@|import-keys")
+        w3 = window.Updater()
+        run.handle_line(w3, "@@REMEDY@@|import-keys")
         w3._failed_steps = ["system"]
         w3._hints = ["A repository signing key is out of date."]
         w3.proc = QProcess(w3)
-        w3.on_finished(1, QProcess.ExitStatus.NormalExit)
+        run.on_finished(w3, 1, QProcess.ExitStatus.NormalExit)
         check("import-keys only: warn button keeps the original single-action text",
               w3.warn_btn.text() == "Import signing key & retry")
         check("import-keys only: second banner button stays hidden",
               not w3.warn_btn2.isVisibleTo(w3.warn_banner))
     finally:
-        updater.read_repos = _orig_read_repos
+        repos.read_repos = _orig_read_repos
 
     # --- ONEUP-0025 final-review fix: a skip remedy with NO accompanying hint
     # (a corrupt-metadata source failure arms @@REMEDY@@|skip-repo but emits no
     # @@HINT@@) must still surface the warn banner with a named skip action —
     # not stay hidden with a dead-end remedy the user never sees. -------------
-    updater.read_repos = lambda: [{"alias": "chrome", "name": "Google Chrome",
+    repos.read_repos = lambda: [{"alias": "chrome", "name": "Google Chrome",
                                    "enabled": True, "url": "http://c/"}]
     try:
-        w5 = updater.Updater()
-        w5.handle_line("@@REMEDY@@|skip-repo|chrome")
+        w5 = window.Updater()
+        run.handle_line(w5, "@@REMEDY@@|skip-repo|chrome")
         w5._failed_steps = ["system"]
         # Deliberately do NOT seed w5._hints — this is the whole point of the test.
         w5.proc = QProcess(w5)
-        w5.on_finished(1, QProcess.ExitStatus.NormalExit)
+        run.on_finished(w5, 1, QProcess.ExitStatus.NormalExit)
         check("banner shows even with no HINT, only a skip remedy",
               w5.warn_banner.isVisibleTo(w5))
         check("fallback banner names the source and offers Skip",
               "Google Chrome" in w5.warn_btn.text() and "Skip" in w5.warn_btn.text())
     finally:
-        updater.read_repos = _orig_read_repos
+        repos.read_repos = _orig_read_repos
 
     # --- ONEUP-0025 final-review fix: two broken repos both offer their skip
     # remedy (the engine emits one @@REMEDY@@|skip-repo per culprit, up to 2) —
     # both must be collected and both re-run, not just the last one. ----------
-    updater.read_repos = lambda: [
+    repos.read_repos = lambda: [
         {"alias": "chrome", "name": "Google Chrome", "enabled": True, "url": "http://c/"},
         {"alias": "brave", "name": "Brave Browser", "enabled": True, "url": "http://b/"},
     ]
     try:
-        w6 = updater.Updater()
-        w6.handle_line("@@REMEDY@@|skip-repo|chrome")
-        w6.handle_line("@@REMEDY@@|skip-repo|brave")
+        w6 = window.Updater()
+        run.handle_line(w6, "@@REMEDY@@|skip-repo|chrome")
+        run.handle_line(w6, "@@REMEDY@@|skip-repo|brave")
         check("both skip remedies are accumulated, not overwritten",
               w6._remedy_skips == ["chrome", "brave"])
         w6._failed_steps = ["system"]
         w6.proc = QProcess(w6)
-        w6.on_finished(1, QProcess.ExitStatus.NormalExit)
+        run.on_finished(w6, 1, QProcess.ExitStatus.NormalExit)
         check("banner offers a combined skip action for multiple sources",
               "Skip 2 sources" in w6.warn_btn.text())
 
         launched6 = {}
-        w6._launch = lambda steps, check=False, import_keys=False, skip_repos=None: (
-            launched6.update(steps=list(steps), skip=list(skip_repos or [])))
-        w6._skip_repo_and_retry()
+        _patch(run, "_launch",
+               lambda win, steps, check=False, import_keys=False, skip_repos=None: (
+                   launched6.update(steps=list(steps), skip=list(skip_repos or []))))
+        banners._skip_repo_and_retry(w6)
         check("skip action re-launches with BOTH aliases",
               launched6.get("skip") == ["chrome", "brave"])
+        _unpatch_all()
     finally:
-        updater.read_repos = _orig_read_repos
+        repos.read_repos = _orig_read_repos
 
     # A stale remedy from a prior run must never linger into the next one.
-    _orig_qp_start = updater.QProcess.start
-    updater.QProcess.start = lambda self, *a, **kw: None   # swallow the real engine launch
+    _orig_qp_start = QProcess.start
+    QProcess.start = lambda self, *a, **kw: None   # swallow the real engine launch
     try:
-        w4 = updater.Updater()
+        w4 = window.Updater()
         w4._remedy_skips = ["stale-alias"]
         w4.warn_btn2.setVisible(True)
-        w4._launch(["system"], check=False)
+        run._launch(w4, ["system"], check=False)
         check("_launch resets a stale skip remedy", w4._remedy_skips == [])
         check("_launch hides a stale second banner button",
               not w4.warn_btn2.isVisibleTo(w4.warn_banner))
     finally:
-        updater.QProcess.start = _orig_qp_start
+        QProcess.start = _orig_qp_start
 
     # --- Diagnostics bundle for a bug report (ONEUP-0031) ------------------
-    _latest, _build = updater._latest_run_log, updater.build_diagnostics
+    _latest, _build = diagnostics._latest_run_log, diagnostics.build_diagnostics
     with tempfile.TemporaryDirectory() as _ld:
         _ldp = Path(_ld)
         for _n, _age in (("2026-07-24_100000.log", 300),       # older real run
@@ -1416,13 +1588,13 @@ def main() -> int:
     check("diagnostics: hostname scrubbed", "boxname" not in _rep and "<host>" in _rep)
     check("diagnostics: no-run placeholder shown",
           "no update has been run yet" in _build("1", "x", [], None, None, "w", "", ""))
-    _big = "H" * 20 + "T" * (updater.DIAG_LOG_CAP + 3000)
+    _big = "H" * 20 + "T" * (diagnostics.DIAG_LOG_CAP + 3000)
     _trim = _build("1", "x", [], "b.log", _big, "w", "", "")
     check("diagnostics: oversized log trimmed to its tail",
           "earlier output trimmed" in _trim and "H" * 20 not in _trim)
 
-    wD = updater.Updater()
-    wD.copy_diagnostics()
+    wD = window.Updater()
+    diagnostics.copy_diagnostics(wD)
     check("diagnostics: button flips to Copied after a copy",
           wD.diag_btn.text() == "Copied ✓")
     check("diagnostics: clipboard receives the bundle",
@@ -1432,14 +1604,14 @@ def main() -> int:
     # refresh_last_run() derives a relative day-count from history.json and ambers
     # the line (dynamic stale property) once a run is STALE_AFTER_DAYS old.
     from datetime import timedelta
-    updater.STATE_DIR.mkdir(parents=True, exist_ok=True)
+    paths.STATE_DIR.mkdir(parents=True, exist_ok=True)
 
     # Both sides of the day-count read the clock independently: _seed_history stamps
-    # history.json from updater.datetime.now(), and refresh_last_run() subtracts calendar
+    # history.json from window.datetime.now(), and refresh_last_run() subtracts calendar
     # DATES using its own now(). Straddle local midnight between the two and every count
     # below shifts by one, flipping the threshold assertions for a reason unconnected to
     # the code under test. Freeze the clock for this block.
-    _real_datetime = updater.datetime
+    _real_datetime = window.datetime
 
     class _FrozenDatetime(_real_datetime):
         _AT = _real_datetime.now()
@@ -1448,14 +1620,14 @@ def main() -> int:
         def now(cls, tz=None):
             return cls._AT
 
-    updater.datetime = _FrozenDatetime
+    window.datetime = _FrozenDatetime
 
     def _seed_history(days_ago: int, status: str = "OK"):
-        when = updater.datetime.now() - timedelta(days=days_ago)
-        updater.HISTORY.write_text(updater.json.dumps(
+        when = window.datetime.now() - timedelta(days=days_ago)
+        paths.HISTORY.write_text(window.json.dumps(
             {"when": when.isoformat(timespec="seconds"), "status": status}))
 
-    wN = updater.Updater()
+    wN = window.Updater()
     _seed_history(0)
     wN.refresh_last_run()
     check("last-run nudge says 'today' for a same-day run", "today" in wN.last_run.text())
@@ -1471,7 +1643,7 @@ def main() -> int:
     check("last-run nudge counts the days for an older run", "20 days ago" in wN.last_run.text())
     check("a run past the threshold is flagged stale", wN.last_run.property("stale") == "true")
 
-    _seed_history(updater.STALE_AFTER_DAYS - 1)
+    _seed_history(window.STALE_AFTER_DAYS - 1)
     wN.refresh_last_run()
     check("a run just under the threshold is not stale",
           wN.last_run.property("stale") == "false")
@@ -1483,15 +1655,36 @@ def main() -> int:
     check("an overdue run says so in words, not just in amber",
           "overdue" in wN.last_run.text())
 
-    updater.HISTORY.unlink()
+    paths.HISTORY.unlink()
     wN.refresh_last_run()
     check("no history shows 'Last run: never'", wN.last_run.text() == "Last run: never")
     check("the 'never' state is not flagged stale", wN.last_run.property("stale") == "false")
 
-    updater.datetime = _real_datetime
+    window.datetime = _real_datetime
+
+    # --- ONEUP-0034 INV-6: every dialog the package defines centres on its parent -
+    # The X11 and Wayland checks above prove the HELPER, on a dialog this file builds
+    # itself. They say nothing about whether a dialog the app ships remembered to call
+    # it — and the split moved all three into modules of their own, where a dropped
+    # showEvent would look like nothing at all. Walked rather than listed, so a dialog
+    # added later is covered without anyone remembering to add it here.
+    _dialogs, _missing = [], []
+    for _mi in pkgutil.iter_modules([str(REPO / "oneup" / "gui")]):
+        _mod = __import__(f"oneup.gui.{_mi.name}", fromlist=["_"])
+        for _name, _obj in vars(_mod).items():
+            if (inspect.isclass(_obj) and issubclass(_obj, QDialog) and _obj is not QDialog
+                    and _obj.__module__ == _mod.__name__):
+                _dialogs.append(f"{_mi.name}.{_name}")
+                _src = inspect.getsource(_obj.showEvent) if "showEvent" in vars(_obj) else ""
+                if "center_on_parent" not in _src:
+                    _missing.append(f"{_mi.name}.{_name}")
+    check(f"the package defines dialogs to check ({', '.join(_dialogs) or 'none'})",
+          len(_dialogs) >= 3)
+    check("every QDialog under oneup/gui/ centres on its parent in its own showEvent "
+          f"({', '.join(_missing) or 'none missing'})", not _missing)
 
     # --- ONEUP-0028: accessibility ---------------------------------------------
-    wA = updater.Updater()
+    wA = window.Updater()
 
     # INV-1: nothing a user can reach may be nameless. Every focusable widget must
     # report an accessible name OR visible text. getattr for .text() is required,
@@ -1510,7 +1703,7 @@ def main() -> int:
     missing = unnamed(wA)
     check(f"every focusable widget in the window is named (unnamed: {missing})", not missing)
 
-    repo_dlg = updater.RepoManagerDialog(wA, [
+    repo_dlg = repos.RepoManagerDialog(wA, [
         {"alias": "oss", "name": "Main repository", "enabled": True, "url": "http://a/x"},
         {"alias": "up", "name": "Updates", "enabled": False, "url": "http://b/y"}])
     miss_repo = unnamed(repo_dlg)
@@ -1518,15 +1711,15 @@ def main() -> int:
           not miss_repo)
     check("a repo switch does not bake its on/off state into its name",
           all("enabled" not in s.accessibleName()
-              for s in repo_dlg.findChildren(updater.ToggleSwitch)))
+              for s in repo_dlg.findChildren(toggle_switch.ToggleSwitch)))
     repo_dlg.reject()
 
-    set_dlg = updater.SettingsDialog(wA)
+    set_dlg = settings_dialog.SettingsDialog(wA)
     miss_set = unnamed(set_dlg)
     check(f"every focusable widget in Settings is named (unnamed: {miss_set})", not miss_set)
     set_dlg.reject()
 
-    roll_dlg = updater.RollbackDialog(wA, [("41", "2026-07-24 09:00", "pre-update")], "41")
+    roll_dlg = rollback.RollbackDialog(wA, [("41", "2026-07-24 09:00", "pre-update")], "41")
     miss_roll = unnamed(roll_dlg)
     check(f"every focusable widget in Rollback is named (unnamed: {miss_roll})", not miss_roll)
     roll_dlg.reject()
@@ -1547,7 +1740,7 @@ def main() -> int:
     # a switch that lost its shape cue. NB a bare "checked vs unchecked images
     # differ" check would pass even then, because the knob itself moves.
     def shape_pixels(checked: bool) -> int:
-        s = updater.ToggleSwitch()
+        s = toggle_switch.ToggleSwitch()
         s.setChecked(checked)
         s._anim.stop()                      # settle the 130 ms knob slide first
         s.set_knob_pos(1.0 if checked else 0.0)
@@ -1569,7 +1762,7 @@ def main() -> int:
     # INV-2 (tray): the attention badge must differ in SHAPE. Count near-white
     # pixels INSIDE the amber disc, inset to exclude the disc's own white outline.
     def badge_glyph_pixels() -> int:
-        pm = wA._tray_icon(True).pixmap(64, 64).toImage()
+        pm = tray._tray_icon(True).pixmap(64, 64).toImage()
         d, inset = 26, 5
         x0, y0 = pm.width() - d - 3 + inset, pm.height() - d - 3 + inset
         n = 0
@@ -1586,8 +1779,8 @@ def main() -> int:
     # INV-3: no absolute pixel font size survives, and every size scales. The
     # regex targets the DECLARATION — a plain `"px" in line` test would false-fail
     # on the lines that legitimately keep a px length beside a font-size.
-    qss_norm = updater.build_theme(True)
-    qss_big = updater.build_theme(True, scale=1.45)
+    qss_norm = theme.build_theme(True)
+    qss_big = theme.build_theme(True, scale=1.45)
     check("no font size is a hard-coded pixel value",
           re.search(r"font-size:\s*[\d.]+px", qss_norm) is None)
     pts = lambda q: [float(m) for m in re.findall(r"font-size:\s*([\d.]+)pt", q)]  # noqa: E731
@@ -1623,7 +1816,7 @@ def main() -> int:
           chain[:1] == [wA.repos_btn])
 
     # INV-6: high contrast only ADDS an overlay — the base sheet is untouched.
-    qss_hc = updater.build_theme(True, high_contrast=True)
+    qss_hc = theme.build_theme(True, high_contrast=True)
     check("high contrast appends to the base sheet rather than replacing it",
           qss_hc.startswith(qss_norm))
     check("high contrast tells the painted switch to change too",
@@ -1649,8 +1842,8 @@ def main() -> int:
         {"alias": "oss-copy", "name": "Main Repository (copy)", "enabled": False,
          "url": "http://download.opensuse.org/tumbleweed/repo/oss/"},
     ]
-    for title, dlg in (("Settings", updater.SettingsDialog(wA)),
-                       ("Repositories", updater.RepoManagerDialog(wA, repo_rows))):
+    for title, dlg in (("Settings", settings_dialog.SettingsDialog(wA)),
+                       ("Repositories", repos.RepoManagerDialog(wA, repo_rows))):
         borders = [f for f in dlg.findChildren(QFrame) if f.objectName() == "RowBorder"]
         check(f"{title} builds rows at all", len(borders) > 0)
         check(f"every {title} RowBorder paints a RowCard over itself",
@@ -1658,20 +1851,20 @@ def main() -> int:
 
     # INV-7: progress and outcome are spoken. _announce records unconditionally,
     # since QAccessible.isActive() is False offscreen.
-    wB = updater.Updater()
-    wB.handle_line("@@STEP_BEGIN@@|system|1|3|Updating system packages")
+    wB = window.Updater()
+    run.handle_line(wB, "@@STEP_BEGIN@@|system|1|3|Updating system packages")
     check("the step being started is announced",
           "Updating system packages" in wB._last_announcement
           and "step 1 of 3" in wB._last_announcement)
-    wB.handle_line("@@STEP_END@@|system|ok|3 packages updated")
+    run.handle_line(wB, "@@STEP_END@@|system|ok|3 packages updated")
     check("the step outcome is announced",
           wB._last_announcement == "System packages: 3 installed")
-    wB.handle_line("@@DISK@@|warn|/|512 MiB")
+    run.handle_line(wB, "@@DISK@@|warn|/|512 MiB")
     check("a warning banner is announced when it appears",
           wB._last_announcement.startswith("Warning:"))
     wB.proc = QProcess(wB)
     wB._check_mode = False
-    wB.on_finished(0, QProcess.ExitStatus.NormalExit)
+    run.on_finished(wB, 0, QProcess.ExitStatus.NormalExit)
     check("the final summary is announced", "All done" in wB._last_announcement)
     try:
         wB._announce("plain call must not throw when no reader is listening")
@@ -1699,15 +1892,15 @@ def main() -> int:
     app_inst = QApplication.instance()
     before = app_inst.styleSheet()
     wA.settings.setValue("text_scale", 1.45)
-    updater.apply_app_theme(app_inst)
+    theme.apply_app_theme(app_inst)
     check("a text-size change applies live", app_inst.styleSheet() != before)
     wA.settings.setValue("high_contrast", True)
-    updater.apply_app_theme(app_inst)
+    theme.apply_app_theme(app_inst)
     check("a high-contrast change applies live",
           "qproperty-highContrast: true" in app_inst.styleSheet())
     wA.settings.setValue("text_scale", 1.0)
     wA.settings.setValue("high_contrast", False)
-    updater.apply_app_theme(app_inst)
+    theme.apply_app_theme(app_inst)
     check("turning high contrast back off really reverts it",
           "qproperty-highContrast: true" not in app_inst.styleSheet())
     check("the text-size button cycles through the offered sizes",

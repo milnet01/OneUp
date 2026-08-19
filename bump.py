@@ -3,9 +3,9 @@
 
 Usage:  ./bump.py X.Y.Z
 
-Edits the six lockstep sites docs/standards/workflow.md §5.1 documents — updater.py
-APP_VERSION, the RPM spec Version + %changelog, the OBS _service versionformat +
-revision, the AppStream
+Edits the six lockstep sites docs/standards/workflow.md §5.1 documents —
+oneup/__init__.py APP_VERSION, the RPM spec Version + %changelog, the OBS
+_service versionformat + revision, the AppStream
 <release>, and the CHANGELOG heading + link — and derives the spec/metainfo release
 notes from the CHANGELOG's `## [Unreleased]` bullets, so that section is the single
 source of truth. Afterwards, review `git diff` and run ./local-CI.sh (its
@@ -58,8 +58,8 @@ def main():
     # strip inline-code backticks for the plain-text/XML targets
     plain = [re.sub(r"`", "", it).strip() for it in items]
 
-    # 1. updater.py APP_VERSION
-    edit("updater.py", r'APP_VERSION = "\d+\.\d+\.\d+"', f'APP_VERSION = "{ver}"')
+    # 1. the package's APP_VERSION
+    edit("oneup/__init__.py", r'APP_VERSION = "\d+\.\d+\.\d+"', f'APP_VERSION = "{ver}"')
 
     # 2. RPM spec Version:
     edit("packaging/rpm/oneup.spec", r'^(Version:\s+)\d+\.\d+\.\d+',
