@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.4.4
+Version:        1.4.5
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -74,6 +74,8 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Wed Aug 19 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.5-0
+- Offers the restart instead of telling you one is needed
 * Tue Aug 18 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.4-0
 - Restart services never restarts something that would log you out
 - Restart services now actually restarts them
