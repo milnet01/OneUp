@@ -113,8 +113,9 @@ if the thing under test still presents the same face.
    lists, its field order and its meaning.
    Documented in `docs/reference/marker-protocol.md`. **One** deliberate, versioned
    exception, recorded in `docs/reference/marker-protocol.md` §5.1 and sequenced in §5.1
-   below: ONEUP-0072's conversion of the `@@HINT@@` and
-   `@@REMEDY@@` payloads to codes. The byte counters the engine rewrite makes possible
+   below: ONEUP-0072's conversion of **every** engine payload the window renders as its own
+   wording — wider than the `@@HINT@@` / `@@REMEDY@@` pair this clause once named
+   (`docs/specs/ONEUP-0072-marker-codes.md` §3.1). The byte counters the engine rewrite makes possible
    (`docs/specs/ONEUP-0054-python-engine.md` §4.3.3) need a marker too, and land **after the
    2.0.0 tag** — not a second exception inside 2.0. See §10.
 2. **The engine's command-line surface** — every flag §2 enumerates, its spelling and its
