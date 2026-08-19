@@ -16,7 +16,36 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: `ONEUP-0032` gated (loop 8); next is the `ONEUP-0027` citation pass**
+> ## ▶ You are here — **Task 18: `ONEUP-0032` converged by cap (loops 8 and 9); next is the `ONEUP-0027` citation pass**
+>
+> **Loop 9 ran — 2 cold lanes. Q1 1 · Q2 3 · Q3 1 · Q4 1, 6 verified, 1 dismissed, 6 fixed.
+> That is both loops of a spec's cap spent, so the run files and ships.**
+>
+> **The Q1 is a test that would have gone red on a correct implementation, and eight loops
+> walked past it.** §7 leans the whole right-to-left gate on *"the pixel sample the suite
+> already takes"* — and `tests/gui-smoke.py`'s `shape_pixels` picks its sampled third from
+> `checked` alone, commented *"Knob sits right when on, so inspect the LEFT third"*. §4.4
+> moves the state shape to the other end, so after a correct mirror the sample looks where
+> the shape no longer is: red on a right implementation, or green having judged nothing.
+> §8's file list named the `sys.argv` change and nothing else.
+>
+> **Three of the six landed on text loop 8 wrote** — 4a-min's pattern, and the honest
+> character of this cap. Loop 8's packaging bullet instructed an install line over a path
+> that does not exist; its INV-2 rewrite said *"one present"* of two cases where only one
+> can falsify the rule above it (both found by both lanes, from opposite ends); and its §8
+> deletion of `ONEUP-0077`'s INV-5 replaced the guard with nothing, leaving §2.2's third
+> measured bug uncovered. **INV-9** now asserts it.
+>
+> **The cap is mixed rather than calm, and the trend is why the run stops**: loop 8 was 8 of
+> 8 pre-existing, loop 9 is 3 of 6 collateral. Size is not the cause — at ~450 lines this
+> spec is well inside the budget — so it is filed and shipped rather than split.
+> `ONEUP-0032` stays `Status: Draft`: no loop has come back empty. It carries **no** open
+> decision, and nothing is left verified and unfixed.
+>
+> **Next: the `ONEUP-0027` citation pass**, which carries three filed findings.
+> `ONEUP-0064` still owes a decision rather than a loop.
+
+> ## Previously — **Task 18: `ONEUP-0032` gated (loop 8); next is the `ONEUP-0027` citation pass**
 >
 > **Loop 8 ran — 2 cold lanes, `--max-loops 1`. Q1 2 · Q2 3 · Q3 1 · Q4 2, 8 verified, 1
 > dismissed, 8 fixed, 1 filed as `ONEUP-0118`.** The real loop 1 this document was owed: its
@@ -1404,10 +1433,13 @@ git commit -m "ONEUP-0064: spec the interface redesign"
         run-state note is gone under `documentation.md` §7.1. Still `Status: Draft`,
         deliberately — the gate never returned an empty loop.
       - [ ] **ONEUP-0076** (630)
-      - [~] **ONEUP-0032** — loop 8 ran 2026-08-19, `review-contract`, 2 lanes,
-        `--max-loops 1`: 8 verified, 8 fixed, 1 dismissed, 1 filed as **ONEUP-0118**.
-        Commit `44b8677`. The document's cap is 2 and only one was spent, so **a second
-        cold loop is available**. Still `Status: Draft` — no loop has come back empty.
+      - [x] **ONEUP-0032** — **converged by cap** 2026-08-19, `review-contract`, two loops,
+        2 lanes each. Loop 8: 8 verified, 8 fixed, 1 dismissed, 1 filed as **ONEUP-0118**
+        (`44b8677`). Loop 9: 6 verified, 6 fixed, 1 dismissed, added **INV-9** (`39f2b25`).
+        Loop 9's Q1 was a test that would have gone red on a correct mirror —
+        `shape_pixels`' fixed sampled third. Collateral 0/8 then 3/6, which is the stop
+        signal as well as the cap. Still `Status: Draft` — no loop has come back empty —
+        with no open decision and nothing verified and unfixed.
       - [ ] **ONEUP-0027** (cheap)
 - [ ] **Step 2–4:** verify, fix by severity, loop cold until clean, log as you go.
 - [ ] **Step 5: Commit** per loop:

@@ -1199,6 +1199,29 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   passed on a 33-byte file that translates nothing. A second cold loop is
   available and unspent; the document stays Status: Draft. Next is the
   ONEUP-0027 citation pass; ONEUP-0064 owes a decision rather than a loop.
+  Progress (2026-08-19, second entry): ONEUP-0032 converged by cap — loop 9
+  ran, 2 cold lanes. Q1 1 · Q2 3 · Q3 1 · Q4 1, 6 verified, 1 dismissed, 6
+  fixed. Both loops of a spec's cap are now spent.
+
+  Loop 9's Q1 is a test that would have gone red on a correct implementation
+  and that eight loops walked past: §7 rests the whole RTL gate on the pixel
+  sample gui-smoke already takes, and shape_pixels picks its sampled third
+  from `checked` alone, so a correctly mirrored switch puts the state shape in
+  the third it does not inspect. §7 and §8 now take that third from
+  QApplication.isRightToLeft().
+
+  Three of the six landed on loop 8's own text: the packaging bullet
+  instructed an install over a path that does not exist, INV-2's "one present"
+  named neither of two materially different cases, and the deletion of
+  ONEUP-0077's INV-5 replaced the guard with nothing — INV-9 now asserts both
+  headless paths build a QCoreApplication.
+
+  Collateral went 0/8 then 3/6, which is the documented stop signal as well as
+  the cap; at ~450 lines size is not the cause, so the document is filed and
+  shipped rather than split. Status stays Draft — no loop has come back empty
+  — with no open decision and nothing verified and unfixed.
+
+  Next: the ONEUP-0027 citation pass. ONEUP-0064 owes a decision, not a loop.
 
 - 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether
