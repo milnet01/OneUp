@@ -16,7 +16,55 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: `ONEUP-0032` converged by cap (loops 8 and 9); next is the `ONEUP-0027` citation pass**
+> ## ▶ You are here — **Task 18: the `ONEUP-0027` citation pass is done; Task 18 has no gate left to run**
+
+> **The cheap pass ran and applied all three filed findings, plus one it found itself.
+> `ONEUP-0027` stays `Status: Reviewed` — a citation pass is not a gate loop, so §11 gains
+> no row.** `./local-CI.sh --docs` green, 19308 claims / 0 failed.
+
+> **The filed pair were one wrong model in two documents, and the code settles it.** `_QSS`
+> carries `QMainWindow { background: $win; }` and **no `QDialog` rule** — verified by
+> reading the template, not recalled — so a dialog inherits the *sheet* and not that
+> declaration, and paints Qt's platform grey. `ONEUP-0076` measured `#efefef` in **both**
+> palettes; only `_HC_QSS` pins it. So `ONEUP-0027` §2's *"§6.1 is why dialogs need no work
+> of their own"* and `ui-and-accessibility.md` §6.1's *"theme comes free"* were both false
+> about the one surface a user actually sees. Both now state the gap, name `ONEUP-0076` §8
+> as the owner of the rule, and leave §6.1's **Do/Don't unchanged** — a per-dialog
+> stylesheet is still forbidden, so no conformer writes a different line (rule 14: the No
+> branch, no gate re-armed on the standard).
+
+> **The third filed item was the `_QSS` edit itself, and it now has a home.** `ONEUP-0076`
+> §8 hands `QMainWindow, QDialog { background: $win; }` to whichever of `ONEUP-0064` or
+> `ONEUP-0027` reaches the sheet first, and neither spec had recorded owing it.
+> `ONEUP-0027` §8 gains the bullet, flagged as *the one code change here that is not a
+> theme* — which is also what keeps it clear of `ui-and-accessibility.md` §7's rule that a
+> theme may not introduce a selector.
+
+> **The pass found a fourth, and it is the one that would have cost an implementer.**
+> `ONEUP-0076` §8 declares `focusfill` and `focusink` to this spec as a named class
+> **measured elsewhere** — not in a fixed pair table, because their values are recomputed
+> per palette, and not decorative, because they are measured. `ONEUP-0027` §4.7 and INV-4
+> admitted **three** routes to coverage and said a key in none of them **fails** the check.
+> 0076 lands first, so its own keys would have failed the check the moment 0027's
+> implementer wrote it, with no correct disposition available. §4.7 and INV-4 now carry the
+> fourth route, and a declaration naming no measuring invariant fails like an undeclared
+> key.
+
+> **One citation repointed in the sibling.** `ONEUP-0076` §8 located the dialogs note at
+> `ONEUP-0027` **§4.8**; it is in **§2**. Corrected, and both amendments recorded as landed
+> ahead of that item rather than owed by it.
+
+> **Judgement recorded rather than left implicit:** the §4.7/INV-4 change does alter what an
+> implementer builds, so it is a re-arm candidate for `ONEUP-0027`'s own gate. It is folding
+> in a decision an already-gated sibling made, which is the grey zone — taken as **no gate**,
+> per rule 14's asymmetry, and written down here so the next reader is not left to guess.
+
+> **Next: `ONEUP-0064`'s open decision — the disclosure arrow's hover ink** (`ONEUP-0076`
+> loop 3 named it), and `ONEUP-0072`'s and `ONEUP-0076`'s unspent second cold loops whenever
+> the user wants them spent. Task 18 owes no gate that has not either converged or stopped
+> deliberately.
+
+> ## Previously — **Task 18: `ONEUP-0032` converged by cap (loops 8 and 9); next is the `ONEUP-0027` citation pass**
 >
 > **Loop 9 ran — 2 cold lanes. Q1 1 · Q2 3 · Q3 1 · Q4 1, 6 verified, 1 dismissed, 6 fixed.
 > That is both loops of a spec's cap spent, so the run files and ships.**
@@ -1440,7 +1488,15 @@ git commit -m "ONEUP-0064: spec the interface redesign"
         `shape_pixels`' fixed sampled third. Collateral 0/8 then 3/6, which is the stop
         signal as well as the cap. Still `Status: Draft` — no loop has come back empty —
         with no open decision and nothing verified and unfixed.
-      - [ ] **ONEUP-0027** (cheap)
+      - [x] **ONEUP-0027** — citation pass done 2026-08-19. Not a gate loop, so `Status`
+        stays `Reviewed` and §11 gains no row. Applied all three filed findings — §2's
+        refuted *"dialogs need no work of their own"*, `ui-and-accessibility.md` §6.1's
+        *"theme comes free"*, and the `_QSS` `QDialog` rule, which §8 now records as this
+        item's if `ONEUP-0064` does not land it first — plus one the pass found: §4.7 and
+        INV-4 admitted three routes to token coverage where `ONEUP-0076` §8 hands this spec
+        a fourth (*measured elsewhere*), so `focusfill` and `focusink` would have failed
+        the check with no correct disposition. Also repointed `ONEUP-0076` §8's citation of
+        the dialogs note from §4.8 to §2.
 - [ ] **Step 2–4:** verify, fix by severity, loop cold until clean, log as you go.
 - [ ] **Step 5: Commit** per loop:
 

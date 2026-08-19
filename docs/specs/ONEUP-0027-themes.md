@@ -34,9 +34,19 @@ without anyone remembering to run it.
 Theming today is one stylesheet, built once and set on the `QApplication`. `build_theme`
 substitutes either `_DARK` or `_LIGHT` into the `_QSS` template, `apply_app_theme` installs
 the result, and `main()` re-applies it on `colorSchemeChanged`. That machinery is sound and
-this spec keeps it — `docs/standards/ui-and-accessibility.md` §6.1 is why dialogs need no
-work of their own: the sheet lives on the application, so every `QDialog` and `QMessageBox`
-inherits it.
+this spec keeps it. **What it does not do is theme a dialog's own background.** A child
+window inherits the *sheet*, not a declaration written for another selector: `_QSS` carries
+`QMainWindow { background: $win; }` and no `QDialog` rule at all, so a bare `QDialog` paints
+Qt's platform grey in both palettes — `docs/specs/ONEUP-0076-ringless-focus-cue.md` measured
+it at `#efefef` light **and** dark. Only `_HC_QSS` pins it, with the
+`QMainWindow, QDialog { background: $win; }` rule the base sheet lacks. What a dialog does
+inherit is every object-name selector its children match, which is why
+`docs/standards/ui-and-accessibility.md` §6.1 still forbids a per-dialog stylesheet.
+
+**That missing rule is a code change this item may own.** `ONEUP-0076` §8 prescribes it and
+hands it to whichever of `docs/specs/ONEUP-0064-interface-redesign.md` or this spec lands
+the sheet edit first; §8 below records what falls to this item if 0064 has not already done
+it.
 
 **Two things are missing, and both were measured before this spec was written.**
 
@@ -299,9 +309,14 @@ a resting one, and the progress bar's text is read on the bar, not on the card.
 - **Declared exempt** — `disfg` on `disbg`. WCAG 2.2 SC 1.4.3 puts inactive components
   outside its scope.
 
-**Every token in the reference set is covered**, in one of three ways: it is the foreground
-of a checked pair, it is the background of one, or it is named on the decorative or exempt
-list. A surface like `card` or `switchknob` is covered by being something else's
+**Every token in the reference set is covered**, in one of four ways: it is the foreground
+of a checked pair, it is the background of one, it is named on the decorative or exempt
+list, or it is declared **measured elsewhere** — naming the item and the invariant that
+measures it. That fourth route exists because `ONEUP-0076` lands first and adds
+`focusfill` and `focusink` per control family: their values are recomputed per palette by
+that item's derivation rather than fixed, so they cannot sit in a table of fixed pairs, and
+they are measured by its INV-2 and INV-3, so they are not decorative. A declaration that
+names no measuring invariant is not one, and fails the check like an undeclared key. A surface like `card` or `switchknob` is covered by being something else's
 background; it needs no row of its own. That is INV-4, and it is what stops a token being
 added and quietly escaping measurement. §4.8's decisions are decisions about pairs these
 lists contain, never about pairs the check does not compute.
@@ -383,7 +398,8 @@ list becoming the place failures go to be forgotten.
   silenced by appending it bare.
 
 - **INV-4** Every token in the reference set is covered by §4.7 — as the foreground of a
-  checked pair, as the background of one, or by name on the decorative or exempt list.
+  checked pair, as the background of one, by name on the decorative or exempt list, or by a
+  *measured elsewhere* declaration naming the item and invariant that measures it.
   *Test:* the check gathers the tokens its lists mention, on either side of a pair, and
   fails on a reference-set key it did not gather. Breaks when a token is added to the
   palette and forgotten, which would otherwise leave a new colour measured by nothing while
@@ -512,6 +528,13 @@ keep it that way.
   `GREEN`, `RED` and `ACCENT`/`BTN_ACCENT` from the `theme.py` row, and
   `TRAY_ATTENTION_COLOR` from `tray.py`'s `TRAY_*`. `theme.py` gains `current_palette()`
   and the palette table in their place.
+- **`updater.py`'s `_QSS`** — **the one code change here that is not a theme.** If
+  `docs/specs/ONEUP-0064-interface-redesign.md` has not already landed it, this item adds
+  `QMainWindow, QDialog { background: $win; }` — the rule `_HC_QSS` already carries.
+  `ONEUP-0076` §8 owns the derivation and hands the edit to whichever of the two lands
+  first; §2 says why it is needed. Without it every dialog paints Qt's platform grey, so
+  §4.7's `win` and `card` rows measure against a surface no palette controls and the picker
+  visibly does not reach a dialog.
 - **`docs/reference/`** — nothing. A theme is not a contract between the two halves.
 - **`docs/standards/testing.md`** §1's suite table gains nothing new: the check is driven
   from `tests/gui-smoke.py` rather than being its own programme.

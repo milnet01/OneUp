@@ -784,9 +784,12 @@ does.
 - **`docs/specs/ONEUP-0027-themes.md` §4.7 gains `win` as a measured 3:1 surface.** Its
   current list carries `ghostbd` against `card` and the danger family's banner borders
   against `win`, but no focus pair on `win`, because until this item nothing rested there.
-  The pair is §4.3's two new rows. Its §4.8 note that *"`ui-and-accessibility.md` §6.1 is why
-  dialogs need no work of their own"* rests on the model the measurement above refutes and is
-  corrected with it.
+  The pair is §4.3's two new rows. Its §2 note that *"`ui-and-accessibility.md` §6.1 is
+  why dialogs need no work of their own"* rested on the model the measurement above
+  refutes; it was corrected on 2026-08-19, together with §6.1 itself, ahead of this item,
+  so both are already true and neither is owed here. That correction also gave
+  `ONEUP-0027` §8 the `_QSS` bullet above as its own deliverable, for the case where 0064
+  does not land the sheet edit first.
 
 - **Two dialog widgets are given object names, in the same commit as the rules that key
   off them.** `RepoManagerDialog`'s `QScrollArea` becomes `#RepoScroll` and

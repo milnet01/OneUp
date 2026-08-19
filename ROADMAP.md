@@ -1222,6 +1222,28 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   — with no open decision and nothing verified and unfixed.
 
   Next: the ONEUP-0027 citation pass. ONEUP-0064 owes a decision, not a loop.
+  Progress (2026-08-19): the ONEUP-0027 citation pass ran and Task 18
+  has no gate left. Not a loop, so ONEUP-0027 stays Status: Reviewed
+  and §11 gains no row. All three filed findings applied. The two from
+  ONEUP-0076 loop 3 were one wrong model in two documents: _QSS carries
+  QMainWindow { background: $win; } and no QDialog rule, so a dialog
+  inherits the sheet and not that declaration and paints Qt's platform
+  grey — #efefef in BOTH palettes, per 0076's measurement; only _HC_QSS
+  pins it. ONEUP-0027 §2 and ui-and-accessibility.md §6.1 both now state
+  the gap and name ONEUP-0076 §8 as the rule's owner, with §6.1's
+  Do/Don't unchanged. The third was the _QSS edit itself: 0076 §8 hands
+  it to whichever of ONEUP-0064 or ONEUP-0027 reaches the sheet first
+  and neither had recorded owing it, so ONEUP-0027 §8 gains the bullet.
+  The pass found a fourth of its own, and it is the one that would have
+  cost an implementer: 0076 §8 declares focusfill and focusink to this
+  spec as a class MEASURED ELSEWHERE, while §4.7 and INV-4 admitted only
+  three routes to coverage and fail a key in none of them — 0076 lands
+  first, so its own keys would have failed 0027's check on day one. §4.7
+  and INV-4 now carry the fourth route. Also repointed ONEUP-0076 §8's
+  citation of the dialogs note from §4.8 to §2. docs-check 19308 claims
+  / 0 failed. Next: ONEUP-0064's open decision (the disclosure arrow's
+  hover ink), and the unspent second cold loops on ONEUP-0072 and
+  ONEUP-0076 whenever the user wants them spent.
 
 - 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether

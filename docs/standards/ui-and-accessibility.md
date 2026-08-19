@@ -191,6 +191,17 @@ re-applied live when the desktop switches light/dark
 the `QApplication`, **every child widget — `QDialog` subclasses and `QMessageBox` instances
 alike — inherits it automatically.**
 
+**One thing does not come free, and it is the dialog's own background.** A window inherits
+the *sheet*, not a declaration written for another selector, and `_QSS` carries
+`QMainWindow { background: $win; }` with no `QDialog` rule — so a bare dialog paints Qt's
+platform grey rather than a palette colour. Measured by
+`docs/specs/ONEUP-0076-ringless-focus-cue.md`: `#efefef` under the base sheet in **both**
+palettes, which is why every dialog is light grey in dark mode today. Only `_HC_QSS` pins
+it, with `QMainWindow, QDialog { background: $win; }`. That rule is prescribed by
+`ONEUP-0076` §8 and lands with whichever of `docs/specs/ONEUP-0064-interface-redesign.md`
+or `docs/specs/ONEUP-0027-themes.md` reaches the sheet first. **It changes nothing below**:
+a new dialog still reuses the object names and still sets no stylesheet of its own.
+
 - **Do** reuse the object names the QSS already styles (`#Card`, `#RowBorder`, `#GhostBtn`,
   `QLabel#Tagline`, …) so a new dialog looks native.
 - **Don't** call `setStyleSheet` or `setPalette` on an individual dialog. A per-dialog
@@ -397,6 +408,7 @@ today; the RTL work adds them, and this is the form they take.
 | §4 no hard-coded `px` font size | `tests/gui-smoke.py` — every font size is in points, and derives from the desktop's own default |
 | §5 focus draws no ring | `tests/gui-smoke.py` — *"focus draws no outline ring"*, paired with *"focus still gives a cue by reusing the hover look"*, so the rule cannot be satisfied by removing the cue altogether |
 | §5.4 the 3:1 focus-indicator ratio | **nothing computes contrast anywhere in the suite.** The four measured ratios in §5.4 were taken by hand, and the shortfall is deliberate, and §5.4 makes closing it **ONEUP-0076's** obligation: a ringless treatment measuring ≥ 3:1 in every shipped theme, with the measurement added to the suite |
+| §6.1 a dialog inherits the theme | `tests/gui-smoke.py` catches the half that is a rule breach — no widget carries a stylesheet of its own. **Nothing checks the background a dialog actually paints**, which is why `_QSS`'s missing `QDialog` rule went unnoticed; ONEUP-0076 §8 prescribes the rule and ONEUP-0027 INV-7 is the nearest test to it |
 | §7 themes | ONEUP-0027 — the contrast check is that item's to write, and the light theme's `lastrun` text sits at 3.07:1 today |
 | §8.1 no directional QSS property | nothing automatic |
 | §8.2 no hard-coded `AlignLeft` / `AlignRight` | nothing automatic. Nothing violates it today — the `#LinkBtn` violation is §8.1's `text-align: left`, not this rule |
