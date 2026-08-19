@@ -16,7 +16,44 @@ absorbed and removed).
 
 **Roadmap item:** ONEUP-0057 (🚧). **Design:** `docs/design/oneup-2.0.md` — read it first.
 
-> ## ▶ You are here — **Task 18: `ONEUP-0076` has no open decision left; next is `ONEUP-0072` from loop 5**
+> ## ▶ You are here — **Task 18: `ONEUP-0072` gated (loop 5); next is `ONEUP-0032`**
+>
+> **Loop 5 ran — 2 cold lanes, `--max-loops 1`. Q1 1 · Q2 2 · Q3 0 · Q4 0, 3 verified, 1
+> dismissed, 3 fixed, 1 filed to `ONEUP-0108`.** The first cold read of this document since
+> the `ONEUP-0101` split took §4.3 away, and the split held: nothing this loop found was a
+> leftover of it.
+>
+> **Both lanes independently led with the same defect, and it is the strongest signal the run
+> produced.** INV-1 selected `@@REBOOT@@`'s vocabulary by element **count** — *"the standalone
+> set where it holds one"* — which §4.1 rules out four lines from its own table. A kernel-only
+> transaction is a **one-element components** field, so the assertion INV-1 prescribes would
+> have gone red on the commonest reboot there is, on the very scenario INV-1 tells the
+> implementer to add — and the natural repair is the vacuous shape check §4.1 exists to
+> forbid. Fixed to membership of the union plus homogeneity, which is how `ONEUP-0108` §4.4
+> already classifies it.
+>
+> **The second was found by a lane and by the packet build independently, and running it is
+> what settled it.** §4.1 said `@@REMEDY@@`'s actions *"need no call-site change"*; §4.2 says
+> the signature change touches every one. `marker REMEDY "skip-repo|$alias"` put through the
+> mandated emitter emerges as `@@REMEDY@@|skip-repo/packman` — one field where the window
+> requires two — so the *Skip this source* button silently stops arming and no assertion
+> fires. Both payloads were executed against the window's branch rather than reasoned about.
+>
+> **A second cold loop is available and unspent** — the run stopped on `--max-loops 1`, not on
+> the document's cap of 2, and this loop's fixes added assertive text in three places.
+> `ONEUP-0072` stays `Status: Draft` for the usual reason: no loop has come back empty. It
+> carries **no** open decision.
+>
+> **One finding is filed rather than fixed**, in a document with its own gate: the retained
+> Bash engine's `end_step cache ok` sends an **empty** code field, and `ONEUP-0108` INV-1's
+> fallback requires text naming a code there is none of. §6's row is narrowed here and names
+> `ONEUP-0108` as the owner; picking it up needs that document, not this one.
+>
+> **Next: `ONEUP-0032`** (a real loop 1, not a citation pass), then the `ONEUP-0027` citation
+> pass, which carries the two findings filed from the `ONEUP-0076` run. `ONEUP-0064` still
+> owes a decision rather than a loop.
+
+> ## Previously — **Task 18: `ONEUP-0076` has no open decision left; next is `ONEUP-0072` from loop 5**
 >
 > **The dialog-surface decision loop 3 surfaced was settled the same session and folded in.**
 > `_QSS` gains `QMainWindow, QDialog { background: $win; }` — the rule `_HC_QSS` already
