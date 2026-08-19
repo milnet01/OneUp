@@ -52,17 +52,21 @@ backlog item, not a ledger entry.
 suspected breakage that turned out not to exist, so by rule 4 it had no business in the
 ledger.*
 
-## Current dependency snapshot (verified 2026-07-26)
+## Current dependency snapshot (verified 2026-07-26; re-checked 2026-08-19)
 
 Recorded so the next sweep has a baseline:
 
 - `actions/checkout` → **v7**, latest `v7.0.1` — current.
 - `actions/setup-python` → **v7**, latest `v7.0.0` — current.
 - `softprops/action-gh-release` → **v3**, latest `v3.0.2` — current.
-- `python-version` in `.github/workflows/release.yml` → **`3.13`**. Behind `3.14`, and
-  **not** for a documented reason — a backlog item, tracked as ONEUP-0004, to be bumped
-  with the rest of the 2.0 dependency refresh on the `v2` branch. `main` is frozen at
-  1.4.0 and takes only qualifying bug fixes, so the bump does not land there.
+- `python-version` in `.github/workflows/release.yml` → **`3.14`** on `v2`, **`3.13`** on
+  `main`. Bumped on `v2` as ONEUP-0004 on 2026-08-19, the 2.0 dependency refresh. `main`
+  is frozen and takes only qualifying bug fixes, so it keeps 3.13 until the 2.0.0 merge —
+  which is why this row names a branch where the others do not. Re-verified at the bump
+  rather than recalled: 3.14 is the current stable series (3.14.7, EOL 2030-10-31), and
+  PySide6 6.11.2 still ships `cp310-abi3` wheels at `requires_python <3.15,>=3.10`, so
+  the sweep below still holds. The three action pins above were re-checked the same day
+  and are all still current.
 - **PySide6** — intentionally *unpinned*: the RPM uses the distro's `python3-pyside6`, and the
   AppImage build `pip install`s the latest. It tracks upstream automatically; no manifest pin
   to bump. Requires only Qt 6 idioms (new-style `connect`, scoped enums where practical).

@@ -92,11 +92,17 @@ lower it. Verify with `python3 -V` on the target, not from memory.
 
 ### 2.1 The decision: a `pyproject.toml` is added in 2.0
 
-**Today there is no lint configuration file at all.** `ruff` is invoked with flags, from
-one place only:
+**Adopted on `v2` as ONEUP-0063, 2026-08-19.** The decision below is unchanged and is
+still what the file must contain; what has moved on is the *state it was settled against*,
+which is still `main`'s. On `v2` the file exists and the gate calls a bare `ruff check`.
+§2.1.1's measurement was re-taken before the adoption, and what it found is recorded
+there.
+
+**Before it, there was no lint configuration file at all.** `ruff` was invoked with flags,
+from one place only:
 
 ```
-local-CI.sh, the Lint gate:
+local-CI.sh's Lint gate, before ONEUP-0063:
     ruff check . --select F,B --exclude screenshots -q
 ```
 

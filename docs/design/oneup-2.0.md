@@ -27,10 +27,10 @@ thing can replace what they run today.
 | Item | What it is | Spec |
 | --- | --- | --- |
 | **ONEUP-0054** | Replace the Bash engine with a Python one | `docs/specs/ONEUP-0054-python-engine.md` |
-| **ONEUP-0034** | Split `updater.py` into focused modules | `docs/specs/ONEUP-0034-gui-modules.md` *(to be written)* |
-| **ONEUP-0064** | Redesign the interface for ergonomics, clarity and accessibility — **no focus borders**; the on/off switches stay. `docs/standards/ui-and-accessibility.md` §5.4 adds a hard obligation: pick a ringless focus treatment measuring **≥ 3:1 against its own rest state, in every shipped theme**, and add the measurement to the suite. Because §5.2 lands themes *after* the redesign, ONEUP-0027 re-takes that measurement for each palette it adds | `docs/specs/ONEUP-0064-interface-redesign.md` *(to be written)* |
-| **ONEUP-0027** | Selectable colour themes beyond follow-the-desktop. `docs/standards/ui-and-accessibility.md` §7 adds a hard obligation: the contrast check every new theme must pass | `docs/specs/ONEUP-0027-themes.md` *(to be written)* |
-| **ONEUP-0032** | Wrap user-facing text for translation, and mirror the window for right-to-left languages — **groundwork only, English alone**, see §5.1 | `docs/specs/ONEUP-0032-i18n.md` *(to be written)* |
+| **ONEUP-0034** | Split `updater.py` into focused modules | `docs/specs/ONEUP-0034-gui-modules.md` |
+| **ONEUP-0064** | Redesign the interface for ergonomics, clarity and accessibility — **no focus borders**; the on/off switches stay. `docs/standards/ui-and-accessibility.md` §5.4 adds a hard obligation: pick a ringless focus treatment measuring **≥ 3:1 against its own rest state, in every shipped theme**, and add the measurement to the suite. Because §5.2 lands themes *after* the redesign, ONEUP-0027 re-takes that measurement for each palette it adds | `docs/specs/ONEUP-0064-interface-redesign.md` |
+| **ONEUP-0027** | Selectable colour themes beyond follow-the-desktop. `docs/standards/ui-and-accessibility.md` §7 adds a hard obligation: the contrast check every new theme must pass | `docs/specs/ONEUP-0027-themes.md` |
+| **ONEUP-0032** | Wrap user-facing text for translation, and mirror the window for right-to-left languages — **groundwork only, English alone**, see §5.1 | `docs/specs/ONEUP-0032-i18n.md` |
 | **ONEUP-0044** | The double password box | no spec — see §6.2 |
 | **ONEUP-0004** | Dependency refresh — chiefly the CI Python version | no spec — see §6.3 |
 | **ONEUP-0063** | Add `pyproject.toml`, so a bare `ruff check` and the gate agree — not a one-line config drop, see §6.4 | no spec — `docs/standards/coding.md` §2.1 settles it |
