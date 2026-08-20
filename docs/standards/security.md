@@ -472,8 +472,11 @@ a wildcard is unavoidable, write down what it actually permits.
 
 **9.4 — Validation that lives only at the call site is one refactor from being lost.**
 Every guard in §4 sits immediately above the command it protects and says so in a comment.
-When the GUI is split into modules (ONEUP-0034), a guard and its command must not end up in
-different files with the assumption travelling between them implicitly.
+When the GUI is split into modules (ONEUP-0034, done on `v2` on 2026-08-20), a guard and its
+command must not end up in different files with the assumption travelling between them
+implicitly. That is what kept `_split_session_critical` with `restart_services`, the alias
+guard with the repository apply command, and the snapshot-id check with the rollback call:
+each pair moved into one module together.
 
 **9.5 — `--check` must never authenticate.** It is strictly read-only, runs **without
 root**, and must never call `zypper dup`/`update`. The mock in the test suite exits 99 if it

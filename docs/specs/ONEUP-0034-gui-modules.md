@@ -1,6 +1,6 @@
 # ONEUP-0034 — splitting the window into modules
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** refactor
 **Roadmap:** ONEUP-0034
 **Branch:** v2
@@ -8,7 +8,7 @@
 
 **Sections:** 1 goal · 2 background · 3 scope decisions · 4 design · 5 correctness
 invariants · 6 failure modes · 7 tests · 8 docs & release · 9 alternatives · 10 out of
-scope · 11 cold-eyes log
+scope · 11 cold-eyes log · 12 what the implementation settled
 
 **In one sentence:** `updater.py` is cut into a package of small modules that each do one
 job, and the app behaves exactly as it does today — same window, same wording, same
@@ -446,3 +446,51 @@ argument is that each step is judged by assertions written before it.
 | 2 | 2026-07-27 | 2 high, 4 medium, 1 low — **6 verified, 1 dismissed** | The same defect in three sentences: an invariant worded wider than its test. INV-6 said "every `QDialog` subclass" — `QMessageBox` is one, and the bullet's own next sentence exempts it, so it was false rather than unproven. INV-5 said "every focusable widget" where the sweep walks four roots. §4.2's completeness claim held for module-level names and not for `Updater`'s methods, so an implementer asking where `handle_marker` goes got no answer. §4.3's third import rule had a named consequence and nothing checking it, where both its siblings had invariants — now INV-12. Dismissed: that INV-4 cannot reach `_headless_command`'s last-resort branch; it turns on `$APPIMAGE` and `shutil.which`, and a test controls both |
 | 3 | 2026-07-27 | 1 medium, 2 low — **3 verified, 0 dismissed** | Converging: nothing structural, and nothing from earlier loops returned. Loop 2's fix to the §7 table had stranded a sibling — INV-6 and INV-9 got their own rows and INV-3/INV-4 stayed merged, so INV-4's two `gui-smoke.py` assertions appeared in no row. Audited all twelve rows against their `*Test:*` clauses rather than waiting for the next loop to find them one at a time; that was the only instance. §1 also promised modules "a reader can hold in their head one at a time" when §4.2 says plainly that `window.py` will not |
 | 4 | 2026-07-27 | 1 low — **1 verified, 0 dismissed** | **Converged.** Two lanes clean for the third loop running. The one finding was a convention slip: INV-4's new `gui-smoke.py` assertions were not marked "new" the way INV-6's and INV-7's are, so §5 alone read as though they existed. `Draft` → `Reviewed`; implementation of ONEUP-0034 is unblocked |
+
+## 12. What the implementation settled (2026-08-20, `v2` at `f0d13e7`)
+
+**An amendment recording what was built, not a change of direction** — `CLAUDE.md` rule 14
+exempts this shape from the gate, because the code exists and a cold read before
+implementation has nothing left to protect. Written because §4.2 claims every module-level
+name has a home, and five did not; and because two of this spec's own claims turned out to
+be wrong on contact.
+
+**`_app_icon` is in `theme.py`, not `app.py`.** §4.2 places it in `app.py`. Both
+`window.py` and `tray.py` need it, and `app.py` imports `window.py` — so §4.2's placement
+makes those two import the starter, inverting the one-way direction §4.3 rule 2 exists to
+keep. `theme.py` already owns what the app looks like and imports no window.
+
+**Five names §4.2 left unplaced, and where they went.** `card_inside` → `theme.py`, since it
+exists only because of how the sheet paints `#RowBorder`. `_SESSION_CRITICAL`,
+`_USER_MANAGER_RE` and `_split_session_critical` → `banners.py`, beside `restart_services`,
+because INV-11 forbids separating a guard from the command it protects.
+`SINGLE_INSTANCE_TIMEOUT_MS` and `single_instance_name` → `tray.py`, with the socket.
+`_update_check_error` → `app_update.py`, with the reply it explains.
+
+**How a method moved, which §4.2 does not say and §9 only bounds.** A method serving a
+subsystem became a module-level function taking the window as its first parameter. The
+window's own attributes are untouched, so every `w._failed_steps`-shaped reach in the suite
+still works and only method references needed retargeting — the smallest blast radius
+available, and the reason the 327 existing assertions could judge the change. Qt slots use
+`functools.partial`: PySide6 offers no context-object `connect` for a plain callable
+(checked), so a functor lives as long as its **sender** rather than its receiver. Safe here
+because every sender — each `QProcess`, `QTimer`, `QLocalServer`, `QMenu` and button — is
+constructed with the window as parent, so sender and receiver die together.
+
+**INV-2's gate is an AST walk in `tests/imports-test.py`, not the `local-CI.sh` grep §7
+names.** It then runs in the release workflow too, which `local-CI.sh` does not, and a
+mention inside a docstring cannot fail it.
+
+**INV-9 needed no work, and §5's measurement is stale rather than wrong.** It says `@@SIZE@@`
+and `@@CHECK_ITEM@@` are fed by nothing, measured at `03435ba`. Scenarios 5b and 5d in
+`tests/gui-smoke.py` feed both today.
+
+**`run.py` also misses the 600-line ceiling**, at 742 lines against `window.py`'s 791. §4.2
+predicted only the window would. `handle_marker` is ~230 of them. Recorded rather than split:
+§4.2 assigns all of it to `run.py`, and this change was behaviour-preserving.
+
+**What the suite had to change, and why it is not a weakening.** A spy set on the instance
+intercepts nothing once callers go through a module, so the ~35 such spies became module
+patches through a `_patch`/`_unpatch_all` pair restoring in reverse order at each scenario's
+end. Eight assertions are new (327 → 339), and each was verified red by breaking the thing it
+guards. `ONEUP-0122` records the one boundary left unannotated and why.

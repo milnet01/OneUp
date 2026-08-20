@@ -3849,3 +3849,33 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Nothing written down says how we would know OneUp actually updates a machine correctly — which is the whole point of it.
   Kind: investigate.
   Source: adopt-project, two independent runs, 2026-08-19.
+
+- 💭 [ONEUP-0122] **Decide whether the window parameter crossing every gui module boundary should be type-annotated.**
+  ONEUP-0034 turned each subsystem's methods into module-level functions taking the
+  window as their first parameter, so that parameter now crosses a real module
+  boundary -- and `docs/standards/coding.md` §3 requires an annotation on anything
+  that does. Every other parameter and return kept the annotation it already
+  carried; `win` has none.
+
+  The reason it is not simply an oversight: annotating it means naming
+  `oneup.gui.window.Updater` inside `run.py`, `tray.py`, `auth.py`, `autostart.py`,
+  `banners.py`, `rollback.py`, `app_update.py` and `diagnostics.py` -- and
+  ONEUP-0034 §4.3 rule 2 says none of those may import `window.py`, precisely so
+  the split does not become a ring of files that can only be read together. A
+  `typing.TYPE_CHECKING` import is the standard way round it and costs nothing at
+  runtime, but it puts the name in every file's import block, which is the
+  textual half of what rule 2 is protecting.
+
+  Three options, and this bullet does not pick one: (a) leave it, and say so in
+  coding.md §3 as a stated exception rather than a gap; (b) `TYPE_CHECKING`
+  imports, accepting the textual coupling; (c) a `Protocol` in a leaf module
+  naming only the attributes each subsystem actually touches, which annotates the
+  boundary without naming the window at all -- more honest about the real
+  contract, and more work.
+
+  Not urgent. It changes no behaviour and nothing is currently wrong; what it
+  settles is whether coding.md §3 has an exception or a breach.
+  **Layman:** A small typing detail the package split left open — worth a decision, not necessarily a change.
+  Kind: refactor.
+  Source: in-session-2026-08-20 (implementing ONEUP-0034).
+  Lanes: gui.

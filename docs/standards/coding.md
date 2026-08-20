@@ -210,9 +210,16 @@ flags. If the Python engine rewrite (ONEUP-0054) lands, shell shrinks but does n
   exists — that is the whole point of the split, and an unannotated public function makes
   the boundary guesswork.
 
-Current coverage, measured: **51 of 174** function definitions in `updater.py` carry a
-return annotation (~29%). New modules start at 100% on their public surface; existing
+Current coverage, measured on `main`: **51 of 174** function definitions in `updater.py`
+carry a return annotation (~29%). New modules start at 100% on their public surface; existing
 functions get annotated when you are already editing them, not in a sweep of their own.
+
+**On `v2` this rule is now live, and one thing it does not yet cover is recorded rather than
+quietly skipped.** The split moved each subsystem's functions into their own module, so their
+parameters and returns cross a real boundary — the annotations they already carried came with
+them. The window they are handed is the exception: annotating it means naming the window's
+class in every subsystem, which is the import direction ONEUP-0034 §4.3 rule 2 keeps one-way.
+It is left unannotated on purpose, and ONEUP-0122 records the question.
 
 ---
 
@@ -228,8 +235,12 @@ six times the ceiling, and a single class inside it — `Updater(QMainWindow)`, 
 module-level `_app_icon` — is nearly four times it on its own.**
 
 A class that size cannot be held in a reader's head, cannot be reviewed as a unit, and cannot
-be tested except through the whole application. Splitting it is ONEUP-0034, whose spec is not
-written yet; this standard's job is to stop the next file getting there.
+be tested except through the whole application. Splitting it is ONEUP-0034, specced in
+`docs/specs/ONEUP-0034-gui-modules.md` and **done on `v2` on 2026-08-20**; the figures above
+describe `main`, which still ships the single file. This standard's job is to stop the next
+file getting there — and the split's own outcome is the honest test of the ceiling: every
+module it produced fits except the window itself, which the spec said up front it would
+not.
 
 *(The exact line counts are deliberately not quoted — `docs/standards/documentation.md` §6b.
 They change with every commit, and the multiple is what carries the argument. The measured
