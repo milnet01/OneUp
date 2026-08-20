@@ -34,7 +34,7 @@ exist yet, and saying so is the point.
 | `packaging/rpm/` | `oneup.spec` — the `zypper`-installable package. |
 | `packaging/appimage/` | `build-appimage.sh` — the single-file portable build. |
 | `packaging/obs/` | `_service` + `README.md` — the openSUSE Build Service recipe. |
-| `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `bump-test.py` (version lockstep), `docs-check.py` (the documentation rules a script can settle). |
+| `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `imports-test.py` (the `oneup/` package's structural rules), `bump-test.py` (version lockstep), `docs-check.py` (the documentation rules a script can settle). |
 | `githooks/` | Repo-local git hooks. One file: `pre-push`. Not active until `git config core.hooksPath githooks`. |
 | `screenshots/` | Images the README and the app-store metadata point at. |
 | `.github/workflows/` | GitHub CI. One file: `release.yml`, triggered by a `v*` tag. |
@@ -237,10 +237,12 @@ were true would have misled the 2.0 implementer.** What is actually true:
   somebody else's outage (ONEUP-0097). **An inherited default is not a decision**; the hook
   states its own.
 - **The GUI is isolated by rewriting `HOME`.** `tests/gui-smoke.py`'s sandbox block sets
-  `HOME` to a throwaway directory *before* `updater` is imported, because the GUI's paths
+  `HOME` to a throwaway directory *before* the window is imported, because the GUI's paths
   are module-level constants (`STATE_DIR`, `LOG_DIR`, `RUN_STATE`, `STOP_REQUEST`)
-  evaluated at import time. Individual tests then reassign the module globals directly
-  (`updater.STOP_REQUEST = …`).
+  evaluated at import time. Individual tests then reassign them on the module that owns
+  them (`paths.STOP_REQUEST = …`), which is why every reader goes through `paths.` and
+  never binds one by name — a bound copy would leave the redirect landing where nobody
+  reads, and `tests/imports-test.py` fails the build on one.
 
 ### 5.2 What that obliges 2.0 to do
 
@@ -251,7 +253,10 @@ were true would have misled the 2.0 implementer.** What is actually true:
   reads the environment each call. Half-and-half is what breaks: a constant captured in
   one module while another reads the environment gives two different answers in the same
   process.
-- **Prefer `XDG_STATE_HOME` when it is set.** OneUp does not honour it today (§7, Trap 3).
+- **Prefer `XDG_STATE_HOME` when it is set. Done in ONEUP-0059 on 2026-08-20, in both
+  halves at once.** Each takes it only when it is ABSOLUTE, as the specification requires,
+  and falls back to `~/.local/state` when it is unset, empty or relative. Trap 3 below
+  records what the app did before.
 
 ---
 
@@ -309,12 +314,16 @@ the suite touching the box, which the testing standard forbids. Filed as **ONEUP
 2.0's engine must either honour an override or create the directory only when it is about
 to write to it.
 
-**Trap 3 — `XDG_STATE_HOME` is set by the tests and ignored by the app.**
-`tests/gui-smoke.py`'s sandbox block exports `XDG_CONFIG_HOME` and `XDG_STATE_HOME`, but
-`updater.py` builds `STATE_DIR` from `Path.home()` and never reads
-either. The isolation works only because `HOME` is redirected too. Two consequences: the
-app does not follow the XDG specification, and the two exports read as protection they do
-not provide. Filed as **ONEUP-0059**.
+**Trap 3 — `XDG_STATE_HOME` was set by the tests and ignored by the app. CLOSED by
+ONEUP-0059 on 2026-08-20.** The sandbox block exported `XDG_CONFIG_HOME` and
+`XDG_STATE_HOME` while the window built `STATE_DIR` from `Path.home()` and read neither, so
+the isolation worked only because `HOME` was redirected too and the two exports read as
+protection they did not provide. Both halves now honour an absolute `XDG_STATE_HOME`, so
+the `XDG_STATE_HOME` export is load-bearing. **`XDG_CONFIG_HOME` still is not the app's
+doing** — settings go through `QSettings("OneUp", "OneUp")`, which Qt resolves under it
+already. **What has not changed is the reason `HOME` is still redirected**: it is what
+covers the paths with no XDG equivalent, and §5.1's table still shows two GUI paths with no
+override at all.
 
 **Trap 4 — `_find_engine`'s fallback leaves each caller to notice.** It tries
 `HERE/update_system.sh`, then `~/Documents/update_system.sh`, then returns the first path
@@ -349,7 +358,8 @@ which category it is in — the answer decides whether §6 applies at all.
 | --- | --- |
 | §1 the root is closed | nothing automatic — the reason for a new root file goes in the commit message, where a reader finds it and a script does not |
 | §2.1 the naming rules | nothing automatic |
-| §4.1 the rules the `oneup/` split must obey | nothing yet — the package does not exist (ONEUP-0034) |
+| §4.1 the rules the `oneup/` split must obey | `tests/imports-test.py` covers **rule 2 only** — it fails the build on any `oneup.gui` import under `oneup/engine/`, vacuously true until that directory exists. Rules 1, 3 and 5 — the shim stays at the root, `snake_case.py` names that say what a module does, the directory called `oneup/` — are checked by **nothing**; they held through ONEUP-0034 by review |
+| §4.2 `HERE` is computed in exactly one place | `tests/imports-test.py` fails the build on `__file__` anywhere under `oneup/` but `paths.py`, and on a `from …paths import <name>` that would bind a path constant by value. `tests/gui-smoke.py` adds the two the AST cannot see: that `paths.ENGINE` resolves to the repo root's `update_system.sh`, and that `_headless_command`'s last-resort branch names the root entry point rather than a package module |
 | §5 runtime state paths, and which are redirectable | `tests/run-tests.sh` — `run_engine` redirects three of them on every scenario. The fourth, `HOME`, cannot be redirected today (ONEUP-0058) |
 | §6 what a new file obliges you to update | nothing automatic. §8's checklist is the only catcher, and it works only if the author opens it |
 

@@ -36,8 +36,9 @@ see §7.
 Both sides are written by one helper each, which is why the format cannot drift:
 
 - Engine: `marker()` — `printf '@@%s@@|%s\n' "$1" "$2"`.
-- Window: `Updater.handle_line` sends any line starting with `@@` to
-  `Updater.handle_marker`, which splits on the first `@@|` and then on `|`.
+- Window: `oneup/gui/run.py`'s `handle_line` sends any line starting with `@@` to
+  `handle_marker`, which calls `oneup/gui/markers.py`'s `split_marker` to cut the tag from
+  the fields. (Both were methods of `Updater` in `updater.py` until ONEUP-0034.)
 
 **A line that starts with `@@` but is not a marker is logged, not dropped.** A diff hunk
 header (`@@ -1,4 +1,4 @@`) is the real case that made this necessary.
@@ -67,10 +68,10 @@ Four channels use this protocol, and only the first goes through `handle_marker`
 
 | Channel | How the engine is invoked | Who reads it |
 | --- | --- | --- |
-| A run | `--steps=…` | `Updater.handle_marker` |
-| Download size | `--size=<step>` | `Updater._on_size_output` — reads `SIZE` only |
-| Authorization state | `--auth-status` / `--grant-auth` / `--revoke-auth` | `Updater._query_auth_status` — matches `@@AUTH@@|on` in the whole output |
-| Snapshot thinning | `--thin-snapshots` | `Updater._on_thin_finished` — reads `SNAPSHOTS|thinned` only |
+| A run | `--steps=…` | `run.handle_marker` |
+| Download size | `--size=<step>` | `run._on_size_output` — reads `SIZE` only |
+| Authorization state | `--auth-status` / `--grant-auth` / `--revoke-auth` | `auth._on_auth_status_finished` — matches `@@AUTH@@|on` in the whole output |
+| Snapshot thinning | `--thin-snapshots` | `rollback._on_thin_finished` — reads `SNAPSHOTS|thinned` only |
 
 This matters when adding a marker: **a marker emitted only on a side channel is not seen
 by `handle_marker`**, and one emitted during a run is not seen by the side-channel readers.
@@ -296,7 +297,10 @@ this contract during 2.0.
 changing all four **in the same commit**:
 
 1. `update_system.sh` — the emitter,
-2. `updater.py` — `Updater.handle_marker` or the relevant side-channel reader,
+2. the window's parser — `oneup/gui/run.py`'s `handle_marker`, or the relevant
+   side-channel reader (`_on_size_output` for `@@SIZE@@`, `oneup/gui/tray.py`'s
+   `_parse_tray_line` for the tray's own check). It was `Updater.handle_marker` in
+   `updater.py` until ONEUP-0034; that file is now the shim and holds no parser,
 3. `tests/run-tests.sh` — the engine assertions,
 4. `tests/gui-smoke.py` — the window assertions.
 
@@ -377,7 +381,8 @@ document is the authority.
 
 ## 8. The two state files — a contract this protocol does *not* cover
 
-`~/.local/state/oneup/run.state` and `stop.request` are also a contract between the two
+`<state>/oneup/run.state` and `stop.request` — where `<state>` is `XDG_STATE_HOME` or
+`~/.local/state`, see below — are also a contract between the two
 halves, and neither is a marker: the window **writes** them, which nothing in §1 permits.
 They are named here because the obvious place to look for "how do the halves agree" is
 this file, and finding nothing would suggest there is nothing to agree on.
@@ -389,9 +394,20 @@ this file, and finding nothing would suggest there is nothing to agree on.
   at safe boundaries (`docs/standards/security.md` §6). A request older than `run.state` is
   a leftover and is ignored.
 
-Both paths are overridable — `ONEUP_RUN_STATE`, `ONEUP_STOP_FILE` — in the **engine only**;
-the window resolves them from `Path.home()` and is isolated in tests by rewriting `HOME`
-(`docs/standards/files-and-naming.md` §5).
+Both paths are overridable — `ONEUP_RUN_STATE`, `ONEUP_STOP_FILE` — in the **engine only**.
+
+**Where the directory itself is, both halves must agree, and since ONEUP-0059 that is not
+`Path.home()`.** Each resolves it from `XDG_STATE_HOME` when that is set to an ABSOLUTE
+path, and falls back to `~/.local/state` when it is unset, empty or relative — the engine in
+`update_system.sh`'s `ONEUP_STATE_DIR`, the window in `oneup/gui/paths.py`'s `_state_home`.
+**Change one side alone and Stop stops working with nothing failing anywhere**: the window
+writes `stop.request` where the engine never looks. `tests/gui-smoke.py` asserts the two
+answers are equal, by running the engine's own resolution lines against the window's over
+the same three inputs.
+
+The window is still isolated in tests by rewriting `HOME` as well
+(`docs/standards/files-and-naming.md` §5), because that is what covers the paths with no
+XDG equivalent.
 
 **Their field layout is pinned in `docs/specs/ONEUP-0054-python-engine.md` §4.1.1**, and
 nowhere else. It is not part of this protocol — these are files, not markers — but the

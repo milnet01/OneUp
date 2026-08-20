@@ -6,6 +6,21 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The app's code is now organised into small, focused files instead of one very large one.** (ONEUP-0034)
+  Nothing about the app looks or behaves differently — the same window, the
+  same wording, the same steps. Only where the code lives has moved, which
+  makes future changes safer to make and easier to review.
+
+### Fixed
+
+- **OneUp now respects `XDG_STATE_HOME`, the standard setting for where apps keep their working files.** (ONEUP-0059)
+  If you have not set it, nothing changes: OneUp keeps using
+  `~/.local/state/oneup` as before. If you have, it is now honoured — by both
+  the window and the update engine together, so stopping a run and following
+  one keep working.
+
 ## [1.4.5] - 2026-08-19
 
 ### Fixed

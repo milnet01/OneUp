@@ -241,7 +241,7 @@ One version number lives in six places, and they must agree:
 
 | # | Site |
 | --- | --- |
-| 1 | `APP_VERSION` in `updater.py` — the in-app update check reads it |
+| 1 | `APP_VERSION` in `oneup/__init__.py` — the in-app update check reads it. It was `updater.py` until ONEUP-0034 moved the window into the package; still six sites, not seven |
 | 2 | `Version:` in `packaging/rpm/oneup.spec` |
 | 3 | the newest `%changelog` stanza in the same spec — rpmlint rejects a mismatch, though nothing in this repository runs rpmlint; the lockstep gate is what catches it here |
 | 4 | `versionformat` **and** `revision` in `packaging/obs/_service` |
@@ -303,7 +303,7 @@ says what each gate is.
 | --- | --- |
 | `Engine test suite` | `tests/run-tests.sh` — the markers `update_system.sh` prints |
 | `GUI smoke test (offscreen)` | `tests/gui-smoke.py` — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip) |
-| `Python compile (updater.py)` | `py_compile updater.py bump.py` — both files parse |
+| `Python compile (updater.py, bump.py, oneup/)` | `py_compile updater.py bump.py` plus `compileall oneup` — `compileall` over the package rather than a file list, because a module nobody has imported yet is exactly the one a split leaves broken |
 | `bump.py functional test` | `tests/bump-test.py` — a real bump in a throwaway copy still parses the five real version sites, and rewrites the (synthetic) `CHANGELOG.md`'s heading and both links correctly |
 | `Lint` | `shellcheck`, then `ruff (F,B bug-class)` — best-effort |
 | `Packaging validation` | desktop file and AppStream metainfo |
