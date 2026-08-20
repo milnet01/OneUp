@@ -376,8 +376,8 @@ and its teardown noise, and this item owns both.
 
 This item lands on `v2` with the rest of 2.0. Its documentation edits are ordinary
 documentation and go to `main` under `docs/standards/workflow.md` §9 — it is **ONEUP-0072**
-that carries §9's one exception, because a marker change binds its reference edit to the
-same commit as 2.0-only code.
+that carries §9's marker-change exception, because a marker change binds its reference edit
+to the same commit as 2.0-only code.
 
 - **`local-CI.sh` and `.github/workflows/release.yml`** — both name `tests/i18n-check.py`,
   and both gain the second, `-reverse` run of `tests/gui-smoke.py`. A suite named in neither

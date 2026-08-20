@@ -95,9 +95,10 @@ CI.
 ### 2.3 Roadmap IDs
 
 Specs and plans are named after the roadmap item they serve, zero-padded to four digits:
-`ONEUP-0034`, not `ONEUP-34`. The next ID comes from `.roadmap-counter`, which is
-**deliberately git-ignored** — see `.gitignore` for why, and for the one-liner that
-rebuilds it on a fresh clone.
+`ONEUP-0034`, not `ONEUP-34`. The next ID comes from `.roadmap-counter` via `roadmap_log`;
+`ROADMAP.md` itself is generated from the roadmap store, and a hand edit does not survive
+(`workflow.md` §4). The counter is **deliberately git-ignored** — see `.gitignore` for why,
+and for the one-liner that rebuilds it on a fresh clone.
 
 ---
 

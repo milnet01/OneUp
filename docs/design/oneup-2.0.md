@@ -369,9 +369,9 @@ correctly under this order: it marks tables 0072 built.
 | Item | Branch | Why |
 | --- | --- | --- |
 | **The 2.0.0 release itself** | `v2` merges **into** `main` | `release.sh` refuses any branch but `main` and pushes `origin main`, and `docs/standards/workflow.md` §2 otherwise forbids that direction — so the merge is a one-off, taken deliberately once G1–G10 pass, and it is the moment `main` unfreezes. Nothing automates it |
-| Documentation (this set) | `main` | The standards govern 1.x maintenance too, and `v2` inherits them by merge. Docs are not a release, so they are unaffected by the freeze. A *later* doc edit that a rule binds to the same commit as 2.0-only code is the one exception, and goes to `v2` — `docs/standards/workflow.md` §9 owns it |
+| Documentation (this set) | `main` | The standards govern 1.x maintenance too, and `v2` inherits them by merge. Docs are not a release, so they are unaffected by the freeze. A *later* doc edit that a rule binds to code only `v2` has goes to `v2` instead — `docs/standards/workflow.md` §9 owns the two rules that bind it |
 | **Everything in §1** | **`v2`** | Under the freeze (§5.4) `main` takes nothing but qualifying bug fixes, so every 2.0 item — including the GUI split — belongs on the branch |
-| The one exception: a behaviour-neutral **test-harness** change | `main` first | `docs/standards/workflow.md` §1.2 defines the exception and its conditions. It exists for exactly one change — the `ONEUP_ENGINE_CMD` indirection (`ONEUP-0054` §4.4) — which must be shown to leave the suite green on `main` before either engine depends on it |
+| A behaviour-neutral **test-harness** change §1.2 has granted | `main` first | `docs/standards/workflow.md` §1.2 defines each one and its conditions, and names three. The first is the `ONEUP_ENGINE_CMD` indirection (`ONEUP-0054` §4.4), which must be shown to leave the suite green on `main` before either engine depends on it |
 
 **The GUI split moved.** An earlier revision of this document put it on `main`, for one
 reason only: months of 1.x fixes would otherwise collide with files `v2` had moved.
@@ -486,6 +486,16 @@ files' *layout*; this settles their *location*.
 
 **Complete when** `XDG_STATE_HOME` is honoured where set and the default is unchanged where
 it is not, **in both halves**, and a run started with it set can be followed and stopped.
+
+**Done 2026-08-20, on `v2` at `f0d13e7`, with one thing settled that this section left
+open.** *"Where it is set"* turned out to need a condition: the specification requires these
+paths to be absolute and an invalid one to be ignored, so both halves take
+`XDG_STATE_HOME` only when it starts with `/`, and fall back to `~/.local/state` when it is
+unset, empty **or relative**. The agreement between the halves is now a test rather than an
+intention — `tests/gui-smoke.py` reads the engine's own resolution lines out of
+`update_system.sh`, runs them and the window's side against those three inputs, and asserts
+the two answers are equal. Reverting the engine half alone fails that check and nothing
+else, which is the silent failure this section warned about.
 
 ## 7. The gate — what "ready" means
 
