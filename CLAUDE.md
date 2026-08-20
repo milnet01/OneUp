@@ -4,7 +4,8 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 **This file is a map and a trap list.** It is the second-lowest-ranked document in the set,
 above only the global default set at `~/.claude/standards/`
-(`docs/standards/documentation.md` §1.1): where it restates a rule, the standard is
+(`docs/standards/documentation.md` §1.1) — except `roadmap-format.md`'s bullet grammar,
+which outranks that whole table and no project may override (§1.2): where it restates a rule, the standard is
 canonical and this file is wrong. What it holds that nothing else does is §6 — the traps,
 each of which cost a real bug to learn.
 
@@ -22,7 +23,8 @@ python3 updater.py                      # launch the GUI (needs PySide6 / Qt 6)
 ./update_system.sh                      # run the engine standalone in a terminal (all steps)
 ./update_system.sh --steps=system,cache # run only selected steps
 ./update_system.sh --check --notify     # read-only "updates available?" pass (no root)
-tests/run-tests.sh                      # full test suite; non-zero exit on any failure
+tests/run-tests.sh                      # engine suite; non-zero exit on any failure
+python3 tests/gui-smoke.py              # window suite (needs PySide6; exit 77 = skipped)
 ./local-CI.sh                           # every gate that runs before a push (workflow.md §6)
 ./local-CI.sh --full                    # also build the AppImage (needs a good connection)
 ```
@@ -38,9 +40,9 @@ githooks`.
 
 ## 3. Where the rules live
 
-Read the one that covers what you are about to change. Each carries a **What checks this**
-table, just before its loop log, naming what catches a breach of each of its rules — and,
-honestly, which rules nothing catches.
+Read the one that covers what you are about to change. Every standard and the marker
+reference carries a **What checks this** table, just before its loop log, naming what
+catches a breach of each of its rules — and, honestly, which rules nothing catches.
 
 | Subject | Document |
 | --- | --- |
@@ -56,21 +58,28 @@ honestly, which rules nothing catches.
 | The engine↔window contract — every marker, field layout and ordering rule | `docs/reference/marker-protocol.md` |
 | What 2.0 is and what its items share | `docs/design/oneup-2.0.md` |
 
-`ROADMAP.md` is the record of intended work; every change needs a bullet on it.
+`ROADMAP.md` is the record of intended work; every change needs a bullet on it — appended
+with `roadmap_log`, never by editing the file, which is generated output (§6).
 
 ## 4. Architecture: a thin window driving a privileged engine
 
 **Read the branch you are on.** On `main` the app is the two files below. On `v2`, as of
 ONEUP-0034, the window is a package — `oneup/gui/`, a module per job, behind a shim still
-called `updater.py` — and the engine's state paths honour `XDG_STATE_HOME` (ONEUP-0059).
+called `updater.py` — and the state paths in **both halves** honour `XDG_STATE_HOME`
+when it is set to an ABSOLUTE path, falling back to `~/.local/state/oneup/` when it is
+unset, empty or relative (ONEUP-0059).
 The privilege split, the marker contract, the step keys and everything else in this
 section are unchanged by that; only the file boundaries moved.
 
-**Every standard in `docs/standards/` still describes `main`'s layout, and does so on
-purpose.** The 2.0 versions live on `v2`, because `tests/docs-check.py` fails any pointer
-that does not resolve and the package files do not exist here — which is
-`docs/standards/workflow.md` §9's stated exception, not drift. They reach `main` at the
-2.0.0 merge.
+**No document `tests/docs-check.py` scans may backtick a path that exists only on `v2`** —
+and it scans four: `docs/standards/`, `docs/reference/`, this file and `README.md`. Its §9
+check fails a backticked path that carries **both** a directory separator and a file
+extension and does not resolve, so a standard here cannot name `oneup/gui/…py`. Neither a
+bare directory nor a bare filename matches that pattern, which is how
+`docs/standards/files-and-naming.md` §4 already describes the package's shape and rules on
+`main`, correctly — and is not licence to evade the check by dropping the directory. Where a standard must name a package file, that is a rule binding it
+to code `main` does not have; `docs/standards/workflow.md` §9 decides the branch, and this
+file does not restate it.
 
 Two files, split by privilege:
 
@@ -83,11 +92,12 @@ Two files, split by privilege:
 They speak in one direction only, in `@@MARKER@@|payload` lines. **The whole contract —
 every marker, its fields, the ordering rules and the traps — is
 `docs/reference/marker-protocol.md`**, which outranks both halves of the app. Changing a
-marker means changing the engine, the parser in the GUI, and the assertions in
-`tests/run-tests.sh` in the same commit.
+marker means changing every file §5 lists — the emitter, the window's parser and BOTH
+suites — plus the reference itself, in one commit. §5 names them; this file does not.
 
-Step keys, the run order both files share: `system, flatpak, firmware, orphans, cache` —
-the `TASKS` list in `updater.py`, the `LABEL` map in `update_system.sh`.
+Step keys, the run order both halves share: `system, flatpak, firmware, orphans, cache` —
+the `TASKS` list (in `updater.py` on `main`; inside the package on `v2`, where `updater.py`
+is only the shim) and the `LABEL` map in `update_system.sh`.
 
 A step whose tool is absent (`flatpak`, `fwupd`) is **skipped cleanly, never errored**.
 Keep new steps tolerant of a missing binary.
@@ -98,8 +108,8 @@ must never claim success or advise a reboot it did not earn — are
 
 Runtime state lives in `~/.local/state/oneup/`, and two files there are a contract between
 the two halves rather than mere state: `docs/reference/marker-protocol.md` §8. (On `v2`
-that directory follows `XDG_STATE_HOME` where it is set — in **both** halves, in one
-commit, because moving one side alone leaves Stop writing where the engine never looks.)
+that directory follows an absolute `XDG_STATE_HOME` — in **both** halves, in one commit,
+because moving one side alone leaves Stop writing where the engine never looks.)
 
 **2.0 replaces both files** — the engine becomes Python, the window has become a package
 (ONEUP-0034, on `v2`).

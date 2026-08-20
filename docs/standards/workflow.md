@@ -71,10 +71,14 @@ and defers here for the test.
 
 ### 1.2 What does not
 
-Everything else. A misplaced dialog, awkward wording, a missing convenience, a nice idea —
-all wait for 2.0. **No feature work lands on `main` during the freeze.**
+Every **feature request** — a missing convenience, a nice idea, a redesign — waits for 2.0,
+however small it looks. **No feature work lands on `main` during the freeze.** A *defect* is
+not on this list: §1.1's test is the change's kind, so a misplaced dialog or awkward wording
+is a fix and lands on `main`. **Work that is neither — a missing test scenario, a refactor,
+a dependency bump — waits for 2.0 with the features**, which is why ONEUP-0070 lands on
+`v2` below: `main` is open to a fix, not to everything that is not a feature.
 
-Two things are not feature work and are unaffected:
+Four things are not feature work and are unaffected:
 
 - **Documentation.** It is not a release. This whole standards set lands on `main` normally,
   because the rules govern 1.x maintenance too and `v2` inherits them by merge (design §5.3).
@@ -87,9 +91,9 @@ Two things are not feature work and are unaffected:
   **This exception names a change; it does not describe a category.** Touching only files
   under `tests/` is a *necessary* condition, not a sufficient one — the absent-tool scenario
   ONEUP-0070 owes is also tests-only, and it lands on `v2` like everything else. Written here,
-  in the standard that owns the freeze, precisely so that it stays one exception rather than
-  becoming a precedent: granting a second one is a decision to take with the user, in this
-  section, not an inference to draw from this one.
+  in the standard that owns the freeze, precisely so that each one is granted rather than
+  inferred: the two below were decisions taken with the user, in this section, and neither
+  was drawn as a precedent from this one.
 
 - **The test-suite fixes from the 2026-08-03 `/test-audit` sweep** — the second exception,
   granted that day at the user's decision, by the route the paragraph above requires. The
@@ -125,7 +129,7 @@ people still install their updates?* has an answer; "is this important enough?" 
 
 | Branch | What it is |
 | --- | --- |
-| `main` | Released 1.x. Frozen (§1). Documentation, qualifying bug fixes, and the one test-harness change §1.2 names — the exception being documentation a rule binds to the same commit as 2.0-only code, which goes to `v2` (§9) |
+| `main` | Released 1.x. Frozen (§1). Documentation, qualifying bug fixes, and the test-harness exceptions §1.2 names — the exception being documentation a rule binds to code that only exists on `v2`, which goes there instead (§9) |
 | `v2` | The 2.0 programme. Long-lived, shared with `origin`, and **never rebased** |
 
 Rules:
@@ -178,9 +182,16 @@ cannot be reverted, and cannot be explained in one subject line.
 **Work that is not on the roadmap did not happen.** Every commit subject carries an ID, so
 every commit is traceable to a bullet that says why the work was wanted.
 
-IDs are allocated from `.roadmap-counter`, a one-line file holding the last number handed
-out. It is **deliberately git-ignored**: tracking it means every branch that allocates an
-ID conflicts on the same line. `ROADMAP.md` is the real record.
+**`ROADMAP.md` is generated output — never hand-edit it.** Since 2026-08-18 the record
+lives in the Ants roadmap store (machine-global, not in this repo), and every `roadmap_log`
+write renders the whole file from the store over it. A hand edit therefore survives only
+until the next write and then vanishes, with no error and no diff to explain it. Append,
+flip and annotate with `roadmap_log`; read with `roadmap_query`, which answers
+`source:"store"`. The shape below is what the store **renders**, not a template to type.
+
+IDs are still allocated from `.roadmap-counter`, a one-line file holding the last number
+handed out — `roadmap_log` bumps it. It is **deliberately git-ignored**: tracking it means
+every branch that allocates an ID conflicts on the same line.
 
 On a fresh clone the counter is absent, and appending a bullet **refuses** rather than
 restarting at 1 — so a collision is impossible, but you must rebuild it first. The
@@ -449,24 +460,46 @@ While the freeze holds, the decision is short:
 
 ```
 Is it documentation?
-├── does a rule bind it to the same commit as 2.0-only code?  → v2 (below)
+├── does a rule bind it to code that only exists on v2?      → v2 (below)
 └── no                                   → main → merge main into v2 (§1.2, §2)
 Is it *the* ONEUP_ENGINE_CMD harness
-  change — the one exception §1.2 names?  → main first, then v2 (§1.2)
-Otherwise:
-Can people still install system, Flatpak and firmware updates?
-├── no  → it is a §1.1 fix → main → 1.4.x → merge main into v2
-└── yes → it is 2.0 work   → v2   → ships when the whole gate passes (design §7)
+  change — the FIRST exception §1.2 names?  → main first, then v2 (§1.2)
+Otherwise — the test is the change's KIND, not its severity (§1.1):
+Is it a fix, a feature request, or neither?
+├── a fix     → main → 1.4.x if a user would notice it (§1.2's third
+│                exception owes none) → merge main into v2, however small
+├── a feature → v2         → ships when the whole gate passes (design §7)
+└── neither   → v2         → a refactor, a dependency bump, a missing test
+                 scenario: main is open to a fix, not to everything that
+                 is not a feature (§1.2)
 ```
 
-**The documentation branch has one exception, and it is not a loophole.**
-`docs/reference/marker-protocol.md` §5 requires a marker change to touch the emitter, the
-window, both suites *and* the reference **in one commit** — that is what makes the change
-reviewable at all. Those code files are 2.0-only, so the reference edit goes with them, onto
-`v2`, and reaches `main` at the 2.0.0 merge (design §5.3). The reason is not convenience:
-`main` still ships the 1.4.0 engine, so a reference amended on `main` would describe a
-contract `main`'s own engine does not implement. **Documentation goes to `main` unless a
-rule binds it to code that cannot** — and today ONEUP-0072 is the only item that qualifies.
+**Two things bind documentation to `v2`, and neither is a loophole.**
+
+**A marker change.** `docs/reference/marker-protocol.md` §5 requires it to touch the
+emitter, the window, both suites *and* the reference **in one commit** — that is what makes
+the change reviewable at all. Those code files are 2.0-only, so the reference edit goes with
+them, onto `v2`, and reaches `main` at the 2.0.0 merge (design §5.3). The reason is not
+convenience: `main` still ships the 1.4.0 engine, so a reference amended on `main` would
+describe a contract `main`'s own engine does not implement. ONEUP-0072 is the item.
+
+**A document `tests/docs-check.py` checks that must NAME a file 2.0 creates** — a
+standard, a reference, `CLAUDE.md` or `README.md`. Its §9
+check reads `docs/standards/`, `docs/reference/`, `CLAUDE.md` and `README.md`, and fails a
+backticked path that carries **both** a directory separator and a file extension and does
+not resolve — deliberately, because
+those documents describe the tree as it is today, where a spec or a design document may name
+a file it is going to create. So a standard here cannot name a file that exists only on
+`v2`, and the edit goes with the code. ONEUP-0034 is the first item: `files-and-naming.md`'s
+`tests/` row, §5.1's version sites and `marker-protocol.md`'s pointer at the window's parser
+all name package files. **Describing the package's *shape* is unaffected** — a backticked
+directory carries no extension and is not checked, which is how `files-and-naming.md` §4
+already sits on `main`. A bare *filename* escapes the pattern too, for want of the
+separator; that is a gap in the check and not licence to evade it by dropping the
+directory.
+
+**Documentation goes to `main` unless a rule binds it to code that cannot.** Those two are
+the rules that bind it today; a third would need naming here before it counted.
 
 **No partial 2.0 releases** — the user's rule, 2026-07-26. `docs/design/oneup-2.0.md` §7
 states it and owns what "complete" means.
@@ -483,8 +516,9 @@ states it and owns what "complete" means.
   — that is the design working, not a bug. Run the one-liner in §4.
 - **Releasing with an empty `## [Unreleased]`.** `bump.py` has nothing to derive the
   packaging notes from and stops. Write the entries as the work lands, not at release time.
-- **A "small fix" on `main` during the freeze.** Test it against §1.1 honestly. If people
-  can still update, it is 2.0 work no matter how small it is.
+- **A small *feature* on `main` during the freeze.** Test it against §1.1 honestly: a fix
+  lands on `main` however small, and a feature request waits for 2.0 however small. "People
+  can still update" was the 2026-07-26 bar and is no longer the test (§1.1).
 - **Adding a *test* gate to `local-CI.sh` but not to `release.yml`.** The release build is
   what actually ships; a test gate it does not run is a test gate that fires too late. (The
   non-test extras staying local is deliberate, not this trap — §6.)
@@ -497,8 +531,8 @@ states it and owns what "complete" means.
 - [ ] `CHANGELOG.md` has an `## [Unreleased]` entry with its plain-English line, if a user
       would notice this change.
 - [ ] The branch is right — §9's tree, not a guess. `main` takes a §1.1 fix, documentation,
-      and the one named test-harness change §1.2 grants. Nothing else — and not even
-      documentation, when a rule binds it to the same commit as 2.0-only code (§9).
+      and the named test-harness exceptions §1.2 grants. Nothing else — and not even
+      documentation, when a rule binds it to code that only exists on `v2` (§9).
 - [ ] `./local-CI.sh` is green — the whole thing, not the part you thought was affected.
 
 ## What checks this
@@ -506,7 +540,7 @@ states it and owns what "complete" means.
 | Rule | What catches a breach |
 | --- | --- |
 | §1 the v1 freeze | nothing automatic — the branch a commit lands on is a human decision |
-| §1.2 the test-harness exception is not widened | nothing automatic. It names one change, so widening it means naming a second — a decision, not a diff. The `tests/`-only condition is one `git diff --name-only` away, but it is necessary, not sufficient, and nothing runs it either |
+| §1.2 the test-harness exceptions are not widened | nothing automatic. Each names a change, so widening means naming another — a decision, not a diff. The `tests/`-only condition is one `git diff --name-only` away, but it is necessary, not sufficient, and nothing runs it either |
 | §2 `v2` is never rebased or force-pushed | **nothing, and the damage is off this machine.** No branch protection exists (the repository has none), so a `git push --force` on `v2` would succeed and break every clone. It is the one trap in this document with no net under it at all |
 | §2 `main` merges *into* `v2`, never the reverse | nothing automatic. A merge the wrong way would carry unfinished 2.0 work onto released `main`, and only the author's attention stands between the two |
 | §3 the commit subject format, the `Co-Authored-By:` trailer, and one thing per commit | nothing automatic, for all three. There is no `commit-msg` hook, and adding one is cheap if the format ever drifts |
@@ -558,3 +592,6 @@ clone where nobody ran that one command, a green push proves nothing at all.
 | 12 | 2026-07-27 | 1 critical, 1 high, 2 medium, 8 low — **10 verified, 2 dismissed** | The critical was §8's recovery advice. All three failure paths said "fix and re-run", and `release.sh` refuses to re-run in every one of them: its first precondition is a clean tree, and every path leaves the bump in it. Verified by running it — dirty and staged both exit on "working tree not clean". The recovery is now an ordered sequence, and the failed-push case takes a mixed reset rather than `--soft`, which only stages what the precondition then refuses |
 | 13 | 2026-07-27 | 3 high, 4 medium, 7 low — **11 verified, 3 dismissed** | No critical. The §8 recovery sequence, rewritten last loop, still dead-ended: discarding the bump and re-running leaves the *fix* uncommitted, which the clean-tree precondition refuses just the same. §6's opening claim that local CI "covers more than GitHub CI does" was false in the one direction that matters — CI builds the AppImage and a default local run does not, so neither set contains the other. And the skip-helper row counted five call sites as five gates, which is the unnamed-unit error `documentation.md` §6b.4 calls the worst this set has produced |
 | 14 | 2026-07-27 | **none** | **Converged**, and batch 2 closes. §8.1 — the section this document was pulled back into review for — survived every loop untouched |
+| 15 | 2026-08-20 | 2 lanes, cold; genre standard; Q1 0 · Q2 5 · Q3 1 — all 6 verified, 0 dismissed, all fixed | **Gate on a §9 change made while landing ONEUP-0034's documentation, and both lanes led with the same PRE-EXISTING defect: §9's decision tree still asked the 2026-07-26 severity question — "can people still install updates?" — which §1.1 withdrew as the bar on 2026-08-18.** §1.1 names ONEUP-0110 as the precedent that fails that question and landed on `main` anyway, so the tree routed an ONEUP-0110-shaped fix to `v2` with no 1.4.x. The same withdrawn bar sat in §10's traps as an instruction. Both are now the kind test. **Two findings were my own change's other half**: the new second binder is not a same-commit rule — the code it names is already on `v2` — so the tree's condition answered "no" and sent the edit to `main`, where the push gate reds; it now reads *binds it to code that only exists on `v2`*, in §2's table and §11's checklist too. And the binder was scoped to *a standard or reference* while `tests/docs-check.py` also reads `CLAUDE.md` and `README.md`, so an edit to either was bound by nothing. **Also fixed, pre-existing**: §1.2 listed *a misplaced dialog* and *awkward wording* among things that wait for 2.0, and both are defects, which §1.1's kind test sends to `main`; and three cross-references called the test-harness grant *the one exception* where §1.2 names three, so an exception-2 or -3 shaped change routed to `v2`. Swept the collateral into `docs/design/oneup-2.0.md`'s two branch-table rows and this document's own What-checks-this row, all of which carried the stale counts. |
+| 16 | 2026-08-20 | 1 lane, cold; genre standard; Q1 1 · Q2 2 — all 3 verified, 0 dismissed, all fixed | **Two of the three were loop 15's own other half, which is the pattern this run kept producing.** The new second binder said the check fails *any backticked path carrying a file extension*; `PATH_RE` requires a directory separator as well, so a bare filename escapes it — the gap is now named as a gap, and as not being licence to evade the check by dropping the directory. And sharpening §1.2 into fix-versus-feature left work that is NEITHER with no branch, while §1.2 itself routes ONEUP-0070 to `v2` twice; that third category is now stated. **The pre-existing one would have cut a release nobody needs**: §9's tree sent every fix to a 1.4.x, where §1.2's third exception establishes that a change nobody can see owes none, and §11's checklist already conditions the CHANGELOG entry the same way. |
+| 17 | 2026-08-20 | 1 lane, cold; genre standard; Q1 1 · Q2 1 — both verified, 0 dismissed, both fixed. **Cap reached (3 for a standard), and it is a CALM cap**: findings fell 6 → 3 → 2 across the run, and the one that remained live was pre-existing rather than this run's collateral | **The finding worth the loop was §4 describing a workflow that stopped being durable on 2026-08-18.** It is the standard that owns roadmap IDs, and it still read as a hand-editing procedure — allocate from `.roadmap-counter`, type the bullet template — when `ROADMAP.md` became generated output rendered from the machine-global roadmap store. A conformer following §4 would append a bullet, see it accepted, and lose it at the next write with no error and no diff. §4 now leads with that, keeps the counter (which `roadmap_log` still bumps) and presents the bullet shape as what the store RENDERS. Swept the same claim out of `files-and-naming.md` §2.3. **The other was loop 16's collateral**: §9's tree stayed binary after §1.2 gained a third category, so a refactor or a dependency bump took the fix arm onto frozen `main` — with a release. The tree now has three arms, matching §1.2's three. |
