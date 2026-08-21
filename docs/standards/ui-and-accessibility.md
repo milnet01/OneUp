@@ -34,7 +34,7 @@ each invariant is tested; this file is the rule a new widget must obey.
 | --- | --- |
 | Everything focusable has a name a screen reader can read | `tests/gui-smoke.py` INV-1, the `unnamed()` sweep — walks every widget, keeps `focusPolicy() != Qt.NoFocus`, fails on a nameless one |
 | No state is signalled by colour alone | `gui-smoke.py` — the switch's shape counted in both states, the "overdue" wording, and ONEUP-0076 INV-6 (§3) |
-| No hard-coded pixel font size | `gui-smoke.py` INV-3 — a regex over the built stylesheet |
+| No hard-coded pixel font size | `gui-smoke.py` INV-3 — a regex over the built stylesheet. **The stylesheet half only** (§4) |
 | Focus never draws a ring or adds a border, and every focusable control HAS a cue | `gui-smoke.py` INV-4 — asserts no ring, that no `:focus` rule moves anything but colour, and that the `:focus` rules are emitted after `:hover`/`:checked`; ONEUP-0076 INV-1 fails any focusable widget with no treatment at all (§5) |
 | Dialogs inherit the app theme and open centred on the window | `gui-smoke.py`'s X11 and Wayland `center_on_parent` assertions (§6) |
 | Every theme passes the same contrast checks | **half enforced** — ONEUP-0076's focus computation runs over the palette dictionary; the whole-palette 4.5:1 sweep is still ONEUP-0027's to write (§7) |
@@ -108,23 +108,32 @@ sounds, so read the scope carefully.
 
 > **Focus is never signalled by drawing a border or an outline.** It is signalled by a
 > **derived** colour: the smallest blend of the colour it replaces toward black or toward
-> white — whichever reaches it at the lower blend fraction, walked in 1% steps — that
-> measures at least 3:1 against every surface the control rests on.
+> white — whichever reaches it at the lower blend fraction, walked in 1% steps, black
+> winning a tie — that measures at least 3:1 against every one of the control's **rest
+> pixels**.
+>
+> **"Rest pixels" is the whole of it, and it is not the same as "what the control sits
+> on".** They are the colours actually rendered where the control is when it does not have
+> focus: its own fill or border where it has one, and the surface behind it where it is
+> transparent. SC 2.4.13 compares the focused and unfocused states of the *same* pixels, so
+> what a colour is measured against is always the colour it replaces.
 >
 > **Which pixels take it depends on what the control holds.** An ordinary control changes
 > its **fill**, and its text is redrawn in whichever of black or white contrasts more with
 > that fill. A control holding its own scrolling content changes the colour of an existing
-> rest **border** instead, because recolouring the fill would recolour the content — §5.3
-> owns the width that second branch requires.
+> rest **border** instead, because recolouring the fill would recolour the content — so its
+> rest pixel is that **border's own colour**, never the surface behind the panel, and §5.3
+> owns the width the branch requires. Deriving one of those borders against the card behind
+> it yields a lighter colour that fails 3:1 against the border it replaces.
 >
-> **Where a control rests on more than one surface, the blend is taken from ONE of them and
+> **Where a control has more than one rest pixel, the blend is taken from ONE of them and
 > tested against all of them.** The source is the first surface that control's row names in
 > `docs/specs/ONEUP-0076-ringless-focus-cue.md` §4.2. The two are different jobs: the same
 > fraction applied to the second surface yields a different colour that clears the threshold
 > just as well, so a control with several rest pixels has no single derivation until the
 > source is pinned.
 >
-> **A colour painted ON the fill counts as a surface.** The switch's state shape and its
+> **A colour painted ON the fill is a rest pixel too.** The switch's state shape and its
 > knob are both white, so its focused track is tested against them too — otherwise a
 > darkened track can swallow the one cue that survives colour blindness.
 >
@@ -187,10 +196,12 @@ opposite case and is kept: `$card` → `$btnhov` moves the whole fill, at 14.67:
 the one appearance mode that exists for low-vision users.
 
 **The overlay obeys the same rule**, and is worth stating because it looks like an
-exception: every high-contrast button carries `border: 2px solid $border` at rest, and what
-focus moves is still the **fill**. Recolouring that border would not work anyway — `$border`
-→ `$focus` measures 1.43:1 dark and 1.87:1 light. **No border is added on focus** in either
-sheet.
+exception: what focus moves there is still the **fill**. Recolouring the rest border would
+not work anyway — `$border` → `$focus` measures 1.43:1 dark and 1.87:1 light. **No border is
+added on focus** in either sheet. Every high-contrast button that carries a rest border
+carries a 2 px one, and the token is `$border` except for the danger family, which takes
+`$errbd` — the overlay never carries a literal red. `#LinkBtn` carries no border at all
+there.
 
 ### 5.4 Why, and what it costs
 
@@ -291,16 +302,28 @@ hand-roll `frameGeometry().moveCenter(...)` + `move(...)` — that is the X11-on
 ONEUP-0049 replaced, and on Wayland it silently does nothing.
 
 **A `QMessageBox` we build and `exec()` ourselves** cannot use `showEvent` cleanly, because
-the box sizes to its content only once shown. Centre it via `Updater._center_child`
-deferred one event-loop tick — the four live call sites are `Updater._confirm_passwordless`,
-`Updater._confirm_key_import`, `Updater._thin_snapshots` and `Updater.show_about`:
+the box sizes to its content only once shown. Centre it via `Updater._center_child`,
+deferred one event-loop tick. There are four live call sites and **only one of them is
+inside `Updater`** — `show_about`. The other three are module-level functions that take the
+window as their first parameter, so they reach the same wrapper through that parameter and
+`self` does not exist in them:
 
 ```python
+# inside Updater
 box = QMessageBox(self)
 ...                                    # setText / buttons / etc.
 QTimer.singleShot(0, lambda: self._center_child(box))
 box.exec()
+
+# in a module-level helper taking the window as `win`
+box = QMessageBox(win)
+...
+QTimer.singleShot(0, lambda: win._center_child(box))
+box.exec()
 ```
+
+Writing `self._center_child(box)` in one of those helpers is a `NameError`, not a style
+choice — which is why both forms are given rather than the one.
 
 ### 6.3 Which rule applies
 
@@ -341,10 +364,16 @@ which are also the rules:
 - **A focus pair that cannot be derived refuses the theme too, and says so.** §5.1's rule
   always succeeds against a *single* surface, and can fail against a *set*: two surfaces far
   enough apart admit no colour clearing 3:1 against both. The derivation raises rather than
-  returning a best-effort colour; `apply_app_theme` catches it, falls back to the built-in
-  palette for the current light/dark scheme, and reports the theme unusable. **The one
-  outcome not allowed is a silently absent cue** — that is the state §5 exists to end. Same
-  posture as the missing key above: fail at the boundary rather than half-apply.
+  returning a best-effort colour, and `apply_app_theme` catches it, applies **nothing**, and
+  says so on the console. **The one outcome not allowed is a silently absent cue** — that is
+  the state §5 exists to end. Same posture as the missing key above: fail at the boundary
+  rather than half-apply. Two things a theme picker must not assume. **Not applying is what
+  preserves the user's text size and high-contrast choice** — the sheet already installed
+  stays, and a fallback that rebuilt without them would turn high contrast off for the one
+  user who cannot do without it. And **the console line is not a user-visible report**;
+  surfacing it belongs to ONEUP-0027's picker, along with turning this into a real fallback
+  — `build_theme` takes no theme argument today, so the built-in palette *is* what failed
+  and there is nothing yet to fall back to.
 - **Contrast is checked, not eyeballed:** body text at least **4.5:1** against its
   background, and any colour that carries meaning — a border, a badge rim, a switch track —
   at least **3:1** (WCAG 2.2 SC 1.4.3 and 1.4.11).
@@ -363,9 +392,15 @@ which are also the rules:
   text. (Dark's equivalent is 5.4:1 and fine.) Either the light palette's `lastrun` is
   darkened when the check lands, or it is recorded as an accepted exception with a reason —
   ONEUP-0027 decides which. It must not be discovered by the check and quietly ignored.
-- **The colour-never-alone rule is per-theme.** A theme whose "on" and "off" track colours
-  are close is still legible, because §3's shapes carry the state — but a theme must not
-  remove or recolour a shape into invisibility against its own track.
+- **The colour-never-alone rule is per-theme — once a theme can reach the switch at all.**
+  Today it cannot: the two track colours are the module constants `GREEN` and `RED`, read
+  directly by `ToggleSwitch.paintEvent` and by the focus derivation, and neither `_DARK` nor
+  `_LIGHT` carries a track key. So this rule binds **ONEUP-0027**, which moves them into the
+  palette. **When it does, the focus derivation has to move with them** — it names those
+  constants, so a palette that sets a track and leaves the derivation alone gets a focused
+  track derived from a colour it no longer paints. The rule itself is unchanged: a theme
+  whose "on" and "off" tracks are close is still legible, because §3's shapes carry the
+  state, but a theme must not recolour a shape into invisibility against its own track.
 - **High contrast stays an overlay, not a theme.** It is appended after the base sheet
   (`build_theme(…, high_contrast=True)`), so it must keep working on top of *every* theme,
   not just the two shipped today. A new theme is checked with the overlay on as well as off.
@@ -476,7 +511,7 @@ today; the RTL work adds them, and this is the form they take.
 | --- | --- |
 | §2 every focusable widget has an accessible name | `tests/gui-smoke.py` — four sweeps, over the main window and the Repositories, Rollback and Settings pages, each naming the widgets that failed |
 | §3 state is never signalled by colour alone | `tests/gui-smoke.py` — the switch's shape counted in both states, the "overdue" wording, every badge's text, and ONEUP-0076 INV-6's check that the shape still reads on the **focused** track. **A newly added cue is still uncovered**: each of these pins one existing cue by name, and nothing fails a colour-only cue nobody wrote an assertion for |
-| §4 no hard-coded `px` font size | `tests/gui-smoke.py` — every font size is in points, and derives from the desktop's own default |
+| §4 no hard-coded `px` font size | `tests/gui-smoke.py` — every font size in the built stylesheet is in points and derives from the desktop's own default. **The stylesheet half only:** a pixel size set on a widget font in code is invisible to a regex over the sheet, so nothing catches it |
 | §5 focus draws no ring | `tests/gui-smoke.py` — *"focus draws no outline ring"*, paired with *"focus still gives a cue"*, so the rule cannot be satisfied by removing the cue altogether. ONEUP-0076 INV-4 adds the half a stylesheet parse cannot see: the focused and unfocused renders of the painted switch must be related by a consistent colour-to-colour mapping, which a ring drawn inside its fixed rect breaks |
 | §5.3 focus changes no box | `tests/gui-smoke.py` — ONEUP-0076 INV-4 expands every `border` shorthand and asserts a `:focus` rule sets no width, style or radius its rest rule does not already set to the same value; colour is the only thing it may move |
 | §5.3 the 2 px area floor | **nothing directly.** The four panels carry a 2 px rest border in both sheets and INV-4 would catch a `:focus` rule narrowing one, but nothing fails a rest border authored at 1 px in the first place |
@@ -505,3 +540,4 @@ ONEUP-0027's six new themes are checked against, rather than against a screensho
 | 3 | 2026-07-26 | none | clean. Collateral only: a pointer to the deleted `dialogs.md` became a plain mention, so it no longer reads as a live path. |
 | 4 | 2026-07-26 | none | converged. |
 | 5 | 2026-08-21 | 7 findings — **7 verified, 0 dismissed** (Q1 2 · Q2 1 · Q3 4) | First loop of a new run, genre `standard`, triggered by ONEUP-0064 and ONEUP-0076 landing and rewriting §5. **All three lanes independently found the same two**, which is the run's strongest signal. §5.3 stated the keep-exemption as a bare ratio floor, where `ONEUP-0076` §4.1 qualifies it on SC 2.4.13's area half and says both halves are load-bearing — so a conformer would have kept a 1 px border recolour measuring 3.91:1, which is the exact pair the shipped `#GhostBtn` was re-derived away from. And §5.1 never said which surface the blend is taken FROM: for a control on `rowcard`/`rowhov` both settlements clear 3:1, so nothing catches the divergence, and blending the wrong one yields `#6d7177` where the spec's table and the shipped sheet both carry `#6a6d73`. Two lanes found §7 and §8 anchoring `_DARK` / `_LIGHT` and two counts to `updater.py`, which is a 21-line shim on this branch — a theme author would have added their palette to the file nothing reads. Two found the *What checks this* row saying §3 is caught by "nothing automatic" while §1's own table said the opposite and four assertions exist. One lane each found that §5.1 stated the fill branch as the whole rule while four panels signal focus on a border instead, and that §7 gave no refusal mode for an underivable focus pair though the code raises and falls back. **Collateral, in another document**: `documentation.md`'s citation-form table used the QSS comment *"Keyboard focus reuses the HOVER look"* as its worked example of a durable anchor, and this change deleted that comment — re-anchored to one present on both branches. **The file moved to `v2`** in this loop (header), by `workflow.md` §9's second binding. |
+| 6 | 2026-08-21 | 7 findings — **7 verified, 0 dismissed** (Q1 5 · Q2 1 · Q3 1) | **Cap reached (2 of 2, set at dispatch); the run files nothing — all seven were fixed.** A CALM cap: three of the seven landed on text this run wrote, and two of those three were not doc collateral but real CODE defects that loop 1's fixes exposed by stating behaviour nobody had written down. The other four were pre-existing and untouched by loop 1. **All three lanes independently found the same one**, and it is the run's most consequential: §5.1 said the derived colour is measured against "every surface the control rests on", which is wrong for the four panels that move a border — the code measures the new border against the border it REPLACES, per SC 2.4.13's same-pixels comparison, and deriving one against the card behind it ships a border failing 3:1 against its own rest state. §5.1 now defines *rest pixels* the way `ONEUP-0076` §4.1 does. **Two code defects, both mine, both would have shipped.** `apply_app_theme`'s fallback rebuilt the sheet WITHOUT the user's text scale and high-contrast choice, silently turning high contrast off for the one user who cannot do without it — the exact failure §5 exists to end; it now applies nothing and leaves the installed sheet standing, and the branch is honest that there is nothing yet to fall back TO. And `derive_focus_gradient` returned the first direction that worked rather than the smaller blend fraction, so a pale future accent would darken where §5.1 prescribes lightening; it now matches `derive_focus`, and both published gradient pairs are unchanged. Also fixed: §5.3 claimed every overlay button carries `border: 2px solid $border`, where the danger family takes `$errbd` and `#LinkBtn` carries none; §7 regulated per-theme switch track colours a theme cannot reach, since the tracks are module constants and the focus derivation names them — so ONEUP-0027 must move both together; §6.2's `self._center_child(box)` snippet is a `NameError` in three of its four call sites, which are module-level functions taking the window; and §4's rows claimed coverage a regex over the stylesheet cannot give, since a pixel size set on a widget font in code is invisible to it. |

@@ -154,22 +154,31 @@ def derive_focus_gradient(stops, *, label: str = "",
 
     Blending toward a fixed target is affine in the source colour, so it commutes
     with the interpolation between the stops — one fraction applied to both gives
-    exactly the colour that fraction would give anywhere in between. The direction
-    is chosen once for the whole gradient, from the stop with the tighter
-    constraint, because a gradient straddling L = 0.1791 could otherwise want to
-    darken at one end and lighten at the other. Sampled at 101 points, since a
-    gradient is governed by its worst pixel and not by its stops.
+    exactly the colour that fraction would give anywhere in between. ONE direction
+    serves the whole gradient, because a gradient straddling L = 0.1791 could
+    otherwise want to darken at one end and lighten at the other; it is chosen the
+    same way `derive_focus` chooses it, by the SMALLER blend fraction across both.
+    Sampled at 101 points, since a gradient is governed by its worst pixel and not
+    by its stops, and each focused sample is compared against the rest sample it
+    replaces — SC 2.4.13 compares the same pixels, so the top of the button is not
+    held against the bottom of its own previous state.
     """
     rest = _samples(*stops)
+    best = None
     for target in (_BLACK[0], _WHITE[0]):
         for step in range(1, 101):
             t = step / 100.0
             if all(contrast(_blend(p, t, target), p) >= threshold for p in rest):
-                fills = [_hex(_blend(_rgb(s), t, target)) for s in stops]
-                return fills, _ink_for(_samples(*fills))
-    raise FocusDerivationError(
-        f"no focus fill reaches {threshold}:1 for the {label or 'gradient'} "
-        f"{stops[0]} → {stops[1]} in either direction")
+                if best is None or t < best[0]:
+                    best = (t, target)
+                break
+    if best is None:
+        raise FocusDerivationError(
+            f"no focus fill reaches {threshold}:1 for the {label or 'gradient'} "
+            f"{stops[0]} → {stops[1]} in either direction")
+    t, target = best
+    fills = [_hex(_blend(_rgb(s), t, target)) for s in stops]
+    return fills, _ink_for(_samples(*fills))
 
 
 # ---------------------------------------------------------------------------
@@ -811,18 +820,27 @@ def apply_app_theme(app: QApplication):
     change takes effect live with no restart and no window rebuild."""
     s = QSettings("OneUp", "OneUp")
     dark = current_is_dark(app)
+    scale = float(s.value("text_scale", 1.0, type=float))
+    high_contrast = bool(s.value("high_contrast", False, type=bool))
     try:
-        qss = build_theme(
-            dark,
-            scale=float(s.value("text_scale", 1.0, type=float)),
-            high_contrast=bool(s.value("high_contrast", False, type=bool)))
+        qss = build_theme(dark, scale=scale, high_contrast=high_contrast)
     except FocusDerivationError as exc:
         # A palette whose surfaces are too far apart for any one fill to clear
         # 3:1 against all of them has no focus cue, and half-applying it would
-        # ship the state ONEUP-0076 exists to end. Fail at the boundary, keep the
-        # app running on the theme that is known to derive, and say so.
-        print(f"OneUp: unusable theme — {exc}; falling back to the default palette")
-        qss = build_theme(dark)
+        # ship the state ONEUP-0076 exists to end. So the theme is not applied at
+        # all and the app keeps running on the sheet already installed — which
+        # preserves the user's text size and high-contrast choice by construction.
+        # Dropping those would take away the one appearance mode that exists for
+        # low-vision users, which is the failure this whole item exists to end.
+        #
+        # RETRYING WOULD BE A LIE TODAY: `build_theme` takes no theme argument, so
+        # the built-in palette IS what just failed and a second call raises the
+        # same error. The branch is unreachable in shipped code — the suite proves
+        # both built-in palettes derive — and it exists for ONEUP-0027, which adds
+        # user-selectable themes. When it does, the fallback here becomes a real
+        # one: re-apply the built-in palette instead of the chosen theme.
+        print(f"OneUp: unusable theme — {exc}; the theme was NOT applied")
+        return
     app.setStyleSheet(qss)
 
 
