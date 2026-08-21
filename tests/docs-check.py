@@ -36,7 +36,12 @@ LINENO_RE = re.compile(r"\b[\w./-]+\.(?:py|sh|yml|yaml|xml|toml|json|spec):\d+")
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)#]+?)(?:#[^)]*)?\)")
 PATH_RE = re.compile(r"`([\w.-]+(?:/[\w.<>-]+)+\.(?:md|py|sh|yml|yaml|xml|toml|json|spec))`")
 MARKER_RE = re.compile(r"(?<![\w`])(TODO|FIXME|TBD|XXX)(?![\w`])")
-SEVERITY_RE = re.compile(r"(\d+)\s+(critical|high|medium|low|info)\b", re.I)
+# `findings` is here beside the four severities because the review gate dropped the
+# severity scale: under its four questions every surviving finding changes what gets
+# built, so a grade decided nothing. A row written in the current form states a plain
+# total instead ("7 findings — **7 verified, 0 dismissed**"), and without this word
+# such a row reports 0 findings against its own outcomes and can never balance.
+SEVERITY_RE = re.compile(r"(\d+)\s+(critical|high|medium|low|info|findings?)\b", re.I)
 DISPOSITION_RE = re.compile(r"(\d+)\s+(verified|dismissed|info)\b", re.I)
 
 failures: list[str] = []

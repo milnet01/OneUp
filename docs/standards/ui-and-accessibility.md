@@ -8,9 +8,17 @@ below names the test that enforces it.
 **Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0057
-**Branch:** main
-**Verified at:** `58ea3bc` — every symbol name, count, QSS rule and contrast ratio below
-was measured against the tree on 2026-07-26, not recalled.
+**Branch:** v2
+**Verified at:** `3c645e4` — §5, §6.1, §7's check status and the *What checks this* table
+were re-measured against this tree on 2026-08-21, after ONEUP-0064 and ONEUP-0076 landed.
+Everything else was measured at `58ea3bc` on 2026-07-26, not recalled.
+
+**This file lives on `v2` from 2026-08-21**, by `docs/standards/workflow.md` §9's second
+binding: it now backticks `oneup/gui/theme.py`, a file 2.0 creates, so `tests/docs-check.py`
+would fail it on `main`. The same conclusion follows from the content — §5's rule and four
+of its *What checks this* rows name a focus treatment and suite invariants that exist only
+here, and `main` is frozen at 1.4.x — but the path is the mechanical half. It reaches `main`
+at the 2.0.0 merge.
 
 **Sections:** 1 the one-line version · 2 accessible names · 3 never colour alone ·
 4 text that scales · 5 focus · 6 dialogs · 7 themes · 8 right-to-left · 9 traps ·
@@ -25,7 +33,7 @@ each invariant is tested; this file is the rule a new widget must obey.
 | Rule | Enforced by |
 | --- | --- |
 | Everything focusable has a name a screen reader can read | `tests/gui-smoke.py` INV-1, the `unnamed()` sweep — walks every widget, keeps `focusPolicy() != Qt.NoFocus`, fails on a nameless one |
-| No state is signalled by colour alone | `gui-smoke.py` INV-2 checks |
+| No state is signalled by colour alone | `gui-smoke.py` — the switch's shape counted in both states, the "overdue" wording, and ONEUP-0076 INV-6 (§3) |
 | No hard-coded pixel font size | `gui-smoke.py` INV-3 — a regex over the built stylesheet |
 | Focus never draws a ring or adds a border, and every focusable control HAS a cue | `gui-smoke.py` INV-4 — asserts no ring, that no `:focus` rule moves anything but colour, and that the `:focus` rules are emitted after `:hover`/`:checked`; ONEUP-0076 INV-1 fails any focusable widget with no treatment at all (§5) |
 | Dialogs inherit the app theme and open centred on the window | `gui-smoke.py`'s X11 and Wayland `center_on_parent` assertions (§6) |
@@ -99,10 +107,30 @@ sounds, so read the scope carefully.
 ### 5.1 The rule
 
 > **Focus is never signalled by drawing a border or an outline.** It is signalled by a
-> **derived** fill: the focused control's own fill changes to the smallest blend of the
-> colour it replaces toward black or toward white — whichever reaches it at the lower blend
-> fraction — that measures at least 3:1 against every colour the control rests on. Its text
-> is redrawn in whichever of black or white contrasts more with that fill.
+> **derived** colour: the smallest blend of the colour it replaces toward black or toward
+> white — whichever reaches it at the lower blend fraction, walked in 1% steps — that
+> measures at least 3:1 against every surface the control rests on.
+>
+> **Which pixels take it depends on what the control holds.** An ordinary control changes
+> its **fill**, and its text is redrawn in whichever of black or white contrasts more with
+> that fill. A control holding its own scrolling content changes the colour of an existing
+> rest **border** instead, because recolouring the fill would recolour the content — §5.3
+> owns the width that second branch requires.
+>
+> **Where a control rests on more than one surface, the blend is taken from ONE of them and
+> tested against all of them.** The source is the first surface that control's row names in
+> `docs/specs/ONEUP-0076-ringless-focus-cue.md` §4.2. The two are different jobs: the same
+> fraction applied to the second surface yields a different colour that clears the threshold
+> just as well, so a control with several rest pixels has no single derivation until the
+> source is pinned.
+>
+> **A colour painted ON the fill counts as a surface.** The switch's state shape and its
+> knob are both white, so its focused track is tested against them too — otherwise a
+> darkened track can swallow the one cue that survives colour blindness.
+>
+> **A gradient is compared pixel for pixel**, each focused sample against the rest sample it
+> replaces rather than against the whole run, and one blend fraction serves the whole
+> gradient.
 
 *This rule read "by reusing the hover appearance" until ONEUP-0076 measured it. Hover
 lightens, and pure white measures 2.63:1 against the accent button's top gradient stop, so
@@ -146,14 +174,17 @@ key to. A qualified rule outranks a bare one on specificity, so the unqualified 
 default surface and the qualified ones are the exceptions.
 
 **Two extra conditions, both of which look like details and are not.** The changed area must
-be at least the area of a **2 px perimeter** of the control (SC 2.4.13), which is what rules
-out recolouring a 1 px border: a panel that holds its own scrolling content — where
-recolouring the fill would recolour the content — carries a 2 px rest border and moves only
-its colour. And a control **already** clearing 3:1 is kept rather than re-derived; the rule
-is a floor, not a replacement. The high-contrast overlay's ghost button goes
-`$card` → `$btnhov`, which is 14.67:1 dark and 11.22:1 light, and "the smallest blend
-reaching 3:1" would weaken that roughly fourfold in the one appearance mode that exists for
-low-vision users.
+be at least the area of a **2 px perimeter** of the control (SC 2.4.13). That is the width
+§5.1's border branch requires, and it is what rules out recolouring a 1 px one.
+
+And a control already clearing 3:1 is kept rather than re-derived — **but only where the
+pixels it already moves meet that same 2 px floor.** The two conditions are not independent,
+and a bare ratio test gets the shipped case backwards in both directions. The dark
+`#GhostBtn`'s old rest→focus pair measured **3.91:1** and was re-derived as a fill anyway,
+because all it moved was a 1 px border. The high-contrast overlay's ghost button is the
+opposite case and is kept: `$card` → `$btnhov` moves the whole fill, at 14.67:1 dark and
+11.22:1 light, and "the smallest blend reaching 3:1" would weaken that roughly fourfold in
+the one appearance mode that exists for low-vision users.
 
 **The overlay obeys the same rule**, and is worth stating because it looks like an
 exception: every high-contrast button carries `border: 2px solid $border` at rest, and what
@@ -298,7 +329,7 @@ that must pass the same checks the two built-in ones pass.** A theme that cannot
 shipped — there is no "it's only optional" exemption, because a user who picks it is using
 the whole app through it.
 
-A theme is a palette dictionary of the same shape as `updater.py`'s `_DARK` and `_LIGHT`,
+A theme is a palette dictionary of the same shape as `oneup/gui/theme.py`'s `_DARK` and `_LIGHT`,
 substituted into the one `_QSS` template by `build_theme`. Consequences,
 which are also the rules:
 
@@ -307,6 +338,13 @@ which are also the rules:
   theme, because no theme can reach the box model.
 - **Every key is supplied.** A missing key is a `KeyError` at substitution time, which is
   the desired behaviour — a theme that half-applies is worse than one that refuses to load.
+- **A focus pair that cannot be derived refuses the theme too, and says so.** §5.1's rule
+  always succeeds against a *single* surface, and can fail against a *set*: two surfaces far
+  enough apart admit no colour clearing 3:1 against both. The derivation raises rather than
+  returning a best-effort colour; `apply_app_theme` catches it, falls back to the built-in
+  palette for the current light/dark scheme, and reports the theme unusable. **The one
+  outcome not allowed is a silently absent cue** — that is the state §5 exists to end. Same
+  posture as the missing key above: fail at the boundary rather than half-apply.
 - **Contrast is checked, not eyeballed:** body text at least **4.5:1** against its
   background, and any colour that carries meaning — a border, a badge rim, a switch track —
   at least **3:1** (WCAG 2.2 SC 1.4.3 and 1.4.11).
@@ -345,7 +383,8 @@ it mirrors nothing else. These four rules are what "nothing else" means in pract
 not mirror stylesheets, so each one is a bug that appears only in Arabic or Hebrew and is
 invisible to everyone testing in English.
 
-The six margin/padding/border properties are at **0** in `updater.py`. `text-align` is
+The six margin/padding/border properties are at **0** in `oneup/gui/theme.py`, which holds
+both stylesheets. `text-align` is
 **not**: `QPushButton#LinkBtn` in `_QSS` carries `text-align: left`, which will not mirror.
 That is one known site, to be resolved by ONEUP-0032 along with the painting in §8.3 —
 `text-align: center` on the progress bar is fine, because centre has no handedness. The
@@ -396,7 +435,7 @@ is out of scope — named here so its absence reads as a decision.
 
 `QApplication.isRightToLeft()` — one source, so every widget agrees. Do not read
 `self.layoutDirection()` on a widget that may have inherited a stale value, and never infer
-direction from the current language code. There are **0** direction reads in `updater.py`
+direction from the current language code. There are **0** direction reads anywhere under `oneup/`
 today; the RTL work adds them, and this is the form they take.
 
 ## 9. Traps
@@ -436,7 +475,7 @@ today; the RTL work adds them, and this is the form they take.
 | Rule | What catches a breach |
 | --- | --- |
 | §2 every focusable widget has an accessible name | `tests/gui-smoke.py` — four sweeps, over the main window and the Repositories, Rollback and Settings pages, each naming the widgets that failed |
-| §3 state is never signalled by colour alone | nothing automatic |
+| §3 state is never signalled by colour alone | `tests/gui-smoke.py` — the switch's shape counted in both states, the "overdue" wording, every badge's text, and ONEUP-0076 INV-6's check that the shape still reads on the **focused** track. **A newly added cue is still uncovered**: each of these pins one existing cue by name, and nothing fails a colour-only cue nobody wrote an assertion for |
 | §4 no hard-coded `px` font size | `tests/gui-smoke.py` — every font size is in points, and derives from the desktop's own default |
 | §5 focus draws no ring | `tests/gui-smoke.py` — *"focus draws no outline ring"*, paired with *"focus still gives a cue"*, so the rule cannot be satisfied by removing the cue altogether. ONEUP-0076 INV-4 adds the half a stylesheet parse cannot see: the focused and unfocused renders of the painted switch must be related by a consistent colour-to-colour mapping, which a ring drawn inside its fixed rect breaks |
 | §5.3 focus changes no box | `tests/gui-smoke.py` — ONEUP-0076 INV-4 expands every `border` shorthand and asserts a `:focus` rule sets no width, style or radius its rest rule does not already set to the same value; colour is the only thing it may move |
@@ -451,8 +490,9 @@ today; the RTL work adds them, and this is the form they take.
 | §8.3 custom painting applies the direction | **nothing** — the toggle knob does not apply it (ONEUP-0032) |
 
 **The gated half is the half a script can see.** A name is present or absent; a font size is
-points or pixels; an outline is drawn or not. Everything left ungated needs a judgement made
-(is this cue really more than colour?). **The contrast half stopped being manual with
+points or pixels; an outline is drawn or not. What is left ungated is the judgement §3's row
+above cannot make for you — whether a **new** cue is really more than colour, when every
+assertion there pins a cue somebody already wrote. **The contrast half stopped being manual with
 ONEUP-0076**, whose computation runs over a palette nobody has written yet — which is what
 ONEUP-0027's six new themes are checked against, rather than against a screenshot.
 
@@ -464,3 +504,4 @@ ONEUP-0027's six new themes are checked against, rather than against a screensho
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
 | 3 | 2026-07-26 | none | clean. Collateral only: a pointer to the deleted `dialogs.md` became a plain mention, so it no longer reads as a live path. |
 | 4 | 2026-07-26 | none | converged. |
+| 5 | 2026-08-21 | 7 findings — **7 verified, 0 dismissed** (Q1 2 · Q2 1 · Q3 4) | First loop of a new run, genre `standard`, triggered by ONEUP-0064 and ONEUP-0076 landing and rewriting §5. **All three lanes independently found the same two**, which is the run's strongest signal. §5.3 stated the keep-exemption as a bare ratio floor, where `ONEUP-0076` §4.1 qualifies it on SC 2.4.13's area half and says both halves are load-bearing — so a conformer would have kept a 1 px border recolour measuring 3.91:1, which is the exact pair the shipped `#GhostBtn` was re-derived away from. And §5.1 never said which surface the blend is taken FROM: for a control on `rowcard`/`rowhov` both settlements clear 3:1, so nothing catches the divergence, and blending the wrong one yields `#6d7177` where the spec's table and the shipped sheet both carry `#6a6d73`. Two lanes found §7 and §8 anchoring `_DARK` / `_LIGHT` and two counts to `updater.py`, which is a 21-line shim on this branch — a theme author would have added their palette to the file nothing reads. Two found the *What checks this* row saying §3 is caught by "nothing automatic" while §1's own table said the opposite and four assertions exist. One lane each found that §5.1 stated the fill branch as the whole rule while four panels signal focus on a border instead, and that §7 gave no refusal mode for an underivable focus pair though the code raises and falls back. **Collateral, in another document**: `documentation.md`'s citation-form table used the QSS comment *"Keyboard focus reuses the HOVER look"* as its worked example of a durable anchor, and this change deleted that comment — re-anchored to one present on both branches. **The file moved to `v2`** in this loop (header), by `workflow.md` §9's second binding. |

@@ -355,7 +355,7 @@ number.** Decided with the user, 2026-07-26.
 | `updater.py:3581` | `updater.py` — `Updater._center_child` |
 | `update_system.sh:864` | `update_system.sh` — the held-lock hint, guarded by `lock_holder` |
 | "the regex at `:927`" | "the `_ALIAS_RE` pattern" |
-| "the comment at `:377-382`" | "the QSS (Qt stylesheet) comment beginning *\"Keyboard focus reuses the HOVER look\"*" |
+| "the comment at `:377-382`" | "the QSS (Qt stylesheet) comment beginning *\"The painted ToggleSwitch can't be reached by a stylesheet\"*" |
 
 **Why a line number is worse than no locator at all:** it looks precise, so a reader trusts
 it, and it is wrong after any edit *above* it — an edit that need not have touched the cited
