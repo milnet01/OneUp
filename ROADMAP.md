@@ -3969,3 +3969,38 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The thin outline around the "Retry failed steps" button is fainter than it should be, because that button now sits on the amber warning strip rather than on the plain card behind it.
   Kind: accessibility.
   Source: in-session-2026-08-21.
+
+- 📋 [ONEUP-0124] **A finished auth probe can outlive its window and traceback at interpreter exit.**
+  Pre-existing, and confirmed so rather than assumed: `git stash`ed the whole
+  ONEUP-0064/0076 change and reproduced it on the untouched tree.
+
+  `_query_auth_status` starts a QProcess and connects its `finished` signal to
+  a lambda that reads the process back. At interpreter exit the C++ QProcess
+  can be destroyed before the queued signal is delivered, so the lambda runs
+  against a deleted object:
+
+    RuntimeError: libshiboken: Internal C++ object
+    (PySide6.QtCore.QProcess) already deleted.
+
+  Harmless in the app itself — it needs the object graph to be torn down while
+  a probe is still in flight, which is teardown, not use. It shows up in
+  `tests/gui-smoke.py` and in any ad-hoc script that builds an Updater and
+  exits promptly.
+
+  Why it is worth fixing anyway: it prints AFTER the suite's own
+  "Passed: N Failed: 0" banner and the exit code stays 0, so the suite reports
+  green with a traceback under it. That is exactly the shape that trains a
+  reader to skim past tracebacks, and a real teardown failure would land in the
+  same place and read the same way.
+
+  Likely fix is a guard in the slot — `sip`/`shiboken` validity check, or
+  disconnect on window close — plus whatever the same pattern needs in
+  `run.py`'s `_on_size_finished`, which fails identically (seen once, same
+  run: `size_failed()` on a deleted QPushButton).
+
+  Not fixed in ONEUP-0064/0076 because it is unrelated to either — surgical
+  changes, and this needs its own regression test that a torn-down window
+  emits nothing.
+  **Layman:** When the test suite finishes, it prints a scary-looking error after the results. Nothing is actually broken — but a real failure could hide behind it, so it is worth silencing properly.
+  Kind: fix.
+  Source: in-session-2026-08-21.
