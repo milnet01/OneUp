@@ -352,6 +352,19 @@ QSS `:focus` rules for the **eight** styled focusable controls — the six butto
 native focus rects the stylesheet has also replaced. A 2 px accent outline (HC
 overlay: 3 px, palette key `hcfocus`).
 
+> **Corrected 2026-08-21, and this paragraph was wrong in three ways when it was
+> written** — recorded rather than rewritten, because this spec is shipped and the
+> record is what it is for. **The count was never true:** `#Disclose`,
+> `QPlainTextEdit#Log` and `QScrollArea#DetailScroll` carried no `:focus` rule at
+> all, so it was five, not eight — a sweep of the whole window found **sixteen of
+> its thirty-four focusable widgets with no cue whatever**, five of them the on/off
+> switches. **The outline was never built and is forbidden:** the 2026-07-25
+> no-focus-ring decision rules out a ring or an outline outright, and the palette
+> key `hcfocus` does not exist. **ONEUP-0076 is what makes this section true**, by
+> a different mechanism than the one described here — a derived fill, or a derived
+> colour on an existing 2 px border for the panels that hold their own content.
+> `docs/standards/ui-and-accessibility.md` §5 is canonical.
+
 **Placement matters:** `#GhostBtn:focus` and `#GhostBtn:checked` have equal
 specificity, so the `:focus` rules must be emitted **after** all `:hover` /
 `:checked` / `:pressed` rules. Emitted before them, a focused *checked* toggle
@@ -362,6 +375,13 @@ lands on.
 `hasFocus()`, so it reads against both the green and the red track. Verified:
 `QAbstractButton` already has `Qt.StrongFocus` (11), so the switch is
 tab-reachable today — only the indicator was missing.
+
+> **Corrected 2026-08-21.** No ring was ever drawn, and none may be: that method's
+> own closing comment said so, which made this the claim a reader would most
+> reasonably have trusted and the one furthest from the code. What ONEUP-0076
+> built instead is a **darkened track** — the same pixels, a derived colour — so
+> the state shape and the knob still read on it. The rest of the paragraph holds:
+> the switch was always tab-reachable, and only the indicator was missing.
 
 ### 6. Tab order
 
@@ -422,9 +442,18 @@ on a correct implementation.
 - **INV-4** All eight styled focusable controls have a `:focus` rule, and each
   `:focus` rule appears **after** the last `:hover`/`:checked`/`:pressed` rule for
   the same selector (the specificity-tie ordering from §5).
+  **Superseded 2026-08-21 by ONEUP-0076 INV-1**, which sweeps every focusable
+  widget in the window and in each dialog rather than a list of eight — the count
+  above was never right. The ordering half is unchanged and still checked.
 - **INV-5** Tab order matches visual order in the header and action rows.
   *Test:* a `nextInFocusChain` walk from `settings_btn` reaches `repos_btn` before
   `recenter_btn`. Fails today (creation order puts `recenter` first).
+  **Superseded 2026-08-21 by ONEUP-0064 INV-1.** That item moves *Repositories*
+  and *Recenter* into `SettingsDialog`, and a `QDialog` has its own focus chain, so
+  a walk rooted in the window can no longer reach either control and would collect
+  an empty list. The replacement flattens the layout tree to visual order and walks
+  the whole chain against it — twice, once for the window and once for the dialog —
+  which covers the same guarantee and every other control besides.
 - **INV-6** High contrast changes appearance only: `build_theme(dark,
   high_contrast=False)` is a strict **prefix** of `build_theme(dark,
   high_contrast=True)`, the overlay sets `qproperty-highContrast: true` while the

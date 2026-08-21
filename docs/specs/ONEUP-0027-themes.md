@@ -296,6 +296,15 @@ a resting one, and the progress bar's text is read on the bar, not on the card.
   `progbg`; `tipfg` on `tip`; the Run button's label on `btn_accent`, against both gradient
   stops; the link button's text on `card` in both its rest and hover colours; and the
   danger family's button label on its own fill.
+  **ONEUP-0064 and ONEUP-0076 add five keys to this class, and each is checked on every
+  surface it lands on rather than on `card` alone** — an ink measured against the card
+  reads 4.53:1 there and 3.89:1 on a hovered row, so the surface set is what makes the row
+  mean anything. `linkfg` and `linkhov` are the link button's rest and hover text, now
+  tokens rather than sheet literals, on `card`, `rowcard`, `rowhov` and the warning
+  banner's composited tint. `ghosthov` is the ghost button's `:hover` / `:checked` ink on
+  the same four, because *Retry* now sits on that tint. `stopfg` and `stophov` are the Stop
+  button's rest and hover label on `card`; its fill is transparent, so it is read against
+  the card and **not** against the danger family's fill row above.
 - **3:1**, the foreground carries meaning without being text — `switchon` and `switchoff`
   against `rowcard`, against `rowhov`, and against `switchmark` and `switchknob`;
   `switchtrackrim` against `switchon` and `switchoff`; `switchknobrim` against
@@ -303,19 +312,36 @@ a resting one, and the progress bar's text is read on the bar, not on the card.
   `trayattn` and `trayidle`; `traymark` against `trayattn`; `focus` against `win` and
   `card`; `ghostbd` against `card`; and the danger family's banner borders against `win`
   and `card`.
+  **Three more from ONEUP-0064 and ONEUP-0076**, each a boundary rather than text:
+  `ghosthov` as the ghost button's hover *border* against `card` — it shares one literal
+  with the ink above, so moving one moves both — and `stopfg` and `stophov` as the Stop
+  button's rest and hover border against `card`.
 - **Declared decorative**, measured by nothing and each carrying its reason — `logbd` on
   `logbg`, `accent` on `win`, and the primary button's hover and pressed fills, which
   restate a state the cursor and the press already carry.
+  **ONEUP-0076 puts `logbd` on three further surfaces and all three join this list for the
+  same reason the `logbg` row is already on it** — `rowcard` and `rowhov`, where the detail
+  panel's new border is read against the row beneath it because the panel is transparent,
+  and `win`, where the two dialog panels sit. Under mechanism B the cue is the border's
+  **change** of colour, which that item's INV-2 measures against `logbd` itself; how far
+  the resting border stands out from what is behind it carries no state.
 - **Declared exempt** — `disfg` on `disbg`. WCAG 2.2 SC 1.4.3 puts inactive components
   outside its scope.
 
 **Every token in the reference set is covered**, in one of four ways: it is the foreground
 of a checked pair, it is the background of one, it is named on the decorative or exempt
 list, or it is declared **measured elsewhere** — naming the item and the invariant that
-measures it. That fourth route exists because `ONEUP-0076` lands first and adds
-`focusfill` and `focusink` per control family: their values are recomputed per palette by
-that item's derivation rather than fixed, so they cannot sit in a table of fixed pairs, and
-they are measured by its INV-2 and INV-3, so they are not decorative. A declaration that
+measures it. That fourth route exists because `ONEUP-0076` lands first and adds a focus pair per control
+family: their values are recomputed per palette by that item's derivation rather than fixed,
+so they cannot sit in a table of fixed pairs, and they are measured by its INV-2 and INV-3,
+so they are not decorative. **As built (2026-08-21) that is fifteen keys, named here so this
+check can see them rather than left as a description**: `focusfill` / `focusink` for the
+card family, `rowfocusfill` / `rowfocusink` for a row's two hover states, `winfocusfill` /
+`winfocusink` for a dialog's button strip, `warnfocusfill` / `warnfocusink` for the warning
+banner, `accentfocus` / `accentfocusink` and `dangerfocus` / `dangerfocusink` for the two
+gradients, `logbdfocus` for every mechanism-B border, and `switchfocuson` / `switchfocusoff`
+for the painted switch. **They are computed, not authored**, so a new palette does not
+supply them and cannot omit them. A declaration that
 names no measuring invariant is not one, and fails the check like an undeclared key. A surface like `card` or `switchknob` is covered by being something else's
 background; it needs no row of its own. That is INV-4, and it is what stops a token being
 added and quietly escaping measurement. §4.8's decisions are decisions about pairs these

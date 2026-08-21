@@ -720,9 +720,15 @@ per-theme loop above is what it passes them to.
   them.** §4.1 carries the evidence and the bound; what belongs here is the response. The
   derivation raises rather than returning a best-effort colour, naming the
   control and both surfaces, and the theme does not ship. **At runtime the app must not die
-  of it:** `apply_app_theme` catches the error, falls back to Follow system, and reports the
-  theme as unusable — the same posture `ONEUP-0027` §7 takes for a missing palette key, which
-  is to fail loudly at the boundary rather than half-apply. It cannot arise from today's two
+  of it:** `apply_app_theme` catches the error and reports the theme as unusable — the same
+  posture `ONEUP-0027` §7 takes for a missing palette key, which is to fail loudly at the
+  boundary rather than half-apply. **As built (2026-08-21) it applies NOTHING and leaves the
+  installed sheet standing**, rather than falling back to Follow system: `build_theme` takes
+  no theme argument yet, so the built-in palette *is* what raised and there is nothing to
+  fall back to. Not applying is also what preserves the user's text size and high-contrast
+  choice — rebuilding without them would turn high contrast off for the one user who cannot
+  do without it. `ONEUP-0027` turns this into a real fallback when it adds a second palette,
+  and owns surfacing the report to the user; today it is a console line. It cannot arise from today's two
   palettes, where the only multi-surface control pairs `rowcard` with `rowhov`, which sit 0.004
   apart in the dark palette and 0.069 apart in the light one; it is guarded because `ONEUP-0027` authors six more palettes and
   nothing stops one of them separating a row's two states widely.
@@ -735,9 +741,13 @@ per-theme loop above is what it passes them to.
   colour, so a gradient straddling `L = 0.1791` could have one stop needing to darken and one
   needing to lighten, and then no single blend fraction serves both. Both of today's
   gradients darken, but `ONEUP-0027` §4.2 moves the accent into the palette and authors six
-  more. The direction is therefore chosen **once per gradient**, from the stop with the
-  tighter constraint, and if that direction cannot carry the other stop to 3:1 the check
-  fails the theme by the same route as the unsatisfiable surface set above.
+  more. The direction is therefore chosen **once per gradient**, and if it cannot carry the
+  other stop to 3:1 the check fails the theme by the same route as the unsatisfiable surface
+  set above. **As built (2026-08-21) it is chosen the way §4.1 chooses it for a flat colour
+  — by the SMALLER blend fraction across the two directions**, not "from the stop with the
+  tighter constraint", which is what this bullet said and what the code never did. One rule
+  now covers both branches, which is what `ui-and-accessibility.md` §5.1 states. Both
+  shipped gradients admit black only, so no published hex moved.
 - **A palette's switch track cannot be darkened or lightened far enough to keep its own
   state mark readable.** The switch is the one control whose fill is constrained by
   something drawn on top of it (§4.2), so its search takes `switchmark` and `switchknob` as
