@@ -1,10 +1,10 @@
 """What the app looks like.
 
 The stylesheet, the two colour palettes and their high-contrast counterparts,
-the font-size derivation, and the two small helpers that exist only because of
-how the sheet paints — `card_inside`, which nests the surface a `#RowBorder`
-needs, and `_app_icon`, which resolves the icon the window and the tray both
-draw.
+the font-size derivation, the focus-cue derivation (ONEUP-0076) and the two
+small helpers that exist only because of how the sheet paints — `card_inside`,
+which nests the surface a `#RowBorder` needs, and `_app_icon`, which resolves
+the icon the window and the tray both draw.
 
 `_app_icon` lives here rather than in `app.py`, where
 `docs/specs/ONEUP-0034-gui-modules.md` §4.2 places it: both `window.py` and
@@ -27,6 +27,152 @@ GREEN = QColor("#2ecc71")
 RED = QColor("#e74c3c")
 
 # ---------------------------------------------------------------------------
+# The focus cue, DERIVED rather than authored (ONEUP-0076).
+#
+# A focused control's own fill becomes the smallest blend of its resting colour
+# toward black or toward white — whichever direction reaches it at the lower
+# blend fraction — that measures at least 3:1 against EVERY colour the control
+# rests on. Its text is redrawn in whichever of black or white contrasts more
+# with that fill.
+#
+# It is a derivation and not a palette entry because SC 2.4.13 compares the
+# focused and unfocused states of the SAME pixels: what counts is the distance
+# from each control's own rest colour, so one authored token passes on the card
+# and fails on the accent button in the same theme. And it DARKENS, because
+# lightening has a ceiling — pure white measures 2.63:1 against the Run button's
+# top gradient stop, so no lighter shade of anything reaches 3:1 there.
+#
+# Every figure in `docs/specs/ONEUP-0076-ringless-focus-cue.md` §4.3 is this
+# code's output. The 1% step and the round-to-nearest are what make those hexes
+# reproducible: a binary search or a finer step prints different ones.
+# ---------------------------------------------------------------------------
+FOCUS_MIN = 3.0    # SC 2.4.13 — the focus indicator against the rest pixels
+INK_MIN = 4.5      # SC 1.4.3 — the label against the fill behind it
+_BLACK = (0, 0, 0)
+_WHITE = (255, 255, 255)
+
+
+class FocusDerivationError(RuntimeError):
+    """No fill clears the threshold against every surface a control rests on.
+
+    Raised rather than returning a best-effort colour: a fill that fails is a
+    cue that is not there, and shipping one silently is the state ONEUP-0076
+    exists to end. `apply_app_theme` catches it at the boundary and falls back.
+    """
+
+
+def _rgb(value) -> tuple[int, int, int]:
+    if isinstance(value, tuple):
+        return value
+    h = value.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _hex(c: tuple[int, int, int]) -> str:
+    return "#{:02x}{:02x}{:02x}".format(*c)
+
+
+def _luminance(c: tuple[int, int, int]) -> float:
+    def channel(v: int) -> float:
+        v /= 255.0
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+    r, g, b = (channel(x) for x in c)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast(a, b) -> float:
+    """WCAG relative-contrast ratio between two colours, hex or (r, g, b)."""
+    la, lb = _luminance(_rgb(a)), _luminance(_rgb(b))
+    if la < lb:
+        la, lb = lb, la
+    return (la + 0.05) / (lb + 0.05)
+
+
+def _blend(c: tuple[int, int, int], t: float, target: int) -> tuple[int, int, int]:
+    return tuple(round(x + t * (target - x)) for x in c)
+
+
+def composite(over: str, alpha: float, under: str) -> str:
+    """`over` at `alpha` painted on `under` — a translucent rest colour resolved
+    to the hex actually rendered, so the check stays a pure computation with no
+    screenshot. The warning banner's tint is the only rest surface that needs it."""
+    o, u = _rgb(over), _rgb(under)
+    return _hex(tuple(round(alpha * o[k] + (1 - alpha) * u[k]) for k in range(3)))
+
+
+def _ink_for(fills) -> str:
+    """Black or white, whichever contrasts more with the WORST of `fills`.
+
+    Always clears 4.5:1: the two directions are equal at relative luminance
+    0.1791, where both measure 4.58:1, so the larger of them is never below that.
+    """
+    black = min(contrast(f, _BLACK) for f in fills)
+    white = min(contrast(f, _WHITE) for f in fills)
+    return _hex(_BLACK if black >= white else _WHITE)
+
+
+def derive_focus(source: str, surfaces, *, label: str = "",
+                 threshold: float = FOCUS_MIN) -> tuple[str, str]:
+    """The focus (fill, ink) pair for a control resting on `surfaces`.
+
+    `source` is the colour blended FROM — the first surface the control's row in
+    §4.2 names. `surfaces` is the whole set the result is tested against; the two
+    are different jobs, and a control with several rest pixels has no derivation
+    at all until the source is pinned. Both directions are tried from that one
+    source: anchoring on one surface and never retrying the other direction is
+    how a satisfiable set gets reported as unsatisfiable.
+    """
+    src = _rgb(source)
+    rest = [_rgb(s) for s in surfaces]
+    best = None
+    for target in (_BLACK[0], _WHITE[0]):
+        for step in range(1, 101):
+            t = step / 100.0
+            fill = _blend(src, t, target)
+            if all(contrast(fill, s) >= threshold for s in rest):
+                if best is None or t < best[0]:
+                    best = (t, fill)
+                break
+    if best is None:
+        raise FocusDerivationError(
+            f"no focus fill reaches {threshold}:1 for {label or source} against "
+            f"{', '.join(str(s) for s in surfaces)}")
+    fill = _hex(best[1])
+    return fill, _ink_for([fill])
+
+
+def _samples(a, b, n: int = 101):
+    """`n` points down a two-stop gradient, endpoints included."""
+    ra, rb = _rgb(a), _rgb(b)
+    return [tuple(round(ra[k] + (i / (n - 1)) * (rb[k] - ra[k])) for k in range(3))
+            for i in range(n)]
+
+
+def derive_focus_gradient(stops, *, label: str = "",
+                          threshold: float = FOCUS_MIN) -> tuple[list[str], str]:
+    """The focus pair for a gradient fill: ONE blend fraction, not one per stop.
+
+    Blending toward a fixed target is affine in the source colour, so it commutes
+    with the interpolation between the stops — one fraction applied to both gives
+    exactly the colour that fraction would give anywhere in between. The direction
+    is chosen once for the whole gradient, from the stop with the tighter
+    constraint, because a gradient straddling L = 0.1791 could otherwise want to
+    darken at one end and lighten at the other. Sampled at 101 points, since a
+    gradient is governed by its worst pixel and not by its stops.
+    """
+    rest = _samples(*stops)
+    for target in (_BLACK[0], _WHITE[0]):
+        for step in range(1, 101):
+            t = step / 100.0
+            if all(contrast(_blend(p, t, target), p) >= threshold for p in rest):
+                fills = [_hex(_blend(_rgb(s), t, target)) for s in stops]
+                return fills, _ink_for(_samples(*fills))
+    raise FocusDerivationError(
+        f"no focus fill reaches {threshold}:1 for the {label or 'gradient'} "
+        f"{stops[0]} → {stops[1]} in either direction")
+
+
+# ---------------------------------------------------------------------------
 # Theme — a gradient-ringed "instrument panel" that follows the desktop's
 # light/dark preference. The signature azure→cyan accent (echoing the app icon)
 # stays constant; only the neutral surfaces swap between the two palettes below.
@@ -43,7 +189,27 @@ RED = QColor("#e74c3c")
 # widget's box and makes buttons visibly resize when focused.
 # ---------------------------------------------------------------------------
 ACCENT = "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)"
-BTN_ACCENT = "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4aa3ff, stop:1 #2f6fe0)"
+
+# The two gradient FILLS a focus cue is derived from, kept as stop pairs rather
+# than as sheet literals so the derivation and the sheet cannot drift apart.
+BTN_ACCENT_STOPS = ("#4aa3ff", "#2f6fe0")
+BTN_DANGER_STOPS = ("#ef6a55", "#d6412a")
+
+
+def _vgradient(stops) -> str:
+    return ("qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+            f"stop:0 {stops[0]}, stop:1 {stops[1]})")
+
+
+BTN_ACCENT = _vgradient(BTN_ACCENT_STOPS)
+BTN_DANGER = _vgradient(BTN_DANGER_STOPS)
+
+# The warning banner's ground is a two-stop ALPHA wash, not a flat token, so a
+# control inside it has no hex to blend from until the tint is composited over
+# the surface beneath (`card`). §4.4 resolves it that way rather than by
+# rendering, which is what keeps the whole check a pure computation.
+WARN_TINT = "#e9b23f"
+WARN_TINT_ALPHAS = (0.20, 0.04)
 
 # Text-size choices offered in Settings. The multiplier scales every font size
 # plus the two metrics that BOUND text (badge padding, progress-bar height) —
@@ -57,18 +223,31 @@ _FONT_SCALE = dict(fs_header=1.58, fs_med=1.05, fs_body=0.90, fs_small=0.83)
 
 _QSS = Template(r"""
 * { font-family: "Inter", "Noto Sans", "Segoe UI", "Cantarell", sans-serif; }
-QMainWindow { background: $win; }
+/* QDialog is named alongside QMainWindow because a dialog does NOT inherit a
+   background written for another selector: without this rule it paints Qt's own
+   platform grey (#efefef) in BOTH themes, measured. That is a defect in its own
+   right in dark mode, and it also puts every dialog control on a surface no
+   palette controls — which is what the focus derivation blends from. */
+QMainWindow, QDialog { background: $win; }
 
 /* The painted ToggleSwitch can't be reached by a stylesheet, so the sheet hands
    it the contrast state as a Qt property. The explicit `false` is MANDATORY: a
    qproperty- assignment is not reverted when its rule stops matching, so without
-   it a switch would stay stuck in high-contrast paint after HC is turned off. */
-ToggleSwitch { qproperty-highContrast: false; }
+   it a switch would stay stuck in high-contrast paint after HC is turned off.
+   The focused tracks arrive the same way and for the same reason — no stylesheet
+   colour rule reaches what paintEvent draws, and the switches are the largest
+   group of controls that had no focus cue at all. */
+ToggleSwitch {
+    qproperty-highContrast: false;
+    qproperty-focusTrackOn: $switchfocuson;
+    qproperty-focusTrackOff: $switchfocusoff;
+}
 
 #Frame { border-radius: 16px; background: $accent; }
 #Card  { border-radius: 14px; background: $card; }
 
 QLabel#Header  { font-size: $fs_header; font-weight: 700; color: $header; }
+QLabel#GroupHeading { font-size: $fs_med; font-weight: 700; color: $header; }
 QLabel#Tagline { font-size: $fs_body; color: $tag; }
 
 #RowBorder {
@@ -88,15 +267,30 @@ QLabel#Badge {
     background: $badgebg; color: $badgefg; border-radius: 9px;
     padding: $badgepad; font-size: $fs_small; font-weight: 600;
 }
+/* 24x24 is SC 2.5.8's floor for a POINTER target, width as well as height, and a
+   stylesheet minimum is what puts it in one place: the controls it applies to are
+   built in five different methods across three dialogs, and the sheet is set on
+   the application, so a dialog this spec does not check still gets the floor.
+   These are BOX dimensions, not text sizes — the no-hard-coded-px rule is about
+   `font-size` and is not engaged. */
 QToolButton#Disclose {
-    background: transparent; border: none; padding: 0px;
+    color: $tdesc; background: transparent; border: none; padding: 0px;
+    min-width: 24px; min-height: 24px;
 }
+/* The arrow has neither a fill nor a border, so the only pixels it can move on
+   hover are its ink. Both colours are existing palette keys, so every theme
+   ONEUP-0027 authors gets this for free. */
+QToolButton#Disclose:hover { color: $tname; }
 #RowDetails { background: transparent; }
 QLabel#DetailList {
     color: $tdesc; background: $logbg; border-radius: 8px; padding: 6px 8px;
     font-family: "JetBrains Mono", "Fira Code", "Noto Sans Mono", monospace; font-size: $fs_small;
 }
-QScrollArea#DetailScroll { border: none; background: transparent; }
+/* A 2px rest border, present focused or not — mechanism B. Only its COLOUR moves
+   on focus, because recolouring the fill of a panel that holds its own content
+   would recolour the content. 2px and not 1px because SC 2.4.13's area half asks
+   for at least a 2px perimeter, which a 1px recolour does not reach. */
+QScrollArea#DetailScroll { border: 2px solid $logbd; background: transparent; }
 QLabel#SizeResult { color: $tname; font-size: $fs_body; font-weight: 600; }
 
 QPushButton#RunBtn {
@@ -114,16 +308,33 @@ QPushButton#RunBtn:disabled { color: $disfg; background: $disbg; }
 QPushButton#GhostBtn {
     color: $ghostfg; font-weight: 600; background: transparent;
     border: 1px solid $ghostbd; border-radius: 8px; padding: 8px 14px;
+    min-width: 24px; min-height: 24px;
 }
-QPushButton#GhostBtn:hover { border-color: #4aa3ff; color: #4aa3ff; }
-QPushButton#GhostBtn:checked { border-color: #4aa3ff; color: #4aa3ff; }
+QPushButton#GhostBtn:hover { border-color: $ghosthov; color: $ghosthov; }
+QPushButton#GhostBtn:checked { border-color: $ghosthov; color: $ghosthov; }
 QPushButton#GhostBtn:disabled { color: $disfg; border-color: $disbg; }
 
-QPushButton#LinkBtn {
-    color: #4aa3ff; font-weight: 600; text-align: left;
-    background: transparent; border: none; padding: 4px 2px;
+/* Stop leaves the ghost outline and the transparent fill alone and takes the
+   danger family's colour for its BORDER and its LABEL — the construction
+   #RebootBanner uses, a red edge over an all-but-transparent ground, not
+   #RestartBtn's solid red fill. A filled Stop would break the `card` derivation
+   the focus cue rests on. It has an object name of its own because a restyled
+   control still called #GhostBtn would be invisible to that derivation, which
+   matches by name. */
+QPushButton#StopBtn {
+    color: $stopfg; font-weight: 600; background: transparent;
+    border: 1px solid $stopfg; border-radius: 8px; padding: 8px 14px;
+    min-width: 24px; min-height: 24px;
 }
-QPushButton#LinkBtn:hover { color: #6fb6ff; }
+QPushButton#StopBtn:hover { border-color: $stophov; color: $stophov; }
+QPushButton#StopBtn:disabled { color: $disfg; border-color: $disbg; }
+
+QPushButton#LinkBtn {
+    color: $linkfg; font-weight: 600; text-align: left;
+    background: transparent; border: none; padding: 4px 2px;
+    min-width: 24px; min-height: 24px;
+}
+QPushButton#LinkBtn:hover { color: $linkhov; }
 
 QLabel#Status  { font-size: $fs_body; color: $status; }
 QLabel#LastRun { font-size: $fs_body; color: $lastrun; }
@@ -137,8 +348,16 @@ QProgressBar::chunk { border-radius: 9px; background: $accent; }
 
 QPlainTextEdit#Log {
     background: $logbg; color: $logfg;
-    border: 1px solid $logbd; border-radius: 10px; padding: 6px;
+    border: 2px solid $logbd; border-radius: 10px; padding: 6px;
     font-family: "JetBrains Mono", "Fira Code", "Noto Sans Mono", monospace; font-size: $fs_small;
+}
+/* The two dialog panels, on `win` rather than on the card. Same mechanism, same
+   2px rest border; both were unnamed until ONEUP-0076 named them, which is what
+   let two OneUp-built focusable widgets sit outside the sweep entirely. */
+QScrollArea#RepoScroll { border: 2px solid $logbd; border-radius: 10px; background: transparent; }
+QListWidget#RollbackList {
+    background: $logbg; color: $logfg;
+    border: 2px solid $logbd; border-radius: 10px; padding: 4px;
 }
 
 #RebootBanner {
@@ -148,7 +367,7 @@ QPlainTextEdit#Log {
 }
 QPushButton#RestartBtn {
     color: #ffffff; font-weight: 700; border: none; border-radius: 8px; padding: 7px 15px;
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ef6a55, stop:1 #d6412a);
+    min-width: 24px; min-height: 24px; background: $btn_danger;
 }
 QPushButton#RestartBtn:hover {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f47c68, stop:1 #e04a32);
@@ -167,7 +386,7 @@ QPushButton#RestartBtn:hover {
 QLabel#BannerText { color: $header; font-weight: 600; border: none; background: transparent; }
 QPushButton#BannerBtn {
     color: #ffffff; font-weight: 700; border: none; border-radius: 8px; padding: 7px 15px;
-    background: $btn_accent;
+    min-width: 24px; min-height: 24px; background: $btn_accent;
 }
 QPushButton#BannerBtn:hover {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
@@ -178,22 +397,52 @@ QToolTip {
     border-radius: 4px; padding: 4px 6px;
 }
 
-/* Keyboard focus reuses the HOVER look — a colour change, never a border or an
-   outline ring (a deliberate design decision: an outline draws a square around
-   our rounded buttons, because Qt ignores `outline-radius`, and a border resizes
-   the widget). So a keyboard user gets exactly the cue a mouse user gets.
+/* Keyboard focus — never a border or an outline ring (a deliberate design
+   decision: an outline draws a square around our rounded buttons, because Qt
+   ignores `outline-radius`, and a border resizes the widget). What moves is the
+   control's own FILL, to a colour DERIVED from the one it replaces; the label
+   is redrawn in whichever of black or white reads on it, and any border the
+   control keeps takes that same ink, because a border left at its rest colour
+   sits at about 1:1 against the new fill and disappears.
+   Focus does NOT reuse the hover look: hover lightens, and pure white measures
+   2.63:1 against the accent's top stop, so no lighter shade of anything reaches
+   3:1 there at any saturation.
    Emitted LAST because :focus ties with :hover / :checked on specificity —
-   placed earlier, a focused *checked* toggle would show no cue at all. */
-QPushButton#RunBtn:focus {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
+   placed earlier, a focused *checked* toggle would show no cue at all.
+   One object name can rest on several surfaces, and each of those takes a
+   selector QUALIFIED by the nearest container unique to it, never a rename:
+   #Card contains every on-card case and is useless as a qualifier, while
+   #RowCard, #RowDetails, #WarnBanner and #DialogButtons each contain exactly
+   one surface. Qt resolves them by specificity, so the qualified rule wins. */
+QPushButton#RunBtn:focus, QPushButton#BannerBtn:focus {
+    background: $accentfocus; color: $accentfocusink;
 }
-QPushButton#GhostBtn:focus { border-color: #4aa3ff; color: #4aa3ff; }
-QPushButton#LinkBtn:focus  { color: #6fb6ff; }
-QPushButton#BannerBtn:focus {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
+QPushButton#RestartBtn:focus { background: $dangerfocus; color: $dangerfocusink; }
+
+QPushButton#GhostBtn:focus, QPushButton#StopBtn:focus {
+    background: $focusfill; color: $focusink; border-color: $focusink;
 }
-QPushButton#RestartBtn:focus {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f47c68, stop:1 #e04a32);
+#RowCard QPushButton#GhostBtn:focus {
+    background: $rowfocusfill; color: $rowfocusink; border-color: $rowfocusink;
+}
+#DialogButtons QPushButton#GhostBtn:focus {
+    background: $winfocusfill; color: $winfocusink; border-color: $winfocusink;
+}
+#WarnBanner QPushButton#GhostBtn:focus {
+    background: $warnfocusfill; color: $warnfocusink; border-color: $warnfocusink;
+}
+
+QPushButton#LinkBtn:focus { background: $focusfill; color: $focusink; }
+#RowCard QPushButton#LinkBtn:focus, #RowDetails QPushButton#LinkBtn:focus {
+    background: $rowfocusfill; color: $rowfocusink;
+}
+#WarnBanner QPushButton#LinkBtn:focus { background: $warnfocusfill; color: $warnfocusink; }
+
+QToolButton#Disclose:focus { background: $rowfocusfill; color: $rowfocusink; }
+
+QPlainTextEdit#Log:focus, QScrollArea#DetailScroll:focus,
+QScrollArea#RepoScroll:focus, QListWidget#RollbackList:focus {
+    border-color: $logbdfocus;
 }
 """)
 
@@ -219,7 +468,8 @@ QMainWindow, QDialog { background: $win; }
    prevent, and the one that made the Settings rows unreadable (ONEUP-0088). The
    named rules below still win: an ID selector outranks a bare type selector. */
 QLabel { color: $text; }
-QLabel#Header, QLabel#TaskName, QLabel#SizeResult, QLabel#BannerText { color: $text; }
+QLabel#Header, QLabel#GroupHeading, QLabel#TaskName, QLabel#SizeResult,
+QLabel#BannerText { color: $text; }
 QLabel#Tagline, QLabel#TaskDesc, QLabel#Status, QLabel#LastRun, QLabel#DetailList { color: $text; }
 QLabel#LastRun[stale="true"] { color: $text; font-weight: 700; }
 QLabel#Badge {
@@ -227,7 +477,17 @@ QLabel#Badge {
     padding: $badgepad; font-size: $fs_small; font-weight: 700;
 }
 QLabel#DetailList { background: $card; border: 1px solid $border; }
-QPlainTextEdit#Log { background: $card; color: $text; border: 1px solid $border; }
+/* 2px, not the 1px this rule used to restate: the overlay is APPENDED, so a 1px
+   border here would override the base sheet's 2px rest border and drop the focus
+   cue below SC 2.4.13's area threshold in exactly the appearance mode that most
+   needs it. #DetailScroll and the two dialog panels carried no overlay rule at
+   all, so theirs are created rather than widened. */
+QPlainTextEdit#Log { background: $card; color: $text; border: 2px solid $border; }
+QScrollArea#DetailScroll { background: transparent; border: 2px solid $border; }
+QScrollArea#RepoScroll { background: transparent; border: 2px solid $border; }
+QListWidget#RollbackList { background: $card; color: $text; border: 2px solid $border; }
+QToolButton#Disclose { color: $text; min-width: 24px; min-height: 24px; }
+QToolButton#Disclose:hover { color: $btnhov; }
 QProgressBar { background: $card; border: 1px solid $border; color: $text; }
 QProgressBar::chunk { background: $text; }
 QToolTip { background: $card; color: $text; border: 1px solid $border; }
@@ -244,6 +504,15 @@ QPushButton#GhostBtn { background: $card; color: $text; border: 2px solid $borde
 QPushButton#GhostBtn:hover   { background: $btn; color: $btntext; border: 2px solid $focus; }
 QPushButton#GhostBtn:checked { background: $btn; color: $btntext; border: 2px solid $border; }
 QPushButton#GhostBtn:disabled { background: $card; color: $text; border: 2px dashed $border; }
+/* Stop takes the shape the overlay gives every ghost button, with the danger
+   token in place of the ordinary border — the overlay never carries a literal
+   red. Without this set the rename would leave the one control that interrupts a
+   running update unstyled in the one appearance mode that exists for low-vision
+   users. */
+QPushButton#StopBtn { background: $card; color: $text; border: 2px solid $errbd; }
+QPushButton#StopBtn:hover   { background: $btn; color: $btntext; border: 2px solid $focus; }
+QPushButton#StopBtn:checked { background: $btn; color: $btntext; border: 2px solid $errbd; }
+QPushButton#StopBtn:disabled { background: $card; color: $text; border: 2px dashed $errbd; }
 QPushButton#LinkBtn { color: $link; text-decoration: underline; }
 QPushButton#LinkBtn:hover { color: $text; }
 
@@ -251,20 +520,54 @@ QPushButton#LinkBtn:hover { color: $text; }
 #InfoBanner   { background: $card; border: 2px solid $infobd; }
 #WarnBanner   { background: $card; border: 2px solid $warnbd; }
 
-/* Focus reuses the hover look here too — no outline ring (see the base sheet). */
-QPushButton#RunBtn:focus, QPushButton#RestartBtn:focus, QPushButton#BannerBtn:focus,
-QPushButton#GhostBtn:focus {
-    background: $btnhov; color: $btntext; border: 2px solid $focus;
+/* Focus here is mechanism A too, and for the same reason — no outline ring (see
+   the base sheet). The overlay's buttons do carry a rest border, but the pixels
+   focus moves are the FILL: recolouring that border would not work anyway, since
+   $border → $focus measures 1.43:1 dark and 1.87:1 light.
+   The primary family's pair is DERIVED. #GhostBtn's is not: $card → $btnhov
+   already measures 14.67:1 dark and 11.22:1 light, and deriving it would replace
+   that with the smallest blend reaching 3:1 — roughly a fourfold cut. A pair that
+   already passes is kept. Its border moves to $btntext rather than $focus, which
+   is identical to $btnhov in both overlay palettes and so vanished into the fill.
+   Every qualified selector the base sheet uses is restated, because a qualified
+   base rule outranks a bare overlay one and would otherwise win. */
+QPushButton#RunBtn:focus, QPushButton#RestartBtn:focus, QPushButton#BannerBtn:focus {
+    background: $hcfocusfill; color: $hcfocusink; border: 2px solid $hcfocusink;
 }
-QPushButton#LinkBtn:focus { color: $text; }
+QPushButton#GhostBtn:focus, QPushButton#StopBtn:focus,
+#RowCard QPushButton#GhostBtn:focus,
+#DialogButtons QPushButton#GhostBtn:focus,
+#WarnBanner QPushButton#GhostBtn:focus {
+    background: $btnhov; color: $btntext; border: 2px solid $btntext;
+}
+/* The overlay's own link rule is the one that fails outright rather than merely
+   weakening: it moves text alone, $link → $text, which is 1.65:1 dark and 1.87:1
+   light. No recolour of that text can carry the cue, so it takes a fill. */
+QPushButton#LinkBtn:focus, QToolButton#Disclose:focus,
+#RowCard QPushButton#LinkBtn:focus, #RowDetails QPushButton#LinkBtn:focus,
+#WarnBanner QPushButton#LinkBtn:focus {
+    background: $btnhov; color: $btntext;
+}
+QPlainTextEdit#Log:focus, QScrollArea#DetailScroll:focus,
+QScrollArea#RepoScroll:focus, QListWidget#RollbackList:focus {
+    border-color: $hcbdfocus;
+}
 """)
 
+# `ghostbd`, `linkfg`, `linkhov` and `ghosthov` carry values ONEUP-0076 §4.3
+# MOVED. The old ones were measured and failed: the light link's #4aa3ff read
+# 2.63:1 on its own card against a 4.5:1 bar, and the ghost button's rest border
+# 1.62:1 against a 3:1 one. `stopfg` / `stophov` are new keys rather than sheet
+# literals because _QSS is one template substituted with either palette, so a
+# value that differs between them cannot be written into the sheet (ONEUP-0064).
 _DARK = dict(
     win="#0f1216", card="#12161c", header="#f4f7fb", tag="#8b95a5",
     rowcard="#1a1f27", rowhov="#1e242e", tname="#eef2f8", tdesc="#a7b0be",
     badgebg="#20304a", badgefg="#cfe0ff", logbg="#0b0e12", logfg="#cdd6e2",
     logbd="#262d38", status="#c3ccd9", lastrun="#828d9d", amber="#f5a623", progbg="#0c0f13",
-    ghostbd="#38414f", ghostfg="#c7d0dd", disbg="#262b34", disfg="#aeb7c4",
+    ghostbd="#5e6570", ghostfg="#c7d0dd", ghosthov="#4aa3ff",
+    linkfg="#4aa3ff", linkhov="#6fb6ff", stopfg="#e0553f", stophov="#ef6a55",
+    disbg="#262b34", disfg="#aeb7c4",
     tip="#1a1f27", tipfg="#e9edf3", focus="#66b8ff",
 )
 _LIGHT = dict(
@@ -272,7 +575,9 @@ _LIGHT = dict(
     rowcard="#f4f6f9", rowhov="#eaeef3", tname="#1b2027", tdesc="#5c6673",
     badgebg="#dbe8ff", badgefg="#1f4e9c", logbg="#f6f8fa", logfg="#2a2f36",
     logbd="#d5dbe2", status="#3a424d", lastrun="#8a94a2", amber="#b5730a", progbg="#dfe4ea",
-    ghostbd="#c4ccd6", ghostfg="#3a424d", disbg="#d5dbe2", disfg="#9aa3ad",
+    ghostbd="#8f959c", ghostfg="#3a424d", ghosthov="#326dab",
+    linkfg="#326dab", linkhov="#446f9c", stopfg="#d6412a", stophov="#b5321d",
+    disbg="#d5dbe2", disfg="#9aa3ad",
     tip="#ffffff", tipfg="#1b2027", focus="#0b5fd0",
 )
 
@@ -289,6 +594,176 @@ _HC_LIGHT = dict(
     focus="#0000cc", btn="#000000", btntext="#ffffff", btnhov="#0000cc",
     link="#0000cc", errbd="#a00000", warnbd="#7a4f00", infobd="#00008b",
 )
+
+
+def warn_tint(palette: dict) -> tuple[str, str]:
+    """The warning banner's two ground colours, composited over the card."""
+    return tuple(composite(WARN_TINT, a, palette["card"]) for a in WARN_TINT_ALPHAS)
+
+
+def focus_keys(palette: dict) -> dict:
+    """Every derived focus pair for one BASE palette.
+
+    One entry per control family of `docs/specs/ONEUP-0076-ringless-focus-cue.md`
+    §4.2, keyed by the surface the family rests on rather than by object name —
+    four object names share the `card` pair, and one object name (`#LinkBtn`)
+    spans three surfaces. The sheet resolves that with a qualified selector; this
+    table resolves it by not caring what the control is called.
+    """
+    tint = warn_tint(palette)
+    keys: dict[str, str] = {}
+    for name, source, surfaces in (
+        # `card` — the header and action-row ghost buttons, Stop, and the three
+        # link buttons that sit directly on the card.
+        ("focus", palette["card"], (palette["card"],)),
+        # A row's two hover states: the disclosure arrow, every SettingsDialog
+        # row's ghost button, `size_btn` in a detail panel, and the repository
+        # dialog's Remove link. One fill has to clear 3:1 on BOTH, which is what
+        # the disclosure paragraph in §4.2 exists to show — a fill derived from
+        # `rowcard` alone measures 2.83:1 on `rowhov`.
+        ("rowfocus", palette["rowcard"], (palette["rowcard"], palette["rowhov"])),
+        # A dialog's own Close / Cancel, in its button strip rather than a row.
+        ("winfocus", palette["win"], (palette["win"],)),
+        # Inside the warning banner: `warn_copy_btn` and, since ONEUP-0064,
+        # `retry_btn`.
+        ("warnfocus", tint[0], tint),
+    ):
+        fill, ink = derive_focus(source, surfaces, label=name)
+        keys[name + "fill"] = fill
+        keys[name + "ink"] = ink
+    # Mechanism B — the panels that hold their own scrolling content. Recolouring
+    # every pixel would recolour the CONTENT, so what moves is an existing 2px
+    # rest border. No ink: their text does not move.
+    keys["logbdfocus"], _ = derive_focus(
+        palette["logbd"], (palette["logbd"],), label="logbd")
+    # The two gradient fills.
+    for name, stops in (("accentfocus", BTN_ACCENT_STOPS),
+                        ("dangerfocus", BTN_DANGER_STOPS)):
+        fills, ink = derive_focus_gradient(stops, label=name)
+        keys[name] = _vgradient(fills)
+        keys[name + "ink"] = ink
+    # The painted switch. Its fill carries a second constraint nothing else has:
+    # the state shape is drawn ON the track, so the focused track must also clear
+    # 3:1 against the white mark and the white knob, or the one colour-independent
+    # cue this app has stops reading.
+    for name, track in (("switchfocuson", GREEN.name()), ("switchfocusoff", RED.name())):
+        keys[name], _ = derive_focus(track, (track, "#ffffff"), label=name)
+    return keys
+
+
+def hc_focus_keys(hc: dict) -> dict:
+    """The overlay's derived pairs.
+
+    Only the primary button family and the mechanism-B borders are derived. The
+    overlay's own `#GhostBtn` focus pair — `$card` → `$btnhov` — already measures
+    14.67:1 dark and 11.22:1 light, and §4.1's floor keeps a pair that passes:
+    "the smallest blend reaching 3:1" would WEAKEN those roughly fourfold, in the
+    one appearance mode that exists for low-vision users.
+    """
+    fill, ink = derive_focus(hc["btn"], (hc["btn"],), label="hc primary")
+    border, _ = derive_focus(hc["border"], (hc["border"],), label="hc panel border")
+    return dict(hcfocusfill=fill, hcfocusink=ink, hcbdfocus=border)
+
+
+def focus_report(dark: bool, high_contrast: bool = False) -> list[dict]:
+    """Every colour pair the focus contract measures, for one theme.
+
+    A pure computation — no rendering and no screenshot — which is what lets it
+    run over a palette nobody has written yet, and what makes ONEUP-0076 §4.3 the
+    output of a check rather than a table somebody transcribed. Each row carries
+    the floor it is held to, so the caller asserts rather than re-deciding:
+    3:1 for an indicator or a boundary (SC 2.4.13, SC 1.4.11), 4.5:1 for text
+    (SC 1.4.3).
+
+    A translucent rest colour is composited over the token beneath it first, and a
+    gradient is sampled at 101 points down its length rather than at its two
+    stops, because a gradient is governed by its worst pixel.
+    """
+    rows: list[dict] = []
+
+    def add(control, kind, value, against, floor):
+        rows.append(dict(control=control, kind=kind, value=value, against=against,
+                         ratio=contrast(value, against), floor=floor))
+
+    if high_contrast:
+        hc = dict(_HC_DARK if dark else _HC_LIGHT)
+        hc.update(hc_focus_keys(hc))
+        add("primary family (HC)", "fill", hc["hcfocusfill"], hc["btn"], FOCUS_MIN)
+        add("primary family (HC)", "ink", hc["hcfocusink"], hc["hcfocusfill"], INK_MIN)
+        add("primary family (HC)", "border", hc["hcfocusink"], hc["hcfocusfill"], FOCUS_MIN)
+        # The overlay's ghost pair is KEPT, not derived — it already clears 3:1 by
+        # a wide margin, and §4.1's floor supplies a cue rather than replacing one.
+        add("ghost family (HC)", "fill", hc["btnhov"], hc["card"], FOCUS_MIN)
+        add("ghost family (HC)", "ink", hc["btntext"], hc["btnhov"], INK_MIN)
+        add("ghost family (HC)", "border", hc["btntext"], hc["btnhov"], FOCUS_MIN)
+        add("panel border (HC)", "border", hc["hcbdfocus"], hc["border"], FOCUS_MIN)
+        return rows
+
+    palette = dict(_DARK if dark else _LIGHT)
+    keys = focus_keys(palette)
+    tint = warn_tint(palette)
+    # Mechanism A, the four surface families. The fill is measured against EVERY
+    # surface the family rests on, which is the whole point of the rule: a fill
+    # derived from `rowcard` alone measures 2.83:1 on `rowhov`.
+    for control, prefix, surfaces in (
+        ("ghost / link / stop on the card", "focus", (palette["card"],)),
+        ("disclosure and row buttons", "rowfocus",
+         (palette["rowcard"], palette["rowhov"])),
+        ("dialog Close / Cancel", "winfocus", (palette["win"],)),
+        ("warning-banner buttons", "warnfocus", tint),
+    ):
+        fill, ink = keys[prefix + "fill"], keys[prefix + "ink"]
+        for s in surfaces:
+            add(control, "fill", fill, s, FOCUS_MIN)
+        add(control, "ink", ink, fill, INK_MIN)
+        # A control that keeps a rest border while its fill moves gives that
+        # border the INK. It cannot keep its rest colour: `ghostbd` and the fill
+        # are the smallest blend in the same direction, so they land on the same
+        # luminance and measure about 1:1 against each other.
+        add(control, "border", ink, fill, FOCUS_MIN)
+    for control, prefix, stops in (("Run / banner button", "accentfocus", BTN_ACCENT_STOPS),
+                                   ("Restart button", "dangerfocus", BTN_DANGER_STOPS)):
+        fills, _ = derive_focus_gradient(stops)
+        rest, focused = _samples(*stops), _samples(*fills)
+        for r, f in zip(rest, focused, strict=True):
+            add(control, "fill", _hex(f), _hex(r), FOCUS_MIN)
+            add(control, "ink", keys[prefix + "ink"], _hex(f), INK_MIN)
+    for control, key, track in (("switch, on", "switchfocuson", GREEN.name()),
+                                ("switch, off", "switchfocusoff", RED.name())):
+        add(control, "fill", keys[key], track, FOCUS_MIN)
+        # The one control whose fill is constrained by something drawn ON it: the
+        # state shape and the knob are both white, and a track that swallowed them
+        # would take the only colour-independent cue this app has with it.
+        add(control, "state shape", "#ffffff", keys[key], FOCUS_MIN)
+    add("log / detail / dialog panels", "border",
+        keys["logbdfocus"], palette["logbd"], FOCUS_MIN)
+
+    # The rest and hover colours this item MOVED, on every surface they land on
+    # — not only `card`. An ink measured against the card alone reads 4.53:1 and
+    # 3.89:1 on a row, so the surface set is what makes this assertion mean
+    # anything. The ghost border is here rather than with the palette-wide sweep
+    # because its `:hover` value shares one literal with the ink it moves with.
+    surfaces = (palette["card"], palette["rowcard"], palette["rowhov"], *tint)
+    for control, colour, floor in (("link button, rest", palette["linkfg"], INK_MIN),
+                                   ("link button, hover", palette["linkhov"], INK_MIN),
+                                   ("ghost button, hover ink", palette["ghosthov"], INK_MIN)):
+        for s in surfaces:
+            add(control, "text", colour, s, floor)
+    add("ghost button, rest border", "border", palette["ghostbd"], palette["card"], FOCUS_MIN)
+    add("ghost button, hover border", "border", palette["ghosthov"],
+        palette["card"], FOCUS_MIN)
+    add("stop button, rest label", "text", palette["stopfg"], palette["card"], INK_MIN)
+    add("stop button, hover label", "text", palette["stophov"], palette["card"], INK_MIN)
+    add("stop button, rest border", "border", palette["stopfg"], palette["card"], FOCUS_MIN)
+    add("stop button, hover border", "border", palette["stophov"],
+        palette["card"], FOCUS_MIN)
+    # The disclosure carries meaning without being text, so 3:1 is its floor;
+    # both values clear 4.5:1 as well.
+    for control, colour in (("disclosure, rest", palette["tdesc"]),
+                            ("disclosure, hover", palette["tname"])):
+        for s in (palette["rowcard"], palette["rowhov"]):
+            add(control, "text", colour, s, FOCUS_MIN)
+    return rows
 
 
 def _font_metrics(scale: float) -> dict:
@@ -313,11 +788,17 @@ def build_theme(dark: bool, scale: float = 1.0, high_contrast: bool = False) -> 
     palette = dict(_DARK if dark else _LIGHT)
     palette["accent"] = ACCENT
     palette["btn_accent"] = BTN_ACCENT
+    palette["btn_danger"] = BTN_DANGER
+    # The focus pairs are computed here rather than authored, so a palette
+    # ONEUP-0027 adds later gets its cue with no further work — and fails loudly
+    # if it cannot have one, rather than shipping a fill that does not read.
+    palette.update(focus_keys(palette))
     metrics = _font_metrics(scale)
     palette.update(metrics)
     qss = _QSS.substitute(palette)
     if high_contrast:
         hc = dict(_HC_DARK if dark else _HC_LIGHT)
+        hc.update(hc_focus_keys(hc))
         hc.update(metrics)
         qss += _HC_QSS.substitute(hc)
     return qss
@@ -329,10 +810,20 @@ def apply_app_theme(app: QApplication):
     light/dark switch, and the two Settings controls all route through here, so a
     change takes effect live with no restart and no window rebuild."""
     s = QSettings("OneUp", "OneUp")
-    app.setStyleSheet(build_theme(
-        current_is_dark(app),
-        scale=float(s.value("text_scale", 1.0, type=float)),
-        high_contrast=bool(s.value("high_contrast", False, type=bool))))
+    dark = current_is_dark(app)
+    try:
+        qss = build_theme(
+            dark,
+            scale=float(s.value("text_scale", 1.0, type=float)),
+            high_contrast=bool(s.value("high_contrast", False, type=bool)))
+    except FocusDerivationError as exc:
+        # A palette whose surfaces are too far apart for any one fill to clear
+        # 3:1 against all of them has no focus cue, and half-applying it would
+        # ship the state ONEUP-0076 exists to end. Fail at the boundary, keep the
+        # app running on the theme that is known to derive, and say so.
+        print(f"OneUp: unusable theme — {exc}; falling back to the default palette")
+        qss = build_theme(dark)
+    app.setStyleSheet(qss)
 
 
 def current_is_dark(app: QApplication) -> bool:

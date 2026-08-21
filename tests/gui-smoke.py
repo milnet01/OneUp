@@ -46,8 +46,9 @@ os.chmod(_notify_mock, 0o755)  # noqa: S103 — a PATH mock must be executable.
 os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
-    from PySide6.QtCore import QProcess, Qt, QTimer
-    from PySide6.QtGui import QAccessible, QCloseEvent, QFontInfo
+    from PySide6.QtCore import QPoint, QProcess, Qt, QTimer
+    from PySide6.QtGui import QAccessible, QCloseEvent, QFont, QFontInfo
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import (
         QApplication,
         QDialog,
@@ -55,6 +56,7 @@ try:
         QLabel,
         QMessageBox,
         QPushButton,
+        QVBoxLayout,
         QWidget,
     )
 except ImportError as exc:  # PySide6 absent — skip, don't fail the suite.
@@ -1796,24 +1798,22 @@ def main() -> int:
 
     # INV-4 (revised 2026-07-25 by explicit design decision): focus must NOT draw
     # a border or an outline ring — Qt ignores outline-radius, so a ring renders as
-    # a square around our rounded buttons. Focus reuses the hover look instead.
+    # a square around our rounded buttons. What it moves is the control's own fill,
+    # to a DERIVED colour (ONEUP-0076); "reuses the hover look" was the rule until
+    # that item measured it and found lightening cannot reach 3:1 on these palettes.
     check("focus draws no outline ring", "outline:" not in qss_norm)
-    check("focus still gives a cue by reusing the hover look",
-          "QPushButton#GhostBtn:focus" in qss_norm)
+    check("focus still gives a cue", "QPushButton#GhostBtn:focus" in qss_norm)
     check("the focus rules come after the hover/checked rules they tie with",
           qss_norm.index("QPushButton#GhostBtn:focus")
           > qss_norm.index("QPushButton#GhostBtn:checked"))
 
-    # INV-5: tab order follows VISUAL order (Repositories sits before Recenter).
-    chain, node = [], wA.settings_btn
-    for _ in range(40):
-        node = node.nextInFocusChain()
-        if node in (wA.repos_btn, wA.recenter_btn):
-            chain.append(node)
-        if len(chain) == 2:
-            break
-    check("tab order reaches Repositories before Recenter",
-          chain[:1] == [wA.repos_btn])
+    # INV-5's old form — a walk from the window looking for Repositories before
+    # Recenter — is SUPERSEDED and removed rather than repaired: ONEUP-0064 moves
+    # both controls into SettingsDialog, and a QDialog has its own focus chain, so
+    # a walk rooted in the window can no longer reach either and would collect an
+    # empty list. That dialog's chain is asserted whole by ONEUP-0064 INV-1 below,
+    # which covers the same guarantee — the grouping puts Repositories above
+    # Recenter and the walk compares against visual order.
 
     # INV-6: high contrast only ADDS an overlay — the base sheet is untouched.
     qss_hc = theme.build_theme(True, high_contrast=True)
@@ -1909,6 +1909,555 @@ def main() -> int:
     check("cycling text size updates both the setting and the label",
           wA._text_scale_index() == 1 and "Large" in wA.textsize_btn.text())
     wA.settings.setValue("text_scale", 1.0)
+
+    # --- ONEUP-0064: the interface redesign ------------------------------------
+    # Every sweep below REVEALS before it walks. Each banner, and stop_btn,
+    # retry_btn, warn_copy_btn, warn_btn2, rollback_btn and each row's disclosure,
+    # is constructed hidden — and visual order and geometry are both undefined for
+    # a widget that has never been laid out, so a walk that skipped them would
+    # pass vacuously rather than prove anything.
+    def reveal(w):
+        for b in (w.reboot_banner, w.services_banner, w.warn_banner, w.appupdate_banner):
+            b.setVisible(True)
+        for btn in (w.stop_btn, w.retry_btn, w.warn_copy_btn, w.warn_btn2, w.rollback_btn):
+            btn.setVisible(True)
+        for r in w.rows.values():
+            r.badge.setVisible(True)
+            r.disclosure.setVisible(True)
+            r.disclosure.setChecked(True)     # expands the detail panel
+        QApplication.processEvents()
+
+    # A layout tree flattened to visual order: top to bottom, then along the
+    # layout direction within a row. A scroll area is a leaf — recursing into one
+    # would collect Qt's own viewport and scrollbars, which are not our controls.
+    def visual_order(widget):
+        from PySide6.QtWidgets import QAbstractScrollArea
+        out = []
+
+        def walk_layout(lay):
+            for i in range(lay.count()):
+                item = lay.itemAt(i)
+                if item.widget() is not None:
+                    walk_widget(item.widget())
+                elif item.layout() is not None:
+                    walk_layout(item.layout())
+
+        def walk_widget(w):
+            if not w.isVisible():
+                return
+            if w.focusPolicy() != Qt.FocusPolicy.NoFocus:
+                out.append(w)
+            if isinstance(w, QAbstractScrollArea):
+                return
+            if w.layout() is not None:
+                walk_layout(w.layout())
+
+        walk_widget(widget)
+        return out
+
+    # The chain walked end to end from `start`, terminating when it returns there
+    # so a cyclic chain cannot loop forever. A WHOLE-chain comparison, not a
+    # per-parent one: a per-parent check cannot see an inversion BETWEEN
+    # containers, which is exactly what this redesign moves.
+    def walk_chain(start, limit=400):
+        out, node = [start], start
+        for _ in range(limit):
+            node = node.nextInFocusChain()
+            if node is start:
+                break
+            if node.isVisible() and node.focusPolicy() != Qt.FocusPolicy.NoFocus:
+                out.append(node)
+        return out
+
+    def describe(widgets):
+        return [f"{type(x).__name__}#{x.objectName()}" for x in widgets]
+
+    wR = window.Updater()
+    wR.show()
+    reveal(wR)
+    # INV-1, window half. Two walks and not one: Qt's focus chain is per
+    # top-level widget, so a walk rooted in the window can never enter a dialog,
+    # and a single-walk test would pass the dialog half vacuously.
+    expect = [x for x in wR.focus_chain() if x.isVisible()]
+    actual = walk_chain(wR.settings_btn)
+    check("INV-1 the window's tab order follows its visual order",
+          actual == expect)
+    if actual != expect:
+        print(f"       expected {describe(expect)}")
+        print(f"       actual   {describe(actual)}")
+    laid_out = visual_order(wR.centralWidget())
+    check("INV-1 that order is the one the layout tree actually draws",
+          laid_out == expect)
+    if laid_out != expect:
+        print(f"       layout   {describe(laid_out)}")
+        print(f"       chain    {describe(expect)}")
+
+    # INV-1, dialog half.
+    wR.open_settings()
+    set_dlg = wR._settings_dialog
+    set_dlg.show()
+    QApplication.processEvents()
+    dlg_expect = set_dlg.focus_chain()
+    dlg_actual = walk_chain(dlg_expect[0])
+    check("INV-1 SettingsDialog's own tab order follows its visual order",
+          dlg_actual == dlg_expect)
+    if dlg_actual != dlg_expect:
+        print(f"       expected {describe(dlg_expect)}")
+        print(f"       actual   {describe(dlg_actual)}")
+    check("INV-1 that dialog's order is the one its layout draws",
+          visual_order(set_dlg) == dlg_expect)
+    # The guarantee the removed window-rooted assertion used to carry.
+    check("INV-1 Repositories still comes before Recenter",
+          dlg_expect.index(wR.repos_btn) < dlg_expect.index(wR.recenter_btn))
+
+    # INV-6: the moves are where the spec says, and none of them is half-done —
+    # the one class of defect here that changes nothing measurable and everything
+    # visible. header_row is asserted BY LAYOUT INDEX: "children of the header"
+    # names nothing testable, since `header` is the object-named QLabel and the
+    # buttons' Qt parent is the card.
+    check("INV-6 Repositories and Recenter are children of SettingsDialog",
+          wR.repos_btn.window() is set_dlg and wR.recenter_btn.window() is set_dlg)
+    header_items = [wR.header_row.itemAt(i) for i in range(wR.header_row.count())]
+    check("INV-6 the header carries the title block and two buttons, in that order",
+          len(header_items) == 3
+          and header_items[0].layout() is not None
+          and header_items[1].widget() is wR.settings_btn
+          and header_items[2].widget() is wR.about_btn)
+    check("INV-6 the action row is Run, then Check, then Stop",
+          [wR.action_row.itemAt(i).widget() for i in range(wR.action_row.count())]
+          == [wR.run_btn, wR.check_btn, wR.stop_btn])
+    check("INV-6 Stop has an object name of its own", wR.stop_btn.objectName() == "StopBtn")
+    check("INV-6 Retry lives inside the warning banner",
+          wR.retry_btn.parent() is wR.warn_banner)
+    set_dlg.reject()
+
+    # INV-6, the swap: exactly one of Check and Stop is ever visible, and Stop is
+    # for a real run only — a --check installs nothing, so there is nothing to stop.
+    wS = window.Updater()
+    wS.show()
+    wS.set_controls_enabled(True)
+    idle = (wS.check_btn.isVisible(), wS.stop_btn.isVisible())
+    wS._run_active, wS._check_mode = True, False
+    wS.set_controls_enabled(False)
+    running = (wS.check_btn.isVisible(), wS.stop_btn.isVisible())
+    wS._check_mode = True
+    wS.set_controls_enabled(False)
+    checking = (wS.check_btn.isVisible(), wS.stop_btn.isVisible())
+    check("INV-6 idle shows Check and not Stop", idle == (True, False))
+    check("INV-6 a run replaces Check with Stop", running == (False, True))
+    check("INV-6 a check keeps Check in the slot, disabled",
+          checking == (True, False) and not wS.check_btn.isEnabled())
+
+    # INV-6, the case today's code gets wrong: a run that FINISHED with a failed
+    # step carrying no hint and no armed remedy. Retry was revealed for any
+    # failure while the banner was raised only for a hint or a remedy, so
+    # reparenting Retry unchanged would have left the user no way to retry at all.
+    wF = window.Updater()
+    wF.show()          # isVisible() is False for every child of a hidden window
+    wF._run_active, wF._check_mode = True, False
+    _patch(run, "_notify_when_away", lambda *a, **k: None)
+    for line in ("@@STEP_BEGIN@@|orphans|1|1|Removing leftovers",
+                 "@@STEP_END@@|orphans|fail|autoremove failed"):
+        run.handle_line(wF, line)
+    run.on_finished(wF, 1, None)
+    _unpatch_all()
+    check("INV-6 a hintless failed run still raises the banner",
+          wF.warn_banner.isVisible())
+    check("INV-6 and Retry is visible inside it", wF.retry_btn.isVisible())
+    check("INV-6 the banner says what happened",
+          "did not finish" in wF.warn_label.text())
+
+    # INV-5: 24x24 is SC 2.5.8's floor for a POINTER target, width as well as
+    # height. Measured at a 6 pt application font — the floor below which
+    # _font_metrics stops honouring the desktop font at all, because it
+    # SUBSTITUTES 10.0 outright outside 6-30 pt rather than clamping, so pinning
+    # 4 pt would silently test at 10 pt and prove less. #GhostBtn, #LinkBtn and
+    # #Disclose carry no font-size, so their geometry follows the application
+    # font directly and 6 pt puts both paths at their tightest in one run.
+    _app = QApplication.instance()
+    _font_before = _app.font()
+    _small = QFont(_font_before)
+    _small.setPointSizeF(6.0)
+    _app.setFont(_small)
+    theme.apply_app_theme(_app)
+    wT = window.Updater()
+    wT.show()
+    reveal(wT)
+    wT.open_settings()
+    tiny_dlg = wT._settings_dialog
+    tiny_dlg.show()
+    QApplication.processEvents()
+    targets = [("run", wT.run_btn), ("check", wT.check_btn), ("stop", wT.stop_btn),
+               ("settings", wT.settings_btn), ("about", wT.about_btn),
+               ("retry", wT.retry_btn), ("close", tiny_dlg.close_btn),
+               ("log toggle", wT.log_toggle), ("open log", wT.openlog_btn),
+               ("rollback", wT.rollback_btn), ("copy command", wT.warn_copy_btn),
+               ("size", wT.rows["system"].size_btn),
+               ("restart", wT.restart_btn), ("services", wT.services_btn),
+               ("warn", wT.warn_btn), ("warn 2", wT.warn_btn2),
+               ("app update", wT.appupdate_btn)]
+    targets += [(f"{k} disclosure", wT.rows[k].disclosure) for k in wT.rows]
+    targets += [(f"{k} switch", wT.rows[k].switch) for k in wT.rows]
+    targets += [(f"settings row {i}", b) for i, b in enumerate(tiny_dlg.focus_chain()[:-1])]
+    undersized = [f"{n} {b.width()}x{b.height()}" for n, b in targets
+                  if b.width() < 24 or b.height() < 24]
+    check(f"INV-5 every pointer target measures at least 24x24 at 6 pt "
+          f"(undersized: {undersized})", not undersized)
+    tiny_dlg.reject()
+    _app.setFont(_font_before)
+    theme.apply_app_theme(_app)
+
+    # INV-4: a whole row is the click target. Counted by EMISSIONS, not by
+    # comparing isChecked() before and after — a state comparison cannot tell one
+    # toggle from three, and the double-toggle this guards against shows up as a
+    # dead-looking control rather than as a throw.
+    wC = window.Updater()
+    wC.show()
+    row = wC.rows["system"]
+    row.badge.setText("3 waiting")
+    row.badge.setVisible(True)
+    row.add_detail_item("bash", "5.2", "5.3")       # reveals the disclosure
+    row.disclosure.setChecked(True)                 # expands the panel
+    QApplication.processEvents()
+    fired = []
+    row.switch.toggled.connect(lambda on: fired.append(on))
+
+    def clicks_at(widget, point=None):
+        fired.clear()
+        QTest.mouseClick(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                         point if point is not None else widget.rect().center())
+        QApplication.processEvents()
+        return len(fired)
+
+    body = QPoint(20, row.height() // 4)   # over the name/description column
+    check("INV-4 clicking a row's body toggles its switch exactly once",
+          clicks_at(row, body) == 1)
+    check("INV-4 clicking the switch itself toggles exactly once, not twice",
+          clicks_at(row.switch) == 1)
+    check("INV-4 clicking the badge does not toggle",
+          clicks_at(row, row.badge.geometry().center()
+                    + row.badge.parentWidget().pos()) == 0)
+    check("INV-4 clicking the disclosure does not toggle",
+          clicks_at(row, row.disclosure.geometry().center()
+                    + row.disclosure.parentWidget().pos()) == 0)
+    check("INV-4 clicking inside the detail panel does not toggle",
+          clicks_at(row, row.details.geometry().center()) == 0)
+    wC.set_controls_enabled(False)
+    check("INV-4 a body click is inert while the switch is disabled",
+          clicks_at(row, body) == 0)
+    wC.set_controls_enabled(True)
+
+    # INV-7: every object name styled in the base sheet has a counterpart rule in
+    # the overlay. Extracted from SELECTOR POSITION only — both templates carry
+    # #rrggbb literals in DECLARATIONS, so a naive #(\w+) scan over the raw text
+    # collects colour values as names and the test is red on its first run.
+    def styled_names(template_text):
+        stripped = re.sub(r"/\*.*?\*/", "", template_text, flags=re.S)
+        names = set()
+        for selector, _decls in re.findall(r"([^{}]*)\{([^}]*)\}", stripped):
+            names.update(re.findall(r"#(\w+)", selector))
+        return names
+
+    base_names = styled_names(theme._QSS.template)
+    hc_names = styled_names(theme._HC_QSS.template)
+    # Named rather than discovered: three names were base-only before this item,
+    # and a parity assertion that is red on arrival gets weakened rather than
+    # believed. #Disclose came off the list here (the 24 px floor gives it a rule
+    # in both). The other two are safe because their base rule sets no colour, so
+    # the appended overlay has nothing to leak — that is the criterion a third
+    # exemption would have to meet, and both now carry overlay rules anyway.
+    exceptions = {"RowDetails", "DetailScroll"}
+    missing_hc = sorted((base_names - exceptions) - hc_names)
+    check(f"INV-7 every styled object name has a high-contrast rule "
+          f"(missing: {missing_hc})", not missing_hc)
+    check("INV-7 the Stop button is styled in BOTH sheets",
+          "StopBtn" in base_names and "StopBtn" in hc_names)
+
+    # --- ONEUP-0076: the ringless focus cue ------------------------------------
+    # INV-2, INV-3, INV-7, INV-8 — the ratio arithmetic, over every theme and
+    # both overlay states. The computation lives in oneup/gui/theme.py beside the
+    # derivation it verifies and prints every pair it measures, so §4.3's table is
+    # regenerated rather than re-derived by hand.
+    measured = 0
+    short = []
+    for _dark in (True, False):
+        for _hc in (False, True):
+            for r in theme.focus_report(_dark, _hc):
+                measured += 1
+                if r["ratio"] + 1e-9 < r["floor"]:
+                    short.append(f"{'dark' if _dark else 'light'}"
+                                 f"{'+hc' if _hc else ''} {r['control']} {r['kind']} "
+                                 f"{r['value']} on {r['against']} = {r['ratio']:.2f}:1 "
+                                 f"< {r['floor']}")
+    check(f"INV-2/3/7/8 all {measured} measured focus pairs clear their floor "
+          f"({len(short)} short)", not short)
+    for line in short[:8]:
+        print(f"       {line}")
+
+    # INV-5: the derivation returns a pair for every sRGB colour, and fails loudly
+    # rather than returning a best-effort one where no fill can satisfy the set.
+    # A stride-16 lattice: the stride-3 one costs about 230 s of pure-Python
+    # derivation and is a one-off, not a suite check.
+    lattice_bad = []
+    for r_ in range(0, 256, 17):
+        for g_ in range(0, 256, 17):
+            for b_ in range(0, 256, 17):
+                c = f"#{r_:02x}{g_:02x}{b_:02x}"
+                fill, ink = theme.derive_focus(c, (c,))
+                if (theme.contrast(fill, c) + 1e-9 < theme.FOCUS_MIN
+                        or theme.contrast(ink, fill) + 1e-9 < theme.INK_MIN):
+                    lattice_bad.append(c)
+    check(f"INV-5 every sRGB colour yields a conforming pair "
+          f"(4096 sampled, {len(lattice_bad)} bad)", not lattice_bad)
+    # Breaks if the search is written in one direction only: toward white alone
+    # fails at #4aa3ff, which reaches 2.63:1 at most.
+    one_way, _ = theme.derive_focus("#4aa3ff", ("#4aa3ff",))
+    check("INV-5 the search tries both directions",
+          theme.contrast(one_way, "#4aa3ff") >= theme.FOCUS_MIN)
+    try:
+        theme.derive_focus("#000000", ("#000000", "#989898"))
+        raised = False
+    except theme.FocusDerivationError:
+        raised = True
+    check("INV-5 an unsatisfiable surface set raises rather than guessing", raised)
+
+    # INV-1: every focusable widget, in the window AND in every dialog it can
+    # open, is covered by a row of §4.2's mechanism table — by object name for a
+    # styled control, by class for a painted one, and BY SURFACE as well where a
+    # name carries qualified rows. Reaching the top of the parent chain on a
+    # surface no row lists is a failure, not a fallback: an unconditional fallback
+    # makes this half decorative, because a name with a default row would then
+    # match on every surface in the application.
+    #
+    # `None` means the row's rest pixels are the control's own fill or border, so
+    # no ancestor decides them; a set of container names means the walk must
+    # reach one of them.
+    FOCUS_TABLE = {
+        "RunBtn": None, "BannerBtn": None, "RestartBtn": None,
+        "Log": None, "DetailScroll": None, "RepoScroll": None, "RollbackList": None,
+        "StopBtn": {"Card"},
+        "Disclose": {"RowCard"},
+        "GhostBtn": {"Card", "RowCard", "DialogButtons", "WarnBanner"},
+        "LinkBtn": {"Card", "RowCard", "RowDetails", "WarnBanner"},
+    }
+    PAINTED = {"ToggleSwitch"}
+
+    def surface_of(widget, wanted):
+        node = widget.parentWidget()
+        while node is not None:
+            if node.objectName() in wanted:
+                return node.objectName()
+            node = node.parentWidget()
+        return None
+
+    def uncovered(root):
+        out = []
+        for wid in root.findChildren(QWidget):
+            if wid.focusPolicy() == Qt.FocusPolicy.NoFocus or not wid.isVisible():
+                continue
+            name = wid.objectName()
+            if name in FOCUS_TABLE:
+                wanted = FOCUS_TABLE[name]
+                if wanted is not None and surface_of(wid, wanted) is None:
+                    out.append(f"{name} on a surface no row lists")
+                continue
+            if type(wid).__name__ in PAINTED:
+                continue
+            # The one exclusion, and it turns on CONSTRUCTION rather than on
+            # appearance: a focusable widget with no object name of ours, built by
+            # a Qt convenience class, carrying no rule in either sheet. That is the
+            # About box's four and nothing else — covering them would mean styling
+            # by private names Qt is free to rename. An unnamed widget OneUp builds
+            # is a missing name and fails here, which is what named #RepoScroll
+            # and #RollbackList.
+            qt_chrome = (isinstance(wid.window(), QMessageBox)
+                         and (not name or name.startswith("qt_"))
+                         and name not in base_names and name not in hc_names)
+            if not qt_chrome:
+                out.append(f"{type(wid).__name__}#{name}")
+        return out
+
+    wU = window.Updater()
+    wU.show()
+    reveal(wU)
+    gaps = uncovered(wU)
+    wU.open_settings()
+    su = wU._settings_dialog
+    su.show()
+    QApplication.processEvents()
+    gaps += uncovered(su)
+    su.reject()
+    ru = repos.RepoManagerDialog(wU, [
+        {"alias": "oss", "name": "Main", "enabled": True, "url": "http://a/x"},
+        {"alias": "dup", "name": "Copy", "enabled": True, "url": "http://a/x"}])
+    ru.show()
+    QApplication.processEvents()
+    gaps += uncovered(ru)
+    ru.reject()
+    ko = rollback.RollbackDialog(wU, [("41", "2026-07-24 09:00", "pre-update")], "41")
+    ko.show()
+    QApplication.processEvents()
+    gaps += uncovered(ko)
+    ko.reject()
+    # About is a QMessageBox built and exec()d inside show_about, which would
+    # block, so the check builds the equivalent box. That is the cost of the
+    # exclusion, said plainly: no assertion here can fail on the real About box —
+    # this covers the exclusion RULE, not that dialog's contents.
+    about = QMessageBox(wU)
+    about.setText("<b>OneUp</b>")
+    about.setInformativeText("about")
+    about.addButton("Check for updates", QMessageBox.ActionRole)
+    about.addButton(QMessageBox.Close)
+    about.show()
+    QApplication.processEvents()
+    gaps += uncovered(about)
+    about.close()
+    check(f"INV-1 every focusable widget has a focus treatment (uncovered: {gaps})",
+          not gaps)
+
+    # INV-4: focus moves colour and nothing else. Two halves, because the window
+    # has two rendering paths.
+    full = theme.build_theme(True) + theme.build_theme(True, high_contrast=True)
+
+    def rules(text):
+        stripped = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+        return re.findall(r"([^{}]*)\{([^}]*)\}", stripped)
+
+    def box_parts(decls):
+        """A border shorthand expanded into the parts a focus rule may not move."""
+        parts = {}
+        for prop, value in re.findall(r"([\w-]+)\s*:\s*([^;]+)", decls):
+            prop, value = prop.strip(), value.strip()
+            if prop == "border":
+                bits = value.split()
+                if bits and bits[0] != "none":
+                    parts["border-width"], parts["border-style"] = bits[0], bits[1]
+                else:
+                    parts["border-width"], parts["border-style"] = "0px", "none"
+            elif prop in ("border-width", "border-style", "border-radius",
+                          "min-width", "min-height", "padding", "outline"):
+                parts[prop] = value
+        return parts
+
+    # Keyed on the LAST compound selector, because that is what Qt's cascade
+    # resolves a box property against: `#RowCard QPushButton#GhostBtn:focus` is
+    # held to `QPushButton#GhostBtn`'s rest rule, which is the only one there is.
+    # Run per sheet rather than on the concatenation, so an overlay rest rule
+    # cannot stand in for a base one the base sheet never wrote.
+    moved, outlined = [], []
+    for sheet_name, sheet in (("base", theme.build_theme(True)),
+                              ("overlay", theme.build_theme(True, high_contrast=True))):
+        rest_parts, focus_parts = {}, {}
+        for selector, decls in rules(sheet):
+            for sel in (s.strip() for s in selector.split(",")):
+                if not sel:
+                    continue
+                base, _, state = sel.partition(":")
+                key = base.split()[-1] if base.split() else base
+                if state == "focus":
+                    if "outline" in box_parts(decls):
+                        outlined.append(sel)
+                    focus_parts.setdefault(key, {}).update(box_parts(decls))
+                elif not state:
+                    rest_parts.setdefault(key, {}).update(box_parts(decls))
+        for key, parts in focus_parts.items():
+            rest = rest_parts.get(key, {})
+            for prop, value in parts.items():
+                if rest.get(prop) != value:
+                    moved.append(f"{sheet_name} {key}:focus {prop}: {value} "
+                                 f"(rest: {rest.get(prop)})")
+    check("INV-4 no :focus rule sets an outline", not outlined)
+    check(f"INV-4 no :focus rule changes a widget's box (moved: {moved})", not moved)
+    ordered = []
+    for name in ("QPushButton#GhostBtn", "QPushButton#RunBtn", "QPushButton#StopBtn",
+                 "QPushButton#LinkBtn", "QPushButton#BannerBtn",
+                 "QPushButton#RestartBtn"):
+        for state in (":hover", ":checked"):
+            if name + state in full and full.rindex(name + ":focus") < full.rindex(name + state):
+                ordered.append(name + state)
+    check(f"INV-4 every :focus rule is emitted after the :hover / :checked rules "
+          f"it ties with ({ordered})", not ordered)
+
+    # The painted half, which no stylesheet parse can see. The focused render must
+    # be the unfocused one under a CONSISTENT COLOUR-TO-COLOUR MAPPING: any two
+    # pixels sharing a colour unfocused still share one focused. Darkening the
+    # track satisfies that by construction; a ring drawn inside the fixed rect
+    # breaks it, because two pixels that were both track become one track and one
+    # ring. Neither weaker form works — "introduces no new colour" is red against
+    # this very design, and "moves only colour, never which pixels are painted" is
+    # vacuous, because an inset ring repaints pixels the track already painted.
+    def switch_image(checked, focused):
+        holder = QWidget()
+        lay = QVBoxLayout(holder)
+        other = QPushButton("focus me")
+        sw2 = toggle_switch.ToggleSwitch()
+        lay.addWidget(other)
+        lay.addWidget(sw2)
+        holder.show()
+        QApplication.processEvents()
+        sw2.setChecked(checked)
+        sw2._anim.stop()
+        sw2.set_knob_pos(1.0 if checked else 0.0)
+        sw2.set_focus_on("#186c3c")
+        sw2.set_focus_off("#66211a")
+        (sw2 if focused else other).setFocus()
+        QApplication.processEvents()
+        got = sw2.hasFocus()
+        img = sw2.grab().toImage()
+        holder.hide()
+        return img, got
+
+    mapping_broken, focus_seen = [], True
+    for checked in (True, False):
+        plain, _ = switch_image(checked, False)
+        lit, had_focus = switch_image(checked, True)
+        focus_seen = focus_seen and had_focus
+        # Within 2 per channel, not byte-identical: two pixels that quantise to
+        # the SAME 8-bit colour unfocused can come from different sub-pixel
+        # coverages, and rounding the antialiased blend of the darker focused
+        # track lands them 1 apart. Measured: 3 such pairs out of 44 distinct
+        # colours, every one off by exactly 1 on one channel. A ring is nothing
+        # like that — it would put a whole second colour where the track was.
+        seen = {}
+        for x in range(plain.width()):
+            for y in range(plain.height()):
+                a = plain.pixelColor(x, y).getRgb()
+                b = lit.pixelColor(x, y).getRgb()
+                first = seen.setdefault(a, b)
+                if max(abs(p - q) for p, q in zip(first, b, strict=True)) > 2:
+                    mapping_broken.append(
+                        f"checked={checked} at {x},{y}: {a} -> {first} and {b}")
+                    break
+            if mapping_broken:
+                break
+    check("INV-4 the switch really takes focus in the harness", focus_seen)
+    check(f"INV-4 the focused switch is the unfocused one recoloured, with no ring "
+          f"({mapping_broken[:1]})", not mapping_broken)
+
+    # INV-6: no state is signalled by colour alone, and the state shape still
+    # reads on the FOCUSED track — the resting tracks are ONEUP-0027 §4.7's, where
+    # the white mark measures 2.10:1 on #2ecc71 and is that item's to close.
+    shape_states = []
+    _orig_shape = toggle_switch.ToggleSwitch._paint_state_shape
+
+    def _spy_shape(self, p, diameter):
+        shape_states.append(self.isChecked())
+        return _orig_shape(self, p, diameter)
+
+    toggle_switch.ToggleSwitch._paint_state_shape = _spy_shape
+    for checked in (True, False):
+        sw3 = toggle_switch.ToggleSwitch()
+        sw3.setChecked(checked)
+        sw3.grab()
+    toggle_switch.ToggleSwitch._paint_state_shape = _orig_shape
+    check("INV-6 the state shape is painted in both checked states",
+          set(shape_states) == {True, False})
+    check("INV-6 every badge keeps its text",
+          all(r.badge.text() for r in (row,)))
+    keys76 = theme.focus_keys(dict(theme._DARK))
+    check("INV-6 the state shape still reads on the focused track",
+          theme.contrast("#ffffff", keys76["switchfocuson"]) >= theme.FOCUS_MIN
+          and theme.contrast("#ffffff", keys76["switchfocusoff"]) >= theme.FOCUS_MIN)
 
     print()
     print("======================================")

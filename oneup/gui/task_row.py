@@ -98,6 +98,7 @@ class TaskRow(QFrame):
         # Focusable (it scrolls), so it needs a name of its own — the arrow key
         # user lands here and would otherwise hear an unnamed scroll area.
         scroll.setAccessibleName(f"List of packages that {title.lower()} will change")
+        self.detail_scroll = scroll   # named: the window's tab chain includes it
         dcol.addWidget(scroll)
 
         self.size_btn = QPushButton("Show download size")
@@ -123,6 +124,54 @@ class TaskRow(QFrame):
         outer.setSpacing(0)
         outer.addWidget(inner)
         outer.addWidget(self.details)
+
+    # --- the row itself is the click target (ONEUP-0064) ---------------------
+    # The switch is 56x30 in a row as wide as the window, so the wider the user
+    # makes the window the smaller the fraction of a row that answers a click.
+    # That ratio, not any one width, is the argument: the whole body now toggles.
+
+    _EXCLUDED = ("switch", "badge", "disclosure", "details")
+
+    def _is_body(self, point) -> bool:
+        """Is `point` in the row's BODY rather than one of its four own controls?
+
+        The switch is excluded so one click is not counted twice — it already
+        handles its own, and a double toggle leaves the app's primary control
+        looking dead rather than throwing. The badge is not clickable at all, and
+        the disclosure and the detail panel each keep the behaviour they have.
+        """
+        if not self.rect().contains(point):
+            return False
+        excluded = tuple(getattr(self, n) for n in self._EXCLUDED)
+        w = self.childAt(point)
+        while w is not None and w is not self:
+            if w in excluded:
+                return False
+            w = w.parentWidget()
+        return True
+
+    def mousePressEvent(self, event):
+        # Accepted here, not merely acted on in the release: a QFrame ignores a
+        # press by default, and an ignored press means the release is delivered
+        # to the parent instead and never reaches this row at all.
+        if event.button() == Qt.MouseButton.LeftButton and self._is_body(
+                event.position().toPoint()):
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self._is_body(
+                event.position().toPoint()):
+            # Inert while the switch is disabled — a run disables each switch but
+            # leaves the row frame enabled, and a disabled ToggleSwitch still
+            # emits `toggled` from toggle(); only click() is ignored. Without this
+            # a user could re-select tasks mid-run by clicking a row's text.
+            if self.switch.isEnabled():
+                self.switch.toggle()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
     def _on_disclosure(self, on: bool):
         self.details.setVisible(on)

@@ -106,6 +106,10 @@ OneUp is built to be usable if you can't see the screen well — or at all.
   instantly.
 - **High contrast.** **Settings → High contrast** switches to plain black and white
   with strong outlines, and works with both the light and the dark scheme.
+- **Keyboard focus you can actually see.** Whatever has keyboard focus fills in with a
+  colour OneUp works out from the one it is covering, so it always stands clearly against
+  its own background — in every theme, and on the on/off switches too. No box is drawn
+  round anything.
 - **Never colour alone.** Every colour cue is paired with words or a shape: the task
   switches show a bar when on and a circle when off, the tray icon draws a "!" when
   updates are waiting, an overdue last run says "⚠ overdue", and step outcomes are

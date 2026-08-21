@@ -13,6 +13,7 @@ from datetime import datetime
 from PySide6.QtCore import QProcess, Qt, QTimer
 from PySide6.QtWidgets import (
     QDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -49,6 +50,7 @@ class RollbackDialog(QDialog):
         root.addWidget(intro)
 
         self.list = QListWidget()
+        self.list.setObjectName("RollbackList")   # see RepoScroll (ONEUP-0076)
         self.list.setAccessibleName("Restore points")
         for sid, date, desc in reversed(snapshots):
             item = QListWidgetItem(f"{date}  —  {desc or 'snapshot'}   (#{sid})")
@@ -61,7 +63,10 @@ class RollbackDialog(QDialog):
         self.list.itemDoubleClicked.connect(lambda *_: self.accept())
         root.addWidget(self.list, 1)
 
-        btns = QHBoxLayout()
+        strip = QFrame()
+        strip.setObjectName("DialogButtons")
+        btns = QHBoxLayout(strip)
+        btns.setContentsMargins(0, 0, 0, 0)
         btns.addStretch(1)
         ok = QPushButton("Roll back & reboot")
         ok.setObjectName("RunBtn")
@@ -71,7 +76,7 @@ class RollbackDialog(QDialog):
         cancel.clicked.connect(self.reject)
         btns.addWidget(ok)
         btns.addWidget(cancel)
-        root.addLayout(btns)
+        root.addWidget(strip)
 
     def selected_id(self) -> str:
         """The chosen snapshot number, or "" if nothing valid is selected. Re-checks

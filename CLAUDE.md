@@ -178,9 +178,16 @@ measurement and the exact shape of the rule are in the document named beside eac
   liveness line in the GUI, and a stall clock stamped on the raw chunk before any line
   splitting. ONEUP-0048; the invariant is `docs/specs/ONEUP-0054-python-engine.md`.
 
-- **The app draws no focus ring.** Keyboard focus reuses the hover look. This is a
-  user-facing design decision, and it is about focus *highlighting* only — ordinary
-  borders are fine. `docs/standards/ui-and-accessibility.md` §5.
+- **The app draws no focus ring — and the cue is DERIVED, not copied from hover.** No ring
+  is the user-facing design decision, and it is the half that cost the bug: Qt ignores
+  `outline-radius` so a ring draws square around rounded buttons, and a border added on
+  focus resizes the widget. It is about focus *highlighting* only — ordinary borders are
+  fine. What replaced *"focus reuses the hover look"* is a measurement, not a preference:
+  hover lightens, and pure white measures 2.63:1 against the accent button's top gradient
+  stop, so no lighter shade reaches SC 2.4.13's 3:1 there at any saturation. A focused
+  control's fill is blended toward black or white until it clears 3:1 against every surface
+  it rests on. Copying a `:hover` rule into a `:focus` one lands a cue of about 1.2:1 —
+  `docs/standards/ui-and-accessibility.md` §5.
 
 - **Rewriting a repository URL must never touch the alias — the alias is the cache key.**
   libzypp keys `/var/cache/zypp/packages/<alias>/` by repository alias, and an openSUSE

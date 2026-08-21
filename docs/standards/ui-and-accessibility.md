@@ -27,9 +27,9 @@ each invariant is tested; this file is the rule a new widget must obey.
 | Everything focusable has a name a screen reader can read | `tests/gui-smoke.py` INV-1, the `unnamed()` sweep — walks every widget, keeps `focusPolicy() != Qt.NoFocus`, fails on a nameless one |
 | No state is signalled by colour alone | `gui-smoke.py` INV-2 checks |
 | No hard-coded pixel font size | `gui-smoke.py` INV-3 — a regex over the built stylesheet |
-| Focus never draws a ring or adds a border | `gui-smoke.py` INV-4 — asserts no ring, and that the `:focus` rules are emitted after `:hover`/`:checked` (§5) |
+| Focus never draws a ring or adds a border, and every focusable control HAS a cue | `gui-smoke.py` INV-4 — asserts no ring, that no `:focus` rule moves anything but colour, and that the `:focus` rules are emitted after `:hover`/`:checked`; ONEUP-0076 INV-1 fails any focusable widget with no treatment at all (§5) |
 | Dialogs inherit the app theme and open centred on the window | `gui-smoke.py`'s X11 and Wayland `center_on_parent` assertions (§6) |
-| Every theme passes the same contrast checks | **not enforced yet** — the check is ONEUP-0027's to write (§7) |
+| Every theme passes the same contrast checks | **half enforced** — ONEUP-0076's focus computation runs over the palette dictionary; the whole-palette 4.5:1 sweep is still ONEUP-0027's to write (§7) |
 | The window mirrors for Hebrew and Arabic | §8, gate G10 |
 
 ## 2. Accessible names — a name for everything reachable
@@ -98,8 +98,17 @@ sounds, so read the scope carefully.
 
 ### 5.1 The rule
 
-> **Focus is never signalled by drawing a border or an outline.** It is signalled by
-> reusing the hover appearance — a colour or fill change.
+> **Focus is never signalled by drawing a border or an outline.** It is signalled by a
+> **derived** fill: the focused control's own fill changes to the smallest blend of the
+> colour it replaces toward black or toward white — whichever reaches it at the lower blend
+> fraction — that measures at least 3:1 against every colour the control rests on. Its text
+> is redrawn in whichever of black or white contrasts more with that fill.
+
+*This rule read "by reusing the hover appearance" until ONEUP-0076 measured it. Hover
+lightens, and pure white measures 2.63:1 against the accent button's top gradient stop, so
+on these palettes no lighter shade of anything reaches 3:1 there at any saturation. The two
+rules were in conflict and the measurable one won. A new control copied from the old
+sentence lands a cue of about 1.2:1.*
 
 ### 5.2 What the rule does *not* say
 
@@ -118,20 +127,39 @@ is recorded here so it cannot recur.*
 captures both halves and can be checked by reading a rule:
 
 ```css
-/* base sheet (_QSS) — a border that already exists changes COLOUR */
+/* base sheet — the fill moves to a DERIVED colour, and any border the control
+   keeps takes the new ink. A border left at its rest colour would sit at about
+   1:1 against the fill and disappear. */
 QPushButton#GhostBtn        { border: 1px solid $ghostbd; }
-QPushButton#GhostBtn:hover  { border-color: #4aa3ff; color: #4aa3ff; }
-QPushButton#GhostBtn:focus  { border-color: #4aa3ff; color: #4aa3ff; }   /* same as hover */
+QPushButton#GhostBtn:focus  { background: $focusfill; color: $focusink;
+                              border-color: $focusink; }
 
-/* base sheet (_QSS) — a borderless button changes its FILL */
+/* base sheet — a borderless gradient button, same rule, one blend fraction
+   applied to both stops */
 QPushButton#RunBtn        { border: none; background: $btn_accent; }
-QPushButton#RunBtn:focus  { background: qlineargradient(… #5cb0ff … #3a7cf0); }
+QPushButton#RunBtn:focus  { background: $accentfocus; color: $accentfocusink; }
 ```
 
-The high-contrast overlay obeys the same rule and is worth stating explicitly, because it
-looks at first glance like an exception: every HC button carries `border: 2px solid $border`
-at rest, hover recolours it to `$focus`, and the `:focus` rule is a copy of hover (all three
-in `_HC_QSS`). **No border is added on focus** — an existing one changes colour.
+**One object name can rest on several surfaces, and each takes a selector qualified by the
+nearest container unique to it** — never a rename, which would move names other documents
+key to. A qualified rule outranks a bare one on specificity, so the unqualified rule is the
+default surface and the qualified ones are the exceptions.
+
+**Two extra conditions, both of which look like details and are not.** The changed area must
+be at least the area of a **2 px perimeter** of the control (SC 2.4.13), which is what rules
+out recolouring a 1 px border: a panel that holds its own scrolling content — where
+recolouring the fill would recolour the content — carries a 2 px rest border and moves only
+its colour. And a control **already** clearing 3:1 is kept rather than re-derived; the rule
+is a floor, not a replacement. The high-contrast overlay's ghost button goes
+`$card` → `$btnhov`, which is 14.67:1 dark and 11.22:1 light, and "the smallest blend
+reaching 3:1" would weaken that roughly fourfold in the one appearance mode that exists for
+low-vision users.
+
+**The overlay obeys the same rule**, and is worth stating because it looks like an
+exception: every high-contrast button carries `border: 2px solid $border` at rest, and what
+focus moves is still the **fill**. Recolouring that border would not work anyway — `$border`
+→ `$focus` measures 1.43:1 dark and 1.87:1 light. **No border is added on focus** in either
+sheet.
 
 ### 5.4 Why, and what it costs
 
@@ -142,39 +170,42 @@ Two measured reasons, both visual bugs rather than preferences:
 - A `border` added on focus **resizes the widget** — measured 33 px → 37 px — so the layout
   twitches as you tab through it.
 
-The cost is stated honestly rather than hidden. **WCAG 2.2 SC 2.4.7 (Focus Visible) is
-still met** — it asks only that focus be *visible*, and a colour or fill change is visible.
-What this design forgoes is **SC 2.4.13 (Focus Appearance)**, which asks the indicator to
-be strong enough to find: at least 3:1 between the focused and unfocused states of the
-changed area. Measured over the shipped palettes:
+**What this cost until ONEUP-0076, stated as it was rather than as it was hoped.** This
+section used to say *"WCAG 2.2 SC 2.4.7 (Focus Visible) is still met"*. That was false, and
+the sentence was written when only four styled controls were in view: a sweep of the whole
+window found **sixteen of its thirty-four focusable widgets with no `:focus` rule at all**,
+five of them the on/off switches, which are painted rather than styled and whose painter drew
+no focus indication. A keyboard-operable control with no visible indicator fails SC 2.4.7,
+which is Level **AA**. The honest statement is that OneUp failed 2.4.7 for those sixteen,
+that ONEUP-0076 is what makes it true, and that **SC 2.4.13 (Focus Appearance, Level AAA)**
+is met on top of it.
 
-| Control | Rest → focus | Ratio |
-| --- | --- | --- |
-| `#RunBtn` | `#4aa3ff` → `#5cb0ff` (gradient top) | **1.14:1** |
-| `#LinkBtn` | `#4aa3ff` → `#6fb6ff` | **1.23:1** |
-| `#GhostBtn`, light | border `#c4ccd6` → `#4aa3ff` | **1.62:1** |
-| `#GhostBtn`, dark | border `#38414f` → `#4aa3ff` | **3.91:1** |
-
-Only the dark ghost button clears 3:1. **This is a real gap, not a rounding error**, and it
-is the redesign's to close: **ONEUP-0076** must pick a ringless focus treatment that
-measures ≥ 3:1 against its own rest state, in every shipped theme, and add the measurement
-to the test suite. Until it does, the honest statement is that OneUp's focus cue is visible
-but weak. Screen-reader focus reporting is unaffected — Qt still reports focus; only the
-sighted cue is at issue. `ToggleSwitch.paintEvent` draws no ring either,
-and says so in a comment there; the switch's **state shape** (§3) is what carries meaning.
+The ratios this section used to table — 1.14:1 to 3.91:1, only one of four clearing 3:1 —
+are superseded. **The current figures are not transcribed here**: they are the output of the
+app's own focus computation, which prints every pair it measures, and
+`docs/specs/ONEUP-0076-ringless-focus-cue.md` §4.3 carries the table. Copying them into a
+second document is how a measured figure becomes a stale one; what belongs here is the
+rule and the floor. The switch's track darkens rather than changing hue, so the red/green
+distinction and the bar-and-circle shape both survive focus untouched — §3 is not weakened
+by the cue landing on the same surface.
 
 ### 5.5 Ordering, which is easy to get wrong
 
 `:focus` ties with `:hover` and `:checked` on CSS specificity, so **the `:focus` rules must
 be emitted after all `:hover` / `:checked` / `:pressed` rules for the same selector.**
 Emitted earlier, a focused *checked* control — exactly what a keyboard user lands on — shows
-no cue at all. Both stylesheets already order it correctly — the base sheet carries the
-comment, beginning *"Keyboard focus reuses the HOVER look"*.
+no cue at all. Both stylesheets order it correctly, and each carries a comment saying why.
+**The overlay is appended rather than swapped**, so its own `:focus` rules must come after
+its own `:hover` and `:checked` rules as well; a base rule qualified by a container also
+outranks a bare overlay rule, so the overlay restates every qualified selector the base
+sheet uses.
 
 ### 5.6 Tab order follows visual order
 
-`setTabOrder` is called after the header row is laid out, because creation order and visual
-order differ. If a new control is inserted into a row, its place in the tab chain is set in
+`setTabOrder` is called for **every** focusable control and not only the first few, because
+what it does not state falls back to parenting order — which is how the warning banner's
+chain came to visit *Show details* before *Copy command* that sits to its left. If a new
+control is inserted into a row, its place in the tab chain is set in
 the same commit — a keyboard user who tabs from the top-left to the bottom-right and back to
 the middle cannot build a mental model of the window.
 
@@ -191,16 +222,16 @@ re-applied live when the desktop switches light/dark
 the `QApplication`, **every child widget — `QDialog` subclasses and `QMessageBox` instances
 alike — inherits it automatically.**
 
-**One thing does not come free, and it is the dialog's own background.** A window inherits
-the *sheet*, not a declaration written for another selector, and `_QSS` carries
-`QMainWindow { background: $win; }` with no `QDialog` rule — so a bare dialog paints Qt's
-platform grey rather than a palette colour. Measured by
-`docs/specs/ONEUP-0076-ringless-focus-cue.md`: `#efefef` under the base sheet in **both**
-palettes, which is why every dialog is light grey in dark mode today. Only `_HC_QSS` pins
-it, with `QMainWindow, QDialog { background: $win; }`. That rule is prescribed by
-`ONEUP-0076` §8 and lands with whichever of `docs/specs/ONEUP-0064-interface-redesign.md`
-or `docs/specs/ONEUP-0027-themes.md` reaches the sheet first. **It changes nothing below**:
-a new dialog still reuses the object names and still sets no stylesheet of its own.
+**One thing did not come free, and it is the dialog's own background.** A window inherits
+the *sheet*, not a declaration written for another selector, so `QMainWindow { background:
+$win; }` alone left a bare dialog painting Qt's platform grey rather than a palette colour.
+Measured by `docs/specs/ONEUP-0076-ringless-focus-cue.md`: `#efefef` under the base sheet in
+**both** palettes, which is why every dialog used to be light grey in dark mode. **Both
+sheets now carry `QMainWindow, QDialog { background: $win; }`** — the base sheet gained it
+with `docs/specs/ONEUP-0064-interface-redesign.md`, and the high-contrast overlay always had
+it. It matters beyond the one visual defect: a dialog painting a colour no palette controls
+is a surface §5.1's derivation cannot blend from. **It changes nothing below**: a new dialog
+still reuses the object names and still sets no stylesheet of its own.
 
 - **Do** reuse the object names the QSS already styles (`#Card`, `#RowBorder`, `#GhostBtn`,
   `QLabel#Tagline`, …) so a new dialog looks native.
@@ -280,12 +311,13 @@ which are also the rules:
   background, and any colour that carries meaning — a border, a badge rim, a switch track —
   at least **3:1** (WCAG 2.2 SC 1.4.3 and 1.4.11).
 
-  **This check does not exist yet.** No contrast computation runs in `tests/gui-smoke.py`
-  today; writing one is **ONEUP-0027**'s work, and it is the first thing that item should
-  do, because it is what makes "a theme that cannot pass is not shipped" enforceable rather
-  than aspirational. The check is a computation over the palette dictionary, so once written
-  it covers every theme including ones added later — it is not a review step somebody can
-  forget.
+  **Half of this check now exists, and the half that does is ONEUP-0076's.** Its focus
+  computation runs over the palette dictionary — so it already covers a theme nobody has
+  written yet, which is the property that makes it worth having — but it measures only the
+  colours that item introduces or moves, plus every derived focus pair. **The whole-palette
+  4.5:1 sweep is still ONEUP-0027's to write**, and is still the first thing that item
+  should do, because it is what makes "a theme that cannot pass is not shipped" enforceable
+  rather than aspirational.
 
   **The two shipped palettes are not both clean, so "pass what the built-ins pass" is the
   wrong bar.** Measured: light `lastrun` `#8a94a2` is **3.07:1** on `card` `#ffffff` and
@@ -406,8 +438,12 @@ today; the RTL work adds them, and this is the form they take.
 | §2 every focusable widget has an accessible name | `tests/gui-smoke.py` — four sweeps, over the main window and the Repositories, Rollback and Settings pages, each naming the widgets that failed |
 | §3 state is never signalled by colour alone | nothing automatic |
 | §4 no hard-coded `px` font size | `tests/gui-smoke.py` — every font size is in points, and derives from the desktop's own default |
-| §5 focus draws no ring | `tests/gui-smoke.py` — *"focus draws no outline ring"*, paired with *"focus still gives a cue by reusing the hover look"*, so the rule cannot be satisfied by removing the cue altogether |
-| §5.4 the 3:1 focus-indicator ratio | **nothing computes contrast anywhere in the suite.** The four measured ratios in §5.4 were taken by hand, and the shortfall is deliberate, and §5.4 makes closing it **ONEUP-0076's** obligation: a ringless treatment measuring ≥ 3:1 in every shipped theme, with the measurement added to the suite |
+| §5 focus draws no ring | `tests/gui-smoke.py` — *"focus draws no outline ring"*, paired with *"focus still gives a cue"*, so the rule cannot be satisfied by removing the cue altogether. ONEUP-0076 INV-4 adds the half a stylesheet parse cannot see: the focused and unfocused renders of the painted switch must be related by a consistent colour-to-colour mapping, which a ring drawn inside its fixed rect breaks |
+| §5.3 focus changes no box | `tests/gui-smoke.py` — ONEUP-0076 INV-4 expands every `border` shorthand and asserts a `:focus` rule sets no width, style or radius its rest rule does not already set to the same value; colour is the only thing it may move |
+| §5.3 the 2 px area floor | **nothing directly.** The four panels carry a 2 px rest border in both sheets and INV-4 would catch a `:focus` rule narrowing one, but nothing fails a rest border authored at 1 px in the first place |
+| §5.4 the 3:1 focus-indicator ratio | **ONEUP-0076's focus computation, driven from `tests/gui-smoke.py`** — 910 pairs over both palettes and both overlay states, each against the floor it is held to. It replaces *"nothing computes contrast anywhere in the suite"*, which is what this row said until that item shipped |
+| §5.1 every focusable control HAS a treatment | `tests/gui-smoke.py` — ONEUP-0076 INV-1 sweeps the window and each dialog and fails any focusable widget matching no row of that spec's table, by object name, class **and** containing surface. Its one exclusion is Qt-supplied chrome with no name of ours and no rule in either sheet |
+| §5.6 tab order follows visual order | `tests/gui-smoke.py` — ONEUP-0064 INV-1 flattens the layout tree to visual order and walks the focus chain end to end against it, once for the window and once for `SettingsDialog`, which has a chain of its own. It is the first thing to actually check this rule |
 | §6.1 a dialog inherits the theme | `tests/gui-smoke.py` catches the half that is a rule breach — no widget carries a stylesheet of its own. **Nothing checks the background a dialog actually paints**, which is why `_QSS`'s missing `QDialog` rule went unnoticed; ONEUP-0076 §8 prescribes the rule and ONEUP-0027 INV-7 is the nearest test to it |
 | §7 themes | ONEUP-0027 — the contrast check is that item's to write, and the light theme's `lastrun` text sits at 3.07:1 today |
 | §8.1 no directional QSS property | nothing automatic |
@@ -415,9 +451,10 @@ today; the RTL work adds them, and this is the form they take.
 | §8.3 custom painting applies the direction | **nothing** — the toggle knob does not apply it (ONEUP-0032) |
 
 **The gated half is the half a script can see.** A name is present or absent; a font size is
-points or pixels; an outline is drawn or not. Everything left ungated needs a number computed
-(contrast) or a judgement made (is this cue really more than colour?) — and ONEUP-0027 is
-where the contrast half stops being manual.
+points or pixels; an outline is drawn or not. Everything left ungated needs a judgement made
+(is this cue really more than colour?). **The contrast half stopped being manual with
+ONEUP-0076**, whose computation runs over a palette nobody has written yet — which is what
+ONEUP-0027's six new themes are checked against, rather than against a screenshot.
 
 ## 11. Cold-eyes loop log
 

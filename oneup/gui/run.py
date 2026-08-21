@@ -725,7 +725,16 @@ def on_finished(win, exit_code: int, _status):
             win.warn_btn2.setText("Import signing key & retry")
             win.warn_btn2.setVisible(True)
 
+    # Retry now lives INSIDE the warning banner (ONEUP-0064), so the banner's
+    # rule has to match Retry's own. It was raised above only for a failure
+    # carrying a hint or an armed remedy, while Retry was revealed for any failed
+    # step — so a run whose steps failed with neither showed Retry with the banner
+    # hidden, and reparenting it unchanged would have left no way to retry at all.
+    # A stopped run is untouched: the `if stopped:` branch returns before here.
     if win._failed_steps:
+        if not win.warn_banner.isVisible():
+            banners._show_warning(win, "Some steps did not finish. Open the log to "
+                                       "see what went wrong, or retry them.")
         win.retry_btn.setVisible(True)
     if not ok:
         win._show_log(True)

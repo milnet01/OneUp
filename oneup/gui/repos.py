@@ -140,23 +140,31 @@ class RepoManagerDialog(QDialog):
             lst.addWidget(self._make_row(repo, is_dup))
         lst.addStretch(1)
         scroll = QScrollArea()
+        # Named as well as described (ONEUP-0076): the focus cue is keyed to
+        # object names, and an unnamed OneUp-built focusable widget is a widget
+        # the sweep fails rather than one it excuses.
+        scroll.setObjectName("RepoScroll")
         scroll.setWidgetResizable(True)
         scroll.setWidget(inner)
         scroll.setMinimumHeight(280)
         scroll.setAccessibleName("Repository list")
+        self.scroll = scroll
         root.addWidget(scroll, 1)
 
-        btns = QHBoxLayout()
+        strip = QFrame()
+        strip.setObjectName("DialogButtons")
+        btns = QHBoxLayout(strip)
+        btns.setContentsMargins(0, 0, 0, 0)
         btns.addStretch(1)
         self.apply_btn = QPushButton("Apply changes")
         self.apply_btn.setObjectName("RunBtn")
         self.apply_btn.clicked.connect(self._apply)
-        close_btn = QPushButton("Close")
-        close_btn.setObjectName("GhostBtn")
-        close_btn.clicked.connect(self.reject)
+        self.close_btn = QPushButton("Close")
+        self.close_btn.setObjectName("GhostBtn")
+        self.close_btn.clicked.connect(self.reject)
         btns.addWidget(self.apply_btn)
-        btns.addWidget(close_btn)
-        root.addLayout(btns)
+        btns.addWidget(self.close_btn)
+        root.addWidget(strip)
 
     def _make_row(self, repo: dict, is_dup: bool) -> QFrame:
         fr = QFrame()

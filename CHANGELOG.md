@@ -8,6 +8,26 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The window has been reworked so there is one obvious thing to press.** (ONEUP-0064)
+  The title bar carries two buttons instead of four — Repositories and Recenter
+  have moved into Settings, which is now grouped under three headings instead of
+  being one long list. "Run selected updates" comes first in the button row, and
+  "Stop" now takes the place of "Check for updates" while an update is running
+  rather than sitting beside it. Clicking anywhere on a task's row turns that task
+  on or off, instead of only the small switch at the far right. "Retry failed
+  steps" has moved inside the warning that explains what went wrong, so the fix
+  sits next to the problem — and that warning now appears whenever a step failed,
+  which it did not always do before. Every button is now at least 24x24, and
+  pressing Tab walks through the window in the order you see it.
+- **You can now see where you are when using the keyboard.** (ONEUP-0076)
+  Sixteen of the window's controls — including all five on/off switches — showed
+  nothing at all when they had keyboard focus. Now every one of them fills in with
+  a colour OneUp calculates from the colour it is covering, so it always stands out
+  clearly, in both the light and the dark theme and in high contrast. Nothing draws
+  a box or a ring around anything, which was the point. Two colours that were too
+  faint to read properly in the light theme — the blue links, and the outline round
+  the plain buttons — have been darkened to match, and dialogs no longer show up
+  light grey in dark mode.
 - **The app's code is now organised into small, focused files instead of one very large one.** (ONEUP-0034)
   Nothing about the app looks or behaves differently — the same window, the
   same wording, the same steps. Only where the code lives has moved, which

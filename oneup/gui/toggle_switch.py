@@ -20,8 +20,9 @@ from .theme import GREEN, RED
 
 class ToggleSwitch(QAbstractButton):
     """A sliding on/off switch. Track is green when on, red when off — plus a
-    SHAPE (a bar when on, an open circle when off) so the state survives
-    colour blindness, and a focus ring so keyboard users can see where they are.
+    SHAPE (a bar when on, an open circle when off) so the state survives colour
+    blindness. Keyboard focus DARKENS the track to a colour the stylesheet
+    derives and hands over as a Qt property; no ring is drawn (ONEUP-0076).
 
     Being a checkable QAbstractButton, Qt maps this to an accessible CheckBox
     with a real checked state, so a screen reader announces on/off for free —
@@ -37,6 +38,13 @@ class ToggleSwitch(QAbstractButton):
         self._margin = 3
         self._pos = 1.0  # 0.0 = off (left), 1.0 = on (right)
         self._high_contrast = False   # set from the stylesheet (qproperty-highContrast)
+        # The two focused tracks, likewise set from the stylesheet. No colour rule
+        # can reach what paintEvent draws, so a Qt property is the only seam —
+        # the same one highContrast already uses. Defaulting them to the resting
+        # tracks means an unstyled switch simply shows no cue rather than a wrong
+        # one; the sheet always assigns both.
+        self._focus_on = QColor(GREEN)
+        self._focus_off = QColor(RED)
         self._anim = QPropertyAnimation(self, b"knobPos", self)
         self._anim.setDuration(130)
         self._anim.setEasingCurve(QEasingCurve.InOutCubic)
@@ -67,6 +75,32 @@ class ToggleSwitch(QAbstractButton):
     # Set by the stylesheet, not by code — see the qproperty- note in _QSS.
     highContrast = Property(bool, get_high_contrast, set_high_contrast)
 
+    def get_focus_on(self) -> QColor:
+        return self._focus_on
+
+    def set_focus_on(self, value: QColor):
+        self._focus_on = QColor(value)
+        self.update()
+
+    focusTrackOn = Property(QColor, get_focus_on, set_focus_on)
+
+    def get_focus_off(self) -> QColor:
+        return self._focus_off
+
+    def set_focus_off(self, value: QColor):
+        self._focus_off = QColor(value)
+        self.update()
+
+    focusTrackOff = Property(QColor, get_focus_off, set_focus_off)
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self.update()
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.update()
+
     def _paint_state_shape(self, p: QPainter, diameter: float):
         """A bar for on, an open circle for off, drawn in the track half OPPOSITE
         the knob (the iOS convention). Painted as geometry rather than a text
@@ -88,7 +122,10 @@ class ToggleSwitch(QAbstractButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         radius = self.height() / 2
-        track = GREEN if self.isChecked() else RED
+        if self.hasFocus():
+            track = self._focus_on if self.isChecked() else self._focus_off
+        else:
+            track = GREEN if self.isChecked() else RED
         if not self.isEnabled():
             track = track.lighter(140)
         p.setPen(Qt.NoPen)
@@ -115,6 +152,7 @@ class ToggleSwitch(QAbstractButton):
 
         # No focus ring is drawn, by explicit design decision (2026-07-25): rings
         # and outlines around these controls were rejected as visual clutter. The
-        # state SHAPE above is what carries meaning; Qt still reports focus to a
-        # screen reader, so keyboard operability is unaffected — only the sighted
-        # keyboard-only cue is absent.
+        # sighted keyboard cue is the DARKENED TRACK chosen at the top of this
+        # method — a colour change to pixels that were already painted, which is
+        # what keeps the geometry fixed and the state SHAPE readable on top of it
+        # (ONEUP-0076 derives the track so the shape still clears 3:1 on it).

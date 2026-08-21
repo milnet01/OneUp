@@ -274,12 +274,16 @@ class Updater(QMainWindow):
         self.about_btn.setToolTip("Version, licence, links and a manual update check")
         self.about_btn.clicked.connect(self.show_about)
 
+        # Two buttons, not four. Four of identical weight beside the app title
+        # make none of them findable — the uniform weight is the complaint, not
+        # the count — so Repositories and Recenter move into Settings, where the
+        # second is a Wayland workaround rather than a feature that earned a
+        # place in the header (ONEUP-0064).
         header_row = QHBoxLayout()
         header_row.addLayout(titleblock, 1)
         header_row.addWidget(self.settings_btn, 0, Qt.AlignTop)
-        header_row.addWidget(self.repos_btn, 0, Qt.AlignTop)
-        header_row.addWidget(self.recenter_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.about_btn, 0, Qt.AlignTop)
+        self.header_row = header_row
         root.addLayout(header_row)
         root.addSpacing(2)
 
@@ -309,8 +313,12 @@ class Updater(QMainWindow):
         # Stop (only while a run is going). Deliberately not a "cancel" — it takes effect
         # at the next safe point, because interrupting an install can leave programs
         # broken. The label and tooltip say so rather than implying an instant abort.
+        # Its own object name, not GhostBtn: it keeps the ghost outline and the
+        # transparent fill but takes the danger colour for its border and label,
+        # and the focus derivation matches a styled control BY NAME — a restyled
+        # control still called GhostBtn would be invisible to it (ONEUP-0064).
         self.stop_btn = QPushButton("Stop")
-        self.stop_btn.setObjectName("GhostBtn")
+        self.stop_btn.setObjectName("StopBtn")
         self.stop_btn.setCursor(Qt.PointingHandCursor)
         self.stop_btn.setAccessibleName("Stop the update")
         self.stop_btn.setToolTip(
@@ -319,20 +327,27 @@ class Updater(QMainWindow):
         self.stop_btn.clicked.connect(partial(run.request_stop, self))
         self.stop_btn.setVisible(False)
 
+        # Primary first. Check and Stop do not share a layout position — a hidden
+        # widget still holds its own layout item — so the row has three items for
+        # the window's whole life and exactly one of indices 1 and 2 is ever
+        # visible. What reads as one slot is the visibility rule, not the geometry.
         actions = QHBoxLayout()
         actions.setSpacing(10)
-        actions.addWidget(self.check_btn, 0)
         actions.addWidget(self.run_btn, 1)
+        actions.addWidget(self.check_btn, 0)
         actions.addWidget(self.stop_btn, 0)
+        self.action_row = actions
         root.addLayout(actions)
 
-        # Retry-failed (hidden until a run has failures).
+        # Retry-failed (hidden until a run has failures). It lives INSIDE the
+        # warning banner, appended below once that banner exists, so the remedy
+        # sits beside the thing it remedies rather than reading as a fourth
+        # member of the action row above while belonging to none of it.
         self.retry_btn = QPushButton("Retry failed steps")
         self.retry_btn.setObjectName("GhostBtn")
         self.retry_btn.setCursor(Qt.PointingHandCursor)
         self.retry_btn.clicked.connect(partial(run.retry_failed, self))
         self.retry_btn.setVisible(False)
-        root.addWidget(self.retry_btn)
 
         # Progress + current step.
         self.status = QLabel("Ready.")
@@ -401,6 +416,10 @@ class Updater(QMainWindow):
         self.warn_btn2.clicked.connect(partial(banners._fix_keys_and_retry, self))
         self.warn_btn2.setVisible(False)
         self.warn_banner.layout().addWidget(self.warn_btn2)
+        # Retry, last of the banner's four buttons. Layout order does NOT set the
+        # focus chain — parenting order does, which is how this banner's chain
+        # came to run backwards — so the chain below states it explicitly.
+        self.warn_banner.layout().addWidget(self.retry_btn)
         root.addWidget(self.warn_banner)
 
         self.appupdate_banner, self.appupdate_label, self.appupdate_btn = banners._make_banner(self,
@@ -455,19 +474,13 @@ class Updater(QMainWindow):
         root.addWidget(self.last_run)
         self.refresh_last_run()
 
-        # Tab order must follow the VISUAL order. Creation order put Recenter
-        # before Repositories while the layout shows Repositories first, so tabbing
-        # jumped sideways (ONEUP-0028).
-        self.setTabOrder(self.settings_btn, self.repos_btn)
-        self.setTabOrder(self.repos_btn, self.recenter_btn)
-        self.setTabOrder(self.recenter_btn, self.about_btn)
-        keys = [k for k, _t, _d in steps.TASKS]
-        self.setTabOrder(self.about_btn, self.rows[keys[0]].switch)
-        # pairwise walks the consecutive pairs: (k0, k1), (k1, k2), ...
-        for key, nxt in itertools.pairwise(keys):
-            self.setTabOrder(self.rows[key].switch, self.rows[nxt].switch)
-        self.setTabOrder(self.rows[keys[-1]].switch, self.check_btn)
-        self.setTabOrder(self.check_btn, self.run_btn)
+        # Tab order must follow the VISUAL order, for EVERY control rather than
+        # the first eleven: what setTabOrder does not state falls back to
+        # parenting order, which is where the warning banner's backwards chain
+        # came from — its own button is parented before Copy command is inserted
+        # ahead of it (ONEUP-0064, ui-and-accessibility.md §5.6).
+        for a, b in itertools.pairwise(self.focus_chain()):
+            self.setTabOrder(a, b)
 
         # Restore the last size + position, if we saved one before.
         geo = self.settings.value("geometry")
@@ -743,6 +756,30 @@ class Updater(QMainWindow):
             QMessageBox.information(self, "No log yet",
                                     "Run an update or a check first — then the log opens here.")
 
+    def focus_chain(self) -> list[QWidget]:
+        """Every focusable control in the window, in the order it is laid out.
+
+        Top to bottom, then along each row: within a task row that is the
+        disclosure and the switch, then the detail panel underneath it. Stated as
+        one list because the chain is set from it AND asserted against the built
+        layout tree — a control added here without a place in the visual order is
+        the failure this replaces, and a second hand-written list would drift.
+        """
+        chain: list[QWidget] = [self.settings_btn, self.about_btn]
+        for key, _t, _d in steps.TASKS:
+            r = self.rows[key]
+            chain += [r.disclosure, r.switch, r.detail_scroll]
+            # Only the system row lays its size link out; the other four are
+            # built, hidden and never given a parent, so they are not in the tree.
+            if r.size_btn.parentWidget() is not None:
+                chain.append(r.size_btn)
+        chain += [self.run_btn, self.check_btn, self.stop_btn,
+                  self.restart_btn, self.services_btn,
+                  self.warn_copy_btn, self.warn_btn, self.warn_btn2, self.retry_btn,
+                  self.appupdate_btn, self.rollback_btn,
+                  self.log_toggle, self.openlog_btn, self.log]
+        return chain
+
     def selected_steps(self) -> list[str]:
         return [key for key, _t, _d in steps.TASKS if self.rows[key].switch.isChecked()]
 
@@ -752,8 +789,11 @@ class Updater(QMainWindow):
         for r in self.rows.values():
             r.switch.setEnabled(enabled)
         # Stop is the mirror image: it only exists while a run does. Shown for a real run
-        # only — a --check installs nothing, so there is nothing to stop.
+        # only — a --check installs nothing, so there is nothing to stop. It REPLACES
+        # Check in the row rather than sitting beside it, so the two are never on
+        # screen at once; during a check the slot holds Check, disabled.
         stoppable = (not enabled) and self._run_active and not self._check_mode
+        self.check_btn.setVisible(not stoppable)
         self.stop_btn.setVisible(stoppable)
         if stoppable:
             self.stop_btn.setEnabled(True)
