@@ -1429,7 +1429,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Suite tallies identical to the pre-change baseline on the same branch, which is
   what says the wrapping and splitting changed no behaviour.
 
-- 📋 [ONEUP-0064] **Redesign the interface around ergonomics, plain-language clarity and accessibility.**
+- ✅ [ONEUP-0064] **Redesign the interface around ergonomics, plain-language clarity and accessibility.**
   Requested by the user (2026-07-26) as part of 2.0, not as polish
   afterwards. Three stated priorities, in the user's order: ergonomics,
   user-friendliness, accessibility.
@@ -1610,6 +1610,30 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   paragraphs above that stop_btn is never setCheckable(True) — verified
   in updater.py. Status stays Draft: the gate reached its cap without an
   empty loop. docs-check 19364 claims / 0 failed.
+  Resolved (2026-08-21): implemented on v2, with ONEUP-0076, which it
+  shares a slot with. The header carries two buttons; Repositories and
+  Recenter moved into Settings, now three headings with a new intro line.
+  The action row reads Run then Check, and Stop REPLACES Check in place
+  during a run rather than sitting beside it wearing the same #GhostBtn as
+  the button that opens a version dialog — it is #StopBtn now, a ghost
+  outline in a per-palette danger colour over a transparent fill, with a
+  full rule set in both sheets. A whole task row toggles its task; the
+  switch, badge, disclosure and detail panel each keep what they had. Every
+  pointer target clears 24x24 from a stylesheet minimum, and the tab chain
+  is stated for every control rather than the first eleven.
+
+  The one behaviour change, and it was a real defect rather than a
+  consequence of the move: Retry was revealed for ANY failed step while the
+  end-of-run banner was raised only for a failure carrying a hint or an
+  armed remedy. So a run whose steps failed with neither showed Retry with
+  the banner hidden — and reparenting Retry into that banner unchanged
+  would have left the user no way to retry at all. The banner's rule now
+  matches Retry's own. A stopped run is untouched.
+
+  Settled by the build rather than by the spec: the two hover colours the
+  user chose on 2026-08-19 both landed as-is, and §4.1's target-size table
+  was exhaustive — every control in its "in" column reached 24x24 with no
+  per-widget call.
 
 - 📋 [ONEUP-0065] **Convert the remaining line-number citations in the older documents to symbol names.**
   docs/standards/documentation.md 6a (added 2026-07-26, the user's
@@ -1944,7 +1968,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: doc.
   Source: write-spec-doc-lint-2026-08-03.
 
-- 📋 [ONEUP-0076] **Derive a ringless focus cue that measures, in every theme.**
+- ✅ [ONEUP-0076] **Derive a ringless focus cue that measures, in every theme.**
   Split out of ONEUP-0064 on 2026-08-03, after that item's spec converged by cap
   rather than clean at three cold-eyes loops and 762 lines. Across three loops and
   nine lanes essentially every finding fell in this half; the layout half stayed
@@ -1987,6 +2011,37 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Make it always obvious which control the keyboard is on — without drawing a box round it — and have the app prove it rather than claim it.
   Kind: accessibility.
   Source: split-from-oneup-0064-2026-08-03.
+  Resolved (2026-08-21): implemented on v2, with ONEUP-0064. Every hex
+  this spec published in §4.3 reproduces exactly from the shipped code —
+  checked before a line of it was written, which is what proved the
+  derivation was understood rather than approximated. 910 measured pairs
+  across both palettes and both overlay states all clear their floor.
+
+  Sixteen of the window's thirty-four focusable widgets had no cue at all,
+  five of them the on/off switches, which are painted rather than styled;
+  that is an SC 2.4.7 (AA) failure and ui-and-accessibility.md said the
+  opposite. The switches take theirs through the same qproperty- seam
+  highContrast already uses. Panels holding their own scrolling content
+  take mechanism B — a 2px rest border whose colour moves — because
+  recolouring their fill would recolour the content.
+
+  The gate found two defects in this item's own code that no test caught.
+  apply_app_theme's fallback rebuilt the sheet without the user's text
+  scale and high-contrast setting, silently turning high contrast off for
+  the one user who cannot do without it — the exact failure this item
+  exists to end — and its retry passed the palette that had just raised, so
+  it could only raise again. And derive_focus_gradient returned the first
+  direction that cleared rather than the smaller blend fraction, so a pale
+  future accent would darken where the rule prescribes lightening. Both
+  fixed; §6 amended to record what was built, since it described neither.
+
+  Also closed here because they were measured and failed: the light link
+  text (2.63:1 rest, 2.14:1 hover), the ghost button's rest border (1.62:1
+  light, 1.76:1 dark) and its hover ink. _QSS gained QMainWindow, QDialog
+  { background: $win; }, which stops every dialog painting Qt's platform
+  grey in dark mode and gives the derivation a surface a palette controls.
+  RepoManagerDialog's scroll area, RollbackDialog's list and each dialog's
+  button strip are named, so no widget OneUp builds sits outside the sweep.
 
 - 📋 [ONEUP-0077] **The window builds the timer notification, instead of asking the engine for it.**
   Split out of ONEUP-0072 on 2026-08-03, on the user's decision. That spec's
@@ -3879,3 +3934,38 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: refactor.
   Source: in-session-2026-08-20 (implementing ONEUP-0034).
   Lanes: gui.
+
+- 📋 [ONEUP-0123] **The ghost button's rest border does not clear 3:1 on the warning banner's tint.**
+  Found while implementing ONEUP-0064/0076 and deliberately NOT fixed there,
+  because fixing it would have meant authoring a palette key neither spec
+  names — which ONEUP-0027 §4.7 would then fail as uncovered.
+
+  ONEUP-0076 §4.3 moves `ghostbd` to clear 3:1 against `card`: #8f959c at
+  3.02:1 light and #5e6570 at 3.09:1 dark. Its INV-8 measures it there, and
+  §4.3's row and INV-8's own Test clause both name `card` as the surface,
+  so the shipped values conform.
+
+  But ONEUP-0064 moved `retry_btn` into #WarnBanner, and that banner's
+  ground is a two-stop alpha wash rather than the card. Composited over the
+  card at each stop, the same border measures:
+
+    light  #8f959c on #fbf0d9 / #fefcf7   2.67:1
+    dark   #5e6570 on #3d3523 / #1b1c1d   2.06:1
+
+  Both below the 3:1 an ink-or-boundary colour is held to. Nothing is red:
+  INV-8's surface set is `card`, so the suite is honest about what it
+  checked rather than silently passing something it did not.
+
+  Two things this is NOT. It is not a focus defect — the focus cue on that
+  button derives from the banner tint correctly (`warnfocusfill`, measured,
+  3.08:1 both palettes). And it is not a regression: before ONEUP-0064 the
+  same border measured 1.62:1 and 1.76:1 on the card, so every surface it
+  lands on is better than it was.
+
+  The fix is a per-surface ghost border, which means a palette key and a
+  qualified selector — the same shape ONEUP-0076 §4.2 uses for the focus
+  rows. That belongs with ONEUP-0027, which authors six more palettes and
+  owns §4.7's key coverage, rather than bolted onto a shipped item.
+  **Layman:** The thin outline around the "Retry failed steps" button is fainter than it should be, because that button now sits on the amber warning strip rather than on the plain card behind it.
+  Kind: accessibility.
+  Source: in-session-2026-08-21.
