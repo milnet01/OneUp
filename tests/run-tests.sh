@@ -740,6 +740,198 @@ fi
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0044: two engine PROCESSES, not one. The window starts the engine a SECOND
+# time for the download-size preview — `request_size` in oneup/gui/run.py issues
+# `bash <engine> --size=system --log=<path>` on its own `_size_proc`, separate from
+# the run's `proc` — and --size dispatches to run_size, which calls sudo_init before
+# its dry run. The run calls sudo_init again. With no terminal (the GUI runs us
+# through QProcess) sudo keys its cached credential to the PARENT process id
+# (sudoers(5) `timestamp_type`), and the two engines are different pids, so each one
+# authenticates. That is what makes the two dialogs OVERLAP — something a single
+# process cannot do, because sudo_init blocks on its own dialog. The reporter saw
+# them 16 seconds apart: a size fetch, then a run started shortly after it.
+#
+# The contract locked here is the observable: a preview and a run that are live
+# together cost exactly ONE interactive prompt between them. Nothing is asserted
+# about HOW — no fix exists yet and several designs are open, so an assertion that
+# run_size skips sudo, or that a lock file appears, would pin the test to one of them.
+#
+# The counting mechanism is ONEUP-0038's mock sudo — one timestamp file per parent
+# pid, a line logged only when a call really has to authenticate, which is a password
+# popup rather than a sudo invocation — with both engines pointed at ONE shared log so
+# the count is across both processes. It cannot pass by accident: a mock that just
+# succeeded would record 0, and 0 fails this as loudly as 2 does.
+#
+# The overlap is staged with a rendezvous file and bounded polls, never a sleep
+# (docs/standards/testing.md §6; the sleep in the orphaned-dialog scenario is
+# ONEUP-0068 and is not to be copied). The size engine's mock zypper announces itself
+# and then blocks inside the dry run — which run_size reaches only AFTER sudo_init —
+# so the preview engine is provably still alive, and already authenticated, at the
+# instant the run engine authenticates. The run engine's mock systemctl records that
+# liveness: release_zypper_lock's `is-active` probe is the first thing the run does
+# after its own sudo_init, and it fires whether or not a fix removes the prompt.
+echo "TEST: a size preview and a run that overlap cost exactly one password prompt"
+d=$(mktemp -d)
+mkdir -p "$d/rdv" "$d/home" "$d/size" "$d/run"
+rdv="$d/rdv"
+setup_common "$d/size"; setup_common "$d/run"
+# ONEUP-0038's mock, plus the role and the peer's liveness, so a failure says WHICH
+# engine prompted and whether the other was still on screen when it did.
+cat > "$d/sudo.mock" <<'EOF'
+#!/usr/bin/env bash
+ts="${ONEUP_TEST_TS:?mock sudo needs ONEUP_TEST_TS}"
+for a in "$@"; do [[ "$a" == "-k" ]] && rm -f "$ts/ts.$PPID"; done
+for a in "$@"; do [[ "$a" == "-n" ]] && exit 1; done   # no passwordless drop-in
+if [[ ! -f "$ts/ts.$PPID" ]]; then
+    peer="n/a"
+    if [[ -n "${ONEUP_TEST_PEER_PID:-}" ]]; then
+        if kill -0 "$ONEUP_TEST_PEER_PID" 2>/dev/null; then peer=alive; else peer=gone; fi
+    fi
+    echo "PROMPT role=${ONEUP_TEST_ROLE:-?} pid=$PPID peer=$peer cmd=$*" >> "$ts/prompts"
+    : > "$ts/ts.$PPID"
+fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -A|-v|-k|-E) shift ;;
+        -p) shift 2 ;;
+        --) shift; break ;;
+        -*) shift ;;
+        *) break ;;
+    esac
+done
+[[ $# -eq 0 ]] && exit 0
+exec "$@"
+EOF
+cp "$d/sudo.mock" "$d/size/sudo"; cp "$d/sudo.mock" "$d/run/sudo"
+# Never executed — sudo is mocked — but ONEUP_ASKPASS must point somewhere inside the
+# temp dir all the same: cleanup runs reap_orphaned_askpass, which scans the real `ps`
+# for the askpass path AND one of OneUp's prompt strings, and the default path is the
+# developer's own ksshaskpass (docs/standards/testing.md §2).
+printf '#!/usr/bin/env bash\nexit 1\n' > "$d/size/mock-askpass"
+cp "$d/size/mock-askpass" "$d/run/mock-askpass"
+# The preview engine. `dup` without --dry-run in --size mode is the bug --size exists
+# to avoid, so the mock exits 99 rather than failing quietly (testing.md §3 rule 2).
+cat > "$d/size/zypper" <<EOF
+#!/usr/bin/env bash
+if [[ "\$*" == *dup* || "\$*" == *update* ]] && [[ "\$*" != *--dry-run* ]]; then
+    echo "BUG: the size preview ran a real transaction" >&2; exit 99
+fi
+if [[ "\$*" == *--dry-run* ]]; then
+    # run_size reaches this only after sudo_init, so the file below is proof that the
+    # preview engine has authenticated and is still running. Hold here until the
+    # scenario has started the run and watched it authenticate. The ceiling is a
+    # safety valve, not a wait: the scenario releases it as soon as the run engine is
+    # past its own sudo_init, and a fix that serialises the two can still finish
+    # instead of deadlocking.
+    : > "$rdv/size-live"
+    for _ in \$(seq 1 600); do [[ -f "$rdv/release-size" ]] && break; sleep 0.05; done
+    echo "Package download size:   371.4 MiB"
+    exit 0
+fi
+exit 0
+EOF
+printf '#!/usr/bin/env bash\n[[ "$*" == *is-active* && "$*" == *packagekit* ]] && exit 3\nexit 0\n' \
+    > "$d/size/systemctl"
+# The run engine: the sibling one-prompt scenario's mocks, plus a systemctl that
+# records the rendezvous.
+cat > "$d/run/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)           exit 0 ;;
+  *dup*|*update*)      echo "Nothing to do." ; exit 0 ;;
+  *needs-rebooting*)   exit 0 ;;
+  *clean*)             exit 0 ;;
+  *" lr "*|*" lr -u"*) echo "1 | repo | X | Yes | (r ) | Yes | http://x" ; exit 0 ;;
+  *packages*)          exit 0 ;;
+  *ps*)                exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+printf '#!/usr/bin/env bash\necho "1024\t/var/cache/zypp"\n' > "$d/run/du"
+cat > "$d/run/systemctl" <<EOF
+#!/usr/bin/env bash
+if [[ "\$*" == *is-active* && "\$*" == *packagekit* ]]; then
+    if kill -0 "\${ONEUP_TEST_PEER_PID:-0}" 2>/dev/null; then
+        echo "peer=alive" > "$rdv/run-past-auth"
+    else
+        echo "peer=gone" > "$rdv/run-past-auth"
+    fi
+    exit 3
+fi
+exit 0
+EOF
+chmod +x "$d/size"/* "$d/run"/*
+
+# The two command lines the window actually issues. There is no Qt here and none is
+# wanted: QProcess is only what starts the two processes, and the number of password
+# prompts is an engine-level observable. Both are invoked directly rather than through
+# run_engine (which cannot return a pid), so each repeats run_engine's redirects by
+# hand, with its own copy of every path — a preview must not be able to damage the
+# run's state, or the machine's (testing.md §2.1). HOME too, which run_engine does not
+# redirect: the engine mkdir -p's $HOME/Documents/update-logs (ONEUP-0058).
+HOME="$d/home" PATH="$d/size:$PATH" \
+    ONEUP_TEST_TS="$d" ONEUP_TEST_ROLE=size \
+    ONEUP_ZYPP_PID_FILE="$d/size/no-zypp.pid" ONEUP_RUN_STATE="$d/size/run.state" \
+    ONEUP_STOP_FILE="$d/size/stop.request" ONEUP_GUARD_FILE="$d/size/guard" \
+    ONEUP_INHIBITED=1 ONEUP_REPOS_DIR="$d/size/repos.d" \
+    ONEUP_ASKPASS="$d/size/mock-askpass" \
+    bash "$ENGINE" --size=system --log="$d/size/size.log" >"$d/size/out" 2>&1 &
+size_pid=$!
+staged=no
+for _ in $(seq 1 300); do
+    [[ -f "$rdv/size-live" ]] && { staged=yes; break; }
+    kill -0 "$size_pid" 2>/dev/null || break
+    sleep 0.1
+done
+overlap=""
+if [[ "$staged" != yes ]]; then
+    # +2: the overlap check and the prompt-count check, neither of which can run.
+    echo "  FAIL - could not stage the preview engine (it never reached its dry run)"; FAIL=$((FAIL+2))
+    awk '{print "         size: " $0}' "$d/size/out" 2>/dev/null | tail -5
+else
+    HOME="$d/home" PATH="$d/run:$PATH" \
+        ONEUP_TEST_TS="$d" ONEUP_TEST_ROLE=run ONEUP_TEST_PEER_PID="$size_pid" \
+        ONEUP_ZYPP_PID_FILE="$d/run/no-zypp.pid" ONEUP_RUN_STATE="$d/run/run.state" \
+        ONEUP_STOP_FILE="$d/run/stop.request" ONEUP_GUARD_FILE="$d/run/guard" \
+        ONEUP_INHIBITED=1 ONEUP_REPOS_DIR="$d/run/repos.d" \
+        ONEUP_ASKPASS="$d/run/mock-askpass" \
+        bash "$ENGINE" --steps=system,flatpak,firmware,orphans,cache \
+        --log="$d/run/run.log" >"$d/run/out" 2>&1 &
+    run_pid=$!
+    for _ in $(seq 1 300); do
+        [[ -f "$rdv/run-past-auth" ]] && break
+        kill -0 "$run_pid" 2>/dev/null || break
+        sleep 0.1
+    done
+    overlap=$(cat "$rdv/run-past-auth" 2>/dev/null || true)
+    if [[ "$overlap" == "peer=alive" ]]; then
+        echo "  ok   - both engines are live at once (the preview is still running when the run authenticates)"; PASS=$((PASS+1))
+    else
+        # +1 only: the prompt count below is still counted, whatever it says.
+        echo "  FAIL - could not stage the overlap (want 'peer=alive' at the run's first post-auth step, got '${overlap:-nothing}')"; FAIL=$((FAIL+1))
+        awk '{print "         run:  " $0}' "$d/run/out" 2>/dev/null | tail -5
+    fi
+fi
+: > "$rdv/release-size"     # let the held preview finish, on every path
+for p in "${size_pid:-}" "${run_pid:-}"; do
+    [[ -z "$p" ]] && continue
+    for _ in $(seq 1 300); do kill -0 "$p" 2>/dev/null || break; sleep 0.1; done
+    kill -9 "$p" 2>/dev/null
+    wait "$p" 2>/dev/null
+done
+if [[ "$staged" == yes ]]; then
+    prompts=$(grep -c . "$d/prompts" 2>/dev/null || echo 0)
+    if [[ "$prompts" == "1" ]]; then
+        echo "  ok   - one password prompt across the preview and the run"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - one password prompt across the preview and the run (expected 1, counted $prompts)"; FAIL=$((FAIL+1))
+        awk '{print "         " $0}' "$d/prompts" 2>/dev/null
+    fi
+fi
+unset size_pid run_pid
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 # ONEUP-0045: a real run records itself so a GUI starting mid-run can find it. Runs
 # outlive the window on purpose (ONEUP-0042), so without this the user is offered a Run
 # button whose only possible outcome is the package-lock message.
