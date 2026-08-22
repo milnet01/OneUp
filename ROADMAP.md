@@ -4096,3 +4096,28 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** When the test suite finishes, it prints a scary-looking error after the results. Nothing is actually broken — but a real failure could hide behind it, so it is worth silencing properly.
   Kind: fix.
   Source: in-session-2026-08-21.
+
+- ✅ [ONEUP-0125] **Bring README.md up to date with the features it had stopped naming.**
+  Checked every claim in README.md against the tree rather than reading it. The
+  claims all held: the four Settings labels it cites ("High contrast", "Text
+  size", "Passwordless", "Automatic updates") all exist, "two minutes" matches
+  REFRESH_TIMEOUT=120, the "Restart" button is the reboot banner's "Restart now",
+  and the run history is the last-run line backed by the history file. Nothing
+  was stale.
+
+  What was missing was three user-visible features the README had never caught
+  up with:
+
+    * "Show download size" on the system task — the button exists in the task
+      row and the engine's --size mode backs it, and a user on a metered
+      connection had no way to learn it was there.
+    * "Retry failed steps" — a real button in the main window.
+    * The Repositories dialog, which can enable, disable and remove a source.
+
+  Added as three bullets in the existing voice. No path is backticked, so
+  CLAUDE.md §4's rule about v2-only paths in the four documents docs-check.py
+  scans is not engaged. Verified with tests/docs-check.py: 20396 checked, 0
+  failed.
+  **Layman:** The README now mentions three things the app can already do that it never told you about.
+  Kind: doc.
+  Source: user-request-2026-08-22.

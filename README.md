@@ -38,6 +38,9 @@ Each task is a toggle — turn off what you don't want. On top of running update
 OneUp can:
 
 - **Check for updates** read-only (see the count per task before installing).
+- **See how big the download is** before you start. **Show download size** on the
+  system task works out the exact figure, so you know whether you're in for 40 MB
+  or 2 GB before you commit to it — useful on a slow or metered connection.
 - **Check weekly in the background** and notify you when updates are ready.
 - **Sit quietly in the system tray** and turn amber when updates are waiting, so you
   notice without catching a popup — with a right-click Check / Update / Open / Quit
@@ -52,6 +55,10 @@ OneUp can:
   isn't actually required.
 - **Survive a single broken software source** instead of failing the whole update —
   sets just that source aside, updates everything else, and retries it next time.
+- **Retry only the steps that failed**, rather than running the whole thing again.
+- **Manage your software sources** without opening a terminal — see what's switched
+  on, turn one off, or remove it entirely, which is what you want when a
+  third-party source is the thing causing trouble.
 - **Roll back** to the snapshot it took before the update, in one click.
 - **Skip the password prompt** — optionally (off by default). A "Passwordless"
   toggle stops OneUp asking for your password on every update. It stores **no
