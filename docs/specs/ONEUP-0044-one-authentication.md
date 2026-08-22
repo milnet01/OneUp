@@ -141,19 +141,60 @@ does today up to and including its `@@SIZE@@` and `@@DONE@@` markers, and then, 
 returning into the dispatch's `exit $?`, enters the hold:
 
 ```
-hold_for_go_ahead()
-  write   $HOLD_STATE_FILE          # pid, log path, the size just quoted
+hold_for_go_ahead()                 # RECORDS a decision; it never runs a step itself
+  write   $HOLD_STATE_FILE          # see §4.3 for the pinned layout
   poll    every $STOP_POLL_SECONDS, up to $ONEUP_HOLD_SECONDS:
-            go.request   newer than hold.state -> read its steps, run them, return 0
+            go.request   newer than hold.state -> set STEPS from it, return 0
             stop.request newer than hold.state -> return 1
-            the window's pid is gone           -> return 1
+            $PPID != $WINDOW_PID (window gone) -> return 1
   ceiling reached                              -> return 1
   always: rm -f $HOLD_STATE_FILE
 ```
 
-On a go-ahead the process falls through into the ordinary run path holding the credential it
-already has, so no second `sudo_init` is reached. On anything else it exits cleanly and the
-window re-arms the size link exactly as `_on_size_finished` does today.
+**The hold records; it does not run.** The run is not a function this could call — the
+engine's step code is straight-line script *below* the `--size` dispatch, and the engine
+already records why that matters in the comment above `system_txn_argv` — "that dispatch
+calls run_size and then exits", so anything "further down the file has never been executed
+and does not exist yet". So a go-ahead sets `STEPS` and returns 0, and the
+`--size` dispatch's `exit $?` becomes conditional on the hold's result, letting control
+reach the existing run path.
+
+**The held path must then SUPPRESS the main dispatch's `sudo_init`**, which is the one
+line that makes this design work. Falling through reaches `$needs_sudo && sudo_init`, and
+`sudo_init` has no re-entry guard — its only early return is `auth_current`, which is
+false precisely for the users this fix is for. Re-entering it does two things, and the
+second is worse than the first: it re-runs the interactive validate, and it spawns a
+**second keep-alive**, overwriting `SUDO_KEEPALIVE` so `cleanup`'s group kill can only
+reach the later one. That is the orphaned-keep-alive leak of ONEUP-0041 and
+`docs/standards/security.md` §2.4, and this design is the first thing in the engine that
+would make it reachable — every existing `sudo_init` call site sits in a dispatch block
+that exits, so no process reaches two of them today. INV-9 pins it.
+
+Suppression is a flag the hold sets, not a change to `sudo_init`'s five call sites.
+`release_zypper_lock` sits immediately after and is re-entered harmlessly, so it is left
+alone.
+
+**How the engine learns the window is gone: it captures `WINDOW_PID=$PPID` at startup and
+watches for `$PPID` to CHANGE.** Under `QProcess` the engine is a direct child of the
+window, so `$PPID` is the window until the window exits, at which point the engine is
+reparented and `$PPID` becomes something else.
+
+**Do not test `$PPID` against 1.** Under systemd a user session's orphans are reparented
+to `systemd --user`, not to init, so a pid-1 test silently never fires. This engine has
+already paid for that mistake once: `reap_orphaned_askpass` carries the measurement —
+"an orphan-check against pid 1 silently never fires (measured — it was the first version
+of this function and it reaped nothing)". Comparing against the captured pid is correct
+whatever the process is reparented to.
+
+A `--hold` run started by hand from a shell keeps its shell as `$PPID` for the whole hold,
+so it never sees this condition and relies on the ceiling alone. That is correct — there
+is no window to have gone away.
+
+**On anything other than a go-ahead the engine exits and the window must clear its own
+held-engine state.** It cannot rely on today's `_on_size_finished` to do it: that handler
+opens `if not row or row.has_size(): return`, and a hold exists only after `@@SIZE@@` has
+arrived, so `has_size()` is true and it returns without reading the exit code. §4.5 says
+what the window does instead.
 
 ### 4.3 Two new state files, and one reused signal
 
@@ -161,14 +202,35 @@ Both live beside the existing two, in the directory the marker reference's §8 p
 engine's `ONEUP_STATE_DIR`, the window's `_state_home` — and both are overridable in the
 engine only, matching the existing pair:
 
-| File | Written by | Carries | Override |
-|------|-----------|---------|----------|
-| `hold.state` | the engine, when the hold begins | pid, log path, the quoted size | `ONEUP_HOLD_STATE` |
-| `go.request` | the window, to say proceed | the step selection at the moment Update was pressed | `ONEUP_GO_FILE` |
+| File | Written by | Deleted by | Override |
+|------|-----------|-----------|----------|
+| `hold.state` | the engine, when the hold begins | the engine, on every exit from the hold | `ONEUP_HOLD_STATE` |
+| `go.request` | the window, to say proceed | the engine, when it reads one or when the hold ends | `ONEUP_GO_FILE` |
 
-**Cancel needs no new file.** `stop.request` already means "the user asked to stop" and both
-halves already agree on it, so the window's Cancel writes that and the hold treats it as
-`stop_pending` does.
+**Both layouts are pinned line by line, because a contents list is not a layout.**
+`run.state`'s equivalent is pinned that way in `docs/specs/ONEUP-0054-python-engine.md`
+§4.1.1 — down to "Lines 1–3 therefore may not be reordered or dropped" — precisely so the
+Python engine can reproduce it, and §10 claims the same reproducibility for these two.
+
+```
+hold.state                        go.request
+  line 1  engine pid                line 1  comma-separated step keys
+  line 2  log path, verbatim
+  line 3  the quoted size
+```
+
+`hold.state` line 1 is the only line the window reads (§6, to tell a live hold from one a
+killed engine left behind). `go.request` line 1 is the only line the engine reads. Extra
+lines are ignored by both halves; a missing line 1 makes the file invalid and it is
+treated as absent.
+
+**Cancel needs no new file, but it does need its own comparison.** `stop.request` already
+means "the user asked to stop" and both halves already agree on it, so the window's Cancel
+writes that. **The hold may not call `stop_pending` to read it.** That function requires
+`[[ -e "$RUN_STATE_FILE" && "$STOP_FILE" -nt "$RUN_STATE_FILE" ]]`, and a hold has
+deliberately not written `run.state` — so `stop_pending` is false for the whole hold and a
+Cancel button wired through it would do nothing for the full 120 seconds. The hold compares
+`stop.request` against `hold.state`, which is its own stamp.
 
 **`run.state`'s layout is untouched.** It is pinned in
 `docs/specs/ONEUP-0054-python-engine.md` §4.1.1 and the Python engine must reproduce it
@@ -196,21 +258,48 @@ Two independent reasons the hold must end by itself:
    finishing it. A held engine has committed to nothing, so the opposite applies: with no
    window there is nobody to authorise anything, and it must exit.
 
-**Expiry is not a failure.** The engine exits 0 having already delivered the size, the
-window re-arms the link, and pressing Update then starts a fresh engine — today's behaviour,
-today's two prompts. The fix degrades to the status quo rather than to an error.
+**Expiry is not a failure, and the two statuses here are different things.** Inside the
+engine `hold_for_go_ahead` returns **non-zero** on expiry, on Cancel and on a departed
+window — that is how the caller knows not to fall through into the run. The `--size`
+dispatch then maps all three to **exit 0**, because the job the process was started for —
+quoting the size — succeeded and was already reported. Without that mapping a user running
+`--size --hold` in a terminal sees a failure for a run they simply chose not to start.
+
+So the window re-arms the link, pressing Update starts a fresh engine, and the user gets
+today's behaviour and today's two prompts. The fix degrades to the status quo rather than
+to an error.
 
 ### 4.5 The window side
 
-- `request_size` passes `--hold` and, on `@@SIZE@@`, keeps `_size_proc` rather than letting
-  `_on_size_finished` tear it down.
-- Starting a run while a held engine exists writes `go.request` with the current step
-  selection, then **adopts** `_size_proc` as `proc` — re-pointing `on_output`, `on_finished`
-  and `on_error` at it — so every existing run path works unchanged.
-- `_launch` gains the guard §2.3 found missing: it must not start a second engine while
-  `_size_proc` is live.
-- If `go.request` is written and the engine has already gone, the window falls back to
-  `_launch` as it works today.
+**The log is named as a run log from the start.** When `request_size` passes `--hold` it
+passes `--log=<stamp>.log`, not `<stamp>.size.log`. A held preview may become the run, and
+the engine writes its `--log=` value verbatim into `run.state` for run-following, so a run
+that logged to a `.size.log` would be followed at a path the window's `_log_path` does not
+name and "Open log file" would show the wrong file. Naming it correctly up front costs
+nothing and needs no extra payload in `go.request`.
+
+**`_launch`'s per-run reset is not part of starting a process, and adoption must run it
+too.** `_launch` sets `_log_path`, `_total`, the progress bar's range, `_run_active` and
+`set_controls_enabled(False)`, and clears the per-run attributes, banners and badges. An
+adopt path that only re-points `on_output`, `on_finished` and `on_error` ships a run with
+no progress range, stale banners from the previous run, and `_run_active` false — which
+leaves the standalone thin-snapshots action unguarded. So that reset block is factored out
+of `_launch` and called by both paths.
+
+The window is then in exactly one of three states, and Update behaves differently in each:
+
+| State | What Update does |
+|---|---|
+| No preview running | `_launch`, exactly as today |
+| Preview running, no `hold.state` yet | **Wait** for `hold.state` or for the engine to exit, then re-enter this table. It must NOT write `go.request` — §4.3's freshness rule compares against a stamp that does not exist yet, so an early request is provably stale and would be ignored, leaving the user with a dead button |
+| `hold.state` present and its pid alive | Run the reset block, write `go.request`, adopt `_size_proc` as `proc` |
+
+That middle row is the whole dry run — seconds to a minute — and it is the state a user
+who presses **Show download size** and then immediately presses **Update** is in.
+
+`_launch` also gains the guard §2.3 found missing: it must not start a second engine while
+`_size_proc` is live. And if the engine has gone by the time the window looks, the window
+clears its held-engine state and falls back to `_launch` as it works today (INV-7).
 
 ### 4.6 The steps travel with the go-ahead
 
@@ -218,11 +307,20 @@ The preview is started for `system` alone, but the run uses whatever the user ha
 when they press Update, which may have changed in between. So the selection is written into
 `go.request` rather than fixed at preview time, and the held engine runs what it is told.
 
-**The step keys are validated against the engine's existing `LABEL` map**, exactly as
-`--steps=` already validates them. `go.request` carries a step list and nothing else; it
-must never become a route by which the window hands the engine a command to run. The
-privilege boundary is otherwise unchanged — the window still never runs as root
-(`docs/standards/security.md` §2).
+**Every key in `go.request` must resolve in the engine's `LABEL` map, or the whole
+go-ahead is refused and the hold ends as a Cancel.** `go.request` carries a step list and
+nothing else; it must never become a route by which the window hands the engine a command
+to run. The privilege boundary is otherwise unchanged — the window still never runs as
+root (`docs/standards/security.md` §2).
+
+**This is stricter than `--steps=`, deliberately, and reusing that path would be a
+security defect.** `--steps=` does not validate: it iterates the five known keys calling
+`step_selected`, so an unknown key is **silently dropped**, and the only rejection is when
+*every* key is unknown (`if (( TOTAL == 0 ))` → exit 2). Reusing that behaviour would mean
+a `go.request` reading `cache,../../evil` runs the cache step and reports success, which
+is a file the window writes being partly ignored rather than refused. `--steps=` is a
+flag a person types on their own command line; `go.request` is an authorisation read by a
+root process, and the two do not warrant the same leniency.
 
 ## 5. Correctness invariants
 
@@ -235,15 +333,22 @@ privilege boundary is otherwise unchanged — the window still never runs as roo
 
 - **INV-2** A held engine never begins a transaction without a go-ahead newer than its own
   `hold.state`.
-  *Test:* `tests/run-tests.sh` — hold with no `go.request`; the mock `zypper` exits 99 if it
-  ever sees `dup` or `update`.
+  *Test:* `tests/run-tests.sh` — hold with no `go.request`; the mock `zypper` exits 99 on a
+  `dup` or `update` that does **not** carry `--dry-run`.
   *Breaks when:* the ceiling path falls through into the run instead of returning non-zero,
   or the staleness comparison is dropped and a leftover `go.request` is honoured.
+  *Why the `--dry-run` carve-out:* the hold is only reached *after* `run_size`'s own
+  `zypper … dup --allow-vendor-change --dry-run`. A mock exiting 99 on any `dup` fires
+  during the size probe, so the scenario would die before it ever reached the hold — and
+  per §6's last row that is "no hold at all", meaning the test could never exercise what it
+  claims to.
 
 - **INV-3** The hold ends without external help. No `go.request`, no `stop.request` and no
-  window leaves the engine exited within `ONEUP_HOLD_SECONDS`.
-  *Test:* `tests/run-tests.sh` — hold with `ONEUP_HOLD_SECONDS` set low; poll for exit.
-  *Breaks when:* the ceiling is unset, infinite, or only checked after a blocking read.
+  window leaves the engine exited within `ONEUP_HOLD_SECONDS`, **exit status 0**.
+  *Test:* `tests/run-tests.sh` — hold with `ONEUP_HOLD_SECONDS` set low; poll for exit and
+  assert the status is 0 (§4.4: the size was delivered, so expiry is not a failure).
+  *Breaks when:* the ceiling is unset, infinite, or only checked after a blocking read; or
+  the dispatch propagates the hold's internal non-zero return to the caller.
 
 - **INV-4** A `go.request` older than `hold.state` is ignored.
   *Test:* `tests/run-tests.sh` — write `go.request` first, then start the held engine, and
@@ -251,11 +356,22 @@ privilege boundary is otherwise unchanged — the window still never runs as roo
   *Breaks when:* the freshness comparison is dropped, or leftovers are deleted at startup
   instead, which races a go-ahead pressed in the same moment.
 
-- **INV-5** This work adds no marker and changes no marker's field layout, so the marker
-  reference's §5.1 freeze holds and gate G2 still compares equal.
-  *Test:* `grep -oE '\bmarker [A-Z_]+' update_system.sh | awk '{print $2}' | sort -u | wc -l`
+- **INV-5** This work adds no marker **name**, so the marker reference's §5.1 freeze is not
+  breached by a new marker.
+  *Test:* `tests/run-tests.sh`, a census assertion running
+  `grep -oE '\bmarker [A-Z_]+' update_system.sh | awk '{print $2}' | sort -u | wc -l`
   → `23`.
   *Breaks when:* the hold is signalled by a new marker rather than by `hold.state`.
+
+- **INV-5a** This work changes no existing marker's **field layout**.
+  *Test:* `tests/run-tests.sh` — harvest every `@@NAME@@|…` line a full mocked run emits,
+  and assert each name's field count against a pinned table. A census cannot do this job:
+  it counts distinct names, so it is blind to a field appended to an existing marker and
+  blind to a rename, and gate G2 compares v1's stream against v2's, so a change made in
+  both compares equal.
+  *Breaks when:* a field is appended to an existing marker to carry hold state — the cheap
+  change §5 of the marker reference explicitly invites, and the one this invariant exists
+  to forbid for the duration of the freeze.
 
 - **INV-6** The run performed after a go-ahead uses the step selection carried in
   `go.request`, not the step the preview was started for.
@@ -274,9 +390,21 @@ privilege boundary is otherwise unchanged — the window still never runs as roo
 - **INV-8** `go.request` carries a step list and nothing else, and every key in it resolves
   in the engine's `LABEL` map before any step runs.
   *Test:* `tests/run-tests.sh` — a `go.request` carrying an unknown key, and one carrying
-  shell metacharacters; assert the engine refuses and runs no step.
+  shell metacharacters; assert the engine refuses the whole go-ahead and runs no step.
   *Breaks when:* the held engine expands the file's contents instead of matching each key
-  against `LABEL`.
+  against `LABEL`; or it reuses `--steps=`'s selection loop, which silently drops an
+  unknown key and so would run the valid part of a tampered list and report success.
+
+- **INV-9** A held run that becomes a real run spawns exactly ONE keep-alive, and `cleanup`
+  kills it.
+  *Test:* `tests/run-tests.sh` — extend the existing keep-alive scenario to the held path;
+  after the run ends, assert no process carrying the `oneup-keepalive` tag survives.
+  *Breaks when:* the held path re-enters `sudo_init`, whose second `setsid` overwrites
+  `SUDO_KEEPALIVE` so `cleanup`'s group kill reaches only the later group. Nothing in the
+  engine guards against this today — it is unreachable only because every existing
+  `sudo_init` call site sits in a dispatch block that exits, and this design is the first
+  thing that would put two of them on one process's path (ONEUP-0041,
+  `docs/standards/security.md` §2.4).
 
 ## 6. Failure modes
 
@@ -288,6 +416,8 @@ privilege boundary is otherwise unchanged — the window still never runs as roo
 | `hold.state` is current | An earlier engine was `SIGKILL`ed and left one behind | The pid it carries is dead, so the window ignores it and launches normally |
 | One window | A second window opens mid-hold | It must not adopt a hold it did not start; it launches its own engine |
 | The dry run succeeded | zypper errored, so no size was quoted | No hold at all — the existing failure path is unchanged |
+| `go.request` carries a valid step list | A key does not resolve in `LABEL`, by tampering or by a window bug | The whole go-ahead is refused and the hold ends as a Cancel (INV-8) — never a partial run of the keys that happened to resolve |
+| Update is pressed after `hold.state` exists | It is pressed during the dry run, before the stamp | The window waits for the stamp or for the engine to exit (§4.5); it does not write a `go.request` that its own freshness rule would discard |
 
 ## 7. Tests
 
@@ -298,15 +428,40 @@ it is the only one here whose red run has been performed; the rest are written w
 | Rule | What catches a breach |
 |------|----------------------|
 | INV-1 | `tests/run-tests.sh` — "a size preview and a run that overlap cost exactly one password prompt" |
-| INV-2 | `tests/run-tests.sh` — hold scenario; the mock `zypper` exits 99 on any transaction |
-| INV-3 | `tests/run-tests.sh` — hold scenario with a low ceiling |
+| INV-2 | `tests/run-tests.sh` — hold scenario; the mock `zypper` exits 99 on a `dup`/`update` **without** `--dry-run` |
+| INV-3 | `tests/run-tests.sh` — hold scenario with a low ceiling, asserting exit status 0 |
 | INV-4 | `tests/run-tests.sh` — stale `go.request` scenario |
-| INV-5 | the marker census in INV-5, plus gate G2 |
+| INV-5 | `tests/run-tests.sh` — the marker-name census |
+| INV-5a | `tests/run-tests.sh` — the per-marker field-count table |
 | INV-6 | `tests/run-tests.sh` — preview one step, go-ahead another |
 | INV-7 | `tests/gui-smoke.py` — fallback on an exited `_size_proc` |
 | INV-8 | `tests/run-tests.sh` — unknown key, and metacharacters, in `go.request` |
-| §4.4's ceiling staying under sudo's credential lifetime | **nothing** — sudo's timeout is not readable without root and is asserted nowhere. If a user has lowered it, the hold silently costs a second prompt, which is INV-1's failure and no test would see it. Tracked by ONEUP-0044 §10 |
+| INV-9 | `tests/run-tests.sh` — the keep-alive scenario extended to the held path |
+| §4.4's ceiling staying under sudo's credential lifetime | **nothing** — sudo's timeout is not readable without root and is asserted nowhere. If a user has lowered it, the hold silently costs a second prompt, which is INV-1's failure and no test would see it. Tracked in §10 |
 | The structural count of privileged call sites (`security.md` §5.2) | `tests/run-tests.sh` — the existing call-site count assertion, which this work must update rather than route around |
+
+### 7.1 One existing test mock must be corrected first
+
+**The three counting mocks in `tests/run-tests.sh` model `sudo -k` more aggressively than
+real sudo does, and that would fail a correct implementation of this spec.** Each contains
+`for a in "$@"; do [[ "$a" == "-k" ]] && rm -f "$ts/ts.$PPID"; done`, so `-k` **deletes**
+the cached timestamp. The engine records the opposite as measured, in `auth_current`'s own
+comment: "-k does NOT invalidate a warm credential".
+
+Today the divergence is invisible, because each process calls `auth_current` once before
+its own `sudo_init`, when there is no timestamp to delete. It becomes visible the moment
+one process reaches `sudo_init` twice — which is exactly what this design does. An
+implementer who fell through without §4.2's suppression would see INV-1 still counting 2,
+and the second prompt would be an artefact of the mock rather than the defect.
+
+§4.2's suppression makes the second `auth_current` unreachable, so a conforming
+implementation passes either way. The mocks are still wrong and should be corrected to
+match the measured behaviour, so that the next design to reach `sudo_init` twice is not
+misled by them.
+
+**This was found by the cold review of this spec, not by a failing test.** It is a change
+to committed test code rather than to this document, so it is surfaced rather than made
+here.
 
 ## 8. Docs & release
 
@@ -320,6 +475,8 @@ Changed in the same release:
   and says "no existing gate can see this bug". Both are now false.
 - `CLAUDE.md` §4 — the state-directory paragraph names two files; it will name four.
 - `docs/standards/security.md` §5.2 — if the privileged call-site count changes.
+- `tests/run-tests.sh` — the three counting mocks' `-k` handling, per §7.1. Not caused by
+  this work and correctable independently of it.
 - `README.md` — only if the download-size wording no longer matches what the user sees.
 - `CHANGELOG.md`, and ONEUP-0044 on the roadmap.
 
@@ -373,3 +530,4 @@ No version-site change: this is not a release on its own.
 
 | Loop | Date | Lanes | Q1 | Q2 | Q3 | Q4 | Outcome |
 |------|------|-------|----|----|----|----|---------|
+| 1 | 2026-08-22 | 3, cold; genre pinned `spec`; Q1 6 · Q2 3 · Q3 3 · Q4 2 — all 14 verified, 0 dismissed, all fixed | 6 | 3 | 3 | 2 | **Fourteen verified on the first loop, and the design section was where nearly all of them lived — §§1–3 and §9 came back clean.** **All three lanes independently found the same two defects**, which is the run's strongest signal. §4.2's pseudo-code said the hold would "read its steps, run them", while the prose two paragraphs down said the process "falls through into the ordinary run path" — two different mechanisms, and the first is impossible: the engine's step code is straight-line script *below* the `--size` dispatch, which the engine's own `system_txn_argv` comment already records. And INV-5's marker census cannot falsify its own second half — a distinct-name count is blind to a field appended to an existing marker, which is precisely the "cheap change" the marker reference invites, so the invariant claimed a coverage it did not have. Split into INV-5 and INV-5a, the latter given a real per-marker field-count assertion rather than a `nothing` row, since `documentation.md` §5 makes an untested invariant an incomplete spec by definition. **The most consequential finding was two lanes': "no second `sudo_init` is reached" was false.** Falling through reaches the main dispatch's `$needs_sudo && sudo_init`, which has no re-entry guard — and its second `setsid` overwrites `SUDO_KEEPALIVE`, so `cleanup`'s group kill reaches only the later group. That is ONEUP-0041's orphaned-keep-alive leak, and **this design would have been the first thing in the engine to make it reachable**: the same overwrite was checked and disproved as unreachable on this item three commits earlier, precisely because every existing call site sits in a dispatch block that exits. §4.2 now requires the held path to suppress it and INV-9 pins one keep-alive. **One finding was security-relevant.** §4.6 claimed `go.request`'s step keys are validated "exactly as `--steps=` already validates them" — and `--steps=` does not validate: it iterates the five known keys, so an unknown one is silently dropped and only an all-unknown set is refused (measured: `--steps=cache,bogus` runs cache and reports `@@DONE@@|ok`). A `go.request` is an authorisation read by a root process, so it now refuses the whole go-ahead on any key that does not resolve in `LABEL`. **Two more were contract gaps a builder could not have settled locally**: `hold.state` and `go.request` had contents but no line layout, while §10 claimed the Python engine could reproduce them and `run.state`'s equivalent is pinned line-by-line in ONEUP-0054 §4.1.1; and nothing said what the window does between starting the preview and the appearance of `hold.state` — a window of seconds to a minute in which §4.3's own freshness rule makes a `go.request` provably stale, i.e. exactly what a user pressing Update straight after Show download size would hit. **The gate also caught a defect in a fix it had just made.** 4a step 3's refuting run showed the replacement text asserted the engine detects a departed window by `$PPID` becoming 1 — and `reap_orphaned_askpass` carries the measurement that under systemd orphans reparent to `systemd --user`, so "an orphan-check against pid 1 silently never fires". Changed to capturing `WINDOW_PID` at startup and watching for a change. Two quotations added by fixes failed the verbatim check (hard wraps with `#` comment markers mid-quote) and were shortened to fragments that verify; substance unchanged, so not counted. **Surfaced rather than fixed, because it is committed test code**: the three counting mocks in `tests/run-tests.sh` delete the timestamp on `sudo -k`, where the engine records as measured that "-k does NOT invalidate a warm credential" — invisible today, and it would have made INV-1 fail a naive fall-through fix for a reason that is not the defect (§7.1). `spec_lint`'s 7 `missing_section` findings dismissed: the verb resolves the global spec-format standard, while this project pins its own eleven-section template in `documentation.md` §4 — the same run reports 8 of that class against ONEUP-0085, which is Implemented and converged. |
