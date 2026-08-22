@@ -604,7 +604,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: in-session-2026-07-25.
 
-- 📋 [ONEUP-0044] **Find out why the single up-front authentication raises two password dialogs.**
+- 🚧 [ONEUP-0044] **Find out why the single up-front authentication raises two password dialogs.**
   Measured on a real run: one engine invocation, one `sudo -A -p ... -v` call,
   and yet TWO ksshaskpass processes 16 seconds apart, both carrying sudo_init's
   -p text, both then waiting hours. Confirmed not a fork (one invocation of the
@@ -659,6 +659,57 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   after 1053 has already fired.
 
   Next step is `write-test` for the harness, not a fix.
+  Second-defect hypothesis CHECKED AND DISPROVED (2026-08-22). Not filed.
+
+  The paragraph above headed "SECOND DEFECT, SAME FUNCTION" claims
+  `thin_snapshots` at 1007 "is reachable in an ordinary run after 1053 has
+  already fired". It is not, and no second `sudo_init` entry is reachable in
+  one process on this tree.
+
+  Four of the five call sites sit inside dispatch blocks that exit, and all
+  four blocks precede line 1053. The `AUTH_ACTION` case ends `exit $?`, so
+  `grant_auth` (942) and `revoke_auth` (970) — each with exactly one caller,
+  at 1026 and 1027 — cannot fall through. `if $THIN_SNAPSHOTS; then
+  thin_snapshots; exit $?; fi` is the ONLY caller of `thin_snapshots`, so
+  passing the flag exits before 1053 and not passing it never calls the
+  function at all. `if [[ -n "$SIZE_STEP" ]]; then run_size; exit $?; fi`
+  does the same for 563. So at most one call site executes per process,
+  SUDO_KEEPALIVE is assigned at most once, and cleanup's group kill covers
+  it. The `systemd-inhibit` re-exec is not a route either: it runs at 220,
+  before `sudo_init` is even defined, and is skipped outright when SIZE_STEP
+  or AUTH_ACTION is set.
+
+  What is true is that the protection is STRUCTURAL, not stated — mutually
+  exclusive dispatch that exits — and nothing in `sudo_init` records that it
+  may be entered only once. A call site added inside a run, which is exactly
+  the mid-run re-auth the hypothesis imagines, would make the overwrite
+  reachable immediately and silently. That is a hardening note, not a defect,
+  and it is recorded here rather than filed.
+
+  ONEUP-0041's orphaned keep-alives keep the single documented cause: a
+  SIGKILLed engine, which no trap can survive, which is why the loop watches
+  the engine pid itself.
+  REPRODUCED (2026-08-22). The harness the bullet asks for exists and is red.
+
+  `tests/run-tests.sh`, scenario "a size preview and a run that overlap cost
+  exactly one password prompt". It stages a `--size=system` engine and a full
+  run so both are provably live at once — a rendezvous file and bounded polls,
+  no sleep — and counts authentications across both processes at the mock sudo,
+  keyed per parent pid the way `sudoers(5)` `timestamp_type` keys them with no
+  terminal. Full suite: 289 passed, 1 failed, the new scenario the only failure,
+  counting 2 prompts where 1 was expected, with both pids and both argv printed.
+
+  This closes the bullet's "attempts to reproduce in isolation raised no dialog
+  at all" — a single engine invocation cannot show it, which is the whole point.
+  It also closes the design note in `docs/design/oneup-2.0.md` §6.2 that "no
+  existing gate can see this bug"; that section still states the disproved
+  one-invocation premise and needs correcting when the fix lands.
+
+  The contract locked is the observable count only. Nothing is asserted about
+  how one prompt is achieved, because the fix is not designed yet: whether the
+  size preview needs root at all is still open, and `sudo_init` already returns
+  early through `auth_current` where the ONEUP-0023 drop-in covers what the run
+  needs. The suite stays red until that lands.
 
 - ✅ [ONEUP-0045] **Pick up and follow a run that is already in progress when the window opens.**
   Runs deliberately outlive the window (ONEUP-0042), so a relaunched OneUp used
