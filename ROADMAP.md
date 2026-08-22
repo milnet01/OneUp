@@ -618,6 +618,47 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** One password request sometimes shows two boxes; only one needs answering. Worth understanding.
   Kind: investigate.
   Source: in-session-2026-07-25.
+  Located (2026-08-21, by `locate-defect` run from ~/.claude; one file read).
+  Not fixed, not reproduced — this is a location and a hypothesis.
+
+  THE REPORT'S PREMISE IS WRONG. It says "one engine invocation". There are
+  two engine PROCESSES. `oneup/gui/run.py:89` starts the engine a second time
+  for the download-size query — `p.start("bash", [ENGINE, f"--size={key}",
+  f"--log={size_log}"])` on its own `win._size_proc`, separate from the run's
+  `win.proc` at run.py:208 — and `--size` dispatches to `run_size`, which calls
+  `sudo_init` at update_system.sh:563. The main run calls it again at
+  update_system.sh:1053. Two processes, each doing its own up-front validate.
+
+  That is what makes the two dialogs OVERLAP, which a single process cannot do:
+  `sudo_init` blocks on its own dialog, so a second sequential call could never
+  be on screen beside the first. The 16-second gap fits a size fetch and a run
+  started shortly after it.
+
+  WHY BOTH DIALOGS CARRY sudo_init's TEXT — checked rather than assumed.
+  `SUDO_PROMPT` is exported globally at update_system.sh:48 with DIFFERENT
+  wording ("OneUp needs administrator rights to update this system."), so a
+  dialog carrying the `-p "System Updater: authenticate to update the system"`
+  string can only have come from the `sudo -A ... -v` at update_system.sh:643.
+  The report's inference from the prompt text holds.
+
+  CONFIRM BY: with no passwordless drop-in installed, fetch a download size and
+  start a run within ~20s. Or log `$$` and `date +%s` at update_system.sh:643
+  and look for two entries with different pids in one session. That is the
+  working harness the bullet says is the first task — and it needs two
+  processes, which is why reproducing it against a single engine invocation
+  raised no dialog at all.
+
+  SECOND DEFECT, SAME FUNCTION, ALREADY EVIDENCED. `sudo_init` has five call
+  sites (563, 942, 970, 1007, 1053) and NO re-entry guard — its only early
+  return is `auth_current`. Each entry overwrites `SUDO_KEEPALIVE=$!`, so the
+  earlier keep-alive's pid is lost and `cleanup` can only kill the later one.
+  That is the mechanism behind ONEUP-0041's orphaned keep-alives, which the
+  function's own comment records as measured ("two of them were found still
+  calling `sudo -n -v` every 50 seconds, 40 minutes after the runs that spawned
+  them were killed"). `thin_snapshots` at 1007 is reachable in an ordinary run
+  after 1053 has already fired.
+
+  Next step is `write-test` for the harness, not a fix.
 
 - ✅ [ONEUP-0045] **Pick up and follow a run that is already in progress when the window opens.**
   Runs deliberately outlive the window (ONEUP-0042), so a relaunched OneUp used
