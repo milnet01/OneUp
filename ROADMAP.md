@@ -604,7 +604,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: in-session-2026-07-25.
 
-- 🚧 [ONEUP-0044] **Find out why the single up-front authentication raises two password dialogs.**
+- ✅ [ONEUP-0044] **Find out why the single up-front authentication raises two password dialogs.**
   Measured on a real run: one engine invocation, one `sudo -A -p ... -v` call,
   and yet TWO ksshaskpass processes 16 seconds apart, both carrying sudo_init's
   -p text, both then waiting hours. Confirmed not a fork (one invocation of the
@@ -742,6 +742,31 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Next step is the build: engine --hold + hold_for_go_ahead, the window adopt
   path, and the test rewrite. Not started in this session.
+  Resolved (2026-08-23): implemented to the spec, on `v2`. The engine gains `--hold`:
+  after `--size` has quoted the size, `hold_for_go_ahead` writes `hold.state` and polls
+  for a `go.request` newer than it, so ONE process spans the preview and the run and sudo
+  sees one parent pid instead of two. `adopt_go_ahead` re-derives `RUN_KEYS`, `TOTAL` and
+  `STEP_INDEX` rather than only assigning `STEPS`, and refuses the whole go-ahead unless
+  every key is in `LABEL`. `HELD_AUTH` suppresses the second `sudo_init`. The window
+  passes `--hold`, waits for `hold.state`, and adopts the process when line 1 is its own
+  `_size_proc` pid.
+
+  Verified: local-CI green — run-tests 302 passed / 0 failed (was 289/1 with the old
+  two-engine scenario red), gui-smoke 385/0, docs-check 20734 checked / 0 failed.
+
+  The evidence that matters is the mutation probes, not the green run. Four parts of the
+  fix were each broken deliberately and the suite went red for the right reason: dropping
+  the `RUN_KEYS` re-derivation produced `@@STEP_BEGIN@@|cache|1|5`; dropping the `LABEL`
+  membership check ran the cache step from a tampered list; not withholding `run_size`'s
+  `@@DONE@@` produced two in one stream; removing the `HELD_AUTH` guard leaked a
+  keep-alive, which is ONEUP-0041's orphan measured rather than assumed.
+
+  One measured limitation worth carrying forward: INV-1's prompt count CANNOT see a
+  re-entered `sudo_init`, because the mock keys its timestamp to `$PPID` and both calls
+  come from one process. INV-9 is what covers it. Recorded in CLAUDE.md §6.
+
+  Two things deliberately NOT done here, filed separately: INV-5a's full per-marker
+  field-count table, and the `review-contract` gate that ONEUP-0054 now owes.
 
 - ✅ [ONEUP-0045] **Pick up and follow a run that is already in progress when the window opens.**
   Runs deliberately outlive the window (ONEUP-0042), so a relaunched OneUp used
@@ -4153,3 +4178,51 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The README now mentions three things the app can already do that it never told you about.
   Kind: doc.
   Source: user-request-2026-08-22.
+
+- 📋 [ONEUP-0126] **Give ONEUP-0044 INV-5a the per-marker field-count table it names.**
+  INV-5a's test surface is "harvest every `@@NAME@@|…` line a full mocked run emits, and
+  assert each name's field count against a pinned table". That harness does not exist. The
+  marker-name census (INV-5) counts distinct NAMES, so it is blind to a field appended to an
+  existing marker and blind to a rename; and gate G2 compares v1's stream against v2's, so a
+  change made in both compares equal. Nothing else covers it.
+
+  It was left out of ONEUP-0044 because a straight count-per-name table is WRONG and would be
+  flaky: `PROGRESS` is legitimately 4 OR 6 fields (the two byte fields are present only in the
+  download phase), and `HINT` and `STEP_END`'s detail carry free English that could contain a
+  `|`. So the table needs a design — an allowed-SET per marker, exact for the structured ones
+  and a floor for the prose-bearing ones — which is a second contract and did not belong in
+  that commit.
+
+  ONEUP-0044 shipped the part of INV-5a its own change actually needed: a held run's stream
+  carries exactly one `@@DONE@@` and it is last, asserted in `tests/run-tests.sh`. That is the
+  ordering property `--hold` introduced; the field-layout half is still uncovered.
+
+  The harvest must cover the held stream as well as an ordinary run's.
+  **Layman:** A safety net that would notice if a future change quietly altered the messages the update engine sends to the window.
+  Kind: test.
+  Source: in-session-2026-08-23, deferred from ONEUP-0044's implementation.
+
+- 📋 [ONEUP-0127] **Re-gate ONEUP-0054 before the Python engine is built — §4.1.1 changed.**
+  ONEUP-0044 added `hold.state` and `go.request` to §4.1.1's pinned state-file layout, and
+  corrected "the two state files" to four in §4.1 and INV-13. That changes what the Python
+  engine's implementer must build, so it re-arms CLAUDE.md rule 14's gate: the document's
+  `Reviewed` stamp no longer covers its current text.
+
+  `docs/reference/marker-protocol.md` §8 took the matching change and is part of the SAME
+  gate, not a second one: it is one contract described in two places, and gating them apart
+  is how the two descriptions drift. Its §8 now names four state files instead of two and
+  records that `--hold` changes stream ORDERING (one `@@DONE@@` per process, at the true
+  end) while changing no field layout, so §5.1's freeze is intact.
+
+  Not run at the time on purpose. Rule 14 requires the gate BEFORE implementation, and
+  ONEUP-0054 is still planned, so nothing has been built under the stale stamp. Running a
+  full cold review of an 800-line spec inside a fix for a different item would also have been
+  the wrong scope.
+
+  The drift is mechanically visible rather than resting on this bullet: `spec_query`
+  mode:"gate_drift" reports the spec as stale with the commit that did it.
+
+  Do this before ONEUP-0054's implementation starts, not before its next edit.
+  **Layman:** A design document was updated, so an independent reviewer should read it again before anyone builds from it.
+  Kind: doc.
+  Source: in-session-2026-08-23, consequence of ONEUP-0044's implementation.

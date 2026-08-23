@@ -129,7 +129,7 @@ read as one item. It does share the package. It is not one item.
   scenario reaches**. Nothing pins the full set anywhere, and `exit 2` (unknown flag) and the
   trap codes 130/143/141 are in no scenario, so v2 could change those three with every gate
   green. Stage 2 writes them down beside §4.1.1, the same way and for the same reason.
-- **The two state files.** `run.state` and `stop.request` keep their **layout** (§4.1.1) and
+- **The four state files.** `run.state`, `stop.request`, `hold.state` and `go.request` keep their **layout** (§4.1.1) and
   their `ONEUP_RUN_STATE` / `ONEUP_STOP_FILE` overrides — as does every other `ONEUP_*`
   override in `docs/standards/files-and-naming.md` §5.1, several of which the suite depends
   on. Their **location** is not this item's to keep: `docs/design/oneup-2.0.md` §6.5 settles
@@ -202,6 +202,45 @@ and v2 must keep it rather than deleting stale requests at start-up, which would
 clicked in the same moment. `cleanup`'s deletion is tidiness and cannot be relied on: a
 `SIGKILL`ed engine never runs it, which is precisely the case the comparison exists for.
 
+**`hold.state`** — added by ONEUP-0044, and pinned here for the same reason as the pair
+above: the Python engine must reproduce it or the one-authentication fix silently stops
+working. The **engine** writes it in one `printf` when a `--size --hold` preview begins
+waiting, and deletes it on every exit from that wait. Plain text, three lines,
+`\n`-terminated.
+
+| Line | Field | Example |
+| --- | --- | --- |
+| 1 | the engine's pid | `48213` |
+| 2 | this preview's log path — the `--log=` value **verbatim** | `/home/u/.local/state/oneup/logs/2026-08-23_0914.log` |
+| 3 | the size just quoted | `371.4 MiB` |
+
+**The window reads line 1 and nothing else**, and treats a missing or non-numeric line 1
+as no hold at all. Line 1 may not be reordered or dropped. That one comparison — is this
+pid our own `_size_proc`'s? — is what refuses both a `hold.state` a `SIGKILL`ed engine
+left behind and a second window's hold.
+
+**`go.request`** — the *window* creates it to tell a held engine to proceed, and the
+**engine** deletes it, both when it reads one and when the hold ends by any other route.
+Line 1 is a comma-separated step list and is the only line the engine reads; extra lines
+are ignored, and a missing line 1 makes the file invalid and it is treated as absent.
+
+**Two rules v2 must keep, and the second is a security property rather than a
+convenience.** Staleness is the same mtime comparison `stop.request` uses, against
+`hold.state` instead of `run.state` — a go-ahead not newer than the stamp is a leftover
+and is ignored, and deleting leftovers at start-up instead would race a go-ahead pressed
+in that same moment. And **every key must resolve in the engine's step-label map before
+any step runs, or the whole go-ahead is refused**. That is deliberately stricter than
+`--steps=`, which iterates the known keys and so silently *drops* an unknown one: reusing
+that leniency would let a `go.request` reading `cache,../../evil` run the cache step and
+report success. `--steps=` is a flag a person types on their own command line;
+`go.request` is an authorisation read by a root process.
+
+**Cancelling a hold reuses `stop.request` and adds no fifth file** — but the held engine
+may **not** read it through the ordinary stop check, which requires `run.state` to exist.
+A hold has deliberately not written `run.state`, so that check is false for the entire
+hold and a Cancel routed through it would do nothing until the ceiling. The hold compares
+`stop.request` against `hold.state`, its own stamp.
+
 ### 4.2 Module layout
 
 Nine modules, each tracing to an existing cluster of the Bash file rather than to a
@@ -215,7 +254,7 @@ split must obey. Paths are relative to `oneup/engine/`.
 | `markers.py` | every marker emitter — the protocol in **one** place | `marker`, `emit_progress`, `emit_check`, and every `marker NAME` call site |
 | `privilege.py` | become root once, and stay root safely for the run | `sudo_init`, `sudo_capture`, `reap_orphaned_askpass`, `cleanup` |
 | `proc.py` | run a child process and stream it — deadline, incremental bytes, cooperative cancel | the ad-hoc pipelines, `progress_filter`, `stop_pending` |
-| `runstate.py` | own the two state files and the log paths (§4.1.1) | the logging `exec` preamble and the state writes around it |
+| `runstate.py` | own the four state files and the log paths (§4.1.1) | the logging `exec` preamble and the state writes around it |
 | `parsers.py` | turn zypper's text into values — **pure functions, no I/O, no privilege** | `to_bytes`, `lock_holder`'s parsing, the progress and download-size wordings, `lr` output, and `reboot_reason_from_log`'s phrase-building (its log **read** is `steps.py`'s — see the split table) |
 | `repos.py` | refresh, skip and disable repositories | `refresh_repos`, `enabled_repo_aliases`, `find_failing_repos`, `disable_repo`, `release_zypper_lock`, `valid_alias`, `repo_scoped_failure` |
 | `steps.py` | run the five steps: `system, flatpak, firmware, orphans, cache` | `begin_step`, `end_step`, `run_system_upgrade`, the per-step bodies |
@@ -229,7 +268,7 @@ functions cross a module boundary**, and each split is deliberate:
 | `lock_holder` | the `$ZYPP_PID_FILE` and `/proc/<pid>/comm` probe → `repos.py`; only the text it parses → `parsers.py` |
 | `progress_filter` | the streaming loop → `proc.py`; the wordings it recognises → `parsers.py` |
 | `cleanup` | it does four things across three modules: deleting the two state files → `runstate.py`; re-enabling every alias in `DISABLED_REPOS` → `repos.py`; reaping the askpass and killing the keep-alive → `privilege.py`. **The repo re-enable is the one to be careful with** — the scenario *"an interrupted --skip-repo run still re-enables the source (trap restore)"* is what asserts it, and it is easy to lose when one function is split three ways |
-| `stop_pending` | the decision (is a stop pending at this boundary?) → `proc.py`; reading the two state files it decides from → `runstate.py` |
+| `stop_pending` | the decision (is a stop pending at this boundary?) → `proc.py`; reading the two state files it decides from → `runstate.py` (the hold's own stop check compares against `hold.state` instead, §4.1.1) |
 | `reboot_reason_from_log` | reading the run's log → `steps.py`; turning the lines it finds into the reason phrase → `parsers.py` |
 
 Keeping I/O out of `parsers.py` is what makes §4.3.4's table-driven tests possible at all.
@@ -489,7 +528,7 @@ rewrite; this list is the index, not the mechanism. Scenario names are the ones 
   *Test:* the scenario *"package-only change offers a SERVICE restart, not a reboot"*,
   whose `@@SERVICES@@` assertion is what proves it.
 
-- **INV-13** The two state files keep the layout §4.1.1 pins, so a window can find and
+- **INV-13** The four state files keep the layout §4.1.1 pins, so a window can find and
   follow a run the previous window started.
   *Test:* the scenarios *"a real run records itself in a run-state file and clears it on
   exit"* — which asserts lines 1–3 and the deletion — and *"a read-only --check run does NOT

@@ -13,7 +13,7 @@ a time, in one direction.
 
 **Sections:** 1 the shape of a line · 2 reading order · 3 the markers · 4 the ones with
 traps · 5 changing the contract · 6 traps · 7 drift in the engine's header comment ·
-8 the two state files · what checks this · 9 cold-eyes log
+8 the four state files · what checks this · 9 cold-eyes log
 
 This is a **reference**, not a standard: it records a contract, not a rule about how to
 work. Where it and the engine's own header comment disagree, **this document is right** —
@@ -379,11 +379,12 @@ of the three is a defect in running code. **ONEUP-0066** tracks carrying the cor
 into the Python engine, where the rewrite replaces this comment anyway. Until then, this
 document is the authority.
 
-## 8. The two state files — a contract this protocol does *not* cover
+## 8. The four state files — a contract this protocol does *not* cover
 
-`<state>/oneup/run.state` and `stop.request` — where `<state>` is `XDG_STATE_HOME` or
+`<state>/oneup/run.state`, `stop.request`, `hold.state` and `go.request` — where
+`<state>` is `XDG_STATE_HOME` or
 `~/.local/state`, see below — are also a contract between the two
-halves, and neither is a marker: the window **writes** them, which nothing in §1 permits.
+halves, and none is a marker: the window **writes** two of them, which nothing in §1 permits.
 They are named here because the obvious place to look for "how do the halves agree" is
 this file, and finding nothing would suggest there is nothing to agree on.
 
@@ -393,8 +394,31 @@ this file, and finding nothing would suggest there is nothing to agree on.
 - **`stop.request`** — created by the *window* to ask for a stop. The engine reads it only
   at safe boundaries (`docs/standards/security.md` §6). A request older than `run.state` is
   a leftover and is ignored.
+- **`hold.state`** — written by the engine when a `--size --hold` preview begins waiting
+  for a go-ahead, and deleted on every exit from that wait (ONEUP-0044). Line 1 is the
+  engine's pid, which is the only line the window reads: it is how a live hold is told
+  from one a `SIGKILL`ed engine left behind, and it is also what stops a second window
+  adopting a hold it did not start.
+- **`go.request`** — created by the *window* to tell a held engine to proceed. Line 1
+  carries a comma-separated step list and nothing else, and is the only line the engine
+  reads. A request older than `hold.state` is a leftover and is ignored, the same rule
+  `stop.request` follows against `run.state` and for the same reason. **Every key must
+  resolve in the engine's `LABEL` map or the whole go-ahead is refused** — stricter than
+  `--steps=`, which silently drops an unknown key, because this file is an authorisation
+  read by a root process rather than a flag a person typed.
 
-Both paths are overridable — `ONEUP_RUN_STATE`, `ONEUP_STOP_FILE` — in the **engine only**.
+**The marker contract is deliberately untouched by that pair.** An earlier framing of
+ONEUP-0044 assumed a new "waiting for your go-ahead" marker; §5.1's freeze forbids one
+until the Python rewrite has passed its gate, and it turned out to be unnecessary. A
+go-ahead is the same shape as `stop.request` — a file the window creates to ask the
+engine for something — so it lands here rather than in §1–§5. What `--hold` does change
+is stream **ordering**, which is not field layout: it withholds `run_size`'s own
+`@@DONE@@` so a held process still emits exactly one, at its true end. Two — the first
+saying `ok` before a single step had run — would break a window that merely *followed*
+the run, for which §4.9 makes `DONE` the only verdict there is.
+
+Every path is overridable — `ONEUP_RUN_STATE`, `ONEUP_STOP_FILE`, `ONEUP_HOLD_STATE`,
+`ONEUP_GO_FILE` — in the **engine only**.
 
 **Where the directory itself is, both halves must agree, and since ONEUP-0059 that is not
 `Path.home()`.** Each resolves it from `XDG_STATE_HOME` when that is set to an ABSOLUTE

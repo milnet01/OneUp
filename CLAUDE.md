@@ -106,8 +106,10 @@ The four correctness invariants the test suite exists to protect — chiefly tha
 must never claim success or advise a reboot it did not earn — are
 `docs/standards/testing.md` §5. Add a regression test for any engine behaviour change.
 
-Runtime state lives in `~/.local/state/oneup/`, and two files there are a contract between
-the two halves rather than mere state: `docs/reference/marker-protocol.md` §8. (On `v2`
+Runtime state lives in `~/.local/state/oneup/`, and four files there are a contract between
+the two halves rather than mere state: `docs/reference/marker-protocol.md` §8. `run.state`
+and `stop.request` are the original pair; `hold.state` and `go.request` were added by
+ONEUP-0044 so one engine can span the size preview and the run. (On `v2`
 that directory follows an absolute `XDG_STATE_HOME` — in **both** halves, in one commit,
 because moving one side alone leaves Stop writing where the engine never looks.)
 
@@ -167,6 +169,17 @@ measurement and the exact shape of the rule are in the document named beside eac
   `reap_orphaned_askpass`, the change-detection form in a spec draft that two review loops
   caught. The keep-alive in `sudo_init` already does it correctly (`while kill -0 "$1"`) —
   `docs/specs/ONEUP-0044-one-authentication.md` §4.2.
+
+- **The suite's prompt counters cannot see a second `sudo_init` inside ONE process.** The
+  three counting sudo mocks key their timestamp file to `$PPID`, which is how they model
+  sudo's real no-tty behaviour — so two `sudo_init` calls from the same engine share one
+  timestamp and log one prompt. Measured: deleting the `HELD_AUTH` guard that suppresses
+  the second `sudo_init` on ONEUP-0044's held path left the one-prompt test **green**.
+  What caught it was the keep-alive scenario, because the second `sudo_init` spawns a
+  second `setsid` group and overwrites `SUDO_KEEPALIVE`, so `cleanup`'s group kill reaches
+  only the later one and a keep-alive is orphaned. So a change that could re-enter
+  `sudo_init` is covered by INV-9, never by INV-1 —
+  `docs/specs/ONEUP-0044-one-authentication.md` §7.1.
 
 - **A shape check on a field of codes does not catch English — check membership instead.**
   A `^[a-z0-9-]+$` test looks like it forbids prose, and against a *space-separated* field it

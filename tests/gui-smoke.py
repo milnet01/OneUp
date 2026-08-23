@@ -818,6 +818,86 @@ def main() -> int:
     check("a failed size probe never claims a size it didn't earn",
           not wS1.rows["system"].has_size())
 
+    # --- 5d-i. ONEUP-0044: the held engine, and what Update does with it --------
+    # The engine half is covered in tests/run-tests.sh; this is the window half of
+    # §4.5's three-state table. Nothing here starts a real engine: what is being
+    # asserted is which branch Update takes, and that is decided by `_size_proc`'s
+    # state and by `hold.state`'s line 1.
+    class _Sig:                       # a signal that records nothing and refuses nothing
+        def connect(self, *_a): pass
+        def disconnect(self, *_a): pass
+
+    class _SizeProc:
+        def __init__(self, pid, running=True):
+            self._pid, self._running = pid, running
+            self.readyReadStandardOutput = _Sig()
+            self.finished = _Sig()
+            self.errorOccurred = _Sig()
+
+        def state(self):
+            return QProcess.Running if self._running else QProcess.NotRunning
+
+        def processId(self): return self._pid
+
+    # INV-7: expiry, a killed engine and a stale hold.state must all degrade to today's
+    # behaviour, never to an error. The failure being guarded is the opposite — a window
+    # that writes go.request and waits for a process that is not there, which the user
+    # experiences as a dead Update button.
+    wF = window.Updater()
+    wF._size_proc = _SizeProc(4242, running=False)
+    _launched = []
+    _real_launch = run._launch
+    run._launch = lambda w, st, check, **kw: _launched.append((list(st), check))
+    try:
+        run.start_run(wF)
+        check("INV-7 Update starts a fresh engine when the preview has already exited",
+              len(_launched) == 1 and _launched[0][1] is False)
+    finally:
+        run._launch = _real_launch
+
+    # §6, two rows at once: a hold.state a SIGKILLed engine left behind, and a second
+    # window's hold. One test refuses both — line 1 must be OUR OWN _size_proc's pid.
+    paths.HOLD_STATE.parent.mkdir(parents=True, exist_ok=True)
+    paths.HOLD_STATE.write_text(f"424242\n{paths.LOG_DIR / 'elsewhere.log'}\n412 MB\n")
+    paths.GO_REQUEST.unlink(missing_ok=True)
+    wO = window.Updater()
+    wO._size_proc = _SizeProc(999999)
+    wO._hold_log = paths.LOG_DIR / "elsewhere.log"
+    check("a hold.state belonging to another engine is not adopted",
+          run._adopt_held_engine(wO) is False)
+    check("and no go-ahead is written for it",
+          not paths.GO_REQUEST.exists())
+
+    # The adopt path itself. The steps travel WITH the go-ahead rather than being fixed
+    # at preview time: the preview is started for `system` alone, but the run uses
+    # whatever is selected when Update is pressed, which may have changed in between.
+    wA = window.Updater()
+    wA._size_proc = _SizeProc(31337)
+    _held_log = paths.LOG_DIR / "held-preview.log"
+    wA._hold_log = _held_log
+    wA._size_buf = "partial-mark"
+    for _k in ("flatpak", "firmware", "orphans"):
+        if wA.rows[_k].switch.isChecked():
+            wA.rows[_k].switch.setChecked(False)
+    paths.HOLD_STATE.write_text(f"31337\n{_held_log}\n412 MB\n")
+    paths.GO_REQUEST.unlink(missing_ok=True)
+    check("a hold started by our own engine is adopted", run._adopt_held_engine(wA) is True)
+    check("the go-ahead carries the steps selected NOW, not the preview's step",
+          paths.GO_REQUEST.read_text().strip() == ",".join(wA.selected_steps()))
+    check("the adopted process becomes the run's process", wA.proc is not None)
+    check("the window stops offering the preview process", wA._size_proc is None)
+    # _log_path must be the path the engine was actually given. Recomputing it from a
+    # fresh stamp would name a file no engine ever wrote to and disagree with run.state
+    # line 2, so "Open log file" would show the wrong file (§4.5).
+    check("the run keeps the log path the preview engine was started with",
+          wA._log_path == _held_log)
+    # Whatever the preview had read but not yet split into a whole line carries over —
+    # dropping it would lose the head of the next marker.
+    check("a partial line read by the preview is not dropped on adoption",
+          wA._buf == "partial-mark")
+    paths.GO_REQUEST.unlink(missing_ok=True)
+    paths.HOLD_STATE.unlink(missing_ok=True)
+
     # --- 5e. --thin-snapshots outcomes -----------------------------------------
     # Three branches, and each decides whether the advisory banner stays up for a retry.
     for _out, _want, _banner_stays in (("@@SNAPSHOTS@@|thinned|7\n", "7", False),

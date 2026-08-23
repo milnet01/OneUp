@@ -410,22 +410,31 @@ no open design question gets a roadmap bullet and a build plan, not a spec.
 
 ### 6.2 The double password box (ONEUP-0044)
 
-**No existing gate can see this bug, and G4 is not the exception it looks like.** The
-symptom is *two dialogs from one authentication*: the roadmap bullet measures one engine
-invocation, one `sudo -A -p … -v`, and two `ksshaskpass` processes sixteen seconds apart.
-G4's scenario counts **authentications** — its mock `sudo` keeps one timestamp file per
-parent pid and logs a line only when a call actually has to authenticate — and there is no
-real askpass in the sandbox at all. So the suite is green today while the bug is open, and
-will stay green if the rewrite reproduces it.
+**Found, specified and fixed.** The contract is
+`docs/specs/ONEUP-0044-one-authentication.md`; what follows records what the
+investigation actually turned up, because the premise this section was written on was
+wrong and a reader of the 2.0 programme should not be sent down it again.
 
-That is why this item is an investigation rather than a fix: the first task is a harness
-that reproduces it, which attempts so far have not managed. It gets a diagnosis step in the
-engine's build plan. Should the cause need real design — for example a change to how the
-engine authenticates — it earns a spec at that point.
+**The premise was one engine invocation, and the cause was two.** This section used to
+say the symptom was *two dialogs from one authentication*, reasoning from a roadmap
+bullet that measured one `sudo -A -p … -v`. The window in fact started the engine a
+second time for the download-size preview — `request_size` issues `--size=system` on its
+own process, separate from the run's — and `--size` dispatches to `run_size`, which calls
+`sudo_init` before its dry run. With no terminal, sudo keys its cached credential to the
+**parent process id**, so two engines are two timestamp records and two prompts. That is
+also what makes the dialogs *overlap*, which one process cannot do: it blocks on its own.
 
-**Complete when** the cause is identified and either fixed with a test that fails without
-the fix, or recorded as understood-and-accepted with the reason. "We could not reproduce
-it" is an acceptable outcome; leaving it unexamined is not.
+**"No existing gate can see this bug" was true, and is no longer.** G4's scenario counts
+authentications within one process, so it stayed green while the bug was open. The fix
+holds a single `--size --hold` engine across both jobs, and `tests/run-tests.sh` now
+drives one engine, writes a `go.request` and counts prompts across it — red before the
+fix, green after.
+
+**Two things the fix is bounded by, and both belong to this programme.** It adds no
+marker and changes no marker's field layout, so §5.1's freeze is intact — the go-ahead is
+a state file, not a protocol message. And the two new state files are pinned line by line
+in `docs/specs/ONEUP-0054-python-engine.md` §4.1.1 beside the two that were already
+there, so the Python rewrite must reproduce all four.
 
 ### 6.3 Dependency refresh (ONEUP-0004)
 

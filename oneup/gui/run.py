@@ -18,7 +18,7 @@ import time
 from datetime import datetime
 from functools import partial
 
-from PySide6.QtCore import QProcess
+from PySide6.QtCore import QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox
 
 from .. import APP_ID, APP_NAME
@@ -29,6 +29,12 @@ from .diagnostics import cache_bytes
 # (ONEUP-0048). Generously past a normal gap — a big repository's cache rebuild is quiet
 # for a while — so the wording is trustworthy when it does appear.
 STALL_SECONDS = 45
+
+# How often we look for a held engine's `hold.state` while its dry run is still going
+# (ONEUP-0044 §4.5, the middle row of the Update table). That wait is seconds to a
+# minute — the whole dry run — and it is the state a user who presses Show download size
+# and then immediately presses Update is in.
+HOLD_WAIT_POLL_MS = 200
 
 
 def request_stop(win):
@@ -52,7 +58,105 @@ def start_check(win):
 
 
 def start_run(win):
+    """Update. The window is in exactly one of three states, and this is the table from
+    ONEUP-0044 §4.5 — the fix's whole window side.
+
+    No preview running, or nothing selected -> `_launch`, exactly as today.
+
+    Preview running, `hold.state` present and its line 1 is our own `_size_proc` pid ->
+    adopt that process as the run's, so the credential it already cached is the one the
+    run uses. That is the fix.
+
+    Preview running, no `hold.state` yet -> WAIT. It must not write `go.request` here:
+    the engine's freshness rule compares a go-ahead against a stamp that does not exist
+    yet, so an early request is provably stale and would be ignored, leaving the user
+    with a dead button.
+    """
+    proc = getattr(win, "_size_proc", None)
+    if proc is not None and proc.state() != QProcess.NotRunning and win.selected_steps():
+        if _adopt_held_engine(win):
+            return
+        _wait_for_hold(win)
+        return
     _launch(win, win.selected_steps(), check=False)
+
+
+def _adopt_held_engine(win) -> bool:
+    """Turn a held preview into the run. False means "cannot adopt" — never an error."""
+    proc = getattr(win, "_size_proc", None)
+    if proc is None or proc.state() == QProcess.NotRunning:
+        return False
+    try:
+        first = paths.HOLD_STATE.read_text().splitlines()[0].strip()
+    except (OSError, IndexError):
+        return False       # no hold yet, or a file with no line 1, which is not a hold
+    # Line 1 must be OUR engine's pid. That one test refuses both of §6's impostors: a
+    # `hold.state` a SIGKILLed engine left behind, and a second window's hold — which
+    # has no `_size_proc` of ours to match, so it launches its own engine rather than
+    # adopting a hold it did not start.
+    if not first.isdigit() or int(first) != proc.processId():
+        return False
+    steps = win.selected_steps()
+    # The steps travel WITH the go-ahead rather than being fixed at preview time: the
+    # preview is started for `system` alone, but the run uses whatever is selected when
+    # Update is pressed, which may have changed in between (§4.6).
+    try:
+        paths.GO_REQUEST.parent.mkdir(parents=True, exist_ok=True)
+        paths.GO_REQUEST.write_text(",".join(steps) + "\n")
+    except OSError as exc:
+        QMessageBox.warning(win, "Update", f"Could not start the update:\n{exc}")
+        return False
+    # Anything the preview read but has not yet split into a whole line. Dropping it
+    # would lose the head of whatever marker follows.
+    carried = getattr(win, "_size_buf", "")
+    _reset_for_run(win, steps, check=False)
+    win._buf = carried
+    # `_log_path` is assigned from what `request_size` already passed as `--log=`, NOT
+    # recomputed from a fresh stamp — see `_reset_for_run`'s docstring.
+    win._log_path = win._hold_log
+    win.bar.setRange(0, win._total)
+    win.bar.setValue(0)
+    win.bar.setFormat("Starting…")
+    win.status.setText("Starting the update…")
+    win.set_controls_enabled(False)
+    proc.readyReadStandardOutput.disconnect()
+    proc.finished.disconnect()
+    proc.readyReadStandardOutput.connect(partial(on_output, win))
+    proc.finished.connect(partial(on_finished, win))
+    proc.errorOccurred.connect(partial(on_error, win))
+    win.proc = proc
+    win._size_proc = None
+    return True
+
+
+def _wait_for_hold(win):
+    """The middle row of §4.5's table: a preview is running but has not reached its hold
+    yet, so wait for it rather than starting a second engine (which is the defect) or
+    writing a go-ahead the engine would discard as stale."""
+    if getattr(win, "_hold_wait", None) is None:
+        win._hold_wait = QTimer(win)
+        win._hold_wait.setInterval(HOLD_WAIT_POLL_MS)
+        win._hold_wait.timeout.connect(partial(_hold_wait_tick, win))
+    win.status.setText("Working out the download size first — the update starts "
+                       "as soon as that finishes…")
+    win._announce("Working out the download size first. The update will start "
+                  "as soon as that finishes.")
+    win.set_controls_enabled(False)
+    win._hold_wait.start()
+
+
+def _hold_wait_tick(win):
+    proc = getattr(win, "_size_proc", None)
+    if proc is None or proc.state() == QProcess.NotRunning:
+        # The preview failed or was cancelled before it ever held. Fall back to starting
+        # a fresh engine, which is today's behaviour and today's two prompts — the fix
+        # degrades to the status quo, never to an error (INV-7).
+        win._hold_wait.stop()
+        win.set_controls_enabled(True)
+        _launch(win, win.selected_steps(), check=False)
+        return
+    if _adopt_held_engine(win):
+        win._hold_wait.stop()
 
 
 def retry_failed(win):
@@ -80,13 +184,25 @@ def request_size(win, key: str):
     win._size_buf = ""
     paths.LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    size_log = paths.LOG_DIR / f"{stamp}.size.log"
+    # Named as a RUN log, not `<stamp>.size.log`, because --hold means this preview may
+    # become the run. The engine writes its --log= value verbatim into `run.state` for
+    # run-following, so a run that logged to a `.size.log` would be followed at a path
+    # `_log_path` does not name and "Open log file" would show the wrong file. Naming it
+    # correctly up front costs nothing and needs no extra payload in `go.request`
+    # (ONEUP-0044 §4.5). Held here rather than in `_log_path`, which must keep pointing
+    # at the last real run until this preview actually becomes one.
+    size_log = paths.LOG_DIR / f"{stamp}.log"
+    win._hold_log = size_log
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.readyReadStandardOutput.connect(partial(_on_size_output, win))
     p.finished.connect(partial(_on_size_finished, win))
     win._size_proc = p
-    p.start("bash", [str(paths.ENGINE), f"--size={key}", f"--log={size_log}"])
+    # --hold keeps this process alive after it has quoted the size, so the run that
+    # follows reuses the credential it has already cached. Two engines are two sudo
+    # timestamp records and therefore two password dialogs, because with no terminal sudo
+    # keys its cache to the PARENT process id (ONEUP-0044).
+    p.start("bash", [str(paths.ENGINE), f"--size={key}", "--hold", f"--log={size_log}"])
 
 
 def _on_size_output(win):
@@ -110,6 +226,14 @@ def _on_size_output(win):
 
 
 def _on_size_finished(win, exit_code: int, _status):
+    # Clear the held-engine state FIRST. The early return below fires whenever a size
+    # arrived — which is exactly when a hold existed — so anything placed after it would
+    # never run for a held engine, and the window would go on offering a process that has
+    # gone. Expiry, Cancel and a killed engine all land here, and all three must degrade
+    # to today's behaviour rather than to an error: the next Update simply launches a
+    # fresh engine (ONEUP-0044 §4.2, INV-7).
+    win._size_proc = None
+    win._hold_log = None
     row = win.rows.get("system")
     if not row or row.has_size():
         return
@@ -136,17 +260,23 @@ def _engine_args(steps: list[str], check: bool = False, import_keys: bool = Fals
     return args
 
 
-def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
-            skip_repos: list[str] | None = None):
-    if not steps:
-        QMessageBox.information(win, "Nothing selected",
-                                "Turn on at least one task first.")
-        return
-    if not paths.ENGINE.exists():
-        QMessageBox.critical(win, "Engine missing",
-                             f"Could not find the update script at:\n{paths.ENGINE}")
-        return
+def _reset_for_run(win, steps: list[str], check: bool):
+    """Everything a run needs cleared before it starts, factored out of `_launch`
+    because ONEUP-0044's adopt path needs it too.
 
+    An adopt path that only re-pointed `on_output`, `on_finished` and `on_error` would
+    ship a run with no progress range, stale banners and badges from the previous run,
+    and `_run_active` false — which leaves the standalone thin-snapshots action
+    unguarded (§4.5).
+
+    `_log_path` is deliberately NOT here, and that exclusion is the point of the
+    paragraph above it in the spec. `_launch` computes it from a fresh
+    `datetime.now()` stamp, so a shared block run on the adopt path would overwrite it
+    with a path no engine ever wrote to — and disagree with `run.state` line 2, so a
+    window following the run would look for the log in the wrong place and "Open log
+    file" would show the wrong file. The stamp and the assignment stay in `_launch`;
+    the adopt path keeps the path `request_size` already passed as `--log=`.
+    """
     # Reset per-run state and any banners/badges from a previous run.
     win._check_mode = check
     win._reboot = False
@@ -187,6 +317,32 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
         r.clear_badge()
         r.clear_details()
     win.log.clear()
+
+
+def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
+            skip_repos: list[str] | None = None):
+    if not steps:
+        QMessageBox.information(win, "Nothing selected",
+                                "Turn on at least one task first.")
+        return
+    if not paths.ENGINE.exists():
+        QMessageBox.critical(win, "Engine missing",
+                             f"Could not find the update script at:\n{paths.ENGINE}")
+        return
+    # Never start a second engine while a download-size preview is in flight. Doing so
+    # IS the ONEUP-0044 defect: with no terminal sudo keys its cached credential to the
+    # parent process id, so two engines are two timestamp records and two password
+    # dialogs. `start_run` routes to the held engine instead of coming here; this guard
+    # covers the other ways in — Check for updates, and Retry failed steps.
+    size_proc = getattr(win, "_size_proc", None)
+    if size_proc is not None and size_proc.state() != QProcess.NotRunning:
+        QMessageBox.information(
+            win, "Just a moment",
+            "OneUp is working out the download size.\n\n"
+            "That takes up to a minute. Try again once it has finished.")
+        return
+
+    _reset_for_run(win, steps, check)
 
     paths.LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")

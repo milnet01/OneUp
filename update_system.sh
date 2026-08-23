@@ -77,10 +77,39 @@ RUN_STATE_FILE="${ONEUP_RUN_STATE:-$ONEUP_STATE_DIR/run.state}"
 # would leave rpm half-applied, or orphan a zypper that carries on regardless, which is
 # the failure this project takes most seriously (ONEUP-0047). Overridable for tests.
 STOP_FILE="${ONEUP_STOP_FILE:-$ONEUP_STATE_DIR/stop.request}"
+# --hold's two files (ONEUP-0044 §4.3). They sit beside the pair above, in the same
+# directory the marker reference's §8 pins, and they are a contract between the two
+# halves in the same way — NOT part of the marker protocol, because the window writes
+# one of them. hold.state is this engine's stamp: the window reads its line 1 to tell a
+# live hold from one a SIGKILLed engine left behind, and the engine compares go.request
+# and stop.request against its mtime to reject a leftover from an earlier session.
+HOLD_STATE_FILE="${ONEUP_HOLD_STATE:-$ONEUP_STATE_DIR/hold.state}"
+GO_FILE="${ONEUP_GO_FILE:-$ONEUP_STATE_DIR/go.request}"
 STOP_HONOURED=false
 CHECK_ONLY=false   # --check: report what WOULD update, install nothing, no root
 NOTIFY=false       # --notify: fire a desktop notification if updates are found
 SIZE_STEP=""       # --size=<step>: on-demand exact download size (needs root)
+HOLD=false         # --hold: after --size has quoted the size, stay alive waiting for the
+                   # window's go-ahead instead of exiting, so the run that follows reuses
+                   # the credential THIS process already cached. Ignored without --size.
+HOLD_SIZE=""       # the size run_size quoted, for hold.state line 3
+HELD_AUTH=false    # true once a hold has been honoured: this process authenticated for
+                   # the preview and must NOT re-enter sudo_init on the way into the run.
+HOLD_SECONDS="${ONEUP_HOLD_SECONDS:-120}"  # the hold ends by itself after this long. Two
+                   # independent reasons it must (ONEUP-0044 §4.4): sudo's cached
+                   # credential expires, so a longer hold would reach its go-ahead cold
+                   # and prompt again — the very second dialog this fixes; and a held
+                   # engine is unattended privilege with nobody left to authorise it.
+# Whose departure ends the hold. Under QProcess the engine is a direct child of the
+# window, so $PPID at shell start IS the window. Captured ONCE here and afterwards asked
+# with `kill -0` — the idiom sudo_init's keep-alive already uses. Do NOT re-read $PPID to
+# detect the change: bash sets it once at shell start and never refreshes it on
+# reparenting, so the comparison is a constant against a copy of itself and can never
+# fire (measured: a child whose parent exited kept $PPID=170203 for its whole life while
+# its real parent moved to 1309). Nor test it against 1 — systemd reparents a user
+# session's orphans to `systemd --user`, the mistake reap_orphaned_askpass already paid
+# for. Both spellings read as a guard and are dead code.
+WINDOW_PID=$PPID
 AUTH_ACTION=""     # --grant-auth / --revoke-auth / --auth-status: manage the
                    # opt-in "remember my authorization" sudoers drop-in.
 IMPORT_KEYS=false  # --import-keys: refresh with --gpg-auto-import-keys so a rotated
@@ -179,6 +208,7 @@ for arg in "$@"; do
         --log=*)   LOG_FILE="${arg#*=}" ;;
         --check)   CHECK_ONLY=true ;;
         --size=*)  SIZE_STEP="${arg#*=}" ;;
+        --hold)    HOLD=true ;;
         --grant-auth)  AUTH_ACTION="grant" ;;
         --revoke-auth) AUTH_ACTION="revoke" ;;
         --auth-status) AUTH_ACTION="status" ;;
@@ -582,7 +612,7 @@ run_size() {
     if [[ -n "$size" ]]; then
         marker SIZE "system|$size"
         echo "  Download size: $size"
-        marker DONE "ok"
+        size_delivered "$size"
     elif (( rc == 0 )) || (( rc >= 100 && rc <= 103 )); then
         # zypper ran fine and reported no size = nothing to fetch (up to date / all
         # cached). Report zero so the GUI shows a definitive answer. 100-103 are
@@ -590,7 +620,7 @@ run_size() {
         # code there is not a failure, so they must not be mistaken for one.
         marker SIZE "system|0 B"
         echo "  Download size: nothing to fetch."
-        marker DONE "ok"
+        size_delivered "0 B"
     else
         # The dry run FAILED. Never answer "0 B" here: a confident zero the run
         # didn't earn is the exact failure class the test suite exists to prevent.
@@ -613,6 +643,116 @@ run_size() {
         sed -n 's/^/    zypper: /p' <<<"$out" | tail -n 5
         return 1
     fi
+}
+
+# ---------------------------------------------------------------------------
+# --hold: keep the --size process alive for the run it just priced (ONEUP-0044).
+#
+# Why this exists at all: with no terminal, sudo keys its cached credential to the
+# PARENT process id, so a preview in one engine and a run in another are two records and
+# two password dialogs. Holding one process across both jobs is what makes it one.
+# ---------------------------------------------------------------------------
+
+# Close out a successful --size probe. Under --hold the process does NOT end here, so
+# the DONE is withheld: the marker reference describes exactly one DONE per run (§4.9),
+# and for a run another window merely FOLLOWED through run.state it is "the only verdict
+# there is" — two in one stream, the first saying ok before a single step had run, is
+# what breaks that reader. A held process emits its DONE at its true end instead. This
+# is an ordering change and not a field-layout one, so the §5.1 freeze is untouched.
+size_delivered() {
+    HOLD_SIZE="$1"
+    $HOLD || marker DONE "ok"
+}
+
+# Adopt a go-ahead's step list, or refuse the whole thing. Returns 0 only if every key
+# resolved and at least one step is selected.
+#
+# Deliberately STRICTER than --steps=, and reusing that path would be a security defect:
+# --steps= iterates the five known keys calling step_selected, so an unknown key is
+# silently DROPPED and the only rejection is when every key is unknown. A go.request
+# reading "cache,../../evil" would then run the cache step and report success — a file
+# the window writes being partly ignored rather than refused. --steps= is a flag a person
+# types on their own command line; go.request is an authorisation read by a root process,
+# and the two do not warrant the same leniency (ONEUP-0044 §4.6, INV-8).
+#
+# Membership in LABEL is the check, not a shape test on the characters: a shape check
+# passes anything well-formed, where membership of a closed vocabulary is the property
+# actually wanted. LABEL is an ASSOCIATIVE array, so the subscript is a literal string —
+# an indexed array would arithmetic-evaluate it, which is how a subscript becomes an
+# injection point.
+adopt_go_ahead() {
+    local list="$1" k
+    # Named `asked` rather than the obvious `want`: shellcheck's array/string checks are
+    # not scope-aware, so declaring a local array called `want` here makes it read
+    # `emit_progress`'s unrelated scalar `want` as an array and warn (SC2178/SC2128) on
+    # code this change never touched.
+    local -a asked=()
+    [[ -n "$list" ]] || return 1
+    IFS=',' read -r -a asked <<<"$list"
+    (( ${#asked[@]} )) || return 1
+    for k in "${asked[@]}"; do
+        [[ -n "${LABEL[$k]:-}" ]] || return 1
+    done
+    # Re-derive the selection. Assigning STEPS alone is NOT enough and is the one place
+    # this can look right and run the wrong thing: the run path never reads STEPS.
+    # step_selected does, but its callers ran long ago — RUN_KEYS, TOTAL, STEP_INDEX and
+    # the TOTAL==0 rejection are all derived at script top level, far ABOVE the --size
+    # dispatch, and the run loop iterates "${RUN_KEYS[@]}". A go-ahead that only set
+    # STEPS would fall through and run whatever startup derived — and request_size passes
+    # no --steps=, so that is the default ALL FIVE. The user's "cache" selection would
+    # silently become a full system upgrade. INV-6 is what catches this.
+    STEPS="$list"
+    RUN_KEYS=()
+    for k in system flatpak firmware orphans cache; do
+        step_selected "$k" && RUN_KEYS+=("$k")
+    done
+    TOTAL=${#RUN_KEYS[@]}
+    STEP_INDEX=0
+    (( TOTAL > 0 )) || return 1
+}
+
+# Wait for the window's go-ahead. RECORDS a decision; it never runs a step itself — the
+# run is straight-line script far below this point (see the comment above
+# system_txn_argv: the --size dispatch "calls run_size and then exits", so anything
+# further down "has never been executed and does not exist yet"). So a go-ahead returns 0
+# and lets the dispatch fall through into the run that already exists.
+#
+# Returns 0 only on a go-ahead carrying a valid step list. Cancel, a departed window and
+# the ceiling all return non-zero — which the caller maps to exit 0, because the job this
+# process was started for succeeded and was already reported (§4.4).
+hold_for_go_ahead() {
+    local waited=0 step=$STOP_POLL_SECONDS rc=1 steps=""
+    (( step > 0 )) || step=1
+    mkdir -p "$(dirname "$HOLD_STATE_FILE")" 2>/dev/null || true
+    # Layout pinned line by line in ONEUP-0044 §4.3, the way run.state's is, so the
+    # Python engine can reproduce it: line 1 the engine pid, line 2 the log path
+    # verbatim, line 3 the quoted size. Do not reorder or drop a line.
+    printf '%s\n%s\n%s\n' "$$" "$LOG_FILE" "$HOLD_SIZE" > "$HOLD_STATE_FILE"
+    while (( waited < HOLD_SECONDS )); do
+        # Staleness is decided the way stop_pending decides it, and for the same reason:
+        # a request older than our own stamp is a leftover from an earlier session.
+        # Deleting leftovers at startup instead would race a go-ahead pressed in that
+        # very moment — exactly what stop_pending's own comment records.
+        if [[ -e "$GO_FILE" && "$GO_FILE" -nt "$HOLD_STATE_FILE" ]]; then
+            steps=$(head -n1 "$GO_FILE" 2>/dev/null)
+            rc=0
+            break
+        fi
+        # Cancel reuses stop.request — both halves already agree on what it means. But it
+        # may NOT be read through stop_pending: that requires run.state to exist and the
+        # request to be newer than it, and a hold has deliberately not written run.state,
+        # so stop_pending is false for the entire hold and a Cancel wired through it
+        # would do nothing for the full ceiling. Compare against our own stamp instead.
+        if [[ -e "$STOP_FILE" && "$STOP_FILE" -nt "$HOLD_STATE_FILE" ]]; then
+            break
+        fi
+        kill -0 "$WINDOW_PID" 2>/dev/null || break
+        sleep "$step"
+        waited=$((waited + step))
+    done
+    rm -f "$HOLD_STATE_FILE" "$GO_FILE"
+    (( rc == 0 )) || return 1
+    adopt_go_ahead "$steps"
 }
 
 if $CHECK_ONLY; then
@@ -1041,7 +1181,28 @@ fi
 # both of which are now defined.
 if [[ -n "$SIZE_STEP" ]]; then
     run_size "$SIZE_STEP"
-    exit $?
+    size_rc=$?
+    if $HOLD && (( size_rc == 0 )); then
+        # --hold: a go-ahead returns 0 and we fall THROUGH into the run below, reusing
+        # the credential this process already cached — which is the whole fix.
+        #
+        # Anything else ends the process, and ends it with status 0. Expiry, Cancel and a
+        # departed window are not failures: the job this process was started for — quoting
+        # the size — succeeded and was already reported, so a user running --size --hold
+        # in a terminal must not see a failure for a run they simply chose not to start.
+        # The window re-arms, Update starts a fresh engine, and the user gets today's
+        # behaviour and today's two prompts: the fix degrades to the status quo rather
+        # than to an error (§4.4, INV-7). The DONE withheld by size_delivered is emitted
+        # here, at this process's true end, so the stream still carries exactly one.
+        if hold_for_go_ahead; then
+            HELD_AUTH=true
+        else
+            marker DONE "ok"
+            exit 0
+        fi
+    else
+        exit $size_rc
+    fi
 fi
 
 # Firmware uses polkit for its own elevation; every other root step reuses the
@@ -1050,7 +1211,17 @@ needs_sudo=false
 for k in system flatpak orphans cache; do
     step_selected "$k" && needs_sudo=true
 done
-$needs_sudo && sudo_init
+# A held preview already authenticated in THIS process, and sudo_init has no re-entry
+# guard: its only early return is auth_current, which is false for precisely the users
+# this fix is for. Re-entering it would re-run the interactive validate AND spawn a
+# second keep-alive, overwriting SUDO_KEEPALIVE so cleanup's group kill can only reach
+# the later group — the orphaned-keep-alive leak of ONEUP-0041 (security.md §2.4). Every
+# other sudo_init call site sits in a dispatch block that exits, so the held path is the
+# first thing in this engine that could reach two of them. INV-9 pins it.
+# release_zypper_lock below is re-entered harmlessly and is deliberately left alone.
+if $needs_sudo && ! $HELD_AUTH; then
+    sudo_init
+fi
 
 # With the credential warm, make sure PackageKit isn't sitting on the lock.
 $needs_sudo && release_zypper_lock

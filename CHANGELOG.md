@@ -35,6 +35,17 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **One password box instead of two when you check the download size first.** (ONEUP-0044)
+  If you pressed **Show download size** and then started the update, OneUp asked for
+  your password twice — sometimes with both boxes on screen at once. It was running
+  the updater twice over: once to weigh the download, once to install it, and each
+  run asked for its own password. Now the first one stays open and waits, so the
+  update it starts is the same run you already approved, and you are asked once.
+
+  Nothing changes if you do not use Show download size. If you take more than two
+  minutes to decide, or close the window, OneUp simply goes back to the old
+  behaviour and starts a fresh run when you press Update.
+
 - **OneUp now respects `XDG_STATE_HOME`, the standard setting for where apps keep their working files.** (ONEUP-0059)
   If you have not set it, nothing changes: OneUp keeps using
   `~/.local/state/oneup` as before. If you have, it is now honoured — by both

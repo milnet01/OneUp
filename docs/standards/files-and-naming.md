@@ -199,7 +199,9 @@ Two directories hold everything OneUp writes at runtime:
 `run.state` and `stop.request` are a **contract between the two halves** — each file is
 defined independently in both programs, with a comment in each saying it must match the
 other — `updater.py`'s `RUN_STATE` / `STOP_REQUEST` constants and `update_system.sh`'s
-`RUN_STATE_FILE` / `STOP_FILE`. Moving either means editing both.
+`RUN_STATE_FILE` / `STOP_FILE`. Moving either means editing both. ONEUP-0044's
+`HOLD_STATE` / `GO_REQUEST` and `HOLD_STATE_FILE` / `GO_FILE` are the same arrangement
+and carry the same obligation.
 
 ### 5.1 The override table — measured, and not what you would assume
 
@@ -209,6 +211,9 @@ Every environment override that exists, and every path that has none:
 | --- | --- | --- | --- |
 | Run record | `~/.local/state/oneup/run.state` | both | `ONEUP_RUN_STATE` — **engine only** |
 | Stop request | `~/.local/state/oneup/stop.request` | both | `ONEUP_STOP_FILE` — **engine only** |
+| Hold stamp | `~/.local/state/oneup/hold.state` | both | `ONEUP_HOLD_STATE` — **engine only** |
+| Go-ahead request | `~/.local/state/oneup/go.request` | both | `ONEUP_GO_FILE` — **engine only** |
+| Hold ceiling | `120` seconds | engine | `ONEUP_HOLD_SECONDS` |
 | zypper lock probe | `/run/zypp.pid` | engine | `ONEUP_ZYPP_PID_FILE` |
 | Passwordless-auth drop-in | `/etc/sudoers.d/oneup` | engine | `ONEUP_AUTH_FILE` |
 | Download guard | `/usr/libexec/oneup-download-guard`, or `/usr/lib/oneup-download-guard` where `/usr/libexec` does not exist (Leap 15.x) | engine | `ONEUP_GUARD_FILE` |

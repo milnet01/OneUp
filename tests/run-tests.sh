@@ -121,6 +121,8 @@ run_engine() {
         ONEUP_ZYPP_PID_FILE="${ONEUP_ZYPP_PID_FILE:-$mockdir/no-zypp.pid}" \
         ONEUP_RUN_STATE="${ONEUP_RUN_STATE:-$mockdir/run.state}" \
         ONEUP_STOP_FILE="${ONEUP_STOP_FILE:-$mockdir/stop.request}" \
+        ONEUP_HOLD_STATE="${ONEUP_HOLD_STATE:-$mockdir/hold.state}" \
+        ONEUP_GO_FILE="${ONEUP_GO_FILE:-$mockdir/go.request}" \
         ONEUP_GUARD_FILE="${ONEUP_GUARD_FILE:-$mockdir/oneup-download-guard}" \
         ONEUP_INHIBITED="${ONEUP_INHIBITED-1}" \
         ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}" \
@@ -740,54 +742,87 @@ fi
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
-# ONEUP-0044: two engine PROCESSES, not one. The window starts the engine a SECOND
-# time for the download-size preview — `request_size` in oneup/gui/run.py issues
-# `bash <engine> --size=system --log=<path>` on its own `_size_proc`, separate from
-# the run's `proc` — and --size dispatches to run_size, which calls sudo_init before
-# its dry run. The run calls sudo_init again. With no terminal (the GUI runs us
-# through QProcess) sudo keys its cached credential to the PARENT process id
-# (sudoers(5) `timestamp_type`), and the two engines are different pids, so each one
-# authenticates. That is what makes the two dialogs OVERLAP — something a single
-# process cannot do, because sudo_init blocks on its own dialog. The reporter saw
-# them 16 seconds apart: a size fetch, then a run started shortly after it.
+# ONEUP-0044: one engine process spans the preview and the run.
 #
-# The contract locked here is the observable: a preview and a run that are live
-# together cost exactly ONE interactive prompt between them. Nothing is asserted
-# about HOW — no fix exists yet and several designs are open, so an assertion that
-# run_size skips sudo, or that a lock file appears, would pin the test to one of them.
+# The defect was two engine PROCESSES. The window started the engine a second time for
+# the download-size preview — `request_size` in oneup/gui/run.py issued
+# `bash <engine> --size=system --log=<path>` on its own `_size_proc`, separate from the
+# run's `proc` — and --size dispatches to run_size, which calls sudo_init before its dry
+# run. The run called sudo_init again. With no terminal (the GUI runs us through
+# QProcess) sudo keys its cached credential to the PARENT process id (sudoers(5)
+# `timestamp_type`), and the two engines are different pids, so each one authenticated.
+# The reporter saw the dialogs 16 seconds apart.
 #
-# The counting mechanism is ONEUP-0038's mock sudo — one timestamp file per parent
-# pid, a line logged only when a call really has to authenticate, which is a password
-# popup rather than a sudo invocation — with both engines pointed at ONE shared log so
-# the count is across both processes. It cannot pass by accident: a mock that just
-# succeeded would record 0, and 0 fails this as loudly as 2 does.
+# The scenario below therefore drives ONE engine. An earlier form of this test started
+# two by hand and counted prompts across both; it reproduced the defect, which is what it
+# was written for, but no engine-side change could ever have satisfied it — nothing in a
+# held engine can stop a SEPARATELY LAUNCHED second engine calling sudo_init. The fix
+# works by having the window start one process and hold it, so the test drives one
+# process too, and the two-engine form is gone rather than kept alongside.
 #
-# The overlap is staged with a rendezvous file and bounded polls, never a sleep
-# (docs/standards/testing.md §6; the sleep in the orphaned-dialog scenario is
-# ONEUP-0068 and is not to be copied). The size engine's mock zypper announces itself
-# and then blocks inside the dry run — which run_size reaches only AFTER sudo_init —
-# so the preview engine is provably still alive, and already authenticated, at the
-# instant the run engine authenticates. The run engine's mock systemctl records that
-# liveness: release_zypper_lock's `is-active` probe is the first thing the run does
-# after its own sudo_init, and it fires whether or not a fix removes the prompt.
-echo "TEST: a size preview and a run that overlap cost exactly one password prompt"
-d=$(mktemp -d)
-mkdir -p "$d/rdv" "$d/home" "$d/size" "$d/run"
-rdv="$d/rdv"
-setup_common "$d/size"; setup_common "$d/run"
-# ONEUP-0038's mock, plus the role and the peer's liveness, so a failure says WHICH
-# engine prompted and whether the other was still on screen when it did.
-cat > "$d/sudo.mock" <<'EOF'
+# The counting mechanism is ONEUP-0038's mock sudo: one timestamp file per parent pid, a
+# line logged only when a call really has to authenticate — a password popup rather than
+# a sudo invocation. It cannot pass by accident: a mock that just succeeded would record
+# 0, and 0 fails this as loudly as 2 does.
+#
+# Staged with the hold's own state file and bounded polls, never a sleep
+# (docs/standards/testing.md §6; the sleep in the orphaned-dialog scenario is ONEUP-0068
+# and is not to be copied). hold.state appears only after the dry run has quoted a size,
+# which run_size reaches only AFTER sudo_init — so its existence is proof the preview
+# engine authenticated and is still alive at the instant the go-ahead is written.
+
+# Start a held preview engine in the background and wait until it has actually reached
+# the hold. Sets HELD_PID. Extra `VAR=value` arguments are passed through to env.
+#
+# A non-zero return is a STAGING failure, not a result: a hold that never began cannot
+# demonstrate anything about go-aheads, so each caller reports it as such rather than
+# letting it read as its own assertion passing or failing.
+start_held_engine() {
+    local d="$1"; shift
+    env HOME="$d/home" PATH="$d:$PATH" \
+        ONEUP_TEST_TS="$d" \
+        ONEUP_ZYPP_PID_FILE="$d/no-zypp.pid" ONEUP_RUN_STATE="$d/run.state" \
+        ONEUP_STOP_FILE="$d/stop.request" ONEUP_GUARD_FILE="$d/guard" \
+        ONEUP_HOLD_STATE="$d/hold.state" ONEUP_GO_FILE="$d/go.request" \
+        ONEUP_INHIBITED=1 ONEUP_REPOS_DIR="$d/repos.d" \
+        ONEUP_ASKPASS="$d/mock-askpass" ONEUP_STOP_POLL_SECONDS=1 \
+        "$@" \
+        bash "$ENGINE" --size=system --hold --log="$d/run.log" >"$d/out" 2>&1 &
+    HELD_PID=$!
+    local _i
+    for _i in $(seq 1 300); do
+        [[ -f "$d/hold.state" ]] && return 0
+        kill -0 "$HELD_PID" 2>/dev/null || return 1
+        sleep 0.1
+    done
+    return 1
+}
+
+# Wait for the held engine to finish and report its exit status. Never leaves a process
+# behind: a scenario that failed its own assertion must not also leak a privileged
+# engine into the rest of the suite.
+reap_held_engine() {
+    local _i rc=0
+    for _i in $(seq 1 600); do kill -0 "$HELD_PID" 2>/dev/null || break; sleep 0.1; done
+    kill -9 "$HELD_PID" 2>/dev/null
+    wait "$HELD_PID" 2>/dev/null; rc=$?
+    return $rc
+}
+
+# The counting sudo mock. Deliberately NOT the `-k deletes the timestamp` form the three
+# older counting mocks use: the engine records the measured behaviour in auth_current's
+# own comment — "-k does NOT invalidate a warm credential". The divergence was invisible
+# while every process called sudo_init at most once, and becomes visible the moment one
+# process could reach it twice, which is exactly what a held run does. Modelling sudo
+# more aggressively than sudo behaves would count a phantom second prompt and fail a
+# correct implementation (ONEUP-0044 §7.1).
+write_counting_sudo() {
+    cat > "$1/sudo" <<'EOF'
 #!/usr/bin/env bash
 ts="${ONEUP_TEST_TS:?mock sudo needs ONEUP_TEST_TS}"
-for a in "$@"; do [[ "$a" == "-k" ]] && rm -f "$ts/ts.$PPID"; done
 for a in "$@"; do [[ "$a" == "-n" ]] && exit 1; done   # no passwordless drop-in
 if [[ ! -f "$ts/ts.$PPID" ]]; then
-    peer="n/a"
-    if [[ -n "${ONEUP_TEST_PEER_PID:-}" ]]; then
-        if kill -0 "$ONEUP_TEST_PEER_PID" 2>/dev/null; then peer=alive; else peer=gone; fi
-    fi
-    echo "PROMPT role=${ONEUP_TEST_ROLE:-?} pid=$PPID peer=$peer cmd=$*" >> "$ts/prompts"
+    echo "PROMPT pid=$PPID cmd=$*" >> "$ts/prompts"
     : > "$ts/ts.$PPID"
 fi
 while [[ $# -gt 0 ]]; do
@@ -802,133 +837,256 @@ done
 [[ $# -eq 0 ]] && exit 0
 exec "$@"
 EOF
-cp "$d/sudo.mock" "$d/size/sudo"; cp "$d/sudo.mock" "$d/run/sudo"
-# Never executed — sudo is mocked — but ONEUP_ASKPASS must point somewhere inside the
-# temp dir all the same: cleanup runs reap_orphaned_askpass, which scans the real `ps`
-# for the askpass path AND one of OneUp's prompt strings, and the default path is the
-# developer's own ksshaskpass (docs/standards/testing.md §2).
-printf '#!/usr/bin/env bash\nexit 1\n' > "$d/size/mock-askpass"
-cp "$d/size/mock-askpass" "$d/run/mock-askpass"
-# The preview engine. `dup` without --dry-run in --size mode is the bug --size exists
-# to avoid, so the mock exits 99 rather than failing quietly (testing.md §3 rule 2).
-cat > "$d/size/zypper" <<EOF
+    chmod +x "$1/sudo"
+}
+
+# A zypper that serves the dry run and then records — and REFUSES — any real transaction.
+# The --dry-run carve-out is load-bearing: the hold is reached only after run_size's own
+# `zypper … dup --allow-vendor-change --dry-run`, so a mock exiting 99 on any `dup` would
+# fire during the size probe and the scenario would die before it ever reached the hold —
+# which §6 calls "no hold at all", meaning the test could never exercise what it claims.
+write_hold_zypper() {  # dir, mode: refuse|allow
+    cat > "$1/zypper" <<EOF
 #!/usr/bin/env bash
-if [[ "\$*" == *dup* || "\$*" == *update* ]] && [[ "\$*" != *--dry-run* ]]; then
-    echo "BUG: the size preview ran a real transaction" >&2; exit 99
-fi
 if [[ "\$*" == *--dry-run* ]]; then
-    # run_size reaches this only after sudo_init, so the file below is proof that the
-    # preview engine has authenticated and is still running. Hold here until the
-    # scenario has started the run and watched it authenticate. The ceiling is a
-    # safety valve, not a wait: the scenario releases it as soon as the run engine is
-    # past its own sudo_init, and a fix that serialises the two can still finish
-    # instead of deadlocking.
-    : > "$rdv/size-live"
-    for _ in \$(seq 1 600); do [[ -f "$rdv/release-size" ]] && break; sleep 0.05; done
     echo "Package download size:   371.4 MiB"
     exit 0
 fi
-exit 0
-EOF
-printf '#!/usr/bin/env bash\n[[ "$*" == *is-active* && "$*" == *packagekit* ]] && exit 3\nexit 0\n' \
-    > "$d/size/systemctl"
-# The run engine: the sibling one-prompt scenario's mocks, plus a systemctl that
-# records the rendezvous.
-cat > "$d/run/zypper" <<'EOF'
-#!/usr/bin/env bash
-case "$*" in
-  *refresh*)           exit 0 ;;
-  *dup*|*update*)      echo "Nothing to do." ; exit 0 ;;
-  *needs-rebooting*)   exit 0 ;;
-  *clean*)             exit 0 ;;
-  *" lr "*|*" lr -u"*) echo "1 | repo | X | Yes | (r ) | Yes | http://x" ; exit 0 ;;
-  *packages*)          exit 0 ;;
-  *ps*)                exit 0 ;;
+case "\$*" in
+  *dup*|*update*)
+      echo "TRANSACTION \$*" >> "$1/transactions"
+      if [[ "$2" == refuse ]]; then
+          echo "BUG: a held engine began a transaction with no go-ahead" >&2; exit 99
+      fi
+      echo "Nothing to do."; exit 0 ;;
+  *refresh*|*needs-rebooting*|*clean*|*packages*|*ps*) exit 0 ;;
+  *" lr "*|*" lr -u"*) echo "1 | repo | X | Yes | (r ) | Yes | http://x"; exit 0 ;;
   *) exit 0 ;;
 esac
 EOF
-printf '#!/usr/bin/env bash\necho "1024\t/var/cache/zypp"\n' > "$d/run/du"
-cat > "$d/run/systemctl" <<EOF
-#!/usr/bin/env bash
-if [[ "\$*" == *is-active* && "\$*" == *packagekit* ]]; then
-    if kill -0 "\${ONEUP_TEST_PEER_PID:-0}" 2>/dev/null; then
-        echo "peer=alive" > "$rdv/run-past-auth"
-    else
-        echo "peer=gone" > "$rdv/run-past-auth"
-    fi
-    exit 3
-fi
-exit 0
-EOF
-chmod +x "$d/size"/* "$d/run"/*
+    chmod +x "$1/zypper"
+}
 
-# The two command lines the window actually issues. There is no Qt here and none is
-# wanted: QProcess is only what starts the two processes, and the number of password
-# prompts is an engine-level observable. Both are invoked directly rather than through
-# run_engine (which cannot return a pid), so each repeats run_engine's redirects by
-# hand, with its own copy of every path — a preview must not be able to damage the
-# run's state, or the machine's (testing.md §2.1). HOME too, which run_engine does not
-# redirect: the engine mkdir -p's $HOME/Documents/update-logs (ONEUP-0058).
-HOME="$d/home" PATH="$d/size:$PATH" \
-    ONEUP_TEST_TS="$d" ONEUP_TEST_ROLE=size \
-    ONEUP_ZYPP_PID_FILE="$d/size/no-zypp.pid" ONEUP_RUN_STATE="$d/size/run.state" \
-    ONEUP_STOP_FILE="$d/size/stop.request" ONEUP_GUARD_FILE="$d/size/guard" \
-    ONEUP_INHIBITED=1 ONEUP_REPOS_DIR="$d/size/repos.d" \
-    ONEUP_ASKPASS="$d/size/mock-askpass" \
-    bash "$ENGINE" --size=system --log="$d/size/size.log" >"$d/size/out" 2>&1 &
-size_pid=$!
-staged=no
-for _ in $(seq 1 300); do
-    [[ -f "$rdv/size-live" ]] && { staged=yes; break; }
-    kill -0 "$size_pid" 2>/dev/null || break
-    sleep 0.1
-done
-overlap=""
-if [[ "$staged" != yes ]]; then
-    # +2: the overlap check and the prompt-count check, neither of which can run.
-    echo "  FAIL - could not stage the preview engine (it never reached its dry run)"; FAIL=$((FAIL+2))
-    awk '{print "         size: " $0}' "$d/size/out" 2>/dev/null | tail -5
+setup_hold_dir() {  # dir, zypper mode
+    local d="$1"
+    mkdir -p "$d/home"
+    setup_common "$d"
+    write_counting_sudo "$d"
+    write_hold_zypper "$d" "$2"
+    # Never executed — sudo is mocked — but ONEUP_ASKPASS must point inside the temp dir
+    # all the same: cleanup runs reap_orphaned_askpass, which scans the real `ps` for the
+    # askpass path, and the default is the developer's own ksshaskpass (testing.md §2).
+    printf '#!/usr/bin/env bash\nexit 1\n' > "$d/mock-askpass"
+    printf '#!/usr/bin/env bash\necho "1024\t/var/cache/zypp"\n' > "$d/du"
+    chmod +x "$d/mock-askpass" "$d/du"
+}
+
+echo "TEST: a size preview and the run that follows it cost exactly one password prompt"
+d=$(mktemp -d); setup_hold_dir "$d" allow
+if ! start_held_engine "$d"; then
+    # +3: the hold's own assertion and the two below it, none of which can run.
+    echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+3))
+    tail -5 "$d/out" 2>/dev/null | awk '{print "         " $0}'
+    reap_held_engine >/dev/null 2>&1
 else
-    HOME="$d/home" PATH="$d/run:$PATH" \
-        ONEUP_TEST_TS="$d" ONEUP_TEST_ROLE=run ONEUP_TEST_PEER_PID="$size_pid" \
-        ONEUP_ZYPP_PID_FILE="$d/run/no-zypp.pid" ONEUP_RUN_STATE="$d/run/run.state" \
-        ONEUP_STOP_FILE="$d/run/stop.request" ONEUP_GUARD_FILE="$d/run/guard" \
-        ONEUP_INHIBITED=1 ONEUP_REPOS_DIR="$d/run/repos.d" \
-        ONEUP_ASKPASS="$d/run/mock-askpass" \
-        bash "$ENGINE" --steps=system,flatpak,firmware,orphans,cache \
-        --log="$d/run/run.log" >"$d/run/out" 2>&1 &
-    run_pid=$!
-    for _ in $(seq 1 300); do
-        [[ -f "$rdv/run-past-auth" ]] && break
-        kill -0 "$run_pid" 2>/dev/null || break
-        sleep 0.1
-    done
-    overlap=$(cat "$rdv/run-past-auth" 2>/dev/null || true)
-    if [[ "$overlap" == "peer=alive" ]]; then
-        echo "  ok   - both engines are live at once (the preview is still running when the run authenticates)"; PASS=$((PASS+1))
-    else
-        # +1 only: the prompt count below is still counted, whatever it says.
-        echo "  FAIL - could not stage the overlap (want 'peer=alive' at the run's first post-auth step, got '${overlap:-nothing}')"; FAIL=$((FAIL+1))
-        awk '{print "         run:  " $0}' "$d/run/out" 2>/dev/null | tail -5
-    fi
-fi
-: > "$rdv/release-size"     # let the held preview finish, on every path
-for p in "${size_pid:-}" "${run_pid:-}"; do
-    [[ -z "$p" ]] && continue
-    for _ in $(seq 1 300); do kill -0 "$p" 2>/dev/null || break; sleep 0.1; done
-    kill -9 "$p" 2>/dev/null
-    wait "$p" 2>/dev/null
-done
-if [[ "$staged" == yes ]]; then
+    echo "  ok   - the preview engine holds instead of exiting"; PASS=$((PASS+1))
+    # hold.state exists only after @@SIZE@@, and run_size reaches its dry run only after
+    # sudo_init — so the engine has provably authenticated already.
+    printf 'system,flatpak,firmware,orphans,cache\n' > "$d/go.request"
+    reap_held_engine; held_rc=$?
     prompts=$(grep -c . "$d/prompts" 2>/dev/null || echo 0)
     if [[ "$prompts" == "1" ]]; then
         echo "  ok   - one password prompt across the preview and the run"; PASS=$((PASS+1))
     else
         echo "  FAIL - one password prompt across the preview and the run (expected 1, counted $prompts)"; FAIL=$((FAIL+1))
         awk '{print "         " $0}' "$d/prompts" 2>/dev/null
+        tail -5 "$d/out" 2>/dev/null | awk '{print "         out: " $0}'
+    fi
+    # The go-ahead must actually have produced a run, or "one prompt" is trivially true
+    # of an engine that did nothing at all — which is how this assertion passes for the
+    # wrong reason.
+    if grep -q '@@STEP_BEGIN@@|system|' "$d/out" 2>/dev/null; then
+        echo "  ok   - the go-ahead started the run in the same process"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - the go-ahead started the run in the same process (no @@STEP_BEGIN@@, exit $held_rc)"; FAIL=$((FAIL+1))
+        tail -5 "$d/out" 2>/dev/null | awk '{print "         " $0}'
     fi
 fi
-unset size_pid run_pid
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0044 INV-2 and INV-3. Two properties of the SAME setup — a hold nobody answers —
+# so they share one scenario rather than staging the hold twice: nothing installs without
+# a go-ahead, and the hold ends by itself.
+#
+# Expiry is not a failure. Inside the engine hold_for_go_ahead returns non-zero so the
+# caller knows not to fall through, but the --size dispatch maps that to exit 0: the job
+# the process was started for — quoting the size — succeeded and was already reported. A
+# user running `--size --hold` in a terminal must not see a failure for a run they simply
+# chose not to start (§4.4).
+echo "TEST: a hold nobody answers installs nothing and ends by itself"
+d=$(mktemp -d); setup_hold_dir "$d" refuse
+if ! start_held_engine "$d" ONEUP_HOLD_SECONDS=3; then
+    echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+3))
+    tail -5 "$d/out" 2>/dev/null | awk '{print "         " $0}'
+    reap_held_engine >/dev/null 2>&1
+else
+    reap_held_engine; held_rc=$?
+    if [[ -f "$d/transactions" ]]; then
+        echo "  FAIL - a held engine began a transaction with no go-ahead (INV-2)"; FAIL=$((FAIL+1))
+        awk '{print "         " $0}' "$d/transactions"
+    else
+        echo "  ok   - no transaction runs without a go-ahead (INV-2)"; PASS=$((PASS+1))
+    fi
+    if [[ "$held_rc" == "0" ]]; then
+        echo "  ok   - the hold expires with exit 0, not a failure (INV-3)"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - the hold expires with exit 0, not a failure (INV-3; got $held_rc)"; FAIL=$((FAIL+1))
+        tail -5 "$d/out" 2>/dev/null | awk '{print "         " $0}'
+    fi
+    # §4.2: --hold withholds run_size's own @@DONE@@ so the stream still carries exactly
+    # one, at the process's true end. Two — the first saying `ok` before a single step had
+    # run — is what breaks a window that FOLLOWED this run through run.state, for which
+    # @@DONE@@ is the only verdict there is (marker-protocol.md §4.9).
+    dones=$(grep -c '^@@DONE@@|' "$d/out" 2>/dev/null || echo 0)
+    if [[ "$dones" == "1" ]] && [[ "$(grep '^@@' "$d/out" | tail -1)" == '@@DONE@@|ok' ]]; then
+        echo "  ok   - the held stream carries exactly one @@DONE@@, and it is last"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - the held stream carries exactly one @@DONE@@, and it is last (counted $dones)"; FAIL=$((FAIL+1))
+        grep '^@@' "$d/out" 2>/dev/null | awk '{print "         " $0}' | tail -5
+    fi
+fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0044 INV-4: a go.request older than hold.state is a leftover from an earlier
+# session and is ignored. Staleness is decided the way stop_pending decides it, and for
+# the same reason — deleting leftovers at startup instead would race a go-ahead pressed
+# in that very moment, which is the failure stop_pending's own comment records.
+echo "TEST: a go-ahead left over from an earlier session is ignored"
+d=$(mktemp -d); setup_hold_dir "$d" refuse
+printf 'system\n' > "$d/go.request"    # written BEFORE the engine starts
+if ! start_held_engine "$d" ONEUP_HOLD_SECONDS=3; then
+    echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+1))
+    tail -5 "$d/out" 2>/dev/null | awk '{print "         " $0}'
+    reap_held_engine >/dev/null 2>&1
+else
+    reap_held_engine >/dev/null 2>&1
+    if [[ -f "$d/transactions" ]]; then
+        echo "  FAIL - a stale go-ahead started a run (INV-4)"; FAIL=$((FAIL+1))
+        awk '{print "         " $0}' "$d/transactions"
+    else
+        echo "  ok   - a stale go-ahead is ignored (INV-4)"; PASS=$((PASS+1))
+    fi
+fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0044 INV-6: the run uses the steps the go-ahead carried, not the step the preview
+# was started for. This is the one place the fall-through can look right and run the wrong
+# thing: the run path never reads STEPS. RUN_KEYS, TOTAL and STEP_INDEX are all derived at
+# script top level, far ABOVE the --size dispatch, so a go-ahead that only assigned STEPS
+# would run whatever startup derived — and request_size passes no --steps=, so that is the
+# default ALL FIVE. The user's "cache" selection would silently become a full system
+# upgrade, which is why this asserts what did NOT run as well as what did.
+echo "TEST: the run follows the go-ahead's steps, not the preview's"
+d=$(mktemp -d); setup_hold_dir "$d" allow
+if ! start_held_engine "$d"; then
+    echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+2))
+    tail -5 "$d/out" 2>/dev/null | awk '{print "         " $0}'
+    reap_held_engine >/dev/null 2>&1
+else
+    printf 'cache\n' > "$d/go.request"
+    reap_held_engine >/dev/null 2>&1
+    begins=$(grep -oE '^@@STEP_BEGIN@@\|[a-z]+' "$d/out" 2>/dev/null | cut -d'|' -f2 | paste -sd, -)
+    if [[ "$begins" == "cache" ]]; then
+        echo "  ok   - only the go-ahead's step ran (INV-6)"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - only the go-ahead's step ran (INV-6; expected 'cache', ran '${begins:-nothing}')"; FAIL=$((FAIL+1))
+    fi
+    # The step count the window draws its progress bar from is re-derived too. A
+    # STEP_BEGIN reading 1/5 for a one-step run is the same defect surviving halfway.
+    if grep -q '^@@STEP_BEGIN@@|cache|1|1|' "$d/out" 2>/dev/null; then
+        echo "  ok   - the step total is re-derived with the selection (INV-6)"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - the step total is re-derived with the selection (INV-6)"; FAIL=$((FAIL+1))
+        grep '^@@STEP_BEGIN@@' "$d/out" 2>/dev/null | awk '{print "         " $0}'
+    fi
+fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0044 INV-8: go.request carries a step list and nothing else, and every key must
+# resolve in LABEL before ANY step runs.
+#
+# Deliberately stricter than --steps=, and reusing that path would be a security defect:
+# --steps= iterates the five known keys calling step_selected, so an unknown key is
+# silently DROPPED and the only rejection is when EVERY key is unknown. Reusing it would
+# mean a go.request reading "cache,../../evil" runs the cache step and reports success —
+# a file the window writes being partly ignored rather than refused. --steps= is a flag a
+# person types on their own command line; go.request is an authorisation read by a root
+# process, and the two do not warrant the same leniency (§4.6).
+canary=$(mktemp -d)
+# shellcheck disable=SC2016  # the single quotes are the point: $(…) must stay LITERAL,
+# because what is under test is that the engine never expands what it reads.
+for payload in 'cache,nosuchstep' 'cache,$(touch '"$canary"'/PWNED)' 'cache;touch '"$canary"'/PWNED2'; do
+    echo "TEST: a tampered go-ahead is refused whole, not run in part [${payload:0:20}…]"
+    d=$(mktemp -d); setup_hold_dir "$d" allow
+    if ! start_held_engine "$d" ONEUP_HOLD_SECONDS=6; then
+        echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+1))
+        reap_held_engine >/dev/null 2>&1
+    else
+        printf '%s\n' "$payload" > "$d/go.request"
+        reap_held_engine >/dev/null 2>&1
+        if grep -q '^@@STEP_BEGIN@@' "$d/out" 2>/dev/null; then
+            echo "  FAIL - a tampered go-ahead ran part of its list (INV-8)"; FAIL=$((FAIL+1))
+            grep '^@@STEP_BEGIN@@' "$d/out" | awk '{print "         " $0}'
+        elif [[ -e "$canary/PWNED" || -e "$canary/PWNED2" ]]; then
+            echo "  FAIL - a tampered go-ahead EXECUTED its payload (INV-8)"; FAIL=$((FAIL+1))
+            rm -f "$canary/PWNED" "$canary/PWNED2"
+        else
+            echo "  ok   - the whole go-ahead is refused and no step runs (INV-8)"; PASS=$((PASS+1))
+        fi
+    fi
+    rm -rf "$d"
+done
+rm -rf "$canary"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0044 INV-9: the held path must not re-enter sudo_init. It has no re-entry guard —
+# its only early return is auth_current, false for precisely the users this fix is for —
+# so a second entry spawns a SECOND keep-alive and overwrites SUDO_KEEPALIVE, leaving
+# cleanup's group kill able to reach only the later group. That is the orphaned-keep-alive
+# leak of ONEUP-0041 (security.md §2.4): two were once found still calling `sudo -n -v`
+# every 50 seconds, 40 minutes after the runs that spawned them were killed. Every other
+# sudo_init call site sits in a dispatch block that exits, so the held path is the first
+# thing in this engine that could reach two of them.
+#
+# Diffed rather than counted absolutely: the developer's own machine may legitimately be
+# running one from a real update (docs/standards/testing.md §2).
+echo "TEST: a held run leaves no orphaned keep-alive behind"
+d=$(mktemp -d); setup_hold_dir "$d" allow
+ka_before=$(pgrep -f oneup-keepalive | sort)
+if ! start_held_engine "$d"; then
+    echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+1))
+    reap_held_engine >/dev/null 2>&1
+else
+    printf 'system,cache\n' > "$d/go.request"
+    reap_held_engine >/dev/null 2>&1
+    leaked=""
+    for _ in $(seq 1 40); do      # the group kill is asynchronous, so poll rather than sleep
+        ka_after=$(pgrep -f oneup-keepalive | sort)
+        leaked=$(comm -13 <(echo "$ka_before") <(echo "$ka_after") | grep -v '^$' || true)
+        [[ -z "$leaked" ]] && break
+        sleep 0.1
+    done
+    if [[ -z "$leaked" ]]; then
+        echo "  ok   - no keep-alive survives a held run (INV-9)"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - a keep-alive survived a held run (INV-9): $leaked"; FAIL=$((FAIL+1))
+        echo "$leaked" | xargs -r kill 2>/dev/null
+    fi
+fi
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

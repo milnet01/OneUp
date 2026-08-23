@@ -77,6 +77,19 @@ RUN_STATE = STATE_DIR / "run.state"
 # Creating this file asks a running engine to stop at its next safe point. Must match
 # STOP_FILE in update_system.sh.
 STOP_REQUEST = STATE_DIR / "stop.request"
+# ONEUP-0044's pair, and they are a contract between the two halves in exactly the way
+# the two above are — not part of the marker protocol, because the window writes one of
+# them (`docs/reference/marker-protocol.md` §8).
+#
+# `hold.state` is written by a held engine and read by us: line 1 is its pid, which is
+# how we tell a live hold from one a SIGKILLed engine left behind. Must match
+# HOLD_STATE_FILE in update_system.sh.
+HOLD_STATE = STATE_DIR / "hold.state"
+# `go.request` is written by US to tell a held engine to proceed, and carries a
+# comma-separated step list on line 1 and nothing else. It is an authorisation read by a
+# root process, so the engine refuses the whole list if any key is unknown rather than
+# running the part that resolved. Must match GO_FILE in update_system.sh.
+GO_REQUEST = STATE_DIR / "go.request"
 # zypper's package cache, which is world-readable — so OneUp can weigh it without root.
 # This is the ONLY byte figure available during the prefetch phase: zypper prints one line
 # per finished package and nothing else, so an 86 MB download from a slow mirror produced
