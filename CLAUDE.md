@@ -157,6 +157,17 @@ measurement and the exact shape of the rule are in the document named beside eac
   Keep-alives were once found still running 40 minutes after their run was killed —
   `docs/standards/security.md` §2.4.
 
+- **To ask "has my parent gone?", `kill -0` the pid you captured — never read `$PPID`
+  again.** Bash sets `PPID` once at shell start and never refreshes it on reparenting, so
+  comparing `$PPID` against a startup copy of itself can never fire; and testing it against
+  `1` never fires either, because systemd reparents a user session's orphans to
+  `systemd --user`. Measured: a child whose parent exited kept `$PPID=170203` for its whole
+  life while its real parent moved to `1309`. Both spellings read as a guard and are dead
+  code, and both have now been written on this engine — the pid-1 form in
+  `reap_orphaned_askpass`, the change-detection form in a spec draft that two review loops
+  caught. The keep-alive in `sudo_init` already does it correctly (`while kill -0 "$1"`) —
+  `docs/specs/ONEUP-0044-one-authentication.md` §4.2.
+
 - **A shape check on a field of codes does not catch English — check membership instead.**
   A `^[a-z0-9-]+$` test looks like it forbids prose, and against a *space-separated* field it
   does not: every word of *"core system packages were updated"* matches it one at a time, so

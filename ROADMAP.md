@@ -710,6 +710,38 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   size preview needs root at all is still open, and `sudo_init` already returns
   early through `auth_current` where the ONEUP-0023 drop-in covers what the run
   needs. The suite stays red until that lands.
+  Spec gate CLOSED (2026-08-23). review-contract loop 2, three cold lanes,
+  genre spec: Q1 2 · Q2 2 · Q3 2 · Q4 1 — 7 verified, 0 dismissed, all fixed.
+  Cap reached (2 for a spec), so the run ships; implementation is the third
+  reviewer. Status Draft -> Reviewed. 21 findings across both loops.
+
+  THE RED TEST DOES NOT TEST THE FIX, and this is the one to carry forward.
+  The committed scenario "a size preview and a run that overlap cost exactly
+  one password prompt" starts TWO engines by hand and counts prompts across
+  both. No engine-side change can satisfy it — nothing in a held engine stops
+  a separately launched second engine calling sudo_init. It reproduced the
+  defect, which is what it was for, but it must be REWRITTEN to drive one
+  `--size=system --hold` engine plus a go.request, and that form owes its own
+  red run. Do not read the committed red as a pass-when-fixed.
+
+  Also settled by the loop, each of which changes what gets built:
+  - Adopting a go-ahead must re-derive RUN_KEYS, TOTAL and STEP_INDEX and
+    re-apply the TOTAL == 0 rejection. Setting STEPS alone is inert, and
+    because request_size passes no --steps=, a go-ahead saying `cache` would
+    have run all five steps.
+  - The departed-window check is `kill -0 "$WINDOW_PID"`. Watching $PPID for a
+    change is dead code: bash sets PPID once at shell start and never
+    refreshes it on reparenting (measured).
+  - `--hold` suppresses run_size's @@DONE@@ — for a run another window merely
+    FOLLOWED, marker-protocol §4.9 makes DONE the only verdict there is.
+  - _log_path is excluded from the factored reset block.
+  - The adopt row keys on the window's own _size_proc pid, not bare liveness.
+  - run_engine needs ONEUP_HOLD_STATE and ONEUP_GO_FILE defaults, and
+    files-and-naming.md §5.1's override table needs two rows, or every hold
+    scenario reads the developer's real state directory.
+
+  Next step is the build: engine --hold + hold_for_go_ahead, the window adopt
+  path, and the test rewrite. Not started in this session.
 
 - ✅ [ONEUP-0045] **Pick up and follow a run that is already in progress when the window opens.**
   Runs deliberately outlive the window (ONEUP-0042), so a relaunched OneUp used
