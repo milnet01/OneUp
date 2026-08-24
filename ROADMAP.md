@@ -258,6 +258,33 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Two ordering facts the spec depends on: ONEUP-0034 creates
   oneup/gui/theme.py, and ONEUP-0076 lands BEFORE this item, so the focus
   measurement is inherited rather than built here.
+  Gate re-run (2026-08-24) before implementation, because ONEUP-0064 and
+  ONEUP-0076 shipped on 2026-08-21 and spec_query mode:"gate_drift" reported the
+  spec stale against its 2026-07-27 stamp. review-contract, genre spec, 3 cold
+  lanes per loop, 2 loops (the spec cap). Loop 5: Q1 7 · Q2 1 · Q3 3 · Q4 0, 11
+  verified. Loop 6: Q1 3 · Q2 3 · Q3 3 · Q4 1, 10 verified. 21 verified, 0
+  dismissed, all fixed. Calm cap — 3 of loop 6's 10 were loop 5's collateral.
+  Status stays Reviewed; implementation is unblocked.
+
+  The finding with teeth, found independently by all three lanes: §4.3 claimed
+  GREEN/RED had one call site. ONEUP-0076's focus derivation reads them too, so an
+  implementer would have moved the tracks into the palette, repointed paintEvent,
+  and left the FOCUSED switch deriving its colour from a green no theme paints —
+  with INV-12 staying green throughout, since the derivation still clears 3:1
+  against whatever it started from.
+
+  Two deliverables turned out already built: _QSS has carried the QDialog
+  background rule since 0064 (§8's "one code change that is not a theme" is
+  deleted), and half the contrast check exists — contrast(), composite() and
+  focus_report() in theme.py, driven from gui-smoke — so §2's "the check does not
+  exist" invited a second WCAG implementation.
+
+  Loop 6 settled the coverage universe: 53 keys reach _QSS (29 authored + 3
+  injected gradients + 15 derived focus + 6 font metrics), so INV-4 covers the 47
+  colours and INV-1 keeps the authored set. Previously INV-4 could never fire on
+  the 18 derived tokens. Also added INV-13: a theme whose focus pair cannot be
+  derived falls back to Follow system, keeps the stored id, and says so — the
+  branch had no invariant and nothing else can reach it.
 
 - ✅ [ONEUP-0028] **Make OneUp usable for blind, partially-sighted, and colour-blind users.**
   Cover the three groups: (1) blind — full screen-reader (Orca/AT-SPI) support: accessible names/roles on every control, the live log and progress announced, focus order sane, no unlabelled icon-only buttons; (2) partially sighted — scalable/large text, honour the desktop font scale, a high-contrast option, keyboard operability throughout; (3) colour-blind — never signal state by colour alone (the amber tray icon, red/green step badges) — pair every colour cue with text/shape/icon. Coordinates with ONEUP-0026 (dialog standard) and ONEUP-0027 (themes: any theme must keep WCAG-AA contrast). Likely warrants its own spec + an audit pass with Orca.
