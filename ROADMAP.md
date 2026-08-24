@@ -4295,7 +4295,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: test.
   Source: in-session-2026-08-23, deferred from ONEUP-0044's implementation.
 
-- 📋 [ONEUP-0127] **Re-gate ONEUP-0054 before the Python engine is built — §4.1.1 changed.**
+- ✅ [ONEUP-0127] **Re-gate ONEUP-0054 before the Python engine is built — §4.1.1 changed.**
   ONEUP-0044 added `hold.state` and `go.request` to §4.1.1's pinned state-file layout, and
   corrected "the two state files" to four in §4.1 and INV-13. That changes what the Python
   engine's implementer must build, so it re-arms CLAUDE.md rule 14's gate: the document's
@@ -4316,6 +4316,69 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   mode:"gate_drift" reports the spec as stale with the commit that did it.
 
   Do this before ONEUP-0054's implementation starts, not before its next edit.
+  Resolved (2026-08-24): review-contract, genre pinned spec, two loops, three cold
+  lanes each. 15 verified, 15 fixed, 1 dismissed. Commits 068ca74 and b01bd60.
+
+  Loop 1 (8 verified) was drift the intervening items left behind, and all three
+  lanes independently found the same four. INV-4 named a scenario ONEUP-0085 had
+  renamed, so the invariant pointed at nothing. §4.4 said the suite reaches the
+  engine at three places; ONEUP-0044 made it four, and an implementer wiring
+  stage 1's two overrides would have left the --hold scenario launching v1
+  forever, leaving §4.1.1's whole hold contract untested against v2 with G1
+  green. §4.1 assigned the window-side LOG_DIR rename to ONEUP-0034, which had
+  shipped without doing it. And §4.2's "the table places every function" was
+  false by twelve, the costly pair being hold_for_go_ahead/adopt_go_ahead —
+  §4.1.1's own contract with no module. Plus: the privileged-call-site guard had
+  no disposition against a Python engine, stage 2's row never mentioned the exit
+  codes it was promised to pin, and §4.1.1 said an invalid go.request is "treated
+  as absent" when adopt_go_ahead refuses and the refusal ENDS the hold.
+
+  Loop 2 (7 verified) reached the cap, and it is a VIOLENT cap: 5 of the 7
+  landed on text loop 1 wrote, every one in text a fix added. The two
+  pre-existing ones are the run's most valuable. ONEUP_ENGINE_CMD was pinned by
+  name and default but never by encoding, and a Bash array cannot cross a process
+  boundary — a harness and a suite settling that differently make G2 diff v1
+  against v1 and go green, which is the single failure this gate exists to
+  prevent. And §4.1.1's "Two rules v2 must keep" omitted the hold's third exit,
+  the kill -0 "$WINDOW_PID" poll, so a Python hold would keep a
+  root-authenticated engine waiting to the ceiling after its window died, with
+  no marker to show for it.
+
+  Not to be re-gated. At 671 lines it is the smallest of its recent siblings, so
+  size is not the problem; a third cold read would be repairing the second. It
+  goes to implementation, which exercises the contract against real code.
+  ONEUP-0054 stays Status: Reviewed — ready to implement.
+
+  Verified: local-CI green. run-tests 305/0, gui-smoke 442/0, imports 7/0,
+  bump 12/0, docs-check 20933 checked / 0 failed.
   **Layman:** A design document was updated, so an independent reviewer should read it again before anyone builds from it.
   Kind: doc.
   Source: in-session-2026-08-23, consequence of ONEUP-0044's implementation.
+
+- 📋 [ONEUP-0128] **Gate CLAUDE.md's new gate-drift trap, and decide whether documentation.md §7 should own it.**
+  ONEUP-0127 added a §6 trap to `CLAUDE.md`: a spec's `Reviewed` stamp does not
+  survive another item editing it, and `spec_query mode:"gate_drift"` is what
+  reports it.
+
+  Rule 14's test was applied rather than assumed, and it came out **Yes**. A
+  conformer would now do something different — run `gate_drift` before trusting a
+  stamp, and before starting an item whose spec is more than a few items old.
+  That is new direction, not a record of what was built, so the gate is owed.
+
+  Not run inside ONEUP-0127 for the same reason ONEUP-0044 did not run this one:
+  rule 14 wants the gate before anything is built under the rule, nothing has
+  been yet, and a cold read of `CLAUDE.md` is not a spec re-gate's scope.
+
+  The second half is the more interesting question and should be settled in the
+  same pass. `docs/standards/documentation.md` §7 owns the cold-eyes gate and
+  says nothing about it re-arming — the whole reason the trap had to go in
+  `CLAUDE.md` at all. §7 is where a conformer looks. If the rule belongs there,
+  `CLAUDE.md` keeps a pointer and the standard takes the rule, which is
+  `documentation.md` §2.1's own consolidation rule applied to this file.
+
+  Measured on 2026-08-24: `spec_query mode:"gate_drift"` reported 6 stale, 7
+  current, 4 ungated. Stale is the normal state of a busy branch, so a rule that
+  treats it as an incident would fire constantly and stop being read.
+  **Layman:** A note was added telling future sessions how to spot a design document whose review has gone stale. An independent reader should check it, and decide whether it belongs in the standard rather than the notes file.
+  Kind: doc.
+  Source: in-session-2026-08-24, consequence of ONEUP-0127.

@@ -254,3 +254,15 @@ measurement and the exact shape of the rule are in the document named beside eac
   markdown and not the history behind it. The migration was verified lossless: normalising
   whitespace makes the rendered file character-for-character identical to its pre-migration
   content. Recorded on `ONEUP-0057`.
+
+- **A spec's `Reviewed` stamp does not survive another item editing it, and nothing in the
+  file says so.** ONEUP-0044 pinned `hold.state` and `go.request` into
+  `docs/specs/ONEUP-0054-python-engine.md` §4.1.1 on 2026-08-23 — a change to what the
+  Python engine's implementer must build — and the stamp still read `Reviewed` from July,
+  with no diff and no error to show the gate had lapsed. The next session to open it would
+  have built from a contract nobody had re-read. `spec_query mode:"gate_drift"` reports
+  which specs are stale and names the commit that did it; six were on 2026-08-24, so this
+  is the normal state of a busy branch rather than an incident. Run it before trusting a
+  stamp, and before starting any item whose spec was written more than a few items ago —
+  `docs/standards/documentation.md` §7 owns the gate itself, and `CLAUDE.md` rule 14 in the
+  global set owns when it re-arms. Recorded on `ONEUP-0127`.
