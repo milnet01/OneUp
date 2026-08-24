@@ -3740,7 +3740,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   its evidence rather than a bare verdict. No marker was added to any of the
   nine, and tests/docs-check.py gained no rule.
 
-- 🚧 [ONEUP-0114] **A documentation-only push runs the documentation gates, not the whole suite.**
+- ✅ [ONEUP-0114] **A documentation-only push runs the documentation gates, not the whole suite.**
   Requested by the user 2026-08-18: "That pre-push hook for documents should only
   relate to documents and in theory should be a very quick run."
 
@@ -3782,6 +3782,36 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Pushing a documentation change no longer waits about a minute and a half for the app's tests to run. It checks the documents instead, which takes under a second.
   Kind: chore.
   Source: user-request-2026-08-18.
+  Resolved (2026-08-24): the mode selection and the fast path were
+  already in place — githooks/pre-push reads the pushed range and asks
+  local-CI.sh for --docs when every changed path ends in .md, and
+  `docs/standards/workflow.md` §6 documents it. What was missing was the
+  test this bullet names, so that is what this change adds.
+
+  tests/run-tests.sh now probes the real hook against the two real ranges
+  named above: 090a11b (README.md + ROADMAP.md) takes the fast path,
+  16153cc (update_system.sh and two .py files among its markdown) does
+  not. A third check locks the fail-safe direction — a new remote branch,
+  which has no base to diff, falls back to the whole suite.
+
+  No gate runs during the probe. The hook invokes local-CI.sh at `git
+  rev-parse --show-toplevel`, so GIT_WORK_TREE points at a throwaway
+  directory holding a stub that echoes the mode, while GIT_DIR still
+  points at the real object store — so the ranges resolve against real
+  history rather than a fixture, and the assertion is on what the hook
+  ASKED for.
+
+  Mutation-checked rather than assumed. Forcing docs_only=false reddens
+  the markdown case; treating every path as .md reddens the code case;
+  the new-branch case survives either singly because two guards defend
+  it, and goes red when both are removed, so it is redundant rather than
+  vacuous.
+
+  This is the suite's one scenario that needs git and a full clone. It
+  skips loudly when either is absent, and the file header now says so
+  rather than claiming no dependencies beyond bash and coreutils.
+
+  Verified: ./local-CI.sh green.
 
 - ✅ [ONEUP-0115] **Offer the reboot instead of naming services the app refuses to restart.**
   Asked by the user 2026-08-19, following ONEUP-0111.

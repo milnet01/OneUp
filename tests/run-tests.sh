@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 #
-# OneUp engine tests. No dependencies beyond bash + coreutils: each test builds a
-# throwaway PATH of mock system tools (zypper, flatpak, sudo, …) so the real
-# machine is never touched, runs update_system.sh, and asserts on the @@MARKER@@
-# lines it prints. These lock in the behaviour that had (or could regress into)
-# the false-"reboot needed" bug.
+# OneUp engine tests. No dependencies beyond bash + coreutils, bar the one stated
+# below: each test builds a throwaway PATH of mock system tools (zypper, flatpak,
+# sudo, …) so the real machine is never touched, runs update_system.sh, and asserts
+# on the @@MARKER@@ lines it prints. These lock in the behaviour that had (or could
+# regress into) the false-"reboot needed" bug.
+#
+# The exception is the ONEUP-0114 pre-push scenario, which probes the hook against
+# two real ranges of this repo's own history. It needs git and a full clone, and
+# skips loudly when either is missing rather than failing.
 #
 # Usage:  tests/run-tests.sh        # runs all tests, non-zero exit on any failure
 set -uo pipefail
@@ -3002,6 +3006,42 @@ for pair in "REFRESH_SUDO_ARGV:5" "CACHE_DU_ARGV:5"; do
         echo "  FAIL - $var referenced $got times, expected $want (call and rule may have drifted)"; FAIL=$((FAIL+1))
     fi
 done
+
+# ---------------------------------------------------------------------------
+echo "TEST: the pre-push hook picks the gate mode from what the push changes (ONEUP-0114)"
+# local-CI.sh owns what each gate IS; the hook only decides WHICH MODE to ask for, so that
+# decision is the whole of what there is to lock here. Two real ranges from this repo's
+# history stand for the two cases: 090a11b changes README.md and ROADMAP.md and nothing
+# else, 16153cc changes update_system.sh and two .py files among its markdown.
+#
+# No gate actually runs. The hook invokes `bash "$root/local-CI.sh" $mode` with $root from
+# `git rev-parse --show-toplevel`, so pointing GIT_WORK_TREE at a throwaway directory
+# holding a stub local-CI.sh captures the mode it asked for; GIT_DIR still points at the
+# real object store, so the ranges resolve against real history rather than a fixture.
+REPO="$(dirname "$ENGINE")"
+if ! git -C "$REPO" cat-file -e '090a11b~1^{commit}' 2>/dev/null ||
+   ! git -C "$REPO" cat-file -e '16153cc~1^{commit}' 2>/dev/null; then
+    # A shallow clone carries the hook but not the history it is probed against. The skip
+    # is LOUD for ONEUP-0068's reason: a silent one lets the selection go inert unnoticed.
+    echo "  SKIP - the hook probe needs full history; this clone lacks those commits"
+else
+    hookd=$(mktemp -d)
+    printf '#!/usr/bin/env bash\nprintf "STUB-CI[%%s]\\n" "$*"\n' > "$hookd/local-CI.sh"
+    hook_probe() {   # $1 = the tip being pushed, $2 = what the remote already has
+        printf 'refs/heads/probe %s refs/heads/probe %s\n' "$1" "$2" |
+            GIT_DIR="$REPO/.git" GIT_WORK_TREE="$hookd" bash "$REPO/githooks/pre-push" 2>&1
+    }
+    check "a markdown-only push runs only the markdown gates" \
+        "STUB-CI[--docs]" "$(hook_probe 090a11b '090a11b~1')"
+    check "a push that touches code runs the whole suite" \
+        "STUB-CI[]" "$(hook_probe 16153cc '16153cc~1')"
+    # The fail-safe direction. A new remote branch has no base to diff against, so the hook
+    # must fall back to the full run rather than guess: a wrong guess costs time, never
+    # coverage, and that is the only safe way round for a gate.
+    check "a new remote branch falls back to the whole suite" \
+        "STUB-CI[]" "$(hook_probe 090a11b 0000000000000000000000000000000000000000)"
+    rm -rf "$hookd"
+fi
 
 # ---------------------------------------------------------------------------
 echo "TEST: the recovery host openSUSE serves is still there (ONEUP-0094 T-1)"
