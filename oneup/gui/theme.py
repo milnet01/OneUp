@@ -17,14 +17,16 @@ from __future__ import annotations
 from string import Template
 
 from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QColor, QFontInfo, QIcon
+from PySide6.QtGui import QFontInfo, QIcon
 from PySide6.QtWidgets import QApplication, QFrame, QVBoxLayout
 
 from .. import APP_ID
 from . import paths
 
-GREEN = QColor("#2ecc71")
-RED = QColor("#e74c3c")
+# ONEUP-0027 moved every colour a theme has to reach into the palette
+# dictionaries below. Nothing here holds one any more except `_BLACK` and
+# `_WHITE`, which are the ends of the sRGB range rather than colours anyone
+# chose — INV-5's gate names them as its only exemption.
 
 # ---------------------------------------------------------------------------
 # The focus cue, DERIVED rather than authored (ONEUP-0076).
@@ -197,27 +199,34 @@ def derive_focus_gradient(stops, *, label: str = "",
 # later rule wins. Focus rings use `outline`, not `border`: a border changes the
 # widget's box and makes buttons visibly resize when focused.
 # ---------------------------------------------------------------------------
-ACCENT = "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)"
-
-# The two gradient FILLS a focus cue is derived from, kept as stop pairs rather
-# than as sheet literals so the derivation and the sheet cannot drift apart.
-BTN_ACCENT_STOPS = ("#4aa3ff", "#2f6fe0")
-BTN_DANGER_STOPS = ("#ef6a55", "#d6412a")
-
-
+# The two BUTTON gradient fills a focus cue is derived from are authored in each
+# palette as stop PAIRS rather than as sheet strings, so the derivation and the
+# sheet cannot drift apart (ONEUP-0027 §4.3). `accent` is the diagonal row-hover
+# gradient — different geometry, its own stops — and is authored whole.
 def _vgradient(stops) -> str:
     return ("qlineargradient(x1:0, y1:0, x2:0, y2:1, "
             f"stop:0 {stops[0]}, stop:1 {stops[1]})")
 
 
-BTN_ACCENT = _vgradient(BTN_ACCENT_STOPS)
-BTN_DANGER = _vgradient(BTN_DANGER_STOPS)
+def _rgba(colour: str, alpha: str) -> str:
+    """`colour` as a QSS `rgba(...)` at `alpha`.
+
+    The banner washes were decimal `rgba()` triples in the sheet, restating hues
+    that are also palette tokens — the warning one being the very colour the
+    focus derivation blends from. Writing them from the token is what stops a
+    theme moving the wash and leaving the cue behind.
+    """
+    r, g, b = _rgb(colour)
+    # The alpha is a STRING so the sheet reads exactly as it was authored:
+    # formatting 0.20 as a float prints "0.2", which Qt treats the same but
+    # which makes a byte-comparison against the pre-tokenised sheet noisy.
+    return f"rgba({r},{g},{b},{alpha})"
+
 
 # The warning banner's ground is a two-stop ALPHA wash, not a flat token, so a
 # control inside it has no hex to blend from until the tint is composited over
 # the surface beneath (`card`). §4.4 resolves it that way rather than by
 # rendering, which is what keeps the whole check a pure computation.
-WARN_TINT = "#e9b23f"
 WARN_TINT_ALPHAS = (0.20, 0.04)
 
 # Text-size choices offered in Settings. The multiplier scales every font size
@@ -303,14 +312,14 @@ QScrollArea#DetailScroll { border: 2px solid $logbd; background: transparent; }
 QLabel#SizeResult { color: $tname; font-size: $fs_body; font-weight: 600; }
 
 QPushButton#RunBtn {
-    font-size: $fs_med; font-weight: 700; color: #ffffff; border: none;
+    font-size: $fs_med; font-weight: 700; color: $btnfg; border: none;
     border-radius: 11px; padding: 12px 18px; background: $btn_accent;
 }
 QPushButton#RunBtn:hover {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
+    background: $btn_accent_hov;
 }
 QPushButton#RunBtn:pressed {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3d90ec, stop:1 #2560c8);
+    background: $btn_accent_press;
 }
 QPushButton#RunBtn:disabled { color: $disfg; background: $disbg; }
 
@@ -370,39 +379,39 @@ QListWidget#RollbackList {
 }
 
 #RebootBanner {
-    border: 1px solid #e0553f; border-radius: 10px;
+    border: 1px solid $dangerbd; border-radius: 10px;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 rgba(231,76,60,0.22), stop:1 rgba(231,76,60,0.05));
+        stop:0 $dangerwash1, stop:1 $dangerwash2);
 }
 QPushButton#RestartBtn {
-    color: #ffffff; font-weight: 700; border: none; border-radius: 8px; padding: 7px 15px;
+    color: $btnfg; font-weight: 700; border: none; border-radius: 8px; padding: 7px 15px;
     min-width: 24px; min-height: 24px; background: $btn_danger;
 }
 QPushButton#RestartBtn:hover {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f47c68, stop:1 #e04a32);
+    background: $btn_danger_hov;
 }
 
 #InfoBanner {
-    border: 1px solid rgba(74,163,255,0.55); border-radius: 10px;
+    border: 1px solid $infobd2; border-radius: 10px;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 rgba(74,163,255,0.20), stop:1 rgba(34,211,238,0.05));
+        stop:0 $infowash1, stop:1 $infowash2);
 }
 #WarnBanner {
-    border: 1px solid rgba(233,178,63,0.6); border-radius: 10px;
+    border: 1px solid $warnbd2; border-radius: 10px;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 rgba(233,178,63,0.20), stop:1 rgba(233,178,63,0.04));
+        stop:0 $warnwash1, stop:1 $warnwash2);
 }
 QLabel#BannerText { color: $header; font-weight: 600; border: none; background: transparent; }
 QPushButton#BannerBtn {
-    color: #ffffff; font-weight: 700; border: none; border-radius: 8px; padding: 7px 15px;
+    color: $btnfg; font-weight: 700; border: none; border-radius: 8px; padding: 7px 15px;
     min-width: 24px; min-height: 24px; background: $btn_accent;
 }
 QPushButton#BannerBtn:hover {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
+    background: $btn_accent_hov;
 }
 
 QToolTip {
-    background: $tip; color: $tipfg; border: 1px solid #4aa3ff;
+    background: $tip; color: $tipfg; border: 1px solid $tipbd;
     border-radius: 4px; padding: 4px 6px;
 }
 
@@ -578,6 +587,27 @@ _DARK = dict(
     linkfg="#4aa3ff", linkhov="#6fb6ff", stopfg="#e0553f", stophov="#ef6a55",
     disbg="#262b34", disfg="#aeb7c4",
     tip="#1a1f27", tipfg="#e9edf3", focus="#66b8ff",
+    # The painted controls (ONEUP-0027 §4.3). A stylesheet cannot reach these:
+    # ToggleSwitch.paintEvent and tray._tray_icon draw them with QPainter.
+    switchon="#2ecc71", switchoff="#e74c3c",
+    switchmark="#ffffff", switchknob="#ffffff",
+    switchtrackrim="#ffffff", switchknobrim="#000000",
+    trayidle="#888888", trayattn="#f5a623", trayrim="#ffffff", traymark="#3a2600",
+    # The sheet's own former literals.
+    btnfg="#ffffff", dangerbd="#e0553f", tipbd="#4aa3ff",
+    # Gradients. The two BUTTON fills are authored as stop pairs and built by
+    # _vgradient, so the sheet and the focus derivation cannot drift apart;
+    # `accent` is the diagonal row-hover gradient and is authored whole.
+    accent="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)",
+    btn_accent_stops=("#4aa3ff", "#2f6fe0"),
+    btn_accent_hov_stops=("#5cb0ff", "#3a7cf0"),
+    btn_accent_press_stops=("#3d90ec", "#2560c8"),
+    btn_danger_stops=("#ef6a55", "#d6412a"),
+    btn_danger_hov_stops=("#f47c68", "#e04a32"),
+    # Banner washes. Each is a hue the sheet composites at two alphas; the
+    # warning one is also what the focus derivation blends from, so a theme that
+    # moved one and not the other would light a focus cue the banner never wears.
+    warntint="#e9b23f", infotint="#4aa3ff", infotint2="#22d3ee", dangertint="#e74c3c",
 )
 _LIGHT = dict(
     win="#eef1f5", card="#ffffff", header="#1b2027", tag="#5c6673",
@@ -588,6 +618,18 @@ _LIGHT = dict(
     linkfg="#326dab", linkhov="#446f9c", stopfg="#d6412a", stophov="#b5321d",
     disbg="#d5dbe2", disfg="#9aa3ad",
     tip="#ffffff", tipfg="#1b2027", focus="#0b5fd0",
+    switchon="#2ecc71", switchoff="#e74c3c",
+    switchmark="#ffffff", switchknob="#ffffff",
+    switchtrackrim="#ffffff", switchknobrim="#000000",
+    trayidle="#888888", trayattn="#f5a623", trayrim="#ffffff", traymark="#3a2600",
+    btnfg="#ffffff", dangerbd="#e0553f", tipbd="#4aa3ff",
+    accent="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)",
+    btn_accent_stops=("#4aa3ff", "#2f6fe0"),
+    btn_accent_hov_stops=("#5cb0ff", "#3a7cf0"),
+    btn_accent_press_stops=("#3d90ec", "#2560c8"),
+    btn_danger_stops=("#ef6a55", "#d6412a"),
+    btn_danger_hov_stops=("#f47c68", "#e04a32"),
+    warntint="#e9b23f", infotint="#4aa3ff", infotint2="#22d3ee", dangertint="#e74c3c",
 )
 
 # High-contrast palettes: pure black/white surfaces and text (21:1), one saturated
@@ -607,7 +649,8 @@ _HC_LIGHT = dict(
 
 def warn_tint(palette: dict) -> tuple[str, str]:
     """The warning banner's two ground colours, composited over the card."""
-    return tuple(composite(WARN_TINT, a, palette["card"]) for a in WARN_TINT_ALPHAS)
+    return tuple(composite(palette["warntint"], a, palette["card"])
+                 for a in WARN_TINT_ALPHAS)
 
 
 def focus_keys(palette: dict) -> dict:
@@ -646,8 +689,8 @@ def focus_keys(palette: dict) -> dict:
     keys["logbdfocus"], _ = derive_focus(
         palette["logbd"], (palette["logbd"],), label="logbd")
     # The two gradient fills.
-    for name, stops in (("accentfocus", BTN_ACCENT_STOPS),
-                        ("dangerfocus", BTN_DANGER_STOPS)):
+    for name, stops in (("accentfocus", palette["btn_accent_stops"]),
+                        ("dangerfocus", palette["btn_danger_stops"])):
         fills, ink = derive_focus_gradient(stops, label=name)
         keys[name] = _vgradient(fills)
         keys[name + "ink"] = ink
@@ -655,8 +698,13 @@ def focus_keys(palette: dict) -> dict:
     # the state shape is drawn ON the track, so the focused track must also clear
     # 3:1 against the white mark and the white knob, or the one colour-independent
     # cue this app has stops reading.
-    for name, track in (("switchfocuson", GREEN.name()), ("switchfocusoff", RED.name())):
-        keys[name], _ = derive_focus(track, (track, "#ffffff"), label=name)
+    # The surface set is BOTH white things drawn on the track — the state shape
+    # and the knob — which ONEUP-0027 §4.3 splits into two themeable tokens. A
+    # focused track measured against only one of them can swallow the other.
+    for name, key in (("switchfocuson", "switchon"), ("switchfocusoff", "switchoff")):
+        track = palette[key]
+        keys[name], _ = derive_focus(
+            track, (track, palette["switchmark"], palette["switchknob"]), label=name)
     return keys
 
 
@@ -730,20 +778,22 @@ def focus_report(dark: bool, high_contrast: bool = False) -> list[dict]:
         # are the smallest blend in the same direction, so they land on the same
         # luminance and measure about 1:1 against each other.
         add(control, "border", ink, fill, FOCUS_MIN)
-    for control, prefix, stops in (("Run / banner button", "accentfocus", BTN_ACCENT_STOPS),
-                                   ("Restart button", "dangerfocus", BTN_DANGER_STOPS)):
+    for control, prefix, stops in (
+            ("Run / banner button", "accentfocus", palette["btn_accent_stops"]),
+            ("Restart button", "dangerfocus", palette["btn_danger_stops"])):
         fills, _ = derive_focus_gradient(stops)
         rest, focused = _samples(*stops), _samples(*fills)
         for r, f in zip(rest, focused, strict=True):
             add(control, "fill", _hex(f), _hex(r), FOCUS_MIN)
             add(control, "ink", keys[prefix + "ink"], _hex(f), INK_MIN)
-    for control, key, track in (("switch, on", "switchfocuson", GREEN.name()),
-                                ("switch, off", "switchfocusoff", RED.name())):
+    for control, key, track in (("switch, on", "switchfocuson", palette["switchon"]),
+                                ("switch, off", "switchfocusoff", palette["switchoff"])):
         add(control, "fill", keys[key], track, FOCUS_MIN)
         # The one control whose fill is constrained by something drawn ON it: the
         # state shape and the knob are both white, and a track that swallowed them
         # would take the only colour-independent cue this app has with it.
-        add(control, "state shape", "#ffffff", keys[key], FOCUS_MIN)
+        add(control, "state shape", palette["switchmark"], keys[key], FOCUS_MIN)
+        add(control, "knob", palette["switchknob"], keys[key], FOCUS_MIN)
     add("log / detail / dialog panels", "border",
         keys["logbdfocus"], palette["logbd"], FOCUS_MIN)
 
@@ -793,15 +843,64 @@ def _font_metrics(scale: float) -> dict:
     return metrics
 
 
+def derived_keys(palette: dict) -> dict:
+    """Everything `build_theme` computes from an authored palette.
+
+    Kept separate from `build_theme` so the contrast check can reach exactly the
+    key set the sheet is substituted with — ONEUP-0027 INV-4's universe is the
+    authored keys plus these, and a check that iterated only the authored ones
+    would exempt the tokens no theme author ever sees.
+    """
+    keys = {
+        # The button fills, built from the stop pairs the palette authors so the
+        # sheet and the focus derivation cannot disagree about what is painted.
+        "btn_accent": _vgradient(palette["btn_accent_stops"]),
+        "btn_accent_hov": _vgradient(palette["btn_accent_hov_stops"]),
+        "btn_accent_press": _vgradient(palette["btn_accent_press_stops"]),
+        "btn_danger": _vgradient(palette["btn_danger_stops"]),
+        "btn_danger_hov": _vgradient(palette["btn_danger_hov_stops"]),
+        # The banner washes, at the alphas the sheet used to spell in decimal.
+        "warnwash1": _rgba(palette["warntint"], "0.20"),
+        "warnwash2": _rgba(palette["warntint"], "0.04"),
+        "warnbd2": _rgba(palette["warntint"], "0.6"),
+        "infowash1": _rgba(palette["infotint"], "0.20"),
+        "infowash2": _rgba(palette["infotint2"], "0.05"),
+        "infobd2": _rgba(palette["infotint"], "0.55"),
+        "dangerwash1": _rgba(palette["dangertint"], "0.22"),
+        "dangerwash2": _rgba(palette["dangertint"], "0.05"),
+    }
+    # The focus pairs are computed rather than authored, so a palette gets its
+    # cue with no further work — and fails loudly if it cannot have one, rather
+    # than shipping a fill that does not read.
+    keys.update(focus_keys({**palette, **keys}))
+    return keys
+
+
+_CURRENT_PALETTE: dict = {}
+
+
+def current_palette() -> dict:
+    """The palette `apply_app_theme` last resolved — authored keys plus derived.
+
+    A painted widget calls this; it never binds a colour at import, because a
+    name bound with `from … import` keeps its own copy and would leave the
+    control on the colour it had at start-up (ONEUP-0034 §4.4, applied to
+    colours). Returns the BASE palette: the high-contrast overlay is never
+    merged in, because the painted widgets need base keys under high contrast
+    (`switchtrackrim`, `switchknobrim`) and the overlay's smaller key set
+    collapses many base tokens onto a few. A painter that needs to know whether
+    high contrast is on reads the `highContrast` property the sheet hands it.
+
+    Falls back to the dark palette before the first `apply_app_theme` — a
+    painter constructed in a test, or during start-up, gets colours rather than
+    a KeyError.
+    """
+    return _CURRENT_PALETTE or {**_DARK, **derived_keys(_DARK)}
+
+
 def build_theme(dark: bool, scale: float = 1.0, high_contrast: bool = False) -> str:
     palette = dict(_DARK if dark else _LIGHT)
-    palette["accent"] = ACCENT
-    palette["btn_accent"] = BTN_ACCENT
-    palette["btn_danger"] = BTN_DANGER
-    # The focus pairs are computed here rather than authored, so a palette
-    # ONEUP-0027 adds later gets its cue with no further work — and fails loudly
-    # if it cannot have one, rather than shipping a fill that does not read.
-    palette.update(focus_keys(palette))
+    palette.update(derived_keys(palette))
     metrics = _font_metrics(scale)
     palette.update(metrics)
     qss = _QSS.substitute(palette)
@@ -841,7 +940,16 @@ def apply_app_theme(app: QApplication):
         # one: re-apply the built-in palette instead of the chosen theme.
         print(f"OneUp: unusable theme — {exc}; the theme was NOT applied")
         return
+    global _CURRENT_PALETTE
+    base = dict(_DARK if dark else _LIGHT)
+    base.update(derived_keys(base))
+    _CURRENT_PALETTE = base
     app.setStyleSheet(qss)
+    # Setting the sheet re-polishes the widgets it styles, but a painter
+    # reading `current_palette()` is not styled by it — nothing tells the
+    # switch its colours moved. So repaint what the sheet cannot reach.
+    for w in app.topLevelWidgets():
+        w.update()
 
 
 def current_is_dark(app: QApplication) -> bool:

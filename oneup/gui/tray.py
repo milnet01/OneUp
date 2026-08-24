@@ -19,7 +19,7 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .. import APP_ID, APP_NAME
-from . import autostart, paths, run
+from . import autostart, paths, run, theme
 from .theme import _app_icon
 
 # Single-instance handshake budget (ONEUP-0084). Both ends are local sockets on the
@@ -32,7 +32,6 @@ SINGLE_INSTANCE_TIMEOUT_MS = 500
 # single .stop() on tray-off cancels everything (no stray one-shot survives).
 TRAY_INITIAL_DELAY_MS = 4000                 # first check ~4s after launch (don't slow login)
 TRAY_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000  # then every 6 hours
-TRAY_ATTENTION_COLOR = "#f5a623"             # amber "updates waiting" badge
 
 
 def single_instance_name() -> str:
@@ -49,7 +48,12 @@ def single_instance_name() -> str:
 def _tray_icon(attention: bool) -> QIcon:
     """Compose the tray icon at runtime: the app icon, plus an amber badge when
     updates are waiting. Drawn (not themed), so it reads on any desktop theme;
-    falls back to a plain disc if the app icon can't be found (never blank)."""
+    falls back to a plain disc if the app icon can't be found (never blank).
+
+    Its four colours are palette tokens (ONEUP-0027 §4.3), read through
+    `current_palette()` on every call so a theme change repaints the badge —
+    which is why `apply_app_theme` rebuilds the icon rather than only the sheet."""
+    pal = theme.current_palette()
     base = _app_icon()
     if not base.isNull():
         pm = base.pixmap(64, 64)
@@ -59,14 +63,14 @@ def _tray_icon(attention: bool) -> QIcon:
         p = QPainter(pm)
         p.setRenderHint(QPainter.Antialiasing)
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor("#888888"))
+        p.setBrush(QColor(pal["trayidle"]))
         p.drawEllipse(8, 8, 48, 48)
         p.end()
     if attention:
         p = QPainter(pm)
         p.setRenderHint(QPainter.Antialiasing)
-        p.setPen(QColor("#ffffff"))
-        p.setBrush(QColor(TRAY_ATTENTION_COLOR))
+        p.setPen(QColor(pal["trayrim"]))
+        p.setBrush(QColor(pal["trayattn"]))
         d = 26
         x, y = pm.width() - d - 3, pm.height() - d - 3
         p.drawEllipse(x, y, d, d)
@@ -77,7 +81,7 @@ def _tray_icon(attention: bool) -> QIcon:
         font.setBold(True)
         font.setPixelSize(int(d * 0.72))
         p.setFont(font)
-        p.setPen(QColor("#3a2600"))
+        p.setPen(QColor(pal["traymark"]))
         p.drawText(QRectF(x, y, d, d), Qt.AlignCenter, "!")
         p.end()
     return QIcon(pm)

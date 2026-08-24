@@ -15,7 +15,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QAbstractButton
 
-from .theme import GREEN, RED
+from . import theme
 
 
 class ToggleSwitch(QAbstractButton):
@@ -43,8 +43,9 @@ class ToggleSwitch(QAbstractButton):
         # the same one highContrast already uses. Defaulting them to the resting
         # tracks means an unstyled switch simply shows no cue rather than a wrong
         # one; the sheet always assigns both.
-        self._focus_on = QColor(GREEN)
-        self._focus_off = QColor(RED)
+        pal = theme.current_palette()
+        self._focus_on = QColor(pal["switchon"])
+        self._focus_off = QColor(pal["switchoff"])
         self._anim = QPropertyAnimation(self, b"knobPos", self)
         self._anim.setDuration(130)
         self._anim.setEasingCurve(QEasingCurve.InOutCubic)
@@ -110,7 +111,7 @@ class ToggleSwitch(QAbstractButton):
               else self.width() - self._margin - diameter / 2)
         cy = self.height() / 2
         p.setBrush(Qt.NoBrush)
-        p.setPen(QPen(QColor("#ffffff"), 2))
+        p.setPen(QPen(QColor(theme.current_palette()["switchmark"]), 2))
         if self.isChecked():
             half = diameter * 0.26
             p.drawLine(QPointF(cx, cy - half), QPointF(cx, cy + half))
@@ -122,10 +123,11 @@ class ToggleSwitch(QAbstractButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         radius = self.height() / 2
+        pal = theme.current_palette()
         if self.hasFocus():
             track = self._focus_on if self.isChecked() else self._focus_off
         else:
-            track = GREEN if self.isChecked() else RED
+            track = QColor(pal["switchon" if self.isChecked() else "switchoff"])
         if not self.isEnabled():
             track = track.lighter(140)
         p.setPen(Qt.NoPen)
@@ -141,13 +143,13 @@ class ToggleSwitch(QAbstractButton):
             # Outline the track so the switch stays distinguishable from a pure
             # black/white surface, and rim the knob so it reads against the track.
             p.setBrush(Qt.NoBrush)
-            p.setPen(QPen(QColor("#ffffff"), 2))
+            p.setPen(QPen(QColor(pal["switchtrackrim"]), 2))
             p.drawRoundedRect(QRectF(1, 1, self.width() - 2, self.height() - 2),
                               radius, radius)
-            p.setPen(QPen(QColor("#000000"), 1))
+            p.setPen(QPen(QColor(pal["switchknobrim"]), 1))
         else:
             p.setPen(Qt.NoPen)
-        p.setBrush(QColor("#ffffff"))
+        p.setBrush(QColor(pal["switchknob"]))
         p.drawEllipse(QRectF(x, self._margin, diameter, diameter))
 
         # No focus ring is drawn, by explicit design decision (2026-07-25): rings
