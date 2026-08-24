@@ -115,7 +115,7 @@ owns the subsystem it serves, and what stays in `window.py` is what the window i
 | `oneup/gui/__init__.py` | nothing | the package marker; no logic, no re-exports |
 | `oneup/gui/paths.py` | `HERE`, `_find_engine`, `ENGINE`, `ENTRY_POINT`, `STATE_DIR`, `HISTORY`, `LOG_DIR`, `RUN_STATE`, `STOP_REQUEST`, `ZYPP_PACKAGE_CACHE` | where everything OneUp reads or writes lives |
 | `oneup/gui/steps.py` | `TASKS` | the five update steps, their keys, titles and order |
-| `oneup/gui/theme.py` | `_QSS`, `_HC_QSS`, `_DARK`, `_LIGHT`, `_HC_DARK`, `_HC_LIGHT`, `ACCENT`, `BTN_ACCENT`, `GREEN`, `RED`, `TEXT_SCALES`, `_FONT_SCALE`, `_font_metrics`, `build_theme`, `apply_app_theme`, `current_is_dark` | what the app looks like |
+| `oneup/gui/theme.py` | `_QSS`, `_HC_QSS`, the eight palettes, `_HC_DARK`, `_HC_LIGHT`, `THEMES`, `REFERENCE_KEYS`, `TEXT_SCALES`, `_FONT_SCALE`, `_font_metrics`, `derived_keys`, `current_palette`, `build_theme`, `apply_app_theme`, `current_is_dark` | what the app looks like |
 | `oneup/gui/placement.py` | `_on_wayland`, `run_kwin_script`, `center_on_parent` | putting a window where the user expects to find it |
 | `oneup/gui/markers.py` | splitting a marker line into its name and fields; `_step_badge`, `_format_duration`, `_format_size` | reading what the engine said, and saying it in English |
 | `oneup/gui/diagnostics.py` | `_os_release_pretty`, `_latest_run_log`, `build_diagnostics`, `cache_bytes`, `DIAG_LOG_CAP` | describing this machine when the user reports a problem |

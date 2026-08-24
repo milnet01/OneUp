@@ -6,6 +6,15 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Eight colour themes, chosen in Settings** (ONEUP-0027)
+  Settings gains a picker offering **Follow system** plus eight themes — four
+  dark (Midnight, Carbon, Forest, Plum) and four light (Daylight, Paper, Sky,
+  Sand). The choice applies at once, across the window and every open dialog,
+  with no restart, and it survives one. Follow system keeps today's behaviour
+  exactly, so nothing changes for anyone who never opens the picker.
+
 ### Changed
 
 - **The window has been reworked so there is one obvious thing to press.** (ONEUP-0064)
@@ -34,6 +43,17 @@ All notable changes to OneUp are documented here. The format follows
   makes future changes safer to make and easier to review.
 
 ### Fixed
+
+- **Text and controls that were too faint to read reliably** (ONEUP-0027)
+  A contrast check now measures every colour pair in every theme, and it found
+  three nobody had measured before. The Run button's white label sat at 2.63:1
+  on its own fill and the Restart button's at 3.06:1, where 4.5:1 is the
+  standard for text; both button fills are slightly deeper now. The tray's
+  "updates waiting" badge was hard to see on a light desktop at 1.79:1 and has
+  been darkened. Also fixed: the light theme's "last run" line and its warning
+  text, and the white bar-and-circle on the on/off switches — the cue that tells
+  you a switch's state without relying on colour, which was the weakest thing on
+  screen at 2.10:1.
 
 - **One password box instead of two when you check the download size first.** (ONEUP-0044)
   If you pressed **Show download size** and then started the update, OneUp asked for

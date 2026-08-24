@@ -37,7 +37,7 @@ each invariant is tested; this file is the rule a new widget must obey.
 | No hard-coded pixel font size | `gui-smoke.py` INV-3 — a regex over the built stylesheet. **The stylesheet half only** (§4) |
 | Focus never draws a ring or adds a border, and every focusable control HAS a cue | `gui-smoke.py` INV-4 — asserts no ring, that no `:focus` rule moves anything but colour, and that the `:focus` rules are emitted after `:hover`/`:checked`; ONEUP-0076 INV-1 fails any focusable widget with no treatment at all (§5) |
 | Dialogs inherit the app theme and open centred on the window | `gui-smoke.py`'s X11 and Wayland `center_on_parent` assertions (§6) |
-| Every theme passes the same contrast checks | **half enforced** — ONEUP-0076's focus computation runs over the palette dictionary; the whole-palette 4.5:1 sweep is still ONEUP-0027's to write (§7) |
+| Every theme passes the same contrast checks | **enforced** — ONEUP-0076's focus computation and ONEUP-0027's whole-palette sweep both run over every palette, from `tests/gui-smoke.py` (§7) |
 | The window mirrors for Hebrew and Arabic | §8, gate G10 |
 
 ## 2. Accessible names — a name for everything reachable
@@ -75,7 +75,7 @@ on ONEUP-0076.)
 | Cue | Pairing |
 | --- | --- |
 | Switch on / off | A shape drawn in the track opposite the knob — a **vertical bar** when on, an **open circle** when off. Drawn with `QPainter` primitives, not a font glyph: a painted widget has no font-fallback chain, so a missing character would vanish silently. |
-| Tray attention badge | A dark `!` (`#3a2600`) inside the amber disc, drawn in `Updater._tray_icon` — the icon differs in *shape*, not only colour. (The white pen in that method draws the disc's rim.) |
+| Tray attention badge | A dark `!` (`traymark`) inside the amber disc, drawn by `tray.py`'s `_tray_icon` — the icon differs in *shape*, not only colour. (`trayrim` draws the disc's rim.) Every one of the four is a palette token since ONEUP-0027, so a theme recolours the badge; the shape is what carries the state regardless. |
 | Overdue last-run line | The text gains a `⚠` prefix and the word `overdue`. Text is safe here because it is an ordinary `QLabel` in the app's font stack. |
 
 **The test for a new cue:** describe the two states out loud without using a colour word.
@@ -378,32 +378,30 @@ which are also the rules:
   background, and any colour that carries meaning — a border, a badge rim, a switch track —
   at least **3:1** (WCAG 2.2 SC 1.4.3 and 1.4.11).
 
-  **Half of this check now exists, and the half that does is ONEUP-0076's.** Its focus
-  computation runs over the palette dictionary — so it already covers a theme nobody has
-  written yet, which is the property that makes it worth having — but it measures only the
-  colours that item introduces or moves, plus every derived focus pair. **The whole-palette
-  4.5:1 sweep is still ONEUP-0027's to write**, and is still the first thing that item
-  should do, because it is what makes "a theme that cannot pass is not shipped" enforceable
-  rather than aspirational.
+  **Both halves of this check now exist.** ONEUP-0076's focus computation measures the
+  colours that item introduces or moves plus every derived focus pair;
+  ONEUP-0027's whole-palette sweep measures the rest, from a pair table in
+  `oneup/gui/contrast.py`. Both run over the palette dictionary rather than over a
+  rendering, so both already cover a theme nobody has written yet — which is the property
+  that makes "a theme that cannot pass is not shipped" enforceable rather than aspirational.
 
-  **The two shipped palettes are not both clean, so "pass what the built-ins pass" is the
-  wrong bar.** Measured: light `lastrun` `#8a94a2` is **3.07:1** on `card` `#ffffff` and
-  **2.71:1** on `win` `#eef1f5` — below 4.5:1 for what `QLabel#LastRun` renders as body
-  text. (Dark's equivalent is 5.4:1 and fine.) Either the light palette's `lastrun` is
-  darkened when the check lands, or it is recorded as an accepted exception with a reason —
-  ONEUP-0027 decides which. It must not be discovered by the check and quietly ignored.
-- **The colour-never-alone rule is per-theme — once a theme can reach the switch at all.**
-  Today it cannot: the two track colours are the module constants `GREEN` and `RED`, read
-  directly by `ToggleSwitch.paintEvent` and by the focus derivation, and neither `_DARK` nor
-  `_LIGHT` carries a track key. So this rule binds **ONEUP-0027**, which moves them into the
-  palette. **When it does, the focus derivation has to move with them** — it names those
-  constants, so a palette that sets a track and leaves the derivation alone gets a focused
-  track derived from a colour it no longer paints. The rule itself is unchanged: a theme
-  whose "on" and "off" tracks are close is still legible, because §3's shapes carry the
-  state, but a theme must not recolour a shape into invisibility against its own track.
+  **"Pass what the built-ins pass" was the wrong bar, because the built-ins did not.** When
+  the sweep landed it failed nine pairs across the two shipped palettes, and the three
+  nobody had measured were the ones that mattered: the Run button's white label at 2.63:1
+  on its own fill, the Restart button's at 3.06:1, and the tray badge at 1.79:1 on a light
+  window. Every one was fixed rather than excepted. A pair a check finds is decided the way
+  its neighbours are; what it must never be is discovered and quietly ignored.
+- **The colour-never-alone rule is per-theme, and a theme can reach the switch.**
+  ONEUP-0027 moved the track colours into every palette as `switchon` / `switchoff`, and
+  **the focus derivation moved with them** in the same commit — it had named the old module
+  constants, so a palette that set a track and left the derivation alone would have got a
+  focused track derived from a colour it no longer paints. The rule itself is unchanged: a
+  theme whose "on" and "off" tracks are close is still legible, because §3's shapes carry
+  the state, but a theme must not recolour a shape into invisibility against its own track —
+  which is now a checked pair, `switchon`/`switchoff` against `switchmark` and `switchknob`.
 - **High contrast stays an overlay, not a theme.** It is appended after the base sheet
   (`build_theme(…, high_contrast=True)`), so it must keep working on top of *every* theme,
-  not just the two shipped today. A new theme is checked with the overlay on as well as off.
+  not just the eight shipped today. A new theme is checked with the overlay on as well as off.
 
 ## 8. Right-to-left languages (ONEUP-0032)
 
@@ -519,7 +517,7 @@ today; the RTL work adds them, and this is the form they take.
 | §5.1 every focusable control HAS a treatment | `tests/gui-smoke.py` — ONEUP-0076 INV-1 sweeps the window and each dialog and fails any focusable widget matching no row of that spec's table, by object name, class **and** containing surface. Its one exclusion is Qt-supplied chrome with no name of ours and no rule in either sheet |
 | §5.6 tab order follows visual order | `tests/gui-smoke.py` — ONEUP-0064 INV-1 flattens the layout tree to visual order and walks the focus chain end to end against it, once for the window and once for `SettingsDialog`, which has a chain of its own. It is the first thing to actually check this rule |
 | §6.1 a dialog inherits the theme | `tests/gui-smoke.py` catches the half that is a rule breach — no widget carries a stylesheet of its own. **Nothing checks the background a dialog actually paints**, which is why `_QSS`'s missing `QDialog` rule went unnoticed; ONEUP-0076 §8 prescribes the rule and ONEUP-0027 INV-7 is the nearest test to it |
-| §7 themes | ONEUP-0027 — the contrast check is that item's to write, and the light theme's `lastrun` text sits at 3.07:1 today |
+| §7 themes | **`oneup/gui/contrast.py`, driven from `tests/gui-smoke.py`** — every pair in its table, over all eight palettes and both overlay states, plus the exception list's shape and the coverage rule that stops a token escaping measurement. The light theme's `lastrun` was darkened to clear 4.5:1 when the check landed |
 | §8.1 no directional QSS property | nothing automatic |
 | §8.2 no hard-coded `AlignLeft` / `AlignRight` | nothing automatic. Nothing violates it today — the `#LinkBtn` violation is §8.1's `text-align: left`, not this rule |
 | §8.3 custom painting applies the direction | **nothing** — the toggle knob does not apply it (ONEUP-0032) |

@@ -66,7 +66,8 @@ OneUp can:
   and switching it off revokes it instantly. The one exception is firmware, which
   asks the system for permission its own way and may still show a prompt.
 - **Explain failures** in plain English, warn about low disk space or duplicate
-  repos before starting, and follow your desktop's **light/dark** theme.
+  repos before starting, and follow your desktop's **light/dark** theme — or take one of
+  **eight colour themes** you pick yourself.
 
 There's a live log, a one-click **Restart** button when a reboot is genuinely
 needed, and a run history.
