@@ -213,7 +213,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Resolved (2026-07-24): Wrote docs/standards/dialogs.md (merged into
   docs/standards/ui-and-accessibility.md §6 on 2026-07-26, ONEUP-0057) codifying the two popup properties (theme-matched via the app-wide QSS inherited by all children; centered via the showEvent override for QDialog subclasses and QTimer.singleShot(0, _center_child) for hand-built QMessageBoxes). Audited all dialogs: RepoManagerDialog/SettingsDialog centre via showEvent; show_about already centred. Fixed the two outliers that built a QMessageBox and exec'd it without centring — _confirm_key_import (the named signing-key box) and _confirm_passwordless — by routing both through _center_child exactly as show_about does. Theme-matching needed no work: apply_theme() sets the stylesheet app-wide and re-applies on colorSchemeChanged, so every child popup inherits it. Static convenience QMessageBox.* calls left as-is (parent-relative default, documented as acceptable for transient notices). local-CI green (108 engine + 165 GUI smoke tests).
 
-- 📋 [ONEUP-0027] **Offer additional themes beyond following the system light/dark scheme.**
+- 🚧 [ONEUP-0027] **Offer additional themes beyond following the system light/dark scheme.**
   Today OneUp follows the desktop light/dark palette and switches live. This item adds a small set of selectable themes (a Settings picker) layered on that. Should coordinate with ONEUP-0026 (dialog standard) so any new theme applies consistently across the main window AND all popups/dialogs. Design open: how many themes, whether "Follow system" stays the default, and where the picker lives.
   **Layman:** Let people choose from a few built-in colour themes for OneUp, instead of only matching the desktop's light or dark setting.
   Kind: feature.
@@ -285,6 +285,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   the 18 derived tokens. Also added INV-13: a theme whose focus pair cannot be
   derived falls back to Follow system, keeps the stored id, and says so — the
   branch had no invariant and nothing else can reach it.
+  Started 2026-08-24, after the re-gate. Build order is the spec's own: the check
+  lands and passes against the two shipped palettes before the first new palette
+  is authored (§7).
 
 - ✅ [ONEUP-0028] **Make OneUp usable for blind, partially-sighted, and colour-blind users.**
   Cover the three groups: (1) blind — full screen-reader (Orca/AT-SPI) support: accessible names/roles on every control, the live log and progress announced, focus order sane, no unlabelled icon-only buttons; (2) partially sighted — scalable/large text, honour the desktop font scale, a high-contrast option, keyboard operability throughout; (3) colour-blind — never signal state by colour alone (the amber tray icon, red/green step badges) — pair every colour cue with text/shape/icon. Coordinates with ONEUP-0026 (dialog standard) and ONEUP-0027 (themes: any theme must keep WCAG-AA contrast). Likely warrants its own spec + an audit pass with Orca.
