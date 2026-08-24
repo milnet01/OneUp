@@ -124,6 +124,44 @@ if command -v ruff >/dev/null 2>&1; then
     else bad "ruff (pyproject.toml rule set)"; fi
 else skip "ruff" "not installed"; fi
 
+# --- ONEUP-0027 INV-5: no colour literal outside a palette -------------------
+# A theme reaches only what the palettes hold, so a literal left in a painter or
+# in the stylesheet template is a colour no theme can recolour — the app would
+# repaint around an unchanged switch, or around a Run button that stayed azure.
+#
+# THREE exemptions, and they are the whole list: the palette dictionaries
+# themselves (including the two high-contrast overlays), the derivation's blend
+# anchors _BLACK and _WHITE, which are the ends of the sRGB range rather than
+# colours anyone chose, and comments.
+#
+# It does NOT catch a colour computed at run time; nothing does, and INV-6's
+# repaint check is what would notice the effect.
+inv5_hits=$(
+    awk '
+        # Inside a palette dict: from `_NAME = dict(` to the closing paren.
+        /^_[A-Z_]+ = dict\(/       { inpal = 1; next }
+        inpal && /^\)/             { inpal = 0; next }
+        inpal                      { next }
+        # Comments and the two named blend anchors.
+        /^[[:space:]]*#/           { next }
+        /^_BLACK = |^_WHITE = /    { next }
+        /#[0-9a-fA-F]{6}/          { print FILENAME ":" FNR ": " $0; next }
+        /QColor\(["'"'"']/          { print FILENAME ":" FNR ": " $0; next }
+        # awk ERE has no \b, so the boundary is spelled out. Written as \b first,
+        # this branch matched NOTHING and the gate looked complete while testing
+        # two of its three cases — found by running it against a seeded Qt.white,
+        # not by reading it (CLAUDE.md § 6).
+        /(^|[^A-Za-z0-9_.])Qt\.(white|black|red|green|blue|cyan|magenta|yellow|gray|darkGray|lightGray)([^A-Za-z0-9_]|$)/ {
+                                     print FILENAME ":" FNR ": " $0 }
+    ' oneup/gui/*.py
+)
+if [ -z "$inv5_hits" ]; then
+    ok "INV-5 no colour literal outside a palette"
+else
+    printf '%s\n' "$inv5_hits" | head -20
+    bad "INV-5 colour literal(s) outside a palette"
+fi
+
 # --- packaging validation (best-effort) -------------------------------------
 step "Packaging validation"
 if command -v desktop-file-validate >/dev/null 2>&1; then

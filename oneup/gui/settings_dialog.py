@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from .placement import center_on_parent
@@ -66,6 +67,13 @@ class SettingsDialog(QDialog):
 
         root.addWidget(self._heading("Appearance"))
         root.addWidget(self._row(
+            "Colour scheme for the whole app. Follow system uses your desktop's "
+            "light or dark setting; the rest are fixed.", parent.theme_combo))
+        # Only shown when a theme could not be applied — a control that silently
+        # does nothing is the one outcome ui-and-accessibility.md §7 forbids.
+        parent._show_theme_error()
+        root.addWidget(parent.theme_note)
+        root.addWidget(self._row(
             "Make all text bigger. OneUp already follows your desktop's font size — "
             "this enlarges it further.", parent.textsize_btn))
         root.addWidget(self._row(
@@ -106,11 +114,11 @@ class SettingsDialog(QDialog):
         for a, b in itertools.pairwise(self.focus_chain()):
             self.setTabOrder(a, b)
 
-    def focus_chain(self) -> list[QPushButton]:
+    def focus_chain(self) -> list[QWidget]:
         """This dialog's controls, in the order the headings lay them out."""
         p = self.parent()
         return [p.auto_btn, p.auth_btn, p.autoupdate_btn, p.tray_btn, p.startboot_btn,
-                p.textsize_btn, p.contrast_btn,
+                p.theme_combo, p.textsize_btn, p.contrast_btn,
                 p.repos_btn, p.recenter_btn, p.diag_btn, self.close_btn]
 
     def _heading(self, text: str) -> QLabel:
@@ -118,7 +126,7 @@ class SettingsDialog(QDialog):
         lbl.setObjectName("GroupHeading")
         return lbl
 
-    def _row(self, description: str, button: QPushButton) -> QFrame:
+    def _row(self, description: str, control: QWidget) -> QFrame:
         fr = QFrame()
         fr.setObjectName("RowBorder")
         lay = QHBoxLayout(card_inside(fr))
@@ -127,7 +135,7 @@ class SettingsDialog(QDialog):
         lbl = QLabel(description)
         lbl.setWordWrap(True)
         lay.addWidget(lbl, 1)
-        lay.addWidget(button, 0, Qt.AlignVCenter)
+        lay.addWidget(control, 0, Qt.AlignVCenter)
         return fr
 
     def showEvent(self, event):

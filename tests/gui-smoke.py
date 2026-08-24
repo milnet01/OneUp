@@ -1991,6 +1991,142 @@ def main() -> int:
           wA._text_scale_index() == 1 and "Large" in wA.textsize_btn.text())
     wA.settings.setValue("text_scale", 1.0)
 
+    # --- ONEUP-0027: the picker, the preference and the fallback ----------------
+    _qs = wA.settings
+    _saved_theme = _qs.value("theme", theme.SYSTEM)
+
+    # INV-7: switching theme applies to the window AND to every open dialog at
+    # once, with no restart, and NO widget carries a stylesheet of its own —
+    # a per-widget setStyleSheet is what desyncs a dialog from every later change.
+    _dlg = settings_dialog.SettingsDialog(wA)
+    _dlg.show()
+    QApplication.processEvents()
+    _before = app_inst.styleSheet()
+    _qs.setValue("theme", "forest")
+    theme.apply_app_theme(app_inst)
+    check("INV-7 a theme change applies live, with a dialog open",
+          app_inst.styleSheet() != _before)
+    _own = [w.objectName() or type(w).__name__
+            for top in app_inst.topLevelWidgets()
+            for w in [top, *top.findChildren(QWidget)] if w.styleSheet()]
+    check(f"INV-7 no widget carries a stylesheet of its own (found: {_own})", not _own)
+    _dlg.reject()
+    QApplication.processEvents()
+
+    # INV-11: what is STORED is the id, never the displayed label. Storing the
+    # label would make every user's theme stop resolving on a language change.
+    _idx = wA.theme_combo.findData("plum")
+    wA.theme_combo.setCurrentIndex(_idx)
+    QApplication.processEvents()
+    check("INV-11 selecting a theme stores its id, not its label",
+          _qs.value("theme") == "plum" and wA.theme_combo.currentText() == "Plum")
+
+    # INV-9: under Follow system the desktop's light/dark switch still re-applies;
+    # under a NAMED theme it must not, or the user's choice is overridden every
+    # time they lock the screen.
+    _qs.setValue("theme", "carbon")
+    theme.apply_app_theme(app_inst)
+    _named = app_inst.styleSheet()
+    theme.apply_app_theme(app_inst)     # what colorSchemeChanged would trigger
+    check("INV-9 a scheme change does not move a named theme",
+          app_inst.styleSheet() == _named)
+    _qs.setValue("theme", theme.SYSTEM)
+    theme.apply_app_theme(app_inst)
+    check("INV-9 Follow system resolves to one of the two built-ins",
+          theme.system_theme(app_inst).id in ("midnight", "daylight"))
+
+    # INV-10: an unrecognised stored id starts in Follow system and LEAVES THE
+    # STORED VALUE ALONE — Qt returns what is stored in preference to the
+    # default, so value("theme", "system") is not the fallback it looks like.
+    _qs.setValue("theme", "Forrest")
+    theme.apply_app_theme(app_inst)
+    _resolved, _known = theme.chosen_theme(app_inst)
+    check("INV-10 an unknown id falls back to Follow system",
+          not _known and _resolved.id == theme.system_theme(app_inst).id)
+    check("INV-10 an unknown id is NOT rewritten", _qs.value("theme") == "Forrest")
+    wA._refresh_theme_combo()
+    check("INV-10 the picker shows Follow system for an unknown id",
+          wA.theme_combo.currentIndex() == 0)
+
+    # INV-13: a theme whose focus pair cannot be derived falls back to Follow
+    # system, keeps the stored id, and SAYS SO. Nothing shipped can reach this —
+    # INV-2 keeps the eight clean and §10 rules out user-authored themes — so it
+    # ships unexercised unless a deliberately underivable palette is injected.
+    _bad = dict(theme._DARK)
+    _bad["card"] = "#000000"
+    _bad["rowcard"] = "#000000"
+    _bad["rowhov"] = "#989898"
+    _broken = theme.Theme("broken", "Broken", "dark", _bad)
+    theme.THEMES.append(_broken)
+    theme.BY_ID["broken"] = _broken
+    try:
+        _qs.setValue("theme", "broken")
+        theme.last_theme_error = ""
+        theme.apply_app_theme(app_inst)
+        check("INV-13 an underivable theme falls back rather than half-applying",
+              theme.current_palette() is not _bad)
+        check("INV-13 the fallback leaves the stored id alone",
+              _qs.value("theme") == "broken")
+        check("INV-13 the fallback says so, for the picker to surface",
+              bool(theme.last_theme_error) and "Broken" in theme.last_theme_error)
+        # Opened rather than merely constructed: Qt's isVisible() is
+        # hierarchy-dependent, so asserting it on a note whose parent is hidden
+        # tests nothing about what the user sees.
+        _d2 = settings_dialog.SettingsDialog(wA)
+        _d2.show()
+        QApplication.processEvents()
+        check("INV-13 the picker shows the message rather than failing silently",
+              wA.theme_note.isVisible() and bool(wA.theme_note.text()))
+        _d2.reject()
+        QApplication.processEvents()
+    finally:
+        theme.THEMES.remove(_broken)
+        del theme.BY_ID["broken"]
+    # INV-6: a painted widget reads its colours THROUGH the module, never a name
+    # bound at import — a `from ... import` keeps its own copy, so the switch
+    # would stay the colour it was at start-up. Sampled from real pixels, because
+    # that is the only thing that proves the repaint reached it.
+    def _track_pixel(theme_id):
+        _qs.setValue("theme", theme_id)
+        theme.apply_app_theme(app_inst)
+        sw = toggle_switch.ToggleSwitch()
+        sw.setChecked(True)
+        sw._anim.stop()
+        sw.set_knob_pos(1.0)
+        img = sw.grab().toImage()
+        # The track, sampled where the knob is not: knob sits right when on.
+        return img.pixelColor(img.width() // 6, img.height() // 2)
+
+    _mid = _track_pixel("midnight")
+    _for = _track_pixel("forest")
+    _exp = theme.BY_ID["forest"].palette["switchon"]
+    check("INV-6 the painted switch takes the new theme's track colour",
+          _for.name().lower() == _exp.lower())
+    check("INV-6 and it is not the colour it started with",
+          _mid.name().lower() == theme.BY_ID["midnight"].palette["switchon"].lower())
+
+    # INV-8: a theme change rebuilds the tray icon. The ATTENTION state is what to
+    # capture — the idle icon is the app's own SVG, which no theme touches, so an
+    # idle comparison would pass unchanged whether the invariant held or not.
+    _qs.setValue("theme", "midnight")
+    theme.apply_app_theme(app_inst)
+    _icon_a = tray._tray_icon(attention=True).pixmap(64, 64).toImage()
+    _qs.setValue("theme", "sand")
+    theme.apply_app_theme(app_inst)
+    _icon_b = tray._tray_icon(attention=True).pixmap(64, 64).toImage()
+    check("INV-8 a theme change rebuilds the tray badge", _icon_a != _icon_b)
+
+    _qs.setValue("theme", _saved_theme)
+    theme.last_theme_error = ""
+    theme.apply_app_theme(app_inst)
+    _d3 = settings_dialog.SettingsDialog(wA)
+    _d3.show()
+    QApplication.processEvents()
+    check("INV-13 a good theme clears the message again",
+          not wA.theme_note.isVisible() and not wA.theme_note.text())
+    _d3.reject()
+    QApplication.processEvents()
+
     # --- ONEUP-0064: the interface redesign ------------------------------------
     # Every sweep below REVEALS before it walks. Each banner, and stop_btn,
     # retry_btn, warn_copy_btn, warn_btn2, rollback_btn and each row's disclosure,
@@ -2384,6 +2520,9 @@ def main() -> int:
         "Disclose": {"RowCard"},
         "GhostBtn": {"Card", "RowCard", "DialogButtons", "WarnBanner"},
         "LinkBtn": {"Card", "RowCard", "RowDetails", "WarnBanner"},
+        # ONEUP-0027's picker and its popup. Both rules are unqualified,
+        # because the picker only ever appears in one place.
+        "ThemeCombo": None, "ThemeList": None,
     }
     PAINTED = {"ToggleSwitch"}
 

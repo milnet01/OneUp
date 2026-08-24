@@ -332,6 +332,24 @@ QPushButton#GhostBtn:hover { border-color: $ghosthov; color: $ghosthov; }
 QPushButton#GhostBtn:checked { border-color: $ghosthov; color: $ghosthov; }
 QPushButton#GhostBtn:disabled { color: $disfg; border-color: $disbg; }
 
+/* The theme picker (ONEUP-0027 §4.6). It takes the ghost button's shape so it
+   sits in a SettingsDialog row beside the two controls that already look like
+   this; without a rule it would paint Qt's platform combo, which is the one
+   widget a user would find unthemed in every theme. */
+QComboBox#ThemeCombo {
+    color: $ghostfg; background: $rowcard;
+    border: 1px solid $ghostbd; border-radius: 8px; padding: 7px 12px;
+    min-width: 140px; min-height: 24px;
+}
+QComboBox#ThemeCombo:hover { border-color: $ghosthov; color: $ghosthov; }
+QComboBox#ThemeCombo::drop-down { border: none; width: 22px; }
+QListView#ThemeList {
+    background: $card; color: $tname; border: 1px solid $ghostbd;
+    selection-background-color: $rowhov; selection-color: $tname;
+}
+QListView#ThemeList:focus { background: $focusfill; color: $focusink; }
+QLabel#ThemeNote { color: $amber; font-size: $fs_body; }
+
 /* Stop leaves the ghost outline and the transparent fill alone and takes the
    danger family's colour for its BORDER and its LABEL — the construction
    #RebootBanner uses, a red edge over an all-but-transparent ground, not
@@ -450,6 +468,12 @@ QPushButton#GhostBtn:focus, QPushButton#StopBtn:focus {
     background: $warnfocusfill; color: $warnfocusink; border-color: $warnfocusink;
 }
 
+/* The picker sits inside a SettingsDialog row, so it takes the pair derived
+   for a row's two hover states rather than the card's. */
+QComboBox#ThemeCombo:focus {
+    background: $rowfocusfill; color: $rowfocusink; border-color: $rowfocusink;
+}
+
 QPushButton#LinkBtn:focus { background: $focusfill; color: $focusink; }
 #RowCard QPushButton#LinkBtn:focus, #RowDetails QPushButton#LinkBtn:focus {
     background: $rowfocusfill; color: $rowfocusink;
@@ -522,6 +546,15 @@ QPushButton#GhostBtn { background: $card; color: $text; border: 2px solid $borde
 QPushButton#GhostBtn:hover   { background: $btn; color: $btntext; border: 2px solid $focus; }
 QPushButton#GhostBtn:checked { background: $btn; color: $btntext; border: 2px solid $border; }
 QPushButton#GhostBtn:disabled { background: $card; color: $text; border: 2px dashed $border; }
+QComboBox#ThemeCombo { background: $card; color: $text; border: 2px solid $border; }
+QComboBox#ThemeCombo:hover { background: $btn; color: $btntext; border: 2px solid $focus; }
+QListView#ThemeList {
+    background: $card; color: $text; border: 2px solid $border;
+    selection-background-color: $btnhov; selection-color: $btntext;
+}
+QListView#ThemeList:focus { background: $hcfocusfill; color: $hcfocusink; }
+QLabel#ThemeNote { color: $text; }
+QComboBox#ThemeCombo:focus { background: $hcfocusfill; color: $hcfocusink; }
 /* Stop takes the shape the overlay gives every ghost button, with the danger
    token in place of the ordinary border — the overlay never carries a literal
    red. Without this set the rename would leave the one control that interrupts a
@@ -679,8 +712,8 @@ _CARBON = dict(
     stopfg='#e0553f', stophov='#ef6a55', disbg='#2d2d2d', disfg='#aeb7c4', tip='#202020',
     tipfg='#e9edf3', focus='#66b8ff', switchon='#26a95e', switchoff='#e74c3c',
     switchmark='#ffffff', switchknob='#ffffff', switchtrackrim='#ffffff',
-    switchknobrim='#000000', trayidle='#888888', trayattn='#ba7e1b', trayrim='#ffffff',
-    traymark='#3a2600', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
+    switchknobrim='#000000', trayidle='#888888', trayattn='#d5901f', trayrim='#000000',
+    traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
     btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
@@ -697,8 +730,8 @@ _FOREST = dict(
     stopfg='#e0553f', stophov='#ef6a55', disbg='#243624', disfg='#aeb7c4', tip='#182918',
     tipfg='#e9edf3', focus='#66b8ff', switchon='#26a95e', switchoff='#e74c3c',
     switchmark='#ffffff', switchknob='#ffffff', switchtrackrim='#ffffff',
-    switchknobrim='#000000', trayidle='#888888', trayattn='#ba7e1b', trayrim='#ffffff',
-    traymark='#3a2600', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
+    switchknobrim='#000000', trayidle='#888888', trayattn='#c3981c', trayrim='#000000',
+    traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
     btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
@@ -715,8 +748,8 @@ _PLUM = dict(
     stopfg='#e0553f', stophov='#ef6a55', disbg='#322436', disfg='#aeb7c4', tip='#251829',
     tipfg='#e9edf3', focus='#66b8ff', switchon='#26a95e', switchoff='#e74c3c',
     switchmark='#ffffff', switchknob='#ffffff', switchtrackrim='#ffffff',
-    switchknobrim='#000000', trayidle='#888888', trayattn='#ba7e1b', trayrim='#ffffff',
-    traymark='#3a2600', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
+    switchknobrim='#000000', trayidle='#888888', trayattn='#de6920', trayrim='#000000',
+    traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
     btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
@@ -733,8 +766,8 @@ _PAPER = dict(
     stopfg='#d6412a', stophov='#b5321d', disbg='#e4ded3', disfg='#9aa3ad', tip='#ffffff',
     tipfg='#1b2027', focus='#0b5fd0', switchon='#239b56', switchoff='#e74c3c',
     switchmark='#ffffff', switchknob='#ffffff', switchtrackrim='#ffffff',
-    switchknobrim='#000000', trayidle='#888888', trayattn='#ba7e1b', trayrim='#ffffff',
-    traymark='#3a2600', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
+    switchknobrim='#000000', trayidle='#888888', trayattn='#a86918', trayrim='#000000',
+    traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
     btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
@@ -751,8 +784,8 @@ _SKY = dict(
     stopfg='#d6412a', stophov='#b5321d', disbg='#d3dee4', disfg='#9aa3ad', tip='#ffffff',
     tipfg='#1b2027', focus='#0b5fd0', switchon='#239b56', switchoff='#e74c3c',
     switchmark='#ffffff', switchknob='#ffffff', switchtrackrim='#ffffff',
-    switchknobrim='#000000', trayidle='#888888', trayattn='#ba7e1b', trayrim='#ffffff',
-    traymark='#3a2600', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
+    switchknobrim='#000000', trayidle='#888888', trayattn='#a48818', trayrim='#000000',
+    traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
     btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
@@ -769,8 +802,8 @@ _SAND = dict(
     stopfg='#d6412a', stophov='#b5321d', disbg='#e7dcd0', disfg='#9aa3ad', tip='#ffffff',
     tipfg='#1b2027', focus='#0b5fd0', switchon='#239b56', switchoff='#e74c3c',
     switchmark='#ffffff', switchknob='#ffffff', switchtrackrim='#ffffff',
-    switchknobrim='#000000', trayidle='#888888', trayattn='#ba7e1b', trayrim='#ffffff',
-    traymark='#3a2600', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
+    switchknobrim='#000000', trayidle='#888888', trayattn='#c7681d', trayrim='#000000',
+    traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
     btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),

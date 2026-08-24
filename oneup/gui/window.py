@@ -33,6 +33,7 @@ except ImportError:  # older PySide6 (e.g. Leap) — _announce falls back to an 
     QAccessibleAnnouncementEvent = None
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -62,6 +63,7 @@ from . import (
     steps,
     tray,
 )
+from . import theme as theme_mod
 from .settings_dialog import SettingsDialog
 from .task_row import TaskRow
 from .theme import TEXT_SCALES, _app_icon, apply_app_theme
@@ -248,6 +250,34 @@ class Updater(QMainWindow):
         self.contrast_btn.setChecked(self.settings.value("high_contrast", False, type=bool))
         self._refresh_contrast_label()
         self.contrast_btn.toggled.connect(self.on_contrast_toggled)
+
+        # The theme picker (ONEUP-0027 §4.6). A combo box rather than the
+        # cycling-button idiom the two controls above use: nine entries is too
+        # many to cycle through, and a combo shows what else is on offer. Built
+        # here and re-parented into SettingsDialog, which hosts rather than owns.
+        self.theme_combo = QComboBox()
+        self.theme_combo.setObjectName("ThemeCombo")
+        self.theme_combo.setCursor(Qt.PointingHandCursor)
+        self.theme_combo.setToolTip("Colour scheme for the whole app")
+        self.theme_combo.setAccessibleName("Colour theme")
+        # The popup is a separate focusable child. It gets a name of ours so
+        # it can be styled and so it is not an anonymous focusable widget,
+        # which is the shape that named #RepoScroll and #RollbackList.
+        self.theme_combo.view().setObjectName("ThemeList")
+        self.theme_combo.view().setAccessibleName("Colour theme choices")
+        self.theme_combo.addItem("Follow system", theme_mod.SYSTEM)
+        for _th in theme_mod.THEMES:
+            self.theme_combo.addItem(_th.label, _th.id)
+        self._refresh_theme_combo()
+        self.theme_combo.currentIndexChanged.connect(self.on_theme_changed)
+
+        # Where a theme that could not be applied is reported. §7 forbids the one
+        # outcome of a control that silently does nothing, and the console line
+        # apply_app_theme prints is not a user-visible report.
+        self.theme_note = QLabel()
+        self.theme_note.setObjectName("ThemeNote")
+        self.theme_note.setWordWrap(True)
+        self.theme_note.setVisible(False)
 
         self.settings_btn = QPushButton("⚙ Settings")
         self.settings_btn.setObjectName("GhostBtn")
@@ -678,6 +708,40 @@ class Updater(QMainWindow):
         self.settings.setValue("text_scale", TEXT_SCALES[nxt][1])
         self._refresh_textsize_label()
         apply_app_theme(QApplication.instance())
+
+    def _refresh_theme_combo(self):
+        """Point the combo at the stored id, without re-entering the handler.
+
+        An unrecognised stored value selects Follow system and leaves the stored
+        value ALONE (§4.5) — findData returns -1 for an id this version does not
+        know, and index 0 is Follow system.
+        """
+        stored = str(self.settings.value("theme", theme_mod.SYSTEM))
+        index = self.theme_combo.findData(stored)
+        blocked = self.theme_combo.blockSignals(True)
+        self.theme_combo.setCurrentIndex(index if index >= 0 else 0)
+        self.theme_combo.blockSignals(blocked)
+
+    def on_theme_changed(self, _index: int):
+        """Apply immediately — there is no OK button in that dialog to press.
+
+        What is STORED is the id, never the displayed label: a label is
+        translatable, so storing it would make every user's theme stop resolving
+        the first time they changed language (INV-11).
+        """
+        self.settings.setValue("theme", self.theme_combo.currentData())
+        apply_app_theme(QApplication.instance())
+        self._show_theme_error()
+        # The tray icon is a QIcon built in a method and handed to setIcon at two
+        # call sites, neither of which fires on a theme change — so a window
+        # holding one rebuilds it here (INV-8). A window with no tray does nothing.
+        if getattr(self, "_tray", None) is not None:
+            tray._tray_update(self)
+
+    def _show_theme_error(self):
+        note = theme_mod.last_theme_error
+        self.theme_note.setText(note)
+        self.theme_note.setVisible(bool(note))
 
     def _refresh_contrast_label(self):
         self.contrast_btn.setText(
