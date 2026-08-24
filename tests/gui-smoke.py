@@ -2269,9 +2269,28 @@ def main() -> int:
     for line in bad_shape[:6]:
         print(f"       {line}")
 
-    for _dark in (True, False):
-        _name = "dark" if _dark else "light"
-        _pal = contrast.palette_for(_dark)
+    # INV-1: every theme supplies every key in the reference set, and no extra,
+    # and every one of them builds. Breaks when a theme is added by copying
+    # another and one key is missed — which surfaces today as a KeyError deep
+    # inside Template.substitute; this names the key and the theme.
+    for _th in theme.THEMES:
+        _missing = sorted(theme.REFERENCE_KEYS - set(_th.palette))
+        _extra = sorted(set(_th.palette) - theme.REFERENCE_KEYS)
+        check(f"INV-1 {_th.id} supplies every reference key and no extra "
+              f"(missing {_missing}, extra {_extra})", not _missing and not _extra)
+        try:
+            theme.build_theme(_th)
+            theme.build_theme(_th, high_contrast=True)
+            _built = True
+        except Exception as exc:                                  # noqa: BLE001
+            _built = False
+            print(f"       {_th.id}: {type(exc).__name__}: {exc}")
+        check(f"INV-1 {_th.id} builds, overlay off and on", _built)
+
+    for _th in theme.THEMES:
+        _name = _th.id
+        _pal = dict(_th.palette)
+        _pal.update(theme.derived_keys(_pal))
 
         # INV-4: a token covered by none of the four routes fails, which is what
         # stops a colour being added to a palette and quietly escaping the check.
@@ -2293,7 +2312,7 @@ def main() -> int:
         # pairs once per base, and the surfaces the overlay does NOT reach — the
         # painted switch and tray — per theme with the overlay on. A theme whose
         # track is legible on its own window can still fail against pure black.
-        _hc = contrast.hc_short(_dark)
+        _hc = contrast.hc_short(_th.dark)
         check(f"INV-2 {_name} clears its floors with the overlay ON "
               f"({len(_hc)} short)", not _hc)
         for line in _hc[:8]:
@@ -2306,12 +2325,12 @@ def main() -> int:
     # regenerated rather than re-derived by hand.
     measured = 0
     short = []
-    for _dark in (True, False):
+    for _theme in theme.THEMES:
         for _hc in (False, True):
-            for r in theme.focus_report(_dark, _hc):
+            for r in theme.focus_report(_theme, _hc):
                 measured += 1
                 if r["ratio"] + 1e-9 < r["floor"]:
-                    short.append(f"{'dark' if _dark else 'light'}"
+                    short.append(f"{_theme.id}"
                                  f"{'+hc' if _hc else ''} {r['control']} {r['kind']} "
                                  f"{r['value']} on {r['against']} = {r['ratio']:.2f}:1 "
                                  f"< {r['floor']}")
