@@ -1045,6 +1045,26 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Rewrite the part of OneUp that does the actual updating in Python, the same language as the window, so the app has finer control over what it is running. Built on a side branch so the current version keeps working until the new one is provably better.
   Kind: implement.
   Source: user-decision-2026-07-25.
+  Known and declined at the ONEUP-0127 re-gate (2026-08-24), recorded so the next
+  gate does not spend a lane rediscovering it: the spec cites four window symbols
+  under their pre-ONEUP-0034 names. §4.1 has `Updater.on_finished`, §4.3.3 has
+  `Updater.on_output`, §4.7 has `Updater.start_run`, and §4.1.1 measures from
+  "`updater.py`'s `_read_run_state`". After the split, three of those are
+  module-level functions in `oneup/gui/run.py` taking the window as their first
+  argument — reached as `run.on_finished(self, ...)` from `oneup/gui/window.py`,
+  never as methods — and `updater.py` is a 21-line shim. `_read_run_state` and
+  `_poll_attached_run` ARE still methods, on `Updater` in `oneup/gui/window.py`.
+
+  A loop-2 lane found it and set it aside as symbol resolution, which its brief
+  excludes. The orchestrator checked it against the tree and agreed for a
+  different and better reason: every one of the four describes what the WINDOW
+  does with the engine's output, and this item builds the ENGINE. No line of
+  `oneup/engine/` is written differently, so it fails the materiality test that
+  governs what a gate may fix.
+
+  Worth correcting when something else opens those sections — ONEUP-0065 is the
+  nearest existing home, since it converts stale citations in the older
+  documents. Not worth a commit of its own.
 
 - ✅ [ONEUP-0056] **Never report "up to date" for a source the check couldn't read.**
   Reported with two screenshots: OneUp's check said "Everything is up
