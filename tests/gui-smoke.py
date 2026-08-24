@@ -103,6 +103,7 @@ from oneup.gui import (  # noqa: E402 — same reason.
     auth,
     autostart,
     banners,
+    contrast,
     diagnostics,
     markers,
     paths,
@@ -2252,6 +2253,51 @@ def main() -> int:
           f"(missing: {missing_hc})", not missing_hc)
     check("INV-7 the Stop button is styled in BOTH sheets",
           "StopBtn" in base_names and "StopBtn" in hc_names)
+
+    # --- ONEUP-0027: the whole-palette contrast check ---------------------------
+    # INV-2, INV-3, INV-4. The check is a module under oneup/gui/ rather than a
+    # helper in tests/, because it is a computation the application could also
+    # expose and a helper living here cannot be imported by anything else.
+    #
+    # INV-3 runs FIRST and validates the exception list's SHAPE before the check
+    # uses it: an entry without a pair, a reason, or — where the reason is a
+    # deferral — a roadmap id is itself a failure. That is what stops the list
+    # becoming the place failing pairs go to be forgotten.
+    bad_shape = contrast.bad_exceptions()
+    check(f"INV-3 every exception entry is complete ({len(bad_shape)} malformed)",
+          not bad_shape)
+    for line in bad_shape[:6]:
+        print(f"       {line}")
+
+    for _dark in (True, False):
+        _name = "dark" if _dark else "light"
+        _pal = contrast.palette_for(_dark)
+
+        # INV-4: a token covered by none of the four routes fails, which is what
+        # stops a colour being added to a palette and quietly escaping the check.
+        _uncovered = contrast.uncovered(_pal)
+        check(f"INV-4 every {_name} colour token is covered by §4.7 "
+              f"({len(_uncovered)} uncovered)", not _uncovered)
+        for line in _uncovered[:6]:
+            print(f"       {line}")
+
+        # INV-2: every pair the table gives this palette clears its floor, or
+        # carries an exception. Breaks on a theme authored by eye.
+        _short = contrast.short(_pal)
+        check(f"INV-2 every {_name} pair clears its floor ({len(_short)} short)",
+              not _short)
+        for line in _short[:8]:
+            print(f"       {line}")
+
+        # INV-2, the high-contrast half. Two different jobs: the overlay's own
+        # pairs once per base, and the surfaces the overlay does NOT reach — the
+        # painted switch and tray — per theme with the overlay on. A theme whose
+        # track is legible on its own window can still fail against pure black.
+        _hc = contrast.hc_short(_dark)
+        check(f"INV-2 {_name} clears its floors with the overlay ON "
+              f"({len(_hc)} short)", not _hc)
+        for line in _hc[:8]:
+            print(f"       {line}")
 
     # --- ONEUP-0076: the ringless focus cue ------------------------------------
     # INV-2, INV-3, INV-7, INV-8 — the ratio arithmetic, over every theme and

@@ -589,20 +589,34 @@ _DARK = dict(
     tip="#1a1f27", tipfg="#e9edf3", focus="#66b8ff",
     # The painted controls (ONEUP-0027 §4.3). A stylesheet cannot reach these:
     # ToggleSwitch.paintEvent and tray._tray_icon draw them with QPainter.
-    switchon="#2ecc71", switchoff="#e74c3c",
+    # ONEUP-0027 §4.8: the "on" track darkened from #2ecc71 so the white
+    # bar-and-circle — the colour-blind cue, and the weakest thing on screen
+    # carrying meaning at 2.10:1 — clears 3:1 on it. Per palette, which is
+    # what tokenising buys: light needs a darker green than dark does.
+    switchon="#26a95e", switchoff="#e74c3c",
     switchmark="#ffffff", switchknob="#ffffff",
     switchtrackrim="#ffffff", switchknobrim="#000000",
-    trayidle="#888888", trayattn="#f5a623", trayrim="#ffffff", traymark="#3a2600",
+        trayidle="#888888",
+    # Darkened from #f5a623 (1.79:1 on a light window, and its white rim only
+    # 2.03:1 on the badge). Decided with the user 2026-08-24 rather than
+    # excepted, even though the badge is composited over the app icon in a
+    # panel whose colour the app does not control.
+    trayattn="#ba7e1b", trayrim="#ffffff", traymark="#3a2600",
     # The sheet's own former literals.
     btnfg="#ffffff", dangerbd="#e0553f", tipbd="#4aa3ff",
     # Gradients. The two BUTTON fills are authored as stop pairs and built by
     # _vgradient, so the sheet and the focus derivation cannot drift apart;
     # `accent` is the diagonal row-hover gradient and is authored whole.
     accent="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)",
-    btn_accent_stops=("#4aa3ff", "#2f6fe0"),
+    # ONEUP-0027 §4.8, decided with the user 2026-08-24: the TOP stop of each
+    # button fill darkened so the white label clears 4.5:1 (SC 1.4.3). It read
+    # 2.63:1 on the accent and 3.06:1 on the danger fill — a real defect on the
+    # app's most-pressed control. Both bottom stops already cleared and did not
+    # move, so the gradient keeps its hue and only its light end deepens.
+    btn_accent_stops=("#3779bd", "#2f6fe0"),
     btn_accent_hov_stops=("#5cb0ff", "#3a7cf0"),
     btn_accent_press_stops=("#3d90ec", "#2560c8"),
-    btn_danger_stops=("#ef6a55", "#d6412a"),
+    btn_danger_stops=("#bf5544", "#d6412a"),
     btn_danger_hov_stops=("#f47c68", "#e04a32"),
     # Banner washes. Each is a hue the sheet composites at two alphas; the
     # warning one is also what the focus derivation blends from, so a theme that
@@ -613,21 +627,36 @@ _LIGHT = dict(
     win="#eef1f5", card="#ffffff", header="#1b2027", tag="#5c6673",
     rowcard="#f4f6f9", rowhov="#eaeef3", tname="#1b2027", tdesc="#5c6673",
     badgebg="#dbe8ff", badgefg="#1f4e9c", logbg="#f6f8fa", logfg="#2a2f36",
-    logbd="#d5dbe2", status="#3a424d", lastrun="#8a94a2", amber="#b5730a", progbg="#dfe4ea",
+    logbd="#d5dbe2", status="#3a424d",
+    # ONEUP-0027 §4.8: darkened from #8a94a2 (3.07:1 on card, 2.71:1 on win)
+    # and #b5730a (3.87:1 on card). Both are body text and there was no
+    # reason to except either; §7 knew about `lastrun` and said it must not
+    # be discovered by the check and quietly ignored.
+    lastrun="#666e78", amber="#a56909", progbg="#dfe4ea",
     ghostbd="#8f959c", ghostfg="#3a424d", ghosthov="#326dab",
     linkfg="#326dab", linkhov="#446f9c", stopfg="#d6412a", stophov="#b5321d",
     disbg="#d5dbe2", disfg="#9aa3ad",
     tip="#ffffff", tipfg="#1b2027", focus="#0b5fd0",
-    switchon="#2ecc71", switchoff="#e74c3c",
+    switchon="#239b56", switchoff="#e74c3c",
     switchmark="#ffffff", switchknob="#ffffff",
     switchtrackrim="#ffffff", switchknobrim="#000000",
-    trayidle="#888888", trayattn="#f5a623", trayrim="#ffffff", traymark="#3a2600",
+        trayidle="#888888",
+    # Darkened from #f5a623 (1.79:1 on a light window, and its white rim only
+    # 2.03:1 on the badge). Decided with the user 2026-08-24 rather than
+    # excepted, even though the badge is composited over the app icon in a
+    # panel whose colour the app does not control.
+    trayattn="#ba7e1b", trayrim="#ffffff", traymark="#3a2600",
     btnfg="#ffffff", dangerbd="#e0553f", tipbd="#4aa3ff",
     accent="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)",
-    btn_accent_stops=("#4aa3ff", "#2f6fe0"),
+    # ONEUP-0027 §4.8, decided with the user 2026-08-24: the TOP stop of each
+    # button fill darkened so the white label clears 4.5:1 (SC 1.4.3). It read
+    # 2.63:1 on the accent and 3.06:1 on the danger fill — a real defect on the
+    # app's most-pressed control. Both bottom stops already cleared and did not
+    # move, so the gradient keeps its hue and only its light end deepens.
+    btn_accent_stops=("#3779bd", "#2f6fe0"),
     btn_accent_hov_stops=("#5cb0ff", "#3a7cf0"),
     btn_accent_press_stops=("#3d90ec", "#2560c8"),
-    btn_danger_stops=("#ef6a55", "#d6412a"),
+    btn_danger_stops=("#bf5544", "#d6412a"),
     btn_danger_hov_stops=("#f47c68", "#e04a32"),
     warntint="#e9b23f", infotint="#4aa3ff", infotint2="#22d3ee", dangertint="#e74c3c",
 )
