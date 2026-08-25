@@ -1129,6 +1129,22 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   source, INV-13's `run.state` fourth-line assertion, and spec §4.1.2 pinning the four
   exit codes nothing else pinned. ONEUP-0130 files the `workflow.md` §9 gap the
   branch routing exposed.
+  Progress (2026-08-25): stage 3 of 9 done on `v2` — `actions.py`'s
+  read-only `--check`. Every `--check` scenario in the engine suite passes
+  against `python3 -m oneup.engine`, and eight mock sets compared by hand
+  give byte-identical whole output from both engines, exit status included.
+  `proc.run` gained a per-child environment overlay (`LC_ALL=C` must reach
+  zypper alone); `Options` carries the step predicate and is passed to
+  `actions`, never imported back. Stage 3's steps were gated first:
+  review-contract --genre plan, 2 loops x 3 cold lanes, 13 verified, 13
+  fixed, cap. The gate's best catch was unstated in the draft and would
+  have shipped: a step whose read FAILED still contributes its partial
+  count to `@@CHECK@@|TOTAL`, and the natural `if rc == 0` passes every
+  stage-3 check while diverging at G2. Not stage 3's, recorded so a green
+  is not read as evidence: the log mirror, the shutdown inhibitor and the
+  run-state file each pass vacuously because the code that could break
+  them does not exist yet — all three are stage 5's, and stage 5 must
+  cover `--check` as well as a full run. local-CI green on `v2`.
 
 - ✅ [ONEUP-0056] **Never report "up to date" for a source the check couldn't read.**
   Reported with two screenshots: OneUp's check said "Everything is up
