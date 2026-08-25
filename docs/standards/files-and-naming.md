@@ -300,12 +300,13 @@ moves into the same package, they will.** Give them distinct names in 2.0 —
 `USER_LOG_DIR` and `STATE_LOG_DIR`, or equivalent — before either is imported anywhere.
 
 **Trap 2 — the engine's log directory is created on the real machine during tests.
-CLOSED on `v2` by ONEUP-0054 stage 2.** `update_system.sh`'s logging preamble runs
-`mkdir -p "$LOG_DIR"` *before* checking whether `--log=` was
-passed, and `run_engine` does not redirect `HOME`. So the suite creates
-`~/Documents/update-logs` on any machine it runs on, including one that has never
-installed OneUp. It writes nothing there — `--log=` is always supplied — but it is still
-the suite touching the box, which the testing standard forbids. Filed as **ONEUP-0058**.
+CLOSED on `v2` by ONEUP-0054 stage 2, and live on `main`.** `update_system.sh`'s
+logging preamble ran `mkdir -p "$LOG_DIR"` *before* checking whether `--log=` was
+passed, and `run_engine` does not redirect `HOME`. So the suite created
+`~/Documents/update-logs` on any machine it ran on, including one that had never
+installed OneUp — and on frozen `main` it still does. It writes nothing there — `--log=`
+is always supplied — but it is still the suite touching the box, which the testing
+standard forbids. Filed as **ONEUP-0058**.
 On `v2` both engines now create the directory only when about to default into it, and a
 scenario asserts it; frozen `main` keeps the old shape.
 
