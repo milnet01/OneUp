@@ -1094,6 +1094,41 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   On v2 one direct `bash "$ENGINE"` invocation remains on purpose: the --hold
   scenario ONEUP-0044 added, which §4.4 assigns to stage 2.
+  Progress (2026-08-25): stage 2 of nine is built and green on `v2`. `oneup/engine/`
+  now holds `markers.py`, `proc.py`, `privilege.py`, `runstate.py`, `actions.py` and
+  `__main__.py` — enough to answer `--help`, `--auth-status` and `--emit-guard`, and
+  nothing more. Driven with `ONEUP_ENGINE_CMD='python3 -m oneup.engine'`, every check
+  in the `--auth-status` scenario passes against the Python engine, including the last,
+  which is reachable only through `--emit-guard`.
+
+  The stage-2 steps were gated first (review-contract --genre plan, 2 loops x 3 cold
+  lanes, 20 verified, 20 fixed). A calm cap this time: four of the last loop's ten
+  landed on text the run itself wrote, against five of six on stage 1's run.
+
+  Three things worth carrying forward.
+
+  The two engines' `--emit-guard` output is byte-identical, measured rather than
+  assumed. This is the one divergence G2 cannot see: the harness compares marker
+  streams and that flag emits none, so a guard body differing by a byte would make
+  every v1-granted guard read as stale to v2 and stand those users' toggles down.
+
+  The gate's best finding was a check of mine that could not fail. A verify ran
+  `python3 -c '…markers…' | cat` to prove the emitter flushes; CPython flushes at
+  interpreter shutdown, so a one-shot prints either way. Measured before fixing: the
+  unflushed emitter does print when the process exits, and never arrives while it
+  stays alive — which is the only case the window sees.
+
+  `--log=` is why the engine parses flags it cannot act on. `run_engine` appends it to
+  every invocation, so a stage-2 engine that refused unbuilt flags wholesale could not
+  be reached by a single scenario. Modifier flags are parsed and stored; only a flag
+  selecting unbuilt work refuses.
+
+  Also landed with it: ONEUP-0058 and ONEUP-0070 (both closed), Trap 1's `LOG_DIR`
+  rename in both halves in one commit, the `--hold` scenario's `ONEUP_ENGINE_CMD`
+  override, INV-7's SIGKILL leg re-expressed as the property rather than the Bash
+  source, INV-13's `run.state` fourth-line assertion, and spec §4.1.2 pinning the four
+  exit codes nothing else pinned. ONEUP-0130 files the `workflow.md` §9 gap the
+  branch routing exposed.
 
 - ✅ [ONEUP-0056] **Never report "up to date" for a source the check couldn't read.**
   Reported with two screenshots: OneUp's check said "Everything is up
@@ -1538,7 +1573,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Progress (2026-08-19): ONEUP-0072 second cold loop run (document row 6, loop 2 of the run) — 3 lanes, Q1 1 · Q2 3 · Q3 0 · Q4 0, 4 verified and fixed, 3 dismissed. The spec cap of 2 binds and it is a CALM cap: none of the four findings landed on text this run wrote. The Q1: §4.1's "The engine keeps its English" claimed three of the five families and it is four — $REBOOT_REASON feeds both the marker and the summary's own echo, and REBOOT is the family §4.1 most tells the implementer to convert. All three Q2s were missing entries in §8, the commit-time doc-edit list: oneup-2.0.md §3 item 1 (the protocol-freeze clause, still narrow), testing.md §1's suite-table row for the retired differential-test.sh, and the scoping of marker-protocol.md §5.2's "never as the raw token". ONEUP-0072 stays Status: Draft — the run reached its cap without an empty loop. Filed not fixed: oneup-2.0.md's G1/G2 passage credits the payload conversion to ONEUP-0032. Commit e7436c4.
   Progress (2026-08-19): ONEUP-0076 second cold loop run (document row 4, loop 2 of the run) — 3 lanes, Q1 2 · Q2 3 · Q3 3 · Q4 1, 9 verified and fixed, 0 dismissed. Spec cap of 2 binds and it is a CALM cap: two of the nine landed on text a gate loop of this run wrote. The document is now 954 lines, past the range two cold reads comfortably cover — the number to weigh if it is ever gated again. Every published contrast figure was recomputed against the tree before the lanes ran and not one is wrong, including all twelve derived fills hex-for-hex and the §2.1 census (34 focusable / 18 with a :focus rule / 16 without). Both Q1s were scoping failures: INV-6 required the switch's state shape to clear 3:1 against the RESTING track, where white on #2ecc71 is 2.10:1 (red on day one), and §8 claimed ONEUP-0027 §4.7 has no focus pair on win when it measures the authored focus token there. The three Q2s were internal contradictions (the ghost hover border's owner, the matcher's fallback, and where the win pairs live). The best Q3, reached by all three lanes: §4.2's qualifier scheme left two surfaces with no unique ancestor, so the RepoManagerDialog Remove button would have taken a card-derived fill over rowcard — the 2.83:1 shape §4.2 warns about; #DialogButtons is named to close the second. ONEUP-0076 stays Status: Draft — the run reached its cap without an empty loop. Commit c91d089.
 
-- 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
+- ✅ [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether
   --log= was passed, and LOG_DIR ($HOME/Documents/update-logs, line 55) has NO
   environment override. tests/run-tests.sh's run_engine (lines 56-72) redirects
@@ -1553,6 +1588,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Lanes: engine, tests.
   Source: in-session-2026-07-26 (writing docs/standards/files-and-naming.md).
+  Resolved (2026-08-25) by ONEUP-0054 stage 2, on `v2`. Both engines now create the log directory only when the run is about to default into it: `update_system.sh`'s `mkdir` moved inside the `--log=` check, and the Python engine's `runstate.py` applies the same rule from the start.
+
+  The scenario is "a run given --log= creates no log directory of its own", which redirects `HOME` and asserts nothing appears. A fix nothing checks is a wish, and this one could not be caught by the existing suite: the directory it created was on the developer's own machine, so nothing failed.
+
+  Frozen `main` keeps the old shape. testing.md's two passages and files-and-naming.md's Trap 2 are reworded to read true from either branch, and landed on `main` per workflow.md §9.
 
 - ✅ [ONEUP-0059] **Honour XDG_STATE_HOME instead of hard-coding ~/.local/state.**
   updater.py:117 builds STATE_DIR from Path.home() / ".local" / "state" /
@@ -2032,7 +2072,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   mock the way scenarios overwrite `zypper`, then drop DISK from
   KNOWN_UNTESTED_MARKERS in tests/docs-check.py. Still open.
 
-- 📋 [ONEUP-0070] **Cover the absent-tool skip path in the engine test suite.**
+- ✅ [ONEUP-0070] **Cover the absent-tool skip path in the engine test suite.**
   Found while revising the ONEUP-0054 spec (2026-07-27, verified at b6d37ed).
   update_system.sh guards the Flatpak and firmware steps with `command -v
   flatpak` and `command -v fwupdmgr`, and both CLAUDE.md and the spec state
@@ -2053,6 +2093,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Prove that OneUp quietly skips the Flatpak and firmware steps on a machine that doesn't have those tools, instead of reporting a failure.
   Kind: test.
   Source: in-session-2026-07-27 (ONEUP-0057 Task 12).
+  Resolved (2026-08-25) by ONEUP-0054 stage 2, on `v2`. INV-9's first test ever: "a step whose tool is absent is skipped, not failed" runs with `flatpak` and `fwupdmgr` hidden and asserts each step ends `skip` rather than `fail`, with the run's verdict unaffected.
+
+  Deleting the two mocks was not enough — `run_engine` puts the mock directory FIRST on the real `PATH`, so `command -v flatpak` would have found the developer's own. The scenario supplies its own `PATH`: the mock directory, then a farm of symlinks to everything on the real `PATH` except those two. It asserts the hiding worked before trusting the result, so a farm that quietly kept the real binary cannot pass this as a skip that never happened.
 
 - 💭 [ONEUP-0071] **Publishing OneUp on Flathub, or packaging it for other distributions — considered and declined.**
   The user's decision, 2026-07-27. Recorded as considered rather than
