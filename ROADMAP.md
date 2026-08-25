@@ -1188,6 +1188,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Not stage 4's, recorded so a green is not read as parity: the keep-alive (it is
   `cleanup`'s to kill, and `cleanup` is stage 5's), the hold itself, and the log
   mirror. Filed with the stage: ONEUP-0133, ONEUP-0134, ONEUP-0135.
+  Progress (2026-08-25): stage 5's build steps appended to docs/plans/ and
+  gated. review-contract --genre plan, 2 loops x 3 cold lanes, 20 verified,
+  20 fixed, cap reached with an empty tail. Loop 1 found 13 (all three lanes
+  led with the shared privileged argv being the whole argv, not the budget);
+  loop 2 found 7, three of them loop 1's own over-corrections — most
+  notably a re-expressed call-site check that could never move when a new
+  privileged call landed. Scope measured rather than described: at 8d715ad
+  the engine suite reports 112 passed / 199 failed against
+  ONEUP_ENGINE_CMD='python3 -m oneup.engine', across 81 of its 103 TEST
+  blocks. Building next.
 
 - ✅ [ONEUP-0056] **Never report "up to date" for a source the check couldn't read.**
   Reported with two screenshots: OneUp's check said "Everything is up
