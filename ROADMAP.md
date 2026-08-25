@@ -4457,3 +4457,31 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The script that checks our documents for broken links and wrong file paths skips the build-plan folder entirely, so nothing has ever checked those files.
   Kind: test.
   Source: in-session-2026-08-25.
+
+- 📋 [ONEUP-0130] **Name the third binding that sends a documentation edit to `v2`.**
+  docs/standards/workflow.md §9 says documentation goes to `main` unless a
+  rule binds it to code that cannot, names two such rules — a marker change,
+  and a docs-check-walked document that must NAME a file 2.0 creates — and
+  closes with "a third would need naming here before it counted".
+
+  A third case is already live and neither rule reaches it: a passage whose
+  TRUTH depends on v2-only code state, without naming any v2-only path. The
+  window's log constant is the example ONEUP-0054 stage 2 hits —
+  files-and-naming.md Trap 1 and its §5.1 constants list both name `LOG_DIR`,
+  which after the rename exists under that name only on `main`, and no
+  both-branch wording is available. files-and-naming.md already diverges
+  between the branches, so the practice exists and the standard does not
+  describe it.
+
+  Found by two of three cold lanes gating ONEUP-0054's stage-2 build plan.
+  The plan routes those two passages to `v2` and says §9 does not cover it,
+  rather than amending a standard from inside a build stage — amending §9 is
+  a direction change and re-arms its own review gate (CLAUDE.md rule 14),
+  which is this item.
+
+  Decide whether the third binding is worth naming, or whether §9 should
+  instead say it routes a CHANGE and is silent where one branch needs none.
+  **Layman:** The rule that decides which branch a documentation fix goes to is missing a case we keep hitting, so write that case down.
+  Kind: doc.
+  Source: in-session-2026-08-25 (review-contract loop 4 on the ONEUP-0054 build plan).
+  Lanes: docs.
