@@ -365,7 +365,9 @@ Recorded so a reader does not take a module's presence for its completeness.
 
 **What stage 3 is.** §4.6's stage-3 row is one line — *"`actions.py`'s `--check` — read-only
 and needs no root, so the safest real behaviour to build first"* — and it ends *"every
-`--check` scenario green against v2"*. **It adds no module.** `parsers.py` is stage 4's by
+`--check` scenario green against v2"*, which means the scenarios *Definition of done*
+names: ONEUP-0086's opens with a full run, so it goes green at stage 5 with the rest of
+it. **It adds no module.** `parsers.py` is stage 4's by
 name, and §4.2 routes none of `run_check`'s parsing to it: that table's `parsers.py` row
 names `to_bytes`, `lock_holder`'s parsing, the progress and download-size wordings, `lr`
 output and `reboot_reason_from_log`'s phrase-building, and the split table names six
@@ -406,30 +408,31 @@ refuses stays refused.
    → **verify:** `python3 -m oneup.engine --check --steps=orphans` no longer exits 3, and
    `--size=system` still does.
 
-4. The system arm. One read of `zypper --no-refresh --non-interactive list-updates` with
-   **stderr merged into stdout** — the merge is not tidiness, it is the whole of ONEUP-0056:
-   zypper reports a repository it set aside as a warning on stderr and exits 106, and that
-   warning is the only thing separating *"nothing to update"* from *"I could not read the
-   repository that had the updates"*. Count the rows whose status column is `v`. On a
-   non-zero exit, name the repositories zypper said it skipped; when it named none, report
-   the exit status rather than guessing a cause. Then one `@@CHECK_ITEM@@|system|name|from|to`
-   per row, each field trimmed.
-   → **verify:** the check lines this step earns pass against `python3 -m oneup.engine` —
-   `@@CHECK@@|system|2` and the two `@@CHECK_ITEM@@|system|…` lines of *"--check reports
-   counts read-only and never installs"*. Its remaining lines belong to later steps (the
-   total to step 9, the flatpak item to step 6), and the whole-scenario claim is step 11's.
+4. The system arm, **and the shared check emitter it is the first user of** — one step,
+   because neither can be verified without the other. One read of `zypper --no-refresh
+   --non-interactive list-updates` with **stderr merged into stdout** — the merge is not
+   tidiness, it is the whole of ONEUP-0056: zypper reports a repository it set aside as a
+   warning on stderr and exits 106, and that warning is the only thing separating
+   *"nothing to update"* from *"I could not read the repository that had the updates"*.
+   Count the rows whose status column is `v`. On a non-zero exit, name the repositories
+   zypper said it skipped; when it named none, report the exit status rather than guessing
+   a cause. Then one `@@CHECK_ITEM@@|system|name|from|to` per row, each field trimmed.
 
-5. The shared check emitter, matching `emit_check`: emit `@@CHECK_UNKNOWN@@|key|reason`
-   **before** `@@CHECK@@`, and **suppress `@@CHECK@@` entirely when the read failed and the
-   count is zero.** A confident `@@CHECK@@|system|0` after an unreadable source is the
-   ONEUP-0056 bug itself, and the scenario asserts its absence rather than its presence —
-   so an implementation that emits it anyway fails on a `check_absent`, which is easy to
-   read as unrelated.
-   → **verify:** under the 106 mock, the output carries `@@CHECK_UNKNOWN@@|system` and no
-   `@@CHECK@@|system|0`; under the two-update mock it carries `@@CHECK@@|system|2` and no
-   `@@CHECK_UNKNOWN@@`.
+   The emitter matches `emit_check`: `@@CHECK_UNKNOWN@@|key|reason` **before** `@@CHECK@@`,
+   and **`@@CHECK@@` suppressed entirely when the read failed and the count is zero.** A
+   confident `@@CHECK@@|system|0` after an unreadable source is the ONEUP-0056 bug itself,
+   and the scenario asserts its absence rather than its presence — so an implementation
+   that emits it anyway fails on a `check_absent`, which is easy to read as unrelated.
+   **One emitter, not one per arm:** step 6 departs from it deliberately and nothing else
+   may.
+   → **verify:** against `python3 -m oneup.engine`, the two-update mock gives
+   `@@CHECK@@|system|2`, the two `@@CHECK_ITEM@@|system|…` lines and no `@@CHECK_UNKNOWN@@`;
+   the 106 mock gives `@@CHECK_UNKNOWN@@|system` naming `packman` and no
+   `@@CHECK@@|system|0`. The rest of those two scenarios' check lines belong to later steps
+   — the total to step 8, the flatpak item to step 5 — and the whole-scenario claim is
+   step 10's.
 
-6. The flatpak arm asks **each remote separately**, in both scopes. `flatpak remotes
+5. The flatpak arm asks **each remote separately**, in both scopes. `flatpak remotes
    <scope> --columns=name,options` first, then `flatpak remote-ls --updates <scope>
    <remote> --columns=application,version` per remote. Never one listing for all remotes:
    that form abandons the whole listing the moment any single remote cannot be summarised,
@@ -440,33 +443,42 @@ refuses stays refused.
    → **verify:** the check lines of *"--check counts Flatpak updates even when one remote
    is unreadable"* all pass, the `check_absent` on `@@CHECK_UNKNOWN@@|flatpak` among them.
 
-7. The firmware arm emits `@@CHECK@@` **directly, not through step 5's emitter.**
+6. The firmware arm emits `@@CHECK@@` **directly, not through step 4's emitter.**
    `fwupdmgr get-updates` answers yes or no, there is no unreadable case, and firmware
-   reports `firmware|0` — which step 5's suppression rule would swallow if the reason field
+   reports `firmware|0` — which step 4's suppression rule would swallow if the reason field
    were ever non-empty. Keeping the asymmetry is keeping the Bash behaviour; tidying the
    two into one emitter changes it.
    → **verify:** no suite scenario drives this arm, so drive it by hand against both
    engines with an `fwupdmgr` mock: exiting 0 gives `@@CHECK@@|firmware|1`, exiting
    non-zero gives `@@CHECK@@|firmware|0`, both identically.
 
-8. A step with no check arm, and a step whose tool is absent, emit **nothing at all** —
+7. A step with no check arm, and a step whose tool is absent, emit **nothing at all** —
    no `@@CHECK@@`, and above all no `@@STEP_END@@|…|skip`. `orphans` and `cache` have no
    arm in `run_check`; `flatpak` and `firmware` are each behind a tool probe. The skip
-   marker belongs to a *run*, and inventing one here would put a marker in the check
-   stream that `docs/reference/marker-protocol.md` never places there.
+   marker belongs to a *run*, and `run_check` emits none — inventing one here would put a
+   marker in the check stream that neither engine has ever produced.
    → **verify:** `--check --steps=orphans,cache` emits no `@@CHECK@@|orphans` or
-   `@@CHECK@@|cache` line and no `@@STEP_END@@`. Then the same with `flatpak` and
-   `fwupdmgr` hidden from the engine's `PATH` — the symlink farm stage 2 step 12b built
-   for the absent-tool scenario, not `run_engine`, whose mock directory ships both.
+   `@@CHECK@@|cache` line and no `@@STEP_END@@`. Then a **second** command — `--check
+   --steps=flatpak,firmware`, with both binaries hidden from the engine's `PATH` — emits no
+   `@@CHECK@@|flatpak`, no `@@CHECK@@|firmware` and no `@@STEP_END@@`. The first selects
+   neither tool, so on its own it cannot exercise the absent-tool half at all. Hide them
+   the way stage 2 step 12b's scenario does, by supplying a `PATH` of its own: `run_engine`
+   puts the mock directory first and `setup_common` ships both binaries, so deleting them
+   finds the developer's instead.
 
-9. The total, the exit status and the console summary. `@@CHECK@@|TOTAL|<sum>|updates
+8. The total, the exit status and the console summary. `@@CHECK@@|TOTAL|<sum>|updates
    available` last, then `@@DONE@@|ok`, and **exit 0 even when a source could not be
    read** — the incompleteness is carried by `@@CHECK_UNKNOWN@@` and by the console
    wording, never by the status, because an unattended timer treats a non-zero status as a
    failed check rather than an incomplete one. The console lines are part of the contract
    too (the engine is usable in a terminal, `CLAUDE.md` §4), including the *"treat this as
    a floor, not an all-clear"* wording that replaces the plain total when a source was
-   unreadable.
+   unreadable. **A step whose read FAILED still contributes its partial count**: in the
+   Bash engine `(( total += n ))` sits outside the failure branch in both arms, and
+   `docs/reference/marker-protocol.md` §4.6 gives the reason — knowing about 7 updates
+   beats knowing about none while a repository is broken. The natural-looking
+   `if rc == 0: total += n` passes every stage-3 check, reports `TOTAL|0` where the Bash
+   reports `TOTAL|7`, and silently suppresses step 9's notification.
    → **verify:** under the 106 mock the process exits 0; and both engines' **whole
    output** — marker lines and console lines alike — matches for one mock set, compared by
    hand. Not the console half alone: the scenarios grep substrings, so `emit_check`'s
@@ -476,7 +488,7 @@ refuses stays refused.
    harness captures `@@MARKER@@` lines and discards the rest — the same blind spot
    `--emit-guard` has.
 
-10. `--notify`. `notify_send` moves into `actions.py` (§4.2) and the check raises one
+9. `--notify`. `notify_send` moves into `actions.py` (§4.2) and the check raises one
    notification only when the total is above zero — a timer that pops up "0 updates" every
    morning is the thing `--check --notify` exists to avoid.
    → **verify:** no suite scenario drives `--check --notify` (the notify scenarios all run
@@ -484,7 +496,7 @@ refuses stays refused.
    logs its arguments: under the two-update mock each logs one notification and the logged
    arguments are identical; under a zero-update mock neither logs any.
 
-11. Run the whole suite against the Python engine and read the `--check` scenarios' own
+10. Run the whole suite against the Python engine and read the `--check` scenarios' own
     check lines out of it, the same way stage 2 step 15 reads `--auth-status`'s. The suite
     takes no arguments and has no per-scenario selector.
     → **verify:** from the repo root, `ONEUP_ENGINE_CMD='python3 -m oneup.engine' bash
@@ -549,8 +561,8 @@ firmware arm and the `--notify` arm, which no scenario reaches, have each been d
 hand against both engines and answered identically; when the two engines' **whole output**
 matches for one mock set, marker lines and console lines alike; and when `./local-CI.sh`
 is green on `v2` with `ONEUP_ENGINE_CMD` unset. **The three vacuous passes are recorded
-in *Not stage 3's* rather than counted here** — the log mirror, the shutdown inhibitor and the run-state
-file each pass because the code that could break them does not exist yet, and a done-list
+in *Not stage 3's* rather than counted here** — the log mirror, the shutdown inhibitor
+and the run-state file each pass because the code that could break them does not exist yet, and a done-list
 that counted them would be counting its own gaps. `main`'s behaviour is unchanged.
 
 **The item is done** at stage 9, when G1–G6 are met. `docs/design/oneup-2.0.md`
@@ -566,3 +578,4 @@ is the commit they are measured against.
 | 3 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 3 · Q2 2 · Q3 3 · Q4 2 — 10 verified, 1 dismissed, all 10 fixed | Loop 1 of a new run, on stage 2's newly appended steps; stage 1's text was not re-opened. **All three lanes led with the same defect, and it would have made stage 2's headline deliverable unreachable**: step 8 said to dispatch `--auth-status` and `--emit-guard` and have *"every other accepted flag"* exit non-zero — but `--log=` is an accepted flag and `run_engine` appends it to every invocation, so the engine would have refused every call the suite makes, and `--help` fell in the same bucket four lines under a sentence saying the engine answers it. Modifier flags are now parsed and stored, and only a flag selecting unbuilt *work* refuses. Two more were found by all three: the exit-code step named the `--help|-h` arm as a source of one of the four codes, and that arm yields `exit 0`; and step 2's verify ran the whole engine to prove `markers.py` flushes, when `actions.py` is step 7 and `__main__.py` step 8 — a check that cannot be reached where it is written. Step 3's carried the same fault more quietly: at step 3 `privilege.py` is the only module, so *"and no other file"* could not fail, and `actions.py` — added later, and the one place a stray `sudo` would land — was never covered. **The most dangerous single-lane finding was an unowned pair of overrides**: `ONEUP_AUTH_FILE` and `ONEUP_GUARD_FILE` are neither state files nor log paths, so no step claimed them, and the `--auth-status` scenario drives the engine entirely through them — stage 2 would have read the real `/etc/sudoers.d/` and `/usr/libexec/`, which `docs/standards/testing.md` §2 forbids outright. Also: nothing instructed *deleting* the SIGKILL scenario the plan called replaced, so both would have shipped against a G1 that permits exactly one replacement and is read off the diff; the done-list omitted three of the section's own obligations, none of which any gate can fail on; step 13 called `testing.md`'s untracked-`HOME` claim false when only its consequence is, and named neither `files-and-naming.md`'s Trap 2 nor its branch; and *"Not stage 2's"* attributed the deferral to §4.6 rows that name none of it. Dismissed as true-but-immaterial: steps 5 and 9 split the `LOG_DIR` work while step 9 says *"one commit"* — no collision is possible, since the engine's constant is never named `LOG_DIR`, so no line is built differently. **The fix pass caught three false claims of its own before the commit**, all by running them: `tests/docs-check.py` does walk `docs/specs/` (only `docs/plans/` is unwalked, ONEUP-0129); §4.6 does name `parsers.py` and the hold at stage 4, so the blanket deferral was wrong for two of six; and a blanket `grep ONEUP-0058 docs/standards/` hits three passages that stay true, so that verify could not pass. The 4b sweep then found three more pieces of its own collateral in the section header and the done-list. Four lane open questions settled clean: `oneup/gui/paths.py` imports only the standard library so step 5's equality check needs no PySide6; the hold path does spawn a keep-alive (the existing *"a held run leaves no orphaned keep-alive behind"* scenario asserts on it); the engine exports two variables, `SUDO_ASKPASS` and `SUDO_PROMPT`, so step 3's count is right and the lanes' packets simply lacked that window; and every window reader goes through `paths.`, so step 9's blast radius is as stated. |
 | 4 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 2 · Q2 2 · Q3 4 · Q4 2 — 10 verified, 0 dismissed, all 10 fixed. Cap reached (2 for a plan); the run files its tail and exits | A calm cap: four of the ten landed on text loop 3 wrote, and the other six were draft defects that loop had not reached — the document held more than the cap held loops, which is the shipping case rather than the oscillating one. **The best finding was a check of my own that could not fail.** Loop 3 replaced step 2's unreachable verify with `python3 -c '…markers…' | cat`, and one lane pointed out that CPython flushes `sys.stdout` at interpreter shutdown, so a one-shot prints with or without the flush. Measured before fixing: the unflushed emitter prints through a pipe when the process exits, and never arrives while it stays alive — which is the only case the window sees. The verify now emits and sleeps. Its twin: step 4 claimed `ruff check .` catches a *reasonless* `# noqa`, and bare `# noqa: S603` comments live in `oneup/gui/` today with ruff green on them, so the step's own §5.2 obligation was discharged by a tool that never looks. And step 3's `grep '\"sudo\"'` matched one quote style against a rule set selecting none, so `['sudo', …]` in `actions.py` would have passed the one check the step says a green suite cannot replace — it now asserts no engine module but `privilege.py` imports `subprocess`. **All three lanes found the same Q2**: step 13's verify enumerated only the ONEUP-0058 passages while its own body named two more that step 9 falsifies, and the done-list counted documents step 13 does not name — a builder would have shipped `files-and-naming.md` still saying *\"Give them distinct names in 2.0\"* after step 9 gave them. **Two lanes found the branch claim**, and it is the one that could not be fixed inside this document: loop 3 said §9 had no `main` edit to route, and §9 names two bindings and closes *\"a third would need naming here before it counted\"*. Step 13 now splits — the ONEUP-0058 passages worded to hold on both branches and routed to `main` as §9 has it, the two naming the window's constant to `v2` because no both-branch wording exists — and the gap is **ONEUP-0130** rather than a standard amended from inside a build stage. Also fixed: *\"Not stage 2's\"* said §4.6 gives the hold to stage 4 by name, where §4.6 names it there only to *exclude* its scenario; step 7's byte-identical guard comparison invokes a flag `__main__.py` cannot answer until step 8; step 12a's new `ONEUP_KEEPALIVE_SECONDS` owed a row in §5.1, which tables the sibling intervals; step 10 never said whether editing the spec re-arms its gate (it does not — §4.1 already freezes the codes); and step 12c adds a field assertion to a scenario whose staging-failure branch states its own arithmetic in a comment. One repair outside this loop's subject, made because it is false and cheap: stage 1 step 7 credited §4.4 with assigning the SIGKILL reader to a stage, and that row names none. |
 | 5 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 1 · Q2 3 · Q3 3 · Q4 2 — 9 verified, 2 dismissed, all 9 fixed | Loop 1 of a new run, on stage 3's newly appended steps; stages 1 and 2 were not re-opened. **All three lanes led with the same defect**: step 3's verify claimed *every* check line of two whole scenarios passes, and those scenarios assert the TOTAL marker, the flatpak detail line and `@@CHECK_UNKNOWN@@` — work three later steps own. An implementer would have collapsed four steps into one or recorded a correct step as failed. **The worst was the ordering underneath it**, found by one lane: the step that wires `__main__.main` to dispatch `--check` sat *last*, while the verifies of every step above it invoke `--check` — and against an unwired engine that is empty stdout and exit 3 (measured), indistinguishable from a wrong emitter. The wiring is now step 3 and the old last step is deleted rather than moved. **Two lanes found step 2 permitting an import its own verify forbids**: the step offers a `TYPE_CHECKING` annotation of `Options`, which can only be written `from .__main__ import Options`, and the check read *"no module … names `__main__` in an import"* — so one builder deletes the annotation and another invents a stand-in the plan never names. **The most consequential single-lane finding was silence about marker text**: `emit_check`'s `label` strings and the two unreadable-reason sentences are pinned by nothing at this stage, because the scenarios grep substrings (`check()` is `grep -qF`, measured) and step 9's by-hand comparison was scoped to *non-marker* lines — so a paraphrase would ship green and surface as a G2 divergence three stages later. That comparison now covers the whole output. Also fixed: step 8's verify named the TOTAL marker step 9 earns, and required two tools *"off `PATH`"* against a harness whose mock directory ships both — it now names stage 2 step 12b's symlink farm; step 10's notify check was one engine and a count where the done-list asks two engines and identity; *Not stage 3's* credited §4.6 with deferring `sudo_init` by row, and no row names it. Two came from verifying rather than from a lane: the plan said *"Stage 3 edits no document"* and left both engine module docstrings asserting that `--check` *"follow[s] at their own stages"*, which step 3 falsifies the moment it lands; and the 4b sweep caught the done-list still saying *non-marker* after the step-9 fix widened it. Two dismissed as true-but-immaterial, both raised by two lanes and filed by neither: the firmware arm *is* executed by two scenarios (bare `--check` selects all steps and `setup_common` mocks `fwupdmgr`) though none asserts on it, and the intro quotes §4.6's *"every `--check` scenario green"* while the ONEUP-0086 scenario is red as a whole for reasons the done-list already excludes. One out-of-scope finding filed rather than fixed: `docs/reference/marker-protocol.md` §4.6 states the bare-zero withholding rule of `CHECK` generally, and `CHECK\|TOTAL\|0` and `CHECK\|firmware\|0` are both emitted unconditionally — a claim in a document that outranks the engine, so it takes its own item and its own gate. |
+| 6 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 0 · Q2 1 · Q3 1 · Q4 2 — 4 verified, 0 dismissed, all 4 fixed. Cap reached (2 for a plan); the run files its tail and exits | Half the loop landed on text loop 5 wrote, and both of that half were the same class — a verify clause that cannot be reached or cannot fail. **All three lanes found the first**: loop 5 scoped step 4's verify to `@@CHECK@@|system|2`, and the emitter that produces `@@CHECK@@` was step 5, whose own verify needed step 4's arm to produce anything — a circular pair in which an implementer either stalls or writes a second emitter inside the system arm, which is the one shape the ONEUP-0056 suppression rule cannot survive. The two are now one step, because a six-line helper and its only callers were never two deliverables. **Two lanes found the second**: loop 5's *"Then the same with `flatpak` and `fwupdmgr` hidden"* took its command from the sentence before, and that command selects `orphans,cache` — so the absent-tool half of the rule was verified by a run that cannot enter it. The second command is now named, and the `PATH` mechanism is described rather than borrowed: stage 2 step 12b supplies a farm inside its own scenario, so *"the symlink farm step 12b built"* implied a reusable artefact that does not exist. **The best finding was a draft gap neither loop had reached, and it is the one that would have shipped**: nothing said whether a step whose read FAILED still contributes its partial count to `@@CHECK@@|TOTAL`. It does — `(( total += n ))` sits outside the failure branch in both arms, measured — and the natural `if rc == 0: total += n` passes every stage-3 check, reports `TOTAL|0` where the Bash reports `TOTAL|7`, silently suppresses the `--notify` popup, and surfaces only as a G2 divergence at stage 6. Also fixed: the intro's quoted §4.6 exit condition (*"every `--check` scenario green"*) and *Not stage 3's* could not both hold, since ONEUP-0086's scenario opens with a full run — raised as an open question by one lane in loop 5 and dismissed, filed by two lanes here, and now glossed to the *Definition of done* list; and step 7's claim that the protocol *"never places"* `@@STEP_END@@` in a check stream rested on the reference's silence, where `run_check` emitting none is measurable and is what the step now says. Three lane open questions settled clean by running rather than reading: a Bash `--check` prints seven deterministic lines with nothing before `run_check`'s first, so step 8's whole-output comparison is exact; no `--notify` scenario in the suite is a `--check` run; and `run_check` contains no `STEP_END`. **A cap between calm and oscillating** — two of four on this run's own text, both in clauses loop 5 rewrote, against two draft defects the cap never reached. The plan routes to implementation, which for a plan is the better third reviewer. |
