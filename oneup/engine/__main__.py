@@ -148,6 +148,12 @@ def main(argv: list[str] | None = None) -> int:
     if opts is None:
         return code
 
+    # Mirror the whole run to its log, for EVERY mode. The Bash installs its
+    # `tee` above every dispatch, so `--check`, `--size`, `--thin-snapshots` and
+    # the auth actions are all logged. Installed after the parse guard above, so
+    # `--help` and an unknown flag still write nothing — the Bash's own order.
+    runstate.install_log_mirror(runstate.resolve_log_path(opts.log_file))
+
     if opts.auth_action == "status":
         return actions.auth_status()
     if opts.auth_action == "emit-guard":

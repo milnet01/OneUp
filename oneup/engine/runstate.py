@@ -12,8 +12,11 @@ name could not collide. In one package it can — `docs/standards/files-and-nami
 
 from __future__ import annotations
 
+import atexit
 import contextlib
 import os
+import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -89,4 +92,97 @@ def clear_owned_state() -> None:
     for path in (RUN_STATE, STOP_REQUEST):
         with contextlib.suppress(OSError):
             path.unlink()
+
+
+class _Mirror:
+    """One output stream, written to the console AND appended to the run's log.
+
+    The Bash installs `exec > >(tee -a -p "$LOG_FILE") 2>&1`, and both halves of
+    that matter. It MERGES — stderr goes into the same tee — so every `>&2` line
+    (the `TOTAL == 0` rejection, "Authentication failed or cancelled",
+    `cleanup`'s re-enable warning) reaches the log. And `-p` is what lets a run
+    survive the GUI going away (ONEUP-0042): our stdout is a pipe to the window,
+    and when the user quits, a plain `tee` dies on the broken pipe and then
+    SIGPIPEs the engine mid-transaction — which is the one thing that must never
+    happen, because a half-applied rpm transaction can leave packages broken.
+
+    Python sets SIGPIPE to SIG_IGN, so the same event arrives as
+    `BrokenPipeError` on the console write. Swallowing it here is NOT enough:
+    the interpreter's shutdown flush of `sys.stdout` fails in its turn and the
+    process exits 120, which the window colours as a failure on a run that
+    finished cleanly. `console_is_gone` is what `install_log_mirror` reads to
+    neutralise that flush.
+    """
+
+    console_gone = False
+
+    def __init__(self, console, log):
+        self._console = console
+        self._log = log
+
+    def write(self, text: str) -> int:
+        if not _Mirror.console_gone:
+            try:
+                self._console.write(text)
+                self._console.flush()
+            except (BrokenPipeError, ValueError, OSError):
+                _Mirror.console_gone = True     # the window quit; the run carries on
+        try:
+            self._log.write(text)
+            self._log.flush()
+        except (ValueError, OSError):
+            pass
+        return len(text)
+
+    def flush(self) -> None:
+        if not _Mirror.console_gone:
+            with contextlib.suppress(BrokenPipeError, ValueError, OSError):
+                self._console.flush()
+        with contextlib.suppress(ValueError, OSError):
+            self._log.flush()
+
+    def isatty(self) -> bool:
+        return False
+
+    def fileno(self) -> int:
+        return self._console.fileno()
+
+
+def install_log_mirror(path: Path) -> None:
+    """Mirror this run's whole output to `path`, whatever the run mode.
+
+    EVERY mode, not just a full run: the Bash installs its tee above every
+    dispatch, so `--check`, `--size`, `--thin-snapshots` and the auth actions
+    are all logged. The directory is created here, at the moment it is about to
+    be written to, and not before (ONEUP-0058).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = path.open("a", encoding="utf-8", errors="replace")
+    sys.stdout = _Mirror(sys.__stdout__, handle)
+    sys.stderr = _Mirror(sys.__stderr__, handle)
+
+    def _drop_stdout_at_exit() -> None:
+        # Once the console end is gone, the interpreter's own shutdown flush
+        # would fail and turn a clean run into exit 120. Point the streams at
+        # something that cannot fail; the log is already flushed per write.
+        if _Mirror.console_gone:
+            with contextlib.suppress(OSError):
+                sys.stdout = open(os.devnull, "w")   # lives to interpreter exit by design
+                sys.stderr = sys.stdout
+
+    atexit.register(_drop_stdout_at_exit)
+
+
+def write_run_state(log_file: Path, steps: str) -> None:
+    """Record this run so a starting window can find it and follow the log.
+
+    Four lines, in this order: our pid, the log path verbatim, the selected
+    step keys, and the epoch second we committed. §4.1.1 pins the layout — do
+    not reorder or drop a line. Written only once the run is definitely going
+    ahead, so a `--check` or a `--size` never claims to be one.
+    """
+    global _RUN_STATE_OWNED
+    RUN_STATE.parent.mkdir(parents=True, exist_ok=True)
+    RUN_STATE.write_text(f"{os.getpid()}\n{log_file}\n{steps}\n{int(time.time())}\n")
+    _RUN_STATE_OWNED = True
 
