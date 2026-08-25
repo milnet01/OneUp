@@ -10,6 +10,22 @@
 set -uo pipefail
 
 ENGINE="$(cd "$(dirname "$0")/.." && pwd)/update_system.sh"
+
+# ONEUP-0054 §4.4: which engine the suite drives. The override is a SCALAR
+# environment variable word-split into argv HERE, because a Bash array cannot
+# cross a process boundary — `export` drops it, so a caller that sets one hands
+# the suite nothing. Two words by default; `python3 -m oneup.engine` is three.
+# Every reader must agree on that encoding, or gate G2 diffs v1 against v1 and
+# goes green. `read -r -a` rather than an unquoted expansion: the latter globs
+# as well as splits, so a value containing `*` would expand against the cwd.
+# The default is built as a quoted array literal, so the absolute $ENGINE path
+# survives a space in it.
+if [[ -n "${ONEUP_ENGINE_CMD:-}" ]]; then
+    read -r -a ENGINE_CMD <<<"$ONEUP_ENGINE_CMD"
+else
+    ENGINE_CMD=(bash "$ENGINE")
+fi
+
 PASS=0 FAIL=0
 
 # --- mock system tools common to every scenario ----------------------------
@@ -124,7 +140,7 @@ run_engine() {
         ONEUP_GUARD_FILE="${ONEUP_GUARD_FILE:-$mockdir/oneup-download-guard}" \
         ONEUP_INHIBITED="${ONEUP_INHIBITED-1}" \
         ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}" \
-        bash "$ENGINE" "$@" --log="$mockdir/run.log" 2>&1
+        "${ENGINE_CMD[@]}" "$@" --log="$mockdir/run.log" 2>&1
 }
 
 check() {  # name, expected-substring, haystack
@@ -873,7 +889,7 @@ chmod +x "$d/zypper"
 # stdout pipe — so it has to repeat run_engine's isolation of the real paths by hand.
 PATH="$d:$PATH" ONEUP_ZYPP_PID_FILE="$d/no-zypp.pid" \
     ONEUP_RUN_STATE="$d/run.state" ONEUP_STOP_FILE="$d/stop.request" \
-    bash "$ENGINE" --steps=system --log="$d/run.log" 2>&1 | head -c 200 >/dev/null
+    "${ENGINE_CMD[@]}" --steps=system --log="$d/run.log" 2>&1 | head -c 200 >/dev/null
 # The engine keeps running after the reader closes; wait for the log to settle.
 for _ in $(seq 1 50); do grep -q '@@DONE@@' "$d/run.log" 2>/dev/null && break; sleep 0.1; done
 out=$(cat "$d/run.log" 2>/dev/null)

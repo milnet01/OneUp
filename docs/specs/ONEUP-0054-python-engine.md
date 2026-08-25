@@ -334,19 +334,39 @@ unchanged throughout and catch an orphan left behind by an ordinary exit.
 ### 4.4 Making the test suite engine-agnostic
 
 `run_engine` in `tests/run-tests.sh` invokes `bash "$ENGINE"`. It gains one indirection —
-an `ONEUP_ENGINE_CMD` array override, defaulting to the current `bash update_system.sh` —
-so the *same* suite runs either engine.
+an `ONEUP_ENGINE_CMD` override, defaulting to the current `bash update_system.sh` — so the
+*same* suite runs either engine. **Pin the encoding, because a Bash array cannot cross a
+process boundary**: `export` drops it, so a caller that sets one hands the suite nothing.
+It is a **scalar environment variable, word-split by the suite into its argv array** — the
+default is two words, and `python3 -m oneup.engine` is three. Every reader must agree on
+that: `run_engine`, the two scenarios patched by hand below, `tests/differential-test.sh`
+(§4.5), which has no other way to select an engine, and the `local-CI.sh` / `release.yml`
+wiring (§8). Settle it differently in the harness and in the suite and G2 diffs v1 against
+v1 and goes green.
 
-**`run_engine` is not the only place the suite reaches the engine, and the other two are
-what make this less trivial than it sounds.** All three must be handled together:
+**`run_engine` is not the only place the suite reaches the engine, and the others are
+what make this less trivial than it sounds.** All five must be accounted for and none
+dropped; they land at stages 1, 2 and 5 as §4.6 has them, not in one pass. The invocation
+count differs by branch: `main` has two invocations and `v2` has three, because ONEUP-0044
+added the `--hold` scenario after stage 1 was written. Stage 1 lands on `main` and meets
+`run_engine` and the broken-pipe scenario; the `--hold` scenario is stage 2's, alongside
+the `runstate.py` work it exercises.
 
 | Call site | What it does | What it needs |
 | --- | --- | --- |
 | `run_engine` | `bash "$ENGINE" "$@"` — almost every scenario | the `ONEUP_ENGINE_CMD` override |
 | the broken-pipe scenario (INV-5) | invokes `bash "$ENGINE" --steps=system` directly, on purpose, so it can close the pipe on it | the same override, applied by hand at that site |
+| the `--hold` scenario (ONEUP-0044) | invokes `bash "$ENGINE" --size=system --hold` directly and backgrounds it, so it can write `go.request` at the held engine | the same override by hand — **`v2` only**, and stage 2's, since a scenario still launching v1 leaves §4.1.1's hold contract untested against v2 with G1 green |
 | the SIGKILL keep-alive scenario (INV-7) | reads `$ENGINE` as a **file** and executes a fragment of its Bash | nothing — it is replaced outright, §4.3.5 |
+| the privileged-call-site count and the shared-argv check (`security.md` §5.2) | also read `$ENGINE` as a **file** — one `grep -c`s its `sudo` / `sudo_capture` call sites against a pinned number, the other greps its shared argv arrays | re-expressed against `oneup/engine/` at stage 5, when the last privileged call site moves. Neither is replaced: the guarantee they carry — that a new privileged call without a matching `auth_cmnds` entry cannot land unnoticed — has to survive the rewrite, not lapse with it |
 
-Beyond those, this is the only change permitted to an **existing assertion** before G1.
+Beyond those, the keep-alive scenario is the only **replacement** permitted to an existing
+assertion before G1. The three invocation rows are re-pointings: they change what a
+scenario invokes, never what it asserts. The structural-check row is neither — re-expressing
+those two against `oneup/engine/` necessarily moves the figure one of them pins, so stage 5
+re-measures the count and records it. That is the same guarantee restated against the new
+engine, which is what G1 protects; leaving them greping a retired `update_system.sh` is the
+weakening, because a check that passes about a file nothing runs has stopped guarding.
 *Additions* are a different matter and are expected: `docs/design/oneup-2.0.md` §7's G1 row
 permits any new scenario a §4.6 stage names, and several stages do — the replacement
 keep-alive test, the absent-tool test, the `run.state` fourth-line assertion and the
