@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 from collections.abc import Sequence
 
-from . import proc
+from . import markers, proc
 
 # Overridable so the suite points it at a mock instead of raising a real KDE dialog.
 ASKPASS = os.environ.get("ONEUP_ASKPASS") or "/usr/libexec/ssh/ksshaskpass"
@@ -43,12 +43,52 @@ def install_environment() -> None:
     os.environ["SUDO_PROMPT"] = SUDO_PROMPT
 
 
-def sudo(argv: Sequence[str], *, flags: Sequence[str] = (), merge_stderr: bool = False
-         ) -> tuple[int, str]:
+# sudo_init's own prompt label, and it is NOT `SUDO_PROMPT` above. The Bash
+# passes this one to the up-front `-v` validate and exports the other for every
+# other prompt; `reap_orphaned_askpass` matches an orphaned dialog against
+# EITHER string, so collapsing them into one leaves that reaper — stage 5's —
+# with a target that never appears.
+VALIDATE_PROMPT = "System Updater: authenticate to update the system"
+
+
+def sudo_init() -> None:
+    """Become root once, up front, so nothing later has to ask again.
+
+    Stage 4 builds the authenticate half only. The keep-alive is `cleanup`'s to
+    kill and `cleanup` is stage 5's; a keep-alive with nothing to kill it is the
+    shape `CLAUDE.md` §6's fourth trap names.
+    """
+    # Deferred: `auth_current` is `actions.py`'s by §4.2, and `actions` imports
+    # this module — a module-level import back would be a cycle.
+    from . import actions
+
+    # If the ONEUP-0023 drop-in is active AND grants what this engine needs,
+    # every privileged command below is individually NOPASSWD, so no cached
+    # credential is needed — and the interactive `-v` here would prompt ANYWAY:
+    # sudo's `verifypw` defaults to `all`, so a bare validate is password-free
+    # only when EVERY one of the user's sudoers entries is NOPASSWD, which a
+    # normal wheel user's is not. Skipping it is what lets a headless timer run.
+    #
+    # `auth_current`, not a bare zypper probe: a drop-in from an older OneUp is
+    # live and still leaves three calls prompting, and that is what turned into
+    # a surprise dialog in the middle of step 1 (ONEUP-0092).
+    if actions.auth_current():
+        return
+    install_environment()
+    rc, _ = proc.run(["sudo", "-A", "-p", VALIDATE_PROMPT, "-v"], merge_stderr=False)
+    if rc != 0:
+        markers.err("Authentication failed or cancelled — aborting.")
+        raise SystemExit(1)
+
+
+def sudo(argv: Sequence[str], *, flags: Sequence[str] = (), merge_stderr: bool = False,
+         stream: bool = False) -> tuple[int, str]:
     """Run `argv` as root and return its status and output.
 
     The single sudo parent for the whole run. `flags` carries sudo's own options
-    (`-k`, `-n`, `-A`); everything after them is the command.
+    (`-k`, `-n`, `-A`); everything after them is the command. With `stream` the
+    child writes to our own stdout and stderr rather than being captured — see
+    `proc.run`.
     """
     install_environment()
-    return proc.run(["sudo", *flags, *argv], merge_stderr=merge_stderr)
+    return proc.run(["sudo", *flags, *argv], merge_stderr=merge_stderr, stream=stream)

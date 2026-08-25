@@ -45,6 +45,23 @@ HOLD_STATE = Path(os.environ.get("ONEUP_HOLD_STATE") or STATE_DIR / "hold.state"
 GO_REQUEST = Path(os.environ.get("ONEUP_GO_FILE") or STATE_DIR / "go.request")
 
 
+def stop_and_run_mtimes() -> tuple[float | None, float | None]:
+    """(`stop.request`, `run.state`) modification times; None where absent.
+
+    The reads only — `proc.stop_pending` owns the decision they feed (§4.2).
+    Both answers matter and the second is the one that looks droppable: §4.1.1
+    says that with no `run.state` at all **no stop is ever honoured**, which is
+    what stops a request outliving the run it was meant for.
+    """
+    def mtime(path: Path) -> float | None:
+        try:
+            return path.stat().st_mtime
+        except OSError:
+            return None
+
+    return mtime(STOP_REQUEST), mtime(RUN_STATE)
+
+
 def resolve_log_path(explicit: str | None) -> Path:
     """The path this run logs to — creating `USER_LOG_DIR` only if we default into it.
 

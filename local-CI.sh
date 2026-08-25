@@ -58,6 +58,18 @@ else
     bad "tests/run-tests.sh"; tail -25 /tmp/local-ci-tests.log
 fi
 
+# --- engine parser unit tests -----------------------------------------------
+# The pure half of the engine (oneup/engine/parsers.py): to_bytes, the two
+# download-size wordings, the progress wordings, `zypper lr -u` output and the
+# lock file's text. Table-driven, because as pure functions these are reachable
+# without a full engine run — docs/specs/ONEUP-0054-python-engine.md §4.3.4.
+step "Engine parser unit tests"
+if python3 tests/parsers-test.py >/tmp/local-ci-parsers.log 2>&1; then
+    ok "tests/parsers-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' /tmp/local-ci-parsers.log | tail -1)"
+else
+    bad "tests/parsers-test.py"; tail -25 /tmp/local-ci-parsers.log
+fi
+
 # --- headless GUI smoke test ------------------------------------------------
 # Constructs the PySide6 window offscreen and feeds it engine markers. Exit 77
 # means PySide6 isn't installed here — a skip, not a failure (matches the
