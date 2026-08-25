@@ -4431,3 +4431,29 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A note was added telling future sessions how to spot a design document whose review has gone stale. An independent reader should check it, and decide whether it belongs in the standard rather than the notes file.
   Kind: doc.
   Source: in-session-2026-08-24, consequence of ONEUP-0127.
+
+- 📋 [ONEUP-0129] **`tests/docs-check.py` never walks `docs/plans/`, so no plan has ever been checked.**
+  Found 2026-08-25 while gating the ONEUP-0054 build plan. Every `docs(...)`
+  call in the checker names the same set — `docs/standards`, `docs/reference`,
+  `docs/design`, `docs/specs`. `docs/plans` appears in none of them, so every
+  plan in the tree is unchecked: links, backticked paths, citations, quotations
+  and table integrity alike.
+
+  Nothing in the repo says the omission is deliberate. `documentation.md` and
+  `files-and-naming.md` both list `docs/plans/` as a first-class document class
+  beside the four that ARE walked, which is the argument that this is an
+  oversight rather than a decision.
+
+  Not blocking anything today. The ONEUP-0054 plan was checked by hand instead
+  — doc_integrity for links and anchors, doc_citations for quotations, plus a
+  by-hand resolve of every backticked path and every cited section number — and
+  came back clean. That is exactly the manual substitute this item exists to
+  remove.
+
+  Worth deciding rather than assuming: adding `docs/plans` to the walk may fire
+  on the older plans, which predate the current rules. Check what it reports
+  before turning it on, and if the older four need work, that is a separate
+  item from the one-word change to the checker.
+  **Layman:** The script that checks our documents for broken links and wrong file paths skips the build-plan folder entirely, so nothing has ever checked those files.
+  Kind: test.
+  Source: in-session-2026-08-25.
