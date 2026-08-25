@@ -1145,6 +1145,49 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   run-state file each pass vacuously because the code that could break
   them does not exist yet — all three are stage 5's, and stage 5 must
   cover `--check` as well as a full run. local-CI green on `v2`.
+  Progress (2026-08-25): stage 4 of 9 done on `v2` — `parsers.py`, `repos.py`,
+  `tests/parsers-test.py` and `actions.py`'s `--size=`. All 15 check lines of the
+  six `--size` scenarios plus the no-tty askpass scenario pass against
+  `python3 -m oneup.engine`, and ten mock sets give byte-identical whole output
+  from both engines, exit status included. local-CI green on `v2`: engine 312/0,
+  parsers 57/0, gui-smoke 442/0, imports 7/0, bump 12/0, docs 20979/0.
+
+  Gated first: review-contract --genre plan, 2 loops x 3 cold lanes, 19 verified,
+  19 fixed. A VIOLENT cap — seven of loop 2's nine landed on text loop 1 wrote,
+  four of those on the one step loop 1 added — so the plan routed to
+  implementation rather than a third cold read.
+
+  Five things worth carrying forward.
+
+  The download-size wording is TWO parsers, not one. `run_size`'s sed wants a
+  single space and any alphabetic unit and returns TEXT (that text is what
+  `@@SIZE@@` carries); `progress_filter`'s regex is anchored, allows any spacing,
+  admits only `[KMG]?i?B` and feeds `to_bytes`. Measured: `1.3 TiB` parses for the
+  first and not the second, `Package download size:371.4MiB` for the second and
+  not the first. One function serving both changes what the window is told.
+
+  `valid_alias` is a `re.fullmatch`, never an anchored `re.match`. Python's `$`
+  matches before a trailing newline, so `re.match` accepts `oss\n` where Bash
+  rejects it — and this is the shape guard `security.md` §4 puts in front of a
+  privileged command.
+
+  `sudo_init`'s validate STREAMS. The Bash redirects that call nowhere, so sudo's
+  own message reaches the run's stderr and its log; capturing it silently swallows
+  the one message a user who cancelled the dialog has to go on. Caught by running
+  the suite, not by reading it.
+
+  `refresh_repos`' privileged call streams too — `proc.run` gained an
+  inherit-stdout mode, because the Bash `sudo timeout … refresh` writes straight to
+  the run's stdout and a capturing form sends it nowhere.
+
+  `stop_pending` tests THREE things, and §4.1.1 states the one a natural
+  translation drops: with no `run.state` at all no stop is ever honoured. A
+  `stat()` with a `FileNotFoundError` fallback of `0` inverts it, and a leftover
+  request then aborts the next run before it starts.
+
+  Not stage 4's, recorded so a green is not read as parity: the keep-alive (it is
+  `cleanup`'s to kill, and `cleanup` is stage 5's), the hold itself, and the log
+  mirror. Filed with the stage: ONEUP-0133, ONEUP-0134, ONEUP-0135.
 
 - ✅ [ONEUP-0056] **Never report "up to date" for a source the check couldn't read.**
   Reported with two screenshots: OneUp's check said "Everything is up
