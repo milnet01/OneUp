@@ -582,6 +582,13 @@ reader cannot account for, where a refusal on stderr with exit 3 is one it never
    and an unrecognised unit each give 0, and the recognised units are `B`, `KiB`, `MiB`,
    `GiB` and no others — `progress_filter`'s own regex admits `KB`, which must therefore
    come back 0 rather than 1000.
+   **The download-size wording is TWO parsers, not one, because the two Bash call sites
+   disagree.** `run_size`'s `sed` wants a single space and takes any alphabetic unit, and
+   its result is the figure **as text** — that text is what `@@SIZE@@` carries.
+   `progress_filter`'s regex is anchored at line start, allows any spacing, admits only a
+   `[KMG]?i?B` unit, and feeds `to_bytes`. Measured: `Overall download size: 1.3 TiB.` parses
+   for the first and not the second, `Package download size:371.4MiB` for the second and not
+   the first. Collapsing them into one function changes what `@@SIZE@@` reports.
    → **verify:** `python3 -c 'import oneup.engine.parsers'` from the repo root exits 0,
    and the module's import list names neither `subprocess` nor `privilege` nor any sibling
    that reaches them — that isolation is what §4.2 says makes step 2 possible at all.
@@ -600,8 +607,10 @@ reader cannot account for, where a refusal on stderr with exit 3 is one it never
    `enabled_repo_aliases`'s `zypper lr -u` invocation, `lock_holder`'s probe,
    `repo_scoped_failure` and `make_cdn_reposd`. **`enabled_repo_aliases` splits like
    `lock_holder`**: the read is here, the table parsing is step 1's, because §4.2's
-   `parsers.py` row names `lr` output in its own right. Step 5's no-new-crossing rule does
-   not reach it — that rule is about a function §4.2 places whole.
+   `parsers.py` row names `lr` output in its own right. **That makes it a SEVENTH crossing,
+   and §4.2's module table is what authorises it** — the split table lists six and omits
+   this one. Step 5's no-new-crossing rule yields to an explicit `parsers.py` naming and to
+   nothing else; §4.2's own table is what needs the extra row, not this plan.
    **`valid_alias` is a FULL match, not an anchored `re.match`.** Bash's `=~
    ^[A-Za-z0-9][A-Za-z0-9:@._+-]*$` rejects a trailing newline; Python's `$` matches
    before one, so `re.match` on the same pattern accepts `oss\n` and `re.fullmatch`
@@ -610,7 +619,8 @@ reader cannot account for, where a refusal on stderr with exit 3 is one it never
    announces** (`CLAUDE.md` §6, ONEUP-0094 §4.2): libzypp keys its package cache by
    repository ALIAS, an openSUSE alias usually contains the host name, and a blanket
    host substitution therefore renames the alias and discards every package already
-   downloaded. The substitution is anchored to `baseurl=` lines and to nothing else.
+   downloaded. The substitution is anchored to `baseurl=` lines carrying that host, and to
+   nothing else.
    `lock_holder` splits as §4.2 says: the `$ZYPP_PID_FILE` read, the `/proc/<pid>` liveness
    test and the self-pid exclusion stay here; only the text it parses is step 1's.
    → **verify:** **`update_system.sh` carries no `BASH_SOURCE` guard, so sourcing it runs
@@ -623,10 +633,16 @@ reader cannot account for, where a refusal on stderr with exit 3 is one it never
    in their own output, and add the stale-pid, unreadable-file and own-pid cases on the
    Python side, where the Bash arms return non-zero and produce nothing to compare.
    `make_cdn_reposd` has **no v1 surface at all** — its directory is internal and no
-   scenario reaches it — so it is checked on the Python side alone: every `baseurl=` is
-   rewritten and **every `[alias]` header and `name=` is byte-identical to the input**,
-   which is the assertion the trap is about. `valid_alias` and `repo_scoped_failure` are
-   checked against the patterns quoted above, `valid_alias` including the `oss\n` case.
+   scenario reaches it — so it is checked on the Python side alone, over a fixture holding
+   a Packman repo as well as an openSUSE one: every `baseurl=` naming
+   `download.opensuse.org` is rewritten, and **every other line — `baseurl=` lines for
+   other hosts included, and every `[alias]` header and `name=` — is byte-identical to the
+   input**. *"Rewrite every `baseurl=`"* is the host-blind widening the trap warns of, so
+   the second fixture repo is what makes this falsifiable. `valid_alias` is checked against the pattern quoted above,
+   the `oss\n` case included. `repo_scoped_failure` matches
+   `signature|GPG|key|metadata|Valid metadata not found|Curl|could not resolve|Download.*failed|Skipping repository`
+   case-insensitively over the run's log, and is checked against that list — it is quoted
+   here because it is quoted nowhere else and no stage-4 caller reaches it.
 
 4. `stop_pending`, split as §4.2 requires: `proc.py` owns the decision, `runstate.py` the
    file reads it decides from. **It tests three things, and the third is the one a natural
@@ -647,17 +663,24 @@ reader cannot account for, where a refusal on stderr with exit 3 is one it never
 
 5. `repos.py`'s privileged half: `release_zypper_lock`, `disable_repo`, `find_failing_repos`
    and `refresh_repos`. `find_failing_repos`' signature/metadata/unreachable classification
-   and `repo_scoped_failure`'s pattern **stay in `repos.py`** — §4.2 places both functions
-   whole and its split table names neither, so splitting one is a change to the contract
-   rather than a reading of it. `disable_repo` is fail-closed and
+   and `repo_scoped_failure`'s pattern **stay in `repos.py`** — §4.2's `parsers.py` row
+   names nothing of either, which is the test that let step 3's `lr` crossing through.
+   Splitting one here is a change to the contract rather than a reading of it. `disable_repo` is fail-closed and
    runs `valid_alias` first, which is `docs/standards/security.md` §4's shape guard on the
    one path an alias reaches a privileged command. Every privileged call goes through
-   `privilege.sudo`; `refresh_repos` uses the `timeout <budget> zypper` argv the drop-in
-   grants, and treats exit 124 as a slow server — a `@@HINT@@` and a `@@REMEDY@@|skip-repo`,
+   `privilege.sudo` — but **`refresh_repos`' is a STREAMING one**. `proc.run` pipes stdout
+   and discards stderr, where the Bash `sudo timeout … refresh` writes straight to the run's
+   stdout and its log; built on the capturing form, the refresh would go silent, and no
+   stage-4 scenario reaches it to say so. `proc.run` gains an inherit-stdout mode here
+   because `refresh_repos` is its first caller; the deadline and byte-counting halves of
+   §4.2's `proc.py` row stay stage 5's, and this call's own budget is already in its argv.
+   `refresh_repos` uses the `timeout <budget> zypper` argv the drop-in grants, and treats exit 124 as a slow server — a `@@HINT@@` and a `@@REMEDY@@|skip-repo`,
    never a disabled repository.
    → **verify:** `python3 -c 'import oneup.engine.repos'` exits 0, and `release_zypper_lock`
-   answers identically from both engines under a `systemctl` mock in both its active and
-   inactive branches. **The other three are exercised by no scenario at this stage and are
+   answers identically from both engines in **both** branches — the suite's own `systemctl`
+   mock reports packagekit inactive, so step 10 already covers that half and only the ACTIVE
+   branch needs staging by hand, with a mock that logs its invocations so "issued no stop"
+   can fail. **The other three are exercised by no scenario at this stage and are
    not claimed to be** — they are reached only through the run driver, and *Not stage 4's*
    records that rather than this list counting it.
 
@@ -695,8 +718,8 @@ reader cannot account for, where a refusal on stderr with exit 3 is one it never
    environment, so `LC_ALL` set on the child never reaches zypper; and `auth_cmnds` grants
    the literal words `env LC_ALL=C zypper *`, so a passwordless user's grant matches this
    argv and no other. Parse BOTH wordings, `Overall download size:` and `Package download
-   size:`, **through `parsers.py`'s download-size function rather than a regex inlined
-   here** — §4.2 gives that wording to `parsers.py`, and a second copy in `actions.py`
+   size:`, **through the text-returning download-size parser of step 1's two, rather than a
+   regex inlined here** — §4.2 gives that wording to `parsers.py`, and a second copy in `actions.py`
    leaves step 2's table green while the live path is untested, which is the stale-parser
    shape §4.3.4 exists for. The second wording is what current zypper prints, and a parse
    for the first alone is what reported "nothing to fetch" on a 137-package upgrade. Then the three arms, and the
@@ -735,19 +758,27 @@ reader cannot account for, where a refusal on stderr with exit 3 is one it never
     measurement. Then `./local-CI.sh` green on `v2` with `ONEUP_ENGINE_CMD` unset, the new
     `tests/parsers-test.py` gate among its steps.
 
-11. **The documentation step 2 owes, on `v2`.** Adding a gate is not finished when the
+11. **The documentation and CI step 2 owes, on `v2`.** Adding a gate is not finished when the
     script runs it: `docs/standards/workflow.md` § *Adding a gate* requires a row in §6's
     table naming the gate the way the script labels it and in the position the script runs
     it, and — because this is a *test* gate — an entry in `.github/workflows/release.yml`
     beside the other Python suites. §10 of that standard names the release.yml omission as
     a trap in its own words: *"a test gate that runs only locally catches its first
     regression after the tag is pushed."* `docs/standards/files-and-naming.md` §1's `tests/`
-    row enumerates the suite closed and gains the new file. All three edits are `v2`'s:
-    §9's second binding routes a document that must name a file 2.0 creates, and `main`
-    has neither the file nor the gate.
-    → **verify:** `python3 tests/docs-check.py` green on `v2` after the edits; the §6 table
-    read against `local-CI.sh` line by line matches, gate for gate and in order; and a
-    `grep` of `release.yml` names every Python suite `local-CI.sh` names.
+    row enumerates the suite closed and gains the new file. All three land on `v2`, by two
+    different branches of §9: the two standards by its second binding, a document that must
+    name a file 2.0 creates; `release.yml` is not a document at all and takes the last
+    branch, *neither a fix nor a feature*. `main` has neither the file nor the gate.
+    → **verify:** `python3 tests/docs-check.py` green on `v2` after the edits; §6's **new
+    row** names the gate the way `local-CI.sh` labels it and sits where the script runs it;
+    and `release.yml` names `tests/parsers-test.py` beside the other *test* suites it runs.
+    **Do not check the whole table against the whole script, and do not add
+    `tests/docs-check.py` to `release.yml`.** §6 says every gate but the three test suites
+    has never run in GitHub CI, and §10 calls the non-test extras staying local deliberate —
+    so a `release.yml` that named every suite `local-CI.sh` names would breach both. The
+    table is short of a `Package structure (oneup/)` row for the same reason it is short of
+    nothing else: a pre-existing gap, filed as its own item rather than repaired from inside
+    a build stage.
 
 ### Not stage 4's
 
@@ -814,7 +845,7 @@ in *Not stage 3's* rather than counted here** — the log mirror, the shutdown i
 and the run-state file each pass because the code that could break them does not exist yet, and a done-list
 that counted them would be counting its own gaps. `main`'s behaviour is unchanged.
 
-**Stage 4 is done** when every `--size` scenario in the suite passes against `python3 -m
+**Stage 4 is done** when every `--size` scenario named here passes against `python3 -m
 oneup.engine` — the two wordings, the failed dry run that reports no size at all, the locked
 package manager, zypper's informational exits and the definite `0 B` — and when *"privileged
 commands can reach the graphical password helper (no tty)"* passes with them; when the two
@@ -824,11 +855,14 @@ own `local-CI.sh` gate; when the alias list and the lock holder answer identical
 from both engines, and the CDN rewrite — which has no v1 surface — leaves every alias
 byte-identical on the Python side; when the checks no scenario can reach have each been driven by hand — `stop_pending`
 with `run.state` absent as well as stale and fresh, `sudo_init`'s cancelled-password abort,
-`release_zypper_lock` in both its branches, and `valid_alias` against a trailing newline;
+`release_zypper_lock`'s ACTIVE branch, `repo_scoped_failure` against its own pattern, and
+`valid_alias` against a trailing newline;
 when step 11's three documentation edits have landed on `v2`; and when `./local-CI.sh` is
 green on `v2` with `ONEUP_ENGINE_CMD` unset. **The by-hand list is here because nothing else
-holds it** — no suite mock set cancels authentication, none reaches `stop_pending`, and a
-widened alias guard is invisible until the run driver calls it. **The `--hold` scenarios are
+holds it** — no suite mock set cancels authentication, none reaches `stop_pending` or
+`repo_scoped_failure`, the suite's `systemctl` mock reports packagekit inactive so every
+`--size` scenario covers only the other branch of `release_zypper_lock`, and a widened alias
+guard is invisible until the run driver calls it. **The `--hold` scenarios are
 not in this list and do not go green here**: §4.6's own row says so, and each needs
 `hold.state`, which step 7 refuses to write. **`refresh_repos`, `find_failing_repos` and `disable_repo` are not in it
 either** — they are built at this stage and reached by no scenario until the run driver calls
@@ -850,3 +884,4 @@ is the commit they are measured against.
 | 5 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 1 · Q2 3 · Q3 3 · Q4 2 — 9 verified, 2 dismissed, all 9 fixed | Loop 1 of a new run, on stage 3's newly appended steps; stages 1 and 2 were not re-opened. **All three lanes led with the same defect**: step 3's verify claimed *every* check line of two whole scenarios passes, and those scenarios assert the TOTAL marker, the flatpak detail line and `@@CHECK_UNKNOWN@@` — work three later steps own. An implementer would have collapsed four steps into one or recorded a correct step as failed. **The worst was the ordering underneath it**, found by one lane: the step that wires `__main__.main` to dispatch `--check` sat *last*, while the verifies of every step above it invoke `--check` — and against an unwired engine that is empty stdout and exit 3 (measured), indistinguishable from a wrong emitter. The wiring is now step 3 and the old last step is deleted rather than moved. **Two lanes found step 2 permitting an import its own verify forbids**: the step offers a `TYPE_CHECKING` annotation of `Options`, which can only be written `from .__main__ import Options`, and the check read *"no module … names `__main__` in an import"* — so one builder deletes the annotation and another invents a stand-in the plan never names. **The most consequential single-lane finding was silence about marker text**: `emit_check`'s `label` strings and the two unreadable-reason sentences are pinned by nothing at this stage, because the scenarios grep substrings (`check()` is `grep -qF`, measured) and step 9's by-hand comparison was scoped to *non-marker* lines — so a paraphrase would ship green and surface as a G2 divergence three stages later. That comparison now covers the whole output. Also fixed: step 8's verify named the TOTAL marker step 9 earns, and required two tools *"off `PATH`"* against a harness whose mock directory ships both — it now names stage 2 step 12b's symlink farm; step 10's notify check was one engine and a count where the done-list asks two engines and identity; *Not stage 3's* credited §4.6 with deferring `sudo_init` by row, and no row names it. Two came from verifying rather than from a lane: the plan said *"Stage 3 edits no document"* and left both engine module docstrings asserting that `--check` *"follow[s] at their own stages"*, which step 3 falsifies the moment it lands; and the 4b sweep caught the done-list still saying *non-marker* after the step-9 fix widened it. Two dismissed as true-but-immaterial, both raised by two lanes and filed by neither: the firmware arm *is* executed by two scenarios (bare `--check` selects all steps and `setup_common` mocks `fwupdmgr`) though none asserts on it, and the intro quotes §4.6's *"every `--check` scenario green"* while the ONEUP-0086 scenario is red as a whole for reasons the done-list already excludes. One out-of-scope finding filed rather than fixed: `docs/reference/marker-protocol.md` §4.6 states the bare-zero withholding rule of `CHECK` generally, and `CHECK\|TOTAL\|0` and `CHECK\|firmware\|0` are both emitted unconditionally — a claim in a document that outranks the engine, so it takes its own item and its own gate. |
 | 6 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 0 · Q2 1 · Q3 1 · Q4 2 — 4 verified, 0 dismissed, all 4 fixed. Cap reached (2 for a plan); the run files its tail and exits | Half the loop landed on text loop 5 wrote, and both of that half were the same class — a verify clause that cannot be reached or cannot fail. **All three lanes found the first**: loop 5 scoped step 4's verify to `@@CHECK@@|system|2`, and the emitter that produces `@@CHECK@@` was step 5, whose own verify needed step 4's arm to produce anything — a circular pair in which an implementer either stalls or writes a second emitter inside the system arm, which is the one shape the ONEUP-0056 suppression rule cannot survive. The two are now one step, because a six-line helper and its only callers were never two deliverables. **Two lanes found the second**: loop 5's *"Then the same with `flatpak` and `fwupdmgr` hidden"* took its command from the sentence before, and that command selects `orphans,cache` — so the absent-tool half of the rule was verified by a run that cannot enter it. The second command is now named, and the `PATH` mechanism is described rather than borrowed: stage 2 step 12b supplies a farm inside its own scenario, so *"the symlink farm step 12b built"* implied a reusable artefact that does not exist. **The best finding was a draft gap neither loop had reached, and it is the one that would have shipped**: nothing said whether a step whose read FAILED still contributes its partial count to `@@CHECK@@|TOTAL`. It does — `(( total += n ))` sits outside the failure branch in both arms, measured — and the natural `if rc == 0: total += n` passes every stage-3 check, reports `TOTAL|0` where the Bash reports `TOTAL|7`, silently suppresses the `--notify` popup, and surfaces only as a G2 divergence at stage 6. Also fixed: the intro's quoted §4.6 exit condition (*"every `--check` scenario green"*) and *Not stage 3's* could not both hold, since ONEUP-0086's scenario opens with a full run — raised as an open question by one lane in loop 5 and dismissed, filed by two lanes here, and now glossed to the *Definition of done* list; and step 7's claim that the protocol *"never places"* `@@STEP_END@@` in a check stream rested on the reference's silence, where `run_check` emitting none is measurable and is what the step now says. Three lane open questions settled clean by running rather than reading: a Bash `--check` prints seven deterministic lines with nothing before `run_check`'s first, so step 8's whole-output comparison is exact; no `--notify` scenario in the suite is a `--check` run; and `run_check` contains no `STEP_END`. **A cap between calm and oscillating** — two of four on this run's own text, both in clauses loop 5 rewrote, against two draft defects the cap never reached. The plan routes to implementation, which for a plan is the better third reviewer. |
 | 7 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 3 · Q2 2 · Q3 3 · Q4 2 — 10 verified, 1 dismissed, all 10 fixed | Loop 1 of a new run, on stage 4's newly appended steps; stages 1-3 were not re-opened. **The most consequential finding was a premise the section opened with**: *"Stage 4 edits no document, so no step splits by branch."* Step 2 adds a suite file and a gate, and `docs/standards/workflow.md` §6 and `docs/standards/files-and-naming.md` §1 each enumerate those closed — so a builder would have shipped a gate table listing eight while the script ran nine, with no check able to fail on it. The same lane found the omission that standard names a trap in its own words: a *test* gate belongs in `.github/workflows/release.yml` too, or it catches its first regression after the tag. Step 11 now owns all three edits and routes them to `v2` by §9's second binding. **Two lanes found the `--hold` claim**, and the plan's own stage 2 text contradicted it: *"All of them then continue into a full run"* is false of a hold nobody answers, a stale go-ahead, a tampered one and the `SIGKILL`ed engine of INV-7 — an implementer reading the run driver as the whole barrier would build the hold at stage 4 to turn those green, which the paragraph below forbids. The barrier is the hold. **The sharpest single-lane finding was a condition the plan counted as two**: `stop_pending` tests three things, and §4.1.1 states the missing one outright — with no `run.state` at all no stop is ever honoured — so the natural `stat()` with a `FileNotFoundError` fallback of `0` inverts it and a leftover request aborts the next run before it starts. Step 4's own verify staged both files in every case, so it could never fail. **A second lane found a verify that cannot be performed at all**: `update_system.sh` carries no `BASH_SOURCE` guard, so sourcing it runs the engine and `enabled_repo_aliases`, `lock_holder` and `make_cdn_reposd` cannot be called on the v1 side — *"drive each against both engines by hand"* had no mechanism. The step now compares through the surface each function has and says which comparison is one-sided. Also fixed: §4.2 gives `lr` output to `parsers.py` in its own row while step 3 kept `enabled_repo_aliases` whole and step 5 stated a rule reading as a bar on splitting it — two module layouts and two gate files, both defensible from the text; the download-size wordings were not routed through `parsers.py`, which would have left the table green over dead code; `sudo_init`'s `-v` label was unpinned, and it is a second live string that `reap_orphaned_askpass` matches on, so collapsing it into `SUDO_PROMPT` leaves stage 5's reaper a target that never appears; `` `main` `` was written for `__main__.main` twice in a section whose other uses are the git branch; and the done list held none of the checks no scenario can reach, where stage 3's does the opposite for its own. One claim was measured rather than reasoned before it landed: Bash's alias guard rejects `oss\n` and Python's `re.match` on the same anchored pattern accepts it, so `valid_alias` is a full match — the guard `security.md` §4 puts in front of a privileged command. Dismissed as true-but-immaterial: `run_size`'s exit-5 and exit-6 hint arms are reached by no mock set, so step 9's comparison cannot pin their wording — true, and an implementer builds the same arms either way. Four lane open questions settled clean: the `--size` dispatch does propagate `run_size`'s `return 2` as process exit 2; the split table names six crossings of any boundary, which stage 3's text has right; `to_bytes`, the three `--size` arms, the console strings and the `env LC_ALL=C zypper` grant all read true as the plan states them; and the askpass scenario's per-invocation mock means step 9's whole-output comparison pins the sudo call count as well as the text. |
+| 8 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 1 · Q2 2 · Q3 2 · Q4 4 — 9 verified, 0 dismissed, all 9 fixed. Cap reached (2 for a plan); the run files its tail and exits | **A violent cap: seven of the nine landed on text loop 7 itself wrote**, and four of those on the one step that loop added. Loop 7 closed the *"stage 4 edits no document"* hole with a step 11 whose verify then carried two clauses that cannot pass on a correct tree, and **all three lanes found at least one of them**. `release.yml` was to name *"every Python suite `local-CI.sh` names"* — but `workflow.md` §6 says every gate bar the three test suites has never run in GitHub CI, and §10 calls the non-test extras staying local deliberate, so a builder satisfying that clause adds `tests/docs-check.py` to CI and breaches both. And the §6 table was to be read against `local-CI.sh` *"gate for gate and in order"*, where the script runs a `Package structure (oneup/)` gate the table has no row for — a pre-existing gap, filed as **ONEUP-0133** rather than repaired from inside a build stage. Both clauses are now scoped to the new row and the new suite, with the two prohibitions stated. **All three lanes also found loop 7's `lr` carve-out resting on a false ground**: it exempted `enabled_repo_aliases` from step 5's no-new-crossing rule because *"that rule is about a function §4.2 places whole"*, and §4.2 places `enabled_repo_aliases` whole too — one criterion, two identically-situated functions, opposite answers, so `parsers-test.py` ships with an `lr` table or without one depending on who builds it. The real ground is that §4.2's `parsers.py` ROW names `lr` output while the split table omits it; the plan now calls this a seventh crossing outright and says §4.2's table is what owes the row. **The best draft finding was one no loop had reached**: `refresh_repos`' privileged call must STREAM. `proc.run` pipes stdout and discards stderr, where the Bash `sudo timeout … refresh` writes straight to the run's stdout and log — so built on the capturing form the refresh goes silent, and no stage-4 scenario reaches it to say so. Its twin: the download-size wording is **two** parsers, not one, and measured rather than reasoned before the fix landed — `Overall download size: 1.3 TiB.` parses for `run_size`'s `sed` and not for `progress_filter`'s regex, `Package download size:371.4MiB` for the second and not the first; one function serving both changes what `@@SIZE@@` carries, and step 2 writes the table before step 8's caller exists. Also fixed: `make_cdn_reposd`'s assertion said *every* `baseurl=` is rewritten where the `sed` rewrites only `download.opensuse.org`, so a Packman fixture fails a correct implementation and the builder widens it host-blind — which is the ONEUP-0087 cache-discard trap the same step warns about; the done list opened *"every `--size` scenario in the suite"* and closed by excluding the `--hold` ones, which are all invoked as `--size=system --hold`; `release_zypper_lock` was filed under checks no scenario can reach when the suite's `systemctl` mock covers its inactive branch and only the active one needs staging; `repo_scoped_failure`'s pattern was quoted nowhere while step 3 said it was checked against a quoted pattern; and step 11 called `release.yml` a documentation edit routed by §9's second binding, which names documents only. One out-of-scope finding filed rather than fixed: spec §4.6's stage-4 row gives *"falls through into a full run"* as the reason the `--hold` scenario cannot pass, and several of that family never reach a run — **ONEUP-0134**, since a spec edit re-arms the spec's own gate. Four lane open questions settled by running rather than reading: v1 prints no log-path line on stdout, so step 9's whole-output comparison is reachable; the `--size` path takes no shutdown inhibitor (`-z "$SIZE_STEP"` guards it), so *Not stage 4's* owes no fourth item; the refresh scenario exists under the wording step 3 quotes and ships a real `lr` fixture; and `local-CI.sh`'s Documentation gate is `tests/docs-check.py`. **A violent cap ends the review, not the shipping** — this stage's steps land, and the plan routes to implementation, which for a plan is the better third reviewer. Size is not the signal here: the stage-4 section is comparable to stage 3's, and a plan's cap is set where implementation takes over. |

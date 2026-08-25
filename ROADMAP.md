@@ -4583,3 +4583,30 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The engine↔window contract says OneUp hides a "0 updates" answer when a source could not be read — but two of those markers are always sent, so the rule as written is wrong about them.
   Kind: doc-fix.
   Source: review-contract-2026-08-25 ONEUP-0054 stage-3 plan gate, lane 1.
+
+- 📋 [ONEUP-0133] **workflow.md §6's gate table is missing its Package structure row.**
+  local-CI.sh runs `step "Package structure (oneup/)"` between the GUI
+  smoke test and the compile step, and §6's table has no row for it — so
+  the table's own closing line, "Listed in the order local-CI.sh runs
+  them, so the table can be read against the script", is false on v2.
+  Found by two cold lanes reviewing ONEUP-0054's stage-4 plan, whose
+  step 11 verify would have collided with it. Not repaired from inside a
+  build stage: it is a standards edit with its own §9 branch decision.
+  The gate arrived with ONEUP-0034 and the row never followed.
+  **Layman:** One of the checks that runs before every push is not listed in the document that is supposed to list them all.
+  Kind: doc-fix.
+  Source: review-contract-2026-08-25 ONEUP-0054 stage 4 loop 2.
+
+- 📋 [ONEUP-0134] **Spec §4.6's stage-4 row gives the wrong reason for excluding the --hold scenario.**
+  §4.6 says the --hold scenario "falls through into a full run and so
+  cannot pass before stage 5's run driver exists". Several of that family
+  never reach a run at all: a hold nobody answers, a go-ahead left over
+  from an earlier session, a tampered go-ahead, and the SIGKILLed engine
+  of INV-7. The real barrier is the hold itself — start_held_engine waits
+  for hold.state, which stage 4 never writes. A builder reading the run
+  driver as the whole barrier would build the hold at stage 4 to turn
+  those green. The plan now states the barrier correctly; the spec still
+  does not, and editing it re-arms its own review gate.
+  **Layman:** A note in the design says why one test cannot pass yet, and the reason it gives is not the real one.
+  Kind: doc-fix.
+  Source: review-contract-2026-08-25 ONEUP-0054 stage 4 loop 2.
