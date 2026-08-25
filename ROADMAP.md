@@ -213,7 +213,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Resolved (2026-07-24): Wrote docs/standards/dialogs.md (merged into
   docs/standards/ui-and-accessibility.md §6 on 2026-07-26, ONEUP-0057) codifying the two popup properties (theme-matched via the app-wide QSS inherited by all children; centered via the showEvent override for QDialog subclasses and QTimer.singleShot(0, _center_child) for hand-built QMessageBoxes). Audited all dialogs: RepoManagerDialog/SettingsDialog centre via showEvent; show_about already centred. Fixed the two outliers that built a QMessageBox and exec'd it without centring — _confirm_key_import (the named signing-key box) and _confirm_passwordless — by routing both through _center_child exactly as show_about does. Theme-matching needed no work: apply_theme() sets the stylesheet app-wide and re-applies on colorSchemeChanged, so every child popup inherits it. Static convenience QMessageBox.* calls left as-is (parent-relative default, documented as acceptable for transient notices). local-CI green (108 engine + 165 GUI smoke tests).
 
-- 📋 [ONEUP-0027] **Offer additional themes beyond following the system light/dark scheme.**
+- ✅ [ONEUP-0027] **Offer additional themes beyond following the system light/dark scheme.**
   Today OneUp follows the desktop light/dark palette and switches live. This item adds a small set of selectable themes (a Settings picker) layered on that. Should coordinate with ONEUP-0026 (dialog standard) so any new theme applies consistently across the main window AND all popups/dialogs. Design open: how many themes, whether "Follow system" stays the default, and where the picker lives.
   **Layman:** Let people choose from a few built-in colour themes for OneUp, instead of only matching the desktop's light or dark setting.
   Kind: feature.
@@ -258,6 +258,69 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Two ordering facts the spec depends on: ONEUP-0034 creates
   oneup/gui/theme.py, and ONEUP-0076 lands BEFORE this item, so the focus
   measurement is inherited rather than built here.
+  Gate re-run (2026-08-24) before implementation, because ONEUP-0064 and
+  ONEUP-0076 shipped on 2026-08-21 and spec_query mode:"gate_drift" reported the
+  spec stale against its 2026-07-27 stamp. review-contract, genre spec, 3 cold
+  lanes per loop, 2 loops (the spec cap). Loop 5: Q1 7 · Q2 1 · Q3 3 · Q4 0, 11
+  verified. Loop 6: Q1 3 · Q2 3 · Q3 3 · Q4 1, 10 verified. 21 verified, 0
+  dismissed, all fixed. Calm cap — 3 of loop 6's 10 were loop 5's collateral.
+  Status stays Reviewed; implementation is unblocked.
+
+  The finding with teeth, found independently by all three lanes: §4.3 claimed
+  GREEN/RED had one call site. ONEUP-0076's focus derivation reads them too, so an
+  implementer would have moved the tracks into the palette, repointed paintEvent,
+  and left the FOCUSED switch deriving its colour from a green no theme paints —
+  with INV-12 staying green throughout, since the derivation still clears 3:1
+  against whatever it started from.
+
+  Two deliverables turned out already built: _QSS has carried the QDialog
+  background rule since 0064 (§8's "one code change that is not a theme" is
+  deleted), and half the contrast check exists — contrast(), composite() and
+  focus_report() in theme.py, driven from gui-smoke — so §2's "the check does not
+  exist" invited a second WCAG implementation.
+
+  Loop 6 settled the coverage universe: 53 keys reach _QSS (29 authored + 3
+  injected gradients + 15 derived focus + 6 font metrics), so INV-4 covers the 47
+  colours and INV-1 keeps the authored set. Previously INV-4 could never fire on
+  the 18 derived tokens. Also added INV-13: a theme whose focus pair cannot be
+  derived falls back to Follow system, keeps the stored id, and says so — the
+  branch had no invariant and nothing else can reach it.
+  Started 2026-08-24, after the re-gate. Build order is the spec's own: the check
+  lands and passes against the two shipped palettes before the first new palette
+  is authored (§7).
+  Resolved (2026-08-24). Eight themes, a picker in Settings, and a whole-palette
+  contrast check that gates every one of them. Built in five stages, each with its
+  own green gate: tokenise (byte-identical stylesheet, proved by comparison), the
+  check, the eight themes, the picker and fallback, then INV-5's gate and the docs.
+
+  The check earned its place on the first run by finding three failing pairs no
+  section had listed — the Run button's white label at 2.63:1 on its own fill, the
+  Restart button's at 3.06:1, and the tray badge at 1.79:1 on a light window. §2
+  had measured the accent gradient against `win` and never the LABEL against the
+  gradient. All three fixed rather than excepted, decided with the user: both
+  button fills darken at their top stop only, since both bottom stops cleared.
+
+  §4.8's "fixed by tokenising" worked exactly as written: the white bar-and-circle
+  stays white and the TRACK moved, per palette — #26a95e dark, #239b56 light, from
+  one shared #2ecc71. Light needed a darker green than dark did, which is the whole
+  argument for the token.
+
+  Two defects the invariants caught in my own work. INV-8 found that the six new
+  palettes had all kept one tray badge, because they were generated by tinting
+  surfaces only — a theme that cannot recolour the badge makes the "tray stays in
+  the old palette" failure undetectable. And INV-5's grep gate was written with \b,
+  which awk's ERE does not support, so its Qt.white branch matched nothing while
+  the gate looked complete and tested two of its three cases; found by seeding a
+  literal and running it, which is CLAUDE.md §6's shape-check trap in a second
+  place.
+
+  Measured at close: 8 themes x 52 reference keys, 0 missing and 0 extra; 3656
+  focus pairs clearing their floors; every pair in the table passing base and
+  overlay, dark and light; 0 colour tokens uncovered; 0 colour literals outside a
+  palette. run-tests.sh 305/0, gui-smoke.py 442/0 (was 385 before this item),
+  docs-check.py 20896/0.
+
+  Spec Status: Implemented, with §10a recording what the build proved.
 
 - ✅ [ONEUP-0028] **Make OneUp usable for blind, partially-sighted, and colour-blind users.**
   Cover the three groups: (1) blind — full screen-reader (Orca/AT-SPI) support: accessible names/roles on every control, the live log and progress announced, focus order sane, no unlabelled icon-only buttons; (2) partially sighted — scalable/large text, honour the desktop font scale, a high-contrast option, keyboard operability throughout; (3) colour-blind — never signal state by colour alone (the amber tray icon, red/green step badges) — pair every colour cue with text/shape/icon. Coordinates with ONEUP-0026 (dialog standard) and ONEUP-0027 (themes: any theme must keep WCAG-AA contrast). Likely warrants its own spec + an audit pass with Orca.
@@ -604,7 +667,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: in-session-2026-07-25.
 
-- 📋 [ONEUP-0044] **Find out why the single up-front authentication raises two password dialogs.**
+- ✅ [ONEUP-0044] **Find out why the single up-front authentication raises two password dialogs.**
   Measured on a real run: one engine invocation, one `sudo -A -p ... -v` call,
   and yet TWO ksshaskpass processes 16 seconds apart, both carrying sudo_init's
   -p text, both then waiting hours. Confirmed not a fork (one invocation of the
@@ -618,6 +681,155 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** One password request sometimes shows two boxes; only one needs answering. Worth understanding.
   Kind: investigate.
   Source: in-session-2026-07-25.
+  Located (2026-08-21, by `locate-defect` run from ~/.claude; one file read).
+  Not fixed, not reproduced — this is a location and a hypothesis.
+
+  THE REPORT'S PREMISE IS WRONG. It says "one engine invocation". There are
+  two engine PROCESSES. `oneup/gui/run.py:89` starts the engine a second time
+  for the download-size query — `p.start("bash", [ENGINE, f"--size={key}",
+  f"--log={size_log}"])` on its own `win._size_proc`, separate from the run's
+  `win.proc` at run.py:208 — and `--size` dispatches to `run_size`, which calls
+  `sudo_init` at update_system.sh:563. The main run calls it again at
+  update_system.sh:1053. Two processes, each doing its own up-front validate.
+
+  That is what makes the two dialogs OVERLAP, which a single process cannot do:
+  `sudo_init` blocks on its own dialog, so a second sequential call could never
+  be on screen beside the first. The 16-second gap fits a size fetch and a run
+  started shortly after it.
+
+  WHY BOTH DIALOGS CARRY sudo_init's TEXT — checked rather than assumed.
+  `SUDO_PROMPT` is exported globally at update_system.sh:48 with DIFFERENT
+  wording ("OneUp needs administrator rights to update this system."), so a
+  dialog carrying the `-p "System Updater: authenticate to update the system"`
+  string can only have come from the `sudo -A ... -v` at update_system.sh:643.
+  The report's inference from the prompt text holds.
+
+  CONFIRM BY: with no passwordless drop-in installed, fetch a download size and
+  start a run within ~20s. Or log `$$` and `date +%s` at update_system.sh:643
+  and look for two entries with different pids in one session. That is the
+  working harness the bullet says is the first task — and it needs two
+  processes, which is why reproducing it against a single engine invocation
+  raised no dialog at all.
+
+  SECOND DEFECT, SAME FUNCTION, ALREADY EVIDENCED. `sudo_init` has five call
+  sites (563, 942, 970, 1007, 1053) and NO re-entry guard — its only early
+  return is `auth_current`. Each entry overwrites `SUDO_KEEPALIVE=$!`, so the
+  earlier keep-alive's pid is lost and `cleanup` can only kill the later one.
+  That is the mechanism behind ONEUP-0041's orphaned keep-alives, which the
+  function's own comment records as measured ("two of them were found still
+  calling `sudo -n -v` every 50 seconds, 40 minutes after the runs that spawned
+  them were killed"). `thin_snapshots` at 1007 is reachable in an ordinary run
+  after 1053 has already fired.
+
+  Next step is `write-test` for the harness, not a fix.
+  Second-defect hypothesis CHECKED AND DISPROVED (2026-08-22). Not filed.
+
+  The paragraph above headed "SECOND DEFECT, SAME FUNCTION" claims
+  `thin_snapshots` at 1007 "is reachable in an ordinary run after 1053 has
+  already fired". It is not, and no second `sudo_init` entry is reachable in
+  one process on this tree.
+
+  Four of the five call sites sit inside dispatch blocks that exit, and all
+  four blocks precede line 1053. The `AUTH_ACTION` case ends `exit $?`, so
+  `grant_auth` (942) and `revoke_auth` (970) — each with exactly one caller,
+  at 1026 and 1027 — cannot fall through. `if $THIN_SNAPSHOTS; then
+  thin_snapshots; exit $?; fi` is the ONLY caller of `thin_snapshots`, so
+  passing the flag exits before 1053 and not passing it never calls the
+  function at all. `if [[ -n "$SIZE_STEP" ]]; then run_size; exit $?; fi`
+  does the same for 563. So at most one call site executes per process,
+  SUDO_KEEPALIVE is assigned at most once, and cleanup's group kill covers
+  it. The `systemd-inhibit` re-exec is not a route either: it runs at 220,
+  before `sudo_init` is even defined, and is skipped outright when SIZE_STEP
+  or AUTH_ACTION is set.
+
+  What is true is that the protection is STRUCTURAL, not stated — mutually
+  exclusive dispatch that exits — and nothing in `sudo_init` records that it
+  may be entered only once. A call site added inside a run, which is exactly
+  the mid-run re-auth the hypothesis imagines, would make the overwrite
+  reachable immediately and silently. That is a hardening note, not a defect,
+  and it is recorded here rather than filed.
+
+  ONEUP-0041's orphaned keep-alives keep the single documented cause: a
+  SIGKILLed engine, which no trap can survive, which is why the loop watches
+  the engine pid itself.
+  REPRODUCED (2026-08-22). The harness the bullet asks for exists and is red.
+
+  `tests/run-tests.sh`, scenario "a size preview and a run that overlap cost
+  exactly one password prompt". It stages a `--size=system` engine and a full
+  run so both are provably live at once — a rendezvous file and bounded polls,
+  no sleep — and counts authentications across both processes at the mock sudo,
+  keyed per parent pid the way `sudoers(5)` `timestamp_type` keys them with no
+  terminal. Full suite: 289 passed, 1 failed, the new scenario the only failure,
+  counting 2 prompts where 1 was expected, with both pids and both argv printed.
+
+  This closes the bullet's "attempts to reproduce in isolation raised no dialog
+  at all" — a single engine invocation cannot show it, which is the whole point.
+  It also closes the design note in `docs/design/oneup-2.0.md` §6.2 that "no
+  existing gate can see this bug"; that section still states the disproved
+  one-invocation premise and needs correcting when the fix lands.
+
+  The contract locked is the observable count only. Nothing is asserted about
+  how one prompt is achieved, because the fix is not designed yet: whether the
+  size preview needs root at all is still open, and `sudo_init` already returns
+  early through `auth_current` where the ONEUP-0023 drop-in covers what the run
+  needs. The suite stays red until that lands.
+  Spec gate CLOSED (2026-08-23). review-contract loop 2, three cold lanes,
+  genre spec: Q1 2 · Q2 2 · Q3 2 · Q4 1 — 7 verified, 0 dismissed, all fixed.
+  Cap reached (2 for a spec), so the run ships; implementation is the third
+  reviewer. Status Draft -> Reviewed. 21 findings across both loops.
+
+  THE RED TEST DOES NOT TEST THE FIX, and this is the one to carry forward.
+  The committed scenario "a size preview and a run that overlap cost exactly
+  one password prompt" starts TWO engines by hand and counts prompts across
+  both. No engine-side change can satisfy it — nothing in a held engine stops
+  a separately launched second engine calling sudo_init. It reproduced the
+  defect, which is what it was for, but it must be REWRITTEN to drive one
+  `--size=system --hold` engine plus a go.request, and that form owes its own
+  red run. Do not read the committed red as a pass-when-fixed.
+
+  Also settled by the loop, each of which changes what gets built:
+  - Adopting a go-ahead must re-derive RUN_KEYS, TOTAL and STEP_INDEX and
+    re-apply the TOTAL == 0 rejection. Setting STEPS alone is inert, and
+    because request_size passes no --steps=, a go-ahead saying `cache` would
+    have run all five steps.
+  - The departed-window check is `kill -0 "$WINDOW_PID"`. Watching $PPID for a
+    change is dead code: bash sets PPID once at shell start and never
+    refreshes it on reparenting (measured).
+  - `--hold` suppresses run_size's @@DONE@@ — for a run another window merely
+    FOLLOWED, marker-protocol §4.9 makes DONE the only verdict there is.
+  - _log_path is excluded from the factored reset block.
+  - The adopt row keys on the window's own _size_proc pid, not bare liveness.
+  - run_engine needs ONEUP_HOLD_STATE and ONEUP_GO_FILE defaults, and
+    files-and-naming.md §5.1's override table needs two rows, or every hold
+    scenario reads the developer's real state directory.
+
+  Next step is the build: engine --hold + hold_for_go_ahead, the window adopt
+  path, and the test rewrite. Not started in this session.
+  Resolved (2026-08-23): implemented to the spec, on `v2`. The engine gains `--hold`:
+  after `--size` has quoted the size, `hold_for_go_ahead` writes `hold.state` and polls
+  for a `go.request` newer than it, so ONE process spans the preview and the run and sudo
+  sees one parent pid instead of two. `adopt_go_ahead` re-derives `RUN_KEYS`, `TOTAL` and
+  `STEP_INDEX` rather than only assigning `STEPS`, and refuses the whole go-ahead unless
+  every key is in `LABEL`. `HELD_AUTH` suppresses the second `sudo_init`. The window
+  passes `--hold`, waits for `hold.state`, and adopts the process when line 1 is its own
+  `_size_proc` pid.
+
+  Verified: local-CI green — run-tests 302 passed / 0 failed (was 289/1 with the old
+  two-engine scenario red), gui-smoke 385/0, docs-check 20734 checked / 0 failed.
+
+  The evidence that matters is the mutation probes, not the green run. Four parts of the
+  fix were each broken deliberately and the suite went red for the right reason: dropping
+  the `RUN_KEYS` re-derivation produced `@@STEP_BEGIN@@|cache|1|5`; dropping the `LABEL`
+  membership check ran the cache step from a tampered list; not withholding `run_size`'s
+  `@@DONE@@` produced two in one stream; removing the `HELD_AUTH` guard leaked a
+  keep-alive, which is ONEUP-0041's orphan measured rather than assumed.
+
+  One measured limitation worth carrying forward: INV-1's prompt count CANNOT see a
+  re-entered `sudo_init`, because the mock keys its timestamp to `$PPID` and both calls
+  come from one process. INV-9 is what covers it. Recorded in CLAUDE.md §6.
+
+  Two things deliberately NOT done here, filed separately: INV-5a's full per-marker
+  field-count table, and the `review-contract` gate that ONEUP-0054 now owes.
 
 - ✅ [ONEUP-0045] **Pick up and follow a run that is already in progress when the window opens.**
   Runs deliberately outlive the window (ONEUP-0042), so a relaunched OneUp used
@@ -799,7 +1011,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: test.
   Source: in-session-2026-07-25.
 
-- 📋 [ONEUP-0054] **OneUp 2.0 — replace the Bash engine with a Python one, on the `v2` branch.**
+- 🚧 [ONEUP-0054] **OneUp 2.0 — replace the Bash engine with a Python one, on the `v2` branch.**
   Decided in ONEUP-0052. Design: docs/specs/ONEUP-0054-python-engine.md
   (draft — must go through /cold-eyes before any code, global rule 14).
 
@@ -833,6 +1045,55 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Rewrite the part of OneUp that does the actual updating in Python, the same language as the window, so the app has finer control over what it is running. Built on a side branch so the current version keeps working until the new one is provably better.
   Kind: implement.
   Source: user-decision-2026-07-25.
+  Known and declined at the ONEUP-0127 re-gate (2026-08-24), recorded so the next
+  gate does not spend a lane rediscovering it: the spec cites four window symbols
+  under their pre-ONEUP-0034 names. §4.1 has `Updater.on_finished`, §4.3.3 has
+  `Updater.on_output`, §4.7 has `Updater.start_run`, and §4.1.1 measures from
+  "`updater.py`'s `_read_run_state`". After the split, three of those are
+  module-level functions in `oneup/gui/run.py` taking the window as their first
+  argument — reached as `run.on_finished(self, ...)` from `oneup/gui/window.py`,
+  never as methods — and `updater.py` is a 21-line shim. `_read_run_state` and
+  `_poll_attached_run` ARE still methods, on `Updater` in `oneup/gui/window.py`.
+
+  A loop-2 lane found it and set it aside as symbol resolution, which its brief
+  excludes. The orchestrator checked it against the tree and agreed for a
+  different and better reason: every one of the four describes what the WINDOW
+  does with the engine's output, and this item builds the ENGINE. No line of
+  `oneup/engine/` is written differently, so it fails the materiality test that
+  governs what a gate may fix.
+
+  Worth correcting when something else opens those sections — ONEUP-0065 is the
+  nearest existing home, since it converts stale citations in the older
+  documents. Not worth a commit of its own.
+  Progress (2026-08-25): stage 1 of nine is built and green on both branches.
+  The build plan is docs/plans/ONEUP-0054-python-engine.md, written now rather
+  than up front — documentation.md §2 forbids writing later stages before they
+  start, so it covers stage 1 only and grows a stage at a time. Gated with
+  review-contract --genre plan: 2 loops, 3 cold lanes each, 10 verified, 10
+  fixed. The cap was VIOLENT — five of loop 2's six findings landed on text
+  loop 1 itself wrote — so the plan routes to implementation rather than a third
+  cold read.
+
+  The harness change: ONEUP_ENGINE_CMD is a scalar env var word-split into argv
+  by the suite, built with `read -r -a` (an unquoted expansion globs as well as
+  splits) and defaulting to a quoted array literal so the absolute $ENGINE path
+  survives a space. Both of main's invocation sites moved; the three readers
+  that treat $ENGINE as a FILE are untouched, per §4.4's stage assignments.
+
+  Two things worth carrying forward. First, main's §4.4 still said "an
+  ONEUP_ENGINE_CMD ARRAY override" — the scalar correction landed on v2 with the
+  ONEUP-0127 re-gate and was never merged back, so the contract an implementer
+  reads on the branch stage 1 is built on prescribed the very defect the re-gate
+  removed. Step 1 crossed §4.4 whole, which also made the step-9 merge conflict-
+  free. Second, the gate's best finding, reproduced: against a stub engine the
+  whole suite goes red the moment run_engine alone is converted, so suite
+  redness is evidence about that one site. Leaving the broken-pipe site on v1
+  and re-running, its own three checks PASS while the suite stays red — a
+  half-done stage 1 that reads as complete, and at stage 6 would have shown up
+  as G2 diffing v1 against v1. The verify is now site-specific.
+
+  On v2 one direct `bash "$ENGINE"` invocation remains on purpose: the --hold
+  scenario ONEUP-0044 added, which §4.4 assigns to stage 2.
 
 - ✅ [ONEUP-0056] **Never report "up to date" for a source the check couldn't read.**
   Reported with two screenshots: OneUp's check said "Everything is up
@@ -3591,7 +3852,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   its evidence rather than a bare verdict. No marker was added to any of the
   nine, and tests/docs-check.py gained no rule.
 
-- 🚧 [ONEUP-0114] **A documentation-only push runs the documentation gates, not the whole suite.**
+- ✅ [ONEUP-0114] **A documentation-only push runs the documentation gates, not the whole suite.**
   Requested by the user 2026-08-18: "That pre-push hook for documents should only
   relate to documents and in theory should be a very quick run."
 
@@ -3633,6 +3894,36 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Pushing a documentation change no longer waits about a minute and a half for the app's tests to run. It checks the documents instead, which takes under a second.
   Kind: chore.
   Source: user-request-2026-08-18.
+  Resolved (2026-08-24): the mode selection and the fast path were
+  already in place — githooks/pre-push reads the pushed range and asks
+  local-CI.sh for --docs when every changed path ends in .md, and
+  `docs/standards/workflow.md` §6 documents it. What was missing was the
+  test this bullet names, so that is what this change adds.
+
+  tests/run-tests.sh now probes the real hook against the two real ranges
+  named above: 090a11b (README.md + ROADMAP.md) takes the fast path,
+  16153cc (update_system.sh and two .py files among its markdown) does
+  not. A third check locks the fail-safe direction — a new remote branch,
+  which has no base to diff, falls back to the whole suite.
+
+  No gate runs during the probe. The hook invokes local-CI.sh at `git
+  rev-parse --show-toplevel`, so GIT_WORK_TREE points at a throwaway
+  directory holding a stub that echoes the mode, while GIT_DIR still
+  points at the real object store — so the ranges resolve against real
+  history rather than a fixture, and the assertion is on what the hook
+  ASKED for.
+
+  Mutation-checked rather than assumed. Forcing docs_only=false reddens
+  the markdown case; treating every path as .md reddens the code case;
+  the new-branch case survives either singly because two guards defend
+  it, and goes red when both are removed, so it is redundant rather than
+  vacuous.
+
+  This is the suite's one scenario that needs git and a full clone. It
+  skips loudly when either is absent, and the file header now says so
+  rather than claiming no dependencies beyond bash and coreutils.
+
+  Verified: ./local-CI.sh green.
 
 - ✅ [ONEUP-0115] **Offer the reboot instead of naming services the app refuses to restart.**
   Asked by the user 2026-08-19, following ONEUP-0111.
@@ -4004,3 +4295,139 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** When the test suite finishes, it prints a scary-looking error after the results. Nothing is actually broken — but a real failure could hide behind it, so it is worth silencing properly.
   Kind: fix.
   Source: in-session-2026-08-21.
+
+- ✅ [ONEUP-0125] **Bring README.md up to date with the features it had stopped naming.**
+  Checked every claim in README.md against the tree rather than reading it. The
+  claims all held: the four Settings labels it cites ("High contrast", "Text
+  size", "Passwordless", "Automatic updates") all exist, "two minutes" matches
+  REFRESH_TIMEOUT=120, the "Restart" button is the reboot banner's "Restart now",
+  and the run history is the last-run line backed by the history file. Nothing
+  was stale.
+
+  What was missing was three user-visible features the README had never caught
+  up with:
+
+    * "Show download size" on the system task — the button exists in the task
+      row and the engine's --size mode backs it, and a user on a metered
+      connection had no way to learn it was there.
+    * "Retry failed steps" — a real button in the main window.
+    * The Repositories dialog, which can enable, disable and remove a source.
+
+  Added as three bullets in the existing voice. No path is backticked, so
+  CLAUDE.md §4's rule about v2-only paths in the four documents docs-check.py
+  scans is not engaged. Verified with tests/docs-check.py: 20396 checked, 0
+  failed.
+  **Layman:** The README now mentions three things the app can already do that it never told you about.
+  Kind: doc.
+  Source: user-request-2026-08-22.
+
+- 📋 [ONEUP-0126] **Give ONEUP-0044 INV-5a the per-marker field-count table it names.**
+  INV-5a's test surface is "harvest every `@@NAME@@|…` line a full mocked run emits, and
+  assert each name's field count against a pinned table". That harness does not exist. The
+  marker-name census (INV-5) counts distinct NAMES, so it is blind to a field appended to an
+  existing marker and blind to a rename; and gate G2 compares v1's stream against v2's, so a
+  change made in both compares equal. Nothing else covers it.
+
+  It was left out of ONEUP-0044 because a straight count-per-name table is WRONG and would be
+  flaky: `PROGRESS` is legitimately 4 OR 6 fields (the two byte fields are present only in the
+  download phase), and `HINT` and `STEP_END`'s detail carry free English that could contain a
+  `|`. So the table needs a design — an allowed-SET per marker, exact for the structured ones
+  and a floor for the prose-bearing ones — which is a second contract and did not belong in
+  that commit.
+
+  ONEUP-0044 shipped the part of INV-5a its own change actually needed: a held run's stream
+  carries exactly one `@@DONE@@` and it is last, asserted in `tests/run-tests.sh`. That is the
+  ordering property `--hold` introduced; the field-layout half is still uncovered.
+
+  The harvest must cover the held stream as well as an ordinary run's.
+  **Layman:** A safety net that would notice if a future change quietly altered the messages the update engine sends to the window.
+  Kind: test.
+  Source: in-session-2026-08-23, deferred from ONEUP-0044's implementation.
+
+- ✅ [ONEUP-0127] **Re-gate ONEUP-0054 before the Python engine is built — §4.1.1 changed.**
+  ONEUP-0044 added `hold.state` and `go.request` to §4.1.1's pinned state-file layout, and
+  corrected "the two state files" to four in §4.1 and INV-13. That changes what the Python
+  engine's implementer must build, so it re-arms CLAUDE.md rule 14's gate: the document's
+  `Reviewed` stamp no longer covers its current text.
+
+  `docs/reference/marker-protocol.md` §8 took the matching change and is part of the SAME
+  gate, not a second one: it is one contract described in two places, and gating them apart
+  is how the two descriptions drift. Its §8 now names four state files instead of two and
+  records that `--hold` changes stream ORDERING (one `@@DONE@@` per process, at the true
+  end) while changing no field layout, so §5.1's freeze is intact.
+
+  Not run at the time on purpose. Rule 14 requires the gate BEFORE implementation, and
+  ONEUP-0054 is still planned, so nothing has been built under the stale stamp. Running a
+  full cold review of an 800-line spec inside a fix for a different item would also have been
+  the wrong scope.
+
+  The drift is mechanically visible rather than resting on this bullet: `spec_query`
+  mode:"gate_drift" reports the spec as stale with the commit that did it.
+
+  Do this before ONEUP-0054's implementation starts, not before its next edit.
+  Resolved (2026-08-24): review-contract, genre pinned spec, two loops, three cold
+  lanes each. 15 verified, 15 fixed, 1 dismissed. Commits 068ca74 and b01bd60.
+
+  Loop 1 (8 verified) was drift the intervening items left behind, and all three
+  lanes independently found the same four. INV-4 named a scenario ONEUP-0085 had
+  renamed, so the invariant pointed at nothing. §4.4 said the suite reaches the
+  engine at three places; ONEUP-0044 made it four, and an implementer wiring
+  stage 1's two overrides would have left the --hold scenario launching v1
+  forever, leaving §4.1.1's whole hold contract untested against v2 with G1
+  green. §4.1 assigned the window-side LOG_DIR rename to ONEUP-0034, which had
+  shipped without doing it. And §4.2's "the table places every function" was
+  false by twelve, the costly pair being hold_for_go_ahead/adopt_go_ahead —
+  §4.1.1's own contract with no module. Plus: the privileged-call-site guard had
+  no disposition against a Python engine, stage 2's row never mentioned the exit
+  codes it was promised to pin, and §4.1.1 said an invalid go.request is "treated
+  as absent" when adopt_go_ahead refuses and the refusal ENDS the hold.
+
+  Loop 2 (7 verified) reached the cap, and it is a VIOLENT cap: 5 of the 7
+  landed on text loop 1 wrote, every one in text a fix added. The two
+  pre-existing ones are the run's most valuable. ONEUP_ENGINE_CMD was pinned by
+  name and default but never by encoding, and a Bash array cannot cross a process
+  boundary — a harness and a suite settling that differently make G2 diff v1
+  against v1 and go green, which is the single failure this gate exists to
+  prevent. And §4.1.1's "Two rules v2 must keep" omitted the hold's third exit,
+  the kill -0 "$WINDOW_PID" poll, so a Python hold would keep a
+  root-authenticated engine waiting to the ceiling after its window died, with
+  no marker to show for it.
+
+  Not to be re-gated. At 671 lines it is the smallest of its recent siblings, so
+  size is not the problem; a third cold read would be repairing the second. It
+  goes to implementation, which exercises the contract against real code.
+  ONEUP-0054 stays Status: Reviewed — ready to implement.
+
+  Verified: local-CI green. run-tests 305/0, gui-smoke 442/0, imports 7/0,
+  bump 12/0, docs-check 20933 checked / 0 failed.
+  **Layman:** A design document was updated, so an independent reviewer should read it again before anyone builds from it.
+  Kind: doc.
+  Source: in-session-2026-08-23, consequence of ONEUP-0044's implementation.
+
+- 📋 [ONEUP-0128] **Gate CLAUDE.md's new gate-drift trap, and decide whether documentation.md §7 should own it.**
+  ONEUP-0127 added a §6 trap to `CLAUDE.md`: a spec's `Reviewed` stamp does not
+  survive another item editing it, and `spec_query mode:"gate_drift"` is what
+  reports it.
+
+  Rule 14's test was applied rather than assumed, and it came out **Yes**. A
+  conformer would now do something different — run `gate_drift` before trusting a
+  stamp, and before starting an item whose spec is more than a few items old.
+  That is new direction, not a record of what was built, so the gate is owed.
+
+  Not run inside ONEUP-0127 for the same reason ONEUP-0044 did not run this one:
+  rule 14 wants the gate before anything is built under the rule, nothing has
+  been yet, and a cold read of `CLAUDE.md` is not a spec re-gate's scope.
+
+  The second half is the more interesting question and should be settled in the
+  same pass. `docs/standards/documentation.md` §7 owns the cold-eyes gate and
+  says nothing about it re-arming — the whole reason the trap had to go in
+  `CLAUDE.md` at all. §7 is where a conformer looks. If the rule belongs there,
+  `CLAUDE.md` keeps a pointer and the standard takes the rule, which is
+  `documentation.md` §2.1's own consolidation rule applied to this file.
+
+  Measured on 2026-08-24: `spec_query mode:"gate_drift"` reported 6 stale, 7
+  current, 4 ungated. Stale is the normal state of a busy branch, so a rule that
+  treats it as an incident would fire constantly and stop being read.
+  **Layman:** A note was added telling future sessions how to spot a design document whose review has gone stale. An independent reader should check it, and decide whether it belongs in the standard rather than the notes file.
+  Kind: doc.
+  Source: in-session-2026-08-24, consequence of ONEUP-0127.
