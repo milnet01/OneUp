@@ -1,17 +1,22 @@
 """The runs that are not an update.
 
-Stage 2 builds `--auth-status` and the `--emit-guard` that proves a guard is
-current. `--check`, `--size=`, the grant/revoke pair and `--thin-snapshots`
-follow at their own stages.
+Built so far: `--auth-status`, the `--emit-guard` that proves a guard is
+current, and the read-only `--check`. `--size=`, the grant/revoke pair and
+`--thin-snapshots` follow at their own stages.
 """
 
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from . import markers, privilege
+from . import markers, privilege, proc
+
+if TYPE_CHECKING:  # the run-time import would be a cycle — `__main__` imports this module
+    from .__main__ import Options
 
 # Overridable so the suite points them at throwaway paths, never real /etc.
 AUTH_FILE = Path(os.environ.get("ONEUP_AUTH_FILE") or "/etc/sudoers.d/oneup")
@@ -163,4 +168,162 @@ def emit_guard() -> int:
                      "a whole number of seconds.")
         return 1
     print(src, end="", flush=True)
+    return 0
+
+
+# --- `--check`: the read-only "what would update?" pass -----------------------
+#
+# Never becomes root and never mutates: an unattended timer runs it, so a
+# password prompt would strand the run. It reads the repository METADATA cache
+# it cannot refresh, which is why it has to be scrupulous about saying when the
+# metadata was not there to read (ONEUP-0056).
+
+APP_ID = "za.co.antsprojectshub.OneUp"
+
+# zypper marks an upgradable package with `v` in its status column.
+_V_ROW = re.compile(r"^v[ \t]*\|")
+_SKIPPED = re.compile(r"Skipping repository '([^']*)'")
+
+
+def notify_send(title: str, body: str) -> None:
+    """A desktop notification. Not a marker, and never fatal."""
+    if shutil.which("notify-send"):
+        proc.run(["notify-send", "-a", "OneUp", "-i", APP_ID, title, body])
+
+
+def _emit_check(key: str, count: int, label: str, unreadable: str = "") -> None:
+    """`emit_check`: the reason first, and never a confident zero after a failed read.
+
+    A bare `CHECK|key|0` when a source could not be read is the ONEUP-0056 bug —
+    "I don't know" rendered as "you're up to date". A non-zero count still ships,
+    because knowing about 7 updates beats knowing about none.
+    """
+    if unreadable:
+        markers.marker("CHECK_UNKNOWN", f"{key}|{unreadable}")
+    if not unreadable or count > 0:
+        markers.marker("CHECK", f"{key}|{count}|{label}")
+
+
+def _check_system() -> tuple[int, bool]:
+    """Count pending system updates. Returns (count, whether a source was unreadable)."""
+    # One read serves both the count and the per-package detail. stderr is MERGED
+    # rather than discarded: zypper reports a repository it had to set aside as a
+    # warning there (exit 106), and that warning is the only difference between
+    # "nothing to update" and "I couldn't read the repository that had the updates".
+    # Merging is safe — every line parsed below is anchored to the `v` status column.
+    rc, text = proc.run(
+        ["zypper", "--no-refresh", "--non-interactive", "list-updates"],
+        merge_stderr=True,
+        env={"LC_ALL": "C"},  # keeps the column layout parseable on any locale
+    )
+    rows = [line for line in text.splitlines() if _V_ROW.match(line)]
+    n = len(rows)
+    unreadable = ""
+    if rc != 0:
+        # 106 = ZYPPER_EXIT_INF_REPO_SKIPPED. Name the repositories if zypper did;
+        # otherwise report the failure without guessing at a cause.
+        skipped = sorted(set(_SKIPPED.findall(text)))
+        if skipped:
+            unreadable = "OneUp couldn't read these software sources: " + ", ".join(skipped)
+        else:
+            unreadable = f"OneUp couldn't read the software sources (zypper exited {rc})"
+        unreadable += " — this list may be incomplete. Running an update refreshes them."
+        markers.out(f"  System packages: couldn't check — {unreadable}")
+    else:
+        markers.out(f"  System packages: {n} update(s)")
+    _emit_check("system", n, "system package(s)", unreadable)
+    # Columns: S | Repository | Name | Current | Available | Arch.
+    for line in rows:
+        f = [field.strip() for field in line.split("|")]
+        if len(f) >= 5 and f[2]:
+            markers.marker("CHECK_ITEM", f"system|{f[2]}|{f[3]}|{f[4]}")
+    return n, bool(unreadable)
+
+
+def _check_flatpak() -> tuple[int, bool]:
+    """Count pending Flatpak updates, asking each remote separately."""
+    # `flatpak remote-ls --updates` with no remote named abandons the WHOLE listing
+    # the moment any single remote can't be summarised — and a local --no-enumerate
+    # origin (what `flatpak install ./app.flatpak` leaves behind) never can be.
+    # Measured: six such leftovers on one box hid a real Discord update for weeks.
+    # Per-remote, one broken source costs only itself.
+    rows: list[str] = []
+    unreachable: list[str] = []
+    for scope in ("--user", "--system"):
+        _, listing = proc.run(["flatpak", "remotes", scope, "--columns=name,options"])
+        for entry in listing.splitlines():
+            remote, _, opts = entry.partition("\t")
+            if not remote.strip():
+                continue
+            rc, out = proc.run(
+                ["flatpak", "remote-ls", "--updates", scope, remote,
+                 "--columns=application,version"],
+            )
+            if rc == 0:
+                rows += [r for r in out.splitlines() if r.strip()]
+            elif "no-enumerate" not in opts:
+                # A no-enumerate origin serves no listing BY DESIGN — apps installed
+                # from a local file have no remote updates to miss, so it is not a
+                # failed check. Any other remote failing means apps went uncounted.
+                unreachable.append(remote)
+    n = len(rows)
+    unreadable = ""
+    if unreachable:
+        unreadable = ("OneUp couldn't reach these Flatpak sources: "
+                      + ", ".join(unreachable)
+                      + " — this list may be incomplete.")
+        markers.out(f"  Flatpak apps: couldn't check — {unreadable}")
+    else:
+        markers.out(f"  Flatpak apps: {n} update(s)")
+    _emit_check("flatpak", n, "Flatpak app(s)", unreadable)
+    for row in rows:
+        parts = row.split()
+        if parts:
+            version = parts[1] if len(parts) > 1 else ""
+            markers.marker("CHECK_ITEM", f"flatpak|{parts[0]}||{version}")
+    return n, bool(unreadable)
+
+
+def _check_firmware() -> int:
+    """Ask fwupd whether anything is pending. Yes or no, so there is no unreadable case."""
+    n = 1 if proc.succeeds(["fwupdmgr", "get-updates"]) else 0
+    # Emitted DIRECTLY, not through `_emit_check`: firmware reports a bare zero on
+    # purpose, which that emitter's suppression rule exists to withhold.
+    markers.marker("CHECK", f"firmware|{n}|firmware update(s)")
+    markers.out("  Firmware: " + ("available" if n else "up to date"))
+    return n
+
+
+def check(opts: Options) -> int:
+    """`--check`: report what WOULD update, install nothing, become root nowhere.
+
+    `orphans` and `cache` have no check arm, and a step whose tool is absent is
+    not checked at all — neither case emits a marker of any kind.
+    """
+    markers.out("Checking for available updates (read-only)…")
+    total = 0
+    incomplete = False
+    if opts.selected("system"):
+        n, bad = _check_system()
+        total += n
+        incomplete = incomplete or bad
+    if opts.selected("flatpak") and shutil.which("flatpak"):
+        n, bad = _check_flatpak()
+        total += n
+        incomplete = incomplete or bad
+    if opts.selected("firmware") and shutil.which("fwupdmgr"):
+        total += _check_firmware()
+    # A step whose read FAILED still contributes its partial count: incompleteness is
+    # carried by CHECK_UNKNOWN and by the wording below, never by a lowered total.
+    markers.marker("CHECK", f"TOTAL|{total}|updates available")
+    if incomplete:
+        markers.out(f"  Total: {total} update(s) found, "
+                    "but at least one source couldn't be read")
+        markers.out("         — treat this as a floor, not an all-clear.")
+    else:
+        markers.out(f"  Total: {total} update(s) available.")
+    if opts.notify and total > 0:
+        notify_send("Updates available",
+                    f"{total} update(s) ready to install. Open OneUp to update.")
+    markers.marker("DONE", "ok")
     return 0

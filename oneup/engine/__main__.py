@@ -3,11 +3,11 @@
 The flag surface is frozen (`docs/design/oneup-2.0.md` §3): every flag
 `update_system.sh` accepts, with the same spelling and the same behaviour.
 
-**Stage 2 acts on `--help`, `--auth-status` and `--emit-guard` only.** Every
+**Built so far: `--help`, `--auth-status`, `--emit-guard` and `--check`.** Every
 other flag is still parsed and stored — `--log=` above all, which the test
 suite appends to every invocation, so an engine that rejected it could not be
-reached at all. What refuses is a flag selecting *work* this stage has not
-built, and it refuses loudly rather than exiting 0 on a run it never performed.
+reached at all. What refuses is a flag selecting *work* no stage has built yet,
+and it refuses loudly rather than exiting 0 on a run it never performed.
 """
 
 from __future__ import annotations
@@ -44,6 +44,10 @@ class Options:
     auto_skip: bool = False
     thin_snapshots: bool = False
     notify: bool = False
+
+    def selected(self, key: str) -> bool:
+        """`step_selected`: is this step in `--steps=`?"""
+        return f",{key}," in f",{self.steps},"
 
 
 def usage() -> str:
@@ -152,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     if opts.thin_snapshots:
         return _not_built("--thin-snapshots", "stage 5")
     if opts.check_only:
-        return _not_built("--check", "stage 3")
+        return actions.check(opts)
     if opts.size_step:
         return _not_built("--size=", "stage 4")
     return _not_built("a full run", "stage 5")
