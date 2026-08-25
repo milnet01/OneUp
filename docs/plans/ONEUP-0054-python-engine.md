@@ -135,14 +135,16 @@ here so a later reader does not count it as a site somebody missed.
 `v2`, and says outright that *"Nothing in stages 1–8 changes `main`'s behaviour."* That
 sentence is what routes step 6's engine fix to `v2` rather than to `main`, against
 `docs/standards/workflow.md` §9's default route for a `Kind: fix`; ONEUP-0058's own bullet
-says *"Do not fix on `main`"* for the same reason. **One exception, and it is
-documentation:** step 13's `testing.md` edit is true read from either branch, so §9 sends
-it to `main` like any other documentation.
+says *"Do not fix on `main`"* for the same reason. **Step 13's documentation edits are
+not an exception to that**: each describes code only `v2` has, and every one of those
+passages is still true of `main`, so `docs/standards/workflow.md` §9 has no `main` edit to
+route.
 
-**What stage 2 is not.** The Python engine answers `--help`, `--auth-status` and
-`--emit-guard`, and refuses every other flag loudly. No run driver, no `--check`, no
-`--size`, no steps, no `sudo_init`, no state writes. §4.6 gives those to stages 3–5, and a
-module that grows past what the steps below name is stage creep, not thoroughness.
+**What stage 2 is not.** The Python engine *acts on* `--help`, `--auth-status` and
+`--emit-guard` and on nothing else; it parses every other flag and refuses loudly only
+when one selects work it has not built (step 8). No run driver, no `--check`, no `--size`,
+no steps, no `sudo_init`, no state writes — §4.6's stage-2 row ends *"nothing more"*, and
+a module that grows past what the steps below name is stage creep, not thoroughness.
 
 ### Steps
 
@@ -155,9 +157,11 @@ module that grows past what the steps below name is stage creep, not thoroughnes
    on every call. The window reads the engine's stdout line by line through `QProcess`, and
    Python block-buffers a pipe by default, so an unflushed marker arrives late or not at
    all.
-   → **verify:** `python3 -m oneup.engine --auth-status | cat` prints the `@@AUTH@@` line.
-   **Through a pipe**, because that is the case a missing flush breaks; run on a terminal
-   it passes either way.
+   → **verify:** at this step, against the emitter alone — `python3 -c 'from
+   oneup.engine import markers; markers.marker("AUTH", "on")' | cat` prints the line.
+   **Through a pipe**, because that is the case a missing flush breaks; on a terminal it
+   passes either way. The end-to-end form belongs to step 8: nothing here can answer a
+   flag yet.
 
 3. `privilege.py` — the single owner of every privileged child
    (`docs/standards/security.md` §2.3). At this stage that is the askpass and prompt
@@ -166,8 +170,11 @@ module that grows past what the steps below name is stage creep, not thoroughnes
    sudo parent for everything. `sudo_init`, the keep-alive, `reap_orphaned_askpass` and
    `cleanup` are stage 5's.
    → **verify:** `grep -n '"sudo"' oneup/engine/*.py` names `privilege.py` and no other
-   file. Site-specific on purpose: §2.3's rule is about *where* the privileged calls live,
-   and a green suite says nothing about that.
+   file — **run at step 14, once the stage's modules exist.** At step 3 `privilege.py` is
+   the only module in the package, so "no other file" cannot fail, and `actions.py`, added
+   at step 7, is exactly where a stray `sudo` would land. Site-specific on purpose: §2.3's
+   rule is about *where* the privileged calls live, and a green suite says nothing about
+   that.
 
 4. `proc.py` — run a child process and return its status and captured output. Fixed argv,
    never `shell=True` (`docs/standards/coding.md` §5.1), and any `# noqa: S603` says why the
@@ -200,7 +207,12 @@ module that grows past what the steps below name is stage creep, not thoroughnes
    the other.
 
 7. `actions.py` — `auth_status`, and the four functions it rests on: `auth_cmnds`,
-   `download_guard_src`, `guard_current` and `auth_current`. **Also `--emit-guard`**, which
+   `download_guard_src`, `guard_current` and `auth_current` — **with the `ONEUP_AUTH_FILE`
+   and `ONEUP_GUARD_FILE` overrides those last two read, and the Bash engine's defaults
+   behind them.** They are neither state files nor log paths, so step 5 does not cover
+   them, and the `--auth-status` scenario drives the engine entirely through them: without
+   them stage 2 reads the real `/etc/sudoers.d/` and `/usr/libexec/`, which
+   `docs/standards/testing.md` §2 forbids outright. **Also `--emit-guard`**, which
    is stage 2's whether or not §4.6's row names it: the `--auth-status` scenario writes a
    current guard with it, and its last check cannot be reached without one.
    → **verify:** `--emit-guard` from the two engines, under the same mock `PATH`, is
@@ -211,8 +223,13 @@ module that grows past what the steps below name is stage creep, not thoroughnes
 
 8. `__main__.py` — the argument loop. The same flags with the same spellings, `-h` sharing
    `--help`'s arm, and an unknown flag printing `Unknown option: <arg>` on stderr followed
-   by the usage, exit 2. Dispatch `--auth-status` and `--emit-guard`; every other accepted
-   flag exits non-zero with a message naming the stage that owes it.
+   by the usage, exit 2. `--help`/`-h` prints the usage and exits 0; `--auth-status` and
+   `--emit-guard` do their work. **Every other flag is parsed and stored, never refused** —
+   `--log=` above all, which `run_engine` appends to *every* invocation, so an engine that
+   rejected it could not reach a single scenario. What exits non-zero is a flag selecting
+   **work** stage 2 has not built — the default run, `--check`, `--size=`,
+   `--thin-snapshots`, `--grant-auth` and `--revoke-auth` — with a message naming the stage
+   that owes it.
    → **verify:** the set of flags the Python parser accepts equals the set of `case`
    patterns in `update_system.sh`'s argument loop, compared mechanically rather than read
    off. And `python3 -m oneup.engine --steps=system` writes **nothing to stdout** and exits
@@ -231,9 +248,10 @@ module that grows past what the steps below name is stage creep, not thoroughnes
 10. **Write the four unpinned exit codes down beside §4.1.1**, which §4.1 promises and
     §4.6's stage-2 row repeats. Nothing pins `2`, `130`, `143` or `141` today, so v2 could
     change all four with every gate green.
-    → **verify:** each is read out of `update_system.sh` — the `--help|-h` arm, the `*)`
-    arm, and the three `trap 'exit N'` lines — and the table names the construct each comes
-    from, so a later reader can re-take the measurement rather than trust it.
+    → **verify:** each is read out of `update_system.sh` — `2` from the argument loop's
+    `*)` arm, and `130`, `143` and `141` from the three `trap 'exit N'` lines — and the
+    table names the construct each comes from, so a later reader can re-take the
+    measurement rather than trust it.
 
 11. **Give the `--hold` scenario the `ONEUP_ENGINE_CMD` override** (§4.4's table). Stage 1
     left it launching v1 on purpose; `start_held_engine` is the function that invokes the
@@ -248,12 +266,17 @@ module that grows past what the steps below name is stage creep, not thoroughnes
        `sed`s the keep-alive loop out of `update_system.sh` and executes that Bash
        fragment, so what it asserts is one engine's implementation — which is why §4.4's
        table gives it no override and calls it replaced outright. The replacement stages a
-       held engine, `SIGKILL`s it, and asserts nothing it spawned survives.
+       held engine, `SIGKILL`s it, and asserts nothing it spawned survives. **Delete the
+       existing scenario in the same commit** — leaving both is not the belt-and-braces it
+       looks like: G1 permits exactly one replacement and is read off the diff at stage 9,
+       and a scenario that greps a retired `update_system.sh` passes about a file nothing
+       runs.
        The keep-alive sleeps 50 seconds between checks, so the property is unobservable
        inside a test's patience: give the interval an `ONEUP_KEEPALIVE_SECONDS` override
-       defaulting to 50 — the way `ONEUP_STOP_POLL_SECONDS`, `ONEUP_HOLD_SECONDS` and
-       `ONEUP_REFRESH_TIMEOUT` already are, and for the same stated reason — and set it in
-       the scenario.
+       defaulting to 50, **in `v2`'s `update_system.sh`** — the Python keep-alive is stage
+       5's, so there is no second place to put it yet — the way `ONEUP_STOP_POLL_SECONDS`,
+       `ONEUP_HOLD_SECONDS` and `ONEUP_REFRESH_TIMEOUT` already are, and for the same
+       stated reason. Then set it in the scenario.
        → **verify:** the replacement identifies a survivor by the `oneup-keepalive` tag
        **and the dead engine's pid**, which the loop carries as its argument: the tag alone
        matches another scenario's keep-alive, and a developer's own. And it must be able to
@@ -277,17 +300,26 @@ module that grows past what the steps below name is stage creep, not thoroughnes
        run — the scenario already keeps one, so no second run is staged — and requires a
        run of digits.
 
-13. **Repair the documentation steps 6 and 9 make false.**
-    `docs/standards/testing.md` calls the engine suite's untracked `HOME` a live defect,
-    in its exceptions list and again in its *What checks this* table; both are false on
-    `v2` after step 6. Word it to read true from either branch — fixed on `v2`, still open
-    on frozen `main` — and land it on `main`, which `docs/standards/workflow.md` §9
-    requires of documentation nothing binds to `v2`.
-    `docs/standards/files-and-naming.md`'s Trap 1 and its list of the window's path
-    constants name `LOG_DIR`, which only `v2` renames, so **those** stay on `v2` — §9's
-    second binding rule.
-    → **verify:** `python3 tests/docs-check.py` passes on both branches, and no document
-    under `docs/standards/` still calls ONEUP-0058 open without saying on which branch.
+13. **Repair the documentation steps 6 and 9 make false — three places, all on `v2`.**
+    `docs/standards/testing.md` states ONEUP-0058 twice, in its exceptions list and in its
+    *What checks this* table, and `docs/standards/files-and-naming.md`'s Trap 2 states it a
+    third time. **What step 6 falsifies is the consequence, not the premise:** the suite
+    still does not redirect `HOME` — only the new scenario does, for itself — and what
+    stops the directory appearing is the engine no longer creating it. An edit saying the
+    suite redirects `HOME` would assert an isolation it does not have, which is the silent
+    exception `testing.md` §2 exists to forbid. `files-and-naming.md`'s Trap 1 and its list
+    of the window's path constants name `LOG_DIR`, which step 9 renames.
+    **All three land on `v2` and none on `main`, and that is not an exemption from
+    `docs/standards/workflow.md` §9:** every one of these statements is still true of
+    `main`, whose engine and whose window are unchanged, so there is no `main` edit to
+    route.
+    → **verify:** `python3 tests/docs-check.py` passes on `v2`, and each of the three
+    passages is re-read and reads true — `testing.md`'s exceptions bullet, its *What checks
+    this* row for §2.3, and `files-and-naming.md`'s Trap 2. **Named, not swept:** a blanket
+    `grep -rn ONEUP-0058 docs/standards/` also hits `files-and-naming.md`'s §5 row and two
+    historical mentions, all of which stay true, so a sweep demanding a branch of every hit
+    could not pass. And docs-check settles none of this either way — it has no check for a
+    claim that has merely gone stale.
 
 14. Run the full push gate.
     → **verify:** `./local-CI.sh` green on `v2`.
@@ -303,9 +335,12 @@ module that grows past what the steps below name is stage creep, not thoroughnes
 
 ### Not stage 2's
 
-`sudo_init` and the keep-alive, `cleanup` and its traps, the run-state *writer*, the hold,
-and every parser. §4.6 assigns them to stages 3–5. `runstate.py` gains the paths at this
-stage and the writers later; `privilege.py` gains the runner now and the bootstrap later.
+`sudo_init` and the keep-alive, `cleanup` and its traps, and the run-state *writer*.
+**§4.6 names none of those four in any row; what defers them is its stage-2 row ending
+*"enough for `--help` and `--auth-status`, nothing more"***, and the run driver that needs
+them arrives at stage 5. `parsers.py` and the hold are not in that class — §4.6 gives both
+to stage 4 by name. `runstate.py` gains the paths at this stage and the writers later;
+`privilege.py` gains the runner now and the bootstrap later.
 Recorded so a reader does not take a module's presence for its completeness.
 
 ## Definition of done
@@ -324,8 +359,13 @@ the environment and ends in `exit $fail`, so the override reaches the suite and
 answer as `update_system.sh` does — the `--auth-status` scenario's own check lines passing
 against the Python engine, and the two guard bodies byte-identical; when the suite's last
 direct `bash "$ENGINE"` *invocation* is gone; when the three scenarios §4.6's stage-2 row
-names exist and can each be made to fail; when no bare `LOG_DIR` is left in the package;
-and when `./local-CI.sh` is green on `v2` with `ONEUP_ENGINE_CMD` unset. `main`'s behaviour
+names exist and can each be made to fail, **the old SIGKILL scenario deleted with them**;
+when the ONEUP-0058 scenario goes red against an engine without step 6's fix; when §4.1.1
+names the four exit codes and the construct each was read from; when the three documents
+step 13 names read true on `v2`; when no bare `LOG_DIR` is left in the package; and when
+`./local-CI.sh` is green on `v2` with `ONEUP_ENGINE_CMD` unset. **The middle three are in
+this list because nothing else holds them** — no gate can fail on a scenario nobody
+wrote, on a table nobody added, or on prose that has merely gone stale. `main`'s behaviour
 is unchanged, as it is for every stage up to 8.
 
 **The item is done** at stage 9, when G1–G6 are met. `docs/design/oneup-2.0.md`
@@ -338,3 +378,4 @@ is the commit they are measured against.
 | --- | --- | --- | --- |
 | 1 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 1 · Q2 0 · Q3 1 · Q4 2 — 4 verified, 0 dismissed, all 4 fixed | First gate on this document. All three lanes independently led with the same two defects, which is the strongest signal the run produced. The worst is that **no clause in stage 1 could distinguish "both call sites converted" from "`run_engine` converted, broken-pipe site missed"**: with the override unset the unconverted site behaves identically, and whole-suite redness against a failing stub is evidence about `run_engine` alone, since it drives nearly every scenario. An implementer would have shipped stage 1 with one site still on v1 and met it at stage 6 as G2 diffing v1 against v1 — the exact failure §4.4 warns of. Step 5 now asserts no `bash "$ENGINE"` invocation remains, and step 6 runs the broken-pipe scenario against the stub in its own right. Second, step 1 said to bring §4.4's *correction* across without saying how much text crossed, and step 9 then merges `main` into `v2` where the same section was rewritten — a minimal edit conflicts there with no stated resolution, and resolving toward `main` silently reverts the re-gated contract stage 2 builds from. Step 1 now crosses §4.4 whole and step 9 verifies `v2`'s copy is byte-identical after the merge; the whole-section crossing was tested against `main`'s docs gate before being prescribed. One lane also caught that step 1's verify — *"no longer contains the word array"* — is falsified by the correct text, which reads *"word-split by the suite into its argv array"*, so a builder satisfying the check would have deleted the sentence that pins the encoding. Three lane open questions settled as non-findings: `local-CI.sh` does propagate the override (it runs `bash tests/run-tests.sh` without scrubbing the environment), the `REPO="$(dirname "$ENGINE")"` reader does belong to the pre-push-hook scenario, and step 7's verify was reworded from an allowlist to a prohibition so the plan's own Status line no longer falls foul of it. |
 | 2 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 0 · Q2 2 · Q3 0 · Q4 4 — 6 verified, 0 dismissed, all 6 fixed. Cap reached (2 for a plan); the run files its tail and exits | **A violent cap: five of the six findings landed on text loop 1 itself wrote.** Loop 1 closed the "which call site" hole with `grep -c 'bash "$ENGINE"' … returns 0`, and two lanes independently found that a *correct* implementation returns 1 — the glob-safe default is an array literal `ENGINE_CMD=(bash "$ENGINE")`, which contains that string once as an assignment. A builder would have unquoted `$ENGINE` to satisfy the check, reintroducing exactly the word-splitting hazard step 3 exists to close. **All three lanes found the second**: loop 1's Definition of done said "no `bash "$ENGINE"` invocation remains in `tests/run-tests.sh`" with no branch qualifier, in a sentence ending on `v2` — where step 10 requires the `--hold` scenario to keep one. An implementer working the done-list after the merge would have converted it, pulling stage 2's work onto an engine that does not exist yet. Two more of loop 1's own: step 9's `v2` check was "local-CI green", which step 6 three paragraphs above already calls no evidence at all — and `run_engine` differs between the branches (ONEUP-0044 added two environment lines), so a conflict there is likely and resolving it toward `v2` drops the indirection silently; and step 7's "none of those readers appears in `git diff`" can never come back clean, because step 1's own §4.4 transplant adds a table row naming two of them. The orchestrator found a fifth while verifying: step 6 said to "run the broken-pipe scenario against the same stub", and the suite takes no arguments and has no per-scenario selector. One finding was pre-existing rather than collateral — the plan named the default as `bash update_system.sh` where step 2 says `bash $ENGINE`, and the suite computes that path absolutely on purpose, so the literal form would resolve against the caller's working directory. Three lane open questions settled clean: `v2`'s §4.4 transplanted onto `main` passes `tests/docs-check.py` (tested before the step was prescribed), `main`'s spec carries every section that §4.4 cross-references, and `local-CI.sh` ends in `exit $fail` so "red" is observable. **The cap being violent ends the review, not the shipping** — this plan now routes to implementation, which for a plan is the better third reviewer, and not to a third cold read. |
+| 3 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 3 · Q2 2 · Q3 3 · Q4 2 — 10 verified, 1 dismissed, all 10 fixed | Loop 1 of a new run, on stage 2's newly appended steps; stage 1's text was not re-opened. **All three lanes led with the same defect, and it would have made stage 2's headline deliverable unreachable**: step 8 said to dispatch `--auth-status` and `--emit-guard` and have *"every other accepted flag"* exit non-zero — but `--log=` is an accepted flag and `run_engine` appends it to every invocation, so the engine would have refused every call the suite makes, and `--help` fell in the same bucket four lines under a sentence saying the engine answers it. Modifier flags are now parsed and stored, and only a flag selecting unbuilt *work* refuses. Two more were found by all three: the exit-code step named the `--help|-h` arm as a source of one of the four codes, and that arm yields `exit 0`; and step 2's verify ran the whole engine to prove `markers.py` flushes, when `actions.py` is step 7 and `__main__.py` step 8 — a check that cannot be reached where it is written. Step 3's carried the same fault more quietly: at step 3 `privilege.py` is the only module, so *"and no other file"* could not fail, and `actions.py` — added later, and the one place a stray `sudo` would land — was never covered. **The most dangerous single-lane finding was an unowned pair of overrides**: `ONEUP_AUTH_FILE` and `ONEUP_GUARD_FILE` are neither state files nor log paths, so no step claimed them, and the `--auth-status` scenario drives the engine entirely through them — stage 2 would have read the real `/etc/sudoers.d/` and `/usr/libexec/`, which `docs/standards/testing.md` §2 forbids outright. Also: nothing instructed *deleting* the SIGKILL scenario the plan called replaced, so both would have shipped against a G1 that permits exactly one replacement and is read off the diff; the done-list omitted three of the section's own obligations, none of which any gate can fail on; step 13 called `testing.md`'s untracked-`HOME` claim false when only its consequence is, and named neither `files-and-naming.md`'s Trap 2 nor its branch; and *"Not stage 2's"* attributed the deferral to §4.6 rows that name none of it. Dismissed as true-but-immaterial: steps 5 and 9 split the `LOG_DIR` work while step 9 says *"one commit"* — no collision is possible, since the engine's constant is never named `LOG_DIR`, so no line is built differently. **The fix pass caught three false claims of its own before the commit**, all by running them: `tests/docs-check.py` does walk `docs/specs/` (only `docs/plans/` is unwalked, ONEUP-0129); §4.6 does name `parsers.py` and the hold at stage 4, so the blanket deferral was wrong for two of six; and a blanket `grep ONEUP-0058 docs/standards/` hits three passages that stay true, so that verify could not pass. The 4b sweep then found three more pieces of its own collateral in the section header and the done-list. Four lane open questions settled clean: `oneup/gui/paths.py` imports only the standard library so step 5's equality check needs no PySide6; the hold path does spawn a keep-alive (the existing *"a held run leaves no orphaned keep-alive behind"* scenario asserts on it); the engine exports two variables, `SUDO_ASKPASS` and `SUDO_PROMPT`, so step 3's count is right and the lanes' packets simply lacked that window; and every window reader goes through `paths.`, so step 9's blast radius is as stated. |
