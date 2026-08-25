@@ -1,7 +1,7 @@
 # ONEUP-0054 — Python engine — build plan
 
 **Spec:** [docs/specs/ONEUP-0054-python-engine.md](../specs/ONEUP-0054-python-engine.md)
-**Status:** in progress — stages 1 and 2 done (2026-08-25); stage 3 next.
+**Status:** in progress — stages 1 and 2 done (2026-08-25); stage 3 under way.
 
 ## Scope of this file
 
@@ -357,6 +357,148 @@ in `actions.py` and the go-ahead re-derivation in `__main__.py`.
 `privilege.py` gains the runner now and the bootstrap later.
 Recorded so a reader does not take a module's presence for its completeness.
 
+## Stage 3 — `actions.py`'s `--check`
+
+**Branch: `v2` only**, for stage 2's reason: §4.6 ends every stage from 2 onwards with
+`./local-CI.sh` green on `v2` and says outright that *"Nothing in stages 1–8 changes
+`main`'s behaviour."* Stage 3 edits no document, so no step splits by branch.
+
+**What stage 3 is.** §4.6's stage-3 row is one line — *"`actions.py`'s `--check` — read-only
+and needs no root, so the safest real behaviour to build first"* — and it ends *"every
+`--check` scenario green against v2"*. **It adds no module.** `parsers.py` is stage 4's by
+name, and §4.2 routes none of `run_check`'s parsing to it: that table's `parsers.py` row
+names `to_bytes`, `lock_holder`'s parsing, the progress and download-size wordings, `lr`
+output and `reboot_reason_from_log`'s phrase-building, and the split table names six
+crossings, none of them `run_check`. So the zypper and flatpak text this stage reads is
+parsed in `actions.py`, where §4.2 puts `run_check` whole.
+
+**The refusal for `--check` is what this stage removes.** Everything else `__main__.main`
+refuses stays refused.
+
+### Steps
+
+1. `proc.run` gains an optional environment overlay for one child. The check reads
+   `LC_ALL=C zypper … list-updates` so the column layout parses on any locale, and that
+   setting must reach that child and no other. Putting `LC_ALL` in the engine's own
+   `os.environ` would change every later child's output, which the Bash engine never does —
+   there the prefix is per-command.
+   → **verify:** with the overlay set, the child process sees `LC_ALL=C`; after the call
+   the engine's own `os.environ` has no `LC_ALL` it did not start with.
+
+2. Step selection reaches `actions.py` as an argument, never as an import. §4.2 puts
+   `step_selected` in `__main__.py`, and `__main__` already imports `actions` — so
+   `actions` importing `__main__` back is a cycle. Give `Options` the predicate
+   (`,steps,` contains `,key,`, as the Bash one-liner has it) and pass the `Options`
+   object into the check; annotate it under `typing.TYPE_CHECKING` if a type is wanted.
+   → **verify:** no module under `oneup/engine/` names `__main__` in an import, and
+   `python3 -c 'import oneup.engine.actions'` from the repo root exits 0.
+
+3. The system arm. One read of `zypper --no-refresh --non-interactive list-updates` with
+   **stderr merged into stdout** — the merge is not tidiness, it is the whole of ONEUP-0056:
+   zypper reports a repository it set aside as a warning on stderr and exits 106, and that
+   warning is the only thing separating *"nothing to update"* from *"I could not read the
+   repository that had the updates"*. Count the rows whose status column is `v`. On a
+   non-zero exit, name the repositories zypper said it skipped; when it named none, report
+   the exit status rather than guessing a cause. Then one `@@CHECK_ITEM@@|system|name|from|to`
+   per row, each field trimmed.
+   → **verify:** the check lines of *"--check reports counts read-only and never installs"*
+   and *"--check reports an unreadable repository instead of claiming up to date"* all pass
+   against `python3 -m oneup.engine`.
+
+4. The shared check emitter, matching `emit_check`: emit `@@CHECK_UNKNOWN@@|key|reason`
+   **before** `@@CHECK@@`, and **suppress `@@CHECK@@` entirely when the read failed and the
+   count is zero.** A confident `@@CHECK@@|system|0` after an unreadable source is the
+   ONEUP-0056 bug itself, and the scenario asserts its absence rather than its presence —
+   so an implementation that emits it anyway fails on a `check_absent`, which is easy to
+   read as unrelated.
+   → **verify:** under the 106 mock, the output carries `@@CHECK_UNKNOWN@@|system` and no
+   `@@CHECK@@|system|0`; under the two-update mock it carries `@@CHECK@@|system|2` and no
+   `@@CHECK_UNKNOWN@@`.
+
+5. The flatpak arm asks **each remote separately**, in both scopes. `flatpak remotes
+   <scope> --columns=name,options` first, then `flatpak remote-ls --updates <scope>
+   <remote> --columns=application,version` per remote. Never one listing for all remotes:
+   that form abandons the whole listing the moment any single remote cannot be summarised,
+   which is how six local origins hid a real update for weeks (ONEUP-0056). A remote whose
+   listing fails is unreadable **unless its options contain `no-enumerate`** — a local
+   origin serves no listing by design, so it is not a failed check. The detail line's
+   *from* field is empty: `@@CHECK_ITEM@@|flatpak|app||version`.
+   → **verify:** the check lines of *"--check counts Flatpak updates even when one remote
+   is unreadable"* all pass, the `check_absent` on `@@CHECK_UNKNOWN@@|flatpak` among them.
+
+6. The firmware arm emits `@@CHECK@@` **directly, not through step 4's emitter.**
+   `fwupdmgr get-updates` answers yes or no, there is no unreadable case, and firmware
+   reports `firmware|0` — which step 4's suppression rule would swallow if the reason field
+   were ever non-empty. Keeping the asymmetry is keeping the Bash behaviour; tidying the
+   two into one emitter changes it.
+   → **verify:** no suite scenario drives this arm, so drive it by hand against both
+   engines with an `fwupdmgr` mock: exiting 0 gives `@@CHECK@@|firmware|1`, exiting
+   non-zero gives `@@CHECK@@|firmware|0`, both identically.
+
+7. A step with no check arm, and a step whose tool is absent, emit **nothing at all** —
+   no `@@CHECK@@`, and above all no `@@STEP_END@@|…|skip`. `orphans` and `cache` have no
+   arm in `run_check`; `flatpak` and `firmware` are each behind a tool probe. The skip
+   marker belongs to a *run*, and inventing one here would put a marker in the check
+   stream that `docs/reference/marker-protocol.md` never places there.
+   → **verify:** `--check --steps=orphans,cache` emits `@@CHECK@@|TOTAL|0` and no other
+   `@@CHECK` line; with `flatpak` and `fwupdmgr` off `PATH`, `--check` emits neither of
+   their keys and no `@@STEP_END@@`.
+
+8. The total, the exit status and the console summary. `@@CHECK@@|TOTAL|<sum>|updates
+   available` last, then `@@DONE@@|ok`, and **exit 0 even when a source could not be
+   read** — the incompleteness is carried by `@@CHECK_UNKNOWN@@` and by the console
+   wording, never by the status, because an unattended timer treats a non-zero status as a
+   failed check rather than an incomplete one. The console lines are part of the contract
+   too (the engine is usable in a terminal, `CLAUDE.md` §4), including the *"treat this as
+   a floor, not an all-clear"* wording that replaces the plain total when a source was
+   unreadable.
+   → **verify:** under the 106 mock the process exits 0; and the **non-marker** lines of
+   both engines' output match for one mock set, compared by hand — **G2 cannot see this
+   difference**, because §4.5's harness captures `@@MARKER@@` lines and discards the rest,
+   which is the same blind spot `--emit-guard` has.
+
+9. `--notify`. `notify_send` moves into `actions.py` (§4.2) and the check raises one
+   notification only when the total is above zero — a timer that pops up "0 updates" every
+   morning is the thing `--check --notify` exists to avoid.
+   → **verify:** no suite scenario drives `--check --notify` (the notify scenarios all run
+   full runs), so drive it by hand with a `notify-send` mock that logs its arguments:
+   the two-update mock logs one notification, a zero-update mock logs none.
+
+10. `__main__.main` dispatches `--check` to the new entry point and its stage-2 refusal
+    goes. The other refusals stay as they are.
+    → **verify:** `python3 -m oneup.engine --check --steps=orphans` no longer exits 3, and
+    `--size=system` still does.
+
+11. Run the whole suite against the Python engine and read the `--check` scenarios' own
+    check lines out of it, the same way stage 2 step 15 reads `--auth-status`'s. The suite
+    takes no arguments and has no per-scenario selector.
+    → **verify:** from the repo root, `ONEUP_ENGINE_CMD='python3 -m oneup.engine' bash
+    tests/run-tests.sh` — every check line belonging to the scenarios the done-list names
+    passes. The rest of the suite is still red, which is expected and is not the
+    measurement. Then `./local-CI.sh` green on `v2` with `ONEUP_ENGINE_CMD` unset.
+
+### Not stage 3's
+
+**Three assertions about `--check` pass against a stage-3 engine without testing anything,
+and each is recorded here so its green is not read as evidence.**
+
+- **The log mirror.** `update_system.sh` tees every run to a log file, `--check` included;
+  the Python engine still writes none. No `--check` scenario reads a log, so nothing goes
+  red — which is exactly why it is written down. §4.2 gives the logging preamble to
+  `runstate.py` and §4.6 gives the run driver to stage 5, so **stage 5 must cover `--check`
+  as well as a full run**; a tee built inside the run driver alone leaves the check
+  unlogged for good. G2 cannot see it either — a log file is not a marker line.
+- **The shutdown inhibitor.** ONEUP-0086's scenario asserts that a `--check` takes no
+  block-mode lock. Against a stage-3 engine that passes because no engine path takes one,
+  and it becomes a real assertion at stage 5. (That scenario's first half is a full run, so
+  the scenario as a whole is red at this stage regardless.)
+- **The run-state file.** *"a read-only `--check` run does NOT touch the run-state file"*
+  passes for the same reason: `runstate.py` has the paths and no writers yet.
+
+`parsers.py`, `repos.py` and `--size=` are stage 4's; the run driver, `steps.py`,
+`sudo_init` and the grant/revoke pair are stage 5's. Neither list is deferred by this
+stage's judgement — §4.6 names both stages by row.
+
 ## Definition of done
 
 **Stage 1 is done** when `main`'s §4.4 matches `v2`'s; neither call site in
@@ -381,6 +523,19 @@ reads true on the branch it landed on; when no bare `LOG_DIR` is left in the pac
 this list because nothing else holds them** — no gate can fail on a scenario nobody
 wrote, on a table nobody added, or on prose that has merely gone stale. `main`'s behaviour
 is unchanged, as it is for every stage up to 8.
+
+**Stage 3 is done** when the three scenarios that actually exercise check output pass
+against `python3 -m oneup.engine` — *"--check reports counts read-only and never
+installs"*, *"--check reports an unreadable repository instead of claiming up to date"* and
+*"--check counts Flatpak updates even when one remote is unreadable"* — and when
+*"--check performs NO privileged auth"* passes with its loud sudo mock in place; when the
+firmware arm and the `--notify` arm, which no scenario reaches, have each been driven by
+hand against both engines and answered identically; when the two engines' **non-marker**
+console lines match for one mock set; and when `./local-CI.sh` is green on `v2` with
+`ONEUP_ENGINE_CMD` unset. **The three vacuous passes are recorded in *Not stage 3's*
+rather than counted here** — the log mirror, the shutdown inhibitor and the run-state
+file each pass because the code that could break them does not exist yet, and a done-list
+that counted them would be counting its own gaps. `main`'s behaviour is unchanged.
 
 **The item is done** at stage 9, when G1–G6 are met. `docs/design/oneup-2.0.md`
 §7 owns the gate; spec §4.6 says which stage earns each of them and that stage 9
