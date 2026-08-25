@@ -4553,3 +4553,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: test.
   Source: in-session-2026-08-25 (verified while closing ONEUP-0054 stage 2).
   Lanes: tests.
+
+- 📋 [ONEUP-0132] **Marker protocol §4.6 states the bare-zero withholding rule too widely.**
+  §4.6 reads "The engine emits `CHECK` only when everything was
+  readable *or* the count is greater than zero". That describes
+  `emit_check`, which only the system and Flatpak arms use. The firmware
+  arm calls `marker CHECK` directly and the run-wide `TOTAL` is emitted
+  unconditionally, so both send a bare zero the rule says is withheld.
+  Found by a cold lane during the ONEUP-0054 stage-3 plan gate and filed
+  rather than fixed: the reference outranks both halves of the app
+  (`CLAUDE.md` §4), so narrowing the rule changes what a window
+  implementer builds and owes its own review-contract gate.
+  **Layman:** The engine↔window contract says OneUp hides a "0 updates" answer when a source could not be read — but two of those markers are always sent, so the rule as written is wrong about them.
+  Kind: doc-fix.
+  Source: review-contract-2026-08-25 ONEUP-0054 stage-3 plan gate, lane 1.
