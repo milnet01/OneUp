@@ -123,8 +123,8 @@ def _traycheck_log():
     A resident tray checks ~4x/day indefinitely; a per-run timestamped file would
     pile up. The engine's `tee -a` starts from the truncated file, so reusing one
     fixed name still overwrites (the output is silent, so no history is lost)."""
-    paths.LOG_DIR.mkdir(parents=True, exist_ok=True)
-    path = paths.LOG_DIR / "traycheck.log"
+    paths.STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    path = paths.STATE_LOG_DIR / "traycheck.log"
     path.write_text("")   # roll: overwrite the previous check's output
     return path
 

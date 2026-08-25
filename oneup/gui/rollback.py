@@ -146,14 +146,14 @@ def _thin_snapshots(win):
         return
     win.warn_btn.setEnabled(False)
     win.status.setText("Thinning snapshots… (approve the password popup)")
-    paths.LOG_DIR.mkdir(parents=True, exist_ok=True)
+    paths.STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.finished.connect(lambda _c, _s, pr=p: _on_thin_finished(win, pr))
     win._thin_proc = p
     p.start("bash", [str(paths.ENGINE), "--thin-snapshots",
-                     f"--log={paths.LOG_DIR / f'{stamp}.thin.log'}"])
+                     f"--log={paths.STATE_LOG_DIR / f'{stamp}.thin.log'}"])
 
 
 def _on_thin_finished(win, proc: QProcess):

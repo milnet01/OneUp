@@ -214,6 +214,7 @@ Every environment override that exists, and every path that has none:
 | Hold stamp | `~/.local/state/oneup/hold.state` | both | `ONEUP_HOLD_STATE` — **engine only** |
 | Go-ahead request | `~/.local/state/oneup/go.request` | both | `ONEUP_GO_FILE` — **engine only** |
 | Hold ceiling | `120` seconds | engine | `ONEUP_HOLD_SECONDS` |
+| Keep-alive refresh interval | `50` seconds | engine | `ONEUP_KEEPALIVE_SECONDS` |
 | zypper lock probe | `/run/zypp.pid` | engine | `ONEUP_ZYPP_PID_FILE` |
 | Passwordless-auth drop-in | `/etc/sudoers.d/oneup` | engine | `ONEUP_AUTH_FILE` |
 | Download guard | `/usr/libexec/oneup-download-guard`, or `/usr/lib/oneup-download-guard` where `/usr/libexec` does not exist (Leap 15.x) | engine | `ONEUP_GUARD_FILE` |
@@ -243,7 +244,7 @@ were true would have misled the 2.0 implementer.** What is actually true:
   states its own.
 - **The GUI is isolated by rewriting `HOME`.** `tests/gui-smoke.py`'s sandbox block sets
   `HOME` to a throwaway directory *before* the window is imported, because the GUI's paths
-  are module-level constants (`STATE_DIR`, `LOG_DIR`, `RUN_STATE`, `STOP_REQUEST`)
+  are module-level constants (`STATE_DIR`, `STATE_LOG_DIR`, `RUN_STATE`, `STOP_REQUEST`)
   evaluated at import time. Individual tests then reassign them on the module that owns
   them (`paths.STOP_REQUEST = …`), which is why every reader goes through `paths.` and
   never binds one by name — a bound copy would leave the redirect landing where nobody
@@ -303,11 +304,13 @@ build. See the UI standard.
 
 Measured, not suspected. Recorded here so 2.0 does not reproduce them.
 
-**Trap 1 — `LOG_DIR` names two different directories.** In `update_system.sh` it is
-`~/Documents/update-logs`; in `updater.py` it is `~/.local/state/oneup/logs`. Today
-they live in separate languages and cannot collide. **When the engine becomes Python and
-moves into the same package, they will.** Give them distinct names in 2.0 —
-`USER_LOG_DIR` and `STATE_LOG_DIR`, or equivalent — before either is imported anywhere.
+**Trap 1 — `LOG_DIR` named two different directories. CLOSED on `v2` by ONEUP-0054
+stage 2.** In `update_system.sh` it is `~/Documents/update-logs`; in the window it was
+`~/.local/state/oneup/logs`. While the two halves were in separate languages they could
+not collide; in one package they would. The window's is now `STATE_LOG_DIR` and the Python
+engine's is `USER_LOG_DIR`, renamed in one commit so the collision could not simply move.
+**`update_system.sh` keeps `LOG_DIR`** — it is Bash, no Python imports it, and it retires
+with the file. On frozen `main` both halves are unchanged and the trap stands as written.
 
 **Trap 2 — the engine's log directory is created on the real machine during tests.**
 `update_system.sh`'s logging preamble runs `mkdir -p "$LOG_DIR"` *before* checking whether

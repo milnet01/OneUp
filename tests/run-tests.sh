@@ -807,7 +807,7 @@ start_held_engine() {
         ONEUP_INHIBITED=1 ONEUP_REPOS_DIR="$d/repos.d" \
         ONEUP_ASKPASS="$d/mock-askpass" ONEUP_STOP_POLL_SECONDS=1 \
         "$@" \
-        bash "$ENGINE" --size=system --hold --log="$d/run.log" >"$d/out" 2>&1 &
+        "${ENGINE_CMD[@]}" --size=system --hold --log="$d/run.log" >"$d/out" 2>&1 &
     HELD_PID=$!
     local _i
     for _i in $(seq 1 300); do
@@ -1141,14 +1141,41 @@ if [[ -f "$d/state-during-run" ]]; then
         echo "  FAIL - it records the log path (got '${st[1]:-}')"; FAIL=$((FAIL+1))
     fi
     check_eq "it records which steps are running" "system" "${st[2]:-}"
+    # ONEUP-0054 INV-13. Line 4 is the epoch second the run committed. The window does not
+    # read it today, which is exactly why it needs asserting: without this a Python engine
+    # could drop the line and pass every gate, silently narrowing the file.
+    if [[ "${st[3]:-}" =~ ^[0-9]+$ ]]; then
+        echo "  ok   - it records when the run committed"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - it records when the run committed (got '${st[3]:-}')"; FAIL=$((FAIL+1))
+    fi
 else
-    # +4: this check plus the three field checks that could not run.
-    echo "  FAIL - no run-state file was written during the run"; FAIL=$((FAIL+4))
+    # +5: this check plus the four field checks that could not run.
+    echo "  FAIL - no run-state file was written during the run"; FAIL=$((FAIL+5))
 fi
 if [[ ! -f "$d/run.state" ]]; then
     echo "  ok   - the record is cleared when the run ends"; PASS=$((PASS+1))
 else
     echo "  FAIL - a finished run left its record behind"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+
+# ONEUP-0058 / files-and-naming.md §7 Trap 2. The engine's log directory has no override,
+# and run_engine does not redirect HOME, so an engine that ran its mkdir before looking at
+# --log= created ~/Documents/update-logs on whatever box the suite ran on — including one
+# that had never installed OneUp. HOME is redirected here for the same reason the assertion
+# exists: a test must not touch the machine it runs on (testing.md §2).
+echo "TEST: a run given --log= creates no log directory of its own (ONEUP-0058)"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"; chmod +x "$d/zypper"
+mkdir -p "$d/home"
+_home_before="$HOME"; HOME="$d/home"
+run_engine "$d" --steps=cache >/dev/null 2>&1
+HOME="$_home_before"
+if [[ ! -e "$d/home/Documents/update-logs" ]]; then
+    echo "  ok   - no log directory is created when --log= points elsewhere"; PASS=$((PASS+1))
+else
+    echo "  FAIL - the engine created \$HOME/Documents/update-logs anyway"; FAIL=$((FAIL+1))
 fi
 rm -rf "$d"
 
@@ -2287,6 +2314,57 @@ check "flatpak up to date when no updates" "@@STEP_END@@|flatpak|ok|up to date" 
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0070 / ONEUP-0054 INV-9: a step whose tool is absent is skipped CLEANLY, never
+# errored. The engine guards the Flatpak and firmware steps with `command -v`, and both
+# CLAUDE.md and the spec state the rule — but no scenario had ever arranged an absent tool,
+# so the branch had run in neither engine. It is also the branch a real user without Flatpak
+# takes on every single run.
+#
+# Deleting the two mocks is not enough: run_engine puts the mock dir FIRST on the real PATH,
+# so `command -v flatpak` would then find the developer's own. The scenario supplies a PATH
+# of its own — the mock dir, then a directory of symlinks to everything on the real PATH
+# except those two — and asserts the hiding actually worked before trusting the result.
+echo "TEST: a step whose tool is absent is skipped, not failed (ONEUP-0070, INV-9)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *needs-rebooting*) exit 0 ;;
+  *dup*|*update*)    echo "Nothing to do."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+# One `ln` per PATH entry rather than one per file. Earlier entries win, so the farm keeps
+# the real PATH's precedence; collisions from later dirs fail harmlessly.
+mkdir -p "$d/sysbin"
+IFS=: read -r -a _pdirs <<<"$PATH"
+for _pd in "${_pdirs[@]}"; do
+    [[ -d "$_pd" ]] || continue
+    ln -s -t "$d/sysbin" "$_pd"/* 2>/dev/null
+done
+rm -f "$d/sysbin/flatpak" "$d/sysbin/fwupdmgr"
+rm -f "$d/flatpak" "$d/fwupdmgr"
+_path_before="$PATH"
+# shellcheck disable=SC2123  # Replacing PATH is the point: hiding the two tools from the
+# engine's own `command -v` lookup is what this scenario tests. Restored on both arms below.
+PATH="$d/sysbin"
+# Prove the hiding worked. Without this, a farm that quietly kept the real binary would
+# report a skip that never happened, and the scenario would pass for the wrong reason.
+if command -v flatpak >/dev/null 2>&1 || command -v fwupdmgr >/dev/null 2>&1; then
+    PATH="$_path_before"
+    # +3: this check plus the three below, none of which would mean anything.
+    echo "  FAIL - could not hide flatpak/fwupdmgr from the engine's PATH"; FAIL=$((FAIL+4))
+else
+    echo "  ok   - both tools are genuinely absent from the engine's PATH"; PASS=$((PASS+1))
+    out=$(run_engine "$d" --steps=flatpak,firmware,cache)
+    PATH="$_path_before"
+    check "an absent flatpak is SKIPPED"           "@@STEP_END@@|flatpak|skip"  "$out"
+    check "an absent fwupdmgr is SKIPPED"          "@@STEP_END@@|firmware|skip" "$out"
+    check_absent "neither absence is an error"     "@@DONE@@|errors"            "$out"
+fi
+rm -rf "$d"
+
 echo "TEST: --check performs NO privileged auth (never invokes sudo)"
 d=$(mktemp -d); setup_common "$d"
 # A sudo mock that fails loudly if called at all: --check must be root-free.
@@ -2345,22 +2423,48 @@ rm -rf "$d"
 # spawned them had been killed. So the loop must also watch the engine's pid and
 # exit on its own. This asserts the guard directly: run the real loop against a pid
 # that is already gone and it must exit rather than idle.
-echo "TEST: the keep-alive exits on its own once the engine is gone (SIGKILL-proof)"
-dead=999999; while [[ -d "/proc/$dead" ]]; do dead=$((dead+1)); done
-ka_body=$(sed -n '/setsid bash -c ./,/oneup-keepalive/p' "$ENGINE")
-if [[ -z "$ka_body" ]]; then
-    echo "  FAIL - could not find the keep-alive loop in the engine"; FAIL=$((FAIL+1))
+# ONEUP-0054 §4.3.5. This REPLACES "the keep-alive exits on its own once the engine is gone
+# (SIGKILL-proof)", which sed'd the keep-alive loop out of update_system.sh and ran that Bash
+# fragment — so what it asserted was one engine's implementation, and it fails against a
+# Python engine at its first step. This asserts the PROPERTY instead (INV-7: nothing the
+# engine spawns outlives it), so it holds for whichever engine ONEUP_ENGINE_CMD names.
+#
+# Staged on a held --size run because that path authenticates: hold.state appears only after
+# run_size's dry run, which follows sudo_init, so a keep-alive provably exists at that point.
+# ONEUP_KEEPALIVE_SECONDS shortens the loop's sleep so the guard is observable inside a
+# test's patience; without it the keep-alive would not look at its parent for 50 seconds.
+echo "TEST: nothing the engine spawned survives a SIGKILL (INV-7)"
+d=$(mktemp -d); setup_hold_dir "$d" allow
+if ! start_held_engine "$d" ONEUP_KEEPALIVE_SECONDS=1; then
+    # +2: both assertions below, neither of which can run.
+    echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+2))
+    tail -5 "$d/out" 2>/dev/null | awk '{print "         " $0}'
+    reap_held_engine >/dev/null 2>&1
 else
-    # Run the engine's own loop body, substituting a 0.1s sleep for its 50s one so the
-    # test doesn't wait a minute to observe the guard. The `kill -0` guard is verbatim.
-    loop=$(sed 's/sleep 50/sleep 0.1/' <<<"$ka_body" \
-           | sed -e 's/^ *setsid bash -c .//' -e "s/. oneup-keepalive .*$//")
-    if timeout 5 bash -c "$loop" oneup-keepalive-test "$dead" >/dev/null 2>&1; then
-        echo "  ok   - the keep-alive exits when its engine no longer exists"; PASS=$((PASS+1))
+    # Matched on the tag AND our own engine's pid, which the loop carries as an argument:
+    # the tag alone would match another scenario's keep-alive, or the developer's own run.
+    if pgrep -f "oneup-keepalive $HELD_PID" >/dev/null 2>&1; then
+        echo "  ok   - the engine spawned a keep-alive to outlive it"; PASS=$((PASS+1))
     else
-        echo "  FAIL - the keep-alive kept running with no engine to keep alive"; FAIL=$((FAIL+1))
+        echo "  FAIL - no keep-alive was spawned, so this scenario asserts nothing"; FAIL=$((FAIL+1))
+    fi
+    kill -9 "$HELD_PID" 2>/dev/null
+    wait "$HELD_PID" 2>/dev/null
+    # A SIGKILLed engine runs no trap, so nothing tidies up on its behalf — the keep-alive
+    # has to notice its parent is gone and exit by itself. Poll rather than sleep.
+    survived=yes
+    for _ in $(seq 1 100); do
+        pgrep -f "oneup-keepalive $HELD_PID" >/dev/null 2>&1 || { survived=no; break; }
+        sleep 0.1
+    done
+    if [[ "$survived" == no ]]; then
+        echo "  ok   - nothing it spawned survived the SIGKILL"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - a keep-alive outlived the SIGKILLed engine"; FAIL=$((FAIL+1))
+        pkill -f "oneup-keepalive $HELD_PID" 2>/dev/null
     fi
 fi
+rm -rf "$d"
 
 # ---------------------------------------------------------------------------
 echo "TEST: @@INSTALLED@@ keeps its positional 3-field layout the GUI depends on"

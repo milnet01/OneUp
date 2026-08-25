@@ -859,11 +859,11 @@ def main() -> int:
     # §6, two rows at once: a hold.state a SIGKILLed engine left behind, and a second
     # window's hold. One test refuses both — line 1 must be OUR OWN _size_proc's pid.
     paths.HOLD_STATE.parent.mkdir(parents=True, exist_ok=True)
-    paths.HOLD_STATE.write_text(f"424242\n{paths.LOG_DIR / 'elsewhere.log'}\n412 MB\n")
+    paths.HOLD_STATE.write_text(f"424242\n{paths.STATE_LOG_DIR / 'elsewhere.log'}\n412 MB\n")
     paths.GO_REQUEST.unlink(missing_ok=True)
     wO = window.Updater()
     wO._size_proc = _SizeProc(999999)
-    wO._hold_log = paths.LOG_DIR / "elsewhere.log"
+    wO._hold_log = paths.STATE_LOG_DIR / "elsewhere.log"
     check("a hold.state belonging to another engine is not adopted",
           run._adopt_held_engine(wO) is False)
     check("and no go-ahead is written for it",
@@ -874,7 +874,7 @@ def main() -> int:
     # whatever is selected when Update is pressed, which may have changed in between.
     wA = window.Updater()
     wA._size_proc = _SizeProc(31337)
-    _held_log = paths.LOG_DIR / "held-preview.log"
+    _held_log = paths.STATE_LOG_DIR / "held-preview.log"
     wA._hold_log = _held_log
     wA._size_buf = "partial-mark"
     for _k in ("flatpak", "firmware", "orphans"):

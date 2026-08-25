@@ -101,7 +101,7 @@ def cache_bytes() -> int:
 def copy_diagnostics(win):
     """Bundle version info + the latest run log onto the clipboard for a bug
     report (the Settings dialog's 'Copy diagnostics' button)."""
-    log = _latest_run_log(paths.LOG_DIR)
+    log = _latest_run_log(paths.STATE_LOG_DIR)
     log_name = log_text = None
     if log is not None:
         log_name = log.name

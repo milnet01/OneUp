@@ -123,6 +123,9 @@ THIN_SNAPSHOTS=false  # --thin-snapshots: run snapper's own retention cleanup to
                       # expendable Btrfs restore points (guarded; never a hand-pick).
 SNAP_WARN_COUNT=25    # pre-flight: warn once this many Btrfs snapshots have piled up
                       # (each zypper transaction leaves a pre/post pair, so they add up).
+KEEPALIVE_SECONDS="${ONEUP_KEEPALIVE_SECONDS:-50}"  # how often the keep-alive refreshes the
+                      # cached credential. sudo's own timeout is minutes, so 50 is ample;
+                      # overridable so a test need not wait one out, like the budgets below.
 STOP_POLL_SECONDS="${ONEUP_STOP_POLL_SECONDS:-2}"  # how often the download pass looks for a
                       # stop request (ONEUP-0085). "Stop within seconds" means this plus
                       # zypper's own exit; overridable so the suite need not wait one out.
@@ -260,8 +263,13 @@ fi
 # ---------------------------------------------------------------------------
 # Logging: mirror everything to the log file as well as the console/GUI.
 # ---------------------------------------------------------------------------
-mkdir -p "$LOG_DIR"
+# Created only if we are about to default into it. Running the mkdir first made the
+# test suite create ~/Documents/update-logs on any machine it ran on, including one
+# that had never installed OneUp — a test must not touch the box it runs on
+# (docs/standards/testing.md §2). ONEUP-0058; the Python engine's runstate.py applies
+# the same rule.
 if [[ -z "$LOG_FILE" ]]; then
+    mkdir -p "$LOG_DIR"
     LOG_FILE="$LOG_DIR/$(date +%Y-%m-%d_%H%M).log"
 fi
 # -p (--output-error=warn-nopipe) is what lets a run survive the GUI going away
@@ -800,13 +808,14 @@ sudo_init() {
     # every 50 seconds, 40 minutes after the runs that spawned them were killed
     # (ONEUP-0041). $0 carries a grep-able tag so a test can identify these without
     # matching every `sleep 50` on the machine.
-    # shellcheck disable=SC2016  # the single quotes are the point: "$1" must reach the
-    # INNER shell unexpanded, where it is the engine pid passed as an argument below.
+    # shellcheck disable=SC2016  # the single quotes are the point: "$1" and "$2" must reach
+    # the INNER shell unexpanded, where they are the engine pid and the refresh interval
+    # passed as arguments below.
     setsid bash -c '
         while kill -0 "$1" 2>/dev/null; do
             sudo -n -v 2>/dev/null || true
-            sleep 50
-        done' oneup-keepalive "$$" >/dev/null 2>&1 &
+            sleep "$2"
+        done' oneup-keepalive "$$" "$KEEPALIVE_SECONDS" >/dev/null 2>&1 &
     SUDO_KEEPALIVE=$!
 }
 

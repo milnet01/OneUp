@@ -68,7 +68,7 @@ ENGINE = _find_engine()
 ENTRY_POINT = HERE / "updater.py"
 STATE_DIR = _state_home() / "oneup"
 HISTORY = STATE_DIR / "history.json"
-LOG_DIR = STATE_DIR / "logs"
+STATE_LOG_DIR = STATE_DIR / "logs"
 # Where the engine records a run in flight, so a window that opens mid-run can find
 # it, say so, and follow the log instead of letting the user launch a second run that
 # can only fail on the package lock (ONEUP-0045). Must match RUN_STATE_FILE in

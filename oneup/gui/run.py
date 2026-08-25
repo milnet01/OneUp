@@ -182,7 +182,7 @@ def request_size(win, key: str):
     win._announce("Working out the download size — this can take up to a minute.",
                    row.size_btn)
     win._size_buf = ""
-    paths.LOG_DIR.mkdir(parents=True, exist_ok=True)
+    paths.STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     # Named as a RUN log, not `<stamp>.size.log`, because --hold means this preview may
     # become the run. The engine writes its --log= value verbatim into `run.state` for
@@ -191,7 +191,7 @@ def request_size(win, key: str):
     # correctly up front costs nothing and needs no extra payload in `go.request`
     # (ONEUP-0044 §4.5). Held here rather than in `_log_path`, which must keep pointing
     # at the last real run until this preview actually becomes one.
-    size_log = paths.LOG_DIR / f"{stamp}.log"
+    size_log = paths.STATE_LOG_DIR / f"{stamp}.log"
     win._hold_log = size_log
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
@@ -344,9 +344,9 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
 
     _reset_for_run(win, steps, check)
 
-    paths.LOG_DIR.mkdir(parents=True, exist_ok=True)
+    paths.STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    win._log_path = paths.LOG_DIR / (f"{stamp}.check.log" if check else f"{stamp}.log")
+    win._log_path = paths.STATE_LOG_DIR / (f"{stamp}.check.log" if check else f"{stamp}.log")
 
     if check:
         win.bar.setRange(0, 0)  # indeterminate

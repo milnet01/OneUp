@@ -254,6 +254,30 @@ A hold has deliberately not written `run.state`, so that check is false for the 
 hold and a Cancel routed through it would do nothing until the ceiling. The hold compares
 `stop.request` against `hold.state`, its own stamp.
 
+### 4.1.2 The exit codes, written down
+
+§4.1 freezes the exit codes and records that four of them are pinned by nothing:
+no scenario reaches them, so v2 could change all four with every gate green.
+Measured from `update_system.sh` at the constructs named in the third column.
+
+| Code | Meaning | Read from |
+| --- | --- | --- |
+| `2` | an unrecognised flag | the argument loop's `*)` arm, which prints `Unknown option: <arg>` and the usage to **stderr** |
+| `130` | interrupted (128 + SIGINT) | `trap 'exit 130' INT` |
+| `143` | terminated (128 + SIGTERM, and SIGHUP) | `trap 'exit 143' TERM HUP` |
+| `141` | broken pipe (128 + SIGPIPE) | `trap 'exit 141' PIPE` |
+
+**The three signal traps `exit` rather than merely running `cleanup`, and that is
+load-bearing.** A plain `trap cleanup INT` would tidy up and then *resume* after the
+interrupted command, carrying on through the remaining privileged steps the user just
+cancelled. Exiting fires the EXIT trap, so `cleanup` still runs. The SIGPIPE trap is
+reachable only on a `tee` without `-p`; its point is that `cleanup` runs at all, since an
+untrapped SIGPIPE kills the shell outright and leaves the keep-alive looping and disabled
+repositories disabled.
+
+**`--help` and `-h` exit `0`**, and that one is not in the table because a scenario already
+covers it.
+
 ### 4.2 Module layout
 
 Nine modules, each tracing to an existing cluster of the Bash file rather than to a

@@ -39,14 +39,14 @@ def _query_auth_status(win):
     p = getattr(win, "_authstat_proc", None)
     if p is not None and p.state() != QProcess.NotRunning:
         return
-    paths.LOG_DIR.mkdir(parents=True, exist_ok=True)
+    paths.STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.finished.connect(lambda _c, _s, pr=p: _on_auth_status_finished(win, pr))
     win._authstat_proc = p
     p.start("bash", [str(paths.ENGINE), "--auth-status",
-                     f"--log={paths.LOG_DIR / f'{stamp}.auth.log'}"])
+                     f"--log={paths.STATE_LOG_DIR / f'{stamp}.auth.log'}"])
 
 
 def _on_auth_status_finished(win, proc: QProcess):
@@ -156,13 +156,14 @@ def _run_auth(win, action: str, status_text: str):
     win.auth_btn.setEnabled(False)
     win.status.setText(status_text)
     win._settings_status(status_text)
-    paths.LOG_DIR.mkdir(parents=True, exist_ok=True)
+    paths.STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.finished.connect(lambda _c, _s, pr=p: _on_auth_finished(win, pr))
     win._authchg_proc = p
-    p.start("bash", [str(paths.ENGINE), action, f"--log={paths.LOG_DIR / f'{stamp}.auth.log'}"])
+    log = paths.STATE_LOG_DIR / f"{stamp}.auth.log"
+    p.start("bash", [str(paths.ENGINE), action, f"--log={log}"])
 
 
 def _on_auth_finished(win, proc: QProcess):
