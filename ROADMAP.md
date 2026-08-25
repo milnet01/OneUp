@@ -4528,3 +4528,28 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: doc.
   Source: in-session-2026-08-25 (review-contract loop 4 on the ONEUP-0054 build plan).
   Lanes: docs.
+
+- 📋 [ONEUP-0131] **Silence the Qt teardown traceback the window suite prints after its summary.**
+  `python3 tests/gui-smoke.py` prints `QProcess: Destroyed while process ("bash")
+  is still running.` and a `RuntimeError: libshiboken: Internal C++ object
+  (PySide6.QtWidgets.QPushButton) already deleted.` AFTER its summary line. The
+  suite reports 442 passed / 0 failed and exits 0, so `local-CI.sh` is green and
+  nothing is broken.
+
+  Verified pre-existing on 2026-08-25, not introduced by ONEUP-0054 stage 2: run
+  against the tree at 2a9e52a (the commit before stage 2's code landed) it prints
+  the identical output — 442/0, exit 0, one traceback — as it does at stage 2's
+  head. Recorded because the traceback is the last thing on screen after a passing
+  run, so it reads as a failure and invites an investigation that has already been
+  done.
+
+  The cause is interpreter-shutdown ordering: a QProcess and a widget outlive the
+  Python objects that own them. The fix is teardown discipline in the suite — hold
+  a reference, or close the process explicitly — not a change to the app.
+
+  Do not chase it as a defect unless the suite starts reporting a non-zero
+  Failed count or a non-zero exit.
+  **Layman:** The window tests pass, but print an alarming-looking error after the results. It is harmless; tidy it so nobody wastes time on it.
+  Kind: test.
+  Source: in-session-2026-08-25 (verified while closing ONEUP-0054 stage 2).
+  Lanes: tests.
