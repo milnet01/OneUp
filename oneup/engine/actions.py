@@ -25,11 +25,6 @@ AUTH_FILE = Path(os.environ.get("ONEUP_AUTH_FILE") or "/etc/sudoers.d/oneup")
 GUARD_DIR = "/usr/libexec" if Path("/usr/libexec").is_dir() else "/usr/lib"
 GUARD_FILE = Path(os.environ.get("ONEUP_GUARD_FILE") or f"{GUARD_DIR}/oneup-download-guard")
 
-# The refresh budget, matching the engine's own default. It reaches auth_cmnds from the
-# environment, so it is pinned to digits there rather than trusted.
-REFRESH_TIMEOUT = os.environ.get("ONEUP_REFRESH_TIMEOUT") or "120"
-
-
 def auth_cmnds() -> str | None:
     """The granted scope, written in ONE place (ONEUP-0092).
 
@@ -55,17 +50,21 @@ def auth_cmnds() -> str | None:
     env = shutil.which("env")
     if env:
         cmds.append(f"{env} LC_ALL=C zypper *")
-    timeout, du = shutil.which("timeout"), shutil.which("du")
-    if not timeout or not du:
+    # Both argvs are written once, in privilege.py, and read by the call site AND by
+    # this rule (ONEUP-0092 §4.2). `None` means the binary is absent — refuse the whole
+    # rule rather than emit a bare name, which visudo rejects outright, taking the
+    # user's working sudoers with it.
+    refresh, cache_du = privilege.REFRESH_SUDO_ARGV, privilege.CACHE_DU_ARGV
+    if refresh is None or cache_du is None:
         return None
     # The budget lands in the one slot a wildcard would make exploitable, and it arrives
     # from the environment, so it is pinned to digits rather than trusted: `5 *` would
     # generate `timeout 5 * zypper *`, which visudo accepts and which
     # `timeout 5 /bin/sh -c 'zypper x'` then satisfies.
-    if not REFRESH_TIMEOUT.isdigit():
+    if not refresh[1].isdigit():
         return None
-    cmds.append(f"{timeout} {REFRESH_TIMEOUT} zypper *")   # timeout <budget> zypper …
-    cmds.append(f"{du} -sB1 /var/cache/zypp")              # exactly this
+    cmds.append(" ".join(refresh) + " *")   # timeout <budget> zypper …
+    cmds.append(" ".join(cache_du))         # exactly this
     cmds.append(str(GUARD_FILE))                           # any args: the guard restricts itself
     return ", ".join(cmds)
 
@@ -191,19 +190,6 @@ def notify_send(title: str, body: str) -> None:
         proc.run(["notify-send", "-a", "OneUp", "-i", APP_ID, title, body])
 
 
-def _emit_check(key: str, count: int, label: str, unreadable: str = "") -> None:
-    """`emit_check`: the reason first, and never a confident zero after a failed read.
-
-    A bare `CHECK|key|0` when a source could not be read is the ONEUP-0056 bug —
-    "I don't know" rendered as "you're up to date". A non-zero count still ships,
-    because knowing about 7 updates beats knowing about none.
-    """
-    if unreadable:
-        markers.marker("CHECK_UNKNOWN", f"{key}|{unreadable}")
-    if not unreadable or count > 0:
-        markers.marker("CHECK", f"{key}|{count}|{label}")
-
-
 def _check_system() -> tuple[int, bool]:
     """Count pending system updates. Returns (count, whether a source was unreadable)."""
     # One read serves both the count and the per-package detail. stderr is MERGED
@@ -231,7 +217,7 @@ def _check_system() -> tuple[int, bool]:
         markers.out(f"  System packages: couldn't check — {unreadable}")
     else:
         markers.out(f"  System packages: {n} update(s)")
-    _emit_check("system", n, "system package(s)", unreadable)
+    markers.emit_check("system", n, "system package(s)", unreadable)
     # Columns: S | Repository | Name | Current | Available | Arch.
     for line in rows:
         f = [field.strip() for field in line.split("|")]
@@ -275,7 +261,7 @@ def _check_flatpak() -> tuple[int, bool]:
         markers.out(f"  Flatpak apps: couldn't check — {unreadable}")
     else:
         markers.out(f"  Flatpak apps: {n} update(s)")
-    _emit_check("flatpak", n, "Flatpak app(s)", unreadable)
+    markers.emit_check("flatpak", n, "Flatpak app(s)", unreadable)
     for row in rows:
         parts = row.split()
         if parts:
@@ -287,7 +273,7 @@ def _check_flatpak() -> tuple[int, bool]:
 def _check_firmware() -> int:
     """Ask fwupd whether anything is pending. Yes or no, so there is no unreadable case."""
     n = 1 if proc.succeeds(["fwupdmgr", "get-updates"]) else 0
-    # Emitted DIRECTLY, not through `_emit_check`: firmware reports a bare zero on
+    # Emitted DIRECTLY, not through `emit_check`: firmware reports a bare zero on
     # purpose, which that emitter's suppression rule exists to withhold.
     markers.marker("CHECK", f"firmware|{n}|firmware update(s)")
     markers.out("  Firmware: " + ("available" if n else "up to date"))

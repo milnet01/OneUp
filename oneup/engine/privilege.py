@@ -16,6 +16,7 @@ the keep-alive, the askpass reaping and `cleanup` arrive with the run driver.
 from __future__ import annotations
 
 import os
+import shutil
 from collections.abc import Sequence
 
 from . import markers, proc
@@ -29,6 +30,38 @@ ASKPASS = os.environ.get("ONEUP_ASKPASS") or "/usr/libexec/ssh/ksshaskpass"
 # only asked for a download size. A prompt nobody can attribute is one they should refuse
 # (ONEUP-0037).
 SUDO_PROMPT = "OneUp needs administrator rights to update this system. Password: "
+
+# ---------------------------------------------------------------------------
+# The privileged argvs this engine issues in more than one place.
+# ---------------------------------------------------------------------------
+# ONEUP-0092 §4.2, "One definition per shape": each of these is written ONCE and
+# read by both the call site and the sudoers rule that grants it, so a respelling
+# on either side cannot drift unnoticed. A drifted pair is invisible until a
+# passwordless user meets it mid-run, in sudo's own bare wording.
+#
+# `None` when the binary is missing, and deliberately NOT a bare-name fallback:
+# `build_auth_rule` must emit an absolute path or `visudo -cf` rejects the whole
+# file, so the two readers want opposite things on failure and the refusal has to
+# win. `auth_cmnds` returns None on it; a caller that needs to RUN one checks first.
+_TIMEOUT_BIN = shutil.which("timeout")
+_DU_BIN = shutil.which("du")
+
+# The per-repository refresh budget. It arrives from the environment, so it is
+# pinned to digits where it reaches the sudoers rule rather than trusted here.
+REFRESH_TIMEOUT = os.environ.get("ONEUP_REFRESH_TIMEOUT") or "120"
+
+# `sudo timeout <budget> zypper …` — zypper has no timeout of its own, so a
+# crawling mirror is bounded from outside (ONEUP-0048).
+REFRESH_SUDO_ARGV: list[str] | None = (
+    [_TIMEOUT_BIN, REFRESH_TIMEOUT, "zypper"] if _TIMEOUT_BIN else None
+)
+
+# `sudo du -sB1 /var/cache/zypp` — the cache step measures the package cache
+# before and after the clean so it can report what it freed. Fixed argv, no
+# wildcard: `du` takes no sub-command, so there is nothing to escape into.
+CACHE_DU_ARGV: list[str] | None = (
+    [_DU_BIN, "-sB1", "/var/cache/zypp"] if _DU_BIN else None
+)
 
 
 def install_environment() -> None:

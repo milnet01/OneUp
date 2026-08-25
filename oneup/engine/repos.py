@@ -143,11 +143,6 @@ def _cdn_line(line: str) -> str:
 
 # --- the privileged half -----------------------------------------------------
 
-# The per-repository refresh budget, matching the engine's own default. It
-# reaches `auth_cmnds` from the environment, so it is pinned to digits there
-# rather than trusted.
-REFRESH_TIMEOUT = os.environ.get("ONEUP_REFRESH_TIMEOUT") or "120"
-
 # Whether this run's refresh hit a problem, and whether it has refreshed at all.
 # A later step needs to tell fresh metadata from stale without paying for a
 # second refresh — the orphans step is reached with the second still False
@@ -168,7 +163,9 @@ _TIMED_OUT = 124
 # Resolved once, and by path: the ONEUP-0023 drop-in grants
 # `timeout <budget> zypper *` against the path sudo will resolve, so the argv here and
 # the granted rule have to name the same binary.
-_TIMEOUT = shutil.which("timeout") or "timeout"
+# The refresh argv lives in privilege.py, read by this call site and by the
+# sudoers rule that grants it (ONEUP-0092 §4.2).
+REFRESH_TIMEOUT = privilege.REFRESH_TIMEOUT
 
 
 def release_zypper_lock() -> None:
@@ -252,7 +249,8 @@ def refresh_repos(*, import_keys: bool = False) -> None:
             return
         markers.marker("REFRESH", f"{i}|{total}|{alias}")
         rc, _ = privilege.sudo(
-            [_TIMEOUT, REFRESH_TIMEOUT, "zypper", "--non-interactive", *gpg, "refresh", alias],
+            [*(privilege.REFRESH_SUDO_ARGV or ["timeout", REFRESH_TIMEOUT, "zypper"]),
+             "--non-interactive", *gpg, "refresh", alias],
             stream=True,
         )
         if rc == 0:
