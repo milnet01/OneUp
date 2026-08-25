@@ -1011,7 +1011,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: test.
   Source: in-session-2026-07-25.
 
-- 📋 [ONEUP-0054] **OneUp 2.0 — replace the Bash engine with a Python one, on the `v2` branch.**
+- 🚧 [ONEUP-0054] **OneUp 2.0 — replace the Bash engine with a Python one, on the `v2` branch.**
   Decided in ONEUP-0052. Design: docs/specs/ONEUP-0054-python-engine.md
   (draft — must go through /cold-eyes before any code, global rule 14).
 
@@ -1065,6 +1065,35 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Worth correcting when something else opens those sections — ONEUP-0065 is the
   nearest existing home, since it converts stale citations in the older
   documents. Not worth a commit of its own.
+  Progress (2026-08-25): stage 1 of nine is built and green on both branches.
+  The build plan is docs/plans/ONEUP-0054-python-engine.md, written now rather
+  than up front — documentation.md §2 forbids writing later stages before they
+  start, so it covers stage 1 only and grows a stage at a time. Gated with
+  review-contract --genre plan: 2 loops, 3 cold lanes each, 10 verified, 10
+  fixed. The cap was VIOLENT — five of loop 2's six findings landed on text
+  loop 1 itself wrote — so the plan routes to implementation rather than a third
+  cold read.
+
+  The harness change: ONEUP_ENGINE_CMD is a scalar env var word-split into argv
+  by the suite, built with `read -r -a` (an unquoted expansion globs as well as
+  splits) and defaulting to a quoted array literal so the absolute $ENGINE path
+  survives a space. Both of main's invocation sites moved; the three readers
+  that treat $ENGINE as a FILE are untouched, per §4.4's stage assignments.
+
+  Two things worth carrying forward. First, main's §4.4 still said "an
+  ONEUP_ENGINE_CMD ARRAY override" — the scalar correction landed on v2 with the
+  ONEUP-0127 re-gate and was never merged back, so the contract an implementer
+  reads on the branch stage 1 is built on prescribed the very defect the re-gate
+  removed. Step 1 crossed §4.4 whole, which also made the step-9 merge conflict-
+  free. Second, the gate's best finding, reproduced: against a stub engine the
+  whole suite goes red the moment run_engine alone is converted, so suite
+  redness is evidence about that one site. Leaving the broken-pipe site on v1
+  and re-running, its own three checks PASS while the suite stays red — a
+  half-done stage 1 that reads as complete, and at stage 6 would have shown up
+  as G2 diffing v1 against v1. The verify is now site-specific.
+
+  On v2 one direct `bash "$ENGINE"` invocation remains on purpose: the --hold
+  scenario ONEUP-0044 added, which §4.4 assigns to stage 2.
 
 - ✅ [ONEUP-0056] **Never report "up to date" for a source the check couldn't read.**
   Reported with two screenshots: OneUp's check said "Everything is up
