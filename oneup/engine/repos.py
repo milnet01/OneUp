@@ -268,3 +268,25 @@ def refresh_repos(*, import_keys: bool = False) -> None:
             )
             markers.marker("REMEDY", f"skip-repo|{alias}")
         REFRESH_FAILED = True
+
+
+def restore_disabled() -> None:
+    """Re-enable every repository this run set aside, on the way out.
+
+    `cleanup`'s half, and §4.2 flags it as the one to be careful with when a
+    function is split three ways: the scenario that asserts it is *"an
+    interrupted --skip-repo run still re-enables the source (trap restore)"*.
+
+    Non-interactively (`-n`): a cold credential must log the manual fix rather
+    than block the exit on a password dialog nobody is watching.
+    """
+    pending, DISABLED[:] = list(DISABLED), []      # idempotent: cleanup can be reached twice
+    for alias in pending:
+        if not alias:
+            continue
+        rc, _ = privilege.sudo(
+            ["zypper", "--non-interactive", "modifyrepo", "--enable", alias], flags=("-n",))
+        if rc != 0:
+            markers.err(f"  ! Couldn't re-enable repository '{alias}' — run: "
+                        f"sudo zypper modifyrepo --enable {alias}")
+

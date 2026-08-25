@@ -12,6 +12,7 @@ name could not collide. In one package it can — `docs/standards/files-and-nami
 
 from __future__ import annotations
 
+import contextlib
 import os
 from datetime import datetime
 from pathlib import Path
@@ -74,3 +75,18 @@ def resolve_log_path(explicit: str | None) -> Path:
         return Path(explicit)
     USER_LOG_DIR.mkdir(parents=True, exist_ok=True)
     return USER_LOG_DIR / f"{datetime.now().strftime('%Y-%m-%d_%H%M')}.log"
+
+
+# Only the process that WROTE the run-state file clears it, so a `--check` or a
+# `--size` run cannot erase a real run's record.
+_RUN_STATE_OWNED = False
+
+
+def clear_owned_state() -> None:
+    """Delete this run's own state files, if this process wrote them."""
+    if not _RUN_STATE_OWNED:
+        return
+    for path in (RUN_STATE, STOP_REQUEST):
+        with contextlib.suppress(OSError):
+            path.unlink()
+

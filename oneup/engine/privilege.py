@@ -15,8 +15,14 @@ the keep-alive, the askpass reaping and `cleanup` arrive with the run driver.
 
 from __future__ import annotations
 
+import atexit
+import contextlib
 import os
+import pathlib
 import shutil
+import signal
+import subprocess
+import sys
 from collections.abc import Sequence
 
 from . import markers, proc
@@ -116,6 +122,69 @@ def sudo_init() -> None:
     if rc != 0:
         markers.err("Authentication failed or cancelled — aborting.")
         raise SystemExit(1)
+    _start_keepalive()
+
+
+# How often the keep-alive re-validates. Overridable so a test can watch the loop
+# exit inside its own patience — a 50-second sleep makes the property unobservable.
+KEEPALIVE_SECONDS = os.environ.get("ONEUP_KEEPALIVE_SECONDS") or "50"
+
+# `argv[0]` of the keep-alive child. A grep-able tag so a test can find these
+# without matching every `sleep` on the machine; `pgrep -f oneup-keepalive` is
+# what both scenarios use, so renaming it makes them pass by finding nothing.
+KEEPALIVE_TAG = "oneup-keepalive"
+
+_KEEPALIVE: subprocess.Popen | None = None
+
+# The loop, as its own argv so nothing is interpolated into a shell. It watches
+# OUR pid and exits on its own once we are gone: `cleanup`'s group kill is the
+# fast path, but a trap cannot run when the engine is SIGKILLed, and then the
+# loop ran forever — two were found still calling `sudo -n -v` every 50 seconds,
+# 40 minutes after the runs that spawned them were killed (ONEUP-0041).
+#
+# `os.kill(pid, 0)` is the liveness test, against a pid captured ONCE at start.
+# Re-reading our own parent id instead can never fire: it is set at start and is
+# not refreshed on reparenting, and testing it against 1 never fires either,
+# because systemd reparents a user session's orphans to `systemd --user`
+# (CLAUDE.md §6).
+_KEEPALIVE_SRC = """
+import os, subprocess, sys, time
+pid, interval = int(sys.argv[2]), float(sys.argv[3])   # argv[1] is the tag
+while True:
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        break
+    subprocess.run(["sudo", "-n", "-v"], check=False,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(interval)
+"""
+
+
+def _start_keepalive() -> None:
+    """Refresh the cached credential in the background for the rest of the run.
+
+    Its own process group, so `cleanup` can kill the WHOLE group: killing the
+    child alone leaves its `sleep` orphaned and lingering for up to an interval.
+    Detached from our stdout and stderr so it never pollutes the log stream, and
+    so a consumer capturing our output is not held open by its sleep.
+
+    Never two. `sudo_init` has no re-entry guard of its own beyond `auth_current`,
+    and a second keep-alive would overwrite the handle so `cleanup`'s group kill
+    could only reach the later group — the orphan leak of ONEUP-0041 (INV-9).
+    """
+    global _KEEPALIVE
+    if _KEEPALIVE is not None:
+        return
+    interval = KEEPALIVE_SECONDS if KEEPALIVE_SECONDS.replace(".", "", 1).isdigit() else "50"
+    # The tag rides in argv so `pgrep -f oneup-keepalive` finds this child; it is
+    # read back out of sys.argv rather than used, which is why the loop skips it.
+    _KEEPALIVE = subprocess.Popen(  # noqa: S603 — fixed argv, no shell
+        [sys.executable, "-c", _KEEPALIVE_SRC, KEEPALIVE_TAG, str(os.getpid()), interval],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def sudo(argv: Sequence[str], *, flags: Sequence[str] = (), merge_stderr: bool = False,
@@ -129,3 +198,98 @@ def sudo(argv: Sequence[str], *, flags: Sequence[str] = (), merge_stderr: bool =
     """
     install_environment()
     return proc.run(["sudo", *flags, *argv], merge_stderr=merge_stderr, stream=stream)
+
+
+def reap_orphaned_askpass() -> None:
+    """Kill a password dialog nobody is waiting on any more.
+
+    Both the helper's path AND one of our own prompts must appear: the path
+    alone would catch another app's dialog, a prompt alone could match an
+    unrelated process that merely mentions the text. Matched as substrings,
+    because a script helper shows up as `bash <script> …`.
+
+    A dialog someone IS waiting on is a child of the sudo that launched it, so
+    the PARENT's command line is the test. Deliberately not "parent is pid 1":
+    systemd reparents a user session's orphans to `systemd --user`, so an
+    orphan-check against pid 1 silently never fires — that was the first version
+    of this function in Bash and it reaped nothing.
+    """
+    try:
+        rc, out = proc.run(["ps", "-eo", "pid=,ppid=,args="])
+    except OSError:
+        return
+    if rc != 0:
+        return
+    for line in out.splitlines():
+        parts = line.split(maxsplit=2)
+        if len(parts) < 3:
+            continue
+        pid, ppid, args = parts
+        if ASKPASS not in args:
+            continue
+        if SUDO_PROMPT not in args and VALIDATE_PROMPT not in args:
+            continue
+        try:
+            parent = pathlib.Path(f"/proc/{ppid}/cmdline").read_bytes().replace(b"\0", b" ")
+        except OSError:
+            parent = b""
+        if b"sudo" in parent:
+            continue                      # someone is still waiting on this one
+        with contextlib.suppress(OSError, ValueError):
+            os.kill(int(pid), signal.SIGTERM)
+
+
+def kill_keepalive() -> None:
+    """Kill the keep-alive's whole process GROUP, not just the child.
+
+    A plain kill leaves the inner sleep orphaned and lingering for up to one
+    interval after a cancelled run.
+    """
+    global _KEEPALIVE
+    if _KEEPALIVE is None:
+        return
+    with contextlib.suppress(OSError, ProcessLookupError):
+        os.killpg(_KEEPALIVE.pid, signal.SIGTERM)
+    _KEEPALIVE = None
+
+
+def cleanup() -> None:
+    """Everything this process must undo, whatever way it is leaving.
+
+    §4.2 splits the Bash `cleanup` three ways and this is the seam that
+    re-joins them. **The ORDER is load-bearing**: the repository re-enable runs
+    `sudo -n`, non-interactively, so it needs the credential the keep-alive is
+    keeping warm — kill the group first and an interrupted `--skip-repo` run
+    leaves the user's repository disabled. No scenario can see it; the suite's
+    cached-sudo mock succeeds on `sudo -n` either way.
+    """
+    # Deferred: both modules import this one, so a top-level import is a cycle.
+    from . import repos, runstate
+
+    runstate.clear_owned_state()
+    reap_orphaned_askpass()
+    repos.restore_disabled()
+    kill_keepalive()
+
+
+def _signal_exit(code: int):
+    """A handler that EXITS rather than merely tidying up.
+
+    A handler that ran `cleanup` and returned would resume after the interrupted
+    call and plough on through the remaining privileged steps the user just
+    cancelled. Raising `SystemExit` unwinds instead, and the `atexit` hook below
+    still runs. 130 = 128+SIGINT, 143 = 128+SIGTERM, the conventional codes
+    `docs/specs/ONEUP-0054-python-engine.md` §4.1.2 freezes.
+    """
+    def handler(_signum, _frame):
+        raise SystemExit(code)
+    return handler
+
+
+def install_exit_handlers() -> None:
+    """Run `cleanup` however this process leaves — including on an exception."""
+    atexit.register(cleanup)
+    signal.signal(signal.SIGINT, _signal_exit(130))
+    signal.signal(signal.SIGTERM, _signal_exit(143))
+    signal.signal(signal.SIGHUP, _signal_exit(143))
+
