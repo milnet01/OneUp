@@ -1,7 +1,7 @@
 # ONEUP-0054 — Python engine — build plan
 
 **Spec:** [docs/specs/ONEUP-0054-python-engine.md](../specs/ONEUP-0054-python-engine.md)
-**Status:** in progress — stages 1–4 done (2026-08-25); stage 5 next.
+**Status:** in progress — stages 1–4 done (2026-08-25); stage 5 under way.
 
 ## Scope of this file
 
@@ -808,6 +808,331 @@ builds only the progress PARSERS, so nothing forces the placement of `emit_progr
 `steps.py` beyond `system_txn_argv`, the run driver, the pre-flight, the grant/revoke pair
 and `--thin-snapshots` are stage 5's by §4.6's row, not by this stage's judgement.
 
+## Stage 5 — the run driver, `steps.py`, and the rest of `actions.py`
+
+**Branch: `v2` only**, for stage 2's reason: §4.6 ends every stage from 2 onwards with
+`./local-CI.sh` green on `v2` and says outright that *"Nothing in stages 1–8 changes
+`main`'s behaviour."* Stage 5 edits `tests/run-tests.sh` (step 11) and one document
+(step 12); both go to `v2`, the suite because it is `v2`'s copy of a file `main` also
+has, the document for `docs/standards/workflow.md` §9's second binding.
+
+**What stage 5 is, measured rather than described.** §4.6's stage-5 row names four
+pieces of work and ends *"the remaining scenarios → G1, and G4 with them"*. What
+"remaining" means was measured at `8d715ad`, the commit stage 4 ended on: with
+`ONEUP_ENGINE_CMD='python3 -m oneup.engine'` the engine suite reports **112 passed,
+199 failed**, the failures spread over 81 `TEST:` blocks. That set is this stage's
+scope. No other stage reduces it, and it is the number the *Definition of done* below
+is written against.
+
+**The barrier is the run driver, and it is why nearly every block fails at once.**
+`__main__.main` ends in `_not_built("a full run", "stage 5")`, so a scenario that
+invokes the engine with no dispatching flag gets one stderr line and exit 3. That
+includes blocks whose subject is not the run at all — `--grant-auth`, `--revoke-auth`
+and `--thin-snapshots` refuse for the same reason from their own arms. So the failing
+count is not a measure of how much behaviour is missing; steps 5 to 10 each convert a
+slice of it, and only step 6 converts a large one.
+
+**Two placements this stage settles, both recorded so neither is answered by accident.**
+
+- **`emit_check` and `emit_progress` go to `markers.py`.** §4.2 gives that module
+  *"every marker emitter"* and names both by name; stage 3 put `_emit_check` in
+  `actions.py`, and stage 4's *Not stage 4's* left the question open because nothing
+  yet forced it. Step 1 moves it. The alternative — leaving it and amending §4.2 —
+  re-arms the spec's own gate for a placement the spec already states.
+- **The shared privileged-argv definitions have no home yet, and one of them has two.**
+  `security.md` §5.2's guarantee is that each privileged argv is written once and read
+  by both the call site and the rule granting it. On the Python side `REFRESH_TIMEOUT`
+  is currently defined *twice* — in `actions.py` and again in `repos.py` — and
+  `du -sB1 /var/cache/zypp` exists only as a literal inside `auth_cmnds`, with the
+  cache step that must match it still unbuilt. The structural check that would have
+  caught the duplicate is still greping `update_system.sh`, which is exactly what §4.4
+  means by a check that has *"stopped guarding"*. Step 2 gives each one home; step 11
+  re-points the check.
+
+**What stage 5 must not become.** The run driver is straight-line script in Bash and
+its ORDER is load-bearing at four points, each of which the suite can only see
+indirectly: the shutdown-inhibitor re-exec happens before the log mirror is installed
+(otherwise the re-exec'd process installs a second one); `sudo_init` happens before
+`release_zypper_lock`; `run.state` is written only once the run is definitely going
+ahead, after the lock-holder check; and the pre-update snapshot block runs before the
+pre-flight warnings. Reproduce the order, not just the pieces.
+
+### Steps
+
+1. `markers.py` gains both emitters. Move `_emit_check` out of `actions.py` as
+   `emit_check` and repoint `actions.check`'s call sites — the body is unchanged,
+   including the ONEUP-0056 withholding rule (emit `CHECK_UNKNOWN` when a source was
+   unreadable; emit `CHECK` only when nothing was unreadable **or** the count is above
+   zero). Write `emit_progress(step, frac, phase, got="", want="")` beside it,
+   reproducing `update_system.sh`'s: strip every space from `frac`, and **return False
+   when it does not match `^([0-9]+)/([0-9]+)$`** — the caller needs to tell *emitted*
+   from *skipped*, because that distinction is the whole input to the ONEUP-0046
+   stale-parser canary. Append the two optional byte fields only when `got` is
+   non-empty, with an absent `want` written as `0`.
+   → **verify:** the three `--check` blocks stage 3 turned green are still green
+   (`emit_check` moving must change no output); and by hand, `emit_progress` returns
+   False and prints nothing for `"( 1/77"`, True and
+   `@@PROGRESS@@|system|1|77|download` for `"( 1/77)"`.
+
+2. One home for each shared privileged argv. Delete `repos.py`'s duplicate
+   `REFRESH_TIMEOUT` and have it import `actions`' — or move the constant to a module
+   both already import, which is the cheaper resolution given `actions` imports
+   `privilege` at module level. Add the cache-clean measurement argv
+   (`du -sB1 /var/cache/zypp`) as a constant in the same home, and have `auth_cmnds`
+   build its rule from it instead of the literal it carries now, so step 7's cache step
+   and the sudoers entry cannot drift apart.
+   → **verify:** `python3 -m oneup.engine --emit-guard` still matches the Bash's byte
+   for byte, and `auth_cmnds`' output — driven by hand from both engines under one
+   `PATH` — is identical, the `du` and `timeout` entries included. The constant appears
+   in exactly one assignment across `oneup/engine/`.
+
+3. `privilege.py` — the keep-alive, the reaper, and `cleanup`. `sudo_init` currently
+   builds only the authenticate half (stage 4's decision, recorded in *Not stage 4's*).
+   Add the keep-alive: a child that re-validates on the sibling interval and **watches
+   the engine's pid, exiting on its own when it goes** — `CLAUDE.md` §6 trap 4 is that a
+   trap cannot run under `SIGKILL`, and trap 5 is that the watch must `kill -0` a pid
+   captured at start, never re-read a parent id. Give it its own process group so
+   `cleanup` can kill the group.
+   `cleanup` does what §4.2 splits three ways, and the split is the part to get right:
+   deleting `run.state` and `stop.request` is `runstate.py`'s and happens **only if this
+   process wrote them**; re-enabling every alias in `repos.DISABLED` is `repos.py`'s
+   (add `restore_disabled`, which is the half §4.2 flags as easy to lose); reaping the
+   askpass dialog and killing the keep-alive group are `privilege.py`'s.
+   `reap_orphaned_askpass` matches the helper path **and** either prompt — `SUDO_PROMPT`
+   or the `-v` label `sudo_init` passes, which are deliberately two strings — and tests
+   the **parent's** cmdline for `sudo`, never pid 1 (trap 5 again: systemd reparents to
+   `systemd --user`).
+   Install it on every exit path: normal return, an uncaught exception, `SIGINT` → 130,
+   `SIGTERM`/`SIGHUP` → 143. The Bash's `PIPE` → 141 trap has no Python twin worth
+   copying — step 4 handles the broken pipe where it actually arrives.
+   **The keep-alive's command line must still contain `oneup-keepalive`.** The Bash
+   passes it as the inner shell's `$0` purely so a test can find these without matching
+   every `sleep` on the machine, and both scenarios that assert on it use
+   `pgrep -f oneup-keepalive`. A Python child spelled any other way is invisible to them
+   and they pass by finding nothing.
+   → **verify:** the two blocks that assert on this pass — *"nothing the engine spawned
+   survives a SIGKILL (INV-7)"* and *"an orphaned password dialog is reaped when the run
+   ends"*. Both are staged through a run, so they go green at step 6, not here; at this
+   step the check is by hand — start a keep-alive, `SIGKILL` the engine, and confirm the
+   helper is gone within its own poll interval.
+
+4. `runstate.py` — the log mirror, and `run.state`. **The mirror covers every run, not
+   just a full one**: `update_system.sh` installs its `tee` above every dispatch, so
+   `--check`, `--size`, the auth actions and `--thin-snapshots` are all mirrored, and
+   the Python engine writes no log at all today. Wrap `sys.stdout` and `sys.stderr` so
+   each line goes to the console and appended to the log path `resolve_log_path` already
+   computes, creating the directory **only when about to write it** — ONEUP-0058, which
+   stage 2 discharged for the path computation and this step must not undo.
+   **The `-p` reason must survive the rewrite.** `tee -a -p` exists because the engine's
+   stdout is a pipe to the window, and when the user quits, a plain `tee` dies and
+   `SIGPIPE`s the engine mid-transaction (`CLAUDE.md` §6 trap 3). In Python the same
+   event arrives as `BrokenPipeError` on the console write: swallow it, keep writing the
+   log, and never let it reach the run. A `SIGPIPE` that kills the process is the exact
+   failure this is here to prevent.
+   `run.state` is four lines — pid, log path verbatim, the selected `STEPS` string,
+   epoch seconds — written when the run commits and not before, with an ownership flag
+   so a `--check` or `--size` cannot clear a real run's record.
+   → **verify:** `--check` and `--size=system` under `run_engine` now leave a non-empty
+   log at `--log=`'s path and their stdout is unchanged (whole-output diff against the
+   Bash, as stages 3 and 4 did); and the block *"a run survives the GUI going away and
+   still finishes (broken stdout pipe)"* — which is staged through a run, so it turns at
+   step 6; here, drive it by hand with the reader closing early.
+
+5. `steps.py` — `begin_step`, `end_step`, and the four steps that are not the system
+   transaction. `begin_step` increments the index, prints the banner and emits
+   `@@STEP_BEGIN@@|key|index|total|label`; `end_step` records the elapsed seconds, the
+   status and the detail, counts a `fail` into the error tally, and emits `@@STEP_END@@`
+   **then** `@@TIMING@@` — two markers, in that order, because the window reads them
+   separately.
+   Flatpak, firmware, orphans and cache come across whole, each keeping its own trap:
+   flatpak counts what will update *before* updating so the detail can say how many;
+   firmware claims success only if the flash itself succeeded, since that is what drives
+   the reboot advice; orphans refreshes under the guard when the system step did not
+   (ONEUP-0048) and passes `--no-refresh` to both queries afterwards, removes only
+   *unneeded* packages and merely *reports* orphaned ones; cache **skips entirely when
+   the system step failed**, keeping the downloads for the retry (ONEUP-0087), and emits
+   `@@FREED@@` only on a genuine reduction. A step whose tool is absent is `skip`, never
+   `fail`.
+   → **verify:** driven from step 6's driver, the blocks *"flatpak reports how many apps
+   were updated"*, *"flatpak with nothing to update reports 'up to date'"*, *"orphans
+   step removes unneeded packages and reports the count"*, *"a FAILED orphan removal is
+   marked fail"*, *"the cache step clears packages but keeps repository metadata"*, *"an
+   already-empty cache reclaims nothing and emits no FREED marker"*, *"a step whose tool
+   is absent is skipped, not failed"* and both firmware blocks.
+
+6. `__main__.py` — the run driver, for everything except the system step and the hold.
+   This is the step that unblocks the rest, so it lands before the system transaction
+   rather than after it: with `main` still refusing, every verify above is empty stdout
+   and exit 3, which is indistinguishable from a wrong emitter.
+   In order, and the order is the deliverable: the **shutdown-inhibitor re-exec**
+   (ONEUP-0086) — probe `systemd-inhibit` first and degrade to no lock rather than to no
+   run, skip it for `--check`, `--size` and the auth actions, set `ONEUP_INHIBITED`, then
+   re-exec. **Re-exec as `sys.executable -m oneup.engine …`, not `sys.argv[0]`**: the
+   Bash's `"$0"` is a runnable script and Python's is `.../oneup/engine/__main__.py`,
+   which cannot be re-run directly because its relative imports break. Then the log
+   mirror from step 4; the ordered `RUN_KEYS` selection and its `LABEL` map, with `TOTAL`
+   derived from it and the **`TOTAL == 0` rejection** that stops a `--steps=sytem` typo
+   reporting a clean run; the `needs_sudo` bootstrap and `release_zypper_lock`; the
+   lock-holder check that names the holder and stops rather than failing five steps for
+   one reason; `run.state`; the pre-update snapshot block (`@@SNAPSHOT@@` and up to
+   twelve `@@SNAPSHOT_ITEM@@`); the pre-flight (`@@DISK@@`, `@@SNAPSHOTS@@`, `@@REPO@@`);
+   the dispatch loop, each step guarded by `not stop_pending()`; the reboot check
+   (exit **102 exactly** means a reboot is advised — any other non-zero means the check
+   failed and must not be read as yes); the service split, where the marker keeps every
+   name and only the printed advice is split (`marker-protocol.md` §5.1 freezes the
+   field); the summary block; `--notify`; and a non-zero process exit iff the error tally
+   is above zero.
+   → **verify:** the blocks *"empty or unknown --steps is rejected"*, *"a real run
+   records itself in a run-state file and clears it on exit"*, *"a real run holds a
+   shutdown inhibitor; a --check does not"*, *"a broken or absent systemd-inhibit
+   degrades to no lock"*, *"another program holding the package lock is named"*, *"a
+   stale lock file (holder already gone) does NOT block a run"*, *"a Flatpak-only run
+   ignores the zypper lock"*, *"many Btrfs snapshots warn in pre-flight and offer
+   thinning"*, *"engine enumerates recent snapshots for the rollback picker"*, *"a
+   duplicate repository URL is named in the @@REPO@@ marker"*, *"a full run fires an
+   end-of-run desktop notification"*, *"a failed early step still lets a later step
+   run"*, *"@@INSTALLED@@ keeps its positional 3-field layout"*, *"a full run asks for
+   the password exactly once"*, plus step 3's and step 5's lists.
+
+7. `proc.py` — the streaming filter, and the per-call deadline. The filter reads the
+   child's merged output line by line, **prints every line through unchanged**, appends
+   it to the transaction log, and recognises four cases via the parsers stage 4 built:
+   a download-size line sets the transaction total (`parsers.progress_total_bytes`); a
+   `Preloading:` line increments a tally and emits `@@PROGRESS@@|step|n|0|phase|0|total`
+   **directly** rather than through `emit_progress`, because zypper prints no `n/m` there
+   for it to parse; a `Retrieving:` line adds that package's size to a running total and
+   emits with both byte fields; an `Installing:`/`Removing:`/`Upgrading:` line emits with
+   neither. `phase` is a parameter — hard-coding `"download"` is what made the commit
+   pass flip the window back to Downloading and reset its byte total to zero mid-install.
+   Only the **download** pass records the seen-tally the stale-parser canary reads; the
+   commit pass writing it too would erase the download pass's count on a healthy run.
+   The deadline is §4.3.2's: one runner owning a per-call budget and what to do on
+   expiry, so it generalises past the repo refresh. Python still cannot signal a root
+   child (§2.2), so a privileged call that must be stoppable keeps the `sudo timeout`
+   shape — the deadline here is bookkeeping around it, not a replacement for it.
+   → **verify:** one-sided, and it has to be — `update_system.sh` carries no
+   `BASH_SOURCE` guard, so sourcing it to call `progress_filter` alone runs the whole
+   engine, the same wall stage 4 step 3 met. So drive a fixture of captured zypper lines
+   through the Python filter directly and assert its markers by hand, then compare the
+   two engines through the surface they share, which is a scenario: that lands at step 8.
+   Assert here, at least, that a `Preloading:` line emits with the transaction total the
+   preceding size line set, and that a commit-pass invocation does not overwrite the
+   download pass's seen-tally.
+
+8. `steps.py` — the system step. The transaction split into a download pass and a commit
+   pass, so a stop can land during the long half; the two wrapper routes (the installed
+   guard when `guard_current`, else the inline `sudo env LC_ALL=C bash -c` wrapper) which
+   have **different argument shapes and must never be fed each other's**; the three safe
+   boundaries (before the refresh, after it, and after the download); the ONEUP-0094 CDN
+   retry, attempted once, guarded on a transfer-shaped failure, and **anchored to
+   `baseurl=` lines so no alias is renamed** (`CLAUDE.md` §6 — a renamed alias discards
+   the cache the retry exists to keep); the repo-scoped-failure probe with its
+   `MAX_SKIP_REPOS` systemic cap, `--auto-skip-repos` disabling and retrying versus the
+   interactive `@@REMEDY@@|skip-repo|alias` offer; the change detection and its hint
+   ladder; and `reboot_reason_from_log` read **while the transaction log still exists**.
+   Two traps carried over from stage 4's findings: `LC_ALL=C` reaches the child as an
+   **argv prefix** through `sudo env`, never as a Python `env=` argument, because sudo
+   resets the environment and the sudoers rule grants those literal words; and a step
+   whose read failed still contributes its partial count.
+   → **verify:** the system-step blocks — *"up-to-date system does NOT advise a
+   reboot"*, both `needs-rebooting` blocks, *"a FAILED system step does not claim
+   changes"*, *"a refresh failure but a successful dup is success"*, the four ONEUP-0094
+   recovery blocks, the five repo-skip blocks, the three key-import blocks, the four
+   progress and stop blocks, the two stale-parser blocks, *"a non-English locale still
+   detects an up-to-date system"*, and the refresh blocks.
+
+9. `actions.py` — `--grant-auth`, `--revoke-auth` and `--thin-snapshots`. The grant's
+   **order is load-bearing and ONEUP-0092 §4.3 fixes it**: validate the generated rule in
+   isolation first so a malformed one costs nothing, then install the guard, then the
+   drop-in — and any failure after the guard lands removes it again, because a stranded
+   root-owned executable leaves the toggle reading off with the revoke arm unreachable.
+   Revoke sweeps **both** candidate guard paths when no override is set, since `GUARD_DIR`
+   is recomputed per run. `--thin-snapshots` runs snapper's own cleanup algorithms and
+   reports the before/after difference, emitting `@@SNAPSHOTS@@|thinned|0` rather than
+   nothing when there was nothing to remove.
+   → **verify:** *"--grant-auth installs a scoped, password-free sudoers drop-in"*,
+   *"--revoke-auth removes the drop-in and reports off"*, *"granting is all-or-nothing"*,
+   *"a drop-in that doesn't cover this engine authenticates up front"*, *"with the
+   passwordless drop-in active, a full run skips the interactive sudo -v"*, and the two
+   `--thin-snapshots` blocks.
+
+10. The hold. `runstate.hold_for_go_ahead` writes `hold.state` — pid, log path verbatim,
+    the quoted size, in that order, §4.1.1 pins it — then polls for `go.request` **newer
+    than `hold.state`**, treats a `stop.request` newer than `hold.state` as Cancel
+    (**not** via `stop_pending`, which requires `run.state` and so is false for the whole
+    hold), breaks when the window's pid is gone, gives up at the ceiling, and deletes
+    both files on **every** exit. `adopt_go_ahead` is deliberately stricter than
+    `--steps=`: membership of the label map, so an unknown key refuses the whole request
+    rather than being dropped — a `go.request` is an authorisation read by a root process.
+    A go-ahead re-derives `STEPS`, `RUN_KEYS`, `TOTAL` and the step index; **setting
+    `STEPS` alone looks right and runs all five**, because the run path iterates
+    `RUN_KEYS` and `request_size` passes no `--steps=`. `size_delivered` withholds
+    `@@DONE@@` under `--hold` and the driver emits it at the process's true end, so the
+    stream carries exactly one. `sudo_init` must not be re-entered on the held path —
+    `CLAUDE.md` §6 records that the suite's prompt counters cannot see a second one, and
+    that what catches it is the keep-alive scenario, not INV-1.
+    → **verify:** *"a size preview and the run that follows it cost exactly one password
+    prompt"*, *"a hold nobody answers installs nothing and ends by itself"*, *"a go-ahead
+    left over from an earlier session is ignored"*, *"the run follows the go-ahead's
+    steps, not the preview's"*, the three *"a tampered go-ahead is refused whole"*
+    blocks, and *"a held run leaves no orphaned keep-alive behind"*.
+
+11. `tests/run-tests.sh` — §4.3.2's scenario, and the two structural checks re-expressed.
+    The new scenario asserts a **per-call deadline fires on a step other than the repo
+    refresh** — behaviour v1 does not have, so it is an addition under §4.4's rule, not a
+    replacement, and it must be shown to fail against an engine without step 7's deadline.
+    The two structural checks currently read `$ENGINE` as a **file** and pass today for
+    the wrong reason: they are measuring a Bash engine the suite no longer runs. Re-express
+    both against `oneup/engine/`. The privileged-call-site count becomes a count of the
+    `privilege.sudo` call sites across the package, **re-measured and recorded** rather
+    than carried over — §4.4 says the move necessarily changes the figure — with the same
+    failure message, because the guarantee is that a new privileged call without a matching
+    `auth_cmnds` entry cannot land unnoticed. The shared-argv check becomes a reference
+    count of step 2's constants. Keep both checks' comments about what they **cannot** see;
+    a structural check read as complete is worse than none.
+    → **verify:** each new or re-pointed check fails against a deliberately broken tree —
+    an extra `privilege.sudo(...)` line, a second copy of a step-2 constant, and the
+    deadline removed — and passes against the real one.
+
+12. Documentation. `docs/reference/marker-protocol.md` and the standards describe the
+    engine's behaviour, not its language, so most of this stage changes no prose. The one
+    edit stage 5 owes is in `docs/specs/ONEUP-0054-python-engine.md` §4.4, whose structural-check
+    row says the two checks are *"re-expressed against `oneup/engine/` at stage 5, when the
+    last privileged call site moves"* and that stage 5 *"re-measures the count and records
+    it"* — the recording is owed and has nowhere else to go. **This is a spec edit and it
+    re-arms the spec's own gate** (`CLAUDE.md` §6, ONEUP-0127); the recording is a fact
+    about work already done rather than a change of direction for work still to come, which
+    rule 14's amendment bullet exempts, so record the amendment and the reasoning in the
+    commit body rather than gating. Check no engine module docstring still says the run
+    driver *"follows at its own stage"* — stage 3 shipped exactly that stale sentence and
+    the 4b sweep caught it.
+    → **verify:** `python3 tests/docs-check.py` green, and
+    `grep -rn 'stage 5' oneup/engine/` names nothing that step 6 has just falsified.
+
+### Not stage 5's
+
+**`update_system.sh` is not retired here.** §4.6 gives that to stage 9, and stages 6, 7
+and 8 all need both engines present — stage 6's differential harness by definition.
+
+**The differential harness is stage 6's**, and this stage's parity evidence is
+deliberately the same by-hand shape stages 3 and 4 used: one mock directory, both
+engines, whole output and exit status diffed. Building the harness early would put G2's
+deliverable inside the stage it is meant to measure.
+
+**The window still points at `update_system.sh`.** Stage 7 moves it behind an
+environment switch and stage 9 changes the default; nothing in this stage touches
+`oneup/gui/`.
+
+**Three suite defects this stage runs past rather than repairs**, each already filed, and
+each recorded here so a builder does not read the gap as their own mistake. **ONEUP-0135**:
+`setup_common`'s `systemctl` mock guards on `"$1 $2" == "is-active packagekit"` while the
+engine calls `systemctl is-active --quiet packagekit`, so the mock always answers active
+and `release_zypper_lock`'s inactive branch is exercised by nothing — fixing it changes
+every scenario's sudo call count at once, which is not a change to make from inside a build
+stage. **ONEUP-0133**: `workflow.md` §6's gate table has no row for `local-CI.sh`'s
+`Package structure (oneup/)` gate. **ONEUP-0134**: §4.6's stage-4 row explains the `--hold`
+exclusion as *"falls through into a full run"*, and several of that family never reach one.
+
 ## Definition of done
 
 **Stage 1 is done** when `main`'s §4.4 matches `v2`'s; neither call site in
@@ -869,6 +1194,25 @@ not in this list and do not go green here**: §4.6's own row says so, and each n
 either** — they are built at this stage and reached by no scenario until the run driver calls
 them, and a done-list that counted an unexercised module would be counting its own gap.
 `main`'s behaviour is unchanged.
+
+**Stage 5 is done** when the engine suite reports **zero failures** against
+`ONEUP_ENGINE_CMD='python3 -m oneup.engine'` — the whole of the 199 measured at
+`8d715ad`, the ONEUP-0094 network probe still skipping without `ONEUP_TEST_NETWORK=1`,
+because §4.6 makes this the stage that earns G1; when step 11's deadline scenario exists
+and has been shown to fail against an engine without step 7's deadline; when both
+structural checks read `oneup/engine/` and each has been shown to fail against a
+deliberately broken tree; when step 2's shared argv definitions each appear in exactly
+one assignment across the package; when the log mirror covers `--check`, `--size`, the
+auth actions and a full run alike, and a reader closing its end does not stop the engine;
+when the checks no scenario can reach have each been driven by hand — the keep-alive
+outliving a `SIGKILL`ed engine, the broken-pipe write, `emit_progress`'s False return on
+an unparsable fraction, and `release_zypper_lock`'s inactive branch, which ONEUP-0135
+leaves unreachable from the suite; when step 12's amendment has landed with its reasoning
+in the commit body; and when `./local-CI.sh` is green on `v2` with `ONEUP_ENGINE_CMD`
+unset. **The by-hand list is here because nothing else holds it** — no mock set kills the
+engine outright, none closes the window's read end, and ONEUP-0135's `systemctl` mock
+answers active to every scenario. **G4 is met with G1**, the one-prompt scenario being an
+engine-suite scenario that needs no window. `main`'s behaviour is unchanged.
 
 **The item is done** at stage 9, when G1–G6 are met. `docs/design/oneup-2.0.md`
 §7 owns the gate; spec §4.6 says which stage earns each of them and that stage 9
