@@ -1,7 +1,7 @@
 # ONEUP-0054 — Python engine — build plan
 
 **Spec:** [docs/specs/ONEUP-0054-python-engine.md](../specs/ONEUP-0054-python-engine.md)
-**Status:** in progress — stages 1–3 done (2026-08-25); stage 4 next.
+**Status:** in progress — stages 1–3 done (2026-08-25); stage 4 under way.
 
 ## Scope of this file
 
@@ -527,6 +527,200 @@ grant/revoke pair are stage 5's. Neither list is deferred by this stage's judgem
 names both stages by row. `sudo_init` is the exception and is deferred as stage 2 defers
 it: no §4.6 row names it, and what puts it out of reach is the run driver it belongs to.
 
+## Stage 4 — `parsers.py`, `repos.py`, and `--size=`
+
+**Branch: `v2` only**, for stage 2's reason: §4.6 ends every stage from 2 onwards with
+`./local-CI.sh` green on `v2` and says outright that *"Nothing in stages 1–8 changes
+`main`'s behaviour."* Stage 4 edits no document, so no step splits by branch.
+
+**What stage 4 is.** §4.6's stage-4 row names three pieces of work — *"`parsers.py`,
+`repos.py`, and `actions.py`'s `--size=`; parser unit tests"* — and ends *"the `--size`
+scenarios green **except the `--hold` one**"*. The exception is a family, not a single
+scenario: every `--hold` scenario is staged through the suite's `start_held_engine`
+helper, which invokes `--size=system --hold` and waits for `hold.state`. All of them then
+continue into a full run, which is stage 5's.
+
+**Two dependencies stage 4 pulls in, because `--size` is the engine's first PRIVILEGED
+action and repos.py's first caller.** Neither has a §4.6 row of its own, and both are
+named here so their arrival is a decision rather than a drift.
+
+- **`sudo_init`'s authenticate half.** Stage 3's *Not stage 3's* deferred `sudo_init`
+  entire, on the grounds that what put it out of reach was the run driver. That was true
+  while nothing became root; `--size` does. Without it a cancelled password reaches
+  `run_size`'s dry run as an ordinary sudo failure and is reported through the `*)` arm,
+  where the Bash engine aborts with *"Authentication failed or cancelled"* and exit 1.
+  **The keep-alive is NOT part of this** — it is `cleanup`'s to kill, `cleanup` is stage
+  5's, and shipping a keep-alive with nothing to kill it is the shape `CLAUDE.md` §6's
+  fourth trap names.
+- **`stop_pending`.** `refresh_repos` checks it between repositories, which is what makes
+  Stop work during the longest phase of a run. §4.2 splits it — the decision to `proc.py`,
+  the two state files it reads to `runstate.py` — and neither half exists yet.
+
+**What `--size` does NOT get is `--hold`.** `main` refuses it as stage 2 refuses
+everything unbuilt, **before** the size is quoted rather than after: a `--size --hold`
+that priced the transaction and then exited with no `@@DONE@@` is a stream the window's
+reader cannot account for, where a refusal on stderr with exit 3 is one it never sees.
+
+### Steps
+
+1. `parsers.py` — the pure module, and nothing else in the package may import into it.
+   §4.2 gives it `to_bytes`, `lock_holder`'s text half, the progress wordings, the two
+   download-size wordings, `lr` output and `reboot_reason_from_log`'s phrase-building.
+   **`to_bytes` is integer arithmetic, and reproducing it exactly is the point**: Bash has
+   no floats, so it keeps ONE fractional digit and computes `(whole * 10 + frac) * mult /
+   10` with truncating division. A `float(n) * mult` in Python rounds differently on some
+   inputs, and the number reaches the window inside `@@PROGRESS@@`. An unparsable figure
+   and an unrecognised unit each give 0, and the recognised units are `B`, `KiB`, `MiB`,
+   `GiB` and no others — `progress_filter`'s own regex admits `KB`, which must therefore
+   come back 0 rather than 1000.
+   → **verify:** `python3 -c 'import oneup.engine.parsers'` from the repo root exits 0,
+   and the module's import list names neither `subprocess` nor `privilege` nor any sibling
+   that reaches them — that isolation is what §4.2 says makes step 2 possible at all.
+
+2. `tests/parsers-test.py`, table-driven, and wired into `local-CI.sh` as its own gate.
+   §4.3.4 names the surfaces it covers. Every case's input is real captured output,
+   quoted verbatim from `update_system.sh`'s own worked examples and from the mocks the
+   engine suite already ships — a table invented from the docstring tests the docstring.
+   → **verify:** the file exits 0 on a clean tree, and non-zero with a single expected
+   value edited — a table that cannot be made to fail is asserting nothing. `./local-CI.sh`
+   shows the new gate by name.
+
+3. `repos.py`'s unprivileged half, which is most of it: `valid_alias`,
+   `enabled_repo_aliases`, `lock_holder`'s probe, `repo_scoped_failure` and
+   `make_cdn_reposd`. **`make_cdn_reposd` carries a trap that nothing in the code
+   announces** (`CLAUDE.md` §6, ONEUP-0094 §4.2): libzypp keys its package cache by
+   repository ALIAS, an openSUSE alias usually contains the host name, and a blanket
+   host substitution therefore renames the alias and discards every package already
+   downloaded. The substitution is anchored to `baseurl=` lines and to nothing else.
+   `lock_holder` splits as §4.2 says: the `$ZYPP_PID_FILE` read, the `/proc/<pid>` liveness
+   test and the self-pid exclusion stay here; only the text it parses is step 1's.
+   → **verify:** drive each against both engines by hand. `enabled_repo_aliases` over one
+   `zypper lr -u` mock gives the same alias list from both. `make_cdn_reposd` over a copied
+   `repos.d`: every `baseurl=` is rewritten and **every `[alias]` header and `name=` is
+   byte-identical to the input** — the assertion the trap is about. `lock_holder` answers
+   identically for a live holder, a stale pid with no `/proc` entry, an unreadable file and
+   our own pid.
+
+4. `stop_pending`, split as §4.2 requires: `proc.py` owns the decision, `runstate.py` the
+   two file reads it decides from. Both conditions are load-bearing and the second is the
+   one that looks droppable — a stop counts only when `stop.request` is NEWER than
+   `run.state`, because the run-state file doubles as the run's start stamp and deleting a
+   leftover request at start-up instead would swallow a stop clicked a moment too early.
+   The one-time console block and `@@HINT@@` fire on the first honoured stop only.
+   → **verify:** with both files staged by hand, a request older than the run-state file
+   does not fire and a newer one does; the second call in a process emits no second hint.
+   No `--size` scenario reaches this — it is verified here because step 5's caller needs it,
+   and its own scenarios are stage 5's.
+
+5. `repos.py`'s privileged half: `release_zypper_lock`, `disable_repo`, `find_failing_repos`
+   and `refresh_repos`. `find_failing_repos`' signature/metadata/unreachable classification
+   and `repo_scoped_failure`'s pattern **stay in `repos.py`** — §4.2's split table names six
+   crossings into `parsers.py` and neither is among them, and inventing a seventh is a
+   change to the contract rather than a reading of it. `disable_repo` is fail-closed and
+   runs `valid_alias` first, which is `docs/standards/security.md` §4's shape guard on the
+   one path an alias reaches a privileged command. Every privileged call goes through
+   `privilege.sudo`; `refresh_repos` uses the `timeout <budget> zypper` argv the drop-in
+   grants, and treats exit 124 as a slow server — a `@@HINT@@` and a `@@REMEDY@@|skip-repo`,
+   never a disabled repository.
+   → **verify:** `python3 -c 'import oneup.engine.repos'` exits 0, and `release_zypper_lock`
+   answers identically from both engines under a `systemctl` mock in both its active and
+   inactive branches. **The other three are exercised by no scenario at this stage and are
+   not claimed to be** — they are reached only through the run driver, and *Not stage 4's*
+   records that rather than this list counting it.
+
+6. `privilege.sudo_init` — the authenticate half only. `auth_current` short-circuits it,
+   and `auth_current` is `actions.py`'s by §4.2 while `actions` imports `privilege`, so the
+   import is deferred into the function body with the cycle named in a comment. On failure
+   it prints the Bash engine's wording on stderr and exits 1; it must not fall through and
+   let the dry run report the cancellation as a package-manager error.
+   → **verify:** with a sudo mock that refuses `-v`, `--size=system` prints
+   *"Authentication failed or cancelled — aborting."* and exits 1 from both engines, with no
+   `@@SIZE@@` and no `@@HINT@@` — the failing-dry-run wording is a different answer to a
+   different question and its appearance here is the defect.
+
+7. **Wire the dispatch before building `run_size` behind it**, for stage 3 step 3's reason:
+   against an unwired engine every verify below returns exit 3 and an empty stdout, which
+   reads exactly like a wrong emitter. `main` sends `--size=` to the new entry point;
+   `--hold` keeps a refusal of its own, checked first. Repair the two module docstrings in
+   the same edit — `__main__.py`'s list of what is built and `actions.py`'s *"`--size=` …
+   follow at their own stages"* are both false the moment this lands. `system_txn_argv` is
+   `steps.py`'s by §4.2, so `steps.py` is created here holding that one function and a
+   docstring saying so; it is shared rather than copied because ONEUP-0085 INV-5 requires
+   the priced argv and the run's argv to be the same one.
+   → **verify:** `python3 -m oneup.engine --size=system` no longer exits 3;
+   `--size=system --hold` still does, and says stage 5; `--grant-auth` still exits 3.
+
+8. `run_size`. A step other than `system` is refused on stderr with exit 2. Then
+   `sudo_init`, `release_zypper_lock`, and one dry run of `system_txn_argv`'s own argv with
+   **stderr merged** and the locale pinned **as an argv prefix, not as a child environment**:
+   `sudo env LC_ALL=C zypper …`. The prefix is not a style choice — sudo resets the
+   environment, so `LC_ALL` set on the child never reaches zypper; and `auth_cmnds` grants
+   the literal words `env LC_ALL=C zypper *`, so a passwordless user's grant matches this
+   argv and no other. Parse BOTH wordings, `Overall download size:` and `Package download
+   size:` — the second is what current zypper prints, and a parse for the first alone is
+   what reported "nothing to fetch" on a 137-package upgrade. Then the three arms, and the
+   middle one is the one that looks droppable: a size found emits `@@SIZE@@|system|<figure>`;
+   **no size but exit 0 or 100–103** emits `@@SIZE@@|system|0 B`, because those are zypper's
+   informational exits and a definite zero is the answer the window's link is waiting for;
+   any other status emits **no `@@SIZE@@` at all**, a `@@HINT@@` naming the cause from
+   zypper's own exit code, and returns 1. A confident `0 B` the run did not earn is the
+   failure class the suite exists to prevent.
+   → **verify:** the check lines of every `--size` scenario *Definition of done* names pass
+   against `python3 -m oneup.engine`, the `check_absent` on `@@SIZE@@` under a failed dry
+   run among them, and so does *"privileged commands can reach the graphical password
+   helper (no tty)"*, which drives `--size` and asserts the askpass export reaches the
+   privileged command itself.
+
+9. The console half, and the whole-output comparison that is the only thing pinning it.
+   `run_size` prints *"Calculating download size (dry run)…"*, then one of
+   *"  Download size: <figure>"*, *"  Download size: nothing to fetch."* or
+   *"  Download size: unavailable — <why>"* followed by the last five lines of what zypper
+   said, each prefixed `    zypper: `. That tail is not decoration: the output is captured
+   into a variable, so without it the log records only "unavailable" and the user has
+   nothing to act on. `size_delivered` emits `@@DONE@@|ok` on both successful arms and not
+   on the failure arm.
+   → **verify:** both engines' **whole output** — marker lines and console lines alike —
+   plus exit status match for each `--size` mock set the suite ships, compared by hand. The
+   scenarios grep substrings, so every one of these strings is pinned by nothing until
+   §4.5's harness diffs them at stage 6 — and that harness captures `@@MARKER@@` lines and
+   discards the rest, so the console half it never sees at all.
+
+10. Run the whole suite against the Python engine and read the `--size` scenarios' own check
+    lines out of it, as stage 3 step 10 does. The suite takes no arguments and has no
+    per-scenario selector.
+    → **verify:** from the repo root, `ONEUP_ENGINE_CMD='python3 -m oneup.engine' bash
+    tests/run-tests.sh` — every check line belonging to the scenarios the done-list names
+    passes. The rest of the suite is still red, which is expected and is not the
+    measurement. Then `./local-CI.sh` green on `v2` with `ONEUP_ENGINE_CMD` unset, the new
+    `tests/parsers-test.py` gate among its steps.
+
+### Not stage 4's
+
+**Three things arrive with `--size`'s Bash twin and deliberately not with this one, and each
+is recorded so its absence is not mistaken for parity.**
+
+- **The keep-alive.** `sudo_init` starts one; step 6 does not. Nothing observes it at this
+  stage — the scenario that does, *"a held run leaves no orphaned keep-alive behind"*, is
+  staged through `start_held_engine` — and building it before `cleanup` exists would ship
+  half of the trap `CLAUDE.md` §6 names, where a helper outlives the engine that spawned it.
+- **The hold.** `hold_for_go_ahead`, `adopt_go_ahead`, `size_delivered`'s withheld
+  `@@DONE@@` and `HOLD_SIZE` are stage 5's. §4.2 splits the pair three ways and gives the
+  `RUN_KEYS`/`TOTAL`/`STEP_INDEX` re-derivation to `__main__.py`, which is the run driver.
+- **The log mirror.** As at stage 3: `update_system.sh` tees every run to a log file,
+  `--size` included, and the Python engine still writes none. No `--size` scenario reads a
+  log, so nothing goes red. Stage 5 owes the tee for `--check` and `--size` as well as for a
+  full run.
+
+**One question stage 4 does not have to answer, recorded so stage 5 does not answer it by
+accident.** §4.2 gives `markers.py` *"every marker emitter"* and names `emit_check` and
+`emit_progress` among them, and stage 3 put `_emit_check` in `actions.py` instead. Stage 4
+builds only the progress PARSERS, so nothing forces the placement of `emit_progress`; stage
+5 builds the streaming loop and must settle both together, either by moving `_emit_check` to
+`markers.py` or by amending §4.2.
+
+`steps.py` beyond `system_txn_argv`, the run driver, the pre-flight, the grant/revoke pair
+and `--thin-snapshots` are stage 5's by §4.6's row, not by this stage's judgement.
+
 ## Definition of done
 
 **Stage 1 is done** when `main`'s §4.4 matches `v2`'s; neither call site in
@@ -564,6 +758,22 @@ is green on `v2` with `ONEUP_ENGINE_CMD` unset. **The three vacuous passes are r
 in *Not stage 3's* rather than counted here** — the log mirror, the shutdown inhibitor
 and the run-state file each pass because the code that could break them does not exist yet, and a done-list
 that counted them would be counting its own gaps. `main`'s behaviour is unchanged.
+
+**Stage 4 is done** when every `--size` scenario in the suite passes against `python3 -m
+oneup.engine` — the two wordings, the failed dry run that reports no size at all, the locked
+package manager, zypper's informational exits and the definite `0 B` — and when *"privileged
+commands can reach the graphical password helper (no tty)"* passes with them; when the two
+engines' **whole output** and exit status match for each of those mock sets, marker lines and
+console lines alike; when `tests/parsers-test.py` exists, can be made to fail, and runs as its
+own `local-CI.sh` gate; when the pure halves of `repos.py` — the alias list, the lock holder,
+and the CDN rewrite that must leave every alias untouched — answer identically from both
+engines; and when `./local-CI.sh` is green on `v2` with `ONEUP_ENGINE_CMD` unset. **The
+`--hold` scenarios are not in this list and do not go green here**: §4.6's own row says so,
+and each is staged through `start_held_engine`, which prices a transaction and then continues
+into a full run. **`refresh_repos`, `find_failing_repos` and `disable_repo` are not in it
+either** — they are built at this stage and reached by no scenario until the run driver calls
+them, and a done-list that counted an unexercised module would be counting its own gap.
+`main`'s behaviour is unchanged.
 
 **The item is done** at stage 9, when G1–G6 are met. `docs/design/oneup-2.0.md`
 §7 owns the gate; spec §4.6 says which stage earns each of them and that stage 9
