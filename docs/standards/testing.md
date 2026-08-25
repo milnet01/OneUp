@@ -120,10 +120,14 @@ silently, and nothing catches that.
 difference between those is the point — a rule with a silent exception is worse than a rule
 with a stated one:
 
-- **The engine suite does not redirect `HOME`.** *A defect.* `update_system.sh` runs
-  `mkdir -p "$LOG_DIR"` with `LOG_DIR="$HOME/Documents/update-logs"`, so every scenario
-  creates that directory on the real machine. The four `ONEUP_*` paths are redirected;
-  `HOME` is not. Filed as **ONEUP-0058**.
+- **The engine suite does not redirect `HOME`, on either branch.** *A defect on `main`;
+  closed on `v2`.* The four `ONEUP_*` paths are redirected and `HOME` is not, so what
+  decides the outcome is when the engine makes its log directory. On `main`
+  `update_system.sh` runs `mkdir -p "$LOG_DIR"` — `LOG_DIR="$HOME/Documents/update-logs"` —
+  before it has looked at `--log=`, so every scenario creates that directory on the real
+  machine. On `v2` both engines create it only when about to default into it, so nothing
+  appears, and a scenario asserts that. Filed as **ONEUP-0058**, closed by ONEUP-0054
+  stage 2; `main` is frozen and keeps the old shape.
 - **One engine scenario reaches the network on purpose.** *A carve-out.* ONEUP-0094's T-1
   asks the real openSUSE content CDN for a repository-metadata file and asserts HTTP 200,
   because the item's whole claim is that a named third-party host is still there — a mock
@@ -380,7 +384,7 @@ with the layout direction forced right-to-left.
 | §2.1 the four redirects | `run_engine` applies them itself, so a scenario that goes through it cannot forget. A scenario that invokes the engine directly must repeat them by hand, and **nothing catches that** |
 | §2.2 the GUI suite redirects `HOME` | the redirect is unconditional and module-level in `tests/gui-smoke.py`, so no individual test can forget it. **Nothing checks it still runs *before* `QApplication` is constructed** — and that ordering is the whole point, because `QSettings` resolves its path once and keeps it |
 | §2.3 no root | the mock `PATH`: a real `sudo` is not on it, so a scenario that reaches for one gets the mock or nothing |
-| §2.3 a test writes only inside its own temporary directory | **nothing — the engine suite breaks this.** `update_system.sh` builds `LOG_DIR` from `$HOME`, which `tests/run-tests.sh` does not redirect, so every scenario creates `~/Documents/update-logs` on the real machine (ONEUP-0058) |
+| §2.3 a test writes only inside its own temporary directory | **on `v2`, the ONEUP-0058 scenario** — it redirects `HOME` and asserts no log directory appears when `--log=` points elsewhere. **On `main`, nothing:** `update_system.sh` there builds `LOG_DIR` from `$HOME` and creates it before looking at `--log=`, and `tests/run-tests.sh` does not redirect `HOME`, so every scenario creates `~/Documents/update-logs` on the real machine (ONEUP-0058) |
 | §2.3 no network | **nothing automated, but the rule now holds.** Verified 2026-08-07 by running each suite inside an empty network namespace (`unshare -rn`): engine **246 passed / 0 failed** with T-1 SKIPping loudly, GUI **307 / 0** — identical to their networked results but for T-1. That is one measurement, not a gate: a *new* network call, or a window constructed above `gui-smoke.py`'s `_check_app_update` stub, would not be caught |
 | §3 a mock fails loudly rather than quietly | several scenarios carry an `exit 99` trap. Nothing checks that a *new* mock has one |
 | §4 one invariant, one test | nothing automatic |
