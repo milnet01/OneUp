@@ -1,7 +1,7 @@
 # ONEUP-0054 — Python engine — build plan
 
 **Spec:** [docs/specs/ONEUP-0054-python-engine.md](../specs/ONEUP-0054-python-engine.md)
-**Status:** in progress — stages 1–3 done (2026-08-25); stage 4 under way.
+**Status:** in progress — stages 1–4 done (2026-08-25); stage 5 next.
 
 ## Scope of this file
 
@@ -677,10 +677,11 @@ reader cannot account for, where a refusal on stderr with exit 3 is one it never
    `refresh_repos` uses the `timeout <budget> zypper` argv the drop-in grants, and treats exit 124 as a slow server — a `@@HINT@@` and a `@@REMEDY@@|skip-repo`,
    never a disabled repository.
    → **verify:** `python3 -c 'import oneup.engine.repos'` exits 0, and `release_zypper_lock`
-   answers identically from both engines in **both** branches — the suite's own `systemctl`
-   mock reports packagekit inactive, so step 10 already covers that half and only the ACTIVE
-   branch needs staging by hand, with a mock that logs its invocations so "issued no stop"
-   can fail. **The other three are exercised by no scenario at this stage and are
+   answers identically from both engines in **both** branches. The suite covers the ACTIVE
+   one and only that one, which is not what its mock intends: that mock answers 3 for
+   `is-active packagekit` and the engine calls `systemctl is-active --quiet packagekit`, so
+   the `"$1 $2"` guard never matches and every scenario is told PackageKit is running. The
+   INACTIVE branch is the one to stage by hand, with a mock keyed on the whole argv. **The other three are exercised by no scenario at this stage and are
    not claimed to be** — they are reached only through the run driver, and *Not stage 4's*
    records that rather than this list counting it.
 
@@ -860,8 +861,8 @@ with `run.state` absent as well as stale and fresh, `sudo_init`'s cancelled-pass
 when step 11's three documentation edits have landed on `v2`; and when `./local-CI.sh` is
 green on `v2` with `ONEUP_ENGINE_CMD` unset. **The by-hand list is here because nothing else
 holds it** — no suite mock set cancels authentication, none reaches `stop_pending` or
-`repo_scoped_failure`, the suite's `systemctl` mock reports packagekit inactive so every
-`--size` scenario covers only the other branch of `release_zypper_lock`, and a widened alias
+`repo_scoped_failure`, the suite's `systemctl` mock answers ACTIVE to every scenario so
+`release_zypper_lock`'s inactive branch is reached by none, and a widened alias
 guard is invisible until the run driver calls it. **The `--hold` scenarios are
 not in this list and do not go green here**: §4.6's own row says so, and each needs
 `hold.state`, which step 7 refuses to write. **`refresh_repos`, `find_failing_repos` and `disable_repo` are not in it

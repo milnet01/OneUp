@@ -23,6 +23,12 @@ jobs:
       - name: Run engine tests
         run: bash tests/run-tests.sh
 
+      # Stdlib-only table over oneup/engine/parsers.py — to_bytes, the two
+      # download-size wordings, the progress wordings, `zypper lr -u` output and
+      # the lock file's text (mirrors local-CI.sh).
+      - name: Engine parser unit tests
+        run: python tests/parsers-test.py
+
       # Stdlib-only; asserts bump.py advances every version site (mirrors local-CI.sh).
       - name: bump.py functional test
         run: python tests/bump-test.py

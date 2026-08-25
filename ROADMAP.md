@@ -4610,3 +4610,21 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A note in the design says why one test cannot pass yet, and the reason it gives is not the real one.
   Kind: doc-fix.
   Source: review-contract-2026-08-25 ONEUP-0054 stage 4 loop 2.
+
+- 📋 [ONEUP-0135] **The suite's systemctl mock never reports PackageKit inactive.**
+  `setup_common`'s mock is `[[ "$1 $2" == "is-active packagekit" ]] && exit 3`
+  with the comment `# inactive`, and the engine calls `systemctl is-active
+  --quiet packagekit`. `$2` is `--quiet`, so the guard never matches and the
+  mock falls through to `exit 0` — ACTIVE. Measured against the mock directly.
+
+  Consequence: every scenario takes `release_zypper_lock`'s active branch and
+  pays a `sudo systemctl stop packagekit`, and the inactive branch — the
+  ordinary case on a machine with no PackageKit running — is exercised by
+  nothing. Found while proving --size parity for ONEUP-0054 stage 4, where a
+  by-hand mock keyed on the whole argv drives both branches identically.
+
+  Not fixed here: changing `setup_common` changes every scenario's sudo call
+  count at once, which is its own change with its own blast radius.
+  **Layman:** A test stand-in meant to say a background updater is switched off actually says it is running, so the switched-off case is never tried.
+  Kind: test.
+  Source: in-session-2026-08-25 ONEUP-0054 stage 4 step 9.

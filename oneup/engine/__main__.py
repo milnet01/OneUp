@@ -3,7 +3,8 @@
 The flag surface is frozen (`docs/design/oneup-2.0.md` §3): every flag
 `update_system.sh` accepts, with the same spelling and the same behaviour.
 
-**Built so far: `--help`, `--auth-status`, `--emit-guard` and `--check`.** Every
+**Built so far: `--help`, `--auth-status`, `--emit-guard`, `--check` and
+`--size=` (without `--hold`).** Every
 other flag is still parsed and stored — `--log=` above all, which the test
 suite appends to every invocation, so an engine that rejected it could not be
 reached at all. What refuses is a flag selecting *work* no stage has built yet,
@@ -158,7 +159,13 @@ def main(argv: list[str] | None = None) -> int:
     if opts.check_only:
         return actions.check(opts)
     if opts.size_step:
-        return _not_built("--size=", "stage 4")
+        # --hold is refused BEFORE the size is quoted rather than after: a run
+        # that priced the transaction and then exited with no `@@DONE@@` is a
+        # stream the window's reader cannot account for, where a refusal on
+        # stderr is one it never sees.
+        if opts.hold:
+            return _not_built("--hold", "stage 5")
+        return actions.run_size(opts.size_step)
     return _not_built("a full run", "stage 5")
 
 

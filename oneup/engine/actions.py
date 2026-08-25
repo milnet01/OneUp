@@ -1,8 +1,8 @@
 """The runs that are not an update.
 
 Built so far: `--auth-status`, the `--emit-guard` that proves a guard is
-current, and the read-only `--check`. `--size=`, the grant/revoke pair and
-`--thin-snapshots` follow at their own stages.
+current, the read-only `--check`, and `--size=` without its `--hold`. The hold,
+the grant/revoke pair and `--thin-snapshots` follow at their own stages.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from . import markers, privilege, proc
+from . import markers, parsers, privilege, proc, repos, steps
 
 if TYPE_CHECKING:  # the run-time import would be a cycle — `__main__` imports this module
     from .__main__ import Options
@@ -327,3 +327,81 @@ def check(opts: Options) -> int:
                     f"{total} update(s) ready to install. Open OneUp to update.")
     markers.marker("DONE", "ok")
     return 0
+
+
+# --- `--size=<step>`: what would this cost to download? -----------------------
+
+# zypper's INFORMATIONAL exits (update / reboot / restart needed). A non-zero
+# code here is not a failure and must not be mistaken for one.
+_INF_FIRST, _INF_LAST = 100, 103
+
+# The documented exit codes worth naming, in the user's words rather than
+# zypper's. Anything else reports its code and shows what zypper actually said.
+_WHY = {
+    7: "another program is using the package manager (PackageKit, or a zypper "
+       "you have open elsewhere) — close it and try again.",
+    5: "OneUp wasn't allowed to run the check as administrator — the password "
+       "prompt may have been cancelled.",
+    6: "no software sources are enabled, so there is nothing to weigh up.",
+}
+
+# How many lines of zypper's own output to show after a failed dry run. `out` is
+# captured into a variable, so without this the log records only "unavailable"
+# and the user has nothing to act on.
+_TAIL = 5
+
+EXIT_WRONG_STEP = 2
+
+
+def size_delivered(size: str) -> None:
+    """Close out a successful `--size` probe.
+
+    Under `--hold` the process does not end here and the `@@DONE@@` is withheld
+    until its true end — the marker reference describes exactly one DONE per run
+    (§4.9). The hold is stage 5's, so at this stage there is nothing to withhold.
+    """
+    markers.marker("DONE", "ok")
+    _ = size
+
+
+def run_size(step: str) -> int:
+    """`--size=<step>`: price the system transaction without performing it."""
+    if step != "system":
+        markers.err("Download-size preview is only available for the system step.")
+        return EXIT_WRONG_STEP
+    privilege.sudo_init()
+    repos.release_zypper_lock()
+    markers.out("Calculating download size (dry run)…")
+    # The locale is pinned as an ARGV PREFIX, not as a child environment: sudo
+    # resets the environment, so `LC_ALL` set on the child never reaches zypper —
+    # and `auth_cmnds` grants the literal words `env LC_ALL=C zypper *`, so a
+    # passwordless user's rule matches this argv and no other.
+    #
+    # The same argv the run itself will use (ONEUP-0085 INV-5): a flag here that
+    # the transaction does not have would quote a different transaction's size.
+    rc, out = privilege.sudo(
+        ["env", "LC_ALL=C", *steps.system_txn_argv(), "--dry-run"], merge_stderr=True,
+    )
+    size = parsers.download_size(out)
+    if size:
+        markers.marker("SIZE", f"system|{size}")
+        markers.out(f"  Download size: {size}")
+        size_delivered(size)
+        return 0
+    if rc == 0 or _INF_FIRST <= rc <= _INF_LAST:
+        # zypper ran fine and reported no size = nothing to fetch (up to date, or
+        # all cached). Report zero so the window shows a definitive answer.
+        markers.marker("SIZE", "system|0 B")
+        markers.out("  Download size: nothing to fetch.")
+        size_delivered("0 B")
+        return 0
+    # The dry run FAILED. Never answer "0 B" here: a confident zero the run did
+    # not earn is the exact failure class the test suite exists to prevent. Stay
+    # silent on SIZE and return non-zero — the window re-arms its "Show download
+    # size" link for a retry.
+    why = _WHY.get(rc, f"the package manager reported an error (code {rc}) — see the lines below.")
+    markers.hint(f"Couldn't work out the download size: {why}")
+    markers.out(f"  Download size: unavailable — {why}")
+    for line in out.rstrip("\n").split("\n")[-_TAIL:]:
+        markers.out(f"    zypper: {line}")
+    return 1

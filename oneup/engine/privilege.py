@@ -75,7 +75,11 @@ def sudo_init() -> None:
     if actions.auth_current():
         return
     install_environment()
-    rc, _ = proc.run(["sudo", "-A", "-p", VALIDATE_PROMPT, "-v"], merge_stderr=False)
+    # STREAMED, not captured. The Bash redirects this call nowhere, so whatever
+    # sudo says — a prompt, a refusal, "a terminal is required" — reaches the
+    # run's own stderr and its log. Capturing it silently swallows the one
+    # message a user who cancelled the dialog has to go on.
+    rc, _ = proc.run(["sudo", "-A", "-p", VALIDATE_PROMPT, "-v"], stream=True)
     if rc != 0:
         markers.err("Authentication failed or cancelled — aborting.")
         raise SystemExit(1)
