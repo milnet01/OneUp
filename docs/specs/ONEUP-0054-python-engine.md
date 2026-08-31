@@ -367,6 +367,18 @@ those two against `oneup/engine/` necessarily moves the figure one of them pins,
 re-measures the count and records it. That is the same guarantee restated against the new
 engine, which is what G1 protects; leaving them greping a retired `update_system.sh` is the
 weakening, because a check that passes about a file nothing runs has stopped guarding.
+
+**Re-measured and recorded at stage 5.** The Python rows sit *beside* the Bash ones rather
+than replacing them: `ENGINE_CMD=(bash "$ENGINE")` is still the suite's default and
+`update_system.sh` does not retire until stage 9, so both engines carry the guard until the
+Bash one goes. The call-site figure is a **union** — sudo-headed argvs *plus*
+`privilege.sudo` call sites — and the union is what makes it a guard at all: `privilege.sudo`
+is the Python `sudo_capture` and prefixes `sudo` itself, its callers passing `["zypper", …]`,
+so counting sudo-headed argvs alone finds that one prefix line plus a handful of raw sites
+and yields a figure that **cannot move when a new privileged call lands**. It stands at 33,
+with the two shared argv constants referenced 3 and 4 times; those three figures are pinned
+by the checks themselves, so none can go stale unnoticed. Both keep the Bash rows' note of
+what they cannot see — an argv assembled in a variable, and two calls on one line.
 *Additions* are a different matter and are expected: `docs/design/oneup-2.0.md` §7's G1 row
 permits any new scenario a §4.6 stage names, and several stages do — the replacement
 keep-alive test, the absent-tool test, the `run.state` fourth-line assertion and the
