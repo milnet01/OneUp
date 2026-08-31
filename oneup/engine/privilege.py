@@ -86,17 +86,24 @@ def install_environment() -> None:
 # sudo_init's own prompt label, and it is NOT `SUDO_PROMPT` above. The Bash
 # passes this one to the up-front `-v` validate and exports the other for every
 # other prompt; `reap_orphaned_askpass` matches an orphaned dialog against
-# EITHER string, so collapsing them into one leaves that reaper — stage 5's —
-# with a target that never appears.
+# EITHER string, so collapsing them into one leaves that reaper with a target
+# that never appears.
 VALIDATE_PROMPT = "System Updater: authenticate to update the system"
 
 
 def sudo_init() -> None:
     """Become root once, up front, so nothing later has to ask again.
 
-    Stage 4 builds the authenticate half only. The keep-alive is `cleanup`'s to
-    kill and `cleanup` is stage 5's; a keep-alive with nothing to kill it is the
-    shape `CLAUDE.md` §6's fourth trap names.
+    Two halves, and they land together on purpose: the interactive validate, and
+    the keep-alive that holds the credential warm. A keep-alive with nothing to
+    kill it is the shape `CLAUDE.md` §6's fourth trap names, so it is started
+    only where `cleanup` can already reach it.
+
+    NOT re-entrant, and there is no guard: its one early return is
+    `auth_current`, which is false for precisely the users the held path is for.
+    Re-entering it would re-run the validate AND spawn a second keep-alive,
+    overwriting the handle `cleanup`'s group kill uses. The run driver's
+    `held_auth` is what keeps that from happening (INV-9).
     """
     # Deferred: `auth_current` is `actions.py`'s by §4.2, and `actions` imports
     # this module — a module-level import back would be a cycle.
