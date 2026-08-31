@@ -18,7 +18,9 @@ builds a command by interpolating text.
 
 from __future__ import annotations
 
+import contextlib
 import os
+import signal
 import subprocess
 import threading
 from collections.abc import Mapping, Sequence
@@ -50,32 +52,74 @@ def run(
     refresh` writes straight to the run's stdout and its log — and building
     those on the capturing form sends their output nowhere.
     """
-    try:
-        if stream:
-            completed = subprocess.run(  # noqa: S603 — fixed argv list, no shell, as above
-                list(argv),
-                check=False,
-                env={**os.environ, **env} if env else None,
-                timeout=deadline,
-            )
-            return completed.returncode, ""
-
-        completed = subprocess.run(  # noqa: S603 — fixed argv list, no shell; the caller
-            # builds every element, and nothing here is interpolated from engine or user text.
+    overlay = {**os.environ, **env} if env else None
+    if deadline is not None:
+        return _run_bounded(argv, deadline, merge_stderr=merge_stderr,
+                            env=overlay, stream=stream)
+    if stream:
+        completed = subprocess.run(  # noqa: S603 — fixed argv list, no shell, as above
             list(argv),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT if merge_stderr else subprocess.DEVNULL,
-            text=True,
             check=False,
-            env={**os.environ, **env} if env else None,
-            timeout=deadline,
+            env=overlay,
         )
-    except subprocess.TimeoutExpired as expiry:
-        partial = expiry.stdout or ""
-        if isinstance(partial, bytes):
-            partial = partial.decode(errors="replace")
-        return DEADLINE_EXPIRED, partial
+        return completed.returncode, ""
+
+    completed = subprocess.run(  # noqa: S603 — fixed argv list, no shell; the caller
+        # builds every element, and nothing here is interpolated from engine or user text.
+        list(argv),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT if merge_stderr else subprocess.DEVNULL,
+        text=True,
+        check=False,
+        env=overlay,
+    )
     return completed.returncode, completed.stdout or ""
+
+
+def _run_bounded(argv: Sequence[str], deadline: float, *, merge_stderr: bool,
+                 env: Mapping[str, str] | None, stream: bool) -> tuple[int, str]:
+    """`run` with a budget. Its own SESSION, so expiry can kill the whole group.
+
+    Killing only the child is not enough and that is the trap: a mock whose
+    `flatpak` shell runs `sleep 300` leaves the sleep holding our read end, so
+    the wait after the kill blocks on a pipe nobody will close — measured, the
+    call never returned. Its own session makes one `killpg` reach the lot.
+    """
+    child = subprocess.Popen(  # noqa: S603 — fixed argv list, no shell, as in `run`
+        list(argv),
+        stdout=None if stream else subprocess.PIPE,
+        stderr=None if stream else (
+            subprocess.STDOUT if merge_stderr else subprocess.DEVNULL),
+        text=True,
+        env=env,
+        start_new_session=True,
+    )
+    try:
+        out, _ = child.communicate(timeout=deadline)
+        return child.returncode, out or ""
+    except subprocess.TimeoutExpired:
+        kill_group(child.pid)
+        try:
+            child.communicate(timeout=_REAP_SECONDS)
+        except subprocess.TimeoutExpired:
+            pass
+        return DEADLINE_EXPIRED, ""
+
+
+# How long to wait for a killed group to actually go before giving up on it.
+_REAP_SECONDS = 5
+
+
+def kill_group(pid: int) -> None:
+    """`SIGKILL` a child's whole process group, if we are allowed to.
+
+    A ROOT child is not ours to signal (`security.md` §2.2), so this can fail —
+    which is exactly why §4.3.2 keeps the `sudo timeout` shape for a privileged
+    call that must be stoppable. The deadline here is bookkeeping around that,
+    never a replacement for it, and no privileged call passes one.
+    """
+    with contextlib.suppress(OSError, ProcessLookupError):
+        os.killpg(os.getpgid(pid), signal.SIGKILL)
 
 
 def succeeds(argv: Sequence[str]) -> bool:
@@ -164,13 +208,17 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
+        # Its own session only when there is a budget to enforce: expiry has to
+        # reach a grandchild holding our read end, and a privileged transaction
+        # with no budget must keep the session it authenticated in.
+        start_new_session=deadline is not None,
     )
     expired = False
 
     def _expire() -> None:
         nonlocal expired
         expired = True
-        child.kill()
+        kill_group(child.pid)
 
     timer = None
     if deadline is not None:

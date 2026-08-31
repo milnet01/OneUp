@@ -3127,6 +3127,78 @@ for pair in "REFRESH_SUDO_ARGV:5" "CACHE_DU_ARGV:5"; do
     fi
 done
 
+# The same two guarantees against the Python engine. The Bash rows above are KEPT rather
+# than re-pointed: ENGINE_CMD=(bash "$ENGINE") is still the suite's default and
+# update_system.sh does not retire until stage 9, so both engines carry the guard until
+# the Bash one goes.
+PYENGINE="$(dirname "$ENGINE")/oneup/engine"
+if [[ ! -d "$PYENGINE" ]]; then
+    echo "  SKIP - no oneup/engine/ in this checkout, so its call sites are unguarded"
+else
+    py_stripped=$(grep -rhvE '^[[:space:]]*#' "$PYENGINE"/*.py)
+    # A UNION, because the Bash pattern above is one: it counts raw `sudo` lines AND every
+    # `sudo_capture` call site. `privilege.sudo` is the Python `sudo_capture` and it
+    # prefixes `sudo` ITSELF — its callers pass ["zypper", …] — so counting sudo-headed
+    # argvs alone finds that one prefix line plus the few raw sites, and yields a figure
+    # that CANNOT MOVE when a new privileged call lands, which is the whole failure this
+    # check exists to catch. Two things it still cannot see, so nobody reads it as
+    # complete: an argv assembled in a variable, and two calls on one line.
+    pn=$(( $(grep -c '\["sudo"' <<<"$py_stripped") \
+         + $(grep -c 'privilege\.sudo(' <<<"$py_stripped") ))
+    if [[ "$pn" == "33" ]]; then
+        echo "  ok   - the Python engine has its known 33 privileged call sites"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - privileged call sites moved: $pn, expected 33. A NEW one needs a matching"; FAIL=$((FAIL+1))
+        echo "         entry in auth_cmnds, or passwordless silently starts prompting again."
+    fi
+    # The shared-argv halves, one row each: each constant is written once and read by both
+    # the call site and the rule that grants it, so neither side can be respelled alone.
+    for pair in "REFRESH_SUDO_ARGV:3" "CACHE_DU_ARGV:4"; do
+        var="${pair%%:*}"; want="${pair##*:}"
+        got=$(grep -c "$var" <<<"$py_stripped")
+        if [[ "$got" == "$want" ]]; then
+            echo "  ok   - $var is referenced $want times in oneup/engine/"; PASS=$((PASS+1))
+        else
+            echo "  FAIL - $var referenced $got times in oneup/engine/, expected $want"; FAIL=$((FAIL+1))
+        fi
+    done
+fi
+
+# ---------------------------------------------------------------------------
+echo "TEST: a per-call deadline fires on a step other than the repo refresh (§4.3.2)"
+# An ADDITION under §4.4, not a replacement: v1 has no budget outside refresh_repos, so
+# this scenario is asserted against the Python engine only and skips LOUDLY otherwise —
+# ONEUP-0068's rule, because a silent skip lets the check go inert unnoticed.
+#
+# `flatpak remote-ls --updates` reaches every configured remote. The mock below accepts
+# the call and then never answers, which is the shape a real dead remote takes: without a
+# budget the step never ends, so a scenario that merely "takes longer" would not
+# distinguish the two engines — it hangs the suite against one of them.
+if [[ "${ONEUP_ENGINE_CMD:-}" != *oneup.engine* ]]; then
+    echo "  SKIP - the per-call deadline is the Python engine's; set ONEUP_ENGINE_CMD to run it"
+else
+    d=$(mktemp -d); setup_common "$d"
+    cat > "$d/flatpak" <<'FLATPAK_EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *remote-ls*) sleep 300 ;;   # accepts, never answers
+  *) exit 0 ;;
+esac
+FLATPAK_EOF
+    chmod +x "$d/flatpak"
+    started=$(date +%s)
+    out=$(ONEUP_FLATPAK_TIMEOUT=1 run_engine "$d" --steps=flatpak)
+    elapsed=$(( $(date +%s) - started ))
+    if (( elapsed < 60 )); then
+        echo "  ok   - the budget ended a query that would never answer (${elapsed}s)"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - the query was not bounded (${elapsed}s)"; FAIL=$((FAIL+1))
+    fi
+    check "the step still completes rather than failing" \
+          "@@STEP_END@@|flatpak|ok" "$out"
+    rm -rf "$d"
+fi
+
 # ---------------------------------------------------------------------------
 echo "TEST: the pre-push hook picks the gate mode from what the push changes (ONEUP-0114)"
 # local-CI.sh owns what each gate IS; the hook only decides WHICH MODE to ask for, so that

@@ -86,6 +86,16 @@ def end_step(key: str, status: str, detail: str = "") -> None:
     markers.marker("TIMING", f"{key}|{SECS[key]}")
 
 
+# A per-call budget for the read-only Flatpak update counts — §4.3.2's runner,
+# on a step other than the repo refresh. v1 has no budget here: `flatpak
+# remote-ls --updates` reaches every configured remote, and a remote that
+# accepts the connection then serves nothing hangs the step with the window
+# showing an open step and no progress — the shape ONEUP-0048 measured on a
+# crawling zypper mirror. The count is a best-effort figure the step already
+# degrades without, so expiry can cost the detail line and never the update.
+FLATPAK_QUERY_SECONDS = float(os.environ.get("ONEUP_FLATPAK_TIMEOUT") or "60")
+
+
 def _lines(text: str) -> int:
     """`wc -l`: how many newline-terminated lines the text carries."""
     return text.count("\n")
@@ -103,7 +113,8 @@ def run_flatpak() -> None:
     # the detail can say how many apps were updated rather than just "done".
     count = 0
     for scope in ("--user", "--system"):
-        rc, out = proc.run(["flatpak", "remote-ls", "--updates", scope])
+        rc, out = proc.run(["flatpak", "remote-ls", "--updates", scope],
+                           deadline=FLATPAK_QUERY_SECONDS)
         if rc == 0:
             count += _lines(out)
     if proc.run(["flatpak", "update", "--user", "-y"], stream=True)[0] != 0:

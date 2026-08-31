@@ -23,14 +23,13 @@ from . import actions, markers, privilege, proc, repos, runstate, steps
 
 ALL_STEPS = "system,flatpak,firmware,orphans,cache"
 
-# Exit codes. 0 and 1 are ordinary; 2 is an unknown flag; 130/143/141 are the trap codes
-# the Bash engine sets (SIGINT, SIGTERM/SIGHUP, SIGPIPE) and are reproduced by the run
-# driver at its own stage. `docs/specs/ONEUP-0054-python-engine.md` §4.1.1 pins all of them.
+# Exit codes. 0 and 1 are ordinary; 2 is an unknown flag or an empty step selection;
+# `privilege.install_exit_handlers` owns 130 and 143 (SIGINT, SIGTERM/SIGHUP).
+# `docs/specs/ONEUP-0054-python-engine.md` §4.1.2 pins them, and scopes the fourth — 141 —
+# to a `tee` without `-p`. v2 has no `tee`, so the construct that code is read from does
+# not exist here and it is deliberately not reproduced; `runstate.py`'s mirror owns what
+# replaces it.
 EXIT_UNKNOWN_FLAG = 2
-# Stage-only, and it disappears when stage 9 completes the engine: a flag that parses but
-# selects work no stage has built yet. Deliberately none of the pinned codes, so it can
-# never be mistaken for one.
-EXIT_NOT_BUILT = 3
 
 
 @dataclass
@@ -134,16 +133,6 @@ def parse(argv: list[str]) -> tuple[Options | None, int]:
             markers.err(usage())
             return None, EXIT_UNKNOWN_FLAG
     return opts, 0
-
-
-def _not_built(what: str, stage: str) -> int:
-    """Refuse work this stage has not built — loudly, and never on stdout.
-
-    Silence plus exit 0 would read as a run that found nothing to do, and a
-    marker on stdout would read as a run that happened.
-    """
-    markers.err(f"oneup.engine: {what} is not built yet — ONEUP-0054 {stage} owes it.")
-    return EXIT_NOT_BUILT
 
 
 def main(argv: list[str] | None = None) -> int:

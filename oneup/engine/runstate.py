@@ -1,8 +1,8 @@
 """Where the engine's own files live: the four state files, and the run log.
 
 `docs/specs/ONEUP-0054-python-engine.md` §4.1.1 pins the layout of the state
-files and `docs/reference/marker-protocol.md` §8 names them. Stage 2 owns the
-PATHS; the writers arrive with the run driver.
+files and `docs/reference/marker-protocol.md` §8 names them. The paths, their
+writers, the log mirror and the hold all live here.
 
 `USER_LOG_DIR`, not `LOG_DIR`: the window has a log directory too, under a
 different path, and while the two halves were in different languages the shared

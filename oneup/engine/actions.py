@@ -1,8 +1,9 @@
 """The runs that are not an update.
 
-Built so far: `--auth-status`, the `--emit-guard` that proves a guard is
-current, the read-only `--check`, and `--size=` without its `--hold`. The hold,
-the grant/revoke pair and `--thin-snapshots` follow at their own stages.
+`--auth-status`, the `--emit-guard` that proves a guard is current, the
+read-only `--check`, `--size=`, the grant/revoke pair and `--thin-snapshots`.
+The hold that `--size --hold` waits in is `runstate.py`'s: it writes a state
+file, so it belongs beside the others.
 """
 
 from __future__ import annotations

@@ -5,12 +5,13 @@ With no terminal — and there is none, because the window runs the engine throu
 `QProcess` — sudo keys its cached credential to the parent process id. In Bash
 that made every `$(sudo …)` subshell authenticate again, and a full run once
 asked for the password seven times (ONEUP-0038). Python has no subshell, so the
-same trap takes a different shape: scatter `subprocess.run(["sudo", …])` across
+same trap takes a different shape: scatter raw sudo-headed argvs across
 modules and each call site becomes its own discipline to remember. Route them
 through `sudo()` here instead, and there is one place to get right.
 
-Stage 2 holds the environment and the runner. `sudo_init`'s one-time bootstrap,
-the keep-alive, the askpass reaping and `cleanup` arrive with the run driver.
+The environment, the runner, `sudo_init`'s one-time bootstrap, the keep-alive,
+the askpass reaping and `cleanup` — whose ORDER is load-bearing, and is stated
+on `cleanup` itself.
 """
 
 from __future__ import annotations
