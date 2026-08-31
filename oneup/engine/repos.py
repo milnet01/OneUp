@@ -290,3 +290,24 @@ def restore_disabled() -> None:
             markers.err(f"  ! Couldn't re-enable repository '{alias}' — run: "
                         f"sudo zypper modifyrepo --enable {alias}")
 
+
+
+def redirectable() -> bool:
+    """Does any repository actually name the host the CDN retry replaces?
+
+    ONEUP-0094's guard: a retry against a copy that rewrote nothing would be
+    byte-identical to the attempt that just failed.
+    """
+    try:
+        files = sorted(REPOS_DIR.glob("*.repo"))
+    except OSError:
+        return False
+    for path in files:
+        try:
+            text = path.read_text(errors="replace")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            if _BASEURL.match(line) and _CDN_HOST.search(line):
+                return True
+    return False

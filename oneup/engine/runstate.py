@@ -186,3 +186,72 @@ def write_run_state(log_file: Path, steps: str) -> None:
     RUN_STATE.write_text(f"{os.getpid()}\n{log_file}\n{steps}\n{int(time.time())}\n")
     _RUN_STATE_OWNED = True
 
+
+
+# How long a hold waits before ending by itself. Two minutes: long enough for a
+# user to read the quoted size and decide, short enough that a forgotten window
+# does not hold a warm credential open indefinitely.
+HOLD_SECONDS = int(os.environ.get("ONEUP_HOLD_SECONDS") or "120")
+
+
+def hold_for_go_ahead(log_file: Path, size: str, window_pid: int,
+                      poll: float) -> str | None:
+    """Wait for the window's go-ahead. Returns its step list, or None.
+
+    RECORDS a decision; it never runs a step. `hold.state` is three lines — our
+    pid, the log path verbatim, the quoted size — and §4.1.1 pins that order.
+
+    Cancel reuses `stop.request`, but it may NOT be read through `stop_pending`:
+    that requires `run.state` to exist and the request to be newer than it, and
+    a hold has deliberately not written `run.state` — so `stop_pending` is false
+    for the whole hold and a Cancel wired through it would do nothing for the
+    full ceiling. Our own stamp is the comparison instead.
+
+    Both files are deleted on EVERY exit.
+    """
+    with contextlib.suppress(OSError):
+        HOLD_STATE.parent.mkdir(parents=True, exist_ok=True)
+    HOLD_STATE.write_text(f"{os.getpid()}\n{log_file}\n{size}\n")
+    try:
+        stamp = HOLD_STATE.stat().st_mtime
+        waited = 0.0
+        step = poll if poll > 0 else 1.0
+        while waited < HOLD_SECONDS:
+            # Staleness the way `stop_pending` decides it: a request older than
+            # our own stamp is a leftover from an earlier session. Deleting
+            # leftovers at start-up instead would race a go-ahead pressed in
+            # that very moment.
+            if _newer_than(GO_REQUEST, stamp):
+                return GO_REQUEST.read_text(errors="replace").split("\n", 1)[0].strip()
+            if _newer_than(STOP_REQUEST, stamp):
+                return None                              # Cancel
+            if not _alive(window_pid):
+                return None                              # the window has gone
+            time.sleep(step)
+            waited += step
+        return None                                      # the ceiling
+    finally:
+        for path in (HOLD_STATE, GO_REQUEST):
+            with contextlib.suppress(OSError):
+                path.unlink()
+
+
+def _newer_than(path: Path, stamp: float) -> bool:
+    try:
+        return path.stat().st_mtime > stamp
+    except OSError:
+        return False
+
+
+def _alive(pid: int) -> bool:
+    """`kill -0` the pid captured at start-up — never a re-read parent id.
+
+    Bash sets `PPID` once and never refreshes it on reparenting, and systemd
+    reparents a user session's orphans to `systemd --user` rather than to pid 1,
+    so both of the obvious spellings are dead code (`CLAUDE.md` §6).
+    """
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True

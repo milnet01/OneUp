@@ -7,9 +7,12 @@ the grant/revoke pair and `--thin-snapshots` follow at their own stages.
 
 from __future__ import annotations
 
+import contextlib
+import getpass
 import os
 import re
 import shutil
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -339,15 +342,25 @@ _TAIL = 5
 EXIT_WRONG_STEP = 2
 
 
+# The size this process quoted, for `hold.state`'s third line.
+HOLD_SIZE = ""
+# Set by the caller when `--hold` was asked for, so the DONE is withheld.
+HOLDING = False
+
+
 def size_delivered(size: str) -> None:
     """Close out a successful `--size` probe.
 
     Under `--hold` the process does not end here and the `@@DONE@@` is withheld
     until its true end — the marker reference describes exactly one DONE per run
-    (§4.9). The hold is stage 5's, so at this stage there is nothing to withhold.
+    (§4.9), and for a run another window merely FOLLOWED through `run.state` it
+    is the only verdict there is. Two in one stream, the first saying ok before
+    a single step had run, is what breaks that reader.
     """
-    markers.marker("DONE", "ok")
-    _ = size
+    global HOLD_SIZE
+    HOLD_SIZE = size
+    if not HOLDING:
+        markers.marker("DONE", "ok")
 
 
 def run_size(step: str) -> int:
@@ -391,3 +404,137 @@ def run_size(step: str) -> int:
     for line in out.rstrip("\n").split("\n")[-_TAIL:]:
         markers.out(f"    zypper: {line}")
     return 1
+
+
+def build_auth_rule() -> str | None:
+    """The sudoers drop-in's text, or None when the scope cannot be built."""
+    cmnds = auth_cmnds()
+    if cmnds is None:
+        return None
+    user = getpass.getuser()
+    return (
+        '# Installed by OneUp\'s "remember my authorization" setting — stores NO password.\n'
+        f"# Lets {user} run OneUp's update commands as root without a password prompt.\n"
+        "# Delete this file (or turn the setting off in OneUp) to revoke immediately.\n"
+        f"Cmnd_Alias ONEUP_UPDATE = {cmnds}\n"
+        f"{user} ALL=(root) NOPASSWD: ONEUP_UPDATE\n"
+    )
+
+
+_GRANT_IMPOSSIBLE = (
+    "Passwordless authorization can't be set up on this machine: zypper, timeout or du "
+    "was not found, or the refresh budget is not a whole number of seconds."
+)
+
+
+def grant_auth() -> int:
+    """Install the guard and the sudoers drop-in — in that order, all or nothing.
+
+    The order is fixed and each position is load-bearing (ONEUP-0092 §4.3):
+    validate FIRST so a malformed rule costs nothing, then the guard, then the
+    drop-in — and any failure after the guard lands removes it again. A stranded
+    root-owned executable is worse than a failed grant: the toggle then reads
+    off, which makes the window's revoke arm unreachable, so the user has
+    consented to a file they can no longer withdraw.
+    """
+    rule, guard = build_auth_rule(), download_guard_src()
+    if rule is None or guard is None:
+        markers.hint(_GRANT_IMPOSSIBLE)
+        return 1
+    try:
+        rule_file, guard_file = _spill(rule), _spill(guard)
+    except OSError:
+        markers.hint("Could not create a temporary file.")
+        return 1
+    try:
+        privilege.sudo_init()
+        # Validate the generated rule in ISOLATION before it can affect the live
+        # policy: a syntactically broken file under /etc/sudoers.d can lock the
+        # user out of sudo entirely.
+        if privilege.sudo(["visudo", "-cf", rule_file])[0] != 0:
+            markers.hint("The generated authorization rule failed validation — "
+                         "nothing was changed.")
+            return 1
+        # 0755: the window and the engine both read the guard back to tell whether
+        # the drop-in beside it is the one this OneUp needs; only root may write it.
+        if privilege.sudo(["install", "-o", "root", "-g", "root", "-m", "0755",
+                           guard_file, str(GUARD_FILE)])[0] != 0:
+            markers.hint(f"Could not write the download helper ({GUARD_FILE}).")
+            return 1
+        # install(1) places it root-owned and 0440 atomically, the mode sudo requires.
+        if privilege.sudo(["install", "-o", "root", "-g", "root", "-m", "0440",
+                           rule_file, str(AUTH_FILE)])[0] != 0:
+            privilege.sudo(["rm", "-f", str(GUARD_FILE)])   # never leave a guard ruleless
+            markers.hint(f"Could not write the authorization rule ({AUTH_FILE}).")
+            return 1
+    finally:
+        for path in (rule_file, guard_file):
+            with contextlib.suppress(OSError):
+                os.unlink(path)
+    markers.out("Passwordless authorization for OneUp's update commands is now enabled.")
+    markers.marker("AUTH", "on")
+    return 0
+
+
+def _spill(text: str) -> str:
+    """Write `text` to a fresh temporary file and return its path."""
+    handle, path = tempfile.mkstemp(prefix="oneup-auth-")
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        out.write(text)
+    return path
+
+
+def revoke_auth() -> int:
+    """Remove the drop-in and the guard, sweeping BOTH candidate guard paths.
+
+    `GUARD_DIR` is recomputed per run, so a `/usr/libexec` created by another
+    package after the grant would move it and leave the `/usr/lib` copy beyond
+    reach. With the override set the sweep collapses to that one path — the
+    override exists so the suite never touches a real system directory.
+    """
+    privilege.sudo_init()
+    if os.environ.get("ONEUP_GUARD_FILE"):
+        guards = [str(GUARD_FILE)]
+    else:
+        guards = ["/usr/libexec/oneup-download-guard", "/usr/lib/oneup-download-guard"]
+    if privilege.sudo(["rm", "-f", str(AUTH_FILE), *guards])[0] != 0:
+        markers.hint(f"Could not remove the authorization rule ({AUTH_FILE}).")
+        return 1
+    markers.out("Passwordless authorization has been revoked.")
+    markers.marker("AUTH", "off")
+    return 0
+
+
+def thin_snapshots() -> int:
+    """Run snapper's OWN retention cleanup and report the before/after difference.
+
+    Only the `number` and `timeline` algorithms, which drop nothing the
+    configured policy does not already consider surplus — we never hand-delete a
+    specific snapshot, so the most recent rollback points are always kept.
+    """
+    if not shutil.which("snapper"):
+        markers.hint("Snapper isn't installed, so there are no snapshots to thin.")
+        return 0
+    privilege.sudo_init()
+    before = _snapshot_count()
+    for algorithm in ("number", "timeline"):
+        privilege.sudo(["snapper", "cleanup", algorithm], merge_stderr=True, stream=True)
+    after = _snapshot_count()
+    if before is not None and after is not None and before > after:
+        markers.out(f"Thinned {before - after} old snapshot(s) ({before} → {after}).")
+        markers.marker("SNAPSHOTS", f"thinned|{before - after}")
+    else:
+        # Zero rather than nothing: a run that removed none still answered the
+        # question, and the window has no other way to tell that from silence.
+        markers.out("No snapshots needed thinning — snapper's retention policy is "
+                    "already satisfied.")
+        markers.marker("SNAPSHOTS", "thinned|0")
+    return 0
+
+
+def _snapshot_count() -> int | None:
+    """How many snapshots snapper lists, or None when it could not be read."""
+    rc, listing = privilege.sudo(["snapper", "--no-headers", "list"])
+    if rc != 0:
+        return None
+    return len([line for line in listing.splitlines() if line.strip()])
