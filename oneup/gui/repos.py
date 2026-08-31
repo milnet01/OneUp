@@ -148,7 +148,10 @@ class RepoManagerDialog(QDialog):
         scroll.setWidget(inner)
         scroll.setMinimumHeight(280)
         scroll.setAccessibleName("Repository list")
-        self.scroll = scroll
+        # Named `repo_scroll`, not `scroll`: a plain `self.scroll` shadows the
+        # inherited QWidget.scroll(dx, dy), so any later call to it would raise
+        # TypeError. Matches `detail_scroll` in task_row.py.
+        self.repo_scroll = scroll
         root.addWidget(scroll, 1)
 
         strip = QFrame()

@@ -72,6 +72,15 @@ All notable changes to OneUp are documented here. The format follows
   the window and the update engine together, so stopping a run and following
   one keep working.
 
+### Security
+
+- **The downloadable AppImage is now built from exactly pinned tooling** (ONEUP-0137)
+  The three GitHub building blocks that assemble a release were named by a
+  moving label, so their authors could have changed the code behind them at any
+  time without the build noticing. Each is now named by its exact contents. The
+  build also no longer keeps its access token lying around after it has finished
+  checking out the code.
+
 ## [1.4.5] - 2026-08-19
 
 ### Fixed

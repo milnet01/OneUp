@@ -39,7 +39,7 @@ exist yet, and saying so is the point.
 | `screenshots/` | Images the README and the app-store metadata point at. |
 | `.github/workflows/` | GitHub CI. One file: `release.yml`, triggered by a `v*` tag. |
 | `.ants/`, `.obs/` | Tooling configuration, not application code. |
-| *(root dotfiles)* | `.gitignore`, `.ants_review_falsepos.jsonl` — tooling state that has to sit at the root to be found. |
+| *(root dotfiles)* | `.gitignore`, `.ants_review_falsepos.jsonl`, `.yamllint` — tooling state that has to sit at the root to be found. |
 
 **The root is closed.** Adding a third program or a fourth developer script to the root
 needs a reason written in the commit message. Everything else has a directory.
@@ -47,11 +47,20 @@ needs a reason written in the commit message. Everything else has a directory.
 **There is no `src/`, no `lib/`, and no `bin/`** — do not create one out of habit. 2.0
 introduces exactly one new source directory, `oneup/` (§4).
 
-**2.0 also adds exactly one new root file: `pyproject.toml`** (ONEUP-0063, on `v2` since
-2026-08-19 — `docs/standards/coding.md` §2.1 settles its contents). It is lint
-configuration only, with no `[project]` table, and OneUp stays not-pip-installable. It is
-at the root for the same reason §1's table already grants the root dotfiles: `ruff` finds
-it by walking up from the working directory, so anywhere else and it is not found.
+**2.0 adds two new root files, and both are lint configuration found by walking up from
+the working directory** — the same reason §1's table already grants the root dotfiles.
+Neither is a program or a developer script, so the closed root above still holds.
+
+- **`pyproject.toml`** (ONEUP-0063, on `v2` since 2026-08-19 — `docs/standards/coding.md`
+  §2.1 settles its contents). Lint configuration only, with no `[project]` table; OneUp
+  stays not-pip-installable. `ruff` finds it by walking up, so anywhere else and it is not
+  found.
+- **`.yamllint`** (ONEUP-0136, 2026-08-31). Without it `yamllint` measures YAML against
+  its own 80-column default, which no part of this project uses — §2.1 sets 100 and
+  `pyproject.toml` sets ruff's `line-length` to match. Twelve of the fourteen line-length
+  findings in the 2026-08-31 audit were lines already inside the project's own limit.
+  `yamllint` auto-discovers it at the working directory only, so the root is the one place
+  it works without a `-c` at every call site.
 
 ---
 

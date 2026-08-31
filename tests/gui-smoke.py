@@ -1171,7 +1171,7 @@ def main() -> int:
     # cannot read the English it silently assumed.
     _seen_env = {}
     _orig_repos_run = repos.subprocess.run
-    repos.subprocess.run = lambda a, *ar, **kw: (
+    repos.subprocess.run = lambda a, *_ar, **kw: (
         _seen_env.update(kw.get("env") or {})
         or type("R", (), {"stdout": sample})())
     try:
@@ -1498,7 +1498,7 @@ def main() -> int:
     # still never forwards the GUI-only --update token — mirrors the guard above).
     _cap = {}
     _orig = gui_app.subprocess.run              # same module as _headless_update
-    gui_app.subprocess.run = lambda a, *ar, **kw: (
+    gui_app.subprocess.run = lambda a, *_ar, **kw: (
         _cap.update(argv=a) or type("R", (), {"returncode": 0})())
     try:
         gui_app._headless_update()

@@ -4734,3 +4734,102 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A test stand-in meant to say a background updater is switched off actually says it is running, so the switched-off case is never tried.
   Kind: test.
   Source: in-session-2026-08-25 ONEUP-0054 stage 4 step 9.
+
+- ✅ [ONEUP-0136] **Declare the project's 100-column YAML limit so yamllint stops measuring against its own 80.**
+  Added `.yamllint` at the root. Without it the tool used its own 80-column
+  default, while `coding.md` §2.1 sets 100 and `pyproject.toml` sets ruff's
+  `line-length` to match. Twelve of the fourteen line-length findings were lines
+  already inside the project's own limit; the two real breaches were
+  `.github/FUNDING.yml:2` (an unbreakable documentation URL, now covered by
+  `allow-non-breakable-words`) and `release.yml:50` at 139 columns, wrapped.
+  Nothing else is relaxed — `document-start` and `truthy` still fire.
+  Registered in `files-and-naming.md` §1, whose closed-root rule this touches.
+  **Layman:** A style checker was complaining about YAML lines that were already the right length for this project.
+  Kind: chore.
+  Source: check-code --tree 2026-08-31.
+
+- ✅ [ONEUP-0137] **Pin the three GitHub Actions to commit SHAs instead of mutable major tags.**
+  `actions/checkout@v7`, `actions/setup-python@v7` and
+  `softprops/action-gh-release@v3` were all major tags, which a publisher can
+  repoint at any commit. Each now carries the SHA with a trailing `# vX.Y.Z`
+  comment, and that comment is what the `dependencies.md` sweep compares.
+  Verified behaviour-preserving: every one of the three major tags resolved to
+  exactly the SHA pinned, so no version moved. Also set
+  `persist-credentials: false` on checkout (zizmor `artipacked`) — the workflow
+  pushes nothing, so the job token had no reason to sit in `.git/config` for the
+  AppImage build to read. Snapshot in `dependencies.md` updated; the `v3.0.2`
+  recorded there was already stale, `@v3` having moved to `v3.0.3` upstream.
+  **Layman:** The release build now names the exact code it runs, so nobody upstream can swap it out underneath us.
+  Kind: security.
+  Source: check-code --tree 2026-08-31 (zizmor unpinned-uses, High).
+
+- ✅ [ONEUP-0138] **Stop `self.scroll` shadowing the inherited `QWidget.scroll()` in the repo dialog.**
+  `RepoManagerDialog` assigned `self.scroll`, which shadows Qt's inherited
+  `QWidget.scroll(dx, dy)`. Nothing read it, so there was no live defect — but any
+  later `self.scroll(0, 10)` would have raised TypeError. Renamed to
+  `repo_scroll`, matching `detail_scroll` in `task_row.py`. Blast radius was one
+  line: nothing in `oneup/`, `tests/` or `docs/` referenced it, and ONEUP-0034
+  §4's symbol table for this module does not name it. Also renamed two unused
+  lambda varargs in `tests/gui-smoke.py` to `*_ar` (vulture).
+  **Layman:** Renamed an internal field that was quietly hiding a built-in Qt function of the same name.
+  Kind: fix.
+  Source: check-code --tree 2026-08-31 (mypy method-assign).
+
+- 💭 [ONEUP-0139] **Decide whether OneUp wants a type-checking posture at all — mypy finds 229 errors and 0 real defects.**
+  There is no mypy or pyright config, no type-check gate in `local-CI.sh` and
+  nothing in `coding.md`. Run unconfigured it returns 229 errors in 16 files.
+  All were triaged against source and NONE is a runtime defect: 68 are PySide6
+  shorthand enums and `bytes(QByteArray)` the stubs do not model, 20 are
+  narrowings that hold by construction (`self.parent()`, `QApplication.instance()`),
+  14 are variable-reuse and tuple-arity inference limits, 4 are deferred
+  module-level init, and 120 are in `gui-smoke.py`, which monkey-patches methods
+  by design. Recorded in `.ants_review_falsepos.jsonl`.
+  The question is whether a posture would pay for itself, not whether these
+  specific findings should be fixed — they should not.
+  **Layman:** A type checker has never been run here; it reports a lot, and every single report turned out to be the tool's limitation rather than a bug.
+  Kind: investigate.
+  Source: check-code --tree 2026-08-31 (mypy, unconfigured).
+
+- 📋 [ONEUP-0140] **Give the four remaining yamllint warnings a position: `document-start` x3 and `truthy` on `on:`.**
+  Left standing deliberately rather than switched off. `document-start` wants a
+  leading `---` on `FUNDING.yml`, `release.yml` and `.obs/workflows.yml`; the
+  project has never adopted that convention. `truthy` fires on the workflow's
+  `on:` key, which YAML 1.1 reads as a boolean and which the GitHub Actions
+  schema requires spelled exactly that way — a genuine false positive, recorded
+  in `.ants_review_falsepos.jsonl`. Nothing gates on either: `local-CI.sh` does
+  not run yamllint.
+  **Layman:** Four minor style warnings in the config files that nobody has decided about yet.
+  Kind: chore.
+  Source: check-code --tree 2026-08-31 (yamllint).
+
+- 📋 [ONEUP-0141] **zizmor: `softprops/action-gh-release` duplicates functionality the runner already provides.**
+  The `Attach AppImage to the release` step could use `gh release upload`
+  directly, dropping a third-party dependency from the release path entirely —
+  which also removes one of the three pins ONEUP-0137 just had to SHA-pin.
+  Informational severity; not urgent. Worth weighing against
+  `generate_release_notes: true`, which the action provides and a bare
+  `gh release upload` does not.
+  **Layman:** The release step uses a third-party action for something the built-in tooling can already do.
+  Kind: chore.
+  Source: check-code --tree 2026-08-31 (zizmor superfluous-actions, Informational).
+
+- 📋 [ONEUP-0142] **Four collections in `oneup/gui` need a type annotation mypy cannot infer.**
+  `repos.py:216` (`enable`, `disable`) and `banners.py:60` (`safe`, `risky`) are
+  empty list literals whose element type mypy cannot infer. Harmless today and
+  only worth doing if ONEUP-0139's question is answered yes; filed so the two are
+  not re-discovered separately.
+  **Layman:** Four empty lists that a type checker cannot work out the contents of on its own.
+  Kind: chore.
+  Source: check-code --tree 2026-08-31 (mypy var-annotated).
+
+- 📋 [ONEUP-0143] **`screenshots/` is missing from the audit exclusion set, so typos scans two PNG binaries.**
+  145 of the audit run's 462 findings — 31% — came from `screenshots/oneup.png`
+  and `oneup-light.png`. The default exclusion set names `static/images/` and not
+  `screenshots/`, and the project has no `audit-config.json` of its own.
+  A project config declaring the exclusion would drop about a third of the noise
+  from every future run. Note the same set excludes `data/`, which here holds the
+  desktop file, AppStream XML and icon rather than a data dump — so user-facing
+  strings are currently NOT spell-checked. Both are one file to fix.
+  **Layman:** The spell-checker was reading the screenshot image files and reporting nonsense from inside them.
+  Kind: chore.
+  Source: check-code --tree 2026-08-31.

@@ -1,0 +1,20 @@
+# yamllint configuration.
+#
+# Without this file yamllint measures against its own 80-column default, which
+# no part of this project uses: `docs/standards/coding.md` §2.1 sets 100 and
+# `pyproject.toml` sets ruff's `line-length = 100` to match. Twelve of the
+# fourteen line-length findings in the 2026-08-31 audit were lines that already
+# conformed to the project's own limit and were only flagged against the tool's.
+#
+# Nothing else is relaxed. `document-start` and `truthy` still fire; the `on:`
+# key that `truthy` flags in a GitHub workflow is the schema's mandatory spelling
+# and cannot be written any other way.
+
+extends: default
+
+rules:
+  line-length:
+    max: 100
+    # A bare URL in a comment cannot be wrapped without breaking it.
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true

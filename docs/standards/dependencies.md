@@ -52,13 +52,30 @@ backlog item, not a ledger entry.
 suspected breakage that turned out not to exist, so by rule 4 it had no business in the
 ledger.*
 
-## Current dependency snapshot (verified 2026-07-26; re-checked 2026-08-19)
+## Current dependency snapshot (verified 2026-07-26; re-checked 2026-08-19 and 2026-08-31)
 
 Recorded so the next sweep has a baseline:
 
-- `actions/checkout` → **v7**, latest `v7.0.1` — current.
-- `actions/setup-python` → **v7**, latest `v7.0.0` — current.
-- `softprops/action-gh-release` → **v3**, latest `v3.0.2` — current.
+- `actions/checkout` → **`3d3c42e5aac5ba805825da76410c181273ba90b1`** (`v7.0.1`) — current.
+- `actions/setup-python` → **`5fda3b95a4ea91299a34e894583c3862153e4b97`** (`v7.0.0`) — current.
+- `softprops/action-gh-release` → **`efb35369e0ad2afab669f228072c1b0d510eae64`** (`v3.0.3`) — current.
+
+**The three actions are pinned to a commit SHA rather than a major tag, since
+2026-08-31 (ONEUP-0137).** A major tag is mutable — its publisher can repoint
+`v7` at any commit — so the tag says which release we *asked* for and not which
+code runs. `zizmor` reports the tag form as `unpinned-uses`, High. Each `uses:`
+line carries the version as a trailing `# vX.Y.Z` comment, and **that comment is
+what the sweep below compares against**; the SHA itself is not a version and
+cannot be read as one. Verified at the pin: every one of the three major tags
+resolved to exactly the SHA recorded here, so pinning changed no behaviour.
+
+This is **not** a ledger entry. Nothing is held back — each pin is the latest
+release, spelled immutably. Rule 2's "older pin" test asks which release you are
+on, and the answer is unchanged.
+
+*The `v3.0.2` recorded on 2026-08-19 was superseded by `v3.0.3` upstream. The
+`@v3` tag had already moved, so the workflow had been running `v3.0.3` since it
+published — the figure was stale, not the pin.*
 - `python-version` in `.github/workflows/release.yml` → **`3.14`** on `v2`, **`3.13`** on
   `main`. Bumped on `v2` as ONEUP-0004 on 2026-08-19, the 2.0 dependency refresh. `main`
   is frozen and takes only qualifying bug fixes, so it keeps 3.13 until the 2.0.0 merge —
@@ -98,10 +115,13 @@ break — a hunch is a backlog item.
 ## How to check what's behind
 
 ```bash
-# CI actions — latest release tag:
+# CI actions — latest release tag. Compare each against the `# vX.Y.Z` comment
+# beside its pin in .github/workflows/release.yml, never against the SHA.
 for r in actions/checkout actions/setup-python softprops/action-gh-release; do
   echo "$r -> $(gh api repos/$r/releases/latest -q .tag_name)"
 done
+# …and the SHA a tag resolves to, when bumping a pin:
+#   gh api repos/<owner>/<repo>/git/ref/tags/<tag> -q .object.sha
 # Host packages (openSUSE):
 zypper info python3-pyside6 | grep -i version
 ```
