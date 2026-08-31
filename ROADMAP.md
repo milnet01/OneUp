@@ -1198,6 +1198,59 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   the engine suite reports 112 passed / 199 failed against
   ONEUP_ENGINE_CMD='python3 -m oneup.engine', across 81 of its 103 TEST
   blocks. Building next.
+  Progress (2026-08-31): stage 5 of 9 done on `v2` — the run driver, `steps.py`,
+  the rest of `actions.py`, and the hold. The engine suite reports 316 passed /
+  0 failed against `ONEUP_ENGINE_CMD='python3 -m oneup.engine'`, from 112/199 at
+  `8d715ad`, so G1 is earned and G4 with it (the one-prompt scenario is an
+  engine-suite scenario). local-CI green on `v2` with `ONEUP_ENGINE_CMD` unset.
+
+  Both live divergences the gate found are closed. `--check --steps=sytem`
+  printed `@@CHECK@@|TOTAL|0` and exited 0 where the Bash refuses and exits 2;
+  the selection and its rejection now sit above every dispatch, as the Bash's
+  do. And the privileged-call-site check is now a UNION of sudo-headed argvs and
+  `privilege.sudo` call sites, because that function prefixes `sudo` itself — the
+  narrow count could not move when a new privileged call landed, which is the
+  whole failure the check exists to catch.
+
+  Six things worth carrying forward.
+
+  The best find came from BUILDING step 11's scenario, not from reading step 7.
+  The per-call deadline killed only its child, so a mock whose `flatpak` shell
+  ran `sleep` left the sleep holding our read end and the wait after the kill
+  blocked on a pipe nobody would close — the bounded call never returned. A
+  bounded call now gets its own session and expiry kills the group. A scenario
+  written to exercise a feature is a better reader of it than a review is.
+
+  The deadline landed on the flatpak update-count queries, and the choice is
+  forced rather than convenient: security.md §2.2 means a root child is not ours
+  to signal, so a budget on a privileged call could only ever be bookkeeping.
+  An unprivileged read the step already degrades without is the one place a real
+  budget both fires and costs nothing when it does.
+
+  Steps 5 to 10 landed as one commit on purpose. The run driver's dispatch loop
+  calls the system step, so a split leaves an intervening tree that does not run.
+
+  `_not_built` and `EXIT_NOT_BUILT` are gone: every flag the engine parses is now
+  built, so the refusal path was dead code claiming a behaviour that no longer
+  existed.
+
+  The checks no scenario can reach were each driven by hand and each held: the
+  broken-pipe write AND the exit status behind it (a reader closing early leaves
+  the engine at 0, not 120, and the mirror keeps writing); `emit_progress`
+  returning False on `( 1/77` and on `( 1/77)` while `  1/77` emits;
+  `release_zypper_lock`'s inactive branch taking no privileged call at all; and
+  the log mirror covering `--check`, `--size`, `--auth-status` and `--emit-guard`
+  alike, stderr included.
+
+  Step 12's spec amendment landed on `main` and merged, per workflow.md §9's
+  default — a spec is not one of the four genres §9 binds to `v2`. It records
+  work already done, so rule 14's amendment bullet exempts it and the gate did
+  not re-arm.
+
+  Not stage 5's, recorded so a green is not read as parity: `update_system.sh`
+  is not retired (stage 9), the differential harness is stage 6's, and the window
+  still points at the Bash engine (stage 7). The three filed suite defects were
+  run past rather than repaired — ONEUP-0135, ONEUP-0133, ONEUP-0134.
 
 - ✅ [ONEUP-0056] **Never report "up to date" for a source the check couldn't read.**
   Reported with two screenshots: OneUp's check said "Everything is up
