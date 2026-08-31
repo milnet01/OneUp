@@ -188,9 +188,17 @@ def _arm_single_instance(win):
     logout) and both survived, which is the two-tray-icon bug (ONEUP-0084). So:
     listen first, and clear the address only once a connect has PROVEN nobody
     is answering it.
+
+    Returns True when THIS copy owns the socket, False when another live copy
+    does. The caller must honour a False: the check `main` makes before building
+    a window is a moment earlier than this one, so two copies started TOGETHER
+    at login — the very case ONEUP-0084 was fixed for — both find nobody
+    answering and both proceed. Only this call can tell them apart, and while it
+    returned nothing the loser carried on to a second tray icon, a second check
+    timer and a second engine able to race the zypper lock.
     """
     if win._local_server is not None:
-        return
+        return True                          # already ours, from an earlier call
     name = single_instance_name()
     server = QLocalServer(win)
     if not server.listen(name):
@@ -198,12 +206,13 @@ def _arm_single_instance(win):
         probe.connectToServer(name)
         if probe.waitForConnected(SINGLE_INSTANCE_TIMEOUT_MS):
             probe.disconnectFromServer()     # a live copy owns it — leave it be
-            return
+            return False
         QLocalServer.removeServer(name)      # proven stale (a crash left it)
         if not server.listen(name):
-            return
+            return False
     server.newConnection.connect(partial(_on_single_instance_connection, win))
     win._local_server = server
+    return True
 
 
 def _on_single_instance_connection(win):
@@ -228,6 +237,22 @@ def _on_tray_activated(win, reason):
 def _on_tray_timer(win):
     _tray_check(win)
     win._tray_timer.setInterval(TRAY_CHECK_INTERVAL_MS)  # short first fire, then 6h
+
+
+def refresh_icon(win):
+    """Rebuild the tray icon for the palette in force (ONEUP-0027 INV-8).
+
+    The icon is painted from theme colours, so a theme change has to rebuild it.
+    Deliberately NOT `_tray_update`, which is the menu's "Update now" action and
+    starts a privileged run; the two were confused once and a theme change
+    started an update.
+
+    The tooltip is left alone: it reports the last check, which a theme change
+    does not alter.
+    """
+    if win._tray is None:
+        return
+    win._tray.setIcon(_tray_icon(win._tray_total > 0))
 
 
 def _tray_update(win):

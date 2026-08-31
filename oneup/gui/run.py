@@ -308,6 +308,12 @@ def _reset_for_run(win, steps: list[str], check: bool):
     win._remedy_keys = False
     win._remedy_skips = []
     win._run_active = not check   # a real run guards the standalone thin action
+    # Separate from `_run_active`, which answers "may the standalone thin action
+    # run?" and is False on a check. The liveness line has to work on BOTH paths:
+    # a check is the metadata-refresh phase ONEUP-0048 was written for, and its
+    # progress bar is indeterminate, so it animates whether or not the engine is
+    # alive. One flag cannot answer both questions.
+    win._liveness_active = True
     win._activity_timer.start()   # stopped again in on_finished
     win.warn_copy_btn.setVisible(False)
     win.warn_btn2.setVisible(False)
@@ -417,7 +423,7 @@ def _tick_activity(win):
     """Redraw the liveness line: what we're waiting on, for how long, and how fast
     it's moving. Runs every 5s for the length of a run, and again whenever fresh
     figures arrive, so the answer to "has it stalled?" is always on screen."""
-    if not win._run_active:
+    if not getattr(win, "_liveness_active", False):
         return
     now = time.monotonic()
     bits = []
@@ -690,6 +696,12 @@ def on_error(win, _err):
     win.status.setText("Could not start the update script.")
     win.bar.setRange(0, 1)
     win.set_controls_enabled(True)
+    # QProcess does not emit `finished` after a start failure, so nothing else
+    # clears these — and a window left mid-run blocks the thin action for the rest
+    # of the session and warns "an update is still running" on every quit.
+    win._run_active = False
+    win._liveness_active = False
+    win._activity_timer.stop()
     # Release the process object on a start failure too (finished never fires here).
     win.proc.deleteLater()
 
@@ -716,6 +728,7 @@ def on_finished(win, exit_code: int, _status):
         handle_line(win, win._buf)
     win._buf = ""
     win._run_active = False
+    win._liveness_active = False
     win._activity_timer.stop()
     _set_activity(win, "")
     # Release the finished process so QProcess instances don't accumulate on the
@@ -784,8 +797,15 @@ def on_finished(win, exit_code: int, _status):
         installed = "already up to date"
     else:
         installed = "finished"
-    win.status.setText(f"All done — {installed}." if ok
-                        else "Finished — some steps had errors (see details).")
+    # A source set aside this run is named in the summary. Without it a run that
+    # skipped an entire software source still ended "All done", which claims more
+    # than the run earned (ONEUP-0025 promises the skip reaches the summary).
+    aside = ""
+    if win._skipped_repos:
+        aside = f" {len(win._skipped_repos)} source(s) set aside: " \
+                f"{', '.join(win._skipped_repos)}."
+    win.status.setText((f"All done — {installed}.{aside}") if ok
+                        else f"Finished — some steps had errors (see details).{aside}")
     # Announced here, where the summary is set. Any warning banner below
     # announces afterwards and so supersedes this (announcements are Polite
     # priority, and the warning is the message that matters more).

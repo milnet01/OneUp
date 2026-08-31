@@ -46,23 +46,27 @@ def run(
     engine writes `LC_ALL=C zypper …` as a per-command prefix; putting the same
     setting in `os.environ` would reach every later child instead.
 
-    With `stream`, the child INHERITS our stdout and stderr instead of being
-    captured, and the returned text is empty. Some of what the Bash engine runs
-    is not captured at all — `refresh_repos`' per-repository `sudo timeout …
-    refresh` writes straight to the run's stdout and its log — and building
-    those on the capturing form sends their output nowhere.
+    With `stream`, the child's output goes to the run's stdout and its log as it
+    arrives, and the returned text is empty. Some of what the Bash engine runs is
+    not captured at all — `refresh_repos`' per-repository `sudo timeout … refresh`
+    writes straight to the run's stdout and its log — and building those on the
+    capturing form sends their output nowhere.
+
+    It is PUMPED rather than inherited, and that is load-bearing twice over. The
+    log mirror replaces `sys.stdout`, not file descriptor 1, so an inheriting
+    child bypasses the log entirely — the opposite of what this docstring used to
+    claim. And CPython restores SIGPIPE to SIG_DFL in every child, so an
+    inheriting child holding the raw console pipe is KILLED when the window quits,
+    which is the ONEUP-0042 failure `tee -a -p` exists to prevent, reappearing on
+    the streaming path. Pumping keeps the console pipe in this process, where
+    `_Mirror` already survives it breaking.
     """
     overlay = {**os.environ, **env} if env else None
     if deadline is not None:
         return _run_bounded(argv, deadline, merge_stderr=merge_stderr,
                             env=overlay, stream=stream)
     if stream:
-        completed = subprocess.run(  # noqa: S603 — fixed argv list, no shell, as above
-            list(argv),
-            check=False,
-            env=overlay,
-        )
-        return completed.returncode, ""
+        return _pump(argv, env=overlay), ""
 
     completed = subprocess.run(  # noqa: S603 — fixed argv list, no shell; the caller
         # builds every element, and nothing here is interpolated from engine or user text.
@@ -70,10 +74,37 @@ def run(
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT if merge_stderr else subprocess.DEVNULL,
         text=True,
+        # zypper's output carries repository and package text, which security.md §4
+        # classifies as untrusted — one undecodable byte under the default strict
+        # errors would raise straight out of a transaction loop.
+        encoding="utf-8",
+        errors="replace",
         check=False,
         env=overlay,
     )
     return completed.returncode, completed.stdout or ""
+
+
+def _pump(argv: Sequence[str], *, env: Mapping[str, str] | None) -> int:
+    """Run `argv`, relaying each line through `sys.stdout` as it arrives.
+
+    `print` here is the point: `sys.stdout` is the log mirror, so the line reaches
+    the console AND the log, and a console that has gone away is absorbed there
+    rather than killing the child.
+    """
+    child = subprocess.Popen(  # noqa: S603 — fixed argv list, no shell, as in `run`
+        list(argv),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+    )
+    if child.stdout is not None:
+        for raw in child.stdout:
+            print(raw.rstrip("\n"), flush=True)
+    return child.wait()
 
 
 def _run_bounded(argv: Sequence[str], deadline: float, *, merge_stderr: bool,
@@ -87,15 +118,22 @@ def _run_bounded(argv: Sequence[str], deadline: float, *, merge_stderr: bool,
     """
     child = subprocess.Popen(  # noqa: S603 — fixed argv list, no shell, as in `run`
         list(argv),
-        stdout=None if stream else subprocess.PIPE,
-        stderr=None if stream else (
-            subprocess.STDOUT if merge_stderr else subprocess.DEVNULL),
+        # Captured on BOTH paths: a streaming child that inherited fd 1 would
+        # bypass the log mirror and die on SIGPIPE when the window quits (see
+        # `run`). Streamed output is relayed below as it is read.
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT if (stream or merge_stderr) else subprocess.DEVNULL,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         env=env,
         start_new_session=True,
     )
     try:
         out, _ = child.communicate(timeout=deadline)
+        if stream and out:
+            print(out, end="" if out.endswith("\n") else "\n", flush=True)
+            return child.returncode, ""
         return child.returncode, out or ""
     except subprocess.TimeoutExpired:
         kill_group(child.pid)
@@ -207,6 +245,12 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        # The transaction's own output, and the most important place not to raise:
+        # one undecodable byte from a repository or package name under the default
+        # strict errors would unwind the read loop mid-`zypper dup`. The WRITE side
+        # below is already `errors="replace"`; this is the read side.
+        encoding="utf-8",
+        errors="replace",
         bufsize=1,
         # Its own session only when there is a budget to enforce: expiry has to
         # reach a grandchild holding our read end, and a privileged transaction

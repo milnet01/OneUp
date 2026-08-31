@@ -274,14 +274,25 @@ def _check_flatpak() -> tuple[int, bool]:
     return n, bool(unreadable)
 
 
-def _check_firmware() -> int:
-    """Ask fwupd whether anything is pending. Yes or no, so there is no unreadable case."""
-    n = 1 if proc.succeeds(["fwupdmgr", "get-updates"]) else 0
-    # Emitted DIRECTLY, not through `emit_check`: firmware reports a bare zero on
-    # purpose, which that emitter's suppression rule exists to withhold.
+def _check_firmware() -> tuple[int, bool]:
+    """Ask fwupd whether anything is pending, and say when it could not answer.
+
+    fwupdmgr(1) EXIT STATUS: 0 = ran and found something, 2 = ran with no actions,
+    1/3 = it could not answer. The docstring here used to read "yes or no, so there
+    is no unreadable case", which is a property the tool's exit surface does not
+    have — an unreachable daemon rendered as a bare zero, i.e. "you're up to date".
+    """
+    fw_rc, _ = proc.run(["fwupdmgr", "get-updates"])
+    if fw_rc not in (0, 2):
+        markers.marker("CHECK_UNKNOWN", "firmware|OneUp couldn't ask fwupd")
+        markers.out("  Firmware: couldn't check")
+        return 0, True
+    n = 1 if fw_rc == 0 else 0
+    # Emitted DIRECTLY, not through `emit_check`: a firmware zero we DID earn is
+    # reported on purpose, which that emitter's suppression rule would withhold.
     markers.marker("CHECK", f"firmware|{n}|firmware update(s)")
     markers.out("  Firmware: " + ("available" if n else "up to date"))
-    return n
+    return n, False
 
 
 def check(opts: Options) -> int:
@@ -302,7 +313,9 @@ def check(opts: Options) -> int:
         total += n
         incomplete = incomplete or bad
     if opts.selected("firmware") and shutil.which("fwupdmgr"):
-        total += _check_firmware()
+        n, bad = _check_firmware()
+        total += n
+        incomplete = incomplete or bad
     # A step whose read FAILED still contributes its partial count: incompleteness is
     # carried by CHECK_UNKNOWN and by the wording below, never by a lowered total.
     markers.marker("CHECK", f"TOTAL|{total}|updates available")

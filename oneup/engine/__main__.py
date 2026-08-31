@@ -273,7 +273,12 @@ def _reexec_under_inhibitor(opts: Options, argv: list[str]) -> None:
     """
     if os.environ.get("ONEUP_INHIBITED"):
         return
-    if opts.auth_action or opts.size_step or opts.check_only:
+    if opts.auth_action or opts.check_only:
+        return
+    # `--size` alone is a read-only price quote and needs no lock. `--size --hold`
+    # is NOT that: it falls through into the full transaction (ONEUP-0044 §4.5) and
+    # is the GUI's ordinary Update path, so it is inhibited like any other run.
+    if opts.size_step and not opts.hold:
         return
     probe = ["systemd-inhibit", "--what=shutdown", "--who=OneUp", "--why=probe", "true"]
     try:

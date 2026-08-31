@@ -60,8 +60,15 @@ if $do_obs; then
         work=$(mktemp -d)
         if ( cd "$work" && osc checkout home:milnet oneup >/dev/null 2>&1 ); then
             cp packaging/obs/_service packaging/rpm/oneup.spec "$work/home:milnet/oneup/"
+            # `osc add` is NOT in the && chain: the checkout above is of an EXISTING
+            # package, so both files are already versioned and `add` errors on them.
+            # Chained, that short-circuited the commit, so every release after the
+            # first reported "osc commit failed" without ever attempting one. It is
+            # kept for the case where a file is genuinely new, and its failure is
+            # ignored. stderr is no longer discarded — the reason a commit failed is
+            # the whole point of the message below.
             if ( cd "$work/home:milnet/oneup" \
-                 && osc add _service oneup.spec >/dev/null 2>&1 \
+                 && { osc add _service oneup.spec >/dev/null 2>&1 || true; } \
                  && osc commit -m "oneup $ver" ); then
                 echo "   OBS updated — rebuild triggered."
             else

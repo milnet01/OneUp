@@ -144,9 +144,17 @@ def run_firmware() -> None:
         end_step("firmware", "skip", "not installed")
         return
     proc.run(["fwupdmgr", "refresh"], stream=True)
-    if not proc.succeeds(["fwupdmgr", "get-updates"]):
+    # fwupdmgr(1) EXIT STATUS: 0 = ran and found something, 2 = ran with no actions,
+    # 1/3 = it could not answer. Treating every non-zero as "nothing to do" tells a
+    # user their firmware is current when we never managed to ask.
+    fw_rc, _ = proc.run(["fwupdmgr", "get-updates"])
+    if fw_rc == 2:
         markers.out("No firmware updates available.")
         end_step("firmware", "ok", "up to date")
+        return
+    if fw_rc != 0:
+        markers.out(f"Couldn't ask fwupd about firmware updates (exit {fw_rc}).")
+        end_step("firmware", "fail", "couldn't check for firmware updates")
         return
     # Claim success only if the flash itself succeeded: a failed update must not
     # report "applied", because that is what advises the reboot.
@@ -157,16 +165,37 @@ def run_firmware() -> None:
         end_step("firmware", "fail", "firmware update failed")
 
 
-def _package_column(text: str) -> list[str]:
-    """The name column of a `zypper packages` table: field 3, past the header."""
+# A package name, for the same reason `repos.valid_alias` exists: this column is
+# parsed out of zypper's own table — one of the untrusted sources security.md §4
+# names — and the result is handed to a ROOT `zypper remove`. The leading class
+# excludes `-`, so a spliced field can never be read as an option.
+_PACKAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
+
+
+def valid_package(name: str) -> bool:
+    """Is this safe to pass to a privileged `zypper remove`?"""
+    return bool(_PACKAGE.fullmatch(name))
+
+
+def _package_column(text: str) -> list[str] | None:
+    """The name column of a `zypper packages` table: field 3, past the header.
+
+    Returns None when any row fails the shape test — fail closed, per security.md
+    §4.2. Dropping the bad row and removing the rest would be a clean-up-and-
+    continue on the argv of a root package removal, which §4.4 forbids.
+    """
     names = []
     for line in text.splitlines()[2:]:
         fields = line.split("|")
         if len(fields) < 3:
             continue
         name = fields[2].replace(" ", "")
-        if name:
-            names.append(name)
+        if not name:
+            continue
+        if not valid_package(name):
+            markers.err(f"Refusing unsafe package name from zypper's table: {name!r}")
+            return None
+        names.append(name)
     return names
 
 
@@ -191,9 +220,19 @@ def run_orphans(opts) -> None:
         return
     # --no-refresh on both queries: the refresh above is the only one allowed,
     # because it is the only one the user can see and the run can escape from.
-    _, raw = privilege.sudo(
+    # The status is checked, not discarded: a query that failed returns no rows,
+    # which is byte-identical to a clean machine, so an unchecked call reports
+    # "nothing to remove" for a step that never managed to look.
+    rc, raw = privilege.sudo(
         ["zypper", "--non-interactive", "--no-refresh", "packages", "--unneeded"])
+    if rc != 0:
+        markers.out(f"Couldn't list leftover dependency packages (zypper exit {rc}).")
+        end_step("orphans", "fail", "couldn't list leftover packages")
+        return
     unneeded = _package_column(raw)
+    if unneeded is None:
+        end_step("orphans", "fail", "unreadable package name in zypper's output")
+        return
     if unneeded:
         markers.out(f"Removing {len(unneeded)} leftover dependency package(s):")
         for name in unneeded:
@@ -210,7 +249,9 @@ def run_orphans(opts) -> None:
         end_step("orphans", "ok", "nothing to remove")
     _, raw = privilege.sudo(
         ["zypper", "--non-interactive", "--no-refresh", "packages", "--orphaned"])
-    orphaned = len(_package_column(raw))
+    # Report-only, and nothing here reaches a privileged argv — so an unreadable
+    # name is not fatal for this half; it just means the count cannot be stated.
+    orphaned = len(_package_column(raw) or [])
     if orphaned > 0:
         markers.out("")
         markers.out(f"Note: {orphaned} package(s) have no active repository (possibly")
@@ -343,6 +384,19 @@ exit $?          # ONEUP-0041 orphan shape, one level down
 '''
 
 
+def _zypper_ok(rc: int) -> bool:
+    """zypper's INFORMATIONAL exits are not failures.
+
+    100-103 say an update, reboot or restart is advised; 106 says a repository was
+    skipped. `run_size` and `check` each already exempt their own subset; the
+    transaction passes exempted none, so a `dup` that installed cleanly and exited
+    102 reported as a failed step, suppressed the reboot advice for packages that
+    really landed, and made the cache step hoard the downloads for a retry nobody
+    needed.
+    """
+    return rc == 0 or 100 <= rc <= 103 or rc == 106
+
+
 def _download_pass() -> bool:
     """Pass 1 of 2: fetch every package, install nothing.
 
@@ -373,7 +427,10 @@ def _download_pass() -> bool:
     # 143 is the wrapper reporting a stop. Nothing is installed either way, so it
     # is not a failure — and it must not read as one, or the caller admits the
     # step to the repo-scoped probe and re-runs the transaction just stopped.
-    return SYS_DL_RC in (0, 143)
+    # 143 is 128+SIGTERM: the user stopped it. Nothing is installed either way, so
+    # it is not a failure — and it must not read as one, or the caller admits the
+    # step to the repo-scoped probe and re-runs the transaction just stopped.
+    return _zypper_ok(SYS_DL_RC) or SYS_DL_RC == 143
 
 
 def _commit_pass() -> bool:
@@ -386,8 +443,8 @@ def _commit_pass() -> bool:
     """
     privilege.install_environment()
     argv = ["sudo", "env", "LC_ALL=C", *system_txn_argv()]
-    return proc.stream_filtered(argv, step="system", phase="install",
-                                log=_SYS_LOG, append=True) == 0
+    return _zypper_ok(proc.stream_filtered(argv, step="system", phase="install",
+                                           log=_SYS_LOG, append=True))
 
 
 _TRANSFER_FAILURE = re.compile(
@@ -654,6 +711,15 @@ def run_system(opts) -> None:
                     # silently retry.
                     if repos.DISABLED:
                         ok = _system_upgrade()
+                        # The retry can itself be stopped, and the boundary check
+                        # that guards the FIRST transaction sits above this probe
+                        # rather than below it — so without this a stop during the
+                        # retry falls through and reports the solver's package
+                        # count as an install that never happened (INV-1).
+                        if SYS_STOPPED:
+                            end_step("system", "skip",
+                                     "stopped before installing anything")
+                            return
                 else:
                     # Interactive: ask, do not act. Offer the skip for each
                     # culprit; disable nothing on our own.

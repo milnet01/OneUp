@@ -201,12 +201,23 @@ def find_failing_repos() -> list[str]:
     for alias in enabled_repo_aliases():
         if not alias:
             continue
+        # Under the SAME per-source budget `refresh_repos` uses. This function runs
+        # only after a failure, i.e. exactly when a source is broken or crawling,
+        # and its output goes to a variable rather than the log pane — so unbounded
+        # it hangs the run showing nothing, which is the ONEUP-0048 failure the
+        # bounded argv above exists to prevent. The `timeout <budget> zypper *`
+        # shape is already granted by security.md §5.2, so this needs no new
+        # auth_cmnds entry.
         rc, out = privilege.sudo(
-            ["zypper", "--non-interactive", "refresh", alias], merge_stderr=True,
+            [*(privilege.REFRESH_SUDO_ARGV or ["timeout", REFRESH_TIMEOUT, "zypper"]),
+             "--non-interactive", "refresh", alias],
+            merge_stderr=True,
         )
         if rc == 0:
             continue
-        if _SIGNATURE.search(out):
+        if rc == _TIMED_OUT:
+            reason = "unreachable"
+        elif _SIGNATURE.search(out):
             reason = "signature"
         elif _METADATA.search(out):
             reason = "metadata"

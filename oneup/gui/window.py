@@ -125,6 +125,7 @@ class Updater(QMainWindow):
         self._warn_snapshots = False  # pre-flight: many Btrfs snapshots may be using disk
         self._snapshot_count = 0      # how many, for the banner text
         self._run_active = False      # is a full update run in flight? (guards the thin action)
+        self._liveness_active = False # is ANY engine in flight? (drives the ONEUP-0048 line)
         self._settings_dialog: SettingsDialog | None = None
         self._pending_autoupdate = False   # one-shot latch: an enable awaiting a fresh auth settle
         self._tray = None
@@ -382,7 +383,12 @@ class Updater(QMainWindow):
         # Progress + current step.
         self.status = QLabel("Ready.")
         self.status.setObjectName("Status")
-        self.status.setAccessibleName("Current status")
+        # NOT setAccessibleName: an explicit name on a QLabel is permanent, and this
+        # label is `_announce`'s default `source` — so a name here makes the reader
+        # say "Current status" for every run summary instead of the summary
+        # (ONEUP-0028 § the fallback deliberately does not name the borrowed label).
+        # A description carries the role without displacing the text.
+        self.status.setAccessibleDescription("Current status")
         root.addWidget(self.status)
         self.bar = QProgressBar()
         self.bar.setTextVisible(True)
@@ -586,6 +592,7 @@ class Updater(QMainWindow):
         self._attached_log = Path(log_path)
         self._attached_pos = 0
         self._run_active = True
+        self._liveness_active = True
         self._check_mode = False
         self._done_status = ""
         run._reset_activity(self)
@@ -736,7 +743,7 @@ class Updater(QMainWindow):
         # call sites, neither of which fires on a theme change — so a window
         # holding one rebuilds it here (INV-8). A window with no tray does nothing.
         if getattr(self, "_tray", None) is not None:
-            tray._tray_update(self)
+            tray.refresh_icon(self)
 
     def _show_theme_error(self):
         note = theme_mod.last_theme_error
@@ -880,6 +887,10 @@ class Updater(QMainWindow):
             '<a href="https://software.opensuse.org/package/oneup">openSUSE package (OBS)</a>')
         for lbl in box.findChildren(QLabel):
             lbl.setOpenExternalLinks(True)  # let the links open in the browser.
+            # setOpenExternalLinks only grants LinksAccessibleByMouse, so without
+            # this the two links above are reachable by mouse alone and there is no
+            # other route to either URL — WCAG 2.2 SC 2.1.1 Keyboard, Level A.
+            lbl.setTextInteractionFlags(Qt.TextBrowserInteraction)
         check_btn = box.addButton("Check for updates", QMessageBox.ActionRole)
         box.addButton(QMessageBox.Close)
         # Centre over the main window once it's laid out (a QMessageBox sizes to its

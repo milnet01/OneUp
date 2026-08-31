@@ -250,7 +250,11 @@ step_selected() { [[ ",$STEPS," == *",$1,"* ]]; }
 # exits WITHOUT running its command if it cannot take the lock (no logind, a container,
 # a locked-down session), which would turn a missing convenience into a failed update.
 # A missing or non-working tool must degrade to "no inhibitor", never to "no run".
-if [[ -z "${ONEUP_INHIBITED:-}" && -z "$AUTH_ACTION" && -z "$SIZE_STEP" ]] \
+# `--size` alone is a read-only price quote and needs no lock. `--size --hold` is
+# NOT that: it falls through into the full transaction below (ONEUP-0044 §4.5), and
+# it is the GUI's ordinary Update path — so it must be inhibited like any other run.
+if [[ -z "${ONEUP_INHIBITED:-}" && -z "$AUTH_ACTION" ]] \
+   && { [[ -z "$SIZE_STEP" ]] || $HOLD; } \
    && ! $CHECK_ONLY \
    && systemd-inhibit --what=shutdown --who=OneUp --why=probe true >/dev/null 2>&1; then
     export ONEUP_INHIBITED=1
@@ -445,6 +449,14 @@ end_step() {
 # is the one answer an update checker must never give (ONEUP-0056). A count is
 # still emitted alongside the warning when we DID find updates: knowing about 7
 # of them beats knowing about none while a repository is broken.
+# zypper's INFORMATIONAL exits are not failures: 100-103 say an update, reboot or
+# restart is advised, and 106 says a repository was skipped. `run_size` and
+# `run_check` each already exempt their own subset; the transaction passes
+# exempted none, so a `dup` that installed cleanly and exited 102 reported as a
+# failed step, suppressed the reboot advice for packages that really landed, and
+# made the cache step hoard the downloads for a retry nobody needed.
+zypper_ok() { (( $1 == 0 || ($1 >= 100 && $1 <= 103) || $1 == 106 )); }
+
 emit_check() {  # key, count, label, [what-was-unreadable]
     local key="$1" count="$2" label="$3" unreadable="${4:-}"
     [[ -n "$unreadable" ]] && marker CHECK_UNKNOWN "$key|$unreadable"
@@ -541,9 +553,19 @@ run_check() {
         (( total += n ))
     fi
     if step_selected firmware && command -v fwupdmgr &>/dev/null; then
-        if fwupdmgr get-updates &>/dev/null; then n=1; else n=0; fi
-        marker CHECK "firmware|$n|firmware update(s)"
-        echo "  Firmware: $( ((n > 0)) && echo available || echo up to date)"
+        # 0 = updates found, 2 = none, anything else = could not ask. The last of
+        # those must not render as a bare zero, which reads as "you're up to date"
+        # (ONEUP-0056) — so it goes through emit_check with an unreadable reason.
+        fwupdmgr get-updates &>/dev/null; fw_rc=$?
+        n=$(( fw_rc == 0 ? 1 : 0 ))
+        if (( fw_rc == 0 || fw_rc == 2 )); then
+            emit_check firmware "$n" "firmware update(s)"
+            echo "  Firmware: $( ((n > 0)) && echo available || echo up to date)"
+        else
+            emit_check firmware 0 "firmware update(s)" "OneUp couldn't ask fwupd"
+            echo "  Firmware: couldn't check"
+            incomplete=true
+        fi
         (( total += n ))
     fi
     marker CHECK "TOTAL|$total|updates available"
@@ -1568,7 +1590,7 @@ run_system_download() {
         sudo "$GUARD_FILE" "$STOP_FILE" "$RUN_STATE_FILE" "$STOP_POLL_SECONDS" \
              "${SYS_TXN[@]}" 2>&1 | tee "$SYS_LOG" | progress_filter system download
         SYS_DL_RC=${PIPESTATUS[0]}
-        (( SYS_DL_RC == 0 || SYS_DL_RC == 143 )) || ok=false
+        zypper_ok "$SYS_DL_RC" || (( SYS_DL_RC == 143 )) || ok=false
         return 0
     fi
     sudo env LC_ALL=C bash -c '
@@ -1592,7 +1614,7 @@ run_system_download() {
     # 143 is 128+SIGTERM: the user stopped it. Nothing is installed either way, so this is
     # not a failure — and it must not set ok=false, or the caller admits the step to the
     # repo-scoped-failure probe and re-runs the whole transaction the user just stopped.
-    (( SYS_DL_RC == 0 || SYS_DL_RC == 143 )) || ok=false
+    zypper_ok "$SYS_DL_RC" || (( SYS_DL_RC == 143 )) || ok=false
 }
 
 # Pass 2 of 2. Every package is already cached, so this performs no network I/O — it is
@@ -1604,7 +1626,7 @@ run_system_commit() {
     system_txn_argv
     sudo env LC_ALL=C "${SYS_TXN[@]}" 2>&1 \
         | tee -a "$SYS_LOG" | progress_filter system install
-    [[ ${PIPESTATUS[0]} -eq 0 ]] || ok=false
+    zypper_ok "${PIPESTATUS[0]}" || ok=false
 }
 
 # Build a copy of REPOS_DIR whose openSUSE baseurls point at the content CDN, and echo its
@@ -1763,11 +1785,17 @@ if step_selected system && ! stop_pending; then
             fi
         fi
     fi
+    # The auto-skip retry above can itself be stopped, and the boundary check that
+    # guards the FIRST transaction sits above the probe rather than below it — so
+    # without this a stop during the retry falls through and reports the solver's
+    # package count as an install that never happened (INV-1).
+    if $SYS_STOPPED; then
+        end_step system skip "stopped before installing anything"
     # Only interpret the transaction output when the step actually SUCCEEDED. A
     # blocked/failed run has no "Nothing to do." line, so treating the else-branch
     # as "packages changed" would falsely trip the reboot advice — the step failed,
     # nothing was installed.
-    if $ok; then
+    elif $ok; then
         if ! $refresh_ok; then
             # The upgrade worked, but off possibly-stale metadata — tell the user so
             # a genuinely-newer package isn't silently missed until the next run.
@@ -1909,7 +1937,11 @@ if step_selected firmware && ! stop_pending; then
     begin_step firmware
     if command -v fwupdmgr &>/dev/null; then
         fwupdmgr refresh || true
-        if fwupdmgr get-updates &>/dev/null; then
+        # fwupdmgr(1) EXIT STATUS: 0 = ran and found something, 2 = ran with no
+        # actions, 1/3 = it could not answer. Treating every non-zero as "nothing
+        # to do" tells a user their firmware is current when we never asked.
+        fwupdmgr get-updates &>/dev/null; FW_RC=$?
+        if (( FW_RC == 0 )); then
             # Only claim success (and later advise a reboot) if the flash actually
             # succeeded — a failed update must not report "applied" or force a reboot.
             if fwupdmgr update -y; then
@@ -1918,9 +1950,12 @@ if step_selected firmware && ! stop_pending; then
             else
                 end_step firmware fail "firmware update failed"
             fi
-        else
+        elif (( FW_RC == 2 )); then
             echo "No firmware updates available."
             end_step firmware ok "up to date"
+        else
+            echo "Couldn't ask fwupd about firmware updates (exit $FW_RC)."
+            end_step firmware fail "couldn't check for firmware updates"
         fi
     else
         echo "fwupd is not installed. Skipping."
@@ -1955,10 +1990,38 @@ if step_selected orphans && ! stop_pending; then
     else
     # --no-refresh on both queries: the refresh above is the only one allowed to happen,
     # because it is the only one the user can see and the run can escape from.
+    # The status is checked, not discarded: a query that failed returns no rows,
+    # which is byte-identical to a clean machine, so an unchecked capture reports
+    # "nothing to remove" for a step that never managed to look. Captured WITHOUT
+    # -e on purpose — merging stderr would feed zypper's progress lines into the
+    # pipe-delimited awk parse below.
     sudo_capture UNNEEDED_RAW zypper --non-interactive --no-refresh packages --unneeded
+    UNNEEDED_QUERY_RC=$?
+    if (( UNNEEDED_QUERY_RC != 0 )); then
+        echo "Couldn't list leftover dependency packages (zypper exit $UNNEEDED_QUERY_RC)."
+        end_step orphans fail "couldn't list leftover packages"
+    else
     mapfile -t UNNEEDED < <(awk -F'|' \
         'NR>2 && $3 !~ /^[[:space:]]*$/ {gsub(/ /,"",$3); print $3}' <<<"$UNNEEDED_RAW")
-    if ((${#UNNEEDED[@]})); then
+    # Shape-checked before it reaches a ROOT `zypper remove`, for the same reason
+    # valid_alias exists: this column is parsed out of zypper's own table, which
+    # security.md §4 names as untrusted. Fail CLOSED (§4.2) — dropping the bad row
+    # and removing the rest is the clean-up-and-continue §4.4 forbids, on the argv
+    # of a package removal. The leading class excludes `-`, so a spliced field can
+    # never be read as a zypper option.
+    UNSAFE_PKG=false
+    for pkg in "${UNNEEDED[@]}"; do
+        if ! [[ "$pkg" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]]; then
+            echo "  Refusing unsafe package name from zypper's table: $pkg" >&2
+            end_step orphans fail "unreadable package name in zypper's output"
+            UNNEEDED=()
+            UNSAFE_PKG=true
+            break
+        fi
+    done
+    if $UNSAFE_PKG; then
+        :                                    # end_step already reported the refusal
+    elif ((${#UNNEEDED[@]})); then
         echo "Removing ${#UNNEEDED[@]} leftover dependency package(s):"
         printf '  - %s\n' "${UNNEEDED[@]}"
         if sudo zypper --non-interactive remove --clean-deps "${UNNEEDED[@]}"; then
@@ -1977,6 +2040,7 @@ if step_selected orphans && ! stop_pending; then
         echo
         echo "Note: $ORPHAN_COUNT package(s) have no active repository (possibly"
         echo "installed by hand). Left in place — review with:  zypper packages --orphaned"
+    fi
     fi
     fi
 fi

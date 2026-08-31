@@ -44,6 +44,58 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A stalled software source can no longer hang a run with nothing on screen** (ONEUP-0172)
+  When an update fails, OneUp re-checks each source to find the culprit. That
+  re-check had no time limit and its output went nowhere, so a crawling mirror
+  could hang the whole run showing nothing — on precisely the path taken when
+  something is already wrong. Two copies of OneUp started at the same moment also
+  no longer both keep running.
+
+- **The "still working" line now appears while checking for updates, not only while installing** (ONEUP-0170)
+  That line is what tells a slow server apart from a frozen app, and checking for
+  updates is exactly the phase it was written for — but it was switched off there,
+  behind a progress bar that animates whether or not anything is happening. A run
+  that set a software source aside also now says so in its summary instead of
+  finishing with a plain "All done".
+
+- **Screen readers now speak the actual message instead of a fixed word** (ONEUP-0169)
+  The status line and the warning banner each carried a permanent accessible name,
+  which replaced their text for assistive technology — so a reader announced
+  "Current status" or "Warning" for every run summary and every warning, never the
+  message itself. The links in the About box can also now be reached from the
+  keyboard; there was no other way to open them.
+
+- **The progress caption is readable in high contrast, and faint borders were darkened** (ONEUP-0168)
+  In high-contrast mode the words on the progress bar were painted the same colour
+  as the bar's fill — white on white — so they vanished exactly when the bar
+  filled and showed the final message. Separately, the outline on quieter buttons
+  fell below the readable minimum wherever it sat on a row rather than a card, and
+  the amber "theme could not be applied" note fell below it on light themes.
+
+- **Stopping during a retry is no longer reported as a completed update** (ONEUP-0167)
+  When OneUp sets a broken software source aside and retries, stopping during that
+  retry was reported as "N packages updated", with a restart advised, for an
+  update that installed nothing.
+
+- **Steps no longer say "up to date" when they could not check** (ONEUP-0166)
+  Firmware, leftover-package and Flatpak checks reported "up to date" when the
+  underlying tool failed to answer at all — a stopped firmware service, a held
+  package lock — which is the one answer an update checker must never give. They
+  now say they could not look. A successful update that zypper reports with an
+  advisory code ("a restart is advised") is also no longer recorded as a failure.
+
+- **The computer can no longer be shut down mid-update on the usual update path** (ONEUP-0165)
+  OneUp asks the system to hold off a shutdown or reboot while it is installing.
+  That hold was skipped whenever you checked the download size first — which is
+  what the Update button does — so the very path most people take was unprotected.
+  Interrupting an update part-way can leave packages half-installed.
+
+- **Changing the colour theme no longer starts an update** (ONEUP-0164)
+  With the tray icon enabled, picking a theme in Settings called the tray menu's
+  "Update now" action instead of redrawing the tray icon — so it un-hid the window
+  and began a full system update you had not asked for. Doing it while an update
+  was already running started a second one.
+
 - **Text and controls that were too faint to read reliably** (ONEUP-0027)
   A contrast check now measures every colour pair in every theme, and it found
   three nobody had measured before. The Run button's white label sat at 2.63:1
@@ -73,6 +125,11 @@ All notable changes to OneUp are documented here. The format follows
   one keep working.
 
 ### Security
+
+- **Package names from the system are checked before reaching a privileged removal** (ONEUP-0171)
+  The list of leftover packages is parsed out of another tool's output, and was
+  handed to a privileged removal command without being checked. It is now
+  validated, and the step refuses outright rather than removing part of the list.
 
 - **The downloadable AppImage is now built from exactly pinned tooling** (ONEUP-0137)
   The three GitHub building blocks that assemble a release were named by a

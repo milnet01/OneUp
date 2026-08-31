@@ -531,7 +531,7 @@ QListWidget#RollbackList { background: $card; color: $text; border: 2px solid $b
 QToolButton#Disclose { color: $text; min-width: 24px; min-height: 24px; }
 QToolButton#Disclose:hover { color: $btnhov; }
 QProgressBar { background: $card; border: 1px solid $border; color: $text; }
-QProgressBar::chunk { background: $text; }
+QProgressBar::chunk { background: $progchunk; }
 QToolTip { background: $card; color: $text; border: 1px solid $border; }
 
 QPushButton#RunBtn, QPushButton#RestartBtn, QPushButton#BannerBtn {
@@ -616,7 +616,7 @@ _DARK = dict(
     rowcard="#1a1f27", rowhov="#1e242e", tname="#eef2f8", tdesc="#a7b0be",
     badgebg="#20304a", badgefg="#cfe0ff", logbg="#0b0e12", logfg="#cdd6e2",
     logbd="#262d38", status="#c3ccd9", lastrun="#828d9d", amber="#f5a623", progbg="#0c0f13",
-    ghostbd="#5e6570", ghostfg="#c7d0dd", ghosthov="#4aa3ff",
+    ghostbd="#686e79", ghostfg="#c7d0dd", ghosthov="#4aa3ff",
     linkfg="#4aa3ff", linkhov="#6fb6ff", stopfg="#e0553f", stophov="#ef6a55",
     disbg="#262b34", disfg="#aeb7c4",
     tip="#1a1f27", tipfg="#e9edf3", focus="#66b8ff",
@@ -665,8 +665,8 @@ _LIGHT = dict(
     # and #b5730a (3.87:1 on card). Both are body text and there was no
     # reason to except either; §7 knew about `lastrun` and said it must not
     # be discovered by the check and quietly ignored.
-    lastrun="#666e78", amber="#a56909", progbg="#dfe4ea",
-    ghostbd="#8f959c", ghostfg="#3a424d", ghosthov="#326dab",
+    lastrun="#666e78", amber="#996208", progbg="#dfe4ea",
+    ghostbd="#848990", ghostfg="#3a424d", ghosthov="#326dab",
     linkfg="#326dab", linkhov="#446f9c", stopfg="#d6412a", stophov="#b5321d",
     disbg="#d5dbe2", disfg="#9aa3ad",
     tip="#ffffff", tipfg="#1b2027", focus="#0b5fd0",
@@ -707,7 +707,7 @@ _CARBON = dict(
     win='#121212', card='#171717', header='#f4f7fb', tag='#8b95a5', rowcard='#202020',
     rowhov='#262626', tname='#eef2f8', tdesc='#a7b0be', badgebg='#353535',
     badgefg='#cfe0ff', logbg='#0e0e0e', logfg='#cdd6e2', logbd='#262d38', status='#c3ccd9',
-    lastrun='#828d9d', amber='#f5a623', progbg='#101010', ghostbd='#5e6570',
+    lastrun='#828d9d', amber='#f5a623', progbg='#101010', ghostbd='#69707a',
     ghostfg='#c7d0dd', ghosthov='#4ca4ff', linkfg='#4ca4ff', linkhov='#6fb6ff',
     stopfg='#e0553f', stophov='#ef6a55', disbg='#2d2d2d', disfg='#aeb7c4', tip='#202020',
     tipfg='#e9edf3', focus='#66b8ff', switchon='#26a95e', switchoff='#e74c3c',
@@ -725,7 +725,7 @@ _FOREST = dict(
     win='#0e170e', card='#101e11', header='#f4f7fb', tag='#8b95a5', rowcard='#182918',
     rowhov='#1b311c', tname='#eef2f8', tdesc='#a7b0be', badgebg='#19511b',
     badgefg='#cfe0ff', logbg='#0a130a', logfg='#cdd6e2', logbd='#262d38', status='#c3ccd9',
-    lastrun='#828d9d', amber='#f5a623', progbg='#0b140b', ghostbd='#606771',
+    lastrun='#828d9d', amber='#f5a623', progbg='#0b140b', ghostbd='#6e757e',
     ghostfg='#c7d0dd', ghosthov='#51a7ff', linkfg='#51a7ff', linkhov='#6fb6ff',
     stopfg='#e0553f', stophov='#ef6a55', disbg='#243624', disfg='#aeb7c4', tip='#182918',
     tipfg='#e9edf3', focus='#66b8ff', switchon='#26a95e', switchoff='#e74c3c',
@@ -743,7 +743,7 @@ _PLUM = dict(
     win='#150e17', card='#1a101e', header='#f4f7fb', tag='#8b95a5', rowcard='#251829',
     rowhov='#2b1b31', tname='#eef2f8', tdesc='#a7b0be', badgebg='#431951',
     badgefg='#cfe0ff', logbg='#110a13', logfg='#cdd6e2', logbd='#262d38', status='#c3ccd9',
-    lastrun='#828d9d', amber='#f5a623', progbg='#120b14', ghostbd='#5e6570',
+    lastrun='#828d9d', amber='#f5a623', progbg='#120b14', ghostbd='#666d77',
     ghostfg='#c7d0dd', ghosthov='#4aa3ff', linkfg='#4aa3ff', linkhov='#6fb6ff',
     stopfg='#e0553f', stophov='#ef6a55', disbg='#322436', disfg='#aeb7c4', tip='#251829',
     tipfg='#e9edf3', focus='#66b8ff', switchon='#26a95e', switchoff='#e74c3c',
@@ -761,7 +761,7 @@ _PAPER = dict(
     win='#f6f3ed', card='#ffffff', header='#1b2027', tag='#5c6673', rowcard='#faf8f3',
     rowhov='#f4f0e9', tname='#1b2027', tdesc='#5c6673', badgebg='#fff3db',
     badgefg='#1f4e9c', logbg='#fbf9f5', logfg='#2a2f36', logbd='#d5dbe2', status='#3a424d',
-    lastrun='#666e78', amber='#a56909', progbg='#ece7dd', ghostbd='#8f959c',
+    lastrun='#666e78', amber='#9b6308', progbg='#ece7dd', ghostbd='#858b91',
     ghostfg='#3a424d', ghosthov='#326dab', linkfg='#326dab', linkhov='#446f9c',
     stopfg='#d6412a', stophov='#b5321d', disbg='#e4ded3', disfg='#9aa3ad', tip='#ffffff',
     tipfg='#1b2027', focus='#0b5fd0', switchon='#239b56', switchoff='#e74c3c',
@@ -779,7 +779,7 @@ _SKY = dict(
     win='#edf3f6', card='#ffffff', header='#1b2027', tag='#5c6673', rowcard='#f3f7fa',
     rowhov='#e8f0f5', tname='#1b2027', tdesc='#5c6673', badgebg='#dbf2ff',
     badgefg='#1f4e9c', logbg='#f5f9fb', logfg='#2a2f36', logbd='#d5dbe2', status='#3a424d',
-    lastrun='#666e78', amber='#a56909', progbg='#dde7ec', ghostbd='#8f959c',
+    lastrun='#666e78', amber='#996208', progbg='#dde7ec', ghostbd='#848990',
     ghostfg='#3a424d', ghosthov='#326dab', linkfg='#326dab', linkhov='#446f9c',
     stopfg='#d6412a', stophov='#b5321d', disbg='#d3dee4', disfg='#9aa3ad', tip='#ffffff',
     tipfg='#1b2027', focus='#0b5fd0', switchon='#239b56', switchoff='#e74c3c',
@@ -797,7 +797,7 @@ _SAND = dict(
     win='#f8f2eb', card='#ffffff', header='#1b2027', tag='#5c6673', rowcard='#fbf7f2',
     rowhov='#f6efe7', tname='#1b2027', tdesc='#5c6673', badgebg='#ffeedb',
     badgefg='#1f4e9c', logbg='#fcf8f4', logfg='#2a2f36', logbd='#d5dbe2', status='#3a424d',
-    lastrun='#666e78', amber='#a56909', progbg='#eee5db', ghostbd='#8f959c',
+    lastrun='#666e78', amber='#9b6308', progbg='#eee5db', ghostbd='#858b91',
     ghostfg='#3a424d', ghosthov='#326dab', linkfg='#326dab', linkhov='#446f9c',
     stopfg='#d6412a', stophov='#b5321d', disbg='#e7dcd0', disfg='#9aa3ad', tip='#ffffff',
     tipfg='#1b2027', focus='#0b5fd0', switchon='#239b56', switchoff='#e74c3c',
@@ -815,15 +815,22 @@ _SAND = dict(
 # High-contrast palettes: pure black/white surfaces and text (21:1), one saturated
 # focus/attention hue, and no dimmed secondary text — "dim" grey is the first thing
 # that fails for a low-vision user, so HC deliberately has none.
+# `progchunk` is the progress bar's FILL, and it is its own token rather than
+# `text` because the caption is centred and is read ON the fill once the bar is
+# full — which is exactly when it carries its final wording. Painted in `text` it
+# was white on white, 1.00:1. This mid-grey clears 4.5:1 under the caption and
+# 3:1 against the trough, so the fill is still visible as a fill.
 _HC_DARK = dict(
     win="#000000", card="#000000", text="#ffffff", border="#ffffff",
     focus="#ffd400", btn="#ffffff", btntext="#000000", btnhov="#ffd400",
     link="#7fd4ff", errbd="#ff8080", warnbd="#ffd400", infobd="#7fd4ff",
+    progchunk="#767676",
 )
 _HC_LIGHT = dict(
     win="#ffffff", card="#ffffff", text="#000000", border="#000000",
     focus="#0000cc", btn="#000000", btntext="#ffffff", btnhov="#0000cc",
     link="#0000cc", errbd="#a00000", warnbd="#7a4f00", infobd="#00008b",
+    progchunk="#757575",
 )
 
 

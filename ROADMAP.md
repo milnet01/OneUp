@@ -4833,3 +4833,381 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** The spell-checker was reading the screenshot image files and reporting nonsense from inside them.
   Kind: chore.
   Source: check-code --tree 2026-08-31.
+
+- 📋 [ONEUP-0144] **Repository aliases reach a privileged zypper refresh unvalidated, in both engines.**
+  security.md §4 requires every value reaching a privileged command to be shape-
+  checked at the boundary, and names repository metadata as untrusted. `valid_alias`
+  exists and guards `disable_repo` only. Unguarded: `update_system.sh` refresh loops
+  (the bulk and per-repo forms), `oneup/engine/repos.py` where the alias reaches a
+  marker payload, and `oneup/gui/run.py`'s `@@REMEDY@@` handler, which forwards the
+  alias to `--skip-repo=`. Not reachable to root today — both engines fail closed at
+  `disable_repo` — so the live effect is the ONEUP-0110 shape: the retry fails
+  identically with nothing on screen saying why. The package-name half of this class
+  was fixed on 2026-08-31; the alias half was left because it spans three files and
+  deserves one deliberate pass.
+  **Layman:** A software-source name from the system is passed to a root command without being checked first.
+  Kind: security.
+  Source: review-code 2026-08-31, lanes engine-shell + engine-steps + gui-run.
+
+- 📋 [ONEUP-0145] **Two engines can both own run.state, and the first to exit silently disables Stop.**
+  `lock_holder` only catches a live zypper, which does not exist during the
+  pre-flight, a flatpak-only run, or between passes. Both engines write `run.state`
+  and set the owned flag; whichever exits first deletes it, and the survivor's
+  `stop_pending` requires the file to exist, so Stop can never fire again. The
+  window following the run also loses it. The machinery to prevent it already
+  exists — `lock_holder`'s /proc liveness test — and is simply not applied to
+  `run.state`'s own pid. Note the GUI's single-instance guard was tightened on
+  2026-08-31, which narrows but does not close this: the engine is also runnable
+  standalone in a terminal.
+  **Layman:** If two updates start at once, the Stop button quietly stops working.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-shell.
+
+- 📋 [ONEUP-0146] **The bulk flatpak query is used in the run where the check already abandoned it.**
+  `flatpak remote-ls --updates` with no remote named abandons the WHOLE listing the
+  moment any single remote cannot be summarised, and a local --no-enumerate origin
+  never can. The check arm was fixed and records the measurement — six such
+  leftovers on one box hid a real Discord update for weeks — and the run arm still
+  carries the abandoned form in both engines, under a comment claiming it is the
+  "same read-only check --check uses". The fix is to factor the per-remote loop out
+  and call it from both, so the comment becomes true.
+  **Layman:** The Flatpak step can say "up to date" right after it updated something.
+  Kind: fix.
+  Source: review-code 2026-08-31, lanes engine-shell + engine-steps.
+
+- 📋 [ONEUP-0147] **A pre-update snapshot that failed to create is reported as this run's rollback point.**
+  The `snapper create` return code is discarded, so a create that failed on a full
+  disk or a read-only subvolume falls through to a listing whose last row predates
+  the update. `@@SNAPSHOT@@` is contractually the restore point taken BEFORE this
+  run, and the window's picker offers it — rolling back to it discards everything
+  since. Present in both engines. Keep the fallback for the listing; check the
+  create's status and emit no SNAPSHOT marker when it failed.
+  **Layman:** If taking the safety snapshot fails, the app offers you an older one and calls it this run's restore point.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-driver.
+
+- 📋 [ONEUP-0148] **getpass.getuser() names the sudoers principal from the environment, not the real uid.**
+  `getpass.getuser()` reads LOGNAME/USER/LNAME/USERNAME before consulting the
+  password database; the Bash original uses `id -un`. Under `su otheruser` without
+  `-`, which preserves the invoking user's USER, `--grant-auth` authenticates as
+  otheruser and writes the NOPASSWD rule for the original user — a passwordless
+  root-equivalent grant to a principal the operator did not name, while the current
+  user's toggle silently reads off. One-line fix: `pwd.getpwuid(os.getuid()).pw_name`.
+  **Layman:** The passwordless setup could write its permission for the wrong user account.
+  Kind: security.
+  Source: review-code 2026-08-31, lane engine-driver.
+
+- 📋 [ONEUP-0149] **The Python engine's re-exec target may not resolve, turning "no inhibitor" into "no run".**
+  `_reexec_under_inhibitor` re-execs `sys.executable -m oneup.engine`, which
+  resolves only if `oneup` is importable from the re-exec'd interpreter's path.
+  Nothing packages it that way yet, and QProcess gives the engine the window's cwd.
+  The probe two lines above proves `systemd-inhibit` works and proves nothing about
+  the re-invocation — while the block's own docstring says a failure here must
+  degrade to "no inhibitor", never to "no run". This became reachable on more paths
+  when the --size --hold exclusion was fixed on 2026-08-31, so it is worth closing
+  before stage 9's packaging. Guard with `importlib.util.find_spec` and set
+  PYTHONPATH to the package root before the exec.
+  **Layman:** A safety step could stop the update from starting at all.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-driver.
+
+- 📋 [ONEUP-0150] **A refused go-ahead is reported as a clean success with no diagnostic anywhere.**
+  `_adopt_go_ahead` is an authorisation check on a file a root process reads. A
+  `go.request` carrying an unresolvable key collapses into the same arm as Cancel:
+  no hint, no stderr line, no log entry, `@@DONE@@|ok`, exit 0. Refusing correctly
+  and then reporting it as an ordinary cancel means a tampered or corrupted
+  authorisation leaves no trace at all, and the window shows success for a run that
+  never started. Emit an error and a hint on the refusal branch so it is
+  distinguishable from the hold simply timing out.
+  **Layman:** If the app rejects a tampered instruction, it says the update finished fine.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-driver.
+
+- 📋 [ONEUP-0151] **The marker-protocol emitter gate scans only the Bash engine, so the Python one is ungated.**
+  `marker-protocol.md` claims `tests/docs-check.py` compares §3's marker table
+  against the engine's emitter call sites both ways. That scan reads
+  `update_system.sh` and has no hits for `oneup/engine`. The two lists agree today
+  — the lane enumerated both by hand — so nothing is wrong yet; what is wrong is
+  that the only automatic protection the contract claims does not cover the file
+  replacing the one it does. Extend the scan to `oneup/engine/*.py` while both
+  engines are in the tree. §3's "Emitted by" column and §5's file list still name
+  Bash symbols; that half is review-contract's.
+  **Layman:** The check that keeps the two halves of the app speaking the same language does not look at the new half.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-protocol.
+
+- 📋 [ONEUP-0152] **Parser and emitter divergences between the two engines that the G2 differential may not catch.**
+  Four, each small and each in the module the protocol calls its single point of
+  truth. `parsers.py` uses `splitlines()`, which breaks on \\r, \\v, \\f and the
+  Unicode separators where the Bash breaks on \\n alone — one \\r in a transaction
+  log can fabricate a reboot reason. `markers.py`'s fraction regex ends in `$`,
+  which accepts a trailing newline the Bash rejects. `if got:` drops both trailing
+  PROGRESS fields on an integer 0. And the emitter substitutes nothing, so a \\n in
+  a payload fabricates a whole line — ONEUP-0072 INV-2 plans an emitter guard and
+  names `|` only, which is review-contract's half.
+  **Layman:** Small differences between the old and new engines that could make them report different things.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-protocol.
+
+- 📋 [ONEUP-0153] **isdigit() is not a valid guard for int() — eight marker handlers can throw in the read slot.**
+  `"²".isdigit()` is True while `int("²")` raises; `isdecimal()` is the property
+  `int()` needs. Because stdout and stderr are merged a spliced field can carry any
+  character, and the throw lands inside `readyReadStandardOutput` — which
+  `marker-protocol.md` §1.2 names as the thing that must not happen, since it aborts
+  parsing and drops every remaining marker while the run carries on. Sites in
+  `oneup/gui/run.py`: the STOPPING, CHECK, PROGRESS (counters and both byte
+  fields), REFRESH, SNAPSHOTS and on_finished handlers, plus `_adopt_held_engine`.
+  **Layman:** An odd character from the engine could stop the window following the rest of the update.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-run.
+
+- 📋 [ONEUP-0154] **The warning banner's text and its button role can decouple within one run.**
+  `_show_warning` sets the banner text but never resets the button role, so a
+  pre-flight snapshot warning that sets the button to "Thin snapshots…" leaves it
+  there when a later download failure replaces the text. The user then reads "A
+  download failed — check your internet connection" above a button that thins
+  snapshots. The remedy paths escape only because `on_finished` happens to re-set
+  the text afterwards. Reset the role in `_show_warning` and have the two
+  pre-flight callers re-arm it.
+  **Layman:** The warning message can end up above a button that does something unrelated.
+  Kind: ux.
+  Source: review-code 2026-08-31, lane gui-run.
+
+- 📋 [ONEUP-0155] **cache_bytes() walks the package cache on the GUI thread, once per progress marker.**
+  `_tick_activity` is called from the 5-second timer AND from the PROGRESS handler
+  on every marker carrying a byte field — potentially several times a second
+  through a large download — and each call rglobs `/var/cache/zypp/packages` with a
+  stat per entry, by then thousands of RPMs. That is an event-loop stall in the
+  module whose stated job is stopping the app from looking hung. Cache the last
+  weight with a monotonic stamp and re-weigh at most once per stall interval.
+  **Layman:** The window can stutter during a big download because it keeps re-measuring a folder.
+  Kind: perf.
+  Source: review-code 2026-08-31, lane gui-run.
+
+- 📋 [ONEUP-0156] **A failed go.request write produces an unescapable modal-dialog storm.**
+  `_adopt_held_engine` shows a warning box and returns False; `_wait_for_hold`'s
+  200 ms timer then calls it again, the pid still matches, the write fails again,
+  and another box appears. On a full or read-only state directory the user cannot
+  dismiss their way out. Latch the failure — stop the wait timer and fall through
+  to a fresh launch — rather than retrying a write that has already failed.
+  **Layman:** On a full disk, an error box can reappear faster than you can dismiss it.
+  Kind: ux.
+  Source: review-code 2026-08-31, lane gui-run.
+
+- 📋 [ONEUP-0157] **Repository-manager and rollback dialogs can leave the machine partly changed and say it was cancelled.**
+  `_build_apply_command` chains its three sub-commands with `&&`, so a mid-chain
+  failure leaves repos disabled, none enabled and none removed — and pkexec-
+  cancelled (126/127) and half-applied land in the same branch, whose wording is
+  "they may have been cancelled". Re-read the machine's real state on any non-zero
+  exit and rebuild the rows from it. Related, same dialog: the duplicate-URL Remove
+  affordance has no floor, so every copy of a URL can be marked and zypper deletes
+  the repository outright with its cached packages.
+  **Layman:** If applying repository changes fails halfway, the app says it was probably cancelled and the switches still show what you asked for.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-services.
+
+- 📋 [ONEUP-0158] **The autostart unit freezes its executable path, so an AppImage upgrade silently breaks it.**
+  `autostart.py` resolves the launcher at ENABLE time and writes it into the
+  systemd unit and the .desktop entry. The normal AppImage upgrade — download the
+  new file, delete the old — leaves ExecStart pointing at a file that no longer
+  exists: the weekly update and start-at-boot stop with no error anywhere, and
+  `_timer_enabled()` still answers enabled, so the toggle reads on. On startup,
+  compare any installed entry's Exec against what would be written now and rewrite
+  on a mismatch.
+  **Layman:** After updating OneUp itself, the weekly check can stop working while the toggle still says it is on.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-services.
+
+- 📋 [ONEUP-0159] **The diagnostics host scrub is an unanchored substring replace and can corrupt the report.**
+  `build_diagnostics` does `report.replace(host, "<host>")` over the whole payload.
+  openSUSE hostnames are routinely short generic words, so a machine called `oss`,
+  `linux` or `tumbleweed` rewrites `repo-oss`, `linux-firmware` and every matching
+  path — corrupting the one artefact that exists to diagnose a failure. Use a
+  word-boundary regex and skip the scrub for very short or generic names. Related:
+  security.md §7.4 states the goal as not publishing the username, and the scrub
+  covers the home PATH rather than a bare username in a log line.
+  **Layman:** On a machine with a short name, the diagnostic report can come out mangled.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-services.
+
+- 📋 [ONEUP-0160] **bump.py writes an unescaped % into the RPM %changelog, and cannot detect a downgrade.**
+  Two independent defects in the release path, neither caught locally because
+  nothing in this repository builds the RPM. `%` is the spec-file macro sigil and
+  the escape is `%%`; CHANGELOG.md has already shipped bullets containing a bare
+  `%`, so this lands at OBS build time — the unattended half. Separately there is no
+  monotonicity check: `./bump.py 1.3.0` on 1.4.5 succeeds, all six sites agree and
+  the lockstep gate passes, leaving the AppStream releases list and the CHANGELOG
+  out of newest-first order and every existing user never offered an update again,
+  since the in-app check reads APP_VERSION.
+  **Layman:** A percent sign in a release note can break the package build, and nothing stops a version going backwards.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane tooling.
+
+- 📋 [ONEUP-0161] **local-CI's lockstep gate passes vacuously when grep has no -P, and two gates report ok on an empty result.**
+  `local-CI.sh` reads the six version sites with `grep -oP`. Without PCRE support
+  all six variables are empty, all six compare equal, and the gate prints
+  `ok "all six version sites = "` — a green tick on the check every other version
+  guarantee in the project rests on, which workflow.md §6's own design point
+  forbids. The INV-5 colour-literal gate has the same shape: it reports ok whenever
+  its hit list is empty, which is true both for "no violations" and for "the glob
+  matched nothing". Assert the inputs are non-empty before comparing.
+  **Layman:** A safety check can report a green tick while having checked nothing.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane tooling.
+
+- 💭 [ONEUP-0162] **ONEUP-0028 mandates an accessible NAME on labels that are also announcement sources.**
+  §1's table names the banner frame AND its label; § the announcement fallback
+  states that an explicit name on a QLabel is permanent and would make every later
+  setText invisible to assistive technology. Both cannot hold for a label the
+  fallback announces on. The code was changed on 2026-08-31 to carry the role as an
+  accessible DESCRIPTION on those labels, keeping the NAME on the banner frame —
+  which satisfies both intents but not §1's literal wording. The spec side is
+  review-contract's: decide whether §1 should say description for the label half.
+  Note `last_run` is NOT an announcement source, so its name is correct as it
+  stands.
+  **Layman:** Two rules in the accessibility spec pull in opposite directions.
+  Kind: accessibility.
+  Source: review-code 2026-08-31, lane gui-window.
+
+- 📋 [ONEUP-0163] **The base progress bar's caption is read on the accent chunk at 1.6:1.**
+  The high-contrast half of this was fixed on 2026-08-31 by giving the overlay its
+  own `progchunk` token — it was 1.00:1, white on white. The BASE sheet is less
+  absolute and still fails: `text-align: center` puts the caption over the chunk,
+  and `$accent` measures 1.63:1 against dark `status` at the left gradient stop and
+  1.12:1 at the right, 3.86:1 against light. Both are under SC 1.4.3's 4.5:1, on
+  live text carrying the download detail. Not fixed here because the honest options
+  are a design decision: give the base chunk its own readable token, or set
+  `setTextVisible(False)` and move the caption to the adjacent label. Whichever is
+  chosen, add the pair to PAIRS so it is measured — today nothing measures it,
+  because the `status` row names the trough and stops.
+  **Layman:** The words on the progress bar are hard to read against the coloured fill.
+  Kind: accessibility.
+  Source: review-code 2026-08-31, lane gui-theme.
+
+- ✅ [ONEUP-0164] **A theme change called the tray's "Update now" action instead of redrawing the icon.**
+  `on_theme_changed` called `tray._tray_update`, which is `_show_window` +
+  `run.start_run` — the tray menu's "Update now" action. With a tray icon present,
+  picking a theme un-hid the window and began a privileged `zypper dup`; during a
+  run it started a SECOND engine, the double-authentication and zypper-lock race
+  ONEUP-0044 exists to prevent. Added `tray.refresh_icon`, which rebuilds the icon
+  and nothing else, and pointed both the theme picker and the desktop's
+  light/dark switch at it — the second route never rebuilt the icon at all, so
+  INV-8 was violated there too. Two lanes found this independently; ONEUP-0027
+  INV-8's own test could not, because it exercises the icon builder directly and
+  never inspects the tray's actual icon.
+  **Layman:** Changing the colour theme could start a full system update you never asked for.
+  Kind: fix.
+  Source: review-code 2026-08-31, corroborated by lanes gui-window and gui-services.
+
+- ✅ [ONEUP-0165] **The shutdown inhibitor was skipped on the --size --hold path, which is the GUI's ordinary Update.**
+  Both engines excluded any `--size` invocation from the ONEUP-0086 re-exec. But
+  `--size --hold` does not end there: it falls through into the full transaction
+  (ONEUP-0044 §4.5), and that is exactly what the window launches when you press
+  Update after a size preview. So the whole failure the inhibitor exists for — a
+  logout hanging on a root process, ending in a held power button mid-rpm — was
+  unguarded on the common path, while a shipped CHANGELOG entry claimed the lock
+  worked. Now excluded only when `--size` is used WITHOUT `--hold`. Fixed in
+  `update_system.sh` and `oneup/engine/__main__.py` together, per the G2
+  differential.
+  **Layman:** The safeguard that stops the machine powering off mid-update was off on the path most people use.
+  Kind: fix.
+  Source: review-code 2026-08-31, found independently in both engines (lanes engine-shell and engine-driver).
+
+- ✅ [ONEUP-0166] **"I couldn't look" was reported as "you're up to date" on five paths.**
+  The ONEUP-0056 shape, reappearing wherever `emit_check`'s machinery does not
+  reach. fwupdmgr(1) returns 2 for "no actions" and 1/3 for an error, and every
+  non-zero was read as "up to date" — in the run AND in `--check`, where it also
+  emitted a bare zero with no CHECK_UNKNOWN. The orphans query discarded its exit
+  status, so a failed query was indistinguishable from a clean machine. And the
+  transaction passes exempted none of zypper's informational exits, so a `dup`
+  that installed cleanly and exited 102 or 106 reported as a failed step,
+  suppressed the reboot advice for packages that really landed, and made the cache
+  step hoard downloads for a retry nobody needed. Added a shared `zypper_ok` /
+  `_zypper_ok` in both engines.
+  **Layman:** Steps said your system was current when the tool they asked had actually failed.
+  Kind: fix.
+  Source: review-code 2026-08-31, lanes engine-shell, engine-driver, engine-steps.
+
+- ✅ [ONEUP-0167] **A stop during the auto-skip retry was reported as a successful install.**
+  The third safe boundary is checked BEFORE the repo-scoped probe, so the retry
+  that probe triggers had no check after it. Stopping during the retry's download
+  left nothing installed, yet the step scraped the solver's package count and
+  emitted a success with the reboot advice — INV-1, on the unattended
+  `--auto-skip-repos` path. Both engines now re-test the stop flag after the retry.
+  **Layman:** Stopping an update at the wrong moment could still report that packages were installed.
+  Kind: fix.
+  Source: review-code 2026-08-31, lanes engine-shell and engine-steps.
+
+- ✅ [ONEUP-0168] **The high-contrast progress caption was white on white, and two tokens missed their floor.**
+  The overlay painted the progress chunk in `text` while the caption was also
+  `text` — 1.00:1, measured — and `text-align: center` puts the caption over the
+  chunk, so it vanished exactly when the bar filled to show its final wording.
+  Given the overlay its own `progchunk` token, which clears 4.5:1 under the
+  caption and 3:1 against the trough. Nothing measured that pair; the `status` row
+  names the trough and stops, so a check was added. Also widened two PAIRS rows
+  after measuring every theme: `ghostbd` failed on `rowcard`/`rowhov` in all eight
+  (2.45–2.88:1) and `amber` on `win` in all four light ones (4.01–4.10:1); twelve
+  token values re-derived with the project's own blend helper. ONEUP-0027 §4.8 had
+  pre-decided a surviving ghostbd failure is a defect in shipped work.
+  **Layman:** In high-contrast mode the words on the progress bar were invisible.
+  Kind: accessibility.
+  Source: review-code 2026-08-31, lane gui-theme.
+
+- ✅ [ONEUP-0169] **A permanent accessible name on the announcement source silenced every screen-reader message.**
+  An explicit accessible name on a QLabel permanently replaces its text as the
+  accessible Name — a rule `_announce`'s own docstring and ONEUP-0028 both state,
+  and which the code then broke on the two labels the announcement fallback reads.
+  On the pre-Qt-6.8 path a reader spoke "Current status" for every run summary and
+  "Warning" for every warning. Both now carry the role as an accessible
+  DESCRIPTION, which leaves the text as the Name. `last_run` was left alone: it is
+  not an announcement source, so its name is correct. Also gave the About dialog's
+  labels `TextBrowserInteraction` — `setOpenExternalLinks` grants mouse access
+  only, so the two links were unreachable by keyboard with no other route to
+  either URL (WCAG 2.2 SC 2.1.1, Level A).
+  **Layman:** A screen reader said "Current status" instead of reading out what actually happened.
+  Kind: accessibility.
+  Source: review-code 2026-08-31, lane gui-window.
+
+- ✅ [ONEUP-0170] **The ONEUP-0048 liveness line was dead on the --check path, and a skipped source went unmentioned.**
+  `_reset_for_run` sets `_run_active = not check`, and `_tick_activity` gated on
+  that flag — so on a check the timer ran and its handler returned immediately,
+  behind an indeterminate progress bar that animates whether or not the engine is
+  alive. One flag was answering three questions. Split out `_liveness_active`,
+  which is true on both paths and false again on finish AND on a start failure
+  (`on_error` cleared neither before, leaving the window mid-run for the session).
+  The three existing liveness tests were re-fixtured to the new flag and a test
+  added for the dimension they cannot see — that a CHECK arms it — proved red
+  against the old condition. Separately `_skipped_repos` was written and read by
+  nothing, so a run that set a source aside still ended "All done"; it is now named
+  in the summary, as ONEUP-0025 promised.
+  **Layman:** The "still working" line was missing while checking for updates, the one place it was needed most.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-run.
+
+- ✅ [ONEUP-0171] **Package names parsed from zypper's table reached a root removal unvalidated.**
+  security.md §4 requires every value reaching a privileged command to be
+  shape-checked at the boundary and names zypper's own output as untrusted. The
+  unneeded-package list was awk-parsed from a pipe-delimited table and handed
+  straight to `zypper remove --clean-deps` as root, with no guard — while
+  `valid_alias` guards the same class three functions away. Added a package-name
+  shape test to both engines, failing CLOSED per §4.2: a bad row refuses the step
+  rather than removing the rest, since dropping it and continuing is the
+  clean-up-and-continue §4.4 forbids on the argv of a removal. The leading
+  character class excludes `-`, so a spliced field cannot be read as an option.
+  **Layman:** Names read from another tool's output were passed straight to a command that deletes packages as root.
+  Kind: security.
+  Source: review-code 2026-08-31, lane engine-shell; raised from MEDIUM at threat-model calibration.
+
+- ✅ [ONEUP-0172] **find_failing_repos ran unbudgeted, and two copies of the window could both keep running.**
+  `find_failing_repos` re-refreshed every repository with no time limit and its
+  output captured to a variable — losing both ONEUP-0048 defences at once, on
+  exactly the path taken when a source is already broken or crawling. It now uses
+  the same bounded argv as `refresh_repos`, which security.md §5.2 already grants,
+  so no new auth_cmnds entry was needed; the suite's drift count moved 3 to 4 and
+  was re-fixtured with the reason. Separately `_arm_single_instance` returned
+  nothing, so the copy that LOST the socket race carried on to a second tray icon,
+  a second check timer and a second engine — ONEUP-0084's simultaneous case, which
+  its sequential fix did not close. It now returns a bool and `main` honours it.
+  **Layman:** A slow software source could hang the app with nothing on screen; and two copies could start at once.
+  Kind: fix.
+  Source: review-code 2026-08-31, lanes engine-steps and gui-services.

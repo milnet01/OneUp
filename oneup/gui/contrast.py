@@ -90,7 +90,11 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     ("status", ("card", "progbg"), TEXT),
     ("lastrun", ("card", "win"), TEXT),
     ("ghostfg", ("card",), TEXT),
-    ("amber", ("card",), TEXT),
+    # `amber` is also the ThemeNote colour, which sits on the dialog root (`win`),
+    # not on a card — and that is the one place a theme failure is reported, so it
+    # is the text that must not be the hardest to read. Measured on `card` alone it
+    # passed in every theme and failed on `win` in all four light ones.
+    ("amber", ("card", "win"), TEXT),
     ("tipfg", ("tip",), TEXT),
     # The Run button's label against both stops of its own fill, and the same
     # ink on the danger family's fill — one token, two gradients.
@@ -116,7 +120,12 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     ("trayrim", ("trayattn", "trayidle"), MARK),
     ("traymark", ("trayattn",), MARK),
     ("focus", ("win", "card"), MARK),
-    ("ghostbd", ("card",), MARK),
+    # Ghost buttons rest on a row and on the settings rows, not only on `card`:
+    # `#RowCard QPushButton#GhostBtn` and `QComboBox#ThemeCombo` both put this
+    # border on `rowcard`/`rowhov`. Measured on `card` alone it cleared 3:1 by a
+    # hair in every theme and failed on the other two surfaces in all eight — the
+    # §4.7 rule that every surface a token renders on is its own row.
+    ("ghostbd", ("card", "rowcard", "rowhov"), MARK),
     # The danger family's banner border, and the two boundaries ONEUP-0076 left
     # as borders: the ghost button's hover border shares one token with its ink
     # above, so moving one moves both.
@@ -276,8 +285,8 @@ def uncovered(palette: dict) -> list[str]:
     return sorted(missing)
 
 
-def hc_short(dark: bool) -> list[str]:
-    """The high-contrast half (§4.7), for one base.
+def hc_short(theme) -> list[str]:
+    """The high-contrast half (§4.7), for ONE THEME.
 
     Two different jobs. The overlay's OWN pairs are checked once per base, since
     there are only two overlays and every theme shares them. The surfaces the
@@ -286,10 +295,15 @@ def hc_short(dark: bool) -> list[str]:
     switch track is legible on its own window can still fail against the
     overlay's pure black or white. That combination is the only part of the
     high-contrast surface a theme can still break.
+
+    Takes the THEME, not a base flag. With a flag the painted set was rebuilt from
+    `_DARK`/`_LIGHT`, so the per-theme half ran the same two checks four times over
+    and proved nothing about the six themes ONEUP-0027 added — while reporting
+    green. `trayattn` alone carries seven distinct values across the eight themes.
     """
-    hc = dict(_HC_DARK if dark else _HC_LIGHT)
+    hc = dict(_HC_DARK if theme.dark else _HC_LIGHT)
     hc.update(hc_focus_keys(hc))
-    base = palette_for(dark)
+    base = theme.palette
     out = []
 
     for fg, bgs, floor in (
@@ -305,6 +319,16 @@ def hc_short(dark: bool) -> list[str]:
             r = contrast(hc[fg], hc[bg])
             if r + 1e-9 < floor:
                 out.append(f"overlay {fg} on {bg} = {r:.2f}:1 < {floor}")
+
+    # The progress caption is centred and the bar is FULL when it carries its final
+    # wording, so the caption is read on the CHUNK, not on the trough. With the
+    # chunk painted in `text` that was 1.00:1 — white on white in HC dark. Nothing
+    # measured it: the PAIRS row for `status` names the trough (`progbg`) and stops.
+    for fg, bg, floor in (("text", "progchunk", TEXT),
+                          ("progchunk", "card", MARK)):
+        r = contrast(hc[fg], hc[bg])
+        if r + 1e-9 < floor:
+            out.append(f"overlay {fg} on {bg} = {r:.2f}:1 < {floor}")
 
     # The painted set, against the overlay's surfaces rather than the theme's.
     for fg, bgs, floor in (

@@ -76,8 +76,20 @@ def main():
     # user's text-size and high-contrast settings, and the Settings controls call
     # the same function, so every path stays consistent.
     apply_app_theme(app)
+    def _rethemed(*_):
+        """The desktop switched light/dark: re-theme, then rebuild the tray icon.
+
+        `apply_app_theme` deliberately does not touch the tray — the icon has no
+        parent widget and belongs to its window — so without this second half the
+        icon keeps the old palette's colours on this route (ONEUP-0027 INV-8).
+        """
+        apply_app_theme(app)
+        for widget in app.topLevelWidgets():
+            if getattr(widget, "_tray", None) is not None:
+                tray.refresh_icon(widget)
+
     try:  # re-theme live when the desktop switches light/dark (Qt 6.5+)
-        app.styleHints().colorSchemeChanged.connect(lambda *_: apply_app_theme(app))
+        app.styleHints().colorSchemeChanged.connect(_rethemed)
     except (AttributeError, TypeError):
         pass
 
@@ -102,7 +114,12 @@ def main():
     # Claim the socket for the whole life of the process, tray or no tray, so the
     # NEXT launch has something to defer to (ONEUP-0084). Idempotent — _ensure_tray
     # calls it too, for a mid-session Settings enable.
-    tray._arm_single_instance(win)
+    # Honour the answer. The deferral above ran before this window existed, so a
+    # copy started at the same instant got past it; this is the point at which the
+    # loser finds out (ONEUP-0084's simultaneous case).
+    if not tray._arm_single_instance(win):
+        _raise_existing_instance("tray" if "--tray" in argv else "show")
+        sys.exit(0)
     if tray_wanted:
         tray._ensure_tray(win)                 # owns quit-behaviour, server, and the check timer
         if "--tray" not in argv:

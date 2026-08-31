@@ -75,8 +75,12 @@ def _make_banner(win, frame_obj: str, btn_obj: str, btn_text: str, slot,
     lbl = QLabel("")
     lbl.setObjectName("BannerText")
     lbl.setWordWrap(True)
+    # The FRAME carries the name; the label carries it as a DESCRIPTION. An explicit
+    # name on a QLabel is permanent and this label is the `source` `_show_warning`
+    # announces on, so naming it makes the reader say "Warning" instead of the
+    # warning. Same rule ONEUP-0028 states for the status label.
     if name:
-        lbl.setAccessibleName(name)
+        lbl.setAccessibleDescription(name)
     btn = QPushButton(btn_text)
     btn.setObjectName(btn_obj)
     btn.setCursor(Qt.PointingHandCursor)

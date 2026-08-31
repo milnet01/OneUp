@@ -305,6 +305,9 @@ def main() -> int:
     try:
         wL = window.Updater()
         wL._run_active = True
+        # The liveness line has its own flag since it must also run on a
+        # --check, where _run_active is False by design.
+        wL._liveness_active = True
         run._reset_activity(wL)        # a real run always baselines before markers arrive
         run.handle_line(wL, "@@STEP_BEGIN@@|system|1|5|Updating system packages")
         run.handle_line(wL, "@@REFRESH@@|6|9|games")
@@ -368,6 +371,9 @@ def main() -> int:
         check("an empty cache weighs nothing", diagnostics.cache_bytes() == 0)
         wC = window.Updater()
         wC._run_active = True
+        # The liveness line has its own flag since it must also run on a
+        # --check, where _run_active is False by design.
+        wC._liveness_active = True
         run._reset_activity(wC)        # baseline taken before anything is fetched
         run.handle_line(wC, "@@STEP_BEGIN@@|system|1|5|Updating system packages")
         run.handle_line(wC, "@@PROGRESS@@|system|1|0|download|0|90596966")
@@ -381,6 +387,9 @@ def main() -> int:
         # counting them would overstate progress and flatter the rate.
         wC2 = window.Updater()
         wC2._run_active = True
+        # The liveness line has its own flag since it must also run on a
+        # --check, where _run_active is False by design.
+        wC2._liveness_active = True
         run._reset_activity(wC2)       # baseline now includes the 20 MB above
         run.handle_line(wC2, "@@PROGRESS@@|system|1|0|download|0|90596966")
         run._tick_activity(wC2)
@@ -389,6 +398,19 @@ def main() -> int:
     finally:
         paths.ZYPP_PACKAGE_CACHE = _orig_cache
         shutil.rmtree(cache_dir, ignore_errors=True)
+
+    # The liveness line must arm on a CHECK as well as a run. A check IS the
+    # metadata-refresh phase ONEUP-0048 was written for, and its progress bar is
+    # indeterminate, so it animates whether or not the engine is still alive — the
+    # liveness line is the only thing that can tell the user apart from a hang.
+    # The fixtures above set the flag by hand, so only this proves _reset_for_run
+    # actually sets it; gating on _run_active looked right and was dead here.
+    wK = window.Updater()
+    run._reset_for_run(wK, ["system"], check=True)
+    check("a check arms the liveness line", wK._liveness_active is True)
+    check("a check still leaves the thin-action guard down", wK._run_active is False)
+    run._reset_for_run(wK, ["system"], check=False)
+    check("a full run arms both", wK._liveness_active is True and wK._run_active is True)
 
     # --- dialogs open over the window, on Wayland too (ONEUP-0049) --------------
     # Qt's move() is accepted and silently ignored on Wayland (the compositor owns
@@ -2448,7 +2470,7 @@ def main() -> int:
         # pairs once per base, and the surfaces the overlay does NOT reach — the
         # painted switch and tray — per theme with the overlay on. A theme whose
         # track is legible on its own window can still fail against pure black.
-        _hc = contrast.hc_short(_th.dark)
+        _hc = contrast.hc_short(_th)
         check(f"INV-2 {_name} clears its floors with the overlay ON "
               f"({len(_hc)} short)", not _hc)
         for line in _hc[:8]:

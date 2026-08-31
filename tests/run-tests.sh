@@ -3153,7 +3153,11 @@ else
     fi
     # The shared-argv halves, one row each: each constant is written once and read by both
     # the call site and the rule that grants it, so neither side can be respelled alone.
-    for pair in "REFRESH_SUDO_ARGV:3" "CACHE_DU_ARGV:4"; do
+    # REFRESH_SUDO_ARGV went 3 -> 4 when find_failing_repos was put under the same
+    # per-source budget as refresh_repos: one more READER of the same granted argv,
+    # not a new privileged shape, so auth_cmnds is unchanged and the call-site count
+    # above still reads 33.
+    for pair in "REFRESH_SUDO_ARGV:4" "CACHE_DU_ARGV:4"; do
         var="${pair%%:*}"; want="${pair##*:}"
         got=$(grep -c "$var" <<<"$py_stripped")
         if [[ "$got" == "$want" ]]; then
