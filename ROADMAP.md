@@ -1251,6 +1251,37 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   is not retired (stage 9), the differential harness is stage 6's, and the window
   still points at the Bash engine (stage 7). The three filed suite defects were
   run past rather than repaired — ONEUP-0135, ONEUP-0133, ONEUP-0134.
+  Progress (2026-09-02): stage 6 of 9 done — the differential harness, gate
+  G2. tests/mock-env.sh holds the mock sandbox both engine suites now source;
+  tests/differential-test.sh drives both engines through it and diffs whole
+  output and exit status across 19 scenarios. 23 of 23 markers in the reference
+  table are produced by a scenario, none excused as unreachable. G2 met.
+
+  Three divergences settled rather than waved through: the banner's position
+  (v2 printed it before the PackageKit stop and the pre-update snapshot, v1
+  after), and two places --help had quietly lost text the Bash carries — the
+  repository-skip cap, and v1's whole Examples block. One accepted, with a test
+  pinning both engines' text: --help names the program, and the program's name
+  changed.
+
+  Two things the build measured rather than predicted, both now in the spec and
+  plan. The elapsed seconds have two renderings and normalising only the marker
+  left the gate flapping — the harness reported that itself. And workflow.md §6's
+  "34-38 seconds" was a main-era figure stale by roughly six times: the pipeline
+  is 4m10s-4m25s, the engine suite alone 2m44s, the harness 49s.
+
+  The plan's stage-6 steps took a two-loop review-contract gate (18 verified, 18
+  fixed) and reached its cap violently — seven of loop 2's nine findings landed
+  on text loop 1 wrote — so the document went to implementation rather than a
+  third loop, which is what the cap's own routing prescribes. It was the right
+  call: the build then found three defects no lane had.
+
+  Filed rather than fixed in-stage: ONEUP-0193 and ONEUP-0194 (two standards
+  claiming release.yml runs three test suites), ONEUP-0195 (this gate is
+  local-only against workflow.md §6.1 step 3, and ONEUP-0072 owns retiring it).
+
+  Next: stage 7 — the window pointed at v2 behind an environment switch, plus
+  INV-11's scenario. G3 and G5.
 
 - ✅ [ONEUP-0056] **Never report "up to date" for a source the check couldn't read.**
   Reported with two screenshots: OneUp's check said "Everything is up
