@@ -44,6 +44,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The words on the progress bar were too faint to read against the coloured fill** (ONEUP-0163)
+  "Downloading 12 of 141 packages" and the rest of the running commentary
+  were printed across the middle of the progress bar, on top of its blue
+  fill, where they were far too faint to read — worse the further the bar
+  filled. The words now sit on their own line just under the bar, where
+  they read clearly in every theme. The bar keeps its full colour.
+
 - **Asking for the download size with no step name started a full update** (ONEUP-0173)
   Running the engine with `--size=` — the flag with its value left off —
   did not quote the price of an update. It installed one. The flag is now

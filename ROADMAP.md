@@ -5086,7 +5086,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane tooling.
 
-- 💭 [ONEUP-0162] **ONEUP-0028 mandates an accessible NAME on labels that are also announcement sources.**
+- ✅ [ONEUP-0162] **ONEUP-0028 mandates an accessible NAME on labels that are also announcement sources.**
   §1's table names the banner frame AND its label; § the announcement fallback
   states that an explicit name on a QLabel is permanent and would make every later
   setText invisible to assistive technology. Both cannot hold for a label the
@@ -5096,11 +5096,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   review-contract's: decide whether §1 should say description for the label half.
   Note `last_run` is NOT an announcement source, so its name is correct as it
   stands.
+  Resolved (2026-09-02): decided with the user - the spec follows the
+  code. §1 now states that a banner's role text is the accessible NAME on
+  the frame and the accessible DESCRIPTION on the label, and says why: the
+  label is an announcement source, and a permanent name on it would
+  silence every later setText. That is what `banners.py` already does. The
+  table now gives the role text rather than naming one call for both
+  widgets, which is what made the two passages contradict. `last_run` is
+  not an announcement source and its name is unchanged.
   **Layman:** Two rules in the accessibility spec pull in opposite directions.
   Kind: accessibility.
   Source: review-code 2026-08-31, lane gui-window.
 
-- 📋 [ONEUP-0163] **The base progress bar's caption is read on the accent chunk at 1.6:1.**
+- ✅ [ONEUP-0163] **The base progress bar's caption is read on the accent chunk at 1.6:1.**
   The high-contrast half of this was fixed on 2026-08-31 by giving the overlay its
   own `progchunk` token — it was 1.00:1, white on white. The BASE sheet is less
   absolute and still fails: `text-align: center` puts the caption over the chunk,
@@ -5111,6 +5119,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   `setTextVisible(False)` and move the caption to the adjacent label. Whichever is
   chosen, add the pair to PAIRS so it is measured — today nothing measures it,
   because the `status` row names the trough and stops.
+  Resolved (2026-09-02): decided with the user - the words move, not the
+  colour. The caption is a label under the bar; the bar paints none of it
+  and keeps its full accent fill. `setFormat` stays the only way the
+  caption is set, so all eight call sites and the suite are unchanged and
+  `bar.format()` still reports it. INV-7 required a high-contrast rule for
+  the new object name, which the overlay now has.
+
+  The caption's new ground is `card`, and `status` on `card` is already a
+  measured PAIRS row, so it is covered. What this did NOT do is retire the
+  now-dead `status` on `progbg` ground or add the fill's own pair: doing
+  that truthfully turns the suite red on four themes, because the fill
+  measures about 1.4:1 against its trough in the light palettes. Filed as
+  ONEUP-0198 with the measurements rather than guessed at here.
   **Layman:** The words on the progress bar are hard to read against the coloured fill.
   Kind: accessibility.
   Source: review-code 2026-08-31, lane gui-theme.
@@ -5663,3 +5684,56 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A hard-won lesson about killing background jobs is written in the code but not in the list of traps; someone should decide whether it belongs there.
   Kind: doc.
   Source: carried in session handoffs since 2026-08-31; filed 2026-09-02 to stop the prose relay.
+
+- 📋 [ONEUP-0197] **Give each of the eight themes its own accent hue.**
+  All eight palettes carry an identical `accent` gradient (azure to cyan),
+  and after ONEUP-0179 an identical row ring built from the same two hues.
+  Themes differ only in their surfaces today. Decided with the user on
+  2026-09-02: they should differ in the highlight too, so Forest highlights
+  green and Plum purple.
+
+  Scope is every token taking that hue: `accent`, the four `rowring*`
+  tints, and the button stop pairs if they are to follow. Each new value
+  must be re-measured against that theme's own surfaces - ONEUP-0027 §4.7
+  holds the pairs and §4.8 the decisions, and INV-2 re-measures every
+  palette on every run, so a hue chosen by eye fails the suite rather than
+  shipping. §9 rejects deriving a palette from a hue at run time, so the
+  values are authored and frozen like the rest.
+
+  Not a colour change alone: `accent` is also what the focus derivation
+  blends from for the two gradient controls, so moving it moves
+  `accentfocus` / `accentfocusink` per theme - which is what tokenising
+  bought, but it means the focus measurement is part of this item rather
+  than a follow-on.
+  **Layman:** Every colour theme currently highlights in the same blue; each should highlight in its own colour.
+  Kind: ux.
+  Source: user decision 2026-09-02, arising from ONEUP-0179.
+
+- 📋 [ONEUP-0198] **The progress fill is barely visible against its own trough in the four light themes.**
+  Measured across all eight palettes with the project's own `contrast.worst`:
+  `accent` against `progbg` is about 7.1:1 to 7.4:1 in the four dark themes
+  and about 1.4:1 in Daylight, Paper, Sky and Sand. The fill IS the
+  information, so under SC 1.4.11 it is a meaningful boundary and wants
+  3:1. Four themes are under half that: the bar looks empty however far it
+  has got.
+
+  Found while closing ONEUP-0163 rather than filed by a review. That item
+  moved the caption OFF the fill, which removes the text-contrast failure
+  and leaves this one - a separate defect that was hidden behind it,
+  because nothing measured the fill against the trough.
+
+  Two things to do together, and neither is guessed here.
+  Add `("accent", ("progbg",), MARK)` to PAIRS so the fill is measured; it
+  goes red on the four light themes until their trough or accent moves, so
+  the recolour lands in the same change. And retire the `progbg` ground on
+  the `status` PAIRS row: with the caption off the bar nothing renders
+  `status` on the trough, so that pair no longer exists. It is left in
+  place for now only because it is what currently covers `progbg` for
+  INV-4, and removing it without the replacement above would fail the
+  coverage check.
+
+  Sequence with ONEUP-0197, which gives each theme its own accent: doing
+  this first means re-measuring every value that item then changes.
+  **Layman:** In the light themes you can hardly see how far the progress bar has filled.
+  Kind: accessibility.
+  Source: measured 2026-09-02 while closing ONEUP-0163.

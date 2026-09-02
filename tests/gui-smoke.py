@@ -262,6 +262,14 @@ def main() -> int:
           "34 so far" in wP.status.text() and "of 0" not in wP.status.text())
     check("the bar keeps the step caption and adds the detail",
           caption in wP.bar.format() and "34 so far" in wP.bar.format())
+    # ONEUP-0163: the caption is a label under the bar, never text on the fill.
+    # Centred on `accent` it measured 1.63:1 against `status`, and no accent a
+    # theme would want reads under body text. Both halves are asserted: the bar
+    # must draw nothing, AND the label must carry what `format()` reports —
+    # either alone passes with the caption invisible or with it in two places.
+    check("the bar paints no caption on its fill", not wP.bar.isTextVisible())
+    check("the caption label carries what the bar reports",
+          wP.bar_caption.text() == wP.bar.format() and "34 so far" in wP.bar_caption.text())
     run.handle_line(wP, "@@PROGRESS@@|system|12|141|download")
     check("a counted download reads as 'Downloading 12 of 141 packages'",
           wP.status.text() == "Downloading 12 of 141 packages…")

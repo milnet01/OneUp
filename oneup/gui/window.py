@@ -73,6 +73,30 @@ from .theme import TEXT_SCALES, _app_icon, apply_app_theme
 STALE_AFTER_DAYS = 14
 
 
+class _ProgressBar(QProgressBar):
+    """A progress bar that hands its caption to a label instead of painting it.
+
+    `setFormat` stays the only way the caption is set — every call site and the
+    suite still read `bar.format()` — but the text is mirrored into `caption`
+    and the bar draws none of it.
+
+    Centred on the fill, the caption was read against `accent`: 1.63:1 at the
+    left gradient stop and 1.12:1 at the right in the dark themes, against SC
+    1.4.3's 4.5:1, on live text carrying the download detail. No accent a theme
+    would want is readable under body text, so the words move rather than the
+    colour (ONEUP-0163).
+    """
+
+    def __init__(self, caption: QLabel) -> None:
+        super().__init__()
+        self._caption = caption
+        self.setTextVisible(False)
+
+    def setFormat(self, fmt: str) -> None:
+        super().setFormat(fmt)
+        self._caption.setText(fmt)
+
+
 class Updater(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -390,12 +414,18 @@ class Updater(QMainWindow):
         # A description carries the role without displacing the text.
         self.status.setAccessibleDescription("Current status")
         root.addWidget(self.status)
-        self.bar = QProgressBar()
-        self.bar.setTextVisible(True)
+        # The caption sits under the bar rather than on its fill (ONEUP-0163).
+        # A description, not a name: this label's text is replaced on every
+        # progress line, and an explicit name on a QLabel is permanent.
+        self.bar_caption = QLabel("")
+        self.bar_caption.setObjectName("ProgressCaption")
+        self.bar_caption.setAccessibleDescription("Update progress detail")
+        self.bar = _ProgressBar(self.bar_caption)
         self.bar.setRange(0, 1)
         self.bar.setValue(0)
         self.bar.setAccessibleName("Update progress")
         root.addWidget(self.bar)
+        root.addWidget(self.bar_caption)
         # Liveness, on its own line under the bar (ONEUP-0048): how long the current
         # phase has been going, the download rate, and — when the engine has gone quiet —
         # how long for. A slow mirror and a hung one look identical without this: zypper

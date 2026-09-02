@@ -371,8 +371,10 @@ QLabel#LastRun[stale="true"] { color: $amber; }
 
 QProgressBar {
     border: none; border-radius: 9px; background: $progbg;
-    min-height: $progmin; text-align: center; color: $status; font-size: $fs_body;
+    min-height: $progmin;
 }
+/* The caption is a label under the bar, not text on the fill (ONEUP-0163). */
+QLabel#ProgressCaption { color: $status; font-size: $fs_body; }
 QProgressBar::chunk { border-radius: 9px; background: $accent; }
 
 QPlainTextEdit#Log {
@@ -505,7 +507,8 @@ QMainWindow, QDialog { background: $win; }
 QLabel { color: $text; }
 QLabel#Header, QLabel#GroupHeading, QLabel#TaskName, QLabel#SizeResult,
 QLabel#BannerText { color: $text; }
-QLabel#Tagline, QLabel#TaskDesc, QLabel#Status, QLabel#LastRun, QLabel#DetailList { color: $text; }
+QLabel#Tagline, QLabel#TaskDesc, QLabel#Status, QLabel#LastRun, QLabel#DetailList,
+QLabel#ProgressCaption { color: $text; }
 QLabel#LastRun[stale="true"] { color: $text; font-weight: 700; }
 QLabel#Badge {
     background: $card; color: $text; border: 1px solid $border;

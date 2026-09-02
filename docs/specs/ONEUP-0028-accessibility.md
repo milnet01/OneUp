@@ -91,9 +91,18 @@ once the panel is open. Qt reports the expanded/collapsed state separately.
 
 `Updater.__init__` names the non-text widgets: progress bar ("Update progress"),
 log pane ("Update log"), the last-run line ("Last update run"), and each banner
-frame plus its label — named for its role, not its styling:
+frame plus its label — for its role, not its styling.
 
-| Widget | Accessible name |
+**A banner's role text is carried two different ways, and the table gives the
+text rather than the call.** It is the accessible NAME on the frame and the
+accessible DESCRIPTION on the label. The label is an announcement source, and an
+explicit name on a `QLabel` is permanent — so a name there would make every later
+`setText` invisible to assistive technology, which is the same reason *the
+announcement fallback* below gives for not naming the label it borrows. Stating
+only the name made those two passages contradict each other (ONEUP-0162).
+`last_run` is not an announcement source, so its name is a name.
+
+| Widget | Role text |
 | --- | --- |
 | `reboot_banner` / `reboot_label` | "Restart recommended" |
 | `services_banner` / `services_label` | "Services should restart" |
