@@ -5539,3 +5539,20 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A rule about our automated build checks says it runs three things; it actually runs five.
   Kind: doc-fix.
   Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, packet build).
+
+- 📋 [ONEUP-0194] **testing.md §1 says the suite is three programmes and names three; five ship.**
+  §1 opens "Three programmes, each runnable on its own" and its table names
+  run-tests.sh, gui-smoke.py and bump-test.py. The tree also ships
+  parsers-test.py (added by ONEUP-0054 stage 4, gated by local-CI.sh and run by
+  release.yml) and imports-test.py. The same paragraph's second claim — that all
+  three are "the *only* gates GitHub CI also runs on a `v*` tag" — is wrong for
+  the same reason, and is the twin of ONEUP-0193 in workflow.md §6.
+
+  Found by a cold lane's open question during ONEUP-0054 stage 6's gate. Left
+  unfixed deliberately: stage 6 step 7 adds its own row to this table, and
+  repairing the two pre-existing omissions in that commit is the orthogonal edit
+  coding.md §1.7 forbids. Whoever closes this should fix ONEUP-0193 with it —
+  one wrong belief about release.yml, stated in two standards.
+  **Layman:** A rule says our test suite has three parts and lists them; there are five.
+  Kind: doc-fix.
+  Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, loop 2).
