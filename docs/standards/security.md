@@ -13,9 +13,43 @@ commands, and every bug in this file is a root bug.
 2026-07-26, not recalled. Where a claim was checked and turned out different from the
 project's own prior description, the correction is stated in place.
 
-**Sections:** 1 the privilege boundary · 2 one authentication per run · 3 attributable
+**Sections:** the threat model · 1 the privilege boundary · 2 one authentication per run · 3 attributable
 prompts · 4 validate at the boundary · 5 the passwordless drop-in · 6 cooperative
 stopping · 7 logs · 8 supply chain · 9 traps · 10 before you commit · what checks this · 11 cold-eyes log
+
+---
+
+## The threat model
+
+Unnumbered, and first because everything after it derives from it. Added
+2026-09-02 on the user's decision (ONEUP-0185). Until then this document named no
+attacker and no trust boundary, so the model had to be inferred from §1, §4 and
+§7 — and three review lanes inferred three different ones.
+
+**The asset is root.** OneUp's job is running privileged commands, so any defect
+that changes which command runs as root, or with what argument, is a root defect.
+
+**The attacker is the data, not the person.** In scope is everything OneUp did
+not write and cannot vouch for: repository metadata, package and repository
+names, the output of every tool it shells out to, and mirror responses. §4
+governs all of it — validate at the boundary, by shape.
+
+**The person at the keyboard is trusted, and so is every account on the machine.**
+A hostile local user is **out of scope**. OneUp is a single-user desktop tool,
+and an account that wanted root would reach for the same `sudo` this app does.
+Three consequences, named so they are not re-argued: the permissions on
+`~/.local/state/oneup/`, the predictability of the tray's `QLocalServer` socket
+name, and the fixed temporary paths in the test harness are not defended here.
+
+**Out of scope is about whose input is trusted, never about correctness.** A
+symlink followed without care, or a race that corrupts a real run, is still a
+defect — filed as correctness rather than as security. §4's shape validation
+applies to a file OneUp wrote exactly as it applies to a mirror, because a run
+that was killed leaves a truncated one and that is not an attack.
+
+**Also out of scope:** a distribution mirror serving signed-but-malicious
+packages, which is the distribution's signing chain rather than OneUp's; §8
+answers OneUp's own supply chain. Physical access, and a hostile kernel or init.
 
 ---
 
