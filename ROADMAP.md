@@ -5522,3 +5522,20 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Two leftovers that read like safety checks but are not doing anything.
   Kind: chore.
   Source: review-code 2026-08-31, lanes engine-shell and engine-steps.
+
+- 📋 [ONEUP-0193] **workflow.md §6 says release.yml runs the three test suites "and nothing else", and it runs more.**
+  Found while building the stage-6 review packet. §6's closing block reads
+  "release.yml runs the three test suites and the AppImage build — and nothing
+  else", and the workflow also runs the bump.py functional test and the package
+  structure check. The sentence after it enumerates the gates it says have never
+  run in GitHub CI and correctly omits bump.py, so the two disagree with each
+  other as well as with the workflow.
+
+  Adjacent to ONEUP-0133 (the same table has no row for the package structure
+  gate) but not the same defect: that one is a missing row, this is a false
+  claim about the workflow. Left unfixed deliberately — ONEUP-0054 stage 6
+  step 6 edits this table, and an orthogonal repair in that commit is what
+  coding.md §1.7 forbids.
+  **Layman:** A rule about our automated build checks says it runs three things; it actually runs five.
+  Kind: doc-fix.
+  Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, packet build).
