@@ -45,12 +45,16 @@ a correctness defect, not a security one.
 
 **The person at the keyboard is trusted, and so is every account on the machine.**
 A hostile local user is **out of scope**: OneUp is a single-user desktop tool.
-That is a decision about whom OneUp defends, **not** a claim that a local account
-is already privileged — §3.3 records that this distro defaults to `targetpw`, so
-an ordinary account cannot reach root through `sudo` at all. Three consequences,
-named so they are not re-argued: the permissions on `~/.local/state/oneup/`, the
-predictability of the tray's `QLocalServer` socket name, and the fixed temporary
-paths in `local-CI.sh` are not defended here.
+That is a decision about whom OneUp defends, not a claim about what a local
+account can already do. Under `targetpw` (§3.3) `sudo` asks for the **root**
+password rather than the user's, and §5's drop-in is a user-granted exception
+giving *this* account password-free root for OneUp's commands — the exclusion
+rests on the single-user decision above, and on neither of those. Three
+consequences, named so they are not re-argued: the permissions on
+`~/.local/state/oneup/`, the predictability of the tray's `QLocalServer` socket
+name, and the fixed temporary paths in `local-CI.sh` are not defended here.
+`local-CI.sh` is the gate runner rather than a test, so `docs/standards/testing.md`
+§2.3 binds the suites it invokes and not the runner itself.
 
 **The exclusion does not reach §5 — that is what §5 is for.** The drop-in grants
 *this* account password-free root, and it is exercised with no person present, by
@@ -62,9 +66,7 @@ Nothing here relaxes them.
 symlink followed without care, or a race that corrupts a real run, is still a
 defect — filed as correctness rather than as security. A file OneUp wrote is read
 back defensively for that reason: a run that was killed leaves a truncated one,
-which is malformed without being an attack. And `docs/standards/testing.md` §2
-still forbids a test writing outside its own `mktemp -d`, whatever this section
-says about `local-CI.sh`.
+which is malformed without being an attack.
 
 **Also out of scope:** a distribution mirror serving signed-but-malicious
 packages, which is the distribution's signing chain rather than OneUp's; §8
@@ -196,7 +198,9 @@ the helper.
 engine is `SIGKILL`ed, so the keep-alive **also watches the engine's pid and exits on its
 own**. It runs under `setsid` in its own process group so `cleanup` can kill the whole
 group (`kill -- -PGID`) — a plain `kill` on the subshell orphans the inner `sleep 50`,
-which reparents to init. It carries the tag `oneup-keepalive` in `$0` so a test can find it.
+which reparents to `systemd --user` rather than to pid 1, so an orphan check written
+against pid 1 can never fire. The live idiom is polling `kill -0` on the captured engine
+pid, never a re-read of `$PPID`. It carries the tag `oneup-keepalive` in `$0` so a test can find it.
 
 Measured: before this, two keep-alives were found still calling `sudo -n -v` every 50
 seconds, **40 minutes after** the runs that spawned them had been killed (ONEUP-0041). Any
@@ -211,8 +215,9 @@ dialog, and the correct response to one is to refuse it. So:
 
 **3.1 — Attribution comes from the exported environment, and the *authenticating* call
 carries it explicitly.** Exactly one `sudo` in the engine passes `-A` and `-p`:
-`sudo_init`'s `sudo -A -v`, which is the call that actually prompts. The other 20 are
-plain `sudo` **on purpose** — they inherit the exported `SUDO_ASKPASS` and `SUDO_PROMPT`
+`sudo_init`'s `sudo -A -v`, which is the call that actually prompts. Every other
+privileged call — direct or through `sudo_capture`, §1.2 owning the breakdown — is
+plain `sudo` **on purpose**: each inherits the exported `SUDO_ASKPASS` and `SUDO_PROMPT`
 (3.2, 3.3), so if any of them ever has to ask, the prompt is graphical and labelled
 anyway. That is why the export is mandatory rather than a convenience: it is what makes
 "every prompt is attributable" true of a call site that never mentions it.
@@ -520,6 +525,10 @@ trap (§2.2) is invisible in a terminal, because with a tty sudo keys its creden
 tty rather than the ppid. Testing a change by running the engine in a terminal therefore
 proves nothing about the path users actually take. The regression test models sudo's
 per-parent-pid cache and fails if a run needs more than one prompt — do not weaken it.
+**It sees a second prompt caused by a subshell, and not a second `sudo_init` inside one
+process**: the mock keys its timestamp to `$PPID`, so two calls from one engine share a
+record and log a single prompt. That shape is caught by the keep-alive scenario instead
+(`docs/specs/ONEUP-0044-one-authentication.md` §7.1).
 
 **9.3 — `sudoers` wildcards match spaces.** `env LC_ALL=C zypper *` grants everything after
 that literal prefix. This is intended here (§5.3) but is a general hazard: a wildcard in a
@@ -570,7 +579,7 @@ lists all four.
 | --- | --- |
 | §1 the GUI never runs as root | nothing automatic |
 | §2 one authentication per run | `tests/run-tests.sh` — *"a full run asks for the password exactly once"*, against a mock that models sudo's per-parent-pid credential cache |
-| §2 no `sudo` inside a subshell | the same scenario, because a subshell **is** a second prompt. The rule and its symptom are the same thing, which is what makes this the strongest gate in the set |
+| §2 no `sudo` inside a subshell | the same scenario, because a subshell **is** a second prompt. The rule and its symptom are the same thing, which is what makes this the strongest gate in the set. It does **not** see a re-entrant `sudo_init` inside one process — the mock keys on `$PPID`, so that shape belongs to the keep-alive row |
 | §3 every prompt says who is asking | nothing automatic |
 | §4 validate at the boundary, by shape — the engine's alias guard | `tests/run-tests.sh` — an unsafe repo alias is refused and never reaches a privileged command |
 | §4.6 no session-critical service is ever restarted | `tests/gui-smoke.py` — a mixed list restarts the safe units and **no** critical one, and an all-critical list restarts nothing; `tests/run-tests.sh` asserts the engine's printed advice splits them the same way |
@@ -586,7 +595,8 @@ lists all four.
 | §5.7 the guard runs zypper and nothing else | `tests/run-tests.sh` — it refuses a non-zypper argv with exit 2, appends `--download-only`, TERMs its child on a stop request and reaps it. The stop scenario also runs over **both** wrappers, so the guard cannot silently drop the stop poll for the users who enabled passwordless |
 | §5 `--check` authenticates zero times | `tests/run-tests.sh` — *"`--check` performs NO privileged auth"*, backed by a mock that exits 99 if a transaction is attempted |
 | §6 stopping is cooperative | `tests/run-tests.sh` |
-| §7 logs carry no secrets | `tests/gui-smoke.py` — the diagnostics bundle has its hostname scrubbed |
+| §7.4 the diagnostics bundle carries no identifiers | `tests/gui-smoke.py` — the bundle has its hostname scrubbed |
+| §7.3 captured privileged output is not echoed to the log | nothing automatic — the §10 checklist is the only gate |
 | §8 supply chain | nothing automatic |
 | nothing the engine spawns outlives it | `tests/run-tests.sh` — the sudo keep-alive leaves no orphaned process when a run ends |
 
@@ -605,6 +615,7 @@ shows up as nothing in particular cannot be tested, however carefully it is word
 | 4 | 2026-07-26 | none | clean. Nothing from the previous pass resurfaced, which is the proof that fix held. |
 | 5 | 2026-07-26 | none | converged. |
 | 6 | 2026-09-02 | 3 lanes, cold; genre pinned `standard`; new run, trigger ONEUP-0185 — Q1 2 · Q2 5 · Q3 0; 7 verified, 1 dismissed, 7 fixed | **The gate was armed by the new unnumbered § The threat model** (commit `0bab233`, +35/-1); five of the seven findings landed on that text and two were pre-existing. **All three lanes independently found the same defect:** declaring a hostile local user out of scope removed the only actor §5.2 and §9.3 defend against, so an implementer adding a `Cmnd` could argue a wildcard is out of scope and emit the `timeout * zypper *` form §5.2 measured against a root shell before it shipped. §5 is now named as untouched by the exclusion. **The sharpest was a Q1 in the new text**: its justification — that an account wanting root would reach for the same `sudo` OneUp does — is false on this distro, because §3.3 records `targetpw`, under which an ordinary account cannot reach root by `sudo` at all. The user's decision stands; the reason it rested on was wrong and is re-based on §5 granting *this* account password-free root. Two more in the new text: §4 was said to govern all untrusted data where §4's own rule fires only where a value reaches a privileged command, and "the fixed temporary paths in the test harness" named the wrong file — they are `local-CI.sh`'s, and `testing.md` §2 forbids a test doing it. One gap: root was the only asset named while §7.3 and §7.4 protect credentials and identifiers, so a second asset is stated. **Two pre-existing, both found by two lanes:** §9.6 and §10 named three state-file overrides where `testing.md` §2 — which §9.6 itself calls canonical — lists four, and the missing `ONEUP_GUARD_FILE` makes a direct scenario read the developer's own passwordless grant; and §1.3 called G5 "what keeps the split honest" when `oneup-2.0.md`'s own loop 5 had already corrected that to half, the other half being the import rule. Collateral: `testing.md` said "all three overrides" under a heading reading "The four redirects" — corrected there, ledgered out of scope. Dismissed: the `58ea3bc` / 2026-07-26 verification stamp now predates four amendments, true but no conformer builds differently. Two lane open questions resolved clean — §1.2's 14+20 against §3.1's "other 20", and whether `main` carries the tray socket the model names (it does) |
+| 7 | 2026-09-02 | 3 lanes, cold; identical brief, packet rebuilt from disk — Q1 4 · Q2 1 · Q3 1; 6 verified, 2 dismissed, 6 fixed | **Two of the six landed on text loop 6 wrote, and four were pre-existing** — the loop found more than it broke. **My own fix was the worst of the two:** loop 6 replaced one wrong justification for the local-user exclusion with another, asserting that under `targetpw` an ordinary account "cannot reach root through `sudo` at all". Two lanes found it false and the third raised it — `targetpw` changes *which* password `sudo` demands, not whether root is reachable, §5's drop-in grants *this* account password-free root, and OneUp itself reaches root by `sudo` on every run. The exclusion now rests on the single-user decision alone. Loop 6 also restated `testing.md` §2.3 as forbidding a write outside `mktemp -d` while the rule reads "**or the redirected `HOME`**", and left that restatement contradicting its own sentence three paragraphs up; all three lanes found the collision, and the classification is now stated once — `local-CI.sh` is the gate runner, not a test. **All three lanes also found the oldest defect here:** §3.1's "The other 20 are plain `sudo`" reconciles with no reading of §1.2's 34 = 14 + 20, and the structural check pins 29, so a conformer re-deriving that pin from §3.1 would set it against 21 sites. Fixed by DELETING the figure rather than reconciling it — §1.2 declares it owns the breakdown, and loop 3 of this log fixed the same duplication once already. **Two lanes found a gate that cannot see what it claims:** §9.2 and its table row call the one-prompt scenario the strongest in the set, while the counting mocks key their timestamp to `$PPID`, so a second `sudo_init` inside one process shares the record and logs one prompt — measured on ONEUP-0044, where deleting the `HELD_AUTH` guard left that test green and only the keep-alive scenario caught it. Both now say so. **One lane found a Q1 the engine's own comment already contradicted:** §2.4 said an orphaned keep-alive "reparents to init", where `systemd --user` adopts a user session's orphans, so an orphan check against pid 1 can never fire — the engine says exactly this at its `kill -0` comment. And the checks table claimed §7 was gated by the hostname-scrub test, which covers §7.4 only; §7.3 now carries its own row reading "nothing automatic", the spelling that table uses elsewhere for an ungated rule. Dismissed as immaterial: the §1 row under-reports G5's gating of §1.3, and a table row is labelled §5 where the rule is §9.5 — neither changes a line anyone builds. Two lane open questions resolved clean — §3.1 does pass both `-A` and `-p` (`sudo -A -p "…" -v`), and §1.2 pre-empts its own count drift |
 
 ---
 
