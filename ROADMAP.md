@@ -5341,6 +5341,20 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   log files under ~/Documents/update-logs carry streamed root output at the ambient
   umask, and the state files carry no schema version, so a mixed install misreads
   by position.
+  Progress (2026-09-02): the umask half is CLOSED, out of scope.
+  ONEUP-0185 settled the absence this bullet defers to - security.md
+  now names a threat model, and the user's decision is that a hostile
+  local user is not defended against. So "another local user could
+  plant a `go.request`" is no longer a defect here, and the section
+  names the state-directory permissions as deliberately undefended.
+
+  The rest of this item STANDS and is unaffected. The threat model
+  says in terms that being out of scope is about whose input is
+  trusted, never about correctness: the non-atomic truncate-then-write
+  is a real defect whatever the trust model, because a window reading
+  `run.state` mid-write sees an empty file and concludes there is no
+  run. Temp-plus-rename is still the fix. The missing schema version
+  on the state files is likewise untouched by the decision.
   **Layman:** The small files the two halves of the app use to talk to each other can be read half-written.
   Kind: fix.
   Source: review-code 2026-08-31, lanes engine-privilege and engine-shell.
@@ -5474,7 +5488,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-services.
 
-- 💭 [ONEUP-0185] **Decide whether a hostile local user is in scope — security.md states no threat model.**
+- ✅ [ONEUP-0185] **Decide whether a hostile local user is in scope — security.md states no threat model.**
   `docs/standards/security.md` has no threat-model section: no "in scope", no
   "attacker", no "trust boundary" heading. The model has to be derived from §1, §4
   (which names repository metadata and tool output as untrusted) and §7 — giving
@@ -5485,6 +5499,35 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   the answer: the state-directory umask, the predictable QLocalServer socket name
   (`tray.py:195`, a trivial local denial of service at launch), and local-CI's
   fixed temp log paths. Writing the model down decides all three at once.
+  Resolved (2026-09-02): security.md gains an unnumbered "The threat
+  model" section, first because everything after it derives from it.
+  The user's decision: a hostile local user is OUT of scope - OneUp is
+  a single-user desktop tool. Two assets are named, root and what
+  passes through the logs; the attacker is the data OneUp did not
+  write; and the exclusion is explicitly about whose input is trusted,
+  never about correctness.
+
+  Unnumbered on purpose, so no section renumbers and no citation
+  anywhere in the repo breaks.
+
+  Three loops of review-contract, genre pinned standard, cap reached:
+  18 verified, 18 fixed, 6 dismissed. The gate repeatedly caught the
+  new section rather than rubber-stamping it - loop 1 found that
+  excluding local users had silently removed the only actor §5.2
+  defends against, and loop 2 found that the justification I wrote for
+  the exclusion was itself false (targetpw changes WHICH password sudo
+  demands, not whether root is reachable). The decision never moved;
+  its stated reasoning was wrong twice and is now the single-user call
+  alone.
+
+  The three findings that hung on this answer: the state-directory
+  umask is closed out of scope, recorded on ONEUP-0177 whose
+  non-atomic half is unaffected; the predictable tray socket name and
+  local-CI's fixed temp paths are named in the section itself as
+  undefended, so neither needs re-arguing.
+
+  Nine defects were found in parts of the document the change never
+  touched - the audit half of the gate rather than the gate half.
   **Layman:** The security rules do not say who they are defending against, so three reviewers reached three different answers.
   Kind: security.
   Source: review-code 2026-08-31, threat-model calibration.
