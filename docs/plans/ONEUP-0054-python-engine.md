@@ -1,7 +1,7 @@
 # ONEUP-0054 — Python engine — build plan
 
 **Spec:** [docs/specs/ONEUP-0054-python-engine.md](../specs/ONEUP-0054-python-engine.md)
-**Status:** in progress — stages 1–4 done (2026-08-25); stage 5 under way.
+**Status:** in progress — stages 1–4 done (2026-08-25), stage 5 done (2026-08-31); stage 6 under way.
 
 ## Scope of this file
 
@@ -1232,6 +1232,146 @@ stage. **ONEUP-0133**: `workflow.md` §6's gate table has no row for `local-CI.s
 `Package structure (oneup/)` gate. **ONEUP-0134**: §4.6's stage-4 row explains the `--hold`
 exclusion as *"falls through into a full run"*, and several of that family never reach one.
 
+## Stage 6 — the differential harness
+
+**Branch: `v2` only.** The harness drives the `oneup/engine/` package, which `main` does
+not have. Stages 4 and 5 both landed their plan text on `v2` alone and this section
+follows them. **Step 8's spec amendment does not**: `docs/standards/workflow.md` §9 binds
+documentation to `v2` for a marker change, or for one of the documents
+`tests/docs-check.py` reads — *"a standard, a reference, `CLAUDE.md` or `README.md`"*. A
+spec is neither, so it lands on `main` and merges. Steps 6 and 7 edit standards that must
+name files only `v2` has, so those two edits go to `v2`.
+
+**What this stage is, measured before any step was written.** Both engines were run
+against five mock sets — `--check`, `--size=system`, a clean full run, a run whose
+`zypper dup` fails, and a run whose refresh reports an invalid repository. **Marker
+streams and exit statuses were identical in all five.** With each engine's own mock
+directory path normalised, **whole output** was identical too, bar one divergence:
+`update_system.sh` prints its banner *after* the PackageKit stop and the pre-update
+snapshot, and the Python driver prints it *before* them.
+
+So this is not a divergence hunt. It is four things: mechanise the whole-output comparison
+that stages 3, 4 and 5 each performed by hand; settle that one divergence; make the
+comparison a gate; and write down what it cannot see.
+
+**Two departures from §4.5, both measured, both recorded by step 8.**
+
+- **The subject is whole output, not the marker lines alone.** §4.5 says capture only
+  `@@MARKER@@` lines. A marker-only diff misses the banner divergence completely — that is
+  console text, and console text is what a terminal user and the log file get. Whole-output
+  parity is already this project's bar: stages 3, 4 and 5 each required it by hand for a
+  mock set.
+- **Three of §4.5's four normalisations are not built.** It names TIMING seconds, log
+  paths, pids and snapshot ids. `docs/reference/marker-protocol.md` §3's table has no pid
+  field and no path field; the snapshot id comes from the suite's `snapper` mock and the
+  free-space figure from its `df` mock, so both are fixed, and equal, for both engines.
+  Normalising a field that cannot vary does not stabilise a gate, it blinds it. Only
+  `@@TIMING@@`'s seconds and the mock directory path are normalised.
+
+### Steps
+
+1. **One definition of the mock sandbox, sourced by both suites.** Move `ENGINE`, the
+   `ONEUP_ENGINE_CMD` decode, `setup_common`, `setup_cached_sudo` and `run_engine` out of
+   `tests/run-tests.sh` verbatim into a new sourceable file, and have `run-tests.sh` source
+   it in their place. Resolve the repository root from `${BASH_SOURCE[0]}` rather than `$0`,
+   which in a sourced file names the *sourcing* script — measured: sourcing that block from
+   elsewhere pointed `ENGINE` at a path that does not exist, and the run failed with exit
+   127 rather than producing a diff. **A copy is the thing to avoid here**: the harness's
+   whole claim is *identical mocks*, and two copies of `setup_common` drift silently while
+   both suites stay green.
+   → **verify:** the engine suite reports the same pass and fail counts as before the move,
+   both with `ONEUP_ENGINE_CMD` unset and with it set to `python3 -m oneup.engine`.
+
+2. **The harness itself.** Per scenario: build **two** mock directories from the same
+   builder — never one reused, because each run writes `run.state`, a log and the `du`
+   counter into it — run `update_system.sh` in the first and `python3 -m oneup.engine` in
+   the second, capture combined output and exit status, normalise, and `diff`. A scenario is
+   a name plus a mock-set builder, so the file reads as a table rather than as prose. Report
+   per scenario and exit non-zero on any divergence.
+   → **verify:** run it before step 4 lands and watch it report the banner divergence as a
+   failure, naming the scenario and the diff. A harness nobody has seen fail is a harness
+   nobody knows works (`docs/standards/workflow.md` §6.1 step 4).
+
+3. **The normalisation, and nothing beyond it.** Replace `@@TIMING@@`'s seconds field with a
+   fixed token, and each engine's own mock directory path with a fixed token. Nothing else,
+   for the reason given above.
+   → **verify:** drive the normaliser directly — two streams differing only in a TIMING
+   seconds field compare equal, and two differing by one character of any other marker
+   payload compare unequal.
+
+4. **The banner.** Move the Python driver's banner to where `update_system.sh` prints it.
+   **Match `main` rather than keep the improvement**: v2's order was not chosen, it is
+   where the banner landed when the driver was rewritten, and §4.5 makes a divergence either
+   a bug or *"a deliberate improvement that gets written down here and given its own test"*.
+   An accidental one is neither. If printing the banner first is worth having it is a
+   roadmap item with its own reasoning and its own test, not a side effect of the rewrite.
+   → **verify:** the harness's diff is empty for every scenario, the clean full run and both
+   failure paths included.
+
+5. **Coverage, reported by the harness rather than claimed here.** The harness reads the
+   marker names from `docs/reference/marker-protocol.md` §3's table, subtracts the ones its
+   scenarios actually produced, and prints the remainder. Add scenarios until that list
+   holds only markers no mock sandbox can reach, each carrying its reason in the harness. A
+   list that prints itself cannot go stale the way a list written here would.
+   → **verify:** deleting a scenario puts its markers back on the uncovered list; the
+   remainder is empty, or every entry carries a reason.
+
+6. **Wire it as a gate**, by `docs/standards/workflow.md` §6.1: a `step` in `local-CI.sh`
+   using its `ok` / `bad` / `skip` helpers, skipping when either engine's interpreter or
+   `update_system.sh` is missing; a row in §6's gate table in the position the script runs
+   it; and an entry in `.github/workflows/release.yml`, which §6.1 step 3 requires of a
+   *test* gate.
+   → **verify:** `./local-CI.sh` green on `v2`; the gate seen red by altering a marker
+   payload and restoring it; and the runtime it adds measured and put in the commit body —
+   a full run costs about 2.2 s per engine on this machine against about 0.1 s for
+   `--check`, so the scenario mix is what decides whether §6's *"short enough to run every
+   time"* still holds.
+
+7. **`docs/standards/files-and-naming.md` §1's `tests/` row** names every file in that
+   directory, and two are being added. §6 of that standard obliges nothing further: neither
+   file reaches a user's disk, carries a version, is a document, or is a widget.
+   → **verify:** the row names both new files, and `tests/docs-check.py` is green.
+
+8. **The spec amendment, on `main`.** Record in §4.5 what was built: whole output rather
+   than marker lines alone, one normalisation rather than four, and the banner divergence
+   with its resolution. An amendment recording what was actually built does not re-arm the
+   gate (global `CLAUDE.md` rule 14).
+   → **verify:** §4.5 read back describes the harness that exists; `tests/docs-check.py`
+   green on `main`; merged into `v2`.
+
+### What G2 cannot see — the hand-check list stage 8 owes G6
+
+§4.5 requires this stage to end by writing it. It lives here because the spec and the
+design doc are both gated documents, and a list of hand-checks for a later stage is
+direction for work still to come, which re-arms their gates.
+
+Everything below is invisible to the harness because the mock sandbox is what supplies it:
+
+- **Real authentication** — the graphical password prompt, a cancelled password, the
+  keep-alive against a real credential cache, and the passwordless drop-in actually
+  installed. The mock `sudo` execs its arguments and never prompts.
+- **Real `zypper`** — its true wordings and exit codes, the progress lines the parsers key
+  on, a real package lock, and a transaction that changes the system.
+- **Real `snapper`, `flatpak` and `fwupdmgr`** — snapshot creation and thinning, and the
+  absent-tool paths on a machine that genuinely lacks one.
+- **The network** — slow mirrors, the per-repository timeout, and the ONEUP-0048 stall
+  clock. Every scenario here answers instantly.
+- **Anything timing-dependent**, which the TIMING normalisation removes by design.
+- **The log file's own content.** The harness compares what the engines write to stdout;
+  the log is a mirror of it and is not read back.
+- **Everything the window does** — G3 and G5 cover that, at stage 7.
+
+### Not stage 6's
+
+**`update_system.sh` is not retired here** and the window is not repointed: §4.6 gives
+those to stages 9 and 7, and the harness needs both engines present for as long as it runs.
+
+**The `Package structure (oneup/)` gate's missing §6 row is ONEUP-0133's**, not this
+stage's. Step 6 adds the row for the gate it introduces and no other; fixing a neighbouring
+omission in the same table would be an orthogonal edit.
+
+**ONEUP-0134 and ONEUP-0135 are still run past**, as at stage 5 and for the same reasons.
+
 ## Definition of done
 
 **Stage 1 is done** when `main`'s §4.4 matches `v2`'s; neither call site in
@@ -1314,6 +1454,20 @@ answers active to every scenario. **The `SIGKILL`ed keep-alive is deliberately n
 list**: stage 2 built a scenario that stages a held engine and kills it, so step 10 holds
 that one. **G4 is met with G1**, the one-prompt scenario being an
 engine-suite scenario that needs no window. `main`'s behaviour is unchanged.
+
+**Stage 6 is done** when the harness reports every scenario identical for both engines —
+whole output after normalisation, and exit status; when it has been seen to fail twice, once
+on the banner divergence before step 4 and once on a deliberately altered marker payload;
+when its uncovered-marker list is empty or every entry names why no mock sandbox reaches
+that marker; when `tests/run-tests.sh` and the harness share one `setup_common` rather than
+two, and the engine suite's counts are unchanged by that move; when the gate is in
+`local-CI.sh`, in `docs/standards/workflow.md` §6's table and in
+`.github/workflows/release.yml`; when the hand-check list above is written; when step 8's
+amendment has landed on `main` and merged; and when `./local-CI.sh` is green on `v2` with
+`ONEUP_ENGINE_CMD` unset. **G2 is met here.** **The banner fix is in this list and not in
+the harness's own diff for a reason** — after step 4 the diff is empty, so nothing but step
+2's before-and-after failure shows the harness could ever have caught it. `main`'s
+behaviour is unchanged.
 
 **The item is done** at stage 9, when G1–G6 are met. `docs/design/oneup-2.0.md`
 §7 owns the gate; spec §4.6 says which stage earns each of them and that stage 9
