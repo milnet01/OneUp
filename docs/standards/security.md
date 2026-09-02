@@ -149,7 +149,7 @@ without validation is a root shell injection, full stop.
 ## 2. One authentication per run
 
 **2.1 — The engine authenticates once, up front.** `sudo_init` in `update_system.sh`
-raises a single graphical prompt via `sudo -A -v`, then starts a keep-alive that refreshes
+raises a single graphical prompt via `sudo -A -p "<label>" -v`, then starts a keep-alive that refreshes
 the credential every 50 seconds for the life of the run. **Zero** prompts, and no
 keep-alive at all, when §5's passwordless drop-in is active **and covers what this engine
 issues** — `sudo_init` asks `auth_current`, not merely whether a rule exists, and returns
@@ -190,9 +190,13 @@ A **top-level** `sudo … | tee` is fine — sudo remains the caller's own child
 is no subshell in Python, so the rule translates to: **one runner object owns every
 privileged child process.** Do not scatter `subprocess.run(["sudo", …])` calls across
 modules; route them through a single helper that is the sudo parent for the whole run,
-exactly as `sudo_capture` is today. The failure mode is identical and so is the symptom —
-extra password dialogs — but the cause will read differently, so write the reason down at
-the helper.
+exactly as `sudo_capture` is today. **The failure mode carries over; the symptom does
+NOT.** In Python every `subprocess.run(["sudo", …])` has the one engine process as sudo's
+parent, so scattered calls share a credential and raise no extra dialog — the Bash symptom
+exists only because bash forks a real subshell with its own pid (§2.2). **So prompt
+counting cannot detect this shape, and nothing gates it today.** The reason to route through
+one helper is a single sudo parent, one exported askpass environment and one keep-alive
+owner. Write that down at the helper.
 
 **2.4 — Nothing the engine spawns may outlive it.** `cleanup`'s trap cannot run when the
 engine is `SIGKILL`ed, so the keep-alive **also watches the engine's pid and exits on its
@@ -215,7 +219,9 @@ dialog, and the correct response to one is to refuse it. So:
 
 **3.1 — Attribution comes from the exported environment, and the *authenticating* call
 carries it explicitly.** Exactly one `sudo` in the engine passes `-A` and `-p`:
-`sudo_init`'s `sudo -A -v`, which is the call that actually prompts. Every other
+`sudo_init`'s `sudo -A -p "<label>" -v`, which is the call that actually prompts. Rendered
+with the `-p` it asserts, because this is the worked form §2.3 tells the Python engine to
+reproduce. Every other
 privileged call — direct or through `sudo_capture`, §1.2 owning the breakdown — is
 plain `sudo` **on purpose**: each inherits the exported `SUDO_ASKPASS` and `SUDO_PROMPT`
 (3.2, 3.3), so if any of them ever has to ask, the prompt is graphical and labelled
@@ -527,8 +533,10 @@ proves nothing about the path users actually take. The regression test models su
 per-parent-pid cache and fails if a run needs more than one prompt — do not weaken it.
 **It sees a second prompt caused by a subshell, and not a second `sudo_init` inside one
 process**: the mock keys its timestamp to `$PPID`, so two calls from one engine share a
-record and log a single prompt. That shape is caught by the keep-alive scenario instead
-(`docs/specs/ONEUP-0044-one-authentication.md` §7.1).
+record and log a single prompt. That shape is caught by the keep-alive scenario instead —
+ONEUP-0044's **INV-9**, not its §7.1, which is about the mocks' `-k` handling. Re-measured
+2026-09-02: removing the `HELD_AUTH` guard fails exactly one check, *"a keep-alive survived
+a held run (INV-9)"*, and leaves the one-prompt scenario green.
 
 **9.3 — `sudoers` wildcards match spaces.** `env LC_ALL=C zypper *` grants everything after
 that literal prefix. This is intended here (§5.3) but is a general hazard: a wildcard in a
@@ -549,13 +557,14 @@ does, and a separate sentinel test asserts `--check` invokes `sudo` **zero** tim
 what makes the background timer and the tray check safe to run unattended.
 
 **9.6 — A test must not damage the machine it runs on.** Scenarios that invoke the engine —
-or any code extracted from it — outside `run_engine` must redirect `ONEUP_ZYPP_PID_FILE`,
-`ONEUP_RUN_STATE`, `ONEUP_STOP_FILE` and `ONEUP_GUARD_FILE` by hand. The first two have
-bitten for real; the fourth is why the count is four and not three — `guard_current` reads
-that path on every run reaching the download pass, so a scenario that leaves it alone
-passes or fails according to whether the developer happens to have granted passwordless.
-The incidents and the rule are `docs/standards/testing.md` §2, which is canonical and
-lists all four.
+or any code extracted from it — outside `run_engine` must redirect **every** `ONEUP_*` state
+path that helper sets. **Read the set out of `run_engine`, never out of a count in prose:**
+this rule was written as a fixed number twice and went stale both times, most recently when
+ONEUP-0044 added `hold.state` and `go.request`. Two of the paths have bitten for real;
+`ONEUP_GUARD_FILE` is among them because `guard_current` reads it on every run that reaches
+the download pass, so a scenario leaving it alone passes or fails according to whether the
+developer happens to have granted passwordless. The incidents and the current list are
+`docs/standards/testing.md` §2.1, which is canonical.
 
 ---
 
@@ -568,8 +577,8 @@ lists all four.
 - [ ] `SUDO_ASKPASS` and `SUDO_PROMPT` still **exported**, and any new *authenticating* call labelled with `-p` (§3).
 - [ ] No new code path that signals the engine during a transaction (§6.1).
 - [ ] Nothing captured from a privileged command echoed to the log unreviewed — no bare `echo "$CAPTURED"` of a `sudo_capture` variable (§7.3).
-- [ ] `--check` still authenticates zero times (§9.5).
-- [ ] Tests redirect the four state-file overrides (§9.6).
+- [ ] `--check` still invokes `sudo` zero times (§9.5).
+- [ ] Tests redirect every state-file override `run_engine` sets (§9.6).
 
 ---
 
@@ -580,6 +589,7 @@ lists all four.
 | §1 the GUI never runs as root | nothing automatic |
 | §2 one authentication per run | `tests/run-tests.sh` — *"a full run asks for the password exactly once"*, against a mock that models sudo's per-parent-pid credential cache |
 | §2 no `sudo` inside a subshell | the same scenario, because a subshell **is** a second prompt. The rule and its symptom are the same thing, which is what makes this the strongest gate in the set. It does **not** see a re-entrant `sudo_init` inside one process — the mock keys on `$PPID`, so that shape belongs to the keep-alive row |
+| §2.3 one runner object owns every privileged child (Python engine) | nothing automatic — and prompt counting cannot see it, because one Python process is one sudo parent |
 | §3 every prompt says who is asking | nothing automatic |
 | §4 validate at the boundary, by shape — the engine's alias guard | `tests/run-tests.sh` — an unsafe repo alias is refused and never reaches a privileged command |
 | §4.6 no session-critical service is ever restarted | `tests/gui-smoke.py` — a mixed list restarts the safe units and **no** critical one, and an all-critical list restarts nothing; `tests/run-tests.sh` asserts the engine's printed advice splits them the same way |
@@ -593,7 +603,7 @@ lists all four.
 | §5.5 revocation removes the guard too | `tests/run-tests.sh` — revoke deletes both files |
 | §5.6 "on" means passwordless works | `tests/run-tests.sh` — `--auth-status` across live-and-current, live-but-stale, and absent |
 | §5.7 the guard runs zypper and nothing else | `tests/run-tests.sh` — it refuses a non-zypper argv with exit 2, appends `--download-only`, TERMs its child on a stop request and reaps it. The stop scenario also runs over **both** wrappers, so the guard cannot silently drop the stop poll for the users who enabled passwordless |
-| §5 `--check` authenticates zero times | `tests/run-tests.sh` — *"`--check` performs NO privileged auth"*, backed by a mock that exits 99 if a transaction is attempted |
+| §9.5 `--check` invokes `sudo` zero times | `tests/run-tests.sh` — *"`--check` performs NO privileged auth"*, backed by a mock that exits 99 if a transaction is attempted, plus the sentinel that counts `sudo` invocations. **Invoking and authenticating are not the same test** — §5.6's `auth_current` probe (`sudo -k -n … --version`) is a `sudo` invocation that authenticates nothing |
 | §6 stopping is cooperative | `tests/run-tests.sh` |
 | §7.4 the diagnostics bundle carries no identifiers | `tests/gui-smoke.py` — the bundle has its hostname scrubbed |
 | §7.3 captured privileged output is not echoed to the log | nothing automatic — the §10 checklist is the only gate |
@@ -616,6 +626,7 @@ shows up as nothing in particular cannot be tested, however carefully it is word
 | 5 | 2026-07-26 | none | converged. |
 | 6 | 2026-09-02 | 3 lanes, cold; genre pinned `standard`; new run, trigger ONEUP-0185 — Q1 2 · Q2 5 · Q3 0; 7 verified, 1 dismissed, 7 fixed | **The gate was armed by the new unnumbered § The threat model** (commit `0bab233`, +35/-1); five of the seven findings landed on that text and two were pre-existing. **All three lanes independently found the same defect:** declaring a hostile local user out of scope removed the only actor §5.2 and §9.3 defend against, so an implementer adding a `Cmnd` could argue a wildcard is out of scope and emit the `timeout * zypper *` form §5.2 measured against a root shell before it shipped. §5 is now named as untouched by the exclusion. **The sharpest was a Q1 in the new text**: its justification — that an account wanting root would reach for the same `sudo` OneUp does — is false on this distro, because §3.3 records `targetpw`, under which an ordinary account cannot reach root by `sudo` at all. The user's decision stands; the reason it rested on was wrong and is re-based on §5 granting *this* account password-free root. Two more in the new text: §4 was said to govern all untrusted data where §4's own rule fires only where a value reaches a privileged command, and "the fixed temporary paths in the test harness" named the wrong file — they are `local-CI.sh`'s, and `testing.md` §2 forbids a test doing it. One gap: root was the only asset named while §7.3 and §7.4 protect credentials and identifiers, so a second asset is stated. **Two pre-existing, both found by two lanes:** §9.6 and §10 named three state-file overrides where `testing.md` §2 — which §9.6 itself calls canonical — lists four, and the missing `ONEUP_GUARD_FILE` makes a direct scenario read the developer's own passwordless grant; and §1.3 called G5 "what keeps the split honest" when `oneup-2.0.md`'s own loop 5 had already corrected that to half, the other half being the import rule. Collateral: `testing.md` said "all three overrides" under a heading reading "The four redirects" — corrected there, ledgered out of scope. Dismissed: the `58ea3bc` / 2026-07-26 verification stamp now predates four amendments, true but no conformer builds differently. Two lane open questions resolved clean — §1.2's 14+20 against §3.1's "other 20", and whether `main` carries the tray socket the model names (it does) |
 | 7 | 2026-09-02 | 3 lanes, cold; identical brief, packet rebuilt from disk — Q1 4 · Q2 1 · Q3 1; 6 verified, 2 dismissed, 6 fixed | **Two of the six landed on text loop 6 wrote, and four were pre-existing** — the loop found more than it broke. **My own fix was the worst of the two:** loop 6 replaced one wrong justification for the local-user exclusion with another, asserting that under `targetpw` an ordinary account "cannot reach root through `sudo` at all". Two lanes found it false and the third raised it — `targetpw` changes *which* password `sudo` demands, not whether root is reachable, §5's drop-in grants *this* account password-free root, and OneUp itself reaches root by `sudo` on every run. The exclusion now rests on the single-user decision alone. Loop 6 also restated `testing.md` §2.3 as forbidding a write outside `mktemp -d` while the rule reads "**or the redirected `HOME`**", and left that restatement contradicting its own sentence three paragraphs up; all three lanes found the collision, and the classification is now stated once — `local-CI.sh` is the gate runner, not a test. **All three lanes also found the oldest defect here:** §3.1's "The other 20 are plain `sudo`" reconciles with no reading of §1.2's 34 = 14 + 20, and the structural check pins 29, so a conformer re-deriving that pin from §3.1 would set it against 21 sites. Fixed by DELETING the figure rather than reconciling it — §1.2 declares it owns the breakdown, and loop 3 of this log fixed the same duplication once already. **Two lanes found a gate that cannot see what it claims:** §9.2 and its table row call the one-prompt scenario the strongest in the set, while the counting mocks key their timestamp to `$PPID`, so a second `sudo_init` inside one process shares the record and logs one prompt — measured on ONEUP-0044, where deleting the `HELD_AUTH` guard left that test green and only the keep-alive scenario caught it. Both now say so. **One lane found a Q1 the engine's own comment already contradicted:** §2.4 said an orphaned keep-alive "reparents to init", where `systemd --user` adopts a user session's orphans, so an orphan check against pid 1 can never fire — the engine says exactly this at its `kill -0` comment. And the checks table claimed §7 was gated by the hostname-scrub test, which covers §7.4 only; §7.3 now carries its own row reading "nothing automatic", the spelling that table uses elsewhere for an ungated rule. Dismissed as immaterial: the §1 row under-reports G5's gating of §1.3, and a table row is labelled §5 where the rule is §9.5 — neither changes a line anyone builds. Two lane open questions resolved clean — §3.1 does pass both `-A` and `-p` (`sudo -A -p "…" -v`), and §1.2 pre-empts its own count drift |
+| 8 | 2026-09-02 | 3 lanes, cold; identical brief, packet rebuilt from disk — Q1 4 · Q2 1 · Q3 0; 5 verified, 3 dismissed, 5 fixed | **Cap reached (3 for a standard); the run files its tail and ships. A calm cap** — 2 of the 5 landed on text this run wrote, 3 were original-document defects, and the share did not climb across the three loops. **The run's best moment was an experiment, not a lane.** Two lanes reasoned in opposite directions about whether the one-prompt scenario can see a re-entrant `sudo_init`: one from `CLAUDE.md`'s measured trap (it cannot), one from ONEUP-0044 §7.1's account of the mocks deleting their timestamp on `-k` (it can). Reading could not settle it, so it was run — removing the `HELD_AUTH` guard fails exactly one check, *"a keep-alive survived a held run (INV-9)"*, and leaves the one-prompt scenario green. The trap is right, that lane's finding is dismissed as refuted, and §9.2 now cites **INV-9** rather than §7.1, which was loop 7's own wrong-owner citation and which a third lane caught independently. **All three lanes found the override list stale again:** loop 6 corrected it from three to four, and ONEUP-0044 had already added `hold.state` and `go.request`, so a hold scenario written to the list would read the developer's real state directory. Fixed by removing the count entirely — the rule now says to read the set out of `run_engine`, because this sentence has gone stale twice as a number. **Two lanes found the document showing a form its own rule forbids:** `sudo_init` renders as `sudo -A -v` in two places while the sentence around it asserts the call carries `-p`, and §2.3 tells the Python engine to reproduce exactly that form. **One lane found a claim that inverts under the mechanism this document states:** §2.3 said the Python symptom is identical — extra password dialogs — but one Python process is one sudo parent, so scattered `subprocess.run(["sudo", …])` calls share a credential and raise none, meaning prompt counting cannot see the shape at all; the checks table gains a row saying so. And §9.5's *invokes `sudo` zero times* was restated twice as *authenticates zero times*, which §5.6's own `sudo -k -n` probe separates. Dismissed: the `58ea3bc` stamp now predates several amendments, and §1.2's 34 against the structural pin's 29 — §1.2 disclaims a standing figure. Collateral outside the subject: `testing.md` §2.1 was closed at four redirects where `run_engine` sets seven, so its heading, its list and its own checks row were corrected there, and `CLAUDE.md`'s trap had the same §7.1 misattribution |
 
 ---
 

@@ -178,8 +178,11 @@ measurement and the exact shape of the rule are in the document named beside eac
   What caught it was the keep-alive scenario, because the second `sudo_init` spawns a
   second `setsid` group and overwrites `SUDO_KEEPALIVE`, so `cleanup`'s group kill reaches
   only the later one and a keep-alive is orphaned. So a change that could re-enter
-  `sudo_init` is covered by INV-9, never by INV-1 —
-  `docs/specs/ONEUP-0044-one-authentication.md` §7.1.
+  `sudo_init` is covered by INV-9, never by INV-1. Re-measured 2026-09-02: removing the
+  `HELD_AUTH` guard fails exactly one check, *"a keep-alive survived a held run (INV-9)"*,
+  and leaves the one-prompt scenario green. The `$PPID` half is
+  `docs/specs/ONEUP-0044-one-authentication.md` §7.1; INV-9 itself is that spec's invariant
+  list, not §7.1.
 
 - **A shape check on a field of codes does not catch English — check membership instead.**
   A `^[a-z0-9-]+$` test looks like it forbids prose, and against a *space-separated* field it

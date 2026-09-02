@@ -58,22 +58,30 @@ skip-cleanly-for-an-absent-tool convention the engine uses for `flatpak` and `fw
 
 This is the rule with the most scar tissue behind it, so it is first.
 
-### 2.1 The four redirects
+### 2.1 The redirects
 
-`run_engine` in `tests/run-tests.sh` rewrites four paths before every engine
-invocation, each only if the scenario has not set it itself:
+`run_engine` in `tests/run-tests.sh` rewrites every state path the engine reads,
+before each invocation and only where the scenario has not set it itself:
 
 ```bash
 ONEUP_ZYPP_PID_FILE="${ONEUP_ZYPP_PID_FILE:-$mockdir/no-zypp.pid}"
 ONEUP_RUN_STATE="${ONEUP_RUN_STATE:-$mockdir/run.state}"
 ONEUP_STOP_FILE="${ONEUP_STOP_FILE:-$mockdir/stop.request}"
+ONEUP_HOLD_STATE="${ONEUP_HOLD_STATE:-$mockdir/hold.state}"
+ONEUP_GO_FILE="${ONEUP_GO_FILE:-$mockdir/go.request}"
 ONEUP_GUARD_FILE="${ONEUP_GUARD_FILE:-$mockdir/oneup-download-guard}"
+ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}"
 ```
 
-The fourth is ONEUP-0092's, and it is here for the same reason as the first: `guard_current`
-**reads** that path on every run that reaches the download pass, so without a default the
-suite's result would depend on whether the developer's own machine happens to have OneUp's
-passwordless setting granted.
+**The rule is every override, not a fixed count — read the set out of `run_engine`.**
+ONEUP-0044 added `hold.state` and `go.request` after this section was written, and the
+count in this prose stayed at four; a scenario copying that list would read and write the
+developer's real state directory, which is the exact damage §2 exists to prevent.
+
+`ONEUP_GUARD_FILE` is ONEUP-0092's, and it is here for the same reason as the first:
+`guard_current` **reads** that path on every run that reaches the download pass, so without
+a default the suite's result would depend on whether the developer's own machine happens to
+have OneUp's passwordless setting granted.
 
 Both defaults bit for real, which is why the rule is not theoretical:
 
@@ -84,8 +92,8 @@ Both defaults bit for real, which is why the rule is not theoretical:
   the suite during a real update **deleted that run's record**, and the window could no
   longer find the run it was following (ONEUP-0045).
 
-**A scenario that invokes the engine directly instead of through `run_engine` repeats all
-four overrides by hand.** There is no fallback that catches the omission — the test simply
+**A scenario that invokes the engine directly instead of through `run_engine` repeats every
+one of those overrides by hand.** There is no fallback that catches the omission — the test simply
 starts reading the machine's real state, and will pass or fail according to what the user
 happens to be doing.
 
@@ -384,7 +392,7 @@ with the layout direction forced right-to-left.
 
 | Rule | What catches a breach |
 | --- | --- |
-| §2.1 the four redirects | `run_engine` applies them itself, so a scenario that goes through it cannot forget. A scenario that invokes the engine directly must repeat them by hand, and **nothing catches that** |
+| §2.1 the redirects | `run_engine` applies them itself, so a scenario that goes through it cannot forget. A scenario that invokes the engine directly must repeat them by hand, and **nothing catches that** — nor does anything catch this list going stale, which it has twice |
 | §2.2 the GUI suite redirects `HOME` | the redirect is unconditional and module-level in `tests/gui-smoke.py`, so no individual test can forget it. **Nothing checks it still runs *before* `QApplication` is constructed** — and that ordering is the whole point, because `QSettings` resolves its path once and keeps it |
 | §2.3 no root | the mock `PATH`: a real `sudo` is not on it, so a scenario that reaches for one gets the mock or nothing |
 | §2.3 a test writes only inside its own temporary directory | **on `v2`, the ONEUP-0058 scenario** — it redirects `HOME` and asserts no log directory appears when `--log=` points elsewhere. **On `main`, nothing:** `update_system.sh` there builds `LOG_DIR` from `$HOME` and creates it before looking at `--log=`, and `tests/run-tests.sh` does not redirect `HOME`, so every scenario creates `~/Documents/update-logs` on the real machine (ONEUP-0058) |
