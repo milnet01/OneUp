@@ -215,10 +215,12 @@ a module that grows past what the steps below name is stage creep, not thoroughn
    is stage 2's whether or not §4.6's row names it: the `--auth-status` scenario writes a
    current guard with it, and its last check cannot be reached without one.
    → **verify:** at step 14, once `__main__.py` can answer a flag — `--emit-guard` from
-   the two engines, under the same mock `PATH`, is **byte-identical**. This is the one divergence G2 cannot see — the harness compares
-   marker streams and `--emit-guard` emits none — and a guard body differing by a byte makes
+   the two engines, under the same mock `PATH`, is **byte-identical**. A guard body differing by a byte makes
    every v1-granted guard read as stale to v2, standing every such user's toggle down
-   (`docs/standards/security.md` §5.7).
+   (`docs/standards/security.md` §5.7). This read *"the one divergence G2 cannot see"*
+   until stage 6, which was true of the marker-only harness §4.5 describes and is not of
+   the one that was built: `--emit-guard` is one of its scenarios and it compares whole
+   output.
 
 8. `__main__.py` — the argument loop. The same flags with the same spellings, `-h` sharing
    `--help`'s arm, and an unknown flag printing `Unknown option: <arg>` on stderr followed
@@ -1234,98 +1236,155 @@ exclusion as *"falls through into a full run"*, and several of that family never
 
 ## Stage 6 — the differential harness
 
-**Branch: `v2` only.** The harness drives the `oneup/engine/` package, which `main` does
-not have. Stages 4 and 5 both landed their plan text on `v2` alone and this section
-follows them. **Step 8's spec amendment does not**: `docs/standards/workflow.md` §9 binds
-documentation to `v2` for a marker change, or for one of the documents
-`tests/docs-check.py` reads — *"a standard, a reference, `CLAUDE.md` or `README.md`"*. A
-spec is neither, so it lands on `main` and merges. Steps 6 and 7 edit standards that must
-name files only `v2` has, so those two edits go to `v2`.
+**Branch: `main`, then merged into `v2` — and that is a change from stages 4 and 5.**
+`docs/standards/workflow.md` §9 binds documentation to `v2` in two cases only, a marker
+change and one of the four documents `tests/docs-check.py`'s §9 check reads, and it closes
+*"Documentation goes to `main` unless a rule binds it to code that cannot."* A plan is
+neither case: `docs/plans/` is not among the trees that check reads, so a plan may name a
+package file `main` does not have. Stages 4 and 5 landed their plan text on `v2` alone,
+which no rule licenses, so the stage-6 commit carries the whole file to `main` and closes
+that divergence in passing. Step 8's spec amendment goes the same way for the same reason.
+**Steps 6 and 7 do not**: they edit standards that must name files only `v2` has, which is
+§9's second binding exactly.
 
-**What this stage is, measured before any step was written.** Both engines were run
-against five mock sets — `--check`, `--size=system`, a clean full run, a run whose
-`zypper dup` fails, and a run whose refresh reports an invalid repository. **Marker
-streams and exit statuses were identical in all five.** With each engine's own mock
-directory path normalised, **whole output** was identical too, bar one divergence:
-`update_system.sh` prints its banner *after* the PackageKit stop and the pre-update
-snapshot, and the Python driver prints it *before* them.
+**What this stage is, measured before any step was written.** Both engines were run against
+five mock sets — `--check`, `--size=system`, a clean full run, a run whose `zypper dup`
+fails, and a run whose refresh reports an invalid repository. **Marker streams and exit
+statuses were identical in all five.** With each engine's own mock directory path
+normalised, **whole output** was identical too, bar the banner: `update_system.sh` prints
+it *after* the PackageKit stop and the pre-update snapshot, and the Python driver prints it
+*before* them. Two flag-only modes were measured after the plan's first draft, and they are
+why step 4 is worded as a rule rather than as one repair: `--emit-guard` is byte-identical
+in both engines, and `--help` differs twice.
 
 So this is not a divergence hunt. It is four things: mechanise the whole-output comparison
-that stages 3, 4 and 5 each performed by hand; settle that one divergence; make the
+that stages 3, 4 and 5 each performed by hand; settle every divergence it reports; make the
 comparison a gate; and write down what it cannot see.
 
 **Two departures from §4.5, both measured, both recorded by step 8.**
 
 - **The subject is whole output, not the marker lines alone.** §4.5 says capture only
-  `@@MARKER@@` lines. A marker-only diff misses the banner divergence completely — that is
-  console text, and console text is what a terminal user and the log file get. Whole-output
-  parity is already this project's bar: stages 3, 4 and 5 each required it by hand for a
-  mock set.
-- **Three of §4.5's four normalisations are not built.** It names TIMING seconds, log
-  paths, pids and snapshot ids. `docs/reference/marker-protocol.md` §3's table has no pid
-  field and no path field; the snapshot id comes from the suite's `snapper` mock and the
-  free-space figure from its `df` mock, so both are fixed, and equal, for both engines.
-  Normalising a field that cannot vary does not stabilise a gate, it blinds it. Only
-  `@@TIMING@@`'s seconds and the mock directory path are normalised.
+  `@@MARKER@@` lines. A marker-only diff misses the banner completely — that is console
+  text, and console text is what a terminal user and the log file get — and it cannot see a
+  mode that emits no marker at all, which `--emit-guard` and `--help` both are.
+  Whole-output parity is already this project's bar: stages 3, 4 and 5 each required it by
+  hand for a mock set.
+- **Two of §4.5's four normalisations are not built.** It names TIMING seconds, log paths,
+  pids and snapshot ids. Two ARE built — TIMING's seconds, and the mock directory path,
+  which subsumes the log-path case because `run_engine` writes the log inside the mock
+  directory as `--log="$mockdir/run.log"`. The two dropped are pids and snapshot ids:
+  `docs/reference/marker-protocol.md` §3's table carries no pid field, the snapshot id
+  comes from the suite's `snapper` mock and the free-space figure from its `df` mock, so
+  each is fixed, and equal, for both engines. Normalising a field that cannot vary does not
+  stabilise a gate, it blinds it.
 
 ### Steps
 
-1. **One definition of the mock sandbox, sourced by both suites.** Move `ENGINE`, the
-   `ONEUP_ENGINE_CMD` decode, `setup_common`, `setup_cached_sudo` and `run_engine` out of
-   `tests/run-tests.sh` verbatim into a new sourceable file, and have `run-tests.sh` source
-   it in their place. Resolve the repository root from `${BASH_SOURCE[0]}` rather than `$0`,
-   which in a sourced file names the *sourcing* script — measured: sourcing that block from
-   elsewhere pointed `ENGINE` at a path that does not exist, and the run failed with exit
+1. **`tests/mock-env.sh` — one definition of the mock sandbox, sourced by both suites.**
+   Move `ENGINE`, the `ONEUP_ENGINE_CMD` decode, `setup_common`, `setup_cached_sudo` and
+   `run_engine` out of `tests/run-tests.sh` verbatim, and have `run-tests.sh` source it in
+   their place. It is a shell script by `docs/standards/files-and-naming.md` §2.1 and takes
+   that row's `kebab-case.sh` shape rather than the test-file row's, because it runs no
+   scenario and asserts nothing. Resolve the repository root from `${BASH_SOURCE[0]}` rather
+   than `$0`, which in a sourced file names the *sourcing* script — measured: sourcing that
+   block from elsewhere pointed `ENGINE` at a path that does not exist, and the run exited
    127 rather than producing a diff. **A copy is the thing to avoid here**: the harness's
    whole claim is *identical mocks*, and two copies of `setup_common` drift silently while
    both suites stay green.
    → **verify:** the engine suite reports the same pass and fail counts as before the move,
    both with `ONEUP_ENGINE_CMD` unset and with it set to `python3 -m oneup.engine`.
 
-2. **The harness itself.** Per scenario: build **two** mock directories from the same
-   builder — never one reused, because each run writes `run.state`, a log and the `du`
-   counter into it — run `update_system.sh` in the first and `python3 -m oneup.engine` in
-   the second, capture combined output and exit status, normalise, and `diff`. A scenario is
-   a name plus a mock-set builder, so the file reads as a table rather than as prose. Report
-   per scenario and exit non-zero on any divergence.
+2. **`tests/differential-test.sh` — the harness.** A scenario is three things, not two: a
+   name, a mock-set builder, and **the engine argv**. The five measured cases differ by
+   flags as much as by mocks — `run_engine` takes them at the call as `"$@"` — so a
+   two-field table cannot express `--check` and a full run against one mock set.
+
+   Per scenario: build **two** mock directories from the same builder, never one reused,
+   because each run writes `run.state` and its log into it; run `update_system.sh` in the
+   first and `python3 -m oneup.engine` in the second; capture combined output and exit
+   status; normalise; and `diff`. Report per scenario and exit non-zero on any divergence.
+
+   **The harness sets each side's argv itself and ignores any inherited
+   `ONEUP_ENGINE_CMD`.** `run_engine` expands one `ENGINE_CMD` built from the ambient
+   environment at source time, and step 1's own verify has a developer exporting that
+   variable — so a harness that just calls `run_engine` twice runs v2 against v2 and G2
+   goes green having compared nothing. `tests/run-tests.sh` already states the failure in
+   its own words: *"Every reader must agree on that encoding, or gate G2 diffs v1 against
+   v1 and goes green."*
    → **verify:** run it before step 4 lands and watch it report the banner divergence as a
-   failure, naming the scenario and the diff. A harness nobody has seen fail is a harness
-   nobody knows works (`docs/standards/workflow.md` §6.1 step 4).
+   failure, naming the scenario and the diff — a harness nobody has seen fail is a harness
+   nobody knows works (`docs/standards/workflow.md` §6.1 step 4). Then run it again with
+   `ONEUP_ENGINE_CMD='python3 -m oneup.engine'` exported and confirm it still reports that
+   divergence rather than going green.
 
-3. **The normalisation, and nothing beyond it.** Replace `@@TIMING@@`'s seconds field with a
-   fixed token, and each engine's own mock directory path with a fixed token. Nothing else,
-   for the reason given above.
+3. **The normalisation, and nothing beyond it.** Replace `@@TIMING@@`'s seconds field with
+   a fixed token, and each engine's own mock directory path with a fixed token. Nothing
+   else, for the reason given above. **Add nothing on suspicion**: the two mock directories
+   differ, so anything genuinely varying between the sides — a pid, a temporary path —
+   makes the harness fail and names itself. Measured: no console line in the five mock sets
+   carried one.
    → **verify:** drive the normaliser directly — two streams differing only in a TIMING
-   seconds field compare equal, and two differing by one character of any other marker
-   payload compare unequal.
+   seconds field compare equal, and two differing by one character of any other line
+   compare unequal.
 
-4. **The banner.** Move the Python driver's banner to where `update_system.sh` prints it.
-   **Match `main` rather than keep the improvement**: v2's order was not chosen, it is
-   where the banner landed when the driver was rewritten, and §4.5 makes a divergence either
-   a bug or *"a deliberate improvement that gets written down here and given its own test"*.
-   An accidental one is neither. If printing the banner first is worth having it is a
-   roadmap item with its own reasoning and its own test, not a side effect of the rewrite.
+4. **Settle every divergence the harness reports.** §4.5 makes each one either a v2 bug or
+   *"a deliberate improvement that gets written down here and given its own test"*, so the
+   harness carries an explicit accepted-divergence list, each entry with its reason, and
+   reports anything not on it. Three are known now:
+
+   - **The banner** — fix v2. Its order was not chosen, it is where the banner landed when
+     the driver was rewritten, and an accidental improvement is neither of §4.5's two
+     kinds. If printing it first is worth having, that is a roadmap item with its own
+     reasoning and its own test, not a side effect of the rewrite.
+   - **`--help`'s `Usage:` line** — accept. The program's name genuinely changed, so this is
+     the list's first and, today, only entry.
+   - **`--help`'s repository-skip sentence** — fix v2. `update_system.sh` interpolates
+     `MAX_SKIP_REPOS` into the text and the package hard-codes the sentence without it, so
+     v2's help withholds a number its own behaviour still enforces (`steps.py` sets the
+     same value and tests the same way). A help text that has quietly lost a fact is a v2
+     defect, not an improvement.
+
    → **verify:** the harness's diff is empty for every scenario, the clean full run and both
-   failure paths included.
+   failure paths included, with exactly one entry on the accepted list.
 
 5. **Coverage, reported by the harness rather than claimed here.** The harness reads the
    marker names from `docs/reference/marker-protocol.md` §3's table, subtracts the ones its
-   scenarios actually produced, and prints the remainder. Add scenarios until that list
-   holds only markers no mock sandbox can reach, each carrying its reason in the harness. A
-   list that prints itself cannot go stale the way a list written here would.
+   scenarios produced, and prints the remainder. Add scenarios until that list holds only
+   markers no mock sandbox can reach, each carrying its reason in the harness.
+
+   **Marker coverage is not scenario coverage, and this is the trap.** A mode emitting no
+   marker can never appear on that list however thoroughly it is missed, so `--emit-guard`
+   and `--help` are named scenarios in step 2's set rather than left to it. Both are cheap
+   and both are reachable now that the subject is whole output, which is why stage 2
+   step 7 no longer claims the guard body is beyond G2.
    → **verify:** deleting a scenario puts its markers back on the uncovered list; the
-   remainder is empty, or every entry carries a reason.
+   remainder is empty, or every entry carries a reason; and the guard-body and help
+   scenarios exist independently of it.
 
 6. **Wire it as a gate**, by `docs/standards/workflow.md` §6.1: a `step` in `local-CI.sh`
    using its `ok` / `bad` / `skip` helpers, skipping when either engine's interpreter or
-   `update_system.sh` is missing; a row in §6's gate table in the position the script runs
-   it; and an entry in `.github/workflows/release.yml`, which §6.1 step 3 requires of a
-   *test* gate.
-   → **verify:** `./local-CI.sh` green on `v2`; the gate seen red by altering a marker
-   payload and restoring it; and the runtime it adds measured and put in the commit body —
-   a full run costs about 2.2 s per engine on this machine against about 0.1 s for
-   `--check`, so the scenario mix is what decides whether §6's *"short enough to run every
-   time"* still holds.
+   `update_system.sh` is missing, and a row in §6's gate table in the position the script
+   runs it.
+
+   **The gate carries a time budget, because step 5 pushes the other way.** A full run costs
+   about 2.2 s per engine against about 0.1 s for a flag-only mode, and §6 records
+   `./local-CI.sh` at 34–38 s and calls it *"short enough to run every time"*. So: the
+   default run keeps the whole suite under a minute, and if the mix needed for coverage
+   exceeds that, the full set moves behind `--full` and `local-CI.sh` keeps a named subset —
+   never markers declared unreachable to stay fast. Re-measure `./local-CI.sh` and update
+   §6's stated range in the same edit.
+
+   **No `.github/workflows/release.yml` entry, and §6.1 step 3 is deviated from
+   deliberately.** That rule exists because *"a test gate that runs only locally catches its
+   first regression after the tag is pushed"*, and here there is no tag before the harness
+   stops being meaningful: the workflow runs on a `v*` tag, the next one is 2.0.0, and spec
+   §4.6 says ONEUP-0072 lands in between and *"changes the marker payloads and the
+   assertions that read them"*. v1 does not follow it, so the entry's first execution would
+   be a run the spec already expects not to match. **The harness is transitional and its
+   retirement has an owner**: ONEUP-0072 removes it, or re-bases it, when it changes those
+   payloads. File the deviation so it is visible rather than inferred.
+   → **verify:** `./local-CI.sh` green on `v2` and under the budget, with the measured time
+   in the commit body; the gate seen red by altering a marker payload and restoring it.
 
 7. **`docs/standards/files-and-naming.md` §1's `tests/` row** names every file in that
    directory, and two are being added. §6 of that standard obliges nothing further: neither
@@ -1333,17 +1392,18 @@ comparison a gate; and write down what it cannot see.
    → **verify:** the row names both new files, and `tests/docs-check.py` is green.
 
 8. **The spec amendment, on `main`.** Record in §4.5 what was built: whole output rather
-   than marker lines alone, one normalisation rather than four, and the banner divergence
-   with its resolution. An amendment recording what was actually built does not re-arm the
-   gate (global `CLAUDE.md` rule 14).
+   than marker lines alone, two normalisations rather than four with the log-path case
+   subsumed by the mock-directory token, and the accepted-divergence list with the entry it
+   holds. An amendment recording what was actually built does not re-arm the gate (global
+   `CLAUDE.md` rule 14).
    → **verify:** §4.5 read back describes the harness that exists; `tests/docs-check.py`
    green on `main`; merged into `v2`.
 
 ### What G2 cannot see — the hand-check list stage 8 owes G6
 
-§4.5 requires this stage to end by writing it. It lives here because the spec and the
-design doc are both gated documents, and a list of hand-checks for a later stage is
-direction for work still to come, which re-arms their gates.
+§4.5 requires this stage to end by writing it. It lives here because the spec and the design
+doc are both gated documents, and a list of hand-checks for a later stage is direction for
+work still to come, which re-arms their gates.
 
 Everything below is invisible to the harness because the mock sandbox is what supplies it:
 
@@ -1361,14 +1421,18 @@ Everything below is invisible to the harness because the mock sandbox is what su
   the log is a mirror of it and is not read back.
 - **Everything the window does** — G3 and G5 cover that, at stage 7.
 
+The guard body is **not** on this list: `--emit-guard` is a step-2 scenario and the harness
+compares it in full.
+
 ### Not stage 6's
 
-**`update_system.sh` is not retired here** and the window is not repointed: §4.6 gives
-those to stages 9 and 7, and the harness needs both engines present for as long as it runs.
+**`update_system.sh` is not retired here** and the window is not repointed: §4.6 gives those
+to stages 9 and 7, and the harness needs both engines present for as long as it runs.
 
-**The `Package structure (oneup/)` gate's missing §6 row is ONEUP-0133's**, not this
-stage's. Step 6 adds the row for the gate it introduces and no other; fixing a neighbouring
-omission in the same table would be an orthogonal edit.
+**The `Package structure (oneup/)` gate's missing §6 row is ONEUP-0133's**, and §6's false
+claim about what `release.yml` runs is ONEUP-0193's. Step 6 adds the row for the gate it
+introduces and no other; repairing either neighbour in that commit is the orthogonal edit
+`docs/standards/coding.md` §1.7 forbids.
 
 **ONEUP-0134 and ONEUP-0135 are still run past**, as at stage 5 and for the same reasons.
 
@@ -1456,18 +1520,22 @@ that one. **G4 is met with G1**, the one-prompt scenario being an
 engine-suite scenario that needs no window. `main`'s behaviour is unchanged.
 
 **Stage 6 is done** when the harness reports every scenario identical for both engines —
-whole output after normalisation, and exit status; when it has been seen to fail twice, once
-on the banner divergence before step 4 and once on a deliberately altered marker payload;
-when its uncovered-marker list is empty or every entry names why no mock sandbox reaches
-that marker; when `tests/run-tests.sh` and the harness share one `setup_common` rather than
-two, and the engine suite's counts are unchanged by that move; when the gate is in
-`local-CI.sh`, in `docs/standards/workflow.md` §6's table and in
-`.github/workflows/release.yml`; when the hand-check list above is written; when step 8's
-amendment has landed on `main` and merged; and when `./local-CI.sh` is green on `v2` with
-`ONEUP_ENGINE_CMD` unset. **G2 is met here.** **The banner fix is in this list and not in
-the harness's own diff for a reason** — after step 4 the diff is empty, so nothing but step
-2's before-and-after failure shows the harness could ever have caught it. `main`'s
-behaviour is unchanged.
+whole output after normalisation, and exit status — with the accepted-divergence list
+holding only `--help`'s `Usage:` line; when it has been seen to fail twice, once on the
+banner before step 4 and once on a deliberately altered marker payload, and seen NOT to go
+green with `ONEUP_ENGINE_CMD` exported; when `--emit-guard` and `--help` are scenarios in
+their own right; when its uncovered-marker list is empty or every entry names why no mock
+sandbox reaches that marker; when `tests/run-tests.sh` and the harness share one
+`setup_common` rather than two, and the engine suite's counts are unchanged by that move;
+when the gate is in `local-CI.sh` and in `docs/standards/workflow.md` §6's table, inside
+the time budget, with §6's measured range re-measured in the same edit and the `release.yml`
+deviation filed; when `files-and-naming.md` §1's `tests/` row names both new files; when the
+hand-check list above is written; when step 8's amendment has landed on `main` and merged;
+and when `./local-CI.sh` is green on `v2` with `ONEUP_ENGINE_CMD` unset. **G2 is met here.**
+**Several clauses are in this list because nothing else holds them** — no gate can fail on a
+scenario nobody wrote, on a `tests/` row nobody updated, or on a budget nobody measured; and
+after step 4 the harness's diff is empty, so only step 2's before-and-after failure shows it
+could ever have caught the banner. `main`'s behaviour is unchanged.
 
 **The item is done** at stage 9, when G1–G6 are met. `docs/design/oneup-2.0.md`
 §7 owns the gate; spec §4.6 says which stage earns each of them and that stage 9
@@ -1487,3 +1555,4 @@ is the commit they are measured against.
 | 8 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 1 · Q2 2 · Q3 2 · Q4 4 — 9 verified, 0 dismissed, all 9 fixed. Cap reached (2 for a plan); the run files its tail and exits | **A violent cap: seven of the nine landed on text loop 7 itself wrote**, and four of those on the one step that loop added. Loop 7 closed the *"stage 4 edits no document"* hole with a step 11 whose verify then carried two clauses that cannot pass on a correct tree, and **all three lanes found at least one of them**. `release.yml` was to name *"every Python suite `local-CI.sh` names"* — but `workflow.md` §6 says every gate bar the three test suites has never run in GitHub CI, and §10 calls the non-test extras staying local deliberate, so a builder satisfying that clause adds `tests/docs-check.py` to CI and breaches both. And the §6 table was to be read against `local-CI.sh` *"gate for gate and in order"*, where the script runs a `Package structure (oneup/)` gate the table has no row for — a pre-existing gap, filed as **ONEUP-0133** rather than repaired from inside a build stage. Both clauses are now scoped to the new row and the new suite, with the two prohibitions stated. **All three lanes also found loop 7's `lr` carve-out resting on a false ground**: it exempted `enabled_repo_aliases` from step 5's no-new-crossing rule because *"that rule is about a function §4.2 places whole"*, and §4.2 places `enabled_repo_aliases` whole too — one criterion, two identically-situated functions, opposite answers, so `parsers-test.py` ships with an `lr` table or without one depending on who builds it. The real ground is that §4.2's `parsers.py` ROW names `lr` output while the split table omits it; the plan now calls this a seventh crossing outright and says §4.2's table is what owes the row. **The best draft finding was one no loop had reached**: `refresh_repos`' privileged call must STREAM. `proc.run` pipes stdout and discards stderr, where the Bash `sudo timeout … refresh` writes straight to the run's stdout and log — so built on the capturing form the refresh goes silent, and no stage-4 scenario reaches it to say so. Its twin: the download-size wording is **two** parsers, not one, and measured rather than reasoned before the fix landed — `Overall download size: 1.3 TiB.` parses for `run_size`'s `sed` and not for `progress_filter`'s regex, `Package download size:371.4MiB` for the second and not the first; one function serving both changes what `@@SIZE@@` carries, and step 2 writes the table before step 8's caller exists. Also fixed: `make_cdn_reposd`'s assertion said *every* `baseurl=` is rewritten where the `sed` rewrites only `download.opensuse.org`, so a Packman fixture fails a correct implementation and the builder widens it host-blind — which is the ONEUP-0087 cache-discard trap the same step warns about; the done list opened *"every `--size` scenario in the suite"* and closed by excluding the `--hold` ones, which are all invoked as `--size=system --hold`; `release_zypper_lock` was filed under checks no scenario can reach when the suite's `systemctl` mock covers its inactive branch and only the active one needs staging; `repo_scoped_failure`'s pattern was quoted nowhere while step 3 said it was checked against a quoted pattern; and step 11 called `release.yml` a documentation edit routed by §9's second binding, which names documents only. One out-of-scope finding filed rather than fixed: spec §4.6's stage-4 row gives *"falls through into a full run"* as the reason the `--hold` scenario cannot pass, and several of that family never reach a run — **ONEUP-0134**, since a spec edit re-arms the spec's own gate. Four lane open questions settled by running rather than reading: v1 prints no log-path line on stdout, so step 9's whole-output comparison is reachable; the `--size` path takes no shutdown inhibitor (`-z "$SIZE_STEP"` guards it), so *Not stage 4's* owes no fourth item; the refresh scenario exists under the wording step 3 quotes and ships a real `lr` fixture; and `local-CI.sh`'s Documentation gate is `tests/docs-check.py`. **A violent cap ends the review, not the shipping** — this stage's steps land, and the plan routes to implementation, which for a plan is the better third reviewer. Size is not the signal here: the stage-4 section is comparable to stage 3's, and a plan's cap is set where implementation takes over. |
 | 9 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 5 · Q2 2 · Q3 5 · Q4 1 — 13 verified, 0 dismissed, all 13 fixed | Loop 1 of a new run, on stage 5's newly appended steps; stages 1-4 were not re-opened. **All three lanes found the same defect, and it is the run's most consequential**: step 2 treated the shared privileged definition as the *budget* where ONEUP-0092 §4.2's unit is the whole **argv**. `repos.py` resolves its own `_TIMEOUT = shutil.which("timeout") or "timeout"` and composes the refresh call from it while `auth_cmnds` composes `timeout <budget> zypper *` separately — so unifying the number leaves the path, the word order and the bare-name fallback free to drift from the granted `Cmnd`, and step 11's re-pointed check would have counted a scalar and passed over exactly the ONEUP-0092 failure it exists to catch. Measured before the fix landed: `visudo -cf` rejects `Cmnd_Alias T = timeout 120 zypper *` with a caret under the bare name and accepts the same line with `/usr/bin/timeout`. **Two lanes each found three more.** Step 1's verify asserted `emit_progress` returns True for `"( 1/77)"`, which a correct implementation refuses — the Bash strips the parentheses before calling, so `${2// /}` sees `(1/77)` and no match; a builder satisfying that check widens the regex, and `"( 1/77"` then matches too, destroying the emitted/skipped distinction the ONEUP-0046 canary is built on. Step 3 never picked up `ONEUP_KEEPALIVE_SECONDS`, which stage 2 introduced in `v2`'s Bash and deferred here **by name**, so the Python keep-alive would have shipped a hard-coded 50 s sleep. And step 12 asserted *"This is a spec edit and it re-arms the spec's own gate"* and then instructed not to gate — one builder dispatches three lanes, another commits a note. **Four of the thirteen came from resolving a lane's open question rather than from a finding**, and one of those is a live divergence rather than a documentation defect: `python3 -m oneup.engine --check --steps=sytem` prints `@@CHECK@@|TOTAL|0` and exits 0 today, where the Bash prints *"No valid update steps selected"* and exits 2 — the `TOTAL == 0` rejection sits **above** the `--check` dispatch in v1 and step 6 had placed it inside the run driver. The other three: the re-expressed call-site count must catch every argv whose first word is `sudo`, not `privilege.sudo` call sites, because `sudo_init` validates through a raw `proc.run(["sudo", …, "-v"])` the Bash check counts and the new one would not; the hold's Cancel, ceiling and departed-window arms each emit `@@DONE@@|ok` and exit 0, which step 10 left unstated after stage 4 called an unaccounted stream the thing to avoid; and 141 is in §4.1.2's frozen table, so declining to reproduce it needed to be a recorded decision rather than *"no Python twin worth copying"*. **The best single-lane finding was the transaction log**: step 7 said the filter *appends* to it, where the download pass truncates (`tee "$SYS_LOG"`) and only the commit pass appends — and `SYS_LOG_FIRST=$(mktemp)` exists *because* the retry's tee truncates, so an always-append filter leaves the first attempt's 404 text in the log the CDN retry re-reads and the ONEUP-0094 blocks stay red. Also fixed: the Bash MERGES stderr into the mirrored stdout (`2>&1`), which step 4 did not say and no parity check can see, since `run_engine` re-merges at the call site; INV-7's replacement is staged through the **hold**, not a run, so it turns at step 10 and does not belong in the by-hand list; and step 12's `grep -rn 'stage 5'` cannot match the stale wording it names (*"follow at their own stages"*), so it would have passed vacuously. **Two claims the FIX pass added were refuted by running them**, which is 4a step 3 working: *"the two scenarios below set it to 1"* — only the SIGKILL one does — and *"every `QProcess` in `oneup/gui/` sets `MergedChannels`"* — the repository editor's does not, and reads no output. One lane open question settled clean: the done list names four run modes for the log mirror where step 4 names five, and both instruct the same build. **Budget:** all three lanes reported ~120k input against a stated ~60k; the subject is 1236 lines, past the ~800-line range that figure is derived for, so it is outside the figure's range rather than over it. |
 | 10 | 2026-08-25 | 3 lanes, cold; genre pinned plan; Q1 3 · Q2 1 · Q3 3 · Q4 0 — 7 verified, 1 dismissed, all 7 fixed. Cap reached (2 for a plan); the run files its tail and exits | Three of the seven landed on text loop 9 itself wrote — a cap between calm and oscillating, and the document still held four defects the cap never reached. **All three lanes found the same defect, and it is loop 9's own over-correction.** Loop 9 replaced *"a count of the `privilege.sudo` call sites"* with *"every argv whose first word is `sudo`"*, and that is the same error mirrored: `privilege.sudo` prefixes `sudo` ITSELF (`proc.run(["sudo", *flags, *argv])`), so its callers pass `["zypper", …]` and a package-wide count of `sudo`-headed argvs finds the wrapper line plus two raw sites and **never moves when a new privileged call lands** — rebuilding, in the fix, the exact ONEUP-0092 blind spot the check exists to close. Measured: two `["sudo", …]` literals in the package against seven `privilege.sudo(` call sites. The Bash check is a union (`sudo|sudo_capture`) and the re-expression now is too, with the missing case added to the broken-tree verify. **Two lanes found the branch routing**, which was in the draft rather than in a fix: the section said step 12's spec amendment goes to `v2` for `workflow.md` §9's second binding, and that binding is scoped to *"a standard, a reference, `CLAUDE.md` or `README.md`"*, its check reading those four locations only. A spec is in none, so §9's default routes it to `main` and a merge — and `main` carries this spec, whose §4.4 stage 1 step 1 spent a whole step making byte-identical across the branches. **The sharpest single-lane finding was a fourth hold arm the fix had flattened to three**: loop 9 enumerated Cancel, the ceiling and a departed window as the non-go-ahead exits, and `hold_for_go_ahead` ends on `adopt_go_ahead "$steps"`, so a go-ahead the membership check REFUSES returns the same way. A builder reading *"a go-ahead falls through into the run"* falls through on a refused one, where `STEPS` and `RUN_KEYS` were never re-derived and start-up's selection is all five steps — a tampered `go.request` becoming a full system upgrade, which is the defect `adopt_go_ahead` exists to prevent. **A second lane found the claim that the two structural checks measure *"a Bash engine the suite no longer runs"*** — false, and this stage's own done-list contradicts it by requiring `local-CI.sh` green with `ONEUP_ENGINE_CMD` unset, which IS the Bash engine; *Not stage 5's* keeps it alive to stage 9. The rows are now kept and added to rather than re-pointed. Also fixed: loop 9's *"resolve once"* never said what the shared constant holds when resolution FAILS, and its two readers want opposite answers — `refresh_repos` something runnable, `auth_cmnds` a refusal, since a bare `timeout` makes `visudo -cf` reject the whole file — so it is now the resolved absolute path or `None`; and `cleanup`'s three-way split omitted the ordering the Bash states outright, that the `sudo -n` repo re-enable must run BEFORE the keep-alive group is killed, because it needs the credential the keep-alive is keeping warm. **One out-of-scope contradiction fixed rather than filed, because it is a false sentence in this document's own done-list**: stage 4's by-hand list named `release_zypper_lock`'s ACTIVE branch where stage 5's names the INACTIVE one. The mock settles it — `[[ "$1 $2" == "is-active packagekit" ]] && exit 3` never matches the engine's `is-active --quiet packagekit`, so it always answers ACTIVE and the INACTIVE branch is the unreachable one (ONEUP-0135). Loop 8's row recorded the opposite; that row is left as written and the correction lives here. Dismissed as true-but-immaterial: step 3 says *"Step 4 owns what replaces it"* of exit 141 and step 4 names no exit status directly — true, and step 4's *"a clean run reports 120"* sentence leaves a builder building the same thing. Three lane open questions settled by running rather than reading: the Bash `--size --hold` dispatch does emit `marker DONE "ok"` and `exit 0` on its non-go-ahead arms (a packet window cut the line, and all three loops of this run asked about it); the cached-sudo mock strips `-n` and execs, so it succeeds either way and cannot see the cleanup ordering; and the scrubbed copy is line-identical to the original above the withheld log. **A cap between calm and oscillating ends the review, not the shipping** — the steps land and the plan routes to implementation, which for a plan is the better third reviewer. The tail is empty: every verified finding was fixed. |
+| 11 | 2026-09-02 | 3 lanes, cold; genre pinned plan; Q1 0 · Q2 4 · Q3 4 · Q4 1 — 9 verified, 1 dismissed, all 9 fixed | Loop 1 of a new run, on stage 6's steps. **Not one Q1** — the measured paragraph was accurate in every lane's check, and every defect was two passages disagreeing or a rule nobody could execute as written. **All three lanes found the normalisation count**, and two of them found the reason it was wrong rather than just the arithmetic: the mock-directory token IS §4.5's log-path normalisation, because `run_engine` writes the log inside the mock directory — so two of four are built, not one, and step 8 would have written a false amendment into the spec. **All three found `--emit-guard`**: step 5's coverage instrument reads marker names, and a mode emitting no marker can never appear on its uncovered list however thoroughly it is missed — so the guard body, whose divergence stands every passwordless user's toggle down, was covered by neither the harness nor the hand-check list. Both flag-only modes are now scenarios, and stage 2 step 7's *"the one divergence G2 cannot see"* is corrected as collateral. **Two lanes found the branch routing**: the paragraph routed the spec by §9's rule and itself by precedent, and §9's default sends a plan to `main` — so stages 4 and 5 put their plan text on `v2` against the rule, and this stage carries the file to `main` and closes it. **The sharpest single finding came from one lane**: `run_engine` expands one `ENGINE_CMD` built from the ambient environment, and step 1's own verify has a developer exporting it — so a harness that simply called it twice would diff v2 against v2 and go green, which is the failure `tests/run-tests.sh` names in its own comment. **Two lanes found the budget hole**: step 5 said add scenarios until coverage is complete, and step 6's verify asked only that the runtime be measured and recorded, which no number can fail. **One lane found the `release.yml` entry contradicts spec §4.6** — the workflow runs on a `v*` tag, the next is 2.0.0, and ONEUP-0072 lands in between and changes the marker payloads, so the entry's first CI run would be one the spec expects not to match; §6.1 step 3 is now deviated from deliberately, with ONEUP-0072 named as the harness's retirement owner. **Two findings were the orchestrator's, from executing a lane's claim rather than reading it**: `--emit-guard` is byte-identical in both engines, and `--help` is not — it differs in its `Usage:` program name (accepted) and in a repository-skip sentence v2 dropped while keeping the behaviour (a v2 defect). That turned step 4 from one repair into a rule plus an accepted-divergence list. Dismissed as immaterial: *"each run writes `run.state`, a log and the `du` counter into it"* over-generalises a per-scenario mock, and two mock directories are needed either way. |
