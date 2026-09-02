@@ -478,10 +478,37 @@ This is what makes the rewrite auditable rather than trusted, and it is the reas
 protocol is frozen. **Any divergence is either a v2 bug or a deliberate improvement that
 gets written down here and given its own test.** Divergence is never waved through.
 
+**Built at stage 6, and wider than the paragraph above describes. Three amendments,
+recording what exists rather than changing direction.**
+
+**The subject is whole output, not `@@MARKER@@` lines alone.** A marker-only diff cannot see
+console text — which is what a terminal user and the log file get — and cannot see a mode
+emitting no marker at all. Both mattered: the divergence the harness found was the banner's
+position, console text; and `--emit-guard`, whose body differing by a byte stands every
+passwordless user's toggle down (`docs/standards/security.md` §5.7), emits none.
+
+**Two quantities are normalised, not the four named above.** The elapsed seconds are
+normalised in both renderings — the `@@TIMING@@` marker and the summary's own column — and
+so is the mock directory path, which subsumes the log-path case because the suite writes the
+log inside it. Pids and snapshot ids are not: `docs/reference/marker-protocol.md` §3's table
+carries no pid field, and the snapshot id and free-space figure come from the suite's own
+mocks, so each is fixed and equal for the two sides. Normalising a field that cannot vary
+blinds the gate rather than stabilising it.
+
+**An accepted divergence carries a test, not a reason.** *"Given its own test"* is met by
+pinning both engines' expected text for the line; a reason alone excuses every later edit to
+it, and the harness is that line's only reader. One is accepted: `--help` names the program,
+and the program's name changed.
+
+Three divergences were settled rather than accepted — the banner's position, and two places
+`--help` had quietly lost text the Bash carries.
+
 **What it cannot see, stated so that nobody assumes otherwise:** timing-dependent behaviour,
 and anything reachable only on a real machine — real sudo, real snapper, real repositories.
 Gate G6 is what covers that, and the phase that builds the harness ends by writing the
-explicit list of what G6 has to check by hand.
+explicit list of what G6 has to check by hand. That list is stage 6's, under *What G2 cannot
+see* in `docs/plans/ONEUP-0054-python-engine.md` — it is direction for stage 8, so it lives
+in the plan rather than here.
 
 ### 4.6 The order the gate is met in
 
