@@ -5610,3 +5610,24 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** One new automated check runs on this machine only, not on GitHub — on purpose, and this records why.
   Kind: chore.
   Source: ONEUP-0054 stage 6 step 6.
+
+- 💭 [ONEUP-0196] **Decide whether the grandchild-holds-the-pipe trap belongs in CLAUDE.md §6.**
+  The trap: killing only the bounded child left a GRANDCHILD holding our read
+  end, so the wait after the kill blocked on a pipe nobody would close and the
+  "bounded" call never returned. proc._run_bounded therefore gives a bounded
+  child its own session and kills the GROUP on expiry. It cost a real bug during
+  ONEUP-0054 stage 5.
+
+  It IS recorded — on proc._run_bounded, in commit 7a19ad0's body, and in
+  ONEUP-0054's roadmap note. What is undecided is whether it also belongs in
+  CLAUDE.md §6, which is where traps that each cost a real bug live. Two reasons
+  it was not added at the time: stage 5 step 12 scoped its documentation to the
+  spec amendment and stale docstrings, and CLAUDE.md is a rule-14 gated
+  document, so adding a trap is not a free edit.
+
+  Needs the user, not a session. Filed as considered rather than planned so it
+  is a decision on the record instead of a paragraph re-typed into every
+  handoff — which is how it has travelled for three sessions.
+  **Layman:** A hard-won lesson about killing background jobs is written in the code but not in the list of traps; someone should decide whether it belongs there.
+  Kind: doc.
+  Source: carried in session handoffs since 2026-08-31; filed 2026-09-02 to stop the prose relay.
