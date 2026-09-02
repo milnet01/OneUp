@@ -488,6 +488,25 @@ check_absent "size mode never really updates"  "BUG: real transaction"  "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# `--size=foo` was always refused, but `--size=` parsed to an empty string, read
+# as false at the dispatch's `-n` test and fell through into the full run — the
+# one flag whose whole job is a read-only quote, installing packages. Shape is
+# not membership: `--size=*` matches the empty value as happily as a step name.
+echo "TEST: a bare --size= is refused, not silently promoted to a full upgrade"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$*" == *dup* || "$*" == *update* ]] && { echo "BUG: real transaction from --size=" >&2; exit 99; }
+exit 0
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --size=); rc=$?
+check_eq     "empty --size= exits 2"           "2" "$rc"
+check        "empty --size= names the option"  "Unknown option: --size=" "$out"
+check_absent "empty --size= installs nothing"  "BUG: real transaction" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 # Current zypper (1.14.98 / libzypp 17.38) renamed the summary line: it prints
 # "Package download size:   371.4 MiB" and dropped "Overall download size:" /
 # "Already cached:" entirely (verified absent from /usr/bin/zypper's strings).

@@ -210,6 +210,9 @@ for arg in "$@"; do
         --steps=*) STEPS="${arg#*=}" ;;
         --log=*)   LOG_FILE="${arg#*=}" ;;
         --check)   CHECK_ONLY=true ;;
+        # A bare `--size=` is not a price quote: its empty value read as false at
+        # the dispatch below and fell through into a FULL upgrade (ONEUP-0173).
+        --size=)   echo "Unknown option: $arg" >&2; usage >&2; exit 2 ;;
         --size=*)  SIZE_STEP="${arg#*=}" ;;
         --hold)    HOLD=true ;;
         --grant-auth)  AUTH_ACTION="grant" ;;

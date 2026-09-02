@@ -399,6 +399,7 @@ echo "Differential: update_system.sh vs python3 -m oneup.engine"
 run_pair "--check"                b_ok      --check
 run_pair "--check --notify"       b_ok      --check --notify
 run_pair "--size=system"          b_ok      --size=system
+run_pair "--size= (empty value)"  b_ok      --size=
 run_pair "--auth-status"          b_ok      --auth-status
 run_pair "--emit-guard"           b_ok      --emit-guard
 run_pair "--help"                 b_ok      --help

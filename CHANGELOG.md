@@ -44,6 +44,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Asking for the download size with no step name started a full update** (ONEUP-0173)
+  Running the engine with `--size=` — the flag with its value left off —
+  did not quote the price of an update. It installed one. The flag is now
+  refused, like any other option OneUp does not recognise. This only ever
+  affected the command line: the window always names a step.
+
 - **A stalled software source can no longer hang a run with nothing on screen** (ONEUP-0172)
   When an update fails, OneUp re-checks each source to find the culprit. That
   re-check had no time limit and its output went nowhere, so a crawling mirror

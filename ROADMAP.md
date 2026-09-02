@@ -5243,13 +5243,21 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lanes engine-steps and gui-services.
 
-- 📋 [ONEUP-0173] **`--size=` with an empty value silently performs a full system upgrade.**
+- ✅ [ONEUP-0173] **`--size=` with an empty value silently performs a full system upgrade.**
   `--size=foo` is refused with exit 2, but `--size=` parses to an empty string,
   reads as falsy at the dispatch test and falls through to the full run. A flag
   whose whole job is a read-only price quote installs packages instead. Present in
   both engines (`oneup/engine/__main__.py:106` and `:182`; `update_system.sh:213`).
   Treat an empty value as an unknown option in the parser, or test for the flag's
   presence rather than its value's truthiness.
+  Resolved (2026-09-02): both parsers now route a bare `--size=` into
+  their own existing unknown-option arm, so the message and the exit
+  code are identical by construction and the G2 differential stays
+  green rather than needing a new accepted divergence. Proved red on
+  BOTH engines before the fix: unrefused, and the mock's dup/update
+  tripwire fired, so the read-only quote really did reach a
+  transaction. Covered by a scenario in tests/run-tests.sh and a
+  `--size=` pair in tests/differential-test.sh.
   **Layman:** A flag that only asks the price can install everything instead.
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-driver.

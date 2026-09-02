@@ -111,7 +111,9 @@ def parse(argv: list[str]) -> tuple[Options | None, int]:
             opts.log_file = arg.split("=", 1)[1]
         elif arg == "--check":
             opts.check_only = True
-        elif arg.startswith("--size="):
+        # A bare `--size=` falls to the unknown-option arm below: its empty value
+        # read as false at the dispatch and ran a FULL upgrade (ONEUP-0173).
+        elif arg.startswith("--size=") and arg != "--size=":
             opts.size_step = arg.split("=", 1)[1]
         elif arg == "--hold":
             opts.hold = True
