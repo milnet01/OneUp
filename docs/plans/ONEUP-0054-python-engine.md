@@ -1331,6 +1331,12 @@ comparison a gate; and write down what it cannot see.
    differ, so anything genuinely varying between the sides — a pid, a temporary path —
    makes the harness fail and names itself. Measured: no console line in the five mock sets
    carried one.
+
+   **Built, and the rule earned itself within the hour.** The elapsed seconds turned out to
+   have two renderings — the `@@TIMING@@` marker and the summary line's own `%3ds` column —
+   and normalising only the first left the gate flapping. The harness reported it rather
+   than anyone predicting it. Both are one rule; a genuinely third KIND of field would need
+   the same evidence.
    → **verify:** drive the normaliser directly — two streams differing only in a TIMING
    seconds field compare equal, and two differing by one character of any other line
    compare unequal. **Then, with the normaliser in place and before step 4 lands, run the
@@ -1388,13 +1394,20 @@ comparison a gate; and write down what it cannot see.
    `update_system.sh` is missing, and a row in §6's gate table in the position the script
    runs it.
 
-   **The gate carries a time budget, because step 5 pushes the other way.** A full run costs
-   about 2.2 s per engine against about 0.1 s for a flag-only mode, and §6 records
-   `./local-CI.sh` at 34–38 s and calls it *"short enough to run every time"*. So: the
-   default run keeps the whole suite under a minute, and if the mix needed for coverage
-   exceeds that, the full set moves behind `--full` and `local-CI.sh` keeps a named subset —
-   never markers declared unreachable to stay fast. Re-measure `./local-CI.sh` and update
-   §6's stated range in the same edit.
+   **The gate carries a time budget, because step 5 pushes the other way** — and the
+   budget's premise turned out to be false. §6 recorded `./local-CI.sh` at 34–38 s, so this
+   step said to keep the whole pipeline under a minute and, failing that, to move the full
+   scenario set behind `--full` with a named subset left in the default run — never markers
+   declared unreachable to stay fast.
+
+   **Measured when the gate landed: the pipeline is 4m10s–4m25s, the engine suite alone
+   2m44s, and the harness 49 s.** The 34–38 s was a `main`-era figure and had gone stale by
+   roughly six times. **So the fallback did not fire, because it aims at a cost that is not
+   the one here**: it exists to stop a differential gate dominating a SHORT pipeline, and
+   the pipeline is not short and the harness is not what makes it long. Moving G2's coverage
+   guarantee behind an opt-in flag would have weakened the gate to save a quarter of a run
+   nobody was going to feel. §6's range is re-measured in the same edit, with the staleness
+   named there rather than quietly corrected.
 
    **No `.github/workflows/release.yml` entry, and §6.1 step 3 is deviated from
    deliberately.** That rule exists because *"a test gate that runs only locally catches its
@@ -1560,9 +1573,9 @@ green with `ONEUP_ENGINE_CMD` exported; when `--emit-guard` and `--help` are sce
 their own right; when its uncovered-marker list is empty or every entry names why no mock
 sandbox reaches that marker; when `tests/run-tests.sh` and the harness share one
 `setup_common` rather than two, and the engine suite's counts are unchanged by that move;
-when the gate is in `local-CI.sh` and in `docs/standards/workflow.md` §6's table, inside the
-time budget, with §6's measured range re-measured in the same edit and the `release.yml`
-deviation filed and its ID cited where step 6 says; when `files-and-naming.md` §1's `tests/`
+when the gate is in `local-CI.sh` and in `docs/standards/workflow.md` §6's table, with its own cost
+measured and §6's range re-measured in the same edit, and the `release.yml` deviation filed
+and its ID cited where step 6 says; when `files-and-naming.md` §1's `tests/`
 row and `testing.md` §1's suite table both name the new files; when the hand-check list
 above is written; when step 8's amendment has landed on `main` and merged; and when
 `./local-CI.sh` is green on `v2` with `ONEUP_ENGINE_CMD` unset. **G2 is met here.**
