@@ -70,6 +70,21 @@ else
     bad "tests/parsers-test.py"; tail -25 /tmp/local-ci-parsers.log
 fi
 
+# --- engine differential (v1 vs v2) -----------------------------------------
+# Gate G2 of ONEUP-0054: both engines against the same mocks, whole output and
+# exit status diffed. Local-only, against workflow.md §6.1 step 3 — the reason is
+# ONEUP-0195, and ONEUP-0072 owns retiring this gate.
+step "Engine differential (v1 vs v2)"
+if [[ ! -f update_system.sh ]]; then
+    skip "tests/differential-test.sh" "update_system.sh is absent — nothing to compare against"
+elif ! command -v python3 >/dev/null 2>&1; then
+    skip "tests/differential-test.sh" "python3 is absent"
+elif bash tests/differential-test.sh >/tmp/local-ci-differential.log 2>&1; then
+    ok "tests/differential-test.sh — $(grep -oE '[0-9]+ passed, [0-9]+ failed' /tmp/local-ci-differential.log | tail -1)"
+else
+    bad "tests/differential-test.sh"; tail -25 /tmp/local-ci-differential.log
+fi
+
 # --- headless GUI smoke test ------------------------------------------------
 # Constructs the PySide6 window offscreen and feeds it engine markers. Exit 77
 # means PySide6 isn't installed here — a skip, not a failure (matches the
@@ -127,7 +142,10 @@ step "Lint"
 if command -v shellcheck >/dev/null 2>&1; then
     # SC2001 is a documented false positive (sed used deliberately for per-line
     # munging) — see .ants_review_falsepos.jsonl.
-    if shellcheck -e SC2001 update_system.sh tests/run-tests.sh \
+    # -x so it follows tests/run-tests.sh's `source tests/mock-env.sh`; without it
+    # every symbol the sandbox defines reads as unassigned (ONEUP-0054 stage 6).
+    if shellcheck -x -e SC2001 update_system.sh tests/run-tests.sh tests/mock-env.sh \
+            tests/differential-test.sh \
             packaging/appimage/build-appimage.sh local-CI.sh release.sh githooks/pre-push; then
         ok "shellcheck"; else bad "shellcheck"; fi
 else skip "shellcheck" "not installed"; fi

@@ -60,7 +60,11 @@ def usage() -> str:
     interpolated literal as a possible SQL query (S608), and a suppression here
     would be silencing a rule rather than answering it.
     """
-    return _USAGE_HEAD + str(runstate.USER_LOG_DIR) + _USAGE_TAIL
+    # The repository-skip cap is interpolated rather than written out, as the Bash
+    # interpolates $MAX_SKIP_REPOS. Hard-coded here, the sentence had already lost
+    # the number while the behaviour kept it — gate G2 caught that (stage 6).
+    return (_USAGE_HEAD.replace("{MAX_SKIP}", str(steps.MAX_SKIP_REPOS))
+            + str(runstate.USER_LOG_DIR) + _USAGE_TAIL)
 
 
 _USAGE_HEAD = """System Updater engine
@@ -83,14 +87,18 @@ Usage: oneup-engine [--steps=LIST] [--check] [--notify] [--log=FILE] [--help]
   --skip-repo=ALIAS  Exclude this source from the run: disable it, upgrade the
                  rest, re-enable it. Repeatable.
   --auto-skip-repos  Unattended mode: on a repo-scoped failure, auto-detect and
-                 skip the culprit(s), then continue.
+                 skip the culprit(s) (up to {MAX_SKIP}), then continue.
   --thin-snapshots  Ask snapper to remove old, expendable Btrfs snapshots (its own
                  retention cleanup — keeps the recent ones), then report how many.
   --log=FILE     Write the run log here. Default: """
 
 _USAGE_TAIL = """/<timestamp>.log
   --help         Show this help.
-"""
+
+Examples:
+  oneup-engine                       # update everything
+  oneup-engine --steps=system,cache  # only system packages + cache clean
+  oneup-engine --check --notify      # background "updates available?" check"""
 
 
 def parse(argv: list[str]) -> tuple[Options | None, int]:
@@ -532,17 +540,15 @@ def run(opts: Options, run_keys: list[str], log_file: Path, held_auth: bool = Fa
     Four points where the order is load-bearing and the suite can only see it
     indirectly: `sudo_init` before `release_zypper_lock`; `run.state` written
     only once the run is definitely going ahead, after the lock-holder check;
-    the pre-update snapshot before the pre-flight warnings; and — above this
-    function, in `main` — the inhibitor re-exec before the log mirror, or the
-    re-exec'd process installs a second one.
-    """
-    markers.out("")
-    markers.out("########################################################")
-    markers.out("#            Starting System Update                    #")
-    markers.out(f"#   Steps: {opts.steps}")
-    markers.out(f"#   Log:   {log_file}")
-    markers.out("########################################################")
+    the pre-update snapshot before the pre-flight warnings; the banner
+    after both, which reads oddly and is where the Bash prints it; and — above
+    this function, in `main` — the inhibitor re-exec before the log mirror, or
+    the re-exec'd process installs a second one.
 
+    The banner was the one divergence gate G2 found (ONEUP-0054 stage 6). It is
+    console text, so a marker-only diff would not have seen it; do not "tidy" it
+    back to the top of the run without changing the Bash in the same commit.
+    """
     # Firmware elevates through polkit on its own; every other root step reuses
     # the cached credential, so we only bootstrap when a sudo step is selected.
     needs_sudo = any(opts.selected(k) for k in ("system", "flatpak", "orphans", "cache"))
@@ -582,6 +588,13 @@ def run(opts: Options, run_keys: list[str], log_file: Path, held_auth: bool = Fa
     if opts.selected("system"):
         _pre_update_snapshot()
         _preflight()
+
+    markers.out("")
+    markers.out("########################################################")
+    markers.out("#            Starting System Update                    #")
+    markers.out(f"#   Steps: {opts.steps}")
+    markers.out(f"#   Log:   {log_file}")
+    markers.out("########################################################")
 
     for key in run_keys:
         if proc.stop_pending():

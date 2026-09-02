@@ -5556,3 +5556,26 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A rule says our test suite has three parts and lists them; there are five.
   Kind: doc-fix.
   Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, loop 2).
+
+- 📋 [ONEUP-0195] **The differential harness is a local-only gate, against workflow.md §6.1 step 3.**
+  workflow.md §6.1 step 3 says a test gate must also go into
+  .github/workflows/release.yml, because "a test gate that runs only locally
+  catches its first regression after the tag is pushed". tests/differential-test.sh
+  is not added there, deliberately.
+
+  That workflow runs on a `v*` tag. The next one is 2.0.0, and ONEUP-0054 §4.6
+  says ONEUP-0072 lands before it and "changes the marker payloads and the
+  assertions that read them" — which update_system.sh does not follow. So the
+  entry's first CI execution would be a run the spec already expects not to
+  match, and there is no tag between now and then for it to protect.
+
+  The harness is transitional. ONEUP-0072 owns retiring it: that spec already
+  records that tests/differential-test.sh stops being runnable at that item and
+  that testing.md §1's suite table loses the row.
+
+  Cited in tests/differential-test.sh's header comment and beside workflow.md
+  §6's table row, so a reader of either finds the reason rather than inferring
+  an omission.
+  **Layman:** One new automated check runs on this machine only, not on GitHub — on purpose, and this records why.
+  Kind: chore.
+  Source: ONEUP-0054 stage 6 step 6.

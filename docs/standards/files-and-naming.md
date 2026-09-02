@@ -34,7 +34,7 @@ exist yet, and saying so is the point.
 | `packaging/rpm/` | `oneup.spec` — the `zypper`-installable package. |
 | `packaging/appimage/` | `build-appimage.sh` — the single-file portable build. |
 | `packaging/obs/` | `_service` + `README.md` — the openSUSE Build Service recipe. |
-| `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `imports-test.py` (the `oneup/` package's structural rules), `bump-test.py` (version lockstep), `parsers-test.py` (the engine's pure parsers), `docs-check.py` (the documentation rules a script can settle). |
+| `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `imports-test.py` (the `oneup/` package's structural rules), `bump-test.py` (version lockstep), `parsers-test.py` (the engine's pure parsers), `differential-test.sh` (both engines against the same mocks — gate G2), `mock-env.sh` (the mock sandbox both engine suites source), `docs-check.py` (the documentation rules a script can settle). |
 | `githooks/` | Repo-local git hooks. One file: `pre-push`. Not active until `git config core.hooksPath githooks`. |
 | `screenshots/` | Images the README and the app-store metadata point at. |
 | `.github/workflows/` | GitHub CI. One file: `release.yml`, triggered by a `v*` tag. |

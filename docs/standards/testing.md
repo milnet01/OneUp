@@ -19,13 +19,16 @@ what checks this · 11 cold-eyes log
 
 ## 1. What the suite is
 
-Three programmes, each runnable on its own. All three are gated by `./local-CI.sh`, and all
-three are the *only* gates GitHub CI also runs on a `v*` tag — everything else in
-`local-CI.sh` is local-only (`docs/standards/workflow.md` §6):
+Each is runnable on its own, and all are gated by `./local-CI.sh`. Which of them GitHub CI
+also runs on a `v*` tag is `docs/standards/workflow.md` §6's to state — the differential
+harness is deliberately not among them (ONEUP-0195). **This table is known to be
+incomplete**: `tests/parsers-test.py` and `tests/imports-test.py` are part of the suite and
+have no row here (ONEUP-0194).
 
 | Suite | File | Asserts on |
 | --- | --- | --- |
 | Engine | `tests/run-tests.sh` | the `@@MARKER@@` lines `update_system.sh` prints |
+| Engine differential | `tests/differential-test.sh` | that `update_system.sh` and the `oneup.engine` package produce the same whole output and exit status when driven through the same mocks — gate G2 of ONEUP-0054, and what makes the rewrite auditable rather than trusted |
 | GUI | `tests/gui-smoke.py` | the window's state after being fed those same marker lines |
 | Version bump | `tests/bump-test.py` | that a real bump still parses the five real version sites, and rewrites the CHANGELOG heading and both links correctly (`docs/standards/workflow.md` §5.1's row owns the exact split) |
 

@@ -279,11 +279,15 @@ notes from it, so there is nothing to derive.
 ## 6. The gate before a push
 
 **`./local-CI.sh` must be green before every push.** It runs everything GitHub CI runs except
-the AppImage build, plus five gates CI never runs, and it is short enough to run every time: measured at `8d4c93e` on the development machine,
-`time ./local-CI.sh` reported **34–38 seconds** across warm runs, of which the engine suite
-is the bulk.
-Under a minute, not under a second — long enough that skipping it feels tempting, which is
-what the pre-push hook is for.
+the AppImage build, plus the gates CI never runs. Measured on `v2` on the development
+machine, `time ./local-CI.sh` reports **4m10s–4m25s** across warm runs, of which the engine
+suite is **2m44s** and the differential harness **49s**.
+
+**The 34–38 seconds recorded here at `8d4c93e` was a `main`-era figure and had gone stale by
+roughly six times** — the engine suite grew with the 2.0 build, and nothing re-measured it.
+Minutes rather than seconds, so skipping it is tempting in a way the original figure did not
+convey; the pre-push hook is what makes that unnecessary, and the markdown-only path below
+is what keeps a documentation push cheap.
 
 **A documentation-only push runs the markdown gates instead, and takes 0.14 s** (ONEUP-0114).
 `githooks/pre-push` reads the refs on its stdin and, when it can prove every changed path
@@ -303,6 +307,7 @@ says what each gate is.
 | --- | --- |
 | `Engine test suite` | `tests/run-tests.sh` — the markers `update_system.sh` prints |
 | `Engine parser unit tests` | `tests/parsers-test.py` — the pure half of the engine (`oneup/engine/parsers.py`): `to_bytes`, the two download-size wordings, the progress wordings, `zypper lr -u` output and the lock file's text, table-driven against real captured output |
+| `Engine differential (v1 vs v2)` | `tests/differential-test.sh` — `update_system.sh` and `python3 -m oneup.engine` driven through the same mocks, their whole output and exit status diffed per scenario: gate G2 of ONEUP-0054. Local-only against §6.1 step 3, deliberately — the reason is ONEUP-0195 |
 | `GUI smoke test (offscreen)` | `tests/gui-smoke.py` — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip) |
 | `Python compile (updater.py, bump.py, oneup/)` | `py_compile updater.py bump.py` plus `compileall oneup` — `compileall` over the package rather than a file list, because a module nobody has imported yet is exactly the one a split leaves broken |
 | `bump.py functional test` | `tests/bump-test.py` — a real bump in a throwaway copy still parses the five real version sites, and rewrites the (synthetic) `CHANGELOG.md`'s heading and both links correctly |
