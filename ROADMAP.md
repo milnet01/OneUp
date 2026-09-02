@@ -5339,7 +5339,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-services.
 
-- 📋 [ONEUP-0179] **Four rgba colour literals in the stylesheet template make every theme paint Midnight's accent.**
+- ✅ [ONEUP-0179] **Four rgba colour literals in the stylesheet template make every theme paint Midnight's accent.**
   `oneup/gui/theme.py:274` and `:278` carry `rgba(74,163,255,...)` and
   `rgba(34,211,238,...)` — four colour literals in the QSS template, which INV-5
   forbids in those words. The gate cannot see them: `local-CI.sh`'s awk pattern is
@@ -5349,6 +5349,30 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   ONEUP-0027 §6's named failure mode verbatim. `theme.py:26` also asserts "nothing
   here holds one any more except _BLACK and _WHITE", which is false. Add
   `rowring*` tokens and extend the gate's pattern with `/rgba\([0-9]/`.
+  Resolved (2026-09-02): the four stops are hex per palette and
+  composited to rgba() by derived_keys, as the banner washes are.
+  Values unchanged, so nothing looks different.
+
+  Two corrections to this finding, both measured. The claimed
+  consequence is NOT live: all eight palettes carry the SAME accent
+  gradient, so an azure-to-cyan row ring is each theme's own accent
+  rather than Midnight's imposed on the rest. The invariant breach
+  was real; the mispainting was not.
+
+  The root cause was also larger than the hex-only pattern. The gate
+  opens its palette skip on `_NAME = dict(`, and `_FONT_SCALE` is a
+  one-line dict above the templates - so the skip ran to the next
+  dict's closing paren and _QSS and _HC_QSS were never scanned at
+  all. The pattern was not why the literals survived; nothing read
+  those lines. Also fixed: the comment rule ate QSS id selectors
+  (`#Name {` looks like a comment), and QSS block comments needed
+  skipping once the templates became visible.
+
+  Gate proved able to fail on four seeds, not assumed. contrast.py
+  gains the tints as decorative rows and the gradients in
+  DERIVED_FROM - INV-4 caught that omission during the work. The
+  spec's §4.7 records both, and its key census, already wrong by two
+  classes, is now named rather than counted.
   **Layman:** Every colour theme draws the task rows in the default theme's blue.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-theme.
