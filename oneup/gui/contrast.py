@@ -150,8 +150,17 @@ DECORATIVE: list[tuple[str, tuple[str, ...], str, str | None]] = [
      "ONEUP-0076 mechanism B: the cue is the border's CHANGE of colour, which "
      "that item's INV-2 measures against `logbd` itself. How far the resting "
      "border stands out from what is behind it carries no state.", None),
-    ("accent", ("win",), "The row's gradient border is a hover cue, and hover also "
-     "changes `rowcard` to `rowhov`, so the border is not the cue on its own.", None),
+    ("accent", ("win",), "The 2px gradient ring around the card (`#Frame`) is trim; "
+     "it shows nothing the card it surrounds does not already show.", None),
+    ("rowringtint", ("card",), "The task row's gradient ring is resting decoration "
+     "on the card behind it; no state of the row is carried by it.", None),
+    ("rowringtint2", ("card",), "The row ring's second stop, same reason as its "
+     "first.", None),
+    ("rowringhovtint", ("rowringtint",), "The row's hover ring restates a state the "
+     "cursor already carries, and hover also changes `rowcard` to `rowhov`, so the "
+     "ring is not the cue on its own.", None),
+    ("rowringhovtint2", ("rowringtint2",), "The hover ring's second stop, same "
+     "reason as its first.", None),
     ("btn_accent_hov_stops", ("btn_accent_stops",),
      "The primary button's hover fill restates a state the cursor already "
      "carries.", None),
@@ -206,6 +215,7 @@ DERIVED_FROM: dict[str, str] = {
     "warnwash1": "warntint", "warnwash2": "warntint", "warnbd2": "warntint",
     "infowash1": "infotint", "infobd2": "infotint", "infowash2": "infotint2",
     "dangerwash1": "dangertint", "dangerwash2": "dangertint",
+    "rowring": "rowringtint", "rowringhov": "rowringhovtint",
 }
 
 # The font metrics are substituted into the same template and are not colours.

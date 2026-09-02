@@ -268,15 +268,8 @@ QLabel#Header  { font-size: $fs_header; font-weight: 700; color: $header; }
 QLabel#GroupHeading { font-size: $fs_med; font-weight: 700; color: $header; }
 QLabel#Tagline { font-size: $fs_body; color: $tag; }
 
-#RowBorder {
-    border-radius: 12px;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(74,163,255,0.65), stop:1 rgba(34,211,238,0.50));
-}
-#RowBorder:hover {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(104,184,255,1.0), stop:1 rgba(58,228,250,0.85));
-}
+#RowBorder { border-radius: 12px; background: $rowring; }
+#RowBorder:hover { background: $rowringhov; }
 #RowCard { border-radius: 11px; background: $rowcard; }
 #RowBorder:hover #RowCard { background: $rowhov; }
 QLabel#TaskName { font-size: $fs_med; font-weight: 600; color: $tname; }
@@ -640,7 +633,13 @@ _DARK = dict(
     # Gradients. The two BUTTON fills are authored as stop pairs and built by
     # _vgradient, so the sheet and the focus derivation cannot drift apart;
     # `accent` is the diagonal row-hover gradient and is authored whole.
+    # The row ring's four stops are hex here and composited by `derived_keys`,
+    # the way the banner washes below are: the sheet held them as decimal rgba()
+    # literals, which no theme could reach and the contrast check could not read
+    # (it takes its colours from a token as hex). Values unchanged (ONEUP-0179).
     accent="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)",
+    rowringtint="#4aa3ff", rowringtint2="#22d3ee",
+    rowringhovtint="#68b8ff", rowringhovtint2="#3ae4fa",
     # ONEUP-0027 §4.8, decided with the user 2026-08-24: the TOP stop of each
     # button fill darkened so the white label clears 4.5:1 (SC 1.4.3). It read
     # 2.63:1 on the accent and 3.06:1 on the danger fill — a real defect on the
@@ -681,6 +680,8 @@ _LIGHT = dict(
     trayattn="#ba7e1b", trayrim="#ffffff", traymark="#3a2600",
     btnfg="#ffffff", dangerbd="#e0553f", tipbd="#4aa3ff",
     accent="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)",
+    rowringtint="#4aa3ff", rowringtint2="#22d3ee",
+    rowringhovtint="#68b8ff", rowringhovtint2="#3ae4fa",
     # ONEUP-0027 §4.8, decided with the user 2026-08-24: the TOP stop of each
     # button fill darkened so the white label clears 4.5:1 (SC 1.4.3). It read
     # 2.63:1 on the accent and 3.06:1 on the danger fill — a real defect on the
@@ -715,6 +716,8 @@ _CARBON = dict(
     switchknobrim='#000000', trayidle='#888888', trayattn='#d5901f', trayrim='#000000',
     traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
+    rowringtint='#4aa3ff', rowringtint2='#22d3ee',
+    rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
     btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
     btn_danger_hov_stops=('#f47c68', '#e04a32'), warntint='#e9b23f', infotint='#4aa3ff',
@@ -733,6 +736,8 @@ _FOREST = dict(
     switchknobrim='#000000', trayidle='#888888', trayattn='#c3981c', trayrim='#000000',
     traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
+    rowringtint='#4aa3ff', rowringtint2='#22d3ee',
+    rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
     btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
     btn_danger_hov_stops=('#f47c68', '#e04a32'), warntint='#e9b23f', infotint='#4aa3ff',
@@ -751,6 +756,8 @@ _PLUM = dict(
     switchknobrim='#000000', trayidle='#888888', trayattn='#de6920', trayrim='#000000',
     traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
+    rowringtint='#4aa3ff', rowringtint2='#22d3ee',
+    rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
     btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
     btn_danger_hov_stops=('#f47c68', '#e04a32'), warntint='#e9b23f', infotint='#4aa3ff',
@@ -769,6 +776,8 @@ _PAPER = dict(
     switchknobrim='#000000', trayidle='#888888', trayattn='#a86918', trayrim='#000000',
     traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
+    rowringtint='#4aa3ff', rowringtint2='#22d3ee',
+    rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
     btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
     btn_danger_hov_stops=('#f47c68', '#e04a32'), warntint='#e9b23f', infotint='#4aa3ff',
@@ -787,6 +796,8 @@ _SKY = dict(
     switchknobrim='#000000', trayidle='#888888', trayattn='#a48818', trayrim='#000000',
     traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
+    rowringtint='#4aa3ff', rowringtint2='#22d3ee',
+    rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
     btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
     btn_danger_hov_stops=('#f47c68', '#e04a32'), warntint='#e9b23f', infotint='#4aa3ff',
@@ -805,6 +816,8 @@ _SAND = dict(
     switchknobrim='#000000', trayidle='#888888', trayattn='#c7681d', trayrim='#000000',
     traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
+    rowringtint='#4aa3ff', rowringtint2='#22d3ee',
+    rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
     btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
     btn_danger_hov_stops=('#f47c68', '#e04a32'), warntint='#e9b23f', infotint='#4aa3ff',
@@ -1109,6 +1122,14 @@ def derived_keys(palette: dict) -> dict:
         "infobd2": _rgba(palette["infotint"], "0.55"),
         "dangerwash1": _rgba(palette["dangertint"], "0.22"),
         "dangerwash2": _rgba(palette["dangertint"], "0.05"),
+        # The task row's ring and its hover, composited here for the same reason
+        # the washes are: the alphas belong to the sheet, the hues to the palette.
+        "rowring": ("qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+                    f"stop:0 {_rgba(palette['rowringtint'], '0.65')}, "
+                    f"stop:1 {_rgba(palette['rowringtint2'], '0.50')})"),
+        "rowringhov": ("qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+                       f"stop:0 {_rgba(palette['rowringhovtint'], '1.0')}, "
+                       f"stop:1 {_rgba(palette['rowringhovtint2'], '0.85')})"),
     }
     # The focus pairs are computed rather than authored, so a palette gets its
     # cue with no further work — and fails loudly if it cannot have one, rather

@@ -391,6 +391,13 @@ a resting one, and the progress bar's text is read on the bar, not on the card.
   nobody computes cannot be shown to have drifted. The rows: `logbd` on
   `logbg`, `accent` on `win`, and the primary button's hover and pressed fills, which
   restate a state the cursor and the press already carry.
+  **ONEUP-0179 adds the task row's ring**, which until then was four decimal `rgba()`
+  literals in the sheet — a form §2's survey and INV-5's gate both read past, each
+  looking only for hex. Its two resting stops are decoration on the `card` behind them;
+  its two hover stops restate a state the cursor already carries, hover having also
+  changed `rowcard` to `rowhov`. All four are authored as hex and composited to `rgba()`
+  by `derived_keys`, the way the banner washes are, because the check takes a token's
+  colour as hex and can read none out of an `rgba()` triple.
   **ONEUP-0076 puts `logbd` on three further surfaces and all three join this list for the
   same reason the `logbg` row is already on it** — `rowcard` and `rowhov`, where the detail
   panel's new border is read against the row beneath it because the panel is transparent,
@@ -401,9 +408,11 @@ a resting one, and the progress bar's text is read on the bar, not on the card.
   outside its scope.
 
 **The check's universe is every colour `$token` substituted into the sheet, which is wider
-than the reference set** — measured at HEAD, 53 keys go into `_QSS`: 29 authored, the 3
-gradients `build_theme` injects, the 15 derived focus keys, and 6 font metrics. The metrics
-are not colours and are out. The other 47 are in, and that is the set INV-4 iterates.
+than the reference set** — the authored palette keys, the gradients and banner washes
+`build_theme` composites, and the derived focus keys. The font metrics are not colours and
+are out; everything else is in, and that is the set INV-4 iterates. Named as classes rather
+than counted, because the count that stood here had gone wrong by two whole classes: it was
+taken before ONEUP-0064 added the washes and the stop-pair gradients, and no gate reads it.
 **Saying "the reference set" would exempt exactly the tokens most likely to escape
 measurement** — the derived ones, which no theme author ever sees. The overlay's own keys
 are checked by the high-contrast paragraph below, including the three `hc_focus_keys()`

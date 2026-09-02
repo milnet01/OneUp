@@ -169,13 +169,32 @@ else skip "ruff" "not installed"; fi
 inv5_hits=$(
     awk '
         # Inside a palette dict: from `_NAME = dict(` to the closing paren.
-        /^_[A-Z_]+ = dict\(/       { inpal = 1; next }
+        # A dict that CLOSES on its own line opens nothing. `_FONT_SCALE` is one,
+        # and it sits above the stylesheet templates — so the skip it opened ran
+        # to the closing paren of the NEXT dict, and _QSS and _HC_QSS were
+        # never scanned at all. That, not the hex-only pattern, is how four rgba
+        # literals sat in the row-ring gradient with this gate green (ONEUP-0179).
+        /^_[A-Z_]+ = dict\(/       { if ($0 !~ /\)[[:space:]]*$/) inpal = 1; next }
         inpal && /^\)/             { inpal = 0; next }
         inpal                      { next }
-        # Comments and the two named blend anchors.
-        /^[[:space:]]*#/           { next }
+        # Comments and the two named blend anchors. A comment is `#` followed by
+        # space, another `#`, or a rule; `#Name {` is a QSS ID SELECTOR, and
+        # skipping those hid every colour written on the selector line itself.
+        /^[[:space:]]*#([[:space:]]|#|-|$)/ { next }
+        # QSS block comments, now that the templates are scanned at all: their
+        # prose quotes hex values on purpose. Like the `#` rule this skips the
+        # whole line, so a colour sharing a line with a trailing /* ... */ is not
+        # seen — the same blind spot as a trailing `#` comment, stated rather
+        # than discovered.
+        /\/\*/                     { incom = 1 }
+        incom                      { if (/\*\//) incom = 0; next }
         /^_BLACK = |^_WHITE = /    { next }
         /#[0-9a-fA-F]{6}/          { print FILENAME ":" FNR ": " $0; next }
+        # A DECIMAL rgba() triple is a colour literal too, and hex-only is how
+        # four of them sat in the row-ring gradient with the gate green
+        # (ONEUP-0179). `_rgba(` and the f-string that builds one are not
+        # literals and do not match: a digit must follow the paren.
+        /rgba\([0-9]/              { print FILENAME ":" FNR ": " $0; next }
         /QColor\(["'"'"']/          { print FILENAME ":" FNR ": " $0; next }
         # awk ERE has no \b, so the boundary is spelled out. Written as \b first,
         # this branch matched NOTHING and the gate looked complete while testing
