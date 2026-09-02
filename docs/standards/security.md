@@ -26,26 +26,45 @@ Unnumbered, and first because everything after it derives from it. Added
 attacker and no trust boundary, so the model had to be inferred from §1, §4 and
 §7 — and three review lanes inferred three different ones.
 
-**The asset is root.** OneUp's job is running privileged commands, so any defect
-that changes which command runs as root, or with what argument, is a root defect.
+**The first asset is root.** OneUp's job is running privileged commands, so any
+defect that changes which command runs as root, or with what argument, is a root
+defect.
+
+**The second is what passes through the logs.** Captured privileged output can
+carry repository URLs with embedded credentials, and the diagnostics bundle
+carries the user's name and hostname. §7 is that asset's rule, and §7.4's *"any
+future 'share this' feature inherits the rule"* is what makes it an asset rather
+than one feature's problem.
 
 **The attacker is the data, not the person.** In scope is everything OneUp did
 not write and cannot vouch for: repository metadata, package and repository
-names, the output of every tool it shells out to, and mirror responses. §4
-governs all of it — validate at the boundary, by shape.
+names, the output of every tool it shells out to, and mirror responses. **§4
+governs such a value where it reaches a privileged command**, which is §4's own
+rule and is narrower than "all untrusted input". Elsewhere a malformed value is
+a correctness defect, not a security one.
 
 **The person at the keyboard is trusted, and so is every account on the machine.**
-A hostile local user is **out of scope**. OneUp is a single-user desktop tool,
-and an account that wanted root would reach for the same `sudo` this app does.
-Three consequences, named so they are not re-argued: the permissions on
-`~/.local/state/oneup/`, the predictability of the tray's `QLocalServer` socket
-name, and the fixed temporary paths in the test harness are not defended here.
+A hostile local user is **out of scope**: OneUp is a single-user desktop tool.
+That is a decision about whom OneUp defends, **not** a claim that a local account
+is already privileged — §3.3 records that this distro defaults to `targetpw`, so
+an ordinary account cannot reach root through `sudo` at all. Three consequences,
+named so they are not re-argued: the permissions on `~/.local/state/oneup/`, the
+predictability of the tray's `QLocalServer` socket name, and the fixed temporary
+paths in `local-CI.sh` are not defended here.
+
+**The exclusion does not reach §5 — that is what §5 is for.** The drop-in grants
+*this* account password-free root, and it is exercised with no person present, by
+processes running as the trusted user. So §5.2's rule that a budget is a literal
+and never a wildcard, and §9.3's preference for exact commands, stand unchanged.
+Nothing here relaxes them.
 
 **Out of scope is about whose input is trusted, never about correctness.** A
 symlink followed without care, or a race that corrupts a real run, is still a
-defect — filed as correctness rather than as security. §4's shape validation
-applies to a file OneUp wrote exactly as it applies to a mirror, because a run
-that was killed leaves a truncated one and that is not an attack.
+defect — filed as correctness rather than as security. A file OneUp wrote is read
+back defensively for that reason: a run that was killed leaves a truncated one,
+which is malformed without being an attack. And `docs/standards/testing.md` §2
+still forbids a test writing outside its own `mktemp -d`, whatever this section
+says about `local-CI.sh`.
 
 **Also out of scope:** a distribution mirror serving signed-but-malicious
 packages, which is the distribution's signing chain rather than OneUp's; §8
@@ -81,9 +100,12 @@ The GUI launches the engine with `QProcess` and reads its output; it never launc
 **1.3 — The engine never imports Qt.** It is Bash, so it imports nothing; measured, the
 only occurrences of a Qt name in `update_system.sh` are two comments mentioning
 `QProcess`. The property that matters, and the one gate **G5** tests, is that the engine
-runs with **PySide6 absent**. This is gate **G5** in the 2.0 design, and it is what keeps the split
-honest — the moment the privileged half can draw a window, "the GUI is not root" stops
-being structural and becomes a promise.
+runs with **PySide6 absent**. This is gate **G5** in the 2.0 design, and it tests HALF of
+the split — the dependency direction. The other half is the import rule,
+`docs/standards/files-and-naming.md` §4.1 rule 2: an engine module importing a Qt-free
+helper out of the GUI package passes G5 and breaches the split anyway. The moment the
+privileged half can draw a window, "the GUI is not root" stops being structural and
+becomes a promise.
 
 **1.4 — But the GUI *may* ask polkit to run a specific program as root.** This is the part
 the project's own documentation previously overstated, so state it exactly:
@@ -519,8 +541,12 @@ what makes the background timer and the tray check safe to run unattended.
 
 **9.6 — A test must not damage the machine it runs on.** Scenarios that invoke the engine —
 or any code extracted from it — outside `run_engine` must redirect `ONEUP_ZYPP_PID_FILE`,
-`ONEUP_RUN_STATE` and `ONEUP_STOP_FILE` by hand. Both defaults have bitten for real; the
-incidents and the rule are `docs/standards/testing.md` §2, which is canonical.
+`ONEUP_RUN_STATE`, `ONEUP_STOP_FILE` and `ONEUP_GUARD_FILE` by hand. The first two have
+bitten for real; the fourth is why the count is four and not three — `guard_current` reads
+that path on every run reaching the download pass, so a scenario that leaves it alone
+passes or fails according to whether the developer happens to have granted passwordless.
+The incidents and the rule are `docs/standards/testing.md` §2, which is canonical and
+lists all four.
 
 ---
 
@@ -534,7 +560,7 @@ incidents and the rule are `docs/standards/testing.md` §2, which is canonical.
 - [ ] No new code path that signals the engine during a transaction (§6.1).
 - [ ] Nothing captured from a privileged command echoed to the log unreviewed — no bare `echo "$CAPTURED"` of a `sudo_capture` variable (§7.3).
 - [ ] `--check` still authenticates zero times (§9.5).
-- [ ] Tests redirect the three state-file overrides (§9.6).
+- [ ] Tests redirect the four state-file overrides (§9.6).
 
 ---
 
@@ -578,6 +604,7 @@ shows up as nothing in particular cannot be tested, however carefully it is word
 | 3 | 2026-07-26 | 1 medium — **1 verified** | §1.2 claimed *this document owns both figures — nothing else restates them*. The design document restated the whole breakdown — the same duplication behind the 21-of-22 against 14-of-34 contradiction the previous review found. The design document now cites this section. |
 | 4 | 2026-07-26 | none | clean. Nothing from the previous pass resurfaced, which is the proof that fix held. |
 | 5 | 2026-07-26 | none | converged. |
+| 6 | 2026-09-02 | 3 lanes, cold; genre pinned `standard`; new run, trigger ONEUP-0185 — Q1 2 · Q2 5 · Q3 0; 7 verified, 1 dismissed, 7 fixed | **The gate was armed by the new unnumbered § The threat model** (commit `0bab233`, +35/-1); five of the seven findings landed on that text and two were pre-existing. **All three lanes independently found the same defect:** declaring a hostile local user out of scope removed the only actor §5.2 and §9.3 defend against, so an implementer adding a `Cmnd` could argue a wildcard is out of scope and emit the `timeout * zypper *` form §5.2 measured against a root shell before it shipped. §5 is now named as untouched by the exclusion. **The sharpest was a Q1 in the new text**: its justification — that an account wanting root would reach for the same `sudo` OneUp does — is false on this distro, because §3.3 records `targetpw`, under which an ordinary account cannot reach root by `sudo` at all. The user's decision stands; the reason it rested on was wrong and is re-based on §5 granting *this* account password-free root. Two more in the new text: §4 was said to govern all untrusted data where §4's own rule fires only where a value reaches a privileged command, and "the fixed temporary paths in the test harness" named the wrong file — they are `local-CI.sh`'s, and `testing.md` §2 forbids a test doing it. One gap: root was the only asset named while §7.3 and §7.4 protect credentials and identifiers, so a second asset is stated. **Two pre-existing, both found by two lanes:** §9.6 and §10 named three state-file overrides where `testing.md` §2 — which §9.6 itself calls canonical — lists four, and the missing `ONEUP_GUARD_FILE` makes a direct scenario read the developer's own passwordless grant; and §1.3 called G5 "what keeps the split honest" when `oneup-2.0.md`'s own loop 5 had already corrected that to half, the other half being the import rule. Collateral: `testing.md` said "all three overrides" under a heading reading "The four redirects" — corrected there, ledgered out of scope. Dismissed: the `58ea3bc` / 2026-07-26 verification stamp now predates four amendments, true but no conformer builds differently. Two lane open questions resolved clean — §1.2's 14+20 against §3.1's "other 20", and whether `main` carries the tray socket the model names (it does) |
 
 ---
 

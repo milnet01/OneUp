@@ -85,7 +85,7 @@ Both defaults bit for real, which is why the rule is not theoretical:
   longer find the run it was following (ONEUP-0045).
 
 **A scenario that invokes the engine directly instead of through `run_engine` repeats all
-three overrides by hand.** There is no fallback that catches the omission — the test simply
+four overrides by hand.** There is no fallback that catches the omission — the test simply
 starts reading the machine's real state, and will pass or fail according to what the user
 happens to be doing.
 
