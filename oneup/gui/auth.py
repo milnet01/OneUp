@@ -34,7 +34,7 @@ def _query_auth_status(win):
     match — so it always shows the truth, not a saved preference (which could
     drift if the rule were removed outside OneUp). Output is tiny, so it's read
     once on finish (no incremental slot that could fire after teardown)."""
-    if not paths.ENGINE.exists():
+    if not paths.engine_available():
         return
     p = getattr(win, "_authstat_proc", None)
     if p is not None and p.state() != QProcess.NotRunning:
@@ -45,8 +45,9 @@ def _query_auth_status(win):
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.finished.connect(lambda _c, _s, pr=p: _on_auth_status_finished(win, pr))
     win._authstat_proc = p
-    p.start("bash", [str(paths.ENGINE), "--auth-status",
-                     f"--log={paths.STATE_LOG_DIR / f'{stamp}.auth.log'}"])
+    argv = paths.engine_argv(
+        "--auth-status", f"--log={paths.STATE_LOG_DIR / f'{stamp}.auth.log'}")
+    p.start(argv[0], argv[1:])
 
 
 def _on_auth_status_finished(win, proc: QProcess):
@@ -131,7 +132,7 @@ def _stand_down_autoupdate(win, lead: str = ""):
 
 
 def on_auth_toggled(win, on: bool):
-    if not paths.ENGINE.exists():
+    if not paths.engine_available():
         _set_auth_checked(win, False)
         return
     if on:
@@ -163,7 +164,8 @@ def _run_auth(win, action: str, status_text: str):
     p.finished.connect(lambda _c, _s, pr=p: _on_auth_finished(win, pr))
     win._authchg_proc = p
     log = paths.STATE_LOG_DIR / f"{stamp}.auth.log"
-    p.start("bash", [str(paths.ENGINE), action, f"--log={log}"])
+    argv = paths.engine_argv(action, f"--log={log}")
+    p.start(argv[0], argv[1:])
 
 
 def _on_auth_finished(win, proc: QProcess):

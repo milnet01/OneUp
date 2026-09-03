@@ -168,7 +168,7 @@ def request_size(win, key: str):
     """Fetch the exact download size for a step on demand (system only). Runs
     the engine's --size mode, which authenticates and does a `zypper dup
     --dry-run`, so it stays out of the password-free --check path."""
-    if key != "system" or not paths.ENGINE.exists():
+    if key != "system" or not paths.engine_available():
         return
     row = win.rows.get(key)
     if not row:
@@ -202,7 +202,8 @@ def request_size(win, key: str):
     # follows reuses the credential it has already cached. Two engines are two sudo
     # timestamp records and therefore two password dialogs, because with no terminal sudo
     # keys its cache to the PARENT process id (ONEUP-0044).
-    p.start("bash", [str(paths.ENGINE), f"--size={key}", "--hold", f"--log={size_log}"])
+    argv = paths.engine_argv(f"--size={key}", "--hold", f"--log={size_log}")
+    p.start(argv[0], argv[1:])
 
 
 def _on_size_output(win):
@@ -247,10 +248,12 @@ def _on_size_finished(win, exit_code: int, _status):
 
 def _engine_args(steps: list[str], check: bool = False, import_keys: bool = False,
                   skip_repos: list[str] | None = None) -> list[str]:
-    """Build the engine argv for the stable flags (steps/check/import_keys), plus
-    one --skip-repo=<alias> per entry in skip_repos. `_launch` inserts --log=<path>
-    into the result at call time — this helper doesn't know about the log path."""
-    args = [str(paths.ENGINE), f"--steps={','.join(steps)}"]
+    """Build the engine ARGUMENTS for the stable flags (steps/check/import_keys),
+    plus one --skip-repo=<alias> per entry in skip_repos. The engine itself is not
+    in here: `_launch` hands these to `paths.engine_argv`, which decides which
+    engine runs (ONEUP-0054 §4.7). `_launch` also inserts --log=<path> at call
+    time — this helper doesn't know about the log path."""
+    args = [f"--steps={','.join(steps)}"]
     if check:
         args.append("--check")
     elif import_keys:
@@ -331,9 +334,10 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
         QMessageBox.information(win, "Nothing selected",
                                 "Turn on at least one task first.")
         return
-    if not paths.ENGINE.exists():
+    if not paths.engine_available():
         QMessageBox.critical(win, "Engine missing",
-                             f"Could not find the update script at:\n{paths.ENGINE}")
+                             "Could not find the update engine:\n"
+                             f"{' '.join(paths.engine_argv())}")
         return
     # Never start a second engine while a download-size preview is in flight. Doing so
     # IS the ONEUP-0044 defect: with no terminal sudo keys its cached credential to the
@@ -366,13 +370,14 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
     win.set_controls_enabled(False)
 
     args = _engine_args(steps, check, import_keys, skip_repos)
-    args.insert(2, f"--log={win._log_path}")  # after --steps, before --check/etc.
+    args.insert(1, f"--log={win._log_path}")  # after --steps, before --check/etc.
     win.proc = QProcess(win)
     win.proc.setProcessChannelMode(QProcess.MergedChannels)
     win.proc.readyReadStandardOutput.connect(partial(on_output, win))
     win.proc.finished.connect(partial(on_finished, win))
     win.proc.errorOccurred.connect(partial(on_error, win))
-    win.proc.start("bash", args)
+    argv = paths.engine_argv(*args)
+    win.proc.start(argv[0], argv[1:])
 
 
 def on_output(win):

@@ -152,8 +152,9 @@ def _thin_snapshots(win):
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.finished.connect(lambda _c, _s, pr=p: _on_thin_finished(win, pr))
     win._thin_proc = p
-    p.start("bash", [str(paths.ENGINE), "--thin-snapshots",
-                     f"--log={paths.STATE_LOG_DIR / f'{stamp}.thin.log'}"])
+    argv = paths.engine_argv(
+        "--thin-snapshots", f"--log={paths.STATE_LOG_DIR / f'{stamp}.thin.log'}")
+    p.start(argv[0], argv[1:])
 
 
 def _on_thin_finished(win, proc: QProcess):

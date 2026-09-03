@@ -61,6 +61,54 @@ def _state_home() -> Path:
 
 
 ENGINE = _find_engine()
+
+
+def _engine_is_v2() -> bool:
+    """Is the window pointed at the Python engine? (ONEUP-0054 §4.7.)
+
+    Read PER CALL, never bound at import: the suite flips the variable between
+    scenarios, and a value captured at import would ignore the flip — the same
+    reason every path here is read through the module (ONEUP-0034 §4.4, INV-2).
+
+    `v2` selects it; anything else — unset, `v1`, a typo — is the Bash engine,
+    which stays the default until stage 9 flips it. Not the suite's
+    `ONEUP_ENGINE_CMD`, which is a whole argv the harness pins per side: this
+    one names a side, and one variable for both would let an export aimed at
+    the suite reach the window.
+    """
+    return os.environ.get("ONEUP_ENGINE", "") == "v2"
+
+
+def engine_argv(*args: str) -> list[str]:
+    """The full command that launches the engine, program first.
+
+    A `QProcess` site takes `argv[0]` as the program and `argv[1:]` as its
+    arguments; a `subprocess` site passes the list whole. Every launch in the
+    window goes through here, so the window can launch a non-Bash engine at all.
+
+    The v2 arm is headed by `env` carrying `PYTHONPATH`: `-m` resolves only
+    from the checkout root otherwise, and an argv cannot carry an environment
+    any other way. Not by mutating `os.environ`, which would reach the v1 bash
+    child too; not by a per-site environment, which would change the work at
+    all eight call sites to serve one arm of one helper. The engine spells a
+    call the same way (`sudo env LC_ALL=C bash -c` in `oneup/engine/steps.py`).
+    """
+    if _engine_is_v2():
+        inherited = os.environ.get("PYTHONPATH", "")
+        pythonpath = f"{HERE}{os.pathsep}{inherited}" if inherited else str(HERE)
+        return ["env", f"PYTHONPATH={pythonpath}",
+                sys.executable, "-m", "oneup.engine", *args]
+    return ["bash", str(ENGINE), *args]
+
+
+def engine_available() -> bool:
+    """Is the SELECTED engine present? `ENGINE.exists()` asks it of a Bash file,
+    which answers about the wrong engine once the switch is on."""
+    if _engine_is_v2():
+        return (HERE / "oneup" / "engine" / "__main__.py").is_file()
+    return ENGINE.exists()
+
+
 # The root updater.py — the thing a launcher names. Resolved once, here, because
 # a systemd unit built from a package module's __file__ would run
 # `python3 …/oneup/gui/autostart.py --check`, which does nothing at all, and the

@@ -29,7 +29,7 @@ have no row here (ONEUP-0194).
 | --- | --- | --- |
 | Engine | `tests/run-tests.sh` | the `@@MARKER@@` lines `update_system.sh` prints |
 | Engine differential | `tests/differential-test.sh` | that `update_system.sh` and the `oneup.engine` package produce the same whole output and exit status when driven through the same mocks — gate G2 of ONEUP-0054, and what makes the rewrite auditable rather than trusted |
-| GUI | `tests/gui-smoke.py` | the window's state after being fed those same marker lines |
+| GUI | `tests/gui-smoke.py` | the window's state after being fed those same marker lines — and, in its `ONEUP_ENGINE=v2` pass only, one scenario that launches the Python engine through the window's own code path and asserts the window acted on what the engine actually sent (gate G3 of ONEUP-0054). That scenario skips in the default pass |
 | Version bump | `tests/bump-test.py` | that a real bump still parses the five real version sites, and rewrites the CHANGELOG heading and both links correctly (`docs/standards/workflow.md` §5.1's row owns the exact split) |
 
 **No sizes or assertion counts appear here, deliberately**

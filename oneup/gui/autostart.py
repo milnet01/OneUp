@@ -201,7 +201,7 @@ def on_autoupdate_toggled(win, on: bool):
     # async chain hits _query_auth_status's early return and NO settle ever fires,
     # so we must revert-and-return BEFORE any latch/disable, or the toggle would be
     # stuck disabled forever.
-    if not paths.ENGINE.exists():
+    if not paths.engine_available():
         _set_autoupdate_checked(win, False)
         return
     if on:

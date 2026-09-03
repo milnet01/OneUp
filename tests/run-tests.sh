@@ -3154,6 +3154,51 @@ else
     echo "  SKIP - T-1 needs the network; set ONEUP_TEST_NETWORK=1 to run it"
 fi
 
+# ---------------------------------------------------------------------------
+echo "TEST: the Python engine runs a full update with PySide6 unimportable (ONEUP-0054 INV-11)"
+# ONEUP-0054 gate G5 and the spec's INV-11: the half that becomes root must not
+# depend on the half that draws windows. A stub PySide6 earlier on the import path
+# than site-packages is what absence looks like from inside the engine -- an
+# uninstall would prove the same thing and cannot be asked of a developer's box.
+#
+# It PINS the Python engine and ignores an inherited ONEUP_ENGINE_CMD, the way
+# tests/differential-test.sh does: under the Bash engine this scenario would pass
+# having tested nothing at all, since no Python import happens.
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "  SKIP - INV-11 needs python3; the Bash engine is unaffected either way"
+else
+    d=$(mktemp -d); setup_common "$d"
+    # setup_common ships no zypper, and without one the system step reaches the
+    # REAL zypper on the developer's box -- a test depending on the machine it
+    # runs on, which docs/standards/testing.md §2 forbids.
+    cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *lr*)      echo " 1 | oss | Main OSS | Yes | (r ) Yes | Yes"; exit 0 ;;
+  *refresh*) exit 0 ;;
+  *dup*|*update*) echo "Nothing to do."; exit 0 ;;
+  *)         exit 0 ;;
+esac
+EOF
+    chmod +x "$d/zypper"
+    mkdir -p "$d/noqt"
+    cat > "$d/noqt/PySide6.py" <<'EOF'
+raise ImportError("PySide6 is hidden by tests/run-tests.sh (ONEUP-0054 INV-11)")
+EOF
+    out=$(
+        ENGINE_CMD=(python3 -m oneup.engine)
+        PYTHONPATH="$d/noqt${PYTHONPATH:+:$PYTHONPATH}" \
+            run_engine "$d" --steps=system,flatpak,firmware,orphans,cache
+    )
+    check "the run reached its end with no Qt on the import path" \
+        "@@DONE@@|ok" "$out"
+    check "the system step still completed"  "@@STEP_END@@|system"  "$out"
+    check_absent "no module the engine loads imported PySide6" \
+        "PySide6 is hidden by tests/run-tests.sh" "$out"
+    check_absent "the run did not fail on an import" "ModuleNotFoundError" "$out"
+    rm -rf "$d"
+fi
+
 echo
 echo "======================================"
 echo "  Passed: $PASS   Failed: $FAIL"

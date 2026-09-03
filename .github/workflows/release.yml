@@ -60,6 +60,20 @@ jobs:
             [ "$rc" -eq 77 ] || exit "$rc"
           }
 
+      # The same suite with the window pointed at the Python engine: gate G3 of
+      # ONEUP-0054. Its pairing scenario runs only under ONEUP_ENGINE=v2 and skips
+      # in the pass above, so without this leg the gate would be local-only —
+      # which docs/standards/workflow.md §10 names as a trap in its own words.
+      - name: GUI smoke test (offscreen, the window driving the v2 engine)
+        env:
+          ONEUP_ENGINE: v2
+        run: |
+          python tests/gui-smoke.py || {
+            rc=$?
+            [ "$rc" -eq 77 ] && echo "PySide6 unavailable — skipped"
+            [ "$rc" -eq 77 ] || exit "$rc"
+          }
+
       - name: Install FUSE (needed to pack the AppImage)
         run: sudo apt-get update && sudo apt-get install -y libfuse2
 

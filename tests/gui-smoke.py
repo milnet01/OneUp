@@ -2773,6 +2773,67 @@ def main() -> int:
           theme.contrast("#ffffff", keys76["switchfocuson"]) >= theme.FOCUS_MIN
           and theme.contrast("#ffffff", keys76["switchfocusoff"]) >= theme.FOCUS_MIN)
 
+    # --- ONEUP-0054 stage 7, gate G3: the window DRIVING the new engine -------
+    # Every other scenario in this file feeds the window marker lines it wrote
+    # itself, so the suite proves the window and not the pair. This one launches
+    # the real Python engine through the window's own code path and reads what
+    # came back (docs/design/oneup-2.0.md §7, G3's row).
+    #
+    # It READS the ambient switch rather than setting one. A self-setting
+    # scenario would run in both of local-CI.sh's window passes, leaving the
+    # second pass nothing it alone can prove and no way to fail.
+    #
+    # --auth-status is the probe because it cannot hurt the machine running it:
+    # read-only, and its privileged leg is sudo -k -n, which refuses to prompt
+    # (oneup/engine/actions.py's auth_current, whose comment records that -k
+    # leaves a warm credential intact).
+    if os.environ.get("ONEUP_ENGINE", "") != "v2":
+        print("  SKIP - G3 pairing: ONEUP_ENGINE is not v2 "
+              "(local-CI.sh's second window pass runs it)")
+    else:
+        wG3 = window.Updater()
+        # _on_auth_status_finished calls this on an explicit @@AUTH@@|off, and it
+        # opens a modal QMessageBox that would block the suite wherever the weekly
+        # timer is enabled and the drop-in is not.
+        _orig_stand_down = auth._stand_down_autoupdate
+        auth._stand_down_autoupdate = lambda *_a, **_k: None
+        # The window's own finish handler DRAINS the process buffer, so reading it
+        # afterwards yields nothing — and an empty payload makes every `in out`
+        # test False, which reads as agreement. Spy on what the handler was
+        # given, then hand the real handler the same bytes through the _StubProc
+        # shape used above, so the code path under test still runs.
+        _seen = {}
+        _orig_finished = auth._on_auth_status_finished
+
+        class _Captured:
+            def __init__(self, text): self._b = text.encode()
+            def readAllStandardOutput(self): return self._b
+
+        def _spy(win_, proc_):
+            _seen["out"] = bytes(proc_.readAllStandardOutput()).decode(errors="replace")
+            _orig_finished(win_, _Captured(_seen["out"]))
+
+        auth._on_auth_status_finished = _spy
+        try:
+            auth._query_auth_status(wG3)
+            proc = getattr(wG3, "_authstat_proc", None)
+            check("G3 the window launched an engine process", proc is not None)
+            check("G3 the engine run finished",
+                  proc is not None and proc.waitForFinished(20000))
+            check("G3 the engine exited 0", proc is not None and proc.exitCode() == 0)
+            out = _seen.get("out", "")
+            # Assert AGREEMENT, never `on` or `off`: the answer is a property of
+            # whatever machine this runs on. Exactly one verdict, so an empty
+            # payload fails here instead of passing both ways below.
+            saw_on, saw_off = "@@AUTH@@|on" in out, "@@AUTH@@|off" in out
+            check("G3 the Python engine emitted exactly one @@AUTH@@ verdict",
+                  saw_on != saw_off)
+            check("G3 the window's toggle agrees with the payload the engine sent",
+                  wG3.auth_btn.isChecked() == saw_on)
+        finally:
+            auth._on_auth_status_finished = _orig_finished
+            auth._stand_down_autoupdate = _orig_stand_down
+
     print()
     print("======================================")
     print(f"  Passed: {PASS}   Failed: {FAIL}")

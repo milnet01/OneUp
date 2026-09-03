@@ -97,13 +97,14 @@ def _show_window(win):
 
 def _tray_check_args(log_path) -> list[str]:
     # The read-only check, WITHOUT --notify: the ambient icon replaces the popup.
-    return [str(paths.ENGINE), "--check", f"--log={log_path}"]
+    # ARGUMENTS only — `paths.engine_argv` supplies the engine (ONEUP-0054 §4.7).
+    return ["--check", f"--log={log_path}"]
 
 
 def _tray_check(win):
     """Run the engine's read-only --check on its own QProcess and read only the
     TOTAL marker — never disturbs the window's task rows / progress / run state."""
-    if not paths.ENGINE.exists():
+    if not paths.engine_available():
         return
     proc = win._traycheck_proc
     if proc is not None and proc.state() != QProcess.NotRunning:
@@ -115,7 +116,8 @@ def _tray_check(win):
     p.readyReadStandardOutput.connect(partial(_on_traycheck_output, win))
     p.finished.connect(partial(_on_traycheck_finished, win))
     win._traycheck_proc = p
-    p.start("bash", _tray_check_args(_traycheck_log()))
+    argv = paths.engine_argv(*_tray_check_args(_traycheck_log()))
+    p.start(argv[0], argv[1:])
 
 
 def _traycheck_log():

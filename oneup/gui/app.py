@@ -22,11 +22,12 @@ from .window import Updater
 def _headless_check() -> int:
     """`oneup --check`: run the engine's read-only check + notification, no GUI.
     This is what the optional weekly systemd-user timer invokes."""
-    if not paths.ENGINE.exists():
-        print(f"OneUp: update script not found at {paths.ENGINE}", file=sys.stderr)
+    if not paths.engine_available():
+        print(f"OneUp: engine not found: {' '.join(paths.engine_argv())}",
+              file=sys.stderr)
         return 1
     return subprocess.run(  # noqa: S603
-        ["bash", str(paths.ENGINE), "--check", "--notify"]  # noqa: S607
+        paths.engine_argv("--check", "--notify")
     ).returncode
 
 
@@ -37,11 +38,12 @@ def _headless_update() -> int:
     every step) and is NEVER handed --update (its arg parser would reject it).
     Also passes --auto-skip-repos (additive): an unattended run should set a single
     broken software source aside and finish the rest, not fail the whole update."""
-    if not paths.ENGINE.exists():
-        print(f"OneUp: update script not found at {paths.ENGINE}", file=sys.stderr)
+    if not paths.engine_available():
+        print(f"OneUp: engine not found: {' '.join(paths.engine_argv())}",
+              file=sys.stderr)
         return 1
     return subprocess.run(  # noqa: S603
-        ["bash", str(paths.ENGINE), "--notify", "--auto-skip-repos"]  # noqa: S607
+        paths.engine_argv("--notify", "--auto-skip-repos")
     ).returncode
 
 

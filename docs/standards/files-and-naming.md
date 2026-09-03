@@ -244,6 +244,15 @@ were true would have misled the 2.0 implementer.** What is actually true:
   recovery declines when no `download.opensuse.org` baseurl is present — an empty
   directory would make every recovery scenario exercise the skip path while appearing to
   test recovery.
+- **`ONEUP_ENGINE` is not in the table above either, and for the same reason.** It
+  overrides no path or setting: it names *which engine* the window launches — `v2` for
+  `python3 -m oneup.engine`, anything else (unset, `v1`, a typo) for the Bash engine.
+  Read by the **window** alone, per call rather than at import, so a scenario can flip
+  it (`ONEUP-0054` §4.7). It is **temporary**: stage 9 of that item flips the default and
+  the variable goes with it. Not to be confused with the suite's `ONEUP_ENGINE_CMD`,
+  which is a whole argv the test harness pins per side; one variable for both would let
+  an export aimed at the suite reach the window.
+
 - **`ONEUP_TEST_NETWORK` is not in the table above, because it is not an engine
   override.** It is read by `tests/run-tests.sh` alone, and opts in to the network-dependent
   checks (ONEUP-0094 T-1). `local-CI.sh` defaults it to 1, the release workflow leaves it

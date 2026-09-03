@@ -89,23 +89,40 @@ fi
 # Constructs the PySide6 window offscreen and feeds it engine markers. Exit 77
 # means PySide6 isn't installed here — a skip, not a failure (matches the
 # engine's skip-cleanly-for-absent-tools convention).
+# Run TWICE (ONEUP-0054 stage 7, gate G3). The suite feeds the window marker lines
+# and launches no engine, so on its own it proves the window rather than the pair;
+# its G3 scenario runs only under ONEUP_ENGINE=v2 and skips otherwise. The first
+# pass CLEARS the variable rather than assuming it is unset — this script does not
+# scrub its environment, so an exported switch would make both passes v2 passes and
+# the second could no longer fail on its own.
+gui_smoke_pass() {   # $1 = label ('' for the default pass), $2.. = env arguments
+    local label="$1"; shift
+    local name="tests/gui-smoke.py${label:+ ($label)}"
+    local log="/tmp/local-ci-gui${label:+-$label}.log"
+    env "$@" python3 tests/gui-smoke.py >"$log" 2>&1
+    local rc=$?
+    if [[ $rc -eq 0 ]]; then
+        ok "$name — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$log" | tail -1)"
+    elif [[ $rc -eq 77 ]]; then
+        skip "$name" "PySide6 not installed"
+    else
+        bad "$name"; tail -25 "$log"
+    fi
+}
+
 step "GUI smoke test (offscreen)"
-python3 tests/gui-smoke.py >/tmp/local-ci-gui.log 2>&1
-rc=$?
-if [[ $rc -eq 0 ]]; then
-    ok "tests/gui-smoke.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' /tmp/local-ci-gui.log | tail -1)"
-elif [[ $rc -eq 77 ]]; then
-    skip "tests/gui-smoke.py" "PySide6 not installed"
-else
-    bad "tests/gui-smoke.py"; tail -25 /tmp/local-ci-gui.log
-fi
+gui_smoke_pass "" -u ONEUP_ENGINE
+
+step "GUI smoke test (offscreen, the window driving the v2 engine)"
+gui_smoke_pass "v2" ONEUP_ENGINE=v2
 
 # --- package structure (docs/specs/ONEUP-0034-gui-modules.md §5) ------------
-# INV-2/3/4/12: the four rules that pass review by looking correct and fail later
-# somewhere that looks unrelated — a path constant bound by name so a test's
-# redirect stops redirecting, an engine module importing oneup.gui, a second
-# module computing its own HERE, and the entry point imported from inside the
-# package. Stdlib-only, so it never skips.
+# INV-2/3/4/12, plus ONEUP-0054's engine-launch rule: the ones that pass review by
+# looking correct and fail later somewhere that looks unrelated — a path constant
+# bound by name so a test's redirect stops redirecting, an engine module importing
+# oneup.gui, a second module computing its own HERE, the entry point imported from
+# inside the package, and a launch site naming its own program instead of going
+# through paths.engine_argv. Stdlib-only, so it never skips.
 step "Package structure (oneup/)"
 if python3 tests/imports-test.py >/tmp/local-ci-imports.log 2>&1; then
     ok "tests/imports-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' /tmp/local-ci-imports.log | tail -1)"
