@@ -1,7 +1,7 @@
 # ONEUP-0054 — Python engine — build plan
 
 **Spec:** [docs/specs/ONEUP-0054-python-engine.md](../specs/ONEUP-0054-python-engine.md)
-**Status:** in progress — stages 1–4 done (2026-08-25), stage 5 done (2026-08-31); stage 6 under way.
+**Status:** in progress — stages 1–4 done (2026-08-25), stage 5 done (2026-08-31), stage 6 done (2026-09-02); stage 7 under way.
 
 ## Scope of this file
 
@@ -1481,6 +1481,121 @@ introduces and no other; repairing either neighbour in that commit is the orthog
 
 **ONEUP-0134 and ONEUP-0135 are still run past**, as at stage 5 and for the same reasons.
 
+## Stage 7 — the window pointed at v2, and the PySide6-absent scenario
+
+**Branch: `v2` for the code and the standards; the plan text and step 8's spec amendment
+take the `main`-then-merge route**, as stage 6 settled. The window is a package `main` does
+not have, and a standard that names the variable only `v2`'s window reads is
+`docs/standards/workflow.md` §9's second binding. A plan is neither of §9's two cases.
+
+**What this stage is: two gates that share a switch and nothing else.** G5 is a scenario —
+run the engine with PySide6 unimportable and see it work. G3 is a pairing — the window's own
+launch path driving the Python engine for real. The window suite as it stands feeds the
+window marker lines and never launches an engine at all, so running it unchanged proves the
+window, not the pair; `docs/design/oneup-2.0.md` §7's G3 row says so and names this stage's
+switch as what fixes it.
+
+**Two environment variables, deliberately.** The suite has `ONEUP_ENGINE_CMD`, a scalar
+argv word-split into a command (spec §4.4). The window gets `ONEUP_ENGINE=v1|v2` (§4.7).
+They answer different questions: the harness pins an *arbitrary* command per side and must,
+while a scenario or a user switching the window names a side rather than composing an argv.
+One name for both would let an export aimed at the suite reach the window unasked. Unset —
+and any value that is not `v2` — is v1, which stays the default until stage 9's flip.
+
+**Why an argv helper rather than a path.** Every launch in the window is `bash` plus
+`paths.ENGINE`, hardcoded at the call site, so the window cannot launch a non-Bash engine at
+all (§4.7). The helper returns the whole command; a `QProcess` site takes its head as the
+program and the rest as arguments, a `subprocess` site passes it whole.
+
+### Steps
+
+1. **`oneup/gui/paths.py` — the switch.** Add `engine_argv(*args)`: `bash` and the resolved
+   `update_system.sh` for v1, the running interpreter and `-m oneup.engine` for v2. Resolve
+   the variable **per call**, never at import, so a scenario can flip it — the same reason
+   every other path here is read through the module rather than bound into another
+   (`docs/specs/ONEUP-0034-gui-modules.md` §4.4, INV-2). For v2, prepend the repo root to
+   the child's `PYTHONPATH`: `QProcess` inherits the parent environment and no call site
+   sets one, so `-m` would otherwise resolve only when the window happened to be launched
+   from the checkout root. `ENGINE` and `_find_engine` stay — v1 is still what an ordinary
+   launch resolves, and stage 9 owns their removal.
+   → **verify:** with the variable unset, set to `v1`, and set to a value that is neither,
+   `engine_argv("--check")` is exactly what the call sites build today; with `v2` it names
+   the interpreter and the module. `python3 tests/gui-smoke.py` unchanged.
+
+2. **Repoint every launch site.** Each `QProcess` start naming `bash`, and each `subprocess`
+   call naming `bash` and the engine, goes through the helper. The headless timer entry
+   points are the ones to check twice: they are the unattended paths, so a pair still
+   launching v1 after the flip would go unnoticed longest (§4.7).
+   → **verify:** no `bash` literal remains beside `paths.ENGINE` anywhere under
+   `oneup/gui/`; `python3 tests/gui-smoke.py` green with the variable unset.
+
+3. **The availability guards.** The sites gating on `paths.ENGINE.exists()` ask their
+   question about a Bash file. Replace with `engine_available()`, which asks it of whichever
+   engine is selected, and let the user-facing "could not find" messages name the resolved
+   command rather than a script path.
+   → **verify:** with `ONEUP_ENGINE=v2` and `update_system.sh` moved aside, the window
+   starts and Run does not warn; with the engine package's entry module moved aside instead
+   it does warn, and the message names the command that failed.
+
+4. **`tests/gui-smoke.py` — G3, the pairing.** One scenario that sets the switch to v2,
+   calls the window's own `_query_auth_status`, waits for the process, and asserts the toggle
+   the window set agrees with the `@@AUTH@@` payload the Python engine actually emitted.
+   `--auth-status` is the right probe: it is read-only, and its privileged leg is `sudo` with
+   `-k -n`, which refuses to prompt — so the scenario can neither hang nor authenticate on
+   the machine running it. Assert **agreement**, never `on` or `off`; the answer is a
+   property of that machine. Neutralise `_stand_down_autoupdate` for the scenario, because on
+   a machine without the drop-in it opens a modal dialog and the suite would block there.
+   Add the structural check beside it: no launch site under `oneup/gui/` names an engine
+   itself.
+   → **verify:** the scenario fails with `engine_argv`'s v2 arm pointed at a module that does
+   not exist and passes with it restored; the suite is green both with the switch unset and
+   with it set to `v2`.
+
+5. **`tests/run-tests.sh` — G5, INV-11.** A scenario that runs a full mock update against the
+   Python engine with PySide6 unimportable: a stub `PySide6` on `PYTHONPATH` that raises
+   `ImportError`, which is what absence looks like from inside the engine. It pins the Python
+   engine itself and ignores an inherited `ONEUP_ENGINE_CMD`, as `tests/differential-test.sh`
+   does and for the same reason — run against the Bash engine it would pass having tested
+   nothing. Skip cleanly where `python3` is absent, the way a step whose tool is missing is
+   skipped.
+   → **verify:** the scenario goes red when a `PySide6` import is added to a module the
+   engine loads and green when it is removed; the engine suite's other counts are unchanged,
+   with `ONEUP_ENGINE_CMD` unset and with it set to the Python engine.
+
+6. **`local-CI.sh` — the second window run.** Run the window suite again with
+   `ONEUP_ENGINE=v2`, reported on its own line. G3 is *"the GUI suite green with the window
+   driving the new engine"*, and only a second run says that. It skips for the same reason
+   the first does when PySide6 is not installed.
+   → **verify:** `./local-CI.sh` is green and reports both window runs; breaking step 1's v2
+   arm turns the second red and leaves the first green.
+
+7. **The two standards this touches.** `docs/standards/files-and-naming.md`'s
+   environment-variable table gains `ONEUP_ENGINE` — which half reads it, and that it lapses
+   at stage 9. `docs/standards/workflow.md` §6's gate table gains the second window run, with
+   its cost measured here and §6's stated range re-measured in the same edit.
+   → **verify:** `python3 tests/docs-check.py` clean; the §6 figure comes from a
+   `./local-CI.sh` run in this stage rather than from the previous one.
+
+8. **The spec amendment — `main`, then merge.** Record in §4.7 what was built: the two
+   variables and why they are two, that the resolver reporting which paths it tried belongs
+   with the default flip rather than with the switch, and G3's probe with its neutralised
+   dialog.
+   → **verify:** §4.7 reads true against the code on `v2`; the file is on `main` and merged.
+
+### Not stage 7's
+
+**The default is not flipped.** §4.7 gives the flip, the console entry point and the
+packaging to stage 9. The switch is what stages 7 and 8 run behind.
+
+**`_find_engine` is not replaced.** §4.7's resolver — the one reporting which paths it tried,
+so no caller has to — belongs with the flip: until then v1 is what an ordinary launch
+resolves, and its behaviour must not move underneath a frozen default.
+
+**G6 is stage 8's.** The real run on the user's machine is what this switch exists to make
+selectable; selecting is all this stage does.
+
+**ONEUP-0133, 0134 and 0135 are still run past**, as at stages 5 and 6.
+
 ## Definition of done
 
 **Stage 1 is done** when `main`'s §4.4 matches `v2`'s; neither call site in
@@ -1583,6 +1698,18 @@ above is written; when step 8's amendment has landed on `main` and merged; and w
 scenario nobody wrote, on a standard's row nobody updated, or on a budget nobody measured;
 and after step 4 the harness reports nothing, so only the failures seen along the way show
 it could ever have caught the banner. `main`'s behaviour is unchanged.
+
+**Stage 7 is done** when `engine_argv` answers for both sides and no launch site under
+`oneup/gui/` names an engine itself; when the availability guards and the "could not find"
+messages speak about the selected engine rather than about `update_system.sh`; when the G3
+scenario has been seen to fail with the v2 arm pointed at a missing module and to pass with
+it restored; when the INV-11 scenario has been seen to fail against an engine module that
+imports PySide6; when `local-CI.sh` runs the window suite against both engines and reports
+each; when the environment table and §6's gate table name what this stage added, with §6's
+range re-measured here; when step 8's amendment has landed on `main` and merged; and when
+`./local-CI.sh` is green on `v2` with both variables unset. **G3 and G5 are met here.**
+**The seen-to-fail clauses are in this list because nothing else holds them** — a scenario
+that has never been red is not yet known to be a test. `main`'s behaviour is unchanged.
 
 **The item is done** at stage 9, when G1–G6 are met. `docs/design/oneup-2.0.md`
 §7 owns the gate; spec §4.6 says which stage earns each of them and that stage 9
