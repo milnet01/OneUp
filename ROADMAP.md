@@ -1282,6 +1282,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Next: stage 7 — the window pointed at v2 behind an environment switch, plus
   INV-11's scenario. G3 and G5.
+  Progress (2026-09-03): stage 7 of 9 done — the window launches either engine behind `ONEUP_ENGINE`, and gates G3 and G5 are earned.
+
+  The plan's stage-7 steps were gated with `review-contract` to its cap: two loops, 14 verified, 14 fixed. All three lanes of loop 1 found the same three defects, and all three of loop 2 found the same one.
+
+  Built: `paths.engine_argv()` and `engine_available()`, resolved per call; all eight launch sites and eight guards repointed, so `paths.ENGINE` appears nowhere outside `paths.py`. A structural check in `tests/imports-test.py` holds that, as an AST walk. `tests/gui-smoke.py` gains the G3 pairing scenario — it reads the ambient switch and runs only in `local-CI.sh`'s second window pass. `tests/run-tests.sh` gains INV-11, a full mock run with PySide6 unimportable. `release.yml` gains the matching leg, so neither gate is local-only.
+
+  Each new check was seen to fail before being trusted. Two defects in the drafts were caught that way: the G3 scenario read a buffer the window's own handler had already drained, which made an empty payload read as agreement; and the INV-11 scenario reached the real `zypper` because `setup_common` ships no mock for it.
+
+  `./local-CI.sh` green on `v2`: 322/0 engine, 57/0 parsers, 31/0 differential, 447/0 and 452/0 window, 8/0 structure, 21354 documentation checks. Re-measured for `workflow.md` §6: 5m25s total, engine suite 2m52s, differential 50s, window pass ~32s each.
+
+  Stage 8 is next: a real run on the user's own machine, which earns G6.
 
 - ✅ [ONEUP-0056] **Never report "up to date" for a source the check couldn't read.**
   Reported with two screenshots: OneUp's check said "Everything is up
@@ -5780,3 +5791,13 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** In the light themes you can hardly see how far the progress bar has filled.
   Kind: accessibility.
   Source: measured 2026-09-02 while closing ONEUP-0163.
+
+- 📋 [ONEUP-0199] **Reconcile ONEUP-0054's spec between main and v2 — main's copy is behind.**
+  Found while building the stage-7 review packet. `docs/specs/ONEUP-0054-python-engine.md` differs between the branches, and `v2` holds the newer text: §4.6's rows 1, 2, 4 and 5 each carry detail `main`'s copy lacks (the named call sites at stage 1, the window's `STATE_LOG_DIR` rename and the four unpinned exit codes at stage 2, the `--hold` exception at stage 4, the two structural checks at stage 5). §4.6 row 7 and the whole of §4.7 are byte-identical on both, so stage 7's own gate was unaffected.
+
+  Why it matters: the plan's stage 8 amends the spec on `main` and merges, which assumes the two are in step. They are not, so an amendment written against `main`'s text can be written against a passage `v2` has already replaced. A session reading the spec on `main` to learn what stage 7 owes reads an older contract with nothing saying so.
+
+  Decide which branch is authoritative for this spec and make the other match, before stage 8 amends it.
+  **Layman:** Two branches hold different versions of the same design document, so a session reading it on the wrong branch builds from stale instructions.
+  Kind: doc-fix.
+  Source: in-session-2026-09-03 (ONEUP-0054 stage 7 plan gate, Phase 1b).
