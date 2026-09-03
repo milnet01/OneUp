@@ -1541,15 +1541,20 @@ program and the rest as arguments, a `subprocess` site passes it whole.
    (§4.7). The structural check goes in `tests/imports-test.py`, which is stdlib-only and
    **never skips**, and which already holds the package's other structural rules — not in
    `tests/gui-smoke.py`, which imports PySide6 at module level and exits 77 wholesale where
-   it is absent, so a Qt-free text check placed there would be gated on Qt.
-   → **verify:** the check is that no `QProcess.start` or `subprocess` call under
-   `oneup/gui/` names its own program; it is red against the tree before this step and green
-   after. **Not "no `bash` literal under `oneup/gui/`"** — step 1 leaves one in
-   `engine_argv`'s v1 arm, so the shape is one occurrence and not zero; and two sites build
-   their argv in a different function from the one naming `bash` (`run.py`'s `_engine_args`
-   against `_launch`, `tray.py`'s `_tray_check_args` against `_tray_check`), which a
-   literal-hunting check passes without touching. `python3 tests/gui-smoke.py` green with
-   the variable unset.
+   it is absent, so a Qt-free text check placed there would be gated on Qt. **That file's
+   docstring counts its rules and names `docs/specs/ONEUP-0034-gui-modules.md` §5 as their
+   contract** — a fifth rule, whose contract is this spec, falsifies both. Repair them in
+   the same edit, as stages 3 and 4 did for the docstrings their steps falsified.
+   → **verify:** the check is that no call under `oneup/gui/` builds an argv naming
+   `paths.ENGINE` while supplying its own program; it is red against the tree before this
+   step and green after. **Scope it to engine launches** — `autostart.py` shells to
+   `systemctl --user`, and the repository editor's apply is a `QProcess` that launches no
+   engine, so a check over every child process could never go green. **And not "no `bash`
+   literal under `oneup/gui/`"** — step 1 leaves one in `engine_argv`'s v1 arm, so the shape
+   is one occurrence and not zero; two sites also build their argv in a different function
+   from the one naming `bash` (`run.py`'s `_engine_args` against `_launch`, `tray.py`'s
+   `_tray_check_args` against `_tray_check`), which a literal-hunting check passes without
+   touching. `python3 tests/gui-smoke.py` green with the variable unset.
 
 3. **The availability guards.** The sites gating on `paths.ENGINE.exists()` ask their
    question about a Bash file. Replace with `engine_available()`, which asks it of whichever
@@ -1571,8 +1576,9 @@ program and the rest as arguments, a `subprocess` site passes it whole.
    can neither hang, authenticate, nor disturb a run in flight. Assert **agreement**, never
    `on` or `off`; the answer is a property of the machine. Neutralise
    `_stand_down_autoupdate` for the scenario: `_on_auth_status_finished` reaches it on an
-   explicit `@@AUTH@@|off` payload, and it opens a `QMessageBox.information` that would block
-   the suite on any machine without the drop-in.
+   explicit `@@AUTH@@|off` payload, and it opens a `QMessageBox.information` that blocks the
+   suite on a machine where the weekly timer is enabled and the drop-in is not — it
+   early-returns otherwise.
    → **verify:** with the switch set to `v2`, the scenario fails with `engine_argv`'s v2 arm
    pointed at a module that does not exist and passes with it restored; with the switch unset
    it reports a skip rather than a pass.
@@ -1590,25 +1596,43 @@ program and the rest as arguments, a `subprocess` site passes it whole.
 
 6. **`local-CI.sh` — the second window run.** Run the window suite again with
    `ONEUP_ENGINE=v2`, reported on its own line. G3 is *"the GUI suite green with the window
-   driving the new engine"*, and only a second run says that. It skips for the same reason
-   the first does when PySide6 is not installed.
+   driving the new engine"*, and only a second run says that. **Run the first pass with
+   `ONEUP_ENGINE` explicitly cleared**, not merely unset in the developer's shell:
+   `local-CI.sh` does not scrub its environment, so an exported switch makes both passes v2
+   passes, the G3 scenario never skips, and the discriminator below reports red for both.
+   Stage 6 step 2 pinned the same hazard for the sibling variable. Both passes skip for the
+   reason the single one does today, when PySide6 is not installed.
    → **verify:** `./local-CI.sh` is green and reports both window runs; breaking step 1's v2
-   arm turns the second red and leaves the first green.
+   arm turns the second red and leaves the first green — including with `ONEUP_ENGINE=v2`
+   exported into the run.
 
-7. **The two standards this touches.** `docs/standards/files-and-naming.md` §5.1 gains
+7. **The documentation and CI step 6 owes.** Adding a gate is not finished when the script
+   runs it, and stage 4 step 11 states the obligation: a row in `docs/standards/workflow.md`
+   §6's table naming the gate as the script labels it and in the position the script runs
+   it, **and — because this is a *test* gate — an entry in `.github/workflows/release.yml`
+   beside the other Python suites.** Discharge it rather than deviate: that file already
+   runs `tests/gui-smoke.py` with an exit-77 skip, so the second pass is that leg again with
+   the switch set. **Stage 6's deviation does not carry over** — its gate needed both
+   engines and had no tag before its own retirement, and neither is true here.
+   `docs/standards/testing.md` §1's suite table is the third document this touches: its GUI
+   row says that suite asserts on the window's state after being fed marker lines, which
+   stage 7 makes incomplete. (`tests/imports-test.py` has no row there to go stale;
+   ONEUP-0194 already owns that gap.) And `docs/standards/files-and-naming.md` §5.1 gains
    `ONEUP_ENGINE` **as a bullet below its table, not as a row in it** — the table is *path
    and setting* overrides, and this variable names an engine rather than overriding a path.
    `ONEUP_TEST_NETWORK` is the precedent and sits there already, saying in its own first
    line why it is not in the table. Say which half reads it and that it lapses at stage 9.
-   `docs/standards/workflow.md` §6's gate table gains the second window run, with its cost
-   measured here and §6's stated range re-measured in the same edit.
-   → **verify:** `python3 tests/docs-check.py` clean; the §6 figure comes from a
-   `./local-CI.sh` run in this stage rather than from the previous one.
+   §6's stated range is re-measured in the same edit.
+   → **verify:** `python3 tests/docs-check.py` clean; `./local-CI.sh` green **with the
+   measured time in the commit body**, as stage 6 step 6 made the same figure observable —
+   a range copied forward is otherwise byte-identical to one re-measured.
 
 8. **The spec amendment — `main`, then merge.** Record in §4.7 what was built: the two
-   variables and why they are two, that the resolver reporting which paths it tried belongs
-   with the default flip rather than with the switch, and G3's probe with its neutralised
-   dialog.
+   variables and why they are two, and G3's probe with its neutralised dialog. **Records
+   what was built, so the gate does not re-arm** (`CLAUDE.md` rule 14) — say so in the commit
+   body, as stages 2, 5 and 6 each did. Nothing about the resolver goes in: where its
+   path-reporting lands is direction for stage 9, and writing it here would be the change
+   that re-arms the gate.
    → **verify:** §4.7 reads true against the code on `v2`; the file is on `main` and merged.
 
 ### Not stage 7's
@@ -1733,11 +1757,14 @@ it could ever have caught the banner. `main`'s behaviour is unchanged.
 messages speak about the selected engine rather than about `update_system.sh`; when the G3
 scenario has been seen to fail with the v2 arm pointed at a missing module and to pass with
 it restored; when the INV-11 scenario has been seen to fail against an engine module that
-imports PySide6; when `local-CI.sh` runs the window suite twice — once with the switch
-unset, where the G3 scenario skips, and once with it set to `v2`, where it runs — and reports
-each; when `files-and-naming.md` §5.1 and `workflow.md` §6's gate table each name what this
-stage added, with §6's range re-measured here; when step 8's amendment has landed on `main`
-and merged; and when `./local-CI.sh` is green on `v2` with both variables unset. **G3 and G5 are met here.**
+imports PySide6; when the structural check in `tests/imports-test.py` has been seen red
+against the tree before step 2 and green after; when `local-CI.sh` runs the window suite
+twice — once with the switch cleared, where the G3 scenario skips, and once with it set to
+`v2`, where it runs — and reports each; when `files-and-naming.md` §5.1, `testing.md` §1's GUI row and `workflow.md` §6's
+gate table each name what this stage added, with §6's range re-measured here and the
+measured time in the commit body; when `release.yml` runs the second pass too, so the gate
+is not local-only; when step 8's amendment has landed on `main` and merged; and when
+`./local-CI.sh` is green on `v2` with both variables unset. **G3 and G5 are met here.**
 **The seen-to-fail clauses are in this list because nothing else holds them** — a scenario
 that has never been red is not yet known to be a test. `main`'s behaviour is unchanged.
 
@@ -1762,3 +1789,4 @@ is the commit they are measured against.
 | 11 | 2026-09-02 | 3 lanes, cold; genre pinned plan; Q1 0 · Q2 4 · Q3 4 · Q4 1 — 9 verified, 1 dismissed, all 9 fixed | Loop 1 of a new run, on stage 6's steps. **Not one Q1** — the measured paragraph was accurate in every lane's check, and every defect was two passages disagreeing or a rule nobody could execute as written. **All three lanes found the normalisation count**, and two of them found the reason it was wrong rather than just the arithmetic: the mock-directory token IS §4.5's log-path normalisation, because `run_engine` writes the log inside the mock directory — so two of four are built, not one, and step 8 would have written a false amendment into the spec. **All three found `--emit-guard`**: step 5's coverage instrument reads marker names, and a mode emitting no marker can never appear on its uncovered list however thoroughly it is missed — so the guard body, whose divergence stands every passwordless user's toggle down, was covered by neither the harness nor the hand-check list. Both flag-only modes are now scenarios, and stage 2 step 7's *"the one divergence G2 cannot see"* is corrected as collateral. **Two lanes found the branch routing**: the paragraph routed the spec by §9's rule and itself by precedent, and §9's default sends a plan to `main` — so stages 4 and 5 put their plan text on `v2` against the rule, and this stage carries the file to `main` and closes it. **The sharpest single finding came from one lane**: `run_engine` expands one `ENGINE_CMD` built from the ambient environment, and step 1's own verify has a developer exporting it — so a harness that simply called it twice would diff v2 against v2 and go green, which is the failure `tests/run-tests.sh` names in its own comment. **Two lanes found the budget hole**: step 5 said add scenarios until coverage is complete, and step 6's verify asked only that the runtime be measured and recorded, which no number can fail. **One lane found the `release.yml` entry contradicts spec §4.6** — the workflow runs on a `v*` tag, the next is 2.0.0, and ONEUP-0072 lands in between and changes the marker payloads, so the entry's first CI run would be one the spec expects not to match; §6.1 step 3 is now deviated from deliberately, with ONEUP-0072 named as the harness's retirement owner. **Two findings were the orchestrator's, from executing a lane's claim rather than reading it**: `--emit-guard` is byte-identical in both engines, and `--help` is not — it differs in its `Usage:` program name (accepted) and in a repository-skip sentence v2 dropped while keeping the behaviour (a v2 defect). That turned step 4 from one repair into a rule plus an accepted-divergence list. Dismissed as immaterial: *"each run writes `run.state`, a log and the `du` counter into it"* over-generalises a per-scenario mock, and two mock directories are needed either way. |
 | 12 | 2026-09-02 | 3 lanes, cold; genre pinned plan; Q1 0 · Q2 4 · Q3 4 · Q4 1 — 9 verified, 0 dismissed, all 9 fixed. Cap reached (2 for a plan); the run files its tail and exits | **Seven of the nine landed on text loop 1 wrote — a violent cap, and the routing that follows from it is that this document goes to implementation rather than to a third loop.** **All three lanes found the same defect, and it was loop 1's own fix**: the `**Branch:**` slot is a STAGE-level route in this document — every other stage uses it that way — and loop 1 rewrote it to `main`, which sends the harness, `tests/mock-env.sh` and step 4's edits to `oneup/engine/` to a branch with no package. Steps 6 and 7's own routing reason is true only if the code is on `v2`, so the two passages could not both be executed. Now split by artefact: code and standards to `v2`, the plan text and step 8's spec amendment `main`-then-merge. **Two lanes found loop 1's other collateral**: stage 2 step 7 was corrected for the marker-only claim and two more copies of it, in stages 3 and 4, were not — a builder reading stage 4 step 9 first would have built the marker-only harness the stage exists to reject. That is the fix-one-copy failure, and 4b's sweep searched the stage rather than the corpus. **The sharpest new finding came from one lane**: step 2 warned a builder off `run_engine` without saying to invoke through it, and an engine invoked directly loses the eight `ONEUP_*` redirections — reading and deleting the developer's own `run.state` and probing the real `/run/zypp.pid`, the damage `docs/standards/testing.md` §2 forbids outright. **One lane found the accepted-divergence list was a suppression**: §4.5 says a deliberate improvement is *"written down here and given its own test"*, and loop 1 gave each entry a reason and no test — so once `--help`'s `Usage:` line was excused, every later change to it was excused, and the harness was that line's only reader. **One lane found a verify that could not fail**: step 2 asked for the harness to be seen failing on the banner before step 3's normaliser existed, when the two mock directories and the TIMING field make every scenario diverge anyway; it moves to step 3. **A lane's open question resolved into a finding**: `testing.md` §1 tabulates the suites as well, so step 7 was short an edit — and that table says *"Three programmes"* where five ship, filed as ONEUP-0194 rather than repaired inside a build stage. **One measurement closed a lane's open question without a finding**: the banner divergence is identical on `--steps=flatpak`, `cache` and `orphans`, which skip the snapshot block, so step 4's fix is uniform and needs no condition. Of the run's 18 verified findings, 16 anchor inside the span that armed the gate — this was a gate rather than an audit. |
 | 13 | 2026-09-03 | 3 lanes, cold; genre pinned plan; Q1 2 · Q2 2 · Q3 1 · Q4 1 — 6 verified, 0 dismissed, all 6 fixed | Loop 1 of a new run, on stage 7's newly appended steps; stages 1-6 were not re-opened. **All three lanes found the same three defects**, the highest agreement any loop of this document has produced. The sharpest: step 4's G3 scenario set the switch itself, so it would have run in both of step 6's `local-CI.sh` passes — leaving step 6 nothing it alone could prove and its verify (*"turns the second red and leaves the first green"*) unachievable. The scenario now reads the ambient switch and skips unless it is `v2`. Second: step 1 said the v2 arm prepends the repo root to the child's `PYTHONPATH`, and an argv cannot carry an environment — three incompatible builds followed, and the omission was invisible because every stage-7 check runs from the checkout root. The v2 argv is now headed by `env`. Third: the branch paragraph cited §9's second binding for two standards edits that name no `v2`-only path, where this plan's own stage 2 step 13 made the opposite call on the same shape; they now route as that step did, on ONEUP-0130's gap. **Two lanes found step 2's verify unsatisfiable in both directions**: step 1 leaves a `bash` literal in `engine_argv`'s own v1 arm, so *"no `bash` literal under `oneup/gui/`"* can never come back clean and would be satisfied by deleting the only thing that launches the Bash engine — while two sites build their argv in a different function from the one naming `bash`, so it could not fail on them either. It is now a check on launch sites. A lane's open question became the fifth finding: the structural check sat in `tests/gui-smoke.py`, which imports PySide6 at module level and exits 77 wholesale, so a Qt-free text check would have been gated on Qt; it moves to `tests/imports-test.py`, which is stdlib-only and never skips. The sixth was found at Phase 1b before any lane was spent — step 7 sent `ONEUP_ENGINE` to `files-and-naming.md` §5.1's table, which tables path and setting overrides and already carries `ONEUP_TEST_NETWORK` as a bullet below it for exactly that reason. Three lane open questions resolved clean and are not in the tally: `-k` does not invalidate a warm credential (the engine's own measured comment), `_stand_down_autoupdate` does open a `QMessageBox.information` on `_query_auth_status`'s finish path, and §5.1's caption is a pre-existing defect in that standard rather than this plan's. |
+| 14 | 2026-09-03 | 3 lanes, cold; genre pinned plan; Q1 2 · Q2 1 · Q3 3 · Q4 2 — 8 verified, 1 dismissed, all 8 fixed. Cap reached (2 for a plan); the run files its tail and exits | Half the loop landed on text loop 13 wrote — a cap between calm and violent, and the pattern every stage of this plan has shown. **All three lanes found the same defect**: stage 7 added a gate and settled neither half of the obligation stage 4 step 11 states, so a builder would have shipped a G3 gate that never runs in CI, in silent breach of §6.1 step 3. Step 7 now discharges it rather than deviating — `release.yml` already runs `tests/gui-smoke.py` with an exit-77 skip, so the second pass is that leg again with the switch set, and stage 6's deviation does not carry over. **Two lanes found the mirror of loop 13's own fix**: making the G3 scenario skip unless `ONEUP_ENGINE` is `v2` created a hazard nothing pinned, because `local-CI.sh` does not scrub its environment — an exported switch makes both passes v2 passes and the discriminator reports red for both. The first pass now clears it explicitly, as stage 6 step 2 did for the sibling variable. Two more landed on loop 13's text: its structural-check verify covered every child process under `oneup/gui/`, where `autostart.py` shells to `systemctl --user` and the repository editor's apply launches no engine, so the check could never go green; and the done list required the property while requiring no check, against its own closing rule. **Both of one lane's open questions became findings on inspection**, and both are the same shape — a document falsified by a change this stage makes and named nowhere: `testing.md` §1's GUI row says that suite asserts on the window's state after being fed marker lines, and `tests/imports-test.py`'s docstring counts its rules and names ONEUP-0034 §5 as their contract. Also fixed: step 7's verify could not fail, since a copied-forward range is byte-identical to a re-measured one — it now asks for the measured time in the commit body, as stage 6 step 6 does; and step 8 stated no rule-14 disposition where stages 2, 5 and 6 each state theirs, and carried one sentence that was direction for stage 9 rather than a record of what was built. One finding dismissed as immaterial and corrected anyway as a false claim: `_stand_down_autoupdate` early-returns unless the weekly timer is enabled, so it does not block on *any* machine without the drop-in. Every verified finding of both loops fell inside the gated span, so this run was a gate rather than an audit. |
