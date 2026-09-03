@@ -475,6 +475,36 @@ engine changes hands. ONEUP-0032 still follows it (`docs/design/oneup-2.0.md` §
   decided by each caller rather than by the resolver. `Updater.start_run` does check and
   names the file; the tray check does not. The 2.0 resolver reports which paths it tried, so
   no caller has to.
+- **What stage 7 actually built** (2026-09-03; recorded here rather than in the plan,
+  because §4.7 is what a stage-9 reader opens). The helper is `engine_argv(*args)`,
+  returning the whole command program-first: a `QProcess` site takes its head and passes
+  the rest, a `subprocess` site passes it whole. **A second helper was needed and this
+  section did not predict it** — `engine_available()`, because the guards it replaced ask
+  `ENGINE.exists()`, which is a question about a Bash file and answers about the wrong
+  engine once the switch is on.
+
+  **The switch is two variables, not one.** `ONEUP_ENGINE=v1|v2` is the window's; §4.4's
+  `ONEUP_ENGINE_CMD` stays the suite's. They answer different questions — the harness must
+  pin an *arbitrary* command per side, while a scenario or a user switching the window
+  names a side — and one name for both would let an export aimed at the suite reach the
+  window unasked.
+
+  **The v2 arm is headed by `env` carrying `PYTHONPATH`.** `-m` resolves only from the
+  checkout root otherwise, and an argv cannot carry an environment any other way: not by
+  mutating `os.environ`, which reaches the v1 `bash` child too, and not by a per-site
+  environment, which would change the work at all eight sites to serve one arm of one
+  helper.
+
+  **`_find_engine` was NOT replaced, and `ENGINE` stays.** v1 is what an ordinary launch
+  resolves until the flip, so the replacement and the path reporting the bullet above
+  describes land with stage 9 rather than with the switch.
+
+  **G3's probe is `--auth-status`**, driven through the window's own `_query_auth_status`:
+  read-only, and its privileged leg is `sudo` with `-k -n`, which refuses to prompt, so
+  the scenario can neither hang nor authenticate on the machine running it. It neutralises
+  `_stand_down_autoupdate` for its duration — the finish handler reaches that on an
+  explicit `@@AUTH@@|off`, and it opens a modal dialog wherever the weekly timer is on and
+  the drop-in is not.
 - **The three packaging paths** — what each does today and what each therefore needs — are
   `docs/design/oneup-2.0.md` §4, which owns them because ONEUP-0034 must move with them.
   Nothing engine-specific to add beyond the entry points above.
