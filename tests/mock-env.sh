@@ -37,6 +37,17 @@ else
 fi
 
 # --- mock system tools common to every scenario ----------------------------
+#
+# NOTE: there is deliberately no `zypper` here, because almost every scenario
+# needs a DIFFERENT one and a shared default would be overwritten by all of
+# them. The consequence is easy to miss: a scenario that exercises the system
+# step and forgets its own zypper mock reaches the REAL zypper on the
+# developer's box, under a sudo mock that just execs -- so it fails as the
+# test user rather than doing damage, but its result now depends on the
+# machine, which docs/standards/testing.md §2 forbids. Measured 2026-09-03,
+# while writing the ONEUP-0054 INV-11 scenario: the run came back "1 error"
+# and looked like an engine bug. If your scenario runs `--steps=system`,
+# write a zypper mock.
 setup_common() {
     local d="$1"
     cat > "$d/sudo" <<'EOF'
