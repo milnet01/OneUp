@@ -1094,6 +1094,205 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   On v2 one direct `bash "$ENGINE"` invocation remains on purpose: the --hold
   scenario ONEUP-0044 added, which §4.4 assigns to stage 2.
+  Progress (2026-08-25): stage 2 of nine is built and green on `v2`. `oneup/engine/`
+  now holds `markers.py`, `proc.py`, `privilege.py`, `runstate.py`, `actions.py` and
+  `__main__.py` — enough to answer `--help`, `--auth-status` and `--emit-guard`, and
+  nothing more. Driven with `ONEUP_ENGINE_CMD='python3 -m oneup.engine'`, every check
+  in the `--auth-status` scenario passes against the Python engine, including the last,
+  which is reachable only through `--emit-guard`.
+
+  The stage-2 steps were gated first (review-contract --genre plan, 2 loops x 3 cold
+  lanes, 20 verified, 20 fixed). A calm cap this time: four of the last loop's ten
+  landed on text the run itself wrote, against five of six on stage 1's run.
+
+  Three things worth carrying forward.
+
+  The two engines' `--emit-guard` output is byte-identical, measured rather than
+  assumed. This is the one divergence G2 cannot see: the harness compares marker
+  streams and that flag emits none, so a guard body differing by a byte would make
+  every v1-granted guard read as stale to v2 and stand those users' toggles down.
+
+  The gate's best finding was a check of mine that could not fail. A verify ran
+  `python3 -c '…markers…' | cat` to prove the emitter flushes; CPython flushes at
+  interpreter shutdown, so a one-shot prints either way. Measured before fixing: the
+  unflushed emitter does print when the process exits, and never arrives while it
+  stays alive — which is the only case the window sees.
+
+  `--log=` is why the engine parses flags it cannot act on. `run_engine` appends it to
+  every invocation, so a stage-2 engine that refused unbuilt flags wholesale could not
+  be reached by a single scenario. Modifier flags are parsed and stored; only a flag
+  selecting unbuilt work refuses.
+
+  Also landed with it: ONEUP-0058 and ONEUP-0070 (both closed), Trap 1's `LOG_DIR`
+  rename in both halves in one commit, the `--hold` scenario's `ONEUP_ENGINE_CMD`
+  override, INV-7's SIGKILL leg re-expressed as the property rather than the Bash
+  source, INV-13's `run.state` fourth-line assertion, and spec §4.1.2 pinning the four
+  exit codes nothing else pinned. ONEUP-0130 files the `workflow.md` §9 gap the
+  branch routing exposed.
+  Progress (2026-08-25): stage 3 of 9 done on `v2` — `actions.py`'s
+  read-only `--check`. Every `--check` scenario in the engine suite passes
+  against `python3 -m oneup.engine`, and eight mock sets compared by hand
+  give byte-identical whole output from both engines, exit status included.
+  `proc.run` gained a per-child environment overlay (`LC_ALL=C` must reach
+  zypper alone); `Options` carries the step predicate and is passed to
+  `actions`, never imported back. Stage 3's steps were gated first:
+  review-contract --genre plan, 2 loops x 3 cold lanes, 13 verified, 13
+  fixed, cap. The gate's best catch was unstated in the draft and would
+  have shipped: a step whose read FAILED still contributes its partial
+  count to `@@CHECK@@|TOTAL`, and the natural `if rc == 0` passes every
+  stage-3 check while diverging at G2. Not stage 3's, recorded so a green
+  is not read as evidence: the log mirror, the shutdown inhibitor and the
+  run-state file each pass vacuously because the code that could break
+  them does not exist yet — all three are stage 5's, and stage 5 must
+  cover `--check` as well as a full run. local-CI green on `v2`.
+  Progress (2026-08-25): stage 4 of 9 done on `v2` — `parsers.py`, `repos.py`,
+  `tests/parsers-test.py` and `actions.py`'s `--size=`. All 15 check lines of the
+  six `--size` scenarios plus the no-tty askpass scenario pass against
+  `python3 -m oneup.engine`, and ten mock sets give byte-identical whole output
+  from both engines, exit status included. local-CI green on `v2`: engine 312/0,
+  parsers 57/0, gui-smoke 442/0, imports 7/0, bump 12/0, docs 20979/0.
+
+  Gated first: review-contract --genre plan, 2 loops x 3 cold lanes, 19 verified,
+  19 fixed. A VIOLENT cap — seven of loop 2's nine landed on text loop 1 wrote,
+  four of those on the one step loop 1 added — so the plan routed to
+  implementation rather than a third cold read.
+
+  Five things worth carrying forward.
+
+  The download-size wording is TWO parsers, not one. `run_size`'s sed wants a
+  single space and any alphabetic unit and returns TEXT (that text is what
+  `@@SIZE@@` carries); `progress_filter`'s regex is anchored, allows any spacing,
+  admits only `[KMG]?i?B` and feeds `to_bytes`. Measured: `1.3 TiB` parses for the
+  first and not the second, `Package download size:371.4MiB` for the second and
+  not the first. One function serving both changes what the window is told.
+
+  `valid_alias` is a `re.fullmatch`, never an anchored `re.match`. Python's `$`
+  matches before a trailing newline, so `re.match` accepts `oss\n` where Bash
+  rejects it — and this is the shape guard `security.md` §4 puts in front of a
+  privileged command.
+
+  `sudo_init`'s validate STREAMS. The Bash redirects that call nowhere, so sudo's
+  own message reaches the run's stderr and its log; capturing it silently swallows
+  the one message a user who cancelled the dialog has to go on. Caught by running
+  the suite, not by reading it.
+
+  `refresh_repos`' privileged call streams too — `proc.run` gained an
+  inherit-stdout mode, because the Bash `sudo timeout … refresh` writes straight to
+  the run's stdout and a capturing form sends it nowhere.
+
+  `stop_pending` tests THREE things, and §4.1.1 states the one a natural
+  translation drops: with no `run.state` at all no stop is ever honoured. A
+  `stat()` with a `FileNotFoundError` fallback of `0` inverts it, and a leftover
+  request then aborts the next run before it starts.
+
+  Not stage 4's, recorded so a green is not read as parity: the keep-alive (it is
+  `cleanup`'s to kill, and `cleanup` is stage 5's), the hold itself, and the log
+  mirror. Filed with the stage: ONEUP-0133, ONEUP-0134, ONEUP-0135.
+  Progress (2026-08-25): stage 5's build steps appended to docs/plans/ and
+  gated. review-contract --genre plan, 2 loops x 3 cold lanes, 20 verified,
+  20 fixed, cap reached with an empty tail. Loop 1 found 13 (all three lanes
+  led with the shared privileged argv being the whole argv, not the budget);
+  loop 2 found 7, three of them loop 1's own over-corrections — most
+  notably a re-expressed call-site check that could never move when a new
+  privileged call landed. Scope measured rather than described: at 8d715ad
+  the engine suite reports 112 passed / 199 failed against
+  ONEUP_ENGINE_CMD='python3 -m oneup.engine', across 81 of its 103 TEST
+  blocks. Building next.
+  Progress (2026-08-31): stage 5 of 9 done on `v2` — the run driver, `steps.py`,
+  the rest of `actions.py`, and the hold. The engine suite reports 316 passed /
+  0 failed against `ONEUP_ENGINE_CMD='python3 -m oneup.engine'`, from 112/199 at
+  `8d715ad`, so G1 is earned and G4 with it (the one-prompt scenario is an
+  engine-suite scenario). local-CI green on `v2` with `ONEUP_ENGINE_CMD` unset.
+
+  Both live divergences the gate found are closed. `--check --steps=sytem`
+  printed `@@CHECK@@|TOTAL|0` and exited 0 where the Bash refuses and exits 2;
+  the selection and its rejection now sit above every dispatch, as the Bash's
+  do. And the privileged-call-site check is now a UNION of sudo-headed argvs and
+  `privilege.sudo` call sites, because that function prefixes `sudo` itself — the
+  narrow count could not move when a new privileged call landed, which is the
+  whole failure the check exists to catch.
+
+  Six things worth carrying forward.
+
+  The best find came from BUILDING step 11's scenario, not from reading step 7.
+  The per-call deadline killed only its child, so a mock whose `flatpak` shell
+  ran `sleep` left the sleep holding our read end and the wait after the kill
+  blocked on a pipe nobody would close — the bounded call never returned. A
+  bounded call now gets its own session and expiry kills the group. A scenario
+  written to exercise a feature is a better reader of it than a review is.
+
+  The deadline landed on the flatpak update-count queries, and the choice is
+  forced rather than convenient: security.md §2.2 means a root child is not ours
+  to signal, so a budget on a privileged call could only ever be bookkeeping.
+  An unprivileged read the step already degrades without is the one place a real
+  budget both fires and costs nothing when it does.
+
+  Steps 5 to 10 landed as one commit on purpose. The run driver's dispatch loop
+  calls the system step, so a split leaves an intervening tree that does not run.
+
+  `_not_built` and `EXIT_NOT_BUILT` are gone: every flag the engine parses is now
+  built, so the refusal path was dead code claiming a behaviour that no longer
+  existed.
+
+  The checks no scenario can reach were each driven by hand and each held: the
+  broken-pipe write AND the exit status behind it (a reader closing early leaves
+  the engine at 0, not 120, and the mirror keeps writing); `emit_progress`
+  returning False on `( 1/77` and on `( 1/77)` while `  1/77` emits;
+  `release_zypper_lock`'s inactive branch taking no privileged call at all; and
+  the log mirror covering `--check`, `--size`, `--auth-status` and `--emit-guard`
+  alike, stderr included.
+
+  Step 12's spec amendment landed on `main` and merged, per workflow.md §9's
+  default — a spec is not one of the four genres §9 binds to `v2`. It records
+  work already done, so rule 14's amendment bullet exempts it and the gate did
+  not re-arm.
+
+  Not stage 5's, recorded so a green is not read as parity: `update_system.sh`
+  is not retired (stage 9), the differential harness is stage 6's, and the window
+  still points at the Bash engine (stage 7). The three filed suite defects were
+  run past rather than repaired — ONEUP-0135, ONEUP-0133, ONEUP-0134.
+  Progress (2026-09-02): stage 6 of 9 done — the differential harness, gate
+  G2. tests/mock-env.sh holds the mock sandbox both engine suites now source;
+  tests/differential-test.sh drives both engines through it and diffs whole
+  output and exit status across 19 scenarios. 23 of 23 markers in the reference
+  table are produced by a scenario, none excused as unreachable. G2 met.
+
+  Three divergences settled rather than waved through: the banner's position
+  (v2 printed it before the PackageKit stop and the pre-update snapshot, v1
+  after), and two places --help had quietly lost text the Bash carries — the
+  repository-skip cap, and v1's whole Examples block. One accepted, with a test
+  pinning both engines' text: --help names the program, and the program's name
+  changed.
+
+  Two things the build measured rather than predicted, both now in the spec and
+  plan. The elapsed seconds have two renderings and normalising only the marker
+  left the gate flapping — the harness reported that itself. And workflow.md §6's
+  "34-38 seconds" was a main-era figure stale by roughly six times: the pipeline
+  is 4m10s-4m25s, the engine suite alone 2m44s, the harness 49s.
+
+  The plan's stage-6 steps took a two-loop review-contract gate (18 verified, 18
+  fixed) and reached its cap violently — seven of loop 2's nine findings landed
+  on text loop 1 wrote — so the document went to implementation rather than a
+  third loop, which is what the cap's own routing prescribes. It was the right
+  call: the build then found three defects no lane had.
+
+  Filed rather than fixed in-stage: ONEUP-0193 and ONEUP-0194 (two standards
+  claiming release.yml runs three test suites), ONEUP-0195 (this gate is
+  local-only against workflow.md §6.1 step 3, and ONEUP-0072 owns retiring it).
+
+  Next: stage 7 — the window pointed at v2 behind an environment switch, plus
+  INV-11's scenario. G3 and G5.
+  Progress (2026-09-03): stage 7 of 9 done — the window launches either engine behind `ONEUP_ENGINE`, and gates G3 and G5 are earned.
+
+  The plan's stage-7 steps were gated with `review-contract` to its cap: two loops, 14 verified, 14 fixed. All three lanes of loop 1 found the same three defects, and all three of loop 2 found the same one.
+
+  Built: `paths.engine_argv()` and `engine_available()`, resolved per call; all eight launch sites and eight guards repointed, so `paths.ENGINE` appears nowhere outside `paths.py`. A structural check in `tests/imports-test.py` holds that, as an AST walk. `tests/gui-smoke.py` gains the G3 pairing scenario — it reads the ambient switch and runs only in `local-CI.sh`'s second window pass. `tests/run-tests.sh` gains INV-11, a full mock run with PySide6 unimportable. `release.yml` gains the matching leg, so neither gate is local-only.
+
+  Each new check was seen to fail before being trusted. Two defects in the drafts were caught that way: the G3 scenario read a buffer the window's own handler had already drained, which made an empty payload read as agreement; and the INV-11 scenario reached the real `zypper` because `setup_common` ships no mock for it.
+
+  `./local-CI.sh` green on `v2`: 322/0 engine, 57/0 parsers, 31/0 differential, 447/0 and 452/0 window, 8/0 structure, 21354 documentation checks. Re-measured for `workflow.md` §6: 5m25s total, engine suite 2m52s, differential 50s, window pass ~32s each.
+
+  Stage 8 is next: a real run on the user's own machine, which earns G6.
 
 - ✅ [ONEUP-0056] **Never report "up to date" for a source the check couldn't read.**
   Reported with two screenshots: OneUp's check said "Everything is up
@@ -1538,7 +1737,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Progress (2026-08-19): ONEUP-0072 second cold loop run (document row 6, loop 2 of the run) — 3 lanes, Q1 1 · Q2 3 · Q3 0 · Q4 0, 4 verified and fixed, 3 dismissed. The spec cap of 2 binds and it is a CALM cap: none of the four findings landed on text this run wrote. The Q1: §4.1's "The engine keeps its English" claimed three of the five families and it is four — $REBOOT_REASON feeds both the marker and the summary's own echo, and REBOOT is the family §4.1 most tells the implementer to convert. All three Q2s were missing entries in §8, the commit-time doc-edit list: oneup-2.0.md §3 item 1 (the protocol-freeze clause, still narrow), testing.md §1's suite-table row for the retired differential-test.sh, and the scoping of marker-protocol.md §5.2's "never as the raw token". ONEUP-0072 stays Status: Draft — the run reached its cap without an empty loop. Filed not fixed: oneup-2.0.md's G1/G2 passage credits the payload conversion to ONEUP-0032. Commit e7436c4.
   Progress (2026-08-19): ONEUP-0076 second cold loop run (document row 4, loop 2 of the run) — 3 lanes, Q1 2 · Q2 3 · Q3 3 · Q4 1, 9 verified and fixed, 0 dismissed. Spec cap of 2 binds and it is a CALM cap: two of the nine landed on text a gate loop of this run wrote. The document is now 954 lines, past the range two cold reads comfortably cover — the number to weigh if it is ever gated again. Every published contrast figure was recomputed against the tree before the lanes ran and not one is wrong, including all twelve derived fills hex-for-hex and the §2.1 census (34 focusable / 18 with a :focus rule / 16 without). Both Q1s were scoping failures: INV-6 required the switch's state shape to clear 3:1 against the RESTING track, where white on #2ecc71 is 2.10:1 (red on day one), and §8 claimed ONEUP-0027 §4.7 has no focus pair on win when it measures the authored focus token there. The three Q2s were internal contradictions (the ghost hover border's owner, the matcher's fallback, and where the win pairs live). The best Q3, reached by all three lanes: §4.2's qualifier scheme left two surfaces with no unique ancestor, so the RepoManagerDialog Remove button would have taken a card-derived fill over rowcard — the 2.83:1 shape §4.2 warns about; #DialogButtons is named to close the second. ONEUP-0076 stays Status: Draft — the run reached its cap without an empty loop. Commit c91d089.
 
-- 📋 [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
+- ✅ [ONEUP-0058] **Stop the test suite creating ~/Documents/update-logs on the real machine.**
   update_system.sh:149 runs `mkdir -p "$LOG_DIR"` before checking whether
   --log= was passed, and LOG_DIR ($HOME/Documents/update-logs, line 55) has NO
   environment override. tests/run-tests.sh's run_engine (lines 56-72) redirects
@@ -1553,6 +1752,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Lanes: engine, tests.
   Source: in-session-2026-07-26 (writing docs/standards/files-and-naming.md).
+  Resolved (2026-08-25) by ONEUP-0054 stage 2, on `v2`. Both engines now create the log directory only when the run is about to default into it: `update_system.sh`'s `mkdir` moved inside the `--log=` check, and the Python engine's `runstate.py` applies the same rule from the start.
+
+  The scenario is "a run given --log= creates no log directory of its own", which redirects `HOME` and asserts nothing appears. A fix nothing checks is a wish, and this one could not be caught by the existing suite: the directory it created was on the developer's own machine, so nothing failed.
+
+  Frozen `main` keeps the old shape. testing.md's two passages and files-and-naming.md's Trap 2 are reworded to read true from either branch, and landed on `main` per workflow.md §9.
 
 - ✅ [ONEUP-0059] **Honour XDG_STATE_HOME instead of hard-coding ~/.local/state.**
   updater.py:117 builds STATE_DIR from Path.home() / ".local" / "state" /
@@ -2032,7 +2236,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   mock the way scenarios overwrite `zypper`, then drop DISK from
   KNOWN_UNTESTED_MARKERS in tests/docs-check.py. Still open.
 
-- 📋 [ONEUP-0070] **Cover the absent-tool skip path in the engine test suite.**
+- ✅ [ONEUP-0070] **Cover the absent-tool skip path in the engine test suite.**
   Found while revising the ONEUP-0054 spec (2026-07-27, verified at b6d37ed).
   update_system.sh guards the Flatpak and firmware steps with `command -v
   flatpak` and `command -v fwupdmgr`, and both CLAUDE.md and the spec state
@@ -2053,6 +2257,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Prove that OneUp quietly skips the Flatpak and firmware steps on a machine that doesn't have those tools, instead of reporting a failure.
   Kind: test.
   Source: in-session-2026-07-27 (ONEUP-0057 Task 12).
+  Resolved (2026-08-25) by ONEUP-0054 stage 2, on `v2`. INV-9's first test ever: "a step whose tool is absent is skipped, not failed" runs with `flatpak` and `fwupdmgr` hidden and asserts each step ends `skip` rather than `fail`, with the run's verdict unaffected.
+
+  Deleting the two mocks was not enough — `run_engine` puts the mock directory FIRST on the real `PATH`, so `command -v flatpak` would have found the developer's own. The scenario supplies its own `PATH`: the mock directory, then a farm of symlinks to everything on the real `PATH` except those two. It asserts the hiding worked before trusting the result, so a farm that quietly kept the real binary cannot pass this as a skip that never happened.
 
 - 💭 [ONEUP-0071] **Publishing OneUp on Flathub, or packaging it for other distributions — considered and declined.**
   The user's decision, 2026-07-27. Recorded as considered rather than
@@ -4431,3 +4638,1166 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A note was added telling future sessions how to spot a design document whose review has gone stale. An independent reader should check it, and decide whether it belongs in the standard rather than the notes file.
   Kind: doc.
   Source: in-session-2026-08-24, consequence of ONEUP-0127.
+
+- 📋 [ONEUP-0129] **`tests/docs-check.py` never walks `docs/plans/`, so no plan has ever been checked.**
+  Found 2026-08-25 while gating the ONEUP-0054 build plan. Every `docs(...)`
+  call in the checker names the same set — `docs/standards`, `docs/reference`,
+  `docs/design`, `docs/specs`. `docs/plans` appears in none of them, so every
+  plan in the tree is unchecked: links, backticked paths, citations, quotations
+  and table integrity alike.
+
+  Nothing in the repo says the omission is deliberate. `documentation.md` and
+  `files-and-naming.md` both list `docs/plans/` as a first-class document class
+  beside the four that ARE walked, which is the argument that this is an
+  oversight rather than a decision.
+
+  Not blocking anything today. The ONEUP-0054 plan was checked by hand instead
+  — doc_integrity for links and anchors, doc_citations for quotations, plus a
+  by-hand resolve of every backticked path and every cited section number — and
+  came back clean. That is exactly the manual substitute this item exists to
+  remove.
+
+  Worth deciding rather than assuming: adding `docs/plans` to the walk may fire
+  on the older plans, which predate the current rules. Check what it reports
+  before turning it on, and if the older four need work, that is a separate
+  item from the one-word change to the checker.
+  **Layman:** The script that checks our documents for broken links and wrong file paths skips the build-plan folder entirely, so nothing has ever checked those files.
+  Kind: test.
+  Source: in-session-2026-08-25.
+
+- 📋 [ONEUP-0130] **Name the third binding that sends a documentation edit to `v2`.**
+  docs/standards/workflow.md §9 says documentation goes to `main` unless a
+  rule binds it to code that cannot, names two such rules — a marker change,
+  and a docs-check-walked document that must NAME a file 2.0 creates — and
+  closes with "a third would need naming here before it counted".
+
+  A third case is already live and neither rule reaches it: a passage whose
+  TRUTH depends on v2-only code state, without naming any v2-only path. The
+  window's log constant is the example ONEUP-0054 stage 2 hits —
+  files-and-naming.md Trap 1 and its §5.1 constants list both name `LOG_DIR`,
+  which after the rename exists under that name only on `main`, and no
+  both-branch wording is available. files-and-naming.md already diverges
+  between the branches, so the practice exists and the standard does not
+  describe it.
+
+  Found by two of three cold lanes gating ONEUP-0054's stage-2 build plan.
+  The plan routes those two passages to `v2` and says §9 does not cover it,
+  rather than amending a standard from inside a build stage — amending §9 is
+  a direction change and re-arms its own review gate (CLAUDE.md rule 14),
+  which is this item.
+
+  Decide whether the third binding is worth naming, or whether §9 should
+  instead say it routes a CHANGE and is silent where one branch needs none.
+  **Layman:** The rule that decides which branch a documentation fix goes to is missing a case we keep hitting, so write that case down.
+  Kind: doc.
+  Source: in-session-2026-08-25 (review-contract loop 4 on the ONEUP-0054 build plan).
+  Lanes: docs.
+
+- 📋 [ONEUP-0131] **Silence the Qt teardown traceback the window suite prints after its summary.**
+  `python3 tests/gui-smoke.py` prints `QProcess: Destroyed while process ("bash")
+  is still running.` and a `RuntimeError: libshiboken: Internal C++ object
+  (PySide6.QtWidgets.QPushButton) already deleted.` AFTER its summary line. The
+  suite reports 442 passed / 0 failed and exits 0, so `local-CI.sh` is green and
+  nothing is broken.
+
+  Verified pre-existing on 2026-08-25, not introduced by ONEUP-0054 stage 2: run
+  against the tree at 2a9e52a (the commit before stage 2's code landed) it prints
+  the identical output — 442/0, exit 0, one traceback — as it does at stage 2's
+  head. Recorded because the traceback is the last thing on screen after a passing
+  run, so it reads as a failure and invites an investigation that has already been
+  done.
+
+  The cause is interpreter-shutdown ordering: a QProcess and a widget outlive the
+  Python objects that own them. The fix is teardown discipline in the suite — hold
+  a reference, or close the process explicitly — not a change to the app.
+
+  Do not chase it as a defect unless the suite starts reporting a non-zero
+  Failed count or a non-zero exit.
+  **Layman:** The window tests pass, but print an alarming-looking error after the results. It is harmless; tidy it so nobody wastes time on it.
+  Kind: test.
+  Source: in-session-2026-08-25 (verified while closing ONEUP-0054 stage 2).
+  Lanes: tests.
+
+- 📋 [ONEUP-0132] **Marker protocol §4.6 states the bare-zero withholding rule too widely.**
+  §4.6 reads "The engine emits `CHECK` only when everything was
+  readable *or* the count is greater than zero". That describes
+  `emit_check`, which only the system and Flatpak arms use. The firmware
+  arm calls `marker CHECK` directly and the run-wide `TOTAL` is emitted
+  unconditionally, so both send a bare zero the rule says is withheld.
+  Found by a cold lane during the ONEUP-0054 stage-3 plan gate and filed
+  rather than fixed: the reference outranks both halves of the app
+  (`CLAUDE.md` §4), so narrowing the rule changes what a window
+  implementer builds and owes its own review-contract gate.
+  **Layman:** The engine↔window contract says OneUp hides a "0 updates" answer when a source could not be read — but two of those markers are always sent, so the rule as written is wrong about them.
+  Kind: doc-fix.
+  Source: review-contract-2026-08-25 ONEUP-0054 stage-3 plan gate, lane 1.
+
+- 📋 [ONEUP-0133] **workflow.md §6's gate table is missing its Package structure row.**
+  local-CI.sh runs `step "Package structure (oneup/)"` between the GUI
+  smoke test and the compile step, and §6's table has no row for it — so
+  the table's own closing line, "Listed in the order local-CI.sh runs
+  them, so the table can be read against the script", is false on v2.
+  Found by two cold lanes reviewing ONEUP-0054's stage-4 plan, whose
+  step 11 verify would have collided with it. Not repaired from inside a
+  build stage: it is a standards edit with its own §9 branch decision.
+  The gate arrived with ONEUP-0034 and the row never followed.
+  **Layman:** One of the checks that runs before every push is not listed in the document that is supposed to list them all.
+  Kind: doc-fix.
+  Source: review-contract-2026-08-25 ONEUP-0054 stage 4 loop 2.
+
+- 📋 [ONEUP-0134] **Spec §4.6's stage-4 row gives the wrong reason for excluding the --hold scenario.**
+  §4.6 says the --hold scenario "falls through into a full run and so
+  cannot pass before stage 5's run driver exists". Several of that family
+  never reach a run at all: a hold nobody answers, a go-ahead left over
+  from an earlier session, a tampered go-ahead, and the SIGKILLed engine
+  of INV-7. The real barrier is the hold itself — start_held_engine waits
+  for hold.state, which stage 4 never writes. A builder reading the run
+  driver as the whole barrier would build the hold at stage 4 to turn
+  those green. The plan now states the barrier correctly; the spec still
+  does not, and editing it re-arms its own review gate.
+  **Layman:** A note in the design says why one test cannot pass yet, and the reason it gives is not the real one.
+  Kind: doc-fix.
+  Source: review-contract-2026-08-25 ONEUP-0054 stage 4 loop 2.
+
+- 📋 [ONEUP-0135] **The suite's systemctl mock never reports PackageKit inactive.**
+  `setup_common`'s mock is `[[ "$1 $2" == "is-active packagekit" ]] && exit 3`
+  with the comment `# inactive`, and the engine calls `systemctl is-active
+  --quiet packagekit`. `$2` is `--quiet`, so the guard never matches and the
+  mock falls through to `exit 0` — ACTIVE. Measured against the mock directly.
+
+  Consequence: every scenario takes `release_zypper_lock`'s active branch and
+  pays a `sudo systemctl stop packagekit`, and the inactive branch — the
+  ordinary case on a machine with no PackageKit running — is exercised by
+  nothing. Found while proving --size parity for ONEUP-0054 stage 4, where a
+  by-hand mock keyed on the whole argv drives both branches identically.
+
+  Not fixed here: changing `setup_common` changes every scenario's sudo call
+  count at once, which is its own change with its own blast radius.
+  **Layman:** A test stand-in meant to say a background updater is switched off actually says it is running, so the switched-off case is never tried.
+  Kind: test.
+  Source: in-session-2026-08-25 ONEUP-0054 stage 4 step 9.
+
+- ✅ [ONEUP-0136] **Declare the project's 100-column YAML limit so yamllint stops measuring against its own 80.**
+  Added `.yamllint` at the root. Without it the tool used its own 80-column
+  default, while `coding.md` §2.1 sets 100 and `pyproject.toml` sets ruff's
+  `line-length` to match. Twelve of the fourteen line-length findings were lines
+  already inside the project's own limit; the two real breaches were
+  `.github/FUNDING.yml:2` (an unbreakable documentation URL, now covered by
+  `allow-non-breakable-words`) and `release.yml:50` at 139 columns, wrapped.
+  Nothing else is relaxed — `document-start` and `truthy` still fire.
+  Registered in `files-and-naming.md` §1, whose closed-root rule this touches.
+  **Layman:** A style checker was complaining about YAML lines that were already the right length for this project.
+  Kind: chore.
+  Source: check-code --tree 2026-08-31.
+
+- ✅ [ONEUP-0137] **Pin the three GitHub Actions to commit SHAs instead of mutable major tags.**
+  `actions/checkout@v7`, `actions/setup-python@v7` and
+  `softprops/action-gh-release@v3` were all major tags, which a publisher can
+  repoint at any commit. Each now carries the SHA with a trailing `# vX.Y.Z`
+  comment, and that comment is what the `dependencies.md` sweep compares.
+  Verified behaviour-preserving: every one of the three major tags resolved to
+  exactly the SHA pinned, so no version moved. Also set
+  `persist-credentials: false` on checkout (zizmor `artipacked`) — the workflow
+  pushes nothing, so the job token had no reason to sit in `.git/config` for the
+  AppImage build to read. Snapshot in `dependencies.md` updated; the `v3.0.2`
+  recorded there was already stale, `@v3` having moved to `v3.0.3` upstream.
+  **Layman:** The release build now names the exact code it runs, so nobody upstream can swap it out underneath us.
+  Kind: security.
+  Source: check-code --tree 2026-08-31 (zizmor unpinned-uses, High).
+
+- ✅ [ONEUP-0138] **Stop `self.scroll` shadowing the inherited `QWidget.scroll()` in the repo dialog.**
+  `RepoManagerDialog` assigned `self.scroll`, which shadows Qt's inherited
+  `QWidget.scroll(dx, dy)`. Nothing read it, so there was no live defect — but any
+  later `self.scroll(0, 10)` would have raised TypeError. Renamed to
+  `repo_scroll`, matching `detail_scroll` in `task_row.py`. Blast radius was one
+  line: nothing in `oneup/`, `tests/` or `docs/` referenced it, and ONEUP-0034
+  §4's symbol table for this module does not name it. Also renamed two unused
+  lambda varargs in `tests/gui-smoke.py` to `*_ar` (vulture).
+  **Layman:** Renamed an internal field that was quietly hiding a built-in Qt function of the same name.
+  Kind: fix.
+  Source: check-code --tree 2026-08-31 (mypy method-assign).
+
+- 💭 [ONEUP-0139] **Decide whether OneUp wants a type-checking posture at all — mypy finds 229 errors and 0 real defects.**
+  There is no mypy or pyright config, no type-check gate in `local-CI.sh` and
+  nothing in `coding.md`. Run unconfigured it returns 229 errors in 16 files.
+  All were triaged against source and NONE is a runtime defect: 68 are PySide6
+  shorthand enums and `bytes(QByteArray)` the stubs do not model, 20 are
+  narrowings that hold by construction (`self.parent()`, `QApplication.instance()`),
+  14 are variable-reuse and tuple-arity inference limits, 4 are deferred
+  module-level init, and 120 are in `gui-smoke.py`, which monkey-patches methods
+  by design. Recorded in `.ants_review_falsepos.jsonl`.
+  The question is whether a posture would pay for itself, not whether these
+  specific findings should be fixed — they should not.
+  **Layman:** A type checker has never been run here; it reports a lot, and every single report turned out to be the tool's limitation rather than a bug.
+  Kind: investigate.
+  Source: check-code --tree 2026-08-31 (mypy, unconfigured).
+
+- 📋 [ONEUP-0140] **Give the four remaining yamllint warnings a position: `document-start` x3 and `truthy` on `on:`.**
+  Left standing deliberately rather than switched off. `document-start` wants a
+  leading `---` on `FUNDING.yml`, `release.yml` and `.obs/workflows.yml`; the
+  project has never adopted that convention. `truthy` fires on the workflow's
+  `on:` key, which YAML 1.1 reads as a boolean and which the GitHub Actions
+  schema requires spelled exactly that way — a genuine false positive, recorded
+  in `.ants_review_falsepos.jsonl`. Nothing gates on either: `local-CI.sh` does
+  not run yamllint.
+  **Layman:** Four minor style warnings in the config files that nobody has decided about yet.
+  Kind: chore.
+  Source: check-code --tree 2026-08-31 (yamllint).
+
+- 📋 [ONEUP-0141] **zizmor: `softprops/action-gh-release` duplicates functionality the runner already provides.**
+  The `Attach AppImage to the release` step could use `gh release upload`
+  directly, dropping a third-party dependency from the release path entirely —
+  which also removes one of the three pins ONEUP-0137 just had to SHA-pin.
+  Informational severity; not urgent. Worth weighing against
+  `generate_release_notes: true`, which the action provides and a bare
+  `gh release upload` does not.
+  **Layman:** The release step uses a third-party action for something the built-in tooling can already do.
+  Kind: chore.
+  Source: check-code --tree 2026-08-31 (zizmor superfluous-actions, Informational).
+
+- 📋 [ONEUP-0142] **Four collections in `oneup/gui` need a type annotation mypy cannot infer.**
+  `repos.py:216` (`enable`, `disable`) and `banners.py:60` (`safe`, `risky`) are
+  empty list literals whose element type mypy cannot infer. Harmless today and
+  only worth doing if ONEUP-0139's question is answered yes; filed so the two are
+  not re-discovered separately.
+  **Layman:** Four empty lists that a type checker cannot work out the contents of on its own.
+  Kind: chore.
+  Source: check-code --tree 2026-08-31 (mypy var-annotated).
+
+- 📋 [ONEUP-0143] **`screenshots/` is missing from the audit exclusion set, so typos scans two PNG binaries.**
+  145 of the audit run's 462 findings — 31% — came from `screenshots/oneup.png`
+  and `oneup-light.png`. The default exclusion set names `static/images/` and not
+  `screenshots/`, and the project has no `audit-config.json` of its own.
+  A project config declaring the exclusion would drop about a third of the noise
+  from every future run. Note the same set excludes `data/`, which here holds the
+  desktop file, AppStream XML and icon rather than a data dump — so user-facing
+  strings are currently NOT spell-checked. Both are one file to fix.
+  **Layman:** The spell-checker was reading the screenshot image files and reporting nonsense from inside them.
+  Kind: chore.
+  Source: check-code --tree 2026-08-31.
+
+- 📋 [ONEUP-0144] **Repository aliases reach a privileged zypper refresh unvalidated, in both engines.**
+  security.md §4 requires every value reaching a privileged command to be shape-
+  checked at the boundary, and names repository metadata as untrusted. `valid_alias`
+  exists and guards `disable_repo` only. Unguarded: `update_system.sh` refresh loops
+  (the bulk and per-repo forms), `oneup/engine/repos.py` where the alias reaches a
+  marker payload, and `oneup/gui/run.py`'s `@@REMEDY@@` handler, which forwards the
+  alias to `--skip-repo=`. Not reachable to root today — both engines fail closed at
+  `disable_repo` — so the live effect is the ONEUP-0110 shape: the retry fails
+  identically with nothing on screen saying why. The package-name half of this class
+  was fixed on 2026-08-31; the alias half was left because it spans three files and
+  deserves one deliberate pass.
+  **Layman:** A software-source name from the system is passed to a root command without being checked first.
+  Kind: security.
+  Source: review-code 2026-08-31, lanes engine-shell + engine-steps + gui-run.
+
+- 📋 [ONEUP-0145] **Two engines can both own run.state, and the first to exit silently disables Stop.**
+  `lock_holder` only catches a live zypper, which does not exist during the
+  pre-flight, a flatpak-only run, or between passes. Both engines write `run.state`
+  and set the owned flag; whichever exits first deletes it, and the survivor's
+  `stop_pending` requires the file to exist, so Stop can never fire again. The
+  window following the run also loses it. The machinery to prevent it already
+  exists — `lock_holder`'s /proc liveness test — and is simply not applied to
+  `run.state`'s own pid. Note the GUI's single-instance guard was tightened on
+  2026-08-31, which narrows but does not close this: the engine is also runnable
+  standalone in a terminal.
+  **Layman:** If two updates start at once, the Stop button quietly stops working.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-shell.
+
+- 📋 [ONEUP-0146] **The bulk flatpak query is used in the run where the check already abandoned it.**
+  `flatpak remote-ls --updates` with no remote named abandons the WHOLE listing the
+  moment any single remote cannot be summarised, and a local --no-enumerate origin
+  never can. The check arm was fixed and records the measurement — six such
+  leftovers on one box hid a real Discord update for weeks — and the run arm still
+  carries the abandoned form in both engines, under a comment claiming it is the
+  "same read-only check --check uses". The fix is to factor the per-remote loop out
+  and call it from both, so the comment becomes true.
+  **Layman:** The Flatpak step can say "up to date" right after it updated something.
+  Kind: fix.
+  Source: review-code 2026-08-31, lanes engine-shell + engine-steps.
+
+- 📋 [ONEUP-0147] **A pre-update snapshot that failed to create is reported as this run's rollback point.**
+  The `snapper create` return code is discarded, so a create that failed on a full
+  disk or a read-only subvolume falls through to a listing whose last row predates
+  the update. `@@SNAPSHOT@@` is contractually the restore point taken BEFORE this
+  run, and the window's picker offers it — rolling back to it discards everything
+  since. Present in both engines. Keep the fallback for the listing; check the
+  create's status and emit no SNAPSHOT marker when it failed.
+  **Layman:** If taking the safety snapshot fails, the app offers you an older one and calls it this run's restore point.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-driver.
+
+- 📋 [ONEUP-0148] **getpass.getuser() names the sudoers principal from the environment, not the real uid.**
+  `getpass.getuser()` reads LOGNAME/USER/LNAME/USERNAME before consulting the
+  password database; the Bash original uses `id -un`. Under `su otheruser` without
+  `-`, which preserves the invoking user's USER, `--grant-auth` authenticates as
+  otheruser and writes the NOPASSWD rule for the original user — a passwordless
+  root-equivalent grant to a principal the operator did not name, while the current
+  user's toggle silently reads off. One-line fix: `pwd.getpwuid(os.getuid()).pw_name`.
+  **Layman:** The passwordless setup could write its permission for the wrong user account.
+  Kind: security.
+  Source: review-code 2026-08-31, lane engine-driver.
+
+- 📋 [ONEUP-0149] **The Python engine's re-exec target may not resolve, turning "no inhibitor" into "no run".**
+  `_reexec_under_inhibitor` re-execs `sys.executable -m oneup.engine`, which
+  resolves only if `oneup` is importable from the re-exec'd interpreter's path.
+  Nothing packages it that way yet, and QProcess gives the engine the window's cwd.
+  The probe two lines above proves `systemd-inhibit` works and proves nothing about
+  the re-invocation — while the block's own docstring says a failure here must
+  degrade to "no inhibitor", never to "no run". This became reachable on more paths
+  when the --size --hold exclusion was fixed on 2026-08-31, so it is worth closing
+  before stage 9's packaging. Guard with `importlib.util.find_spec` and set
+  PYTHONPATH to the package root before the exec.
+  **Layman:** A safety step could stop the update from starting at all.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-driver.
+
+- 📋 [ONEUP-0150] **A refused go-ahead is reported as a clean success with no diagnostic anywhere.**
+  `_adopt_go_ahead` is an authorisation check on a file a root process reads. A
+  `go.request` carrying an unresolvable key collapses into the same arm as Cancel:
+  no hint, no stderr line, no log entry, `@@DONE@@|ok`, exit 0. Refusing correctly
+  and then reporting it as an ordinary cancel means a tampered or corrupted
+  authorisation leaves no trace at all, and the window shows success for a run that
+  never started. Emit an error and a hint on the refusal branch so it is
+  distinguishable from the hold simply timing out.
+  **Layman:** If the app rejects a tampered instruction, it says the update finished fine.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-driver.
+
+- 📋 [ONEUP-0151] **The marker-protocol emitter gate scans only the Bash engine, so the Python one is ungated.**
+  `marker-protocol.md` claims `tests/docs-check.py` compares §3's marker table
+  against the engine's emitter call sites both ways. That scan reads
+  `update_system.sh` and has no hits for `oneup/engine`. The two lists agree today
+  — the lane enumerated both by hand — so nothing is wrong yet; what is wrong is
+  that the only automatic protection the contract claims does not cover the file
+  replacing the one it does. Extend the scan to `oneup/engine/*.py` while both
+  engines are in the tree. §3's "Emitted by" column and §5's file list still name
+  Bash symbols; that half is review-contract's.
+  **Layman:** The check that keeps the two halves of the app speaking the same language does not look at the new half.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-protocol.
+
+- 📋 [ONEUP-0152] **Parser and emitter divergences between the two engines that the G2 differential may not catch.**
+  Four, each small and each in the module the protocol calls its single point of
+  truth. `parsers.py` uses `splitlines()`, which breaks on \\r, \\v, \\f and the
+  Unicode separators where the Bash breaks on \\n alone — one \\r in a transaction
+  log can fabricate a reboot reason. `markers.py`'s fraction regex ends in `$`,
+  which accepts a trailing newline the Bash rejects. `if got:` drops both trailing
+  PROGRESS fields on an integer 0. And the emitter substitutes nothing, so a \\n in
+  a payload fabricates a whole line — ONEUP-0072 INV-2 plans an emitter guard and
+  names `|` only, which is review-contract's half.
+  **Layman:** Small differences between the old and new engines that could make them report different things.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-protocol.
+
+- 📋 [ONEUP-0153] **isdigit() is not a valid guard for int() — eight marker handlers can throw in the read slot.**
+  `"²".isdigit()` is True while `int("²")` raises; `isdecimal()` is the property
+  `int()` needs. Because stdout and stderr are merged a spliced field can carry any
+  character, and the throw lands inside `readyReadStandardOutput` — which
+  `marker-protocol.md` §1.2 names as the thing that must not happen, since it aborts
+  parsing and drops every remaining marker while the run carries on. Sites in
+  `oneup/gui/run.py`: the STOPPING, CHECK, PROGRESS (counters and both byte
+  fields), REFRESH, SNAPSHOTS and on_finished handlers, plus `_adopt_held_engine`.
+  **Layman:** An odd character from the engine could stop the window following the rest of the update.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-run.
+
+- 📋 [ONEUP-0154] **The warning banner's text and its button role can decouple within one run.**
+  `_show_warning` sets the banner text but never resets the button role, so a
+  pre-flight snapshot warning that sets the button to "Thin snapshots…" leaves it
+  there when a later download failure replaces the text. The user then reads "A
+  download failed — check your internet connection" above a button that thins
+  snapshots. The remedy paths escape only because `on_finished` happens to re-set
+  the text afterwards. Reset the role in `_show_warning` and have the two
+  pre-flight callers re-arm it.
+  **Layman:** The warning message can end up above a button that does something unrelated.
+  Kind: ux.
+  Source: review-code 2026-08-31, lane gui-run.
+
+- 📋 [ONEUP-0155] **cache_bytes() walks the package cache on the GUI thread, once per progress marker.**
+  `_tick_activity` is called from the 5-second timer AND from the PROGRESS handler
+  on every marker carrying a byte field — potentially several times a second
+  through a large download — and each call rglobs `/var/cache/zypp/packages` with a
+  stat per entry, by then thousands of RPMs. That is an event-loop stall in the
+  module whose stated job is stopping the app from looking hung. Cache the last
+  weight with a monotonic stamp and re-weigh at most once per stall interval.
+  **Layman:** The window can stutter during a big download because it keeps re-measuring a folder.
+  Kind: perf.
+  Source: review-code 2026-08-31, lane gui-run.
+
+- 📋 [ONEUP-0156] **A failed go.request write produces an unescapable modal-dialog storm.**
+  `_adopt_held_engine` shows a warning box and returns False; `_wait_for_hold`'s
+  200 ms timer then calls it again, the pid still matches, the write fails again,
+  and another box appears. On a full or read-only state directory the user cannot
+  dismiss their way out. Latch the failure — stop the wait timer and fall through
+  to a fresh launch — rather than retrying a write that has already failed.
+  **Layman:** On a full disk, an error box can reappear faster than you can dismiss it.
+  Kind: ux.
+  Source: review-code 2026-08-31, lane gui-run.
+
+- 📋 [ONEUP-0157] **Repository-manager and rollback dialogs can leave the machine partly changed and say it was cancelled.**
+  `_build_apply_command` chains its three sub-commands with `&&`, so a mid-chain
+  failure leaves repos disabled, none enabled and none removed — and pkexec-
+  cancelled (126/127) and half-applied land in the same branch, whose wording is
+  "they may have been cancelled". Re-read the machine's real state on any non-zero
+  exit and rebuild the rows from it. Related, same dialog: the duplicate-URL Remove
+  affordance has no floor, so every copy of a URL can be marked and zypper deletes
+  the repository outright with its cached packages.
+  **Layman:** If applying repository changes fails halfway, the app says it was probably cancelled and the switches still show what you asked for.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-services.
+
+- 📋 [ONEUP-0158] **The autostart unit freezes its executable path, so an AppImage upgrade silently breaks it.**
+  `autostart.py` resolves the launcher at ENABLE time and writes it into the
+  systemd unit and the .desktop entry. The normal AppImage upgrade — download the
+  new file, delete the old — leaves ExecStart pointing at a file that no longer
+  exists: the weekly update and start-at-boot stop with no error anywhere, and
+  `_timer_enabled()` still answers enabled, so the toggle reads on. On startup,
+  compare any installed entry's Exec against what would be written now and rewrite
+  on a mismatch.
+  **Layman:** After updating OneUp itself, the weekly check can stop working while the toggle still says it is on.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-services.
+
+- 📋 [ONEUP-0159] **The diagnostics host scrub is an unanchored substring replace and can corrupt the report.**
+  `build_diagnostics` does `report.replace(host, "<host>")` over the whole payload.
+  openSUSE hostnames are routinely short generic words, so a machine called `oss`,
+  `linux` or `tumbleweed` rewrites `repo-oss`, `linux-firmware` and every matching
+  path — corrupting the one artefact that exists to diagnose a failure. Use a
+  word-boundary regex and skip the scrub for very short or generic names. Related:
+  security.md §7.4 states the goal as not publishing the username, and the scrub
+  covers the home PATH rather than a bare username in a log line.
+  **Layman:** On a machine with a short name, the diagnostic report can come out mangled.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-services.
+
+- 📋 [ONEUP-0160] **bump.py writes an unescaped % into the RPM %changelog, and cannot detect a downgrade.**
+  Two independent defects in the release path, neither caught locally because
+  nothing in this repository builds the RPM. `%` is the spec-file macro sigil and
+  the escape is `%%`; CHANGELOG.md has already shipped bullets containing a bare
+  `%`, so this lands at OBS build time — the unattended half. Separately there is no
+  monotonicity check: `./bump.py 1.3.0` on 1.4.5 succeeds, all six sites agree and
+  the lockstep gate passes, leaving the AppStream releases list and the CHANGELOG
+  out of newest-first order and every existing user never offered an update again,
+  since the in-app check reads APP_VERSION.
+  **Layman:** A percent sign in a release note can break the package build, and nothing stops a version going backwards.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane tooling.
+
+- 📋 [ONEUP-0161] **local-CI's lockstep gate passes vacuously when grep has no -P, and two gates report ok on an empty result.**
+  `local-CI.sh` reads the six version sites with `grep -oP`. Without PCRE support
+  all six variables are empty, all six compare equal, and the gate prints
+  `ok "all six version sites = "` — a green tick on the check every other version
+  guarantee in the project rests on, which workflow.md §6's own design point
+  forbids. The INV-5 colour-literal gate has the same shape: it reports ok whenever
+  its hit list is empty, which is true both for "no violations" and for "the glob
+  matched nothing". Assert the inputs are non-empty before comparing.
+  **Layman:** A safety check can report a green tick while having checked nothing.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane tooling.
+
+- ✅ [ONEUP-0162] **ONEUP-0028 mandates an accessible NAME on labels that are also announcement sources.**
+  §1's table names the banner frame AND its label; § the announcement fallback
+  states that an explicit name on a QLabel is permanent and would make every later
+  setText invisible to assistive technology. Both cannot hold for a label the
+  fallback announces on. The code was changed on 2026-08-31 to carry the role as an
+  accessible DESCRIPTION on those labels, keeping the NAME on the banner frame —
+  which satisfies both intents but not §1's literal wording. The spec side is
+  review-contract's: decide whether §1 should say description for the label half.
+  Note `last_run` is NOT an announcement source, so its name is correct as it
+  stands.
+  Resolved (2026-09-02): decided with the user - the spec follows the
+  code. §1 now states that a banner's role text is the accessible NAME on
+  the frame and the accessible DESCRIPTION on the label, and says why: the
+  label is an announcement source, and a permanent name on it would
+  silence every later setText. That is what `banners.py` already does. The
+  table now gives the role text rather than naming one call for both
+  widgets, which is what made the two passages contradict. `last_run` is
+  not an announcement source and its name is unchanged.
+  **Layman:** Two rules in the accessibility spec pull in opposite directions.
+  Kind: accessibility.
+  Source: review-code 2026-08-31, lane gui-window.
+
+- ✅ [ONEUP-0163] **The base progress bar's caption is read on the accent chunk at 1.6:1.**
+  The high-contrast half of this was fixed on 2026-08-31 by giving the overlay its
+  own `progchunk` token — it was 1.00:1, white on white. The BASE sheet is less
+  absolute and still fails: `text-align: center` puts the caption over the chunk,
+  and `$accent` measures 1.63:1 against dark `status` at the left gradient stop and
+  1.12:1 at the right, 3.86:1 against light. Both are under SC 1.4.3's 4.5:1, on
+  live text carrying the download detail. Not fixed here because the honest options
+  are a design decision: give the base chunk its own readable token, or set
+  `setTextVisible(False)` and move the caption to the adjacent label. Whichever is
+  chosen, add the pair to PAIRS so it is measured — today nothing measures it,
+  because the `status` row names the trough and stops.
+  Resolved (2026-09-02): decided with the user - the words move, not the
+  colour. The caption is a label under the bar; the bar paints none of it
+  and keeps its full accent fill. `setFormat` stays the only way the
+  caption is set, so all eight call sites and the suite are unchanged and
+  `bar.format()` still reports it. INV-7 required a high-contrast rule for
+  the new object name, which the overlay now has.
+
+  The caption's new ground is `card`, and `status` on `card` is already a
+  measured PAIRS row, so it is covered. What this did NOT do is retire the
+  now-dead `status` on `progbg` ground or add the fill's own pair: doing
+  that truthfully turns the suite red on four themes, because the fill
+  measures about 1.4:1 against its trough in the light palettes. Filed as
+  ONEUP-0198 with the measurements rather than guessed at here.
+  **Layman:** The words on the progress bar are hard to read against the coloured fill.
+  Kind: accessibility.
+  Source: review-code 2026-08-31, lane gui-theme.
+
+- ✅ [ONEUP-0164] **A theme change called the tray's "Update now" action instead of redrawing the icon.**
+  `on_theme_changed` called `tray._tray_update`, which is `_show_window` +
+  `run.start_run` — the tray menu's "Update now" action. With a tray icon present,
+  picking a theme un-hid the window and began a privileged `zypper dup`; during a
+  run it started a SECOND engine, the double-authentication and zypper-lock race
+  ONEUP-0044 exists to prevent. Added `tray.refresh_icon`, which rebuilds the icon
+  and nothing else, and pointed both the theme picker and the desktop's
+  light/dark switch at it — the second route never rebuilt the icon at all, so
+  INV-8 was violated there too. Two lanes found this independently; ONEUP-0027
+  INV-8's own test could not, because it exercises the icon builder directly and
+  never inspects the tray's actual icon.
+  **Layman:** Changing the colour theme could start a full system update you never asked for.
+  Kind: fix.
+  Source: review-code 2026-08-31, corroborated by lanes gui-window and gui-services.
+
+- ✅ [ONEUP-0165] **The shutdown inhibitor was skipped on the --size --hold path, which is the GUI's ordinary Update.**
+  Both engines excluded any `--size` invocation from the ONEUP-0086 re-exec. But
+  `--size --hold` does not end there: it falls through into the full transaction
+  (ONEUP-0044 §4.5), and that is exactly what the window launches when you press
+  Update after a size preview. So the whole failure the inhibitor exists for — a
+  logout hanging on a root process, ending in a held power button mid-rpm — was
+  unguarded on the common path, while a shipped CHANGELOG entry claimed the lock
+  worked. Now excluded only when `--size` is used WITHOUT `--hold`. Fixed in
+  `update_system.sh` and `oneup/engine/__main__.py` together, per the G2
+  differential.
+  **Layman:** The safeguard that stops the machine powering off mid-update was off on the path most people use.
+  Kind: fix.
+  Source: review-code 2026-08-31, found independently in both engines (lanes engine-shell and engine-driver).
+
+- ✅ [ONEUP-0166] **"I couldn't look" was reported as "you're up to date" on five paths.**
+  The ONEUP-0056 shape, reappearing wherever `emit_check`'s machinery does not
+  reach. fwupdmgr(1) returns 2 for "no actions" and 1/3 for an error, and every
+  non-zero was read as "up to date" — in the run AND in `--check`, where it also
+  emitted a bare zero with no CHECK_UNKNOWN. The orphans query discarded its exit
+  status, so a failed query was indistinguishable from a clean machine. And the
+  transaction passes exempted none of zypper's informational exits, so a `dup`
+  that installed cleanly and exited 102 or 106 reported as a failed step,
+  suppressed the reboot advice for packages that really landed, and made the cache
+  step hoard downloads for a retry nobody needed. Added a shared `zypper_ok` /
+  `_zypper_ok` in both engines.
+  **Layman:** Steps said your system was current when the tool they asked had actually failed.
+  Kind: fix.
+  Source: review-code 2026-08-31, lanes engine-shell, engine-driver, engine-steps.
+
+- ✅ [ONEUP-0167] **A stop during the auto-skip retry was reported as a successful install.**
+  The third safe boundary is checked BEFORE the repo-scoped probe, so the retry
+  that probe triggers had no check after it. Stopping during the retry's download
+  left nothing installed, yet the step scraped the solver's package count and
+  emitted a success with the reboot advice — INV-1, on the unattended
+  `--auto-skip-repos` path. Both engines now re-test the stop flag after the retry.
+  **Layman:** Stopping an update at the wrong moment could still report that packages were installed.
+  Kind: fix.
+  Source: review-code 2026-08-31, lanes engine-shell and engine-steps.
+
+- ✅ [ONEUP-0168] **The high-contrast progress caption was white on white, and two tokens missed their floor.**
+  The overlay painted the progress chunk in `text` while the caption was also
+  `text` — 1.00:1, measured — and `text-align: center` puts the caption over the
+  chunk, so it vanished exactly when the bar filled to show its final wording.
+  Given the overlay its own `progchunk` token, which clears 4.5:1 under the
+  caption and 3:1 against the trough. Nothing measured that pair; the `status` row
+  names the trough and stops, so a check was added. Also widened two PAIRS rows
+  after measuring every theme: `ghostbd` failed on `rowcard`/`rowhov` in all eight
+  (2.45–2.88:1) and `amber` on `win` in all four light ones (4.01–4.10:1); twelve
+  token values re-derived with the project's own blend helper. ONEUP-0027 §4.8 had
+  pre-decided a surviving ghostbd failure is a defect in shipped work.
+  **Layman:** In high-contrast mode the words on the progress bar were invisible.
+  Kind: accessibility.
+  Source: review-code 2026-08-31, lane gui-theme.
+
+- ✅ [ONEUP-0169] **A permanent accessible name on the announcement source silenced every screen-reader message.**
+  An explicit accessible name on a QLabel permanently replaces its text as the
+  accessible Name — a rule `_announce`'s own docstring and ONEUP-0028 both state,
+  and which the code then broke on the two labels the announcement fallback reads.
+  On the pre-Qt-6.8 path a reader spoke "Current status" for every run summary and
+  "Warning" for every warning. Both now carry the role as an accessible
+  DESCRIPTION, which leaves the text as the Name. `last_run` was left alone: it is
+  not an announcement source, so its name is correct. Also gave the About dialog's
+  labels `TextBrowserInteraction` — `setOpenExternalLinks` grants mouse access
+  only, so the two links were unreachable by keyboard with no other route to
+  either URL (WCAG 2.2 SC 2.1.1, Level A).
+  **Layman:** A screen reader said "Current status" instead of reading out what actually happened.
+  Kind: accessibility.
+  Source: review-code 2026-08-31, lane gui-window.
+
+- ✅ [ONEUP-0170] **The ONEUP-0048 liveness line was dead on the --check path, and a skipped source went unmentioned.**
+  `_reset_for_run` sets `_run_active = not check`, and `_tick_activity` gated on
+  that flag — so on a check the timer ran and its handler returned immediately,
+  behind an indeterminate progress bar that animates whether or not the engine is
+  alive. One flag was answering three questions. Split out `_liveness_active`,
+  which is true on both paths and false again on finish AND on a start failure
+  (`on_error` cleared neither before, leaving the window mid-run for the session).
+  The three existing liveness tests were re-fixtured to the new flag and a test
+  added for the dimension they cannot see — that a CHECK arms it — proved red
+  against the old condition. Separately `_skipped_repos` was written and read by
+  nothing, so a run that set a source aside still ended "All done"; it is now named
+  in the summary, as ONEUP-0025 promised.
+  **Layman:** The "still working" line was missing while checking for updates, the one place it was needed most.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-run.
+
+- ✅ [ONEUP-0171] **Package names parsed from zypper's table reached a root removal unvalidated.**
+  security.md §4 requires every value reaching a privileged command to be
+  shape-checked at the boundary and names zypper's own output as untrusted. The
+  unneeded-package list was awk-parsed from a pipe-delimited table and handed
+  straight to `zypper remove --clean-deps` as root, with no guard — while
+  `valid_alias` guards the same class three functions away. Added a package-name
+  shape test to both engines, failing CLOSED per §4.2: a bad row refuses the step
+  rather than removing the rest, since dropping it and continuing is the
+  clean-up-and-continue §4.4 forbids on the argv of a removal. The leading
+  character class excludes `-`, so a spliced field cannot be read as an option.
+  **Layman:** Names read from another tool's output were passed straight to a command that deletes packages as root.
+  Kind: security.
+  Source: review-code 2026-08-31, lane engine-shell; raised from MEDIUM at threat-model calibration.
+
+- ✅ [ONEUP-0172] **find_failing_repos ran unbudgeted, and two copies of the window could both keep running.**
+  `find_failing_repos` re-refreshed every repository with no time limit and its
+  output captured to a variable — losing both ONEUP-0048 defences at once, on
+  exactly the path taken when a source is already broken or crawling. It now uses
+  the same bounded argv as `refresh_repos`, which security.md §5.2 already grants,
+  so no new auth_cmnds entry was needed; the suite's drift count moved 3 to 4 and
+  was re-fixtured with the reason. Separately `_arm_single_instance` returned
+  nothing, so the copy that LOST the socket race carried on to a second tray icon,
+  a second check timer and a second engine — ONEUP-0084's simultaneous case, which
+  its sequential fix did not close. It now returns a bool and `main` honours it.
+  **Layman:** A slow software source could hang the app with nothing on screen; and two copies could start at once.
+  Kind: fix.
+  Source: review-code 2026-08-31, lanes engine-steps and gui-services.
+
+- ✅ [ONEUP-0173] **`--size=` with an empty value silently performs a full system upgrade.**
+  `--size=foo` is refused with exit 2, but `--size=` parses to an empty string,
+  reads as falsy at the dispatch test and falls through to the full run. A flag
+  whose whole job is a read-only price quote installs packages instead. Present in
+  both engines (`oneup/engine/__main__.py:106` and `:182`; `update_system.sh:213`).
+  Treat an empty value as an unknown option in the parser, or test for the flag's
+  presence rather than its value's truthiness.
+  Resolved (2026-09-02): both parsers now route a bare `--size=` into
+  their own existing unknown-option arm, so the message and the exit
+  code are identical by construction and the G2 differential stays
+  green rather than needing a new accepted divergence. Proved red on
+  BOTH engines before the fix: unrefused, and the mock's dup/update
+  tripwire fired, so the read-only quote really did reach a
+  transaction. Covered by a scenario in tests/run-tests.sh and a
+  `--size=` pair in tests/differential-test.sh.
+  **Layman:** A flag that only asks the price can install everything instead.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-driver.
+
+- 📋 [ONEUP-0174] **Three raw sudo-headed argvs are built outside privilege.sudo, which security.md §2.3 forbids by name.**
+  `oneup/engine/steps.py:363`, `:369` and `:388` build `["sudo", "env", "LC_ALL=C",
+  ...]` directly. security.md §2.3: "one runner object owns every privileged child
+  process. Do not scatter subprocess.run([\"sudo\", ...]) calls across modules", and
+  `privilege.py`'s own docstring says the same. Each site re-remembers
+  `install_environment()` by hand, which is the discipline the rule exists to
+  remove. The cause is structural: `privilege.py` exposes no streaming-transaction
+  route, so `stream_filtered` can only be reached with a hand-built argv. These
+  three also carry §5.2's call-site count, so a route around the helper is a route
+  around the count. Add a `privilege.sudo_argv()` or a streaming wrapper.
+  **Layman:** A few commands that become root are assembled by hand instead of going through the one place that owns them.
+  Kind: security.
+  Source: review-code 2026-08-31, lane engine-privilege.
+
+- 📋 [ONEUP-0175] **REFRESH_TIMEOUT reaches a privileged argv unvalidated, and the file says so.**
+  `oneup/engine/privilege.py:58` takes `ONEUP_REFRESH_TIMEOUT` straight from the
+  environment; the comment above concedes it is "pinned to digits where it reaches
+  the sudoers rule rather than trusted here". The digit pin exists at
+  `actions.py:68` on the GRANT path only, so the run path issues
+  `sudo timeout <unvalidated> zypper ...` unchecked. security.md §4 admits no such
+  exception. Not exploitable — argv form, no shell, and `timeout` rejects a
+  non-numeric duration — but the same file validates the UNPRIVILEGED
+  KEEPALIVE_SECONDS twelve lines later, which is the asymmetry §5.2 warns about.
+  The shell engine has the same shape at `update_system.sh:817`, where a
+  non-numeric keep-alive interval makes the watcher busy-spin for the whole run.
+  If the deviation is deliberate, §4 needs the carve-out written down — that half
+  is review-contract's.
+  **Layman:** A setting read from the environment is passed to a root command without being checked.
+  Kind: security.
+  Source: review-code 2026-08-31, lane engine-privilege.
+
+- 📋 [ONEUP-0176] **Two races and an unguarded write in the engine's process and state layer.**
+  `proc.py:234` writes to the transaction log inside the read loop with no guard,
+  so a full disk kills the engine mid-transaction — `_Mirror.write` guards the
+  identical operation. `proc.py:256` cancels the deadline watchdog AFTER the wait,
+  so a timer firing in that window reports a completed run as a timeout and
+  `killpg`s a pid already reaped, which under pid reuse targets an unrelated group.
+  And `runstate.py:128` catches `ValueError` to latch `console_gone` permanently —
+  `UnicodeEncodeError` is a `ValueError`, so one non-encodable character in any
+  payload silences the whole marker stream for the rest of the run and the window
+  sees a live run as frozen. The `proc.py` encoding half of that last one was
+  fixed on 2026-08-31; the latch was not.
+  **Layman:** Three small timing and error-handling gaps in the part of the engine that runs commands.
+  Kind: fix.
+  Source: review-code 2026-08-31, lanes engine-privilege and engine-protocol.
+
+- 📋 [ONEUP-0177] **State files are written non-atomically and at the process umask.**
+  `runstate.py:186` and `:214` (and `update_system.sh:1259`, `:738`) use a bare
+  truncate-then-write, so a window reading `run.state` or `hold.state` in that
+  window sees an empty file and concludes there is no run. Temp-plus-rename is the
+  fix. Separately the state directory and its files are created at the process
+  umask: under the common `umask 022` that is safe, but under a permissive one
+  another local user could plant a `go.request`, which is an authorisation a root
+  process reads. Calibrated LOW on 2026-08-31 because security.md names no
+  multi-user adversary — see ONEUP-0185, which is about that absence. Also here:
+  log files under ~/Documents/update-logs carry streamed root output at the ambient
+  umask, and the state files carry no schema version, so a mixed install misreads
+  by position.
+  Progress (2026-09-02): the umask half is CLOSED, out of scope.
+  ONEUP-0185 settled the absence this bullet defers to - security.md
+  now names a threat model, and the user's decision is that a hostile
+  local user is not defended against. So "another local user could
+  plant a `go.request`" is no longer a defect here, and the section
+  names the state-directory permissions as deliberately undefended.
+
+  The rest of this item STANDS and is unaffected. The threat model
+  says in terms that being out of scope is about whose input is
+  trusted, never about correctness: the non-atomic truncate-then-write
+  is a real defect whatever the trust model, because a window reading
+  `run.state` mid-write sees an empty file and concludes there is no
+  run. Temp-plus-rename is still the fix. The missing schema version
+  on the state files is likewise untouched by the decision.
+  **Layman:** The small files the two halves of the app use to talk to each other can be read half-written.
+  Kind: fix.
+  Source: review-code 2026-08-31, lanes engine-privilege and engine-shell.
+
+- 📋 [ONEUP-0178] **A stale auth probe makes the Automatic-updates toggle flip back after the user approves it.**
+  `oneup/gui/auth.py:40` returns early when a probe is already in flight, which
+  makes the "fresh settle" `autostart.on_autoupdate_toggled` relies on stale. The
+  sequence: the window's startup probe is still running when the user enables
+  Automatic updates, the grant succeeds, the re-probe returns early, and the
+  startup probe's PRE-grant output consumes the latch with `is_on == False` — so
+  the timer is never installed and the toggle reverts. The comment at
+  `autostart.py:209` claims the install "always waits for a FRESH auth settle".
+  Security-coupled state landing silently in the wrong place is worse than a
+  visible failure. Set a re-run flag on the early return and re-probe when the
+  in-flight one finishes.
+  **Layman:** You type your password to turn on weekly updates, and the switch quietly turns itself off again.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-services.
+
+- ✅ [ONEUP-0179] **Four rgba colour literals in the stylesheet template make every theme paint Midnight's accent.**
+  `oneup/gui/theme.py:274` and `:278` carry `rgba(74,163,255,...)` and
+  `rgba(34,211,238,...)` — four colour literals in the QSS template, which INV-5
+  forbids in those words. The gate cannot see them: `local-CI.sh`'s awk pattern is
+  `/#[0-9a-fA-F]{6}/`, hex only. The consequence is user-visible — `#RowBorder`'s
+  ring and hover ring are the same azure-to-cyan in all eight themes, so Forest,
+  Plum, Paper and Sand paint every task row with Midnight's accent, which is
+  ONEUP-0027 §6's named failure mode verbatim. `theme.py:26` also asserts "nothing
+  here holds one any more except _BLACK and _WHITE", which is false. Add
+  `rowring*` tokens and extend the gate's pattern with `/rgba\([0-9]/`.
+  Resolved (2026-09-02): the four stops are hex per palette and
+  composited to rgba() by derived_keys, as the banner washes are.
+  Values unchanged, so nothing looks different.
+
+  Two corrections to this finding, both measured. The claimed
+  consequence is NOT live: all eight palettes carry the SAME accent
+  gradient, so an azure-to-cyan row ring is each theme's own accent
+  rather than Midnight's imposed on the rest. The invariant breach
+  was real; the mispainting was not.
+
+  The root cause was also larger than the hex-only pattern. The gate
+  opens its palette skip on `_NAME = dict(`, and `_FONT_SCALE` is a
+  one-line dict above the templates - so the skip ran to the next
+  dict's closing paren and _QSS and _HC_QSS were never scanned at
+  all. The pattern was not why the literals survived; nothing read
+  those lines. Also fixed: the comment rule ate QSS id selectors
+  (`#Name {` looks like a comment), and QSS block comments needed
+  skipping once the templates became visible.
+
+  Gate proved able to fail on four seeds, not assumed. contrast.py
+  gains the tints as decorative rows and the gradients in
+  DERIVED_FROM - INV-4 caught that omission during the work. The
+  spec's §4.7 records both, and its key census, already wrong by two
+  classes, is now named rather than counted.
+  **Layman:** Every colour theme draws the task rows in the default theme's blue.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-theme.
+
+- 📋 [ONEUP-0180] **The focus derivation runs twice on every theme change — about 40,000 contrast calls each time.**
+  `theme.py:1220` re-runs `derived_keys` in `apply_app_theme` having already paid
+  for it inside `build_theme`. One derivation evaluates up to 2 x 100 steps x 101
+  samples per gradient, twice, with six pow() calls each and no memoisation. It
+  fires on startup, on the desktop's light/dark switch and on all three Settings
+  controls, and the fallback path makes it three. Have `build_theme` return the
+  resolved palette alongside the QSS, or memoise on the theme id — the input is
+  immutable per theme.
+  **Layman:** Switching themes does the same expensive colour calculation twice.
+  Kind: perf.
+  Source: review-code 2026-08-31, lane gui-theme.
+
+- 📋 [ONEUP-0181] **Dialog placement: the X11 branch has no screen clamp, and the session type is read from the environment.**
+  `placement.py:66-72` and `:82-84` are the same computation and only one has been
+  patched: the Wayland branch clamps against the available geometry with the
+  comment "a dialog taller than its parent would otherwise hang off it", and the
+  X11 branch does not — so that exact defect is live on X11 for the Repositories
+  manager (780x560) and long message boxes. Separately `placement.py:19` infers the
+  session from `XDG_SESSION_TYPE`, so a Wayland session launched without it takes
+  the X11 branch where `move()` is accepted and silently ignored, which is
+  ONEUP-0049's failure returning by another door; `QGuiApplication.platformName()`
+  is the authoritative answer. Also here: `run_kwin_script` targets `org.kde.KWin`
+  only and swallows every failure, so centring is a silent no-op on other Wayland
+  compositors — while ui-and-accessibility.md §6.2 calls the helper "the only one
+  that handles Wayland" with no KDE qualifier, which is the document's half.
+  **Layman:** A tall dialog can open with its title bar off the top of the screen.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-window.
+
+- 📋 [ONEUP-0182] **The last-run line assumes the C locale for its date, which ONEUP-0032 does not cover.**
+  `oneup/gui/window.py:767` formats with `%d %b %Y, %H:%M`. Python does not call
+  `setlocale(LC_TIME, "")`, so `%b` renders from the C locale regardless of the
+  user's; day-month-year ordering and 24-hour time are hardcoded too. This is the
+  unconditional half of the i18n dimension — an assumed calendar presentation, not
+  a translatable string — so ONEUP-0032 does not reach it: that item is entirely
+  about tr() wrapping and right-to-left. `QLocale().toString(..., ShortFormat)` is
+  the fix. Related and smaller: `task_row.py:68` and `:100` build a sentence with
+  `title.lower()`, which is locale-naive (Turkish dotted/dotless I) on a fragment
+  that is meant to become translatable.
+  **Layman:** The date on the last-run line is always in English and always day-month-year.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-window.
+
+- 📋 [ONEUP-0183] **Text formats, default buttons and dialog lifetimes across the window layer.**
+  Five small classes, grouped because each is a one-line fix in the same layer.
+  Labels fed by the engine keep Qt's AutoText, so text containing a known HTML tag
+  renders as rich text — `window.py:383`, `:398`, `:501`, `task_row.py:52`, `:108`
+  and `banners.py:75`, where repository names and URLs reach it; `task_row.py:92`
+  already sets PlainText for the same class of value. The reboot and
+  restart-services confirmations (`banners.py:222`, `:258`) set no default button,
+  so Enter activates Qt's automatic choice on a dialog that reboots the machine —
+  three sibling dialogs set it deliberately. `run.py:228` never deleteLater's its
+  QProcess and omits the final-buffer flush, so a SIZE marker without a trailing
+  newline yields an unearned "Nothing to download". `repos.py:255`,
+  `rollback.py:147` and `auth.py:156` connect only `finished`, so a missing pkexec
+  leaves the button disabled forever with nothing said. And `window.py:607` reads
+  the log then checks the pid, so a run finishing in that gap records a false
+  failure.
+  **Layman:** A set of small window defects: text that could render as markup, dialogs where Enter picks the wrong button, and objects that are never released.
+  Kind: chore.
+  Source: review-code 2026-08-31, lanes gui-window, gui-run, gui-services.
+
+- 📋 [ONEUP-0184] **Non-atomic writes and unguarded state access in the window's peripheral services.**
+  `autostart.py:94` and `:138` write the systemd unit and the .desktop entry with a
+  bare `write_text`, so a failure part-way leaves a truncated unit systemd refuses.
+  `window.py:777` does the same for the run history, which then reads as "never".
+  `repos.py:118` restores saved geometry without an isinstance check, so a corrupt
+  or hand-edited settings value raises in `__init__` and the Repositories dialog
+  can never open again. `diagnostics.py:33` puts the `stat` outside the `try` that
+  wraps its glob, so a log rotated away mid-call raises out of a button handler.
+  And several `mkdir`/`write_text` calls under the state directory are unguarded,
+  so a full or read-only disk throws out of a timer or slot rather than degrading.
+  **Layman:** Several small files the app writes can be left half-written, and one bad saved value can stop a dialog opening.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-services.
+
+- ✅ [ONEUP-0185] **Decide whether a hostile local user is in scope — security.md states no threat model.**
+  `docs/standards/security.md` has no threat-model section: no "in scope", no
+  "attacker", no "trust boundary" heading. The model has to be derived from §1, §4
+  (which names repository metadata and tool output as untrusted) and §7 — giving
+  root as the asset and attacker-influenced strings as the surface, with a hostile
+  local user named nowhere. Three review lanes reasoned about local-user hostility
+  and reached different conclusions, and the 2026-08-31 calibration had to move
+  four findings on a model it had inferred rather than read. Three findings hang on
+  the answer: the state-directory umask, the predictable QLocalServer socket name
+  (`tray.py:195`, a trivial local denial of service at launch), and local-CI's
+  fixed temp log paths. Writing the model down decides all three at once.
+  Resolved (2026-09-02): security.md gains an unnumbered "The threat
+  model" section, first because everything after it derives from it.
+  The user's decision: a hostile local user is OUT of scope - OneUp is
+  a single-user desktop tool. Two assets are named, root and what
+  passes through the logs; the attacker is the data OneUp did not
+  write; and the exclusion is explicitly about whose input is trusted,
+  never about correctness.
+
+  Unnumbered on purpose, so no section renumbers and no citation
+  anywhere in the repo breaks.
+
+  Three loops of review-contract, genre pinned standard, cap reached:
+  18 verified, 18 fixed, 6 dismissed. The gate repeatedly caught the
+  new section rather than rubber-stamping it - loop 1 found that
+  excluding local users had silently removed the only actor §5.2
+  defends against, and loop 2 found that the justification I wrote for
+  the exclusion was itself false (targetpw changes WHICH password sudo
+  demands, not whether root is reachable). The decision never moved;
+  its stated reasoning was wrong twice and is now the single-user call
+  alone.
+
+  The three findings that hung on this answer: the state-directory
+  umask is closed out of scope, recorded on ONEUP-0177 whose
+  non-atomic half is unaffected; the predictable tray socket name and
+  local-CI's fixed temp paths are named in the section itself as
+  undefended, so neither needs re-arguing.
+
+  Nine defects were found in parts of the document the change never
+  touched - the audit half of the gate rather than the gate half.
+  **Layman:** The security rules do not say who they are defending against, so three reviewers reached three different answers.
+  Kind: security.
+  Source: review-code 2026-08-31, threat-model calibration.
+
+- 📋 [ONEUP-0186] **Release-script and gate defects below the ones already filed.**
+  `release.sh:27` checks the clean-tree precondition, then runs the full local CI
+  and an unbounded interactive prompt before `git add -A` — so anything created by
+  the suites or edited while the prompt waits is swept into the release commit,
+  which workflow.md §8 says the precondition makes safe. `release.sh:77` prints
+  "Released" and exits 0 even when the whole OBS block failed. `release.sh:60`
+  leaves the checkout behind if interrupted, and `rm -rf "$work"` is unguarded
+  against an empty variable. `bump.py:92` inserts the CHANGELOG link before the
+  first line anywhere starting `[` plus a digit, unanchored. `bump.py:31` truncates
+  before writing, nine times across five files, so an interruption can leave
+  `CHANGELOG.md` or `oneup/__init__.py` empty. And both scripts read one flag only,
+  so `./local-CI.sh --docs --full` silently ignores the second.
+  **Layman:** Smaller problems in the release scripts that can let a bad release through quietly.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane tooling.
+
+- 📋 [ONEUP-0187] **Nine document claims the review found false against the code they describe.**
+  Reported by lanes and judged document-side, so they are for review-contract or a
+  docs pass rather than a code fix. `workflow.md` §6's gate table has no row for
+  Package structure or the INV-5 gate while claiming to list them in run order;
+  §6 and §7 say `release.yml` runs three suites and it runs five, which also makes
+  "every gate other than the three test suites has never run in GitHub CI" false;
+  the Lint row's label differs from the script's own; "three of the eight gates"
+  against ten. `files-and-naming.md` §6 says six `edit()` calls (there are nine),
+  still says the lockstep gate greps `updater.py` by name (it greps
+  `oneup/__init__.py`), and still says the spec installs two source files by name.
+  `ONEUP-0034` §4.2 pins `LOG_DIR` to `paths.py` where the code has
+  `STATE_LOG_DIR`, leaves `HOLD_STATE`/`GO_REQUEST` unplaced, and pins `_app_icon`
+  to `app.py` where it lives in `theme.py`. `security.md` still cites `updater.py`
+  for `_ALIAS_RE`, `Updater.rollback` and `Updater.restart_services`.
+  `marker-protocol.md` §2 says `_on_size_output` reads SIZE only; it also handles
+  HINT and appends non-marker lines.
+  **Layman:** Nine places where a document describes the code inaccurately.
+  Kind: doc-fix.
+  Source: review-code 2026-08-31, lanes tooling, gui-services, gui-run, engine-protocol.
+
+- 📋 [ONEUP-0188] **Engine polish below the filed items: help text, verbatim log path, and a few dead or misleading lines.**
+  `__main__.py:91` drops the Examples block the Bash `--help` prints, and `:87`
+  drops the skip-repo ceiling — a user-facing regression on the "fully usable in a
+  terminal" contract; `update_system.sh:177` omits `--size=`, `--hold` and
+  `--emit-guard` entirely. `__main__.py:151` normalises the `--log=` value, which
+  §4.1.1 pins as verbatim in `run.state` line 2. `__main__.py:318`'s fallback
+  snapshot id skips the isdigit test its sibling loop applies. `privilege.py:104`
+  and `__main__.py:545` both misstate what protects INV-9 (`_start_keepalive`
+  returns early; the `held_auth` guard is the real protection). `privilege.py:140`
+  says the keep-alive tag rides in `argv[0]`; under `-c` it is `argv[1]`.
+  `runstate.py:219` counts sleeps rather than elapsed time, so a suspend leaves a
+  root-authenticated engine held past its ceiling. `runstate.py:194` raises at
+  IMPORT on a mistyped `ONEUP_HOLD_SECONDS`, killing even `--check`.
+  `runstate.py:246` returns False on PermissionError where the window's twin probe
+  returns True. `repos.py:283` clears DISABLED before attempting any re-enable, so
+  an interrupted cleanup leaves a repository disabled with no retry — a port
+  regression, the Bash does not clear it. `steps.py:450` and `repos.py:122` write
+  without `encoding=`, so UnicodeEncodeError escapes their OSError handlers.
+  `update_system.sh:1048`, `:288`, `:894` and the ASKPASS default round it out. And
+  in the theme layer: `contrast.py:144`'s accent exemption gives a reason that no
+  longer applies, `theme.py:555` derives the HC focus fill from `btn` while the
+  rest fill is `card`, `theme.py:622`'s `focus` token is substituted into nothing,
+  and `_ink_for`'s docstring states a guarantee the function does not have.
+  **Layman:** A collection of small inaccuracies and tidy-ups across the engine.
+  Kind: chore.
+  Source: review-code 2026-08-31, lanes engine-driver, engine-privilege, engine-shell, engine-steps, gui-theme.
+
+- 📋 [ONEUP-0189] **thin_snapshots swallows every failure and reports "already satisfied".**
+  In `update_system.sh`'s `thin_snapshots`, both `snapper cleanup` calls end in
+  `|| true` and both `sudo_capture list` statuses are ignored, so a snapper that
+  cannot run at all leaves the before and after counts at zero and the step reports
+  "No snapshots needed thinning — snapper's retention policy is already satisfied"
+  plus `@@SNAPSHOTS@@|thinned|0`, exiting 0. That is the same could-not-look shape
+  as the firmware and orphans cases fixed on 2026-08-31, on the one path the user
+  reaches from a disk-space warning. Check the capture status and report a distinct
+  failure rather than reusing the already-satisfied wording.
+  **Layman:** If tidying old snapshots fails, the app says there was nothing to tidy.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane engine-shell.
+
+- 📋 [ONEUP-0190] **The window's unknown-status badge and size wording claim more than they know.**
+  `oneup/gui/markers.py`'s `_step_badge` treats every status that is not `fail` or
+  `skip` as a success and falls through to "Done", where the marker protocol says
+  the field is exactly one of `ok`, `skip`, `fail` — a closed vocabulary, so this
+  is the shape-versus-membership trap applied to a field that is already codified.
+  A spliced status renders a badge claiming a success the step did not earn.
+  Separately `_format_size` divides by 1<<30, 1<<20 and 1<<10 and labels the result
+  GB, MB and KB, overstating every figure by about 7% at the GB rung, where
+  wording-and-translation.md §4 says numbers are what was measured. Either label
+  them GiB/MiB/KiB or divide by powers of 1000.
+  **Layman:** An unrecognised result shows as "Done", and sizes are labelled with the wrong unit names.
+  Kind: fix.
+  Source: review-code 2026-08-31, lane gui-run.
+
+- 💭 [ONEUP-0191] **OneUp contacts api.github.com on every launch, with no consent and no opt-out.**
+  `oneup/gui/app_update.py`'s update check fires from the window's startup path on
+  every launch, including the `--tray` autostart at login. There is no setting, no
+  prompt and no documented way to decline. Reported raw because nothing in the
+  reviewed contracts states a position either way — which is the point: whether a
+  desktop updater should phone home unasked is a decision the project has not
+  written down. Note the rate-limit handler is also unguarded against an absurd
+  `x-ratelimit-reset`, where `int()` can raise `OverflowError`, which is not in the
+  handler's except tuple and escapes the network slot.
+  **Layman:** The app checks GitHub for a new version every time it starts, and there is no way to turn that off.
+  Kind: security.
+  Source: review-code 2026-08-31, lane gui-services.
+
+- 📋 [ONEUP-0192] **Two dead or misleading guards left over from the Bash engine.**
+  `update_system.sh` sets `WINDOW_PID=$PPID` and documents it as "the window". That
+  holds only because `--size` skipped the shutdown-inhibitor re-exec; now that the
+  `--size --hold` path IS inhibited (ONEUP-0165), `$PPID` on that path is the
+  `systemd-inhibit` parent, which forks rather than execs. Latent rather than live,
+  but the comment is now wrong and the value is used for the hold. Separately
+  `oneup/engine/repos.py`'s `FAILING` module global is vestigial: the Bash needed it
+  to avoid a subshell, which Python does not have, and the function returns it
+  anyway with every caller using the return value. Neither is a zombie under
+  review-code's own test — no contract promises either as an entry point — so they
+  are filed here rather than reported as dead code.
+  **Layman:** Two leftovers that read like safety checks but are not doing anything.
+  Kind: chore.
+  Source: review-code 2026-08-31, lanes engine-shell and engine-steps.
+
+- 📋 [ONEUP-0193] **workflow.md §6 says release.yml runs the three test suites "and nothing else", and it runs more.**
+  Found while building the stage-6 review packet. §6's closing block reads
+  "release.yml runs the three test suites and the AppImage build — and nothing
+  else", and the workflow also runs the bump.py functional test and the package
+  structure check. The sentence after it enumerates the gates it says have never
+  run in GitHub CI and correctly omits bump.py, so the two disagree with each
+  other as well as with the workflow.
+
+  Adjacent to ONEUP-0133 (the same table has no row for the package structure
+  gate) but not the same defect: that one is a missing row, this is a false
+  claim about the workflow. Left unfixed deliberately — ONEUP-0054 stage 6
+  step 6 edits this table, and an orthogonal repair in that commit is what
+  coding.md §1.7 forbids.
+  **Layman:** A rule about our automated build checks says it runs three things; it actually runs five.
+  Kind: doc-fix.
+  Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, packet build).
+
+- 📋 [ONEUP-0194] **testing.md §1 says the suite is three programmes and names three; five ship.**
+  §1 opens "Three programmes, each runnable on its own" and its table names
+  run-tests.sh, gui-smoke.py and bump-test.py. The tree also ships
+  parsers-test.py (added by ONEUP-0054 stage 4, gated by local-CI.sh and run by
+  release.yml) and imports-test.py. The same paragraph's second claim — that all
+  three are "the *only* gates GitHub CI also runs on a `v*` tag" — is wrong for
+  the same reason, and is the twin of ONEUP-0193 in workflow.md §6.
+
+  Found by a cold lane's open question during ONEUP-0054 stage 6's gate. Left
+  unfixed deliberately: stage 6 step 7 adds its own row to this table, and
+  repairing the two pre-existing omissions in that commit is the orthogonal edit
+  coding.md §1.7 forbids. Whoever closes this should fix ONEUP-0193 with it —
+  one wrong belief about release.yml, stated in two standards.
+  **Layman:** A rule says our test suite has three parts and lists them; there are five.
+  Kind: doc-fix.
+  Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, loop 2).
+
+- 📋 [ONEUP-0195] **The differential harness is a local-only gate, against workflow.md §6.1 step 3.**
+  workflow.md §6.1 step 3 says a test gate must also go into
+  .github/workflows/release.yml, because "a test gate that runs only locally
+  catches its first regression after the tag is pushed". tests/differential-test.sh
+  is not added there, deliberately.
+
+  That workflow runs on a `v*` tag. The next one is 2.0.0, and ONEUP-0054 §4.6
+  says ONEUP-0072 lands before it and "changes the marker payloads and the
+  assertions that read them" — which update_system.sh does not follow. So the
+  entry's first CI execution would be a run the spec already expects not to
+  match, and there is no tag between now and then for it to protect.
+
+  The harness is transitional. ONEUP-0072 owns retiring it: that spec already
+  records that tests/differential-test.sh stops being runnable at that item and
+  that testing.md §1's suite table loses the row.
+
+  Cited in tests/differential-test.sh's header comment and beside workflow.md
+  §6's table row, so a reader of either finds the reason rather than inferring
+  an omission.
+  **Layman:** One new automated check runs on this machine only, not on GitHub — on purpose, and this records why.
+  Kind: chore.
+  Source: ONEUP-0054 stage 6 step 6.
+
+- 💭 [ONEUP-0196] **Decide whether the grandchild-holds-the-pipe trap belongs in CLAUDE.md §6.**
+  The trap: killing only the bounded child left a GRANDCHILD holding our read
+  end, so the wait after the kill blocked on a pipe nobody would close and the
+  "bounded" call never returned. proc._run_bounded therefore gives a bounded
+  child its own session and kills the GROUP on expiry. It cost a real bug during
+  ONEUP-0054 stage 5.
+
+  It IS recorded — on proc._run_bounded, in commit 7a19ad0's body, and in
+  ONEUP-0054's roadmap note. What is undecided is whether it also belongs in
+  CLAUDE.md §6, which is where traps that each cost a real bug live. Two reasons
+  it was not added at the time: stage 5 step 12 scoped its documentation to the
+  spec amendment and stale docstrings, and CLAUDE.md is a rule-14 gated
+  document, so adding a trap is not a free edit.
+
+  Needs the user, not a session. Filed as considered rather than planned so it
+  is a decision on the record instead of a paragraph re-typed into every
+  handoff — which is how it has travelled for three sessions.
+  **Layman:** A hard-won lesson about killing background jobs is written in the code but not in the list of traps; someone should decide whether it belongs there.
+  Kind: doc.
+  Source: carried in session handoffs since 2026-08-31; filed 2026-09-02 to stop the prose relay.
+
+- 📋 [ONEUP-0197] **Give each of the eight themes its own accent hue.**
+  All eight palettes carry an identical `accent` gradient (azure to cyan),
+  and after ONEUP-0179 an identical row ring built from the same two hues.
+  Themes differ only in their surfaces today. Decided with the user on
+  2026-09-02: they should differ in the highlight too, so Forest highlights
+  green and Plum purple.
+
+  Scope is every token taking that hue: `accent`, the four `rowring*`
+  tints, and the button stop pairs if they are to follow. Each new value
+  must be re-measured against that theme's own surfaces - ONEUP-0027 §4.7
+  holds the pairs and §4.8 the decisions, and INV-2 re-measures every
+  palette on every run, so a hue chosen by eye fails the suite rather than
+  shipping. §9 rejects deriving a palette from a hue at run time, so the
+  values are authored and frozen like the rest.
+
+  Not a colour change alone: `accent` is also what the focus derivation
+  blends from for the two gradient controls, so moving it moves
+  `accentfocus` / `accentfocusink` per theme - which is what tokenising
+  bought, but it means the focus measurement is part of this item rather
+  than a follow-on.
+  **Layman:** Every colour theme currently highlights in the same blue; each should highlight in its own colour.
+  Kind: ux.
+  Source: user decision 2026-09-02, arising from ONEUP-0179.
+
+- 📋 [ONEUP-0198] **The progress fill is barely visible against its own trough in the four light themes.**
+  Measured across all eight palettes with the project's own `contrast.worst`:
+  `accent` against `progbg` is about 7.1:1 to 7.4:1 in the four dark themes
+  and about 1.4:1 in Daylight, Paper, Sky and Sand. The fill IS the
+  information, so under SC 1.4.11 it is a meaningful boundary and wants
+  3:1. Four themes are under half that: the bar looks empty however far it
+  has got.
+
+  Found while closing ONEUP-0163 rather than filed by a review. That item
+  moved the caption OFF the fill, which removes the text-contrast failure
+  and leaves this one - a separate defect that was hidden behind it,
+  because nothing measured the fill against the trough.
+
+  Two things to do together, and neither is guessed here.
+  Add `("accent", ("progbg",), MARK)` to PAIRS so the fill is measured; it
+  goes red on the four light themes until their trough or accent moves, so
+  the recolour lands in the same change. And retire the `progbg` ground on
+  the `status` PAIRS row: with the caption off the bar nothing renders
+  `status` on the trough, so that pair no longer exists. It is left in
+  place for now only because it is what currently covers `progbg` for
+  INV-4, and removing it without the replacement above would fail the
+  coverage check.
+
+  Sequence with ONEUP-0197, which gives each theme its own accent: doing
+  this first means re-measuring every value that item then changes.
+  **Layman:** In the light themes you can hardly see how far the progress bar has filled.
+  Kind: accessibility.
+  Source: measured 2026-09-02 while closing ONEUP-0163.
+
+- 📋 [ONEUP-0199] **Reconcile ONEUP-0054's spec between main and v2 — main's copy is behind.**
+  Found while building the stage-7 review packet. `docs/specs/ONEUP-0054-python-engine.md` differs between the branches, and `v2` holds the newer text: §4.6's rows 1, 2, 4 and 5 each carry detail `main`'s copy lacks (the named call sites at stage 1, the window's `STATE_LOG_DIR` rename and the four unpinned exit codes at stage 2, the `--hold` exception at stage 4, the two structural checks at stage 5). §4.6 row 7 and the whole of §4.7 are byte-identical on both, so stage 7's own gate was unaffected.
+
+  Why it matters: the plan's stage 8 amends the spec on `main` and merges, which assumes the two are in step. They are not, so an amendment written against `main`'s text can be written against a passage `v2` has already replaced. A session reading the spec on `main` to learn what stage 7 owes reads an older contract with nothing saying so.
+
+  Decide which branch is authoritative for this spec and make the other match, before stage 8 amends it.
+  **Layman:** Two branches hold different versions of the same design document, so a session reading it on the wrong branch builds from stale instructions.
+  Kind: doc-fix.
+  Source: in-session-2026-09-03 (ONEUP-0054 stage 7 plan gate, Phase 1b).
