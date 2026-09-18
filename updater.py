@@ -932,7 +932,8 @@ class TaskRow(QFrame):
 # --- repository listing / management ---------------------------------------
 # Repo aliases are the identifiers passed to a root `zypper modifyrepo/removerepo`;
 # validate them against this before they reach a shell (defence in depth, mirroring
-# the rollback snapshot-id and service-name guards).
+# the rollback snapshot-id and service-name guards). A skip-repo remedy's alias is
+# checked against it too, since it goes back to the engine as --skip-repo= (ONEUP-0144).
 _ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
 
 
@@ -3387,7 +3388,8 @@ for (var i = 0; i < wins.length; i++) {{
             # one behind a confirmation.
             if parts and parts[0] == "import-keys":
                 self._remedy_keys = True
-            elif parts and parts[0] == "skip-repo" and len(parts) >= 2:
+            elif (parts and parts[0] == "skip-repo" and len(parts) >= 2
+                  and _ALIAS_RE.fullmatch(parts[1])):
                 self._remedy_skips.append(parts[1])
         elif tag == "REBOOT":
             self._reboot = parts[0] == "yes"

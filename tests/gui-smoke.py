@@ -1251,6 +1251,10 @@ def main() -> int:
 
         w.handle_line("@@REMEDY@@|skip-repo|google-chrome")
         check("skip-repo remedy stores the alias", w._remedy_skips == ["google-chrome"])
+        # ONEUP-0144: the alias goes back to the engine as `--skip-repo=`, so the window
+        # checks it at the marker boundary too. `-` first would be an option, not a name.
+        w.handle_line("@@REMEDY@@|skip-repo|--plus-content")
+        check("an unsafe skip-repo alias is not armed", w._remedy_skips == ["google-chrome"])
         w._failed_steps = ["system"]
         w._hints = ["The 'google-chrome' repository failed — the rest can still update."]
         w.proc = QProcess(w)

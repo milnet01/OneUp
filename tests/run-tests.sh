@@ -2211,6 +2211,33 @@ check_absent "unsafe alias never reaches modifyrepo" "modifyrepo --disable evil"
 unset MOCK_ZLOG
 rm -rf "$d"
 
+echo "TEST: an unsafe alias in the repository list is refused, never refreshed as root (ONEUP-0144)"
+# The list comes from zypper's own table, which security.md §4 names as untrusted. An
+# alias starting with `-` is an option to zypper, not a repository name.
+d=$(mktemp -d); setup_common "$d"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "zypper $*" >> "$MOCK_ZLOG"
+case "$*" in
+  *lr*)
+    echo " 1 | oss             | Main OSS | Yes | (r ) Yes | Yes"
+    echo " 2 | --plus-content  | Hostile  | Yes | (r ) Yes | Yes"
+    exit 0 ;;
+  *dup*|*update*) echo "Nothing to do."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+check_absent "the unsafe alias never reaches a refresh"   "refresh --plus-content" "$(cat "$MOCK_ZLOG")"
+check_absent "nor a marker the window would act on"       "|--plus-content"        "$out"
+check        "the refusal is said out loud"               "Refusing unsafe repo alias: --plus-content" "$out"
+check        "the safe source is still refreshed"         "refresh oss"            "$(cat "$MOCK_ZLOG")"
+check        "and counted alone"                          "@@REFRESH@@|1|1|oss"    "$out"
+unset MOCK_ZLOG
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 echo "TEST: --auto-skip-repos sets a broken source aside, upgrades the rest, reports ok + notifies"
 d=$(mktemp -d); setup_common "$d"

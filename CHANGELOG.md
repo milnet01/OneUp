@@ -6,6 +6,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- **Software-source names are checked before any root command sees them** (ONEUP-0144)
+  A software source with an unsafe name is now refused with a message,
+  instead of being passed to the package manager as administrator.
+
 ## [1.4.5] - 2026-08-19
 
 ### Fixed

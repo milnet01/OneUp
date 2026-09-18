@@ -1168,9 +1168,21 @@ disable_repo() {   # $1=alias $2=reason ; records + marks on success, fail-close
 }
 
 enabled_repo_aliases() {   # alias of each ENABLED repo (read-only; no root)
-    LC_ALL=C zypper --non-interactive lr -u 2>/dev/null | awk -F'|' '
+    # Checked HERE, where the list enters: zypper's table is untrusted input
+    # (security.md §4), and every alias printed reaches `sudo … refresh` and a marker
+    # the window forwards back as --skip-repo=. An alias starting with `-` is an option
+    # to zypper, not a name (ONEUP-0144).
+    local alias
+    while IFS= read -r alias; do
+        [[ -z "$alias" ]] && continue
+        if valid_alias "$alias"; then
+            printf '%s\n' "$alias"
+        else
+            echo "  Refusing unsafe repo alias: $alias" >&2
+        fi
+    done < <(LC_ALL=C zypper --non-interactive lr -u 2>/dev/null | awk -F'|' '
         { for (i=1;i<=NF;i++) gsub(/^ +| +$/,"",$i) }
-        $1 ~ /^[0-9]+$/ && tolower(substr($4,1,1))=="y" { print $2 }'
+        $1 ~ /^[0-9]+$/ && tolower(substr($4,1,1))=="y" { print $2 }')
 }
 
 # Fills FAILING_REPOS[] with "alias reason" per enabled repo that fails its own
