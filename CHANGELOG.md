@@ -44,6 +44,10 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A bad keep-alive interval no longer makes the engine spin** (ONEUP-0175)
+  An invalid ONEUP_KEEPALIVE_SECONDS used to make the credential keep-alive
+  retry non-stop for the whole run. It now falls back to the default.
+
 - **The words on the progress bar were too faint to read against the coloured fill** (ONEUP-0163)
   "Downloading 12 of 141 packages" and the rest of the running commentary
   were printed across the middle of the progress bar, on top of its blue
@@ -138,6 +142,14 @@ All notable changes to OneUp are documented here. The format follows
   one keep working.
 
 ### Security
+
+- **Passwordless setup names the real account** (ONEUP-0148)
+  Turning on passwordless updates now writes its permission for the account
+  you are actually signed in as, even if the environment claims otherwise.
+
+- **Software-source names are checked before any root command sees them** (ONEUP-0144)
+  A software source with an unsafe name is now refused with a message,
+  instead of being passed to the package manager as administrator.
 
 - **Package names from the system are checked before reaching a privileged removal** (ONEUP-0171)
   The list of leftover packages is parsed out of another tool's output, and was

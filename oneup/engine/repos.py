@@ -55,7 +55,19 @@ def enabled_repo_aliases() -> list[str]:
         ["zypper", "--non-interactive", "lr", "-u"],
         env={"LC_ALL": "C"},  # keeps the column layout parseable on any locale
     )
-    return parsers.enabled_aliases(text)
+    # Checked HERE, where the list enters: zypper's table is untrusted input
+    # (security.md §4), and every alias returned reaches `sudo … refresh` and a
+    # marker the window forwards back as `--skip-repo=`. An alias starting with `-`
+    # is an option to zypper, not a name (ONEUP-0144).
+    safe = []
+    for alias in parsers.enabled_aliases(text):
+        if not alias:
+            continue
+        if valid_alias(alias):
+            safe.append(alias)
+        else:
+            markers.err(f"  Refusing unsafe repo alias: {alias}")
+    return safe
 
 
 def lock_holder() -> str | None:

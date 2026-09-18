@@ -1267,6 +1267,7 @@ check "the upgrade still runs after the timeout" "@@STEP_END@@|system|ok"      "
 check "and the stale-metadata caveat is stated"  "cached metadata"             "$out"
 rm -rf "$d"
 
+
 echo "TEST: Stop is honoured DURING the refresh, before anything is installed"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<EOF
@@ -1724,6 +1725,15 @@ else
     echo "  FAIL - grant left no download guard"; FAIL=$((FAIL+1))
 fi
 check "the guard carries the granted scope as its stamp" "# oneup-auth-scope:" "$(cat "$d/oneup-download-guard" 2>/dev/null)"
+# ONEUP-0148: the rule names the REAL account, never one the environment claims. Under
+# `su other` without `-`, USER still names the invoking user, and a rule written for it
+# grants passwordless root to someone the operator never named.
+rm -f "$authfile"
+USER=not-this-user LOGNAME=not-this-user LNAME=not-this-user USERNAME=not-this-user \
+    ONEUP_AUTH_FILE="$authfile" run_engine "$d" --grant-auth >/dev/null 2>&1
+rule=$(cat "$authfile" 2>/dev/null)
+check        "the rule names the real account"            "$(id -un) ALL=(root) NOPASSWD:" "$rule"
+check_absent "not the account the environment claims"     "not-this-user"                   "$rule"
 # Bonus: if a real visudo is on the box, prove the generated rule is truly valid
 # (not just accepted by the mock). Absolute paths dodge the mock visudo in $PATH.
 # Skipped silently where visudo isn't installed.
@@ -2310,6 +2320,29 @@ else
 fi
 rm -rf "$d"
 
+echo "TEST: a non-numeric keep-alive interval falls back to the default, never busy-spins (ONEUP-0175)"
+# The interval feeds `sleep`, which fails at once on `abc`, so an unchecked value turned the
+# keep-alive into a tight loop of `sudo -n -v` for the whole run. Checked where it is read,
+# the loop validates once and sleeps.
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\ncase "$*" in *dup*|*update*) sleep 2; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
+mv "$d/sudo" "$d/sudo.real"
+cat > "$d/sudo" <<SUDO
+#!/usr/bin/env bash
+[[ "\$*" == "-n -v" ]] && echo x >> "$d/keepalive.log"
+exec "$d/sudo.real" "\$@"
+SUDO
+chmod +x "$d/zypper" "$d/sudo"
+: > "$d/keepalive.log"
+ONEUP_KEEPALIVE_SECONDS=abc run_engine "$d" --steps=system >/dev/null 2>&1
+n=$(wc -l < "$d/keepalive.log")
+if (( n >= 1 && n <= 3 )); then
+    echo "  ok   - the keep-alive validated $n time(s) in a two-second run"; PASS=$((PASS+1))
+else
+    echo "  FAIL - the keep-alive validated $n times in a two-second run (want 1-3)"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 # ONEUP-0041: cleanup's trap cannot run when the engine is SIGKILLed, and the
 # keep-alive used to loop forever in that case. Two were found on the reporter's
@@ -2560,6 +2593,33 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system "--skip-repo=evil; rm -rf /")
 check_absent "unsafe alias never reaches modifyrepo" "modifyrepo --disable evil" "$(cat "$MOCK_ZLOG")"
+unset MOCK_ZLOG
+rm -rf "$d"
+
+echo "TEST: an unsafe alias in the repository list is refused, never refreshed as root (ONEUP-0144)"
+# The list comes from zypper's own table, which security.md §4 names as untrusted. An
+# alias starting with `-` is an option to zypper, not a repository name.
+d=$(mktemp -d); setup_common "$d"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "zypper $*" >> "$MOCK_ZLOG"
+case "$*" in
+  *lr*)
+    echo " 1 | oss             | Main OSS | Yes | (r ) Yes | Yes"
+    echo " 2 | --plus-content  | Hostile  | Yes | (r ) Yes | Yes"
+    exit 0 ;;
+  *dup*|*update*) echo "Nothing to do."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+check_absent "the unsafe alias never reaches a refresh"   "refresh --plus-content" "$(cat "$MOCK_ZLOG")"
+check_absent "nor a marker the window would act on"       "|--plus-content"        "$out"
+check        "the refusal is said out loud"               "Refusing unsafe repo alias: --plus-content" "$out"
+check        "the safe source is still refreshed"         "refresh oss"            "$(cat "$MOCK_ZLOG")"
+check        "and counted alone"                          "@@REFRESH@@|1|1|oss"    "$out"
 unset MOCK_ZLOG
 rm -rf "$d"
 
@@ -3037,20 +3097,23 @@ else
     # that CANNOT MOVE when a new privileged call lands, which is the whole failure this
     # check exists to catch. Two things it still cannot see, so nobody reads it as
     # complete: an argv assembled in a variable, and two calls on one line.
+    # `privilege.sudo_argv` is the streaming form of the same helper (ONEUP-0174), so its
+    # call sites count too. It went 33 -> 34 when the three hand-built transaction argvs
+    # moved behind it: the same three sites, plus the helper's own prefix line.
     pn=$(( $(grep -c '\["sudo"' <<<"$py_stripped") \
-         + $(grep -c 'privilege\.sudo(' <<<"$py_stripped") ))
-    if [[ "$pn" == "33" ]]; then
-        echo "  ok   - the Python engine has its known 33 privileged call sites"; PASS=$((PASS+1))
+         + $(grep -cE 'privilege\.sudo(_argv)?\(' <<<"$py_stripped") ))
+    if [[ "$pn" == "34" ]]; then
+        echo "  ok   - the Python engine has its known 34 privileged call sites"; PASS=$((PASS+1))
     else
-        echo "  FAIL - privileged call sites moved: $pn, expected 33. A NEW one needs a matching"; FAIL=$((FAIL+1))
+        echo "  FAIL - privileged call sites moved: $pn, expected 34. A NEW one needs a matching"; FAIL=$((FAIL+1))
         echo "         entry in auth_cmnds, or passwordless silently starts prompting again."
     fi
     # The shared-argv halves, one row each: each constant is written once and read by both
     # the call site and the rule that grants it, so neither side can be respelled alone.
     # REFRESH_SUDO_ARGV went 3 -> 4 when find_failing_repos was put under the same
     # per-source budget as refresh_repos: one more READER of the same granted argv,
-    # not a new privileged shape, so auth_cmnds is unchanged and the call-site count
-    # above still reads 33.
+    # not a new privileged shape, so auth_cmnds was unchanged and the call-site count
+    # above did not move.
     for pair in "REFRESH_SUDO_ARGV:4" "CACHE_DU_ARGV:4"; do
         var="${pair%%:*}"; want="${pair##*:}"
         got=$(grep -c "$var" <<<"$py_stripped")

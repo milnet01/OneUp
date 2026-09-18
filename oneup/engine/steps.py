@@ -411,17 +411,16 @@ def _download_pass() -> bool:
     global SYS_DL_RC
     from . import actions  # deferred: actions imports this module
     txn = system_txn_argv()
-    privilege.install_environment()
     stop_file, run_state = str(runstate.STOP_REQUEST), str(runstate.RUN_STATE)
     if actions.guard_current():
-        argv = ["sudo", str(actions.GUARD_FILE), stop_file, run_state,
-                STOP_POLL_SECONDS, *txn]
+        argv = privilege.sudo_argv([str(actions.GUARD_FILE), stop_file, run_state,
+                                    STOP_POLL_SECONDS, *txn])
     else:
         # LC_ALL=C reaches the child as an ARGV PREFIX through `sudo env`, never
         # as a Python `env=` argument: sudo resets the environment, and the
         # sudoers rule grants those literal words.
-        argv = ["sudo", "env", "LC_ALL=C", "bash", "-c", _STOP_WRAPPER, "_",
-                stop_file, run_state, STOP_POLL_SECONDS, *txn]
+        argv = privilege.sudo_argv(["env", "LC_ALL=C", "bash", "-c", _STOP_WRAPPER, "_",
+                                    stop_file, run_state, STOP_POLL_SECONDS, *txn])
     SYS_DL_RC = proc.stream_filtered(argv, step="system", phase="download",
                                      log=_SYS_LOG, append=False)
     # 143 is the wrapper reporting a stop. Nothing is installed either way, so it
@@ -441,8 +440,7 @@ def _commit_pass() -> bool:
     transaction log, because the download pass's output is where a download
     failure's evidence lives.
     """
-    privilege.install_environment()
-    argv = ["sudo", "env", "LC_ALL=C", *system_txn_argv()]
+    argv = privilege.sudo_argv(["env", "LC_ALL=C", *system_txn_argv()])
     return _zypper_ok(proc.stream_filtered(argv, step="system", phase="install",
                                            log=_SYS_LOG, append=True))
 

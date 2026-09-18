@@ -9,8 +9,8 @@ file, so it belongs beside the others.
 from __future__ import annotations
 
 import contextlib
-import getpass
 import os
+import pwd
 import re
 import shutil
 import tempfile
@@ -425,7 +425,11 @@ def build_auth_rule() -> str | None:
     cmnds = auth_cmnds()
     if cmnds is None:
         return None
-    user = getpass.getuser()
+    # The REAL account, from the uid. `getpass.getuser()` reads USER and LOGNAME first,
+    # and `su other` without `-` keeps the invoking user's — so the rule would grant
+    # passwordless root to an account the operator never named (ONEUP-0148). The Bash
+    # engine asks `id -un`, which is the same question.
+    user = pwd.getpwuid(os.getuid()).pw_name
     return (
         '# Installed by OneUp\'s "remember my authorization" setting — stores NO password.\n'
         f"# Lets {user} run OneUp's update commands as root without a password prompt.\n"

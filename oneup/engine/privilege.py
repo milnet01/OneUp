@@ -7,7 +7,8 @@ that made every `$(sudo …)` subshell authenticate again, and a full run once
 asked for the password seven times (ONEUP-0038). Python has no subshell, so the
 same trap takes a different shape: scatter raw sudo-headed argvs across
 modules and each call site becomes its own discipline to remember. Route them
-through `sudo()` here instead, and there is one place to get right.
+through `sudo()` here instead — or `sudo_argv()`, where the caller streams the
+output itself — and there is one place to get right.
 
 The environment, the runner, `sudo_init`'s one-time bootstrap, the keep-alive,
 the askpass reaping and `cleanup` — whose ORDER is load-bearing, and is stated
@@ -206,6 +207,18 @@ def sudo(argv: Sequence[str], *, flags: Sequence[str] = (), merge_stderr: bool =
     """
     install_environment()
     return proc.run(["sudo", *flags, *argv], merge_stderr=merge_stderr, stream=stream)
+
+
+def sudo_argv(argv: Sequence[str]) -> list[str]:
+    """The sudo-headed argv for a child this module does not run itself.
+
+    `proc.stream_filtered` reads a transaction's output line by line, which
+    `sudo()` above cannot do. Routing that argv through here keeps the rule of
+    this module whole: the environment is installed, and the prefix is written
+    once (ONEUP-0174).
+    """
+    install_environment()
+    return ["sudo", *argv]
 
 
 def reap_orphaned_askpass() -> None:

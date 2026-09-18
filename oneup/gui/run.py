@@ -12,6 +12,7 @@ half-applied or orphan a zypper that carries on regardless (ONEUP-0047).
 """
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import time
@@ -24,6 +25,12 @@ from PySide6.QtWidgets import QMessageBox
 from .. import APP_ID, APP_NAME
 from . import banners, markers, paths, tray
 from .diagnostics import cache_bytes
+
+# The alias shape both engines accept (`valid_alias` in `oneup/engine/repos.py` and
+# `update_system.sh`). A skip-repo remedy's alias goes back to the engine as
+# `--skip-repo=`, so the window checks it at the marker boundary as well
+# (security.md §4, ONEUP-0144). A pair by design: the window does not import the engine.
+_SAFE_ALIAS = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
 
 # How long the engine may produce NOTHING before the liveness line calls it stalled
 # (ONEUP-0048). Generously past a normal gap — a big repository's cache rebuild is quiet
@@ -650,7 +657,8 @@ def handle_marker(win, line: str):
         # one behind a confirmation.
         if parts and parts[0] == "import-keys":
             win._remedy_keys = True
-        elif parts and parts[0] == "skip-repo" and len(parts) >= 2:
+        elif (parts and parts[0] == "skip-repo" and len(parts) >= 2
+              and _SAFE_ALIAS.fullmatch(parts[1])):
             win._remedy_skips.append(parts[1])
     elif tag == "REBOOT":
         win._reboot = parts[0] == "yes"
