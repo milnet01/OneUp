@@ -2715,6 +2715,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   year of them has to decide which of a user's thousands of files it may
   delete, on their machine. Same outcome, harder problem. The work still
   waits its turn to be built; what is settled is where it sits in the queue.
+  Decided (2026-09-18, user): 2.0.0. ONEUP-0077, on the 2.0 list, is what starts
+  filling the log folder weekly, so this goes with that work.
 
 - 📋 [ONEUP-0083] **Record the third loop-log tally trap in documentation.md §7.**
   tests/docs-check.py's DISPOSITION_RE matches only `verified`,
@@ -3207,6 +3209,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Sequenced AFTER ONEUP-0085: until the download pass exists there is no phase
   in which Stop works, and disabling it everywhere would be worse than the
   current state.
+  Decided (2026-09-18, user): a fix, 1.4.6 + 2.0.0. A Stop button that accepts
+  a click and does nothing is broken behaviour, so it lands on main too.
   **Layman:** The Stop button should go grey while the installer is running, so it never looks like it will work when it cannot.
   Kind: ux.
   Source: user-request-2026-08-07.
@@ -5029,6 +5033,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   stat per entry, by then thousands of RPMs. That is an event-loop stall in the
   module whose stated job is stopping the app from looking hung. Cache the last
   weight with a monotonic stamp and re-weigh at most once per stall interval.
+  Decided (2026-09-18, user): a fix, 1.4.6 + 2.0.0. The effect is the window
+  freezing during a download, in main's updater.py and in v2's package alike.
   **Layman:** The window can stutter during a big download because it keeps re-measuring a folder.
   Kind: perf.
   Source: review-code 2026-08-31, lane gui-run.
@@ -5339,6 +5345,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   time, and falling back to the default would break that. What remains is the
   finding's own second half: security.md §4 does not write that exception down.
   That is a standard edit, so it goes through review-contract.
+  Decided (2026-09-18, user): write the exception down. security.md §4 gains
+  a sentence naming the refresh budget as the one value ONEUP-0092 §6
+  deliberately leaves unchecked on the run path, and why it is safe. No code
+  change. The standard edit goes through review-contract.
   **Layman:** A setting read from the environment is passed to a root command without being checked.
   Kind: security.
   Source: review-code 2026-08-31, lane engine-privilege.
@@ -5499,6 +5509,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   leaves the button disabled forever with nothing said. And `window.py:607` reads
   the log then checks the pid, so a run finishing in that gap records a false
   failure.
+  Decided (2026-09-18, user): a fix, 1.4.6 + 2.0.0. Its contents are defects,
+  most of them in main's updater.py (e.g. no default button on the reboot
+  confirmation).
   **Layman:** A set of small window defects: text that could render as markup, dialogs where Enter picks the wrong button, and objects that are never released.
   Kind: chore.
   Source: review-code 2026-08-31, lanes gui-window, gui-run, gui-services.
@@ -5736,7 +5749,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: chore.
   Source: ONEUP-0054 stage 6 step 6.
 
-- 💭 [ONEUP-0196] **Decide whether the grandchild-holds-the-pipe trap belongs in CLAUDE.md §6.**
+- 📋 [ONEUP-0196] **Decide whether the grandchild-holds-the-pipe trap belongs in CLAUDE.md §6.**
   The trap: killing only the bounded child left a GRANDCHILD holding our read
   end, so the wait after the kill blocked on a pipe nobody would close and the
   "bounded" call never returned. proc._run_bounded therefore gives a bounded
@@ -5753,6 +5766,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Needs the user, not a session. Filed as considered rather than planned so it
   is a decision on the record instead of a paragraph re-typed into every
   handoff — which is how it has travelled for three sessions.
+  Decided (2026-09-18, user): add it to CLAUDE.md §6. It cost a real bug, which
+  is the list's entry test. CLAUDE.md is rule-14 gated, so the new trap goes
+  through review-contract before it lands.
   **Layman:** A hard-won lesson about killing background jobs is written in the code but not in the list of traps; someone should decide whether it belongs there.
   Kind: doc.
   Source: carried in session handoffs since 2026-08-31; filed 2026-09-02 to stop the prose relay.
@@ -5816,6 +5832,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Why it matters: the plan's stage 8 amends the spec on `main` and merges, which assumes the two are in step. They are not, so an amendment written against `main`'s text can be written against a passage `v2` has already replaced. A session reading the spec on `main` to learn what stage 7 owes reads an older contract with nothing saying so.
 
   Decide which branch is authoritative for this spec and make the other match, before stage 8 amends it.
+  Decided (2026-09-18, user): v2's copy is authoritative. Copy it whole onto
+  main, as stage 1 did for §4.4. A catch-up to already-gated text, so it does
+  not re-arm rule 14. Do this before stage 8 amends the spec.
   **Layman:** Two branches hold different versions of the same design document, so a session reading it on the wrong branch builds from stale instructions.
   Kind: doc-fix.
   Source: in-session-2026-09-03 (ONEUP-0054 stage 7 plan gate, Phase 1b).
