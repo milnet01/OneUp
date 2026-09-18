@@ -2606,8 +2606,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   package split forces anyway (docs/design/oneup-2.0.md).
   **Layman:** If the window's test run crashes half way, the summary at the end can't tell you how many checks never got to run.
   Kind: test.
-  Lanes: tests.
   Source: test-audit-2026-08-03.
+  Lanes: tests.
 
 - ✅ [ONEUP-0080] **Close the 2026-08-03 test-audit findings across all four suites.**
   A /test-audit sweep over the four test programmes, triaged against source.
@@ -2655,8 +2655,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   freeze exception, recorded in docs/standards/workflow.md §1.2; owes a 1.4.x.
   **Layman:** A review of OneUp's own tests found some that could not fail, and some that quietly depended on the machine they ran on. Both are fixed.
   Kind: test.
-  Lanes: tests, docs.
   Source: test-audit-2026-08-03.
+  Lanes: tests, docs.
 
 - ✅ [ONEUP-0081] **Add the GitHub funding file, the only Ants project that lacked one.**
   `.github/FUNDING.yml`, copied byte-identical from the eleven other Ants
@@ -4876,7 +4876,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: chore.
   Source: check-code --tree 2026-08-31.
 
-- 📋 [ONEUP-0144] **Repository aliases reach a privileged zypper refresh unvalidated, in both engines.**
+- ✅ [ONEUP-0144] **Repository aliases reach a privileged zypper refresh unvalidated, in both engines.**
   security.md §4 requires every value reaching a privileged command to be shape-
   checked at the boundary, and names repository metadata as untrusted. `valid_alias`
   exists and guards `disable_repo` only. Unguarded: `update_system.sh` refresh loops
@@ -4887,6 +4887,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   identically with nothing on screen saying why. The package-name half of this class
   was fixed on 2026-08-31; the alias half was left because it spans three files and
   deserves one deliberate pass.
+  Resolved 2026-09-18 (4b1e694): both engines check each alias with valid_alias in
+  enabled_repo_aliases, where the list enters, and refuse an unsafe one out loud.
+  The window checks a skip-repo remedy's alias before arming it. Scenarios in
+  tests/run-tests.sh and tests/gui-smoke.py, each seen red first.
   **Layman:** A software-source name from the system is passed to a root command without being checked first.
   Kind: security.
   Source: review-code 2026-08-31, lanes engine-shell + engine-steps + gui-run.
@@ -4928,13 +4932,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-driver.
 
-- 📋 [ONEUP-0148] **getpass.getuser() names the sudoers principal from the environment, not the real uid.**
+- ✅ [ONEUP-0148] **getpass.getuser() names the sudoers principal from the environment, not the real uid.**
   `getpass.getuser()` reads LOGNAME/USER/LNAME/USERNAME before consulting the
   password database; the Bash original uses `id -un`. Under `su otheruser` without
   `-`, which preserves the invoking user's USER, `--grant-auth` authenticates as
   otheruser and writes the NOPASSWD rule for the original user — a passwordless
   root-equivalent grant to a principal the operator did not name, while the current
   user's toggle silently reads off. One-line fix: `pwd.getpwuid(os.getuid()).pw_name`.
+  Resolved 2026-09-18 (4b1e694): the rule's principal is
+  pwd.getpwuid(os.getuid()).pw_name. The --grant-auth scenario now spoofs
+  USER, LOGNAME, LNAME and USERNAME and asserts the real account; red first.
   **Layman:** The passwordless setup could write its permission for the wrong user account.
   Kind: security.
   Source: review-code 2026-08-31, lane engine-driver.
@@ -5294,7 +5301,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-driver.
 
-- 📋 [ONEUP-0174] **Three raw sudo-headed argvs are built outside privilege.sudo, which security.md §2.3 forbids by name.**
+- ✅ [ONEUP-0174] **Three raw sudo-headed argvs are built outside privilege.sudo, which security.md §2.3 forbids by name.**
   `oneup/engine/steps.py:363`, `:369` and `:388` build `["sudo", "env", "LC_ALL=C",
   ...]` directly. security.md §2.3: "one runner object owns every privileged child
   process. Do not scatter subprocess.run([\"sudo\", ...]) calls across modules", and
@@ -5304,6 +5311,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   route, so `stream_filtered` can only be reached with a hand-built argv. These
   three also carry §5.2's call-site count, so a route around the helper is a route
   around the count. Add a `privilege.sudo_argv()` or a streaming wrapper.
+  Resolved 2026-09-18 (4b1e694): privilege.sudo_argv() builds the three
+  streaming transaction argvs. The call-site count counts its calls too, and was
+  seen to move when a fourth was added.
   **Layman:** A few commands that become root are assembled by hand instead of going through the one place that owns them.
   Kind: security.
   Source: review-code 2026-08-31, lane engine-privilege.
@@ -5321,6 +5331,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   non-numeric keep-alive interval makes the watcher busy-spin for the whole run.
   If the deviation is deliberate, §4 needs the carve-out written down — that half
   is review-contract's.
+  Progress 2026-09-18 (4b1e694): the keep-alive half is fixed. The Bash engine
+  now checks ONEUP_KEEPALIVE_SECONDS where it reads it, as Python already did; a
+  two-second run went from 1231 validations to 1. The REFRESH_TIMEOUT half was
+  NOT changed, on purpose. docs/specs/ONEUP-0092-passwordless-gaps.md §6 decides
+  that a non-numeric budget refuses at grant time and fails the refresh at run
+  time, and falling back to the default would break that. What remains is the
+  finding's own second half: security.md §4 does not write that exception down.
+  That is a standard edit, so it goes through review-contract.
   **Layman:** A setting read from the environment is passed to a root command without being checked.
   Kind: security.
   Source: review-code 2026-08-31, lane engine-privilege.
@@ -5801,3 +5819,32 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** Two branches hold different versions of the same design document, so a session reading it on the wrong branch builds from stale instructions.
   Kind: doc-fix.
   Source: in-session-2026-09-03 (ONEUP-0054 stage 7 plan gate, Phase 1b).
+
+- 📋 [ONEUP-0200] **The non-numeric refresh budget check can never fail.**
+  ONEUP-0092 INV-4 requires a scenario that grants with
+  `ONEUP_REFRESH_TIMEOUT='5 *'` and asserts no drop-in and a `@@HINT@@`. That
+  check sits at the end of the "granting is all-or-nothing" scenario in
+  `tests/run-tests.sh`, reusing its directory, whose mocks make the install fail
+  on purpose. So the grant refuses whatever the budget is. Measured: a change that
+  swapped a bad budget for the default, so the grant would have succeeded, left
+  the suite green. Give it its own directory with working mocks, and see it red
+  against an engine that accepts the value.
+  **Layman:** A test meant to prove a bad setting blocks passwordless setup passes even when it doesn't.
+  Kind: test.
+  Source: close-findings 2026-09-18, sweep of ONEUP-0175.
+
+## 1.4.6 — fixes to the released app
+
+**Theme:** fixes for the 1.4 app people use today, landed on `main`. No
+features: those wait for 2.0 (`docs/standards/workflow.md` §1).
+
+## 2.0.0 — the rewrite
+
+**Theme:** the Python engine, the split window and the rest of
+`docs/design/oneup-2.0.md` §1's list, plus fixes to that new code. Ships only
+when complete (that document's §7).
+
+## 2.1.0 — after 2.0
+
+**Theme:** features raised after 2.0's list closed. They wait for 2.0.0 to ship
+(`docs/design/oneup-2.0.md` §1).
