@@ -5832,3 +5832,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** A test meant to prove a bad setting blocks passwordless setup passes even when it doesn't.
   Kind: test.
   Source: close-findings 2026-09-18, sweep of ONEUP-0175.
+
+## 1.4.6 — fixes to the released app
+
+**Theme:** fixes for the 1.4 app people use today, landed on `main`. No
+features: those wait for 2.0 (`docs/standards/workflow.md` §1).
+
+## 2.0.0 — the rewrite
+
+**Theme:** the Python engine, the split window and the rest of
+`docs/design/oneup-2.0.md` §1's list, plus fixes to that new code. Ships only
+when complete (that document's §7).
+
+## 2.1.0 — after 2.0
+
+**Theme:** features raised after 2.0's list closed. They wait for 2.0.0 to ship
+(`docs/design/oneup-2.0.md` §1).
