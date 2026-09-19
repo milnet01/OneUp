@@ -4899,7 +4899,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: security.
   Source: review-code 2026-08-31, lanes engine-shell + engine-steps + gui-run.
 
-- 📋 [ONEUP-0145] **Two engines can both own run.state, and the first to exit silently disables Stop.**
+- ✅ [ONEUP-0145] **Two engines can both own run.state, and the first to exit silently disables Stop.**
   `lock_holder` only catches a live zypper, which does not exist during the
   pre-flight, a flatpak-only run, or between passes. Both engines write `run.state`
   and set the owned flag; whichever exits first deletes it, and the survivor's
@@ -4909,6 +4909,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   `run.state`'s own pid. Note the GUI's single-instance guard was tightened on
   2026-08-31, which narrows but does not close this: the engine is also runnable
   standalone in a terminal.
+  Resolved (2026-09-19): fixed in both engines. main 8a352ae (Bash)
+  and v2 de12a1d (Python). claim_run_state hard-links run.state into
+  place and refuses the run when another live engine owns it (pid alive
+  and its command line naming update_system or oneup.engine), so a
+  second engine can no longer take over and delete the record. Tests:
+  the live-owner refusal, and a dead or reused pid not blocking.
   **Layman:** If two updates start at once, the Stop button quietly stops working.
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-shell.
@@ -4964,7 +4970,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-driver.
 
-- 📋 [ONEUP-0150] **A refused go-ahead is reported as a clean success with no diagnostic anywhere.**
+- ✅ [ONEUP-0150] **A refused go-ahead is reported as a clean success with no diagnostic anywhere.**
   `_adopt_go_ahead` is an authorisation check on a file a root process reads. A
   `go.request` carrying an unresolvable key collapses into the same arm as Cancel:
   no hint, no stderr line, no log entry, `@@DONE@@|ok`, exit 0. Refusing correctly
@@ -4972,6 +4978,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   authorisation leaves no trace at all, and the window shows success for a run that
   never started. Emit an error and a hint on the refusal branch so it is
   distinguishable from the hold simply timing out.
+  Resolved (2026-09-19, v2 de12a1d): a go-ahead that arrives and is
+  refused ends with a stderr line, a HINT and @@DONE@@|errors (exit 1)
+  in both engines, never the ok a Cancel ends with. ONEUP-0044 spec
+  §4.6 and its failure-mode row were amended to match.
   **Layman:** If the app rejects a tampered instruction, it says the update finished fine.
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-driver.
@@ -5039,12 +5049,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: perf.
   Source: review-code 2026-08-31, lane gui-run.
 
-- 📋 [ONEUP-0156] **A failed go.request write produces an unescapable modal-dialog storm.**
+- ✅ [ONEUP-0156] **A failed go.request write produces an unescapable modal-dialog storm.**
   `_adopt_held_engine` shows a warning box and returns False; `_wait_for_hold`'s
   200 ms timer then calls it again, the pid still matches, the write fails again,
   and another box appears. On a full or read-only state directory the user cannot
   dismiss their way out. Latch the failure — stop the wait timer and fall through
   to a fresh launch — rather than retrying a write that has already failed.
+  Resolved (2026-09-19, v2 de12a1d): a failed go.request write is
+  latched. One warning, the wait timer stops, and the window falls
+  back to a fresh engine (INV-7). The gui-smoke test drives it
+  through the wait path with an unwritable go.request.
   **Layman:** On a full disk, an error box can reappear faster than you can dismiss it.
   Kind: ux.
   Source: review-code 2026-08-31, lane gui-run.
@@ -5353,7 +5367,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: security.
   Source: review-code 2026-08-31, lane engine-privilege.
 
-- 📋 [ONEUP-0176] **Two races and an unguarded write in the engine's process and state layer.**
+- ✅ [ONEUP-0176] **Two races and an unguarded write in the engine's process and state layer.**
   `proc.py:234` writes to the transaction log inside the read loop with no guard,
   so a full disk kills the engine mid-transaction — `_Mirror.write` guards the
   identical operation. `proc.py:256` cancels the deadline watchdog AFTER the wait,
@@ -5364,11 +5378,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   payload silences the whole marker stream for the rest of the run and the window
   sees a live run as frozen. The `proc.py` encoding half of that last one was
   fixed on 2026-08-31; the latch was not.
+  Resolved (2026-09-19, v2 de12a1d): stream_filtered guards the
+  transaction-log write and close. The deadline watchdog is settled
+  after the child exits but before it is reaped (waitid WNOWAIT), and
+  skips an exited child. _Mirror substitutes an unencodable character
+  instead of latching console_gone. Each part has a run-tests.sh
+  check that failed against the old code.
   **Layman:** Three small timing and error-handling gaps in the part of the engine that runs commands.
   Kind: fix.
   Source: review-code 2026-08-31, lanes engine-privilege and engine-protocol.
 
-- 📋 [ONEUP-0177] **State files are written non-atomically and at the process umask.**
+- ✅ [ONEUP-0177] **State files are written non-atomically and at the process umask.**
   `runstate.py:186` and `:214` (and `update_system.sh:1259`, `:738`) use a bare
   truncate-then-write, so a window reading `run.state` or `hold.state` in that
   window sees an empty file and concludes there is no run. Temp-plus-rename is the
@@ -5394,6 +5414,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   `run.state` mid-write sees an empty file and concludes there is no
   run. Temp-plus-rename is still the fix. The missing schema version
   on the state files is likewise untouched by the decision.
+  Resolved (2026-09-19): run.state (main 8a352ae, v2 de12a1d) and
+  hold.state (v2 de12a1d) are written whole in both engines, and the
+  window now writes go.request whole too. Log-file umask: dismissed on
+  the same ONEUP-0185 threat-model decision that closed the state-dir
+  half. Schema version: queued as ONEUP-0201, since it changes a
+  cross-half contract and 2.0 keeps the layouts identical.
   **Layman:** The small files the two halves of the app use to talk to each other can be read half-written.
   Kind: fix.
   Source: review-code 2026-08-31, lanes engine-privilege and engine-shell.
@@ -5867,3 +5893,18 @@ when complete (that document's §7).
 
 **Theme:** features raised after 2.0's list closed. They wait for 2.0.0 to ship
 (`docs/design/oneup-2.0.md` §1).
+
+- 📋 [ONEUP-0201] **Give the state files a format version before either engine changes their layout.**
+  `run.state`, `hold.state` and `go.request` are read by line position and
+  carry no format version. Today that is harmless: both engines and the
+  window use the layouts pinned in the ONEUP-0054 spec §4.1.1, so no mixed
+  install can misread them. It becomes a defect the day either layout
+  changes, because a run outlives its window (ONEUP-0042) and so an old
+  engine's file can meet a new window. Queued rather than fixed in the
+  ONEUP-0177 run because adding a line changes a cross-half contract and
+  needs a design decision: where the version goes without breaking readers
+  that take line 1 as a pid. Filed under 2.1.0 because 2.0 keeps the
+  layouts identical.
+  **Layman:** If a future version changes these small files, an older copy of the app could misread them; a version line would let it notice.
+  Kind: enhancement.
+  Source: close-findings 2026-09-19, split from ONEUP-0177 (review-code 2026-08-31).
