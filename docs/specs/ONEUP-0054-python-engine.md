@@ -166,8 +166,12 @@ engine "must reproduce it exactly or run-following breaks silently". Measured
 from `update_system.sh`'s `RUN_STATE_FILE` writer and `updater.py`'s `_read_run_state` at
 `8d4c93e`:
 
-**`run.state`** — plain text, four lines, `\n`-terminated, written in one `printf` when the
-run commits.
+**`run.state`** — plain text, four lines, `\n`-terminated, written when the run commits:
+to a temporary file first, then hard-linked into place, so it appears whole or not at all
+(ONEUP-0177). The link also refuses to replace a record that is already there. An engine
+that finds one owned by another live engine — its pid alive and its command line naming
+`update_system` or `oneup.engine` — refuses the run with `@@DONE@@|errors` rather than
+take it over (ONEUP-0145); a stale record is removed and the link retried.
 
 | Line | Field | Example |
 | --- | --- | --- |
@@ -206,8 +210,8 @@ clicked in the same moment. `cleanup`'s deletion is tidiness and cannot be relie
 
 **`hold.state`** — added by ONEUP-0044, and pinned here for the same reason as the pair
 above: the Python engine must reproduce it or the one-authentication fix silently stops
-working. The **engine** writes it in one `printf` when a `--size --hold` preview begins
-waiting, and deletes it on every exit from that wait. Plain text, three lines,
+working. The **engine** writes it whole — a temporary file renamed into place (ONEUP-0177) — when
+a `--size --hold` preview begins waiting, and deletes it on every exit from that wait. Plain text, three lines,
 `\n`-terminated.
 
 | Line | Field | Example |
@@ -226,7 +230,9 @@ left behind and a second window's hold.
 Line 1 is a comma-separated step list and is the only line the engine reads; extra lines
 are ignored. An empty or unresolvable line 1 does **not** put the engine back to waiting:
 `adopt_go_ahead` refuses, and the refusal ends the hold — the stamp and the request are
-already deleted by then, so the engine exits rather than polling on. v2 must keep that,
+already deleted by then, so the engine exits rather than polling on — with
+`@@DONE@@|errors` and exit 1, never the `ok` a Cancel ends with, so a refused
+authorisation leaves a trace (ONEUP-0150). v2 must keep that,
 because a refusal that resumed the wait would sit there until the ceiling with the window
 believing it had been answered.
 

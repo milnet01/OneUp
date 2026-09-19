@@ -160,6 +160,25 @@ def kill_group(pid: int) -> None:
         os.killpg(os.getpgid(pid), signal.SIGKILL)
 
 
+@contextlib.contextmanager
+def _closing_quietly(handle):
+    """Close `handle` on the way out without raising. Closing flushes, so a full disk
+    would otherwise raise HERE, after the transaction, and fail a run that worked."""
+    try:
+        yield handle
+    finally:
+        with contextlib.suppress(OSError):
+            handle.close()
+
+
+def _has_exited(pid: int) -> bool:
+    """Has our child `pid` exited? Asked without reaping it, so the pid stays ours."""
+    try:
+        return os.waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None
+    except ChildProcessError:
+        return True                        # already reaped: certainly not running
+
+
 def succeeds(argv: Sequence[str]) -> bool:
     """True when `argv` exits 0. Output is discarded."""
     return run(argv)[0] == 0
@@ -258,11 +277,20 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
         start_new_session=deadline is not None,
     )
     expired = False
+    # Settled once, before the child is reaped (ONEUP-0176). Cancelling the
+    # watchdog only after `wait()` left a window in which it could fire on a
+    # finished run — reporting it as a timeout, and `killpg`ing a group whose
+    # pid was already reaped and could by then belong to anything.
+    settle = threading.Lock()
+    settled = False
 
     def _expire() -> None:
         nonlocal expired
-        expired = True
-        kill_group(child.pid)
+        with settle:
+            if settled or _has_exited(child.pid):
+                return
+            expired = True
+            kill_group(child.pid)
 
     timer = None
     if deadline is not None:
@@ -271,12 +299,16 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
         # runs when a line arrives can never fire on it.
         timer = threading.Timer(deadline, _expire)
         timer.start()
-    with log.open("a" if append else "w", encoding="utf-8", errors="replace") as handle:
+    with _closing_quietly(log.open("a" if append else "w", encoding="utf-8",
+                                   errors="replace")) as handle:
         for raw in child.stdout:
             line = raw.rstrip("\n")
             markers.out(line)
-            handle.write(line + "\n")
-            handle.flush()
+            # Guarded as `_Mirror.write` guards the same operation: a full disk
+            # must not unwind this loop mid-transaction (ONEUP-0176).
+            with contextlib.suppress(OSError):
+                handle.write(line + "\n")
+                handle.flush()
             total = parsers.progress_total_bytes(line)
             if total is not None:
                 want = total
@@ -297,13 +329,20 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
                     "Installing:" in line or "Removing:" in line or "Upgrading:" in line):
                 if markers.emit_progress(step, parsers.install_fraction(line), "install"):
                     seen += 1
+    # Wait for the child to EXIT without reaping it, so its pid still names it
+    # while the watchdog is live: a child that closed its output and kept going
+    # stays under its budget. Once settled, the watchdog can no longer fire.
+    with contextlib.suppress(ChildProcessError, InterruptedError):
+        os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOWAIT)
+    with settle:
+        settled = True
+    if timer is not None:
+        timer.cancel()
     rc = child.wait()
     if rc < 0:
         # A child killed by a signal reports -N here where a shell reports
         # 128+N, and 143 is what the caller reads a stop from.
         rc = 128 - rc
-    if timer is not None:
-        timer.cancel()
     if expired:
         # A flag set by the watchdog itself, never `timer.is_alive()`: a timer
         # that fires in the moment between the child exiting and the check is

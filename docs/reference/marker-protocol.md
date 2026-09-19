@@ -398,17 +398,19 @@ this file, and finding nothing would suggest there is nothing to agree on.
   at safe boundaries (`docs/standards/security.md` §6). A request older than `run.state` is
   a leftover and is ignored.
 - **`hold.state`** — written by the engine when a `--size --hold` preview begins waiting
-  for a go-ahead, and deleted on every exit from that wait (ONEUP-0044). Line 1 is the
+  for a go-ahead, and deleted on every exit from that wait (ONEUP-0044). It is written
+  whole, never truncated mid-write (ONEUP-0177). Line 1 is the
   engine's pid, which is the only line the window reads: it is how a live hold is told
   from one a `SIGKILL`ed engine left behind, and it is also what stops a second window
   adopting a hold it did not start.
-- **`go.request`** — created by the *window* to tell a held engine to proceed. Line 1
-  carries a comma-separated step list and nothing else, and is the only line the engine
-  reads. A request older than `hold.state` is a leftover and is ignored, the same rule
+- **`go.request`** — created by the *window* to tell a held engine to proceed, written
+  whole so the engine never reads it empty. Line 1 carries a comma-separated step list
+  and nothing else, and is the only line the engine reads. A request older than `hold.state` is a leftover and is ignored, the same rule
   `stop.request` follows against `run.state` and for the same reason. **Every key must
   resolve in the engine's `LABEL` map or the whole go-ahead is refused** — stricter than
   `--steps=`, which silently drops an unknown key, because this file is an authorisation
-  read by a root process rather than a flag a person typed.
+  read by a root process rather than a flag a person typed. A refused go-ahead ends the
+  hold with `@@DONE@@|errors`, never as a Cancel (ONEUP-0150).
 
 **The marker contract is deliberately untouched by that pair.** An earlier framing of
 ONEUP-0044 assumed a new "waiting for your go-ahead" marker; §5.1's freeze forbids one

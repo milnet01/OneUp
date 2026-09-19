@@ -12,8 +12,11 @@ half-applied or orphan a zypper that carries on regardless (ONEUP-0047).
 """
 from __future__ import annotations
 
+import contextlib
+import os
 import shutil
 import subprocess
+import tempfile
 import time
 from datetime import datetime
 from functools import partial
@@ -74,10 +77,12 @@ def start_run(win):
     """
     proc = getattr(win, "_size_proc", None)
     if proc is not None and proc.state() != QProcess.NotRunning and win.selected_steps():
+        win._go_write_failed = False
         if _adopt_held_engine(win):
             return
-        _wait_for_hold(win)
-        return
+        if not win._go_write_failed:
+            _wait_for_hold(win)
+            return
     _launch(win, win.selected_steps(), check=False)
 
 
@@ -101,9 +106,12 @@ def _adopt_held_engine(win) -> bool:
     # preview is started for `system` alone, but the run uses whatever is selected when
     # Update is pressed, which may have changed in between (§4.6).
     try:
-        paths.GO_REQUEST.parent.mkdir(parents=True, exist_ok=True)
-        paths.GO_REQUEST.write_text(",".join(steps) + "\n")
+        _write_go_request(",".join(steps) + "\n")
     except OSError as exc:
+        # Latched, so the caller stops asking (ONEUP-0156). `_wait_for_hold` would
+        # otherwise retry a write that has already failed every 200 ms, and on a full
+        # or read-only state directory each retry is another modal box.
+        win._go_write_failed = True
         QMessageBox.warning(win, "Update", f"Could not start the update:\n{exc}")
         return False
     # Anything the preview read but has not yet split into a whole line. Dropping it
@@ -127,6 +135,23 @@ def _adopt_held_engine(win) -> bool:
     win.proc = proc
     win._size_proc = None
     return True
+
+
+def _write_go_request(text: str) -> None:
+    """Write `go.request` whole. The engine reads its first line the moment the file is
+    newer than its hold stamp, so a truncate-then-write could be read empty — and an
+    empty go-ahead is refused. A rename is atomic: the engine sees all of it or none."""
+    target = paths.GO_REQUEST
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix=target.name + ".", dir=target.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.replace(name, target)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(name)
+        raise
 
 
 def _wait_for_hold(win):
@@ -155,8 +180,15 @@ def _hold_wait_tick(win):
         win.set_controls_enabled(True)
         _launch(win, win.selected_steps(), check=False)
         return
+    win._go_write_failed = False
     if _adopt_held_engine(win):
         win._hold_wait.stop()
+    elif win._go_write_failed:
+        # The go-ahead could not be written and would fail again. Fall back to a fresh
+        # engine — the status quo, as for a preview that never held (INV-7).
+        win._hold_wait.stop()
+        win.set_controls_enabled(True)
+        _launch(win, win.selected_steps(), check=False)
 
 
 def retry_failed(win):

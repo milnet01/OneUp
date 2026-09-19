@@ -199,15 +199,26 @@ def main(argv: list[str] | None = None) -> int:
         # arms end the process, and end it with status 0: Cancel, the ceiling
         # and a departed window are not failures, because the job this process
         # was started for — quoting the size — succeeded and was already
-        # reported. So is a go-ahead the membership check REFUSES; what that arm
-        # must not do is fall through, because the selection has not been
-        # re-derived and start-up's default is all five steps, so a tampered
-        # go.request would become a full system upgrade.
-        adopted = _adopt_go_ahead(opts, runstate.hold_for_go_ahead(
-            log_file, actions.HOLD_SIZE, _WINDOW_PID, _poll_seconds()))
-        if adopted is None:
+        # reported. A go-ahead the membership check REFUSES ends the process
+        # too, but as an error, and it must not fall through: the selection has
+        # not been re-derived and start-up's default is all five steps, so a
+        # tampered go.request would become a full system upgrade.
+        asked = runstate.hold_for_go_ahead(
+            log_file, actions.HOLD_SIZE, _WINDOW_PID, _poll_seconds())
+        if asked is None:
             markers.marker("DONE", "ok")      # withheld by size_delivered, emitted here
             return 0
+        adopted = _adopt_go_ahead(opts, asked)
+        if adopted is None:
+            # A go-ahead that ARRIVED and was refused is not a Cancel. Reporting it as
+            # one would leave a tampered or corrupted authorisation with no trace, and
+            # the window showing success for a run that never started (ONEUP-0150).
+            markers.err("Refused an update request that named no valid step; nothing was run.")
+            markers.hint(
+                "OneUp could not verify the request to start the update, so nothing was "
+                "changed. Press Update again.")
+            markers.marker("DONE", "errors")
+            return 1
         run_keys = adopted
         held_auth = True
 
@@ -585,7 +596,19 @@ def run(opts: Options, run_keys: list[str], log_file: Path, held_auth: bool = Fa
     # From here the run is definitely going ahead, so record it: a window
     # starting up can then find a run already in flight and follow its log
     # rather than offering a Run button that could only fail on the lock.
-    runstate.write_run_state(log_file, opts.steps)
+    holder = runstate.claim_run_state(log_file, opts.steps)
+    if holder is not None:
+        # Another live engine owns the record (ONEUP-0145). Taking it over would
+        # leave whichever run outlives the other with a Stop that can never fire.
+        markers.out(f"OneUp is already running an update (process {holder}).")
+        markers.out("Nothing has been changed. Follow that run in the OneUp window, "
+                    "or wait for it to finish.")
+        markers.hint(
+            f"Another OneUp update is already running (process {holder}). Nothing was "
+            "changed. Open OneUp to follow it, or run the update again once it has "
+            "finished.")
+        markers.marker("DONE", "errors")
+        return 1
 
     if opts.selected("system"):
         _pre_update_snapshot()

@@ -16,6 +16,7 @@ import atexit
 import contextlib
 import os
 import sys
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -123,7 +124,14 @@ class _Mirror:
     def write(self, text: str) -> int:
         if not _Mirror.console_gone:
             try:
-                self._console.write(text)
+                try:
+                    self._console.write(text)
+                except UnicodeEncodeError:
+                    # A ValueError, so without this arm one character the console
+                    # cannot encode would latch `console_gone` and silence every
+                    # marker for the rest of the run (ONEUP-0176). Substitute it.
+                    enc = getattr(self._console, "encoding", None) or "utf-8"
+                    self._console.write(text.encode(enc, "replace").decode(enc))
                 self._console.flush()
             except (BrokenPipeError, ValueError, OSError):
                 _Mirror.console_gone = True     # the window quit; the run carries on
@@ -173,18 +181,108 @@ def install_log_mirror(path: Path) -> None:
     atexit.register(_drop_stdout_at_exit)
 
 
-def write_run_state(log_file: Path, steps: str) -> None:
+def _temp_beside(path: Path, text: str) -> Path:
+    """Write `text` to a new temporary file in `path`'s directory; return its path."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(name)
+        raise
+    return Path(name)
+
+
+def write_whole(path: Path, text: str) -> None:
+    """Replace `path` with `text` in one step (ONEUP-0177).
+
+    A truncate-then-write lets a reader land between the two and see an empty
+    file — for `run.state` or `hold.state` that reads as "no run". A rename is
+    atomic, so a reader sees the old file or the new one, never neither.
+    """
+    tmp = _temp_beside(path, text)
+    try:
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            tmp.unlink()
+        raise
+
+
+# What an engine's command line contains. Both engines, because they share the
+# state directory: either may meet the other's record.
+_ENGINE_MARKS = (b"update_system", b"oneup.engine")
+
+
+def run_state_holder() -> int | None:
+    """The pid of ANOTHER live engine that owns `run.state`, or None (ONEUP-0145).
+
+    `repos.lock_holder` only sees a live zypper, which does not exist during the
+    pre-flight, a Flatpak-only run or between passes — so without this two
+    engines both wrote the record and the first to exit deleted it, leaving the
+    survivor's Stop dead. The command line is checked as well as the pid: a
+    stale record outlives a reboot, and its pid may by then be anything.
+    """
+    try:
+        first = RUN_STATE.read_text(errors="replace").split("\n", 1)[0].strip()
+    except OSError:
+        return None
+    if not first.isdigit() or int(first) == os.getpid():
+        return None
+    try:
+        cmdline = Path(f"/proc/{first}/cmdline").read_bytes()
+    except OSError:
+        return None
+    return int(first) if any(mark in cmdline for mark in _ENGINE_MARKS) else None
+
+
+def claim_run_state(log_file: Path, steps: str) -> int | None:
     """Record this run so a starting window can find it and follow the log.
 
     Four lines, in this order: our pid, the log path verbatim, the selected
     step keys, and the epoch second we committed. §4.1.1 pins the layout — do
     not reorder or drop a line. Written only once the run is definitely going
     ahead, so a `--check` or a `--size` never claims to be one.
+
+    Returns None once this run owns the record, or the pid of the live engine
+    that already does — in which case nothing is written. The record is written
+    to a temporary file and hard-linked into place: that appears whole
+    (ONEUP-0177), and a link refuses to replace a file that is already there,
+    so two engines cannot both own it (ONEUP-0145). A stale record is removed
+    and the link retried once. A record that cannot be written at all leaves
+    the run going ahead unowned. The Bash engine's `claim_run_state` is the twin.
     """
     global _RUN_STATE_OWNED
-    RUN_STATE.parent.mkdir(parents=True, exist_ok=True)
-    RUN_STATE.write_text(f"{os.getpid()}\n{log_file}\n{steps}\n{int(time.time())}\n")
-    _RUN_STATE_OWNED = True
+    try:
+        tmp = _temp_beside(RUN_STATE,
+                           f"{os.getpid()}\n{log_file}\n{steps}\n{int(time.time())}\n")
+    except OSError:
+        # A full or read-only state directory. The run still goes ahead, unowned —
+        # a window cannot follow it, but an update must not fail over its record.
+        return None
+    try:
+        for _ in range(2):
+            try:
+                os.link(tmp, RUN_STATE)
+                _RUN_STATE_OWNED = True
+                return None
+            except FileExistsError:
+                holder = run_state_holder()
+                if holder is not None:
+                    return holder
+                with contextlib.suppress(OSError):
+                    RUN_STATE.unlink()
+            except OSError:
+                break                      # no hard links here: fall back to a rename
+        with contextlib.suppress(OSError):
+            os.replace(tmp, RUN_STATE)
+            _RUN_STATE_OWNED = True
+        return None
+    finally:
+        with contextlib.suppress(OSError):
+            tmp.unlink()
 
 
 
@@ -211,7 +309,12 @@ def hold_for_go_ahead(log_file: Path, size: str, window_pid: int,
     """
     with contextlib.suppress(OSError):
         HOLD_STATE.parent.mkdir(parents=True, exist_ok=True)
-    HOLD_STATE.write_text(f"{os.getpid()}\n{log_file}\n{size}\n")
+    try:
+        write_whole(HOLD_STATE, f"{os.getpid()}\n{log_file}\n{size}\n")
+    except OSError:
+        # A hold that cannot be recorded ends at once; the window falls back to a
+        # fresh engine (INV-7), as the Bash engine's hold does.
+        return None
     try:
         stamp = HOLD_STATE.stat().st_mtime
         waited = 0.0

@@ -929,6 +929,40 @@ def main() -> int:
     paths.GO_REQUEST.unlink(missing_ok=True)
     paths.HOLD_STATE.unlink(missing_ok=True)
 
+    # ONEUP-0156: a go.request that cannot be written must be reported ONCE. The wait
+    # timer used to retry the failed write every tick, and each retry raised another
+    # modal box, which on a full or read-only state directory the user could not
+    # dismiss their way out of. Staged through the wait path, because that is the loop:
+    # Update is pressed before the hold exists, then the hold appears.
+    wW = window.Updater()
+    wW._size_proc = _SizeProc(27182)
+    wW._hold_log = paths.STATE_LOG_DIR / "full-disk.log"
+    paths.HOLD_STATE.unlink(missing_ok=True)
+    _warnings, _launched = [], []
+    _real_warning, _real_go = QMessageBox.warning, paths.GO_REQUEST
+    QMessageBox.warning = staticmethod(lambda *a, **k: _warnings.append(a) or 0)
+    # A parent that is a file, not a directory: every write under it fails, as on a
+    # full or read-only state directory.
+    paths.GO_REQUEST = Path(os.devnull) / "go.request"
+    run._launch = lambda w, st, check, **kw: _launched.append((list(st), check))
+    try:
+        run.start_run(wW)
+        paths.HOLD_STATE.write_text(f"27182\n{wW._hold_log}\n412 MB\n")
+        for _ in range(3):
+            if wW._hold_wait.isActive():
+                run._hold_wait_tick(wW)
+        check("ONEUP-0156 a failed go-ahead write is reported once, not per tick",
+              len(_warnings) == 1)
+        check("ONEUP-0156 the wait stops once the write has failed",
+              not wW._hold_wait.isActive())
+        check("ONEUP-0156 and the window falls back to a fresh engine (INV-7)",
+              len(_launched) == 1 and _launched[0][1] is False)
+    finally:
+        QMessageBox.warning = _real_warning
+        paths.GO_REQUEST = _real_go
+        run._launch = _real_launch
+    paths.HOLD_STATE.unlink(missing_ok=True)
+
     # --- 5e. --thin-snapshots outcomes -----------------------------------------
     # Three branches, and each decides whether the advisory banner stays up for a retry.
     for _out, _want, _banner_stays in (("@@SNAPSHOTS@@|thinned|7\n", "7", False),

@@ -757,8 +757,9 @@ adopt_go_ahead() {
 # and lets the dispatch fall through into the run that already exists.
 #
 # Returns 0 only on a go-ahead carrying a valid step list. Cancel, a departed window and
-# the ceiling all return non-zero — which the caller maps to exit 0, because the job this
-# process was started for succeeded and was already reported (§4.4).
+# the ceiling return 1 — which the caller maps to exit 0, because the job this process
+# was started for succeeded and was already reported (§4.4). A go-ahead that arrived
+# and was refused returns 2, which the caller reports as an error (ONEUP-0150).
 hold_for_go_ahead() {
     local waited=0 step=$STOP_POLL_SECONDS rc=1 steps=""
     (( step > 0 )) || step=1
@@ -766,7 +767,16 @@ hold_for_go_ahead() {
     # Layout pinned line by line in ONEUP-0044 §4.3, the way run.state's is, so the
     # Python engine can reproduce it: line 1 the engine pid, line 2 the log path
     # verbatim, line 3 the quoted size. Do not reorder or drop a line.
-    printf '%s\n%s\n%s\n' "$$" "$LOG_FILE" "$HOLD_SIZE" > "$HOLD_STATE_FILE"
+    # Whole or not at all (ONEUP-0177): the window reads line 1 the moment the file
+    # exists, and a truncate-then-write would show it an empty hold. A hold that cannot
+    # be recorded ends at once, and the window falls back to a fresh engine (INV-7).
+    local tmp
+    if ! { tmp=$(mktemp "$HOLD_STATE_FILE.XXXXXX" 2>/dev/null) \
+            && printf '%s\n%s\n%s\n' "$$" "$LOG_FILE" "$HOLD_SIZE" > "$tmp" \
+            && mv -f "$tmp" "$HOLD_STATE_FILE"; }; then
+        rm -f "$tmp"
+        return 1
+    fi
     while (( waited < HOLD_SECONDS )); do
         # Staleness is decided the way stop_pending decides it, and for the same reason:
         # a request older than our own stamp is a leftover from an earlier session.
@@ -791,7 +801,10 @@ hold_for_go_ahead() {
     done
     rm -f "$HOLD_STATE_FILE" "$GO_FILE"
     (( rc == 0 )) || return 1
-    adopt_go_ahead "$steps"
+    # A go-ahead that ARRIVED and is refused returns 2, never 1: reporting it as a
+    # Cancel would leave a tampered or corrupted authorisation with no trace, and the
+    # window showing success for a run that never started (ONEUP-0150).
+    adopt_go_ahead "$steps" || return 2
 }
 
 if $CHECK_ONLY; then
@@ -997,7 +1010,8 @@ run_state_holder() {
     read -r pid < "$RUN_STATE_FILE" 2>/dev/null || return 1
     [[ "$pid" =~ ^[0-9]+$ ]] && (( pid != $$ )) && [[ -d "/proc/$pid" ]] || return 1
     cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
-    [[ "$cmd" == *update_system* ]] || return 1
+    # Either engine: both use this state directory, so either may meet the other's record.
+    [[ "$cmd" == *update_system* || "$cmd" == *oneup.engine* ]] || return 1
     echo "$pid"
 }
 
@@ -1275,8 +1289,14 @@ if [[ -n "$SIZE_STEP" ]]; then
         # behaviour and today's two prompts: the fix degrades to the status quo rather
         # than to an error (§4.4, INV-7). The DONE withheld by size_delivered is emitted
         # here, at this process's true end, so the stream still carries exactly one.
-        if hold_for_go_ahead; then
+        hold_for_go_ahead; hold_rc=$?
+        if (( hold_rc == 0 )); then
             HELD_AUTH=true
+        elif (( hold_rc == 2 )); then
+            echo "Refused an update request that named no valid step; nothing was run." >&2
+            marker HINT "OneUp could not verify the request to start the update, so nothing was changed. Press Update again."
+            marker DONE "errors"
+            exit 1
         else
             marker DONE "ok"
             exit 0

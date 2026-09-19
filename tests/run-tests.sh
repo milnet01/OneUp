@@ -961,6 +961,13 @@ for payload in 'cache,nosuchstep' 'cache,$(touch '"$canary"'/PWNED)' 'cache;touc
         else
             echo "  ok   - the whole go-ahead is refused and no step runs (INV-8)"; PASS=$((PASS+1))
         fi
+        # ONEUP-0150: refused is not cancelled. A refusal reported as `ok` leaves a
+        # tampered authorisation with no trace and shows success for a run never started.
+        check        "a refused go-ahead is reported as an error (ONEUP-0150)" \
+                     "@@DONE@@|errors" "$(cat "$d/out" 2>/dev/null)"
+        check_absent "and never as a clean finish" "@@DONE@@|ok" "$(cat "$d/out" 2>/dev/null)"
+        check        "the refusal says why on stderr" "Refused an update request" \
+                     "$(cat "$d/out" 2>/dev/null)"
     fi
     rm -rf "$d"
 done
@@ -3210,6 +3217,76 @@ FLATPAK_EOF
     check "the step still completes rather than failing" \
           "@@STEP_END@@|flatpak|ok" "$out"
     rm -rf "$d"
+fi
+
+# ---------------------------------------------------------------------------
+# ONEUP-0176: three gaps in the Python engine's process and state layer, each driven
+# directly through the module because none has an argv that reaches it on demand. The
+# snippet prints the suite's own `ok` / `FAIL` lines, which are counted here.
+echo "TEST: the Python engine's process layer survives its three edge cases (ONEUP-0176)"
+if ! command -v python3 >/dev/null; then
+    echo "  SKIP - python3 is absent"
+else
+    py_out=$(cd "$(dirname "$ENGINE")" && python3 - 2>&1 <<'PY_EOF'
+import io, subprocess, sys, tempfile
+from pathlib import Path
+from oneup.engine import proc, runstate
+
+def report(name, good):
+    print(("  ok   - " if good else "  FAIL - ") + name)
+
+# 1. One character the console cannot encode is a UnicodeEncodeError — a ValueError —
+#    and used to latch console_gone, silencing every marker after it.
+console = io.TextIOWrapper(io.BytesIO(), encoding="ascii")
+mirror = runstate._Mirror(console, io.StringIO())
+runstate._Mirror.console_gone = False
+mirror.write("café\n")
+mirror.write("@@STEP_END@@|system|ok\n")
+console.flush()
+report("an unencodable character does not mark the console gone",
+       not runstate._Mirror.console_gone)
+report("and the markers after it still reach the window",
+       b"@@STEP_END@@|system|ok" in console.buffer.getvalue())
+runstate._Mirror.console_gone = False
+
+# 2. A full disk under the transaction log must not unwind the read loop.
+real_out = proc.markers.out
+proc.markers.out = lambda text: None
+try:
+    rc = proc.stream_filtered(["printf", "a\\nb\\n"], step="system", phase="commit",
+                              log=Path("/dev/full"), append=True)
+    report("a transaction log on a full disk does not stop the run", rc == 0)
+except OSError as exc:
+    report(f"a transaction log on a full disk does not stop the run ({exc})", False)
+
+# 3. A deadline that fires after the child has exited is not a timeout, and must not
+#    signal a group whose pid has been reaped. A slow reap stands in for the scheduler.
+killed = []
+real_kill, real_wait = proc.kill_group, subprocess.Popen.wait
+proc.kill_group = lambda pid: killed.append(pid)
+def slow_wait(self, *a, **k):
+    import time; time.sleep(0.4)
+    return real_wait(self, *a, **k)
+subprocess.Popen.wait = slow_wait
+try:
+    rc = proc.stream_filtered(["true"], step="flatpak", phase="commit",
+                              log=Path(tempfile.mkstemp()[1]), append=True, deadline=0.1)
+finally:
+    subprocess.Popen.wait = real_wait
+    proc.kill_group = real_kill
+    proc.markers.out = real_out
+report("a child that finished inside its budget is not reported as a timeout",
+       rc == 0)
+report("and the watchdog signals nothing once the child has exited", not killed)
+PY_EOF
+)
+    echo "$py_out"
+    PASS=$((PASS + $(grep -c '^  ok   - ' <<<"$py_out")))
+    FAIL=$((FAIL + $(grep -c '^  FAIL - ' <<<"$py_out")))
+    # A snippet that died part-way must not read as a clean pass: it reports five lines.
+    if (( $(grep -c '^  \(ok  \|FAIL\) - ' <<<"$py_out") != 5 )); then
+        echo "  FAIL - the snippet did not report all five checks"; FAIL=$((FAIL+1))
+    fi
 fi
 
 # ---------------------------------------------------------------------------

@@ -44,6 +44,23 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A rejected request to start the update is now reported, not shown as success** (ONEUP-0150)
+  If the instruction to start the update after checking its size was
+  rejected as invalid, OneUp used to report a clean finish for an update
+  that never ran. It now says the request could not be verified, changes
+  nothing, and asks you to press Update again.
+
+- **A full disk no longer produces an endless stream of error boxes** (ONEUP-0156)
+  If OneUp could not save the instruction to start the update, it showed a
+  warning and then tried again several times a second, so the warning kept
+  coming back. It now warns once and starts the update the ordinary way.
+
+- **The update engine copes with a full disk, an odd character and a close-run timer** (ONEUP-0176)
+  A full disk while writing the update's log no longer stops the update
+  half-way. One character the terminal could not display no longer made the
+  window think the update had frozen. And a command that finished just as
+  its time limit ran out is no longer reported as having timed out.
+
 - **Starting a second update no longer breaks the Stop button of the first** (ONEUP-0145)
   If an update was already running and another was started (say, from a
   terminal), both claimed the same record and the first to finish deleted

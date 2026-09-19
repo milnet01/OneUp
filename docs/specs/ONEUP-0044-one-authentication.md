@@ -349,7 +349,9 @@ when they press Update, which may have changed in between. So the selection is w
 `go.request` rather than fixed at preview time, and the held engine runs what it is told.
 
 **Every key in `go.request` must resolve in the engine's `LABEL` map, or the whole
-go-ahead is refused and the hold ends as a Cancel.** `go.request` carries a step list and
+go-ahead is refused and the hold ends — as an error, never as a Cancel (ONEUP-0150).**
+A refusal reported as a clean finish would leave a tampered or corrupted authorisation
+with no trace, and the window showing success for a run that never started. `go.request` carries a step list and
 nothing else; it must never become a route by which the window hands the engine a command
 to run. The privilege boundary is otherwise unchanged — the window still never runs as
 root (`docs/standards/security.md` §2).
@@ -466,7 +468,7 @@ root process, and the two do not warrant the same leniency.
 | `hold.state` is current | An earlier engine was `SIGKILL`ed and left one behind | Its line 1 is not this window's `_size_proc` pid, so §4.5 row 3 does not match and the window launches normally |
 | One window | A second window opens mid-hold | The same test refuses it: with no `_size_proc` of its own it is in §4.5 row 1, so it launches its own engine rather than adopting a hold it did not start |
 | The dry run succeeded | zypper errored, so no size was quoted | No hold at all — the existing failure path is unchanged |
-| `go.request` carries a valid step list | A key does not resolve in `LABEL`, by tampering or by a window bug | The whole go-ahead is refused and the hold ends as a Cancel (INV-8) — never a partial run of the keys that happened to resolve |
+| `go.request` carries a valid step list | A key does not resolve in `LABEL`, by tampering or by a window bug | The whole go-ahead is refused and the hold ends with `@@DONE@@\|errors` and exit 1 (INV-8, ONEUP-0150) — never a partial run of the keys that happened to resolve, and never reported as a Cancel |
 | Update is pressed after `hold.state` exists | It is pressed during the dry run, before the stamp | The window waits for the stamp or for the engine to exit (§4.5); it does not write a `go.request` that its own freshness rule would discard |
 
 ## 7. Tests
