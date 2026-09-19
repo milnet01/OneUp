@@ -6,6 +6,19 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Starting a second update no longer breaks the Stop button of the first** (ONEUP-0145)
+  If an update was already running and another was started (say, from a
+  terminal), both claimed the same record and the first to finish deleted
+  it, so Stop stopped working for the other. A second update now says one
+  is already running and changes nothing.
+
+- **The window can no longer catch the run record half-written** (ONEUP-0177)
+  The small file that tells the window an update is running is now written
+  in one step, so a window opening at that moment cannot mistake it for no
+  update at all.
+
 ### Security
 
 - **Software-source names are checked before any root command sees them** (ONEUP-0144)

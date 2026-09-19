@@ -810,6 +810,58 @@ else
 fi
 rm -rf "$d"
 
+# ONEUP-0145: a second engine must not take over a live run's record. The package-lock
+# probe only sees a live zypper, which does not exist during the pre-flight, a
+# Flatpak-only run or between passes — so both engines wrote run.state, the first to exit
+# deleted it, and the survivor's stop_pending could never fire again. The holder here is
+# a real live process whose command line names the engine, which is what the engine tests.
+echo "TEST: a second run refuses while a live engine owns the run-state file"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\necho "$*" >> "%s/zypper.calls"\nexit 0\n' "$d" > "$d/zypper"
+chmod +x "$d/zypper"
+bash -c 'exec -a update_system.sh sleep 30' & holder=$!
+sleep 0.2
+printf '%s\n%s\n%s\n%s\n' "$holder" "$d/other.log" "flatpak" "$(date +%s)" > "$d/run.state"
+out=$(ONEUP_RUN_STATE="$d/run.state" run_engine "$d" --steps=system,cache)
+check        "the live run is named with its pid" "already running (process $holder)" "$out"
+check        "the refused run reports errors" "@@DONE@@|errors" "$out"
+check_eq     "the live run's record is left exactly as it was" "$holder" "$(head -n1 "$d/run.state" 2>/dev/null)"
+if grep -qwE "dup|update" "$d/zypper.calls" 2>/dev/null; then
+    echo "  FAIL - the refused run still started a transaction"; FAIL=$((FAIL+1))
+else
+    echo "  ok   - the refused run started no transaction"; PASS=$((PASS+1))
+fi
+kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
+rm -rf "$d"
+
+echo "TEST: a run-state file left by a dead engine, or naming a reused pid, does not block"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"; chmod +x "$d/zypper"
+# A pid that is certainly gone: a process that has already been reaped.
+bash -c 'exit 0' & dead=$!; wait "$dead"
+printf '%s\n%s\n%s\n%s\n' "$dead" "$d/old.log" "system" "1" > "$d/run.state"
+out=$(ONEUP_RUN_STATE="$d/run.state" run_engine "$d" --steps=cache)
+check_absent "a dead engine's record does not block" "already running" "$out"
+# A live pid that is not an engine: after a reboot a stale record's pid can belong to
+# anything, and treating that as a live run would block every run until it exits.
+sleep 30 & other=$!
+printf '%s\n%s\n%s\n%s\n' "$other" "$d/old.log" "system" "1" > "$d/run.state"
+out=$(ONEUP_RUN_STATE="$d/run.state" run_engine "$d" --steps=cache)
+check_absent "a reused pid that is not an engine does not block" "already running" "$out"
+kill "$other" 2>/dev/null; wait "$other" 2>/dev/null
+rm -rf "$d"
+
+# ONEUP-0177: a truncate-then-write lets a window reading run.state mid-write see an empty
+# file and conclude there is no run. The record must appear whole or not at all, so no
+# redirect may target the file itself. Structural, because the window is microseconds.
+echo "TEST: run.state is never written in place"
+# shellcheck disable=SC2016  # the pattern matches the engine's literal source text
+if grep -nE '>>? *"?\$RUN_STATE_FILE"?' "$ENGINE" >/dev/null; then
+    echo "  FAIL - the engine redirects straight into \$RUN_STATE_FILE"; FAIL=$((FAIL+1))
+else
+    echo "  ok   - the engine writes run.state through a temporary file"; PASS=$((PASS+1))
+fi
+
 # ---------------------------------------------------------------------------
 # ONEUP-0043: an orphaned password dialog must not be left on the user's screen. Eleven
 # had accumulated on the reporter's machine, and one was still open 5.7 hours after its

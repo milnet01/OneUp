@@ -384,7 +384,10 @@ this file, and finding nothing would suggest there is nothing to agree on.
 
 - **`run.state`** — written by the engine when a run commits, cleared on exit. Carries the
   pid, the log path and the selected steps, so a window opened mid-run can find that run
-  and follow its log (`Updater._attach_to_running_engine`).
+  and follow its log (`Updater._attach_to_running_engine`). It appears whole or not at
+  all, never truncated mid-write (ONEUP-0177). An engine that finds it owned by another
+  live engine refuses to run rather than take it over, because the first to exit would
+  delete it and leave the other's Stop dead (ONEUP-0145).
 - **`stop.request`** — created by the *window* to ask for a stop. The engine reads it only
   at safe boundaries (`docs/standards/security.md` §6). A request older than `run.state` is
   a leftover and is ignored.
