@@ -987,6 +987,47 @@ lock_holder() {          # echoes "<pid> <name>" of the process holding the lock
     echo "$pid ${name:-another program}"
 }
 
+# The pid of another LIVE engine that owns run.state (ONEUP-0145). lock_holder only sees
+# a live zypper, which does not exist during the pre-flight, a Flatpak-only run or
+# between passes, so without this two engines both wrote the record and the first to exit
+# deleted it — leaving the survivor's Stop dead. Same /proc test as lock_holder, plus the
+# command line: a stale record outlives a reboot, and its pid may by then be anything.
+run_state_holder() {
+    local pid cmd
+    read -r pid < "$RUN_STATE_FILE" 2>/dev/null || return 1
+    [[ "$pid" =~ ^[0-9]+$ ]] && (( pid != $$ )) && [[ -d "/proc/$pid" ]] || return 1
+    cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
+    [[ "$cmd" == *update_system* ]] || return 1
+    echo "$pid"
+}
+
+# Record this run in run.state, whole or not at all (ONEUP-0177): a window reading a
+# truncate-then-write mid-way sees an empty file and concludes there is no run. The
+# record is written to a temporary file and hard-linked into place, which also refuses
+# to replace a record that is already there — so two engines cannot both own it. A
+# record that is there but stale is removed and the link retried once. Returns 1 when a
+# live engine holds it, 2 when the record could not be written at all.
+claim_run_state() {
+    local tmp
+    mkdir -p "$(dirname "$RUN_STATE_FILE")" 2>/dev/null
+    tmp=$(mktemp "$RUN_STATE_FILE.XXXXXX" 2>/dev/null) || return 2
+    printf '%s\n%s\n%s\n%s\n' "$$" "$LOG_FILE" "$STEPS" "$(date +%s)" > "$tmp" \
+        || { rm -f "$tmp"; return 2; }
+    for _ in 1 2; do
+        if ln "$tmp" "$RUN_STATE_FILE" 2>/dev/null; then
+            rm -f "$tmp"
+            return 0
+        fi
+        if run_state_holder >/dev/null; then
+            rm -f "$tmp"
+            return 1
+        fi
+        rm -f "$RUN_STATE_FILE"
+    done
+    # A filesystem without hard links still gets the whole-file guarantee from rename.
+    mv -f "$tmp" "$RUN_STATE_FILE" 2>/dev/null || { rm -f "$tmp"; return 2; }
+}
+
 # ---------------------------------------------------------------------------
 # Opt-in "remember my authorization" mode (ONEUP-0023). Deliberately stores NO
 # password — encrypting a password the app must itself decrypt is obfuscation,
@@ -1286,9 +1327,16 @@ fi
 # From here the run is definitely going ahead, so record it. A GUI starting up can then
 # find a run already in flight — they outlive the window on purpose (ONEUP-0042) — and
 # follow this log rather than offering a Run button that could only fail on the lock.
-mkdir -p "$(dirname "$RUN_STATE_FILE")" 2>/dev/null
-printf '%s\n%s\n%s\n%s\n' "$$" "$LOG_FILE" "$STEPS" "$(date +%s)" > "$RUN_STATE_FILE" \
-    && RUN_STATE_OWNED=true
+claim_run_state; claim_rc=$?
+if (( claim_rc == 1 )); then
+    holder_pid=$(run_state_holder)
+    echo "OneUp is already running an update (process $holder_pid)."
+    echo "Nothing has been changed. Follow that run in the OneUp window, or wait for it to finish."
+    marker HINT "Another OneUp update is already running (process $holder_pid). Nothing was changed. Open OneUp to follow it, or run the update again once it has finished."
+    marker DONE "errors"
+    exit 1
+fi
+(( claim_rc == 0 )) && RUN_STATE_OWNED=true
 # A stop request older than the line above is a leftover and is ignored by stop_pending;
 # cleanup deletes it on the way out so it can't confuse anything later.
 
