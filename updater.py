@@ -987,7 +987,7 @@ def _parse_repos(text: str) -> list[dict]:
     repos = []
     for line in text.splitlines():
         cols = [c.strip() for c in line.split("|")]
-        if len(cols) < 7 or not cols[0].isdigit():
+        if len(cols) < 7 or not cols[0].isdecimal():
             continue
         repos.append({
             "alias": cols[1],
@@ -1348,10 +1348,10 @@ class RollbackDialog(QDialog):
 
     def selected_id(self) -> str:
         """The chosen snapshot number, or "" if nothing valid is selected. Re-checks
-        isdigit() so a spliced non-numeric payload can never reach the root shell."""
+        isdecimal() so a spliced non-numeric payload can never reach the root shell."""
         item = self.list.currentItem()
         sid = item.data(Qt.UserRole) if item else ""
-        return sid if isinstance(sid, str) and sid.isdigit() else ""
+        return sid if isinstance(sid, str) and sid.isdecimal() else ""
 
     def showEvent(self, event):
         # Centre over the main window each time it opens (dialog standard).
@@ -1865,7 +1865,7 @@ class Updater(QMainWindow):
             lines = RUN_STATE.read_text().splitlines()
         except OSError:
             return None
-        if len(lines) < 3 or not lines[0].isdigit():
+        if len(lines) < 3 or not lines[0].isdecimal():
             return None
         pid = int(lines[0])
         try:
@@ -2219,7 +2219,7 @@ for (var i = 0; i < wins.length; i++) {{
         elif line.startswith("@@CHECK@@|"):
             parts = line[len("@@CHECK@@|"):].split("|")
             if len(parts) >= 2 and parts[0] == "TOTAL":
-                self._apply_tray_total(int(parts[1]) if parts[1].isdigit() else 0,
+                self._apply_tray_total(int(parts[1]) if parts[1].isdecimal() else 0,
                                        uncertain=self._traycheck_unknown)
 
     def _on_traycheck_finished(self, *args):
@@ -2862,7 +2862,7 @@ for (var i = 0; i < wins.length; i++) {{
         for line in out.splitlines():
             if line.startswith("@@SNAPSHOTS@@|thinned|"):
                 n = line.split("|")[-1]
-                removed = int(n) if n.isdigit() else None
+                removed = int(n) if n.isdecimal() else None
             elif line.startswith("@@HINT@@|"):
                 QMessageBox.warning(self, "Couldn't thin snapshots", line.split("|", 1)[1])
         if removed:
@@ -3220,7 +3220,10 @@ for (var i = 0; i < wins.length; i++) {{
             # stdout+stderr, so a marker line can be spliced by interleaved text. A
             # malformed STEP_BEGIN must never throw out of the QProcess read slot —
             # that would abort parsing and drop the run's later markers.
-            if len(parts) < 4 or not parts[1].isdigit():
+            # isdecimal(), never isdigit(), here and at every other numeric field:
+            # "²".isdigit() is True while int("²") raises, so isdigit() is not a
+            # guard for the call it is guarding (ONEUP-0153).
+            if len(parts) < 4 or not parts[1].isdecimal():
                 return
             _key, index, total, label = parts[0], parts[1], parts[2], parts[3]
             self.status.setText(f"{label}…")
@@ -3262,7 +3265,7 @@ for (var i = 0; i < wins.length; i++) {{
         elif tag == "TIMING":
             # How long the step took, appended to its row badge ("3 installed · 42s").
             key = parts[0]
-            secs = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+            secs = int(parts[1]) if len(parts) > 1 and parts[1].isdecimal() else 0
             row = self.rows.get(key)
             if row:
                 row.set_timing(self._format_duration(secs))
@@ -3282,7 +3285,7 @@ for (var i = 0; i < wins.length; i++) {{
             else:
                 row = self.rows.get(key)
                 if row:
-                    n = int(count) if count.isdigit() else 0
+                    n = int(count) if count.isdecimal() else 0
                     row.set_badge(f"{n} available" if n > 0 else "up to date")
         elif tag == "CHECK_UNKNOWN":
             # This step couldn't read one of its sources, so its count is a floor,
@@ -3312,7 +3315,7 @@ for (var i = 0; i < wins.length; i++) {{
             # Keep only well-formed numeric ids (the id is later interpolated into a
             # root `snapper rollback`, so a spliced non-numeric payload must never
             # be captured). Oldest→newest as the engine emits them.
-            if parts and parts[0].isdigit():
+            if parts and parts[0].isdecimal():
                 date = parts[1] if len(parts) > 1 else ""
                 desc = parts[2] if len(parts) > 2 else ""
                 self._snapshots.append((parts[0], date, desc))
@@ -3323,7 +3326,7 @@ for (var i = 0; i < wins.length; i++) {{
             # Guarded like STEP_BEGIN: the engine's stdout and stderr are merged, so
             # any marker can arrive spliced, and a throw here would abort parsing and
             # drop the rest of the run's markers.
-            if len(parts) < 4 or not parts[1].isdigit() or not parts[2].isdigit():
+            if len(parts) < 4 or not parts[1].isdecimal() or not parts[2].isdecimal():
                 return
             key, phase = parts[0], parts[3]
             n, total = int(parts[1]), int(parts[2])
@@ -3347,9 +3350,9 @@ for (var i = 0; i < wins.length; i++) {{
             # prefetch phase zypper reports no sizes at all, and the liveness line falls
             # back to weighing the package cache. Set the phase FIRST: that fallback is
             # gated on it, so a stale phase would skip the very first measurement.
-            if len(parts) > 4 and parts[4].isdigit():
+            if len(parts) > 4 and parts[4].isdecimal():
                 self._dl_bytes = max(self._dl_bytes, int(parts[4]))
-                if len(parts) > 5 and parts[5].isdigit() and int(parts[5]):
+                if len(parts) > 5 and parts[5].isdecimal() and int(parts[5]):
                     self._dl_total = int(parts[5])
                 self._tick_activity()
             if announce:
@@ -3359,7 +3362,7 @@ for (var i = 0; i < wins.length; i++) {{
             # This phase used to be a blank several minutes: zypper reports it as dots
             # with no line ending, so there was nothing for the log pane to draw, and a
             # crawling mirror was indistinguishable from a hung app.
-            if len(parts) < 3 or not parts[0].isdigit() or not parts[1].isdigit():
+            if len(parts) < 3 or not parts[0].isdecimal() or not parts[1].isdecimal():
                 return
             n, total, alias = int(parts[0]), int(parts[1]), parts[2]
             detail = f"Checking for updates from {alias} ({n} of {total} sources)"
@@ -3401,7 +3404,7 @@ for (var i = 0; i < wins.length; i++) {{
             # disk. Offer a one-click thin (snapper's own retention cleanup) via the
             # warn banner. The "thinned|N" variant comes from the dedicated
             # --thin-snapshots process and is read in _on_thin_finished, not here.
-            self._snapshot_count = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+            self._snapshot_count = int(parts[1]) if len(parts) > 1 and parts[1].isdecimal() else 0
             self._warn_snapshots = True
             self.warn_btn.setText("Thin snapshots…")
             self._show_warning(
@@ -3479,7 +3482,7 @@ for (var i = 0; i < wins.length; i++) {{
             self.bar.setValue(1)
             self.bar.setFormat("Check complete")
             n = self._installed_count
-            total = int(n) if n.isdigit() else 0
+            total = int(n) if n.isdecimal() else 0
             # A count built on sources we couldn't read is a floor, not an answer, so
             # it must never be dressed up as an all-clear — that is the bug this whole
             # marker exists to prevent: the app said "up to date 🎉" while 8 updates
@@ -3709,14 +3712,14 @@ for (var i = 0; i < wins.length; i++) {{
         # pick an older one — e.g. to undo a problem that started two updates ago
         # (ONEUP-0020). Both the picker and the guard below re-check the id is a
         # bare number: it is interpolated into a root shell, so a spliced
-        # non-numeric payload must never reach it. (isdigit() also covers empty.)
+        # non-numeric payload must never reach it. (isdecimal() also covers empty.)
         target = self._snapshot
         if self._snapshots:
             dlg = RollbackDialog(self, self._snapshots, self._snapshot)
             if dlg.exec() != QDialog.Accepted:
                 return
             target = dlg.selected_id()
-        if not target.isdigit():
+        if not target.isdecimal():
             return
         answer = QMessageBox.warning(
             self, "Roll back this update?",
@@ -3820,7 +3823,7 @@ def _update_check_error(reply: QNetworkReply) -> str:
     if status in (403, 429):
         reset = bytes(reply.rawHeader(b"x-ratelimit-reset")).decode(errors="replace")
         when = (time.strftime(" Try again after %H:%M.", time.localtime(int(reset)))
-                if reset.isdigit() else "")
+                if reset.isdecimal() else "")
         return ("GitHub limits how often OneUp may check for a new version — 60 times "
                 "an hour from one address, shared with anything else here that uses "
                 f"GitHub.{when}\n\nThis doesn't affect updating your system.")
