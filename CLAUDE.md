@@ -176,9 +176,9 @@ measurement and the exact shape of the rule are in the document named beside eac
   What caught it was the keep-alive scenario, because the second `sudo_init` spawns a
   second `setsid` group and overwrites `SUDO_KEEPALIVE`, so `cleanup`'s group kill reaches
   only the later one and a keep-alive is orphaned. So a change that could re-enter
-  `sudo_init` is covered by INV-9, never by INV-1. Re-measured 2026-09-02: removing the
-  `HELD_AUTH` guard fails exactly one check, *"a keep-alive survived a held run (INV-9)"*,
-  and leaves the one-prompt scenario green. The `$PPID` half is
+  `sudo_init` is covered by INV-9, never by INV-1. Removing the `HELD_AUTH` guard fails
+  exactly one check, *"a keep-alive survived a held run (INV-9)"*, and leaves the one-prompt
+  scenario green. The `$PPID` half is
   `docs/specs/ONEUP-0044-one-authentication.md` §7.1; INV-9 itself is that spec's invariant
   list, not §7.1.
 
@@ -207,7 +207,7 @@ measurement and the exact shape of the rule are in the document named beside eac
   is the user-facing design decision, and it is the half that cost the bug: Qt ignores
   `outline-radius` so a ring draws square around rounded buttons, and a border added on
   focus resizes the widget. It is about focus *highlighting* only — ordinary borders are
-  fine. What replaced *"focus reuses the hover look"* is a measurement, not a preference:
+  fine. The cue is derived rather than copied for a measured reason, not a preference:
   hover lightens, and pure white measures 2.63:1 against the accent button's top gradient
   stop, so no lighter shade reaches SC 2.4.13's 3:1 there at any saturation. A focused
   control's fill is blended toward black or white until it clears 3:1 against every surface
