@@ -5975,6 +5975,25 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Also observed and unexplained: the engine suite's assertion total varies
   between runs on one tree (300 and 301 both seen). A varying denominator
   makes "N passed" unreadable as evidence.
+  Refined (2026-09-21), and it is worse than first filed. The overlapping runs
+  were not both OneUp's. `cc-job status` shows another project's `v630-build`
+  started at 10:57:39 and its `v630-localci` at 11:12:18, inside the window where
+  OneUp's gate reported its phantom failure.
+
+  So the interference is MACHINE-WIDE, not per-repository. A OneUp session cannot
+  avoid it by serialising its own jobs, because the colliding run belongs to a
+  different session working on a different project.
+
+  That makes the fixed `/tmp/local-ci-<suite>.log` paths the more likely cause
+  rather than a merely untidy one: they are not namespaced by repository OR by
+  process, so any two gate runs on this machine share them. Candidate fix is a
+  per-run directory (mktemp -d) rather than fixed names.
+
+  Still unverified, and it is the thing to establish first: whether the SUITES
+  collide as well as their logs. `CLAUDE.md` §6 records that a scenario invoking
+  the engine outside `run_engine` must redirect `/run/zypp.pid` and `run.state` by
+  hand — both machine-global, and neither namespaced per repository either. If
+  those are the real collision, a log-path fix would hide the symptom and leave it.
   **Layman:** Running the test gate twice at the same time makes it report a failure that is not real.
   Kind: fix.
   Source: close-findings sweep 2026-09-21, found during the run.
