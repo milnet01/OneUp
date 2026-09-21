@@ -2,12 +2,10 @@
 
 Guidance for Claude Code (claude.ai/code) when working in this repository.
 
-**This file is a map and a trap list.** It is the second-lowest-ranked document in the set,
-above only the global default set at `~/.claude/standards/`
-(`docs/standards/documentation.md` §1.1) — except `roadmap-format.md`'s bullet grammar,
-which outranks that whole table and no project may override (§1.2): where it restates a rule, the standard is
-canonical and this file is wrong. What it holds that nothing else does is §6 — the traps,
-each of which cost a real bug to learn.
+**This file is a map and a trap list.** Where it restates a rule, the standard is canonical
+and this file is wrong — `docs/standards/documentation.md` §1.1 ranks the set, and §1.2 holds
+the one exception that outranks the whole table. What it holds that nothing else does is §6 —
+the traps, each of which cost a real bug to learn.
 
 ## 1. What OneUp is
 
@@ -162,8 +160,8 @@ measurement and the exact shape of the rule are in the document named beside eac
   does not: every word of *"core system packages were updated"* matches it one at a time, so
   a half-converted payload passes and the suite stays green. Where a closed vocabulary
   exists, assert membership of it; shape only tells you a token is well-formed, never that it
-  is one of yours. Caught in review rather than in production, by running the regex instead
-  of reading it — `docs/specs/ONEUP-0072-marker-codes.md` INV-1.
+  is one of yours. Run the regex rather than reading it —
+  `docs/specs/ONEUP-0072-marker-codes.md` INV-1.
 
 - **A test must never depend on, or damage, the state of the machine it runs on.** Both
   defaults have bitten for real: the lock probe reads `/run/zypp.pid`, and `run.state`
@@ -211,8 +209,8 @@ measurement and the exact shape of the rule are in the document named beside eac
   appending a bullet refuses rather than restarting at 1 —
   `docs/standards/workflow.md` §4.
 
-- **`ROADMAP.md` is generated output — do not hand-edit it.** Migrated to the Ants roadmap
-  store on 2026-08-18, which is now the source of truth. Every `roadmap_log` write renders
+- **`ROADMAP.md` is generated output — do not hand-edit it.** The Ants roadmap store is the
+  source of truth. Every `roadmap_log` write renders
   all of it from the store over the file, so a hand edit survives only until the next write
   and then vanishes with no error and no diff to explain it. Use `roadmap_log`
   (`append` / `flip` / `annotate`); read with `roadmap_query`, which answers `source:"store"`.
@@ -220,6 +218,11 @@ measurement and the exact shape of the rule are in the document named beside eac
   longer works here** — it refuses with `unsupported_format`, because the headline is a store
   column and its locate key; to change one, edit the store. And **the store is machine-global**
   (`~/.local/share/ants-terminal/roadmap.sqlite`), not in this repo, so a fresh clone has the
-  markdown and not the history behind it. The migration was verified lossless: normalising
-  whitespace makes the rendered file character-for-character identical to its pre-migration
-  content. Recorded on `ONEUP-0057`.
+  markdown and not the history behind it. Recorded on `ONEUP-0057`.
+
+## 7. Where this file's history went
+
+Dated corrections, superseded wording and the argument that settled a rule are in
+[`docs/history/claude-md.md`](docs/history/claude-md.md). Nothing there is a rule. A trap's
+own measurement is not history and stays above: a trap without its evidence is advice, and
+the next session argues with advice.
