@@ -6032,6 +6032,42 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: close-findings sweep 2026-09-21, collateral of ONEUP-0153.
 
+- 🚧 [ONEUP-0208] **Move CLAUDE.md's pedigree to docs/history/claude-md.md and leave a pointer.**
+  A rule reads faster without its own pedigree wrapped around it. What
+  stays: the rule, and the measurement that makes a trap believable — this
+  file is mostly trap, and a trap stripped of its evidence becomes advice
+  the next session argues with. What moves: dated corrections, superseded
+  wording, and the argument that settled a rule.
+
+  Lands on `main` and merges forward. `workflow.md` §1.2 admits
+  documentation during the freeze, and §1.2's ONEUP-0097 precedent means a
+  change with nothing user-facing owes no 1.4.x.
+
+  Leaves one thing undone, filed separately: `documentation.md` §1's table
+  has no row for a history file, and adding one is a direction change that
+  owes its own gate.
+  **Layman:** CLAUDE.md keeps the rules and the traps; the dated story of how each rule got there moves to its own file, linked from the foot.
+  Kind: doc.
+  Source: user-request-2026-09-21.
+
+- 📋 [ONEUP-0209] **documentation.md §1's table has no row for a history file, and now one exists.**
+  ONEUP-0208 created `docs/history/claude-md.md`. `documentation.md` §1's
+  table names every document class and what each holds; it has no row for
+  a history file, and §1.1's ranking does not place one. `docs/reviews/`
+  is already in the same position, so the row should cover both.
+
+  A conformer wanting to move a rule's pedigree out of a document today
+  cannot tell from the standard where it goes. Adding the row changes what
+  they write, so it re-arms the gate and runs `review-contract` before it
+  lands — which is why it is not folded into ONEUP-0208.
+
+  Both are descriptive, not authoritative: a history file records why a
+  rule says what it says and binds nobody, so it ranks with `README.md`,
+  `CHANGELOG.md` and `ROADMAP.md` rather than in the table above them.
+  **Layman:** The rulebook that says which folder each kind of document goes in does not yet mention the new history folder.
+  Kind: doc.
+  Source: in-session-2026-09-21.
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of
