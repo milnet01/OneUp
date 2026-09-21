@@ -6032,7 +6032,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: close-findings sweep 2026-09-21, collateral of ONEUP-0153.
 
-- 🚧 [ONEUP-0208] **Move CLAUDE.md's pedigree to docs/history/claude-md.md and leave a pointer.**
+- ✅ [ONEUP-0208] **Move CLAUDE.md's pedigree to docs/history/claude-md.md and leave a pointer.**
   A rule reads faster without its own pedigree wrapped around it. What
   stays: the rule, and the measurement that makes a trap believable — this
   file is mostly trap, and a trap stripped of its evidence becomes advice
@@ -6046,6 +6046,16 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Leaves one thing undone, filed separately: `documentation.md` §1's table
   has no row for a history file, and adding one is a direction change that
   owes its own gate.
+  Resolved 2026-09-21: landed on `main` (bfbd783), merged to `v2` (7cbff5e),
+  and `v2`'s own pedigree moved in 9a0b5ee. `docs/history/claude-md.md` holds
+  the file's ranking restatement, the roadmap store's migration evidence, the
+  gate-drift incident, the re-taken HELD_AUTH measurement and the focus-ring
+  wording it replaced. A pointer sits at CLAUDE.md §7.
+
+  Measured: `main` 14,410 to 14,363 bytes; `v2` 18,052 to 17,840. Small on
+  both, as expected — the file was already mostly trap and measurement rather
+  than pedigree, and a trap's evidence stays. local-CI green, docs-check
+  21,376 checks 0 failures.
   **Layman:** CLAUDE.md keeps the rules and the traps; the dated story of how each rule got there moves to its own file, linked from the foot.
   Kind: doc.
   Source: user-request-2026-09-21.
