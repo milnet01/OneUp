@@ -1,4 +1,5 @@
 <!-- ants-roadmap-format: 1 -->
+<!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
 
 # OneUp Roadmap
 
@@ -4986,7 +4987,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-driver.
 
-- 📋 [ONEUP-0151] **The marker-protocol emitter gate scans only the Bash engine, so the Python one is ungated.**
+- ✅ [ONEUP-0151] **The marker-protocol emitter gate scans only the Bash engine, so the Python one is ungated.**
   `marker-protocol.md` claims `tests/docs-check.py` compares §3's marker table
   against the engine's emitter call sites both ways. That scan reads
   `update_system.sh` and has no hits for `oneup/engine`. The two lists agree today
@@ -4995,11 +4996,25 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   replacing the one it does. Extend the scan to `oneup/engine/*.py` while both
   engines are in the tree. §3's "Emitted by" column and §5's file list still name
   Bash symbols; that half is review-contract's.
+  Resolved (2026-09-21, v2 873a84a): `check_marker_table` now scans
+  `oneup/engine/*.py` alongside `update_system.sh`, and the directory's
+  absence on the Bash-only branch simply contributes nothing.
+
+  It also gained a check this item did not ask for and that nothing else
+  performs: a marker one engine emits and the other does not. The G2
+  differential runs both engines against one transcript, so it cannot see a
+  marker neither was asked to emit. Proven to bite by renaming a marker in
+  the Python engine — it failed in both directions.
+
+  The two lists do agree today, as this finding said.
+
+  The documentation half this item explicitly handed to review-contract is
+  filed as ONEUP-0206.
   **Layman:** The check that keeps the two halves of the app speaking the same language does not look at the new half.
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-protocol.
 
-- 📋 [ONEUP-0152] **Parser and emitter divergences between the two engines that the G2 differential may not catch.**
+- ✅ [ONEUP-0152] **Parser and emitter divergences between the two engines that the G2 differential may not catch.**
   Four, each small and each in the module the protocol calls its single point of
   truth. `parsers.py` uses `splitlines()`, which breaks on \\r, \\v, \\f and the
   Unicode separators where the Bash breaks on \\n alone — one \\r in a transaction
@@ -5008,11 +5023,34 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   PROGRESS fields on an integer 0. And the emitter substitutes nothing, so a \\n in
   a payload fabricates a whole line — ONEUP-0072 INV-2 plans an emitter guard and
   names `|` only, which is review-contract's half.
+  Resolved (2026-09-21, v2 873a84a). Three of the four were live and are
+  fixed; the fourth was not live.
+
+  splitlines() → split("\n") in parsers.py. Proven: a bare \r beside an NVIDIA
+  package fabricated "kernel driver modules" in a reboot reason, exactly as
+  this finding predicted. \x0b behaves the same way and is also covered.
+
+  The fraction pattern's `$` → `\Z`. `$` matches before a trailing newline, so
+  it accepted "1/77\n" where the Bash `case` does not.
+
+  The emitter now folds every line-breaking character to a space. Line breaks
+  only: `|` is the field separator and every multi-field payload carries it,
+  so rewriting `|` in marker() would destroy them — that guard belongs at
+  field-construction level, which is what ONEUP-0072 INV-2 is for. Filed as
+  ONEUP-0207.
+
+  NOT live: `if got:` dropping both trailing PROGRESS fields. proc.py passes
+  `str(got)`, so the guard sees "0", which is truthy. Changed to an emptiness
+  test anyway and the field counts are now asserted, but the finding
+  overstates this one.
+
+  Tests: 6 assertions in tests/parsers-test.py, red against the reverted
+  source. That suite now covers the emitter too and its docstring says so.
   **Layman:** Small differences between the old and new engines that could make them report different things.
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-protocol.
 
-- 📋 [ONEUP-0153] **isdigit() is not a valid guard for int() — eight marker handlers can throw in the read slot.**
+- ✅ [ONEUP-0153] **isdigit() is not a valid guard for int() — eight marker handlers can throw in the read slot.**
   `"²".isdigit()` is True while `int("²")` raises; `isdecimal()` is the property
   `int()` needs. Because stdout and stderr are merged a spliced field can carry any
   character, and the throw lands inside `readyReadStandardOutput` — which
@@ -5020,6 +5058,26 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   parsing and drops every remaining marker while the run carries on. Sites in
   `oneup/gui/run.py`: the STOPPING, CHECK, PROGRESS (counters and both byte
   fields), REFRESH, SNAPSHOTS and on_finished handlers, plus `_adopt_held_engine`.
+  Resolved (2026-09-21): isdecimal(), not isdigit(), guards every int().
+  Fixed as a class on both codebases rather than at the sites named here —
+  main 61036f8, v2 873a84a — because isdecimal() is a strict subset of
+  isdigit() and every such guard protects an int() or a numeric identity.
+
+  The finding said eight handlers; there were eleven int-guarding sites in
+  the window alone, and nine further modules carried the same pattern.
+
+  One of them was not a crash and is the more serious half: @@SNAPSHOT_ITEM@@
+  CAPTURES its id rather than int-ing it, and that id is interpolated into a
+  root `snapper rollback`. A superscript digit cleared the capture, the
+  picker's re-check and the rollback guard alike, with nothing thrown. It has
+  its own assertion.
+
+  Tests: 13 assertions in tests/gui-smoke.py on each branch, red on their
+  assertions ("invalid literal for int() with base 10") against the old code,
+  green after. Gates green on both branches.
+
+  Collateral filed: ONEUP-0202 (security.md names the old guard — take that
+  one first, it would propagate the defect) and ONEUP-0205.
   **Layman:** An odd character from the engine could stop the window following the rest of the update.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-run.
@@ -5883,11 +5941,129 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 **Theme:** fixes for the 1.4 app people use today, landed on `main`. No
 features: those wait for 2.0 (`docs/standards/workflow.md` §1).
 
+- 📋 [ONEUP-0202] **security.md still states the root-shell rollback guard as str.isdigit(), which is now false.**
+  The privileged-call table's `Updater.rollback` row and the worked excerpt
+  beside it both name `str.isdigit()`. ONEUP-0153 changed that guard to
+  `isdecimal()` on both codebases (main 61036f8, v2 873a84a), so the standard
+  now describes a guard the code does not use — and names the WEAKER one. A
+  conformer adding a privileged call would copy `isdigit()` and reintroduce
+  exactly the hole ONEUP-0153 closed: a superscript digit clears `isdigit()`
+  and reaches the interpolated root `snapper rollback`.
+
+  Take this before the other queued doc items. It is the only one whose
+  staleness actively propagates a defect.
+
+  A gated edit — it changes what a conformer writes, so `CLAUDE.md` rule 14
+  applies: `review-contract docs/standards/security.md --genre standard`.
+  **Layman:** A security rule still describes the old, weaker check, so the next person could copy it back in.
+  Kind: doc-fix.
+  Source: close-findings sweep 2026-09-21, collateral of ONEUP-0153.
+
+- 📋 [ONEUP-0203] **local-CI.sh cannot be run twice at once, and a concurrent run reports a false failure.**
+  Two `local-CI.sh` runs overlapping produced `tests/run-tests.sh` "Passed:
+  299 Failed: 1" on a tree whose engine suite passes 300/0 in isolation. The
+  failing run was a `git push`, whose pre-push hook runs the gate — so it
+  aborted a push over a defect that was not there.
+
+  The visible cause is the log paths: `local-CI.sh` redirects each suite to a
+  fixed `/tmp/local-ci-<suite>.log`, so a second run overwrites the first's
+  output. Whether the suites themselves also collide is unverified and is the
+  thing to establish first; `CLAUDE.md` §6 already records that a scenario
+  invoking the engine outside `run_engine` must redirect `/run/zypp.pid` and
+  `run.state` by hand, which is the same class.
+
+  Also observed and unexplained: the engine suite's assertion total varies
+  between runs on one tree (300 and 301 both seen). A varying denominator
+  makes "N passed" unreadable as evidence.
+  **Layman:** Running the test gate twice at the same time makes it report a failure that is not real.
+  Kind: fix.
+  Source: close-findings sweep 2026-09-21, found during the run.
+
+- 📋 [ONEUP-0204] **The window suite leaves QProcess auth probes running, and dumps tracebacks at interpreter shutdown.**
+  `tests/gui-smoke.py` ends with repeated `RuntimeError: libshiboken:
+  Internal C++ object (PySide6.QtCore.QProcess) already deleted` out of
+  `_on_auth_status_finished`, each preceded by `QProcess: Destroyed while
+  process ("bash") is still running`. Measured on main at the same count with
+  and without ONEUP-0153's change, so it predates it and is not that fix's
+  damage.
+
+  The suite still exits 0, which is why it has survived: the noise arrives
+  after the summary line. It costs a reader the tail of every run and it
+  leaves `bash` children behind, which `CLAUDE.md` §6's "nothing the engine
+  spawns may outlive it" is the same principle for.
+
+  Each `Updater()` a scenario builds starts an `--auth-status` probe nothing
+  waits on. Either wait for it or never start it under test.
+  **Layman:** The window tests print a wall of harmless-looking errors after they finish, and leave stray processes.
+  Kind: fix.
+  Source: close-findings sweep 2026-09-21, found next door.
+
+- 📋 [ONEUP-0205] **ONEUP-0018's spec and plan quote isdigit() for code that now uses isdecimal().**
+  Both documents reproduce the tray's CHECK/TOTAL handling as `int(parts[1])
+  if parts[1].isdigit() else 0` and instruct mirroring "the `.isdigit()`
+  guard `on_finished` itself uses". ONEUP-0153 changed both sites.
+
+  Low urgency and deliberately separated from the security.md item: these are
+  shipped-item records describing what was built, not a rule anyone conforms
+  to, and the spec already quotes line numbers that have long since moved. If
+  the answer is that these are past-tense records to leave alone, that is a
+  fine disposition — but it should be decided rather than left unnoticed,
+  because the next reader cannot tell a stale quotation from a current one.
+  **Layman:** Two older design documents quote the old check; they describe finished work, so this is tidying.
+  Kind: doc-fix.
+  Source: close-findings sweep 2026-09-21, collateral of ONEUP-0153.
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of
 `docs/design/oneup-2.0.md` §1's list, plus fixes to that new code. Ships only
 when complete (that document's §7).
+
+- 📋 [ONEUP-0206] **marker-protocol.md's Emitted by column and its file list name only the Bash engine.**
+  The marker table's "Emitted by" column and the numbered file list that
+  follows both name `update_system.sh` as the emitter. The Python engine
+  emits every one of those markers through `oneup/engine/markers.py`, and
+  neither passage says so.
+
+  This is the half ONEUP-0151's lane handed to review-contract rather than
+  fixing: the code half — extending the emitter gate to scan the Python
+  engine — shipped in 873a84a, and that gate now also reports any marker one
+  engine emits and the other does not. So the contract is enforced against
+  both engines while still describing one.
+
+  Note the constraint before editing: `CLAUDE.md` §4 forbids a document
+  `tests/docs-check.py` scans from backticking a path that exists only on
+  `v2`, and `docs/reference/` is scanned. A bare directory or a bare filename
+  does not match that check's pattern; a path carrying both a separator and
+  an extension does.
+
+  A gated edit — `review-contract docs/reference/marker-protocol.md`.
+  **Layman:** The message contract still says only the old engine sends these messages; the new one sends them too.
+  Kind: doc-fix.
+  Source: review-code 2026-08-31, lane engine-protocol (doc half of ONEUP-0151).
+
+- 📋 [ONEUP-0207] **ONEUP-0072 INV-2 plans an emitter guard for the pipe alone, and a line break needs one too.**
+  INV-2 reads "No marker field contains a `|`: the emitter rewrites it to `/`
+  before the line is emitted". ONEUP-0152 found the neighbouring hole — the
+  emitter substituted nothing at all, so a line break in a payload fabricated
+  a whole second marker line the window then parsed as real — and 873a84a now
+  folds every line-breaking character to a space in `markers.marker`.
+
+  The two guards are not interchangeable and the spec should carry both. The
+  line-break guard belongs in `marker()`, where it now is. The `|` guard
+  cannot: `|` is the field separator and every multi-field payload is built
+  with it, so rewriting it there would destroy each one. It belongs at
+  field-construction level, which is what INV-2 is actually specifying.
+
+  Amend INV-2 to name the line-break guard alongside it, and to say why the
+  two sit at different levels — otherwise the next implementer reads one
+  invariant, puts the `|` rewrite in `marker()`, and breaks every marker that
+  has more than one field.
+
+  A gated edit — it changes what the implementer builds.
+  **Layman:** A planned rule covers one bad character; we just fixed a second one and the rule should mention both.
+  Kind: doc-fix.
+  Source: review-code 2026-08-31, lane engine-protocol (spec half of ONEUP-0152).
 
 ## 2.1.0 — after 2.0
 
