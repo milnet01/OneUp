@@ -595,7 +595,7 @@ class Updater(QMainWindow):
             lines = paths.RUN_STATE.read_text().splitlines()
         except OSError:
             return None
-        if len(lines) < 3 or not lines[0].isdigit():
+        if len(lines) < 3 or not lines[0].isdecimal():
             return None
         pid = int(lines[0])
         try:

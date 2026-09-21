@@ -197,10 +197,30 @@ def check_marker_table() -> None:
     # stale list against another and calling it agreement.
     engine = set(re.findall(r"\bmarker ([A-Z_]+)",
                             (ROOT / "update_system.sh").read_text()))
-    check(not engine - table, doc, 0, "§3",
-          f"the engine emits markers this table omits: {sorted(engine - table)}")
-    check(not table - engine, doc, 0, "§3",
-          f"this table names markers the engine never emits: {sorted(table - engine)}")
+    # The Python engine emits through `markers.marker("NAME", ...)`, so its call sites
+    # read differently from the Bash `marker NAME`. Scanned while both engines are in
+    # the tree; the directory is absent on the branch that has only the Bash engine,
+    # and then this half simply contributes nothing (ONEUP-0151).
+    py_dir = ROOT / "oneup/engine"
+    py_files = sorted(py_dir.glob("*.py")) if py_dir.is_dir() else []
+    py_engine = set()
+    for src in py_files:
+        py_engine |= set(re.findall(r"\bmarker\(\s*\"([A-Z_]+)\"", src.read_text()))
+    emitted = engine | py_engine
+    check(not emitted - table, doc, 0, "§3",
+          f"the engine emits markers this table omits: {sorted(emitted - table)}")
+    check(not table - emitted, doc, 0, "§3",
+          f"this table names markers the engine never emits: {sorted(table - emitted)}")
+    # Two engines must say the same things. Nothing else compares them: the G2
+    # differential runs both against one transcript, which cannot see a marker
+    # neither one was asked to emit.
+    if py_files:
+        check(not engine - py_engine, doc, 0, "§3",
+              f"markers the Bash engine emits that the Python engine does not: "
+              f"{sorted(engine - py_engine)}")
+        check(not py_engine - engine, doc, 0, "§3",
+              f"markers the Python engine emits that the Bash engine does not: "
+              f"{sorted(py_engine - engine)}")
     # The engine suite is what proves each marker is really produced. A marker nothing
     # asserts on is a row in the contract with no evidence behind it.
     tested = set(re.findall(r"@@([A-Z_]+)@@", (ROOT / "tests/run-tests.sh").read_text()))

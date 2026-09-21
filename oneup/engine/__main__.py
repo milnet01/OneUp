@@ -350,7 +350,7 @@ def _pre_update_snapshot() -> None:
     rows = []
     for line in csv.splitlines()[1:]:
         fields = line.split(",")
-        if len(fields) < 3 or not fields[0].isdigit() or fields[0] == "0" or not fields[1]:
+        if len(fields) < 3 or not fields[0].isdecimal() or fields[0] == "0" or not fields[1]:
             continue
         desc = line.split(",", 2)[2]
         if desc.startswith('"'):
@@ -374,7 +374,7 @@ def _preflight() -> None:
         if rc != 0 or len(rows) < 2:
             continue
         fields = rows[1].split()
-        if len(fields) < 4 or not fields[3].isdigit():
+        if len(fields) < 4 or not fields[3].isdecimal():
             continue
         avail = int(fields[3])
         if avail >= _LOW_DISK:

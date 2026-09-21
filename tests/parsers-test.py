@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Table-driven tests for oneup/engine/parsers.py — the pure half of the engine.
+"""Table-driven tests for the pure half of the Python engine — oneup/engine/parsers.py
+and the emitter predicates in oneup/engine/markers.py.
 
 `docs/specs/ONEUP-0054-python-engine.md` §4.3.4: `to_bytes`, the zypper progress
 wordings, the two download-size wordings, `lr` output and `lock_holder`'s text
@@ -17,13 +18,15 @@ Stdlib-only, exit 0 on success and 1 on any failure, so it runs wherever Python
 does — `local-CI.sh` and the release workflow both name it by hand, because
 nothing in this project discovers tests.
 """
+import contextlib
+import io
 import sys
 from pathlib import Path
 
 # The repo root, so `oneup.engine` imports without an install step.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from oneup.engine import parsers
+from oneup.engine import markers, parsers
 
 PASS = 0
 FAIL = 0
@@ -134,6 +137,15 @@ REBOOT = [
      "your NVIDIA graphics driver and kernel driver modules were installed"),
     ("broadcom-wl-kmp-default-6.30.x86_64",
      "kernel driver modules was installed"),
+    # A bare \r is NOT a line break to the Bash, which splits the transaction log
+    # on \n alone. Python's splitlines() also breaks on \r, \v, \f and the Unicode
+    # separators — and here that fabricates a reason: split in two, the vbox kmp no
+    # longer has the nvidia name beside it to exclude it, so "kernel driver modules"
+    # appears in a reason the Bash engine never gives (ONEUP-0152).
+    ("nvidia-gfxG06-550.x86_64\rvbox-kmp-default-7.0",
+     "your NVIDIA graphics driver was installed"),
+    ("nvidia-gfxG06-550.x86_64\x0bvbox-kmp-default-7.0",
+     "your NVIDIA graphics driver was installed"),
     ("Mesa-24.1.0-1.x86_64",
      "your graphics driver was installed"),
     ("kernel-default-6.9.1-1.x86_64\nMesa-24.1.0-1.x86_64\nvbox-kmp-default-7.0",
@@ -191,6 +203,46 @@ def main() -> int:
     for log, want in REBOOT:
         check(f"reboot_reason({log.splitlines()[0][:34] if log else ''!r}…)",
               parsers.reboot_reason(log), want)
+
+    # --- the emitter (oneup/engine/markers.py) ------------------------------
+    # `emit_progress` returns False when there was no counter to parse, and that
+    # distinction is the whole input to the ONEUP-0046 stale-parser canary: a
+    # transaction that installed packages while nothing was recognised. A pattern
+    # that accepts more than the Bash does blinds the canary.
+    for frac, want in (("1/77", True),
+                       ("  12 / 141 ", True),
+                       # `$` matches before a trailing newline; the Bash `case` does
+                       # not. `\Z` is the anchor that means end-of-string.
+                       ("1/77\n", False),
+                       ("( 1/77", False),
+                       ("x/77", False),
+                       ("", False)):
+        with contextlib.redirect_stdout(io.StringIO()):
+            got = markers.emit_progress("system", frac, "download")
+        check(f"emit_progress(frac={frac!r})", got, want)
+
+    # The two byte fields travel together, and "0" is a REAL reading ("nothing has
+    # come down yet"), not an absent one. Only the empty string means absent. The
+    # emitter tests the argument for emptiness rather than truth, so a caller that
+    # ever passes a falsy non-string cannot silently drop both fields.
+    for got_arg, want_fields in (("0", 7), ("41943040", 7), ("", 5)):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            markers.emit_progress("system", "1/77", "download", got_arg, "397410304")
+        line = buf.getvalue().strip()
+        check(f"emit_progress(got={got_arg!r}) field count",
+              len(line.split("|")), want_fields)
+
+    # One marker call must produce exactly one line. The payload is interpolated
+    # straight into the output, so a newline reaching it fabricates a whole second
+    # marker — and the window parses whatever comes out.
+    for payload in ("plain", "two\nlines", "carriage\rreturn", "vertical\x0btab"):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            markers.marker("HINT", payload)
+        body = buf.getvalue().rstrip("\n")
+        check(f"marker(HINT, {payload!r}) emits one line",
+              not any(c in body for c in "\n\r\x0b\x0c"), True)
 
     print(f"\n  Passed: {PASS}   Failed: {FAIL}")
     return 1 if FAIL else 0

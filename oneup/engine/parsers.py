@@ -71,7 +71,11 @@ def download_size(text: str) -> str | None:
     None when no line matches, which is the "nothing to fetch" case the caller
     must tell apart from a failed run.
     """
-    for line in text.splitlines():
+    # split("\n"), never splitlines(): the Bash reads these logs a line at a time
+    # and a line ends at \n alone. splitlines() also breaks on \r, \v, \f and the
+    # Unicode separators, which invents lines the other engine never sees
+    # (ONEUP-0152). Every parser in this module splits the same way.
+    for line in text.split("\n"):
         found = _SIZE_TEXT.match(line)
         if found:
             return found.group(1)
@@ -145,7 +149,7 @@ def enabled_aliases(text: str) -> list[str]:
     `refresh_repos` treats empty as "fall back to one bulk refresh".
     """
     aliases = []
-    for line in text.splitlines():
+    for line in text.split("\n"):
         fields = [f.strip() for f in line.split("|")]
         if len(fields) < 4:
             continue
@@ -200,7 +204,7 @@ def reboot_reason(log: str) -> str:
         parts.append("your graphics driver")
     # DKMS / kernel-module packages OTHER than the NVIDIA one already named.
     if any(_MODULE.search(line) and not _NVIDIA_ANYWHERE.search(line)
-           for line in log.splitlines()):
+           for line in log.split("\n")):
         parts.append("kernel driver modules")
     if not parts:
         return ""

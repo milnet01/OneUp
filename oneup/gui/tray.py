@@ -151,7 +151,7 @@ def _parse_tray_line(win, line: str):
     elif line.startswith("@@CHECK@@|"):
         parts = line[len("@@CHECK@@|"):].split("|")
         if len(parts) >= 2 and parts[0] == "TOTAL":
-            _apply_tray_total(win, int(parts[1]) if parts[1].isdigit() else 0,
+            _apply_tray_total(win, int(parts[1]) if parts[1].isdecimal() else 0,
                                    uncertain=win._traycheck_unknown)
 
 

@@ -185,7 +185,7 @@ def _start_keepalive() -> None:
     global _KEEPALIVE
     if _KEEPALIVE is not None:
         return
-    interval = KEEPALIVE_SECONDS if KEEPALIVE_SECONDS.replace(".", "", 1).isdigit() else "50"
+    interval = KEEPALIVE_SECONDS if KEEPALIVE_SECONDS.replace(".", "", 1).isdecimal() else "50"
     # The tag rides in argv so `pgrep -f oneup-keepalive` finds this child; it is
     # read back out of sys.argv rather than used, which is why the loop skips it.
     _KEEPALIVE = subprocess.Popen(  # noqa: S603 — fixed argv, no shell

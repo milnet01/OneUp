@@ -298,7 +298,7 @@ def _cache_bytes() -> int | None:
         return None
     _, out = privilege.sudo(privilege.CACHE_DU_ARGV)
     first = out.split(maxsplit=1)
-    if not first or not first[0].isdigit():
+    if not first or not first[0].isdecimal():
         return None
     return int(first[0])
 

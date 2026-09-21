@@ -215,6 +215,48 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001 — any throw is the failure.
             check(f"malformed line handled: {bad[:22]!r} ({exc})", False)
 
+    # --- 1a. A digit isdigit() accepts but int() rejects (ONEUP-0153) ----------
+    # "²".isdigit() is True while int("²") raises: isdecimal() is the property
+    # int() actually needs. stdout and stderr are merged, so a spliced field can
+    # carry any character, and the throw would land inside the QProcess read slot
+    # — which marker-protocol.md §1.2 names as the thing that must not happen,
+    # since it aborts parsing and drops every remaining marker while the run
+    # carries on. One superscript per numeric field of every handler that ints.
+    w = window.Updater()
+    for bad in ("@@STEP_BEGIN@@|system|²|3|Label",
+                "@@TIMING@@|system|²",
+                "@@CHECK@@|system|²|packages",
+                "@@SNAPSHOT_ITEM@@|²|2026-01-01|a restore point",
+                "@@PROGRESS@@|system|²|141|download",
+                "@@PROGRESS@@|system|12|²|download",
+                "@@PROGRESS@@|system|12|141|download|²|397410304",
+                "@@PROGRESS@@|system|12|141|download|41943040|²",
+                "@@REFRESH@@|²|9|games",
+                "@@REFRESH@@|6|²|games",
+                "@@SNAPSHOTS@@|warn|²"):
+        try:
+            run.handle_line(w, bad)
+            check(f"superscript digit handled: {bad[:34]!r}", True)
+        except Exception as exc:  # noqa: BLE001 — any throw is the failure.
+            check(f"superscript digit handled: {bad[:34]!r} ({exc})", False)
+    # @@SNAPSHOT_ITEM@@ does not int() its id, it CAPTURES it — and the id is
+    # interpolated into a root `snapper rollback`. isdigit() accepts "²" at the
+    # capture, at the picker's re-check and at the rollback guard, so a spliced
+    # superscript clears all three and reaches the root shell. Nothing throws;
+    # that is why this one needs its own assertion rather than a no-throw check.
+    check("a superscript snapshot id is never captured",
+          all(sid.isdecimal() for sid, _d, _x in w._snapshots))
+    # on_finished reads the same way: @@CHECK@@|TOTAL's count reaches int() there,
+    # after the read slot has returned, so the guard has to hold in both places.
+    wD = window.Updater()
+    wD._run_active, wD._check_mode = True, True
+    run.handle_line(wD, "@@CHECK@@|TOTAL|²")
+    try:
+        run.on_finished(wD, 0, None)
+        check("superscript digit handled: the check-mode summary", True)
+    except Exception as exc:  # noqa: BLE001 — any throw is the failure.
+        check(f"superscript digit handled: the check-mode summary ({exc})", False)
+
     # --- 2. A real run's markers land the right per-row badges + state ----------
     w = window.Updater()
     for line in ("@@STEP_BEGIN@@|system|1|3|Updating system packages",

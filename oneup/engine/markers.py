@@ -15,10 +15,16 @@ from __future__ import annotations
 import re
 import sys
 
+# Everything Python treats as a line break. The payload is interpolated straight
+# into the output, so any one of these fabricates a second marker line that the
+# window then parses as real — the emitter substituted nothing at all before
+# ONEUP-0152. Folded to a space rather than dropped, so the text stays readable.
+_LINE_BREAKS = str.maketrans(dict.fromkeys("\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029", " "))
+
 
 def marker(name: str, payload: str = "") -> None:
-    """Emit one `@@NAME@@|payload` line."""
-    print(f"@@{name}@@|{payload}", flush=True)
+    """Emit one `@@NAME@@|payload` line — one call, one line, always."""
+    print(f"@@{name}@@|{payload.translate(_LINE_BREAKS)}", flush=True)
 
 
 def hint(text: str) -> None:
@@ -50,7 +56,10 @@ def emit_check(key: str, count: int, label: str, unreadable: str = "") -> None:
         marker("CHECK", f"{key}|{count}|{label}")
 
 
-_FRACTION = re.compile(r"^([0-9]+)/([0-9]+)$")
+# `\Z`, not `$`: `$` also matches just before a trailing newline, so `$` would
+# accept "1/77\n" where the Bash `case` pattern does not — and a pattern that
+# accepts more than the Bash blinds the ONEUP-0046 canary (ONEUP-0152).
+_FRACTION = re.compile(r"^([0-9]+)/([0-9]+)\Z")
 
 
 def emit_progress(step: str, frac: str, phase: str,
@@ -74,7 +83,10 @@ def emit_progress(step: str, frac: str, phase: str,
     if not hit:
         return False
     payload = f"{step}|{hit.group(1)}|{hit.group(2)}|{phase}"
-    if got:
+    # Emptiness, not truthiness: "0" is a real reading ("nothing has come down
+    # yet") and the two byte fields travel together, so a truth test would drop
+    # BOTH of them for the whole transaction on any falsy value (ONEUP-0152).
+    if got != "":
         payload += f"|{got}|{want or 0}"
     marker("PROGRESS", payload)
     return True

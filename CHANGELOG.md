@@ -44,6 +44,23 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The window can no longer stop following a run because of one odd character** (ONEUP-0153)
+  A numeric field in an engine message was checked with a test that accepts
+  characters the conversion to a number then rejects — a superscript digit, for
+  instance. The window stopped reading the rest of the run when one arrived. The
+  same gap let such a character reach the system rollback command.
+
+- **The two engines no longer disagree about where a line ends or what a counter looks like** (ONEUP-0152)
+  The new Python engine treated a stray carriage return as a line break where the
+  original does not, which could invent a reason for the "restart needed" notice.
+  Its progress-counter pattern also accepted a trailing newline the original
+  rejects, and a message could be split into two by a line break in its text.
+
+- **The check that keeps the engine and its contract in step now covers the Python engine** (ONEUP-0151)
+  The documentation check compared the message contract against the original
+  engine only, so the Python one was ungated. It now reads both and additionally
+  reports any message one engine sends and the other does not.
+
 - **A rejected request to start the update is now reported, not shown as success** (ONEUP-0150)
   If the instruction to start the update after checking its size was
   rejected as invalid, OneUp used to report a clean finish for an update

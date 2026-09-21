@@ -229,7 +229,7 @@ def run_state_holder() -> int | None:
         first = RUN_STATE.read_text(errors="replace").split("\n", 1)[0].strip()
     except OSError:
         return None
-    if not first.isdigit() or int(first) == os.getpid():
+    if not first.isdecimal() or int(first) == os.getpid():
         return None
     try:
         cmdline = Path(f"/proc/{first}/cmdline").read_bytes()

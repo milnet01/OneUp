@@ -44,7 +44,7 @@ def _parse_repos(text: str) -> list[dict]:
     repos = []
     for line in text.splitlines():
         cols = [c.strip() for c in line.split("|")]
-        if len(cols) < 7 or not cols[0].isdigit():
+        if len(cols) < 7 or not cols[0].isdecimal():
             continue
         repos.append({
             "alias": cols[1],

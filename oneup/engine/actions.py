@@ -65,7 +65,7 @@ def auth_cmnds() -> str | None:
     # from the environment, so it is pinned to digits rather than trusted: `5 *` would
     # generate `timeout 5 * zypper *`, which visudo accepts and which
     # `timeout 5 /bin/sh -c 'zypper x'` then satisfies.
-    if not refresh[1].isdigit():
+    if not refresh[1].isdecimal():
         return None
     cmds.append(" ".join(refresh) + " *")   # timeout <budget> zypper …
     cmds.append(" ".join(cache_du))         # exactly this

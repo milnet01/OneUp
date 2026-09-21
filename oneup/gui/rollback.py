@@ -80,10 +80,10 @@ class RollbackDialog(QDialog):
 
     def selected_id(self) -> str:
         """The chosen snapshot number, or "" if nothing valid is selected. Re-checks
-        isdigit() so a spliced non-numeric payload can never reach the root shell."""
+        isdecimal() so a spliced non-numeric payload can never reach the root shell."""
         item = self.list.currentItem()
         sid = item.data(Qt.UserRole) if item else ""
-        return sid if isinstance(sid, str) and sid.isdigit() else ""
+        return sid if isinstance(sid, str) and sid.isdecimal() else ""
 
     def showEvent(self, event):
         # Centre over the main window each time it opens (dialog standard).
@@ -97,14 +97,14 @@ def rollback(win):
     # pick an older one — e.g. to undo a problem that started two updates ago
     # (ONEUP-0020). Both the picker and the guard below re-check the id is a
     # bare number: it is interpolated into a root shell, so a spliced
-    # non-numeric payload must never reach it. (isdigit() also covers empty.)
+    # non-numeric payload must never reach it. (isdecimal() also covers empty.)
     target = win._snapshot
     if win._snapshots:
         dlg = RollbackDialog(win, win._snapshots, win._snapshot)
         if dlg.exec() != QDialog.Accepted:
             return
         target = dlg.selected_id()
-    if not target.isdigit():
+    if not target.isdecimal():
         return
     answer = QMessageBox.warning(
         win, "Roll back this update?",
@@ -165,7 +165,7 @@ def _on_thin_finished(win, proc: QProcess):
     for line in out.splitlines():
         if line.startswith("@@SNAPSHOTS@@|thinned|"):
             n = line.split("|")[-1]
-            removed = int(n) if n.isdigit() else None
+            removed = int(n) if n.isdecimal() else None
         elif line.startswith("@@HINT@@|"):
             QMessageBox.warning(win, "Couldn't thin snapshots", line.split("|", 1)[1])
     if removed:
