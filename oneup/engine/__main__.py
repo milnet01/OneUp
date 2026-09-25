@@ -331,10 +331,17 @@ def _pre_update_snapshot() -> None:
     if not shutil.which("snapper"):
         return
     desc = "OneUp pre-update " + time.strftime("%Y-%m-%d %H:%M")
-    _, snap_id = privilege.sudo(["snapper", "create", "--description", desc,
-                                 "--cleanup-algorithm", "number", "--print-number"])
+    rc, snap_id = privilege.sudo(["snapper", "create", "--description", desc,
+                                  "--cleanup-algorithm", "number", "--print-number"])
     snap_id = snap_id.strip()
-    if not snap_id:
+    # ONEUP-0147: only a create that SUCCEEDED may fall back to the listing. After a
+    # failed create the newest listed snapshot predates this run, and reporting it
+    # as SNAPSHOT would offer a rollback that discards everything since.
+    if rc != 0:
+        snap_id = ""
+        markers.out("Couldn't create a pre-update snapshot, so this run has no "
+                    "restore point of its own.")
+    elif not snap_id:
         _, listing = privilege.sudo(["snapper", "--no-headers", "list"])
         tail = listing.splitlines()
         snap_id = tail[-1].split()[0] if tail and tail[-1].split() else ""

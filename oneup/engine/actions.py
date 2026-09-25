@@ -535,12 +535,23 @@ def thin_snapshots() -> int:
         return 0
     privilege.sudo_init()
     before = _snapshot_count()
+    cleaned = True
     for algorithm in ("number", "timeline"):
-        privilege.sudo(["snapper", "cleanup", algorithm], merge_stderr=True, stream=True)
+        rc, _ = privilege.sudo(["snapper", "cleanup", algorithm], merge_stderr=True, stream=True)
+        cleaned = cleaned and rc == 0
     after = _snapshot_count()
-    if before is not None and after is not None and before > after:
+    # ONEUP-0189: an unreadable list is not "already satisfied". Say we could not
+    # look instead, and emit no count.
+    if before is None or after is None:
+        markers.hint("Couldn't read the list of restore points, so OneUp can't tell "
+                     "whether any were removed.")
+        return 1
+    if before > after:
         markers.out(f"Thinned {before - after} old snapshot(s) ({before} → {after}).")
         markers.marker("SNAPSHOTS", f"thinned|{before - after}")
+    elif not cleaned:
+        markers.hint("Snapper's cleanup failed, so no restore points were removed.")
+        return 1
     else:
         # Zero rather than nothing: a run that removed none still answered the
         # question, and the window has no other way to tell that from silence.
