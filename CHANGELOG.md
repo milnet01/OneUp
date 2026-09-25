@@ -8,6 +8,30 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A safety snapshot that failed is no longer offered as this update's restore point** (ONEUP-0147)
+  If taking the snapshot before an update failed (a full disk, say), OneUp
+  used to offer the newest older snapshot as this update's restore point,
+  and rolling back to it would have undone more than this update. Now it
+  says no snapshot was taken and offers none.
+
+- **Tidying old snapshots no longer says there was nothing to tidy when it failed** (ONEUP-0189)
+  If the snapshot tool could not run, OneUp reported that no snapshots
+  needed removing. It now says it couldn't read or clean up the snapshots,
+  and keeps the warning up so you can try again.
+
+- **Sizes use the right unit names, and an unknown result no longer shows as Done** (ONEUP-0190)
+  Download sizes are measured in binary units and are now labelled that
+  way (MiB, GiB), matching the package manager's own log. A step result
+  OneUp does not recognise now shows "Result unknown" instead of "Done".
+
+- **The Repositories and Roll back windows say what actually changed** (ONEUP-0157)
+  If applying repository changes failed part-way, OneUp said they had
+  probably been cancelled and kept showing what you had asked for. It now
+  checks the machine and shows each repository as it really is. The last
+  copy of a duplicated repository can no longer be removed. A roll back
+  that fails, or that is set but cannot restart the computer, now says so
+  instead of saying nothing.
+
 - **Starting a second update no longer breaks the Stop button of the first** (ONEUP-0145)
   If an update was already running and another was started (say, from a
   terminal), both claimed the same record and the first to finish deleted

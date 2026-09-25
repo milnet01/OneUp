@@ -3179,7 +3179,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lanes engine-shell + engine-steps.
 
-- 📋 [ONEUP-0147] **A pre-update snapshot that failed to create is reported as this run's rollback point.**
+- ✅ [ONEUP-0147] **A pre-update snapshot that failed to create is reported as this run's rollback point.**
   The `snapper create` return code is discarded, so a create that failed on a full
   disk or a read-only subvolume falls through to a listing whose last row predates
   the update. `@@SNAPSHOT@@` is contractually the restore point taken BEFORE this
@@ -3192,6 +3192,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Two scenarios added to tests/run-tests.sh. Owed: the same fix in
   oneup/engine/__main__.py _pre_update_snapshot on v2, then merge main
   into v2 and run the suite with ONEUP_ENGINE_CMD="python3 -m oneup.engine".
+  Resolved (2026-09-25): Python engine half on v2 2e3ae1f,
+  same wording as main 77a81e7. Suite green under both engines.
   **Layman:** If taking the safety snapshot fails, the app offers you an older one and calls it this run's restore point.
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-driver.
@@ -3347,7 +3349,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: ux.
   Source: review-code 2026-08-31, lane gui-run.
 
-- 📋 [ONEUP-0157] **Repository-manager and rollback dialogs can leave the machine partly changed and say it was cancelled.**
+- ✅ [ONEUP-0157] **Repository-manager and rollback dialogs can leave the machine partly changed and say it was cancelled.**
   `_build_apply_command` chains its three sub-commands with `&&`, so a mid-chain
   failure leaves repos disabled, none enabled and none removed — and pkexec-
   cancelled (126/127) and half-applied land in the same branch, whose wording is
@@ -3355,6 +3357,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   exit and rebuild the rows from it. Related, same dialog: the duplicate-URL Remove
   affordance has no floor, so every copy of a URL can be marked and zypper deletes
   the repository outright with its cached packages.
+  Resolved (2026-09-25): main 0adb921, v2 af2abdd. A failed
+  apply re-reads zypper lr and says what changed; the last copy
+  of a URL cannot be removed. Rollback is no longer detached:
+  each half exits 3 or 4 and the window explains it.
+  security.md's rollback row updated.
   **Layman:** If applying repository changes fails halfway, the app says it was probably cancelled and the switches still show what you asked for.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-services.
@@ -3835,7 +3842,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: chore.
   Source: review-code 2026-08-31, lanes engine-driver, engine-privilege, engine-shell, engine-steps, gui-theme.
 
-- 📋 [ONEUP-0189] **thin_snapshots swallows every failure and reports "already satisfied".**
+- ✅ [ONEUP-0189] **thin_snapshots swallows every failure and reports "already satisfied".**
   In `update_system.sh`'s `thin_snapshots`, both `snapper cleanup` calls end in
   `|| true` and both `sudo_capture list` statuses are ignored, so a snapper that
   cannot run at all leaves the before and after counts at zero and the step reports
@@ -3850,11 +3857,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   "Couldn't thin snapshots" and keeps the banner. Owed: the same fix in
   oneup/engine/actions.py thin_snapshots on v2 (_snapshot_count already
   returns None on failure), with the same English wording.
+  Resolved (2026-09-25): Python engine half on v2 2e3ae1f.
+  The 7 checks main added failed under the Python engine first,
+  then passed.
   **Layman:** If tidying old snapshots fails, the app says there was nothing to tidy.
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-shell.
 
-- 📋 [ONEUP-0190] **The window's unknown-status badge and size wording claim more than they know.**
+- ✅ [ONEUP-0190] **The window's unknown-status badge and size wording claim more than they know.**
   `oneup/gui/markers.py`'s `_step_badge` treats every status that is not `fail` or
   `skip` as a success and falls through to "Done", where the marker protocol says
   the field is exactly one of `ok`, `skip`, `fail` — a closed vocabulary, so this
@@ -3870,6 +3880,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   own MiB in the log pane. tests/gui-smoke.py asserts "MB" strings from
   _format_size and must change with it. The SIZE marker's text comes from
   the engine, not _format_size, so that assertion stays. Not started.
+  Resolved (2026-09-25): main 4d27f14, v2 98072a2. Unknown
+  status badges "Result unknown"; sizes labelled GiB/MiB/KiB.
   **Layman:** An unrecognised result shows as "Done", and sizes are labelled with the wrong unit names.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-run.
@@ -4793,6 +4805,13 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Decided (2026-09-18, user): a fix, 1.4.6 + 2.0.0. Its contents are defects,
   most of them in main's updater.py (e.g. no default button on the reboot
   confirmation).
+  Progress (2026-09-25): ONEUP-0157 moved the rollback onto a
+  QProcess that connects only `finished`, like repos.py, so the
+  missing-pkexec case here now covers rollback.py's rollback too.
+  Seen in both window suites: after "Passed", callbacks such as
+  _on_size_finished and _on_auth_status_finished run on a QProcess
+  or button already deleted ("Internal C++ object ... already
+  deleted"). The exit code stays 0; it is the same lifetime class.
   **Layman:** A set of small window defects: text that could render as markup, dialogs where Enter picks the wrong button, and objects that are never released.
   Kind: chore.
   Source: review-code 2026-08-31, lanes gui-window, gui-run, gui-services.
