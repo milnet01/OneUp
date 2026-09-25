@@ -37,6 +37,7 @@ exist yet, and saying so is the point.
 | `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `bump-test.py` (version lockstep), `docs-check.py` (the documentation rules a script can settle). |
 | `githooks/` | Repo-local git hooks. One file: `pre-push`. Not active until `git config core.hooksPath githooks`. |
 | `screenshots/` | Images the README and the app-store metadata point at. |
+| `branding/` | The OneUp wordmark, for pages outside this repository that show the project. Nothing in the app or its packages reads it. |
 | `.github/workflows/` | GitHub CI. One file: `release.yml`, triggered by a `v*` tag. |
 | `.ants/`, `.obs/` | Tooling configuration, not application code. |
 | *(root dotfiles)* | `.gitignore`, `.ants_review_falsepos.jsonl` — tooling state that has to sit at the root to be found. |
