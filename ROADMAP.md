@@ -3968,7 +3968,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 **Theme:** fixes for the 1.4 app people use today, landed on `main`. No
 features: those wait for 2.0 (`docs/standards/workflow.md` §1).
 
-- 📋 [ONEUP-0202] **security.md still states the root-shell rollback guard as str.isdigit(), which is now false.**
+- ✅ [ONEUP-0202] **security.md still states the root-shell rollback guard as str.isdigit(), which is now false.**
   The privileged-call table's `Updater.rollback` row and the worked excerpt
   beside it both name `str.isdigit()`. ONEUP-0153 changed that guard to
   `isdecimal()` on both codebases (main 61036f8, v2 873a84a), so the standard
@@ -3982,6 +3982,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
 
   A gated edit — it changes what a conformer writes, so `CLAUDE.md` rule 14
   applies: `review-contract docs/standards/security.md --genre standard`.
+  Resolved (2026-09-25): main c0935b1, merged to v2. The table row and the
+  §4.1 excerpt now name isdecimal() and say why isdigit() is weaker. Not
+  gated: rule 14's existing-code exception applies, because the guard
+  already ships on both branches.
   **Layman:** A security rule still describes the old, weaker check, so the next person could copy it back in.
   Kind: doc-fix.
   Source: close-findings sweep 2026-09-21, collateral of ONEUP-0153.
