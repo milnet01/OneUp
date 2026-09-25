@@ -279,6 +279,13 @@ def main() -> int:
     check("_format_duration formats seconds", markers._format_duration(42) == "42s")
     check("_format_duration formats minutes", markers._format_duration(65) == "1m 5s")
     check("_format_duration handles sub-second", markers._format_duration(0) == "<1s")
+    # ONEUP-0190: sizes are binary, so they carry binary unit names.
+    check("_format_size labels binary units",
+          (markers._format_size(512 << 10), markers._format_size(41 << 20),
+           markers._format_size(3 << 29)) == ("512 KiB", "41 MiB", "1.5 GiB"))
+    # ONEUP-0190: a status outside ok / skip / fail earned no "Done".
+    check("an unrecognised step status badges as unknown, not a success",
+          markers._step_badge("spliced", "3 packages updated") == "Result unknown")
     check("flatpak row badge = 'Up to date'", w.rows["flatpak"].badge.text() == "Up to date")
     check("firmware skip badge = 'Not installed'",
           w.rows["firmware"].badge.text() == "Not installed")
@@ -370,7 +377,7 @@ def main() -> int:
         check("the liveness line is visible during a run", wL.activity.isVisibleTo(wL))
         # Bytes: the download phase is the only place in a run where a figure exists at all.
         run.handle_line(wL, "@@PROGRESS@@|system|12|141|download|41943040|397410304")
-        check("the download says how much of how much", "40 MB of 379 MB" in wL.activity.text())
+        check("the download says how much of how much", "40 MiB of 379 MiB" in wL.activity.text())
         check("the byte total is remembered", wL._dl_total == 397410304)
         # A rate needs both movement and elapsed time to divide by.
         run.handle_line(wL, "@@PROGRESS@@|system|24|141|download|83886080|397410304")
@@ -432,7 +439,7 @@ def main() -> int:
         (Path(cache_dir) / "pkg.rpm").write_bytes(b"x" * (20 * 1024 * 1024))
         run._tick_activity(wC)
         check("the download is measured even though zypper reported no size",
-              "20 MB of 86 MB" in wC.activity.text())
+              "20 MiB of 86 MiB" in wC.activity.text())
         # Packages already cached sit inside the baseline: zypper won't re-fetch them, so
         # counting them would overstate progress and flatter the rate.
         wC2 = window.Updater()
@@ -444,7 +451,7 @@ def main() -> int:
         run.handle_line(wC2, "@@PROGRESS@@|system|1|0|download|0|90596966")
         run._tick_activity(wC2)
         check("already-cached packages are excluded from this run's figure",
-              "20 MB" not in wC2.activity.text())
+              "20 MiB" not in wC2.activity.text())
     finally:
         paths.ZYPP_PACKAGE_CACHE = _orig_cache
         shutil.rmtree(cache_dir, ignore_errors=True)

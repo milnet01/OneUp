@@ -30,6 +30,10 @@ def _step_badge(status: str, detail: str) -> str:
         return "Failed"
     if status == "skip":
         return "Not installed" if "not installed" in detail.lower() else "Skipped"
+    # ONEUP-0190: the status field is exactly one of ok / skip / fail. Anything
+    # else earned no success badge, so say we cannot tell rather than "Done".
+    if status != "ok":
+        return "Result unknown"
     d = detail.lower()
     if any(w in d for w in ("up to date", "already", "nothing")):
         return "Up to date"
@@ -49,11 +53,15 @@ def _format_duration(secs: int) -> str:
     return f"{secs // 60}m {secs % 60}s"
 
 def _format_size(n: int) -> str:
-    """A compact human size: '900 B', '512 KB', '41 MB', '1.4 GB'."""
+    """A compact human size: '900 B', '512 KiB', '41 MiB', '1.4 GiB'.
+
+    Binary units, labelled as such (ONEUP-0190) — the same MiB zypper prints in
+    the log pane, so the two figures agree.
+    """
     if n >= 1 << 30:
-        return f"{n / (1 << 30):.1f} GB"
+        return f"{n / (1 << 30):.1f} GiB"
     if n >= 1 << 20:
-        return f"{n / (1 << 20):.0f} MB"
+        return f"{n / (1 << 20):.0f} MiB"
     if n >= 1 << 10:
-        return f"{n / (1 << 10):.0f} KB"
+        return f"{n / (1 << 10):.0f} KiB"
     return f"{n} B"
