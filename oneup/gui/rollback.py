@@ -113,9 +113,40 @@ def rollback(win):
         "\n\nContinue?",
         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
     if answer == QMessageBox.Yes:
-        QProcess.startDetached(
+        # ONEUP-0157: each half exits with its own code, so a failure says which
+        # half failed — a set rollback whose restart failed is half-done, and the
+        # user must be told to restart rather than left to assume nothing changed.
+        win._rollback_proc = QProcess(win)
+        win._rollback_proc.finished.connect(
+            lambda code, _status=None, t=target: _on_rollback_finished(win, code, t))
+        win._rollback_proc.start(
             "pkexec", ["sh", "-c",
-                       f"snapper rollback {target} && systemctl reboot"])
+                       f"snapper rollback {target} || exit 3; systemctl reboot || exit 4"])
+
+
+def _on_rollback_finished(win, code: int, target: str):
+    """Say what a rollback that did not end in a restart actually did."""
+    if code == 0:
+        return   # the restart is under way
+    if code in (126, 127):   # pkexec: prompt dismissed, or not authorised
+        QMessageBox.information(
+            win, "Roll back",
+            "Nothing was changed — the administrator prompt was cancelled or refused.")
+    elif code == 3:
+        QMessageBox.warning(
+            win, "Roll back",
+            f"Snapper couldn't roll back to restore point #{target}, so OneUp "
+            "did not restart the computer.")
+    elif code == 4:
+        QMessageBox.warning(
+            win, "Roll back",
+            f"Restore point #{target} is set, but the restart failed. Restart the "
+            "computer yourself to finish the rollback.")
+    else:
+        QMessageBox.warning(
+            win, "Roll back",
+            f"The rollback ended unexpectedly (exit code {code}). Before restarting, "
+            "check the restore points with: sudo snapper list")
 
 
 def _thin_snapshots(win):

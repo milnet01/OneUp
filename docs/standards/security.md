@@ -122,7 +122,7 @@ update run:
 | --- | --- | --- |
 | `RepoManagerDialog._build_apply_command` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must match `_ALIAS_RE`, else the whole command is `None` and nothing runs |
 | `Updater.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped; and every **session-critical** unit removed before the command is built (§4.6) |
-| `Updater.rollback` | `pkexec sh -c "snapper rollback <id> && systemctl reboot"` | `id` must satisfy `str.isdecimal()` — never `isdigit()`, which also accepts superscript digits such as `²` |
+| `Updater.rollback` | `pkexec sh -c "snapper rollback <id> \|\| exit 3; systemctl reboot \|\| exit 4"` | `id` must satisfy `str.isdecimal()` — never `isdigit()`, which also accepts superscript digits such as `²` |
 
 One more privileged action does not go through `pkexec` at all and must not be forgotten
 when this list is checked:

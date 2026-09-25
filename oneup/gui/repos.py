@@ -109,7 +109,8 @@ class RepoManagerDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Repositories")
         self.setMinimumWidth(720)   # wide enough that repo URLs aren't cut off
-        self._rows: list[dict] = []   # {repo, switch, remove(bool), frame}
+        self._rows: list[dict] = []   # {repo, switch, remove(bool), frame, rm}
+        self._repos = repos           # the state the rows were built from
         self._proc: QProcess | None = None
 
         # Remember the size the user last left this dialog at (position is always
@@ -121,9 +122,6 @@ class RepoManagerDialog(QDialog):
         else:
             self.resize(780, 560)
 
-        # A URL used by more than one repository is the duplicate we can clean up.
-        url_counts = Counter(r["url"] for r in repos if r["url"])
-
         root = QVBoxLayout(self)
         intro = QLabel(
             "Turn repositories on or off. ⚠ marks a URL used by more than one "
@@ -132,26 +130,19 @@ class RepoManagerDialog(QDialog):
         intro.setWordWrap(True)
         root.addWidget(intro)
 
-        inner = QWidget()
-        lst = QVBoxLayout(inner)
-        lst.setSpacing(6)
-        for repo in repos:
-            is_dup = bool(repo["url"]) and url_counts[repo["url"]] > 1
-            lst.addWidget(self._make_row(repo, is_dup))
-        lst.addStretch(1)
         scroll = QScrollArea()
         # Named as well as described (ONEUP-0076): the focus cue is keyed to
         # object names, and an unnamed OneUp-built focusable widget is a widget
         # the sweep fails rather than one it excuses.
         scroll.setObjectName("RepoScroll")
         scroll.setWidgetResizable(True)
-        scroll.setWidget(inner)
         scroll.setMinimumHeight(280)
         scroll.setAccessibleName("Repository list")
         # Named `repo_scroll`, not `scroll`: a plain `self.scroll` shadows the
         # inherited QWidget.scroll(dx, dy), so any later call to it would raise
         # TypeError. Matches `detail_scroll` in task_row.py.
         self.repo_scroll = scroll
+        self._populate(repos)
         root.addWidget(scroll, 1)
 
         strip = QFrame()
@@ -168,6 +159,22 @@ class RepoManagerDialog(QDialog):
         btns.addWidget(self.apply_btn)
         btns.addWidget(self.close_btn)
         root.addWidget(strip)
+
+    def _populate(self, repos: list[dict]):
+        """(Re)build one row per repository — at open, and after a failed apply so
+        the rows show the machine's real state rather than what was asked for."""
+        self._repos = repos
+        self._rows = []
+        # A URL used by more than one repository is the duplicate we can clean up.
+        url_counts = Counter(r["url"] for r in repos if r["url"])
+        inner = QWidget()
+        lst = QVBoxLayout(inner)
+        lst.setSpacing(6)
+        for repo in repos:
+            is_dup = bool(repo["url"]) and url_counts[repo["url"]] > 1
+            lst.addWidget(self._make_row(repo, is_dup))
+        lst.addStretch(1)
+        self.repo_scroll.setWidget(inner)   # takes ownership and deletes the old list
 
     def _make_row(self, repo: dict, is_dup: bool) -> QFrame:
         fr = QFrame()
@@ -191,9 +198,10 @@ class RepoManagerDialog(QDialog):
         text.addWidget(url)
         lay.addLayout(text, 1)
 
-        entry: dict = {"repo": repo, "remove": False, "frame": fr}
+        entry: dict = {"repo": repo, "remove": False, "frame": fr, "rm": None}
         if is_dup:
             rm = QPushButton("Remove")
+            entry["rm"] = rm
             rm.setObjectName("LinkBtn")
             rm.setCursor(Qt.PointingHandCursor)
             rm.clicked.connect(lambda _=False, e=entry: self._mark_removed(e))
@@ -209,8 +217,15 @@ class RepoManagerDialog(QDialog):
         return fr
 
     def _mark_removed(self, entry: dict):
+        url = entry["repo"]["url"]
+        kept = [e for e in self._rows
+                if e["repo"]["url"] == url and not e["remove"] and e is not entry]
+        if not kept:
+            return   # ONEUP-0157: the last copy of a URL is never removable
         entry["remove"] = True
         entry["frame"].setEnabled(False)   # grey it out; excluded from the toggle diff
+        if len(kept) == 1 and kept[0]["rm"] is not None:
+            kept[0]["rm"].setEnabled(False)   # keep one copy: no Remove on the last
 
     def _build_apply_command(self) -> list[str] | None:
         """The single pkexec command that applies every change, [] if there's
@@ -261,10 +276,26 @@ class RepoManagerDialog(QDialog):
         if code == 0:
             QMessageBox.information(self, "Repositories", "Repository changes applied.")
             self.accept()
+            return
+        # ONEUP-0157: the sub-commands run in sequence, so a failure part-way leaves
+        # some changes made. Re-read the machine rather than guess, and say which.
+        before = {r["alias"]: r["enabled"] for r in self._repos}
+        now_repos = read_repos()
+        if not now_repos:
+            text = ("Couldn't apply every change, and couldn't re-read the repositories "
+                    "to check what did change. Close and reopen this window to see.")
         else:
-            QMessageBox.warning(self, "Repositories",
-                                "Couldn't apply the changes — they may have been cancelled.")
-            self.apply_btn.setEnabled(True)
+            now = {r["alias"]: r["enabled"] for r in now_repos}
+            if now != before:
+                text = ("Some of the changes were applied and some weren't. The list "
+                        "now shows each repository as it actually is.")
+            elif code in (126, 127):   # pkexec: prompt dismissed, or not authorised
+                text = "Nothing was changed — the administrator prompt was cancelled or refused."
+            else:
+                text = "Nothing was changed — the repository commands failed."
+            self._populate(now_repos)
+        QMessageBox.warning(self, "Repositories", text)
+        self.apply_btn.setEnabled(True)
 
     def showEvent(self, event):
         # Centre over the main window each time it opens (size is restored from

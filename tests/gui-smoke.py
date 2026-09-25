@@ -1340,6 +1340,71 @@ def main() -> int:
     check("an unsafe repo alias refuses to build a command",
           dlg_bad._build_apply_command() is None)
 
+    # ONEUP-0157: one copy of a duplicated URL always stays.
+    dlg_f = repos.RepoManagerDialog(None, parsed)
+    dlg_f._mark_removed(dlg_f._rows[1])
+    check("removing one copy disables Remove on the last copy",
+          not dlg_f._rows[2]["rm"].isEnabled())
+    dlg_f._mark_removed(dlg_f._rows[2])
+    check("the last copy of a URL cannot be marked for removal",
+          dlg_f._rows[2]["remove"] is False
+          and "removerepo debug-dup" not in (dlg_f._build_apply_command() or ["", "", "", ""])[3])
+
+    # ONEUP-0157: a failed apply re-reads the machine and says what it found.
+    def _failed_apply(code, now_repos):
+        d = repos.RepoManagerDialog(None, parsed)
+        said = []
+        _w, _r = QMessageBox.warning, repos.read_repos
+        QMessageBox.warning = staticmethod(lambda _p, _t, text, *a, **k: said.append(text))
+        repos.read_repos = lambda: now_repos
+        try:
+            d._on_applied(code, None)
+        finally:
+            QMessageBox.warning, repos.read_repos = _w, _r
+        return d, " ".join(said)
+    half = [dict(r) for r in parsed]
+    half[0]["enabled"] = False                  # the disable landed ...
+    half = [r for r in half if r["alias"] != "debug-dup"] + [dict(parsed[2])]  # ... the remove didn't
+    d, said = _failed_apply(1, half)
+    check("a half-applied change is reported as partly applied",
+          "Some of the changes were applied" in said and "cancelled" not in said)
+    check("after a half-applied change the rows show the real state",
+          d._rows[0]["switch"].isChecked() is False)
+    _d, said = _failed_apply(126, [dict(r) for r in parsed])
+    check("a dismissed prompt with nothing changed says so",
+          "Nothing was changed" in said and "cancelled" in said)
+    _d, said = _failed_apply(1, [dict(r) for r in parsed])
+    check("a failure that changed nothing does not blame a cancel",
+          "Nothing was changed" in said and "cancelled" not in said)
+    _d, said = _failed_apply(1, [])
+    check("an unreadable result claims neither outcome",
+          "couldn't re-read" in said)
+
+    # ONEUP-0157: a rollback reports which half failed instead of saying nothing.
+    wr = window.Updater()
+    wr._snapshot = "42"
+    started, said = [], []
+    _warn, _info, _start = QMessageBox.warning, QMessageBox.information, QProcess.start
+    QMessageBox.warning = staticmethod(
+        lambda _p, _t, text, *a, **k: (said.append(text), QMessageBox.Yes)[1])
+    QMessageBox.information = staticmethod(lambda _p, _t, text, *a, **k: said.append(text))
+    QProcess.start = lambda self, prog, args=None, *a, **k: started.append([prog, *(args or [])])
+    try:
+        rollback.rollback(wr)
+        check("rollback gives each half its own exit code",
+              bool(started) and started[0][-1]
+              == "snapper rollback 42 || exit 3; systemctl reboot || exit 4")
+        for code, want in ((126, "cancelled"), (3, "couldn't roll back"),
+                           (4, "restart failed"), (9, "exit code 9")):
+            said.clear()
+            rollback._on_rollback_finished(wr, code, "42")
+            check(f"rollback exit {code} is explained", want in " ".join(said))
+        said.clear()
+        rollback._on_rollback_finished(wr, 0, "42")
+        check("a rollback that is restarting says nothing", said == [])
+    finally:
+        QMessageBox.warning, QMessageBox.information, QProcess.start = _warn, _info, _start
+
     # --- failure-hint "Copy command" fallback ---------------------------------
     E = banners._extract_command
     check("extract_command pulls the runnable command",
