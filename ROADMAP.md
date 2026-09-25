@@ -3186,6 +3186,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   run, and the window's picker offers it — rolling back to it discards everything
   since. Present in both engines. Keep the fallback for the listing; check the
   create's status and emit no SNAPSHOT marker when it failed.
+  Progress (2026-09-25): Bash engine half on main 77a81e7 — the create's
+  status is checked; no SNAPSHOT marker after a failed create; the listing
+  fallback stays for a create that succeeds without printing a number.
+  Two scenarios added to tests/run-tests.sh. Owed: the same fix in
+  oneup/engine/__main__.py _pre_update_snapshot on v2, then merge main
+  into v2 and run the suite with ONEUP_ENGINE_CMD="python3 -m oneup.engine".
   **Layman:** If taking the safety snapshot fails, the app offers you an older one and calls it this run's restore point.
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-driver.
@@ -3838,6 +3844,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   as the firmware and orphans cases fixed on 2026-08-31, on the one path the user
   reaches from a disk-space warning. Check the capture status and report a distinct
   failure rather than reusing the already-satisfied wording.
+  Progress (2026-09-25): Bash engine half on main 77a81e7. An unreadable
+  list, or a failed cleanup that removed nothing, emits a HINT and exits 1.
+  The window needed no change: _on_thin_finished already shows a HINT as
+  "Couldn't thin snapshots" and keeps the banner. Owed: the same fix in
+  oneup/engine/actions.py thin_snapshots on v2 (_snapshot_count already
+  returns None on failure), with the same English wording.
   **Layman:** If tidying old snapshots fails, the app says there was nothing to tidy.
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-shell.
@@ -3852,6 +3864,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   GB, MB and KB, overstating every figure by about 7% at the GB rung, where
   wording-and-translation.md §4 says numbers are what was measured. Either label
   them GiB/MiB/KiB or divide by powers of 1000.
+  Decided (2026-09-25): an unrecognised STEP_END status gets the badge
+  "Result unknown" instead of falling through to "Done". Sizes keep their
+  binary arithmetic and are relabelled GiB / MiB / KiB, matching zypper's
+  own MiB in the log pane. tests/gui-smoke.py asserts "MB" strings from
+  _format_size and must change with it. The SIZE marker's text comes from
+  the engine, not _format_size, so that assertion stays. Not started.
   **Layman:** An unrecognised result shows as "Done", and sizes are labelled with the wrong unit names.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-run.
