@@ -64,7 +64,7 @@ update run:
 | --- | --- | --- |
 | `RepoManagerDialog._build_apply_command` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must match `_ALIAS_RE`, else the whole command is `None` and nothing runs |
 | `Updater.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped; and every **session-critical** unit removed before the command is built (§4.6) |
-| `Updater.rollback` | `pkexec sh -c "snapper rollback <id> && systemctl reboot"` | `id` must satisfy `str.isdigit()` |
+| `Updater.rollback` | `pkexec sh -c "snapper rollback <id> && systemctl reboot"` | `id` must satisfy `str.isdecimal()` — never `isdigit()`, which also accepts superscript digits such as `²` |
 
 One more privileged action does not go through `pkexec` at all and must not be forgotten
 when this list is checked:
@@ -213,7 +213,8 @@ _ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
 # …used as: if not _ALIAS_RE.fullmatch(alias): return None
 
 # Updater.rollback — the rollback target is interpolated into a root shell.
-if not target.isdigit(): return          # isdigit() also rejects empty
+if not target.isdecimal(): return        # isdecimal() also rejects empty
+# Not isdigit(): it also accepts superscript digits ('²'), which int() refuses (ONEUP-0153).
 
 # Updater.restart_services — service units, argv form. The first character class excludes
 # '-' so a spliced token cannot be read as a systemctl option; the startswith test repeats
