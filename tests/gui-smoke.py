@@ -1364,7 +1364,8 @@ def main() -> int:
         return d, " ".join(said)
     half = [dict(r) for r in parsed]
     half[0]["enabled"] = False                  # the disable landed ...
-    half = [r for r in half if r["alias"] != "debug-dup"] + [dict(parsed[2])]  # ... the remove didn't
+    # ... the remove didn't:
+    half = [r for r in half if r["alias"] != "debug-dup"] + [dict(parsed[2])]
     d, said = _failed_apply(1, half)
     check("a half-applied change is reported as partly applied",
           "Some of the changes were applied" in said and "cancelled" not in said)
