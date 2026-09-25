@@ -1034,16 +1034,25 @@ thin_snapshots() {
         return 0
     fi
     sudo_init
-    local before after list
-    sudo_capture list snapper --no-headers list
+    local before after list listed=true cleaned=true
+    sudo_capture list snapper --no-headers list || listed=false
     before=$(grep -c . <<<"$list")
-    sudo snapper cleanup number   2>&1 || true
-    sudo snapper cleanup timeline 2>&1 || true
-    sudo_capture list snapper --no-headers list
+    sudo snapper cleanup number   2>&1 || cleaned=false
+    sudo snapper cleanup timeline 2>&1 || cleaned=false
+    sudo_capture list snapper --no-headers list || listed=false
     after=$(grep -c . <<<"$list")
-    if [[ "$before" =~ ^[0-9]+$ && "$after" =~ ^[0-9]+$ ]] && (( before > after )); then
+    # ONEUP-0189: an unreadable list counts zero before and after, which is the
+    # "already satisfied" shape. Say we could not look instead, and emit no count.
+    if ! $listed; then
+        marker HINT "Couldn't read the list of restore points, so OneUp can't tell whether any were removed."
+        return 1
+    fi
+    if (( before > after )); then
         echo "Thinned $(( before - after )) old snapshot(s) ($before → $after)."
         marker SNAPSHOTS "thinned|$(( before - after ))"
+    elif ! $cleaned; then
+        marker HINT "Snapper's cleanup failed, so no restore points were removed."
+        return 1
     else
         echo "No snapshots needed thinning — snapper's retention policy is already satisfied."
         marker SNAPSHOTS "thinned|0"
@@ -1125,13 +1134,22 @@ fi
 if step_selected system && command -v snapper &>/dev/null; then
     # Create a clearly-labelled rollback point so the pre-update state is easy to
     # find later. (Tumbleweed also auto-snapshots around zypper, but a named entry
-    # is unambiguous.) Fall back to reporting the newest snapshot if create fails.
+    # is unambiguous.) Fall back to the newest listed snapshot only when the create
+    # succeeds without printing its number.
     # The description is built FIRST: a nested `$(date …)` inside the capture would
     # fork a subshell and cost an extra password prompt (see sudo_capture).
     SNAP_DESC="OneUp pre-update $(date '+%Y-%m-%d %H:%M')"
+    # ONEUP-0147: only a create that SUCCEEDED may fall back to the listing. After a
+    # failed create the newest listed snapshot predates this run, and reporting it as
+    # SNAPSHOT would offer a rollback that discards everything since.
+    # Kept at the start of its line: the suite's privileged call-site count reads it there.
+    SNAP_CREATED=true
     sudo_capture SNAP_ID snapper create --description "$SNAP_DESC" \
-        --cleanup-algorithm number --print-number
-    if [[ -z "$SNAP_ID" ]]; then
+        --cleanup-algorithm number --print-number || SNAP_CREATED=false
+    if ! $SNAP_CREATED; then
+        SNAP_ID=""
+        echo "Couldn't create a pre-update snapshot, so this run has no restore point of its own."
+    elif [[ -z "$SNAP_ID" ]]; then
         sudo_capture SNAP_LIST snapper --no-headers list
         SNAP_ID=$(tail -n1 <<<"$SNAP_LIST" | awk '{print $1}')
     fi
