@@ -2895,6 +2895,39 @@ check "thin with a stable count reports zero removed" "@@SNAPSHOTS@@|thinned|0" 
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0189: a snapper that cannot list gives zero before and zero after. That must not
+# read as "retention policy already satisfied" — the engine never looked.
+echo "TEST: --thin-snapshots that cannot read the snapshot list reports a failure, not zero"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/snapper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in *cleanup*) exit 0 ;; esac
+[[ "$1" == "--no-headers" ]] && { echo "snapper: IO error" >&2; exit 1; }
+exit 0
+EOF
+chmod +x "$d/snapper"
+out=$(run_engine "$d" --thin-snapshots); rc=$?
+check_absent "unreadable list: no thinned count is claimed" "@@SNAPSHOTS@@|thinned" "$out"
+check "unreadable list: the user is told why" "@@HINT@@|" "$out"
+check_eq "unreadable list: the pass exits non-zero" "1" "$rc"
+rm -rf "$d"
+
+echo "TEST: --thin-snapshots whose cleanup fails and removes nothing reports a failure"
+d=$(mktemp -d); setup_common "$d"   # default list answers; only cleanup is broken
+cat > "$d/snapper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in *cleanup*) echo "snapper: cleanup failed" >&2; exit 1 ;; esac
+[[ "$1" == "--no-headers" ]] && { echo "40 | single"; exit 0; }
+exit 0
+EOF
+chmod +x "$d/snapper"
+out=$(run_engine "$d" --thin-snapshots); rc=$?
+check_absent "failed cleanup: no thinned count is claimed" "@@SNAPSHOTS@@|thinned" "$out"
+check "failed cleanup: the user is told why" "@@HINT@@|" "$out"
+check_eq "failed cleanup: the pass exits non-zero" "1" "$rc"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: engine enumerates recent snapshots for the rollback picker (ONEUP-0020)"
 d=$(mktemp -d); setup_common "$d"
 # `create --print-number` -> 100 (the pre-update point). The machine-readable CSV
@@ -2928,6 +2961,45 @@ check "picker lists the pre-update snapshot" \
 check "picker lists an older snapshot" \
     "@@SNAPSHOT_ITEM@@|98|2026-07-20 09:00:00|OneUp pre-update 2026-07-20 09:00" "$out"
 check_absent "picker skips snapshot 0 (the live 'current' entry)" "@@SNAPSHOT_ITEM@@|0|" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0147: @@SNAPSHOT@@ is the restore point taken BEFORE this run. When the create
+# fails, the newest listed snapshot predates the update — offering it as this run's
+# rollback point would discard everything since. The picker still lists real snapshots.
+echo "TEST: a failed pre-update snapshot is not reported as this run's rollback point"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/snapper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$*" == *--print-number* ]] && { echo "snapper: disk full" >&2; exit 1; }
+if [[ "$*" == *--columns* ]]; then
+    echo "number,date,description"
+    echo "40,2026-07-20 09:00:00,older"
+    exit 0
+fi
+[[ "$1" == "--no-headers" ]] && { echo "40 | single"; exit 0; }
+exit 0
+EOF
+printf '#!/usr/bin/env bash\ncase "$*" in *dup*|*update*) echo "Nothing to do."; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
+chmod +x "$d/snapper" "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check_absent "failed create: no SNAPSHOT marker" "@@SNAPSHOT@@|" "$out"
+check "failed create: the picker still lists real restore points" \
+    "@@SNAPSHOT_ITEM@@|40|" "$out"
+rm -rf "$d"
+
+echo "TEST: a create that succeeds without printing its number still finds it"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/snapper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$*" == *--print-number* ]] && exit 0
+[[ "$1" == "--no-headers" ]] && { printf '39 | single\n41 | single\n'; exit 0; }
+exit 0
+EOF
+printf '#!/usr/bin/env bash\ncase "$*" in *dup*|*update*) echo "Nothing to do."; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
+chmod +x "$d/snapper" "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check "silent create: the newest listed snapshot is reported" "@@SNAPSHOT@@|41" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
