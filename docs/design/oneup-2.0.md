@@ -369,7 +369,7 @@ correctly under this order: it marks tables 0072 built.
 | Item | Branch | Why |
 | --- | --- | --- |
 | **The 2.0.0 release itself** | `v2` merges **into** `main` | `release.sh` refuses any branch but `main` and pushes `origin main`, and `docs/standards/workflow.md` §2 otherwise forbids that direction — so the merge is a one-off, taken deliberately once G1–G10 pass, and it is the moment `main` unfreezes. Nothing automates it |
-| Documentation (this set) | `main` | The standards govern 1.x maintenance too, and `v2` inherits them by merge. Docs are not a release, so they are unaffected by the freeze. A *later* doc edit that a rule binds to code only `v2` has goes to `v2` instead — `docs/standards/workflow.md` §9 owns the two rules that bind it |
+| Documentation (this set) | `main` | The standards govern 1.x maintenance too, and `v2` inherits them by merge. Docs are not a release, so they are unaffected by the freeze. A *later* doc edit that a rule binds to code only `v2` has goes to `v2` instead — `docs/standards/workflow.md` §9 owns the rules that bind it |
 | **Everything in §1** | **`v2`** | Under the freeze (§5.4) `main` takes nothing but qualifying bug fixes, so every 2.0 item — including the GUI split — belongs on the branch |
 | A behaviour-neutral **test-harness** change §1.2 has granted | `main` first | `docs/standards/workflow.md` §1.2 defines each one and its conditions, and names three. The first is the `ONEUP_ENGINE_CMD` indirection (`ONEUP-0054` §4.4), which must be shown to leave the suite green on `main` before either engine depends on it |
 
@@ -554,8 +554,9 @@ indistinguishable from no groundwork by the time somebody contributes Hebrew.
 - **Long-branch drift** — mitigated by the freeze itself (§5.4): a `main` that takes only
   qualifying bug fixes cannot drift far, and each one is merged into `v2` on release.
 - **The freeze leaks.** The failure mode of any freeze is a slow slide back into 1.x
-  work, one "small" fix at a time. §5.4's definition is deliberately testable — *can
-  people still install their updates?* — so the answer is a finding, not a preference.
+  work, one "small" fix at a time. The freeze's test (`docs/standards/workflow.md` §1.1) is
+  deliberately checkable — *is it a fix, a feature request, or neither?* — so the answer is
+  a finding, not a preference.
 - **A rewrite that buys less than claimed.** The ONEUP-0054 draft is unusually honest
   about this and its §2 should survive review intact: nothing that went wrong in
   ONEUP-0048 was Bash's fault, and Python still cannot kill a root child.

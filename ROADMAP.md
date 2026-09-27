@@ -4316,7 +4316,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: test.
   Source: in-session-2026-08-12.
 
-- 📋 [ONEUP-0103] **Every document still sends the reader to /cold-eyes, which no longer exists.**
+- ✅ [ONEUP-0103] **Every document still sends the reader to /cold-eyes, which no longer exists.**
   Raised as a lane open question during documentation.md's review gate
   2026-08-12, then verified: /home/ants/.claude/skills/cold-eyes does not
   exist. The global rules record that `review-contract` replaced it on
@@ -4345,6 +4345,11 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   implements it now. The second is much cheaper and needs no exception.
 
   Recommend the second.
+  Resolved (2026-09-27, main, 2bffce1): the user chose the cheaper
+  option. "Cold-eyes" stays as this project's name for the gate, and
+  documentation.md §7 now says once that the review-contract skill runs
+  it, and that older text saying /cold-eyes means review-contract.
+  Loop-log rows and the headings docs-check.py matches are unchanged.
   **Layman:** Our docs tell you to run a review tool that has been renamed and deleted; anyone following them hits nothing.
   Kind: doc-fix.
   Source: in-session-2026-08-12.
@@ -4651,7 +4656,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: test.
   Source: in-session-2026-08-25.
 
-- 📋 [ONEUP-0130] **Name the third binding that sends a documentation edit to `v2`.**
+- ✅ [ONEUP-0130] **Name the third binding that sends a documentation edit to `v2`.**
   docs/standards/workflow.md §9 says documentation goes to `main` unless a
   rule binds it to code that cannot, names two such rules — a marker change,
   and a docs-check-walked document that must NAME a file 2.0 creates — and
@@ -4674,6 +4679,15 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
 
   Decide whether the third binding is worth naming, or whether §9 should
   instead say it routes a CHANGE and is silent where one branch needs none.
+  Resolved (2026-09-27, main 026b5cd, gated in loops 18-20): workflow.md
+  §9 names the third binding. A passage whose truth depends on code only
+  v2 has goes to each branch's own copy, main keeps what is true of
+  main, and a merge of main into v2 keeps v2's side. The gate hit a calm
+  cap (findings 4 → 4 → 2): eight fixed, two filed (non-atomic push on
+  ONEUP-0186, and ONEUP-0213). NEXT under this rule: ONEUP-0133, 0193
+  and 0194, plus the v2 half of ONEUP-0211, are corrections to v2's OWN
+  copies of workflow.md §6 and testing.md §1 and land on v2 only. main's
+  text is true of main.
   **Layman:** The rule that decides which branch a documentation fix goes to is missing a case we keep hitting, so write that case down.
   Kind: doc.
   Source: in-session-2026-08-25 (review-contract loop 4 on the ONEUP-0054 build plan).
@@ -4702,6 +4716,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   step 11 verify would have collided with it. Not repaired from inside a
   build stage: it is a standards edit with its own §9 branch decision.
   The gate arrived with ONEUP-0034 and the row never followed.
+  Branch settled 2026-09-27 by ONEUP-0130's third binding (workflow.md
+  §9): v2 only. main's §6 is true of main; fix v2's own copy, and keep
+  v2's side when main is merged in. Fix with ONEUP-0193 and 0194 in one
+  v2 commit.
   **Layman:** One of the checks that runs before every push is not listed in the document that is supposed to list them all.
   Kind: doc-fix.
   Source: review-contract-2026-08-25 ONEUP-0054 stage 4 loop 2.
@@ -4870,6 +4888,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   before writing, nine times across five files, so an interruption can leave
   `CHANGELOG.md` or `oneup/__init__.py` empty. And both scripts read one flag only,
   so `./local-CI.sh --docs --full` silently ignores the second.
+  Added 2026-09-27 (review-contract loop 19 on workflow.md, both lanes):
+  release.sh pushes with `git push origin main "v$ver"`, which is not
+  atomic. If the remote rejects main, the tag can still land and
+  release.yml then publishes it. workflow.md §8's failed-push undo (tag
+  -d, reset HEAD~1, checkout, re-run) is only right when nothing reached
+  the remote. Fix in the script: `git push --atomic origin main
+  "v$ver"`, which makes §8's recovery true as written. Code, so filed
+  here rather than fixed by the doc review.
   **Layman:** Smaller problems in the release scripts that can let a bad release through quietly.
   Kind: fix.
   Source: review-code 2026-08-31, lane tooling.
@@ -4907,6 +4933,9 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   claim about the workflow. Left unfixed deliberately — ONEUP-0054 stage 6
   step 6 edits this table, and an orthogonal repair in that commit is what
   coding.md §1.7 forbids.
+  Branch settled 2026-09-27 by ONEUP-0130's third binding: v2 only.
+  main's release.yml really does run three suites and nothing else. Fix
+  together with ONEUP-0133 and 0194.
   **Layman:** A rule about our automated build checks says it runs three things; it actually runs five.
   Kind: doc-fix.
   Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, packet build).
@@ -4924,6 +4953,9 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   repairing the two pre-existing omissions in that commit is the orthogonal edit
   coding.md §1.7 forbids. Whoever closes this should fix ONEUP-0193 with it —
   one wrong belief about release.yml, stated in two standards.
+  Branch settled 2026-09-27 by ONEUP-0130's third binding: v2 only. main
+  ships three suites, so testing.md §1 is true on main. Correct v2's
+  copy together with ONEUP-0133 and 0193.
   **Layman:** A rule says our test suite has three parts and lists them; there are five.
   Kind: doc-fix.
   Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, loop 2).
@@ -4990,6 +5022,22 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   **Layman:** One entry in a review history table had been accidentally merged into its neighbour, so it never showed up; it is back.
   Kind: doc-fix.
   Source: in-session-2026-09-27 (check-doc.py run for claude-config, CFG-0493).
+
+- 📋 [ONEUP-0213] **workflow.md never defines a "test gate", so nobody can tell which new checks release.yml must also run.**
+  §6.1 step 3 says "If it is a *test* gate, add it to
+  `.github/workflows/release.yml` as well", and §10's trap repeats it, but
+  neither says what a test gate is. §6 implies "the three test suites",
+  yet tests/docs-check.py also lives under tests/ and stays local-only, and
+  v2's "Engine differential (v1 vs v2)" gate is local-only on purpose
+  (ONEUP-0195). A conformer adding a check under tests/ cannot tell
+  whether they breached the rule, and What checks this says nothing does.
+  Suggested fix from the lane: "a program that asserts on OneUp's
+  behaviour (the suites in testing.md §1); a check on documents, packaging
+  or versions is not one". Do not re-review; fold in directly. A standard
+  edit, so its own gate decides whether it re-arms.
+  **Layman:** A rule says some checks must also run on the release build, but never says which kind, so it can't be followed reliably.
+  Kind: doc-fix.
+  Source: review-contract loop 20 on workflow.md, 2026-09-27 (filed at the cap).
 
 ## 2.0.0 — the rewrite
 

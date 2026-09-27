@@ -483,6 +483,10 @@ nobody checks is a measurement wearing a contract's clothes.
 
 ## 7. Review — the cold-eyes gate
 
+**"Cold-eyes" is this project's name for the gate, and the `review-contract` skill runs
+it.** Older text says `/cold-eyes`, the skill `review-contract` replaced on 2026-08-12, and
+the loop-log headings keep the name. Where either appears, run `review-contract` (ONEUP-0103).
+
 **Every design document, spec, standard and reference goes through `review-contract`, and is
 looped until a pass finds nothing substantive left.** Implementation does not start before
 that.
