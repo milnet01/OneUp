@@ -4937,6 +4937,20 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: in-session-2026-09-03 (ONEUP-0054 stage 7 plan gate, Phase 1b).
 
+- 📋 [ONEUP-0211] **files-and-naming.md §5.1 claims every environment override, and misses four.**
+  §5.1 opens "Every environment override that exists". Diffed 2026-09-27
+  against the env reads in both engines and the window. Missing on both
+  branches: ONEUP_STOP_POLL_SECONDS (update_system.sh; oneup/engine/steps.py
+  on v2), ONEUP_INSTANCE_NAME (updater.py on main, oneup/gui/tray.py on v2),
+  and ONEUP_INHIBITED, the re-exec guard, which the prose neither lists nor
+  carves out. Missing on v2 only: ONEUP_FLATPAK_TIMEOUT (oneup/engine/steps.py)
+  and XDG_STATE_HOME, which moves every state-path default (ONEUP-0059).
+  The doc names nothing the code lacks. The main-branch rows land on main;
+  the two v2-only rows land with the v2 copy (workflow.md §9).
+  **Layman:** The list of settings you can change through the environment says it is complete, and it leaves some out.
+  Kind: doc-fix.
+  Source: in-session-2026-09-27 (CFG-0562 sizing for claude-config).
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of
