@@ -5785,7 +5785,7 @@ when complete (that document's §7).
   Kind: test.
   Source: cold-eyes-2026-07-26 batch 1, testing-standard lane HIGH.
 
-- 📋 [ONEUP-0069] **Cover the DISK marker in the engine test suite.**
+- ✅ [ONEUP-0069] **Cover the DISK marker in the engine test suite.**
   The engine emits 23 markers via the `marker NAME "payload"` helper.
   `tests/run-tests.sh` asserts on 22 of them; **DISK** is the exception.
   It fires only from the pre-flight low-disk check, which no scenario
@@ -5814,6 +5814,11 @@ when complete (that document's §7).
   line into every system-step scenario. A DISK scenario can now overwrite that
   mock the way scenarios overwrite `zypper`, then drop DISK from
   KNOWN_UNTESTED_MARKERS in tests/docs-check.py. Still open.
+  Resolved (2026-09-27, v2): the up-to-date scenario asserts no DISK
+  line with ample space, then a df mock reporting 1 GiB free makes both
+  engines warn for / and /var. KNOWN_UNTESTED_MARKERS is now empty, and
+  marker-protocol.md's What-checks-this row matches. Bash 362/0, Python
+  364/0, docs-check 0 failed.
 
 - 📋 [ONEUP-0072] **Turn the engine's prose marker payloads into stable codes the window words itself.**
   Split out of ONEUP-0032 at its fifth cold-eyes loop: the item held two
