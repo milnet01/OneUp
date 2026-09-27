@@ -42,6 +42,9 @@ MARKER_RE = re.compile(r"(?<![\w`])(TODO|FIXME|TBD|XXX)(?![\w`])")
 # such a row reports 0 findings against its own outcomes and can never balance.
 SEVERITY_RE = re.compile(r"(\d+)\s+(critical|high|medium|low|info|findings?)\b", re.I)
 DISPOSITION_RE = re.compile(r"(\d+)\s+(verified|dismissed|info)\b", re.I)
+# The four-question gate counts findings per question (`Q1 2 · Q3 1`), with no severity.
+Q_TALLY_RE = re.compile(r"\bQ[1-4]\s+(\d+)\b")
+VERIFIED_RE = re.compile(r"(\d+)\s+verified\b", re.I)
 
 failures: list[str] = []
 checked = 0
@@ -111,6 +114,19 @@ def check_loop_tallies() -> None:
             if len(cells) < 3 or not cells[0].isdigit():
                 continue
             findings = cells[2]
+            q = [int(n) for n in Q_TALLY_RE.findall(findings)]
+            if q:
+                # A four-question row has no severities, so balance its question counts
+                # instead. They sum to the VERIFIED number, never verified + dismissed: a
+                # dismissed finding is given no question. Measured 2026-09-27 on every such
+                # row in docs/, 47 of 47 (ONEUP-0100). Bold or not, the row is checked.
+                verified = VERIFIED_RE.findall(findings.replace("**", ""))
+                if verified:
+                    check(sum(q) == int(verified[0]), path, i, "§7",
+                          f"loop {cells[0]} tally does not balance: the questions count "
+                          f"{sum(q)} ({'+'.join(map(str, q))}) against "
+                          f"{verified[0]} verified")
+                continue
             # The disposition clause is bolded, and sits in either the Findings cell or the
             # Outcome one — authors have used both, and a check that saw only the first
             # would skip the second in silence.
