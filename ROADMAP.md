@@ -4758,7 +4758,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: review-code 2026-08-31, lane tooling.
 
-- 📋 [ONEUP-0175] **REFRESH_TIMEOUT reaches a privileged argv unvalidated, and the file says so.**
+- ✅ [ONEUP-0175] **REFRESH_TIMEOUT reaches a privileged argv unvalidated, and the file says so.**
   `oneup/engine/privilege.py:58` takes `ONEUP_REFRESH_TIMEOUT` straight from the
   environment; the comment above concedes it is "pinned to digits where it reaches
   the sudoers rule rather than trusted here". The digit pin exists at
@@ -4783,6 +4783,13 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   a sentence naming the refresh budget as the one value ONEUP-0092 §6
   deliberately leaves unchecked on the run path, and why it is safe. No code
   change. The standard edit goes through review-contract.
+  Resolved (2026-09-27, 00007fd): security.md §4.7 now records the
+  refresh budget as the one value deliberately left unchecked on the run
+  path. It says why that is safe (argv form; `timeout` exits 125 on a
+  non-numeric or option-shaped duration, checked by running both) and
+  where the digit pin does apply (`auth_cmnds`). No code change, as
+  decided. No review-contract gate: the amendment only records shipped,
+  verified code (ONEUP-0092 §6), which is rule 14's exception.
   **Layman:** A setting read from the environment is passed to a root command without being checked.
   Kind: security.
   Source: review-code 2026-08-31, lane engine-privilege.
