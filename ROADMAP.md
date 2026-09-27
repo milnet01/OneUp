@@ -1570,7 +1570,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   CI green (210 engine / 283 GUI). Not released — main stays at 1.4.0
   until the user calls a 1.4.1.
 
-- 📋 [ONEUP-0079] **Give the GUI smoke suite a partial tally when it aborts part-way.**
+- ✅ [ONEUP-0079] **Give the GUI smoke suite a partial tally when it aborts part-way.**
   tests/gui-smoke.py runs its ~300 checks inside one unbroken main(). A real
   exception anywhere aborts every check after it and the run ends on a bare
   traceback instead of the "Passed: N Failed: M" summary at the foot, so the
@@ -1583,6 +1583,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   the running tally plus "aborted after N checks" on the way out; the thorough
   version is splitting main() into sections, which is the same change 2.0's
   package split forces anyway (docs/design/oneup-2.0.md).
+  Resolved (2026-09-27, v2): the cheap version. The suite's entry point
+  catches a crash, prints the traceback and "ABORTED after N checks —
+  Passed: P Failed: F", and exits 1. Red: a copy raising before the
+  summary printed no tally at all; green: it now prints "ABORTED after
+  479 checks", and the real suite is 479/0.
   **Layman:** If the window's test run crashes half way, the summary at the end can't tell you how many checks never got to run.
   Kind: test.
   Source: test-audit-2026-08-03.
@@ -4168,7 +4173,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: user-request-2026-07-26.
 
-- 📋 [ONEUP-0075] **No OneUp spec's invariant list can be read by spec_query.**
+- ✅ [ONEUP-0075] **No OneUp spec's invariant list can be read by spec_query.**
   Found by /doc-lint's structure check while writing
   docs/specs/ONEUP-0064-interface-redesign.md. Its checks.md calls this exact
   signature a finding: invariants_count 0 together with a non-zero
@@ -4205,6 +4210,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
 
   Test: spec_query on any file in docs/specs/ returns invariants_count equal to
   the number of INV-N bullets it contains, rather than 0.
+  Resolved (2026-09-27): fixed on the Ants MCP side; nothing in OneUp
+  changed. Re-measured on v2 at 2d544b6: for all 14 specs carrying `-
+  **INV-N**` bullets, spec_query's invariants_count equals the number of
+  distinct bullet ids (e.g. ONEUP-0027 now 13, was 0; ONEUP-0064 7, was
+  0). So this item's own Test passes. Residual, advisory only:
+  possible_untabled_invariants is still non-zero on ONEUP-0032 (1),
+  ONEUP-0064 (3) and ONEUP-0108 (2) even though their counts are right.
+  It gates nothing.
   **Layman:** The tool that is supposed to list a spec's promises reads zero of them, for every spec we have — so nothing automated can check that list.
   Kind: doc.
   Source: write-spec-doc-lint-2026-08-03.
@@ -4936,6 +4949,32 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   **Layman:** Two branches hold different versions of the same design document, so a session reading it on the wrong branch builds from stale instructions.
   Kind: doc-fix.
   Source: in-session-2026-09-03 (ONEUP-0054 stage 7 plan gate, Phase 1b).
+
+- 📋 [ONEUP-0211] **files-and-naming.md §5.1 claims every environment override, and misses four.**
+  §5.1 opens "Every environment override that exists". Diffed 2026-09-27
+  against the env reads in both engines and the window. Missing on both
+  branches: ONEUP_STOP_POLL_SECONDS (update_system.sh; oneup/engine/steps.py
+  on v2), ONEUP_INSTANCE_NAME (updater.py on main, oneup/gui/tray.py on v2),
+  and ONEUP_INHIBITED, the re-exec guard, which the prose neither lists nor
+  carves out. Missing on v2 only: ONEUP_FLATPAK_TIMEOUT (oneup/engine/steps.py)
+  and XDG_STATE_HOME, which moves every state-path default (ONEUP-0059).
+  The doc names nothing the code lacks. The main-branch rows land on main;
+  the two v2-only rows land with the v2 copy (workflow.md §9).
+  **Layman:** The list of settings you can change through the environment says it is complete, and it leaves some out.
+  Kind: doc-fix.
+  Source: in-session-2026-09-27 (CFG-0562 sizing for claude-config).
+
+- ✅ [ONEUP-0212] **ONEUP-0064's loop-5 review row was glued onto the loop-6 row and vanished from the table.**
+  Commit b36691f added the loop-6 row by replacing the loop-5 row's
+  "| 5 | 2026-08-13 |" prefix instead of inserting a line, so both rows
+  shared one line: six cells under a four-cell header, and a Markdown
+  renderer drops the extra two. tests/docs-check.py did not notice; the
+  machine-wide check-doc.py structure check did. Repaired 2026-09-27 on
+  main by restoring the loop-5 row byte-identical to its landed text from
+  b36691f^, which restores a landed row rather than editing one.
+  **Layman:** One entry in a review history table had been accidentally merged into its neighbour, so it never showed up; it is back.
+  Kind: doc-fix.
+  Source: in-session-2026-09-27 (check-doc.py run for claude-config, CFG-0493).
 
 ## 2.0.0 — the rewrite
 
@@ -5785,7 +5824,7 @@ when complete (that document's §7).
   Kind: test.
   Source: cold-eyes-2026-07-26 batch 1, testing-standard lane HIGH.
 
-- 📋 [ONEUP-0069] **Cover the DISK marker in the engine test suite.**
+- ✅ [ONEUP-0069] **Cover the DISK marker in the engine test suite.**
   The engine emits 23 markers via the `marker NAME "payload"` helper.
   `tests/run-tests.sh` asserts on 22 of them; **DISK** is the exception.
   It fires only from the pre-flight low-disk check, which no scenario
@@ -5814,6 +5853,11 @@ when complete (that document's §7).
   line into every system-step scenario. A DISK scenario can now overwrite that
   mock the way scenarios overwrite `zypper`, then drop DISK from
   KNOWN_UNTESTED_MARKERS in tests/docs-check.py. Still open.
+  Resolved (2026-09-27, v2): the up-to-date scenario asserts no DISK
+  line with ample space, then a df mock reporting 1 GiB free makes both
+  engines warn for / and /var. KNOWN_UNTESTED_MARKERS is now empty, and
+  marker-protocol.md's What-checks-this row matches. Bash 362/0, Python
+  364/0, docs-check 0 failed.
 
 - 📋 [ONEUP-0072] **Turn the engine's prose marker payloads into stable codes the window words itself.**
   Split out of ONEUP-0032 at its fifth cold-eyes loop: the item held two
