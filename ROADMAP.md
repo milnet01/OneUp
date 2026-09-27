@@ -1570,7 +1570,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   CI green (210 engine / 283 GUI). Not released — main stays at 1.4.0
   until the user calls a 1.4.1.
 
-- 📋 [ONEUP-0079] **Give the GUI smoke suite a partial tally when it aborts part-way.**
+- ✅ [ONEUP-0079] **Give the GUI smoke suite a partial tally when it aborts part-way.**
   tests/gui-smoke.py runs its ~300 checks inside one unbroken main(). A real
   exception anywhere aborts every check after it and the run ends on a bare
   traceback instead of the "Passed: N Failed: M" summary at the foot, so the
@@ -1583,6 +1583,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   the running tally plus "aborted after N checks" on the way out; the thorough
   version is splitting main() into sections, which is the same change 2.0's
   package split forces anyway (docs/design/oneup-2.0.md).
+  Resolved (2026-09-27, v2): the cheap version. The suite's entry point
+  catches a crash, prints the traceback and "ABORTED after N checks —
+  Passed: P Failed: F", and exits 1. Red: a copy raising before the
+  summary printed no tally at all; green: it now prints "ABORTED after
+  479 checks", and the real suite is 479/0.
   **Layman:** If the window's test run crashes half way, the summary at the end can't tell you how many checks never got to run.
   Kind: test.
   Source: test-audit-2026-08-03.
