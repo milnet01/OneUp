@@ -5004,6 +5004,22 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: in-session-2026-09-27 (check-doc.py run for claude-config, CFG-0493).
 
+- 📋 [ONEUP-0213] **workflow.md never defines a "test gate", so nobody can tell which new checks release.yml must also run.**
+  §6.1 step 3 says "If it is a *test* gate, add it to
+  `.github/workflows/release.yml` as well", and §10's trap repeats it, but
+  neither says what a test gate is. §6 implies "the three test suites",
+  yet tests/docs-check.py also lives under tests/ and stays local-only, and
+  v2's "Engine differential (v1 vs v2)" gate is local-only on purpose
+  (ONEUP-0195). A conformer adding a check under tests/ cannot tell
+  whether they breached the rule, and What checks this says nothing does.
+  Suggested fix from the lane: "a program that asserts on OneUp's
+  behaviour (the suites in testing.md §1); a check on documents, packaging
+  or versions is not one". Do not re-review; fold in directly. A standard
+  edit, so its own gate decides whether it re-arms.
+  **Layman:** A rule says some checks must also run on the release build, but never says which kind, so it can't be followed reliably.
+  Kind: doc-fix.
+  Source: review-contract loop 20 on workflow.md, 2026-09-27 (filed at the cap).
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of
