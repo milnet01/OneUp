@@ -1172,10 +1172,17 @@ EOF
 chmod +x "$d/fake-sudo"
 "$d/fake-sudo" "System Updater: authenticate to update the system" >/dev/null 2>&1 &
 live_parent=$!
-sleep 0.5
-live_pid=$(pgrep -P "$live_parent" -f mock-askpass | head -1)
+live_pid=""
+for _ in $(seq 1 50); do          # poll, up to 5s: the dialog is fake-sudo's child
+    live_pid=$(pgrep -P "$live_parent" -f mock-askpass | head -1)
+    [[ -n "$live_pid" ]] && break
+    sleep 0.1
+done
+# A fixture that cannot be staged proves nothing, so it is a failure, never a quiet skip
+# that leaves the pass count looking complete (ONEUP-0068).
 if ! kill -0 "$orphan_pid" 2>/dev/null || [[ -z "$live_pid" ]]; then
-    echo "  SKIP - could not stage the dialogs (orphan=$orphan_pid live=${live_pid:-none})"
+    echo "  FAIL - could not stage the dialogs (orphan=$orphan_pid live=${live_pid:-none})"
+    FAIL=$((FAIL+1))
 else
     ONEUP_ASKPASS="$d/mock-askpass" run_engine "$d" --steps=cache >/dev/null 2>&1
     reaped=no
