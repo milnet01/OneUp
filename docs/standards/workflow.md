@@ -474,7 +474,7 @@ Is it a fix, a feature request, or neither?
                  is not a feature (§1.2)
 ```
 
-**Two things bind documentation to `v2`, and neither is a loophole.**
+**Three things bind documentation to `v2`, and none is a loophole.**
 
 **A marker change.** `docs/reference/marker-protocol.md` §5 requires it to touch the
 emitter, the window, both suites *and* the reference **in one commit** — that is what makes
@@ -498,8 +498,16 @@ already sits on `main`. A bare *filename* escapes the pattern too, for want of t
 separator; that is a gap in the check and not licence to evade it by dropping the
 directory.
 
-**Documentation goes to `main` unless a rule binds it to code that cannot.** Those two are
-the rules that bind it today; a third would need naming here before it counted.
+**A passage whose truth depends on code only `v2` has** — a gate, a test file or a
+constant that `v2` added or renamed — even where it names no `v2`-only path. Here there is
+no wording true of both branches, so each branch carries its own. `main` keeps the text that
+is true of `main`; `v2` corrects its own copy; the two differ by design until the 2.0.0
+merge. When `main` is merged into `v2`, keep `v2`'s side of such a passage. The live cases
+are §6's gate table in this standard, and the `LOG_DIR` passages of `files-and-naming.md`
+(ONEUP-0130).
+
+**Documentation goes to `main` unless a rule binds it to code that cannot.** Those three
+are the rules that bind it today; a fourth would need naming here before it counted.
 
 **No partial 2.0 releases** — the user's rule, 2026-07-26. `docs/design/oneup-2.0.md` §7
 states it and owns what "complete" means.
