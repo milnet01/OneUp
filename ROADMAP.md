@@ -4168,7 +4168,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: user-request-2026-07-26.
 
-- 📋 [ONEUP-0075] **No OneUp spec's invariant list can be read by spec_query.**
+- ✅ [ONEUP-0075] **No OneUp spec's invariant list can be read by spec_query.**
   Found by /doc-lint's structure check while writing
   docs/specs/ONEUP-0064-interface-redesign.md. Its checks.md calls this exact
   signature a finding: invariants_count 0 together with a non-zero
@@ -4205,6 +4205,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
 
   Test: spec_query on any file in docs/specs/ returns invariants_count equal to
   the number of INV-N bullets it contains, rather than 0.
+  Resolved (2026-09-27): fixed on the Ants MCP side; nothing in OneUp
+  changed. Re-measured on v2 at 2d544b6: for all 14 specs carrying `-
+  **INV-N**` bullets, spec_query's invariants_count equals the number of
+  distinct bullet ids (e.g. ONEUP-0027 now 13, was 0; ONEUP-0064 7, was
+  0). So this item's own Test passes. Residual, advisory only:
+  possible_untabled_invariants is still non-zero on ONEUP-0032 (1),
+  ONEUP-0064 (3) and ONEUP-0108 (2) even though their counts are right.
+  It gates nothing.
   **Layman:** The tool that is supposed to list a spec's promises reads zero of them, for every spec we have — so nothing automated can check that list.
   Kind: doc.
   Source: write-spec-doc-lint-2026-08-03.
