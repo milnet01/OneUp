@@ -4222,7 +4222,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc.
   Source: write-spec-doc-lint-2026-08-03.
 
-- 📋 [ONEUP-0083] **Record the third loop-log tally trap in documentation.md §7.**
+- ✅ [ONEUP-0083] **Record the third loop-log tally trap in documentation.md §7.**
   tests/docs-check.py's DISPOSITION_RE matches only `verified`,
   `dismissed` and `info`. A row written as `28 verified, 1 dismissed,
   1 carried` therefore offers 28 outcomes against 29 findings and
@@ -4240,6 +4240,11 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Editing documentation.md is a standards edit and so runs the
   rule-14 /cold-eyes gate; that is why this is filed rather than
   applied inline mid-review.
+  Resolved (2026-09-27, main): documentation.md §7 now lists the third
+  trap. The check counts only verified/dismissed/info, so write a
+  carried finding inside `verified` or as `N info`. No gate: it records
+  how DISPOSITION_RE already behaves (rule 14's existing-code
+  exception).
   **Layman:** A rule about how to write review-log rows so the automated check stops rejecting them.
   Kind: doc.
   Source: in-session-2026-08-04.
