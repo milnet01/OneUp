@@ -4523,7 +4523,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: chore.
   Source: in-session-2026-08-19 (v1.4.5 release).
 
-- 📋 [ONEUP-0118] **Correct the catalogue Extract command in wording-and-translation.md §7.**
+- ✅ [ONEUP-0118] **Correct the catalogue Extract command in wording-and-translation.md §7.**
   §7's workflow table gives Extract as "`pyside6-lupdate` over the
   `oneup/` package". Measured on PySide6 6.11: given a directory,
   `pyside6-lupdate` reports `Found 0 source text(s)` — with or without
@@ -4535,6 +4535,13 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   command in that spec's INV-8 and repaired it there. Correcting a standard
   changes what a conformer runs, so this edit re-arms that document's own
   review gate and is not a passing fix.
+  Resolved (2026-09-27, main): §7's Extract row now gives
+  pyside6-lupdate every .py file under oneup/, never the directory, and
+  the rules list carries the re-measurement (PySide6 6.11.0, one-file
+  fixture: directory 0, directory -recursive 0, file list 1). No new
+  gate: it writes back review-contract loop 8's decision on ONEUP-0032
+  INV-8, and the commit names that run and the Q2 grep terms (rule 14's
+  write-back exception).
   **Layman:** The instructions for pulling OneUp's translatable sentences out of the code name a command that quietly finds nothing.
   Kind: doc-fix.
   Source: review-contract loop 8 on ONEUP-0032, 2026-08-19.
