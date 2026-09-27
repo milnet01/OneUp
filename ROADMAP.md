@@ -4279,7 +4279,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: ux.
   Source: user-request-2026-08-07.
 
-- 📋 [ONEUP-0100] **The loop-log tally check cannot balance a four-question review row.**
+- ✅ [ONEUP-0100] **The loop-log tally check cannot balance a four-question review row.**
   Found 2026-08-12 writing ONEUP-0072's loop-3 row. `check_loop_tallies`
   in `tests/docs-check.py` balances SEVERITY_RE (`N critical|high|medium|
   low|info`) against DISPOSITION_RE (`N verified|dismissed|info`) inside
@@ -4302,6 +4302,16 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   says so in the row itself rather than looking like a row that balanced.
 
   Related: ONEUP-0083 records an earlier trap in the same check.
+  Resolved (2026-09-27, v2): check_loop_tallies now balances a
+  four-question row's Q counts against its `N verified`, whether the
+  clause is bolded or not. It compares with verified alone, not verified
+  + dismissed as proposed above: measured over every Q-row in docs/, the
+  counts equal verified in 47 of 47 and verified + dismissed in none.
+  Red and green shown with a throwaway spec; real tree 0 failed. It
+  lands on v2, where tests may change, so the freeze question does not
+  arise. Older rows that say "nothing here for §7's tally check to
+  balance" stay as written (landed rows are not edited); they are now
+  simply checked.
   **Layman:** Our documentation checker was written for the old review scoring and quietly skips rows written under the new one.
   Kind: test.
   Source: in-session-2026-08-12.
