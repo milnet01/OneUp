@@ -5751,7 +5751,7 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: in-session-2026-07-26 (ONEUP-0057 Task 9, writing the marker reference).
 
-- 📋 [ONEUP-0068] **Replace the orphaned-dialog scenario's sleep with a poll, and make its SKIP branch loud.**
+- ✅ [ONEUP-0068] **Replace the orphaned-dialog scenario's sleep with a poll, and make its SKIP branch loud.**
   The scenario "an orphaned password dialog is reaped when the run ends"
   stages two background processes, then does a bare `sleep 0.5` IN THE
   SCENARIO BODY before pgrep-ing for their children. docs/standards/
@@ -5768,6 +5768,12 @@ when complete (that document's §7).
   Fix: poll for the child pid with a ceiling (the pattern the rest of the
   suite uses), and make the give-up path a FAIL — if the fixture cannot be
   staged, the test cannot prove what it claims.
+  Resolved (2026-09-27, v2): the scenario now polls up to 5 s for the
+  staged dialog instead of sleeping, and a fixture it cannot stage
+  counts as a FAIL instead of a silent SKIP. Red first: with the fixture
+  sabotaged, the old code ended "Failed: 0" and the new code ends
+  "Failed: 1". Green: Bash engine 359/0, Python engine 361/0. Test-only,
+  so it stays on v2 (workflow.md §1.2).
   **Layman:** One test waits half a second and hopes; when the guess is wrong it quietly skips instead of failing.
   Kind: test.
   Source: cold-eyes-2026-07-26 batch 1, testing-standard lane HIGH.
