@@ -4656,7 +4656,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: test.
   Source: in-session-2026-08-25.
 
-- 📋 [ONEUP-0130] **Name the third binding that sends a documentation edit to `v2`.**
+- ✅ [ONEUP-0130] **Name the third binding that sends a documentation edit to `v2`.**
   docs/standards/workflow.md §9 says documentation goes to `main` unless a
   rule binds it to code that cannot, names two such rules — a marker change,
   and a docs-check-walked document that must NAME a file 2.0 creates — and
@@ -4679,6 +4679,15 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
 
   Decide whether the third binding is worth naming, or whether §9 should
   instead say it routes a CHANGE and is silent where one branch needs none.
+  Resolved (2026-09-27, main 026b5cd, gated in loops 18-20): workflow.md
+  §9 names the third binding. A passage whose truth depends on code only
+  v2 has goes to each branch's own copy, main keeps what is true of
+  main, and a merge of main into v2 keeps v2's side. The gate hit a calm
+  cap (findings 4 → 4 → 2): eight fixed, two filed (non-atomic push on
+  ONEUP-0186, and ONEUP-0213). NEXT under this rule: ONEUP-0133, 0193
+  and 0194, plus the v2 half of ONEUP-0211, are corrections to v2's OWN
+  copies of workflow.md §6 and testing.md §1 and land on v2 only. main's
+  text is true of main.
   **Layman:** The rule that decides which branch a documentation fix goes to is missing a case we keep hitting, so write that case down.
   Kind: doc.
   Source: in-session-2026-08-25 (review-contract loop 4 on the ONEUP-0054 build plan).
@@ -4707,6 +4716,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   step 11 verify would have collided with it. Not repaired from inside a
   build stage: it is a standards edit with its own §9 branch decision.
   The gate arrived with ONEUP-0034 and the row never followed.
+  Branch settled 2026-09-27 by ONEUP-0130's third binding (workflow.md
+  §9): v2 only. main's §6 is true of main; fix v2's own copy, and keep
+  v2's side when main is merged in. Fix with ONEUP-0193 and 0194 in one
+  v2 commit.
   **Layman:** One of the checks that runs before every push is not listed in the document that is supposed to list them all.
   Kind: doc-fix.
   Source: review-contract-2026-08-25 ONEUP-0054 stage 4 loop 2.
@@ -4920,6 +4933,9 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   claim about the workflow. Left unfixed deliberately — ONEUP-0054 stage 6
   step 6 edits this table, and an orthogonal repair in that commit is what
   coding.md §1.7 forbids.
+  Branch settled 2026-09-27 by ONEUP-0130's third binding: v2 only.
+  main's release.yml really does run three suites and nothing else. Fix
+  together with ONEUP-0133 and 0194.
   **Layman:** A rule about our automated build checks says it runs three things; it actually runs five.
   Kind: doc-fix.
   Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, packet build).
@@ -4937,6 +4953,9 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   repairing the two pre-existing omissions in that commit is the orthogonal edit
   coding.md §1.7 forbids. Whoever closes this should fix ONEUP-0193 with it —
   one wrong belief about release.yml, stated in two standards.
+  Branch settled 2026-09-27 by ONEUP-0130's third binding: v2 only. main
+  ships three suites, so testing.md §1 is true on main. Correct v2's
+  copy together with ONEUP-0133 and 0193.
   **Layman:** A rule says our test suite has three parts and lists them; there are five.
   Kind: doc-fix.
   Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, loop 2).
