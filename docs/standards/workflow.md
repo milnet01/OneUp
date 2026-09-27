@@ -140,7 +140,7 @@ Rules:
   anything else that lands on `main` — documentation, or the §1.2 exception — so the branch
   picks it up. Nothing travels the other way until 2.0 ships.
 - **Feature branches are optional and short.** If one is used, name it
-  `<ONEUP-id>-<topic>` and merge it into `v2` when its item is done. There is no
+  `<ONEUP-id>-<topic>` and merge it into the branch §9 names when its item is done. There is no
   requirement to branch for every item — the project has one developer and zero merge
   commits in its history.
 
@@ -350,7 +350,8 @@ the scarcest thing in this process — never spend one on what `grep -c` can set
 Adding a gate:
 
 1. **Add the check to `local-CI.sh`**, using its `ok` / `bad` / `skip` helpers, so a missing
-   tool is reported as skipped and never silently passed.
+   tool is reported as skipped and never silently passed. If editing a markdown file can
+   break it, put it outside the `if ! $DOCS` blocks, so a documentation-only push runs it.
 2. **Add a row to §6's table** saying what it proves. Name the gate the way the script
    labels it, so the table can be read against `local-CI.sh` line by line, and put the row
    in the position the script runs it.
@@ -505,8 +506,8 @@ directory.
 constant that `v2` added or renamed — even where it names no `v2`-only path. Here there is
 no wording true of both branches, so each branch carries its own. `main` keeps the text that
 is true of `main`; `v2` corrects its own copy; the two differ by design until the 2.0.0
-merge. When `main` is merged into `v2`, keep `v2`'s side of such a passage. The live cases
-are §6's gate table in this standard, and the `LOG_DIR` passages of `files-and-naming.md`
+merge. When `main` is merged into `v2`, keep `v2`'s side of such a passage. Live cases
+include §6 of this standard and the `LOG_DIR` passages of `files-and-naming.md`
 (ONEUP-0130).
 
 **Documentation goes to `main` unless a rule binds it to code that cannot.** Those three
@@ -608,3 +609,4 @@ clone where nobody ran that one command, a green push proves nothing at all.
 | 16 | 2026-08-20 | 1 lane, cold; genre standard; Q1 1 · Q2 2 — all 3 verified, 0 dismissed, all fixed | **Two of the three were loop 15's own other half, which is the pattern this run kept producing.** The new second binder said the check fails *any backticked path carrying a file extension*; `PATH_RE` requires a directory separator as well, so a bare filename escapes it — the gap is now named as a gap, and as not being licence to evade the check by dropping the directory. And sharpening §1.2 into fix-versus-feature left work that is NEITHER with no branch, while §1.2 itself routes ONEUP-0070 to `v2` twice; that third category is now stated. **The pre-existing one would have cut a release nobody needs**: §9's tree sent every fix to a 1.4.x, where §1.2's third exception establishes that a change nobody can see owes none, and §11's checklist already conditions the CHANGELOG entry the same way. |
 | 17 | 2026-08-20 | 1 lane, cold; genre standard; Q1 1 · Q2 1 — both verified, 0 dismissed, both fixed. **Cap reached (3 for a standard), and it is a CALM cap**: findings fell 6 → 3 → 2 across the run, and the one that remained live was pre-existing rather than this run's collateral | **The finding worth the loop was §4 describing a workflow that stopped being durable on 2026-08-18.** It is the standard that owns roadmap IDs, and it still read as a hand-editing procedure — allocate from `.roadmap-counter`, type the bullet template — when `ROADMAP.md` became generated output rendered from the machine-global roadmap store. A conformer following §4 would append a bullet, see it accepted, and lose it at the next write with no error and no diff. §4 now leads with that, keeps the counter (which `roadmap_log` still bumps) and presents the bullet shape as what the store RENDERS. Swept the same claim out of `files-and-naming.md` §2.3. **The other was loop 16's collateral**: §9's tree stayed binary after §1.2 gained a third category, so a refactor or a dependency bump took the fix arm onto frozen `main` — with a release. The tree now has three arms, matching §1.2's three. |
 | 18 | 2026-09-27 | 2 lanes, cold; genre standard; Q1 1 · Q2 3 — 4 verified, 0 dismissed, all fixed | **Gate on ONEUP-0130's new third binding in §9, and neither lane found fault with it**: both checked its two live cases against the branches and they held. All four findings were PRE-EXISTING, so the second share is 0 of 4 inside the armed span. They were fixed here rather than filed, so one gate covers them: §1.2's closing paragraph still offered *can people still install?* as the freeze's test, which §1.1 replaced with the change's kind; §9's tree called any defect a fix for `main`, where §1.2 grants a `tests/` or push-gate fix only by name, and tied a 1.4.x to *a user would notice* against the second exception's owed release; §11 demanded the full gate on a push §6 lets run `--docs`; and the marker binding called files 2.0-only that all exist on `main`. Collateral, repaired in `docs/design/oneup-2.0.md` with no row there: its Documentation row said §9 owns "the two rules" (this run's own change made that false), and its risk list carried the old install test. Five lane open questions resolved clean (the `skip` count, `release.sh`'s commit subject and y/N prompt, the one-workflow claim). |
+| 19 | 2026-09-27 | 2 lanes, cold; genre standard; Q1 2 · Q2 1 · Q3 1 — 4 verified, 0 dismissed; 3 fixed, 1 filed | **One of the four landed on this run's own text**: both lanes read the new third binding's "The live cases are §6's gate table …" as a closed list, while §6's gate-count paragraphs also differ on `v2`. It now says "Live cases include". The other three were pre-existing. §6.1's add-a-gate step never said whether a new gate belongs in the `--docs` set; it now says to keep a gate that a markdown edit can break outside the `if ! $DOCS` blocks. §2 sent every feature branch to `v2`; it now goes where §9 says. **Filed, not fixed:** §8's failed-push undo assumes nothing reached the remote, but `release.sh`'s push is not atomic, so a rejected `main` can leave the tag published. The fix is `--atomic` in the script, which is code; filed on ONEUP-0186. Open questions resolved clean: the `bump.py` stop-at-first-drift claim (read in full by one lane) and the one-workflow claim. |

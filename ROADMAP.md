@@ -4875,6 +4875,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   before writing, nine times across five files, so an interruption can leave
   `CHANGELOG.md` or `oneup/__init__.py` empty. And both scripts read one flag only,
   so `./local-CI.sh --docs --full` silently ignores the second.
+  Added 2026-09-27 (review-contract loop 19 on workflow.md, both lanes):
+  release.sh pushes with `git push origin main "v$ver"`, which is not
+  atomic. If the remote rejects main, the tag can still land and
+  release.yml then publishes it. workflow.md §8's failed-push undo (tag
+  -d, reset HEAD~1, checkout, re-run) is only right when nothing reached
+  the remote. Fix in the script: `git push --atomic origin main
+  "v$ver"`, which makes §8's recovery true as written. Code, so filed
+  here rather than fixed by the doc review.
   **Layman:** Smaller problems in the release scripts that can let a bad release through quietly.
   Kind: fix.
   Source: review-code 2026-08-31, lane tooling.
