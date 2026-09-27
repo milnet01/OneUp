@@ -23,6 +23,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -2995,8 +2996,17 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    code = 1
     try:
         code = main()
+    except Exception:  # noqa: BLE001 — any crash; reported, then exits 1
+        # A crash skips every check after it. Say how far the run got, so a crash near
+        # the top and one near the bottom stop looking the same (ONEUP-0079).
+        traceback.print_exc()
+        print()
+        print("======================================")
+        print(f"  ABORTED after {PASS + FAIL} checks — Passed: {PASS}   Failed: {FAIL}")
+        print("======================================")
     finally:
         shutil.rmtree(_SANDBOX, ignore_errors=True)
     sys.exit(code)
