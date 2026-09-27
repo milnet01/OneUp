@@ -523,8 +523,8 @@ a test), those are exempt — they are too small to warrant it. OneUp has none t
 - **The tally must balance.** A row saying 8 findings and 6 outcomes is a row where two
   findings were dropped without a decision. `tests/docs-check.py` fails on it.
 
-  Two things about that check are worth knowing before you write a row, because both cost a
-  red `local-CI.sh` on 2026-08-03:
+  Three things about that check are worth knowing before you write a row, because each cost
+  a red `local-CI.sh` (2026-08-03, and the third 2026-08-04):
 
   - **A dismissed finding still needs a severity.** The check compares the severity counts
     against *verified + dismissed*, so four findings you checked and dropped have to appear
@@ -537,6 +537,10 @@ a test), those are exempt — they are too small to warrant it. OneUp has none t
     `**Dismissed: two.**` — pairs into one span and contributes a phantom `069 Dismissed`,
     which read as 105 outcomes against 36 findings. Leave measurements unbolded in that
     cell; bold the prose instead.
+  - **The check knows three outcome words: `verified`, `dismissed` and `info`.** Any other
+    word is not counted. So `28 verified, 1 dismissed, 1 carried` comes up one outcome
+    short and fails. Count a carried finding inside `verified` and say it was carried in
+    the prose, or write it as `1 info` (ONEUP-0083).
 
 **Spend a cold reader only on what a script cannot do.** The catchers, cheapest first:
 
