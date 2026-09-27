@@ -23,10 +23,9 @@ ROOT = Path(__file__).resolve().parent.parent
 GRANDFATHERED = {"ONEUP-0018", "ONEUP-0022", "ONEUP-0025", "ONEUP-0028"}
 
 # Markers the engine emits that the engine suite does not assert on. Each needs a roadmap
-# id, so the exemption reads as a known gap rather than an oversight. DISK fires only when
-# a mount drops below the pre-flight threshold, which no scenario currently arranges; the
-# GUI half IS covered, in tests/gui-smoke.py.
-KNOWN_UNTESTED_MARKERS = {"DISK"}  # ONEUP-0069
+# id, so the exemption reads as a known gap rather than an oversight. Empty since DISK
+# gained its scenario (ONEUP-0069).
+KNOWN_UNTESTED_MARKERS: set[str] = set()
 
 STATUS_RE = re.compile(r"^\*\*Status:\*\* (Draft|Reviewed|Implemented|Superseded by \S+)"
                        r"(?: — cold-eyes in progress)?$")

@@ -77,6 +77,19 @@ out=$(run_engine "$d" --steps=system,cache)
 check         "system reports already up to date" "@@STEP_END@@|system|ok|already up to date" "$out"
 check         "reboot marker is NO"               "@@REBOOT@@|no"  "$out"
 check_absent  "no false reboot=yes"               "@@REBOOT@@|yes" "$out"
+check_absent  "ample free space raises no disk warning" "@@DISK@@" "$out"
+
+# ONEUP-0069: the low-disk pre-flight warns for each mount under 2 GiB free. Same
+# directory and zypper mock; only df changes, to report 1 GiB free on every mount.
+cat > "$d/df" <<'EOF'
+#!/usr/bin/env bash
+echo "Filesystem     1B-blocks        Used   Available Capacity Mounted on"
+echo "/dev/mock  1099511627776 1098437885952 1073741824      99% ${*: -1}"
+EOF
+chmod +x "$d/df"
+out=$(run_engine "$d" --steps=system)
+check         "low disk space on / is reported"    "@@DISK@@|warn|/|"    "$out"
+check         "low disk space on /var is reported" "@@DISK@@|warn|/var|" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

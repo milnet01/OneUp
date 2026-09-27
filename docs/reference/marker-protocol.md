@@ -448,7 +448,7 @@ the four lines, which three the window reads, and how each half deletes the file
 
 | Rule | What catches a breach |
 | --- | --- |
-| the engine emits each marker | `tests/run-tests.sh` — **for 22 of the 23**. `DISK` is asserted by no engine scenario (ONEUP-0069); `tests/docs-check.py` fails if any *other* marker joins it |
+| the engine emits each marker | `tests/run-tests.sh`, for every marker (`DISK` since ONEUP-0069); `tests/docs-check.py` fails if any marker loses its scenario |
 | the window reacts to each marker | `tests/gui-smoke.py` — for the markers it exercises, which is not the whole table. Nothing enumerates what `handle_marker` accepts, so this row cannot yet be made exact |
 | §3's table matches the markers the engine emits | `tests/docs-check.py`, both ways: a marker the engine emits and this table omits, and a marker this table names that the engine never emits. It reads the `marker NAME` **call sites**, not the `@@NAME@@` literals in the engine's header comment — §7 records three inaccuracies in that comment, so comparing against it would validate one stale list against another |
 | §1.1 a payload contains no `\|` | nothing automatic. The engine rewrites `\|` to `/` before emitting `SNAPSHOT_ITEM`; a new free-text field that forgets to is caught by nobody |
