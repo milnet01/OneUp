@@ -122,8 +122,8 @@ Four things are not feature work and are unaffected:
   generally open and ONEUP-0070 still lands on `v2`.
 
 **Why the freeze is stated as a testable question rather than a preference:** the failure
-mode of any freeze is a slow slide back into 1.x work, one "small" fix at a time. *Can
-people still install their updates?* has an answer; "is this important enough?" does not.
+mode of any freeze is a slow slide back into 1.x work, one "small" fix at a time. *Is it a
+fix, a feature request, or neither?* has an answer; "is this important enough?" does not.
 
 ## 2. Branches
 
@@ -466,8 +466,10 @@ Is it *the* ONEUP_ENGINE_CMD harness
   change — the FIRST exception §1.2 names?  → main first, then v2 (§1.2)
 Otherwise — the test is the change's KIND, not its severity (§1.1):
 Is it a fix, a feature request, or neither?
-├── a fix     → main → 1.4.x if a user would notice it (§1.2's third
-│                exception owes none) → merge main into v2, however small
+├── a fix     → main → 1.4.x if a user would notice it → merge main into
+│                v2, however small. A defect in tests/ or the push gate
+│                is a fix only where §1.2 grants it, and then owes a
+│                1.4.x only where that grant says so; otherwise "neither"
 ├── a feature → v2         → ships when the whole gate passes (design §7)
 └── neither   → v2         → a refactor, a dependency bump, a missing test
                  scenario: main is open to a fix, not to everything that
@@ -476,10 +478,11 @@ Is it a fix, a feature request, or neither?
 
 **Three things bind documentation to `v2`, and none is a loophole.**
 
-**A marker change.** `docs/reference/marker-protocol.md` §5 requires it to touch the
-emitter, the window, both suites *and* the reference **in one commit** — that is what makes
-the change reviewable at all. Those code files are 2.0-only, so the reference edit goes with
-them, onto `v2`, and reaches `main` at the 2.0.0 merge (design §5.3). The reason is not
+**A marker change made as 2.0 work.** `docs/reference/marker-protocol.md` §5 requires it
+to touch the emitter, the window, both suites *and* the reference **in one commit** — that
+is what makes the change reviewable at all. That work is 2.0-only, so the reference edit goes
+with it, onto `v2`, and reaches `main` at the 2.0.0 merge (design §5.3). A §1.1 fix on
+`main` that changes a marker keeps the same one-commit rule on `main`. The reason is not
 convenience: `main` still ships the 1.4.0 engine, so a reference amended on `main` would
 describe a contract `main`'s own engine does not implement. ONEUP-0072 is the item.
 
@@ -542,6 +545,7 @@ states it and owns what "complete" means.
       and the named test-harness exceptions §1.2 grants. Nothing else — and not even
       documentation, when a rule binds it to code that only exists on `v2` (§9).
 - [ ] `./local-CI.sh` is green — the whole thing, not the part you thought was affected.
+      A push the hook proves documentation-only runs `--docs` instead (§6).
 
 ## What checks this
 
@@ -603,3 +607,4 @@ clone where nobody ran that one command, a green push proves nothing at all.
 | 15 | 2026-08-20 | 2 lanes, cold; genre standard; Q1 0 · Q2 5 · Q3 1 — all 6 verified, 0 dismissed, all fixed | **Gate on a §9 change made while landing ONEUP-0034's documentation, and both lanes led with the same PRE-EXISTING defect: §9's decision tree still asked the 2026-07-26 severity question — "can people still install updates?" — which §1.1 withdrew as the bar on 2026-08-18.** §1.1 names ONEUP-0110 as the precedent that fails that question and landed on `main` anyway, so the tree routed an ONEUP-0110-shaped fix to `v2` with no 1.4.x. The same withdrawn bar sat in §10's traps as an instruction. Both are now the kind test. **Two findings were my own change's other half**: the new second binder is not a same-commit rule — the code it names is already on `v2` — so the tree's condition answered "no" and sent the edit to `main`, where the push gate reds; it now reads *binds it to code that only exists on `v2`*, in §2's table and §11's checklist too. And the binder was scoped to *a standard or reference* while `tests/docs-check.py` also reads `CLAUDE.md` and `README.md`, so an edit to either was bound by nothing. **Also fixed, pre-existing**: §1.2 listed *a misplaced dialog* and *awkward wording* among things that wait for 2.0, and both are defects, which §1.1's kind test sends to `main`; and three cross-references called the test-harness grant *the one exception* where §1.2 names three, so an exception-2 or -3 shaped change routed to `v2`. Swept the collateral into `docs/design/oneup-2.0.md`'s two branch-table rows and this document's own What-checks-this row, all of which carried the stale counts. |
 | 16 | 2026-08-20 | 1 lane, cold; genre standard; Q1 1 · Q2 2 — all 3 verified, 0 dismissed, all fixed | **Two of the three were loop 15's own other half, which is the pattern this run kept producing.** The new second binder said the check fails *any backticked path carrying a file extension*; `PATH_RE` requires a directory separator as well, so a bare filename escapes it — the gap is now named as a gap, and as not being licence to evade the check by dropping the directory. And sharpening §1.2 into fix-versus-feature left work that is NEITHER with no branch, while §1.2 itself routes ONEUP-0070 to `v2` twice; that third category is now stated. **The pre-existing one would have cut a release nobody needs**: §9's tree sent every fix to a 1.4.x, where §1.2's third exception establishes that a change nobody can see owes none, and §11's checklist already conditions the CHANGELOG entry the same way. |
 | 17 | 2026-08-20 | 1 lane, cold; genre standard; Q1 1 · Q2 1 — both verified, 0 dismissed, both fixed. **Cap reached (3 for a standard), and it is a CALM cap**: findings fell 6 → 3 → 2 across the run, and the one that remained live was pre-existing rather than this run's collateral | **The finding worth the loop was §4 describing a workflow that stopped being durable on 2026-08-18.** It is the standard that owns roadmap IDs, and it still read as a hand-editing procedure — allocate from `.roadmap-counter`, type the bullet template — when `ROADMAP.md` became generated output rendered from the machine-global roadmap store. A conformer following §4 would append a bullet, see it accepted, and lose it at the next write with no error and no diff. §4 now leads with that, keeps the counter (which `roadmap_log` still bumps) and presents the bullet shape as what the store RENDERS. Swept the same claim out of `files-and-naming.md` §2.3. **The other was loop 16's collateral**: §9's tree stayed binary after §1.2 gained a third category, so a refactor or a dependency bump took the fix arm onto frozen `main` — with a release. The tree now has three arms, matching §1.2's three. |
+| 18 | 2026-09-27 | 2 lanes, cold; genre standard; Q1 1 · Q2 3 — 4 verified, 0 dismissed, all fixed | **Gate on ONEUP-0130's new third binding in §9, and neither lane found fault with it**: both checked its two live cases against the branches and they held. All four findings were PRE-EXISTING, so the second share is 0 of 4 inside the armed span. They were fixed here rather than filed, so one gate covers them: §1.2's closing paragraph still offered *can people still install?* as the freeze's test, which §1.1 replaced with the change's kind; §9's tree called any defect a fix for `main`, where §1.2 grants a `tests/` or push-gate fix only by name, and tied a 1.4.x to *a user would notice* against the second exception's owed release; §11 demanded the full gate on a push §6 lets run `--docs`; and the marker binding called files 2.0-only that all exist on `main`. Collateral, repaired in `docs/design/oneup-2.0.md` with no row there: its Documentation row said §9 owns "the two rules" (this run's own change made that false), and its risk list carried the old install test. Five lane open questions resolved clean (the `skip` count, `release.sh`'s commit subject and y/N prompt, the one-workflow claim). |
