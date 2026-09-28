@@ -741,7 +741,7 @@ fact only to make a *different* point with it, and say where it came from.
 | §8.2 every roadmap bullet carries a `**Layman:**` line | **nothing** automatic — `ROADMAP.md` is outside this gate's scope entirely, though the rule is mechanical enough to check |
 | §9 never rewrite `CHANGELOG.md` history | **nothing** automatic — a released entry rewritten looks exactly like one written correctly the first time. Git history is the only record, and nothing reads it |
 | §9 a superseded document is marked, not deleted | **nothing** automatic — a deleted file leaves nothing behind to check |
-| §9 one owner per fact | **nothing** automatic. This is the gap the review loop exists to cover, and the most expensive one to leave uncovered. ONEUP-0105 would gate it |
+| §9 one owner per fact | `tests/docs-check.py` covers one slice: a present-tense count keyed by a backticked name and its unit must carry the same number wherever it is stated — across standards, reference, design, specs, `CLAUDE.md` and `README.md` (ONEUP-0105). A fact stated twice in words, and a copy that still agrees, are the review loop's; that remains the expensive gap |
 
 **More than half these rows have nothing automatic behind them**, and that is the honest
 state rather than a to-do list: a gate for *"is this claim true?"* would have to read the
@@ -750,7 +750,7 @@ The exact figure was written here twice and went stale both times, once within a
 session, because every row added to the table moves it.) Two were worth building anyway, because both would have caught errors this set has
 actually produced — a check for a tree-derived count written in the present tense with no
 command beside it (§6b, **ONEUP-0104**, now in `tests/docs-check.py`), and a check for the
-same figure appearing in two documents at once (§9, filed as **ONEUP-0105**). Both are
+same figure appearing in two documents at once (§9, **ONEUP-0105**, likewise). Both are
 approximations. Both are cheaper than the review pass that catches them otherwise.
 
 ## 10. Cold-eyes loop log

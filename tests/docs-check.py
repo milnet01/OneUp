@@ -229,6 +229,35 @@ def check_counts() -> None:
                   f"the command, or date it as a measurement" if hit else "")
 
 
+# --- §9: one figure, one value ----------------------------------------------
+def check_figures_agree() -> None:
+    # ONEUP-0105. A present-tense count that §6b lets stand — or that sits where
+    # check_counts does not look — is keyed by each backticked name in its sentence and its
+    # unit, and every document stating that key must state the same number. Catches the
+    # figure fixed in one sentence and left stale in another, in one document or across
+    # two. Dated measurements are skipped: two of them may differ because time passed.
+    files = docs("docs/standards", "docs/reference", "docs/design", "docs/specs")
+    files += [ROOT / "CLAUDE.md", ROOT / "README.md"]
+    seen: dict[tuple[str, str], tuple[int, Path, int]] = {}
+    for path in files:
+        for i, para in prose_paragraphs(path):
+            if COUNT_PAST_RE.search(para):
+                continue
+            for sent in re.split(r"(?<=[.!?])\s+", COUNT_QUOTE_RE.sub("", para)):
+                for m in COUNT_RE.finditer(sent):
+                    n = int(m.group(2).replace(",", ""))
+                    if n < 2 or COUNT_LIMIT_RE.search(sent[:m.start()]):
+                        continue
+                    unit = re.search(COUNT_UNITS + r"\b", m.group(0), re.I).group(0)
+                    for name in set(re.findall(r"`([^`\s]+)`", sent)):
+                        key = (name, unit.lower().rstrip("s"))
+                        first = seen.setdefault(key, (n, path, i))
+                        check(first[0] == n, path, i, "§9",
+                              f"{n} {unit} of `{name}` here, {first[0]} at "
+                              f"{first[1].relative_to(ROOT)}:{first[2]} — one fact, one "
+                              f"value" if first[0] != n else "")
+
+
 # --- §9: a pointer resolves -------------------------------------------------
 def check_pointers() -> None:
     # Only the documents that describe the tree as it is today. A spec, a design document
@@ -332,7 +361,7 @@ def check_changelog_links() -> None:
 
 def main() -> int:
     for fn in (check_headers, check_sections, check_loop_tallies, check_line_citations,
-               check_counts, check_pointers, check_markers, check_marker_table,
+               check_counts, check_figures_agree, check_pointers, check_markers, check_marker_table,
                check_changelog_links):
         fn()
     for line in failures:
