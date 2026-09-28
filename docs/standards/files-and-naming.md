@@ -223,6 +223,7 @@ Every environment override that exists, and every path that has none:
 | Stop request | `~/.local/state/oneup/stop.request` | both | `ONEUP_STOP_FILE` — **engine only** |
 | Hold stamp | `~/.local/state/oneup/hold.state` | both | `ONEUP_HOLD_STATE` — **engine only** |
 | Go-ahead request | `~/.local/state/oneup/go.request` | both | `ONEUP_GO_FILE` — **engine only** |
+| The `~/.local/state` base of every `oneup/` path above | `~/.local/state` | both | `XDG_STATE_HOME` — taken only when ABSOLUTE; unset, empty or relative falls back (ONEUP-0059) |
 | Hold ceiling | `120` seconds | engine | `ONEUP_HOLD_SECONDS` |
 | Keep-alive refresh interval | `50` seconds | engine | `ONEUP_KEEPALIVE_SECONDS` |
 | zypper lock probe | `/run/zypp.pid` | engine | `ONEUP_ZYPP_PID_FILE` |
@@ -230,6 +231,7 @@ Every environment override that exists, and every path that has none:
 | Download guard | `/usr/libexec/oneup-download-guard`, or `/usr/lib/oneup-download-guard` where `/usr/libexec` does not exist (Leap 15.x) | engine | `ONEUP_GUARD_FILE` |
 | Graphical password helper | `/usr/libexec/ssh/ksshaskpass` | engine | `ONEUP_ASKPASS` |
 | Per-repository refresh budget | `120` seconds | engine | `ONEUP_REFRESH_TIMEOUT` |
+| Flatpak update-count query budget | `60` seconds | Python engine only | `ONEUP_FLATPAK_TIMEOUT` |
 | Repository definitions | `/etc/zypp/repos.d` | engine | `ONEUP_REPOS_DIR` — **engine only** |
 | Stop-request poll interval, download pass | `2` seconds | engine | `ONEUP_STOP_POLL_SECONDS` |
 | Single-instance socket name | `OneUp-<uid>` | GUI | `ONEUP_INSTANCE_NAME` |

@@ -113,7 +113,7 @@ one to the gate. Nobody is warned; the local run simply passes or fails for diff
 reasons.
 
 **Note what "the gate" means here.** Lint runs in `local-CI.sh` **only**. GitHub CI
-(`.github/workflows/release.yml`) runs the three test suites and the AppImage build — it
+(`.github/workflows/release.yml`) runs the test gates and the AppImage build — it
 has never run `ruff` or `shellcheck`. So the divergence is `ruff check .` versus
 `./local-CI.sh`, not versus CI; a lint failure is caught before a push or not at all (`docs/standards/workflow.md` §6 owns that split and what it costs).
 

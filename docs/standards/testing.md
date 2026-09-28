@@ -21,16 +21,16 @@ what checks this · 11 cold-eyes log
 
 Each is runnable on its own, and all are gated by `./local-CI.sh`. Which of them GitHub CI
 also runs on a `v*` tag is `docs/standards/workflow.md` §6's to state — the differential
-harness is deliberately not among them (ONEUP-0195). **This table is known to be
-incomplete**: `tests/parsers-test.py` and `tests/imports-test.py` are part of the suite and
-have no row here (ONEUP-0194).
+harness is deliberately not among them (ONEUP-0195).
 
 | Suite | File | Asserts on |
 | --- | --- | --- |
 | Engine | `tests/run-tests.sh` | the `@@MARKER@@` lines `update_system.sh` prints |
+| Engine parsers | `tests/parsers-test.py` | the pure half of the engine, `oneup/engine/parsers.py`, table-driven against real captured zypper output and the lock file's text |
 | Engine differential | `tests/differential-test.sh` | that `update_system.sh` and the `oneup.engine` package produce the same whole output and exit status when driven through the same mocks — gate G2 of ONEUP-0054, and what makes the rewrite auditable rather than trusted |
 | GUI | `tests/gui-smoke.py` | the window's state after being fed those same marker lines — and, in its `ONEUP_ENGINE=v2` pass only, one scenario that launches the Python engine through the window's own code path and asserts the window acted on what the engine actually sent (gate G3 of ONEUP-0054). That scenario skips in the default pass |
 | Version bump | `tests/bump-test.py` | that a real bump still parses the five real version sites, and rewrites the CHANGELOG heading and both links correctly (`docs/standards/workflow.md` §5.1's row owns the exact split) |
+| Package structure | `tests/imports-test.py` | the `oneup/` package's structural rules — how path constants are imported, which way the engine and window may depend on each other, and how the engine is launched (`docs/standards/workflow.md` §6's row names each) |
 
 **No sizes or assertion counts appear here, deliberately**
 (`docs/standards/documentation.md` §6b). They are wrong the next time anybody adds a test,
@@ -39,11 +39,11 @@ always current and is where to look. Where a count is genuinely needed as a base
 figures 2.0 will be measured against — it belongs in the document doing the measuring, dated
 and in the past tense: `docs/design/oneup-2.0.md` §2.
 
-**`tests/docs-check.py` is a fourth programme in that directory and is deliberately not in
+**`tests/docs-check.py` is one more programme in that directory and is deliberately not in
 the table above.** It asserts nothing about what OneUp does — it checks the documentation
 against the rules of `docs/standards/documentation.md`. It runs in `local-CI.sh` and, unlike
-the three suites, **not** in GitHub CI (`docs/standards/workflow.md` §6 explains why the two
-gate sets differ). Everything in §2 and §3 below is about the three suites; a rule that also
+the test suites, **not** in GitHub CI (`docs/standards/workflow.md` §6 explains why the two
+gate sets differ). Everything in §2 and §3 below is about the suites in the table; a rule that also
 binds `docs-check.py` says so.
 
 They meet in the middle: the engine suite proves the engine **emits** a marker, the GUI

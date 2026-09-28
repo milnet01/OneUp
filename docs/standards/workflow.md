@@ -314,6 +314,7 @@ says what each gate is.
 | `Engine differential (v1 vs v2)` | `tests/differential-test.sh` — `update_system.sh` and `python3 -m oneup.engine` driven through the same mocks, their whole output and exit status diffed per scenario: gate G2 of ONEUP-0054. Local-only against §6.1 step 3, deliberately — the reason is ONEUP-0195 |
 | `GUI smoke test (offscreen)` | `tests/gui-smoke.py` — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip). Run with `ONEUP_ENGINE` cleared, not merely unset: this script does not scrub its environment, so an exported switch would make both passes v2 passes |
 | `GUI smoke test (offscreen, the window driving the v2 engine)` | the same suite under `ONEUP_ENGINE=v2`, which is the only pass its G3 pairing scenario runs in — that scenario launches the Python engine through the window's own code path and reads what came back, where every other scenario feeds the window lines the suite wrote itself. Gate G3 of ONEUP-0054, and unlike the differential harness above it does have a `release.yml` leg |
+| `Package structure (oneup/)` | `tests/imports-test.py` — the package rules a reader passes by eye: no path constant bound by name, no engine module importing `oneup/gui/`, no module building paths from its own `__file__`, the entry point never imported from inside the package, and every engine launch going through `paths.engine_argv` |
 | `Python compile (updater.py, bump.py, oneup/)` | `py_compile updater.py bump.py` plus `compileall oneup` — `compileall` over the package rather than a file list, because a module nobody has imported yet is exactly the one a split leaves broken |
 | `bump.py functional test` | `tests/bump-test.py` — a real bump in a throwaway copy still parses the five real version sites, and rewrites the (synthetic) `CHANGELOG.md`'s heading and both links correctly |
 | `Lint` | `shellcheck`, then `ruff (F,B bug-class)` — best-effort |
@@ -343,11 +344,13 @@ git config core.hooksPath githooks
 **`--no-verify` is not a way past a red gate.** It exists for the case where the hook
 itself is broken. A failing test is fixed, not bypassed.
 
-**The two gate sets are not identical, deliberately.** `release.yml` runs the three test
-suites and the AppImage build — and nothing else. So **every gate in the §6 table above other
-than the three test suites has never run in GitHub CI**: the compile check, lint, packaging validation,
-version lockstep and documentation. Written as the shape rather than a count, because the
-count has gone stale here once already.
+**The two gate sets are not identical, deliberately.** `release.yml` runs the test gates —
+the engine suite, the parser unit tests, the `bump.py` functional test, the package structure
+check and both GUI smoke passes — and the AppImage build, and nothing else. So **every other
+gate in the §6 table has never run in GitHub CI**: the differential harness (deliberately,
+ONEUP-0195), the compile check, lint, packaging validation, version lockstep and
+documentation. Written as names rather than a count, because a count goes stale
+silently.
 
 - **The extras stay local**, so understand what that costs: **a lint failure is
   caught before a push or not at all.** The pre-push hook is what makes that reliable.
@@ -383,8 +386,8 @@ would quietly rewrite a claim it does not understand.
 is no reason to batch pushes. Push each commit as it lands, once local CI is green.
 
 The only workflow is `release.yml`, and it triggers on `push: tags: ['v*']` — an ordinary
-commit push runs no CI at all. A tag push runs the three suites, builds the AppImage and attaches
-it to the GitHub release.
+commit push runs no CI at all. A tag push runs the test gates §6 names, builds the AppImage and
+attaches it to the GitHub release.
 
 ## 8. Releasing
 
