@@ -5039,6 +5039,30 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: review-contract loop 20 on workflow.md, 2026-09-27 (filed at the cap).
 
+- 📋 [ONEUP-0214] **The progress bar's text is unreadable where it sits on the filled part.**
+  Reported by the Hub website session from the published dark screenshot.
+  Measured against build_theme's QSS on main (updater.py) and v2
+  (oneup/gui/theme.py); the rule is identical on both branches.
+  The label colour is $status, over the chunk's $accent gradient,
+  which runs #4aa3ff to #22d3ee.
+
+  Dark ($status #c3ccd9): 1.63:1 on #4aa3ff, 1.12:1 on #22d3ee.
+  Light ($status #3a424d): 3.86:1 on #4aa3ff, 5.62:1 on #22d3ee.
+  WCAG AA for body text is 4.5:1, so both themes fail on the blue
+  end. The light theme only fails there, which is why it looks fine.
+
+  Not a plain colour swap: the centred label straddles the chunk and
+  the unfilled track ($progbg). In dark, a dark label that clears the
+  chunk (#0c0f13: 7.29:1 and 10.63:1) is 1.0:1 on the #0c0f13 track.
+  Options: a text colour that clears both surfaces, a darker chunk,
+  or drawing the label outside the bar. Measure every option against
+  the chunk ends and the track, in both themes and high contrast.
+  Fix on main first, then merge to v2.
+  **Layman:** The words on the progress bar, like "Check complete", are pale grey on bright blue and cyan in the dark theme, so they are very hard to read.
+  Kind: accessibility.
+  Source: hub-website-session-2026-09-28.
+  Lanes: gui, theme.
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of
