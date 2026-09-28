@@ -4472,6 +4472,15 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   be folded into the first document's pass rather than done separately:
   ONEUP-0106 (the bold-nothing form, breached by every standard) and
   ONEUP-0103 (every document names /cold-eyes, which no longer exists).
+  Progress (2026-09-28): coding.md done on v2 — loops 7-8 in its
+  log, 10 verified, all fixed (3d6b46d, d11c141; the one both-branch
+  [Q2] on main e8818e2). Still owed, in this order: testing.md,
+  files-and-naming.md, wording-and-translation.md, dependencies.md,
+  marker-protocol.md (security.md, ui-and-accessibility.md, workflow.md
+  and documentation.md already carry four-question rows). Measured
+  cost: two neutral-lane lanes per loop, ~$0.55-0.62 each. The
+  dominant defect class on v2 copies is text still describing main's
+  tree (ONEUP-0215 files security.md's).
   **Layman:** A stricter review found a dozen real errors in a document we thought was finished; the others have not had that review yet.
   Kind: doc-fix.
   Source: in-session-2026-08-12.
