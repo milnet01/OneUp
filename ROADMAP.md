@@ -4481,6 +4481,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   cost: two neutral-lane lanes per loop, ~$0.55-0.62 each. The
   dominant defect class on v2 copies is text still describing main's
   tree (ONEUP-0215 files security.md's).
+  Progress (2026-09-28): testing.md done on v2 — loops 7-9 in its
+  log, 11 verified, all fixed; cap reached, calm (355253a, 92624f9,
+  933da3d). Still owed, in this order: files-and-naming.md,
+  wording-and-translation.md, dependencies.md, marker-protocol.md.
+  Method that worked: build the packet by RUNNING each claim on v2
+  (half the findings surface there), scrub the loop log, two
+  neutral-lane lanes per loop, fix v2-only unless main's copy is also
+  wrong (then main first, merge).
   **Layman:** A stricter review found a dozen real errors in a document we thought was finished; the others have not had that review yet.
   Kind: doc-fix.
   Source: in-session-2026-08-12.
