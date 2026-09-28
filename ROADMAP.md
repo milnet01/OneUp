@@ -4354,7 +4354,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: in-session-2026-08-12.
 
-- 📋 [ONEUP-0104] **Gate a tree-derived count written in the present tense with no command beside it.**
+- ✅ [ONEUP-0104] **Gate a tree-derived count written in the present tense with no command beside it.**
   documentation.md §6b forbids most code-derived counts in a document, and
   nothing automatic catches a breach. The standard itself has said since
   2026-07-26 that this check is worth building; §4 requires a roadmap id in
@@ -4374,6 +4374,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
 
   Freeze-blocked: this is tests/, and workflow.md 1.2 makes tests-only a
   necessary and not a sufficient condition.
+  Resolved (2026-09-28): check_counts in tests/docs-check.py on v2,
+  over standards, reference and design; proved red. Its two real hits
+  fixed on main in d3046f6 (wording-and-translation.md §6, coding.md
+  §2.1) and merged.
   **Layman:** Catch numbers copied out of the code into a document, which quietly go wrong the moment the code changes.
   Kind: test.
   Source: in-session-2026-08-12.
