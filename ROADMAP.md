@@ -4382,7 +4382,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: test.
   Source: in-session-2026-08-12.
 
-- 📋 [ONEUP-0105] **Gate the same figure appearing in two documents at once.**
+- ✅ [ONEUP-0105] **Gate the same figure appearing in two documents at once.**
   documentation.md §9's one-owner-per-fact rule has nothing automatic behind
   it, and the standard calls it "the most expensive one to leave uncovered".
   §4 requires a roadmap id in a What-checks-this cell whose gap is a defect;
@@ -4400,6 +4400,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   place — the two gates are complements.
 
   Freeze-blocked, same as its sibling: tests/ is not an automatic exception.
+  Resolved (2026-09-28): check_figures_agree in tests/docs-check.py on
+  v2 — same backticked name and unit, same number, within or across
+  documents; dated measurements skipped. Passes today (19 figures in
+  scope, none repeated); proved red with a planted pair.
   **Layman:** Catch a number stated in two places, because the two will disagree the moment one is updated.
   Kind: test.
   Source: in-session-2026-08-12.
