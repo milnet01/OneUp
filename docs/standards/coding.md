@@ -187,8 +187,9 @@ intended none. The three in `run_kwin_script` are fine; the ones in `read_repos`
 two `Updater` `Popen` calls are not. **Re-anchor them to the reported line as part of
 enabling `S`.**
 
-Adopting the config is therefore a small, bounded piece of work — wrap 14 lines, re-anchor
-3 comments, resolve or explicitly ignore the rest — and **not** a one-line config drop.
+Adopting the config is therefore a small, bounded piece of work — wrap the over-long lines
+measured above, re-anchor the misplaced `noqa` comments, resolve or explicitly ignore the
+rest — and **not** a one-line config drop.
 Filed as **ONEUP-0063**. An implementer who adds the file without doing the rest turns the
 gate red on the next commit.
 

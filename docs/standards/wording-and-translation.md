@@ -155,8 +155,8 @@ system tool's output and the engine has no locale machinery by design.
 2026-07-26). Gate **G10** tests the machinery, because untested groundwork is
 indistinguishable from no groundwork by the time somebody contributes Hebrew.
 
-There are **0** `tr()` calls in `updater.py` today and roughly 112 string-setting call sites,
-so this is written as the rule for the wrapping work, not a description of it.
+No user-facing string is wrapped in `tr()` yet, so this is written as the rule for the
+wrapping work, not a description of it.
 
 ### 6.1 Wrap every user-facing string
 
