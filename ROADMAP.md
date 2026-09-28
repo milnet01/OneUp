@@ -6270,6 +6270,23 @@ when complete (that document's §7).
   Kind: chore.
   Source: review-code 2026-08-31, lanes engine-shell and engine-steps.
 
+- 📋 [ONEUP-0215] **v2's security.md names the window's methods as Updater.* that now live in oneup/gui modules.**
+  Found by ONEUP-0107's review-contract run on coding.md (loop 1),
+  which fixed the same class in coding.md on v2. security.md on v2
+  still names Updater.restart_services, Updater.rollback,
+  Updater.restart_now and Updater._service_units (its §1 table, the §4
+  code block and §5), and §4's block says "updater.py, the
+  module-level _ALIAS_RE". On v2 updater.py is a 21-line shim: the
+  functions are module-level in oneup/gui/banners.py and
+  oneup/gui/rollback.py, and _ALIAS_RE lives with repos.py. main's
+  copy is true of main (workflow.md §9 third binding): fix v2's copy
+  only. testing.md carries the same class (Updater._check_app_update,
+  Updater._query_auth_status) and is next in ONEUP-0107's queue, so
+  its own review takes it.
+  **Layman:** A security rule points at code by names from before the window was split into parts, so a reader looks in the wrong file.
+  Kind: doc-fix.
+  Source: review-contract-2026-09-28 coding.md loop 1 (out of scope).
+
 ## 2.1.0 — after 2.0
 
 **Theme:** features raised after 2.0's list closed. They wait for 2.0.0 to ship

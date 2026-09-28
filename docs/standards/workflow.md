@@ -317,7 +317,7 @@ says what each gate is.
 | `Package structure (oneup/)` | `tests/imports-test.py` — the package rules a reader passes by eye: no path constant bound by name, no engine module importing `oneup/gui/`, no module building paths from its own `__file__`, the entry point never imported from inside the package, and every engine launch going through `paths.engine_argv` |
 | `Python compile (updater.py, bump.py, oneup/)` | `py_compile updater.py bump.py` plus `compileall oneup` — `compileall` over the package rather than a file list, because a module nobody has imported yet is exactly the one a split leaves broken |
 | `bump.py functional test` | `tests/bump-test.py` — a real bump in a throwaway copy still parses the five real version sites, and rewrites the (synthetic) `CHANGELOG.md`'s heading and both links correctly |
-| `Lint` | `shellcheck`, then `ruff (F,B bug-class)` — best-effort |
+| `Lint` | `shellcheck`, then `ruff check .` with `pyproject.toml`'s rule set — best-effort |
 | `Packaging validation` | desktop file and AppStream metainfo |
 | `Version lockstep (six sites must agree)` | the **version numbers** at the six sites of §5.1 agree |
 | `Documentation` | `tests/docs-check.py` — the rules of `docs/standards/documentation.md` that a script can settle, the `CHANGELOG.md` links §5.1's site 6 depends on, and the marker table in `docs/reference/marker-protocol.md` §3 against both the engine's `marker NAME` call sites and the markers the engine suite asserts on |

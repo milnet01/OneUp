@@ -58,8 +58,7 @@ PySide6 — the only third-party thing the GUI needs — declares `requires_pyth
 <3.15,>=3.10` (measured against PyPI for 6.11.1; see `docs/standards/dependencies.md`).
 So **3.14 is permitted by the ceiling and 3.15 is not**, until PySide6 raises it. Ceiling
 and floor are different questions: CI and the AppImage may *run* 3.14, while code may not
-*require* it (§1). This is what ONEUP-0004's pending CI bump turns on — 3.13 → 3.14 is
-inside the ceiling; a later jump to 3.15 is not, and must wait for PySide6.
+*require* it (§1). CI's move to 3.14 (ONEUP-0004) is inside the ceiling; a later jump to 3.15 is not, and must wait for PySide6.
 
 ### 1.3 What the floor lets you write
 
@@ -184,8 +183,8 @@ executable literal, which is the line *after* the `subprocess.run(` / `subproces
 that the comment is attached to. So the directive suppresses nothing (`RUF100: unused
 noqa`) **and** the underlying `S607` fires unsuppressed — two errors where the author
 intended none. The three in `run_kwin_script` are fine; the ones in `read_repos` and the
-two `Updater` `Popen` calls are not. **Re-anchor them to the reported line as part of
-enabling `S`.**
+two `Updater` `Popen` calls are not. ONEUP-0063 re-anchored them when it enabled `S`: on
+`v2` each `S607` now sits on the line carrying the executable.
 
 Adopting the config is therefore a small, bounded piece of work — wrap the over-long lines
 measured above, re-anchor the misplaced `noqa` comments, resolve or explicitly ignore the
@@ -195,8 +194,8 @@ gate red on the next commit.
 
 ### 2.2 Shell code
 
-`shellcheck` runs in `local-CI.sh`'s Lint gate with `-e SC2001` on `update_system.sh`,
-`tests/run-tests.sh` and the other shell scripts. Keep new shell clean under the same
+`shellcheck` runs in `local-CI.sh`'s Lint gate with `-x -e SC2001` over the shell scripts
+it names — `-x` so a script's `source` is followed. Keep new shell clean under the same
 flags. If the Python engine rewrite (ONEUP-0054) lands, shell shrinks but does not vanish
 — `local-CI.sh`, `release.sh`, `bump.py`'s callers and `githooks/pre-push` stay.
 
@@ -239,9 +238,7 @@ A class that size cannot be held in a reader's head, cannot be reviewed as a uni
 be tested except through the whole application. Splitting it is ONEUP-0034, specced in
 `docs/specs/ONEUP-0034-gui-modules.md` and **done on `v2` on 2026-08-20**; the figures above
 describe `main`, which still ships the single file. This standard's job is to stop the next
-file getting there — and the split's own outcome is the honest test of the ceiling: every
-module it produced fits except the window itself, which the spec said up front it would
-not.
+file getting there.
 
 *(The exact line counts are deliberately not quoted — `docs/standards/documentation.md` §6b.
 They change with every commit, and the multiple is what carries the argument. The measured
@@ -276,7 +273,7 @@ OneUp's entire job is running other programs, so this section is load-bearing.
    check — the snapshot id reaching `snapper rollback` is checked to be a bare number
    before it is used.
 3. **The GUI never calls `sudo` and never becomes root** — measured: zero `sudo`
-   invocations in `updater.py`. Update work shells out to the engine, which is the only
+   invocations in the window's code, `oneup/gui/`. Update work shells out to the engine, which is the only
    part that touches root during a run. It *may* ask `pkexec` to run a named program as
    root for a short user-initiated action outside a run, and **every argument is validated
    first, at every such site**. Corrected 2026-07-26: an earlier revision of this line said
@@ -285,16 +282,15 @@ OneUp's entire job is running other programs, so this section is load-bearing.
 4. **No privileged call ever sits inside a subshell.** In the engine, a call whose
    *output* is needed goes through `sudo_capture`; every other one is a direct `sudo` at
    top level, which is safe precisely because sudo stays the caller's own child. This is
-   the most expensive trap in the project and §8.1 explains why. In Python the rule
-   becomes: one runner object owns every privileged child process.
+   the most expensive trap in the project and §8.1 explains why. In the Python engine
+   the runner is `sudo()` — or `sudo_argv()`, where the caller streams the output — in
+   `oneup/engine/privilege.py`; `docs/standards/security.md` §2.3 owns the rule.
    (`docs/standards/security.md` §1.2 owns the counts and how they were taken.)
 5. **Long-running child processes use `QProcess`, not `subprocess`**, in the GUI. Qt's
    event loop reads its output without blocking the window; `subprocess.run` freezes it.
    `subprocess` is for short, immediate calls that answer a question (`systemctl
-   --user is-enabled`). There are **13** such call sites in `updater.py` today — among
-   them `read_repos`, `run_kwin_script`, `Updater._timer_enabled`,
-   `Updater._install_user_timer`, `Updater._remove_user_timer`, and the two
-   `subprocess.Popen` sites in `Updater`.
+   --user is-enabled`). `read_repos`, `run_kwin_script` and the
+   `systemctl --user` helpers in `oneup/gui/autostart.py` are the pattern.
 
 ### 5.2 Annotating a suppression
 
@@ -305,9 +301,10 @@ just which rule to silence. The existing ones are the pattern to copy:
 subprocess.run(  # noqa: S603,S607 — fixed argv, no shell.
 ```
 
-A bare `# noqa: S603` with no reason is a review comment. Two of the six are exactly that
-today — the second and third calls in `run_kwin_script` — and they are the counterexample,
-not the pattern. Give each a reason when §2.1's config lands.
+A bare `# noqa: S603` with no reason is a review comment. Some in `oneup/gui/` are exactly
+that today — the second and third calls in `run_kwin_script` among them — and they are the
+counterexample, not the pattern. Nothing checks for the reason; give one when you touch the
+line.
 
 ---
 
@@ -321,14 +318,14 @@ lock in what is true rather than asking for a migration.
   runtime instead of at import, which is the worst possible time to find a typo.
 - **Parent every widget that owns a window** — dialogs, `QMenu`, `QMessageBox`. An
   unparented menu can be garbage-collected while it is on screen; the ONEUP-0018 review
-  found exactly that. The one menu in the tree is parented today (`QMenu(self)` in
-  `Updater._ensure_tray`), and new ones must be.
-- **Parent every `QProcess`.** Every one in the tree is (`QProcess(self)`). An unparented
+  found exactly that. The one menu in the tree is parented today (`QMenu(win)` in
+  `_ensure_tray`, `oneup/gui/tray.py`), and new ones must be.
+- **Parent every `QProcess`.** Every one in the tree is. An unparented
   one is collected by Python while C++ still holds it, which surfaces as
   `RuntimeError: Internal C++ object (QProcess) already deleted`.
 - **Parenting is not the whole answer, and the tree proves it.** That same `RuntimeError`
   is printed dozens of times by a *passing* `tests/gui-smoke.py` run, from the `finished` lambda
-  in `Updater._query_auth_status` — where the `QProcess` **is** parented.
+  in `_query_auth_status` (`oneup/gui/auth.py`) — where the `QProcess` **is** parented.
   (`docs/standards/testing.md` §7 owns the measurement and says how to take it; the count
   varies run to run, so it is not quoted here.) Parenting is
   what kills it: the test drops the window, Qt deletes the child C++ object, and the
@@ -354,7 +351,8 @@ genuinely is the only option, a comment names the constraint so it reads as deli
   `except (OSError, subprocess.SubprocessError)` — the form already used in
   `run_kwin_script` and `read_repos`.
 - **No `except Exception: pass`.** There is exactly **one** `except Exception` in
-  `updater.py`. One is a defensible number; keep it there.
+  the app's code (`updater.py` and `oneup/`), in `oneup/gui/theme.py`'s colour-scheme
+  probe. One is a defensible number; keep it there.
 - **A failure is reported, never silenced**, and **never claim success you did not earn.**
   These are not style preferences — they are the four correctness invariants the engine
   suite exists to protect, and `docs/standards/testing.md` §5 states them in full and owns
@@ -421,8 +419,7 @@ path for a situation that cannot arise at the call site.
 Written down because each one has either bitten this project or is positioned to.
 
 **10.1 — CI's Python version is not the floor.** `.github/workflows/release.yml` pins
-`python-version: '3.13'`, and ONEUP-0004 will raise it to 3.14. **That bump does not
-raise the floor.** CI's interpreter builds the AppImage, which bundles its own Python; the
+`python-version: '3.14'` (ONEUP-0004). **That does not raise the floor.** CI's interpreter builds the AppImage, which bundles its own Python; the
 RPM path runs the *distro's* `/usr/bin/python3` (the spec's `oneup` wrapper). So a 3.14-only idiom
 would pass CI, ship a working AppImage, and break for every user who installed via
 `zypper`. The floor moves only when §1's table moves.
@@ -431,16 +428,12 @@ would pass CI, ship a working AppImage, and break for every user who installed v
 "it works in the AppImage" is not evidence that it works when installed from the RPM or
 OBS. Two distribution paths, two Pythons. Test the one you are claiming about.
 
-**10.3 — `ruff check .` and the gate disagree today.** Covered in §2.1. Until
-`pyproject.toml` exists, run the gate's command verbatim —
-`ruff check . --select F,B --exclude screenshots` — or better, run `./local-CI.sh`, which
-is where lint actually runs. **GitHub CI never lints**, so a `ruff` failure that gets past
-`local-CI.sh` gets past everything.
+**10.3 — GitHub CI never lints.** `ruff` and `shellcheck` run in `./local-CI.sh` only, so a
+lint failure that gets past it gets past everything. A bare `ruff check .` reads
+`pyproject.toml` and gives the gate's answer (§2.1).
 
-**10.4 — The six `noqa: S` comments suppress nothing.** They name rules the current
-invocation does not enable. Do not read them as evidence that a security rule set is
-running, and do not delete them; §2.1 turns them on — and §2.1.1 explains why three of
-them still will not work until they are re-anchored.
+**10.4 — A `noqa: S` comment is a live suppression.** `S` is enabled, so each one silences
+a security diagnostic `ruff` would otherwise fail the gate on. §5.2 says what it must carry.
 
 **10.5 — `python3-pyside6` looks like it does not exist, and does.** Checking with
 `zypper info python3-pyside6` on Tumbleweed reports *"package not found"*, because the
@@ -457,8 +450,8 @@ value goes through a marker (see `docs/reference/marker-protocol.md`).
 
 Corrected 2026-07-26: this trap previously read "the GUI must never grow a privileged
 call", which is both wrong and misleading — the GUI already calls `pkexec` at three sites
-(`RepoManagerDialog._build_apply_command`, `Updater.restart_services`,
-`Updater.rollback`), two of which build a root shell string. Coding to the
+(`RepoManagerDialog._build_apply_command`, `restart_services` in `oneup/gui/banners.py`,
+`rollback` in `oneup/gui/rollback.py`), two of which build a root shell string. Coding to the
 absolute version means not writing the boundary validation those sites depend on, which is
 the opposite of safe. `docs/standards/security.md` §1.4–1.6 and §4 carry the accurate rule
 and the guards it requires.
@@ -482,23 +475,21 @@ and the guards it requires.
 
 | Rule | What catches a breach |
 | --- | --- |
-| the code parses | `python3 -m py_compile updater.py bump.py` in `local-CI.sh` |
-| §1 the 3.13 floor and the below-3.15 ceiling | **nothing** — no `python_requires` is declared anywhere in the tree. ONEUP-0063's `pyproject.toml` is what will declare it |
-| §2.1 the select list | **nothing** — `local-CI.sh` runs `ruff check . --select F,B`, the bug classes only, because there is no config for `ruff` to read. ONEUP-0063 closes this |
-| §2.2 shell code | `shellcheck -e SC2001` in `local-CI.sh`, over the six shell scripts it names |
+| the code parses | `python3 -m py_compile updater.py bump.py` and `compileall oneup` in `local-CI.sh` |
+| §1 the 3.13 floor and the below-3.15 ceiling | half-covered. `ruff`'s `target-version = "py313"` rejects syntax newer than 3.13 — measured 2026-09-28 with ruff 0.16.8, where a t-string and an unparenthesised `except A, B` both failed. A 3.14-only **library** call is caught by nothing, and no `python_requires` is declared: `pyproject.toml` has no `[project]` table |
+| §2.1 the select list | `ruff check .` in `local-CI.sh`, reading `pyproject.toml` |
+| §2.2 shell code | `shellcheck -x -e SC2001` in `local-CI.sh`, over the shell scripts it names |
 | §3 type hints | nothing automatic |
 | §4 module and function size | nothing automatic, deliberately. It is a soft ceiling, and a hard one is met by splitting badly |
-| §5 subprocess discipline | half-covered. `tests/run-tests.sh` proves an unsafe repo alias never reaches a privileged command; `ruff`'s `S` rules would cover the rest, but only after ONEUP-0063 |
+| §5 subprocess discipline | half-covered. `ruff`'s `S` rules in `local-CI.sh`, and `tests/run-tests.sh`'s proof that an unsafe repo alias never reaches a privileged command. A `noqa` with no reason (§5.2) and a privileged call outside §5.1 rule 4's runner are caught by nothing |
 | §6 Qt idioms | nothing automatic |
-| §7 error handling | `ruff`'s `BLE` rule, again only after ONEUP-0063 |
+| §7 error handling | `ruff`'s `BLE` rule in `local-CI.sh` |
 | §8 comments | nothing automatic |
 | §9 reuse before rewriting | nothing automatic |
 
-**Almost nothing in this standard is gated today, and one roadmap item fixes most of it.**
-ONEUP-0063's `pyproject.toml` turns §2.1, §5 and §7 from prose into `ruff` rules that run on
-every push. Until it lands, this standard is enforced by review alone — which is worth
-stating plainly here rather than leaving a reader to discover it from a green `local-CI.sh`
-that checked two rule families out of eight.
+**`ruff` gates §1's syntax floor, §2.1, part of §5 and §7 on every push through
+`local-CI.sh`; everything marked *nothing* above is enforced by review alone.** GitHub CI
+runs none of it (§10.3).
 
 ## 12. Cold-eyes loop log
 
@@ -510,3 +501,4 @@ that checked two rule families out of eight.
 | 4 | 2026-07-26 | none | clean. |
 | 5 | 2026-07-26 | 1 medium — **1 verified** | the loop-1 row above carried 54 as the prescribed ruff config's error count. 54 is the figure *without* `BLE`; §2.1.1 owns both, and the row now defers to it. |
 | 6 | 2026-07-26 | 1 low — **1 verified** | converged (polish only). §6 quoted the teardown-traceback count as '~30'. It varies run to run, so `testing.md` §7 owns it and this file no longer states a number (§6b). |
+| 7 | 2026-09-28 | 2 lanes, cold, dispatched from outside the project; genre pinned standard; every lane held every question. Q1 7 · Q2 1 · Q3 1 — 9 verified, 0 dismissed, all 9 fixed | **A pure audit (ONEUP-0107): no change armed it, so there is no armed-span share.** The four-question gate's first read of this document, and it found `v2`'s copy still describing `main`'s tree: the What-checks-this table, §10.3 and §10.4 said the lint gate ran `--select F,B` with `S` and `BLE` off, when `v2` runs the full `pyproject.toml` set; §1's row said nothing checks the floor, when `ruff`'s `target-version` rejects newer syntax (measured, not assumed); window methods were placed in `updater.py`, now a shim; §4.1 said every split module fits the ceiling; §10.1 had CI on 3.13. **The one [Q2] was true of both branches** — §5.1 rule 2 forbade the interpolation `security.md` §1.6 approves — so it landed on `main` (e8818e2) and merged; the rest are `v2`-only (workflow.md §9). The [Q3]: rule 4's runner was unnamed; it is `privilege.py`'s `sudo()`. Five of the nine surfaced while building the packet, before a lane ran. Collateral: `workflow.md`'s Lint row corrected in passing; `security.md`'s stale `Updater.*` names filed as ONEUP-0215. `tests/docs-check.py` stood in for `check-doc-facts`; it checks no quotation and no symbol |
