@@ -5058,6 +5058,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   or drawing the label outside the bar. Measure every option against
   the chunk ends and the track, in both themes and high contrast.
   Fix on main first, then merge to v2.
+  Decided (user, 2026-09-28): two-tone label. Paint the text
+  clipped to the chunk in near-black (#0c0f13: 7.29:1 and 10.63:1 on
+  the gradient ends) and the rest in the theme's $status colour
+  (dark #c3ccd9 on track #0c0f13: 11.85:1; light #3a424d on #dfe4ea:
+  7.95:1). No single colour can pass on both surfaces in dark: it
+  would need luminance >= 0.197 and <= 0.039 at once. Look and
+  layout unchanged, so the published screenshots stay valid.
+  High contrast uses its own chunk/track rule; measure it too.
   **Layman:** The words on the progress bar, like "Check complete", are pale grey on bright blue and cyan in the dark theme, so they are very hard to read.
   Kind: accessibility.
   Source: hub-website-session-2026-09-28.
