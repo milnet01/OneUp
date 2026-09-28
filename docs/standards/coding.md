@@ -270,10 +270,11 @@ OneUp's entire job is running other programs, so this section is load-bearing.
 
 1. **Never `shell=True`. Never `os.system`.** Pass an argument list. There is no
    `shell=True` in the tree today (measured) — keep it that way.
-2. **Fixed argv only.** No string interpolation of user or engine data into a command.
-   Where a value must be passed, it is a separate list element, and it is validated first
-   — the snapshot id reaching `snapper rollback` is checked to be a bare number before it
-   is used (`docs/standards/security.md` §4).
+2. **Fixed argv only.** Where a value must be passed, it is a separate list element, and
+   it is validated first. The two root shell strings `docs/standards/security.md` §1.6
+   names are the exception: a value is interpolated into them only after §4's shape
+   check — the snapshot id reaching `snapper rollback` is checked to be a bare number
+   before it is used.
 3. **The GUI never calls `sudo` and never becomes root** — measured: zero `sudo`
    invocations in `updater.py`. Update work shells out to the engine, which is the only
    part that touches root during a run. It *may* ask `pkexec` to run a named program as
