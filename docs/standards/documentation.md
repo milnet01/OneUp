@@ -730,7 +730,7 @@ fact only to make a *different* point with it, and say where it came from.
 | §6 a claim is checked against the tree | **nothing** automatic. The review gate is the only catcher, which is why §7 is a gate and not advice |
 | §6 no `TODO` / `TBD` / `FIXME` / `XXX` left in a document | `tests/docs-check.py` |
 | §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design — and **that is the whole of its reach**. `docs/specs/` is exempt until ONEUP-0065 converts the `path:line` citations the older specs carry; `CLAUDE.md` and `ROADMAP.md` are inside §6a.2's scope and are scanned by **nothing**, as is the prose form — *"around line 786"* |
-| §6b most counts taken from the code stay out of the document | **nothing** automatic — a cold reader. ONEUP-0104 would gate it |
+| §6b most counts taken from the code stay out of the document | `tests/docs-check.py`, over standards, reference and design: a number beside a counting unit, in a paragraph with no commit, date or past-tense verb. **An approximation** — a count written without a unit it knows, or in specs and plans, is left to a cold reader (ONEUP-0104) |
 | §7 a loop tally balances | `tests/docs-check.py` |
 | §7.1 a run-state note is deleted when its run ends | **nothing** automatic — whether a run has ended is not a fact on disk. The catcher is the closing commit itself; a later reader can only spot a breach by the `-run-state.md` name §7.1 pins |
 | §7.1 a file under `docs/reviews/` is named `-run-state.md` or `-fix-ledger.md` | **nothing** automatic — no gate scans that directory at all, which is the same gap the row above rests on |
@@ -747,12 +747,11 @@ fact only to make a *different* point with it, and say where it came from.
 state rather than a to-do list: a gate for *"is this claim true?"* would have to read the
 code and decide. (The proportion is stated rather than counted on purpose — §6b's own rule.
 The exact figure was written here twice and went stale both times, once within a single
-session, because every row added to the table moves it.) Two are worth building anyway, because both would have caught errors this set has
+session, because every row added to the table moves it.) Two were worth building anyway, because both would have caught errors this set has
 actually produced — a check for a tree-derived count written in the present tense with no
-command beside it (§6b, filed as **ONEUP-0104**), and a check for the same figure appearing
-in two documents at once (§9, filed as **ONEUP-0105**). Both are approximations. Both are
-cheaper than the review pass that currently catches
-them.
+command beside it (§6b, **ONEUP-0104**, now in `tests/docs-check.py`), and a check for the
+same figure appearing in two documents at once (§9, filed as **ONEUP-0105**). Both are
+approximations. Both are cheaper than the review pass that catches them otherwise.
 
 ## 10. Cold-eyes loop log
 

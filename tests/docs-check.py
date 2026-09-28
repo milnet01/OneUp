@@ -45,6 +45,24 @@ DISPOSITION_RE = re.compile(r"(\d+)\s+(verified|dismissed|info)\b", re.I)
 # The four-question gate counts findings per question (`Q1 2 · Q3 1`), with no severity.
 Q_TALLY_RE = re.compile(r"\bQ[1-4]\s+(\d+)\b")
 VERIFIED_RE = re.compile(r"(\d+)\s+verified\b", re.I)
+# §6b: a count taken from the tree, stated as standing fact. A number within three words of
+# a counting unit. A roadmap id's digits (`0069`) are not a count.
+COUNT_UNITS = (r"(?:lines?|tests?|assertions?|scenarios?|call[- ]sites?|markers?|errors?|"
+               r"warnings?|calls?|files?|modules?|citations?|functions?|findings?|prompts?|"
+               r"tracebacks?)")
+COUNT_RE = re.compile(r"(?<![\w.#§/·-])(\*\*)?(?!0\d{3}\b)(\d[\d,]*)(\*\*)?\s+"
+                      r"(?:[\w`'()-]+\s+){0,3}?" + COUNT_UNITS +
+                      r"\b(?!\s+(?:per|an?|each)\b)", re.I)
+# A limit or a rate is a rule, not a count: "600 lines per module", "60 calls an hour",
+# "no module crossed 600 lines".
+COUNT_LIMIT_RE = re.compile(r"\b(?:crossed|over|under|above|below|exceeds?|than|at most|"
+                            r"at least|within|ceiling|limit|per)\s+(?:\*\*)?$", re.I)
+# §6b.4's escape: a commit, a date or a past-tense verb anywhere in the paragraph makes the
+# figure a measurement of something that happened.
+COUNT_PAST_RE = re.compile(r"`[0-9a-f]{7,40}`|\b20\d\d-\d\d-\d\d\b|"
+                           r"\b(?:measured|was|were|had|once|reported|found|counted)\b", re.I)
+# A quoted example of the breach, which §6b itself has to show.
+COUNT_QUOTE_RE = re.compile(r'\*"[^"]*"\*|"[^"]*"')
 
 failures: list[str] = []
 checked = 0
@@ -166,6 +184,51 @@ def check_line_citations() -> None:
                   if hit else "")
 
 
+# --- §6b: a count from the tree is a measurement, not a standing fact ---------
+def prose_paragraphs(path: Path):
+    """Yield (first line, text) for each prose paragraph. Headings, tables, fences, the
+    one-line section lists (`1 x · 2 y`) and everything under a loop-log heading are not
+    prose: a loop log is a dated record, which is §6b.4's form already."""
+    fence = in_log = False
+    buf: list[str] = []
+    start = 0
+    for i, ln in enumerate(path.read_text().split("\n"), 1):
+        if ln.startswith("```"):
+            fence = not fence
+        if ln.startswith("#"):
+            in_log = "loop log" in ln.lower()
+        if (fence or ln.startswith(("```", "#", "|", "**Sections:**")) or not ln.strip()
+                or "·" in ln or in_log):
+            if buf:
+                yield start, " ".join(buf)
+                buf = []
+            continue
+        if not buf:
+            start = i
+        buf.append(ln.strip())
+    if buf:
+        yield start, " ".join(buf)
+
+
+def check_counts() -> None:
+    # ONEUP-0104. An approximation, so it scans only the documents §6a's check scans: specs
+    # and plans number their steps and stages, which reads as a count ("stage 2 step 12b")
+    # and would bury the real hits. A false positive's remedy is §6b.4's form — date it —
+    # never a suppression comment.
+    for path in docs("docs/standards", "docs/reference", "docs/design"):
+        for i, para in prose_paragraphs(path):
+            if COUNT_PAST_RE.search(para):
+                continue
+            bare = COUNT_QUOTE_RE.sub("", para)
+            hit = next((m for m in COUNT_RE.finditer(bare)
+                        if int(m.group(2).replace(",", "")) >= 2
+                        and not COUNT_LIMIT_RE.search(bare[:m.start()])
+                        and " per " not in m.group(0)), None)
+            check(hit is None, path, i, "§6b",
+                  f"present-tense count {hit.group(0)!r} — drop it, write the shape, name "
+                  f"the command, or date it as a measurement" if hit else "")
+
+
 # --- §9: a pointer resolves -------------------------------------------------
 def check_pointers() -> None:
     # Only the documents that describe the tree as it is today. A spec, a design document
@@ -269,7 +332,8 @@ def check_changelog_links() -> None:
 
 def main() -> int:
     for fn in (check_headers, check_sections, check_loop_tallies, check_line_citations,
-               check_pointers, check_markers, check_marker_table, check_changelog_links):
+               check_counts, check_pointers, check_markers, check_marker_table,
+               check_changelog_links):
         fn()
     for line in failures:
         print(f"  FAIL {line}")
