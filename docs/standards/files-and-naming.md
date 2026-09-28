@@ -216,6 +216,8 @@ Every environment override that exists, and every path that has none:
 | Graphical password helper | `/usr/libexec/ssh/ksshaskpass` | engine | `ONEUP_ASKPASS` |
 | Per-repository refresh budget | `120` seconds | engine | `ONEUP_REFRESH_TIMEOUT` |
 | Repository definitions | `/etc/zypp/repos.d` | engine | `ONEUP_REPOS_DIR` — **engine only** |
+| Stop-request poll interval, download pass | `2` seconds | engine | `ONEUP_STOP_POLL_SECONDS` |
+| Single-instance socket name | `OneUp-<uid>` | GUI | `ONEUP_INSTANCE_NAME` |
 | Engine's user-visible log dir | `~/Documents/update-logs` | engine | **none** |
 | GUI's log dir | `~/.local/state/oneup/logs` | GUI | **none** |
 | Run history | `~/.local/state/oneup/history.json` | GUI | **none** |
@@ -230,6 +232,10 @@ were true would have misled the 2.0 implementer.** What is actually true:
   recovery declines when no `download.opensuse.org` baseurl is present — an empty
   directory would make every recovery scenario exercise the skip path while appearing to
   test recovery.
+- **`ONEUP_INHIBITED` is not in the table either: it is the engine's own re-exec guard,
+  not a setting.** The engine exports it just before re-running itself under
+  `systemd-inhibit`, so the second copy does not do it again. Set by hand, it skips the
+  shutdown and sleep inhibitor for that run.
 - **`ONEUP_TEST_NETWORK` is not in the table above, because it is not an engine
   override.** It is read by `tests/run-tests.sh` alone, and opts in to the network-dependent
   checks (ONEUP-0094 T-1). `local-CI.sh` defaults it to 1, the release workflow leaves it
