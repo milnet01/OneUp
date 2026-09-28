@@ -4707,7 +4707,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: review-contract-2026-08-25 ONEUP-0054 stage-3 plan gate, lane 1.
 
-- 📋 [ONEUP-0133] **workflow.md §6's gate table is missing its Package structure row.**
+- ✅ [ONEUP-0133] **workflow.md §6's gate table is missing its Package structure row.**
   local-CI.sh runs `step "Package structure (oneup/)"` between the GUI
   smoke test and the compile step, and §6's table has no row for it — so
   the table's own closing line, "Listed in the order local-CI.sh runs
@@ -4720,6 +4720,8 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   §9): v2 only. main's §6 is true of main; fix v2's own copy, and keep
   v2's side when main is merged in. Fix with ONEUP-0193 and 0194 in one
   v2 commit.
+  Resolved (2026-09-28): 3a3bbf2 on v2 — the Package structure row, in
+  local-CI.sh order.
   **Layman:** One of the checks that runs before every push is not listed in the document that is supposed to list them all.
   Kind: doc-fix.
   Source: review-contract-2026-08-25 ONEUP-0054 stage 4 loop 2.
@@ -4920,7 +4922,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: review-code 2026-08-31, lanes tooling, gui-services, gui-run, engine-protocol.
 
-- 📋 [ONEUP-0193] **workflow.md §6 says release.yml runs the three test suites "and nothing else", and it runs more.**
+- ✅ [ONEUP-0193] **workflow.md §6 says release.yml runs the three test suites "and nothing else", and it runs more.**
   Found while building the stage-6 review packet. §6's closing block reads
   "release.yml runs the three test suites and the AppImage build — and nothing
   else", and the workflow also runs the bump.py functional test and the package
@@ -4936,11 +4938,13 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Branch settled 2026-09-27 by ONEUP-0130's third binding: v2 only.
   main's release.yml really does run three suites and nothing else. Fix
   together with ONEUP-0133 and 0194.
+  Resolved (2026-09-28): 3a3bbf2 on v2 — §6 names the six test gates
+  release.yml runs; §7 and coding.md stopped saying three.
   **Layman:** A rule about our automated build checks says it runs three things; it actually runs five.
   Kind: doc-fix.
   Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, packet build).
 
-- 📋 [ONEUP-0194] **testing.md §1 says the suite is three programmes and names three; five ship.**
+- ✅ [ONEUP-0194] **testing.md §1 says the suite is three programmes and names three; five ship.**
   §1 opens "Three programmes, each runnable on its own" and its table names
   run-tests.sh, gui-smoke.py and bump-test.py. The tree also ships
   parsers-test.py (added by ONEUP-0054 stage 4, gated by local-CI.sh and run by
@@ -4956,6 +4960,8 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Branch settled 2026-09-27 by ONEUP-0130's third binding: v2 only. main
   ships three suites, so testing.md §1 is true on main. Correct v2's
   copy together with ONEUP-0133 and 0193.
+  Resolved (2026-09-28): 3a3bbf2 on v2 — parser and package-structure
+  rows added; the incomplete-table note removed.
   **Layman:** A rule says our test suite has three parts and lists them; there are five.
   Kind: doc-fix.
   Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, loop 2).
@@ -4997,7 +5003,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: in-session-2026-09-03 (ONEUP-0054 stage 7 plan gate, Phase 1b).
 
-- 📋 [ONEUP-0211] **files-and-naming.md §5.1 claims every environment override, and misses four.**
+- ✅ [ONEUP-0211] **files-and-naming.md §5.1 claims every environment override, and misses four.**
   §5.1 opens "Every environment override that exists". Diffed 2026-09-27
   against the env reads in both engines and the window. Missing on both
   branches: ONEUP_STOP_POLL_SECONDS (update_system.sh; oneup/engine/steps.py
@@ -5007,6 +5013,9 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   and XDG_STATE_HOME, which moves every state-path default (ONEUP-0059).
   The doc names nothing the code lacks. The main-branch rows land on main;
   the two v2-only rows land with the v2 copy (workflow.md §9).
+  Resolved (2026-09-28): main half 6daf0ed (ONEUP_STOP_POLL_SECONDS,
+  ONEUP_INSTANCE_NAME rows; ONEUP_INHIBITED carve-out); v2 half 3a3bbf2
+  (ONEUP_FLATPAK_TIMEOUT, XDG_STATE_HOME).
   **Layman:** The list of settings you can change through the environment says it is complete, and it leaves some out.
   Kind: doc-fix.
   Source: in-session-2026-09-27 (CFG-0562 sizing for claude-config).
