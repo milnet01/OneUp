@@ -75,6 +75,9 @@ ONEUP_INHIBITED="${ONEUP_INHIBITED-1}"
 ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}"
 ```
 
+It also puts the mock directory first on `PATH`, and passes `--log=` into the scenario
+directory so the engine never defaults into a log directory under the real `HOME`.
+
 **The rule is every override, not a fixed count — read the set out of `run_engine`.**
 ONEUP-0044 added `hold.state` and `go.request` after this section was written, and the
 count in this prose stayed at four; a scenario copying that list would read and write the
@@ -99,7 +102,7 @@ Both defaults bit for real, which is why the rule is not theoretical:
   longer find the run it was following (ONEUP-0045).
 
 **A scenario that invokes the engine directly instead of through `run_engine` repeats every
-one of those overrides by hand.** There is no fallback that catches the omission — the test simply
+one of those settings by hand.** There is no fallback that catches the omission — the test simply
 starts reading the machine's real state, and will pass or fail according to what the user
 happens to be doing.
 
@@ -171,8 +174,8 @@ when a scenario is commented out during debugging.
 
 ## 3. The mock-PATH sandbox
 
-Almost every engine scenario — 75 of 76 — builds a directory of fake system tools and
-prepends it to `PATH`. (The exception is the keep-alive-guard scenario, which executes a
+Almost every engine scenario builds a directory of fake system tools and prepends it to
+`PATH`. (The exception is the keep-alive-guard scenario, which executes a
 `sed`-extracted fragment of the engine rather than the engine, and is safe only because its
 `kill -0` guard fails before the body runs. **Its safety rests on that guard and nothing
 asserts the guard** — the suite does assert what the keep-alive *does* (it exits once the
@@ -307,9 +310,7 @@ precisely the problem — they are indistinguishable at a glance from that many 
 **The count is deliberately not stated** (`docs/standards/documentation.md` §6b). It varies
 with teardown and garbage-collection order, so it differs between runs of the *same* commit
 and drifts as the suite grows: four runs at `58ea3bc` gave 30, 30, 30, 31, and five at
-`5e76cfb` gave 33, 32, 33, 33, 33. `ROADMAP.md`'s ONEUP-0062 headline says 56, which was one
-observation and is now the third figure in circulation — the reason this section owns the
-measurement and the roadmap bullet cites it. To see the current number:
+`5e76cfb` gave 33, 32, 33, 33, 33. This section owns the measurement. To see the current number:
 
 ```bash
 python3 tests/gui-smoke.py 2>&1 | grep -c 'Traceback (most recent call last)'
@@ -378,7 +379,8 @@ with the layout direction forced right-to-left.
 ## 10. Before you commit a test change
 
 - [ ] It runs with no network and no root, and touches nothing outside its temp directory.
-- [ ] If it invokes the engine directly, it repeats every override `run_engine` sets (§2.1).
+- [ ] If it invokes the engine directly, it repeats everything `run_engine` sets up — the
+  `ONEUP_*` overrides, the `PATH` prefix and `--log=` (§2.1).
 - [ ] Its mock fails loudly (exit 99) on the behaviour it is guarding against.
 - [ ] It waits by polling for a condition, not by sleeping for a duration.
 - [ ] It fails before the fix and passes after — verified, not assumed.
@@ -392,7 +394,7 @@ with the layout direction forced right-to-left.
 | --- | --- |
 | §2.1 the redirects | `run_engine` applies them itself, so a scenario that goes through it cannot forget. A scenario that invokes the engine directly must repeat them by hand, and **nothing catches that** — nor does anything catch this list going stale, which it has twice |
 | §2.2 the GUI suite redirects `HOME` | the redirect is unconditional and module-level in `tests/gui-smoke.py`, so no individual test can forget it. **Nothing checks it still runs *before* `QApplication` is constructed** — and that ordering is the whole point, because `QSettings` resolves its path once and keeps it |
-| §2.3 no root | the mock `PATH`: a real `sudo` is not on it, so a scenario that reaches for one gets the mock or nothing |
+| §2.3 no root | **half-covered.** `run_engine` puts the mock directory in front of the real `PATH`, so a name the scenario mocks — `setup_common` mocks `sudo` — shadows the real one. The real tools are still behind it: a scenario without `setup_common`, an absolute path, or `pkexec` (mocked nowhere) reaches the real binary, and nothing catches that |
 | §2.3 a test writes only inside its own temporary directory | **on `v2`, the ONEUP-0058 scenario** — it redirects `HOME` and asserts no log directory appears when `--log=` points elsewhere. **On `main`, nothing:** `update_system.sh` there builds `LOG_DIR` from `$HOME` and creates it before looking at `--log=`, and `tests/run-tests.sh` does not redirect `HOME`, so every scenario creates `~/Documents/update-logs` on the real machine (ONEUP-0058) |
 | §2.3 no network | **nothing automated, but the rule now holds.** Verified 2026-08-07 by running each suite inside an empty network namespace (`unshare -rn`): engine **246 passed / 0 failed** with T-1 SKIPping loudly, GUI **307 / 0** — identical to their networked results but for T-1. That is one measurement, not a gate: a *new* network call, or a window constructed above `gui-smoke.py`'s `_check_app_update` stub, would not be caught |
 | §3 a mock fails loudly rather than quietly | several scenarios carry an `exit 99` trap. Nothing checks that a *new* mock has one |
@@ -415,3 +417,4 @@ every single run, which is why it is on the roadmap rather than in a footnote.
 | 5 | 2026-07-26 | 2 medium — **0 verified, 2 dismissed** | both asked that §2.3's absolute *no test may reach the network* be softened to *should not*, because the section then names its own violations. That disclosure is deliberate, and the proposed wording is the uncheckable hedge `documentation.md` §8.1 bans. Dismissed explicitly rather than filtered. |
 | 6 | 2026-07-26 | 1 medium — **1 verified** | converged (polish only). §3's parenthetical pointed at §2.1 for a claim §2.1 does not make, and blurred what the suite does assert about the keep-alive against what it does not. |
 | 7 | 2026-09-28 | 2 lanes, cold, dispatched from outside the project; genre pinned standard; every lane held every question. Q1 5 · Q2 2 — 7 verified, 0 dismissed, all 7 fixed | **A pure audit (ONEUP-0107): no change armed it, so there is no armed-span share.** The four-question gate's first read of this document. **Both [Q2]s change what a test does**: §10's checklist said *all three* `ONEUP_*` paths (§2.3 said four, §3 three) against §2.1's *every override* — a direct-invocation scenario following it would have read the developer's real `hold.state` and `go.request`; and G4 said *one password prompt* where the design's G4 says it authenticates once, which is not the same as one dialog. [Q1]s: §2.1's block omitted `ONEUP_INHIBITED`, whose absence takes a real shutdown lock on the tester's session; §2.3's pairing check compared two totals that differ by two on a tree with no leak (`canary`, `hookd`), so it now states the pairing per variable — verified 110/110, 1/1, 1/1; the stub was named on `Updater`, where the window calls a module function, so a stub written from it would miss; `run_engine` and `setup_common` live in `tests/mock-env.sh`; `_query_auth_status` is in `auth.py`. Four of the seven surfaced while building the packet. **Fixed as exempt records, outside the tally:** §6's ONEUP-0068 paragraph and its What-checks row (the sleep became a poll), the six-traps count and the 56-constructions figure. All `v2`-only: `main` still has the sleep and keeps `run_engine` in `tests/run-tests.sh` |
+| 8 | 2026-09-28 | 2 lanes, cold, briefed exactly as loop 7; every lane held every question. Q1 1 · Q3 1 — 2 verified, 1 dismissed, both fixed | **Both lanes led with the same pre-existing [Q1]**: the What-checks-this row said a real `sudo` is not on the mock `PATH`, so a scenario reaching for one gets the mock or nothing. `run_engine` prepends the mock directory and keeps the real `PATH` behind it, and `pkexec` is mocked nowhere — so a scenario without `setup_common`, an absolute path or `pkexec` reaches the real binary. The row now says half-covered and names what nothing catches. **The [Q3] was partly loop 7's own text**: *every override `run_engine` sets* reads as the `ONEUP_*` variables and drops the `PATH` prefix and `--log=`, and without `--log=` the engine defaults into the real `~/Documents/update-logs` (`update_system.sh`'s `if [[ -z "$LOG_FILE" ]]`). §2.1 and §10 now name both. **Dismissed:** a [Q2] setting §1's local-only differential harness against `workflow.md` §10's trap — `workflow.md` §6 itself names the harness as a deliberate exception, tracked by ONEUP-0195. Exempt records fixed alongside: the *75 of 76* count, and a claim that ONEUP-0062's headline says 56 (it carries no figure). Own-fix share of this loop: 1 of 2 |
