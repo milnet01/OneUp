@@ -79,7 +79,7 @@ only where the exceptions below grant it (§9). **Work that is neither — a mis
 a dependency bump — waits for 2.0 with the features**, which is why ONEUP-0070 lands on
 `v2` below: `main` is open to a fix, not to everything that is not a feature.
 
-Four things are not feature work and are unaffected:
+These are not feature work and are unaffected:
 
 - **Documentation.** It is not a release. This whole standards set lands on `main` normally,
   because the rules govern 1.x maintenance too and `v2` inherits them by merge (design §5.3).
@@ -93,7 +93,7 @@ Four things are not feature work and are unaffected:
   under `tests/` is a *necessary* condition, not a sufficient one — the absent-tool scenario
   ONEUP-0070 owes is also tests-only, and it lands on `v2` like everything else. Written here,
   in the standard that owns the freeze, precisely so that each one is granted rather than
-  inferred: the two below were decisions taken with the user, in this section, and neither
+  inferred: the ones below were decisions taken with the user, in this section, and neither
   was drawn as a precedent from this one.
 
 - **The test-suite fixes from the 2026-08-03 `/test-audit` sweep** — the second exception,
@@ -121,6 +121,14 @@ Four things are not feature work and are unaffected:
 
   Same caveat, third time: a batch of changes, not a category. `tests/` is still not
   generally open and ONEUP-0070 still lands on `v2`.
+
+- **ONEUP-0216, the pre-push hook's secret scan and pushed-commit gate** — the fourth
+  exception, granted 2026-10-01 at the user's decision. The machine-wide `local-gate.md`
+  standard (§2.1) requires a project's own hook to scan the pushed commits for secrets and
+  to gate those commits rather than the working tree; `githooks/pre-push` did neither. It
+  qualifies for the ONEUP-0097 reason: the hook runs from whichever branch is checked out,
+  so a fix on `v2` alone leaves every push made from `main` unscanned. Nothing user-facing
+  changed, so **no 1.4.x is owed**. A batch of changes, not a category.
 
 **Why the freeze is stated as a testable question rather than a preference:** the failure
 mode of any freeze is a slow slide back into 1.x work, one "small" fix at a time. *Is it a
@@ -306,6 +314,14 @@ packaging validation cannot be reached by a `.md` edit.
 unreadable stdin — every uncertain case runs the full suite. A wrong guess must cost time
 rather than coverage. The hook chooses the *mode*; `local-CI.sh` remains the one place that
 says what each gate is.
+
+**The hook gates the commits being pushed, not the working tree** (ONEUP-0216). A pushed
+tip that is `HEAD` on a clean tree is gated in place; any other — an uncommitted edit, an
+untracked file, a push of the branch you are not on — is checked out into a throwaway
+worktree under the user's cache directory and gated there. **Before any gate, it scans the
+pushed commits for secrets** by handing its stdin to the machine-wide hook's
+`--secrets-only` mode; a find aborts the push. On a machine without that hook it prints
+`NO SECRET SCAN` and carries on.
 
 | Gate | What it proves |
 | --- | --- |
@@ -579,6 +595,7 @@ states it and owns what "complete" means.
 | §5.1 the six version sites agree | `local-CI.sh`'s version-lockstep gate — for the version **numbers**, at all six sites. `tests/bump-test.py` covers a *different* failure: it runs a real bump in a throwaway copy where five of the six sites are the real files copied verbatim, so a site whose format has drifted makes `bump.py` refuse ("no match … file drifted from the expected format") and the test fail. Since 2026-08-03 it also reads every site back after the bump and asserts the new version landed at that site's own pattern (`APP_VERSION = "…"`, `^Version:`, the newest `%changelog` stanza, `versionformat`/`revision`, the newest `<release>`) — an exit code alone proves only that the regexes *matched*, not that they wrote the right value. Its target version is deliberately one no shipped file already contains, because `bump.py` prepends to the `%changelog` and `<releases>` lists and a colliding version makes those two read-backs match the old entry and pass regardless |
 | §5.1 site 6's two `CHANGELOG.md` links match its newest heading | `tests/docs-check.py`. Added 2026-07-26: the lockstep gate reads only the heading, and a hand-edit could leave the release link missing or the `[Unreleased]` compare base pointing at the previous tag — which is ONEUP-0033, a bug this project shipped once already |
 | §5.2 a release needs a non-empty `## [Unreleased]` | `bump.py` — it refuses outright: *"CHANGELOG.md has no non-empty '## [Unreleased]' section to release"*. One of the few rules here with a hard automatic stop |
+| §6 the pushed commits carry no secret | `githooks/pre-push`, through the machine-wide hook's `--secrets-only` gitleaks scan — on this machine only. Elsewhere the hook says `NO SECRET SCAN` and nothing else checks |
 | §6 local CI is green before a push | `githooks/pre-push` — but only once per clone, after `git config core.hooksPath githooks`. **Nothing enforces that it is enabled**, so on a fresh clone this rule is a habit |
 | §7 push each commit once local CI is green | nothing automatic, and nothing needs to be — the repository is public, so a wasted push costs no runner minutes and an unpushed commit harms only its author |
 | §6.1 the same *class* of error caught twice becomes a gate | nothing automatic — it is a judgement made in a review pass, and the only evidence it was made is that the gate exists |

@@ -29,20 +29,59 @@
 # A wrong guess has to cost time rather than coverage; that is the only safe way round for a
 # gate, and it is why every uncertain branch below sets docs_only=false.
 #
+# Two more duties, both from ~/.claude/standards/local-gate.md §2.1 (ONEUP-0216):
+#
+# SECRETS. The pushed commits are scanned for leaked keys and passwords before anything
+# else. The scan itself is the machine-wide hook's (`--secrets-only` runs gitleaks and no
+# gate), so there is one implementation to fix. On a machine without that hook the scan
+# cannot run, and this says so loudly rather than passing in silence.
+#
+# THE PUSHED COMMITS, NOT THE WORKING TREE (local-gate.md §5). An uncommitted fix would
+# otherwise turn a push green for commits that go red, and pushing the branch you are NOT
+# on would gate the one you are on. So each pushed tip is gated in place only when it IS
+# HEAD and the tree is clean; otherwise it is checked out into a throwaway worktree under
+# ~/.cache (a real disk — /tmp is RAM on this machine) and gated there.
+#
+# ONEUP_PREPUSH_GATE is a test seam: when set, it is run as `$ONEUP_PREPUSH_GATE <tip>
+# <mode>` in place of the checkout and local-CI.sh, so tests/run-tests.sh can see which
+# tips and which mode the hook chose without running the real gate.
+#
 # Enable once per clone:  git config core.hooksPath githooks
 set -uo pipefail
 root=$(git rev-parse --show-toplevel)
 
-# stdin carries one line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>
+# stdin carries one line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>.
+# Read it once: the secret scan and the gate both need it.
+mapfile -t reflines
+
+secrets_hook="${ANTS_GLOBAL_HOOKS:-$HOME/.claude/githooks}/pre-push"
+if [[ -x "$secrets_hook" ]]; then
+    if ! printf '%s\n' "${reflines[@]}" | "$secrets_hook" --secrets-only "${1:-}"; then
+        echo "pre-push: secret scan failed — push aborted." >&2
+        exit 1
+    fi
+else
+    echo "pre-push: NO SECRET SCAN — $secrets_hook is absent on this machine." >&2
+fi
+
 docs_only=true
 saw_commits=false
-while read -r _local_ref local_sha _remote_ref remote_sha; do
-    [[ "$local_sha" =~ ^0+$ ]] && continue            # deleting a ref — nothing to test
+tips=()
+for line in "${reflines[@]}"; do
+    read -r _local_ref local_sha _remote_ref remote_sha <<< "$line"
+    [[ -z "${local_sha:-}" || "$local_sha" =~ ^0+$ ]] && continue   # deleting a ref — nothing to test
+    tip=$(git rev-parse --verify --quiet "$local_sha^{commit}") || tip=""
+    if [[ -z "$tip" ]]; then                          # not a commit we can check out
+        echo "pre-push: cannot resolve $local_sha to a commit — push aborted." >&2
+        exit 1
+    fi
+    [[ " ${tips[*]} " == *" $tip "* ]] || tips+=("$tip")
+    $docs_only || continue
     if [[ "$remote_sha" =~ ^0+$ ]]; then              # new remote branch — no base to diff
-        docs_only=false; break
+        docs_only=false; continue
     fi
     if ! changed=$(git diff --name-only "$remote_sha..$local_sha" 2>/dev/null); then
-        docs_only=false; break                        # unresolvable range
+        docs_only=false; continue                     # unresolvable range
     fi
     [[ -z "$changed" ]] && continue
     saw_commits=true
@@ -50,7 +89,6 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         [[ "$f" == *.md ]] && continue
         docs_only=false; break
     done <<< "$changed"
-    $docs_only || break
 done
 $saw_commits || docs_only=false                       # determined nothing — run everything
 
@@ -61,7 +99,32 @@ else
     echo "pre-push: running local CI gates…"
     mode=
 fi
-if ! ONEUP_TEST_NETWORK=0 bash "$root/local-CI.sh" $mode; then
-    echo "pre-push: local CI failed — push aborted. (Override with 'git push --no-verify' only if you are certain.)" >&2
-    exit 1
-fi
+
+worktree=""
+cleanup() { [[ -n "$worktree" ]] && git -C "$root" worktree remove --force "$worktree" 2>/dev/null; return 0; }
+trap cleanup EXIT
+
+head=$(git rev-parse --verify --quiet HEAD) || head=""
+for tip in "${tips[@]}"; do
+    if [[ -n "${ONEUP_PREPUSH_GATE:-}" ]]; then
+        "$ONEUP_PREPUSH_GATE" "$tip" "$mode" || exit 1
+        continue
+    fi
+    if [[ "$tip" == "$head" && -z $(git -C "$root" status --porcelain --untracked-files=all) ]]; then
+        run_dir=$root
+        echo "pre-push: gating ${tip:0:12} in place (clean tree at HEAD)"
+    else
+        scratch="${XDG_CACHE_HOME:-$HOME/.cache}/oneup-pre-push"
+        mkdir -p "$scratch"
+        worktree=$(mktemp -d "$scratch/tmp.XXXXXX")
+        git -C "$root" worktree add --detach --quiet "$worktree" "$tip" || exit 1
+        run_dir=$worktree
+        echo "pre-push: gating ${tip:0:12} in a clean checkout (it is not a clean HEAD)"
+    fi
+    if ! ( cd "$run_dir" && ONEUP_TEST_NETWORK=0 bash ./local-CI.sh $mode ); then
+        echo "pre-push: local CI failed on ${tip:0:12} — push aborted. (Override with 'git push --no-verify' only if you are certain.)" >&2
+        exit 1
+    fi
+    cleanup
+    worktree=""
+done
