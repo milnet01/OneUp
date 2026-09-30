@@ -3383,15 +3383,17 @@ fi
 
 # ---------------------------------------------------------------------------
 echo "TEST: the pre-push hook picks the gate mode from what the push changes (ONEUP-0114)"
-# local-CI.sh owns what each gate IS; the hook only decides WHICH MODE to ask for, so that
-# decision is the whole of what there is to lock here. Two real ranges from this repo's
-# history stand for the two cases: 090a11b changes README.md and ROADMAP.md and nothing
-# else, 16153cc changes update_system.sh and two .py files among its markdown.
+# local-CI.sh owns what each gate IS; the hook decides WHICH MODE to ask for, WHICH COMMITS
+# it gates, and hands the push to the secret scan first (ONEUP-0216). Those decisions are
+# the whole of what there is to lock here. Two real ranges from this repo's history stand
+# for the two modes: 090a11b changes README.md and ROADMAP.md and nothing else, 16153cc
+# changes update_system.sh and two .py files among its markdown.
 #
-# No gate actually runs. The hook invokes `bash "$root/local-CI.sh" $mode` with $root from
-# `git rev-parse --show-toplevel`, so pointing GIT_WORK_TREE at a throwaway directory
-# holding a stub local-CI.sh captures the mode it asked for; GIT_DIR still points at the
-# real object store, so the ranges resolve against real history rather than a fixture.
+# No gate and no scan actually run. ONEUP_PREPUSH_GATE is the hook's test seam: it is run
+# as `<seam> <tip> <mode>` in place of the checkout and local-CI.sh. ANTS_GLOBAL_HOOKS
+# points the secret scan at a stub, so the real machine-wide hook and gitleaks are never
+# reached (testing.md §2). GIT_DIR points at the real object store, so the ranges resolve
+# against real history rather than a fixture.
 REPO="$(dirname "$ENGINE")"
 if ! git -C "$REPO" cat-file -e '090a11b~1^{commit}' 2>/dev/null ||
    ! git -C "$REPO" cat-file -e '16153cc~1^{commit}' 2>/dev/null; then
@@ -3400,15 +3402,45 @@ if ! git -C "$REPO" cat-file -e '090a11b~1^{commit}' 2>/dev/null ||
     echo "  SKIP - the hook probe needs full history; this clone lacks those commits"
 else
     hookd=$(mktemp -d)
-    printf '#!/usr/bin/env bash\nprintf "STUB-CI[%%s]\\n" "$*"\n' > "$hookd/local-CI.sh"
+    printf '#!/usr/bin/env bash\nprintf "STUB-TIP[%%s]\\nSTUB-CI[%%s]\\n" "$1" "$2"\n' > "$hookd/gate"
+    mkdir "$hookd/global"
+    # The stub scan reports its arguments and the refs it was handed, then exits with
+    # $STUB_SECRETS_RC so the refusal path can be driven too.
+    printf '#!/usr/bin/env bash\nprintf "STUB-SECRETS[%%s]\\n" "$*"\nsed "s/^/STUB-REF /"\nexit "${STUB_SECRETS_RC:-0}"\n' \
+        > "$hookd/global/pre-push"
+    # A hook that ignores the seam and gates the working tree lands here instead. $hookd is
+    # the work tree of every probe, so the real local-CI.sh (which runs this suite, which
+    # runs this probe) can never be reached: a regression fails an assertion, it cannot
+    # recurse.
+    printf '#!/usr/bin/env bash\nprintf "UNGATED-WORKING-TREE[%%s]\\n" "$*"\n' > "$hookd/local-CI.sh"
+    chmod +x "$hookd/gate" "$hookd/global/pre-push" "$hookd/local-CI.sh"
     hook_probe() {   # $1 = the tip being pushed, $2 = what the remote already has
         printf 'refs/heads/probe %s refs/heads/probe %s\n' "$1" "$2" |
-            GIT_DIR="$REPO/.git" GIT_WORK_TREE="$hookd" bash "$REPO/githooks/pre-push" 2>&1
+            (cd "$hookd" && GIT_DIR="$REPO/.git" GIT_WORK_TREE="$hookd" ONEUP_PREPUSH_GATE="$hookd/gate" \
+            ANTS_GLOBAL_HOOKS="$hookd/global" bash "$REPO/githooks/pre-push" origin 2>&1)
     }
     check "a markdown-only push runs only the markdown gates" \
         "STUB-CI[--docs]" "$(hook_probe 090a11b '090a11b~1')"
-    check "a push that touches code runs the whole suite" \
-        "STUB-CI[]" "$(hook_probe 16153cc '16153cc~1')"
+    out=$(hook_probe 16153cc '16153cc~1')
+    check "a push that touches code runs the whole suite" "STUB-CI[]" "$out"
+    # §5 of the machine-wide local-gate.md: the gate answers for the PUSHED commit. The
+    # probe pushes a commit that is not HEAD, so a hook gating the working tree would
+    # hand over some other sha, or none.
+    check_absent "the working tree is never gated in place of the pushed commit (ONEUP-0216)" \
+        "UNGATED-WORKING-TREE" "$out"
+    check "the gate is given the pushed commit, not HEAD (ONEUP-0216)" \
+        "STUB-TIP[$(git -C "$REPO" rev-parse 16153cc)]" "$out"
+    check "the secret scan is handed the remote (ONEUP-0216)" \
+        "STUB-SECRETS[--secrets-only origin]" "$out"
+    check "the secret scan is handed the pushed refs (ONEUP-0216)" \
+        "STUB-REF refs/heads/probe 16153cc refs/heads/probe 16153cc~1" "$out"
+    # A scan that finds something must stop the push before any gate runs.
+    rc=0
+    out=$(STUB_SECRETS_RC=1 hook_probe 16153cc '16153cc~1') || rc=$?
+    check_eq "a failed secret scan refuses the push (ONEUP-0216)" "1" "$rc"
+    check_absent "a failed secret scan runs no gate (ONEUP-0216)" "STUB-CI[" "$out"
+    check_absent "a failed secret scan gates nothing, not even the working tree (ONEUP-0216)" \
+        "UNGATED-WORKING-TREE" "$out"
     # The fail-safe direction. A new remote branch has no base to diff against, so the hook
     # must fall back to the full run rather than guess: a wrong guess costs time, never
     # coverage, and that is the only safe way round for a gate.
