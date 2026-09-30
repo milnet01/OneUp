@@ -5105,6 +5105,20 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Source: hub-website-session-2026-09-28.
   Lanes: gui, theme.
 
+- 🚧 [ONEUP-0216] **The pre-push hook scans for secrets and gates the pushed commits, not the working tree.**
+  ~/.claude/standards/local-gate.md §2.1 (2026-09-28): a project's own
+  pre-push must (1) scan the pushed commits for secrets and (2) gate the
+  pushed commits, never the working tree (§5). githooks/pre-push did
+  neither: tools/ci-gate reported NO SECRET SCAN, and the hook ran
+  local-CI.sh over whatever was on disk, so an uncommitted fix could turn
+  a push green, and pushing the other branch gated the checked-out one.
+  User decisions 2026-10-01: keep OneUp's own hook rather than hand off to
+  the shared one (a clone on another machine keeps its gate), and land it
+  on both branches as a granted freeze exception (workflow.md §1.2).
+  **Layman:** Before anything leaves the machine, the push check now looks for leaked passwords and keys, and tests exactly what is being sent.
+  Kind: security.
+  Source: session-message-claude-config-2026-09-28.
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of
