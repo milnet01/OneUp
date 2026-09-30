@@ -3402,10 +3402,12 @@ if ! git -C "$REPO" cat-file -e '090a11b~1^{commit}' 2>/dev/null ||
     echo "  SKIP - the hook probe needs full history; this clone lacks those commits"
 else
     hookd=$(mktemp -d)
+    # shellcheck disable=SC2016  # the single quotes are the point: the text is the stub's own code.
     printf '#!/usr/bin/env bash\nprintf "STUB-TIP[%%s]\\nSTUB-CI[%%s]\\n" "$1" "$2"\n' > "$hookd/gate"
     mkdir "$hookd/global"
     # The stub scan reports its arguments and the refs it was handed, then exits with
     # $STUB_SECRETS_RC so the refusal path can be driven too.
+    # shellcheck disable=SC2016  # the single quotes are the point: the text is the stub's own code.
     printf '#!/usr/bin/env bash\nprintf "STUB-SECRETS[%%s]\\n" "$*"\nsed "s/^/STUB-REF /"\nexit "${STUB_SECRETS_RC:-0}"\n' \
         > "$hookd/global/pre-push"
     # A hook that ignores the seam and gates the working tree lands here instead. $hookd is
