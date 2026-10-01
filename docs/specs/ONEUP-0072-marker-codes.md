@@ -93,7 +93,7 @@ greps the engine for user-facing English finds it already accounted for. A termi
 
 ### 3.1 Why this is wider than the reference reserves
 
-`marker-protocol.md` §5.1 reserves this work for the `HINT` and `REMEDY` payloads. That is
+`marker-protocol.md` §5.1 reserved this work for the `HINT` and `REMEDY` payloads. That is
 too narrow to meet the gate it is meant to meet: design §7's **G10** opens *"Every
 user-facing string is translatable…"* (its second clause is ONEUP-0032's right-to-left run,
 not this item's), and converting only those two would leave every task badge, every
