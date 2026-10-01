@@ -4498,6 +4498,15 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   and files-and-naming.md §4's HERE/oneup/translations/; it also says .qm
   is git-ignored (no rule exists). Filed ONEUP-0217. Lanes cost
   $0.76-0.84 each this run, above the earlier $0.55-0.62.
+  Progress (2026-10-01): wording-and-translation.md done on v2 — loops
+  5-7 in its log, 10 verified (4 found building the packet, 6 by lanes),
+  1 dismissed, all fixed; converged at loop 7 (8 -> 2 -> 0). Eight of the
+  ten were true of main too and landed there first (896420e, then
+  merged). Lanes cost $3.36 for six ($0.45-0.73 each). Filed ONEUP-0218,
+  ONEUP-0219, ONEUP-0220. Still owed, in this order: dependencies.md,
+  marker-protocol.md. Carried into marker-protocol.md's run: its §5.1 and
+  §5.2 limit ONEUP-0072 to HINT and REMEDY, where design §5.1 and
+  ONEUP-0072 §3.1 convert every payload the window renders.
   **Layman:** A stricter review found a dozen real errors in a document we thought was finished; the others have not had that review yet.
   Kind: doc-fix.
   Source: in-session-2026-08-12.
@@ -6347,6 +6356,37 @@ when complete (that document's §7).
   **Layman:** A rule in v2's guide for Claude says the standards may not name the new package's files, but on v2 they all do and the checker is happy — the rule was written for main.
   Kind: doc-fix.
   Source: review-contract-2026-10-01 files-and-naming.md loop 7.
+
+- 📋 [ONEUP-0218] **The signing-key hint shows users "repository", which wording-and-translation.md §2.1 forbids.**
+  Both engines emit "A repository signing key is out of date…" (update_system.sh,
+  oneup/engine/steps.py) and tests/gui-smoke.py asserts that text. The
+  standard's model message now reads "A source's signing key…". The natural
+  place to fix it is ONEUP-0108's code-to-sentence map, which rewords every
+  hint in the window anyway; changing the engines' prose before ONEUP-0072
+  would break gate G2's byte-identical marker stream. main is frozen, so a
+  1.4.x fix there is the user's call.
+  **Layman:** One error message uses a technical word our own wording rules say to replace with "source".
+  Kind: fix.
+  Source: review-contract-2026-10-01 wording-and-translation.md loop 5 (surfaced).
+
+- 📋 [ONEUP-0219] **ONEUP-0032's spec §4.2 cites wording-and-translation.md §7 for a claim §7 no longer makes.**
+  §4.2 says the catalogue directory is resolved "from the package's own
+  location", which makes every layout find it "by the same relative path
+  (wording-and-translation.md §7)". §7 now defers to files-and-naming.md §4,
+  which says the loader finds HERE/oneup/translations/ through paths.py,
+  and tests/imports-test.py fails on __file__ anywhere under oneup/ but
+  paths.py. Fix at the spec's own gate, before ONEUP-0032 is built.
+  **Layman:** A plan document points at a rule that has since moved, and disagrees with where the rule now lives.
+  Kind: doc-fix.
+  Source: review-contract-2026-10-01 wording-and-translation.md loop 5 (out of scope).
+
+- 📋 [ONEUP-0220] **testing.md §5 invariant 2 requires a plain-English @@HINT@@, which ONEUP-0072's codes make false.**
+  Once ONEUP-0072 lands a HINT payload is an identifier, not text
+  (wording-and-translation.md §5). Check that testing.md is on ONEUP-0072's
+  list of files the codes change updates, or reword invariant 2 to "a hint".
+  **Layman:** A test rule still expects English text in a message that a planned change turns into a short code.
+  Kind: doc-fix.
+  Source: review-contract-2026-10-01 wording-and-translation.md loop 7 (out of scope).
 
 ## 2.1.0 — after 2.0
 
