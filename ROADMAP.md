@@ -5190,6 +5190,27 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: security.
   Source: session-message-claude-config-2026-09-28.
 
+- 📋 [ONEUP-0222] **The firmware step trusts fwupd's cached answer offline, and fwupdmgr may prompt invisibly.**
+  Two residuals the ONEUP-0166 fix did not introduce, found by a cold
+  read. Both engines, unverified on this machine.
+
+  1. Stale answer offline. The run does `fwupdmgr refresh || true`,
+  then trusts `get-updates`. If refresh fails, get-updates can still
+  exit 2 off cached metadata, so the step reports "up to date" though
+  nothing was asked today. Same shape as ONEUP-0166. Suggested: keep
+  refresh's status, and when it failed say "up to date as of the last
+  check" (or warn) rather than a plain "up to date".
+
+  2. Hidden prompt. `get-updates` runs with stdin attached and output
+  sent to /dev/null. fwupdmgr can prompt (metadata age, unreported
+  report upload) when stdin is a terminal, which would hang a terminal
+  run invisibly. GUI runs use QProcess, so stdin is not a terminal
+  there. Suggested: `</dev/null`, or the --no-metadata-check /
+  --no-unreported-check flags; check which flags 2.1.x honours first.
+  **Layman:** With no internet, OneUp can still say your firmware is current using an old copy of the firmware list, and in a terminal run the firmware tool might wait for an answer nobody can see.
+  Kind: fix.
+  Source: cold read by the Pressless session, 2026-10-01, of the ONEUP-0166 main backport.
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of
