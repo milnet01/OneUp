@@ -123,7 +123,7 @@ done
 # …and the SHA a tag resolves to, when bumping a pin:
 #   gh api repos/<owner>/<repo>/git/ref/tags/<tag> -q .object.sha
 # Host packages (openSUSE):
-zypper info python3-pyside6 | grep -i version
+zypper search -s --provides --match-exact python3-pyside6
 ```
 
 ## What checks this
