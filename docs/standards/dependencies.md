@@ -37,7 +37,8 @@ much as for features. Staying current is the default; falling behind needs a rea
    version ships, re-test the feature. If it works, bump and delete the ledger row. The
    ledger is a to-do list, not an archive — a pin whose reason no longer holds gets removed.
 5. **A bump updates the calling code in the same change** (idiom refresh), so the codebase
-   doesn't rot into "compiles but nobody meant it."
+   doesn't rot into "compiles but nobody meant it." A Python runtime bump is the exception:
+   the code's idioms follow the floor in `docs/standards/coding.md` §1, not the CI version.
 
 ## Known-incompatibility ledger
 
@@ -91,6 +92,7 @@ zypper search -s --provides --match-exact python3-pyside6
 | --- | --- |
 | use the latest stable release | nothing automatic — the sweep under *How to check what's behind* is run by hand |
 | a pin older than latest carries a written reason | nothing automatic |
+| a security advisory against a held pin ends its exemption | nothing automatic |
 | a bump updates the calling code in the same change | nothing automatic |
 | the ledger records each known incompatibility | nothing automatic |
 
