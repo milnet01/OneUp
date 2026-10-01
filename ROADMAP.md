@@ -3485,6 +3485,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   suppressed the reboot advice for packages that really landed, and made the cache
   step hoard downloads for a retry nobody needed. Added a shared `zypper_ok` /
   `_zypper_ok` in both engines.
+  Note (2026-10-01): main still has the firmware path. Its run_check
+  does `if fwupdmgr get-updates; then n=1; else n=0; fi`, so an fwupd
+  error emits CHECK firmware|0, read as "up to date". Seen while closing
+  ONEUP-0132. Whether main takes this fix (workflow.md §1's freeze) is
+  undecided; v2 is correct.
   **Layman:** Steps said your system was current when the tool they asked had actually failed.
   Kind: fix.
   Source: review-code 2026-08-31, lanes engine-shell, engine-driver, engine-steps.
