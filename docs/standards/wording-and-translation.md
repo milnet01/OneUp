@@ -8,9 +8,9 @@ translated into another language later without rewriting the app.
 **Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0057
-**Branch:** main
-**Verified at:** `58ea3bc` — every quoted string and symbol name below was copied from the
-tree on 2026-07-26, not recalled.
+**Branch:** v2
+**Verified at:** `89c0b25` — §2.2's quotations, §4's markers, §6's PySide6 behaviour and §7's
+commands were re-run against this tree on 2026-10-01, not recalled.
 
 **Sections:** 1 who is reading · 2 plain English · 3 never blame the user · 4 never claim
 what was not earned · 5 where wording lives · 6 writing a translatable string · 7 the
@@ -227,7 +227,7 @@ sentence — never pass it through as the message.
 | Translate | Qt Linguist, or any `.ts` editor |
 | Compile | `pyside6-lrelease oneup_<lang>.ts -qm oneup_<lang>.qm` |
 | Load | `QTranslator` installed on the `QApplication` at startup, before the first widget |
-| Install | `/usr/share/oneup/translations/` |
+| Install | `HERE/oneup/translations/` in every layout — `docs/standards/files-and-naming.md` §4 |
 
 Rules:
 
@@ -240,9 +240,8 @@ Rules:
   translator's work and the source-line references); the `.qm` is a build artefact.
   No step builds one yet and `.gitignore` has no rule for them, so the change that first
   builds one adds both.
-- **Catalogues live in `oneup/translations/`** — inside the one package directory, so the
-  AppImage, the RPM and a plain checkout all find them by the same relative path
-  (`docs/standards/files-and-naming.md` §4).
+- **Catalogues live in `oneup/translations/`.** Where each layout puts them at runtime, and
+  the packaging step each one needs, is `docs/standards/files-and-naming.md` §4's.
 - **The file name is `oneup_<lang>.ts`**, using the Qt locale code (`oneup_de.ts`,
   `oneup_he.ts`) — lowercase language, `_XX` region suffix only when the region actually
   differs (`pt_BR`).
