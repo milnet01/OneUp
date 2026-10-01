@@ -13,6 +13,7 @@ import subprocess
 from datetime import datetime
 from functools import partial
 
+import shiboken6
 from PySide6.QtCore import QProcess, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
@@ -156,6 +157,8 @@ def _parse_tray_line(win, line: str):
 
 
 def _on_traycheck_finished(win, *args):
+    if not shiboken6.isValid(win):   # destroyed with its window (ONEUP-0204)
+        return
     if win._traycheck_proc is not None:
         win._traycheck_proc.deleteLater()   # don't accumulate over a long session
         win._traycheck_proc = None

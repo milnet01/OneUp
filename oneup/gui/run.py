@@ -21,6 +21,7 @@ import time
 from datetime import datetime
 from functools import partial
 
+import shiboken6
 from PySide6.QtCore import QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox
 
@@ -267,8 +268,12 @@ def _on_size_finished(win, exit_code: int, _status):
     # fresh engine (ONEUP-0044 §4.2, INV-7).
     win._size_proc = None
     win._hold_log = None
+    # A window Qt already destroyed (quitting mid-probe, or teardown at exit) has nothing
+    # left to update, and touching its row raises (ONEUP-0204).
+    if not shiboken6.isValid(win):
+        return
     row = win.rows.get("system")
-    if not row or row.has_size():
+    if not row or not shiboken6.isValid(row) or row.has_size():
         return
     # No SIZE marker arrived. Exit 0 = solver found nothing to fetch; non-zero
     # = auth cancelled or an error, so re-arm the link for a retry.

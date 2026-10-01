@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import shiboken6
 from PySide6.QtCore import QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox
 
@@ -51,6 +52,10 @@ def _query_auth_status(win):
 
 
 def _on_auth_status_finished(win, proc: QProcess):
+    # The probe can finish after Qt destroyed the window or the process (quitting
+    # mid-probe, or teardown at exit); reading either then raises (ONEUP-0204).
+    if not (shiboken6.isValid(win) and shiboken6.isValid(proc)):
+        return
     out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
     is_on = "@@AUTH@@|on" in out
     _set_auth_checked(win, is_on)
@@ -169,6 +174,8 @@ def _run_auth(win, action: str, status_text: str):
 
 
 def _on_auth_finished(win, proc: QProcess):
+    if not (shiboken6.isValid(win) and shiboken6.isValid(proc)):   # ONEUP-0204
+        return
     out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
     win.auth_btn.setEnabled(True)
     win.status.setText("Ready.")

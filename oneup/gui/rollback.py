@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import shiboken6
 from PySide6.QtCore import QProcess, Qt, QTimer
 from PySide6.QtWidgets import (
     QDialog,
@@ -190,6 +191,8 @@ def _thin_snapshots(win):
 
 def _on_thin_finished(win, proc: QProcess):
     """Report the outcome of a --thin-snapshots run and clear the advisory banner."""
+    if not (shiboken6.isValid(win) and shiboken6.isValid(proc)):   # ONEUP-0204
+        return
     out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
     win.warn_btn.setEnabled(True)
     removed = None
