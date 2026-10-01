@@ -7,9 +7,9 @@ a time, in one direction.
 **Status:** Reviewed
 **Kind:** reference
 **Roadmap:** ONEUP-0057
-**Branch:** main
-**Verified at:** `58ea3bc` — every marker, field and behaviour below was read out of
-`update_system.sh` and `updater.py` on 2026-07-26, not recalled.
+**Branch:** v2
+**Verified at:** `cd14877` — §1, §2, §3, §7 and §8 were re-read against both engines and
+`oneup/gui/` on 2026-10-01, not recalled.
 
 **Sections:** 1 the shape of a line · 2 reading order · 3 the markers · 4 the ones with
 traps · 5 changing the contract · 6 traps · 7 drift in the engine's header comment ·
@@ -33,9 +33,11 @@ see §7.
 - **A marker is also readable by a human.** The engine is usable standalone in a terminal,
   where these lines are harmless one-liners.
 
-Both sides are written by one helper each, which is why the format cannot drift:
+Each side writes or reads it through one helper:
 
-- Engine: `marker()` — `printf '@@%s@@|%s\n' "$1" "$2"`.
+- Engine: `update_system.sh`'s `marker()` — `printf '@@%s@@|%s\n' "$1" "$2"`. The Python
+  engine's is `oneup/engine/markers.py`'s `marker`, which also folds every line break in a
+  payload to a space, so a payload cannot fabricate a second marker line (ONEUP-0152).
 - Window: `oneup/gui/run.py`'s `handle_line` sends any line starting with `@@` to
   `handle_marker`, which calls `oneup/gui/markers.py`'s `split_marker` to cut the tag from
   the fields. (Both were methods of `Updater` in `updater.py` until ONEUP-0034.)
@@ -43,7 +45,7 @@ Both sides are written by one helper each, which is why the format cannot drift:
 **A line that starts with `@@` but is not a marker is logged, not dropped.** A diff hunk
 header (`@@ -1,4 +1,4 @@`) is the real case that made this necessary.
 
-### 1.1 There is no escaping — except one substitution
+### 1.1 There is no escaping
 
 A payload cannot contain a `|`, and the protocol offers no way to quote one. The one place
 where user data could contain one — a Btrfs snapshot description — the engine rewrites `|`
@@ -70,7 +72,7 @@ Four channels use this protocol, and only the first goes through `handle_marker`
 | --- | --- | --- |
 | A run | `--steps=…` | `run.handle_marker` |
 | Download size | `--size=<step>` | `run._on_size_output` — reads `SIZE` only |
-| Authorization state | `--auth-status` / `--grant-auth` / `--revoke-auth` | `auth._on_auth_status_finished` — matches `@@AUTH@@|on` in the whole output |
+| Authorization state | `--auth-status` / `--grant-auth` / `--revoke-auth` | `auth._on_auth_status_finished` — matches `@@AUTH@@|on` and `@@AUTH@@|off` in the whole output |
 | Snapshot thinning | `--thin-snapshots` | `rollback._on_thin_finished` — reads `SNAPSHOTS|thinned` only |
 
 This matters when adding a marker: **a marker emitted only on a side channel is not seen
@@ -96,7 +98,7 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@CHECK_UNKNOWN@@` | `key\|reason` | `emit_check` | `handle_marker` |
 | `@@SIZE@@` | `key\|download` | the `--size` pass | `_on_size_output` |
 | `@@FREED@@` | `cache\|human` | the cache step | `handle_marker` |
-| `@@AUTH@@` | `on` *or* `off` | the auth actions | `_query_auth_status` |
+| `@@AUTH@@` | `on` *or* `off` | the auth actions | `_on_auth_status_finished` |
 | `@@DISK@@` | `warn\|mount\|free` | pre-flight | `handle_marker` |
 | `@@REPO@@` | `warn\|duplicate\|urls` | pre-flight | `handle_marker` |
 | `@@REPO_SKIPPED@@` | `alias\|reason` | the skip path | `handle_marker` |
@@ -318,8 +320,9 @@ streams under identical mocks and requires them to be equal. A rewrite that chan
 protocol could not be tested this way at all.
 
 **One exception, deliberately sequenced after the rewrite has passed its gate:**
-ONEUP-0072 turns the `HINT` and `REMEDY` payloads from English prose into stable codes, so
-the window can translate them. That is a single versioned change touching all four files
+ONEUP-0072 turns every payload the window renders as its own wording from English prose
+into stable codes, so the window can translate them —
+`docs/specs/ONEUP-0072-marker-codes.md` §3.1 names which. That is a single versioned change touching all four files
 plus this document
 (`docs/standards/wording-and-translation.md` §5).
 
@@ -328,7 +331,7 @@ cannot tell you which one broke it.
 
 ### 5.2 What the codes must define, when they land
 
-ONEUP-0072 turns `HINT` and `REMEDY` payloads into codes, and three questions have to be
+ONEUP-0072 turns those payloads into codes, and three questions have to be
 answered *in that item's specs* rather than discovered during implementation. They are
 reserved here so the reference is where a reader looks for them. **The item is specified in
 two documents** since the 2026-08-12 split: `docs/specs/ONEUP-0072-marker-codes.md` holds
@@ -365,7 +368,7 @@ Until that lands, the payloads are English prose (§4.10, §5.1).
 ## 7. Known drift in the engine's own header comment
 
 `update_system.sh` carries an abbreviated marker list in its header. It is convenient and
-mostly right, but **three entries are inaccurate at `58ea3bc`**, and a reader who trusts
+mostly right, but **these entries are inaccurate at `58ea3bc`**, and a reader who trusts
 them writes a wrong parser:
 
 | Entry | The header says | Actually |
@@ -373,9 +376,10 @@ them writes a wrong parser:
 | step end | `key\|ok\|skip\|fail\|detail` | three fields — `key\|status\|detail`, where `status` is one *of* `ok`/`skip`/`fail` |
 | repo warning | `warn\|reason` | three fields — `warn\|duplicate\|urls`, and the window reads the third |
 | done | `ok\|errors` | `stopped` is a third value, and the one with a behaviour rule attached (§4.9) |
+| reboot | `yes\|no[\|reason]` | `yes[\|reason]` *or* `no` — the reason follows `yes` only (§4.8) |
 
 Left as-is rather than patched: `main` is frozen (`docs/standards/workflow.md` §1) and none
-of the three is a defect in running code. **ONEUP-0066** tracks carrying the corrected list
+of them is a defect in running code. **ONEUP-0066** tracks carrying the corrected list
 into the Python engine, where the rewrite replaces this comment anyway. Until then, this
 document is the authority.
 
@@ -428,11 +432,12 @@ Every path is overridable — `ONEUP_RUN_STATE`, `ONEUP_STOP_FILE`, `ONEUP_HOLD_
 **Where the directory itself is, both halves must agree, and since ONEUP-0059 that is not
 `Path.home()`.** Each resolves it from `XDG_STATE_HOME` when that is set to an ABSOLUTE
 path, and falls back to `~/.local/state` when it is unset, empty or relative — the engine in
-`update_system.sh`'s `ONEUP_STATE_DIR`, the window in `oneup/gui/paths.py`'s `_state_home`.
+`update_system.sh`'s `ONEUP_STATE_DIR`, the Python engine in `oneup/engine/runstate.py`'s
+`_state_home`, the window in `oneup/gui/paths.py`'s `_state_home`.
 **Change one side alone and Stop stops working with nothing failing anywhere**: the window
-writes `stop.request` where the engine never looks. `tests/gui-smoke.py` asserts the two
-answers are equal, by running the engine's own resolution lines against the window's over
-the same three inputs.
+writes `stop.request` where the engine never looks. `tests/gui-smoke.py` asserts the Bash
+engine's answer equals the window's, by running the engine's own resolution lines against
+the window's over the same three inputs. Nothing compares the Python engine's.
 
 The window is still isolated in tests by rewriting `HOME` as well
 (`docs/standards/files-and-naming.md` §5), because that is what covers the paths with no
