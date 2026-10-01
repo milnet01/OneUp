@@ -85,7 +85,7 @@ for the user who does not want to skip anything.
 
 | Don't | Do |
 | --- | --- |
-| "GPG key verification failed for repository." | "A repository signing key is out of date. Use \"Import signing key & retry\" to fix it." |
+| "GPG key verification failed for repository." | "A source's signing key is out of date. Use \"Import signing key & retry\" to fix it." |
 | "Transaction failed with exit code 4." | "The update stopped because a package conflicts with another. Check the log — you may need to turn off a third-party source." |
 | "Invalid input." | "That doesn't look like a snapshot number. Pick one from the list." |
 | "Operation completed successfully." | "All five tasks finished. Nothing needs a restart." |
@@ -98,7 +98,7 @@ for the user who does not want to skip anything.
 - **When the user is the cause, say it neutrally.** "Stopped at your request" — not "you
   cancelled the update".
 - **Never imply carelessness.** A conflict caused by a third-party repository the user added
-  months ago is still just "a package conflict — often a third-party repo".
+  months ago is still just "a package conflict — often a third-party source".
 
 ## 4. Never claim what was not earned
 
@@ -226,7 +226,7 @@ sentence — never pass it through as the message.
 | Extract | `pyside6-lupdate` given every `.py` file under `oneup/`, never the directory → `oneup/translations/oneup_<lang>.ts` |
 | Translate | Qt Linguist, or any `.ts` editor |
 | Compile | `pyside6-lrelease oneup_<lang>.ts -qm oneup_<lang>.qm` |
-| Load | `QTranslator` installed on the `QApplication` at startup, before the first widget |
+| Load | OneUp's catalogue and Qt's `qtbase` one, installed on the `QApplication` at startup before the first widget — both or neither (`docs/specs/ONEUP-0032-i18n.md` INV-2) |
 | Install | `/usr/share/oneup/translations/` |
 
 Rules:
@@ -239,17 +239,18 @@ Rules:
 - **`.ts` files are tracked; `.qm` files are not.** The `.ts` is the source (it holds the
   translator's work and the source-line references); the `.qm` is a build artefact.
   No step builds one yet and `.gitignore` has no rule for them, so the change that first
-  builds one adds both.
+  builds one adds that step and a `*.qm` rule.
 - **Catalogues live in `oneup/translations/`** — inside the one package directory, so the
   AppImage, the RPM and a plain checkout all find them by the same relative path
   (`docs/standards/files-and-naming.md` §4).
 - **The file name is `oneup_<lang>.ts`**, using the Qt locale code (`oneup_de.ts`,
   `oneup_he.ts`) — lowercase language, `_XX` region suffix only when the region actually
   differs (`pt_BR`).
-- **A missing catalogue is not an error.** `QTranslator.load()` returning `False` means the
-  app runs in English, which is the correct behaviour, not a condition to report.
-- **Extraction runs in CI once the wrapping lands**, so a string added without `tr()` is
-  caught by review rather than discovered by a translator.
+- **A missing catalogue is not an error.** The app then runs in English, which is the correct
+  behaviour, not a condition to report.
+- **Extraction runs in CI once the wrapping lands** — it proves the catalogue builds
+  (`docs/specs/ONEUP-0032-i18n.md` INV-8). A string added without `tr()` is never extracted,
+  so only review catches it.
 
 ## 8. Traps
 
