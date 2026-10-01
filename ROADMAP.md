@@ -5238,7 +5238,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: cold read by the Pressless session, 2026-10-01, of the ONEUP-0166 main backport.
 
-- 📋 [ONEUP-0223] **"Show download size" says "nothing to fetch" when some of the update is already downloaded.**
+- ✅ [ONEUP-0223] **"Show download size" says "nothing to fetch" when some of the update is already downloaded.**
   zypper prints its download size in two shapes (src/Summary.cc,
   since commit 8feea47f, 2024-07; present in 1.14.101 here). With
   nothing cached it is one line:
@@ -5257,6 +5257,11 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   want=0, so the window shows no "of N" total. The figure to read is
   the table's first column, the bytes still to fetch, which is also
   what the window measures.
+  Resolved (2026-10-01): main d0a9599 (both shell parsers, two
+  run-tests.sh scenarios, a marker-protocol.md §4.3 bullet, CHANGELOG),
+  merged to v2 at 3e8520e, plus v2's Python parsers in the next commit.
+  Red then green in both engines; local-CI green on both branches, the
+  differential test included.
   **Layman:** If part of an update is already downloaded, OneUp can wrongly say there is nothing left to download, and its progress line shows no total.
   Kind: fix.
   Source: in-session-2026-10-01, found while checking ONEUP-0093's premise against zypper's source.
