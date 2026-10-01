@@ -5266,6 +5266,24 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: in-session-2026-10-01, found while checking ONEUP-0093's premise against zypper's source.
 
+- 🚧 [ONEUP-0224] **The window suite opens a real password dialog on the desktop every time it runs.**
+  tests/gui-smoke.py sandboxes HOME, XDG dirs and PATH, but not sudo. The
+  download-size scenario emits size_requested, request_size launches the
+  real engine with --size, sudo_init runs `sudo -A -v`, and the user's
+  ksshaskpass opens "System Updater: authenticate to update the system".
+  Nothing waits on it, so the suite still passes, and the dialog (or an
+  orphaned sudo under systemd --user) stays open. Measured 2026-10-01:
+  eight such dialogs were open at once, all traced to gui-smoke runs
+  from local-CI and pre-push gates (main --size, v2 --size --hold).
+  Typing a password would have run `zypper dup --dry-run` as root from a
+  test. Against testing.md §2 and CLAUDE.md §6's "a test must never
+  depend on, or damage, the machine". Fix: a mock sudo first on the
+  suite's PATH that logs and refuses, plus a check that the size probe
+  reached it. A tests-only fix on main, granted by the user 2026-10-01.
+  **Layman:** Running OneUp's window tests (including before every push) popped up a real "authenticate to update the system" password box, which stayed open until someone closed it.
+  Kind: fix.
+  Source: in-session-2026-10-01, found while running gui-smoke for ONEUP-0204.
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of
