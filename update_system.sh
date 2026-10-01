@@ -491,9 +491,19 @@ run_check() {
         (( total += n ))
     fi
     if step_selected firmware && command -v fwupdmgr &>/dev/null; then
-        if fwupdmgr get-updates &>/dev/null; then n=1; else n=0; fi
-        marker CHECK "firmware|$n|firmware update(s)"
-        echo "  Firmware: $( ((n > 0)) && echo available || echo up to date)"
+        # 0 = updates found, 2 = none, anything else = could not ask. The last of
+        # those must not render as a bare zero, which reads as "you're up to date"
+        # (ONEUP-0056) — so it goes through emit_check with an unreadable reason.
+        fwupdmgr get-updates &>/dev/null; fw_rc=$?
+        n=$(( fw_rc == 0 ? 1 : 0 ))
+        if (( fw_rc == 0 || fw_rc == 2 )); then
+            emit_check firmware "$n" "firmware update(s)"
+            echo "  Firmware: $( ((n > 0)) && echo available || echo up to date)"
+        else
+            emit_check firmware 0 "firmware update(s)" "OneUp couldn't ask fwupd"
+            echo "  Firmware: couldn't check"
+            incomplete=true
+        fi
         (( total += n ))
     fi
     marker CHECK "TOTAL|$total|updates available"
@@ -1795,7 +1805,11 @@ if step_selected firmware && ! stop_pending; then
     begin_step firmware
     if command -v fwupdmgr &>/dev/null; then
         fwupdmgr refresh || true
-        if fwupdmgr get-updates &>/dev/null; then
+        # fwupdmgr(1) EXIT STATUS: 0 = ran and found something, 2 = ran with no
+        # actions, 1/3 = it could not answer. Treating every non-zero as "nothing
+        # to do" tells a user their firmware is current when we never asked.
+        fwupdmgr get-updates &>/dev/null; FW_RC=$?
+        if (( FW_RC == 0 )); then
             # Only claim success (and later advise a reboot) if the flash actually
             # succeeded — a failed update must not report "applied" or force a reboot.
             if fwupdmgr update -y; then
@@ -1804,9 +1818,12 @@ if step_selected firmware && ! stop_pending; then
             else
                 end_step firmware fail "firmware update failed"
             fi
-        else
+        elif (( FW_RC == 2 )); then
             echo "No firmware updates available."
             end_step firmware ok "up to date"
+        else
+            echo "Couldn't ask fwupd about firmware updates (exit $FW_RC)."
+            end_step firmware fail "couldn't check for firmware updates"
         fi
     else
         echo "fwupd is not installed. Skipping."

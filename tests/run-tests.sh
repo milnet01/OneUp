@@ -528,6 +528,39 @@ check        "reason names the repository"   "packman"                  "$out"
 check_absent "no confident zero for system"  "@@CHECK@@|system|0"       "$out"
 rm -rf "$d"
 
+# The same rule for firmware. fwupdmgr(1) exits 0 when it found updates, 2 when
+# it ran and found none, and 1 or 3 when it could not answer. Every non-zero was
+# read as "up to date", in --check and in the run alike (ONEUP-0166).
+echo "TEST: an fwupd that cannot answer is reported as unknown or failed, never up to date"
+for rc in 1 3; do
+  d=$(mktemp -d); setup_common "$d"
+  cat > "$d/fwupdmgr" <<EOF
+#!/usr/bin/env bash
+case "\$1" in get-updates) exit $rc ;; update) echo "BUG: flashed"; exit 0 ;; *) exit 0 ;; esac
+EOF
+  chmod +x "$d/fwupdmgr"
+  out=$(run_engine "$d" --check --steps=firmware)
+  check        "check: fwupd exit $rc is not-checkable"   "@@CHECK_UNKNOWN@@|firmware" "$out"
+  check_absent "check: fwupd exit $rc is no bare zero"    "@@CHECK@@|firmware|0"       "$out"
+  out=$(run_engine "$d" --steps=firmware)
+  check        "run: fwupd exit $rc fails the step"       "@@STEP_END@@|firmware|fail" "$out"
+  check_absent "run: fwupd exit $rc flashes nothing"      "BUG: flashed"               "$out"
+  rm -rf "$d"
+done
+# Control: exit 2 really is "nothing to do", and must stay up to date.
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/fwupdmgr" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in get-updates) exit 2 ;; *) exit 0 ;; esac
+EOF
+chmod +x "$d/fwupdmgr"
+out=$(run_engine "$d" --check --steps=firmware)
+check        "check: fwupd exit 2 is a confident zero"  "@@CHECK@@|firmware|0"       "$out"
+check_absent "check: fwupd exit 2 is not unknown"       "@@CHECK_UNKNOWN@@|firmware" "$out"
+out=$(run_engine "$d" --steps=firmware)
+check        "run: fwupd exit 2 is up to date"          "@@STEP_END@@|firmware|ok|up to date" "$out"
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 # One unreadable remote must not hide every other remote's updates. `flatpak
 # remote-ls --updates` aborts the WHOLE listing (exit 1, empty stdout) when any
