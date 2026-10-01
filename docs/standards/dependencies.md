@@ -103,7 +103,7 @@ for r in actions/checkout actions/setup-python softprops/action-gh-release; do
   echo "$r -> $(gh api repos/$r/releases/latest -q .tag_name)"
 done
 # Host packages (openSUSE):
-zypper info python3-pyside6 | grep -i version
+zypper search -s --provides --match-exact python3-pyside6
 ```
 
 ## What checks this
