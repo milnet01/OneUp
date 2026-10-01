@@ -2936,7 +2936,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: accessibility.
   Source: in-session-2026-08-21.
 
-- 📋 [ONEUP-0124] **A finished auth probe can outlive its window and traceback at interpreter exit.**
+- ✅ [ONEUP-0124] **A finished auth probe can outlive its window and traceback at interpreter exit.**
   Pre-existing, and confirmed so rather than assumed: `git stash`ed the whole
   ONEUP-0064/0076 change and reproduced it on the untouched tree.
 
@@ -2967,6 +2967,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Not fixed in ONEUP-0064/0076 because it is unrelated to either — surgical
   changes, and this needs its own regression test that a torn-down window
   emits nothing.
+  Resolved (2026-10-01) by ONEUP-0204's fix (main b6469fb, v2 e1a8dfd):
+  the auth-status slot, and the size slot this item also named, now
+  ignore a destroyed QProcess or window. Same root cause.
   **Layman:** When the test suite finishes, it prints a scary-looking error after the results. Nothing is actually broken — but a real failure could hide behind it, so it is worth silencing properly.
   Kind: fix.
   Source: in-session-2026-08-21.
@@ -3056,7 +3059,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: doc.
   Source: in-session-2026-08-23, consequence of ONEUP-0044's implementation.
 
-- 📋 [ONEUP-0131] **Silence the Qt teardown traceback the window suite prints after its summary.**
+- ✅ [ONEUP-0131] **Silence the Qt teardown traceback the window suite prints after its summary.**
   `python3 tests/gui-smoke.py` prints `QProcess: Destroyed while process ("bash")
   is still running.` and a `RuntimeError: libshiboken: Internal C++ object
   (PySide6.QtWidgets.QPushButton) already deleted.` AFTER its summary line. The
@@ -3076,6 +3079,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Do not chase it as a defect unless the suite starts reporting a non-zero
   Failed count or a non-zero exit.
+  Resolved (2026-10-01) by ONEUP-0204 (main b6469fb, v2 e1a8dfd): the
+  window suite prints nothing after its summary; it reaps its probes and
+  the slots ignore destroyed objects.
   **Layman:** The window tests pass, but print an alarming-looking error after the results. It is harmless; tidy it so nobody wastes time on it.
   Kind: test.
   Source: in-session-2026-08-25 (verified while closing ONEUP-0054 stage 2).
@@ -4030,6 +4036,22 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: chore.
   Source: in-session-2026-09-21.
 
+- 📋 [ONEUP-0225] **The window suite hung mid-run three times on 2026-10-01, and the cause is unconfirmed.**
+  Three runs of main's tests/gui-smoke.py never finished; the main thread
+  sat in poll (wchan poll_schedule_timeout) with one zombie bash child.
+  gdb could not attach (ptrace not permitted). Every log stopped at
+  17,131 bytes, after "a fresh run is not flagged stale". That is a
+  stdout buffering boundary, not where the suite stopped, so the
+  location is unknown. One hang had a real ksshaskpass open (before
+  ONEUP-0224's mock sudo); two came after it. Four runs since, under
+  `faulthandler.dump_traceback_later(240, exit=True)` via runpy, and both
+  branches' local-CI, finished clean. Ruled out: the weekly-update stand
+  down (this machine has no oneup-update timer). If it recurs, rerun
+  under that faulthandler wrapper and read the dumped stacks.
+  **Layman:** The window tests froze three times in one afternoon and then ran cleanly every time after; nobody yet knows why.
+  Kind: investigate.
+  Source: in-session-2026-10-01, while proving ONEUP-0204/0224 on main.
+
 ## 1.4.6 — fixes to the released app
 
 **Theme:** fixes for the 1.4 app people use today, landed on `main`. No
@@ -4096,7 +4118,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: close-findings sweep 2026-09-21, found during the run.
 
-- 📋 [ONEUP-0204] **The window suite leaves QProcess auth probes running, and dumps tracebacks at interpreter shutdown.**
+- ✅ [ONEUP-0204] **The window suite leaves QProcess auth probes running, and dumps tracebacks at interpreter shutdown.**
   `tests/gui-smoke.py` ends with repeated `RuntimeError: libshiboken:
   Internal C++ object (PySide6.QtCore.QProcess) already deleted` out of
   `_on_auth_status_finished`, each preceded by `QProcess: Destroyed while
@@ -4111,6 +4133,11 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
 
   Each `Updater()` a scenario builds starts an `--auth-status` probe nothing
   waits on. Either wait for it or never start it under test.
+  Resolved (2026-10-01): main b6469fb, v2 merge e1a8dfd. The five probe
+  slots return when shiboken6 says the window or process is gone; the
+  window suite reaps every probe before its summary. Main: 31 tracebacks
+  and 32 'Destroyed while process' warnings went to 0 and 0. Red/green on
+  both branches. Mock sudo is ONEUP-0224.
   **Layman:** The window tests print a wall of harmless-looking errors after they finish, and leave stray processes.
   Kind: fix.
   Source: close-findings sweep 2026-09-21, found next door.
@@ -5266,7 +5293,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: in-session-2026-10-01, found while checking ONEUP-0093's premise against zypper's source.
 
-- 🚧 [ONEUP-0224] **The window suite opens a real password dialog on the desktop every time it runs.**
+- ✅ [ONEUP-0224] **The window suite opens a real password dialog on the desktop every time it runs.**
   tests/gui-smoke.py sandboxes HOME, XDG dirs and PATH, but not sudo. The
   download-size scenario emits size_requested, request_size launches the
   real engine with --size, sudo_init runs `sudo -A -v`, and the user's
@@ -5280,6 +5307,12 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   depend on, or damage, the machine". Fix: a mock sudo first on the
   suite's PATH that logs and refuses, plus a check that the size probe
   reached it. A tests-only fix on main, granted by the user 2026-10-01.
+  Resolved (2026-10-01): main b6469fb, v2 e1a8dfd. A mock sudo first on
+  the window suite's PATH (logs and refuses), plus a check that the size
+  probe reached it. Recorded as workflow.md §1.2's fifth exception. The
+  eight leftover dialogs were closed by hand. Three suite runs hung
+  earlier the same day; the cause is unconfirmed, and four runs and two
+  gates since were clean.
   **Layman:** Running OneUp's window tests (including before every push) popped up a real "authenticate to update the system" password box, which stayed open until someone closed it.
   Kind: fix.
   Source: in-session-2026-10-01, found while running gui-smoke for ONEUP-0204.
@@ -6064,7 +6097,7 @@ when complete (that document's §7).
   Kind: implement.
   Source: in-session-2026-07-26 (ONEUP-0057 Task 3 gotcha sweep).
 
-- 📋 [ONEUP-0062] **Silence the teardown tracebacks the GUI suite prints while passing.**
+- ✅ [ONEUP-0062] **Silence the teardown tracebacks the GUI suite prints while passing.**
   Measured 2026-07-26: `QT_QPA_PLATFORM=offscreen python3 tests/gui-smoke.py`
   printed 56 Traceback / RuntimeError lines and exited 0. That figure was one
   observation — the count varies run to run and drifts as the suite grows, so
@@ -6092,6 +6125,9 @@ when complete (that document's §7).
   parented QProcess objects torn down in a non-deterministic order.
   `docs/standards/testing.md` §7 owns the measurement and its derivation;
   treat this bullet's number as the symptom that opened the item.
+  Resolved (2026-10-01) by ONEUP-0204 (main b6469fb, v2 e1a8dfd), the
+  guard-in-the-slot fix this item proposed, applied to all five probe
+  slots. Production quit-mid-probe is covered by the same guard.
 
 - ✅ [ONEUP-0066] **Correct the engine's abbreviated marker list when the Python engine replaces it.**
   update_system.sh's header comment lists the markers for a reader's
