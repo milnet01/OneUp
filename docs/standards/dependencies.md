@@ -56,7 +56,7 @@ backlog item, not a ledger entry.
 
 *Rows removed from this ledger, and why: `docs/history/dependencies.md`.*
 
-## Current dependency snapshot (verified 2026-07-26; re-checked 2026-08-19 and 2026-08-31)
+## Current dependency snapshot (verified 2026-07-26; re-checked 2026-08-19, 2026-08-31 and 2026-10-01)
 
 Recorded so the next sweep has a baseline:
 
@@ -87,7 +87,7 @@ on, and the answer is unchanged.
   AppImage build `pip install`s the latest. It tracks upstream automatically; no manifest pin
   to bump. Requires only Qt 6 idioms (new-style `connect`, scoped enums where practical).
 - `zypper`, `flatpak`, `fwupd`, `snapper` — host tools, versioned by the user's openSUSE
-  install; OneUp calls stable CLI surfaces and skips cleanly when a tool is absent.
+  install; OneUp calls stable CLI surfaces.
 
 ## How to check what's behind
 
@@ -134,3 +134,4 @@ whether these dependencies are current.
 | 6 | 2026-07-26 | none | converged. |
 | 7 | 2026-10-01 | Packet build, then 2 lanes, cold, dispatched from outside the project; genre pinned standard; every lane held every question. Q1 3 · Q2 1 · Q3 1 — 5 verified, 0 dismissed, all 5 fixed: 2 found building the packet (`6a079a0`, `df43168`), 3 by the lanes | **A pure audit (ONEUP-0107): no change armed it, so there is no armed-span share.** The four-question gate's first read of this document. **Packet**: the host-package check `zypper info python3-pyside6` finds nothing — it is a capability, not a package name [Q1]; the tag-to-SHA command returns the tag object for an annotated tag, not the pinned commit [Q1, v2 only]. **Lanes**: rule 2 allowed an older pin only for a breakage while the runner row is a compatibility floor [Q2, both lanes]; What-checks said no suite makes a network call, where `testing.md` §2.3 carves out one opt-in scenario [Q1, both lanes]; the sweep named as the only catcher never checked the Python runtime [Q3]. Four open questions resolved clean. Per the user's document rules, the dated history moved to `docs/history/dependencies.md`; that move cut the host-tools bullet, caught on re-read and restored (`100e7e4`) |
 | 8 | 2026-10-01 | 2 lanes, cold, briefed exactly as loop 7; every lane held every question. Q2 1 · Q3 2 — 3 verified, 0 dismissed, all 3 fixed | **[Q2], pre-existing**: rule 5 had every bump update the calling code, while `coding.md` §1 lets CI run a newer Python than the code may require; rule 5 now names the runtime bump as the exception. **[Q3]**: SHA pinning was described but was no rule and had no What-checks row — rule 6 states it, v2 only, and the row says nothing runs `zizmor`. **[Q3]**: rule 2's advisory clause had no What-checks row. Own-fix share: 0 of 3. Four open questions resolved clean |
+| 9 | 2026-10-01 | 2 lanes, cold, briefed exactly as loop 8 plus one packet fact (nothing runs `zizmor`); every lane held every question. None — 0 verified, 0 dismissed | **Converged**: both lanes returned no findings, on the third loop of the run (the cap for a standard, reached empty). Two true-but-immaterial notes from both lanes, corrected by deletion or a date: the host-tools line no longer says `zypper` is skipped when absent (the RPM requires it), and the snapshot heading now carries 2026-10-01 |
