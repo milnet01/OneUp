@@ -4036,7 +4036,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: chore.
   Source: in-session-2026-09-21.
 
-- 📋 [ONEUP-0225] **The window suite hung mid-run three times on 2026-10-01, and the cause is unconfirmed.**
+- ✅ [ONEUP-0225] **The window suite hung mid-run three times on 2026-10-01, and the cause is unconfirmed.**
   Three runs of main's tests/gui-smoke.py never finished; the main thread
   sat in poll (wchan poll_schedule_timeout) with one zombie bash child.
   gdb could not attach (ptrace not permitted). Every log stopped at
@@ -4048,6 +4048,15 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   branches' local-CI, finished clean. Ruled out: the weekly-update stand
   down (this machine has no oneup-update timer). If it recurs, rerun
   under that faulthandler wrapper and read the dumped stacks.
+  Resolved (2026-10-01): main 8f9c60e, merged to v2. The cause was
+  ONEUP-0204's own end-of-suite reap (b6469fb): waiting on in-flight
+  probes ran their `finished` slots. Under the mock sudo every probe said
+  "@@AUTH@@|off", and windows carrying the real _stand_down_autoupdate with
+  _autoupdate_enabled forced true opened a real QMessageBox after the
+  dialog stubs were restored. Reproduced in isolation (faulthandler:
+  _on_auth_status_finished -> _stand_down_autoupdate). Fix: blockSignals(True)
+  before waiting; finished.disconnect() segfaulted in Qt. It also hung a
+  push gate once, before the fix.
   **Layman:** The window tests froze three times in one afternoon and then ran cleanly every time after; nobody yet knows why.
   Kind: investigate.
   Source: in-session-2026-10-01, while proving ONEUP-0204/0224 on main.
