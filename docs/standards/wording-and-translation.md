@@ -132,12 +132,13 @@ half that runs as root; it protects gate G2, which compares v1's and v2's marker
 equality (an engine emitting translated text would differ on a German desktop, testing the
 locale rather than the rewrite); and the GUI already owns presentation.
 
-**Today this is not yet true** — `@@HINT@@` and `@@REMEDY@@` carry English prose, as every
-quotation in §2.2 shows. The transition is deliberately ordered:
+**Today this is not yet true** — engine payloads carry English prose, as every quotation in
+§2.2 shows. The transition is deliberately ordered:
 
 1. The engine rewrite (ONEUP-0054) ships with the contract **byte-identical**, English prose
    included, and passes its gate against unchanged tests.
-2. **Then**, as part of ONEUP-0072, the prose payloads become codes in one deliberate,
+2. **Then**, as part of ONEUP-0072, every payload the window renders as its own wording
+   becomes a code (`docs/specs/ONEUP-0072-marker-codes.md` §3.1), in one deliberate,
    versioned change.
 
 Never both at once — `docs/reference/marker-protocol.md` §5.1 is canonical for that rule
@@ -248,8 +249,8 @@ Rules:
   differs (`pt_BR`).
 - **A missing catalogue is not an error.** The app then runs in English, which is the correct
   behaviour, not a condition to report.
-- **Extraction runs in CI once the wrapping lands** — it proves the catalogue builds
-  (`docs/specs/ONEUP-0032-i18n.md` INV-8). A string added without `tr()` is never extracted,
+- **The catalogue check runs in CI once the wrapping lands**; `docs/specs/ONEUP-0032-i18n.md`
+  INV-8 says what it runs and what passes. A string added without `tr()` is never extracted,
   so only review catches it.
 
 ## 8. Traps
