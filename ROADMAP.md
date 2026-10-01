@@ -3490,6 +3490,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   error emits CHECK firmware|0, read as "up to date". Seen while closing
   ONEUP-0132. Whether main takes this fix (workflow.md §1's freeze) is
   undecided; v2 is correct.
+  Resolved on main (2026-10-01, 741e9da, user's decision): main's
+  firmware check and run now treat fwupd exits 1 and 3 as "couldn't
+  check", as v2 does. Exit 3 checked against fwupd 2.1.7's source: no
+  devices or no updatable devices is exit 2, so 3 is a real failure. New
+  run-tests.sh scenario, red before and green after; merged to v2.
+  Residuals from Pressless's cold read are ONEUP-0222.
   **Layman:** Steps said your system was current when the tool they asked had actually failed.
   Kind: fix.
   Source: review-code 2026-08-31, lanes engine-shell, engine-driver, engine-steps.
