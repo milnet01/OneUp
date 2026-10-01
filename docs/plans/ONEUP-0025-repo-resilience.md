@@ -14,7 +14,7 @@
 
 - **Never weaken security.** No run ever passes `--no-gpg-checks`, disables `gpgcheck`, or force-imports a key to skip a source. A source is *disabled* (set aside), never *forced/trusted*.
 - **Privilege split.** `updater.py` never runs as root; it shells out to `update_system.sh` via `QProcess`. All `sudo`/`modifyrepo` calls live in the engine. Match the `sudo` (ASKPASS) pattern already in the engine.
-- **Marker contract lives in both files.** Any new `@@MARKER@@` is added to the catalogue comment in `update_system.sh` (lines 103-119) **and** the "Current markers" list in `CLAUDE.md`, and asserted in the tests.
+- **Marker contract lives in both files.** Any new `@@MARKER@@` is added to the catalogue comment in `update_system.sh` **and** the "Current markers" list in `CLAUDE.md`, and asserted in the tests.
 - **Reboot honesty preserved.** A run that skipped a source but upgraded the rest reports `@@STEP_END@@|system|ok` with normal reboot/service advice for what actually installed; a run where skipping didn't clear the failure reports `fail` and advises no reboot.
 - **Alias safety.** Every repo alias is validated against `^[A-Za-z0-9][A-Za-z0-9:@._+-]*$` (identical char class to `updater.py`'s `_ALIAS_RE`) before it reaches any privileged `modifyrepo`. Fail-closed: a non-matching alias is refused, the repo is *not* skipped.
 - **Guaranteed restore.** Every repo the engine disables is re-enabled before exit — on success, failure, and Ctrl-C/SIGTERM — via the `cleanup()`/`trap` machinery.
@@ -28,7 +28,7 @@
 The smallest end-to-end slice: the flags, the alias guard, `disable_repo`, the `cleanup()` restore extension, the `REPO_SKIPPED` marker, and the up-front `--skip-repo` disable. This is exactly the GUI's "Skip & retry" re-run path.
 
 **Files:**
-- Modify: `update_system.sh` (globals ~35-44; arg parse ~74-85; marker catalogue 103-119; `cleanup()` ~325; `system` step 525-616)
+- Modify: `update_system.sh` (option globals; arg parse; marker catalogue; `cleanup()`; `system` step)
 - Test: `tests/run-tests.sh`
 
 **Interfaces (produced, used by Tasks 2-3):**
@@ -101,19 +101,19 @@ unset MOCK_ZLOG
 
 - [ ] **Step 3: Add globals + arg parsing** (`update_system.sh`)
 
-Near the other option globals (~line 35-44):
+Near the other option globals:
 ```bash
 SKIP_REPOS=()      # --skip-repo=<alias> (repeatable): sources to set aside this run
 AUTO_SKIP=false    # --auto-skip-repos: unattended auto-quarantine of a broken source
 DISABLED_REPOS=()  # aliases WE disabled this run; cleanup() re-enables every one
 MAX_SKIP_REPOS=2   # more than this failing at once = systemic, don't silently skip
 ```
-In the arg-parse `case` (~line 74-85), add:
+In the arg-parse `case`, add:
 ```bash
         --skip-repo=*)     SKIP_REPOS+=("${arg#*=}") ;;
         --auto-skip-repos) AUTO_SKIP=true ;;
 ```
-Add to `usage()` (~line 49-65) two lines mirroring the spec's flag descriptions.
+Add to `usage()` two lines mirroring the spec's flag descriptions.
 
 - [ ] **Step 4: Add helpers + extend `cleanup()`** (`update_system.sh`)
 
@@ -131,7 +131,7 @@ disable_repo() {   # $1=alias $2=reason ; records + marks on success, fail-close
     return 1
 }
 ```
-Extend `cleanup()` (line 325) — re-enable **before** killing the keep-alive (sudo cred still warm), non-interactively so a cold-credential exit logs the manual fix instead of blocking on a popup:
+Extend `cleanup()` — re-enable **before** killing the keep-alive (sudo cred still warm), non-interactively so a cold-credential exit logs the manual fix instead of blocking on a popup:
 ```bash
 cleanup() {
     local a
@@ -168,7 +168,7 @@ In the step, right after `begin_step system` and before the refresh, disable any
 ```
 Keep the existing refresh block. Then `SYS_LOG=$(mktemp)` and call `run_system_upgrade` in place of the old inline transaction. (`tee` truncates `$SYS_LOG`, so re-runs in Task 3 are clean.)
 
-- [ ] **Step 6: Add the two markers to the catalogue** (`update_system.sh` lines 103-119)
+- [ ] **Step 6: Add the two markers to the catalogue** (`update_system.sh`'s header comment)
 ```
 #   @@REPO_SKIPPED@@|alias|reason        (a source was set aside this run)
 #   @@REMEDY@@|skip-repo|alias           (offer "Skip <source> & update the rest")
@@ -253,7 +253,7 @@ repo_scoped_failure() {
 Wire the helpers into the `system` step's failure path.
 
 **Files:**
-- Modify: `update_system.sh` (`system` step, between `run_system_upgrade` and the `if $ok` block; the success and fail branches; the end-of-run notify block ~804-815)
+- Modify: `update_system.sh` (`system` step, between `run_system_upgrade` and the `if $ok` block; the success and fail branches; the end-of-run notify block)
 - Test: `tests/run-tests.sh`
 
 - [ ] **Step 1: Write the failing tests**
@@ -397,7 +397,7 @@ In the **fail** branch, add the systemic hint as the FIRST case so it wins over 
         ...   # (existing cases unchanged)
 ```
 
-- [ ] **Step 4: Extend the end-of-run notify** (`update_system.sh` ~804-815) — when `DISABLED_REPOS` is non-empty, include the skipped source name(s) in the notification text so an unattended run reports them. Read the existing block and append to its message; keep the existing wording for the no-skip case.
+- [ ] **Step 4: Extend the end-of-run notify** (`update_system.sh`) — when `DISABLED_REPOS` is non-empty, include the skipped source name(s) in the notification text so an unattended run reports them. Read the existing block and append to its message; keep the existing wording for the no-skip case.
 
 - [ ] **Step 5: Run the Task-3 tests + the FULL suite, confirm all PASS** (esp. every pre-existing system-step test stays green).
 
@@ -420,7 +420,7 @@ In the **fail** branch, add the systemic hint as the FIRST case so it wins over 
 ### Task 5: GUI — `_launch(skip_repos=…)` + `_headless_update` auto-skip
 
 **Files:**
-- Modify: `updater.py` (`_launch` ~1914; `_headless_update` ~2368)
+- Modify: `updater.py` (`_launch`; `_headless_update`)
 - Test: `tests/gui-smoke.py`
 
 - [ ] **Step 1: Write the failing tests** (`tests/gui-smoke.py`)
@@ -475,7 +475,7 @@ In `_headless_update()` add `--auto-skip-repos`:
 ```python
     return subprocess.run(["bash", str(ENGINE), "--notify", "--auto-skip-repos"]).returncode
 ```
-> The gui-smoke guard "headless `--update` invokes the engine with `--notify`, not `--update`" (lines 205-215) must stay green — `--auto-skip-repos` is additive.
+> The gui-smoke guard "headless `--update` invokes the engine with `--notify`, not `--update`" must stay green — `--auto-skip-repos` is additive.
 
 - [ ] **Step 4: Run the tests, confirm PASS.** Run the FULL gui-smoke suite.
 - [ ] **Step 5: Commit** — `git commit -m "ONEUP-0025: GUI _launch skip_repos + unattended --auto-skip-repos"`
@@ -485,7 +485,7 @@ In `_headless_update()` add `--auto-skip-repos`:
 ### Task 6: GUI — `REPO_SKIPPED` logging + the "Skip &lt;source&gt; & update the rest" banner action
 
 **Files:**
-- Modify: `updater.py` (`handle_marker` ~2022; `on_finished` remedy handling ~2200-2215; the warn banner ~1010/1940)
+- Modify: `updater.py` (`handle_marker`; `on_finished` remedy handling; the warn banner)
 - Test: `tests/gui-smoke.py`
 
 - [x] **Step 1: Write the failing tests** (`tests/gui-smoke.py`)
@@ -546,7 +546,7 @@ In `_headless_update()` add `--auto-skip-repos`:
         steps = list(self._failed_steps) or ["system"]
         self._launch(steps, check=False, skip_repos=[alias])
 ```
-- In `on_finished` where remedies are surfaced (~2200-2215), when `self._remedy_skip` is set, show the warn banner with primary action text `f"Skip {self._repo_display_name(self._remedy_skip)} & update the rest"` wired to `_skip_repo_and_retry`. When BOTH `_remedy_skip` and `_remedy_keys` are set, the skip action is primary and the "Import signing key & retry" path stays reachable.
+- In `on_finished` where remedies are surfaced, when `self._remedy_skip` is set, show the warn banner with primary action text `f"Skip {self._repo_display_name(self._remedy_skip)} & update the rest"` wired to `_skip_repo_and_retry`. When BOTH `_remedy_skip` and `_remedy_keys` are set, the skip action is primary and the "Import signing key & retry" path stays reachable.
 > **Two-action banner:** the current banner drives a single action via `warn_btn`'s text/slot swap plus a separate `warn_copy_btn`. Offering skip *and* import-keys together needs a genuine second action button. Add one `warn_btn2` next to `warn_btn` (mirror `warn_copy_btn`'s construction and visibility toggling); show it only when both remedies are armed. Keep the single-action path unchanged when only one remedy is armed. Reset `_remedy_skip`/`_remedy_keys`/`warn_btn2` visibility at the start of each run (mirror how `_remedy_keys` is reset today).
 
 - [x] **Step 4: Run the tests, confirm PASS.** Run the FULL gui-smoke suite.
@@ -562,7 +562,7 @@ In `_headless_update()` add `--auto-skip-repos`:
 
 ## Notes for the implementer
 
-- **`set -uo pipefail` is on.** Guard array expansions with `"${arr[@]:-}"` and length checks with `${#arr[@]}` (safe on empty declared arrays). The engine has a load-bearing comment about this at line 129 — follow it.
+- **`set -uo pipefail` is on.** Guard array expansions with `"${arr[@]:-}"` and length checks with `${#arr[@]}` (safe on empty declared arrays). The engine has a load-bearing comment about this above `declare -a RUN_KEYS=()` — follow it.
 - **`MOCK_ZLOG`/`MOCK_NLOG`** are test-only conveniences these tests introduce; confirm `run_engine` forwards exported env into the mock `PATH` (the existing key-import tests already rely on `MOCK_KEYDIR`, so the pattern is established — mirror it).
 - **Do not** add a `--no-gpg-checks` path or disable `gpgcheck` anywhere — a test asserts its absence.
 - **Reuse, don't reinvent:** `marker`, `begin_step`/`end_step`, `read_repos`/`_parse_repos`, `_ALIAS_RE`, the warn-banner helpers, and `cleanup()`/`trap` all already exist — extend them.

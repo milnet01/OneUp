@@ -13,7 +13,7 @@
 - **Design spec is the contract:** `docs/specs/ONEUP-0022-unattended-updates.md` — every task traces to it.
 - **Privileged engine calls** go through `SUDO_ASKPASS="$ASKPASS"` (`ASKPASS=/usr/libexec/ssh/ksshaskpass`), `sudo -A` — never bare `sudo`. New privileged calls match this.
 - **No new markers / step keys.** The `@@MARKER@@` contract in `CLAUDE.md` stays byte-identical.
-- **`--update` is GUI-only.** It is consumed by `updater.py`'s `main()` and **never** passed to the engine (the engine's arg parser rejects unknown flags with `exit 2` at `update_system.sh:79`).
+- **`--update` is GUI-only.** It is consumed by `updater.py`'s `main()` and **never** passed to the engine (the engine's arg parser rejects unknown flags with `exit 2` at `update_system.sh`).
 - **Off by default.** Auto-update starts off; the auto-update timer is never enabled while passwordless is off.
 - **A failed step never claims success or forces a reboot** — unchanged engine invariant; the timer runs the same engine path as a manual run.
 - **Layman's-language user-facing copy** (dialogs, notifications, changelog).
@@ -35,14 +35,14 @@
 ## Task 1: Engine — skip the interactive bootstrap when passwordless is active
 
 **Files:**
-- Modify: `update_system.sh:285-303` (`sudo_init`)
+- Modify: `update_system.sh` (`sudo_init`)
 - Test: `tests/run-tests.sh` (new scenario)
 
 **Interfaces:**
-- Consumes: the scoped non-interactive probe pattern the engine already uses at `update_system.sh:416` (`sudo -k -n "$zypper" --version`).
+- Consumes: the scoped non-interactive probe pattern the engine already uses at `update_system.sh` (`sudo -k -n "$zypper" --version`).
 - Produces: a `sudo_init` that returns early (no interactive `-v`, no keep-alive) when the drop-in is active; unchanged otherwise.
 
-- [ ] **Step 1: Write the failing test** — append to `tests/run-tests.sh` (after the `--auth-status` scenario, ~line 328):
+- [ ] **Step 1: Write the failing test** — append to `tests/run-tests.sh` (after the `--auth-status` scenario):
 
 ```bash
 # ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ rm -rf "$d"
 Run: `bash tests/run-tests.sh 2>&1 | grep -A1 "skips the interactive"`
 Expected: `FAIL - drop-in active: no interactive sudo -A -v` (today `sudo_init` always runs `sudo -A … -v`, so the mock's `exit 99` fires and the BUG line appears).
 
-- [ ] **Step 3: Write the minimal implementation** — edit `sudo_init` at `update_system.sh:285`, inserting the guard as the first lines of the function body:
+- [ ] **Step 3: Write the minimal implementation** — edit `sudo_init` at `update_system.sh`, inserting the guard as the first lines of the function body:
 
 ```bash
 sudo_init() {
@@ -105,7 +105,7 @@ sudo_init() {
     # to `all`, so a bare `-v` validate is only password-free when EVERY one of the
     # user's sudoers entries is NOPASSWD (a normal %wheel user's isn't). Skipping it
     # is what lets a headless timer run authenticate. Same non-interactive scoped
-    # probe --auth-status uses (auth_status, ~line 416).
+    # probe --auth-status uses (auth_status).
     local _zypper
     if _zypper=$(command -v zypper) && sudo -k -n "$_zypper" --version >/dev/null 2>&1; then
         return 0
@@ -118,7 +118,7 @@ sudo_init() {
     # ... (existing keep-alive loop unchanged) ...
 ```
 
-Leave the rest of `sudo_init` (the `setsid` keep-alive at lines 300-302) exactly as-is.
+Leave the rest of `sudo_init` (the `setsid` keep-alive) exactly as-is.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
@@ -142,12 +142,12 @@ git commit -m "ONEUP-0022: skip interactive sudo bootstrap when passwordless dro
 ## Task 2: Engine — end-of-run desktop notification on a full run
 
 **Files:**
-- Modify: `update_system.sh` (end-of-run summary block, ~line 765, before `echo "  Log saved: $LOG_FILE"`)
+- Modify: `update_system.sh` (end-of-run summary block, before `echo "  Log saved: $LOG_FILE"`)
 - Test: `tests/run-tests.sh` (new scenario)
 
 **Interfaces:**
-- Consumes: `notify_send` helper (`update_system.sh:115-117`), and the summary variables already computed by this point — `ERRORS` (defined line 150), `SYS_COUNT` (line 152), `SYS_CHANGED` (line 151), `FW_CHANGED` (line 153), `LOG_FILE`.
-- Produces: exactly one `notify-send` call at the end of a full run when `--notify` is set. `--check`/`--size`/auth actions exit earlier (`update_system.sh:277`, `:436`, `:429`), so this code path is full-run-only and cannot double-fire with the existing check-mode notify at line 229.
+- Consumes: `notify_send` helper (`update_system.sh`), and the summary variables already computed by this point — `ERRORS`, `SYS_COUNT`, `SYS_CHANGED`, `FW_CHANGED`, `LOG_FILE`.
+- Produces: exactly one `notify-send` call at the end of a full run when `--notify` is set. `--check`/`--size`/auth actions exit earlier in `update_system.sh`, so this code path is full-run-only and cannot double-fire with the existing check-mode notify ("Updates available").
 
 - [ ] **Step 1: Write the failing test** — append to `tests/run-tests.sh`:
 
@@ -187,7 +187,7 @@ _notify_case "boom"                   "Update failed" 1
 Run: `bash tests/run-tests.sh 2>&1 | grep "full run notifies"`
 Expected: three `FAIL` lines (today a full run never calls `notify_send`).
 
-- [ ] **Step 3: Write the minimal implementation** — in `update_system.sh`, insert this block after the reboot/services advice (after line 765, immediately before `echo "  Log saved: $LOG_FILE"`):
+- [ ] **Step 3: Write the minimal implementation** — in `update_system.sh`, insert this block after the reboot/services advice (immediately before `echo "  Log saved: $LOG_FILE"`):
 
 ```bash
 # End-of-run desktop notification (full runs only; --check has its own at line ~229).
@@ -227,7 +227,7 @@ git commit -m "ONEUP-0022: notify with the outcome at the end of a full run"
 ## Task 3: GUI — shared timer/command helpers + the `--update` headless entrypoint
 
 **Files:**
-- Modify: `updater.py:1017-1080` (rename/extract the weekly-check helpers), `updater.py:1042-1045` (`_autocheck_enabled`), `updater.py:1715-1726` (`_headless_check` + `main`)
+- Modify: `updater.py` (rename/extract the weekly-check helpers), `updater.py` (`_autocheck_enabled`), `updater.py` (`_headless_check` + `main`)
 - Test: `tests/gui-smoke.py` (command-builder assertions)
 
 **Interfaces:**
@@ -238,7 +238,7 @@ git commit -m "ONEUP-0022: notify with the outcome at the end of a full run"
   - `Updater._timer_enabled(timer: str) -> bool` — `is-enabled` probe.
   - `_headless_update() -> int` (module-level) and `main()` dispatch of `--update`.
 
-- [ ] **Step 1: Write the failing test** — in `tests/gui-smoke.py`, add after the `--check` section (after line 193, before the About section):
+- [ ] **Step 1: Write the failing test** — in `tests/gui-smoke.py`, add after the `--check` section (before the About section):
 
 ```python
     # --- headless command builder shared by both timers ------------------------
@@ -257,7 +257,7 @@ Expected: `FAIL`/traceback — `_headless_command` does not exist yet (only `_au
 
 - [ ] **Step 3: Write the minimal implementation.**
 
-**3a.** Replace `_autocheck_command` (`updater.py:1021-1040`) with the generalised builder:
+**3a.** Replace `_autocheck_command` with the generalised builder:
 
 ```python
     @staticmethod
@@ -280,7 +280,7 @@ Expected: `FAIL`/traceback — `_headless_command` does not exist yet (only `_au
         return f"{_arg(sys.executable)} {_arg(Path(__file__).resolve())} {flag}"
 ```
 
-**3b.** Extract the install/remove/probe helpers. Replace `_autocheck_enabled` (`updater.py:1042-1045`) and `on_autocheck_toggled` (`updater.py:1051-1080`) with:
+**3b.** Extract the install/remove/probe helpers. Replace `_autocheck_enabled` and `on_autocheck_toggled` with:
 
 ```python
     def _timer_enabled(self, timer: str) -> bool:
@@ -340,7 +340,7 @@ Expected: `FAIL`/traceback — `_headless_command` does not exist yet (only `_au
         self._refresh_autocheck_label()
 ```
 
-**3c.** Add the `--update` headless entrypoint. Replace the `main()` head (`updater.py:1724-1726`) and add `_headless_update` next to `_headless_check` (`updater.py:1715`):
+**3c.** Add the `--update` headless entrypoint. Replace the `main()` head (`updater.py`) and add `_headless_update` next to `_headless_check`:
 
 ```python
 def _headless_update() -> int:
@@ -379,7 +379,7 @@ git commit -m "ONEUP-0022: extract shared user-timer helpers + add --update head
 ## Task 4: GUI — the Settings popup + header restructure
 
 **Files:**
-- Modify: `updater.py:718-811` (`Updater.__init__`: min-width, the three toggle buttons, header row), add `SettingsDialog` class near `RepoManagerDialog` (`updater.py:552`), add `open_settings` near `open_repos` (`updater.py:1187`)
+- Modify: `updater.py` (`Updater.__init__`: min-width, the three toggle buttons, header row), add `SettingsDialog` class near `RepoManagerDialog`, add `open_settings` near `open_repos`
 - Test: `tests/gui-smoke.py` (Settings/dialog assertions)
 
 **Interfaces:**
@@ -409,7 +409,7 @@ Expected: `FAIL`/traceback — `settings_btn`, `autoupdate_btn`, `SettingsDialog
 
 - [ ] **Step 3: Write the minimal implementation.**
 
-**3a.** Add the `SettingsDialog` class (place immediately before or after `RepoManagerDialog`, `updater.py:552`):
+**3a.** Add the `SettingsDialog` class (place immediately before or after `RepoManagerDialog`, `updater.py`):
 
 ```python
 class SettingsDialog(QDialog):
@@ -470,7 +470,7 @@ class SettingsDialog(QDialog):
             self.move(fg.topLeft())
 ```
 
-**3b.** In `Updater.__init__`, change the min-width (`updater.py:722-724`):
+**3b.** In `Updater.__init__`, change the min-width (`updater.py`):
 
 ```python
         # Four header controls (Settings · Repositories · Recenter · About); the
@@ -478,14 +478,14 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(560)
 ```
 
-**3c.** Initialise the dialog handle and the new toggle. Add near the other init state (after `updater.py:739`):
+**3c.** Initialise the dialog handle and the new toggle. Add near the other init state (after `updater.py`):
 
 ```python
         self._settings_dialog: SettingsDialog | None = None
         self._pending_autoupdate = False   # one-shot latch: an enable awaiting a fresh auth settle
 ```
 
-Add the auto-update button next to `auth_btn` (after `updater.py:784`):
+Add the auto-update button next to `auth_btn` (after `updater.py`):
 
 ```python
         # Automatic weekly updates (ONEUP-0022). Off by default; enabling it needs
@@ -502,7 +502,7 @@ Add the auto-update button next to `auth_btn` (after `updater.py:784`):
         self.autoupdate_btn.toggled.connect(self.on_autoupdate_toggled)
 ```
 
-Add the Settings header button (replacing the `auto_btn`/`auth_btn` header slots). Change the header block (`updater.py:786-811`) so the two toggle buttons are **not** added to `header_row`, and add `settings_btn` first:
+Add the Settings header button (replacing the `auto_btn`/`auth_btn` header slots). Change the header block (`updater.py`) so the two toggle buttons are **not** added to `header_row`, and add `settings_btn` first:
 
 ```python
         self.settings_btn = QPushButton("⚙ Settings")
@@ -525,7 +525,7 @@ Add the Settings header button (replacing the `auto_btn`/`auth_btn` header slots
 
 (The `auto_btn` and `auth_btn` objects are still constructed exactly as before — they are simply no longer added to `header_row`; `SettingsDialog` reparents them into itself on first open.)
 
-**3d.** Add `open_settings`, `_settings_status`, and the auto-update label/reflect helpers. Place `open_settings` near `open_repos` (`updater.py:1187`):
+**3d.** Add `open_settings`, `_settings_status`, and the auto-update label/reflect helpers. Place `open_settings` near `open_repos`:
 
 ```python
     def open_settings(self):
@@ -542,7 +542,7 @@ Add the Settings header button (replacing the `auto_btn`/`auth_btn` header slots
             self._settings_dialog.status.setText(text)
 ```
 
-Place the auto-update label helpers next to `_refresh_autocheck_label` (`updater.py:1047`):
+Place the auto-update label helpers next to `_refresh_autocheck_label`:
 
 ```python
     def _refresh_autoupdate_label(self):
@@ -585,7 +585,7 @@ git commit -m "ONEUP-0022: group the three background toggles behind a Settings 
 ## Task 5: GUI — the passwordless↔auto-update coupling
 
 **Files:**
-- Modify: `updater.py` — replace the Task-4 placeholder `on_autoupdate_toggled`; factor the passwordless warning out of `on_auth_toggled` (`updater.py:1116-1142`) into `_confirm_passwordless`; add the install gate to `_on_auth_status_finished` (`updater.py:1112-1114`); hook the revoke coupling into `on_auth_toggled`'s `on=False` branch; route `_run_auth` status to the dialog.
+- Modify: `updater.py` — replace the Task-4 placeholder `on_autoupdate_toggled`; factor the passwordless warning out of `on_auth_toggled` into `_confirm_passwordless`; add the install gate to `_on_auth_status_finished`; hook the revoke coupling into `on_auth_toggled`'s `on=False` branch; route `_run_auth` status to the dialog.
 - Test: `tests/gui-smoke.py` (coupling stubs)
 
 **Interfaces:**
@@ -648,7 +648,7 @@ Expected: `FAIL`s — the placeholder `on_autoupdate_toggled` just mirrors the t
 
 - [ ] **Step 3: Write the minimal implementation.**
 
-**3a.** Factor the passwordless warning out of `on_auth_toggled` into `_confirm_passwordless`, and wire the revoke coupling. Replace `on_auth_toggled` (`updater.py:1116-1142`) with:
+**3a.** Factor the passwordless warning out of `on_auth_toggled` into `_confirm_passwordless`, and wire the revoke coupling. Replace `on_auth_toggled` with:
 
 ```python
     def _confirm_passwordless(self, lead: str = "") -> bool:
@@ -738,7 +738,7 @@ Expected: `FAIL`s — the placeholder `on_autoupdate_toggled` just mirrors the t
             self._refresh_autoupdate_label()
 ```
 
-**3c.** Make the settle the single install gate. Replace `_on_auth_status_finished` (`updater.py:1112-1114`) with:
+**3c.** Make the settle the single install gate. Replace `_on_auth_status_finished` with:
 
 ```python
     def _on_auth_status_finished(self, proc: QProcess):
@@ -763,13 +763,13 @@ Expected: `FAIL`s — the placeholder `on_autoupdate_toggled` just mirrors the t
                 self._set_autoupdate_checked(False)
 ```
 
-**3d.** Route the auth-flow status to the Settings dialog. In `_run_auth` (`updater.py:1149`) add after `self.status.setText(status_text)`:
+**3d.** Route the auth-flow status to the Settings dialog. In `_run_auth` add after `self.status.setText(status_text)`:
 
 ```python
         self._settings_status(status_text)
 ```
 
-And in `_on_auth_finished` (`updater.py:1161`) after `self.status.setText("Ready.")`:
+And in `_on_auth_finished` after `self.status.setText("Ready.")`:
 
 ```python
         self._settings_status("")
@@ -801,7 +801,7 @@ git commit -m "ONEUP-0022: couple auto-update to passwordless (enable both / rev
 
 **Interfaces:** none (docs only). No version bump — versioning is a separate release step (`./bump.py`).
 
-- [ ] **Step 1: Add the CHANGELOG bullet** — under `## [Unreleased]` → `### Added` in `CHANGELOG.md` (after line 24):
+- [ ] **Step 1: Add the CHANGELOG bullet** — under `## [Unreleased]` → `### Added` in `CHANGELOG.md`:
 
 ```markdown
 - **An optional "Automatic updates" setting that installs everything on a weekly schedule — off by default.**
@@ -815,7 +815,7 @@ git commit -m "ONEUP-0022: couple auto-update to passwordless (enable both / rev
   **⚙ Settings** button in the header.
 ```
 
-- [ ] **Step 2: Add the README feature bullet** — under "What it does" in `README.md`, add to the bullet list (after the Passwordless bullet at line 45-48):
+- [ ] **Step 2: Add the README feature bullet** — under "What it does" in `README.md`, add to the bullet list (after the Passwordless bullet):
 
 ```markdown
 - **Update automatically every week** — optionally (off by default). A

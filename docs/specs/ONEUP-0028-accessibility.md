@@ -27,11 +27,11 @@ All citations verified against `updater.py` at commit `2f240fd` (2842 lines).
 
 | Gap | Where | Effect with Orca |
 | --- | --- | --- |
-| `ToggleSwitch` is a `QAbstractButton` with **no text and no accessible name** | `updater.py:357-403` | The five task switches — the app's primary controls — announce as an unnamed check box. A blind user cannot tell which task they are toggling. |
-| The disclosure arrow is an icon-only `QToolButton` (arrow type only, no text) | `updater.py:440-446` | Announces unnamed. |
-| Progress bar, log pane, banners, badges carry no accessible name | `updater.py:1148-1152`, `1214-1220`, `_make_banner` `1245-1260` | Progress is announced as a bare percentage with no context; a banner that *appears* is never announced at all. |
-| Nothing is announced when a step starts/ends or a run finishes | `handle_marker` `2338`, `on_finished` `2499` | A blind user gets silence for the whole run, then must hunt for the outcome. |
-| Repo-manager switches carry no name | `_make_row` `696-730` | 20+ unnamed switches in the Repositories dialog. |
+| `ToggleSwitch` is a `QAbstractButton` with **no text and no accessible name** | `ToggleSwitch` | The five task switches — the app's primary controls — announce as an unnamed check box. A blind user cannot tell which task they are toggling. |
+| The disclosure arrow is an icon-only `QToolButton` (arrow type only, no text) | `TaskRow.__init__` | Announces unnamed. |
+| Progress bar, log pane, banners, badges carry no accessible name | `Updater.__init__`, `_make_banner` | Progress is announced as a bare percentage with no context; a banner that *appears* is never announced at all. |
+| Nothing is announced when a step starts/ends or a run finishes | `handle_marker`, `on_finished` | A blind user gets silence for the whole run, then must hunt for the outcome. |
+| Repo-manager switches carry no name | `_make_row` | 20+ unnamed switches in the Repositories dialog. |
 
 **Roles are already correct — do not add machinery for them.** The roadmap bullet
 asks for "accessible names/**roles** on every control". Verified empirically on
@@ -46,26 +46,26 @@ needed, and none should be written.
 
 | Gap | Where | Effect |
 | --- | --- | --- |
-| Every font size in the stylesheet is an **absolute pixel value** — **twelve** `font-size: …px` declarations (`21px`, `14px`×2, `12px`×6, `11px`×3) | `_QSS` `202-318` | A user who raises their desktop font size sees **no change in OneUp** — the QSS pixel value overrides the inherited font. This is the single biggest low-vision failure. |
-| No high-contrast option | — | Body text is mid-grey on near-black (`tdesc="#a7b0be"` on `rowcard="#1a1f27"`, `updater.py:322-323`); banners are translucent gradient washes (`282-304`). |
-| **No `:focus` rule anywhere in the QSS** | `_QSS` `240-312` | Once a stylesheet styles a `QPushButton`, Qt's native focus decoration is gone. Keyboard focus is therefore *invisible* on every button in the app (WCAG 2.4.7 failure). |
-| `ToggleSwitch.paintEvent` never draws a focus ring | `updater.py:388-403` | Same, for the primary controls. |
-| Header tab order does not match visual order | created `settings, recenter, repos, about` (`1073-1096`), laid out `settings, repos, recenter, about` (`1100-1103`) | Tabbing jumps sideways. |
+| Every font size in the stylesheet is an **absolute pixel value** — **twelve** `font-size: …px` declarations (`21px`, `14px`×2, `12px`×6, `11px`×3) | `_QSS` | A user who raises their desktop font size sees **no change in OneUp** — the QSS pixel value overrides the inherited font. This is the single biggest low-vision failure. |
+| No high-contrast option | — | Body text is mid-grey on near-black (`tdesc="#a7b0be"` on `rowcard="#1a1f27"`); banners are translucent gradient washes. |
+| **No `:focus` rule anywhere in the QSS** | `_QSS` | Once a stylesheet styles a `QPushButton`, Qt's native focus decoration is gone. Keyboard focus is therefore *invisible* on every button in the app (WCAG 2.4.7 failure). |
+| `ToggleSwitch.paintEvent` never draws a focus ring | `ToggleSwitch.paintEvent` | Same, for the primary controls. |
+| Header tab order does not match visual order | `Updater.__init__`: created `settings, recenter, repos, about`, laid out `settings, repos, recenter, about` | Tabbing jumps sideways. |
 
 ### Colour-blind
 
 | Gap | Where | Effect |
 | --- | --- | --- |
-| Task on/off is signalled by track colour (green/red) as the **only deliberate cue** | `updater.py:392` `track = GREEN if self.isChecked() else RED` | Red/green is the classic confusion pair (deuteranopia/protanopia): the *primary* control state is unreadable. The knob's left/right position is a second-order cue, but at 56×30 px with no reference point beside it (`updater.py:365`) it is easy to miss — it reads as decoration, not state. |
-| The tray "updates waiting" badge is an amber dot — colour only | `_tray_icon` `1492-1499` | Attention state indistinguishable from the normal icon. (The tooltip does carry text — `1566-1567` — but only on hover.) |
-| The overdue last-run line is signalled only by turning amber | QSS `268`, `refresh_last_run` `1943-1947` | "Overdue" is invisible. |
+| Task on/off is signalled by track colour (green/red) as the **only deliberate cue** | `ToggleSwitch.paintEvent`: `track = GREEN if self.isChecked() else RED` | Red/green is the classic confusion pair (deuteranopia/protanopia): the *primary* control state is unreadable. The knob's left/right position is a second-order cue, but at 56×30 px with no reference point beside it it is easy to miss — it reads as decoration, not state. |
+| The tray "updates waiting" badge is an amber dot — colour only | `_tray_icon` | Attention state indistinguishable from the normal icon. (The tooltip does carry text, but only on hover.) |
+| The overdue last-run line is signalled only by turning amber | `_QSS` (`QLabel#LastRun[stale="true"]`), `refresh_last_run` | "Overdue" is invisible. |
 
 **Already correct — no change needed here, despite the roadmap naming it.** The
 bullet lists "red/green step badges" as a colour-only gap, but per-step outcomes
-are already **text**: `_step_badge` returns "Failed", "Up to date", "3 installed"
-(`2311-2327`), and the badge's colours come from one theme pair
+are already **text**: `_step_badge` returns "Failed", "Up to date", "3 installed",
+and the badge's colours come from one theme pair
 (`badgebg`/`badgefg`) that does not vary by outcome. The reboot/warning banners
-likewise already carry a `⚠` glyph plus prose (`1282`, `2551-2558`). So the
+likewise already carry a `⚠` glyph plus prose. So the
 colour-blind work is the three rows above — switch, tray badge, overdue line —
 and an implementer should not go looking for badge colours to fix. What matters
 for the badges is that this stays true.
@@ -74,8 +74,8 @@ for the badges is that this stays true.
 
 ### 1. Accessible names — a name for everything a user can reach
 
-`TaskRow.__init__` (`updater.py:416`) names its own controls, so every task row is
-self-describing. The description is **stored** (today it is only a local, `424`)
+`TaskRow.__init__` names its own controls, so every task row is
+self-describing. The description is **stored** (today it is only a local)
 because `_render_badge` needs it:
 
 ```python
@@ -108,7 +108,7 @@ only the name made those two passages contradict each other (ONEUP-0162).
 | `services_banner` / `services_label` | "Services should restart" |
 | `warn_banner` / `warn_label` | "Warning" |
 | `appupdate_banner` / `appupdate_label` | "OneUp update available" |
-| `RollbackDialog.list` (`897`) | "Restore points" |
+| `RollbackDialog.list` | "Restore points" |
 
 `RepoManagerDialog._make_row` names each repo switch
 `f"{repo['name']} — include this repository"`. The name must **not** bake in the
@@ -123,7 +123,7 @@ name from the button text, and the accessible *description* from the tooltip whe
 none is set explicitly (verified: an explicit `setAccessibleDescription` wins;
 otherwise `QAccessibleWidget` falls back to `toolTip()`).
 
-**Outcome reachability.** `TaskRow._render_badge` (`542`) also refreshes the
+**Outcome reachability.** `TaskRow._render_badge` also refreshes the
 switch's accessible description, so a blind user tabbing to a switch after a run
 hears *"System packages … 3 installed · 42s"* rather than having to find a
 separate, unfocusable badge label:
@@ -141,8 +141,8 @@ def _render_badge(self):
 ```
 
 **`clear_badge` must route through `_render_badge`** rather than clearing the
-fields inline as it does today (`547-550`): `_launch` calls it on every row at the
-start of each run (`2267-2269`), and without the re-render the switch would keep
+fields inline as it does today: `_launch` calls it on every row at the
+start of each run, and without the re-render the switch would keep
 announcing the *previous* run's outcome on a row that has not run yet.
 
 ### 2. Announcements — one helper, degrading cleanly
@@ -183,7 +183,7 @@ def _announce(self, text: str, source: QWidget | None = None):
 
 The fallback deliberately does **not** call `setAccessibleName` on the borrowed
 label: an explicit accessible name on a `QLabel` is permanent, so every later
-`status.setText` (`2278-2283`, `2519-2540`) would become invisible to AT.
+`status.setText` would become invisible to AT.
 
 Announced (and only these — enough to follow a run, not a monologue). The roadmap
 bullet also asks for the **live log** to be announced; that is a deliberate,
@@ -199,18 +199,18 @@ scope*:
 | `on_finished` (check) | the "N update(s) available" / "up to date" line | `self.status` |
 
 Three ordering rules, because `_show_warning` fires from four sites — two of them
-*inside* `on_finished` (`2453`, `2475`, `2579`, `2591`) — and
+*inside* `on_finished` — and
 `QAccessibleAnnouncementEvent` defaults to **Polite** priority, meaning a later
 announcement can supersede an earlier one:
 
 1. In `on_finished`, announce the summary **where `status.setText` happens**, and
    let the warning announcement come **after** it — the warning is the more
    urgent message, so it must be the one left standing.
-2. `_notify_when_away`'s desktop-notification text (`2618-2620`) is **not**
+2. `_notify_when_away`'s desktop-notification text is **not**
    re-announced. It duplicates the summary; a screen-reader user would hear it
    twice.
 3. `TIMING` and `FREED` rewrite a row's badge *after* `STEP_END`
-   (`2372-2387`; asserted at `tests/gui-smoke.py:128-129`) — so the spoken
+   (asserted in `tests/gui-smoke.py`) — so the spoken
    `STEP_END` text is the badge **as it stood at that moment** ("Cache cleanup:
    Done"), while the final badge reads "Reclaimed 1.0G · 3s". The refresh updates
    the switch's accessible description (§1) so the final figure is reachable by
@@ -244,7 +244,7 @@ if not 6.0 <= base <= 30.0:
 **Ordering constraint:** `QApplication.font()` is only meaningful once the
 `QApplication` exists, so `build_theme` must never be called before it. Both call
 paths already satisfy this — `main()` constructs `QApplication([])` before
-theming (`2807-2814`), and the Settings handlers run long after — but the clamp
+theming, and the Settings handlers run long after — but the clamp
 above is also what keeps a too-early call from emitting a negative point size
 rather than crashing.
 
@@ -263,8 +263,8 @@ Emitted as `f"{base * mult * scale:.1f}pt"`. Fractional `pt` in a Qt stylesheet 
 verified to work (`font-size: 14.5pt` → `QFont.pointSizeF() == 14.5`).
 
 **Two metrics scale with the text, not just the fonts**, or enlarged text crowds
-fixed padding: `QLabel#Badge`'s `padding: 2px 9px` (`226-229`) and
-`QProgressBar`'s `min-height: 20px` (`271-273`) become `$badgepad` /
+fixed padding: `QLabel#Badge`'s `padding: 2px 9px` and
+`QProgressBar`'s `min-height: 20px` become `$badgepad` /
 `$progmin`, multiplied by the same `scale`. Every other length (border radii,
 layout margins) is decoration that does not bound text, and stays absolute.
 
@@ -279,7 +279,7 @@ TEXT_SCALES = [("Normal", 1.0), ("Large", 1.2), ("Larger", 1.45)]
 Persisted as `text_scale` in the existing `QSettings("OneUp", "OneUp")`.
 
 **The single theming entry point.** `main()`'s local `apply_theme` closure
-(`2811-2812`) reads neither setting and is unreachable from a Settings handler or
+reads neither setting and is unreachable from a Settings handler or
 from the test, so it is replaced by a module-level function:
 
 ```python
@@ -293,7 +293,7 @@ def apply_app_theme(app: QApplication):
         high_contrast=bool(s.value("high_contrast", False, type=bool))))
 ```
 
-`main()` calls it at startup and rewires `colorSchemeChanged` (`2815-2818`) to it;
+`main()` calls it at startup and rewires `colorSchemeChanged` to it;
 the two new Settings buttons write their `QSettings` key and then call it, so a
 change applies live with no restart and no window rebuild.
 
@@ -303,10 +303,10 @@ change. Qt has no font-changed signal wired here, so a desktop font change made
 while OneUp is open takes effect on the next of those events.
 
 *No clipping risk at `Larger`:* the only fixed geometry is `ToggleSwitch`'s
-56×30 (it holds no text — `365`); `run_btn`'s 44 px and the log's 180 px are
-**minimums** (`1126`, `1218`), and the detail list's `setMaximumHeight(180)`
-(`474`) is a scroll area that already scrolls. The main window sets
-`setMinimumWidth`, not a fixed size (`944`).
+56×30 (it holds no text); `run_btn`'s 44 px and the log's 180 px are
+**minimums**, and the detail list's `setMaximumHeight(180)`
+ is a scroll area that already scrolls. The main window sets
+`setMinimumWidth`, not a fixed size.
 
 ### 4. High contrast — an overlay, not a third palette
 
@@ -324,22 +324,22 @@ An overlay that only restates the plain rules would leak the gradient back the
 moment the pointer touches a button. The overlay must therefore restate **every
 pseudo-state and attribute variant** the base defines:
 
-| Base rule to beat | `updater.py` |
-| --- | --- |
-| `#RunBtn:hover`, `#RunBtn:pressed`, `#RunBtn:disabled` | `244-250` |
-| `#GhostBtn:hover`, `#GhostBtn:checked`, `#GhostBtn:disabled` | `256-258` |
-| `#LinkBtn:hover` | `264` |
-| `#RestartBtn:hover` | `291-293` |
-| `#BannerBtn:hover` | `310-312` |
-| `#RowBorder:hover`, `#RowBorder:hover #RowCard` | `217-222` |
-| `QLabel#LastRun[stale="true"]` | `268` |
+| Base rule to beat |
+| --- |
+| `#RunBtn:hover`, `#RunBtn:pressed`, `#RunBtn:disabled` |
+| `#GhostBtn:hover`, `#GhostBtn:checked`, `#GhostBtn:disabled` |
+| `#LinkBtn:hover` |
+| `#RestartBtn:hover` |
+| `#BannerBtn:hover` |
+| `#RowBorder:hover`, `#RowBorder:hover #RowCard` |
+| `QLabel#LastRun[stale="true"]` |
 
 Plus the plain rules for surfaces, text, badges, banners, progress, log and
 tooltips: **~27 rules**, not the dozen a first pass would guess.
 
 `ToggleSwitch` is painted in code, so the stylesheet cannot reach it. It exposes a
 `highContrast` Qt property that the sheet sets — the mechanism the class already
-uses for `knobPos` (`386`):
+uses for `knobPos`:
 
 ```
 ToggleSwitch { qproperty-highContrast: false; }   /* base sheet — see caveat */
@@ -357,7 +357,7 @@ surface.
 
 QSS `:focus` rules for the **eight** styled focusable controls — the six buttons
 `#RunBtn`, `#GhostBtn`, `#LinkBtn`, `#BannerBtn`, `#RestartBtn`, `#Disclose`, plus
-`QPlainTextEdit#Log` (`276-280`) and `QScrollArea#DetailScroll` (`237`), whose
+`QPlainTextEdit#Log` and `QScrollArea#DetailScroll`, whose
 native focus rects the stylesheet has also replaced. A 2 px accent outline (HC
 overlay: 3 px, palette key `hcfocus`).
 
@@ -404,11 +404,11 @@ tab-reachable today — only the indicator was missing.
 | --- | --- |
 | Switch on/off | A shape drawn in the track **opposite the knob**: a **vertical bar** when on, an **open circle** when off (the iOS convention). Drawn with `QPainter` primitives in the knob's white, not a font glyph — a painted widget has no font-fallback chain, so a missing character would silently vanish. |
 | Tray attention badge | A white `!` drawn inside the amber disc, so the attention icon differs in *shape*, not just colour. |
-| Overdue last-run line | The text itself gains a `⚠` prefix and the word `overdue`. Text is safe here (unlike the switch) because this is a `QLabel` in the app's normal font stack, and the app already relies on `⚠` in exactly this way (`1282`, `2551-2558`). |
+| Overdue last-run line | The text itself gains a `⚠` prefix and the word `overdue`. Text is safe here (unlike the switch) because this is a `QLabel` in the app's normal font stack, and the app already relies on `⚠` in exactly this way. |
 
 Also affected: `set_controls_enabled(False)` disables the five switches for the
-duration of a run (`2145-2149`), so the "Tab to a switch to hear its outcome"
-affordance from §1 applies once `on_finished` re-enables them (`2510`). Names and
+duration of a run, so the "Tab to a switch to hear its outcome"
+affordance from §1 applies once `on_finished` re-enables them. Names and
 descriptions are set regardless of enabled state, which is what a screen reader
 needs to describe a greyed-out control.
 
@@ -424,12 +424,12 @@ on a correct implementation.
   assert `w.accessibleName() or getattr(w, "text", lambda: "")()`. The `getattr`
   is required, not defensive: focusable non-buttons have no `.text()` — the log is
   a `QPlainTextEdit` (`toPlainText()`), and `QScrollArea#DetailScroll` plus its
-  viewport (`469-476`) and `RollbackDialog`'s `QListWidget` (`897`) have no text at
+  viewport and `RollbackDialog`'s `QListWidget` have no text at
   all. Those three container widgets are named (§1) rather than exempted, so the
   sweep needs no exemption list.
 - **INV-2** No state is conveyed by colour alone, and each check **must be able to
   fail**:
-  - *Switch:* stop the 130 ms knob animation (`369-378`) and set `_pos` to its
+  - *Switch:* stop the 130 ms knob animation and set `_pos` to its
     settled value, render with `QWidget.grab()`, then count near-white pixels in
     the track half **opposite the knob** — `> 0` in both the checked and unchecked
     render. A plain colour-only track leaves that region a solid fill, so today's
@@ -437,7 +437,7 @@ on a correct implementation.
     today**: the knob already translates. That is not the invariant.)
   - *Tray:* count near-white pixels **inside the amber disc, inset by 4 px** in
     `_tray_icon(True)` — `> 0` only once a glyph is drawn. The inset excludes the
-    disc's existing white outline pen (`1495`). (A bare "attention and plain
+    disc's existing white outline pen. (A bare "attention and plain
     pixmaps differ" check would **pass today** — the disc alone differs.)
   - *Last run:* a 20-day-old history yields `"overdue" in last_run.text()`.
 - **INV-3** The stylesheet contains **no** absolute pixel font size, and every
@@ -445,7 +445,7 @@ on a correct implementation.
   *Test:* `re.search(r"font-size:\s*[\d.]+px", qss) is None` — a *regex on the
   declaration*, not `"px" not in <line containing font-size>`, which would
   false-fail on the two lines that legitimately keep a px length beside a
-  font-size (`padding: 2px 9px` at `227`, `min-height: 20px` at `272`). Plus:
+  font-size (`padding: 2px 9px`, `min-height: 20px`). Plus:
   every `pt` number for `scale=1.45` is strictly larger than its `scale=1.0`
   counterpart.
 - **INV-4** All eight styled focusable controls have a `:focus` rule, and each
@@ -496,7 +496,7 @@ flag).
    `on_finished`, asserting `_last_announcement` after each, plus a direct
    `_announce("x")` no-throw call (INV-7).
 4. `_tray_icon` disc-interior white-pixel count (INV-2).
-5. **Extend the existing stale-last-run block** (`tests/gui-smoke.py:788-821`,
+5. **Extend the existing stale-last-run block** (`tests/gui-smoke.py`,
    added for ONEUP-0030 — it already has a `_seed_history(days_ago)` helper and
    asserts the `stale` dynamic property) with the new `"overdue"` text assertion.
    Do not add a second seeded-history block.

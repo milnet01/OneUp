@@ -18,7 +18,7 @@ with no system tray.
 The weekly *check* (ONEUP earlier work) runs as a **separate, throwaway** process — a
 systemd-user timer invokes `oneup --check` → the engine's read-only pass, which fires a
 `notify-send` popup and **persists nothing**. Nothing in the app is resident, so today closing
-the window quits the whole app (`main()` at updater.py:2045–2046 does `win.show(); app.exec()`
+the window quits the whole app (`main()` does `win.show(); app.exec()`
 with the default quit-on-last-window-closed).
 
 A tray icon only earns its keep if it is present **when the window is closed**. That requires
@@ -58,7 +58,7 @@ a resident process. The agreed model (with the user) is therefore:
 
 ## New CLI entrypoint
 
-`main()` (updater.py:2020) gains a third headless-ish token, consumed by `updater.py` (never
+`main()` gains a third headless-ish token, consumed by `updater.py` (never
 passed to the engine, exactly like `--check`/`--update`):
 
 - **`--tray`** — start the GUI in **resident tray mode**: build the window but do **not**
@@ -91,14 +91,14 @@ is treated as tray-not-wanted (main()'s `tray_wanted` is false), so main() shows
 ## GUI change (`updater.py`) — components
 
 All changes are in `updater.py`. New Qt imports: `QSystemTrayIcon`, `QMenu` (QtWidgets);
-`QPixmap` (QtGui — `QPainter`, `QColor`, `QIcon` are already imported at updater.py:42).
+`QPixmap` (QtGui — `QPainter`, `QColor`, `QIcon` are already imported).
 
 ### 1. Two new toggles in the Settings popup
 
-`SettingsDialog` (updater.py:718) currently lays out three `_row(...)` entries (weekly check,
-passwordless, automatic updates) at updater.py:733–742. Add two rows — **Show a tray icon** and
+`SettingsDialog` currently lays out three `_row(...)` entries (weekly check,
+passwordless, automatic updates). Add two rows — **Show a tray icon** and
 **Start at boot** — bound to two new buttons owned by the `Updater` window, created alongside
-the existing toggles in `__init__` (near updater.py:827–859) with the same recipe
+the existing toggles in `__init__` with the same recipe
 (`GhostBtn`, checkable, `PointingHandCursor`, `_refresh_*_label`, `toggled.connect(...)`):
 
 - `self.tray_btn` — checked initial state = `self.settings.value("tray_enabled", False, type=bool)`.
@@ -119,7 +119,7 @@ Follow the established `_set_*_checked` / `_refresh_*_label` / `on_*_toggled` sh
     no-op.
   - `on=False`: persist `tray_enabled=False`; **also remove Start at boot** (call
     `_remove_autostart()` and reflect `startboot_btn` off via a `blockSignals` set, mirroring
-    `_set_autoupdate_checked` at updater.py:1229); then tear down everything `_ensure_tray()`
+    `_set_autoupdate_checked`); then tear down everything `_ensure_tray()`
     set up (the reverse of §4): **stop `self._tray_timer`** (so the periodic check stops
     shelling out once the feature is off), **close the single-instance `QLocalServer`**
     (residency is ending), hide the tray icon (`self._tray.hide()`, drop the reference),
@@ -135,7 +135,7 @@ Follow the established `_set_*_checked` / `_refresh_*_label` / `on_*_toggled` sh
   - `on=False`: `_remove_autostart()`. (Does **not** turn the tray off — you can be resident
     this session without launching at boot.)
 
-Coupling reverts always use `blockSignals` sets (like `_set_auth_checked` at updater.py:1276)
+Coupling reverts always use `blockSignals` sets (like `_set_auth_checked`)
 so a programmatic reflect never re-fires the other handler.
 
 ### 3. Autostart entry (`~/.config/autostart/za.co.antsprojectshub.OneUp-tray.desktop`)
@@ -156,9 +156,9 @@ so a programmatic reflect never re-fires the other handler.
   X-GNOME-Autostart-enabled=true
   ```
 - **`_remove_autostart()`** — unlink the file, ignoring a missing file (like
-  `_remove_user_timer` at updater.py:1199).
+  `_remove_user_timer`).
 
-**Exec quoting is NOT the systemd form.** `_headless_command(flag)` (updater.py:1146) escapes
+**Exec quoting is NOT the systemd form.** `_headless_command(flag)` escapes
 for **systemd** unit files — it doubles `$`→`$$` and `%`→`%%` because systemd does env-var and
 specifier expansion. A **Desktop Entry** `Exec` uses *different* rules (freedesktop Desktop
 Entry spec § "The Exec key"): a literal `%` is escaped as `%%`, but `$` is **literal** (must
@@ -185,7 +185,7 @@ Autostart is a plain file drop — no `systemctl daemon-reload`, no enable step.
 ### 4. The tray icon itself
 
 - **`_tray_icon(attention: bool) -> QIcon`** — base pixmap from `_app_icon()`
-  (updater.py:1988) at 64px; when `attention`, paint a filled amber disc
+  at 64px; when `attention`, paint a filled amber disc
   (`QColor("#f5a623")` or similar) in the lower-right quadrant with a thin contrasting ring,
   via `QPainter` on a copy of the pixmap. No new asset files; works on any theme because the
   badge is drawn, not themed. When `_app_icon()` is null (unlikely), fall back to a plain
@@ -211,7 +211,7 @@ Autostart is a plain file drop — no `systemctl daemon-reload`, no enable step.
   separator; **Quit** → `QApplication.quit()`.
 - **`_show_window()`** — `showNormal(); raise_(); activateWindow()` (also used by left-click
   and Open). Un-hiding is reliable; the *focus-raise* is best-effort — subject to the same
-  Wayland limitation the app already documents for `recenter` (updater.py:1079–1082), where a
+  Wayland limitation the app already documents for `recenter`, where a
   compositor may ignore an app's self-raise. The window is shown regardless.
 
 State is conveyed by **both** color and tooltip text (not color alone), for accessibility:
@@ -222,7 +222,7 @@ State is conveyed by **both** color and tooltip text (not color alone), for acce
 
 ### 5. The periodic tray check (silent, independent of the window's Check button)
 
-Modelled on `request_size`/`_on_size_output` (updater.py:1511–1548) — a **dedicated** QProcess
+Modelled on `request_size`/`_on_size_output` — a **dedicated** QProcess
 whose output parser reads only the one marker it cares about, so it never disturbs the main
 window's task rows / progress bar / interactive-check state:
 
@@ -231,16 +231,16 @@ window's task rows / progress bar / interactive-check state:
   --log=<LOG_DIR>/<stamp>.traycheck.log` with merged channels, wiring
   `readyReadStandardOutput`→`_on_traycheck_output` and `finished`→`_on_traycheck_finished`.
   **No `--notify`** (silent).
-- **`_on_traycheck_output()`** — line-buffer like `_on_size_output` (updater.py:1535). The
+- **`_on_traycheck_output()`** — line-buffer like `_on_size_output`. The
   engine emits the **three-field** line `@@CHECK@@|TOTAL|<n>|updates available` (see
   `update_system.sh`'s `marker CHECK "TOTAL|$total|updates available"`), so parse it the way
-  `handle_marker` already does at updater.py:1709–1712: strip the `@@CHECK@@|` prefix, `split("|")`,
+  `handle_marker` already does: strip the `@@CHECK@@|` prefix, `split("|")`,
   and when field 0 is `TOTAL` read the integer in **field 1** (ignore the trailing
   `updates available` label). Do **not** do a naïve `int(<everything after the prefix>)` — that
   would choke on the third field. Call `_apply_tray_total(n)`; ignore every other line (do
   **not** append to the window log).
 - **`_on_traycheck_finished()`** — release the finished `QProcess` (`deleteLater()` + drop
-  `self._traycheck_proc`), mirroring `_on_size_finished` (updater.py:1549), so a weeks-long
+  `self._traycheck_proc`), mirroring `_on_size_finished`, so a weeks-long
   resident session (~4 checks/day) doesn't accumulate dead QProcess objects on the window.
 - **`_apply_tray_total(n: int)`** — store `self._tray_total = n` and `self._tray_checked_at =
   now`; if the tray exists, set `_tray_icon(n > 0)` and the matching tooltip.
@@ -256,12 +256,12 @@ window's task rows / progress bar / interactive-check state:
 **Keep the ambient icon consistent with in-window activity:** when the window's own flows learn
 a fresh total, refresh the tray too, so the icon doesn't lie while the window is open:
 
-These hooks live in `on_finished` (updater.py:1785), which already branches on
-`self._check_mode` (updater.py:1797):
+These hooks live in `on_finished`, which already branches on
+`self._check_mode`:
 - **Check branch** (`_check_mode` true): `_apply_tray_total(int(self._installed_count) if
   self._installed_count.isdigit() else 0)` — mirror the `.isdigit()` guard `on_finished` itself
-  uses at updater.py:1802 (`_installed_count` is a free-form string, so a bare `int(...)` can
-  raise). The count came from the CHECK/TOTAL handling at updater.py:1709–1712.
+  uses (`_installed_count` is a free-form string, so a bare `int(...)` can
+  raise). The count came from the CHECK/TOTAL handling.
 - **Run branch** (`_check_mode` false) **and only when the run succeeded** (`ok`): set the tray
   neutral (updates were just installed → nothing waiting): `_apply_tray_total(0)`. On a **failed**
   run, do **not** touch the tray — its last known state stands (blanking it would falsely claim
@@ -269,13 +269,13 @@ These hooks live in `on_finished` (updater.py:1785), which already branches on
 
 ### 6. Close-to-tray
 
-`closeEvent` (updater.py:1074) becomes: **if** the tray is live (`self._tray is not None`),
+`closeEvent` becomes: **if** the tray is live (`self._tray is not None`),
 save geometry, `event.ignore()`, `self.hide()`, and — **once per session** — fire a
 close-to-tray hint ("OneUp is still running in the tray — right-click the icon to quit."),
 gated by a `self._tray_hint_shown` flag. That hint is a **direct** `notify-send` — the same
-fixed-argv `Popen` pattern as `_notify_when_away` (updater.py:1778–1783), keeping that method's
-`shutil.which("notify-send")` presence check (updater.py:1776) but dropping its `isActiveWindow()`
-half — **not** a call to `_notify_when_away` itself, whose active-window guard (updater.py:1776)
+fixed-argv `Popen` pattern as `_notify_when_away`, keeping that method's
+`shutil.which("notify-send")` presence check but dropping its `isActiveWindow()`
+half — **not** a call to `_notify_when_away` itself, whose active-window guard
 would suppress it, since the window is still the active window at close time. (A missing
 `notify-send` is doubly safe: skipped by the `which` check and, failing that, swallowed by the
 pattern's `except OSError`.) **Else** unchanged (save geometry +
@@ -283,7 +283,7 @@ pattern's `except OSError`.) **Else** unchanged (save geometry +
 
 ### 7. `main()` wiring
 
-- Keep `--check` / `--update` dispatch first (updater.py:2021–2024), unchanged.
+- Keep `--check` / `--update` dispatch first, unchanged.
 - After `QApplication([])`, decide tray intent: `tray_wanted = QSettings("OneUp","OneUp")
   .value("tray_enabled", False, type=bool)` **and** `QSystemTrayIcon.isSystemTrayAvailable()`.
 - If `tray_wanted`: **first run the single-instance client check** (§8) — if another resident
@@ -351,8 +351,8 @@ across the two natural owners:
 | Situation | Behaviour |
 |-----------|-----------|
 | No system tray on this desktop | `isSystemTrayAvailable()` false → both new toggles disabled with a note; no tray built; `--tray`/`tray_enabled` degrade to a normal shown window. |
-| `_install_autostart` raises `OSError` (can't write `~/.config/autostart`) | Caught, `QMessageBox.warning`, `startboot_btn` reverted to off (never shows on after a failed write) — mirrors the `_install_user_timer` OSError catch/warn at updater.py:1194–1196 (the button revert is added by this handler). |
-| `ENGINE` missing when a tray check fires | `_tray_check()` early-returns (like `request_size` at updater.py:1515); icon stays at its last known state; tooltip unchanged. |
+| `_install_autostart` raises `OSError` (can't write `~/.config/autostart`) | Caught, `QMessageBox.warning`, `startboot_btn` reverted to off (never shows on after a failed write) — mirrors the `_install_user_timer` OSError catch/warn (the button revert is added by this handler). |
+| `ENGINE` missing when a tray check fires | `_tray_check()` early-returns (like `request_size`); icon stays at its last known state; tooltip unchanged. |
 | `--check` exits non-zero / emits no `TOTAL` | No `_apply_tray_total` call → icon unchanged (last known / neutral). No crash: the parser only acts on a well-formed `TOTAL` line. |
 | Second `oneup` launched while resident | Single-instance guard raises the existing window and the second process exits 0 — no duplicate tray icon. |
 | Tray turned off mid-session with window hidden | Window is re-shown; quit-on-last-window-closed restored; autostart removed. |
