@@ -6390,6 +6390,19 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: review-contract-2026-10-01 wording-and-translation.md loop 7 (out of scope).
 
+- 📋 [ONEUP-0221] **Move every document's review loop log into its own file, as the user's history rule requires.**
+  The user's document rules (2026-10-01) say history that does not serve a
+  document's purpose moves to its own file, linked. A Cold-eyes loop log is
+  review history. documentation.md §4 currently requires every standard to
+  carry one, and tests/docs-check.py enforces it and balances its counts.
+  Doing this means amending documentation.md §4 (a standard: rule 14 gate),
+  teaching docs-check to read the log from docs/reviews/<doc>-loop-log.md,
+  and moving the logs. The global documentation.md §9.1 already defines the
+  pointer form: heading plus one-line pointer, rows in the record.
+  **Layman:** Each rule document carries a long record of past reviews that readers do not need; it should live in a separate file instead.
+  Kind: doc-fix.
+  Source: user-request-2026-10-01.
+
 ## 2.1.0 — after 2.0
 
 **Theme:** features raised after 2.0's list closed. They wait for 2.0.0 to ship
