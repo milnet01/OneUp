@@ -69,8 +69,8 @@ Recorded so the next sweep has a baseline:
 - **PySide6** — intentionally *unpinned*: the RPM uses the distro's `python3-pyside6`, and the
   AppImage build `pip install`s the latest. It tracks upstream automatically; no manifest pin
   to bump. Requires only Qt 6 idioms (new-style `connect`, scoped enums where practical).
-
-stable CLI surfaces and skips cleanly when a tool is absent.
+- `zypper`, `flatpak`, `fwupd`, `snapper` — host tools, versioned by the user's openSUSE
+  install; OneUp calls stable CLI surfaces and skips cleanly when a tool is absent.
 
 ## How to check what's behind
 
