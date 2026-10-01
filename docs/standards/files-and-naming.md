@@ -7,9 +7,10 @@ nothing is half-installed.
 **Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0057
-**Branch:** main
-**Verified at:** `58ea3bc` — every path, name and figure below was read out of the tree,
-not recalled.
+**Branch:** v2
+**Verified at:** `0fda0d4` — §1, §4, §5, §6, §7 and the *What checks this* table were
+re-measured against this tree on 2026-10-01. Everything else was read out of the tree at
+`58ea3bc`, not recalled.
 
 **Sections:** 1 the repository · 2 naming · 3 the app ID · 4 the `oneup/` package ·
 5 runtime state · 6 what a new file obliges you to update · 7 traps · 8 quick check ·
@@ -25,8 +26,11 @@ exist yet, and saying so is the point.
 | Path | What belongs there |
 | --- | --- |
 | *(repo root)* | The two programs (`updater.py`, `update_system.sh`), the three developer scripts (`bump.py`, `local-CI.sh`, `release.sh`), and the four documents every reader starts from (`README.md`, `CLAUDE.md`, `ROADMAP.md`, `CHANGELOG.md`) plus `LICENSE`. |
+| `oneup/` | The application: `engine/` (the Python engine) and `gui/` (the window). §4 owns its shape. |
 | `data/` | Everything the desktop installs and the user never edits: the launcher entry, the icon, the app-store metadata. |
 | `docs/design/` | Programme-level decisions that several items share. |
+| `docs/history/` | History moved out of a document so the document stays a rule. One file: `claude-md.md`. |
+| `docs/reviews/` | Review records kept outside the document they review. One file: `ONEUP-0072-fix-ledger.md`. |
 | `docs/specs/` | One item's contract. |
 | `docs/plans/` | One item's build steps. |
 | `docs/standards/` | Standing rules, like this one. |
@@ -38,7 +42,7 @@ exist yet, and saying so is the point.
 | `githooks/` | Repo-local git hooks. One file: `pre-push`. Not active until `git config core.hooksPath githooks`. |
 | `screenshots/` | Images the README and the app-store metadata point at. |
 | `branding/` | The OneUp wordmark, for pages outside this repository that show the project. Nothing in the app or its packages reads it. |
-| `.github/workflows/` | GitHub CI. One file: `release.yml`, triggered by a `v*` tag. |
+| `.github/` | `FUNDING.yml`, and `workflows/` — GitHub CI. One workflow: `release.yml`, triggered by a `v*` tag. |
 | `.ants/`, `.obs/` | Tooling configuration, not application code. |
 | *(root dotfiles)* | `.gitignore`, `.ants_review_falsepos.jsonl`, `.yamllint` — tooling state that has to sit at the root to be found. |
 
@@ -96,7 +100,7 @@ rather than one subject's test file, and it reads as a command because it is one
 whose filename is exactly the hook's name.
 
 **Test files do not follow `test_*.py`.** There is no pytest here, and nothing discovers
-anything: `tests/run-tests.sh` runs the engine scenarios and calls no Python file at all.
+anything: `tests/run-tests.sh` runs the engine scenarios and no Python test file.
 `local-CI.sh` names every Python suite by hand, and `.github/workflows/release.yml` names
 again the ones a tag must run. Do not add a pytest-style name expecting discovery to pick it
 up — a suite in neither script runs nowhere, and one in `local-CI.sh` alone never runs in
@@ -151,7 +155,8 @@ update_system.sh   stays through 2.0 as a documented fallback, goes in 2.1
 
 `translations/` holds data rather than code, and sits inside the package so a plain
 checkout, the RPM and the AppImage all resolve it by the same relative path. `.ts` files
-are tracked; the compiled `.qm` files are build artefacts and are git-ignored — see
+are tracked; the compiled `.qm` files are build artefacts and are not — `.gitignore` has
+no rule for them yet, so the change that first builds one adds it. See
 `docs/standards/wording-and-translation.md` §7.
 
 ### 4.1 Rules the split must obey
@@ -172,26 +177,28 @@ are tracked; the compiled `.qm` files are build artefacts and are git-ignored �
 5. **The package directory is `oneup/`, lowercase, singular** — matching the installed
    `/usr/share/oneup/` and the `oneup` command.
 
-### 4.2 The trap that will bite the split — path resolution
+### 4.2 The trap the split had to avoid — path resolution
 
-`updater.py` finds the engine and the icon relative to **its own file**:
+The window finds the engine and the icon relative to `HERE`, the repo root. It is
+computed in `paths.py` under `oneup/gui/`:
 
 ```python
-# updater.py, the HERE constant
+# oneup/gui/paths.py, the HERE constant
 if getattr(sys, "frozen", False):
     HERE = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
 else:
-    HERE = Path(__file__).resolve().parent
+    HERE = Path(__file__).resolve().parents[2]
 ```
 
-`HERE` is the repo root today because `updater.py` sits in the repo root. **A module
-moved to `oneup/gui/` that computes the same expression gets `oneup/gui/`** — and
-`_find_engine()` then looks for `update_system.sh` in the wrong directory,
-falls through its `~/Documents/update_system.sh` fallback, and returns a path that does
-not exist. The window opens and the Run button fails.
+Before the split this was `Path(__file__).resolve().parent` in `updater.py`, which gave
+the repo root only because `updater.py` sits there. **A module under `oneup/gui/` that
+computes that expression gets `oneup/gui/`** — and `_find_engine()` then looks for
+`update_system.sh` in the wrong directory, falls through its
+`~/Documents/update_system.sh` fallback, and returns a path that does not exist. The
+window opens and the Run button fails.
 
-**The rule:** `HERE` is computed in **exactly one place** in the package, and every other
-module imports it. No module may build a path from its own `__file__`.
+**The rule:** `HERE` is computed in **exactly one place** in the package, `paths.py`, and
+every other module imports it. No other module may build a path from its own `__file__`.
 
 The same applies inside the AppImage, where PyInstaller unpacks bundled data flat into
 `_MEIPASS` — a nested package directory does not exist there at all.
@@ -206,12 +213,12 @@ Two directories hold everything OneUp writes at runtime:
 - **`~/Documents/update-logs/`** — the engine's own copy of each run's log, kept in a
   place a user can find without being told where `.local/state` is
 
-`run.state` and `stop.request` are a **contract between the two halves** — each file is
-defined independently in both programs, with a comment in each saying it must match the
-other — `updater.py`'s `RUN_STATE` / `STOP_REQUEST` constants and `update_system.sh`'s
-`RUN_STATE_FILE` / `STOP_FILE`. Moving either means editing both. ONEUP-0044's
-`HOLD_STATE` / `GO_REQUEST` and `HOLD_STATE_FILE` / `GO_FILE` are the same arrangement
-and carry the same obligation.
+`run.state` and `stop.request` are a **contract between the window and the engine** — each
+file is defined independently in three places: the window's `RUN_STATE` / `STOP_REQUEST`
+in `paths.py`, the Python engine's constants of the same names in `runstate.py`, and
+`update_system.sh`'s `RUN_STATE_FILE` / `STOP_FILE`. Moving either means editing all
+three. ONEUP-0044's `HOLD_STATE` / `GO_REQUEST` and `HOLD_STATE_FILE` / `GO_FILE` are the
+same arrangement and carry the same obligation.
 
 ### 5.1 The override table — measured, and not what you would assume
 
@@ -243,8 +250,9 @@ Every environment override that exists, and every path that has none:
 were true would have misled the 2.0 implementer.** What is actually true:
 
 - **The engine is isolated by environment variable.** `run_engine` in
-  `tests/run-tests.sh` sets the first three, plus `ONEUP_REPOS_DIR`, unless the scenario
-  sets them itself; scenarios that need `ONEUP_AUTH_FILE` set it themselves.
+  `tests/mock-env.sh` sets the four state-file overrides, `ONEUP_ZYPP_PID_FILE`,
+  `ONEUP_GUARD_FILE` and `ONEUP_REPOS_DIR`, unless the scenario sets them itself;
+  scenarios that need `ONEUP_AUTH_FILE` set it themselves.
   `ONEUP_REPOS_DIR` is seeded by `setup_common` rather than left empty, because download
   recovery declines when no `download.opensuse.org` baseurl is present — an empty
   directory would make every recovery scenario exercise the skip path while appearing to
@@ -300,8 +308,8 @@ Adding a file is rarely one change. Work down this list:
 ships in none of them:
 
 1. `packaging/rpm/oneup.spec` — an `install -D…` line in `%install` **and** an entry in
-   `%files`. The spec currently installs exactly two source files by name
-   (`updater.py`, `update_system.sh`); a package needs a directory install instead.
+   `%files`. A file under `oneup/` needs neither: `%install` copies that directory whole
+   (`cp -a oneup`) and `%files` owns `/usr/share/oneup/`. Any other new file does.
 2. `packaging/appimage/build-appimage.sh` — PyInstaller follows `import` statements by
    itself, but **data files need an explicit `--add-data`** — the script's two
    `--add-data` flags do this for `update_system.sh` and the icon.
@@ -312,8 +320,8 @@ ships in none of them:
 
 - `bump.py` must learn to edit it — the six `edit(...)` calls in `main()`.
 - `local-CI.sh`'s lockstep gate must read it — the `# --- version lockstep` step. Note
-  that gate greps **`updater.py` by name** for `APP_VERSION`, so moving the constant into
-  the package means editing the `v_py=` line in the same change.
+  that gate greps **`oneup/__init__.py` by name** for `APP_VERSION`, so moving the
+  constant means editing the `v_py=` line in the same change.
 - `tests/bump-test.py` must cover it.
 - `docs/standards/workflow.md` §5.1's list of six sites becomes seven. It is the only
   place that list is written out, so nothing else needs editing with it.
@@ -363,7 +371,7 @@ override at all.
 **Trap 4 — `_find_engine`'s fallback leaves each caller to notice.** It tries
 `HERE/update_system.sh`, then `~/Documents/update_system.sh`, then returns the first path
 regardless of whether it exists — so whether a packaging mistake is legible depends on the
-caller. `Updater.start_run` checks and names the missing file; the tray check does not, and
+caller. `start_run` in the window's `run.py` checks and names the missing engine; the tray check does not, and
 there it surfaces as nothing happening. Any 2.0 equivalent must say which paths it tried, so
 that no caller has to.
 
@@ -393,9 +401,9 @@ which category it is in — the answer decides whether §6 applies at all.
 | --- | --- |
 | §1 the root is closed | nothing automatic — the reason for a new root file goes in the commit message, where a reader finds it and a script does not |
 | §2.1 the naming rules | nothing automatic |
-| §4.1 the rules the `oneup/` split must obey | `tests/imports-test.py` covers **rule 2 only** — it fails the build on any `oneup.gui` import under `oneup/engine/`, vacuously true until that directory exists. Rules 1, 3 and 5 — the shim stays at the root, `snake_case.py` names that say what a module does, the directory called `oneup/` — are checked by **nothing**; they held through ONEUP-0034 by review |
+| §4.1 the rules the `oneup/` split must obey | `tests/imports-test.py` covers **rule 2 only** — it fails the build on any `oneup.gui` import under `oneup/engine/`. Rules 1, 3 and 5 — the shim stays at the root, `snake_case.py` names that say what a module does, the directory called `oneup/` — are checked by **nothing**; they held through ONEUP-0034 by review |
 | §4.2 `HERE` is computed in exactly one place | `tests/imports-test.py` fails the build on `__file__` anywhere under `oneup/` but `paths.py`, and on a `from …paths import <name>` that would bind a path constant by value. `tests/gui-smoke.py` adds the two the AST cannot see: that `paths.ENGINE` resolves to the repo root's `update_system.sh`, and that `_headless_command`'s last-resort branch names the root entry point rather than a package module |
-| §5 runtime state paths, and which are redirectable | `tests/run-tests.sh` — `run_engine` redirects three of them on every scenario. The fourth, `HOME`, cannot be redirected today (ONEUP-0058) |
+| §5 runtime state paths, and which are redirectable | `run_engine` in `tests/mock-env.sh` redirects the engine's on every scenario of both engine suites; `tests/gui-smoke.py` redirects the window's by rewriting `HOME` before import. Nothing checks that a new state path got an override (§5.2) |
 | §6 what a new file obliges you to update | nothing automatic. §8's checklist is the only catcher, and it works only if the author opens it |
 
 **Nothing here is gated, and most of it could be.** Naming, the closed root and the packaging
