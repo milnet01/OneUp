@@ -44,6 +44,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Firmware is no longer reported as up to date when OneUp couldn't ask** (ONEUP-0166)
+  If the firmware tool failed to answer, OneUp said your firmware was
+  current. Now the update check says it couldn't check firmware, and an
+  update run marks the firmware step as failed.
+
 - **A safety snapshot that failed is no longer offered as this update's restore point** (ONEUP-0147)
   If taking the snapshot before an update failed (a full disk, say), OneUp
   used to offer the newest older snapshot as this update's restore point,
