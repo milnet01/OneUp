@@ -85,7 +85,7 @@ for the user who does not want to skip anything.
 
 | Don't | Do |
 | --- | --- |
-| "GPG key verification failed for repository." | "A repository signing key is out of date. Use \"Import signing key & retry\" to fix it." |
+| "GPG key verification failed for repository." | "A source's signing key is out of date. Use \"Import signing key & retry\" to fix it." |
 | "Transaction failed with exit code 4." | "The update stopped because a package conflicts with another. Check the log — you may need to turn off a third-party source." |
 | "Invalid input." | "That doesn't look like a snapshot number. Pick one from the list." |
 | "Operation completed successfully." | "All five tasks finished. Nothing needs a restart." |
@@ -98,7 +98,7 @@ for the user who does not want to skip anything.
 - **When the user is the cause, say it neutrally.** "Stopped at your request" — not "you
   cancelled the update".
 - **Never imply carelessness.** A conflict caused by a third-party repository the user added
-  months ago is still just "a package conflict — often a third-party repo".
+  months ago is still just "a package conflict — often a third-party source".
 
 ## 4. Never claim what was not earned
 
@@ -226,7 +226,7 @@ sentence — never pass it through as the message.
 | Extract | `pyside6-lupdate` given every `.py` file under `oneup/`, never the directory → `oneup/translations/oneup_<lang>.ts` |
 | Translate | Qt Linguist, or any `.ts` editor |
 | Compile | `pyside6-lrelease oneup_<lang>.ts -qm oneup_<lang>.qm` |
-| Load | `QTranslator` installed on the `QApplication` at startup, before the first widget |
+| Load | OneUp's catalogue and Qt's `qtbase` one, installed on the `QApplication` at startup before the first widget — both or neither (`docs/specs/ONEUP-0032-i18n.md` INV-2) |
 | Install | `HERE/oneup/translations/` in every layout — `docs/standards/files-and-naming.md` §4 |
 
 Rules:
@@ -239,16 +239,17 @@ Rules:
 - **`.ts` files are tracked; `.qm` files are not.** The `.ts` is the source (it holds the
   translator's work and the source-line references); the `.qm` is a build artefact.
   No step builds one yet and `.gitignore` has no rule for them, so the change that first
-  builds one adds both.
+  builds one adds that step and a `*.qm` rule.
 - **Catalogues live in `oneup/translations/`.** Where each layout puts them at runtime, and
   the packaging step each one needs, is `docs/standards/files-and-naming.md` §4's.
 - **The file name is `oneup_<lang>.ts`**, using the Qt locale code (`oneup_de.ts`,
   `oneup_he.ts`) — lowercase language, `_XX` region suffix only when the region actually
   differs (`pt_BR`).
-- **A missing catalogue is not an error.** `QTranslator.load()` returning `False` means the
-  app runs in English, which is the correct behaviour, not a condition to report.
-- **Extraction runs in CI once the wrapping lands**, so a string added without `tr()` is
-  caught by review rather than discovered by a translator.
+- **A missing catalogue is not an error.** The app then runs in English, which is the correct
+  behaviour, not a condition to report.
+- **Extraction runs in CI once the wrapping lands** — it proves the catalogue builds
+  (`docs/specs/ONEUP-0032-i18n.md` INV-8). A string added without `tr()` is never extracted,
+  so only review catches it.
 
 ## 8. Traps
 
@@ -306,3 +307,4 @@ review is the backstop.
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged. Nothing from loop 1 resurfaced in this lane, which is the proof those fixes held. The two findings that verified are logged against `files-and-naming.md` and `workflow.md` |
 | 3 | 2026-07-26 | none | clean. |
 | 4 | 2026-07-26 | none | converged. |
+| 5 | 2026-10-01 | Packet build, then 2 lanes, cold, dispatched from outside the project; genre pinned standard; every lane held every question. Q1 2 · Q2 5 · Q3 1 — 8 verified, 1 dismissed, all 8 fixed: 4 found building the packet (`896420e`, `ea12b6e`), 4 by the lanes | **A pure audit (ONEUP-0107): no change armed it, so there is no armed-span share.** The four-question gate's first read of this document. **Packet**: §9 said placeholders are numbered where §6.2 requires named [Q2]; §7 said the `.qm` is rebuilt by packaging and git-ignored — neither exists [Q1]; §5 listed the codes change's files without the engine [Q2]; §7's Install path disagreed with the RPM's `cp -a oneup` and `files-and-naming.md` §4 [Q2, v2 only]. **Lanes**: §7 said CI extraction catches a string added without `tr()` — measured, an unwrapped string is never extracted [Q1, both lanes]; §7 loaded one translator where ONEUP-0032 INV-2 loads OneUp's and `qtbase` both or neither [Q2, both lanes]; §2.3 and §3 showed users "repository"/"repo", which §2.1 forbids [Q2]; the packet fix's "adds both" read two ways [Q3, own fix]. **Dismissed**: §8's f-string trap said lupdate extracts one entry per value of `n` — measured, it extracts the template once; the rule holds, the explanation was narrowed. Four open questions resolved clean. Code side surfaced, not edited: both engines' signing-key hint still says "repository" |
