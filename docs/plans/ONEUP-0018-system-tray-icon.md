@@ -33,7 +33,7 @@ The test harness (`tests/gui-smoke.py`) is one `main()` that builds `updater.Upd
 ### Task 1: Imports, constants, and autostart-file helpers
 
 **Files:**
-- Modify: `updater.py` (import block ~42–61; constants after `LOG_DIR` ~89; new methods on `Updater`)
+- Modify: `updater.py` (import block; constants after `LOG_DIR`; new methods on `Updater`)
 - Test: `tests/gui-smoke.py`
 
 **Interfaces:**
@@ -113,7 +113,7 @@ Add a focused escaping assertion that pins `\\$` and `%%` without needing a `$`/
 Run: `python3 tests/gui-smoke.py`
 Expected: FAIL — `AttributeError: 'Updater' object has no attribute '_autostart_exec'` (or `_install_autostart`).
 
-- [ ] **Step 4: Implement the helpers** — add these methods to the `Updater` class (near the existing `_headless_command`, ~updater.py:1146):
+- [ ] **Step 4: Implement the helpers** — add these methods to the `Updater` class (near the existing `_headless_command`):
 
 ```python
     def _autostart_path(self) -> Path:
@@ -205,7 +205,7 @@ git commit -m "ONEUP-0018: autostart .desktop helpers + Desktop-Entry Exec escap
 - Test: `tests/gui-smoke.py`
 
 **Interfaces:**
-- Consumes: `_app_icon()` (updater.py:1988), `TRAY_ATTENTION_COLOR`.
+- Consumes: `_app_icon()`, `TRAY_ATTENTION_COLOR`.
 - Produces: `Updater._tray_icon(self, attention: bool) -> QIcon`, `Updater._show_window(self)`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -288,7 +288,7 @@ git commit -m "ONEUP-0018: tray icon rendering (amber badge) + _show_window"
 - Consumes: `ENGINE`, `LOG_DIR`, `datetime`, `QProcess`.
 - Produces: `Updater._tray_check_args(self, log_path) -> list[str]`, `Updater._tray_check(self)`, `Updater._on_traycheck_output(self)`, `Updater._parse_tray_line(self, line: str)`, `Updater._on_traycheck_finished(self, *args)`, `Updater._apply_tray_total(self, n: int)`.
 
-- [ ] **Step 1: Add the state fields** — in `Updater.__init__`, next to the other `self._…` initialisers (near updater.py:797, after `self._pending_autoupdate = False`):
+- [ ] **Step 1: Add the state fields** — in `Updater.__init__`, next to the other `self._…` initialisers (after `self._pending_autoupdate = False`):
 
 ```python
         self._tray = None
@@ -526,14 +526,14 @@ git commit -m "ONEUP-0018: _ensure_tray resident lifecycle + single-instance ser
 ### Task 5: Settings toggles + coupling
 
 **Files:**
-- Modify: `updater.py` (`__init__` toggle creation ~827–859; `SettingsDialog.__init__` rows; new handler methods)
+- Modify: `updater.py` (`__init__` toggle creation; `SettingsDialog.__init__` rows; new handler methods)
 - Test: `tests/gui-smoke.py`
 
 **Interfaces:**
 - Consumes: `_ensure_tray`, `_teardown_tray`, `_install_autostart`, `_remove_autostart`, `_startboot_enabled`, `self.settings`.
 - Produces: `tray_btn`, `startboot_btn`, `_refresh_tray_label`, `_refresh_startboot_label`, `_set_tray_checked`, `_set_startboot_checked`, `on_tray_toggled`, `on_startboot_toggled`.
 
-- [ ] **Step 1: Create the toggle buttons** — in `Updater.__init__`, after the `autoupdate_btn` block (~updater.py:859), add (note: `setChecked` **before** `toggled.connect`, so the initial state never fires the handler — mirror the existing toggles):
+- [ ] **Step 1: Create the toggle buttons** — in `Updater.__init__`, after the `autoupdate_btn` block, add (note: `setChecked` **before** `toggled.connect`, so the initial state never fires the handler — mirror the existing toggles):
 
 ```python
         # System-tray icon + start-at-boot (ONEUP-0018). Both off by default; disabled
@@ -608,7 +608,7 @@ git commit -m "ONEUP-0018: _ensure_tray resident lifecycle + single-instance ser
         self._refresh_startboot_label()
 ```
 
-- [ ] **Step 3: Add the two Settings rows** — in `SettingsDialog.__init__` (updater.py:725), after the third `_row(...)` (the auto-update row), add:
+- [ ] **Step 3: Add the two Settings rows** — in `SettingsDialog.__init__`, after the third `_row(...)` (the auto-update row), add:
 
 ```python
         _tray_note = "" if parent._tray_available else "  (your desktop has no system tray)"
@@ -686,7 +686,7 @@ git commit -m "ONEUP-0018: Settings tray + start-at-boot toggles with coupling"
 ### Task 6: Close-to-tray, on_finished hooks, and `main()` wiring
 
 **Files:**
-- Modify: `updater.py` (`closeEvent` ~1074; `on_finished` end ~1809 and ~1865; a module-level `_raise_existing_instance`; `main()` ~2020)
+- Modify: `updater.py` (`closeEvent`; the two `_notify_when_away` calls in `on_finished`; a module-level `_raise_existing_instance`; `main()`)
 - Test: `tests/gui-smoke.py`
 
 **Interfaces:**
@@ -735,7 +735,7 @@ git commit -m "ONEUP-0018: Settings tray + start-at-boot toggles with coupling"
 Run: `python3 tests/gui-smoke.py`
 Expected: FAIL — `AttributeError: ... '_notify_tray_hint'` and the on_finished assertions.
 
-- [ ] **Step 3: Update `closeEvent`** — replace the existing `closeEvent` (updater.py:1074–1076) with:
+- [ ] **Step 3: Update `closeEvent`** — replace the existing `closeEvent` with:
 
 ```python
     def closeEvent(self, event):
@@ -765,13 +765,13 @@ Expected: FAIL — `AttributeError: ... '_notify_tray_hint'` and the on_finished
             pass
 ```
 
-- [ ] **Step 4: Add the `on_finished` tray hooks** — in `on_finished`, add one line just before the check-branch `return` (after updater.py:1807 `self._notify_when_away(...)`, before `self._check_mode = False`):
+- [ ] **Step 4: Add the `on_finished` tray hooks** — in `on_finished`, add one line just before the check-branch `return` (after its `self._notify_when_away(...)`, before `self._check_mode = False`):
 
 ```python
             self._apply_tray_total(total)
 ```
 
-And add, as the **last** statement of `on_finished` (after the `self._notify_when_away(...)` at ~1865):
+And add, as the **last** statement of `on_finished` (after its final `self._notify_when_away(...)`):
 
 ```python
         # Keep the ambient tray icon honest: a clean run just installed updates.
@@ -779,7 +779,7 @@ And add, as the **last** statement of `on_finished` (after the `self._notify_whe
             self._apply_tray_total(0)
 ```
 
-- [ ] **Step 5: Add the single-instance client helper + wire `main()`** — add a module-level function near `_headless_update` (updater.py:2009):
+- [ ] **Step 5: Add the single-instance client helper + wire `main()`** — add a module-level function near `_headless_update`:
 
 ```python
 def _raise_existing_instance() -> bool:
@@ -794,7 +794,7 @@ def _raise_existing_instance() -> bool:
     return False
 ```
 
-Update `main()` (updater.py:2020). Keep the `--check`/`--update` dispatch. After `app.setDesktopFileName(APP_ID)` and the theme setup, replace the tail (`icon = _app_icon() … win.show(); app.exec()`) with:
+Update `main()`. Keep the `--check`/`--update` dispatch. After `app.setDesktopFileName(APP_ID)` and the theme setup, replace the tail (`icon = _app_icon() … win.show(); app.exec()`) with:
 
 ```python
     argv = sys.argv[1:]
