@@ -142,7 +142,8 @@ update_system.sh   stays through 2.0 as a documented fallback, goes in 2.1
 
 `translations/` holds data rather than code, and sits inside the package so a plain
 checkout, the RPM and the AppImage all resolve it by the same relative path. `.ts` files
-are tracked; the compiled `.qm` files are build artefacts and are git-ignored — see
+are tracked; the compiled `.qm` files are build artefacts and are not — `.gitignore` has no rule for them
+yet, so the change that first builds one adds it. See
 `docs/standards/wording-and-translation.md` §7.
 
 ### 4.1 Rules the split must obey
