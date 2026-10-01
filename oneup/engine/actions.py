@@ -288,8 +288,8 @@ def _check_firmware() -> tuple[int, bool]:
         markers.out("  Firmware: couldn't check")
         return 0, True
     n = 1 if fw_rc == 0 else 0
-    # Emitted DIRECTLY, not through `emit_check`: a firmware zero we DID earn is
-    # reported on purpose, which that emitter's suppression rule would withhold.
+    # fwupd answered, so the zero is earned and reported — the same output
+    # `emit_check` gives with no unreadable reason.
     markers.marker("CHECK", f"firmware|{n}|firmware update(s)")
     markers.out("  Firmware: " + ("available" if n else "up to date"))
     return n, False
