@@ -155,6 +155,10 @@ The marker that stops a working download looking like a hang (ONEUP-0040/0048).
 - The transaction total is printed once as **`Package download size:` *or* `Overall
   download size:`** depending on the backend, and **both wordings are parsed**. The first
   is what `classic_rpmtrans` prints.
+- **When part of the transaction is already cached, that line carries no number.** zypper
+  prints a table under it instead, and the total is the first column of its `already in
+  cache` row: the bytes still to fetch. A parser reading only the one-line form reports
+  the total as unknown, and `--size` as nothing to fetch (ONEUP-0223).
 
 **Guarded:** fewer than four fields, or a non-numeric `done`/`total`, and the line is
 ignored.

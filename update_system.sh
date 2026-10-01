@@ -575,7 +575,15 @@ run_size() {
     # parse for the old wording alone silently reported "nothing to fetch" on a
     # 137-package upgrade. Capture the number+unit (LC_ALL=C above pins '.' as the
     # decimal point, so the value can't run into any trailing sentence).
-    size=$(sed -n 's/.*\(Overall\|Package\) download size:[[:space:]]*\([0-9.]\+ [A-Za-z]\+\).*/\2/p' \
+    # And when anything is already cached, the current one puts no number on that
+    # line at all — it prints a table, and the first column of its "already in
+    # cache" row is what is still to fetch (zypper src/Summary.cc). Missing it
+    # answered "nothing to fetch" with 99 MiB to go (ONEUP-0223).
+    #   Package download size:
+    #                   |     105.7 MiB  overall package size
+    #         99.2 MiB  |  -    6.4 MiB  already in cache
+    size=$(sed -n -e 's/.*\(Overall\|Package\) download size:[[:space:]]*\([0-9.]\+ [A-Za-z]\+\).*/\2/p' \
+                  -e 's/^[[:space:]]*\([0-9.]\+ [A-Za-z]\+\)[[:space:]]*|.*already in cache.*/\1/p' \
         <<<"$out" | head -n1)
     if [[ -n "$size" ]]; then
         marker SIZE "system|$size"
@@ -1411,6 +1419,13 @@ progress_filter() {      # step-key [phase]; passes every line through, adding @
                 # classic_rpmtrans backend prints, "Overall download size" the other.
                 [[ "$line" =~ ^(Overall|Package)\ download\ size:\ *([0-9.]+)\ *([KMG]?i?B) ]] \
                     && want=$(to_bytes "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}") ;;
+            *"|"*"already in cache")
+                # With part of the transaction cached, that line carries no number and
+                # the figure is this table row's first column: what is still to fetch,
+                # the same bytes the GUI sees arrive (ONEUP-0223). The `Preloading: …
+                # [already in cache]` lines end in "]", so they never reach this arm.
+                [[ "$line" =~ ^\ *([0-9.]+)\ *([KMG]?i?B)\ *\| ]] \
+                    && want=$(to_bytes "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}") ;;
             Preloading:*)
                 # The parallel prefetch, and the phase a big download actually spends its
                 # time in — zypper gives it neither a counter nor a size, so all we can

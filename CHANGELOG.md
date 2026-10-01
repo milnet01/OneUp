@@ -8,6 +8,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **"Show download size" no longer says "nothing to fetch" when part of the update is already downloaded** (ONEUP-0223)
+  When some packages were already downloaded, the package manager
+  reports the size in a different layout, and OneUp missed it. It
+  answered "nothing to fetch" and showed no total while downloading.
+  It now reads that layout and shows what is still to download.
+
 - **Firmware is no longer reported as up to date when OneUp couldn't ask** (ONEUP-0166)
   If the firmware tool failed to answer, OneUp said your firmware was
   current. Now the update check says it couldn't check firmware, and an
