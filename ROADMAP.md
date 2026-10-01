@@ -1444,7 +1444,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: package.
   Source: user-request-2026-07-27.
 
-- 📋 [ONEUP-0073] **Skip the cache clean when an earlier step failed.**
+- ✅ [ONEUP-0073] **Skip the cache clean when an earlier step failed.**
   The cache step is guarded by `step_selected cache && ! stop_pending` only —
   it never consults whether an earlier step failed. So a `zypper dup` that
   aborts mid-transaction is followed immediately by a clean that discards
@@ -1460,6 +1460,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   because the cached packages are exactly the retry's input. Narrow the rule
   rather than reversing it: skip the clean when the system step failed, and say
   so in the summary so the skip is not mistaken for the step not running.
+  Resolved (checked 2026-10-01): already shipped by ONEUP-0086/0087
+  (d3b44d6), in exactly the form proposed here. Both engines skip the
+  clean when RESULT[system] is fail. They end the cache step `skip` with
+  "kept the downloads for a retry" and send a HINT saying why: on main
+  and v2 in update_system.sh's cache step, on v2 also in
+  oneup/engine/steps.py. Locked by the run-tests.sh scenario asserting
+  @@STEP_END@@|cache|skip and "retrying the update" after a failed
+  system step. This item was never flipped when that landed.
   **Layman:** If the update fails, OneUp should keep the packages it already downloaded so retrying is quick, instead of deleting them.
   Kind: fix.
   Source: in-session-2026-07-31 (real run 2026-07-31_074230).
@@ -1971,6 +1979,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   ONEUP-0091.
   Sources: en.opensuse.org/openSUSE:Standards_Zypper_Xml ;
   github.com/openSUSE/zypper/blob/master/src/output/xmlout.rnc
+  Checked 2026-10-01; the premise does not hold as written. zypper's
+  src/Summary.cc prints "Package download size" as _todownload plus
+  _incache only when _incache is 0, so the one-line figure is bytes
+  still to fetch, the same population the window measures. With
+  anything cached it prints a table whose first column is _todownload.
+  The cited run (2026-08-07_093045.log) FAILED: kernel-default and
+  others returned 404, and the system step ended fail. So "167 MB of
+  604 MB" was a stalled download, not a healthy one under-reported. One
+  thing is still unexplained: that run's preload printed 21
+  "[already in cache]" lines, yet zypper's summary counted nothing
+  cached. The parser defect this check exposed is ONEUP-0223. Re-measure
+  this item on a run that SUCCEEDS from a warm cache before changing the
+  window's arithmetic.
 
 - ✅ [ONEUP-0094] **Retry a truncated download with mirror striping disabled.**
   Observed twice THROUGH ONEUP on 2026-08-07 (four reproductions in total --
@@ -5217,6 +5238,29 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: cold read by the Pressless session, 2026-10-01, of the ONEUP-0166 main backport.
 
+- 📋 [ONEUP-0223] **"Show download size" says "nothing to fetch" when some of the update is already downloaded.**
+  zypper prints its download size in two shapes (src/Summary.cc,
+  since commit 8feea47f, 2024-07; present in 1.14.101 here). With
+  nothing cached it is one line:
+      Package download size:   99.2 MiB
+  With anything cached it is a header plus a table, and the header has
+  no number:
+      Package download size:
+                      |     105.7 MiB  overall package size
+            99.2 MiB  |  -    6.4 MiB  already in cache
+  Both of OneUp's parsers expect a number on the header line: the --size
+  sed and progress_filter in update_system.sh (main and v2), and
+  _SIZE_TEXT / _SIZE_BYTES in oneup/engine/parsers.py (v2). So on a
+  partly cached update, --size finds no size, takes the "zypper ran fine
+  and reported no size" branch, and emits SIZE system|0 B: a confident
+  zero, the class testing.md §5 exists to stop. The download pass gets
+  want=0, so the window shows no "of N" total. The figure to read is
+  the table's first column, the bytes still to fetch, which is also
+  what the window measures.
+  **Layman:** If part of an update is already downloaded, OneUp can wrongly say there is nothing left to download, and its progress line shows no total.
+  Kind: fix.
+  Source: in-session-2026-10-01, found while checking ONEUP-0093's premise against zypper's source.
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of
@@ -6026,7 +6070,7 @@ when complete (that document's §7).
   `docs/standards/testing.md` §7 owns the measurement and its derivation;
   treat this bullet's number as the symptom that opened the item.
 
-- 📋 [ONEUP-0066] **Correct the engine's abbreviated marker list when the Python engine replaces it.**
+- ✅ [ONEUP-0066] **Correct the engine's abbreviated marker list when the Python engine replaces it.**
   update_system.sh's header comment lists the markers for a reader's
   convenience. Measured at b3ede2d while writing
   docs/reference/marker-protocol.md, three entries are wrong, and each
@@ -6048,6 +6092,16 @@ when complete (that document's §7).
   the corrected list, or drops the comment and points at the reference.
   Until then docs/reference/marker-protocol.md 7 records the drift and is
   the authority.
+  Resolved (2026-10-01): delivered by the rewrite. The Python engine
+  carries no marker list. oneup/engine/markers.py names
+  docs/reference/marker-protocol.md as the contract and is the only
+  emitter, which is this item's "drops the comment and points at the
+  reference" option. The shell engine's comment is still wrong on both
+  branches, in four entries rather than three (REBOOT too). It is not
+  patched: on main, a comment edit in a shipped script is neither
+  documentation nor a qualifying fix under workflow.md §1. On v2 that
+  file is the fallback 2.1 removes. marker-protocol.md §7 already names
+  all four and stays the warning until then.
   **Layman:** The update script has a quick summary of its own progress messages at the top, and three lines of it are out of date.
   Kind: doc-fix.
   Source: in-session-2026-07-26 (ONEUP-0057 Task 9, writing the marker reference).
