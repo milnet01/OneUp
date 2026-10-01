@@ -4436,7 +4436,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: in-session-2026-08-12.
 
-- 📋 [ONEUP-0107] **Re-gate the standards set under the four-question review, one document at a time.**
+- ✅ [ONEUP-0107] **Re-gate the standards set under the four-question review, one document at a time.**
   Evidence, measured 2026-08-12. documentation.md had been through seven
   review loops and was long settled. Amending it for ONEUP-0102 triggered
   the gate, and two loops found 13 verified findings, of which only three
@@ -4522,6 +4522,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   review-contract's packet-build.sh/brief-build.sh, two neutral-lane
   lanes, --genre standard; the cap is row 8 (3 loops for a standard).
   Lanes cost $1.58 for loop 10 (large packet, ~86 KB).
+  Resolved (2026-10-01): marker-protocol.md done on v2 — rows 7-8 in its
+  log; row 7 had 4 verified (§8's Cancel during a hold, §4.3's cache
+  weighing, §1.1's free-text-last rule, §5's Python emitters), row 8
+  had 1 (§5's cheap-change claim missed _on_thin_finished). All fixed.
+  The cap was reached and it was calm: 0 of the final loop's findings
+  landed on this run's own text. Both-branch fixes landed on main first
+  (ff33349, d957636), then merged. Lanes $3.35 for four. Every standard
+  in the set has now had the four-question review; ONEUP-0107 complete.
   **Layman:** A stricter review found a dozen real errors in a document we thought was finished; the others have not had that review yet.
   Kind: doc-fix.
   Source: in-session-2026-08-12.
