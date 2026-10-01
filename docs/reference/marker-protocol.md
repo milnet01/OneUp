@@ -25,8 +25,7 @@ see §7.
 @@NAME@@|field|field|field
 ```
 
-- The engine writes it to **stdout**. Nothing travels the other way: the window's only
-  reply channel is the `stop.request` file, which is not part of this protocol.
+- The engine writes it to **stdout**. Nothing travels the other way.
 - Fields are separated by `|` and are **positional** — there are no names and no defaults.
 - Everything the engine prints that is *not* a marker is ordinary log text, and the window
   shows it verbatim in the log pane.
@@ -303,7 +302,8 @@ this contract during 2.0.
 **A marker's name and field layout are a contract between the files below.** Changing one
 means changing all of them **in the same commit**:
 
-1. the emitters — `update_system.sh`, and the Python engine through `oneup/engine/markers.py`,
+1. the emitters — `update_system.sh`, and every call to `oneup/engine/markers.py`'s helpers
+   that builds that marker's payload, wherever under `oneup/engine/` it sits,
 2. the window's parser — `oneup/gui/run.py`'s `handle_marker`, and every side-channel
    reader §2 lists for that marker. It was `Updater.handle_marker` in
    `updater.py` until ONEUP-0034; that file is now the shim and holds no parser,
@@ -404,7 +404,9 @@ this file, and finding nothing would suggest there is nothing to agree on.
   delete it and leave the other's Stop dead (ONEUP-0145).
 - **`stop.request`** — created by the *window* to ask for a stop. The engine reads it only
   at safe boundaries (`docs/standards/security.md` §6). A request not newer than `run.state`, or
-  with no `run.state` at all, is a leftover and is ignored.
+  with no `run.state` at all, is a leftover and is ignored — except during a `--hold` wait,
+  which writes no `run.state`: there both engines judge it against `hold.state`, and a newer
+  one is the window's Cancel.
 - **`hold.state`** — written by the engine when a `--size --hold` preview begins waiting
   for a go-ahead, and deleted on every exit from that wait (ONEUP-0044). It is written
   whole, never truncated mid-write (ONEUP-0177). Line 1 is the
@@ -486,3 +488,4 @@ halves, and only checking them separately shows which one is missing.
 | 4 | 2026-07-26 | none | clean. |
 | 5 | 2026-07-26 | 1 medium — **1 verified** | converged (polish only). §3 wrote the REBOOT payload as `yes|no[|reason]`, which reads as three fields where the house style elsewhere is *or*. The ambiguity had already propagated into §4.8's prose, which called the reason 'the third field'. |
 | 6 | 2026-10-01 | Packet build, then 2 lanes, cold, dispatched from outside the project; genre pinned standard; every lane held every question. Q1 6 · Q2 6 — 12 verified, 0 dismissed, all 12 fixed: 5 found building the packet (`cd14877`, `f7e5e41`), 7 by the lanes and one lane open question | **A pure audit (ONEUP-0107): no change armed it, so there is no armed-span share.** The four-question gate's first read of this document. **Packet**: `AUTH`'s reader misnamed and its `off` match omitted [Q1]; §7 missed a fourth stale header entry, `REBOOT` [Q1]; §5.1 and §5.2 scoped ONEUP-0072 to `HINT`/`REMEDY` against its own spec's §3.1 [Q2]; §1 and §1.1 ignored the Python engine's helper and its line-break fold [Q1, v2]; §8 omitted the Python engine's state-directory resolver, which no test compares [Q1, v2]. **Lanes**: §5 named one emitter where v2 has two [Q2, both lanes, v2]; `HINT` has three side-channel readers [Q2, both lanes]; the tray's reader was a fifth channel [Q2, both lanes]; grant/revoke had the wrong reader [Q1]; §8's stop rule said "older than" where both engines need strictly newer [Q2]; the What-checks row put §1.2's guards in the engine [Q1, both lanes]; and from an open question, §4.9 said the exit code and `DONE` always agree, but a stopped run exits 0 [Q1]. Two open questions resolved clean |
+| 7 | 2026-10-01 | Packet rebuilt from disk (no source file had changed since row 6), then 2 lanes, cold, dispatched from outside the project; genre pinned standard; every lane held every question. Q1 3 · Q2 1 — 4 verified, 1 dismissed, all 4 fixed: 0 found building the packet, 3 by the lanes, 1 by settling an open question both lanes raised | **A pure audit (ONEUP-0107): no armed span.** §8's `stop.request` rule ignored every request with no `run.state`, which a `--hold` wait never writes, so Cancel reached neither engine by that rule [Q2, both lanes, v2]; §4.3 said the window weighs the package cache only when the byte fields are absent, where it does so throughout the download phase [Q1, both branches]; §1.1 said a free-text field is safe if last, but `REBOOT`'s last field is read by position and cut at a `|` [Q1, both branches]; §5 named `oneup/engine/markers.py` as the Python emitter, where each marker's payload is built at its call sites across `oneup/engine/` [Q1, v2, from both lanes' open questions]. Dismissed: a followed, stopped run reported as failed — `run.on_finished` checks `stopped` first. Corrected by deletion, outside the tally: §1 called `stop.request` the window's only reply channel, where §8 names `go.request` too (v2). Two of the four landed on text row 6's fixes wrote (§8, §5). One open question resolved clean: `KNOWN_UNTESTED_MARKERS` is empty. Lanes $1.67 for two |
