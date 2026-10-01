@@ -63,14 +63,16 @@ with `len(parts) > n` tests.
 
 ## 2. Reading order
 
-Four channels use this protocol, and only the first goes through `handle_marker`:
+These channels use this protocol, and only the first goes through `handle_marker`:
 
 | Channel | How the engine is invoked | Who reads it |
 | --- | --- | --- |
 | A run | `--steps=…` | `Updater.handle_marker` |
-| Download size | `--size=<step>` | `Updater._on_size_output` — reads `SIZE` only |
-| Authorization state | `--auth-status` / `--grant-auth` / `--revoke-auth` | `Updater._on_auth_status_finished` — matches `@@AUTH@@|on` and `@@AUTH@@|off` in the whole output |
-| Snapshot thinning | `--thin-snapshots` | `Updater._on_thin_finished` — reads `SNAPSHOTS|thinned` only |
+| Download size | `--size=<step>` | `Updater._on_size_output` — reads `SIZE` and `HINT` |
+| Authorization state | `--auth-status` | `Updater._on_auth_status_finished` — matches `@@AUTH@@|on` and `@@AUTH@@|off` in the whole output |
+| Authorization change | `--grant-auth` / `--revoke-auth` | `Updater._on_auth_finished` — reads `HINT` |
+| Snapshot thinning | `--thin-snapshots` | `Updater._on_thin_finished` — reads `SNAPSHOTS|thinned` and `HINT` |
+| Tray check | `--check`, the tray's own background check | `Updater._parse_tray_line` — reads `CHECK` and `CHECK_UNKNOWN` |
 
 This matters when adding a marker: **a marker emitted only on a side channel is not seen
 by `handle_marker`**, and one emitted during a run is not seen by the side-channel readers.
@@ -90,16 +92,16 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@SNAPSHOT@@` | `id` | the pre-update snapshot block | `handle_marker` |
 | `@@SNAPSHOT_ITEM@@` | `id\|date\|description` | the same block, once per restore point | `handle_marker` |
 | `@@SNAPSHOTS@@` | `warn\|count` *or* `thinned\|removed` | pre-flight; `--thin-snapshots` | `handle_marker`; `_on_thin_finished` |
-| `@@CHECK@@` | `key\|count\|label` | `emit_check` | `handle_marker` |
+| `@@CHECK@@` | `key\|count\|label` | `emit_check` | `handle_marker`; `_parse_tray_line` |
 | `@@CHECK_ITEM@@` | `key\|name\|from\|to` | the `--check` pass | `handle_marker` |
-| `@@CHECK_UNKNOWN@@` | `key\|reason` | `emit_check` | `handle_marker` |
+| `@@CHECK_UNKNOWN@@` | `key\|reason` | `emit_check` | `handle_marker`; `_parse_tray_line` |
 | `@@SIZE@@` | `key\|download` | the `--size` pass | `_on_size_output` |
 | `@@FREED@@` | `cache\|human` | the cache step | `handle_marker` |
 | `@@AUTH@@` | `on` *or* `off` | the auth actions | `_on_auth_status_finished` |
 | `@@DISK@@` | `warn\|mount\|free` | pre-flight | `handle_marker` |
 | `@@REPO@@` | `warn\|duplicate\|urls` | pre-flight | `handle_marker` |
 | `@@REPO_SKIPPED@@` | `alias\|reason` | the skip path | `handle_marker` |
-| `@@HINT@@` | `plain-English sentence` | anywhere a step outcome needs explaining — **either** outcome | `handle_marker` |
+| `@@HINT@@` | `plain-English sentence` | anywhere a step outcome needs explaining — **either** outcome | `handle_marker`; the size, thinning and authorization-change readers (§2) |
 | `@@REMEDY@@` | `import-keys` *or* `skip-repo\|alias` | the system step; `refresh_repos` | `handle_marker` |
 | `@@SERVICES@@` | `svc1 svc2 …` | the summary | `handle_marker` |
 | `@@INSTALLED@@` | `count\|sys_changed\|fw_changed` | the summary | `handle_marker` |
@@ -228,8 +230,8 @@ errored** — belongs to the engine, not to this field.
 
 - **`stopped` means the user asked to stop**, and the window must claim **neither success
   nor failure**. A stop never interrupts a transaction; it takes effect at a safe boundary.
-- Normally the window takes its verdict from the engine's **exit code**, and `DONE` is
-  belt-and-braces — the two always agree.
+- Normally the window takes success or errors from the engine's **exit code**, which agrees
+  with `DONE`. `stopped` comes from `DONE` alone: a stopped run with no errors exits 0.
 - **The exception is a run the window merely *followed***
   (`Updater._attach_to_running_engine`): there is no exit code to read, so `DONE` is the
   only verdict there is. **A followed run that never printed one is reported as errors,
@@ -296,7 +298,7 @@ this contract during 2.0.
 changing all four **in the same commit**:
 
 1. `update_system.sh` — the emitter,
-2. `updater.py` — `Updater.handle_marker` or the relevant side-channel reader,
+2. `updater.py` — `Updater.handle_marker` and every side-channel reader §2 lists for that marker,
 3. `tests/run-tests.sh` — the engine assertions,
 4. `tests/gui-smoke.py` — the window assertions.
 
@@ -391,8 +393,8 @@ this file, and finding nothing would suggest there is nothing to agree on.
   live engine refuses to run rather than take it over, because the first to exit would
   delete it and leave the other's Stop dead (ONEUP-0145).
 - **`stop.request`** — created by the *window* to ask for a stop. The engine reads it only
-  at safe boundaries (`docs/standards/security.md` §6). A request older than `run.state` is
-  a leftover and is ignored.
+  at safe boundaries (`docs/standards/security.md` §6). A request not newer than `run.state`, or
+  with no `run.state` at all, is a leftover and is ignored.
 
 Both paths are overridable — `ONEUP_RUN_STATE`, `ONEUP_STOP_FILE` — in the **engine only**;
 the window resolves them from `Path.home()` and is isolated in tests by rewriting `HOME`
@@ -412,7 +414,7 @@ the four lines, which three the window reads, and how each half deletes the file
 | the window reacts to each marker | `tests/gui-smoke.py` — for the markers it exercises, which is not the whole table. Nothing enumerates what `handle_marker` accepts, so this row cannot yet be made exact |
 | §3's table matches the markers the engine emits | `tests/docs-check.py`, both ways: a marker the engine emits and this table omits, and a marker this table names that the engine never emits. It reads the `marker NAME` **call sites**, not the `@@NAME@@` literals in the engine's header comment — §7 records three inaccuracies in that comment, so comparing against it would validate one stale list against another |
 | §1.1 a payload contains no `\|` | nothing automatic. The engine rewrites `\|` to `/` before emitting `SNAPSHOT_ITEM`; a new free-text field that forgets to is caught by nobody |
-| §1.2 a marker read must survive being spliced with stderr | nothing automatic — the three guards are in the engine, and nothing checks a fourth has one |
+| §1.2 a marker read must survive being spliced with stderr | nothing automatic — the three guards are in the window's `handle_marker`, and nothing checks a fourth has one |
 | §5.1 the contract is frozen for 1.x | nothing automatic |
 
 **The gap left is the GUI half.** The engine's side of the contract is now compared against
