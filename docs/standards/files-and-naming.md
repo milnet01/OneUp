@@ -153,12 +153,13 @@ updater.py         thin entry point — stays at the root
 update_system.sh   stays through 2.0 as a documented fallback, goes in 2.1
 ```
 
-`translations/` holds data rather than code. Nothing loads it yet; where it is installed is
-`docs/standards/wording-and-translation.md` §7's to decide. The loader that ONEUP-0032 adds
-finds it through `paths.py`, like the engine and the icon (§4.2), and the AppImage needs an
-`--add-data` for it, because PyInstaller follows imports and not data (§6). `.ts` files are
-tracked; the
-compiled `.qm` files are build artefacts and are not — `.gitignore` has no rule for them
+`translations/` holds data rather than code, and nothing loads it yet. Its runtime location
+is `HERE/oneup/translations/` in every layout, and the loader ONEUP-0032 adds finds it
+through `paths.py`, like the engine and the icon (§4.2). A checkout and the RPM get that
+path from the package itself — the RPM's `cp -a oneup` puts it at
+`/usr/share/oneup/oneup/translations/`. The AppImage gets it only from an `--add-data` whose
+destination is `oneup/translations`, because PyInstaller follows imports and not data (§6).
+`.ts` files are tracked; the compiled `.qm` files are build artefacts and are not — `.gitignore` has no rule for them
 yet, so the change that first builds one adds it. See
 `docs/standards/wording-and-translation.md` §7.
 
@@ -338,8 +339,9 @@ ships in none of them:
   that gate greps **`oneup/__init__.py` by name** for `APP_VERSION`, so moving the
   constant means editing the `v_py=` line in the same change.
 - `tests/bump-test.py` must cover it.
-- `docs/standards/workflow.md` §5.1's list of six sites becomes seven. It is the only
-  place that list is written out, so nothing else needs editing with it.
+- `docs/standards/workflow.md` §5.1's list of six sites becomes seven. The count is
+  repeated across the tree — `git grep -nE "six (version |lockstep )?sites"` finds every
+  copy; update the live ones and leave changelogs and dated records as they are.
 
 **Any new document** — `docs/standards/documentation.md` says which directory, and
 whether it needs a `review-contract` pass before it counts as written.
@@ -416,7 +418,7 @@ which category it is in — the answer decides whether §6 applies at all.
 | --- | --- |
 | §1 the root is closed | nothing automatic — the reason for a new root file goes in the commit message, where a reader finds it and a script does not |
 | §2.1 the naming rules | nothing automatic |
-| §4.1 the rules the `oneup/` split must obey | `tests/imports-test.py` covers **rule 2 only** — it fails the build on any `oneup.gui` import under `oneup/engine/`. Rules 1, 3 and 5 — the shim stays at the root, `snake_case.py` names that say what a module does, the directory called `oneup/` — are checked by **nothing**; they held through ONEUP-0034 by review |
+| §4.1 the rules the `oneup/` split must obey | `tests/imports-test.py` covers **rule 2 in full** — it fails the build on any `oneup.gui` import under `oneup/engine/`. It also fails when `oneup/` is absent, which covers part of rule 5. Rules 1 and 3 — the shim stays at the root, `snake_case.py` names that say what a module does — and rule 5's *lowercase, singular* are checked by **nothing**; they held through ONEUP-0034 by review |
 | §4.2 `HERE` is computed in exactly one place | `tests/imports-test.py` fails the build on `__file__` anywhere under `oneup/` but `paths.py`, and on a `from …paths import <name>` that would bind a path constant by value. `tests/gui-smoke.py` adds the two the AST cannot see: that `paths.ENGINE` resolves to the repo root's `update_system.sh`, and that `_headless_command`'s last-resort branch names the root entry point rather than a package module |
 | §5 runtime state paths, and which are redirectable | `run_engine` in `tests/mock-env.sh` redirects the engine's on every scenario of both engine suites; `tests/gui-smoke.py` redirects the window's by rewriting `HOME` before import. Nothing checks that a new state path is redirectable (§5.2) |
 | §6 what a new file obliges you to update | nothing automatic. §8's checklist is the only catcher, and it works only if the author opens it |
@@ -436,3 +438,4 @@ misnamed or unregistered file.
 | 4 | 2026-07-26 | none | converged. |
 | 5 | 2026-10-01 | Packet build, then 2 lanes, cold, dispatched from outside the project; genre pinned standard; every lane held every question. Q1 13 · Q2 3 · Q3 1 — 17 verified, 1 dismissed, all 17 fixed: 12 found building the packet (`44efd32`), 5 by the lanes | **A pure audit (ONEUP-0107): no change armed it, so there is no armed-span share.** The four-question gate's first read of this document. **Building the packet by running each claim on v2 found twelve [Q1]s before any lane ran**, all text still describing `main`'s tree: §1 omitted `oneup/` while saying anything unlisted does not exist; §4.2 quoted the pre-split `HERE`; §5 named two definers of the state-file contract where v2 has three; §5.1 put `run_engine` in the wrong file; §6 said the RPM installs two source files by name where it copies `oneup/` whole, and that the lockstep gate greps `updater.py`. **Lanes, three [Q2]s that change what gets built**: §5.2 required an `ONEUP_*` override in both halves while every existing window state path has none (both lanes); §4.2 said modules import `HERE`, which `tests/imports-test.py` INV-2 fails; §4 said translations resolve by one relative path in the AppImage, which §4.2 says has no nested package. [Q1]: §5's "everything OneUp writes" omitted `~/.config`. [Q3]: a generated `.qm` under `oneup/` still needs a build step. **Dismissed:** the "six" `edit(...)` calls in `bump.py` (nine on both branches) — a stale figure; a conformer adds the same call. Four open questions resolved clean. Out of scope, carried to its own run: `wording-and-translation.md` §7 repeats the one-relative-path claim, says `.qm` is git-ignored, and installs to a path the RPM does not use |
 | 6 | 2026-10-01 | 2 lanes, cold, briefed exactly as loop 5 plus one corrected packet fact (`ONEUP_ENGINE_CMD` is only named in a `paths.py` docstring; a loop-5 lane disputed it and was right); every lane held every question. Q1 2 · Q2 1 — 3 verified, 0 dismissed, all 3 fixed | **[Q1], both lanes, pre-existing since ONEUP-0059**: §5.1 gave the window's log dir and run history no override, and Trap 3 kept that as the reason `HOME` is redirected — both are built from `STATE_DIR`, so `XDG_STATE_HOME` moves them. What only `HOME` covers is the engine's `~/Documents/update-logs` and the autostart entry and timers, which `autostart.py` builds from `Path.home()`; loop 5's `~/.config` bullet had credited `XDG_CONFIG_HOME` with those too. **[Q2], on loop 5's own text**: §4 said the translations path "is resolved" in `paths.py` — no loader exists — and fixed nothing against `wording-and-translation.md` §7's install path, which the RPM's `cp -a oneup` does not produce. §4 now leaves the install path to §7 and says what the ONEUP-0032 loader must do. **[Q1]**: §6 said PyInstaller follows imports, read beside "a file under `oneup/` needs neither" — the window never imports `oneup/engine/`, so the AppImage carries no Python engine until ONEUP-0054 stage 9. Own-fix share: 1 of 3, plus half of the first. Two open questions resolved clean |
+| 7 | 2026-10-01 | 2 lanes, cold, briefed exactly as loop 6, plus a window listing the tracked files under four directories §1 names; every lane held every question. Q1 2 · Q2 1 — 3 verified, 0 dismissed, all 3 fixed. **Cap reached (3 for a standard)** | **A calm cap: findings ran 17 → 3 → 3, and this loop's own-fix share was 1 of 3.** **[Q2], both lanes, on loop 6's text**: §4 left the translations install path to `wording-and-translation.md` §7 while §6 said a file under `oneup/` needs no RPM line — so the loader, the RPM and the AppImage `--add-data` would each pick a directory. §4 now pins `HERE/oneup/translations/` in every layout and the AppImage destination that produces it; §7's Install row still disagrees and is carried to that document's own run. **[Q1]**: §6 said `workflow.md` §5.1 is the only place the six-site list is written out — the count is in `local-CI.sh`, `bump.py` and `oneup/__init__.py`; §6 now gives the `git grep` that finds every copy. **[Q1]**: the What-checks-this row said rule 5 is checked by nothing — `tests/imports-test.py` fails when `oneup/` is absent. Out of scope, filed: `CLAUDE.md` §4 forbids backticking a v2-only path in a scanned document, which every v2 standard does and `tests/docs-check.py` passes |

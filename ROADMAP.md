@@ -4489,6 +4489,15 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   (half the findings surface there), scrub the loop log, two
   neutral-lane lanes per loop, fix v2-only unless main's copy is also
   wrong (then main first, merge).
+  Progress (2026-10-01): files-and-naming.md done on v2 — loops 5-7 in
+  its log, 23 verified (12 found building the packet, 11 by lanes), all
+  fixed; cap reached, calm (17 -> 3 -> 3). Still owed, in this order:
+  wording-and-translation.md, dependencies.md, marker-protocol.md.
+  Carried into wording-and-translation.md's run: its §7 Install row
+  (/usr/share/oneup/translations/) disagrees with the RPM's cp -a layout
+  and files-and-naming.md §4's HERE/oneup/translations/; it also says .qm
+  is git-ignored (no rule exists). Filed ONEUP-0217. Lanes cost
+  $0.76-0.84 each this run, above the earlier $0.55-0.62.
   **Layman:** A stricter review found a dozen real errors in a document we thought was finished; the others have not had that review yet.
   Kind: doc-fix.
   Source: in-session-2026-08-12.
@@ -6325,6 +6334,19 @@ when complete (that document's §7).
   **Layman:** A security rule points at code by names from before the window was split into parts, so a reader looks in the wrong file.
   Kind: doc-fix.
   Source: review-contract-2026-09-28 coding.md loop 1 (out of scope).
+
+- 📋 [ONEUP-0217] **v2's CLAUDE.md §4 forbids backticking a v2-only path in a scanned document, which every v2 standard does.**
+  Found by a cold lane on files-and-naming.md (ONEUP-0107, loop 7) as an open
+  question. CLAUDE.md §4 on v2 says no document tests/docs-check.py scans may
+  backtick a path that exists only on v2, because its §9 check fails an
+  unresolvable path. On v2 those paths resolve, so the check passes, and
+  coding.md, testing.md, files-and-naming.md, ui-and-accessibility.md and
+  workflow.md on v2 all backtick oneup/ paths. The paragraph is main's text,
+  merged in unchanged. Fix on v2 only: say the rule binds main's copies, and
+  that v2's copies may name the package (workflow.md §9 decides the branch).
+  **Layman:** A rule in v2's guide for Claude says the standards may not name the new package's files, but on v2 they all do and the checker is happy — the rule was written for main.
+  Kind: doc-fix.
+  Source: review-contract-2026-10-01 files-and-naming.md loop 7.
 
 ## 2.1.0 — after 2.0
 
