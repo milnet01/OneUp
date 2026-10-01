@@ -1863,10 +1863,15 @@ def main() -> int:
 
     # ONEUP-0204: nothing this suite starts may outlive it. With no event loop running, a
     # probe that has exited is never reaped, so at interpreter exit Qt destroys it as
-    # "still running" and kills its bash. Collect every one before the summary.
+    # "still running" and kills its bash. Collect every one before the summary — with its
+    # signals BLOCKED, so reaping runs none of its slots: some windows above carry the real
+    # _stand_down_autoupdate with _autoupdate_enabled forced true, and the dialog stubs are
+    # restored by now, so a late "@@AUTH@@|off" opened a real modal that nothing closes and
+    # hung the suite (ONEUP-0225). Not finished.disconnect(): that segfaulted in Qt.
     left = [p for top in QApplication.topLevelWidgets() for p in top.findChildren(QProcess)
             if shiboken6.isValid(p) and p.state() != QProcess.NotRunning]
     for p in left:
+        p.blockSignals(True)
         p.waitForFinished(5000)
     check("every probe a window started has finished before the suite exits",
           all(p.state() == QProcess.NotRunning for p in left if shiboken6.isValid(p)))
