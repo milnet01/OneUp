@@ -4515,6 +4515,13 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   (move every loop log out of its document). Still owed:
   marker-protocol.md, with the HINT/REMEDY scope carried from
   wording-and-translation.md's run.
+  Progress (2026-10-01): marker-protocol.md loop 10 done on v2 (row 6
+  in its log): 12 verified (5 packet, 7 lanes), all fixed; both-branch
+  fixes on main (cd14877, 9e4cecf) then merged. RESUME: dispatch the
+  next cold loop (log row 7) — rebuild the packet from disk with
+  review-contract's packet-build.sh/brief-build.sh, two neutral-lane
+  lanes, --genre standard; the cap is row 8 (3 loops for a standard).
+  Lanes cost $1.58 for loop 10 (large packet, ~86 KB).
   **Layman:** A stricter review found a dozen real errors in a document we thought was finished; the others have not had that review yet.
   Kind: doc-fix.
   Source: in-session-2026-08-12.
