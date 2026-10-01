@@ -20,8 +20,8 @@ much as for features. Staying current is the default; falling behind needs a rea
    release. On any release cycle (and whenever you edit a manifest/workflow for another
    reason), check what's behind and bump it.
 2. **An older pin is allowed only when a newer version explicitly breaks something we rely
-   on** — and there is genuinely no other way. A preference for a version you remember is
-   not a reason.
+   on, or would drop a platform we deliberately support** — and there is genuinely no other
+   way. A preference for a version you remember is not a reason.
    - **A security advisory against the pinned version ends the exemption.** If the version
      we are held back on has a known vulnerability, we move — and if the newer version
      genuinely breaks a feature, the feature gives way, not the security fix. Record what
@@ -29,12 +29,13 @@ much as for features. Staying current is the default; falling behind needs a rea
      inconvenient.
 3. **Every older pin must be documented in the ledger below**, with:
    - *what* is pinned and to which version,
-   - *why* (the exact feature that breaks and how it manifests),
+   - *why* (the exact feature that breaks and how it manifests, or the platform a newer
+     version drops),
    - the *first broken version*,
    - *when to re-test* (so a version newer than the broken one triggers a re-check).
 4. **Re-test on the ledger's cue.** When a version newer than a recorded "first broken"
    version ships, re-test the feature. If it works, bump and delete the ledger row. The
-   ledger is a to-do list, not an archive — a pin with no live breakage gets removed.
+   ledger is a to-do list, not an archive — a pin whose reason no longer holds gets removed.
 5. **A bump updates the calling code in the same change** (idiom refresh), so the codebase
    doesn't rot into "compiles but nobody meant it."
 
@@ -46,11 +47,9 @@ backlog item, not a ledger entry.
 
 | Dependency | Pinned to | Latest available | First broken version | Why held back | Re-test when |
 |---|---|---|---|---|---|
-| GitHub runner image (`runs-on`) | `ubuntu-22.04` | `ubuntu-24.04`+ | — (not a break) | **Compatibility floor, not a breakage.** The AppImage is built on an older glibc so it runs on older openSUSE/other distros; a newer runner would raise the minimum glibc and shrink the audience. | Only if we drop the "runs on old glibc" goal, or AppImage tooling changes the target. |
+| GitHub runner image (`runs-on`) | `ubuntu-22.04` | `ubuntu-24.04`+ | — (not a break) | **Compatibility floor.** The AppImage is built on an older glibc so it runs on older openSUSE/other distros; a newer runner would raise the minimum glibc and shrink the audience. | Only if we drop the "runs on old glibc" goal, or AppImage tooling changes the target. |
 
-*The `python-version` row was removed on 2026-07-26 — see the sweep below. It recorded a
-suspected breakage that turned out not to exist, so by rule 4 it had no business in the
-ledger.*
+*Rows removed from this ledger, and why: `docs/history/dependencies.md`.*
 
 ## Current dependency snapshot (verified 2026-07-26; re-checked 2026-08-19)
 
@@ -71,29 +70,7 @@ Recorded so the next sweep has a baseline:
   AppImage build `pip install`s the latest. It tracks upstream automatically; no manifest pin
   to bump. Requires only Qt 6 idioms (new-style `connect`, scoped enums where practical).
 
-### Sweep, 2026-07-26 — why the Python row died
-
-The ledger claimed 3.13 was held back pending "PySide6 wheels for 3.14". Checked against
-PyPI rather than recalled, and **the premise was wrong**: PySide6 ships **stable-ABI**
-wheels, so there is no per-version wheel to wait for.
-
-```
-$ curl -s https://pypi.org/pypi/PySide6/6.11.1/json | ... ['urls'] → filename
-pyside6-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl      ← cp310-abi3, not cp313/cp314
-requires_python: <3.15,>=3.10
-```
-
-`cp310-abi3` installs on **any** CPython from 3.10 up to the `<3.15` ceiling — 3.14
-included — and `manylinux_2_34` is satisfied by the `ubuntu-22.04` runner (glibc 2.35). So
-nothing was ever broken; the pin was caution with no measurement behind it, which rule 4
-says must not sit in the ledger. Removed.
-
-**The lesson, worth more than the bump:** an unverified suspicion written into a ledger
-reads exactly like a verified breakage six months later, and nobody re-checks it because
-the ledger looks authoritative. A row goes in only when something has been *observed* to
-break — a hunch is a backlog item.
-- `zypper`, `flatpak`, `fwupd`, `snapper` — host tools, versioned by the user's openSUSE
-  install; OneUp calls stable CLI surfaces and skips cleanly when a tool is absent.
+stable CLI surfaces and skips cleanly when a tool is absent.
 
 ## How to check what's behind
 
@@ -102,6 +79,8 @@ break — a hunch is a backlog item.
 for r in actions/checkout actions/setup-python softprops/action-gh-release; do
   echo "$r -> $(gh api repos/$r/releases/latest -q .tag_name)"
 done
+# Python runtime — latest stable release; compare with python-version in release.yml:
+curl -s https://endoflife.date/api/python.json | python3 -c 'import json,sys; print("python ->", json.load(sys.stdin)[0]["latest"])'
 # Host packages (openSUSE):
 zypper search -s --provides --match-exact python3-pyside6
 ```
@@ -115,9 +94,9 @@ zypper search -s --provides --match-exact python3-pyside6
 | a bump updates the calling code in the same change | nothing automatic |
 | the ledger records each known incompatibility | nothing automatic |
 
-**Nothing here is gated, and that is structural rather than neglect.** *"Is this the latest
-version?"* can only be answered by a network call, and no suite in this project makes one
-(`docs/standards/testing.md` §2.3). The catcher is the sweep, and a sweep is a habit, not a
+**Nothing here is gated.** *"Is this the latest version?"* can only be answered by a
+network call, which `docs/standards/testing.md` §2.3 allows only in an opt-in scenario,
+and no scenario checks versions. The catcher is the sweep, and a sweep is a habit, not a
 gate — so the honest reading of a green `local-CI.sh` is that it says nothing whatever about
 whether these dependencies are current.
 
