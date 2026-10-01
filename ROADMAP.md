@@ -4759,7 +4759,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Source: in-session-2026-08-25 (review-contract loop 4 on the ONEUP-0054 build plan).
   Lanes: docs.
 
-- 📋 [ONEUP-0132] **Marker protocol §4.6 states the bare-zero withholding rule too widely.**
+- ✅ [ONEUP-0132] **Marker protocol §4.6 states the bare-zero withholding rule too widely.**
   §4.6 reads "The engine emits `CHECK` only when everything was
   readable *or* the count is greater than zero". That describes
   `emit_check`, which only the system and Flatpak arms use. The firmware
@@ -4769,6 +4769,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   rather than fixed: the reference outranks both halves of the app
   (`CLAUDE.md` §4), so narrowing the rule changes what a window
   implementer builds and owes its own review-contract gate.
+  Resolved (2026-10-01): §4.6 now scopes the withholding rule to a
+  step's CHECK and says TOTAL is always emitted, with a preceding
+  CHECK_UNKNOWN marking it a floor (main c332761, merged to v2). On v2
+  the Bash firmware arm now goes through emit_check, so only TOTAL was
+  an exception there; on main firmware was one too, but it has no
+  unreadable case at all. Rule 14: an amendment recording existing code,
+  exempt. Also corrected v2's Python firmware comment, which gave a
+  false reason for not using emit_check (8b2c15d).
   **Layman:** The engine↔window contract says OneUp hides a "0 updates" answer when a source could not be read — but two of those markers are always sent, so the rule as written is wrong about them.
   Kind: doc-fix.
   Source: review-contract-2026-08-25 ONEUP-0054 stage-3 plan gate, lane 1.
@@ -5174,7 +5182,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
 `docs/design/oneup-2.0.md` §1's list, plus fixes to that new code. Ships only
 when complete (that document's §7).
 
-- 📋 [ONEUP-0206] **marker-protocol.md's Emitted by column and its file list name only the Bash engine.**
+- ✅ [ONEUP-0206] **marker-protocol.md's Emitted by column and its file list name only the Bash engine.**
   The marker table's "Emitted by" column and the numbered file list that
   follows both name `update_system.sh` as the emitter. The Python engine
   emits every one of those markers through `oneup/engine/markers.py`, and
@@ -5193,6 +5201,12 @@ when complete (that document's §7).
   an extension does.
 
   A gated edit — `review-contract docs/reference/marker-protocol.md`.
+  Resolved (2026-10-01) by ONEUP-0107's marker-protocol.md run on v2.
+  §5's file list names the Python engine's markers.py call sites
+  (f7e5e41, e3a61a2). The Emitted-by column names no file; checked
+  that every function it names (begin_step, end_step, emit_check,
+  emit_progress, progress_filter, refresh_repos) exists in both
+  update_system.sh and oneup/engine/.
   **Layman:** The message contract still says only the old engine sends these messages; the new one sends them too.
   Kind: doc-fix.
   Source: review-code 2026-08-31, lane engine-protocol (doc half of ONEUP-0151).
