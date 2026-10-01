@@ -66,14 +66,16 @@ with `len(parts) > n` tests.
 
 ## 2. Reading order
 
-Four channels use this protocol, and only the first goes through `handle_marker`:
+These channels use this protocol, and only the first goes through `handle_marker`:
 
 | Channel | How the engine is invoked | Who reads it |
 | --- | --- | --- |
 | A run | `--steps=…` | `run.handle_marker` |
-| Download size | `--size=<step>` | `run._on_size_output` — reads `SIZE` only |
-| Authorization state | `--auth-status` / `--grant-auth` / `--revoke-auth` | `auth._on_auth_status_finished` — matches `@@AUTH@@|on` and `@@AUTH@@|off` in the whole output |
-| Snapshot thinning | `--thin-snapshots` | `rollback._on_thin_finished` — reads `SNAPSHOTS|thinned` only |
+| Download size | `--size=<step>` | `run._on_size_output` — reads `SIZE` and `HINT` |
+| Authorization state | `--auth-status` | `auth._on_auth_status_finished` — matches `@@AUTH@@|on` and `@@AUTH@@|off` in the whole output |
+| Authorization change | `--grant-auth` / `--revoke-auth` | `auth._on_auth_finished` — reads `HINT` |
+| Snapshot thinning | `--thin-snapshots` | `rollback._on_thin_finished` — reads `SNAPSHOTS|thinned` and `HINT` |
+| Tray check | `--check`, the tray's own background check | `tray._parse_tray_line` — reads `CHECK` and `CHECK_UNKNOWN` |
 
 This matters when adding a marker: **a marker emitted only on a side channel is not seen
 by `handle_marker`**, and one emitted during a run is not seen by the side-channel readers.
@@ -93,16 +95,16 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@SNAPSHOT@@` | `id` | the pre-update snapshot block | `handle_marker` |
 | `@@SNAPSHOT_ITEM@@` | `id\|date\|description` | the same block, once per restore point | `handle_marker` |
 | `@@SNAPSHOTS@@` | `warn\|count` *or* `thinned\|removed` | pre-flight; `--thin-snapshots` | `handle_marker`; `_on_thin_finished` |
-| `@@CHECK@@` | `key\|count\|label` | `emit_check` | `handle_marker` |
+| `@@CHECK@@` | `key\|count\|label` | `emit_check` | `handle_marker`; `_parse_tray_line` |
 | `@@CHECK_ITEM@@` | `key\|name\|from\|to` | the `--check` pass | `handle_marker` |
-| `@@CHECK_UNKNOWN@@` | `key\|reason` | `emit_check` | `handle_marker` |
+| `@@CHECK_UNKNOWN@@` | `key\|reason` | `emit_check` | `handle_marker`; `_parse_tray_line` |
 | `@@SIZE@@` | `key\|download` | the `--size` pass | `_on_size_output` |
 | `@@FREED@@` | `cache\|human` | the cache step | `handle_marker` |
 | `@@AUTH@@` | `on` *or* `off` | the auth actions | `_on_auth_status_finished` |
 | `@@DISK@@` | `warn\|mount\|free` | pre-flight | `handle_marker` |
 | `@@REPO@@` | `warn\|duplicate\|urls` | pre-flight | `handle_marker` |
 | `@@REPO_SKIPPED@@` | `alias\|reason` | the skip path | `handle_marker` |
-| `@@HINT@@` | `plain-English sentence` | anywhere a step outcome needs explaining — **either** outcome | `handle_marker` |
+| `@@HINT@@` | `plain-English sentence` | anywhere a step outcome needs explaining — **either** outcome | `handle_marker`; the size, thinning and authorization-change readers (§2) |
 | `@@REMEDY@@` | `import-keys` *or* `skip-repo\|alias` | the system step; `refresh_repos` | `handle_marker` |
 | `@@SERVICES@@` | `svc1 svc2 …` | the summary | `handle_marker` |
 | `@@INSTALLED@@` | `count\|sys_changed\|fw_changed` | the summary | `handle_marker` |
@@ -231,8 +233,8 @@ errored** — belongs to the engine, not to this field.
 
 - **`stopped` means the user asked to stop**, and the window must claim **neither success
   nor failure**. A stop never interrupts a transaction; it takes effect at a safe boundary.
-- Normally the window takes its verdict from the engine's **exit code**, and `DONE` is
-  belt-and-braces — the two always agree.
+- Normally the window takes success or errors from the engine's **exit code**, which agrees
+  with `DONE`. `stopped` comes from `DONE` alone: a stopped run with no errors exits 0.
 - **The exception is a run the window merely *followed***
   (`Updater._attach_to_running_engine`): there is no exit code to read, so `DONE` is the
   only verdict there is. **A followed run that never printed one is reported as errors,
@@ -295,13 +297,12 @@ this contract during 2.0.
 
 ## 5. Changing the contract
 
-**A marker's name and field layout are a contract between four files.** Changing one means
-changing all four **in the same commit**:
+**A marker's name and field layout are a contract between the files below.** Changing one
+means changing all of them **in the same commit**:
 
-1. `update_system.sh` — the emitter,
-2. the window's parser — `oneup/gui/run.py`'s `handle_marker`, or the relevant
-   side-channel reader (`_on_size_output` for `@@SIZE@@`, `oneup/gui/tray.py`'s
-   `_parse_tray_line` for the tray's own check). It was `Updater.handle_marker` in
+1. the emitters — `update_system.sh`, and the Python engine through `oneup/engine/markers.py`,
+2. the window's parser — `oneup/gui/run.py`'s `handle_marker`, and every side-channel
+   reader §2 lists for that marker. It was `Updater.handle_marker` in
    `updater.py` until ONEUP-0034; that file is now the shim and holds no parser,
 3. `tests/run-tests.sh` — the engine assertions,
 4. `tests/gui-smoke.py` — the window assertions.
@@ -322,7 +323,7 @@ protocol could not be tested this way at all.
 **One exception, deliberately sequenced after the rewrite has passed its gate:**
 ONEUP-0072 turns every payload the window renders as its own wording from English prose
 into stable codes, so the window can translate them —
-`docs/specs/ONEUP-0072-marker-codes.md` §3.1 names which. That is a single versioned change touching all four files
+`docs/specs/ONEUP-0072-marker-codes.md` §3.1 names which. That is a single versioned change touching every file §5 lists,
 plus this document
 (`docs/standards/wording-and-translation.md` §5).
 
@@ -399,8 +400,8 @@ this file, and finding nothing would suggest there is nothing to agree on.
   live engine refuses to run rather than take it over, because the first to exit would
   delete it and leave the other's Stop dead (ONEUP-0145).
 - **`stop.request`** — created by the *window* to ask for a stop. The engine reads it only
-  at safe boundaries (`docs/standards/security.md` §6). A request older than `run.state` is
-  a leftover and is ignored.
+  at safe boundaries (`docs/standards/security.md` §6). A request not newer than `run.state`, or
+  with no `run.state` at all, is a leftover and is ignored.
 - **`hold.state`** — written by the engine when a `--size --hold` preview begins waiting
   for a go-ahead, and deleted on every exit from that wait (ONEUP-0044). It is written
   whole, never truncated mid-write (ONEUP-0177). Line 1 is the
@@ -409,7 +410,7 @@ this file, and finding nothing would suggest there is nothing to agree on.
   adopting a hold it did not start.
 - **`go.request`** — created by the *window* to tell a held engine to proceed, written
   whole so the engine never reads it empty. Line 1 carries a comma-separated step list
-  and nothing else, and is the only line the engine reads. A request older than `hold.state` is a leftover and is ignored, the same rule
+  and nothing else, and is the only line the engine reads. A request not newer than `hold.state` is a leftover and is ignored, the same rule
   `stop.request` follows against `run.state` and for the same reason. **Every key must
   resolve in the engine's `LABEL` map or the whole go-ahead is refused** — stricter than
   `--steps=`, which silently drops an unknown key, because this file is an authorisation
@@ -457,7 +458,7 @@ the four lines, which three the window reads, and how each half deletes the file
 | the window reacts to each marker | `tests/gui-smoke.py` — for the markers it exercises, which is not the whole table. Nothing enumerates what `handle_marker` accepts, so this row cannot yet be made exact |
 | §3's table matches the markers the engine emits | `tests/docs-check.py`, both ways: a marker the engine emits and this table omits, and a marker this table names that the engine never emits. It reads the `marker NAME` **call sites**, not the `@@NAME@@` literals in the engine's header comment — §7 records three inaccuracies in that comment, so comparing against it would validate one stale list against another |
 | §1.1 a payload contains no `\|` | nothing automatic. The engine rewrites `\|` to `/` before emitting `SNAPSHOT_ITEM`; a new free-text field that forgets to is caught by nobody |
-| §1.2 a marker read must survive being spliced with stderr | nothing automatic — the three guards are in the engine, and nothing checks a fourth has one |
+| §1.2 a marker read must survive being spliced with stderr | nothing automatic — the three guards are in the window's `handle_marker`, and nothing checks a fourth has one |
 | §5.1 the contract is frozen for 1.x | nothing automatic |
 
 **The gap left is the GUI half.** The engine's side of the contract is now compared against
@@ -481,3 +482,4 @@ halves, and only checking them separately shows which one is missing.
 | 3 | 2026-07-26 | 1 high — **1 verified** | the What-checks-this row claimed `tests/run-tests.sh` proves the engine emits each marker. It proves 22 of 23 — `DISK` is asserted by no engine scenario, and reads as covered only because `gui-smoke.py` feeds it (**ONEUP-0069**). The gate meant to protect this table was itself comparing against the engine's *header comment*, which §7 of this document records as stale, rather than the `marker` call sites. |
 | 4 | 2026-07-26 | none | clean. |
 | 5 | 2026-07-26 | 1 medium — **1 verified** | converged (polish only). §3 wrote the REBOOT payload as `yes|no[|reason]`, which reads as three fields where the house style elsewhere is *or*. The ambiguity had already propagated into §4.8's prose, which called the reason 'the third field'. |
+| 6 | 2026-10-01 | Packet build, then 2 lanes, cold, dispatched from outside the project; genre pinned standard; every lane held every question. Q1 6 · Q2 6 — 12 verified, 0 dismissed, all 12 fixed: 5 found building the packet (`cd14877`, `f7e5e41`), 7 by the lanes and one lane open question | **A pure audit (ONEUP-0107): no change armed it, so there is no armed-span share.** The four-question gate's first read of this document. **Packet**: `AUTH`'s reader misnamed and its `off` match omitted [Q1]; §7 missed a fourth stale header entry, `REBOOT` [Q1]; §5.1 and §5.2 scoped ONEUP-0072 to `HINT`/`REMEDY` against its own spec's §3.1 [Q2]; §1 and §1.1 ignored the Python engine's helper and its line-break fold [Q1, v2]; §8 omitted the Python engine's state-directory resolver, which no test compares [Q1, v2]. **Lanes**: §5 named one emitter where v2 has two [Q2, both lanes, v2]; `HINT` has three side-channel readers [Q2, both lanes]; the tray's reader was a fifth channel [Q2, both lanes]; grant/revoke had the wrong reader [Q1]; §8's stop rule said "older than" where both engines need strictly newer [Q2]; the What-checks row put §1.2's guards in the engine [Q1, both lanes]; and from an open question, §4.9 said the exit code and `DONE` always agree, but a stopped run exits 0 [Q1]. Two open questions resolved clean |

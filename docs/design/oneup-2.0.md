@@ -537,7 +537,7 @@ release is announced.
 (§5.2) and, by §5.1, converts **every** engine payload the window renders as its own wording
 to codes — wider than the `@@HINT@@` / `@@REMEDY@@` pair
 (`docs/specs/ONEUP-0072-marker-codes.md` §3.1) — changing
-the marker stream and the assertions that read it, in one versioned change touching all four
+the marker stream and the assertions that read it, in one versioned change touching every
 files (`docs/reference/marker-protocol.md` §5). Re-run at the 2.0.0 tag, G1 and G2 would
 then be false by construction. They are gates on the *rewrite*, measured once, at the commit
 that switches the engine over — not standing properties of the release.
