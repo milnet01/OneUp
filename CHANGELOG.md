@@ -44,6 +44,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **"Show download size" no longer says "nothing to fetch" when part of the update is already downloaded** (ONEUP-0223)
+  When some packages were already downloaded, the package manager
+  reports the size in a different layout, and OneUp missed it. It
+  answered "nothing to fetch" and showed no total while downloading.
+  It now reads that layout and shows what is still to download.
+
 - **A safety snapshot that failed is no longer offered as this update's restore point** (ONEUP-0147)
   If taking the snapshot before an update failed (a full disk, say), OneUp
   used to offer the newest older snapshot as this update's restore point,

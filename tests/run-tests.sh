@@ -580,6 +580,33 @@ check        "size marker carries the new-wording figure" "@@SIZE@@|system|371.4
 check_absent "new-wording size is not reported as nothing" "nothing to fetch" "$out"
 rm -rf "$d"
 
+# With ANY package already cached, current zypper prints the size as a header with no
+# number, then a table whose first column is what is still to fetch (zypper's
+# src/Summary.cc; the three strings are in /usr/bin/zypper). A parse for the one-line
+# form found nothing there and answered "nothing to fetch" (ONEUP-0223).
+echo "TEST: --size reads the cached-split table, and never answers 0 B from it"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *dup* && "$*" == *--dry-run* ]]; then
+  echo "12 packages to upgrade."
+  echo ""
+  echo "Package download size:"
+  echo "                |     105.7 MiB  overall package size"
+  echo "      99.2 MiB  |  -    6.4 MiB  already in cache"
+  echo ""
+  exit 0
+fi
+[[ "$*" == *dup* || "$*" == *update* ]] && { echo "BUG: real transaction in --size" >&2; exit 99; }
+exit 0
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --size=system)
+check        "size is what is still to fetch"          "@@SIZE@@|system|99.2 MiB" "$out"
+check_absent "a cached split is not 'nothing to fetch'" "nothing to fetch"         "$out"
+check_absent "a cached split is not a zero"             "@@SIZE@@|system|0 B"      "$out"
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 # A failed dry run (cancelled password prompt, held package lock) must NOT be
 # reported as a confident "0 B to download" — the same never-claim-what-you-
@@ -1482,6 +1509,36 @@ check "the prefetch tally invents no denominator but carries the total" \
       "@@PROGRESS@@|system|1|0|download|0|90596966" "$out"
 check "every prefetched package keeps the total" \
       "@@PROGRESS@@|system|2|0|download|0|90596966" "$out"
+rm -rf "$d"
+
+# The same header with part of the transaction cached: no number on it, and the figure
+# to pass on is the table's first column — the bytes still to fetch, which is also what
+# the GUI measures arriving (ONEUP-0223).
+echo "TEST: the prefetch total is read from the cached-split table"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*) exit 0 ;;
+  *dup*|*update*)
+    echo "12 packages to upgrade."
+    echo "Package download size:"
+    echo "                |     105.7 MiB  overall package size"
+    echo "      99.2 MiB  |  -    6.4 MiB  already in cache"
+    echo "Preloading: libswresample6-32bit-8.1.2-1699.3.pm.5.x86_64.rpm [already in cache]"
+    echo "Preloading: libavformat62-32bit-8.1.2-1699.3.pm.5.x86_64.rpm [done]"
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+# 99.2 MiB = 104018739 bytes. Not 105.7 MiB: the overall figure counts the cached 6.4 MiB,
+# which the GUI's cache-weight baseline already excludes.
+check "the total is what is still to fetch" \
+      "@@PROGRESS@@|system|1|0|download|0|104018739" "$out"
+check_absent "a cached split does not leave the total unknown" \
+      "@@PROGRESS@@|system|1|0|download|0|0" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
