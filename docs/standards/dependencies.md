@@ -38,7 +38,11 @@ much as for features. Staying current is the default; falling behind needs a rea
    version ships, re-test the feature. If it works, bump and delete the ledger row. The
    ledger is a to-do list, not an archive — a pin whose reason no longer holds gets removed.
 5. **A bump updates the calling code in the same change** (idiom refresh), so the codebase
-   doesn't rot into "compiles but nobody meant it."
+   doesn't rot into "compiles but nobody meant it." A Python runtime bump is the exception:
+   the code's idioms follow the floor in `docs/standards/coding.md` §1, not the CI version.
+6. **A CI action is pinned to a full commit SHA**, with the release it resolves to as a
+   trailing `# vX.Y.Z` comment (ONEUP-0137). A bump changes both, and the SHA comes from the
+   command under *How to check what's behind*.
 
 ## Known-incompatibility ledger
 
@@ -60,12 +64,10 @@ Recorded so the next sweep has a baseline:
 - `actions/setup-python` → **`5fda3b95a4ea91299a34e894583c3862153e4b97`** (`v7.0.0`) — current.
 - `softprops/action-gh-release` → **`efb35369e0ad2afab669f228072c1b0d510eae64`** (`v3.0.3`) — current.
 
-**The three actions are pinned to a commit SHA rather than a major tag, since
-2026-08-31 (ONEUP-0137).** A major tag is mutable — its publisher can repoint
+**Why a SHA (rule 6).** A major tag is mutable — its publisher can repoint
 `v7` at any commit — so the tag says which release we *asked* for and not which
-code runs. `zizmor` reports the tag form as `unpinned-uses`, High. Each `uses:`
-line carries the version as a trailing `# vX.Y.Z` comment, and **that comment is
-what the sweep below compares against**; the SHA itself is not a version and
+code runs. `zizmor` reports the tag form as `unpinned-uses`, High. The `# vX.Y.Z`
+comment is **what the sweep below compares against**; the SHA itself is not a version and
 cannot be read as one. Verified at the pin: every one of the three major tags
 resolved to exactly the SHA recorded here, so pinning changed no behaviour.
 
@@ -109,6 +111,8 @@ zypper search -s --provides --match-exact python3-pyside6
 | --- | --- |
 | use the latest stable release | nothing automatic — the sweep under *How to check what's behind* is run by hand |
 | a pin older than latest carries a written reason | nothing automatic |
+| a security advisory against a held pin ends its exemption | nothing automatic |
+| a CI action is pinned to a full commit SHA | nothing automatic — `zizmor` reports the tag form as `unpinned-uses`, and nothing runs it |
 | a bump updates the calling code in the same change | nothing automatic |
 | the ledger records each known incompatibility | nothing automatic |
 
@@ -129,3 +133,4 @@ whether these dependencies are current.
 | 5 | 2026-07-26 | none | clean. |
 | 6 | 2026-07-26 | none | converged. |
 | 7 | 2026-10-01 | Packet build, then 2 lanes, cold, dispatched from outside the project; genre pinned standard; every lane held every question. Q1 3 · Q2 1 · Q3 1 — 5 verified, 0 dismissed, all 5 fixed: 2 found building the packet (`6a079a0`, `df43168`), 3 by the lanes | **A pure audit (ONEUP-0107): no change armed it, so there is no armed-span share.** The four-question gate's first read of this document. **Packet**: the host-package check `zypper info python3-pyside6` finds nothing — it is a capability, not a package name [Q1]; the tag-to-SHA command returns the tag object for an annotated tag, not the pinned commit [Q1, v2 only]. **Lanes**: rule 2 allowed an older pin only for a breakage while the runner row is a compatibility floor [Q2, both lanes]; What-checks said no suite makes a network call, where `testing.md` §2.3 carves out one opt-in scenario [Q1, both lanes]; the sweep named as the only catcher never checked the Python runtime [Q3]. Four open questions resolved clean. Per the user's document rules, the dated history moved to `docs/history/dependencies.md`; that move cut the host-tools bullet, caught on re-read and restored (`100e7e4`) |
+| 8 | 2026-10-01 | 2 lanes, cold, briefed exactly as loop 7; every lane held every question. Q2 1 · Q3 2 — 3 verified, 0 dismissed, all 3 fixed | **[Q2], pre-existing**: rule 5 had every bump update the calling code, while `coding.md` §1 lets CI run a newer Python than the code may require; rule 5 now names the runtime bump as the exception. **[Q3]**: SHA pinning was described but was no rule and had no What-checks row — rule 6 states it, v2 only, and the row says nothing runs `zizmor`. **[Q3]**: rule 2's advisory clause had no What-checks row. Own-fix share: 0 of 3. Four open questions resolved clean |
