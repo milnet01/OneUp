@@ -212,6 +212,10 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Security
 
+- **The AppImage build installs exact versions of PySide6 and PyInstaller.** (ONEUP-0060)
+  A rebuilt release now bundles the same toolkit it shipped with, and
+  the release is tested on that toolkit.
+
 - **Passwordless setup names the real account** (ONEUP-0148)
   Turning on passwordless updates now writes its permission for the account
   you are actually signed in as, even if the environment claims otherwise.

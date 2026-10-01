@@ -5909,7 +5909,7 @@ when complete (that document's §7).
   Progress (2026-08-19): ONEUP-0072 second cold loop run (document row 6, loop 2 of the run) — 3 lanes, Q1 1 · Q2 3 · Q3 0 · Q4 0, 4 verified and fixed, 3 dismissed. The spec cap of 2 binds and it is a CALM cap: none of the four findings landed on text this run wrote. The Q1: §4.1's "The engine keeps its English" claimed three of the five families and it is four — $REBOOT_REASON feeds both the marker and the summary's own echo, and REBOOT is the family §4.1 most tells the implementer to convert. All three Q2s were missing entries in §8, the commit-time doc-edit list: oneup-2.0.md §3 item 1 (the protocol-freeze clause, still narrow), testing.md §1's suite-table row for the retired differential-test.sh, and the scoping of marker-protocol.md §5.2's "never as the raw token". ONEUP-0072 stays Status: Draft — the run reached its cap without an empty loop. Filed not fixed: oneup-2.0.md's G1/G2 passage credits the payload conversion to ONEUP-0032. Commit e7436c4.
   Progress (2026-08-19): ONEUP-0076 second cold loop run (document row 4, loop 2 of the run) — 3 lanes, Q1 2 · Q2 3 · Q3 3 · Q4 1, 9 verified and fixed, 0 dismissed. Spec cap of 2 binds and it is a CALM cap: two of the nine landed on text a gate loop of this run wrote. The document is now 954 lines, past the range two cold reads comfortably cover — the number to weigh if it is ever gated again. Every published contrast figure was recomputed against the tree before the lanes ran and not one is wrong, including all twelve derived fills hex-for-hex and the §2.1 census (34 focusable / 18 with a :focus rule / 16 without). Both Q1s were scoping failures: INV-6 required the switch's state shape to clear 3:1 against the RESTING track, where white on #2ecc71 is 2.10:1 (red on day one), and §8 claimed ONEUP-0027 §4.7 has no focus pair on win when it measures the authored focus token there. The three Q2s were internal contradictions (the ghost hover border's owner, the matcher's fallback, and where the win pairs live). The best Q3, reached by all three lanes: §4.2's qualifier scheme left two surfaces with no unique ancestor, so the RepoManagerDialog Remove button would have taken a card-derived fill over rowcard — the 2.83:1 shape §4.2 warns about; #DialogButtons is named to close the second. ONEUP-0076 stays Status: Draft — the run reached its cap without an empty loop. Commit c91d089.
 
-- 📋 [ONEUP-0060] **Pin PySide6 and PyInstaller in the AppImage build.**
+- ✅ [ONEUP-0060] **Pin PySide6 and PyInstaller in the AppImage build.**
   packaging/appimage/build-appimage.sh:22 runs `pip install --quiet
   pyinstaller PySide6` with no version constraint, inside a fresh venv, on
   every tagged release. Three consequences, all measured against the file
@@ -5924,6 +5924,14 @@ when complete (that document's §7).
   exact version in the build script (or a requirements file it installs
   from), and treat the bump as ordinary ledger-governed dependency work.
   Not fixable on frozen main; lands with the 2.0 packaging pass.
+  Resolved (2026-10-01, v2; user chose pinning over tracking latest):
+  packaging/appimage/requirements.txt pins the whole resolved set
+  (PySide6 6.11.2 + parts, pyinstaller 6.22.3 + deps, all latest);
+  build-appimage.sh and release.yml's window suite both install it
+  (cefce46, 23cd819). A local build installed the set and froze the
+  app; packing stalled on appimagetool's runtime download, so CI's
+  first tag build is packing's first run. dependencies.md updated;
+  its re-armed gate converged on loop 10 with no findings.
   **Layman:** The downloadable app is rebuilt against whatever version of its toolkit is newest that day, so two builds of the same release can differ — pin the versions so a release is reproducible.
   Kind: security.
   Source: in-session-2026-07-26 (ONEUP-0057 Task 3 gotcha sweep).
