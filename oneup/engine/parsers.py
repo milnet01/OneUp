@@ -63,6 +63,19 @@ _SIZE_TEXT = re.compile(r".*(?:Overall|Package) download size:[ \t]*([0-9.]+ [A-
 # unit `to_bytes` knows the shape of.
 _SIZE_BYTES = re.compile(r"^(?:Overall|Package) download size: *([0-9.]+) *([KMG]?i?B)")
 
+# With part of the transaction cached, current zypper puts no number on that line.
+# It prints a table instead, and the figure is the first column of the "already in
+# cache" row: the bytes still to fetch (zypper src/Summary.cc, ONEUP-0223).
+#   Package download size:
+#                   |     105.7 MiB  overall package size
+#         99.2 MiB  |  -    6.4 MiB  already in cache
+# `run_size`'s second sed expression; [[:space:]] spelled out so \r counts and the
+# Unicode spaces do not, as in the Bash.
+_SIZE_CACHED_TEXT = re.compile(r"[ \t\r\f\v]*([0-9.]+ [A-Za-z]+)[ \t\r\f\v]*\|.*already in cache")
+# `progress_filter`'s case arm: a line holding a "|" and ENDING "already in cache"
+# (so `Preloading: … [already in cache]` never reaches it), then this regex.
+_SIZE_CACHED_BYTES = re.compile(r" *([0-9.]+) *([KMG]?i?B) *\|")
+
 
 def download_size(text: str) -> str | None:
     """`run_size`'s parse: the first line carrying a figure, as text.
@@ -76,7 +89,7 @@ def download_size(text: str) -> str | None:
     # Unicode separators, which invents lines the other engine never sees
     # (ONEUP-0152). Every parser in this module splits the same way.
     for line in text.split("\n"):
-        found = _SIZE_TEXT.match(line)
+        found = _SIZE_TEXT.match(line) or _SIZE_CACHED_TEXT.match(line)
         if found:
             return found.group(1)
     return None
@@ -89,6 +102,8 @@ def progress_total_bytes(line: str) -> int | None:
     numbers that tell a slow download from a stalled one.
     """
     found = _SIZE_BYTES.match(line)
+    if not found and "|" in line and line.endswith("already in cache"):
+        found = _SIZE_CACHED_BYTES.match(line)
     if not found:
         return None
     return to_bytes(found.group(1), found.group(2))

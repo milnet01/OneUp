@@ -75,6 +75,12 @@ SIZE_TEXT = [
     ("Package download size:371.4MiB", None),
     ("Nothing to do.", None),
     ("Package install size change:", None),
+    # With part of the transaction cached, the header has no number and the figure is
+    # the "already in cache" row's first column (zypper src/Summary.cc, ONEUP-0223).
+    ("Package download size:", None),
+    ("                |     105.7 MiB  overall package size", None),
+    ("      99.2 MiB  |  -    6.4 MiB  already in cache", "99.2 MiB"),
+    ("Preloading: git-2.55.0-3.1.x86_64.rpm [already in cache]", None),
 ]
 
 SIZE_BYTES = [
@@ -84,6 +90,10 @@ SIZE_BYTES = [
     ("Overall download size: 1.3 TiB. Already cached: 0 B.", None),
     ("  Overall download size: 1.3 GiB.", None),
     ("Package install size change:", None),
+    ("Package download size:", None),
+    ("                |     105.7 MiB  overall package size", None),
+    ("      99.2 MiB  |  -    6.4 MiB  already in cache", 104018739),
+    ("Preloading: git-2.55.0-3.1.x86_64.rpm [already in cache]", None),
 ]
 
 # --- the progress wordings ---------------------------------------------------
@@ -174,6 +184,14 @@ def main() -> int:
               "Package download size:   371.4 MiB\n"
               "Package install size change:\n"),
           "371.4 MiB")
+    check("download_size reads the cached-split table, header and all (ONEUP-0223)",
+          parsers.download_size(
+              "12 packages to upgrade.\n"
+              "\n"
+              "Package download size:\n"
+              "                |     105.7 MiB  overall package size\n"
+              "      99.2 MiB  |  -    6.4 MiB  already in cache\n"),
+          "99.2 MiB")
     check("download_size takes the LAST figure on a line, as the sed's greedy .* does",
           parsers.download_size("Overall download size: 1.3 GiB. Package download size: 2.0 MiB"),
           "2.0 MiB")
