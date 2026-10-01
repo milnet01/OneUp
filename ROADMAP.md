@@ -4507,6 +4507,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   marker-protocol.md. Carried into marker-protocol.md's run: its §5.1 and
   §5.2 limit ONEUP-0072 to HINT and REMEDY, where design §5.1 and
   ONEUP-0072 §3.1 convert every payload the window renders.
+  Progress (2026-10-01): dependencies.md done on v2 — loops 7-9 in its
+  log, 8 verified (2 found building the packet, 6 by lanes), all fixed;
+  converged at loop 9 (5 -> 3 -> 0). Most were true of main too and
+  landed there first. Dated history moved to docs/history/dependencies.md
+  per the user's document rules. Lanes $2.50 for six. Filed ONEUP-0221
+  (move every loop log out of its document). Still owed:
+  marker-protocol.md, with the HINT/REMEDY scope carried from
+  wording-and-translation.md's run.
   **Layman:** A stricter review found a dozen real errors in a document we thought was finished; the others have not had that review yet.
   Kind: doc-fix.
   Source: in-session-2026-08-12.
