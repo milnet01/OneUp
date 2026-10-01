@@ -202,10 +202,11 @@ while eight updates waited.
 
 - **`CHECK_UNKNOWN` means this step's count is a floor, not an answer.** A source could not
   be read. The window records the reason and refuses the "up to date" summary.
-- **A bare zero is withheld when something was unreadable.** The engine emits `CHECK` only
-  when everything was readable *or* the count is greater than zero: knowing about 7 updates
-  beats knowing about none while a repository is broken.
-- **`key` of `TOTAL`** carries the run-wide total rather than a step's.
+- **A step's bare zero is withheld when something was unreadable.** The engine emits a
+  step's `CHECK` only when everything was readable *or* the count is greater than zero:
+  knowing about 7 updates beats knowing about none while a repository is broken.
+- **`key` of `TOTAL`** carries the run-wide total rather than a step's. It is always
+  emitted, zero included; a `CHECK_UNKNOWN` before it is what makes it a floor.
 - `label` is a human phrase (`"firmware update(s)"`). The window **does not use it** — it
   builds its own badge text. It is there for the terminal reader.
 
