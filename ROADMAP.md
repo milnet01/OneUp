@@ -6365,6 +6365,8 @@ when complete (that document's §7).
   hint in the window anyway; changing the engines' prose before ONEUP-0072
   would break gate G2's byte-identical marker stream. main is frozen, so a
   1.4.x fix there is the user's call.
+  Decided (user, 2026-10-01): fix in 2.0 only, through ONEUP-0108's
+  code-to-sentence map. No 1.4.x change; main keeps the old wording.
   **Layman:** One error message uses a technical word our own wording rules say to replace with "source".
   Kind: fix.
   Source: review-contract-2026-10-01 wording-and-translation.md loop 5 (surfaced).
