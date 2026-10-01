@@ -50,7 +50,9 @@ header (`@@ -1,4 +1,4 @@`) is the real case that made this necessary.
 A payload cannot contain a `|`, and the protocol offers no way to quote one. The one place
 where user data could contain one — a Btrfs snapshot description — the engine rewrites `|`
 to `/` before emitting `SNAPSHOT_ITEM`. **Any new field carrying free text must do the
-same, or must be last.**
+same, or must be last and be read as the whole remainder of the line, as `HINT` and
+`SERVICES` are.** A last field read by position, as `REBOOT`'s reason is, is cut short at
+the first `|` in it.
 
 ### 1.2 Markers arrive spliced, and the parser must survive it
 
@@ -147,8 +149,9 @@ The marker that stops a working download looking like a hang (ONEUP-0040/0048).
   "Downloading packages — 37 so far" — never as an invented denominator. Zypper's parallel
   prefetch (`Preloading:`) reports no counter at all.
 - **The two byte fields are optional**, present only in the download phase once zypper has
-  printed a size. **`bytes_total` of 0 means "not known yet."** When they are absent the
-  window weighs `/var/cache/zypp/packages` itself — world-readable, so no root is involved.
+  printed a size. **`bytes_total` of 0 means "not known yet."** Throughout the download phase the
+  window also weighs `/var/cache/zypp/packages` itself — world-readable, so no root is
+  involved — and shows whichever figure is larger.
 - The engine derives all of this by parsing zypper's own output, which is why `LC_ALL=C` is
   pinned on the transaction: the three wordings (`Preloading:`, `Retrieving: … (12/77)`,
   `( 7/77) Installing:`) would otherwise change on a non-English desktop.
