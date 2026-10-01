@@ -71,7 +71,7 @@ Recorded so the next sweep has a baseline:
   AppImage build `pip install`s the latest. It tracks upstream automatically; no manifest pin
   to bump. Requires only Qt 6 idioms (new-style `connect`, scoped enums where practical).
 - `zypper`, `flatpak`, `fwupd`, `snapper` — host tools, versioned by the user's openSUSE
-  install; OneUp calls stable CLI surfaces and skips cleanly when a tool is absent.
+  install; OneUp calls stable CLI surfaces.
 
 ## How to check what's behind
 
