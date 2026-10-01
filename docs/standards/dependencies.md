@@ -64,7 +64,7 @@ Recorded so the next sweep has a baseline:
   which is why this row names a branch where the others do not. Re-verified at the bump
   rather than recalled: 3.14 is the current stable series (3.14.7, EOL 2030-10-31), and
   PySide6 6.11.2 still ships `cp310-abi3` wheels at `requires_python <3.15,>=3.10`, so
-  the sweep below still holds. The three action pins above were re-checked the same day
+  the 2026-07-26 sweep (`docs/history/dependencies.md`) still holds. The three action pins above were re-checked the same day
   and are all still current.
 - **PySide6** — intentionally *unpinned*: the RPM uses the distro's `python3-pyside6`, and the
   AppImage build `pip install`s the latest. It tracks upstream automatically; no manifest pin
