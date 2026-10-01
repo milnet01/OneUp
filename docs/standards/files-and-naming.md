@@ -153,9 +153,11 @@ updater.py         thin entry point — stays at the root
 update_system.sh   stays through 2.0 as a documented fallback, goes in 2.1
 ```
 
-`translations/` holds data rather than code. Its location is resolved in `paths.py` from
-`HERE`, like the engine's and the icon's (§4.2), and the AppImage needs an `--add-data` for it,
-because PyInstaller follows imports and not data (§6). `.ts` files are tracked; the
+`translations/` holds data rather than code. Nothing loads it yet; where it is installed is
+`docs/standards/wording-and-translation.md` §7's to decide. The loader that ONEUP-0032 adds
+finds it through `paths.py`, like the engine and the icon (§4.2), and the AppImage needs an
+`--add-data` for it, because PyInstaller follows imports and not data (§6). `.ts` files are
+tracked; the
 compiled `.qm` files are build artefacts and are not — `.gitignore` has no rule for them
 yet, so the change that first builds one adds it. See
 `docs/standards/wording-and-translation.md` §7.
@@ -216,9 +218,9 @@ Three directories hold everything OneUp writes at runtime:
 - **`~/Documents/update-logs/`** — the engine's own copy of each run's log, kept in a
   place a user can find without being told where `.local/state` is
 - **`~/.config/`** — the window's settings, through `QSettings("OneUp", "OneUp")`, and the
-  autostart entry and systemd user timers the window can install. These are
-  redirected in tests by `XDG_CONFIG_HOME` and by rewriting `HOME`, never by an `ONEUP_*`
-  override
+  autostart entry and systemd user timers the window can install. `QSettings` follows
+  `XDG_CONFIG_HOME`; the autostart entry and the timers are built from `Path.home()`, so
+  only rewriting `HOME` redirects them. None has an `ONEUP_*` override
 
 `run.state` and `stop.request` are a **contract between the window and the engine** — each
 file is defined independently in three places: the window's `RUN_STATE` / `STOP_REQUEST`
@@ -251,8 +253,8 @@ that has none:
 | Stop-request poll interval, download pass | `2` seconds | engine | `ONEUP_STOP_POLL_SECONDS` |
 | Single-instance socket name | `OneUp-<uid>` | GUI | `ONEUP_INSTANCE_NAME` |
 | Engine's user-visible log dir | `~/Documents/update-logs` | engine | **none** |
-| GUI's log dir | `~/.local/state/oneup/logs` | GUI | **none** |
-| Run history | `~/.local/state/oneup/history.json` | GUI | **none** |
+| GUI's log dir | `~/.local/state/oneup/logs` | GUI | `XDG_STATE_HOME` only, through the row above — no `ONEUP_*` |
+| Run history | `~/.local/state/oneup/history.json` | GUI | `XDG_STATE_HOME` only, through the row above — no `ONEUP_*` |
 
 **So the rule "everything has an override" is false, and writing it down as though it
 were true would have misled the 2.0 implementer.** What is actually true:
@@ -321,9 +323,11 @@ ships in none of them:
    (`cp -a oneup`) and `%files` owns `/usr/share/oneup/`. Any other new file does, and so
    does a file under `oneup/` that the build generates rather than git tracks — a `.qm`
    needs its compile step here and in the AppImage script.
-2. `packaging/appimage/build-appimage.sh` — PyInstaller follows `import` statements by
-   itself, but **data files need an explicit `--add-data`** — the script's two
-   `--add-data` flags do this for `update_system.sh` and the icon.
+2. `packaging/appimage/build-appimage.sh` — PyInstaller follows the window's `import`
+   statements by itself, but **data files need an explicit `--add-data`** — the script's
+   two `--add-data` flags do this for `update_system.sh` and the icon. `oneup/engine/` is
+   not reached: the window launches it as a separate process and never imports it, so it
+   is not in the AppImage until ONEUP-0054 stage 9 adds it (that spec's §4.7).
 3. `packaging/obs/_service` — rolls the tarball the RPM spec expects; a layout change
    means checking it still matches.
 
@@ -376,8 +380,8 @@ protection they did not provide. Both halves now honour an absolute `XDG_STATE_H
 the `XDG_STATE_HOME` export is load-bearing. **`XDG_CONFIG_HOME` still is not the app's
 doing** — settings go through `QSettings("OneUp", "OneUp")`, which Qt resolves under it
 already. **What has not changed is the reason `HOME` is still redirected**: it is what
-covers the paths with no XDG equivalent, and §5.1's table still shows two GUI paths with no
-override at all.
+covers the paths with no XDG equivalent — the engine's `~/Documents/update-logs`, and the
+autostart entry and timers built from `Path.home()` (§5).
 
 **Trap 4 — `_find_engine`'s fallback leaves each caller to notice.** It tries
 `HERE/update_system.sh`, then `~/Documents/update_system.sh`, then returns the first path
@@ -431,3 +435,4 @@ misnamed or unregistered file.
 | 3 | 2026-07-26 | none | clean. Collateral only: the `tests/` row and the test-file naming row gained `docs-check.py`. |
 | 4 | 2026-07-26 | none | converged. |
 | 5 | 2026-10-01 | Packet build, then 2 lanes, cold, dispatched from outside the project; genre pinned standard; every lane held every question. Q1 13 · Q2 3 · Q3 1 — 17 verified, 1 dismissed, all 17 fixed: 12 found building the packet (`44efd32`), 5 by the lanes | **A pure audit (ONEUP-0107): no change armed it, so there is no armed-span share.** The four-question gate's first read of this document. **Building the packet by running each claim on v2 found twelve [Q1]s before any lane ran**, all text still describing `main`'s tree: §1 omitted `oneup/` while saying anything unlisted does not exist; §4.2 quoted the pre-split `HERE`; §5 named two definers of the state-file contract where v2 has three; §5.1 put `run_engine` in the wrong file; §6 said the RPM installs two source files by name where it copies `oneup/` whole, and that the lockstep gate greps `updater.py`. **Lanes, three [Q2]s that change what gets built**: §5.2 required an `ONEUP_*` override in both halves while every existing window state path has none (both lanes); §4.2 said modules import `HERE`, which `tests/imports-test.py` INV-2 fails; §4 said translations resolve by one relative path in the AppImage, which §4.2 says has no nested package. [Q1]: §5's "everything OneUp writes" omitted `~/.config`. [Q3]: a generated `.qm` under `oneup/` still needs a build step. **Dismissed:** the "six" `edit(...)` calls in `bump.py` (nine on both branches) — a stale figure; a conformer adds the same call. Four open questions resolved clean. Out of scope, carried to its own run: `wording-and-translation.md` §7 repeats the one-relative-path claim, says `.qm` is git-ignored, and installs to a path the RPM does not use |
+| 6 | 2026-10-01 | 2 lanes, cold, briefed exactly as loop 5 plus one corrected packet fact (`ONEUP_ENGINE_CMD` is only named in a `paths.py` docstring; a loop-5 lane disputed it and was right); every lane held every question. Q1 2 · Q2 1 — 3 verified, 0 dismissed, all 3 fixed | **[Q1], both lanes, pre-existing since ONEUP-0059**: §5.1 gave the window's log dir and run history no override, and Trap 3 kept that as the reason `HOME` is redirected — both are built from `STATE_DIR`, so `XDG_STATE_HOME` moves them. What only `HOME` covers is the engine's `~/Documents/update-logs` and the autostart entry and timers, which `autostart.py` builds from `Path.home()`; loop 5's `~/.config` bullet had credited `XDG_CONFIG_HOME` with those too. **[Q2], on loop 5's own text**: §4 said the translations path "is resolved" in `paths.py` — no loader exists — and fixed nothing against `wording-and-translation.md` §7's install path, which the RPM's `cp -a oneup` does not produce. §4 now leaves the install path to §7 and says what the ONEUP-0032 loader must do. **[Q1]**: §6 said PyInstaller follows imports, read beside "a file under `oneup/` needs neither" — the window never imports `oneup/engine/`, so the AppImage carries no Python engine until ONEUP-0054 stage 9. Own-fix share: 1 of 3, plus half of the first. Two open questions resolved clean |
