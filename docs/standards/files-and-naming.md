@@ -153,10 +153,11 @@ updater.py         thin entry point — stays at the root
 update_system.sh   stays through 2.0 as a documented fallback, goes in 2.1
 ```
 
-`translations/` holds data rather than code, and sits inside the package so a plain
-checkout, the RPM and the AppImage all resolve it by the same relative path. `.ts` files
-are tracked; the compiled `.qm` files are build artefacts and are not — `.gitignore` has
-no rule for them yet, so the change that first builds one adds it. See
+`translations/` holds data rather than code. Its location is resolved in `paths.py` from
+`HERE`, like the engine's and the icon's (§4.2), and the AppImage needs an `--add-data` for it,
+because PyInstaller follows imports and not data (§6). `.ts` files are tracked; the
+compiled `.qm` files are build artefacts and are not — `.gitignore` has no rule for them
+yet, so the change that first builds one adds it. See
 `docs/standards/wording-and-translation.md` §7.
 
 ### 4.1 Rules the split must obey
@@ -198,7 +199,8 @@ computes that expression gets `oneup/gui/`** — and `_find_engine()` then looks
 window opens and the Run button fails.
 
 **The rule:** `HERE` is computed in **exactly one place** in the package, `paths.py`, and
-every other module imports it. No other module may build a path from its own `__file__`.
+every other module reads it as `paths.HERE`, never binding it by name (§5.1). No other
+module may build a path from its own `__file__`.
 
 The same applies inside the AppImage, where PyInstaller unpacks bundled data flat into
 `_MEIPASS` — a nested package directory does not exist there at all.
@@ -207,11 +209,16 @@ The same applies inside the AppImage, where PyInstaller unpacks bundled data fla
 
 ## 5. Runtime state, and which paths tests can actually redirect
 
-Two directories hold everything OneUp writes at runtime:
+Three directories hold everything OneUp writes at runtime:
 
-- **`~/.local/state/oneup/`** — `history.json`, `logs/`, `run.state`, `stop.request`
+- **`~/.local/state/oneup/`** — `history.json`, `logs/`, and the four state files in
+  §5.1's table
 - **`~/Documents/update-logs/`** — the engine's own copy of each run's log, kept in a
   place a user can find without being told where `.local/state` is
+- **`~/.config/`** — the window's settings, through `QSettings("OneUp", "OneUp")`, and the
+  autostart entry and systemd user timers the window can install. These are
+  redirected in tests by `XDG_CONFIG_HOME` and by rewriting `HOME`, never by an `ONEUP_*`
+  override
 
 `run.state` and `stop.request` are a **contract between the window and the engine** — each
 file is defined independently in three places: the window's `RUN_STATE` / `STOP_REQUEST`
@@ -222,7 +229,8 @@ same arrangement and carry the same obligation.
 
 ### 5.1 The override table — measured, and not what you would assume
 
-Every environment override that exists, and every path that has none:
+Every environment override that exists, and every path in the first two directories above
+that has none:
 
 | Path or setting | Default | Used by | Override |
 | --- | --- | --- | --- |
@@ -286,8 +294,9 @@ were true would have misled the 2.0 implementer.** What is actually true:
 
 ### 5.2 What that obliges 2.0 to do
 
-- **A new state path gets a `ONEUP_*` override at the moment it is added**, in both
-  halves, not later. The two GUI paths without one are the reason this section exists.
+- **A new state path is redirectable at the moment it is added**, not later: an `ONEUP_*`
+  override in each engine, and in the window a module-level constant in `paths.py` that
+  the suite reassigns, as it does `RUN_STATE` (§5.1).
 - **The `HOME`-rewriting trick must keep working**, which means state paths stay as
   module-level constants computed once at import — or move to a single accessor that
   reads the environment each call. Half-and-half is what breaks: a constant captured in
@@ -309,7 +318,9 @@ ships in none of them:
 
 1. `packaging/rpm/oneup.spec` — an `install -D…` line in `%install` **and** an entry in
    `%files`. A file under `oneup/` needs neither: `%install` copies that directory whole
-   (`cp -a oneup`) and `%files` owns `/usr/share/oneup/`. Any other new file does.
+   (`cp -a oneup`) and `%files` owns `/usr/share/oneup/`. Any other new file does, and so
+   does a file under `oneup/` that the build generates rather than git tracks — a `.qm`
+   needs its compile step here and in the AppImage script.
 2. `packaging/appimage/build-appimage.sh` — PyInstaller follows `import` statements by
    itself, but **data files need an explicit `--add-data`** — the script's two
    `--add-data` flags do this for `update_system.sh` and the icon.
@@ -388,7 +399,7 @@ which category it is in — the answer decides whether §6 applies at all.
   change it here, not by inventing a folder.)
 - Does its name follow §2, or is it a documented exception?
 - If it is under `data/`, does it start with the app ID?
-- If it writes at runtime, does it have a `ONEUP_*` override and a test that uses it?
+- If it writes at runtime, can the suite redirect it (§5.2), and does a test do so?
 - Does it need any of the three packaging paths (§6)?
 - Does it carry a version number? If so, all of `bump.py`, `local-CI.sh`,
   `tests/bump-test.py` and `docs/standards/workflow.md` §5.1.
@@ -403,7 +414,7 @@ which category it is in — the answer decides whether §6 applies at all.
 | §2.1 the naming rules | nothing automatic |
 | §4.1 the rules the `oneup/` split must obey | `tests/imports-test.py` covers **rule 2 only** — it fails the build on any `oneup.gui` import under `oneup/engine/`. Rules 1, 3 and 5 — the shim stays at the root, `snake_case.py` names that say what a module does, the directory called `oneup/` — are checked by **nothing**; they held through ONEUP-0034 by review |
 | §4.2 `HERE` is computed in exactly one place | `tests/imports-test.py` fails the build on `__file__` anywhere under `oneup/` but `paths.py`, and on a `from …paths import <name>` that would bind a path constant by value. `tests/gui-smoke.py` adds the two the AST cannot see: that `paths.ENGINE` resolves to the repo root's `update_system.sh`, and that `_headless_command`'s last-resort branch names the root entry point rather than a package module |
-| §5 runtime state paths, and which are redirectable | `run_engine` in `tests/mock-env.sh` redirects the engine's on every scenario of both engine suites; `tests/gui-smoke.py` redirects the window's by rewriting `HOME` before import. Nothing checks that a new state path got an override (§5.2) |
+| §5 runtime state paths, and which are redirectable | `run_engine` in `tests/mock-env.sh` redirects the engine's on every scenario of both engine suites; `tests/gui-smoke.py` redirects the window's by rewriting `HOME` before import. Nothing checks that a new state path is redirectable (§5.2) |
 | §6 what a new file obliges you to update | nothing automatic. §8's checklist is the only catcher, and it works only if the author opens it |
 
 **Nothing here is gated, and most of it could be.** Naming, the closed root and the packaging
@@ -419,3 +430,4 @@ misnamed or unregistered file.
 | 2 | 2026-07-26 | 1 high, 6 medium, 1 info — **2 verified, 5 dismissed, 1 info left** | converged (polish only). Verified here: "From design §4" never named the design document. The two line-number citations two lanes reported are in `CLAUDE.md`, not in this document — dismissed, and already covered by ONEUP-0065 and Task 11 |
 | 3 | 2026-07-26 | none | clean. Collateral only: the `tests/` row and the test-file naming row gained `docs-check.py`. |
 | 4 | 2026-07-26 | none | converged. |
+| 5 | 2026-10-01 | Packet build, then 2 lanes, cold, dispatched from outside the project; genre pinned standard; every lane held every question. Q1 13 · Q2 3 · Q3 1 — 17 verified, 1 dismissed, all 17 fixed: 12 found building the packet (`44efd32`), 5 by the lanes | **A pure audit (ONEUP-0107): no change armed it, so there is no armed-span share.** The four-question gate's first read of this document. **Building the packet by running each claim on v2 found twelve [Q1]s before any lane ran**, all text still describing `main`'s tree: §1 omitted `oneup/` while saying anything unlisted does not exist; §4.2 quoted the pre-split `HERE`; §5 named two definers of the state-file contract where v2 has three; §5.1 put `run_engine` in the wrong file; §6 said the RPM installs two source files by name where it copies `oneup/` whole, and that the lockstep gate greps `updater.py`. **Lanes, three [Q2]s that change what gets built**: §5.2 required an `ONEUP_*` override in both halves while every existing window state path has none (both lanes); §4.2 said modules import `HERE`, which `tests/imports-test.py` INV-2 fails; §4 said translations resolve by one relative path in the AppImage, which §4.2 says has no nested package. [Q1]: §5's "everything OneUp writes" omitted `~/.config`. [Q3]: a generated `.qm` under `oneup/` still needs a build step. **Dismissed:** the "six" `edit(...)` calls in `bump.py` (nine on both branches) — a stale figure; a conformer adds the same call. Four open questions resolved clean. Out of scope, carried to its own run: `wording-and-translation.md` §7 repeats the one-relative-path claim, says `.qm` is git-ignored, and installs to a path the RPM does not use |
