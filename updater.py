@@ -29,6 +29,7 @@ from datetime import datetime
 from pathlib import Path
 from string import Template
 
+import shiboken6
 from PySide6.QtCore import (
     Property,
     QEasingCurve,
@@ -549,6 +550,16 @@ def _version_tuple(v: str) -> list[int]:
 
 def _on_wayland() -> bool:
     return os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
+
+
+def _alive(*objs) -> bool:
+    """False once Qt has destroyed any of these objects' C++ side.
+
+    A probe's `finished` signal can be delivered after its window has been torn down —
+    quitting while one is in flight, or a test dropping a window. The slot then reads
+    a deleted QProcess or widget and raises "Internal C++ object … already deleted"
+    (ONEUP-0204). Every probe slot checks this first and does nothing instead."""
+    return all(shiboken6.isValid(o) for o in objs)
 
 
 def cache_bytes() -> int:
@@ -2255,6 +2266,8 @@ for (var i = 0; i < wins.length; i++) {{
                                        uncertain=self._traycheck_unknown)
 
     def _on_traycheck_finished(self, *args):
+        if not _alive(self):
+            return
         if self._traycheck_proc is not None:
             self._traycheck_proc.deleteLater()   # don't accumulate over a long session
             self._traycheck_proc = None
@@ -2587,6 +2600,8 @@ for (var i = 0; i < wins.length; i++) {{
         p.start("bash", [str(ENGINE), "--auth-status", f"--log={LOG_DIR / f'{stamp}.auth.log'}"])
 
     def _on_auth_status_finished(self, proc: QProcess):
+        if not _alive(self, proc):
+            return
         out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
         is_on = "@@AUTH@@|on" in out
         self._set_auth_checked(is_on)
@@ -2698,6 +2713,8 @@ for (var i = 0; i < wins.length; i++) {{
         p.start("bash", [str(ENGINE), action, f"--log={LOG_DIR / f'{stamp}.auth.log'}"])
 
     def _on_auth_finished(self, proc: QProcess):
+        if not _alive(self, proc):
+            return
         out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
         self.auth_btn.setEnabled(True)
         self.status.setText("Ready.")
@@ -2888,6 +2905,8 @@ for (var i = 0; i < wins.length; i++) {{
 
     def _on_thin_finished(self, proc: QProcess):
         """Report the outcome of a --thin-snapshots run and clear the advisory banner."""
+        if not _alive(self, proc):
+            return
         out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
         self.warn_btn.setEnabled(True)
         removed = None
@@ -3015,8 +3034,10 @@ for (var i = 0; i < wins.length; i++) {{
                 self.log.appendPlainText(line)
 
     def _on_size_finished(self, exit_code: int, _status):
+        if not _alive(self):
+            return
         row = self.rows.get("system")
-        if not row or row.has_size():
+        if not row or not _alive(row) or row.has_size():
             return
         # No SIZE marker arrived. Exit 0 = solver found nothing to fetch; non-zero
         # = auth cancelled or an error, so re-arm the link for a retry.

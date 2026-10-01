@@ -130,6 +130,13 @@ These are not feature work and are unaffected:
   so a fix on `v2` alone leaves every push made from `main` unscanned. Nothing user-facing
   changed, so **no 1.4.x is owed**. A batch of changes, not a category.
 
+- **ONEUP-0224, the window suite's mock `sudo`** — the fifth exception, granted 2026-10-01
+  at the user's decision. `tests/gui-smoke.py`'s download-size scenario launched the real
+  engine, whose real `sudo` opened a password dialog on the desktop on every run, push gates
+  included: §2 of `testing.md`, broken by the suite itself. It qualifies for the ONEUP-0097
+  reason, since `main`'s gate runs this suite on every push of `main`. Nothing user-facing
+  changed, so **no 1.4.x is owed**. A batch of changes, not a category.
+
 **Why the freeze is stated as a testable question rather than a preference:** the failure
 mode of any freeze is a slow slide back into 1.x work, one "small" fix at a time. *Is it a
 fix, a feature request, or neither?* has an answer; "is this important enough?" does not.

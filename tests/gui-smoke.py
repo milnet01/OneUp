@@ -40,9 +40,19 @@ _notify_mock = os.path.join(_BIN, "notify-send")
 with open(_notify_mock, "w") as _f:
     _f.write(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> {_NOTIFY_LOG}\n')
 os.chmod(_notify_mock, 0o755)
+# A mock sudo beside it: records each call and refuses, as a cancelled password prompt
+# does. A scenario that makes the window launch the engine (the download-size probe)
+# otherwise reached the REAL sudo, which opened a real password dialog on the desktop on
+# every run of this suite, push gates included (ONEUP-0224).
+_SUDO_LOG = os.path.join(_SANDBOX, "sudo.log")
+_sudo_mock = os.path.join(_BIN, "sudo")
+with open(_sudo_mock, "w") as _f:
+    _f.write(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> {_SUDO_LOG}\nexit 1\n')
+os.chmod(_sudo_mock, 0o755)
 os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
+    import shiboken6
     from PySide6.QtCore import QProcess, Qt, QTimer
     from PySide6.QtGui import QAccessible, QCloseEvent, QFontInfo
     from PySide6.QtWidgets import (
@@ -516,6 +526,33 @@ def main() -> int:
     check("status marker 'on' turns the toggle on", w.auth_btn.isChecked())
     w._on_auth_status_finished(_StubProc("@@AUTH@@|off\n"))
     check("status marker 'off' turns the toggle off", not w.auth_btn.isChecked())
+
+    # ONEUP-0204: a probe's `finished` can be delivered after Qt destroyed the QProcess —
+    # quitting mid-probe, or a window torn down at exit. The slot must then do nothing,
+    # not raise "Internal C++ object (QProcess) already deleted".
+    for slot in ("_on_auth_status_finished", "_on_auth_finished", "_on_thin_finished"):
+        dead = updater.QProcess(w)
+        shiboken6.delete(dead)
+        try:
+            getattr(w, slot)(dead)
+            quiet = True
+        except RuntimeError:
+            quiet = False
+        check(f"{slot} ignores a QProcess Qt already destroyed", quiet)
+    # The same when the whole window is gone: its rows and its tray-check process go with it.
+    wZ = updater.Updater()
+    if getattr(wZ, "_authstat_proc", None) is not None:
+        wZ._authstat_proc.waitForFinished(5000)     # so deleting wZ kills no probe
+    wZ._traycheck_proc = updater.QProcess(wZ)
+    shiboken6.delete(wZ)
+    for slot, call in (("_on_size_finished", lambda: wZ._on_size_finished(1, None)),
+                       ("_on_traycheck_finished", wZ._on_traycheck_finished)):
+        try:
+            call()
+            quiet = True
+        except RuntimeError:
+            quiet = False
+        check(f"{slot} ignores a window Qt already destroyed", quiet)
 
     # A REPO marker names the duplicate URL and flips the banner button to the
     # repo manager.
@@ -1788,6 +1825,13 @@ def main() -> int:
           "up to a minute" in wB._last_announcement)
     check("the size button says the wait is expected",
           "up to a minute" in wB.rows["system"].size_btn.text())
+    # ONEUP-0224: that emit launched the real engine. Its sudo must be this suite's mock,
+    # refusing as a cancelled prompt does — never the system one, which opens a real
+    # password dialog on the desktop.
+    wB._size_proc.waitForFinished(30000)
+    sudo_calls = Path(_SUDO_LOG).read_text() if os.path.exists(_SUDO_LOG) else ""
+    check("the size probe's sudo is the suite's mock, not the system's",
+          "-A" in sudo_calls.split())
 
     check("the outcome is folded into the switch's description for a screen reader",
           "3 installed" in wB.rows["system"].switch.accessibleDescription())
@@ -1816,6 +1860,16 @@ def main() -> int:
     check("cycling text size updates both the setting and the label",
           wA._text_scale_index() == 1 and "Large" in wA.textsize_btn.text())
     wA.settings.setValue("text_scale", 1.0)
+
+    # ONEUP-0204: nothing this suite starts may outlive it. With no event loop running, a
+    # probe that has exited is never reaped, so at interpreter exit Qt destroys it as
+    # "still running" and kills its bash. Collect every one before the summary.
+    left = [p for top in QApplication.topLevelWidgets() for p in top.findChildren(QProcess)
+            if shiboken6.isValid(p) and p.state() != QProcess.NotRunning]
+    for p in left:
+        p.waitForFinished(5000)
+    check("every probe a window started has finished before the suite exits",
+          all(p.state() == QProcess.NotRunning for p in left if shiboken6.isValid(p)))
 
     print()
     print("======================================")
