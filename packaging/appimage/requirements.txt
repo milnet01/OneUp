@@ -1,0 +1,17 @@
+# What the AppImage build installs, pinned so a rebuild of a release bundles the
+# same toolkit it shipped with (ONEUP-0060). The whole resolved set, not just the two
+# top-level names: an unpinned dependency of PyInstaller changes the build too.
+#
+# These track the latest release; they are pinned, not held back
+# (docs/standards/dependencies.md). To bump, resolve the set afresh and replace
+# every line below:
+#   pip install --dry-run --ignore-installed --quiet --report - PySide6==X pyinstaller==Y
+PySide6==6.11.2
+PySide6_Addons==6.11.2
+PySide6_Essentials==6.11.2
+shiboken6==6.11.2
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.8
+altgraph==0.17.5
+packaging==26.3
+setuptools==84.0.0

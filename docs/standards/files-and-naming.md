@@ -36,7 +36,7 @@ exist yet, and saying so is the point.
 | `docs/standards/` | Standing rules, like this one. |
 | `docs/reference/` | Frozen contracts (formats, protocols). One file: `marker-protocol.md`. |
 | `packaging/rpm/` | `oneup.spec` — the `zypper`-installable package. |
-| `packaging/appimage/` | `build-appimage.sh` — the single-file portable build. |
+| `packaging/appimage/` | `build-appimage.sh` — the single-file portable build — and `requirements.txt`, the exact packages it installs. |
 | `packaging/obs/` | `_service` + `README.md` — the openSUSE Build Service recipe. |
 | `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `imports-test.py` (the `oneup/` package's structural rules), `bump-test.py` (version lockstep), `parsers-test.py` (the engine's pure parsers), `differential-test.sh` (both engines against the same mocks — gate G2), `mock-env.sh` (the mock sandbox both engine suites source), `docs-check.py` (the documentation rules a script can settle). |
 | `githooks/` | Repo-local git hooks. One file: `pre-push`. Not active until `git config core.hooksPath githooks`. |

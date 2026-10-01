@@ -83,9 +83,12 @@ on, and the answer is unchanged.
   PySide6 6.11.2 still ships `cp310-abi3` wheels at `requires_python <3.15,>=3.10`, so
   the 2026-07-26 sweep (`docs/history/dependencies.md`) still holds. The three action pins above were re-checked the same day
   and are all still current.
-- **PySide6** — intentionally *unpinned*: the RPM uses the distro's `python3-pyside6`, and the
-  AppImage build `pip install`s the latest. It tracks upstream automatically; no manifest pin
-  to bump. Requires only Qt 6 idioms (new-style `connect`, scoped enums where practical).
+- **PySide6** → **`6.11.2`** and **PyInstaller** → **`6.22.3`** in the AppImage build — current
+  (2026-10-01). `packaging/appimage/requirements.txt` pins the whole resolved set, so a
+  rebuild of a release bundles the toolkit it shipped with (ONEUP-0060). Like the action
+  pins, this is not a ledger entry: nothing is held back. The RPM takes the distro's
+  `python3-pyside6` and pins nothing. Requires only Qt 6 idioms (new-style `connect`, scoped
+  enums where practical).
 - `zypper`, `flatpak`, `fwupd`, `snapper` — host tools, versioned by the user's openSUSE
   install; OneUp calls stable CLI surfaces.
 
@@ -101,6 +104,9 @@ done
 #   gh api repos/<owner>/<repo>/commits/<tag> -q .sha
 # Python runtime — latest stable release; compare with python-version in release.yml:
 curl -s https://endoflife.date/api/python.json | python3 -c 'import json,sys; print("python ->", json.load(sys.stdin)[0]["latest"])'
+# AppImage build packages — latest on PyPI; compare with packaging/appimage/requirements.txt,
+# and on a bump replace the whole set with the resolution that file's header names:
+python3 -m pip index versions PySide6 | head -1; python3 -m pip index versions pyinstaller | head -1
 # Host packages (openSUSE):
 zypper search -s --provides --match-exact python3-pyside6
 ```
