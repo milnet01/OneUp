@@ -312,8 +312,9 @@ means changing all of them **in the same commit**:
 
 Then this document, in the same commit.
 
-**Adding a trailing optional field is the cheap change**; every reader already tests
-`len(parts) > n` before reading. **Reordering or renaming is the expensive one** and needs
+**Adding a trailing optional field is the cheap change**; `handle_marker` tests
+`len(parts) > n` before reading. One reader breaks: `_on_thin_finished` takes
+`SNAPSHOTS|thinned`'s count as the *last* field, so a field appended there must change it. **Reordering or renaming is the expensive one** and needs
 a reason better than tidiness.
 
 ### 5.1 During 2.0 the contract is frozen
@@ -461,7 +462,7 @@ the four lines, which three the window reads, and how each half deletes the file
 | --- | --- |
 | the engine emits each marker | `tests/run-tests.sh`, for every marker (`DISK` since ONEUP-0069); `tests/docs-check.py` fails if any marker loses its scenario |
 | the window reacts to each marker | `tests/gui-smoke.py` — for the markers it exercises, which is not the whole table. Nothing enumerates what `handle_marker` accepts, so this row cannot yet be made exact |
-| §3's table matches the markers the engine emits | `tests/docs-check.py`, both ways: a marker the engine emits and this table omits, and a marker this table names that the engine never emits. It reads the `marker NAME` **call sites**, not the `@@NAME@@` literals in the engine's header comment — §7 records three inaccuracies in that comment, so comparing against it would validate one stale list against another |
+| §3's table matches the markers the engine emits | `tests/docs-check.py`, both ways: a marker the engine emits and this table omits, and a marker this table names that the engine never emits. It reads the `marker NAME` **call sites**, not the `@@NAME@@` literals in the engine's header comment — §7 records inaccuracies in that comment, so comparing against it would validate one stale list against another |
 | §1.1 a payload contains no `\|` | nothing automatic. The engine rewrites `\|` to `/` before emitting `SNAPSHOT_ITEM`; a new free-text field that forgets to is caught by nobody |
 | §1.2 a marker read must survive being spliced with stderr | nothing automatic — the three guards are in the window's `handle_marker`, and nothing checks a fourth has one |
 | §5.1 the contract is frozen for 1.x | nothing automatic |
@@ -472,11 +473,6 @@ this table on every push, but nothing proves the window *handles* each marker it
 covers the markers it happens to exercise — not the whole table. Closing that needs a list of
 handled names the GUI can be asked for, which the 2.0 split (ONEUP-0034) makes easy and the
 current single file does not.
-
-**`DISK` is worth knowing about as a pattern, not just an omission.** It reads as covered
-when you grep the whole suite, because `tests/gui-smoke.py` does feed it — so the *window*
-is proven to react to a marker the *engine* is not proven to send. A marker needs both
-halves, and only checking them separately shows which one is missing.
 
 ## 9. Cold-eyes loop log
 
