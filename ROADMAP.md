@@ -4149,7 +4149,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc.
   Source: in-session-2026-09-21.
 
-- 📋 [ONEUP-0065] **Convert the remaining line-number citations in the older documents to symbol names.**
+- ✅ [ONEUP-0065] **Convert the remaining line-number citations in the older documents to symbol names.**
   docs/standards/documentation.md 6a (added 2026-07-26, the user's
   decision) requires a citation to name a symbol or quote a searchable
   anchor, never a bare line number. All seven standards were swept in the
@@ -4174,6 +4174,15 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   built from, and those are now clean. Do this before the GUI split
   (ONEUP-0034) lands, since that is what turns every remaining line number
   into a pointer at a file that no longer exists.
+  Resolved (2026-10-01, 6759f03 on main, merged to v2 at 9dfddbe):
+  the ONEUP-0018, 0022, 0025 and 0028 specs and plans now cite code by
+  symbol. The 2.0 design doc's three were already gone. Left on purpose:
+  the 0022 plan's verbatim quotation of an engine comment; the 0057
+  plan's verification commands (§6a permits them); state-file "line N"
+  in the 0044 and 0054 specs, which describe a file format, not a code
+  location. Not done: the line numbers inside ROADMAP item notes. They
+  are dated records of what was seen at the time, and rewriting them
+  would change the record, not fix a pointer.
   **Layman:** Make the older design notes point at code by name instead of by line number, so they don't go wrong the moment the code shifts down a few lines.
   Kind: doc-fix.
   Source: user-request-2026-07-26.
