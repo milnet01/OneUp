@@ -7,8 +7,9 @@ cue to re-test — so nobody has to remember why a version is old.
 **Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0004
-**Branch:** main
-**Verified at:** `58ea3bc` — the snapshot below was checked on 2026-07-26, not recalled.
+**Branch:** v2
+**Verified at:** `3aa4357` — the snapshot and the *How to check* commands below were re-run
+against this tree on 2026-10-01, not recalled.
 
 **Standing rule for OneUp.** Every dependency — CI actions, language runtimes, base
 images, and Python packages — tracks the **latest stable version**, for security fixes as
@@ -121,7 +122,7 @@ for r in actions/checkout actions/setup-python softprops/action-gh-release; do
   echo "$r -> $(gh api repos/$r/releases/latest -q .tag_name)"
 done
 # …and the SHA a tag resolves to, when bumping a pin:
-#   gh api repos/<owner>/<repo>/git/ref/tags/<tag> -q .object.sha
+#   gh api repos/<owner>/<repo>/commits/<tag> -q .sha
 # Host packages (openSUSE):
 zypper search -s --provides --match-exact python3-pyside6
 ```
