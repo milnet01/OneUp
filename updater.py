@@ -3871,10 +3871,45 @@ for (var i = 0; i < wins.length; i++) {{
                      + "\n\nThe Restart now button above will do that when you are "
                        "ready.")
         if QMessageBox.question(self, "Restart services?", body) == QMessageBox.Yes:
-            QProcess.startDetached("pkexec", ["systemctl", "restart", *safe])
-            # Nothing is left for this button to do. Anything still needing a reboot is
-            # carried by the reboot banner, which on_finished has already shown.
+            self._start_service_restart("pkexec", ["systemctl", "restart", *safe])
+            # Hidden while it runs, and shown again only if the restart fails, so a failed
+            # one can be retried. Anything still needing a reboot is carried by the reboot
+            # banner, which on_finished has already shown.
             self.services_banner.setVisible(False)
+
+    def _start_service_restart(self, prog: str, args: list[str]) -> None:
+        """Run the restart attached, so its result can be reported (ONEUP-0229). It was
+        started detached, and the user was never told whether it worked. The one place it
+        starts: the suite replaces this, so no test launches a real pkexec."""
+        units = args[2:]
+        p = QProcess(self)
+        p.setProcessChannelMode(QProcess.MergedChannels)
+        p.finished.connect(lambda code, _status, p=p: self._on_services_restarted(
+            code, bytes(p.readAll()).decode(errors="replace"), units))
+        p.errorOccurred.connect(lambda err: err == QProcess.FailedToStart
+                                and self._on_services_restarted(-1, f"{prog} could not be started.",
+                                                                units))
+        self._restart_proc = p
+        p.start(prog, args)
+
+    def _on_services_restarted(self, code: int, output: str, units: list[str]) -> None:
+        """Say how the restart went, in a box the user closes with OK (ONEUP-0229, the
+        user's choice 2026-10-02). pkexec exits 126 when its password prompt is dismissed
+        and 127 when authorisation fails or pkexec itself errs (pkexec(1)); any other
+        non-zero status is systemctl's own failure, and its output is the reason."""
+        names = ", ".join(units)
+        if code == 0:
+            QMessageBox.information(self, "Services restarted",
+                                    f"These services were restarted:\n\n{names}")
+            return
+        if code == 126:
+            reason = "The password prompt was closed, so nothing was restarted."
+        elif code == 127:
+            reason = "Permission to restart them was refused, or could not be asked for."
+        else:
+            reason = "The restart failed:\n\n" + (output.strip()[-600:] or f"exit code {code}")
+        self.services_banner.setVisible(True)
+        QMessageBox.warning(self, "Services not restarted", f"{reason}\n\nServices: {names}")
 
     def rollback(self):
         # The rollback target defaults to the pre-update snapshot, but when the
