@@ -2187,6 +2187,51 @@ fi
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0231: launched from a terminal, sudo keys the cached credential to that
+# terminal's session. A keep-alive started in a NEW session (setsid) has no terminal,
+# so its `sudo -n -v` refreshes a different record, the terminal's one expires after
+# five minutes, and the next password-needing call prompts unseen in the terminal.
+# Measured on a real run from Konsole. So the keep-alive must stay in the engine's
+# session and terminal, and still lead its own process group, which cleanup's group
+# kill depends on. `script` gives the engine a controlling terminal, as Konsole did;
+# the mock sudo records the session, terminal and group of every call.
+echo "TEST: the keep-alive shares the engine's terminal session but has its own group"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\ncase "$*" in *refresh*) exit 0;; *dup*|*update*) sleep 1; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
+mv "$d/sudo" "$d/sudo-inner"
+cat > "$d/sudo" <<EOF
+#!/usr/bin/env bash
+read -r sid tty pgid < <(ps -o sid=,tty=,pgid= -p \$\$)
+printf '%s|%s|%s|%s\n' "\$*" "\$sid" "\$tty" "\$pgid" >> "$d/sudo-calls.log"
+exec "$d/sudo-inner" "\$@"
+EOF
+chmod +x "$d/sudo" "$d/zypper"
+saved_cmd=("${ENGINE_CMD[@]}")
+ENGINE_CMD=(script -qe /dev/null -- "${saved_cmd[@]}")
+run_engine "$d" --steps=system >/dev/null 2>&1 </dev/null
+ENGINE_CMD=("${saved_cmd[@]}")
+calls=$(cat "$d/sudo-calls.log" 2>/dev/null)
+eng=$(grep -m1 -- '-v|' <<<"$calls" | grep -v '^-n -v|' || true)   # the interactive validate
+ka=$(grep -m1 '^-n -v|' <<<"$calls" || true)                       # the keep-alive's refresh
+IFS='|' read -r _ eng_sid eng_tty eng_pgid <<<"$eng"
+IFS='|' read -r _ ka_sid ka_tty ka_pgid <<<"$ka"
+if [[ -z "$eng" || -z "$ka" || "$eng_tty" == "?" ]]; then
+    echo "  FAIL - setup: no terminal, or no validate/keep-alive call recorded"; FAIL=$((FAIL+1))
+    printf '%s\n' "$calls" | sed 's/^/         /'
+elif [[ "$ka_sid" == "$eng_sid" && "$ka_tty" == "$eng_tty" ]]; then
+    echo "  ok   - the keep-alive refreshes the engine's terminal credential"; PASS=$((PASS+1))
+else
+    echo "  FAIL - keep-alive in session $ka_sid on $ka_tty, engine in $eng_sid on $eng_tty"
+    FAIL=$((FAIL+1))
+fi
+if [[ -n "$ka" && -n "$ka_pgid" && "$ka_pgid" != "$eng_pgid" ]]; then
+    echo "  ok   - the keep-alive leads its own process group (INV-9)"; PASS=$((PASS+1))
+else
+    echo "  FAIL - keep-alive group '$ka_pgid' is the engine's '$eng_pgid'"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 # ONEUP-0041: cleanup's trap cannot run when the engine is SIGKILLed, and the
 # keep-alive used to loop forever in that case. Two were found on the reporter's
 # machine still validating sudo every 50 seconds, 40 minutes after the runs that
@@ -2195,14 +2240,14 @@ rm -rf "$d"
 # that is already gone and it must exit rather than idle.
 echo "TEST: the keep-alive exits on its own once the engine is gone (SIGKILL-proof)"
 dead=999999; while [[ -d "/proc/$dead" ]]; do dead=$((dead+1)); done
-ka_body=$(sed -n '/setsid bash -c ./,/oneup-keepalive/p' "$ENGINE")
+ka_body=$(sed -n '/^ *bash -c .$/,/oneup-keepalive/p' "$ENGINE")
 if [[ -z "$ka_body" ]]; then
     echo "  FAIL - could not find the keep-alive loop in the engine"; FAIL=$((FAIL+1))
 else
     # Run the engine's own loop body, substituting a 0.1s sleep for its 50s one so the
     # test doesn't wait a minute to observe the guard. The `kill -0` guard is verbatim.
     loop=$(sed 's/sleep 50/sleep 0.1/' <<<"$ka_body" \
-           | sed -e 's/^ *setsid bash -c .//' -e "s/. oneup-keepalive .*$//")
+           | sed -e 's/^ *bash -c .//' -e "s/. oneup-keepalive .*$//")
     if timeout 5 bash -c "$loop" oneup-keepalive-test "$dead" >/dev/null 2>&1; then
         echo "  ok   - the keep-alive exits when its engine no longer exists"; PASS=$((PASS+1))
     else
