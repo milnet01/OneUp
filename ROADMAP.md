@@ -5439,7 +5439,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: user-request-2026-10-02.
 
-- 📋 [ONEUP-0231] **A run launched from a terminal loses its credential after five minutes, and the next password-needing call waits five minutes on a prompt nobody sees.**
+- ✅ [ONEUP-0231] **A run launched from a terminal loses its credential after five minutes, and the next password-needing call waits five minutes on a prompt nobody sees.**
   Measured on the ONEUP-0054 stage-8 run (2026-10-02, v2 engine,
   launched from Konsole). The journal shows two `pam_unix(sudo:auth):
   conversation failed` lines exactly 300 s after the cache step's two
@@ -5464,6 +5464,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   scenario with a controlling tty (e.g. `script -qc`). Side note: the
   user's /etc/sudoers.d/oneup is the 2026-08-07 version (no `du`,
   `timeout` or guard entries), which is why `du` needed the credential.
+  Resolved (2026-10-02): main a813f1e — sudo_init launches the keep-alive under
+  `set -m` (own process group, same session) instead of setsid; v2 25c63f5
+  — privilege.py passes process_group=0 instead of start_new_session=True.
+  Red first: a new run-tests.sh scenario runs the engine under script(1)
+  for a real terminal and fails when the keep-alive's refresh comes from
+  another session ("on ?, engine on pts/26"), on both engines; it also
+  fails if the keep-alive shares the engine's group. security.md §2.4
+  records the rule. Not yet confirmed on a real terminal-launched run.
   **Layman:** Started from a terminal, OneUp could quietly ask for your password a second time in that terminal and sit waiting for five minutes.
   Kind: fix.
   Source: user-real-run-2026-10-02.
