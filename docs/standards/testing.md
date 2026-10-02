@@ -20,14 +20,12 @@ what checks this · 11 cold-eyes log
 ## 1. What the suite is
 
 Each is runnable on its own, and all are gated by `./local-CI.sh`. Which of them GitHub CI
-also runs on a `v*` tag is `docs/standards/workflow.md` §6's to state — the differential
-harness is deliberately not among them (ONEUP-0195).
+also runs on a `v*` tag is `docs/standards/workflow.md` §6's to state.
 
 | Suite | File | Asserts on |
 | --- | --- | --- |
 | Engine | `tests/run-tests.sh` | the `@@MARKER@@` lines the engine prints — the `oneup.engine` package by default since ONEUP-0054 stage 9, any other command through `ONEUP_ENGINE_CMD` |
 | Engine parsers | `tests/parsers-test.py` | the pure half of the engine, `oneup/engine/parsers.py`, table-driven against real captured zypper output and the lock file's text |
-| Engine differential | `tests/differential-test.sh` | that `update_system.sh` and the `oneup.engine` package produce the same whole output and exit status when driven through the same mocks — gate G2 of ONEUP-0054, and what makes the rewrite auditable rather than trusted |
 | GUI | `tests/gui-smoke.py` | the window's state after being fed those same marker lines — and one scenario that launches the Python engine through the window's own code path and asserts the window acted on what the engine actually sent (gate G3 of ONEUP-0054) |
 | Version bump | `tests/bump-test.py` | that a real bump still parses the five real version sites, and rewrites the CHANGELOG heading and both links correctly (`docs/standards/workflow.md` §5.1's row owns the exact split) |
 | Package structure | `tests/imports-test.py` | the `oneup/` package's structural rules — how path constants are imported, which way the engine and window may depend on each other, and how the engine is launched (`docs/standards/workflow.md` §6's row names each) |
@@ -238,8 +236,8 @@ engine logic without re-checking them is how the original bug returns:
 
 1. **Reboot advice (`@@REBOOT@@|yes`) fires only when something was actually installed, or
    `zypper needs-rebooting` explicitly says so** — never merely because a step errored.
-2. **A failed step is recorded, emits a plain-English `@@HINT@@`, and the run continues**
-   to the next step, so cache cleanup still happens and the summary is still useful.
+2. **A failed step is recorded, emits a `@@HINT@@` the window words in plain English, and
+   the run continues** to the next step, so cache cleanup still happens and the summary is still useful.
 3. **A package-only change offers a service restart (`@@SERVICES@@`), not a reboot.**
 4. **`--check` is strictly read-only and runs without root** — no `zypper dup`, no
    `zypper update`; the mock exits 99 if either is called.

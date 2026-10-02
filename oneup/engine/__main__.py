@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import actions, markers, privilege, proc, repos, runstate, steps
+from . import actions, markers, parsers, privilege, proc, repos, runstate, steps
 
 ALL_STEPS = "system,flatpak,firmware,orphans,cache"
 
@@ -215,7 +215,8 @@ def main(argv: list[str] | None = None) -> int:
             # the window showing success for a run that never started (ONEUP-0150).
             markers.err("Refused an update request that named no valid step; nothing was run.")
             markers.hint(
-                "OneUp could not verify the request to start the update, so nothing was "
+                "go-ahead-unverified",
+                say="OneUp could not verify the request to start the update, so nothing was "
                 "changed. Press Update again.")
             markers.marker("DONE", "errors")
             return 1
@@ -364,9 +365,9 @@ def _pre_update_snapshot() -> None:
             desc = desc[1:]
         if desc.endswith('"'):
             desc = desc[:-1]
-        rows.append(f"{fields[0]}|{fields[1]}|{desc.replace('|', '/')}")
+        rows.append((fields[0], fields[1], desc))    # the emitter rewrites any `|`
     for row in rows[-12:]:
-        markers.marker("SNAPSHOT_ITEM", row)
+        markers.marker("SNAPSHOT_ITEM", *row)
 
 
 _LOW_DISK = 2 * 1024 * 1024 * 1024        # recommend at least 2 GiB free
@@ -389,7 +390,7 @@ def _preflight() -> None:
         human = steps.human_bytes(avail)
         markers.out(f"  ! Low disk space on {mount}: only {human} free "
                     f"(recommend at least 2 GiB).")
-        markers.marker("DISK", f"warn|{mount}|{human}")
+        markers.marker("DISK", "warn", mount, human)
     # Btrfs snapshots accumulate around every zypper transaction and can quietly
     # fill the root filesystem. Count is the honest signal: Btrfs shares extents
     # copy-on-write, so a byte figure would overcount.
@@ -400,7 +401,7 @@ def _preflight() -> None:
             markers.out(f"  ! {count} system restore points (snapshots) stored — these build up")
             markers.out("    with each update and can use a lot of disk space; "
                         "consider thinning them.")
-            markers.marker("SNAPSHOTS", f"warn|{count}")
+            markers.marker("SNAPSHOTS", "warn", count)
     # Duplicate repository URLs are a frequent source of update conflicts.
     _, listing = proc.run(["zypper", "--non-interactive", "lr", "-u"])
     seen: dict[str, int] = {}
@@ -417,7 +418,7 @@ def _preflight() -> None:
         for url in dupes:
             markers.out(f"      {url}")
         # URLs never contain spaces, so a space-join survives the single marker line.
-        markers.marker("REPO", f"warn|duplicate|{' '.join(dupes)}")
+        markers.marker("REPO", "warn", "duplicate", ' '.join(dupes))
 
 
 # Restarting one of these ends the user's graphical session, so a reboot is the
@@ -439,22 +440,28 @@ def _display_manager_unit() -> str:
 
 def _reboot_and_services(opts: Options) -> tuple[str, str, str, str]:
     """The reboot verdict, its reason, and the services split into safe and risky."""
-    reboot, reason = "no", ""
+    # `reason` is the marker's: component codes space-separated, or one standalone
+    # code (ONEUP-0072 §4.1). `why` is the same thing in English for the summary.
+    reboot, reason, why = "no", "", ""
     if shutil.which("zypper"):
         # zypper exits EXACTLY 102 when a reboot is advised. Any OTHER non-zero
         # code means the check itself failed (the lock was held, say) — reading
         # that as "reboot needed" would make a blocked run nag forever.
         if proc.run(["zypper", "needs-rebooting"], merge_stderr=True)[0] == 102:
             reboot = "yes"
-            reason = steps.SYS_REBOOT_DETAIL or "core system packages were updated"
+            if steps.SYS_REBOOT_PARTS:
+                reason = " ".join(steps.SYS_REBOOT_PARTS)
+                why = parsers.reboot_phrase(steps.SYS_REBOOT_PARTS)
+            else:
+                reason, why = "core-packages-updated", "core system packages were updated"
     if reboot == "no" and steps.FW_CHANGED:
-        reboot, reason = "yes", "firmware was updated"
-    markers.marker("INSTALLED", f"{steps.SYS_COUNT}|"
-                               f"{'yes' if steps.SYS_CHANGED else 'no'}|"
-                               f"{'yes' if steps.FW_CHANGED else 'no'}")
+        reboot, reason, why = "yes", "firmware-updated", "firmware was updated"
+    markers.marker("INSTALLED", steps.SYS_COUNT,
+                   "yes" if steps.SYS_CHANGED else "no",
+                   "yes" if steps.FW_CHANGED else "no")
     # The reason is appended only when a reboot is advised, so the no-reboot
     # marker stays exactly "@@REBOOT@@|no" — the reason is an optional field.
-    markers.marker("REBOOT", reboot + (f"|{reason}" if reason else ""))
+    markers.marker("REBOOT", reboot, reason or None)
 
     services = safe = risky = ""
     if steps.SYS_CHANGED and reboot == "no" and shutil.which("zypper"):
@@ -472,7 +479,7 @@ def _reboot_and_services(opts: Options) -> tuple[str, str, str, str]:
                 risky += (" " if risky else "") + svc
             else:
                 safe += (" " if safe else "") + svc
-    return reboot, reason, safe, risky
+    return reboot, why, safe, risky
 
 
 _ICON = {"ok": "OK  ", "skip": "SKIP", "fail": "FAIL"}
@@ -589,11 +596,15 @@ def run(opts: Options, run_keys: list[str], log_file: Path, held_auth: bool = Fa
         holder = repos.lock_holder()
         if holder:
             holder_pid, _, holder_name = holder.partition(" ")
+            named = holder_name
+            holder_name = holder_name or "another program"
             markers.out(f"The package manager is busy: {holder_name} "
                         f"(process {holder_pid}) is using it.")
             markers.out("Nothing has been changed. Try again once it has finished.")
             markers.hint(
-                "Something else is installing or removing software right now — "
+                *(("package-manager-busy", holder_pid, named) if named
+                  else ("package-manager-busy-unnamed", holder_pid)),
+                say="Something else is installing or removing software right now — "
                 f"{holder_name} (process {holder_pid}). That is often OneUp's own earlier "
                 "run still finishing in the background; it clears on its own. Nothing was "
                 "changed, so just run the update again in a minute.")
@@ -611,7 +622,8 @@ def run(opts: Options, run_keys: list[str], log_file: Path, held_auth: bool = Fa
         markers.out("Nothing has been changed. Follow that run in the OneUp window, "
                     "or wait for it to finish.")
         markers.hint(
-            f"Another OneUp update is already running (process {holder}). Nothing was "
+            "oneup-already-running", holder,
+            say=f"Another OneUp update is already running (process {holder}). Nothing was "
             "changed. Open OneUp to follow it, or run the update again once it has "
             "finished.")
         markers.marker("DONE", "errors")

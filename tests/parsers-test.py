@@ -219,8 +219,19 @@ def main() -> int:
         check(f"lock_pid({text!r})", parsers.lock_pid(text), want)
 
     for log, want in REBOOT:
-        check(f"reboot_reason({log.splitlines()[0][:34] if log else ''!r}…)",
-              parsers.reboot_reason(log), want)
+        check(f"reboot_phrase(reboot_components({log.splitlines()[0][:34] if log else ''!r}…))",
+              parsers.reboot_phrase(parsers.reboot_components(log)), want)
+    # The marker carries the codes, not the phrase (ONEUP-0072 §4.1).
+    check("reboot_components names a kernel and the NVIDIA driver as codes",
+          parsers.reboot_components("kernel-default-6.9.1-1.x86_64\n"
+                                    "nvidia-compute-G06-550.x86_64"),
+          ["kernel-new", "graphics-driver-nvidia"])
+    check("reboot_components: all three, in the reason's order",
+          parsers.reboot_components("kernel-default-6.9.1-1.x86_64\nMesa-24.1.0-1.x86_64\n"
+                                    "vbox-kmp-default-7.0"),
+          ["kernel-new", "graphics-driver-generic", "kernel-modules"])
+    check("reboot_components: nothing qualifying is empty",
+          parsers.reboot_components("libfoo-1.2.3.x86_64"), [])
 
     # --- the emitter (oneup/engine/markers.py) ------------------------------
     # `emit_progress` returns False when there was no counter to parse, and that

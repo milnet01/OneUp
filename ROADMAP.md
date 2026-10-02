@@ -4125,6 +4125,22 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: investigate.
   Source: in-session-2026-10-01, while proving ONEUP-0204/0224 on main.
 
+- 📋 [ONEUP-0233] **The tampered go-ahead scenario can fail under load: the hold ends "ok" without seeing the request.**
+  Seen 2026-10-02 on v2 while two window-suite runs overlapped the engine
+  suite: "a tampered go-ahead is refused whole" passed its first check (no
+  step ran) for the payload "cache;touch /tmp/…" but the run ended
+  @@DONE@@|ok with no "Refused an update request" — the shape of a hold
+  that never saw go.request and timed out (the scenario sets
+  ONEUP_HOLD_SECONDS=6). The other two payloads in the same loop passed,
+  and the suite re-run alone was 398/0. ONEUP-0203's load test (CPU busy
+  loops only) did not reproduce it, so that item's "load is not a cause"
+  holds for CPU load, not for this. Suspects to measure first: the
+  go.request-newer-than-hold.state mtime test at one-second granularity,
+  and the 6-second ceiling under load.
+  **Layman:** One of the update-safety tests sometimes fails when the computer is busy, even though nothing is wrong.
+  Kind: fix.
+  Source: in-session-2026-10-02.
+
 ## 1.4.6 — fixes to the released app
 
 **Theme:** fixes for the 1.4 app people use today, landed on `main`. No
@@ -5545,6 +5561,20 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Source: user-real-run-2026-10-02.
   Lanes: gui.
 
+- 📋 [ONEUP-0234] **zypper's exit 103 (restart the package manager) is counted as a finished update, but the rest was not installed.**
+  Reported by the Groundwork session from `man zypper` EXIT CODES: 103
+  ZYPPER_EXIT_INF_RESTART_NEEDED is returned after a successful patch that
+  requires the package manager itself to restart, so the rest of the
+  transaction is not installed until zypper runs again. Verified 2026-10-02:
+  update_system.sh's zypper_ok and oneup/engine/steps.py's equivalent both
+  accept 100-103 as success, and neither re-runs the step. Groundwork re-runs
+  once on 103. Both engines need the same change (main first, then v2's
+  Python engine); a regression scenario with a mock that exits 103 once and 0
+  on the second run.
+  **Layman:** When zypper updates itself first, OneUp says the update finished, though the other updates still need another pass.
+  Kind: fix.
+  Source: peer-report groundwork 2026-10-02, verified in-session.
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of
@@ -6495,7 +6525,7 @@ when complete (that document's §7).
   marker-protocol.md's What-checks-this row matches. Bash 362/0, Python
   364/0, docs-check 0 failed.
 
-- 📋 [ONEUP-0072] **Turn the engine's prose marker payloads into stable codes the window words itself.**
+- ✅ [ONEUP-0072] **Turn the engine's prose marker payloads into stable codes the window words itself.**
   Split out of ONEUP-0032 at its fifth cold-eyes loop: the item held two
   contracts, and every finding in loops 4 and 5 sat on this side of the seam.
   ONEUP-0032 keeps the catalogue machinery and right-to-left; this item takes
@@ -6554,6 +6584,10 @@ when complete (that document's §7).
   forbids implementation; review-contract says a capped spec takes the ready
   value (ONEUP-0032 was set Reviewed on that ground today). Set both to
   Reviewed, or ask the user, before building them after ONEUP-0054 stage 9.
+  Shipped 2026-10-02 on v2 with ONEUP-0108, in one commit per the gated
+  plan: every worded marker field is a code, the window holds the
+  English, the differential harness is retired. Engine 416/0, window
+  590/0, local-CI green in 4m25s.
 
 - 📋 [ONEUP-0074] **A run the user stopped notifies "Already up to date".**
   Found while writing docs/specs/ONEUP-0072-marker-codes.md; filed by that
@@ -6689,7 +6723,7 @@ when complete (that document's §7).
   Decided (2026-09-18, user): 2.0.0. ONEUP-0077, on the 2.0 list, is what starts
   filling the log folder weekly, so this goes with that work.
 
-- 📋 [ONEUP-0108] **The window's wording tables, and what it shows for a code it has never heard of.**
+- ✅ [ONEUP-0108] **The window's wording tables, and what it shows for a code it has never heard of.**
   The window half of ONEUP-0072, split out on 2026-08-12 under
   ONEUP-0101 because the combined document stopped being reviewable —
   its fourth cold loop spent 4 of 6 findings repairing loop 3's own
@@ -6734,6 +6768,9 @@ when complete (that document's §7).
   the mixed case is what distinguishes them. INV-3 pins a single known
   standalone reason rendering its own sentence. Both guard seams the
   parent's review kept re-finding.
+  Shipped 2026-10-02 on v2 with ONEUP-0072: the window's code tables,
+  the two fallback forms, the reboot render rows and was/were branch.
+  INV-1 to INV-3 tested and seen red.
 
 - 📋 [ONEUP-0117] **Give ONEUP-0108 INV-1 a case for an empty code field.**
   Filed by ONEUP-0072's loop 5 rather than fixed, because it is a contract

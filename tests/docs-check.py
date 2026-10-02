@@ -263,9 +263,16 @@ def check_pointers() -> None:
     # Only the documents that describe the tree as it is today. A spec, a design document
     # and a plan all legitimately name files they are going to create (§2), so a dangling
     # path in one of those is a forward reference, not a stale pointer.
+    # A loop-log row is a review record: it describes the tree as it was, so a path it
+    # names may since have been deleted — the same ground that keeps specs out (ONEUP-0072).
     for path in [*docs("docs/standards", "docs/reference"), ROOT / "CLAUDE.md",
                  ROOT / "README.md"]:
+        in_log = False
         for i, ln in enumerate(path.read_text().split("\n"), 1):
+            if ln.startswith("## "):
+                in_log = ln.lower().rstrip().endswith("loop log")
+            if in_log:
+                continue
             # A markdown link is relative to the document; a backticked path is a command
             # or a repo path, so it is relative to the root and may carry a leading "./".
             for target in LINK_RE.findall(ln):
@@ -318,9 +325,9 @@ def check_marker_table() -> None:
           f"the engine emits markers this table omits: {sorted(emitted - table)}")
     check(not table - emitted, doc, 0, "§3",
           f"this table names markers the engine never emits: {sorted(table - emitted)}")
-    # Two engines must say the same things. Nothing else compares them: the G2
-    # differential runs both against one transcript, which cannot see a marker
-    # neither one was asked to emit.
+    # Two engines must emit the same marker names. Nothing else compares them now the
+    # G2 differential is retired (ONEUP-0072 §7): their payloads differ by design, so
+    # the frozen Bash engine is held to its marker set and no more.
     if py_files:
         check(not engine - py_engine, doc, 0, "§3",
               f"markers the Bash engine emits that the Python engine does not: "

@@ -155,6 +155,7 @@ class Updater(QMainWindow):
         self._remedy_keys = False  # engine flagged a fixable signing-key error (@@REMEDY@@)
         self._skipped_repos: list[str] = []  # aliases set aside this run (@@REPO_SKIPPED@@)
         self._remedy_skips: list[str] = []  # aliases to offer "Skip … & update the rest" for
+        self._remedy_unknown: list[str] = []  # REMEDY codes this window has no action for
         self._log_path: Path | None = None
         self._latest_tag = ""
         self._warn_repo_dup = False   # is the current warning a duplicate-repo one?

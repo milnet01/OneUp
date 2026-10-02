@@ -218,7 +218,8 @@ def main() -> int:
     # --- 1. A malformed / spliced marker never throws out of the read slot ------
     w = window.Updater()
     for bad in ("@@STEP_BEGIN@@|system",          # too few fields
-                "@@STEP_BEGIN@@|system|x|3|Label",  # non-numeric index
+                "@@STEP_BEGIN@@|system|1",        # still too few: the floor is three
+                "@@STEP_BEGIN@@|system|x|3",  # non-numeric index
                 "@@ -1,4 +1,4 @@ a diff hunk",       # looks like a marker, isn't
                 "@@NOPE@@ no pipe at all",
                 "an ordinary log line"):
@@ -228,6 +229,26 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001 — any throw is the failure.
             check(f"malformed line handled: {bad[:22]!r} ({exc})", False)
 
+    # --- 1b. A step key the window has no phrasing for (ONEUP-0108 INV-1) -------
+    # ONEUP-0072 retired STEP_BEGIN's label, so an unfamiliar key (a newer engine's
+    # new step) has no wording at all. Each site takes its own fallback form: a
+    # sentence where there is room, the bare key in the progress caption.
+    wK = window.Updater()
+    _key = "zzz-new-step"
+    run.handle_line(wK, f"@@STEP_BEGIN@@|{_key}|2|5")
+    _st, _cap, _ann = wK.status.text(), wK.bar.format(), wK._last_announcement
+    # The proxy alone is too weak here: "zzz-new-step, step 2 of 5" is long and has
+    # spaces, so the announcement must carry the fallback sentence itself.
+    _long = markers.fallback_long(_key)
+    check("an unknown step key gives the status line a sentence naming it",
+          _long in _st and len(_long) >= 2 * len(_key))
+    check("and the announcement the same sentence", _long in _ann)
+    check("the progress caption carries the bare key, not a sentence",
+          _cap.startswith(_key) and "OneUp" not in _cap)
+    run.handle_line(wK, "@@STEP_BEGIN@@|system|3|5")
+    check("parsing continues after an unknown step key",
+          wK.status.text().startswith("Updating system packages"))
+
     # --- 1a. A digit isdigit() accepts but int() rejects (ONEUP-0153) ----------
     # "²".isdigit() is True while int("²") raises: isdecimal() is the property
     # int() actually needs. stdout and stderr are merged, so a spliced field can
@@ -236,7 +257,7 @@ def main() -> int:
     # since it aborts parsing and drops every remaining marker while the run
     # carries on. One superscript per numeric field of every handler that ints.
     w = window.Updater()
-    for bad in ("@@STEP_BEGIN@@|system|²|3|Label",
+    for bad in ("@@STEP_BEGIN@@|system|²|3",
                 "@@TIMING@@|system|²",
                 "@@CHECK@@|system|²|packages",
                 "@@SNAPSHOT_ITEM@@|²|2026-01-01|a restore point",
@@ -272,13 +293,13 @@ def main() -> int:
 
     # --- 2. A real run's markers land the right per-row badges + state ----------
     w = window.Updater()
-    for line in ("@@STEP_BEGIN@@|system|1|3|Updating system packages",
-                 "@@STEP_END@@|system|ok|3 packages updated",
+    for line in ("@@STEP_BEGIN@@|system|1|3",
+                 "@@STEP_END@@|system|ok|installed|3",
                  "@@TIMING@@|system|42",
-                 "@@STEP_END@@|flatpak|ok|up to date",
-                 "@@STEP_END@@|firmware|skip|fwupd not installed",
-                 "@@STEP_END@@|orphans|fail|autoremove failed",
-                 "@@STEP_END@@|cache|ok",
+                 "@@STEP_END@@|flatpak|ok|up-to-date",
+                 "@@STEP_END@@|firmware|skip|not-installed",
+                 "@@STEP_END@@|orphans|fail|failed",
+                 "@@STEP_END@@|cache|ok|done",
                  "@@FREED@@|cache|1.0G",
                  "@@TIMING@@|cache|3",
                  "@@SNAPSHOT@@|42",
@@ -298,7 +319,18 @@ def main() -> int:
            markers._format_size(3 << 29)) == ("512 KiB", "41 MiB", "1.5 GiB"))
     # ONEUP-0190: a status outside ok / skip / fail earned no "Done".
     check("an unrecognised step status badges as unknown, not a success",
-          markers._step_badge("spliced", "3 packages updated") == "Result unknown")
+          markers._step_badge("spliced", "installed", ["3"]) == "Result unknown")
+    # ONEUP-0108 INV-1, the STEP_END family: a code the table does not know, or a
+    # known one whose arguments do not fit, shows the bare code — the short form,
+    # since a badge has no room for a sentence — and never raises.
+    check("an unknown STEP_END code shows itself as the badge",
+          markers._step_badge("ok", "zzz-new-outcome", []) == "zzz-new-outcome")
+    check("a known STEP_END code with an argument too few shows the bare code",
+          markers._step_badge("ok", "installed", []) == "installed")
+    check("a known STEP_END code with an argument too many shows the bare code",
+          markers._step_badge("ok", "installed", ["3", "4"]) == "installed")
+    check("an empty STEP_END code still badges something readable",
+          markers._step_badge("ok", "", []) == "Result unknown")
     check("flatpak row badge = 'Up to date'", w.rows["flatpak"].badge.text() == "Up to date")
     check("firmware skip badge = 'Not installed'",
           w.rows["firmware"].badge.text() == "Not installed")
@@ -315,7 +347,7 @@ def main() -> int:
 
     # --- @@PROGRESS@@: a long download must never look like a hang (ONEUP-0040) ---
     wP = window.Updater()
-    run.handle_line(wP, "@@STEP_BEGIN@@|system|1|5|Updating system packages")
+    run.handle_line(wP, "@@STEP_BEGIN@@|system|1|5")
     caption = wP.bar.format()
     # zypper's preload phase gives no total, so the GUI must show a running tally
     # rather than inventing a denominator it doesn't have.
@@ -355,7 +387,7 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001 — any throw is the failure.
             check(f"malformed progress marker handled ({exc})", False)
     # A later step's caption must replace the previous one, not accumulate.
-    run.handle_line(wP, "@@STEP_BEGIN@@|cache|5|5|Cleaning package cache")
+    run.handle_line(wP, "@@STEP_BEGIN@@|cache|5|5")
     check("a new step resets the progress caption",
           "141" not in wP.bar.format() and "Cleaning package cache" in wP.bar.format())
 
@@ -379,7 +411,7 @@ def main() -> int:
         # --check, where _run_active is False by design.
         wL._liveness_active = True
         run._reset_activity(wL)        # a real run always baselines before markers arrive
-        run.handle_line(wL, "@@STEP_BEGIN@@|system|1|5|Updating system packages")
+        run.handle_line(wL, "@@STEP_BEGIN@@|system|1|5")
         run.handle_line(wL, "@@REFRESH@@|6|9|games")
         check("the source being fetched is named, with its position",
               wL.status.text() == "Checking for updates from games (6 of 9 sources)…")
@@ -412,7 +444,7 @@ def main() -> int:
         check("output arriving clears the stall wording",
               "may have stalled" not in wL.activity.text())
         # A new step is a new wait and a new download; neither figure may carry over.
-        run.handle_line(wL, "@@STEP_BEGIN@@|flatpak|2|5|Updating Flatpak apps")
+        run.handle_line(wL, "@@STEP_BEGIN@@|flatpak|2|5")
         check("a new step drops the previous source", "games" not in wL.activity.text())
         check("a new step resets the byte counters", wL._dl_bytes == 0 and wL._dl_total == 0)
         # ONEUP-0232: a quiet step that is not known to be downloading — flatpak deploying
@@ -429,7 +461,7 @@ def main() -> int:
         # even though a source was fetched earlier in the step.
         wL._activity_at = time.monotonic()
         run._tick_activity(wL)
-        run.handle_line(wL, "@@STEP_BEGIN@@|system|1|5|Updating system packages")
+        run.handle_line(wL, "@@STEP_BEGIN@@|system|1|5")
         run.handle_line(wL, "@@REFRESH@@|9|9|games")
         run.handle_line(wL, "@@PROGRESS@@|system|3|141|install")
         wL._activity_at = time.monotonic() - (run.STALL_SECONDS + 5)
@@ -467,7 +499,7 @@ def main() -> int:
         # --check, where _run_active is False by design.
         wC._liveness_active = True
         run._reset_activity(wC)        # baseline taken before anything is fetched
-        run.handle_line(wC, "@@STEP_BEGIN@@|system|1|5|Updating system packages")
+        run.handle_line(wC, "@@STEP_BEGIN@@|system|1|5")
         run.handle_line(wC, "@@PROGRESS@@|system|1|0|download|0|90596966")
         check("a prefetch tally still invents no denominator",
               "1 so far" in wC.status.text() and "of 0" not in wC.status.text())
@@ -593,7 +625,7 @@ def main() -> int:
     # A stand-in engine: alive, so the pid check passes, and writing real marker lines.
     holder = _sp.Popen(["sleep", "60"])  # noqa: S607 — fixed argv.
     with open(attach_log, "w") as fh:
-        fh.write("@@STEP_BEGIN@@|system|1|2|Updating system packages\n"
+        fh.write("@@STEP_BEGIN@@|system|1|2\n"
                  "@@PROGRESS@@|system|12|141|download\n")
     orig_state = paths.RUN_STATE
     paths.RUN_STATE = Path(attach_dir) / "run.state"
@@ -758,7 +790,7 @@ def main() -> int:
 
     # --- 4. A package-only change offers services, not a reboot ----------------
     w = window.Updater()
-    for line in ("@@STEP_END@@|system|ok|packages updated",
+    for line in ("@@STEP_END@@|system|ok|updated",
                  "@@INSTALLED@@|2|yes|no",
                  "@@SERVICES@@|foo.service bar.service",
                  "@@REBOOT@@|no"):
@@ -787,7 +819,7 @@ def main() -> int:
     # manager. Feeding a session-critical name here would assert the behaviour ONEUP-0111
     # exists to prevent; that split is covered by the scenario below.
     w = window.Updater()
-    for line in ("@@STEP_END@@|system|ok|packages updated",
+    for line in ("@@STEP_END@@|system|ok|updated",
                  "@@INSTALLED@@|2|yes|no",
                  "@@SERVICES@@|sshd cups getty@tty1 avahi-daemon -f",
                  "@@REBOOT@@|no"):
@@ -868,7 +900,7 @@ def main() -> int:
         about: what the window OFFERS before anything is clicked.
         """
         win = window.Updater()
-        for ln in ("@@STEP_END@@|system|ok|packages updated",
+        for ln in ("@@STEP_END@@|system|ok|updated",
                    "@@INSTALLED@@|2|yes|no",
                    f"@@SERVICES@@|{marker_payload}",
                    "@@REBOOT@@|no"):
@@ -936,17 +968,96 @@ def main() -> int:
 
     # --- 4b. A reason-bearing REBOOT marker names the culprit in the banner ----
     w = window.Updater()
-    for line in ("@@STEP_END@@|system|ok|7 packages updated",
+    for line in ("@@STEP_END@@|system|ok|installed|7",
                  "@@INSTALLED@@|7|yes|no",
-                 "@@REBOOT@@|yes|a new kernel and your NVIDIA graphics driver were installed"):
+                 "@@REBOOT@@|yes|kernel-new graphics-driver-nvidia"):
         run.handle_line(w, line)
-    check("reboot reason captured from the marker",
+    check("reboot reason worded from the marker's codes",
           w._reboot_reason == "a new kernel and your NVIDIA graphics driver were installed")
     w.proc = QProcess(w)
     run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("reboot banner names the kernel + driver, keeping NVIDIA casing",
           "NVIDIA graphics driver" in w.reboot_label.text()
           and w.reboot_label.text().lstrip("⚠ ").startswith("A new kernel"))
+
+    # --- 4c. ONEUP-0108 §4.4: the reboot reason's rows, INV-2 and INV-3 ----------
+    def _reason(field):
+        wR = window.Updater()
+        run.handle_line(wR, "@@REBOOT@@|yes" + (f"|{field}" if field is not None else ""))
+        return wR._reboot_reason
+    # INV-2: the verb agrees with what the sentence lists, unknown codes included.
+    check("INV-2 one component reads 'was'",
+          _reason("kernel-new") == "a new kernel was installed")
+    check("INV-2 two components read 'were', joined with ' and '",
+          _reason("kernel-new kernel-modules")
+          == "a new kernel and kernel driver modules were installed")
+    check("INV-2 one known plus one unknown reads 'were', the unknown as its code",
+          _reason("kernel-new gpu-firmware-blob")
+          == "a new kernel and gpu-firmware-blob were installed")
+    check("three components take the serial comma, as the engine joins them",
+          _reason("kernel-new graphics-driver-generic kernel-modules")
+          == "a new kernel, your graphics driver, and kernel driver modules were installed")
+    # INV-3: a known standalone reason is its own sentence — no join, no fallback.
+    for _code in ("firmware-updated", "core-packages-updated"):
+        _r = _reason(_code)
+        check(f"INV-3 {_code} renders its own sentence",
+              _r == markers.REBOOT_STANDALONE[_code] and "installed" not in _r
+              and "no wording" not in _r)
+    check("an absent reason is no sentence, never the fallback", _reason(None) == "")
+    check("both vocabularies in one field is the long fallback, naming every element",
+          _reason("firmware-updated kernel-new")
+          == markers.fallback_long("firmware-updated", "kernel-new"))
+    check("no known element is the long fallback, never the join",
+          _reason("zzz-a zzz-b") == markers.fallback_long("zzz-a", "zzz-b"))
+    check("a known standalone beside an unknown names only the unknown",
+          _reason("firmware-updated zzz-c") == markers.fallback_long("zzz-c"))
+    w = window.Updater()
+    for line in ("@@STEP_END@@|firmware|ok|updated", "@@REBOOT@@|yes|firmware-updated"):
+        run.handle_line(w, line)
+    w.proc = QProcess(w)
+    run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
+    check("a firmware-only reboot banner reads as before",
+          w.reboot_label.text()
+          == "⚠  Firmware was updated — restart so everything uses the latest version.")
+
+    # --- 4d. ONEUP-0072 INV-4: the log pane is the engine's, verbatim ------------
+    # Ordinary engine lines stay English and are never looked up — even one that is
+    # spelled exactly like a code — and no code field's raw text reaches any widget
+    # but the log pane (ONEUP-0108 §4.3's bare-code fallbacks being the exception,
+    # which these known codes never take).
+    w = window.Updater()
+    _plain = ["Refreshing repository 'oss'…", "  Hint: this line is the engine's own",
+              "disk-full", "kernel-new graphics-driver-nvidia"]
+    for line in (_plain[0], "@@STEP_BEGIN@@|system|1|1", _plain[1],
+                 "@@HINT@@|network-failed", _plain[2],
+                 "@@STEP_END@@|system|fail|failed", _plain[3],
+                 "@@REBOOT@@|yes|kernel-new graphics-driver-nvidia", "@@DONE@@|errors"):
+        run.handle_line(w, line)
+    w.proc = QProcess(w)
+    run.on_finished(w, 1, QProcess.ExitStatus.NormalExit)
+    _log = w.log.toPlainText().splitlines()
+    check("INV-4 every plain engine line is in the log pane verbatim",
+          all(line in _log for line in _plain))
+    check("INV-4 a log line spelled like a code is not looked up",
+          markers.HINTS["disk-full"][1] not in w.log.toPlainText())
+    _shown = []
+    for _wd in w.findChildren(QWidget):
+        if _wd is w.log:
+            continue
+        for _get in ("text", "toolTip", "accessibleName", "accessibleDescription",
+                     "windowTitle"):
+            _v = getattr(_wd, _get, None)
+            if callable(_v):
+                with contextlib.suppress(TypeError):
+                    _t = _v()
+                    if isinstance(_t, str):
+                        _shown.append(_t)
+    _codes = ("network-failed", "kernel-new", "graphics-driver-nvidia")
+    check("INV-4 no known code field's raw text reaches a widget but the log",
+          not [c for c in _codes for t in _shown if c in t])
+    check("INV-4 and the codes were worded, not dropped",
+          any("A new kernel" in t for t in _shown)
+          and w._hints == [markers.HINTS["network-failed"][1]])
 
     # --- 5. --check mode summarises available updates without banners ----------
     w = window.Updater()
@@ -980,9 +1091,108 @@ def main() -> int:
     # Every other hint scenario assigns w._hints directly, so the dispatch line that
     # actually populates it was never exercised by anything.
     wH = window.Updater()
-    run.handle_line(wH, "@@HINT@@|A repository signing key is out of date.")
-    check("a @@HINT@@ line is parsed into _hints",
-          wH._hints == ["A repository signing key is out of date."])
+    run.handle_line(wH, "@@HINT@@|repo-key-expired")
+    check("a @@HINT@@ code is parsed into _hints as the window's own sentence",
+          wH._hints == [markers.HINTS["repo-key-expired"][1]]
+          and wH._hints[0].startswith("A repository signing key is out of date."))
+    run.handle_line(wH, "@@HINT@@|repo-slow|packman")
+    check("a hint's argument is substituted into its sentence",
+          "The 'packman' source is serving updates too slowly" in wH._hints[-1])
+
+    # --- 5c-i. ONEUP-0108 INV-1 for @@HINT@@ and @@REMEDY@@ ----------------------
+    # A code the window has no entry for, or a known one whose arguments do not fit,
+    # renders a sentence naming the code — never the bare token, never a throw.
+    def _long_for(text, *codes):
+        return (all(c in text for c in codes) and " " in text
+                and len(text) >= 2 * len(" ".join(codes)))
+    for _line, _code, _why in (("@@HINT@@|zzz-new-hint", "zzz-new-hint", "an unknown hint"),
+                               ("@@HINT@@|repo-slow", "repo-slow", "an argument too few"),
+                               ("@@HINT@@|repo-slow|a|b", "repo-slow", "an argument too many")):
+        wU = window.Updater()
+        run.handle_line(wU, _line)
+        run.handle_line(wU, "@@HINT@@|disk-full")
+        check(f"{_why} renders a sentence naming the code",
+              _long_for(wU._hints[0], _code) and _code != wU._hints[0])
+        check(f"{_why}: parsing continues", wU._hints[1] == markers.HINTS["disk-full"][1])
+    # The three side-channel readers put a hint in front of the user away from
+    # handle_marker (ONEUP-0108 §4.5); each must go through the table too.
+    _shown = []
+    _orig_warn = QMessageBox.warning
+    _orig_reprobe = auth._query_auth_status
+    QMessageBox.warning = staticmethod(lambda *a, **k: _shown.append(a[2]) or 0)
+    auth._query_auth_status = lambda *a, **k: None
+    try:
+        wA = window.Updater()
+        auth._on_auth_finished(wA, _StubProc("@@HINT@@|zzz-auth-code\n"))
+        auth._on_auth_finished(wA, _StubProc("@@HINT@@|auth-write-failed|/etc/sudoers.d/oneup\n"))
+        wR = window.Updater()
+        rollback._on_thin_finished(wR, _StubProc("@@HINT@@|zzz-thin-code\n"))
+    finally:
+        QMessageBox.warning = _orig_warn
+        auth._query_auth_status = _orig_reprobe
+    check("the authorization reader words an unknown hint as a sentence",
+          len(_shown) >= 1 and _long_for(_shown[0], "zzz-auth-code"))
+    check("the authorization reader words a known hint, argument included",
+          len(_shown) >= 2 and _shown[1] == "Could not write the authorization rule "
+                                            "(/etc/sudoers.d/oneup).")
+    check("the snapshot reader words an unknown hint as a sentence",
+          len(_shown) >= 3 and _long_for(_shown[2], "zzz-thin-code"))
+    wZ = window.Updater()
+    wZ._size_buf = ""
+    wZ._size_proc = _StubProc("@@HINT@@|zzz-size-code\n")
+    run._on_size_output(wZ)
+    check("the download-size reader words an unknown hint as a sentence",
+          _long_for(wZ.log.toPlainText(), "zzz-size-code"))
+    # An unknown REMEDY arms no button; the banner says there is no fix instead.
+    wM = window.Updater()
+    # No failed STEP_END here: with the window unshown, on_finished's failed-step
+    # banner tests warn_banner.isVisible(), which is False, and replaces the text.
+    for _ln in ("@@HINT@@|disk-full", "@@REMEDY@@|zzz-new-fix", "@@DONE@@|errors"):
+        run.handle_line(wM, _ln)
+    wM.proc = QProcess(wM)
+    run.on_finished(wM, 1, QProcess.ExitStatus.NormalExit)
+    check("an unknown REMEDY arms no button",
+          not wM._remedy_keys and not wM._remedy_skips)
+    check("and the banner names it, beside the run's own hint",
+          "zzz-new-fix" in wM.warn_label.text()
+          and markers.HINTS["disk-full"][1] in wM.warn_label.text())
+
+    # --- 5c-ii. @@CHECK_UNKNOWN@@ carries a code (ONEUP-0072 step 5) ------------
+    # The warning banner must read as it did when the engine sent English: one name,
+    # two names joined ", ", a name with spaces kept whole, and each code's tail.
+    _was = (" — this list may be incomplete. Running an update refreshes them.")
+    for _ln, _want in (
+            ("@@CHECK_UNKNOWN@@|system|sources-unreadable|packman",
+             "OneUp couldn't read these software sources: packman" + _was),
+            ("@@CHECK_UNKNOWN@@|system|sources-unreadable|My Repo|packman",
+             "OneUp couldn't read these software sources: My Repo, packman" + _was),
+            ("@@CHECK_UNKNOWN@@|system|sources-unknown-error|7",
+             "OneUp couldn't read the software sources (zypper exited 7)" + _was),
+            ("@@CHECK_UNKNOWN@@|flatpak|flatpak-remotes-unreachable|fedora|kde",
+             "OneUp couldn't reach these Flatpak sources: fedora, kde"
+             " — this list may be incomplete."),
+            ("@@CHECK_UNKNOWN@@|firmware|fwupd-unreachable", "OneUp couldn't ask fwupd"),
+            # Zero names is an engine defect, not a version mismatch (ONEUP-0108 §4.3).
+            ("@@CHECK_UNKNOWN@@|system|sources-unreadable",
+             "OneUp couldn't read these software sources: " + _was)):
+        wK = window.Updater()
+        run.handle_line(wK, _ln)
+        check(f"CHECK_UNKNOWN words {_ln.split('|', 2)[2]!r} as before",
+              wK._unchecked == [_want])
+        check(f"and badges {_ln.split('|')[1]} as unknown",
+              wK.rows[_ln.split("|")[1]]._badge_text == "couldn't check")
+    # INV-1: an unknown code, or a fixed-arity one with the wrong count, is the long
+    # fallback naming it — and the parse carries on to the next marker.
+    for _ln, _code in (("@@CHECK_UNKNOWN@@|system|zzz-new-reason|x", "zzz-new-reason"),
+                       ("@@CHECK_UNKNOWN@@|system|sources-unknown-error", "sources-unknown-error"),
+                       ("@@CHECK_UNKNOWN@@|firmware|fwupd-unreachable|extra",
+                        "fwupd-unreachable")):
+        wK = window.Updater()
+        run.handle_line(wK, _ln)
+        run.handle_line(wK, "@@CHECK@@|TOTAL|3|updates available")
+        check(f"CHECK_UNKNOWN {_code!r} out of table is the long fallback",
+              len(wK._unchecked) == 1 and _long_for(wK._unchecked[0], _code))
+        check(f"and parsing continues after {_code!r}", wK._installed_count == "3")
 
     # --- 5d. the download-size side channel ------------------------------------
     # A separate QProcess from the main run, with its own parser. The engine half is
@@ -1919,7 +2129,7 @@ def main() -> int:
     w = window.Updater()
     tray._parse_tray_line(
         w,
-        "@@CHECK_UNKNOWN@@|system|OneUp couldn't read these software sources: packman")
+        "@@CHECK_UNKNOWN@@|system|sources-unreadable|packman")
     tray._parse_tray_line(w, "@@CHECK@@|TOTAL|0|updates available")
     check("tray records the qualified total", w._tray_total == 0)
     check("tray flagged the check as uncertain", w._traycheck_unknown is True)
@@ -2476,11 +2686,11 @@ def main() -> int:
     # INV-7: progress and outcome are spoken. _announce records unconditionally,
     # since QAccessible.isActive() is False offscreen.
     wB = window.Updater()
-    run.handle_line(wB, "@@STEP_BEGIN@@|system|1|3|Updating system packages")
+    run.handle_line(wB, "@@STEP_BEGIN@@|system|1|3")
     check("the step being started is announced",
           "Updating system packages" in wB._last_announcement
           and "step 1 of 3" in wB._last_announcement)
-    run.handle_line(wB, "@@STEP_END@@|system|ok|3 packages updated")
+    run.handle_line(wB, "@@STEP_END@@|system|ok|installed|3")
     check("the step outcome is announced",
           wB._last_announcement == "System packages: 3 installed")
     run.handle_line(wB, "@@DISK@@|warn|/|512 MiB")
@@ -2823,8 +3033,8 @@ def main() -> int:
     wF.show()          # isVisible() is False for every child of a hidden window
     wF._run_active, wF._check_mode = True, False
     _patch(run, "_notify_when_away", lambda *a, **k: None)
-    for line in ("@@STEP_BEGIN@@|orphans|1|1|Removing leftovers",
-                 "@@STEP_END@@|orphans|fail|autoremove failed"):
+    for line in ("@@STEP_BEGIN@@|orphans|1|1",
+                 "@@STEP_END@@|orphans|fail|failed"):
         run.handle_line(wF, line)
     run.on_finished(wF, 1, None)
     _unpatch_all()

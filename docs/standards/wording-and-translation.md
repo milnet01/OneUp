@@ -127,24 +127,19 @@ The rules that fall out of it:
 
 **All user-facing wording lives in the GUI. The engine emits stable codes.** (Design §5.1.)
 
-Three reasons, in the design's order of weight: it keeps translation machinery out of the
-half that runs as root; it protects gate G2, which compares v1's and v2's marker streams for
-equality (an engine emitting translated text would differ on a German desktop, testing the
-locale rather than the rewrite); and the GUI already owns presentation.
+Reasons, in the design's order of weight: it keeps translation machinery out of the half
+that runs as root; an engine emitting translated text would make a marker stream depend on
+the desktop's locale, so a test would be testing the locale; and the GUI already owns
+presentation.
 
-**Today this is not yet true** — engine payloads carry English prose, as every quotation in
-§2.2 shows. The transition is deliberately ordered:
+**This is true since ONEUP-0072.** The engine rewrite (ONEUP-0054) shipped with English
+prose payloads, byte-identical to the Bash engine's; then ONEUP-0072 turned every payload
+the window renders as its own wording into a code
+(`docs/specs/ONEUP-0072-marker-codes.md` §3.1), in one change. The quotations in §2.2 are
+the English those codes now carry in the window. `docs/reference/marker-protocol.md` §5.1
+is canonical for why the two never happened at once.
 
-1. The engine rewrite (ONEUP-0054) ships with the contract **byte-identical**, English prose
-   included, and passes its gate against unchanged tests.
-2. **Then**, as part of ONEUP-0072, every payload the window renders as its own wording
-   becomes a code (`docs/specs/ONEUP-0072-marker-codes.md` §3.1), in one deliberate,
-   versioned change.
-
-Never both at once — `docs/reference/marker-protocol.md` §5.1 is canonical for that rule
-and says why.
-
-**Once that lands:** a marker payload is an **identifier, not text**. It is never
+A marker payload is an **identifier, not text**. It is never
 translated, never shown to the user verbatim, and renaming one is a contract change
 (`docs/reference/marker-protocol.md`). The engine's terminal output — the plain log lines a
 user sees when running the engine (`python3 -m oneup.engine`) in a terminal — stays English, because it is a
@@ -190,6 +185,14 @@ label = self.tr("Found %n update(s) from {source}", "", n).format(source=alias)
 - **Name the fields** (`{source}`), never positional `{}` — a translator who moves them must
   not have to track their order.
 - **Never wrap a fragment** — no `self.tr("Skip ") + name`.
+
+**One deliberate exception: `@@REBOOT@@`'s components.** The window joins them into one
+*"… was/were installed"* sentence, because the alternative is a whole sentence for every
+combination, which grows combinatorially with each new component
+(`docs/specs/ONEUP-0072-marker-codes.md` §4.1). The table holding them,
+`REBOOT_COMPONENTS` in `oneup/gui/markers.py`, says what they are joined into, and the
+sentence's verb follows §6.3. Nothing else may
+assemble a sentence from parts.
 
 **A PySide6 detail worth stating, because the Qt/C++ documentation implies otherwise:**
 `tr()` returns a plain Python `str`, not a `QString`, so **`.arg()` does not exist** —

@@ -204,23 +204,40 @@ _MODULE = re.compile(r"(-kmp-|\bdkms\b)")
 _NVIDIA_ANYWHERE = re.compile(r"nvidia", re.IGNORECASE)
 
 
-def reboot_reason(log: str) -> str:
-    """Why a reboot is advised, in the user's words. "" when nothing qualifies.
+# The reboot reason's component codes (ONEUP-0072 §4.1) and the English the
+# terminal summary still prints for each; the window holds its own copy.
+REBOOT_COMPONENTS = {
+    "kernel-new": "a new kernel",
+    "graphics-driver-nvidia": "your NVIDIA graphics driver",
+    "graphics-driver-generic": "your graphics driver",
+    "kernel-modules": "kernel driver modules",
+}
 
-    Reading the log is `steps.py`'s (§4.2); this turns the lines it found into
-    the phrase.
+
+def reboot_components(log: str) -> list[str]:
+    """Which reboot-worthy components the transaction installed, as codes, in the
+    order the reason names them. Empty when nothing qualifies.
+
+    Reading the log is `steps.py`'s (§4.2); this picks the components from the
+    lines it found.
     """
     parts = []
     if _KERNEL.search(log):
-        parts.append("a new kernel")
+        parts.append("kernel-new")
     if _NVIDIA.search(log):
-        parts.append("your NVIDIA graphics driver")
+        parts.append("graphics-driver-nvidia")
     elif _GRAPHICS.search(log):
-        parts.append("your graphics driver")
+        parts.append("graphics-driver-generic")
     # DKMS / kernel-module packages OTHER than the NVIDIA one already named.
     if any(_MODULE.search(line) and not _NVIDIA_ANYWHERE.search(line)
            for line in log.split("\n")):
-        parts.append("kernel driver modules")
+        parts.append("kernel-modules")
+    return parts
+
+
+def reboot_phrase(components: list[str]) -> str:
+    """The terminal's English for those components. "" for none."""
+    parts = [REBOOT_COMPONENTS[c] for c in components]
     if not parts:
         return ""
     verb = "was" if len(parts) == 1 else "were"
@@ -233,3 +250,4 @@ def reboot_reason(log: str) -> str:
     else:
         phrase = f"{parts[0]}, {parts[1]}, and {parts[2]}"
     return f"{phrase} {verb} installed"
+

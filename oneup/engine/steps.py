@@ -54,12 +54,16 @@ _STEP_START = 0.0
 # What the system step found, read by the reboot check and the summary.
 SYS_CHANGED = False
 SYS_COUNT = ""
-SYS_REBOOT_DETAIL = ""
+SYS_REBOOT_PARTS: list[str] = []   # reboot-reason component codes
 FW_CHANGED = False
 
 
 def begin_step(key: str) -> None:
-    """Announce a step: the banner, then `@@STEP_BEGIN@@`."""
+    """Announce a step: the banner, then `@@STEP_BEGIN@@`.
+
+    The label stays on the banner, for the terminal reader, and leaves the
+    marker: the window owns the wording of a step in progress (ONEUP-0072 §4.1,
+    fate 1), so the marker carries only the key and the position."""
     global STEP_INDEX, _STEP_START
     STEP_INDEX += 1
     _STEP_START = time.monotonic()
@@ -67,14 +71,17 @@ def begin_step(key: str) -> None:
     markers.out("==========================================")
     markers.out(f"  [{STEP_INDEX}/{TOTAL}] {LABEL[key]}")
     markers.out("==========================================")
-    markers.marker("STEP_BEGIN", f"{key}|{STEP_INDEX}|{TOTAL}|{LABEL[key]}")
+    markers.marker("STEP_BEGIN", key, STEP_INDEX, TOTAL)
 
 
-def end_step(key: str, status: str, detail: str = "") -> None:
+def end_step(key: str, status: str, code: str, detail: str = "",
+             count: int | None = None) -> None:
     """Close a step: record it, count a failure, then `@@STEP_END@@` and `@@TIMING@@`.
 
-    Two markers in that order, because the window reads them separately — the
-    timing is additional to the frozen `status|detail` contract, never part of it.
+    The marker carries a code from ONEUP-0072 §4.1's closed set, and a count for
+    `installed` and `removed` — the window words the badge (ONEUP-0108). The
+    English `detail` stays here, for the end-of-run summary the terminal reader
+    sees. Two markers in that order, because the window reads them separately.
     """
     global ERRORS
     SECS[key] = int(time.monotonic() - _STEP_START)
@@ -82,8 +89,8 @@ def end_step(key: str, status: str, detail: str = "") -> None:
     DETAIL[key] = detail
     if status == "fail":
         ERRORS += 1
-    markers.marker("STEP_END", f"{key}|{status}|{detail}")
-    markers.marker("TIMING", f"{key}|{SECS[key]}")
+    markers.marker("STEP_END", key, status, code, count)
+    markers.marker("TIMING", key, SECS[key])
 
 
 # A per-call budget for the read-only Flatpak update counts — §4.3.2's runner,
@@ -136,7 +143,7 @@ def run_flatpak() -> None:
     begin_step("flatpak")
     if not _have("flatpak"):
         markers.out("Flatpak is not installed. Skipping.")
-        end_step("flatpak", "skip", "not installed")
+        end_step("flatpak", "skip", "not-installed", "not installed")
         return
     ok = True
     # Count what will update FIRST — the same read-only query `--check` uses — so
@@ -150,11 +157,11 @@ def run_flatpak() -> None:
     proc.run(["flatpak", "uninstall", "--user", "--unused", "-y"], stream=True)
     privilege.sudo(["flatpak", "uninstall", "--system", "--unused", "-y"], stream=True)
     if not ok:
-        end_step("flatpak", "fail", "a flatpak update failed")
+        end_step("flatpak", "fail", "failed", "a flatpak update failed")
     elif count > 0:
-        end_step("flatpak", "ok", f"{count} app(s) updated")
+        end_step("flatpak", "ok", "installed", f"{count} app(s) updated", count)
     else:
-        end_step("flatpak", "ok", "up to date")
+        end_step("flatpak", "ok", "up-to-date", "up to date")
 
 
 def run_firmware() -> None:
@@ -166,7 +173,7 @@ def run_firmware() -> None:
     begin_step("firmware")
     if not _have("fwupdmgr"):
         markers.out("fwupd is not installed. Skipping.")
-        end_step("firmware", "skip", "not installed")
+        end_step("firmware", "skip", "not-installed", "not installed")
         return
     proc.run(["fwupdmgr", "refresh"], stream=True)
     # fwupdmgr(1) EXIT STATUS: 0 = ran and found something, 2 = ran with no actions,
@@ -175,19 +182,19 @@ def run_firmware() -> None:
     fw_rc, _ = proc.run(["fwupdmgr", "get-updates"])
     if fw_rc == 2:
         markers.out("No firmware updates available.")
-        end_step("firmware", "ok", "up to date")
+        end_step("firmware", "ok", "up-to-date", "up to date")
         return
     if fw_rc != 0:
         markers.out(f"Couldn't ask fwupd about firmware updates (exit {fw_rc}).")
-        end_step("firmware", "fail", "couldn't check for firmware updates")
+        end_step("firmware", "fail", "failed", "couldn't check for firmware updates")
         return
     # Claim success only if the flash itself succeeded: a failed update must not
     # report "applied", because that is what advises the reboot.
     if proc.run(["fwupdmgr", "update", "-y"], stream=True)[0] == 0:
         FW_CHANGED = True
-        end_step("firmware", "ok", "updates applied")
+        end_step("firmware", "ok", "updated", "updates applied")
     else:
-        end_step("firmware", "fail", "firmware update failed")
+        end_step("firmware", "fail", "failed", "firmware update failed")
 
 
 # A package name, for the same reason `repos.valid_alias` exists: this column is
@@ -251,7 +258,7 @@ def run_orphans(opts) -> None:
     if proc.stop_pending():
         # refresh_repos returns between sources on a stop, and nothing has been
         # removed yet — the same free boundary the system step stops at.
-        end_step("orphans", "skip", "stopped before removing anything")
+        end_step("orphans", "skip", "skipped", "stopped before removing anything")
         return
     # --no-refresh on both queries: the refresh above is the only one allowed,
     # because it is the only one the user can see and the run can escape from.
@@ -262,11 +269,11 @@ def run_orphans(opts) -> None:
         ["zypper", "--non-interactive", "--no-refresh", "packages", "--unneeded"])
     if rc != 0:
         markers.out(f"Couldn't list leftover dependency packages (zypper exit {rc}).")
-        end_step("orphans", "fail", "couldn't list leftover packages")
+        end_step("orphans", "fail", "failed", "couldn't list leftover packages")
         return
     unneeded = _package_column(raw)
     if unneeded is None:
-        end_step("orphans", "fail", "unreadable package name in zypper's output")
+        end_step("orphans", "fail", "failed", "unreadable package name in zypper's output")
         return
     if unneeded:
         markers.out(f"Removing {len(unneeded)} leftover dependency package(s):")
@@ -276,12 +283,13 @@ def run_orphans(opts) -> None:
             ["zypper", "--non-interactive", "remove", "--clean-deps", *unneeded],
             stream=True)
         if rc == 0:
-            end_step("orphans", "ok", f"removed {len(unneeded)} package(s)")
+            end_step("orphans", "ok", "removed", f"removed {len(unneeded)} package(s)",
+                     len(unneeded))
         else:
-            end_step("orphans", "fail", "removal failed")
+            end_step("orphans", "fail", "failed", "removal failed")
     else:
         markers.out("No leftover dependency packages to remove.")
-        end_step("orphans", "ok", "nothing to remove")
+        end_step("orphans", "ok", "up-to-date", "nothing to remove")
     _, raw = privilege.sudo(
         ["zypper", "--non-interactive", "--no-refresh", "packages", "--orphaned"])
     # Report-only, and nothing here reaches a privileged argv — so an unreadable
@@ -313,21 +321,21 @@ def run_cache() -> None:
         note = ("Kept the already-downloaded packages, so retrying the update doesn't "
                 "fetch them all over again.")
         markers.out(f"  {note}")
-        markers.hint(note)
-        end_step("cache", "skip", "kept the downloads for a retry")
+        markers.hint("downloads-kept")
+        end_step("cache", "skip", "skipped", "kept the downloads for a retry")
         return
     before = _cache_bytes()
     if privilege.sudo(["zypper", "--non-interactive", "clean"], stream=True)[0] != 0:
-        end_step("cache", "fail", "clean failed")
+        end_step("cache", "fail", "failed", "clean failed")
         return
-    end_step("cache", "ok")
+    end_step("cache", "ok", "done")
     after = _cache_bytes()
     # Only report a genuine reclamation, so the window never shows "Reclaimed 0B".
     if before is None or after is None or before <= after:
         return
     freed = human_bytes(before - after)
     markers.out(f"  Reclaimed {freed} from the package cache.")
-    markers.marker("FREED", f"cache|{freed}")
+    markers.marker("FREED", "cache", freed)
 
 
 def _cache_bytes() -> int | None:
@@ -613,24 +621,24 @@ def _discard_logs() -> None:
         _CDN_REPOSD_DIR = ""
 
 
-def _note(text: str) -> None:
-    """Say the same thing to the terminal and to the window."""
+def _note(text: str, code: str, *args: object) -> None:
+    """Say the sentence to the terminal and send its code to the window."""
     markers.out(f"  Note: {text}")
-    markers.hint(text)
+    markers.hint(code, *args)
 
 
 def _success(refresh_ok: bool) -> None:
     """Interpret a transaction that SUCCEEDED, and only then."""
-    global SYS_CHANGED, SYS_COUNT, SYS_REBOOT_DETAIL
+    global SYS_CHANGED, SYS_COUNT, SYS_REBOOT_PARTS
     log = _log_text()
     if not refresh_ok:
         # The upgrade worked, but off possibly-stale metadata — say so, or a
         # genuinely newer package is silently missed until the next run.
         _note("Couldn't refresh one or more repositories — upgraded from cached "
-              "metadata. A future run should refresh cleanly.")
+              "metadata. A future run should refresh cleanly.", "refresh-failed-cached")
     if "Nothing to do." in log:
         SYS_COUNT = "0"
-        end_step("system", "ok", "already up to date")
+        end_step("system", "ok", "up-to-date", "already up to date")
     else:
         SYS_CHANGED = True
         if proc.PROGRESS_SEEN == 0:
@@ -639,34 +647,42 @@ def _success(refresh_ok: bool) -> None:
             # renamed the lines we read — and silence is how the "download size:
             # 0 B" bug hid for weeks. Say so rather than quietly showing nothing.
             markers.hint(
-                "Packages were installed, but OneUp couldn't follow the progress — zypper "
-                "has probably renamed the lines it reports progress on. The update itself "
-                "was fine; please report this so the progress display can be updated.")
+                "progress-unrecognised",
+                say="Packages were installed, but OneUp couldn't follow the progress — zypper "
+                    "has probably renamed the lines it reports progress on. The update itself "
+                    "was fine; please report this so the progress display can be updated.")
             markers.out("  Note: no progress lines recognised in zypper's output "
-                        "(see @@HINT@@ above).")
+                        "(see the hint above).")
         count = _last_count(_UPGRADE_COUNT, log) + _last_count(_INSTALL_COUNT, log)
         SYS_COUNT = str(count)
-        # Read the reboot-reason names now, while the transaction log still
+        # Read the reboot-reason components now, while the transaction log still
         # exists — it is discarded at the end of this step, long before the
         # reboot check runs.
-        SYS_REBOOT_DETAIL = parsers.reboot_reason(log)
-        end_step("system", "ok",
-                 f"{count} package(s) updated" if count > 0 else "packages updated")
+        SYS_REBOOT_PARTS = parsers.reboot_components(log)
+        if count > 0:
+            end_step("system", "ok", "installed", f"{count} package(s) updated", count)
+        else:
+            end_step("system", "ok", "updated", "packages updated")
     if repos.DISABLED:
-        _note(f"Updated everything except: {' '.join(repos.DISABLED)} — set aside this "
-              "run (temporary problem); OneUp will retry next time.")
+        # One space-joined argument: every alias passed repos.valid_alias, which
+        # forbids a space (the ONEUP-0072 plan's site 4).
+        aliases = " ".join(repos.DISABLED)
+        _note(f"Updated everything except: {aliases} — set aside this "
+              "run (temporary problem); OneUp will retry next time.", "repos-set-aside", aliases)
     if DL_RECOVERY_TRIED and not DL_RETRY_FAILED:
         # This one reports a run that already succeeded, so unlike the failure
         # hints it has nothing for the user to do.
         _note("Recovered from a failed download — some packages were fetched from "
-              "openSUSE's content delivery network instead of the mirror that failed.")
+              "openSUSE's content delivery network instead of the mirror that failed.",
+              "download-recovered")
 
 
 def _failure(systemic: bool, import_keys: bool) -> None:
     """Turn the most common zypper failures into one plain-English line."""
     log = _log_text()
-    hint = ""
+    hint, code, args = "", "", []
     if systemic:
+        code = "repos-failing-systemic"
         hint = ("Several repositories are failing at once — likely a network or system "
                 "problem, not a single bad source. Check your connection and retry.")
     elif DL_RETRY_FAILED and _TRANSFER_FAILURE.search(log):
@@ -675,40 +691,46 @@ def _failure(systemic: bool, import_keys: bool) -> None:
         # then failed. The log is re-tested so a retry that died of a full disk
         # still reaches the disk-full arm below.
         named = _failed_package()
+        code, args = ("download-failed-package", [named]) if named else ("download-failed", [])
         hint = (f"Could not download {named} — " if named else
                 "A package could not be downloaded — ")
         hint += ("openSUSE's servers are still catching up with this update. Nothing was "
                  "installed and everything already downloaded has been kept; try again "
                  "later.")
     elif re.search(r"No space left|disk full", log, re.IGNORECASE):
+        code = "disk-full"
         hint = ("Ran out of disk space — free some room (clear the package cache, delete "
                 "old snapshots) and retry.")
     elif re.search(r"signature|GPG|key.*(expired|reject)", log, re.IGNORECASE):
         if import_keys:
             # Keys were already imported this run and it STILL failed, so
             # importing will not help: do not offer the one-click remedy again.
+            code = "repo-key-still-rejected"
             hint = ("A repository signing key is still rejected even after importing keys "
                     "— check the log for the offending repository, or run: sudo zypper "
                     "--gpg-auto-import-keys refresh, then retry.")
         else:
             markers.marker("REMEDY", "import-keys")
+            code = "repo-key-expired"
             hint = ('A repository signing key is out of date. Use "Import signing key & '
                     'retry" to fix it, or run: sudo zypper --gpg-auto-import-keys refresh, '
                     "then retry.")
     elif re.search(r"Timeout|could not resolve|connection failed|Curl error"
                    r"|Download.*failed|Temporary failure", log, re.IGNORECASE):
+        code = "network-failed"
         hint = "A download failed — check your internet connection, then retry."
     # zypper's solver words a conflict several ways; a real run (2026-09-22) said only
     # "Problem: 1: … cannot be provided" and got no hint at all (ONEUP-0227).
     elif re.search(r"conflict|nothing provides|not installable|cannot be provided"
                    r"|^Problem: [0-9]|does not belong to a distupgrade repository",
                    log, re.IGNORECASE | re.MULTILINE):
+        code = "package-conflict"
         hint = ("A package conflict — often a third-party repo. Check the log; you may "
                 "need to disable a conflicting repository.")
     if hint:
         markers.out(f"  Hint: {hint}")
-        markers.hint(hint)
-    end_step("system", "fail", "zypper reported an error")
+        markers.hint(code, *args)
+    end_step("system", "fail", "failed", "zypper reported an error")
 
 
 def run_system(opts) -> None:
@@ -734,7 +756,7 @@ def run_system(opts) -> None:
     # Second safe boundary: the refresh can take a minute on a slow mirror.
     # Nothing has been installed yet, which is exactly why stopping here is free.
     if proc.stop_pending():
-        end_step("system", "skip", "stopped before installing anything")
+        end_step("system", "skip", "skipped", "stopped before installing anything")
         return
     handle, path = tempfile.mkstemp(prefix="oneup-sys-")
     os.close(handle)
@@ -744,7 +766,7 @@ def run_system(opts) -> None:
         if SYS_STOPPED:
             # Returns BEFORE the repo-scoped probe below, which would otherwise
             # re-run the whole transaction the user just stopped.
-            end_step("system", "skip", "stopped before installing anything")
+            end_step("system", "skip", "skipped", "stopped before installing anything")
             return
         systemic = False
         # Only probe when we were not already told which sources to skip — a
@@ -772,13 +794,13 @@ def run_system(opts) -> None:
                         # count as an install that never happened (INV-1).
                         if SYS_STOPPED:
                             end_step("system", "skip",
-                                     "stopped before installing anything")
+                                     "skipped", "stopped before installing anything")
                             return
                 else:
                     # Interactive: ask, do not act. Offer the skip for each
                     # culprit; disable nothing on our own.
                     for entry in failing:
-                        markers.marker("REMEDY", f"skip-repo|{entry.partition(' ')[0]}")
+                        markers.marker("REMEDY", "skip-repo", entry.partition(' ')[0])
         if ok:
             _success(refresh_ok)
         else:

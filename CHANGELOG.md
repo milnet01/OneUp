@@ -17,6 +17,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The engine sends codes, and the window words every message itself (ONEUP-0072, ONEUP-0108)**
+  Step results, hints, fixes, "couldn't check" reasons and the reason
+  for a restart now travel from the engine as short codes, and the
+  window holds all the English. Nothing reads differently today; this
+  is what lets the window be translated later. The old Bash engine is
+  kept as a terminal tool only: run behind the window it no longer
+  matches, and the window says it has no wording for what it reports.
+
 - **OneUp now runs its updates with a new engine written in Python** (ONEUP-0054)
   The part of OneUp that does the actual updating has been rewritten in
   Python, the same language as the window, and the window now uses it for

@@ -15,10 +15,6 @@ set -uo pipefail
 
 # The mock sandbox — ENGINE, the ONEUP_ENGINE_CMD decode, setup_common,
 # setup_cached_sudo and run_engine — lives in tests/mock-env.sh rather than here.
-# ONEUP-0054 stage 6: tests/differential-test.sh drives BOTH engines through the
-# same mocks and diffs their output, so its whole claim is that the two sides saw
-# an identical sandbox. A second copy of setup_common would drift from this one
-# silently, with both suites staying green the entire time.
 # shellcheck source=tests/mock-env.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mock-env.sh"
 
@@ -56,6 +52,50 @@ check_re() {  # name, extended-regex, haystack
         echo "  FAIL - $name (no match: $re)"; FAIL=$((FAIL+1))
     fi
 }
+# ONEUP-0072 INV-1: every converted marker's CODE field holds codes and nothing else.
+# Field 3 of STEP_END, 2 of CHECK_UNKNOWN, 1 of HINT and REMEDY must be code-shaped;
+# REBOOT's reason is checked by MEMBERSHIP, because lowercase English passes the shape
+# word for word — every element a component, or the whole field one standalone code.
+# Argument fields are data and are not checked. `family` must appear at least once,
+# since a shape check over a family nothing emitted is vacuous.
+check_codes() {  # name, family, haystack
+    local name="$1" family="$2" bad
+    bad=$(python3 -c '
+import re, sys
+family, shape = sys.argv[1], re.compile(r"^[a-z0-9-]+$")
+components = {"kernel-new", "graphics-driver-nvidia", "graphics-driver-generic",
+              "kernel-modules"}
+standalone = {"core-packages-updated", "firmware-updated"}
+code_at = {"STEP_END": 2, "CHECK_UNKNOWN": 1, "HINT": 0, "REMEDY": 0}
+seen = False
+for line in sys.stdin.read().splitlines():
+    m = re.match(r"^@@([A-Z_]+)@@\|(.*)$", line)
+    if not m:
+        continue
+    tag, fields = m.group(1), m.group(2).split("|")
+    if tag == "REBOOT":
+        if len(fields) < 2:
+            continue
+        elems = fields[1].split(" ")
+        ok = (all(e in components for e in elems)
+              or (len(elems) == 1 and elems[0] in standalone))
+    elif tag in code_at:
+        i = code_at[tag]
+        ok = i < len(fields) and bool(shape.match(fields[i]))
+    else:
+        continue
+    seen = seen or tag == family
+    if not ok:
+        print(line)
+if not seen:
+    print(f"no @@{family}@@ code field to check")
+' "$family" <<<"$3")
+    if [[ -z $bad ]]; then
+        echo "  ok   - $name"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - $name (not codes: ${bad//$'\n'/ ; })"; FAIL=$((FAIL+1))
+    fi
+}
 
 # ---------------------------------------------------------------------------
 echo "TEST: up-to-date system does NOT advise a reboot (the original bug)"
@@ -74,8 +114,9 @@ esac
 EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system,cache)
-check         "system reports already up to date" "@@STEP_END@@|system|ok|already up to date" "$out"
+check         "system reports already up to date" "@@STEP_END@@|system|ok|up-to-date" "$out"
 check         "reboot marker is NO"               "@@REBOOT@@|no"  "$out"
+check_re      "no-reboot marker has one field (INV-2)" '^@@REBOOT@@\|no$' "$out"
 check_absent  "no false reboot=yes"               "@@REBOOT@@|yes" "$out"
 check_absent  "ample free space raises no disk warning" "@@DISK@@" "$out"
 
@@ -223,7 +264,7 @@ out=$(run_engine "$d" --steps=system)
 check        "dup success recorded ok despite refresh fail" "@@STEP_END@@|system|ok" "$out"
 check_absent "not recorded as a failed step"                "@@STEP_END@@|system|fail" "$out"
 check        "real change detected (installed, sys_changed)" "@@INSTALLED@@|3|yes" "$out"
-check        "stale-metadata note surfaced as a hint"        "@@HINT@@|Couldn't refresh one or more repositories" "$out"
+check        "stale-metadata note surfaced as a hint"        "@@HINT@@|refresh-failed-cached" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -243,8 +284,9 @@ chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system)
 check "reboot advised on kernel change" "@@REBOOT@@|yes" "$out"
 # Honesty guard (ONEUP-0019): with no kernel/driver name in the transaction log,
-# the reason must fall back to the generic phrase and NOT invent "a new kernel".
-check_absent "no false kernel naming without evidence" "@@REBOOT@@|yes|a new kernel" "$out"
+# the reason must fall back to the standalone code and NOT invent a kernel.
+check        "unnamed reboot is the standalone reason" "@@REBOOT@@|yes|core-packages-updated" "$out"
+check_absent "no false kernel naming without evidence" "kernel-new" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -269,8 +311,10 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system)
 check "reboot still advised when named"      "@@REBOOT@@|yes"                       "$out"
-check "reboot reason names the kernel"       "@@REBOOT@@|yes|a new kernel"          "$out"
-check "reboot reason names NVIDIA driver"    "NVIDIA graphics driver"               "$out"
+check "reboot reason is the component codes" "@@REBOOT@@|yes|kernel-new graphics-driver-nvidia" "$out"
+check "terminal summary keeps the English"   "a new kernel and your NVIDIA graphics driver were installed" "$out"
+check_codes "INV-1 REBOOT components are members" REBOOT   "$out"
+check_codes "INV-1 STEP_END carries a code"        STEP_END "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -289,7 +333,8 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system)
 check        "system step marked fail"      "@@STEP_END@@|system|fail" "$out"
-check        "network hint emitted"         "@@HINT@@|A download failed" "$out"
+check        "network hint emitted"         "@@HINT@@|network-failed" "$out"
+check_codes  "INV-1 HINT carries a code"    HINT "$out"
 check        "no reboot after failure"      "@@REBOOT@@|no"  "$out"
 check_absent "no reboot=yes after failure"  "@@REBOOT@@|yes" "$out"
 rm -rf "$d"
@@ -315,7 +360,7 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system)
 check "system step marked fail"   "@@STEP_END@@|system|fail" "$out"
-check "the conflict hint is given" "@@HINT@@|A package conflict" "$out"
+check "the conflict hint is given" "@@HINT@@|package-conflict" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -442,8 +487,47 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --check --steps=system)
 check        "system marked not-checkable"   "@@CHECK_UNKNOWN@@|system" "$out"
-check        "reason names the repository"   "packman"                  "$out"
+check        "reason is a code and the name" "@@CHECK_UNKNOWN@@|system|sources-unreadable|packman" "$out"
+check        "terminal keeps the English"    "couldn't read these software sources: packman" "$out"
+check_codes  "INV-1 CHECK_UNKNOWN carries a code" CHECK_UNKNOWN "$out"
 check_absent "no confident zero for system"  "@@CHECK@@|system|0"       "$out"
+rm -rf "$d"
+
+# ONEUP-0072 step 5: the reason is a code with one name per field, so two names
+# are two fields and a name with a space stays one; with no name, zypper's status.
+echo "TEST: --check sends each unreadable source as its own field"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF2'
+#!/usr/bin/env bash
+if [[ "$*" == *list-updates* ]]; then
+  echo "Warning: Skipping repository 'packman' because of the above error." >&2
+  echo "Warning: Skipping repository 'My Repo' because of the above error." >&2
+  exit 106
+fi
+exit 0
+EOF2
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --check --steps=system)
+check "two names, two fields" "@@CHECK_UNKNOWN@@|system|sources-unreadable|My Repo|packman" "$out"
+cat > "$d/zypper" <<'EOF2'
+#!/usr/bin/env bash
+[[ "$*" == *list-updates* ]] && exit 7
+exit 0
+EOF2
+out=$(run_engine "$d" --check --steps=system)
+check "no name: zypper's status" "@@CHECK_UNKNOWN@@|system|sources-unknown-error|7" "$out"
+cat > "$d/flatpak" <<'EOF2'
+#!/usr/bin/env bash
+case "$1" in
+  remotes) [[ "$*" == *--user* ]] && printf 'fedora\t\nkde\t\n'; exit 0 ;;
+  remote-ls) exit 1 ;;
+esac
+exit 0
+EOF2
+chmod +x "$d/flatpak"
+out=$(run_engine "$d" --check --steps=flatpak)
+check "unreachable remotes, one per field" \
+      "@@CHECK_UNKNOWN@@|flatpak|flatpak-remotes-unreachable|fedora|kde" "$out"
 rm -rf "$d"
 
 # The same rule for firmware. fwupdmgr(1) exits 0 when it found updates, 2 when
@@ -458,7 +542,7 @@ case "\$1" in get-updates) exit $rc ;; update) echo "BUG: flashed"; exit 0 ;; *)
 EOF
   chmod +x "$d/fwupdmgr"
   out=$(run_engine "$d" --check --steps=firmware)
-  check        "check: fwupd exit $rc is not-checkable"   "@@CHECK_UNKNOWN@@|firmware" "$out"
+  check        "check: fwupd exit $rc is not-checkable"   "@@CHECK_UNKNOWN@@|firmware|fwupd-unreachable" "$out"
   check_absent "check: fwupd exit $rc is no bare zero"    "@@CHECK@@|firmware|0"       "$out"
   out=$(run_engine "$d" --steps=firmware)
   check        "run: fwupd exit $rc fails the step"       "@@STEP_END@@|firmware|fail" "$out"
@@ -476,7 +560,7 @@ out=$(run_engine "$d" --check --steps=firmware)
 check        "check: fwupd exit 2 is a confident zero"  "@@CHECK@@|firmware|0"       "$out"
 check_absent "check: fwupd exit 2 is not unknown"       "@@CHECK_UNKNOWN@@|firmware" "$out"
 out=$(run_engine "$d" --steps=firmware)
-check        "run: fwupd exit 2 is up to date"          "@@STEP_END@@|firmware|ok|up to date" "$out"
+check        "run: fwupd exit 2 is up to date"          "@@STEP_END@@|firmware|ok|up-to-date" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -649,7 +733,7 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --size=system); rc=$?
 check_absent "a failed dry run reports no size at all" "@@SIZE@@" "$out"
-check        "a failed dry run hints why"              "@@HINT@@|Couldn't work out the download size" "$out"
+check        "a failed dry run hints why"              "@@HINT@@|size-failed|1" "$out"
 check        "a failed dry run logs what zypper said"  "zypper: sudo: a terminal is required" "$out"
 # Exit code asserted inline (the suite's convention — there is no check() for rc).
 if [[ $rc -ne 0 ]]; then echo "  ok   - a failed dry run exits non-zero"; PASS=$((PASS+1));
@@ -1017,7 +1101,7 @@ else
     fi
     # The step count the window draws its progress bar from is re-derived too. A
     # STEP_BEGIN reading 1/5 for a one-step run is the same defect surviving halfway.
-    if grep -q '^@@STEP_BEGIN@@|cache|1|1|' "$d/out" 2>/dev/null; then
+    if grep -q '^@@STEP_BEGIN@@|cache|1|1$' "$d/out" 2>/dev/null; then   # key|index|total (ONEUP-0072)
         echo "  ok   - the step total is re-derived with the selection (INV-6)"; PASS=$((PASS+1))
     else
         echo "  FAIL - the step total is re-derived with the selection (INV-6)"; FAIL=$((FAIL+1))
@@ -1425,6 +1509,7 @@ out=$(ONEUP_REFRESH_TIMEOUT=1 run_engine "$d" --steps=system 2>&1)
 check "the slow source is given up on by name"   "Gave up on 'games'"          "$out"
 check "the hint names the source in plain words" "The 'games' source is serving updates too slowly" "$out"
 check "the GUI is offered the matching skip"     "@@REMEDY@@|skip-repo|games"  "$out"
+check_codes "INV-1 REMEDY carries a code"           REMEDY "$out"
 # The point of bounding it: the rest of the update still happens.
 check "the upgrade still runs after the timeout" "@@STEP_END@@|system|ok"      "$out"
 check "and the stale-metadata caveat is stated"  "cached metadata"             "$out"
@@ -1593,7 +1678,7 @@ check        "the summary is still printed" "Summary" "$out"
 check "the hint says an install is never cut half-way" \
       "never interrupts an install half-way" "$out"
 check "stopping before the transaction is recorded honestly" \
-      "@@STEP_END@@|system|skip|stopped before installing anything" "$out"
+      "@@STEP_END@@|system|skip|skipped" "$out"
 rm -rf "$d"
 
 echo "TEST: a stop DURING the download ends the run without installing (ONEUP-0085 INV-1)"
@@ -1796,6 +1881,36 @@ check_absent "no step is even begun"                        "@@STEP_BEGIN@@" "$o
 if [[ $rc -ne 0 ]]; then echo "  ok   - a blocked run exits non-zero"; PASS=$((PASS+1));
 else echo "  FAIL - a blocked run exits non-zero (rc=$rc)"; FAIL=$((FAIL+1)); fi
 rm -rf "$d"
+
+# ONEUP-0072 INV-2: the emitter rewrites a `|` in ANY field to `/`, so a holder
+# whose name carries one still yields exactly the hint's three fields. The process
+# name is the executable's file name, so a copy of `sleep` named with a `|` is one.
+echo "TEST: a lock holder whose name contains a | still makes a three-field hint"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"; chmod +x "$d/zypper"
+cp "$(command -v sleep)" "$d/zy|pp"
+"$d/zy|pp" 30 & holder=$!
+echo "$holder" > "$d/zypp.pid"
+out=$(ONEUP_ZYPP_PID_FILE="$d/zypp.pid" run_engine "$d" 2>&1)
+kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
+check_re "the | became / and the field count held (INV-2)" \
+         "^@@HINT@@\|package-manager-busy\|$holder\|zy/pp\$" "$out"
+rm -rf "$d"
+
+# ONEUP-0072 INV-2's third obligation, by a direct call: no end-to-end run can pass a
+# middle None, because an engine branch doing so is the programming error guarded.
+echo "TEST: the emitter refuses a None in a middle field"
+if env "PYTHONPATH=$(dirname "$ENGINE")" python3 -c '
+from oneup.engine import markers
+try:
+    markers.marker("HINT", "repo-slow", None, "x")
+except ValueError:
+    raise SystemExit(0)
+raise SystemExit(1)' >/dev/null; then
+  echo "  ok   - a middle None raises rather than emitting an empty field"; PASS=$((PASS+1))
+else
+  echo "  FAIL - a middle None raises rather than emitting an empty field"; FAIL=$((FAIL+1))
+fi
 
 echo "TEST: a stale lock file (holder already gone) does NOT block a run"
 d=$(mktemp -d); setup_common "$d"
@@ -2209,6 +2324,9 @@ chmod +x "$d/zypper" "$d/fwupdmgr"
 out=$(run_engine "$d" --steps=firmware)
 check "firmware success marked ok"    "@@STEP_END@@|firmware|ok" "$out"
 check "reboot advised after firmware" "@@REBOOT@@|yes" "$out"
+# The standalone half of the reason (ONEUP-0072 §4.1): a firmware-only reboot.
+check "firmware-only reboot is the standalone reason" "@@REBOOT@@|yes|firmware-updated" "$out"
+check_codes "INV-1 REBOOT standalone is a member" REBOOT "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -2277,8 +2395,9 @@ esac
 EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system)
-check        "up-to-date detected under non-English locale" "@@STEP_END@@|system|ok|already up to date" "$out"
-check_absent "no false 'packages updated' claim"            "@@STEP_END@@|system|ok|packages updated"   "$out"
+check        "up-to-date detected under non-English locale" "@@STEP_END@@|system|ok|up-to-date" "$out"
+check_absent "no false 'packages updated' claim"            "@@STEP_END@@|system|ok|updated"   "$out"
+check_absent "nor a false install count"                   "@@STEP_END@@|system|ok|installed" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -2332,7 +2451,7 @@ esac
 EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=orphans)
-check "orphan autoremove reports count" "@@STEP_END@@|orphans|ok|removed 2 package(s)" "$out"
+check "orphan autoremove reports count" "@@STEP_END@@|orphans|ok|removed|2" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -2364,7 +2483,7 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=orphans)
 check "only the real package is removed" \
-      "@@STEP_END@@|orphans|ok|removed 1 package(s)" "$out"
+      "@@STEP_END@@|orphans|ok|removed|1" "$out"
 check "the no-repository count leaves out the heading" \
       "Note: 1 package(s) have no active repository" "$out"
 rm -rf "$d"
@@ -2460,7 +2579,7 @@ esac
 EOF
 chmod +x "$d/flatpak"
 out=$(run_engine "$d" --steps=flatpak)
-check "flatpak reports updated count" "@@STEP_END@@|flatpak|ok|3 app(s) updated" "$out"
+check "flatpak reports updated count" "@@STEP_END@@|flatpak|ok|installed|3" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -2485,14 +2604,14 @@ EOF
 chmod +x "$d/flatpak"
 out=$(run_engine "$d" --steps=flatpak)
 check "the working remote's update is counted" \
-      "@@STEP_END@@|flatpak|ok|1 app(s) updated" "$out"
+      "@@STEP_END@@|flatpak|ok|installed|1" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
 echo "TEST: flatpak with nothing to update reports 'up to date'"
 d=$(mktemp -d); setup_common "$d"   # its flatpak mock prints nothing -> 0 updates
 out=$(run_engine "$d" --steps=flatpak)
-check "flatpak up to date when no updates" "@@STEP_END@@|flatpak|ok|up to date" "$out"
+check "flatpak up to date when no updates" "@@STEP_END@@|flatpak|ok|up-to-date" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -2777,7 +2896,8 @@ out=$(run_engine "$d" --steps=system,cache)
 check_absent "strict run never imports keys unprompted" "BUG: imported keys without opt-in" "$out"
 check        "key error fails the system step"          "@@STEP_END@@|system|fail" "$out"
 check        "key error offers the one-click remedy"    "@@REMEDY@@|import-keys" "$out"
-check_re     "the hint carries a 'run:' command the GUI can copy" '@@HINT@@\|.*run: ' "$out"
+check        "the hint is the expired-key one"                "@@HINT@@|repo-key-expired" "$out"
+check_re     "the terminal hint carries a 'run:' command"     '  Hint: .*run: ' "$out"
 # The cache step runs AND cleans: a signature failure stops the system step before any
 # download, so there is nothing to keep for a retry (ONEUP-0228). It read cache|skip
 # while every system failure kept the cache.
@@ -2827,7 +2947,8 @@ chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system --import-keys)
 check        "persistent key error still fails the system step" "@@STEP_END@@|system|fail" "$out"
 check_absent "no remedy re-offered once keys were already imported" "@@REMEDY@@" "$out"
-check_re     "the terminal hint still carries a copyable 'run:' command" '@@HINT@@\|.*run: ' "$out"
+check        "the hint is the still-rejected one" "@@HINT@@|repo-key-still-rejected" "$out"
+check_re     "the terminal hint still carries a copyable 'run:' command" '  Hint: .*run: ' "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -3066,7 +3187,7 @@ esac
 EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system --auto-skip-repos)
-check        "systemic failure hints network/system"  "@@HINT@@|Several repositories are failing" "$out"
+check        "systemic failure hints network/system"  "@@HINT@@|repos-failing-systemic" "$out"
 check_absent "systemic failure disables nothing"      "modifyrepo --disable" "$(cat "$MOCK_ZLOG")"
 check        "systemic failure fails the step"         "@@STEP_END@@|system|fail" "$out"
 unset MOCK_ZLOG
@@ -3319,7 +3440,7 @@ mk_recovery_zypper "$d" "Preloading: demo-1.0.x86_64.rpm [end of response with 9
 repos_before="$(ls -1 "$d/repos.d"; md5sum "$d/repos.d"/*.repo)"
 out=$(run_engine "$d" --steps=system)
 check        "the step succeeds after the retry"      "@@STEP_END@@|system|ok" "$out"
-check        "and the user is told how"               "@@HINT@@|Recovered from a failed download" "$out"
+check        "and the user is told how"               "@@HINT@@|download-recovered" "$out"
 check        "the hint names the CDN in plain words"  "content delivery network" "$out"
 if [[ "$(dl_calls "$d")" == "2" ]]; then
     echo "  ok   - the download pass ran exactly twice"; PASS=$((PASS+1))
@@ -3733,8 +3854,8 @@ echo "TEST: the Python engine runs a full update with PySide6 unimportable (ONEU
 # than site-packages is what absence looks like from inside the engine -- an
 # uninstall would prove the same thing and cannot be asked of a developer's box.
 #
-# It PINS the Python engine and ignores an inherited ONEUP_ENGINE_CMD, the way
-# tests/differential-test.sh does: under the Bash engine this scenario would pass
+# It PINS the Python engine and ignores an inherited ONEUP_ENGINE_CMD: under the
+# Bash engine this scenario would pass
 # having tested nothing at all, since no Python import happens.
 if ! command -v python3 >/dev/null 2>&1; then
     echo "  SKIP - INV-11 needs python3; the Bash engine is unaffected either way"

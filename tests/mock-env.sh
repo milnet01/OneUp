@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
 #
-# The mock sandbox, shared by every suite that drives an engine.
-#
-# ONEUP-0054 stage 6: tests/differential-test.sh runs both engines against the
-# same mocks and diffs their output, so its whole claim is that the two sides saw
-# an IDENTICAL sandbox. A second copy of setup_common would drift from this one
-# silently, with both suites staying green the entire time — so there is one
-# copy, and both suites source it.
+# The mock sandbox the engine suite sources. It was split out of run-tests.sh in
+# ONEUP-0054 stage 6 so a differential harness could share it; that harness was
+# retired by ONEUP-0072, and one sandbox in its own file is still the right shape.
 #
 # Sourced, never executed: it defines ENGINE, ENGINE_CMD, setup_common,
 # setup_cached_sudo and run_engine, and runs nothing.
@@ -14,18 +10,16 @@
 # The repository root is resolved from ${BASH_SOURCE[0]} rather than $0, which in
 # a sourced file names the SOURCING script. Measured while this file was being
 # split out: with $0, sourcing the block from a script outside tests/ pointed
-# ENGINE at a path that does not exist, and the run failed with exit 127 instead
-# of producing a diff — a differential harness that reports "engine missing" and
-# a differential harness that reports "no divergence" both exit non-zero and
-# zero for the wrong reasons.
+# ENGINE at a path that does not exist, and the run failed with exit 127 for a
+# reason that had nothing to do with the engine.
 
 ENGINE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/update_system.sh"
 
 # ONEUP-0054 §4.4: which engine the suite drives. The override is a SCALAR
 # environment variable word-split into argv HERE, because a Bash array cannot
 # cross a process boundary — `export` drops it, so a caller that sets one hands
-# the suite nothing. Every reader must agree on that encoding, or gate G2 diffs
-# v1 against v1 and goes green. `read -r -a` rather than an unquoted expansion:
+# the suite nothing. Every reader must agree on that encoding, or the suite
+# drives a different engine from the one its caller named. `read -r -a` rather than an unquoted expansion:
 # the latter globs as well as splits, so a value containing `*` would expand
 # against the cwd.
 #

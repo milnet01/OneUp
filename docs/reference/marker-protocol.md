@@ -9,7 +9,9 @@ a time, in one direction.
 **Roadmap:** ONEUP-0057
 **Branch:** v2
 **Verified at:** `cd14877` — §1, §2, §3, §7 and §8 were re-read against both engines and
-`oneup/gui/` on 2026-10-01, not recalled.
+`oneup/gui/` on 2026-10-01, not recalled. §1, §3, §4, §5 and §6 were re-read against the
+Python engine and `oneup/gui/` again on 2026-10-02, when ONEUP-0072 turned the worded
+fields into codes.
 
 **Sections:** 1 the shape of a line · 2 reading order · 3 the markers · 4 the ones with
 traps · 5 changing the contract · 6 traps · 7 drift in the engine's header comment ·
@@ -34,10 +36,11 @@ see §7.
 
 Each side writes or reads it through one helper:
 
-- Engine: `oneup/engine/markers.py`'s `marker`, which also folds every line break in a
-  payload to a space, so a payload cannot fabricate a second marker line (ONEUP-0152). The
-  retained Bash fallback's is `update_system.sh`'s `marker()` —
-  `printf '@@%s@@|%s\n' "$1" "$2"`.
+- Engine: `oneup/engine/markers.py`'s `marker(name, *fields)`. It joins the fields with
+  `|`, rewrites a `|` inside any field to `/` (§1.1), leaves off trailing `None` fields and
+  refuses a `None` before a present one, and folds every line break to a space, so a
+  payload cannot fabricate a second marker line (ONEUP-0152). The retained Bash fallback's
+  is `update_system.sh`'s `marker()` — `printf '@@%s@@|%s\n' "$1" "$2"`.
 - Window: `oneup/gui/run.py`'s `handle_line` sends any line starting with `@@` to
   `handle_marker`, which calls `oneup/gui/markers.py`'s `split_marker` to cut the tag from
   the fields. (Both were methods of `Updater` in `updater.py` until ONEUP-0034.)
@@ -47,12 +50,10 @@ header (`@@ -1,4 +1,4 @@`) is the real case that made this necessary.
 
 ### 1.1 There is no escaping
 
-A payload cannot contain a `|`, and the protocol offers no way to quote one. The one place
-where user data could contain one — a Btrfs snapshot description — the engine rewrites `|`
-to `/` before emitting `SNAPSHOT_ITEM`. **Any new field carrying free text must do the
-same, or must be last and be read as the whole remainder of the line, as `HINT` and
-`SERVICES` are.** A last field read by position, as `REBOOT`'s reason is, is cut short at
-the first `|` in it.
+A field cannot contain a `|`, and the protocol offers no way to quote one. **The Python
+engine's emitter rewrites `|` to `/` in every field of every marker** (ONEUP-0072 INV-2), so
+a repository name, a process name or a snapshot description cannot shift the fields after
+it. The frozen Bash fallback does it for `SNAPSHOT_ITEM`'s description alone.
 
 ### 1.2 Markers arrive spliced, and the parser must survive it
 
@@ -89,8 +90,8 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 
 | Marker | Fields | Emitted by | Read by |
 | --- | --- | --- | --- |
-| `@@STEP_BEGIN@@` | `key\|index\|total\|label` | `begin_step` | `handle_marker` |
-| `@@STEP_END@@` | `key\|status\|detail` | `end_step` | `handle_marker` |
+| `@@STEP_BEGIN@@` | `key\|index\|total` | `begin_step` | `handle_marker` |
+| `@@STEP_END@@` | `key\|status\|code[\|count]` | `end_step` | `handle_marker` |
 | `@@TIMING@@` | `key\|seconds` | `end_step` | `handle_marker` |
 | `@@PROGRESS@@` | `key\|done\|total\|phase[\|bytes\|bytes_total]` | `emit_progress`, fed by `stream_filtered` (`progress_filter` in the Bash fallback) | `handle_marker` |
 | `@@REFRESH@@` | `done\|total\|alias` | `refresh_repos` | `handle_marker` |
@@ -99,19 +100,33 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@SNAPSHOTS@@` | `warn\|count` *or* `thinned\|removed` | pre-flight; `--thin-snapshots` | `handle_marker`; `_on_thin_finished` |
 | `@@CHECK@@` | `key\|count\|label` | `emit_check` | `handle_marker`; `_parse_tray_line` |
 | `@@CHECK_ITEM@@` | `key\|name\|from\|to` | the `--check` pass | `handle_marker` |
-| `@@CHECK_UNKNOWN@@` | `key\|reason` | `emit_check` | `handle_marker`; `_parse_tray_line` |
+| `@@CHECK_UNKNOWN@@` | `key\|code[\|name…]` | `emit_check` | `handle_marker`; `_parse_tray_line` |
 | `@@SIZE@@` | `key\|download` | the `--size` pass | `_on_size_output` |
 | `@@FREED@@` | `cache\|human` | the cache step | `handle_marker` |
 | `@@AUTH@@` | `on` *or* `off` | the auth actions | `_on_auth_status_finished` |
 | `@@DISK@@` | `warn\|mount\|free` | pre-flight | `handle_marker` |
 | `@@REPO@@` | `warn\|duplicate\|urls` | pre-flight | `handle_marker` |
 | `@@REPO_SKIPPED@@` | `alias\|reason` | the skip path | `handle_marker` |
-| `@@HINT@@` | `plain-English sentence` | anywhere a step outcome needs explaining — **either** outcome | `handle_marker`; the size, thinning and authorization-change readers (§2) |
+| `@@HINT@@` | `code[\|arg…]` | `markers.hint`, anywhere a step outcome needs explaining — **either** outcome | `handle_marker`; the size, thinning and authorization-change readers (§2) |
 | `@@REMEDY@@` | `import-keys` *or* `skip-repo\|alias` | the system step; `refresh_repos` | `handle_marker` |
 | `@@SERVICES@@` | `svc1 svc2 …` | the summary | `handle_marker` |
 | `@@INSTALLED@@` | `count\|sys_changed\|fw_changed` | the summary | `handle_marker` |
-| `@@REBOOT@@` | `yes[\|reason]` *or* `no` | the summary | `handle_marker` |
+| `@@REBOOT@@` | `yes[\|codes]` *or* `no` | the summary | `handle_marker` |
 | `@@DONE@@` | `ok` *or* `errors` *or* `stopped` | the exit paths | `handle_marker` |
+
+**The fields the window words are codes, since ONEUP-0072**: `STEP_END`'s code, the first
+field of `CHECK_UNKNOWN`'s reason, of `HINT` and of `REMEDY`, and `REBOOT`'s reason. A code
+matches `^[a-z0-9-]+$`; the fields beside it are data — a name, a count, an exit status. The
+window's tables are the code register: `STEP_BADGES`, `HINTS`, `CHECK_UNKNOWN`,
+`REBOOT_COMPONENTS` and `REBOOT_STANDALONE` in `oneup/gui/markers.py`, and the step
+captions in `oneup/gui/steps.py`'s `IN_PROGRESS`. A code is allocated with the engine
+branch that sends it and never reused for another meaning; a retired one is commented out
+in its table, not deleted. A code with no entry, or arguments that do not fit it, renders
+the readable fallback `docs/specs/ONEUP-0108-window-wording.md` §4.3 defines.
+
+**The frozen `update_system.sh` still sends the English it always did**, so against this
+window it renders that fallback in every worded place. It is no longer a drop-in engine for
+the window, only a terminal tool.
 
 **Every marker the engine emits is read, and every marker the window reads is emitted.**
 Checked both directions at `58ea3bc`; the two side-channel markers (`SIZE`, `AUTH`) are the
@@ -119,25 +134,30 @@ only ones absent from `handle_marker`, and that is by design.
 
 ## 4. The ones with traps
 
-### 4.1 `STEP_BEGIN|key|index|total|label`
+### 4.1 `STEP_BEGIN|key|index|total`
 
 `index` is 1-based and `total` is the number of steps *this run* selected, not five. The
-window sets the progress bar to `index - 1` and keeps `label` so `PROGRESS` can rebuild the
-bar's caption without re-deriving it.
+window sets the progress bar to `index - 1` and takes the step's caption from
+`IN_PROGRESS` by `key`, so `PROGRESS` can rebuild the bar's caption without re-deriving it.
+A key with no entry shows the key itself in the caption and the long fallback in the status
+line.
 
-**Guarded:** fewer than four fields, or a non-numeric `index`, and the line is ignored.
+**Guarded:** fewer than three fields, or a non-numeric `index`, and the line is ignored.
 
-### 4.2 `STEP_END|key|status|detail`
+### 4.2 `STEP_END|key|status|code[|count]`
 
-`status` is exactly one of **`ok`**, **`skip`**, **`fail`**. `detail` is a short phrase for
-the row's badge (`"3 package(s) updated"`, `"not installed"`) and **may be empty** — the
-cache step's success emits none.
+`status` is exactly one of **`ok`**, **`skip`**, **`fail`**. `code` names the row's badge —
+`installed`, `not-installed`, `up-to-date` and the rest of `STEP_BADGES` — and is **never
+empty**: every step end carries one. `count` follows only the codes whose badge shows a
+number (`installed`, `removed`). A failed step badges *Failed* whatever its code. An
+unknown code, or a count where none fits, shows the bare code in the badge, which has no
+room for a sentence. The engine's terminal line keeps its English detail.
 
 `skip` is not a failure. A step for a tool that is not installed is skipped cleanly, and
 the run's verdict is unaffected.
 
 `TIMING` follows immediately, always, as a separate marker — deliberately, so the
-`status|detail` layout never had to grow a field.
+step-end layout never had to grow a timing field.
 
 ### 4.3 `PROGRESS|key|done|total|phase[|bytes|bytes_total]`
 
@@ -200,13 +220,17 @@ A documented trap, because the names differ by one letter and mean unrelated thi
 it can reach a root `snapper rollback`; `date` and `description` are display-only, and the
 description has had any `|` rewritten to `/` (§1.1).
 
-### 4.6 `CHECK|key|count|label` and `CHECK_UNKNOWN|key|reason`
+### 4.6 `CHECK|key|count|label` and `CHECK_UNKNOWN|key|code[|name…]`
 
 The pair that exists because of ONEUP-0056 — OneUp once reported "Everything is up to date"
 while eight updates waited.
 
 - **`CHECK_UNKNOWN` means this step's count is a floor, not an answer.** A source could not
   be read. The window records the reason and refuses the "up to date" summary.
+- **Its reason is one of four codes.** `sources-unreadable` and
+  `flatpak-remotes-unreachable` carry one source name per trailing field, so a name with
+  spaces stays one name; `sources-unknown-error` carries zypper's exit status;
+  `fwupd-unreachable` carries nothing. The tray check reads the marker only as a flag.
 - **A step's bare zero is withheld when something was unreadable.** The engine emits a
   step's `CHECK` only when everything was readable *or* the count is greater than zero:
   knowing about 7 updates beats knowing about none while a repository is broken.
@@ -227,10 +251,14 @@ the layout (a positional regression test pins all three) and must keep its posit
 ### 4.8 `REBOOT|yes[|reason]` or `REBOOT|no`
 
 The payload is `yes` or `no`, and **`no` never carries anything after it**. The trailing
-`reason` is **optional**, appears only alongside `yes`, and is a
-plain-English phrase built from the run's system transaction log naming what makes the
-restart matter — *"a new kernel and your NVIDIA graphics driver were installed"*. The
-window shows it **verbatim**, falling back to generic wording when it is absent.
+`reason` is **optional** and appears only alongside `yes`. It holds either **component
+codes**, space-separated, read from the run's system transaction log — `kernel-new`,
+`graphics-driver-nvidia`, `graphics-driver-generic`, `kernel-modules` — or **one
+standalone code**, `core-packages-updated` or `firmware-updated`. The two sets are
+disjoint. The window words them by `docs/specs/ONEUP-0108-window-wording.md` §4.4 —
+*"a new kernel and your NVIDIA graphics driver were installed"*, agreeing *was* or *were*
+with what the sentence lists — and falls back to generic wording when the reason is
+absent.
 
 It is cosmetic by design: it *names* a decision the engine has already made and can never
 change it. The invariant it must not break — **reboot advice fires only when something was
@@ -260,6 +288,9 @@ themselves:
 - **`REMEDY|skip-repo|alias`** — one source is broken. The banner offers *"Skip &lt;source&gt;
   & update the rest"*. `REPO_SKIPPED|alias|reason` is the matching report that a source
   *was* set aside for this run.
+
+An action the window does not know arms no button; the banner says this version has no
+fix for it, beside the run's hint.
 
 **`--no-gpg-checks` is never a remedy** and no marker will ever offer it.
 
@@ -326,46 +357,45 @@ a reason better than tidiness.
 
 ### 5.1 During 2.0 the contract is frozen
 
-The engine rewrite (ONEUP-0054) ships with this contract **byte-identical**, English hint
-prose included, and is measured against it: gate **G2** compares v1's and v2's marker
-streams under identical mocks and requires them to be equal. A rewrite that changed the
-protocol could not be tested this way at all.
+The engine rewrite (ONEUP-0054) shipped with this contract **byte-identical**, English
+hint prose included, and was measured against it: gate **G2** compared v1's and v2's marker
+streams under identical mocks and required them to be equal.
 
-**One exception, deliberately sequenced after the rewrite has passed its gate:**
-ONEUP-0072 turns every payload the window renders as its own wording from English prose
-into stable codes, so the window can translate them —
-`docs/specs/ONEUP-0072-marker-codes.md` §3.1 names which. That is a single versioned change touching every file §5 lists,
-plus this document
-(`docs/standards/wording-and-translation.md` §5).
+**One exception, sequenced after the rewrite had passed its gate:** ONEUP-0072 turned every
+payload the window renders as its own wording from English prose into stable codes, so the
+window can translate them — `docs/specs/ONEUP-0072-marker-codes.md` §3.1 names which. It
+landed as one change touching every file §5 lists, plus this document
+(`docs/standards/wording-and-translation.md` §5). The two engines' payloads now differ by
+design, so G2's harness was retired with it (ONEUP-0072 §7). **The contract is frozen again
+for the rest of 2.0.**
 
-Never both at once. A rewrite and a contract change in the same step means a failing test
-cannot tell you which one broke it.
+Never a rewrite and a contract change at once. In the same step, a failing test cannot tell
+you which one broke it.
 
-### 5.2 What the codes must define, when they land
+### 5.2 What the codes define
 
-ONEUP-0072 turns those payloads into codes, and three questions have to be
-answered *in that item's specs* rather than discovered during implementation. They are
-reserved here so the reference is where a reader looks for them. **The item is specified in
-two documents** since the 2026-08-12 split: `docs/specs/ONEUP-0072-marker-codes.md` holds
-the engine side and `docs/specs/ONEUP-0108-window-wording.md` the window side, and they land
-in one commit. Question 2 is the window's; 1 and 3 are the engine's.
+The three questions this section reserved are answered in ONEUP-0072's two specs:
+`docs/specs/ONEUP-0072-marker-codes.md` for the engine side and
+`docs/specs/ONEUP-0108-window-wording.md` for the window side. §3 states the result.
 
-1. **The shape of a code** — a stable identifier, ASCII, no spaces or `|`, chosen so it
-   never needs translating and never reads as prose.
+1. **The shape of a code** — `^[a-z0-9-]+$`: ASCII, no spaces or `|`, never translated and
+   never prose. `REBOOT`'s reason is the one field holding several, space-separated.
 2. **Where the code→sentence map lives** — in the window, per
-   `docs/standards/wording-and-translation.md` §5, and how a code with no entry renders.
-   **It must render as something readable**, never as the raw token and never as an empty
-   banner; a code the window does not know about is a bug in the window, not in the run.
-3. **Who allocates one**, and the rule that a code is never reused for a different meaning
-   once shipped — the same discipline as a roadmap ID.
-
-Until that lands, the payloads are English prose (§4.10, §5.1).
+   `docs/standards/wording-and-translation.md` §5. **A code with no entry renders as
+   something readable**, never as the raw token in a place with room for a sentence and
+   never as an empty banner; it is a bug in the window, not in the run.
+3. **Who allocates one** — the change that adds the engine branch sending it. A shipped
+   code is never reused for a different meaning — the same discipline as a roadmap ID.
 
 ## 6. Traps
 
 - **Adding a field in the middle.** Positions are the whole protocol. Append, or rename.
-- **Free text in a non-final field.** There is no escaping (§1.1). A `|` in the payload
-  silently shifts every field after it.
+- **Free text that bypasses the emitter.** There is no escaping (§1.1). The emitter's
+  guard is what stops a `|` in a name from silently shifting every field after it; a line
+  printed some other way has none.
+- **A shape check on a code field.** Ordinary lowercase English passes `^[a-z0-9-]+$` word
+  by word, so a half-converted space-separated field passes it. Check membership of the
+  code set (ONEUP-0072 INV-1).
 - **Reading a field without checking it is there.** Markers arrive spliced (§1.2); an
   exception in the read slot drops the rest of the run.
 - **Treating `total: 0` as a denominator.** `PROGRESS` and only `PROGRESS`: zero means
@@ -471,7 +501,8 @@ the four lines, which three the window reads, and how each half deletes the file
 | the engine emits each marker | `tests/run-tests.sh`, for every marker (`DISK` since ONEUP-0069); `tests/docs-check.py` fails if any marker loses its scenario |
 | the window reacts to each marker | `tests/gui-smoke.py` — for the markers it exercises, which is not the whole table. Nothing enumerates what `handle_marker` accepts, so this row cannot yet be made exact |
 | §3's table matches the markers the engine emits | `tests/docs-check.py`, both ways: a marker the engine emits and this table omits, and a marker this table names that the engine never emits. It reads the `marker NAME` **call sites**, not the `@@NAME@@` literals in the engine's header comment — §7 records inaccuracies in that comment, so comparing against it would validate one stale list against another |
-| §1.1 a payload contains no `\|` | nothing automatic. The engine rewrites `\|` to `/` before emitting `SNAPSHOT_ITEM`; a new free-text field that forgets to is caught by nobody |
+| §1.1 a payload contains no `\|` | `tests/run-tests.sh` — a lock holder whose process name carries a `\|` still yields a three-field `HINT` (ONEUP-0072 INV-2). A line printed without the emitter is caught by nobody |
+| §3 the worded fields hold codes | `tests/run-tests.sh`'s `check_codes`, over one scenario per family — shape for the single-code fields, membership for `REBOOT`'s reason; `tests/gui-smoke.py` for each table's unknown-code fallback |
 | §1.2 a marker read must survive being spliced with stderr | nothing automatic — the three guards are in the window's `handle_marker`, and nothing checks a fourth has one |
 | §5.1 the contract is frozen during 2.0 | nothing automatic |
 

@@ -14,7 +14,7 @@ import shiboken6
 from PySide6.QtCore import QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox
 
-from . import autostart, paths
+from . import autostart, markers, paths
 
 
 def _refresh_auth_label(win):
@@ -201,7 +201,7 @@ def _on_auth_finished(win, proc: QProcess):
     for line in out.splitlines():
         if line.startswith("@@HINT@@|"):
             QMessageBox.warning(win, "Couldn't change the setting",
-                                line.split("|", 1)[1])
+                                markers.render_hint(line.split("|")[1:]))
     # Re-probe the real state rather than trusting the toggle: a cancelled
     # password prompt or a failure must leave the switch showing the truth.
     _query_auth_status(win)

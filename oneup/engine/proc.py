@@ -216,7 +216,8 @@ def stop_pending() -> bool:
         markers.out("Stopping at your request — the step that was running has finished, and")
         markers.out("nothing further will be started.")
         markers.hint(
-            "Stopped at your request. Anything already installed stays installed — a stop "
+            "stopped",
+            say="Stopped at your request. Anything already installed stays installed — a stop "
             "never interrupts an install half-way, because that can leave programs broken. "
             "Run the update again whenever you like."
         )
@@ -319,7 +320,7 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
                 # which needs an `n/m` there is none of here.
                 preloaded += 1
                 seen += 1
-                markers.marker("PROGRESS", f"{step}|{preloaded}|0|{phase}|0|{want}")
+                markers.marker("PROGRESS", step, preloaded, 0, phase, 0, want)
             elif line.startswith("Retrieving:"):
                 got += parsers.retrieving_bytes(line)
                 if markers.emit_progress(step, parsers.retrieving_fraction(line),

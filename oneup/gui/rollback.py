@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from . import paths
+from . import markers, paths
 from .placement import center_on_parent
 
 
@@ -200,7 +200,8 @@ def _on_thin_finished(win, proc: QProcess):
             n = line.split("|")[-1]
             removed = int(n) if n.isdecimal() else None
         elif line.startswith("@@HINT@@|"):
-            QMessageBox.warning(win, "Couldn't thin snapshots", line.split("|", 1)[1])
+            QMessageBox.warning(win, "Couldn't thin snapshots",
+                                markers.render_hint(line.split("|")[1:]))
     if removed:
         win.status.setText(f"Thinned {removed} old snapshot(s).")
         win._warn_snapshots = False

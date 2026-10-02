@@ -166,9 +166,7 @@ def emit_guard() -> int:
     """`--emit-guard`: print the guard this engine expects, for the caller to install."""
     src = download_guard_src()
     if src is None:
-        markers.hint("Passwordless authorization can't be set up on this machine: "
-                     "zypper, timeout or du was not found, or the refresh budget is not "
-                     "a whole number of seconds.")
+        markers.hint("passwordless-unsupported", say=_GRANT_IMPOSSIBLE)
         return 1
     print(src, end="", flush=True)
     return 0
@@ -208,17 +206,20 @@ def _check_system() -> tuple[int, bool]:
     )
     rows = [line for line in text.splitlines() if _V_ROW.match(line)]
     n = len(rows)
-    unreadable = ""
+    unreadable: tuple[str, ...] = ()
     if rc != 0:
         # 106 = ZYPPER_EXIT_INF_REPO_SKIPPED. Name the repositories if zypper did;
-        # otherwise report the failure without guessing at a cause.
+        # otherwise report the failure without guessing at a cause. The marker
+        # carries a code and one name per field; the terminal keeps the English.
         skipped = sorted(set(_SKIPPED.findall(text)))
         if skipped:
-            unreadable = "OneUp couldn't read these software sources: " + ", ".join(skipped)
+            unreadable = ("sources-unreadable", *skipped)
+            why = "OneUp couldn't read these software sources: " + ", ".join(skipped)
         else:
-            unreadable = f"OneUp couldn't read the software sources (zypper exited {rc})"
-        unreadable += " — this list may be incomplete. Running an update refreshes them."
-        markers.out(f"  System packages: couldn't check — {unreadable}")
+            unreadable = ("sources-unknown-error", str(rc))
+            why = f"OneUp couldn't read the software sources (zypper exited {rc})"
+        why += " — this list may be incomplete. Running an update refreshes them."
+        markers.out(f"  System packages: couldn't check — {why}")
     else:
         markers.out(f"  System packages: {n} update(s)")
     markers.emit_check("system", n, "system package(s)", unreadable)
@@ -226,7 +227,7 @@ def _check_system() -> tuple[int, bool]:
     for line in rows:
         f = [field.strip() for field in line.split("|")]
         if len(f) >= 5 and f[2]:
-            markers.marker("CHECK_ITEM", f"system|{f[2]}|{f[3]}|{f[4]}")
+            markers.marker("CHECK_ITEM", "system", f[2], f[3], f[4])
     return n, bool(unreadable)
 
 
@@ -234,12 +235,11 @@ def _check_flatpak() -> tuple[int, bool]:
     """Count pending Flatpak updates, asking each remote separately."""
     rows, unreachable = steps.flatpak_updates()   # why per remote: see the helper
     n = len(rows)
-    unreadable = ""
+    unreadable: tuple[str, ...] = ()
     if unreachable:
-        unreadable = ("OneUp couldn't reach these Flatpak sources: "
-                      + ", ".join(unreachable)
-                      + " — this list may be incomplete.")
-        markers.out(f"  Flatpak apps: couldn't check — {unreadable}")
+        unreadable = ("flatpak-remotes-unreachable", *unreachable)
+        markers.out("  Flatpak apps: couldn't check — OneUp couldn't reach these Flatpak "
+                    "sources: " + ", ".join(unreachable) + " — this list may be incomplete.")
     else:
         markers.out(f"  Flatpak apps: {n} update(s)")
     markers.emit_check("flatpak", n, "Flatpak app(s)", unreadable)
@@ -247,7 +247,7 @@ def _check_flatpak() -> tuple[int, bool]:
         parts = row.split()
         if parts:
             version = parts[1] if len(parts) > 1 else ""
-            markers.marker("CHECK_ITEM", f"flatpak|{parts[0]}||{version}")
+            markers.marker("CHECK_ITEM", "flatpak", parts[0], "", version)
     return n, bool(unreadable)
 
 
@@ -261,13 +261,13 @@ def _check_firmware() -> tuple[int, bool]:
     """
     fw_rc, _ = proc.run(["fwupdmgr", "get-updates"])
     if fw_rc not in (0, 2):
-        markers.marker("CHECK_UNKNOWN", "firmware|OneUp couldn't ask fwupd")
+        markers.marker("CHECK_UNKNOWN", "firmware", "fwupd-unreachable")
         markers.out("  Firmware: couldn't check")
         return 0, True
     n = 1 if fw_rc == 0 else 0
     # fwupd answered, so the zero is earned and reported — the same output
     # `emit_check` gives with no unreadable reason.
-    markers.marker("CHECK", f"firmware|{n}|firmware update(s)")
+    markers.marker("CHECK", "firmware", n, "firmware update(s)")
     markers.out("  Firmware: " + ("available" if n else "up to date"))
     return n, False
 
@@ -295,7 +295,7 @@ def check(opts: Options) -> int:
         incomplete = incomplete or bad
     # A step whose read FAILED still contributes its partial count: incompleteness is
     # carried by CHECK_UNKNOWN and by the wording below, never by a lowered total.
-    markers.marker("CHECK", f"TOTAL|{total}|updates available")
+    markers.marker("CHECK", "TOTAL", total, "updates available")
     if incomplete:
         markers.out(f"  Total: {total} update(s) found, "
                     "but at least one source couldn't be read")
@@ -324,6 +324,10 @@ _WHY = {
        "prompt may have been cancelled.",
     6: "no software sources are enabled, so there is nothing to weigh up.",
 }
+
+# The window's code for each named reason (ONEUP-0072 §4.2); anything else is
+# "size-failed" with the exit status as its argument.
+_WHY_CODE = {7: ("size-busy",), 5: ("size-cancelled",), 6: ("size-no-sources",)}
 
 # How many lines of zypper's own output to show after a failed dry run. `out` is
 # captured into a variable, so without this the log records only "unavailable"
@@ -374,14 +378,14 @@ def run_size(step: str) -> int:
     )
     size = parsers.download_size(out)
     if size:
-        markers.marker("SIZE", f"system|{size}")
+        markers.marker("SIZE", "system", size)
         markers.out(f"  Download size: {size}")
         size_delivered(size)
         return 0
     if rc == 0 or _INF_FIRST <= rc <= _INF_LAST:
         # zypper ran fine and reported no size = nothing to fetch (up to date, or
         # all cached). Report zero so the window shows a definitive answer.
-        markers.marker("SIZE", "system|0 B")
+        markers.marker("SIZE", "system", "0 B")
         markers.out("  Download size: nothing to fetch.")
         size_delivered("0 B")
         return 0
@@ -390,7 +394,9 @@ def run_size(step: str) -> int:
     # silent on SIZE and return non-zero — the window re-arms its "Show download
     # size" link for a retry.
     why = _WHY.get(rc, f"the package manager reported an error (code {rc}) — see the lines below.")
-    markers.hint(f"Couldn't work out the download size: {why}")
+    # The terminal line below carries the reason in English; the window gets a code
+    # per reason, and the default one names the exit status (ONEUP-0072 §4.2).
+    markers.hint(*_WHY_CODE.get(rc, ("size-failed", rc)))
     markers.out(f"  Download size: unavailable — {why}")
     for line in out.rstrip("\n").split("\n")[-_TAIL:]:
         markers.out(f"    zypper: {line}")
@@ -434,12 +440,12 @@ def grant_auth() -> int:
     """
     rule, guard = build_auth_rule(), download_guard_src()
     if rule is None or guard is None:
-        markers.hint(_GRANT_IMPOSSIBLE)
+        markers.hint("passwordless-unsupported", say=_GRANT_IMPOSSIBLE)
         return 1
     try:
         rule_file, guard_file = _spill(rule), _spill(guard)
     except OSError:
-        markers.hint("Could not create a temporary file.")
+        markers.hint("temp-file-failed", say="Could not create a temporary file.")
         return 1
     try:
         privilege.sudo_init()
@@ -447,20 +453,22 @@ def grant_auth() -> int:
         # policy: a syntactically broken file under /etc/sudoers.d can lock the
         # user out of sudo entirely.
         if privilege.sudo(["visudo", "-cf", rule_file])[0] != 0:
-            markers.hint("The generated authorization rule failed validation — "
-                         "nothing was changed.")
+            markers.hint("auth-rule-invalid", say="The generated authorization rule failed "
+                         "validation — nothing was changed.")
             return 1
         # 0755: the window and the engine both read the guard back to tell whether
         # the drop-in beside it is the one this OneUp needs; only root may write it.
         if privilege.sudo(["install", "-o", "root", "-g", "root", "-m", "0755",
                            guard_file, str(GUARD_FILE)])[0] != 0:
-            markers.hint(f"Could not write the download helper ({GUARD_FILE}).")
+            markers.hint("guard-write-failed", GUARD_FILE,
+                         say=f"Could not write the download helper ({GUARD_FILE}).")
             return 1
         # install(1) places it root-owned and 0440 atomically, the mode sudo requires.
         if privilege.sudo(["install", "-o", "root", "-g", "root", "-m", "0440",
                            rule_file, str(AUTH_FILE)])[0] != 0:
             privilege.sudo(["rm", "-f", str(GUARD_FILE)])   # never leave a guard ruleless
-            markers.hint(f"Could not write the authorization rule ({AUTH_FILE}).")
+            markers.hint("auth-write-failed", AUTH_FILE,
+                         say=f"Could not write the authorization rule ({AUTH_FILE}).")
             return 1
     finally:
         for path in (rule_file, guard_file):
@@ -493,7 +501,8 @@ def revoke_auth() -> int:
     else:
         guards = ["/usr/libexec/oneup-download-guard", "/usr/lib/oneup-download-guard"]
     if privilege.sudo(["rm", "-f", str(AUTH_FILE), *guards])[0] != 0:
-        markers.hint(f"Could not remove the authorization rule ({AUTH_FILE}).")
+        markers.hint("auth-remove-failed", AUTH_FILE,
+                     say=f"Could not remove the authorization rule ({AUTH_FILE}).")
         return 1
     markers.out("Passwordless authorization has been revoked.")
     markers.marker("AUTH", "off")
@@ -508,7 +517,8 @@ def thin_snapshots() -> int:
     specific snapshot, so the most recent rollback points are always kept.
     """
     if not shutil.which("snapper"):
-        markers.hint("Snapper isn't installed, so there are no snapshots to thin.")
+        markers.hint("snapper-missing",
+                     say="Snapper isn't installed, so there are no snapshots to thin.")
         return 0
     privilege.sudo_init()
     before = _snapshot_count()
@@ -520,21 +530,22 @@ def thin_snapshots() -> int:
     # ONEUP-0189: an unreadable list is not "already satisfied". Say we could not
     # look instead, and emit no count.
     if before is None or after is None:
-        markers.hint("Couldn't read the list of restore points, so OneUp can't tell "
-                     "whether any were removed.")
+        markers.hint("snapshots-unreadable", say="Couldn't read the list of restore points, "
+                     "so OneUp can't tell whether any were removed.")
         return 1
     if before > after:
         markers.out(f"Thinned {before - after} old snapshot(s) ({before} → {after}).")
-        markers.marker("SNAPSHOTS", f"thinned|{before - after}")
+        markers.marker("SNAPSHOTS", "thinned", before - after)
     elif not cleaned:
-        markers.hint("Snapper's cleanup failed, so no restore points were removed.")
+        markers.hint("snapper-cleanup-failed",
+                     say="Snapper's cleanup failed, so no restore points were removed.")
         return 1
     else:
         # Zero rather than nothing: a run that removed none still answered the
         # question, and the window has no other way to tell that from silence.
         markers.out("No snapshots needed thinning — snapper's retention policy is "
                     "already satisfied.")
-        markers.marker("SNAPSHOTS", "thinned|0")
+        markers.marker("SNAPSHOTS", "thinned", 0)
     return 0
 
 

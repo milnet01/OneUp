@@ -26,7 +26,7 @@ from PySide6.QtCore import QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox
 
 from .. import APP_ID, APP_NAME
-from . import banners, markers, paths, repos, tray
+from . import banners, markers, paths, repos, steps, tray
 from .diagnostics import cache_bytes
 
 # How long the engine may produce NOTHING before the liveness line calls it stalled
@@ -255,7 +255,7 @@ def _on_size_output(win):
             # The size probe failed (busy package manager, cancelled password
             # prompt). Say why in the log — the link re-arms itself for a retry
             # in _on_size_finished, but a silent re-arm looks like a dead button.
-            win.log.appendPlainText(line.split("|", 1)[1])
+            win.log.appendPlainText(markers.render_hint(line.split("|")[1:]))
         elif not line.startswith("@@"):
             win.log.appendPlainText(line)
 
@@ -348,6 +348,7 @@ def _reset_for_run(win, steps: list[str], check: bool):
     win._hint_command = ""
     win._remedy_keys = False
     win._remedy_skips = []
+    win._remedy_unknown = []
     win._run_active = not check   # a real run guards the standalone thin action
     # Separate from `_run_active`, which answers "may the standalone thin action
     # run?" and is False on a check. The liveness line has to work on BOTH paths:
@@ -527,17 +528,23 @@ def handle_marker(win, line: str):
         return
     tag, parts, rest = split
     if tag == "STEP_BEGIN":
-        # Guard the fixed 4-field unpack + int(): the engine's output is merged
+        # Guard the fixed 3-field unpack + int(): the engine's output is merged
         # stdout+stderr, so a marker line can be spliced by interleaved text. A
         # malformed STEP_BEGIN must never throw out of the QProcess read slot —
-        # that would abort parsing and drop the run's later markers.
-        if len(parts) < 4 or not parts[1].isdecimal():
+        # that would abort parsing and drop the run's later markers. Three since
+        # ONEUP-0072 retired the label: a floor of four would ignore every one.
+        if len(parts) < 3 or not parts[1].isdecimal():
             return
-        _key, index, total, label = parts[0], parts[1], parts[2], parts[3]
-        win.status.setText(f"{label}…")
+        key, index, total = parts[0], parts[1], parts[2]
+        # The window's own phrasing, keyed by step. A key it has no entry for gets
+        # the long fallback where there is room for a sentence and the bare key in
+        # the caption, which has none (ONEUP-0108 §4.3, ONEUP-0072 §4.1's table).
+        phrasing = steps.IN_PROGRESS.get(key)
+        label = phrasing or markers.fallback_long(key)
+        win.status.setText(f"{phrasing}…" if phrasing else label)
         # Kept so @@PROGRESS@@ can rebuild the bar's caption without re-deriving
         # the step's label and position from a marker it doesn't carry.
-        win._step_caption = f"{label}  (step {index} of {total})"
+        win._step_caption = f"{phrasing or key}  (step {index} of {total})"
         win._progress_phase = ""
         # A new step is a new thing to wait on, and its own download: carrying the
         # previous step's elapsed time or byte rate over would misreport both.
@@ -557,12 +564,13 @@ def handle_marker(win, line: str):
         win.bar.setValue(min(win.bar.value() + 1, win._total))
         key = parts[0]
         status = parts[1] if len(parts) >= 2 else ""
-        detail = parts[2] if len(parts) >= 3 else ""
+        # The code and its arguments (ONEUP-0072 §4.1); the window words the badge.
+        code, args = (parts[2] if len(parts) >= 3 else ""), parts[3:]
         # Badge the task row with what actually happened (mirrors the "N available"
         # badge --check shows, but for a real run: "3 installed", "Up to date", …).
         row = win.rows.get(key)
         if row:
-            badge = markers._step_badge(status, detail)
+            badge = markers._step_badge(status, code, args)
             row.set_badge(badge)
             # The outcome, spoken once. A later TIMING/FREED marker refines the
             # badge but is NOT re-announced — it stays reachable by Tab via the
@@ -599,8 +607,7 @@ def handle_marker(win, line: str):
         # This step couldn't read one of its sources, so its count is a floor,
         # not an answer. Recorded so on_finished can refuse the "up to date"
         # summary — the whole point of the marker (ONEUP-0056).
-        reason = parts[1] if len(parts) > 1 else "a source couldn't be read"
-        win._unchecked.append(reason)
+        win._unchecked.append(markers.render_check_unknown(parts[1:]))
         row = win.rows.get(parts[0])
         if row:
             # Text, not colour: the badge must read as unknown to everyone.
@@ -683,7 +690,8 @@ def handle_marker(win, line: str):
     elif tag == "SERVICES":
         win._services = rest.strip()
     elif tag == "HINT":
-        win._hints.append(rest.strip())
+        # A code and its arguments; the window holds the sentence (ONEUP-0108).
+        win._hints.append(markers.render_hint(parts))
     elif tag == "REPO_SKIPPED":
         # A source was set aside for this run (disabled, upgrade ran, will be
         # re-enabled by the engine on exit — see --skip-repo/--auto-skip-repos).
@@ -704,11 +712,17 @@ def handle_marker(win, line: str):
             # Checked because the alias goes back to the engine as --skip-repo=
             # (security.md §4, ONEUP-0144): the same guard the repository editor uses.
             win._remedy_skips.append(parts[1])
+        elif parts and parts[0] not in ("import-keys", "skip-repo"):
+            # A fix this window does not know: arm no button — there is no action it
+            # can perform — and say so in the banner (ONEUP-0072 §4.1). The two known
+            # actions above are this family's register; a retired one stays as a
+            # commented-out arm there (§4.2).
+            win._remedy_unknown.append(parts[0])
     elif tag == "REBOOT":
         win._reboot = parts[0] == "yes"
-        # Optional field: a plain-English reason naming what makes the reboot
-        # matter (a new kernel, graphics driver, …). Absent for a plain reboot.
-        win._reboot_reason = parts[1] if len(parts) > 1 else ""
+        # Optional field: the codes naming what makes the reboot matter (a new
+        # kernel, a graphics driver, …), worded here. Absent for a plain reboot.
+        win._reboot_reason = markers.render_reboot_reason(parts[1] if len(parts) > 1 else "")
     elif tag == "SNAPSHOTS" and parts and parts[0] == "warn":
         # Pre-flight: a lot of Btrfs restore points have piled up and may be using
         # disk. Offer a one-click thin (snapper's own retention cleanup) via the
@@ -884,8 +898,10 @@ def on_finished(win, exit_code: int, _status):
             # driver were installed — restart …". Capitalise the first letter only
             # (str.capitalize() would lower-case "NVIDIA").
             r = win._reboot_reason
-            win.reboot_label.setText(
-                f"⚠  {r[0].upper()}{r[1:]} — restart so everything uses the latest version.")
+            # The fallback (ONEUP-0108 §4.3) is already a whole sentence.
+            tail = (" Restart so everything uses the latest version." if r.endswith(".")
+                    else " — restart so everything uses the latest version.")
+            win.reboot_label.setText(f"⚠  {r[0].upper()}{r[1:]}{tail}")
         elif n and n not in ("", "0"):
             win.reboot_label.setText(
                 f"⚠  {n} update(s) installed — restart so everything uses "
@@ -923,8 +939,11 @@ def on_finished(win, exit_code: int, _status):
     # failure arms @@REMEDY@@|skip-repo with no @@HINT@@), a GUI-built
     # fallback naming the culprit(s) so the skip/import action is never a
     # dead end behind an invisible banner.
-    if win._hints or win._remedy_skips or win._remedy_keys:
-        if win._hints:
+    if win._hints or win._remedy_skips or win._remedy_keys or win._remedy_unknown:
+        if win._remedy_unknown:
+            unknown = " ".join(markers.fallback_remedy(c) for c in win._remedy_unknown)
+            banners._show_warning(win, f"{win._hints[0]}  {unknown}" if win._hints else unknown)
+        elif win._hints:
             banners._show_warning(win, win._hints[0])
         elif win._remedy_skips:
             names = ", ".join(banners._repo_display_name(a) for a in win._remedy_skips)
