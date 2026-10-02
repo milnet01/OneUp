@@ -3843,6 +3843,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   locale format; (b) keep day-month-name-year but take the month name from
   the locale. Recommendation to put: (b), readable for a low-vision user and
   still translated. Ask before building.
+  Decision (user, 2026-10-02): option (b). Keep day, month name, year
+  order ("02 Oct 2026, 14:05"), with the month name taken from the
+  locale. Not the full locale format, which renders all-numeric here.
   **Layman:** The date on the last-run line is always in English and always day-month-year.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-window.
@@ -5453,6 +5456,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Both engines share the shape, so the fix lands on main first.
   Likely fix: own process GROUP, not own session (Python
   `process_group=0`), so the group kill still works and the tty stays.
+  Order agreed with the user 2026-10-02: this fix first (main, then
+  merge to v2), then ONEUP-0054 stage 9, then ONEUP-0232 and the rest of
+  the fix list. Bash side: `setsid` drops the tty too; candidate is a
+  new process group without a new session (e.g. `set -m` around the
+  background launch), keeping `cleanup`'s group kill. Red-first needs a
+  scenario with a controlling tty (e.g. `script -qc`). Side note: the
+  user's /etc/sudoers.d/oneup is the 2026-08-07 version (no `du`,
+  `timeout` or guard entries), which is why `du` needed the credential.
   **Layman:** Started from a terminal, OneUp could quietly ask for your password a second time in that terminal and sit waiting for five minutes.
   Kind: fix.
   Source: user-real-run-2026-10-02.
