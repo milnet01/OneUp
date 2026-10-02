@@ -444,6 +444,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   no logic that assumes words are space-separated. The reviewed spec
   (docs/specs/ONEUP-0032-i18n.md) does not yet say this, so the spec is amended
   and re-gated before building.
+  Progress (2026-10-02): spec amended for the CJK scope and re-gated.
+  New §4.5 (no NoFontMerging, no fixed or maximum size on a control with
+  text, no wording built by a case change or a literal-separator join) and
+  INV-10 to INV-12, measured first: Qt falls back per glyph whatever the
+  stylesheet names, and wraps CJK with no spaces. review-contract ran two
+  loops (10 and 11), 12 verified, 12 fixed, cap reached calmly; Status is
+  Reviewed. Build order is 0072, then 0077, then this item, because INV-9
+  retires 0077's INV-5; 0072 is blocked on ONEUP-0054 stages 8 and 9.
 
 - ✅ [ONEUP-0033] **bump.py: advance the CHANGELOG [Unreleased] compare-link base to the new tag.**
   bump.py rewrites the six version sites and adds a new `[x.y.z]: .../releases/tag/vX.Y.Z` reference link, but leaves the `[Unreleased]: .../compare/vPREV...HEAD` link pointing at the PREVIOUS tag. After releasing 1.2.0 the link still reads `compare/v1.1.0...HEAD` (CHANGELOG.md:207) — it should read `compare/v1.2.0...HEAD`. Fix: in bump.py, when moving `## [Unreleased]` to `## [X.Y.Z]`, also rewrite the `[Unreleased]:` compare base from the old tag to `vX.Y.Z`. Cosmetic (the link 404s on the stale range only until the next commit), pre-existing since at least 1.1.0. Add/adjust a bump.py test to assert the Unreleased compare base advances. No version-lockstep impact (local-CI's lockstep gate doesn't check this link).
