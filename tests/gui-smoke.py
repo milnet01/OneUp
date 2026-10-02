@@ -1653,6 +1653,77 @@ def main() -> int:
     check("diagnostics: oversized log trimmed to its tail",
           "earlier output trimmed" in _trim and "H" * 20 not in _trim)
 
+    # --- ONEUP-0184: a bad saved value or an unwritable disk degrades, never raises ----
+    # (a) a log rotated away between the glob and the stat is skipped, not raised.
+    with tempfile.TemporaryDirectory() as _ld:
+        _ldp = Path(_ld)
+        (_ldp / "2026-07-24_120000.log").write_text("x")
+        (_ldp / "2026-07-24_130000.log").symlink_to(_ldp / "gone")   # stat() raises
+        try:
+            _got = updater._latest_run_log(_ldp)
+        except OSError:
+            _got = "raised"
+        check("ONEUP-0184: a log that vanished mid-call is skipped",
+              _got == _ldp / "2026-07-24_120000.log")
+    # (b) a corrupt saved geometry opens the dialog and the window at their defaults.
+    _gs = updater.QSettings("OneUp", "OneUp")
+    _gs.setValue("repos_geometry", "not a geometry")
+    _gs.setValue("geometry", "not a geometry")
+    try:
+        _dg = updater.RepoManagerDialog(None, [])
+        _ok = (_dg.width(), _dg.height()) == (780, 560)
+        updater.Updater()
+    except TypeError:
+        _ok = False
+    finally:
+        _gs.remove("repos_geometry")
+        _gs.remove("geometry")
+    check("ONEUP-0184: a corrupt saved geometry does not stop a dialog or the window opening",
+          _ok)
+    # (c) a write that fails part-way leaves the previous file, and no temporary behind.
+    with tempfile.TemporaryDirectory() as _wd:
+        _target = Path(_wd) / "unit.service"
+        _target.write_text("old")
+        _orig_replace = updater.os.replace
+        updater.os.replace = lambda *a, **k: (_ for _ in ()).throw(OSError("disk full"))
+        try:
+            getattr(updater, "_atomic_write_text", lambda p, t: p.write_text(t[:3]))(
+                _target, "new contents")
+        except OSError:
+            pass
+        finally:
+            updater.os.replace = _orig_replace
+        check("ONEUP-0184: a failed write keeps the previous file whole",
+              _target.read_text() == "old" and sorted(os.listdir(_wd)) == ["unit.service"])
+    # (d) an unwritable log folder leaves every launcher's state as it was.
+    _orig_logdir = updater.LOG_DIR
+    _blocker = Path(tempfile.mkstemp()[1])          # a FILE, so mkdir under it fails
+    updater.LOG_DIR = _blocker / "logs"
+    warned = []
+    _orig_warn = updater.QMessageBox.warning
+    updater.QMessageBox.warning = staticmethod(lambda *a, **k: warned.append(a[1]) or 0)
+    try:
+        wF = updater.Updater()
+        raised = False
+        try:
+            wF._set_auth_checked(True)                  # the user just switched it on
+            wF._run_auth("--grant-auth", "Setting up…")
+            wF.request_size("system")
+            wF._launch(["system"], check=True)
+            wF._tray_check()
+        except OSError:
+            raised = True
+        check("ONEUP-0184: an unwritable log folder raises out of no launcher", not raised)
+        check("ONEUP-0184: a failed grant puts the password toggle back and re-enables it",
+              not wF.auth_btn.isChecked() and wF.auth_btn.isEnabled())
+        check("ONEUP-0184: a user action that could not start says so", len(warned) == 3)
+        check("ONEUP-0184: a run that could not start leaves no run in progress",
+              wF.proc is None or wF.proc.state() == updater.QProcess.NotRunning)
+    finally:
+        updater.LOG_DIR = _orig_logdir
+        updater.QMessageBox.warning = _orig_warn
+        _blocker.unlink(missing_ok=True)
+
     wD = updater.Updater()
     wD.copy_diagnostics()
     check("diagnostics: button flips to Copied after a copy",

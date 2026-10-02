@@ -32,6 +32,7 @@ from string import Template
 import shiboken6
 from PySide6.QtCore import (
     Property,
+    QByteArray,
     QEasingCurve,
     QPointF,
     QProcess,
@@ -184,7 +185,13 @@ def _latest_run_log(log_dir: Path) -> Path | None:
                 if p.name.count(".") == 1 and p.name != "traycheck.log"]
     except OSError:
         return None
-    return max(runs, key=lambda p: p.stat().st_mtime, default=None)
+    stamped = []
+    for p in runs:
+        try:                           # a log rotated away mid-call is skipped (ONEUP-0184)
+            stamped.append((p.stat().st_mtime, p))
+        except OSError:
+            continue
+    return max(stamped, key=lambda tp: tp[0], default=(0.0, None))[1]
 
 
 def _os_release_pretty() -> str:
@@ -568,6 +575,24 @@ def _on_wayland() -> bool:
     # without that variable would otherwise take the X11 branch, where move() is accepted
     # and ignored.
     return _platform_name().startswith("wayland")
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write `path` whole, through a temporary file and a rename (ONEUP-0184). A full
+    disk or a crash part-way leaves the old file rather than a truncated one, which
+    systemd refuses as a unit and history.json reads as "never". Raises OSError."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.replace(name, path)
+    except BaseException:
+        try:
+            os.unlink(name)
+        except OSError:
+            pass
+        raise
 
 
 def _alive(*objs) -> bool:
@@ -1114,9 +1139,8 @@ class RepoManagerDialog(QDialog):
         # re-centred over the main window in showEvent).
         self._settings = QSettings("OneUp", "OneUp")
         geo = self._settings.value("repos_geometry")
-        if geo is not None:
-            self.restoreGeometry(geo)
-        else:
+        # A corrupt or hand-edited value must not stop the dialog opening (ONEUP-0184).
+        if not (isinstance(geo, QByteArray) and self.restoreGeometry(geo)):
             self.resize(780, 560)
 
         root = QVBoxLayout(self)
@@ -1827,7 +1851,7 @@ class Updater(QMainWindow):
 
         # Restore the last size + position, if we saved one before.
         geo = self.settings.value("geometry")
-        if geo is not None:
+        if isinstance(geo, QByteArray):         # a corrupt value must not stop startup
             self.restoreGeometry(geo)
 
         # Non-blocking: is there a newer OneUp release?
@@ -2199,7 +2223,7 @@ for (var i = 0; i < wins.length; i++) {{
         for path, text, is_unit in wanted:
             try:
                 if path.is_file() and path.read_text() != text:
-                    path.write_text(text)
+                    _atomic_write_text(path, text)
                     reload = reload or is_unit
             except OSError as exc:
                 print(f"OneUp: could not refresh {path}: {exc}", file=sys.stderr)
@@ -2211,8 +2235,7 @@ for (var i = 0; i < wins.length; i++) {{
         A plain file drop — no systemctl reload (unlike the update timers)."""
         path = self._autostart_path()
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(self._autostart_text())
+            _atomic_write_text(path, self._autostart_text())
         except OSError as exc:
             QMessageBox.warning(self, "Could not change start-at-boot", str(exc))
             return False
@@ -2280,6 +2303,11 @@ for (var i = 0; i < wins.length; i++) {{
         proc = self._traycheck_proc
         if proc is not None and proc.state() != QProcess.NotRunning:
             return  # a check is already in flight
+        try:
+            log = self._traycheck_log()
+        except OSError as exc:        # a full or read-only disk skips this check (ONEUP-0184)
+            print(f"OneUp: tray check skipped, cannot write {LOG_DIR}: {exc}", file=sys.stderr)
+            return
         self._traycheck_buf = ""
         self._traycheck_unknown = False
         p = QProcess(self)
@@ -2287,7 +2315,7 @@ for (var i = 0; i < wins.length; i++) {{
         p.readyReadStandardOutput.connect(self._on_traycheck_output)
         p.finished.connect(self._on_traycheck_finished)
         self._traycheck_proc = p
-        p.start("bash", self._tray_check_args(self._traycheck_log()))
+        p.start("bash", self._tray_check_args(log))
 
     def _traycheck_log(self):
         """One rolling log for the silent tray check, truncated each run (ONEUP-0024).
@@ -2462,9 +2490,9 @@ for (var i = 0; i < wins.length; i++) {{
         units = self._user_units_dir()
         try:
             units.mkdir(parents=True, exist_ok=True)
-            (units / f"{basename}.service").write_text(
-                self._timer_service_text(description, exec_flag))
-            (units / f"{basename}.timer").write_text(
+            _atomic_write_text(units / f"{basename}.service",
+                               self._timer_service_text(description, exec_flag))
+            _atomic_write_text(units / f"{basename}.timer",
                 f"[Unit]\nDescription={description}\n\n"
                 "[Timer]\nOnCalendar=weekly\nPersistent=true\n\n"
                 "[Install]\nWantedBy=timers.target\n"
@@ -2646,7 +2674,8 @@ for (var i = 0; i < wins.length; i++) {{
             # probe in flight started before it. Ask again when that one finishes.
             self._authstat_rerun = True
             return
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        if not self._log_dir_ready(quiet=True):
+            return
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         p = QProcess(self)
         p.setProcessChannelMode(QProcess.MergedChannels)
@@ -2762,10 +2791,17 @@ for (var i = 0; i < wins.length; i++) {{
         p = getattr(self, "_authchg_proc", None)
         if p is not None and p.state() != QProcess.NotRunning:
             return
+        if not self._log_dir_ready():
+            # Nothing changed, so put both toggles back as they were (ONEUP-0184).
+            self._set_auth_checked(action == "--revoke-auth")
+            if self._pending_autoupdate:
+                self._pending_autoupdate = False
+                self.autoupdate_btn.setEnabled(True)
+                self._set_autoupdate_checked(False)
+            return
         self.auth_btn.setEnabled(False)
         self.status.setText(status_text)
         self._settings_status(status_text)
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         p = QProcess(self)
         p.setProcessChannelMode(QProcess.MergedChannels)
@@ -2812,10 +2848,11 @@ for (var i = 0; i < wins.length; i++) {{
         self.last_run.style().polish(self.last_run)
 
     def save_last_run(self, status: str):
-        STATE_DIR.mkdir(parents=True, exist_ok=True)
-        HISTORY.write_text(
-            json.dumps({"when": datetime.now().isoformat(timespec="seconds"), "status": status})
-        )
+        try:
+            _atomic_write_text(HISTORY, json.dumps(
+                {"when": datetime.now().isoformat(timespec="seconds"), "status": status}))
+        except OSError as exc:        # a full disk keeps the previous record (ONEUP-0184)
+            print(f"OneUp: could not record the run in {HISTORY}: {exc}", file=sys.stderr)
         self.refresh_last_run()
 
     # ---- repositories -----------------------------------------------------
@@ -2951,11 +2988,10 @@ for (var i = 0; i < wins.length; i++) {{
         box.button(QMessageBox.Ok).setText("Thin snapshots")
         box.setDefaultButton(QMessageBox.Cancel)
         QTimer.singleShot(0, lambda: self._center_child(box))
-        if box.exec() != QMessageBox.Ok:
+        if box.exec() != QMessageBox.Ok or not self._log_dir_ready():
             return
         self.warn_btn.setEnabled(False)
         self.status.setText("Thinning snapshots… (approve the password popup)")
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         p = QProcess(self)
         p.setProcessChannelMode(QProcess.MergedChannels)
@@ -3059,13 +3095,14 @@ for (var i = 0; i < wins.length; i++) {{
         proc = getattr(self, "_size_proc", None)
         if proc is not None and proc.state() != QProcess.NotRunning:
             return  # a fetch is already in flight
+        if not self._log_dir_ready():
+            return
         row.size_pending()
         # The button's "up to a minute" label is invisible to a screen reader, so
         # say it out loud too — otherwise a blind user gets silence for the wait.
         self._announce("Working out the download size — this can take up to a minute.",
                        row.size_btn)
         self._size_buf = ""
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         size_log = LOG_DIR / f"{stamp}.size.log"
         p = QProcess(self)
@@ -3132,6 +3169,8 @@ for (var i = 0; i < wins.length; i++) {{
             QMessageBox.critical(self, "Engine missing",
                                  f"Could not find the update script at:\n{ENGINE}")
             return
+        if not self._log_dir_ready():
+            return
 
         # Reset per-run state and any banners/badges from a previous run.
         self._check_mode = check
@@ -3174,7 +3213,6 @@ for (var i = 0; i < wins.length; i++) {{
             r.clear_details()
         self.log.clear()
 
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         self._log_path = LOG_DIR / (f"{stamp}.check.log" if check else f"{stamp}.log")
 
@@ -3911,6 +3949,22 @@ for (var i = 0; i < wins.length; i++) {{
         box.exec()
         if box.clickedButton() is check_btn:
             self._check_app_update(manual=True)
+
+    def _log_dir_ready(self, quiet: bool = False) -> bool:
+        """Make the log folder, or say why it can't be made (ONEUP-0184). Called before
+        a launcher changes any state, so a full or read-only disk leaves the window as
+        it was instead of raising out of a slot with a button left disabled. `quiet`
+        is for background probes, which have nobody to tell."""
+        try:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            return True
+        except OSError as exc:
+            if quiet:
+                print(f"OneUp: cannot write logs to {LOG_DIR}: {exc}", file=sys.stderr)
+            else:
+                QMessageBox.warning(self, "Can't write OneUp's logs",
+                                    f"OneUp couldn't create its log folder:\n{LOG_DIR}\n\n{exc}")
+            return False
 
     def _center_child(self, widget):
         """Move a child popup so its centre sits over the main window's centre."""
