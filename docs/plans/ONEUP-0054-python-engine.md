@@ -1658,7 +1658,8 @@ roadmap body records the run.
 ## Stage 9 — the switch-over
 
 **Branch: `v2` for the code, the packaging and every standard; the plan text and the
-spec's §4.7 amendment take the `main`-then-merge route**, as stages 6 and 7 settled. The
+spec's §4.7 — its 2026-10-02 amendment and step 8's record of what was built — take the
+`main`-then-merge route**, as stages 6 and 7 settled. The
 standards edits name `oneup/engine/` files, which `docs/standards/workflow.md` §9's second
 binding sends to `v2`.
 
@@ -1688,14 +1689,20 @@ engine suite's *default* engine and no assertion, which is what G1's diff review
    - **Not frozen** (a checkout, the RPM): `env PYTHONPATH=<HERE>[:inherited]`, the running
      interpreter, `-m oneup.engine` — stage 7's v2 arm unchanged — and present only where
      `<HERE>/oneup/engine/__main__.py` is a file.
-   - **Frozen** (the AppImage): copy the bundled engine source — `oneup/__init__.py`, which
-     `-m oneup.engine` imports first, and `oneup/engine/*.py`, never a `__pycache__` — to
-     `<STATE_DIR>/engine/<digest>/`, where `<digest>` is a hash of the source's relative paths
-     and bytes, then launch `env PYTHONPATH=<that directory>`, the machine's `python3`,
-     `-m oneup.engine`. Copy into a temporary sibling and rename it into place, so a
-     half-written copy is never launched; reuse an existing directory with that digest
-     unchanged. Find `python3` on `PATH` and accept it only if it reports a version at or
-     above `docs/standards/coding.md` §1's floor; ask once per process. **Other digests'
+   - **Frozen** (the AppImage): copy the bundled engine source, which step 4 puts under
+     `<HERE>/engine-src/` — `oneup/__init__.py`, which `-m oneup.engine` imports first, and
+     `oneup/engine/*.py`, never a `__pycache__` — to `<STATE_DIR>/engine/<digest>/`, where
+     `<digest>` is a hash of the source's relative paths and bytes, then launch `env` with
+     `PYTHONPATH=<that directory>`, the machine's `python3`, `-m oneup.engine`. **The same
+     `env` restores `LD_LIBRARY_PATH`** from `LD_LIBRARY_PATH_ORIG`, or removes it where that
+     is absent: measured 2026-10-02, a PyInstaller one-file bundle sets it to its own `_MEI…`
+     directory and every child inherits it, so the machine's `python3` would load the
+     bundle's libraries, which go when the window exits. Copy into a temporary sibling and
+     rename it into place, so a half-written copy is never launched; reuse an existing
+     directory with that digest unchanged. Find `python3` on `PATH` and accept it only if it
+     reports a version at or above `docs/standards/coding.md` §1's floor; ask once per
+     process. Keep that answer and the stderr line's sent-once flag in module state that one
+     function clears, so the suite can clear it before each case. **Other digests'
      directories are left in place**: nothing records which digest a live engine is using
      — a `--check`, a `--size --hold` wait and a run before its lock write all leave
      `run.state` absent — so no deletion can be shown safe.
@@ -1705,8 +1712,8 @@ engine suite's *default* engine and no assertion, which is what G1's diff review
    `paths.ENGINE`**, which this step removes, so re-key it in the same edit: no string
    constant under `oneup/gui/` outside `paths.py`, docstrings excepted, names
    `update_system.sh` or `oneup.engine`.
-   → **verify:** in `tests/gui-smoke.py`, with the state paths sandboxed (testing.md §2):
-   the checkout arm's argv is exactly stage 7's v2 argv; with `sys.frozen` faked and
+   → **verify:** in `tests/gui-smoke.py`, with the state paths sandboxed (testing.md §2) and
+   the resolver's state cleared before each case: the checkout arm's argv is exactly stage 7's v2 argv; with `sys.frozen` faked and
    `HERE` pointed at a sandbox holding a source tree, the resolver copies it, the copy
    answers `--help`, a second resolve reuses the directory, and an edit to one source byte
    produces a new digest; with `python3` made unresolvable it reports unavailable, the
@@ -1726,9 +1733,9 @@ engine suite's *default* engine and no assertion, which is what G1's diff review
    stderr and exits non-zero.
 
 3. **The suites and gates follow the default.** `tests/mock-env.sh`'s default
-   `ENGINE_CMD` becomes the Python engine, headed by `env` carrying the repo root (the
-   directory `ENGINE` already resolves to) on `PYTHONPATH`, so it resolves from any working
-   directory, and `tests/run-tests.sh` with nothing set tests what users now run;
+   `ENGINE_CMD` becomes the Python engine, headed by `env` carrying the repo root —
+   `$(dirname "$ENGINE")`, since `ENGINE` names the Bash file — on `PYTHONPATH`, so it
+   resolves from any working directory, and `tests/run-tests.sh` with nothing set tests what users now run;
    `ONEUP_ENGINE_CMD` still overrides it. `tests/gui-smoke.py`'s G3
    scenario drops its `ONEUP_ENGINE` skip and always runs. `local-CI.sh` and
    `.github/workflows/release.yml` drop the second window pass, which existed only to set
@@ -1740,7 +1747,9 @@ engine suite's *default* engine and no assertion, which is what G1's diff review
    → **verify:** from the repo root, the engine suite with both variables unset reports the
    same passed and failed counts as with `ONEUP_ENGINE_CMD='python3 -m oneup.engine'`, and
    goes red with the Python engine's entry module replaced by a stub — so the default really
-   moved; the unset run gives the same counts again from another directory. The suite diff
+   moved; and the default `ENGINE_CMD` answers `--help` when run from another directory.
+   (The whole suite is not re-run there: the G5 scenario pins its own engine and resolves
+   only from the root.) The suite diff
    touches no assertion. The window suite is green in one pass with the G3 scenario
    reported as run, not skipped.
 
@@ -1749,9 +1758,10 @@ engine suite's *default* engine and no assertion, which is what G1's diff review
      that runs `python3 -m oneup.engine` with `%{_datadir}/oneup` on `PYTHONPATH`, and list
      it in `%files`. `update_system.sh` stays installed. `%description` names the Python
      engine.
-   - **AppImage** (`packaging/appimage/build-appimage.sh`): add the engine's source as data,
-     at the path step 1's frozen arm reads, alongside the existing `update_system.sh` and
-     icon entries.
+   - **AppImage** (`packaging/appimage/build-appimage.sh`): add `oneup/__init__.py` and
+     `oneup/engine/` as data under `engine-src/`, a directory of their own so the data never
+     shares a path with the frozen `oneup` package, alongside the existing
+     `update_system.sh` and icon entries.
    - **OBS** (`packaging/obs/_service`): nothing. It rolls the tagged source, which carries
      the package already.
 
@@ -1760,7 +1770,8 @@ engine suite's *default* engine and no assertion, which is what G1's diff review
    `./local-CI.sh --full` builds the AppImage. That AppImage's headless `--check`, run with
    `XDG_STATE_HOME` pointed at a scratch directory, exits as a source checkout's does,
    leaves one digest directory there, and while it runs the process list shows the
-   machine's `python3` running from that directory and not from the bundle's mount.
+   machine's `python3` running from that directory and not from the bundle's mount, with no
+   `_MEI` directory in its `LD_LIBRARY_PATH` (`/proc/<pid>/environ`).
 
 5. **ONEUP-0149 — reproduce it before fixing it.** `_reexec_under_inhibitor` re-execs
    `sys.executable -m oneup.engine`, which resolves only where `oneup` is importable from
@@ -1812,6 +1823,10 @@ engine suite's *default* engine and no assertion, which is what G1's diff review
    - `docs/standards/wording-and-translation.md`'s line naming `./update_system.sh` as the
      terminal path.
    - `CHANGELOG.md` `[Unreleased]`: one user-facing entry.
+   - Spec §4.7, **`main` then merge**: its *What stage 7 actually built* bullet still says
+     `_find_engine` and `ENGINE` stay and `ONEUP_ENGINE` is the window's switch. Record what
+     this stage built instead — the resolver and its stderr report, the variable gone, the
+     frozen arm's copy and its `LD_LIBRARY_PATH` restore.
    → **verify:** `python3 tests/docs-check.py` clean; a search of these files for
    `update_system.sh` returns only passages about the fallback; `./local-CI.sh` green with
    both variables unset **and the measured time in the commit body**.
@@ -1953,7 +1968,7 @@ that has never been red is not yet known to be a test. `main`'s behaviour is unc
 measurement; when the engine suite's default is the Python engine and its counts match the
 overridden run's; when the RPM builds with `oneup-engine` listed, and the AppImage's
 headless `--check` runs its engine from a copy outside the bundle; when the marker gate
-reports a Python-only untested marker; when step 8's documents read true on `v2`; and when
+reports a Python-only untested marker; when step 8's documents read true on `v2`, spec §4.7 among them on both branches; and when
 `./local-CI.sh` is green on `v2` with both variables unset.
 
 **The item is done** at stage 9, when G1–G6 are met. `docs/design/oneup-2.0.md`
@@ -1979,3 +1994,4 @@ is the commit they are measured against.
 | 13 | 2026-09-03 | 3 lanes, cold; genre pinned plan; Q1 2 · Q2 2 · Q3 1 · Q4 1 — 6 verified, 0 dismissed, all 6 fixed | Loop 1 of a new run, on stage 7's newly appended steps; stages 1-6 were not re-opened. **All three lanes found the same three defects**, the highest agreement any loop of this document has produced. The sharpest: step 4's G3 scenario set the switch itself, so it would have run in both of step 6's `local-CI.sh` passes — leaving step 6 nothing it alone could prove and its verify (*"turns the second red and leaves the first green"*) unachievable. The scenario now reads the ambient switch and skips unless it is `v2`. Second: step 1 said the v2 arm prepends the repo root to the child's `PYTHONPATH`, and an argv cannot carry an environment — three incompatible builds followed, and the omission was invisible because every stage-7 check runs from the checkout root. The v2 argv is now headed by `env`. Third: the branch paragraph cited §9's second binding for two standards edits that name no `v2`-only path, where this plan's own stage 2 step 13 made the opposite call on the same shape; they now route as that step did, on ONEUP-0130's gap. **Two lanes found step 2's verify unsatisfiable in both directions**: step 1 leaves a `bash` literal in `engine_argv`'s own v1 arm, so *"no `bash` literal under `oneup/gui/`"* can never come back clean and would be satisfied by deleting the only thing that launches the Bash engine — while two sites build their argv in a different function from the one naming `bash`, so it could not fail on them either. It is now a check on launch sites. A lane's open question became the fifth finding: the structural check sat in `tests/gui-smoke.py`, which imports PySide6 at module level and exits 77 wholesale, so a Qt-free text check would have been gated on Qt; it moves to `tests/imports-test.py`, which is stdlib-only and never skips. The sixth was found at Phase 1b before any lane was spent — step 7 sent `ONEUP_ENGINE` to `files-and-naming.md` §5.1's table, which tables path and setting overrides and already carries `ONEUP_TEST_NETWORK` as a bullet below it for exactly that reason. Three lane open questions resolved clean and are not in the tally: `-k` does not invalidate a warm credential (the engine's own measured comment), `_stand_down_autoupdate` does open a `QMessageBox.information` on `_query_auth_status`'s finish path, and §5.1's caption is a pre-existing defect in that standard rather than this plan's. |
 | 14 | 2026-09-03 | 3 lanes, cold; genre pinned plan; Q1 2 · Q2 1 · Q3 3 · Q4 2 — 8 verified, 1 dismissed, all 8 fixed. Cap reached (2 for a plan); the run files its tail and exits | Half the loop landed on text loop 13 wrote — a cap between calm and violent, and the pattern every stage of this plan has shown. **All three lanes found the same defect**: stage 7 added a gate and settled neither half of the obligation stage 4 step 11 states, so a builder would have shipped a G3 gate that never runs in CI, in silent breach of §6.1 step 3. Step 7 now discharges it rather than deviating — `release.yml` already runs `tests/gui-smoke.py` with an exit-77 skip, so the second pass is that leg again with the switch set, and stage 6's deviation does not carry over. **Two lanes found the mirror of loop 13's own fix**: making the G3 scenario skip unless `ONEUP_ENGINE` is `v2` created a hazard nothing pinned, because `local-CI.sh` does not scrub its environment — an exported switch makes both passes v2 passes and the discriminator reports red for both. The first pass now clears it explicitly, as stage 6 step 2 did for the sibling variable. Two more landed on loop 13's text: its structural-check verify covered every child process under `oneup/gui/`, where `autostart.py` shells to `systemctl --user` and the repository editor's apply launches no engine, so the check could never go green; and the done list required the property while requiring no check, against its own closing rule. **Both of one lane's open questions became findings on inspection**, and both are the same shape — a document falsified by a change this stage makes and named nowhere: `testing.md` §1's GUI row says that suite asserts on the window's state after being fed marker lines, and `tests/imports-test.py`'s docstring counts its rules and names ONEUP-0034 §5 as their contract. Also fixed: step 7's verify could not fail, since a copied-forward range is byte-identical to a re-measured one — it now asks for the measured time in the commit body, as stage 6 step 6 does; and step 8 stated no rule-14 disposition where stages 2, 5 and 6 each state theirs, and carried one sentence that was direction for stage 9 rather than a record of what was built. One finding dismissed as immaterial and corrected anyway as a false claim: `_stand_down_autoupdate` early-returns unless the weekly timer is enabled, so it does not block on *any* machine without the drop-in. Every verified finding of both loops fell inside the gated span, so this run was a gate rather than an audit. |
 | 15 | 2026-10-02 | 2 lanes, cold, each holding every question; genre pinned plan; admitted pair with the spec as companion (its §4.7 amended in the same change); Q1 1 · Q2 3 · Q3 5 · Q4 1 — 10 verified, 0 dismissed, all 10 fixed | Loop 1 of a new run, on stages 8 and 9. **One Q1 was the orchestrator's, from building the packet**: step 3 named two silent guards where there are five. **Both lanes led with the same two**: step 1 (ONEUP-0149) needed launch shapes that steps 2 and 5 create later, so it moved after packaging and the steps renumbered; and step 6's probe verify passed with the step undone, because the table and parity checks already report a Python-only marker. Both lanes also found the plan's callers-print design contradicting §4.7's *"the resolver reports … so no caller has to"*: the resolver now writes its tried list to stderr itself. Both found the digest pruning keyed on `run.state`, which a `--check`, a `--hold` wait and a run before its lock write all leave absent, so pruning is dropped. One lane found `tests/imports-test.py`'s launch check keyed on `paths.ENGINE`, which step 1 deletes; it is now re-keyed in the same step. Two Q2s were in the companion spec's §8 (ONEUP-0066's stale "carry the list" obligation, and a 2.0.0 bump §4.6 puts at the release). Two Q3s were open questions settled by the orchestrator: the copied tree needs `oneup/__init__.py`, and the suite's new default needs the repo root on `PYTHONPATH` to run from another directory. Two open questions resolved clean: the release workflow never launches the AppImage, and G1 is the engine suite's alone. Lane spend, per neutral-lane: 1.64 and 1.61 USD |
+| 16 | 2026-10-02 | 2 lanes, cold, each holding every question; genre pinned plan; same admitted pair; Q1 1 · Q2 0 · Q3 3 · Q4 2 — 6 verified, 0 dismissed, all 6 fixed. Cap reached (2 for a plan); the run files no tail and exits | **A calm cap: 3 of the 6 landed on text loop 15 wrote** — step 3's "the directory `ENGINE` already resolves to" (`ENGINE` names a file), its other-directory verify (the G5 scenario pins its own engine and resolves only from the root), and step 1's new stderr-once line, whose once-per-process cache made its own check depend on test order (the resolver's state is now cleared per case). The other three were draft defects. **Both lanes asked for the same measurement, and it found the loop's most consequential defect**: a throwaway PyInstaller one-file bundle sets `LD_LIBRARY_PATH` to its own `_MEI…` directory and every child inherits it, so the frozen arm's machine `python3` would load the bundle's libraries, which go when the window exits — the frozen arm's `env` now restores it. Also: no step recorded stage 9 in spec §4.7, which stage 9 makes false (step 8 now does, `main` then merge); and the AppImage data had no named destination, so it could share a path with the frozen package (now `engine-src/`). Two open questions resolved clean — the spec's two branch copies differ by design (`workflow.md` §9's third binding), and G1 is the engine suite's alone. **This loop's six fixes are read by no lane**; implementation is their reader. Second share: 14 of the run's 16 findings fell inside the armed span (stages 8–9 and §4.7's amendment), the other 2 on spec §8's older text. Lane spend, per neutral-lane: see Phase 6 |
