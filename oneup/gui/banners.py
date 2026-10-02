@@ -260,9 +260,46 @@ def restart_services(win):
                  + "\n\nThe Restart now button above will do that when you are "
                    "ready.")
     if QMessageBox.question(win, "Restart services?", body) == QMessageBox.Yes:
-        QProcess.startDetached("pkexec", ["systemctl", "restart", *safe])
-        # Nothing is left for this button to do. Anything still needing a reboot is
-        # carried by the reboot banner, which on_finished has already shown.
+        _start_service_restart(win, "pkexec", ["systemctl", "restart", *safe])
+        # Hidden while it runs, and shown again only if the restart fails, so a failed
+        # one can be retried. Anything still needing a reboot is carried by the reboot
+        # banner, which on_finished has already shown.
         win.services_banner.setVisible(False)
+
+
+def _start_service_restart(win, prog: str, args: list[str]) -> None:
+    """Run the restart attached, so its result can be reported (ONEUP-0229). It was
+    started detached, and the user was never told whether it worked. The one place it
+    starts: the suite replaces this, so no test launches a real pkexec."""
+    units = args[2:]
+    p = QProcess(win)
+    p.setProcessChannelMode(QProcess.MergedChannels)
+    p.finished.connect(lambda code, _status, p=p: _on_services_restarted(
+        win, code, bytes(p.readAll()).decode(errors="replace"), units))
+    p.errorOccurred.connect(lambda err: err == QProcess.FailedToStart
+                            and _on_services_restarted(win, -1, f"{prog} could not be started.",
+                                                       units))
+    win._restart_proc = p
+    p.start(prog, args)
+
+
+def _on_services_restarted(win, code: int, output: str, units: list[str]) -> None:
+    """Say how the restart went, in a box the user closes with OK (ONEUP-0229, the
+    user's choice 2026-10-02). pkexec exits 126 when its password prompt is dismissed
+    and 127 when authorisation fails or pkexec itself errs (pkexec(1)); any other
+    non-zero status is systemctl's own failure, and its output is the reason."""
+    names = ", ".join(units)
+    if code == 0:
+        QMessageBox.information(win, "Services restarted",
+                                f"These services were restarted:\n\n{names}")
+        return
+    if code == 126:
+        reason = "The password prompt was closed, so nothing was restarted."
+    elif code == 127:
+        reason = "Permission to restart them was refused, or could not be asked for."
+    else:
+        reason = "The restart failed:\n\n" + (output.strip()[-600:] or f"exit code {code}")
+    win.services_banner.setVisible(True)
+    QMessageBox.warning(win, "Services not restarted", f"{reason}\n\nServices: {names}")
 
 

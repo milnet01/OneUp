@@ -154,6 +154,8 @@ DL_RETRY_FAILED=false    # recovery ran and its download pass failed. What the h
                       # there would be a silent wrong answer (workflow.md §1.1).
 SYS_LOG_FIRST=""      # snapshot of the first attempt's log. The retry's `tee` truncates
                       # SYS_LOG, so the failing package's name only survives here.
+SYS_DOWNLOAD_BEGAN=false  # some package started downloading in the system step — so the
+                      # cache may hold what a retry needs (ONEUP-0228). Read by the cache step.
 REFRESH_TIMEOUT="${ONEUP_REFRESH_TIMEOUT:-120}"   # per-repository refresh budget, seconds.
                       # zypper has no timeout of its own: a mirror trickling metadata at
                       # 1 KB/s once held a run for hours with nothing on screen. Overridable
@@ -1805,7 +1807,7 @@ _run_system_upgrade_inner() {
         # failure is the one case where doing so throws away a working source.
         if ! $DL_RECOVERY_TRIED && ! stop_pending \
            && grep -qiE 'bytes missing|returned error: 404|Download.*failed|Curl error|connection failed' "$SYS_LOG" \
-           && ! grep -qiE 'No space left|disk full|conflict|nothing provides|not installable|signature|GPG' "$SYS_LOG" \
+           && ! grep -qiE 'No space left|disk full|conflict|nothing provides|not installable|cannot be provided|^Problem: [0-9]|does not belong to a distupgrade repository|signature|GPG' "$SYS_LOG" \
            && grep -qiE '^baseurl[[:space:]]*=[[:space:]]*https?://download\.opensuse\.org' \
                         "$REPOS_DIR"/*.repo 2>/dev/null
         then
@@ -2027,7 +2029,9 @@ if step_selected system && ! stop_pending; then
             fi
         elif grep -qiE 'Timeout|could not resolve|connection failed|Curl error|Download.*failed|Temporary failure' "$SYS_LOG"; then
             hint="A download failed — check your internet connection, then retry."
-        elif grep -qiE 'conflict|nothing provides|not installable' "$SYS_LOG"; then
+        # zypper's solver words a conflict several ways; a real run (2026-09-22) said only
+        # "Problem: 1: … cannot be provided" and got no hint at all (ONEUP-0227).
+        elif grep -qiE 'conflict|nothing provides|not installable|cannot be provided|^Problem: [0-9]|does not belong to a distupgrade repository' "$SYS_LOG"; then
             hint="A package conflict — often a third-party repo. Check the log; you may need to disable a conflicting repository."
         fi
         if [[ -n "$hint" ]]; then
@@ -2035,6 +2039,11 @@ if step_selected system && ! stop_pending; then
             marker HINT "$hint"
         fi
         end_step system fail "zypper reported an error"
+    fi
+    # Decided before the logs go: zypper prints one Retrieving:/Preloading: line per package
+    # it starts to fetch, and a retry truncates SYS_LOG, so the first attempt is read too.
+    if grep -qE '^(Retrieving|Preloading): ' "$SYS_LOG" ${SYS_LOG_FIRST:+"$SYS_LOG_FIRST"} 2>/dev/null; then
+        SYS_DOWNLOAD_BEGAN=true
     fi
     rm -f "$SYS_LOG" "$PROGRESS_SEEN_FILE" "$SYS_LOG_FIRST"
     [[ -n "$CDN_REPOSD_DIR" ]] && rm -rf "$CDN_REPOSD_DIR"   # rm -f cannot remove a dir
@@ -2204,8 +2213,10 @@ if step_selected cache && ! stop_pending; then
     # aborted with 194 MB missing, the step failed, and this step then reclaimed
     # 424 MB — so the retry started again from zero, over the same mirror that had
     # just dropped the connection (ONEUP-0087). Disk space is worth far less than a
-    # download that finally completes.
-    if [[ "${RESULT[system]:-}" == "fail" ]]; then
+    # download that finally completes. But only a download that BEGAN left anything to
+    # keep: a failure in dependency solving fetched nothing, so the cache is cleaned as
+    # normal and nothing is said about keeping it (ONEUP-0228, the user's rule 2026-10-02).
+    if [[ "${RESULT[system]:-}" == "fail" ]] && $SYS_DOWNLOAD_BEGAN; then
         note="Kept the already-downloaded packages, so retrying the update doesn't fetch them all over again."
         echo "  $note"
         marker HINT "$note"

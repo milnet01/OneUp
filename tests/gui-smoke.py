@@ -794,15 +794,15 @@ def main() -> int:
         run.handle_line(w, line)
     launched = []
     _orig_question = QMessageBox.question
-    _orig_detached = QProcess.startDetached
+    _orig_launch = banners._start_service_restart
     QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
-    QProcess.startDetached = staticmethod(
-        lambda prog, args=None, *a, **k: (launched.append((prog, list(args or []))), True)[1])
+    # The one launch seam (ONEUP-0229): replaced so no test starts a real pkexec.
+    banners._start_service_restart = lambda _w, prog, args: launched.append((prog, list(args)))
     try:
         banners.restart_services(w)
     finally:
         QMessageBox.question = _orig_question
-        QProcess.startDetached = _orig_detached
+        banners._start_service_restart = _orig_launch
     check("restart services launches something for bare unit names", bool(launched))
     check("restart services passes every bare unit name to systemctl",
           bool(launched)
@@ -813,6 +813,41 @@ def main() -> int:
           all("-f" not in call[1] for call in launched))
     check("restart services hides the banner once it has launched",
           bool(launched) and not w.services_banner.isVisibleTo(w))
+
+    # --- 4a-i. The restart says how it went (ONEUP-0229) -------------------------
+    # Reported by the user 2026-10-02: the button gave no sign of whether the services
+    # restarted. Their choice: a box when it finishes, success or the reason, closed with
+    # OK. pkexec's 126 and 127 are its own (pkexec(1)); anything else is systemctl's.
+    shown = []
+    _orig_info, _orig_warn = QMessageBox.information, QMessageBox.warning
+    QMessageBox.information = staticmethod(
+        lambda *a, **k: shown.append(("info", a[2])) or 0)
+    QMessageBox.warning = staticmethod(
+        lambda *a, **k: shown.append(("warn", a[2])) or 0)
+    try:
+        outcome = {}
+        for code, out in ((0, ""), (126, ""), (127, ""), (1, "Job for cups.service failed.")):
+            banners._on_services_restarted(w, code, out, ["sshd", "cups"])
+            outcome[code] = shown[-1]
+        # The wiring, not just the handler: a real child's exit status and output reach
+        # the box. `sh` stands in for pkexec; nothing privileged runs.
+        banners._start_service_restart(w, "sh", ["-c", "echo boom; exit 3"])
+        w._restart_proc.waitForFinished(5000)
+        wired = shown[-1]
+    finally:
+        QMessageBox.information, QMessageBox.warning = _orig_info, _orig_warn
+    check("a successful restart says so, naming the services",
+          outcome[0][0] == "info" and "sshd, cups" in outcome[0][1])
+    check("a dismissed password prompt is given as the reason",
+          outcome[126][0] == "warn" and "password prompt was closed" in outcome[126][1])
+    check("a refused authorisation is given as the reason",
+          outcome[127][0] == "warn" and "refused" in outcome[127][1])
+    check("systemctl's own failure carries its message",
+          outcome[1][0] == "warn" and "Job for cups.service failed." in outcome[1][1])
+    check("a failed restart brings the banner back for a retry",
+          w.services_banner.isVisibleTo(w))
+    check("a real child's exit status and output reach the report",
+          wired[0] == "warn" and "boom" in wired[1])
 
     # --- 4a-ii. A session-critical service is never restarted (ONEUP-0111) -----
     # Asked by the user the day ONEUP-0110 made this button work: what if it restarts
@@ -849,11 +884,14 @@ def main() -> int:
         QMessageBox.information = staticmethod(lambda *a, **k: 0)
         QProcess.startDetached = staticmethod(
             lambda prog, args=None, *a, **k: (calls.append([prog, *(args or [])]), True)[1])
+        _ls = banners._start_service_restart
+        banners._start_service_restart = lambda _w, prog, args: calls.append([prog, *args])
         try:
             banners.restart_services(win)
         finally:
             (QMessageBox.question, QMessageBox.information,
              QProcess.startDetached) = _q, _i, _d
+            banners._start_service_restart = _ls
         return win, [a for call in calls for a in call]
 
     CRITICAL = ["display-manager", "user@1000", "dbus", "systemd-logind", "polkit"]

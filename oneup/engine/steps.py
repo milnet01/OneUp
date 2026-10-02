@@ -306,7 +306,10 @@ def run_cache() -> None:
     (ONEUP-0056).
     """
     begin_step("cache")
-    if RESULT.get("system") == "fail":
+    # Only a download that BEGAN left anything to keep: a failure in dependency solving
+    # fetched nothing, so the cache is cleaned as normal and nothing is said about
+    # keeping it (ONEUP-0228, the user's rule 2026-10-02).
+    if RESULT.get("system") == "fail" and SYS_DOWNLOAD_BEGAN:
         note = ("Kept the already-downloaded packages, so retrying the update doesn't "
                 "fetch them all over again.")
         markers.out(f"  {note}")
@@ -393,6 +396,9 @@ DL_RETRY_FAILED = False
 
 _SYS_LOG: Path | None = None
 _SYS_LOG_FIRST: Path | None = None
+# Some package started downloading in the system step, so the cache may hold what a
+# retry needs (ONEUP-0228). Set by _discard_logs before the logs go; read by run_cache.
+SYS_DOWNLOAD_BEGAN = False
 _CDN_REPOSD_DIR = ""
 
 # The unprivileged engine cannot signal a root child (`security.md` §2.2), so a
@@ -484,8 +490,9 @@ _TRANSFER_FAILURE = re.compile(
     r"bytes missing|returned error: 404|Download.*failed|Curl error|connection failed",
     re.IGNORECASE)
 _NOT_TRANSFER = re.compile(
-    r"No space left|disk full|conflict|nothing provides|not installable|signature|GPG",
-    re.IGNORECASE)
+    r"No space left|disk full|conflict|nothing provides|not installable|cannot be provided"
+    r"|^Problem: [0-9]|does not belong to a distupgrade repository|signature|GPG",
+    re.IGNORECASE | re.MULTILINE)
 
 
 def _log_text() -> str:
@@ -585,8 +592,18 @@ def _failed_package() -> str:
 
 
 def _discard_logs() -> None:
-    """Drop this step's temporary files, including the throwaway repos.d copy."""
-    global _CDN_REPOSD_DIR
+    """Drop this step's temporary files, including the throwaway repos.d copy.
+
+    Decides SYS_DOWNLOAD_BEGAN first: zypper prints one Retrieving:/Preloading: line
+    per package it starts to fetch, and a retry truncates _SYS_LOG, so the first
+    attempt's log is read too."""
+    global _CDN_REPOSD_DIR, SYS_DOWNLOAD_BEGAN
+    for path in (_SYS_LOG, _SYS_LOG_FIRST):
+        if path is not None:
+            with contextlib.suppress(OSError):
+                if re.search(r"^(Retrieving|Preloading): ",
+                             path.read_text(errors="replace"), re.MULTILINE):
+                    SYS_DOWNLOAD_BEGAN = True
     for path in (_SYS_LOG, _SYS_LOG_FIRST):
         if path is not None:
             with contextlib.suppress(OSError):
@@ -681,7 +698,11 @@ def _failure(systemic: bool, import_keys: bool) -> None:
     elif re.search(r"Timeout|could not resolve|connection failed|Curl error"
                    r"|Download.*failed|Temporary failure", log, re.IGNORECASE):
         hint = "A download failed — check your internet connection, then retry."
-    elif re.search(r"conflict|nothing provides|not installable", log, re.IGNORECASE):
+    # zypper's solver words a conflict several ways; a real run (2026-09-22) said only
+    # "Problem: 1: … cannot be provided" and got no hint at all (ONEUP-0227).
+    elif re.search(r"conflict|nothing provides|not installable|cannot be provided"
+                   r"|^Problem: [0-9]|does not belong to a distupgrade repository",
+                   log, re.IGNORECASE | re.MULTILINE):
         hint = ("A package conflict — often a third-party repo. Check the log; you may "
                 "need to disable a conflicting repository.")
     if hint:

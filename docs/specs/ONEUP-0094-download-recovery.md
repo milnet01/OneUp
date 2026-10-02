@@ -186,7 +186,8 @@ existing early return. All five conditions must hold:
 2. The failure is **transfer-shaped**: `$SYS_LOG` matches
    `bytes missing|returned error: 404|Download.*failed|Curl error|connection failed`, and
    does **not** match the shapes that recovery cannot help and must not mask —
-   `No space left|disk full|conflict|nothing provides|not installable|signature|GPG`.
+   `No space left|disk full|conflict|nothing provides|not installable|cannot be provided|^Problem: [0-9]|does not belong to a distupgrade repository|signature|GPG`
+   — the solver's three wordings added by ONEUP-0227.
 3. No stop is pending (`stop_pending` false). A user who asked to stop is not served by
    another download pass.
 4. Recovery has not already been attempted this run (`DL_RECOVERY_TRIED` false — the

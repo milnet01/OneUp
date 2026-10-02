@@ -64,6 +64,23 @@ All notable changes to OneUp are documented here. The format follows
   whatever language your computer uses. It now uses your language's, in
   the same day, month, year order as before.
 
+- **An update that stops on a package conflict now says so** (ONEUP-0227)
+  When the package manager could not work out how to update because of
+  a conflict, often caused by a third-party source, OneUp showed no
+  explanation. It now gives the same advice as for other conflicts:
+  check the log, and you may need to turn off the conflicting source.
+
+- **OneUp no longer claims it kept downloaded packages when nothing was downloaded** (ONEUP-0228)
+  After a failed update OneUp kept the downloaded packages for a retry
+  and said so, even when the update failed before anything had
+  downloaded. It now keeps them, and says so, only when a download had
+  actually started; otherwise it cleans up as normal.
+
+- **"Restart services" now tells you whether it worked** (ONEUP-0229)
+  Clicking "Restart services" gave no sign of what happened. A short
+  message now says the services were restarted, or why they were not,
+  for example that the password prompt was closed.
+
 - **The window no longer blames the server when an update is just busy writing to a slow disk** (ONEUP-0232)
   When a step went quiet for a while, the window always said the server
   might have stalled. That was wrong when nothing was downloading, for
