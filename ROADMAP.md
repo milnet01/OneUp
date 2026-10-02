@@ -5848,6 +5848,15 @@ when complete (that document's §7).
   which breaks INV-5. Rejected: running from inside the bundle (relies on that
   inheritance), and keeping the AppImage on the Bash fallback (stops working
   with the window once ONEUP-0072 lands).
+  Progress (2026-10-02): stage 9's build steps appended to docs/plans/ and
+  gated, with spec §4.7's AppImage amendment as an admitted pair.
+  review-contract --genre plan, 2 loops x 2 cold lanes (neutral-lane), 16
+  verified, 16 fixed, cap reached, calm (3 of loop 2's 6 on loop 1's text).
+  Lane spend 1.64 + 1.61 + 2.07 + 1.75 USD. Best catch, measured on the
+  lanes' request: a PyInstaller one-file bundle points LD_LIBRARY_PATH at
+  its own _MEI directory and children inherit it, so the AppImage's
+  copied-out engine must have it restored. Plan rows 15-16 (main abbc009).
+  Building next.
 
 - 🚧 [ONEUP-0057] **Write the OneUp 2.0 documentation set before any 2.0 code is written.**
   Agreed with the user 2026-07-26. Deliverables, in order: nine standards
