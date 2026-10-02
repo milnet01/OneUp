@@ -3421,7 +3421,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-services.
 
-- 📋 [ONEUP-0158] **The autostart unit freezes its executable path, so an AppImage upgrade silently breaks it.**
+- ✅ [ONEUP-0158] **The autostart unit freezes its executable path, so an AppImage upgrade silently breaks it.**
   `autostart.py` resolves the launcher at ENABLE time and writes it into the
   systemd unit and the .desktop entry. The normal AppImage upgrade — download the
   new file, delete the old — leaves ExecStart pointing at a file that no longer
@@ -3429,6 +3429,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   `_timer_enabled()` still answers enabled, so the toggle reads on. On startup,
   compare any installed entry's Exec against what would be written now and rewrite
   on a mismatch.
+  Resolved (2026-10-02): main ffa0f70, merged to v2 11895e0. At startup the
+  window rewrites any installed start-at-boot entry or timer .service whose
+  text differs from what this copy would write, reloading systemd once if
+  a unit changed; entries not installed are never created. One builder per
+  file, shared with the install path. Regression checks in gui-smoke.py on
+  both branches, seen red first.
   **Layman:** After updating OneUp itself, the weekly check can stop working while the toggle still says it is on.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-services.
