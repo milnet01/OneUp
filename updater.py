@@ -2628,6 +2628,9 @@ for (var i = 0; i < wins.length; i++) {{
             return
         p = getattr(self, "_authstat_proc", None)
         if p is not None and p.state() != QProcess.NotRunning:
+            # ONEUP-0178: the caller wants an answer from after its own change, and the
+            # probe in flight started before it. Ask again when that one finishes.
+            self._authstat_rerun = True
             return
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -2639,6 +2642,13 @@ for (var i = 0; i < wins.length; i++) {{
 
     def _on_auth_status_finished(self, proc: QProcess):
         if not _alive(self, proc):
+            return
+        if getattr(self, "_authstat_rerun", False):
+            # ONEUP-0178: this probe started before a change that asked for a fresh one,
+            # so its answer is stale. Acting on it would settle the enable latch with the
+            # pre-grant state and revert the toggle. Discard it and probe again.
+            self._authstat_rerun = False
+            self._query_auth_status()
             return
         out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
         is_on = "@@AUTH@@|on" in out

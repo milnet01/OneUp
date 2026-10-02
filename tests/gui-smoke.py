@@ -986,6 +986,31 @@ def main() -> int:
     check("a probe that emitted nothing still reflects passwordless as off",
           not w.auth_btn.isChecked())
 
+    # (h) ONEUP-0178: a probe asked for while another is still running must not be
+    # dropped. The window's startup probe is in flight when the user enables automatic
+    # updates; the grant succeeds and asks for a fresh probe. The startup probe's answer
+    # predates the grant, so letting it consume the latch reverts the toggle.
+    w = updater.Updater()
+    if getattr(w, "_authstat_proc", None) is not None:
+        w._authstat_proc.waitForFinished(5000)       # settle the real startup probe first
+    installed_h = []
+    w._install_user_timer = lambda *a, **k: (installed_h.append(a) or True)
+
+    class _Running:
+        def state(self): return updater.QProcess.Running
+
+    w._authstat_proc = _Running()                    # a probe that started before the grant
+    w._query_auth_status()                           # the grant's re-probe arrives
+    reprobes = []
+    w._query_auth_status = lambda: reprobes.append(1)
+    w._pending_autoupdate = True
+    w._on_auth_status_finished(_StubProc("@@AUTH@@|off\n"))   # the pre-grant answer
+    check("ONEUP-0178: a stale probe's answer does not consume the enable latch",
+          w._pending_autoupdate is True and not installed_h)
+    check("ONEUP-0178: a probe dropped while one ran is asked again", reprobes == [1])
+    w._on_auth_status_finished(_StubProc("@@AUTH@@|on\n"))    # the fresh answer
+    check("ONEUP-0178: the fresh answer installs the update timer", bool(installed_h))
+
     updater.QMessageBox.information = _orig_msg_info
     updater.QMessageBox.warning = _orig_msg_warn
 

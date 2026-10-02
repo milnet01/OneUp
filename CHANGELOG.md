@@ -8,6 +8,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Turning on automatic updates right after opening OneUp no longer switches itself back off** (ONEUP-0178)
+  If you turned it on while OneUp was still checking the password
+  setting it found at startup, OneUp used that older answer, decided the
+  password setting was off, and turned automatic updates back off. It
+  now waits for a fresh answer.
+
 - **"Copy diagnostics" no longer mangles the report on a computer with a short name** (ONEUP-0159)
   OneUp hides your computer's name before you share the report. On a
   computer called something like "oss", it also changed every "oss" in
