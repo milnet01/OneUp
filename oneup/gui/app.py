@@ -12,12 +12,12 @@ import subprocess
 import sys
 from datetime import datetime
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QCoreApplication, QSettings
 from PySide6.QtNetwork import QLocalSocket
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from .. import APP_ID, APP_NAME
-from . import markers, paths, tray
+from . import i18n, markers, paths, tray
 from .theme import _app_icon, apply_app_theme
 from .window import Updater
 
@@ -63,11 +63,21 @@ def _headless_log(suffix: str) -> str | None:
     return str(paths.STATE_LOG_DIR / f"{stamp}{suffix}")
 
 
+def _headless_app() -> QCoreApplication:
+    """The application object a timer path needs before it renders a sentence.
+    A `QCoreApplication`, which needs no display — a timer may have none — and
+    without which no catalogue can be installed (ONEUP-0032 §4.2, INV-9)."""
+    app = QCoreApplication.instance() or QCoreApplication(sys.argv)
+    i18n.load()
+    return app
+
+
 def _headless_check() -> int:
     """`oneup --check`: the engine's read-only check, and the window's notification.
     This is what the optional weekly systemd-user timer invokes."""
     if not paths.engine_available():     # the resolver has said what it tried, on stderr
         return 1
+    app = _headless_app()  # noqa: F841 — held for the run: the catalogues live on it
     log = _headless_log(".check.log")
     if log is None:
         return 1
@@ -95,6 +105,7 @@ def _headless_update() -> int:
     finish the rest, not fail the whole update."""
     if not paths.engine_available():     # the resolver has said what it tried, on stderr
         return 1
+    app = _headless_app()  # noqa: F841 — held for the run: the catalogues live on it
     log = _headless_log(".log")
     if log is None:
         return 1
@@ -138,7 +149,10 @@ def main():
     if "--update" in sys.argv[1:]:
         sys.exit(_headless_update())
 
-    app = QApplication([])
+    # sys.argv, so Qt sees its own options — `-reverse` is how the right-to-left
+    # test reaches the window (ONEUP-0032 §4.2). Qt leaves sys.argv as it found it.
+    app = QApplication(sys.argv)
+    i18n.load()
     app.setApplicationName(APP_NAME)
     app.setDesktopFileName(APP_ID)  # ties the window to its .desktop/icon
 

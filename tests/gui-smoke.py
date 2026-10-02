@@ -118,6 +118,7 @@ from oneup.gui import (  # noqa: E402 — same reason.
     banners,
     contrast,
     diagnostics,
+    i18n,
     markers,
     paths,
     placement,
@@ -212,7 +213,9 @@ def main() -> int:
     # user's LIVE OneUp and pop its window open mid-test (testing.md §2).
     os.environ["ONEUP_INSTANCE_NAME"] = f"OneUp-test-{os.getpid()}"
 
-    app = QApplication.instance() or QApplication([])
+    # sys.argv, so a `-reverse` run reaches Qt: built with [] the second pass would
+    # run left to right while reporting a pass (ONEUP-0032 §4.2, INV-5).
+    app = QApplication.instance() or QApplication(sys.argv)
     app  # noqa: B018 — keep a reference so it isn't GC'd mid-test.
 
     # --- 1. A malformed / spliced marker never throws out of the read slot ------
@@ -1657,17 +1660,26 @@ def main() -> int:
               len(_notes) == 1)
     check("INV-4 and constructed no tray icon on either path", _trays == [])
 
-    # INV-5 (transitional — ONEUP-0032 retires it): in a process of its own, neither
-    # path constructs a QCoreApplication. The child says so itself, because exiting
-    # cleanly would prove nothing (ONEUP-0077 INV-5).
+    # ONEUP-0032 INV-9 (it replaced ONEUP-0077's INV-5, which asserted the opposite):
+    # in a process of its own, each path builds an application object and offers the
+    # catalogues BEFORE it composes its sentence. The child reports both itself, at
+    # the moment the sentence is composed, because a clean exit would prove nothing.
     _child = (
         "import os, sys\n"
         f"sys.path.insert(0, {str(Path(__file__).resolve().parents[1])!r})\n"
         "from PySide6.QtCore import QCoreApplication\n"
-        "from oneup.gui import app, paths\n"
+        "from oneup.gui import app, i18n, markers, paths\n"
         f"paths._resolve_engine = lambda: ([sys.executable, {_mock_engine!r}], ['mock'])\n"
+        "seen = []\n"
+        "def spy(real):\n"
+        "    def wrapped(*a, **kw):\n"
+        "        seen.append(QCoreApplication.instance() is not None and i18n.called)\n"
+        "        return real(*a, **kw)\n"
+        "    return wrapped\n"
+        "markers.run_notification = spy(markers.run_notification)\n"
+        "markers.check_notification = spy(markers.check_notification)\n"
         "getattr(app, sys.argv[1])()\n"
-        "print('NO-APP' if QCoreApplication.instance() is None else 'APP')\n")
+        "print('READY' if seen == [True] else f'NOT-READY {seen}')\n")
     for _name, _lines in (("_headless_update", ["@@INSTALLED@@|2|yes|no", "@@DONE@@|ok"]),
                           ("_headless_check", ["@@CHECK@@|TOTAL|2|x"])):
         with open(_mock_env["ONEUP_MOCK_OUT"], "w") as _f:
@@ -1680,9 +1692,67 @@ def main() -> int:
             # interpreter; the child gets this one's module search path instead.
             env={**os.environ, **_mock_env, "ONEUP_MOCK_RC": "0",
                  "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}, timeout=60)
-        check(f"INV-5 {_name} in its own process constructs no QCoreApplication",
-              _r.returncode == 0 and _r.stdout.rstrip().endswith("NO-APP"))
-        check(f"INV-5 and still raised its notification ({_name})", _wait_for_notify())
+        check(f"INV-9 {_name} has an application object and loaded the catalogues "
+              "before its sentence", _r.returncode == 0 and _r.stdout.rstrip().endswith("READY"))
+        check(f"INV-9 and still raised its notification ({_name})", _wait_for_notify())
+
+    # --- ONEUP-0032 INV-2 and INV-4: the catalogue pair, and the translators' life ---
+    # A hand-written catalogue compiled with pyside6-lrelease — a freshly extracted one
+    # translates nothing — loaded for a left-to-right language with both directories
+    # pointed at throwaway copies, never at a real Qt installation.
+    _lrelease = shutil.which("pyside6-lrelease")
+    if not _lrelease:
+        print("  SKIP - INV-2/INV-4 need pyside6-lrelease, which is not installed")
+    else:
+        import gc
+
+        from PySide6.QtCore import QCoreApplication, QLocale
+        _i18n_dir = tempfile.mkdtemp(dir=_SANDBOX)
+
+        def _qm(name, context, source, translation):
+            ts = os.path.join(_i18n_dir, f"{name}.ts")
+            with open(ts, "w") as f:
+                f.write('<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE TS>\n'
+                        '<TS version="2.1" language="de_DE"><context>'
+                        f"<name>{context}</name><message><source>{source}</source>"
+                        f"<translation>{translation}</translation></message>"
+                        "</context></TS>\n")
+            # The tool is a Python script; under the rewritten HOME it needs this
+            # interpreter's module path to find PySide6, as INV-9's child does.
+            subprocess.run([_lrelease, ts, "-qm", ts[:-3] + ".qm"],  # noqa: S603
+                           capture_output=True, check=True,
+                           env={**os.environ,
+                                "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)})
+            return ts[:-3] + ".qm"
+
+        _ours_qm = _qm("oneup_de", "I18nTest", "Hello", "Hallo")
+        _qt_qm = _qm("qtbase_de", "I18nQtTest", "Yes", "Ja")
+        _locale = QLocale()
+        QLocale.setDefault(QLocale("de_DE"))
+        try:
+            for _ours, _qt, _want in ((True, True, True), (False, True, False),
+                                      (True, False, False), (False, False, False)):
+                _o, _q = tempfile.mkdtemp(dir=_SANDBOX), tempfile.mkdtemp(dir=_SANDBOX)
+                if _ours:
+                    shutil.copy(_ours_qm, _o)
+                if _qt:
+                    shutil.copy(_qt_qm, _q)
+                _got = i18n.load(_o, _q)
+                _ours_on = QCoreApplication.translate("I18nTest", "Hello") == "Hallo"
+                _qt_on = QCoreApplication.translate("I18nQtTest", "Yes") == "Ja"
+                _label = f"ours={'yes' if _ours else 'no'} qtbase={'yes' if _qt else 'no'}"
+                check(f"INV-2 {_label}: installed only as a pair",
+                      _got is _want and _ours_on is _want and _qt_on is _want)
+                if _want:
+                    gc.collect()
+                    check("INV-4 the installed catalogue still translates after gc.collect()",
+                          QCoreApplication.translate("I18nTest", "Hello") == "Hallo")
+                i18n.unload()
+            check("INV-2 unloading leaves the window in English",
+                  QCoreApplication.translate("I18nTest", "Hello") == "Hello")
+        finally:
+            i18n.unload()
+            QLocale.setDefault(_locale)
 
     # --- Settings popup groups the three background toggles --------------------
     w = window.Updater()

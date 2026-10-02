@@ -237,7 +237,9 @@ this item does not touch (§10), so it cannot assert any of these.
   at all — so on this item's code it entails this one; they are separate because INV-5 is
   transitional and this one outlives it.)
 
-- **INV-5** *(transitional — `ONEUP-0032` retires it, see §8)* This item requires no
+- **INV-5** *(retired 2026-10-02 by `ONEUP-0032`, whose INV-9 asserts the opposite: both
+  headless paths now build a `QCoreApplication` and load the catalogues before rendering.
+  Kept for the record; its test is gone.)* This item requires no
   `QCoreApplication` on either headless path, and constructs none.
   *Test:* `tests/gui-smoke.py` runs each entry point in a **subprocess** with no Qt
   application constructed. An in-process patch does not cross `subprocess`, so the child

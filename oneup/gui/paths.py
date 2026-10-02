@@ -232,6 +232,11 @@ def engine_tried() -> str:
 # `python3 …/oneup/gui/autostart.py --check`, which does nothing at all, and the
 # existing assertions pass either way (spec §4.4).
 ENTRY_POINT = HERE / "updater.py"
+# OneUp's own translation catalogues, `oneup_<lang>.qm` (ONEUP-0032 §4.2). Resolved
+# from the package's location, never the working directory, so a checkout, the
+# AppImage and the RPM find it by the same relative path. 2.0 ships none, so the
+# directory need not exist: a missing catalogue is the normal case.
+TRANSLATIONS_DIR = HERE / "oneup" / "translations"
 STATE_DIR = _state_home() / "oneup"
 HISTORY = STATE_DIR / "history.json"
 STATE_LOG_DIR = STATE_DIR / "logs"
