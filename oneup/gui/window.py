@@ -21,7 +21,18 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QProcess, QSettings, Qt, QTimer, QUrl
+from PySide6.QtCore import (
+    QByteArray,
+    QDate,
+    QDateTime,
+    QLocale,
+    QProcess,
+    QSettings,
+    Qt,
+    QTime,
+    QTimer,
+    QUrl,
+)
 from PySide6.QtGui import (
     QAccessible,
     QAccessibleEvent,
@@ -803,8 +814,15 @@ class Updater(QMainWindow):
             # "Overdue" in WORDS as well as amber: colour alone carries no meaning
             # for a colour-blind user. ⚠ matches the banners' existing idiom.
             overdue = "  ·  ⚠ overdue" if stale else ""
+            # The user's layout (day, month name, year — ONEUP-0182, 2026-10-02) with the
+            # month name from their locale. strftime's %b is always the C locale's, since
+            # Python never calls setlocale(LC_TIME); the full locale format was declined
+            # because it renders all-numeric on this machine's en_ZA.
+            stamp = QLocale().toString(
+                QDateTime(QDate(when.year, when.month, when.day), QTime(when.hour, when.minute)),
+                "dd MMM yyyy, HH:mm")
             self.last_run.setText(
-                f"Last run: {when:%d %b %Y, %H:%M}  ·  {relative}  —  {data['status']}{overdue}")
+                f"Last run: {stamp}  ·  {relative}  —  {data['status']}{overdue}")
         except (OSError, ValueError, KeyError):
             self.last_run.setText("Last run: never")
         # Amber the line once a run is overdue: flip the dynamic property and

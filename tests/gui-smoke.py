@@ -2228,6 +2228,21 @@ def main() -> int:
     check("an overdue run says so in words, not just in amber",
           "overdue" in wN.last_run.text())
 
+    # ONEUP-0182: the month name comes from the user's locale, in the day-month-year
+    # layout the user chose (2026-10-02); Python's %b is always the C locale's "Mar".
+    from PySide6.QtCore import QLocale
+    _orig_locale = QLocale()
+    QLocale.setDefault(QLocale(QLocale.Language.German, QLocale.Country.Germany))
+    try:
+        paths.HISTORY.write_text(window.json.dumps(
+            {"when": "2026-03-05T14:05:00", "status": "OK"}))
+        wN.refresh_last_run()
+        _month = QLocale().monthName(3, QLocale.FormatType.ShortFormat)
+        check("the last-run date names the month in the user's locale",
+              _month != "Mar" and f"05 {_month} 2026, 14:05" in wN.last_run.text())
+    finally:
+        QLocale.setDefault(_orig_locale)
+
     paths.HISTORY.unlink()
     wN.refresh_last_run()
     check("no history shows 'Last run: never'", wN.last_run.text() == "Last run: never")

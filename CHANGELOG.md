@@ -53,6 +53,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The "Last run" date uses your language's name for the month** (ONEUP-0182)
+  The date on the last-run line always showed the English month name,
+  whatever language your computer uses. It now uses your language's, in
+  the same day, month, year order as before.
+
 - **The window no longer blames the server when an update is just busy writing to a slow disk** (ONEUP-0232)
   When a step went quiet for a while, the window always said the server
   might have stalled. That was wrong when nothing was downloading, for
