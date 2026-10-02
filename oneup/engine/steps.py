@@ -490,8 +490,16 @@ def _commit_pass() -> bool:
     failure's evidence lives.
     """
     argv = privilege.sudo_argv(["env", "LC_ALL=C", *system_txn_argv()])
-    return _zypper_ok(proc.stream_filtered(argv, step="system", phase="install",
-                                           log=_SYS_LOG, append=True))
+    rc = proc.stream_filtered(argv, step="system", phase="install", log=_SYS_LOG, append=True)
+    # 103 = ZYPPER_EXIT_INF_RESTART_NEEDED: zypper installed an update to itself and must
+    # run again to install the rest (zypper(8), EXIT CODES). `_zypper_ok` counts it as
+    # informational, which read it as a finished update with the rest left uninstalled
+    # (ONEUP-0234). The same transaction runs once more and that run decides.
+    if rc == 103:
+        markers.out("  zypper updated itself — running the update again for the rest.")
+        rc = proc.stream_filtered(argv, step="system", phase="install", log=_SYS_LOG,
+                                  append=True)
+    return _zypper_ok(rc)
 
 
 _TRANSFER_FAILURE = re.compile(

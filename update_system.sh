@@ -1769,9 +1769,20 @@ run_system_download() {
 run_system_commit() {
     ok=true
     system_txn_argv
-    sudo env LC_ALL=C "${SYS_TXN[@]}" 2>&1 \
-        | tee -a "$SYS_LOG" | progress_filter system install
-    zypper_ok "${PIPESTATUS[0]}" || ok=false
+    # 103 = ZYPPER_EXIT_INF_RESTART_NEEDED: zypper installed an update to itself and must
+    # run again to install the rest (zypper(8), EXIT CODES). The same transaction runs once
+    # more and that run decides; read as a failure or a finish, 103 left the rest of the
+    # update uninstalled (ONEUP-0234). One call site, looped, so the privileged command
+    # set the passwordless rule must cover is unchanged (security.md §5.2).
+    local rc attempt
+    for attempt in 1 2; do
+        sudo env LC_ALL=C "${SYS_TXN[@]}" 2>&1 \
+            | tee -a "$SYS_LOG" | progress_filter system install
+        rc=${PIPESTATUS[0]}
+        (( rc == 103 && attempt == 1 )) || break
+        echo "  zypper updated itself — running the update again for the rest."
+    done
+    zypper_ok "$rc" || ok=false
 }
 
 # Build a copy of REPOS_DIR whose openSUSE baseurls point at the content CDN, and echo its

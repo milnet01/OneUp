@@ -76,6 +76,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **An update that first updated zypper itself now finishes the rest** (ONEUP-0234)
+  When zypper updates itself it asks to be run again for the remaining
+  updates. OneUp now does that once, instead of stopping there with
+  the rest of the update not installed.
+
 - **A weekly update you stopped no longer says "Already up to date"** (ONEUP-0074)
   It now says the update was stopped and points at the log. A weekly
   check that could not read a software source now says so, instead of
