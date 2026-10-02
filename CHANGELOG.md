@@ -8,6 +8,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **OneUp is ready to be translated, including into right-to-left languages** (ONEUP-0032)
+  Every sentence the window shows, speaks or sends as a notification
+  can now be translated with a data file alone; OneUp itself still
+  ships in English. The window mirrors correctly for Hebrew and Arabic
+  (the on/off switches and the expand arrows included), and nothing in
+  it stops Chinese, Japanese or Korean text from fitting. A test now
+  runs the whole window mirrored on every push.
+
 - **Eight colour themes, chosen in Settings** (ONEUP-0027)
   Settings gains a picker offering **Follow system** plus eight themes — four
   dark (Midnight, Carbon, Forest, Plum) and four light (Daylight, Paper, Sky,

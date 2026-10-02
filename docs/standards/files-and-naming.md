@@ -153,9 +153,10 @@ updater.py         thin entry point — stays at the root
 update_system.sh   stays through 2.0 as a documented fallback, goes in 2.1
 ```
 
-`translations/` holds data rather than code, and nothing loads it yet. Its runtime location
-is `HERE/oneup/translations/` in every layout, and the loader ONEUP-0032 adds finds it
-through `paths.py`, like the engine and the icon (§4.2). A checkout and the RPM get that
+`translations/` holds data rather than code, and 2.0 ships no catalogue in it. Its runtime
+location is `HERE/oneup/translations/` in every layout, and the loader in
+`oneup/gui/i18n.py` finds it through `paths.py`'s `TRANSLATIONS_DIR`, like the engine and
+the icon (§4.2). A checkout and the RPM get that
 path from the package itself — the RPM's `cp -a oneup` puts it at
 `/usr/share/oneup/oneup/translations/`. The AppImage gets it only from an `--add-data` whose
 destination is `oneup/translations`, because PyInstaller follows imports and not data (§6).

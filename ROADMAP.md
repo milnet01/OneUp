@@ -379,7 +379,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: in-session-2026-07-23.
   Resolved (2026-07-24): Added a 'Copy diagnostics' button to the Settings dialog (updater.py). It bundles the OneUp version, openSUSE PRETTY_NAME, the enabled/disabled tasks, and the most-recent real run log onto the clipboard, with a light scrub (home path -> ~, hostname -> <host>) so a public paste doesn't leak the username/machine. Oversized logs are trimmed to their last 200 KB (errors sit at the tail). GUI-only, no engine changes; /etc/os-release read directly. Logic split into pure helpers build_diagnostics / _latest_run_log with 10 new gui-smoke.py regression checks (157 pass). local-CI green.
 
-- 📋 [ONEUP-0032] **Wrap UI strings for translation (i18n groundwork).**
+- ✅ [ONEUP-0032] **Wrap UI strings for translation (i18n groundwork).**
   Wrap user-facing strings in updater.py with self.tr() and keep a Qt .ts/.qm workflow ready. openSUSE has a large European base. Doing it before the string count grows keeps the door open even if no second locale ships initially.
   **Layman:** Prepare the app so its text can be translated into other languages later (German, etc.) — cheap to do now, expensive once the wording grows.
   Kind: enhancement.
@@ -456,6 +456,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   sentence with title.lower(), which is locale-naive (Turkish dotted and
   dotless I) on a fragment this item makes translatable. Settle it when
   that string is wrapped.
+  Shipped 2026-10-02 on v2 in five commits: the catalogue loader and an
+  app object on every path (INV-2, INV-4, INV-9); tests/i18n-check.py
+  (INV-1, -3, -6, -7, -8, -10, -11, -12); right-to-left for the toggle
+  switch, the disclosure arrow and the link button, with a second
+  -reverse window pass that first asserts it is mirrored (INV-5); every
+  sentence wrapped, plurals through i18n._Counted, lists through
+  translated separators; and the documents. The task_row title.lower()
+  handed on from ONEUP-0182 is settled: the names are written out per
+  step. Spec §4.6 records what the build settled; ONEUP-0235 files the
+  Copy-command cue.
 
 - ✅ [ONEUP-0033] **bump.py: advance the CHANGELOG [Unreleased] compare-link base to the new tag.**
   bump.py rewrites the six version sites and adds a new `[x.y.z]: .../releases/tag/vX.Y.Z` reference link, but leaves the `[Unreleased]: .../compare/vPREV...HEAD` link pointing at the PREVIOUS tag. After releasing 1.2.0 the link still reads `compare/v1.1.0...HEAD` (CHANGELOG.md:207) — it should read `compare/v1.2.0...HEAD`. Fix: in bump.py, when moving `## [Unreleased]` to `## [X.Y.Z]`, also rewrite the `[Unreleased]:` compare base from the old tag to `vX.Y.Z`. Cosmetic (the link 404s on the stale range only until the next commit), pre-existing since at least 1.1.0. Add/adjust a bump.py test to assert the Unreleased compare base advances. No version-lockstep impact (local-CI's lockstep gate doesn't check this link).
@@ -4140,6 +4150,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   **Layman:** One of the update-safety tests sometimes fails when the computer is busy, even though nothing is wrong.
   Kind: fix.
   Source: in-session-2026-10-02.
+
+- 📋 [ONEUP-0235] **The warning banner's Copy command button finds its command by English words.**
+  banners._extract_command finds the command in a hint by the English cue
+  "run: " and ends it at ", then", ", or" or ";". A translated hint carries
+  neither, so the Copy command button would never show. Found while building
+  ONEUP-0032, outside its scope. The fix is for the hint table to carry the
+  command as data — a separate field per entry — rather than the window
+  fishing it out of the sentence. No effect in 2.0, which ships English only.
+  **Layman:** Once OneUp is translated, the button that copies a suggested fix command would stop appearing, because it looks for English words in the message.
+  Kind: fix.
+  Source: in-session-2026-10-02 ONEUP-0032 build.
 
 ## 1.4.6 — fixes to the released app
 

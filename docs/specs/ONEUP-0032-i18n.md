@@ -1,6 +1,6 @@
 # ONEUP-0032 — translation groundwork
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** enhancement
 **Roadmap:** ONEUP-0032
 **Branch:** v2
@@ -288,6 +288,36 @@ installed CJK font and already wraps CJK text, so the work is not to defeat eith
   catalogue, or one lacking that message — the condition its §4.2
   leaves to this item. A join of data no translator touches — an argv, a
   log line, a search key — is outside the rule, and the check's exemption list names each.
+
+### 4.6 What the build settled (2026-10-02)
+
+Recorded after the build, not reviewed with the spec. Each is a measurement or a reading
+the code now depends on.
+
+- **The spelling at a call is `QCoreApplication.translate("<module>", …)`.** An alias
+  (`_t = QCoreApplication.translate`) is not extracted by `pyside6-lupdate`; the full
+  spelling, `self.tr` and `QT_TRANSLATE_NOOP` are. The context is the module's name.
+- **A plural lives in `oneup/gui/i18n.py`'s `_Counted`, as `self.tr("%n …", "", n)`.**
+  `QCoreApplication.translate` with a count extracts as an ordinary message, `win.tr`
+  records `win` as the context, and PySide6 has no `QT_TRANSLATE_N_NOOP`; only a class
+  method's `self.tr` comes out with plural forms. `wording-and-translation.md` §6.3 now
+  states it.
+- **INV-7 reads three cases as passing**: a `.format` on a translate call (the
+  standard's own §6.2 form), a `.join` whose separator is not a literal (§4.5's
+  wrapped separator), and a literal with no letter in it. Its list gained the calls the
+  window actually uses to show text: `setFormat`, `addAction`, `addButton`,
+  `_make_banner`, `TaskRow`'s `set_badge` and `set_size_result`, the Settings dialog's
+  `_heading`, `_row` and `_settings_status`, `_notify` and the text-taking widget
+  constructors.
+- **The reboot reason arrives in its sentence-start form.** Each component is written
+  out twice in `markers.REBOOT_COMPONENTS`, and the banner no longer upper-cases a
+  letter. `TaskRow`'s two screen-reader names are written out per step in
+  `steps.DETAIL_NAMES`. Those were §4.5's case-change worklist.
+- **`pyside6-lrelease` keeps an unfinished message that has a translation** and drops
+  one that has none — the second is what INV-8's measurement saw — so INV-8 writes the
+  translation and leaves the state alone.
+- **Out of this item, filed**: the warning banner's *Copy command* button finds the
+  command by an English cue in the hint text, which a translated hint would not carry.
 
 ## 5. Correctness invariants
 

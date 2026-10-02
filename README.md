@@ -129,6 +129,14 @@ OneUp is built to be usable if you can't see the screen well — or at all.
 Screen-reader behaviour is verified against Orca. If something is announced
 confusingly, that's a bug worth reporting.
 
+## Languages
+
+OneUp ships in English. Every sentence it shows is ready to be translated, and the
+window lays itself out right-to-left for languages such as Hebrew and Arabic, so adding
+a language needs only a translation file, not a code change. To contribute one, extract
+the strings with `pyside6-lupdate` (given every `.py` file under `oneup/`), translate the
+resulting `oneup_<lang>.ts` in Qt Linguist, and open a pull request with it.
+
 ## Install & run
 
 Three ways, below. **OneUp is not on Flathub and is not packaged for other

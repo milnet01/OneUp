@@ -296,9 +296,10 @@ notes from it, so there is nothing to derive.
 
 **`./local-CI.sh` must be green before every push.** It runs everything GitHub CI runs except
 the AppImage build, plus the gates CI never runs. Measured on `v2` on the development
-machine, a timed `./local-CI.sh` took **4m25s** on one run on 2026-10-02, after ONEUP-0072
-retired the differential harness; earlier that day, with the harness and after ONEUP-0054
-stage 9 cut the window suite to one pass, it took **5m46s**. Its parts were last measured on
+machine, a timed `./local-CI.sh` took **5m03s** on one run on 2026-10-02, after ONEUP-0032
+added the right-to-left window pass and the translation checks. Earlier that day it took
+**4m25s** once ONEUP-0072 retired the differential harness, and **5m46s** with the harness
+after ONEUP-0054 stage 9 cut the window suite to one pass. Its parts were last measured on
 their own on 2026-09-03: the engine suite **2m52s**, the window suite **~32s a pass**.
 
 **The 34–38 seconds recorded here at `8d4c93e` was a `main`-era figure and had gone stale by

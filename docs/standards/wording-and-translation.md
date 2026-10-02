@@ -191,8 +191,17 @@ label = self.tr("Found %n update(s) from {source}", "", n).format(source=alias)
 combination, which grows combinatorially with each new component
 (`docs/specs/ONEUP-0072-marker-codes.md` §4.1). The table holding them,
 `REBOOT_COMPONENTS` in `oneup/gui/markers.py`, says what they are joined into, and the
-sentence's verb follows §6.3. Nothing else may
-assemble a sentence from parts.
+sentence's verb follows §6.3. Each component is written out twice — the form that opens
+the sentence and the form that follows another — because a capital derived by a case
+change does not exist in a language without case. One other thing may be joined from
+parts.
+
+**A list a user reads joins through a separator that is itself wrapped** —
+`i18n.join_names`, or a separator wrapped where it is used, each with a
+disambiguation naming the list it joins. English joins with `, `; a CJK catalogue
+supplies `、` (ONEUP-0032 §4.5). A join of data no person reads as wording — an argv,
+a command line, a log line — is outside this rule. Nothing else may assemble a
+sentence from parts.
 
 **A PySide6 detail worth stating, because the Qt/C++ documentation implies otherwise:**
 `tr()` returns a plain Python `str`, not a `QString`, so **`.arg()` does not exist** —
@@ -206,6 +215,13 @@ exception: `tr()` substitutes it itself from the count argument.
 Several languages have three or more plural forms and no amount of English branching
 produces them. The `(s)` is only the English fallback; the `.ts` file holds a separate,
 properly inflected form per language.
+
+**Only `self.tr(…, "", n)` inside a class extracts as a plural.** Measured 2026-10-02 on
+PySide6 6.11: `QCoreApplication.translate(ctx, text, "", n)` is extracted as an ordinary
+message with no plural forms, `win.tr(…)` records the variable name `win` as the context,
+which never matches at run time, and PySide6 has no `QT_TRANSLATE_N_NOOP`. So a sentence
+with a count that is built outside a widget class goes in `oneup/gui/i18n.py`'s `_Counted`
+and is fetched with `i18n.counted(key, n)` (ONEUP-0032).
 
 ### 6.4 Add a translator comment where the string is ambiguous
 
@@ -230,7 +246,7 @@ sentence — never pass it through as the message.
 | Extract | `pyside6-lupdate` given every `.py` file under `oneup/`, never the directory → `oneup/translations/oneup_<lang>.ts` |
 | Translate | Qt Linguist, or any `.ts` editor |
 | Compile | `pyside6-lrelease oneup_<lang>.ts -qm oneup_<lang>.qm` |
-| Load | OneUp's catalogue and Qt's `qtbase` one, installed on the `QApplication` at startup before the first widget — both or neither (`docs/specs/ONEUP-0032-i18n.md` INV-2) |
+| Load | OneUp's catalogue and Qt's `qtbase` one, installed by `oneup/gui/i18n.py`'s `load` straight after the application object is built — the window's `QApplication`, or the `QCoreApplication` of the two timer paths — both or neither (`docs/specs/ONEUP-0032-i18n.md` INV-2, INV-9) |
 | Install | `HERE/oneup/translations/` in every layout — `docs/standards/files-and-naming.md` §4 |
 
 Rules:
@@ -251,9 +267,10 @@ Rules:
   differs (`pt_BR`).
 - **A missing catalogue is not an error.** The app then runs in English, which is the correct
   behaviour, not a condition to report.
-- **The catalogue check runs in CI once the wrapping lands**; `docs/specs/ONEUP-0032-i18n.md`
-  INV-8 says what it runs and what passes. A string added without `tr()` is never extracted,
-  so only review catches it.
+- **The catalogue check runs in both gates**: `tests/i18n-check.py`'s INV-8 extracts
+  from the file list, finishes one message, compiles it and reads it back through Qt.
+  A string added without `tr()` is never extracted; INV-7 catches it at the calls it
+  lists, and only review catches one assembled into a variable first.
 
 ## 8. Traps
 
@@ -292,10 +309,10 @@ Rules:
 | §2 plain English | nothing automatic |
 | §3 never blame the user | nothing automatic |
 | §4 never claim what was not earned | `tests/run-tests.sh` — the reboot and success invariants. A failed step is recorded, gives a hint, and claims nothing; a package-only change offers a service restart rather than a reboot |
-| §6.1 every user-facing string is wrapped for translation | nothing yet — there is no `tr()` anywhere in the tree. ONEUP-0032 is groundwork, and this rule binds the code it will produce |
-| §6.2 no sentence assembled by concatenation | nothing automatic |
-| §6.3 plurals go through the plural form | nothing automatic |
-| §7 the catalogue workflow | nothing yet — no catalogue exists |
+| §6.1 every user-facing string is wrapped for translation | **partly**: `tests/i18n-check.py` (ONEUP-0032 INV-7) fails an unwrapped literal or f-string at every call on its closed list of text-setting calls and helpers. A sentence assembled into a variable before the call is invisible to it, so review stays beside it |
+| §6.2 no sentence assembled by concatenation | **partly**: the same INV-7 fails a `+`, a `%`, a `.format` on anything not translated, and a `.join` on a literal separator at those calls; INV-12 fails a literal-separator join or case change anywhere under `oneup/gui/` that is not on its list of data sites. Concatenation into a variable is review's |
+| §6.3 plurals go through the plural form | **partly**: INV-8 asserts the `_Counted` sentences extract as plurals. Nothing catches a count written into an ordinary `translate` call |
+| §7 the catalogue workflow | `tests/i18n-check.py` (ONEUP-0032 INV-8): extraction from the file list reaches the window and its tables, and a finished translation survives compile and load |
 
 **§4 is the one rule here with real teeth, and it is not a wording rule by accident.** "Never
 claim what was not earned" is testable because it is a claim about *state*, not about prose:
