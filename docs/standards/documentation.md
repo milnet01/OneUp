@@ -273,8 +273,9 @@ nobody has thought about. `tests/docs-check.py` fails a standard that lacks the 
 
 - **a gate** — the file that catches a breach, named exactly, plus the assertion or scenario
   if the file is large.
-- **`nothing`, in bold, followed by why** — and a roadmap id when the gap is a defect rather
-  than a limit of what a script can decide.
+- **`nothing` as the cell's first word, followed by why** — and a roadmap id when the gap is
+  a defect rather than a limit of what a script can decide. Bold is allowed and not required:
+  the leading word is what keeps the cell from reading as a gate.
 - **a gate, plus what that gate does not catch**, in the same cell — for a rule covered in
   part. The partly-gated rows need it, and the carve-out is the point of them: a partly-gated rule
   written as though fully gated is the "row that is wrong" this section warns about, and
