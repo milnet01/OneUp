@@ -8,6 +8,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **"Copy diagnostics" no longer mangles the report on a computer with a short name** (ONEUP-0159)
+  OneUp hides your computer's name before you share the report. On a
+  computer called something like "oss", it also changed every "oss" in
+  the log, so "repo-oss" became "repo-<host>". It now hides the name only
+  where it appears on its own.
+
 - **Updating the OneUp AppImage no longer silently stops the weekly check, automatic updates or start-at-boot** (ONEUP-0158)
   Each of those remembers the OneUp file that switched it on. Replacing
   that file with a newer one left them pointing at a file that was gone,

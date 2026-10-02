@@ -1590,6 +1590,21 @@ def main() -> int:
     check("diagnostics: disabled tasks marked off", "flatpak ✗" in _rep)
     check("diagnostics: home path scrubbed to ~", "/home/ants" not in _rep and "~/x" in _rep)
     check("diagnostics: hostname scrubbed", "boxname" not in _rep and "<host>" in _rep)
+    # ONEUP-0159: openSUSE host names are often words the log also uses, so the scrub
+    # matches the name only where it stands alone, never inside a longer token or path.
+    _short = _build("1", "x", [], "r.log",
+                    "repo-oss refreshed\nhttps://download.opensuse.org/tumbleweed/repo/oss/ ok\n"
+                    "oss sudo[42]: session opened\nreached oss.lan\n",
+                    "w", "", "oss")
+    check("diagnostics: a host name inside a repo alias survives (ONEUP-0159)",
+          "repo-oss refreshed" in _short)
+    check("diagnostics: a host name inside a URL path survives (ONEUP-0159)",
+          "/repo/oss/ ok" in _short)
+    check("diagnostics: a standalone host name is still scrubbed (ONEUP-0159)",
+          "<host> sudo[42]" in _short and "<host>.lan" in _short)
+    check("diagnostics: a host name prefixing a package name survives (ONEUP-0159)",
+          "linux-firmware updated" in _build("1", "x", [], "r.log", "linux-firmware updated",
+                                             "w", "", "linux"))
     check("diagnostics: no-run placeholder shown",
           "no update has been run yet" in _build("1", "x", [], None, None, "w", "", ""))
     _big = "H" * 20 + "T" * (updater.DIAG_LOG_CAP + 3000)

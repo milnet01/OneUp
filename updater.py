@@ -228,7 +228,10 @@ def build_diagnostics(version: str, os_pretty: str, enabled: list[str],
     if home:
         report = report.replace(home, "~")
     if host:
-        report = report.replace(host, "<host>")
+        # Only where the name stands alone (ONEUP-0159): openSUSE host names are often
+        # words the log uses too, and `oss` must not rewrite `repo-oss` or `/repo/oss/`.
+        # A following `.` is allowed, so `oss.lan` is still scrubbed.
+        report = re.sub(rf"(?<![\w./-]){re.escape(host)}(?![\w/-])", "<host>", report)
     return report
 
 
