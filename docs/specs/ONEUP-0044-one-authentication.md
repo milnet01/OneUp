@@ -451,7 +451,7 @@ root process, and the two do not warrant the same leniency.
   kills it.
   *Test:* `tests/run-tests.sh` — extend the existing keep-alive scenario to the held path;
   after the run ends, assert no process carrying the `oneup-keepalive` tag survives.
-  *Breaks when:* the held path re-enters `sudo_init`, whose second `setsid` overwrites
+  *Breaks when:* the held path re-enters `sudo_init`, whose second keep-alive launch overwrites
   `SUDO_KEEPALIVE` so `cleanup`'s group kill reaches only the later group. Nothing in the
   engine guards against this today — it is unreachable only because every existing
   `sudo_init` call site sits in a dispatch block that exits, and this design is the first
@@ -576,7 +576,7 @@ No version-site change: this is not a release on its own.
   like any other, and §4.3 is written so that it can.
 - **Turning `HINT` and `REMEDY` payloads into codes** — ONEUP-0072.
 - **Whether `sudo_init`'s keep-alive refreshes the credential record the engine actually
-  uses.** The keep-alive is a `setsid bash -c '… sudo -n -v …'`, so its `sudo`'s parent is
+  uses.** The keep-alive is a separate `bash -c '… sudo -n -v …'`, so its `sudo`'s parent is
   that shell rather than the engine — and with no terminal the timestamp is keyed to the
   parent pid. If that reasoning holds, the keep-alive has been refreshing a different record
   from the one the engine's own privileged calls use. It bears on §4.4: if the keep-alive

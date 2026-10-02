@@ -175,6 +175,10 @@ def _start_keepalive() -> None:
 
     Its own process group, so `cleanup` can kill the WHOLE group: killing the
     child alone leaves its `sleep` orphaned and lingering for up to an interval.
+    A new group, never a new session: started from a terminal, sudo keys the
+    cached credential to that terminal's session, and a child in a new session
+    has no terminal, so its refresh renewed a different record and the real one
+    expired after five minutes (ONEUP-0231, measured on a run from Konsole).
     Detached from our stdout and stderr so it never pollutes the log stream, and
     so a consumer capturing our output is not held open by its sleep.
 
@@ -190,7 +194,7 @@ def _start_keepalive() -> None:
     # read back out of sys.argv rather than used, which is why the loop skips it.
     _KEEPALIVE = subprocess.Popen(  # noqa: S603 — fixed argv, no shell
         [sys.executable, "-c", _KEEPALIVE_SRC, KEEPALIVE_TAG, str(os.getpid()), interval],
-        start_new_session=True,
+        process_group=0,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )

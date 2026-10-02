@@ -174,7 +174,7 @@ measurement and the exact shape of the rule are in the document named beside eac
   timestamp and log one prompt. Measured: deleting the `HELD_AUTH` guard that suppresses
   the second `sudo_init` on ONEUP-0044's held path left the one-prompt test **green**.
   What caught it was the keep-alive scenario, because the second `sudo_init` spawns a
-  second `setsid` group and overwrites `SUDO_KEEPALIVE`, so `cleanup`'s group kill reaches
+  second keep-alive group and overwrites `SUDO_KEEPALIVE`, so `cleanup`'s group kill reaches
   only the later one and a keep-alive is orphaned. So a change that could re-enter
   `sudo_init` is covered by INV-9, never by INV-1. Removing the `HELD_AUTH` guard fails
   exactly one check, *"a keep-alive survived a held run (INV-9)"*, and leaves the one-prompt
