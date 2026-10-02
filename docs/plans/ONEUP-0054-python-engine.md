@@ -1720,9 +1720,10 @@ engine suite's *default* engine and no assertion, which is what G1's diff review
    a resolver with that behaviour removed.
 
 3. **The "could not find" messages name what was tried.** Every site that today prints
-   `' '.join(paths.engine_argv())` on a missing engine — `app.py` twice, `run.py` — prints
-   the resolver's tried list instead, and the two sites that skip silently (`tray.py`,
-   `autostart.py`) keep doing so, being background probes with nobody to tell.
+   `' '.join(paths.engine_argv())` on a missing engine — `app.py`'s two headless entry
+   points and `run.py`'s Run guard — prints the resolver's tried list instead. The guards
+   that return without a message (`auth.py`'s two, `run.py`'s size request, `tray.py`,
+   `autostart.py`) are unchanged.
    → **verify:** with the engine's entry module moved aside, Run warns and the warning
    names the path it looked for; the headless `--check` entry prints the same list to
    stderr and exits non-zero.
