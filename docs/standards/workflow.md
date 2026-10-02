@@ -335,6 +335,7 @@ pushed commits for secrets** by handing its stdin to the machine-wide hook's
 | `Engine parser unit tests` | `tests/parsers-test.py` — the pure half of the engine (`oneup/engine/parsers.py`): `to_bytes`, the two download-size wordings, the progress wordings, `zypper lr -u` output and the lock file's text, table-driven against real captured output |
 | `GUI smoke test (offscreen)` | `tests/gui-smoke.py` — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip), plus its G3 pairing scenario, which launches the Python engine through the window's own code path and reads what came back, where every other scenario feeds the window lines the suite wrote itself. Gate G3 of ONEUP-0054, with a `release.yml` leg |
 | `Package structure (oneup/)` | `tests/imports-test.py` — the package rules a reader passes by eye: no path constant bound by name, no engine module importing `oneup/gui/`, no module building paths from its own `__file__`, the entry point never imported from inside the package, and every engine launch going through `paths.engine_argv` |
+| `Translation groundwork (oneup/)` | `tests/i18n-check.py` — ONEUP-0032's source rules: no translation machinery in the engine, no explicit layout direction, font fallback never switched off, no size cap a translation could outgrow |
 | `Python compile (updater.py, bump.py, oneup/)` | `py_compile updater.py bump.py` plus `compileall oneup` — `compileall` over the package rather than a file list, because a module nobody has imported yet is exactly the one a split leaves broken |
 | `bump.py functional test` | `tests/bump-test.py` — a real bump in a throwaway copy still parses the five real version sites, and rewrites the (synthetic) `CHANGELOG.md`'s heading and both links correctly |
 | `Lint` | `shellcheck`, then `ruff check .` with `pyproject.toml`'s rule set — best-effort |
@@ -366,7 +367,7 @@ itself is broken. A failing test is fixed, not bypassed.
 
 **The two gate sets are not identical, deliberately.** `release.yml` runs the test gates —
 the engine suite, the parser unit tests, the `bump.py` functional test, the package structure
-check and the GUI smoke test — and the AppImage build, and nothing else. So **every other
+check, the translation groundwork check and the GUI smoke test — and the AppImage build, and nothing else. So **every other
 gate in the §6 table has never run in GitHub CI**: the compile check, lint, packaging validation, version lockstep and
 documentation. Written as names rather than a count, because a count goes stale
 silently.

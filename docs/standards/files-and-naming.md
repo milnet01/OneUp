@@ -38,7 +38,7 @@ exist yet, and saying so is the point.
 | `packaging/rpm/` | `oneup.spec` — the `zypper`-installable package. |
 | `packaging/appimage/` | `build-appimage.sh` — the single-file portable build — and `requirements.txt`, the exact packages it installs. |
 | `packaging/obs/` | `_service` + `README.md` — the openSUSE Build Service recipe. |
-| `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `imports-test.py` (the `oneup/` package's structural rules), `bump-test.py` (version lockstep), `parsers-test.py` (the engine's pure parsers), `mock-env.sh` (the mock sandbox both engine suites source), `docs-check.py` (the documentation rules a script can settle). |
+| `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `imports-test.py` (the `oneup/` package's structural rules), `i18n-check.py` (the translation groundwork's source rules), `bump-test.py` (version lockstep), `parsers-test.py` (the engine's pure parsers), `mock-env.sh` (the mock sandbox both engine suites source), `docs-check.py` (the documentation rules a script can settle). |
 | `githooks/` | Repo-local git hooks. One file: `pre-push`. Not active until `git config core.hooksPath githooks`. |
 | `screenshots/` | Images the README and the app-store metadata point at. |
 | `branding/` | The OneUp wordmark, for pages outside this repository that show the project. Nothing in the app or its packages reads it. |
@@ -77,7 +77,7 @@ Neither is a program or a developer script, so the closed root above still holds
 | --- | --- | --- |
 | Python module | `snake_case.py` | `updater.py`, `bump.py` |
 | Shell script | `kebab-case.sh` | `build-appimage.sh`, `run-tests.sh`, `release.sh` |
-| Test file | `<subject>-<kind>` | `gui-smoke.py`, `bump-test.py`, `docs-check.py` |
+| Test file | `<subject>-<kind>` | `gui-smoke.py`, `bump-test.py`, `docs-check.py`, `i18n-check.py` |
 | Spec / plan | `ONEUP-NNNN-<kebab-topic>.md` | `ONEUP-0028-accessibility.md` |
 | Standard | `<subject>.md`, no ID | `documentation.md`, `dependencies.md` |
 | Anything under `data/` | `za.co.antsprojectshub.OneUp.<ext>` | all three files |

@@ -114,6 +114,17 @@ else
     bad "tests/imports-test.py"; cat "$LOGS/imports.log"
 fi
 
+# --- translation groundwork (docs/specs/ONEUP-0032-i18n.md §5) ---------------
+# The source checks that keep the window translatable and mirrorable: no locale
+# machinery in the engine, no explicit layout direction, no font-merging switched
+# off, no size cap a translation could outgrow. Stdlib-only, so it never skips.
+step "Translation groundwork (oneup/)"
+if python3 tests/i18n-check.py >"$LOGS/i18n.log" 2>&1; then
+    ok "tests/i18n-check.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/i18n.log" | tail -1)"
+else
+    bad "tests/i18n-check.py"; cat "$LOGS/i18n.log"
+fi
+
 # --- Python syntax ----------------------------------------------------------
 # compileall over the package, not py_compile over one file: a module nobody has
 # imported yet is exactly the one a split leaves broken.

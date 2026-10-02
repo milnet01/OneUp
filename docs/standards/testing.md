@@ -29,6 +29,7 @@ also runs on a `v*` tag is `docs/standards/workflow.md` §6's to state.
 | GUI | `tests/gui-smoke.py` | the window's state after being fed those same marker lines — and one scenario that launches the Python engine through the window's own code path and asserts the window acted on what the engine actually sent (gate G3 of ONEUP-0054) |
 | Version bump | `tests/bump-test.py` | that a real bump still parses the five real version sites, and rewrites the CHANGELOG heading and both links correctly (`docs/standards/workflow.md` §5.1's row owns the exact split) |
 | Package structure | `tests/imports-test.py` | the `oneup/` package's structural rules — how path constants are imported, which way the engine and window may depend on each other, and how the engine is launched (`docs/standards/workflow.md` §6's row names each) |
+| Translation groundwork | `tests/i18n-check.py` | the source rules that keep the window translatable and mirrorable — ONEUP-0032's source-level invariants, each named in the suite's header |
 
 **No sizes or assertion counts appear here, deliberately**
 (`docs/standards/documentation.md` §6b). They are wrong the next time anybody adds a test,
