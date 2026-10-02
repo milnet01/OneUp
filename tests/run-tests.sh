@@ -401,6 +401,30 @@ check_absent "no reboot=yes after failure"  "@@REBOOT@@|yes" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: a solver failure (\"Problem: ... cannot be provided\") gets the conflict hint (ONEUP-0227)"
+# The wording is a real run's (2026-09-22): a third-party ROCm package the distribution
+# no longer satisfies. The classifier matched only conflict|nothing provides|not
+# installable, so the step failed with no hint at all.
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)
+    echo "2 Problems:"
+    echo "Problem: 1: the installed libhipfft0-6.4.2-4.6.x86_64 requires 'libamdhip64.so.6()(64bit)', but this requirement cannot be provided"
+    echo "- the installed rocm-hip-6.4.2-4.6.x86_64 does not belong to a distupgrade repository and must be replaced"
+    exit 4 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check "system step marked fail"   "@@STEP_END@@|system|fail" "$out"
+check "the conflict hint is given" "@@HINT@@|A package conflict" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: package-only change offers a SERVICE restart, not a reboot"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'
@@ -1882,7 +1906,8 @@ cat > "$d/zypper" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
   *refresh*)         exit 0 ;;
-  *dup*|*update*)    echo "Download (curl) error - could not resolve host"; exit 1 ;;
+  *dup*|*update*)    echo "Retrieving: kernel-default-7.1.6-1.1.x86_64 (Main Repository (OSS)) (1/9), 194.2 MiB"
+                     echo "Download (curl) error - could not resolve host"; exit 1 ;;
   *needs-rebooting*) exit 0 ;;
   *clean*)           exit 0 ;;
   *) exit 0 ;;
@@ -1897,6 +1922,30 @@ check "system step failed"         "@@STEP_END@@|system|fail" "$out"
 check "cache step still ran after" "@@STEP_END@@|cache|skip"  "$out"
 check "and says why it kept them"  "retrying the update"      "$out"
 check "run reports errors overall" "@@DONE@@|errors"          "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: a system step that failed before downloading lets the cache clean (ONEUP-0228)"
+# The kept-cache rule above is for a failure part-way through the download. A failure
+# in dependency solving downloads nothing, so there is nothing to keep, and claiming to
+# have kept "the already-downloaded packages" is false. The user's rule (2026-10-02):
+# clean as normal and say nothing about keeping.
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)    echo "Problem: 1: the installed foo-1.0 requires 'libbar.so.1()(64bit)', but this requirement cannot be provided"; exit 4 ;;
+  *needs-rebooting*) exit 0 ;;
+  *clean*)           exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system,cache)
+check        "system step failed"            "@@STEP_END@@|system|fail" "$out"
+check        "the cache is cleaned as normal" "@@STEP_END@@|cache|ok"    "$out"
+check_absent "no claim to have kept downloads" "retrying the update"    "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -2316,7 +2365,10 @@ check_absent "strict run never imports keys unprompted" "BUG: imported keys with
 check        "key error fails the system step"          "@@STEP_END@@|system|fail" "$out"
 check        "key error offers the one-click remedy"    "@@REMEDY@@|import-keys" "$out"
 check_re     "the hint carries a 'run:' command the GUI can copy" '@@HINT@@\|.*run: ' "$out"
-check        "the run continues to later steps after the key failure" "@@STEP_END@@|cache|skip" "$out"
+# The cache step runs AND cleans: a signature failure stops the system step before any
+# download, so there is nothing to keep for a retry (ONEUP-0228). It read cache|skip
+# while every system failure kept the cache.
+check        "the run continues to later steps after the key failure" "@@STEP_END@@|cache|ok" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
