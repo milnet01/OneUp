@@ -333,6 +333,28 @@ check        "stale-metadata note surfaced as a hint"        "@@HINT@@|Couldn't 
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# zypper exits 103 when it has updated itself and must run again to install the rest
+# (zypper(8) EXIT CODES). Reading that as the end of the update left the rest of it
+# uninstalled (ONEUP-0234): the transaction runs once more and the second run decides.
+echo "TEST: zypper's exit 103 (it updated itself) runs the update once more"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *--download-only*) exit 0 ;;
+  *dup*|*update*)
+    echo run >> "$d/commits"
+    if [[ \$(wc -l < "$d/commits") -eq 1 ]]; then echo "1 package to upgrade."; exit 103; fi
+    echo "4 packages to upgrade."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check_eq "the transaction ran a second time after 103" "2" "$(wc -l < "$d/commits")"
+check    "and the step ends ok"                       "@@STEP_END@@|system|ok" "$out"
+rm -rf "$d"
+
 echo "TEST: kernel/core change (needs-rebooting=102) DOES advise a reboot"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'

@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **An update that first updated zypper itself now finishes the rest** (ONEUP-0234)
+  When zypper updates itself it asks to be run again for the remaining
+  updates. OneUp now does that once, instead of stopping there and
+  reporting the step as failed.
+
 - **An update that stops on a package conflict now says so** (ONEUP-0227)
   When the package manager could not work out how to update because of
   a conflict, often caused by a third-party source, OneUp showed no
