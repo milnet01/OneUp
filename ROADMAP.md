@@ -5326,6 +5326,59 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: in-session-2026-10-01, found while running gui-smoke for ONEUP-0204.
 
+- 📋 [ONEUP-0226] **The leftover-package parser reads zypper's table heading as a package called "Name".**
+  `zypper packages --unneeded` / `--orphaned` print `Loading repository data...` and
+  `Reading installed packages...` on stdout before the table, so skipping two lines
+  lands on the header row, whose third field is "Name" and passes ONEUP-0171's
+  name-shape check. Seen in the log of the 2026-10-02 07:33 run: "Removing 2
+  leftover dependency package(s): - Name - libschroedinger-1_0-0", then
+  `@@STEP_END@@|orphans|fail|removal failed` although libschroedinger was removed.
+  The same parse makes the "no active repository" count one too high on every run
+  (12 shown, 11 real that day). Sites: the `NR>2` awk filters for UNNEEDED and
+  ORPHAN_COUNT in update_system.sh (also on main), and `_package_column`'s
+  `splitlines()[2:]` in oneup/engine/steps.py. Fix: take rows only after the
+  `---+` separator line. The suite's mocks print the header as line 1, which is
+  why nothing caught it; the regression test replays zypper's real output.
+  User 2026-10-02: jump this ahead of the oldest-first order.
+  **Layman:** When there are leftover packages, OneUp tries to remove one called "Name", then marks the step failed although the real removal worked.
+  Kind: fix.
+  Source: update-log review 2026-10-02.
+
+- 📋 [ONEUP-0227] **A solver failure ("Problem: ... cannot be provided") gets no hint.**
+  Three runs (2026-09-22 20:31 and 20:37, 2026-09-23 08:08) failed on a ROCm
+  third-party conflict: "Problem: 1: the installed libhipfft0-... requires
+  'libamdhip64.so.6()(64bit)', but this requirement cannot be provided". No
+  @@HINT@@ was emitted, because the classifier matches only
+  `conflict|nothing provides|not installable` — in update_system.sh and in
+  oneup/engine/steps.py. Add zypper's solver wording (`cannot be provided`,
+  `^Problem:`, `does not belong to a distupgrade repository`) to both, and check
+  the same list in the repo-retry exclusion near the top of the system step, which
+  shares the pattern.
+  **Layman:** When an update stops on a package conflict, OneUp doesn't explain it or suggest what to do.
+  Kind: fix.
+  Source: update-log review 2026-10-02.
+
+- 📋 [ONEUP-0228] **"Kept the already-downloaded packages" is claimed when nothing was downloaded.**
+  The cache step skips cleaning whenever the system step failed (ONEUP-0086/0087)
+  and emits that hint. Two runs (2026-09-22 20:31, 2026-09-23 08:08) failed in
+  dependency solving, before any download, and still showed it. User 2026-10-02:
+  keep the cache and show the message only when the download had actually begun;
+  otherwise clean as normal and say nothing about it. Sites: the cache step's
+  `RESULT[system] == fail` branch in update_system.sh and `run_cache` in
+  oneup/engine/steps.py.
+  **Layman:** After a failed update OneUp says it kept downloaded packages for a retry, even when nothing had been downloaded.
+  Kind: fix.
+  Source: update-log review 2026-10-02.
+
+- 📋 [ONEUP-0229] **Restarting services gives no feedback on whether it worked.**
+  Reported by the user 2026-10-02. The "Restart services" banner button
+  (`restart_services`; updater.py on main, oneup/gui/banners.py on v2) shows no
+  result. User's choice 2026-10-02: a short message box when it finishes —
+  success, or failure with the reason — closed with OK.
+  **Layman:** After clicking "Restart services" you aren't told whether the services restarted or not.
+  Kind: fix.
+  Source: user-request-2026-10-02.
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of
@@ -6610,6 +6663,14 @@ when complete (that document's §7).
   **Layman:** Each rule document carries a long record of past reviews that readers do not need; it should live in a separate file instead.
   Kind: doc-fix.
   Source: user-request-2026-10-01.
+
+- 📋 [ONEUP-0230] **Thinning backups gives no feedback on whether it worked.**
+  Reported by the user 2026-10-02. `_thin_snapshots` / `_on_thin_finished` in
+  oneup/gui/rollback.py (v2 only). User's choice 2026-10-02: a short message box
+  when it finishes — success, or failure with the reason — closed with OK.
+  **Layman:** After choosing to thin out backups you aren't told whether it worked or how many were removed.
+  Kind: fix.
+  Source: user-request-2026-10-02.
 
 ## 2.1.0 — after 2.0
 
