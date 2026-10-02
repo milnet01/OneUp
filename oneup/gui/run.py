@@ -209,13 +209,14 @@ def request_size(win, key: str):
     proc = getattr(win, "_size_proc", None)
     if proc is not None and proc.state() != QProcess.NotRunning:
         return  # a fetch is already in flight
+    if not paths.log_dir_ready(win):
+        return
     row.size_pending()
     # The button's "up to a minute" label is invisible to a screen reader, so
     # say it out loud too — otherwise a blind user gets silence for the wait.
     win._announce("Working out the download size — this can take up to a minute.",
                    row.size_btn)
     win._size_buf = ""
-    paths.STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     # Named as a RUN log, not `<stamp>.size.log`, because --hold means this preview may
     # become the run. The engine writes its --log= value verbatim into `run.state` for
@@ -389,9 +390,10 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
             "That takes up to a minute. Try again once it has finished.")
         return
 
+    if not paths.log_dir_ready(win):
+        return
     _reset_for_run(win, steps, check)
 
-    paths.STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     win._log_path = paths.STATE_LOG_DIR / (f"{stamp}.check.log" if check else f"{stamp}.log")
 

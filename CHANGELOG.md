@@ -44,6 +44,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A full or read-only disk, or a damaged settings value, no longer breaks OneUp's window** (ONEUP-0184)
+  If the disk filled up while OneUp saved a file, the file could be left
+  half-written, and a damaged saved window size could stop OneUp or the
+  software sources window from opening. If OneUp can't write its logs, it
+  now says so and leaves everything as it was, instead of leaving buttons
+  stuck. Files are now saved whole or not at all.
+
 - **A tall window, such as the software sources manager, no longer opens with its top off the screen on X11** (ONEUP-0181)
   OneUp centres each window over the main one. On X11 a window taller
   than the main one could end up with its title bar above the top of the

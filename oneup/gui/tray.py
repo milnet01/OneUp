@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from datetime import datetime
 from functools import partial
 
@@ -110,6 +111,12 @@ def _tray_check(win):
     proc = win._traycheck_proc
     if proc is not None and proc.state() != QProcess.NotRunning:
         return  # a check is already in flight
+    try:
+        log = _traycheck_log()
+    except OSError as exc:        # a full or read-only disk skips this check (ONEUP-0184)
+        print(f"OneUp: tray check skipped, cannot write {paths.STATE_LOG_DIR}: {exc}",
+              file=sys.stderr)
+        return
     win._traycheck_buf = ""
     win._traycheck_unknown = False
     p = QProcess(win)
@@ -117,7 +124,7 @@ def _tray_check(win):
     p.readyReadStandardOutput.connect(partial(_on_traycheck_output, win))
     p.finished.connect(partial(_on_traycheck_finished, win))
     win._traycheck_proc = p
-    argv = paths.engine_argv(*_tray_check_args(_traycheck_log()))
+    argv = paths.engine_argv(*_tray_check_args(log))
     p.start(argv[0], argv[1:])
 
 

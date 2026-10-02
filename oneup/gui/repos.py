@@ -13,7 +13,7 @@ import shutil
 import subprocess
 from collections import Counter
 
-from PySide6.QtCore import QProcess, QSettings, Qt
+from PySide6.QtCore import QByteArray, QProcess, QSettings, Qt
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -117,9 +117,8 @@ class RepoManagerDialog(QDialog):
         # re-centred over the main window in showEvent).
         self._settings = QSettings("OneUp", "OneUp")
         geo = self._settings.value("repos_geometry")
-        if geo is not None:
-            self.restoreGeometry(geo)
-        else:
+        # A corrupt or hand-edited value must not stop the dialog opening (ONEUP-0184).
+        if not (isinstance(geo, QByteArray) and self.restoreGeometry(geo)):
             self.resize(780, 560)
 
         root = QVBoxLayout(self)

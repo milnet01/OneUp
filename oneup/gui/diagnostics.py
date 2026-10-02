@@ -31,7 +31,13 @@ def _latest_run_log(log_dir: Path) -> Path | None:
                 if p.name.count(".") == 1 and p.name != "traycheck.log"]
     except OSError:
         return None
-    return max(runs, key=lambda p: p.stat().st_mtime, default=None)
+    stamped = []
+    for p in runs:
+        try:                           # a log rotated away mid-call is skipped (ONEUP-0184)
+            stamped.append((p.stat().st_mtime, p))
+        except OSError:
+            continue
+    return max(stamped, key=lambda tp: tp[0], default=(0.0, None))[1]
 
 
 def _os_release_pretty() -> str:

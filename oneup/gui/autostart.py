@@ -124,7 +124,7 @@ def _refresh_stale_launchers():
     for path, text, is_unit in wanted:
         try:
             if path.is_file() and path.read_text() != text:
-                path.write_text(text)
+                paths.write_whole(path, text)
                 reload = reload or is_unit
         except OSError as exc:
             print(f"OneUp: could not refresh {path}: {exc}", file=sys.stderr)
@@ -137,8 +137,7 @@ def _install_autostart(win) -> bool:
     A plain file drop — no systemctl reload (unlike the update timers)."""
     path = _autostart_path()
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(_autostart_text())
+        paths.write_whole(path, _autostart_text())
     except OSError as exc:
         QMessageBox.warning(win, "Could not change start-at-boot", str(exc))
         return False
@@ -172,9 +171,9 @@ def _install_user_timer(win, basename: str, description: str, exec_flag: str) ->
     units = _user_units_dir()
     try:
         units.mkdir(parents=True, exist_ok=True)
-        (units / f"{basename}.service").write_text(
-            _timer_service_text(description, exec_flag))
-        (units / f"{basename}.timer").write_text(
+        paths.write_whole(units / f"{basename}.service",
+                          _timer_service_text(description, exec_flag))
+        paths.write_whole(units / f"{basename}.timer",
             f"[Unit]\nDescription={description}\n\n"
             "[Timer]\nOnCalendar=weekly\nPersistent=true\n\n"
             "[Install]\nWantedBy=timers.target\n"

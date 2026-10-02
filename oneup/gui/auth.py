@@ -43,7 +43,8 @@ def _query_auth_status(win):
         # probe in flight started before it. Ask again when that one finishes.
         win._authstat_rerun = True
         return
-    paths.STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    if not paths.log_dir_ready(quiet=True):
+        return
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
@@ -169,10 +170,17 @@ def _run_auth(win, action: str, status_text: str):
     p = getattr(win, "_authchg_proc", None)
     if p is not None and p.state() != QProcess.NotRunning:
         return
+    if not paths.log_dir_ready(win):
+        # Nothing changed, so put both toggles back as they were (ONEUP-0184).
+        _set_auth_checked(win, action == "--revoke-auth")
+        if win._pending_autoupdate:
+            win._pending_autoupdate = False
+            win.autoupdate_btn.setEnabled(True)
+            autostart._set_autoupdate_checked(win, False)
+        return
     win.auth_btn.setEnabled(False)
     win.status.setText(status_text)
     win._settings_status(status_text)
-    paths.STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)

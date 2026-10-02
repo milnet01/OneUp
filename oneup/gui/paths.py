@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 # Where our bundled files (update_system.sh, the icon) live. Normally the repo
@@ -61,6 +62,43 @@ def _state_home() -> Path:
 
 
 ENGINE = _find_engine()
+
+
+def write_whole(path: Path, text: str) -> None:
+    """Write `path` whole, through a temporary file and a rename (ONEUP-0184). A full
+    disk or a crash part-way leaves the old file rather than a truncated one, which
+    systemd refuses as a unit and history.json reads as "never". Raises OSError."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.replace(name, path)
+    except BaseException:
+        try:
+            os.unlink(name)
+        except OSError:
+            pass
+        raise
+
+
+def log_dir_ready(win=None, quiet: bool = False) -> bool:
+    """Make the log folder, or say why it can't be made (ONEUP-0184). Called before
+    a launcher changes any state, so a full or read-only disk leaves the window as
+    it was instead of raising out of a slot with a button left disabled. `quiet` is
+    for background probes, which have nobody to tell. Qt is imported only on that
+    failure path, so this module stays importable with no Qt at all."""
+    try:
+        STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        return True
+    except OSError as exc:
+        if quiet or win is None:
+            print(f"OneUp: cannot write logs to {STATE_LOG_DIR}: {exc}", file=sys.stderr)
+        else:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(win, "Can't write OneUp's logs",
+                                f"OneUp couldn't create its log folder:\n{STATE_LOG_DIR}\n\n{exc}")
+        return False
 
 
 def _engine_is_v2() -> bool:

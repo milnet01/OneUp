@@ -15,12 +15,13 @@ from __future__ import annotations
 import itertools
 import json
 import os
+import sys
 import time
 from datetime import datetime
 from functools import partial
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, QSettings, Qt, QTimer, QUrl
+from PySide6.QtCore import QByteArray, QProcess, QSettings, Qt, QTimer, QUrl
 from PySide6.QtGui import (
     QAccessible,
     QAccessibleEvent,
@@ -551,7 +552,7 @@ class Updater(QMainWindow):
 
         # Restore the last size + position, if we saved one before.
         geo = self.settings.value("geometry")
-        if geo is not None:
+        if isinstance(geo, QByteArray):         # a corrupt value must not stop startup
             self.restoreGeometry(geo)
 
         # Non-blocking: is there a newer OneUp release?
@@ -813,10 +814,11 @@ class Updater(QMainWindow):
         self.last_run.style().polish(self.last_run)
 
     def save_last_run(self, status: str):
-        paths.STATE_DIR.mkdir(parents=True, exist_ok=True)
-        paths.HISTORY.write_text(
-            json.dumps({"when": datetime.now().isoformat(timespec="seconds"), "status": status})
-        )
+        try:
+            paths.write_whole(paths.HISTORY, json.dumps(
+                {"when": datetime.now().isoformat(timespec="seconds"), "status": status}))
+        except OSError as exc:        # a full disk keeps the previous record (ONEUP-0184)
+            print(f"OneUp: could not record the run in {paths.HISTORY}: {exc}", file=sys.stderr)
         self.refresh_last_run()
 
     def open_repos(self):

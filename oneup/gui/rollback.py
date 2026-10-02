@@ -174,11 +174,10 @@ def _thin_snapshots(win):
     box.button(QMessageBox.Ok).setText("Thin snapshots")
     box.setDefaultButton(QMessageBox.Cancel)
     QTimer.singleShot(0, lambda: win._center_child(box))
-    if box.exec() != QMessageBox.Ok:
+    if box.exec() != QMessageBox.Ok or not paths.log_dir_ready(win):
         return
     win.warn_btn.setEnabled(False)
     win.status.setText("Thinning snapshots… (approve the password popup)")
-    paths.STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
