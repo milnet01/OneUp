@@ -5436,7 +5436,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: update-log review 2026-10-02.
 
-- 📋 [ONEUP-0227] **A solver failure ("Problem: ... cannot be provided") gets no hint.**
+- ✅ [ONEUP-0227] **A solver failure ("Problem: ... cannot be provided") gets no hint.**
   Three runs (2026-09-22 20:31 and 20:37, 2026-09-23 08:08) failed on a ROCm
   third-party conflict: "Problem: 1: the installed libhipfft0-... requires
   'libamdhip64.so.6()(64bit)', but this requirement cannot be provided". No
@@ -5446,11 +5446,16 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   `^Problem:`, `does not belong to a distupgrade repository`) to both, and check
   the same list in the repo-retry exclusion near the top of the system step, which
   shares the pattern.
+  Resolved (2026-10-02): main c79485c, v2 1a5d884 (Python port). The
+  classifier and the download-recovery exclusion now also match cannot
+  be provided, ^Problem: [0-9] and does not belong to a distupgrade
+  repository, read off the real logs; the existing conflict hint is
+  given. Red on main 332/3, green 335/0; v2 399/0. Ships with 1.4.6.
   **Layman:** When an update stops on a package conflict, OneUp doesn't explain it or suggest what to do.
   Kind: fix.
   Source: update-log review 2026-10-02.
 
-- 📋 [ONEUP-0228] **"Kept the already-downloaded packages" is claimed when nothing was downloaded.**
+- ✅ [ONEUP-0228] **"Kept the already-downloaded packages" is claimed when nothing was downloaded.**
   The cache step skips cleaning whenever the system step failed (ONEUP-0086/0087)
   and emits that hint. Two runs (2026-09-22 20:31, 2026-09-23 08:08) failed in
   dependency solving, before any download, and still showed it. User 2026-10-02:
@@ -5458,15 +5463,26 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   otherwise clean as normal and say nothing about it. Sites: the cache step's
   `RESULT[system] == fail` branch in update_system.sh and `run_cache` in
   oneup/engine/steps.py.
+  Resolved (2026-10-02): main c79485c, v2 1a5d884. The system step
+  records whether any Retrieving:/Preloading: line appeared (first
+  attempt included) before deleting its logs; the cache is kept, and the
+  kept message shown, only then. Two older scenarios pinned the old rule
+  incidentally and were adjusted with comments. Ships with 1.4.6.
   **Layman:** After a failed update OneUp says it kept downloaded packages for a retry, even when nothing had been downloaded.
   Kind: fix.
   Source: update-log review 2026-10-02.
 
-- 📋 [ONEUP-0229] **Restarting services gives no feedback on whether it worked.**
+- ✅ [ONEUP-0229] **Restarting services gives no feedback on whether it worked.**
   Reported by the user 2026-10-02. The "Restart services" banner button
   (`restart_services`; updater.py on main, oneup/gui/banners.py on v2) shows no
   result. User's choice 2026-10-02: a short message box when it finishes —
   success, or failure with the reason — closed with OK.
+  Resolved (2026-10-02): main 099df65, v2 1a5d884 (banners.py). The
+  restart runs attached and a box reports success, or the reason: pkexec
+  126 (prompt closed), 127 (refused), else the command's own output; the
+  banner returns on failure. The red run launched one real pkexec prompt
+  for ~10 s (old code path outside the new stub); killed unanswered.
+  Ships with 1.4.6.
   **Layman:** After clicking "Restart services" you aren't told whether the services restarted or not.
   Kind: fix.
   Source: user-request-2026-10-02.
