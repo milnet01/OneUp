@@ -1514,19 +1514,175 @@ def main() -> int:
         check(f"window and Python engine agree on run.state / stop.request ({_label})",
               len(_py) == 2 and _py == _win)
 
-    # Regression guard: the GUI-only --update token must NEVER be forwarded to the
-    # engine (it exits 2 on unknown flags, which would make the 2am weekly run
-    # silently fail). _headless_update() runs the engine with --notify only.
-    _captured = {}
-    _orig_run = gui_app.subprocess.run          # the module _headless_update lives in
-    gui_app.subprocess.run = lambda a, *args, **kw: (
-        _captured.update(argv=a) or type("R", (), {"returncode": 0})())
-    try:
-        gui_app._headless_update()
-    finally:
-        gui_app.subprocess.run = _orig_run
-    check("headless --update invokes the engine with --notify, not --update",
-          "--notify" in _captured.get("argv", []) and "--update" not in _captured.get("argv", []))
+    # --- ONEUP-0077: the timers' two headless paths build their own notification ----
+    # A mock engine stands in for the real one through the resolver, so no real check or
+    # update runs (docs/standards/testing.md §2): it records its argv, prints what the
+    # case gives it and exits with the case's status. The mock notify-send on PATH
+    # records each notification.
+    _mock_engine = os.path.join(_SANDBOX, "mock-engine.py")
+    with open(_mock_engine, "w") as _f:
+        _f.write("import os, sys\n"
+                 "open(os.environ['ONEUP_MOCK_ARGV'], 'w').write('\\n'.join(sys.argv[1:]))\n"
+                 "sys.stdout.write(open(os.environ['ONEUP_MOCK_OUT']).read())\n"
+                 "sys.exit(int(os.environ.get('ONEUP_MOCK_RC', '0')))\n")
+    _mock_env = {"ONEUP_MOCK_ARGV": os.path.join(_SANDBOX, "mock-engine.argv"),
+                 "ONEUP_MOCK_OUT": os.path.join(_SANDBOX, "mock-engine.out")}
+    def _mock_resolve():
+        return [sys.executable, _mock_engine], ["the mock engine"]
+
+    def _headless(fn, lines, rc=0):
+        """Run one headless path against the mock; (exit, engine argv, stdout, notes)."""
+        with open(_mock_env["ONEUP_MOCK_OUT"], "w") as f:
+            f.write("".join(f"{ln}\n" for ln in lines))
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(_NOTIFY_LOG)
+        saved = {k: os.environ.get(k) for k in (*_mock_env, "ONEUP_MOCK_RC")}
+        os.environ.update(_mock_env, ONEUP_MOCK_RC=str(rc))
+        _patch(paths, "_resolve_engine", _mock_resolve)
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                code = fn()
+        finally:
+            _unpatch_all()
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        argv = Path(_mock_env["ONEUP_MOCK_ARGV"]).read_text().split("\n")
+        notes = (Path(_NOTIFY_LOG).read_text().splitlines()
+                 if os.path.exists(_NOTIFY_LOG) else [])
+        return code, argv, out.getvalue(), notes
+
+    def _is_note(notes, key):
+        """Exactly one notification, and it is that table entry's title."""
+        head = f"-a OneUp -i {gui_app.APP_ID} {markers.NOTIFICATIONS[key][0]} "
+        return len(notes) == 1 and notes[0].startswith(head)
+
+    # INV-2: each path's argv, field by field — no --notify, no --update, a --log= under
+    # the window's own log folder, and --auto-skip-repos still on the update path.
+    _stamp = r"\d{4}-\d\d-\d\d_\d{6}"
+    _c, _argv, _, _ = _headless(gui_app._headless_check, ["@@CHECK@@|TOTAL|0|updates available"])
+    check("INV-2 --check argv is --check and a log under LOG_DIR, nothing else",
+          len(_argv) == 2 and _argv[0] == "--check"
+          and re.fullmatch(rf"--log={re.escape(str(paths.STATE_LOG_DIR))}/{_stamp}\.check\.log",
+                           _argv[1]) is not None)
+    _c, _argv, _, _ = _headless(gui_app._headless_update, ["@@DONE@@|ok"])
+    check("INV-2 --update argv is --auto-skip-repos and a log under LOG_DIR, nothing else",
+          len(_argv) == 2 and _argv[0] == "--auto-skip-repos"
+          and re.fullmatch(rf"--log={re.escape(str(paths.STATE_LOG_DIR))}/{_stamp}\.log",
+                           _argv[1]) is not None)
+
+    # INV-1 and INV-7: DONE decides, never the exit status; with no DONE the run did
+    # not finish. A stopped run exits 0 and is its own entry, never a success.
+    for _done, _key in (("ok", "run.uptodate"), ("errors", "run.failed"),
+                        ("stopped", "run.stopped"), (None, "run.failed")):
+        for _rc in (0, 1):
+            _lines = ["@@INSTALLED@@|0|no|no"] + ([f"@@DONE@@|{_done}"] if _done else [])
+            _c, _, _, _notes = _headless(gui_app._headless_update, _lines, _rc)
+            check(f"INV-7 DONE={_done} exit={_rc} notifies {_key}", _is_note(_notes, _key))
+            check(f"and returns the engine's exit status ({_rc})", _c == _rc)
+    _c, _argv, _, _notes = _headless(gui_app._headless_update,
+                                     ["@@INSTALLED@@|0|no|no", "@@DONE@@|stopped"])
+    check("INV-1 a stopped run with nothing installed names the log, not 'up to date'",
+          _is_note(_notes, "run.stopped") and _argv[1].removeprefix("--log=") in _notes[0])
+    _c, _, _, _notes = _headless(gui_app._headless_update,
+                                 ["@@INSTALLED@@|7|yes|no", "@@DONE@@|stopped"])
+    check("INV-7 a stopped run that installed something is still never a success",
+          _is_note(_notes, "run.stopped"))
+    # The rest of the fall-through, and the set-aside note on exactly three texts.
+    _c, _, _, _notes = _headless(gui_app._headless_update,
+                                 ["@@REPO_SKIPPED@@|games|unreachable",
+                                  "@@INSTALLED@@|7|yes|no", "@@DONE@@|ok"])
+    check("an installed count reads as the engine wrote it, with the set-aside source",
+          _is_note(_notes, "run.installed")
+          and _notes[0].endswith("7 system package(s) installed. "
+                                 "(skipped: games — will retry next time)"))
+    _c, _, _, _notes = _headless(gui_app._headless_update,
+                                 ["@@INSTALLED@@|0|no|yes", "@@DONE@@|ok"])
+    check("firmware alone reads 'Updates were installed.'",
+          _is_note(_notes, "run.changed") and _notes[0].endswith("Updates were installed."))
+    _c, _, _, _notes = _headless(gui_app._headless_update,
+                                 ["@@REPO_SKIPPED@@|games|x", "@@DONE@@|errors"])
+    check("a failure never carries the set-aside note", _is_note(_notes, "run.failed")
+          and "skipped:" not in _notes[0])
+
+    # INV-3: --check is silent only on a zero total with every source read.
+    _c, _, _, _notes = _headless(gui_app._headless_check, ["@@CHECK@@|TOTAL|0|updates available"])
+    check("INV-3 a clean zero is silent", _notes == [])
+    _c, _, _, _notes = _headless(gui_app._headless_check, ["@@CHECK@@|TOTAL|3|updates available"])
+    check("INV-3 a non-zero total notifies, as the engine worded it",
+          _is_note(_notes, "check.available")
+          and _notes[0].endswith("3 update(s) ready to install. Open OneUp to update."))
+    _c, _, _, _notes = _headless(gui_app._headless_check,
+                                 ["@@CHECK_UNKNOWN@@|system|sources-unreadable|packman",
+                                  "@@CHECK@@|TOTAL|0|updates available"])
+    check("INV-3 an unreadable source with a zero total notifies and names it",
+          _is_note(_notes, "check.partial") and "packman" in _notes[0])
+    _c, _, _, _notes = _headless(gui_app._headless_check,
+                                 ["@@CHECK_UNKNOWN@@|system|sources-unreadable|packman",
+                                  "@@CHECK@@|TOTAL|4|updates available"])
+    check("INV-3 an unreadable source beside a count gives both",
+          _is_note(_notes, "check.partial_count") and "packman" in _notes[0]
+          and "4 update(s)" in _notes[0])
+
+    # INV-6: every line the engine prints reaches this path's stdout, in order.
+    _plain = ["Refreshing repository 'oss'…", "  Hint: kept as the engine wrote it"]
+    for _fn, _lines in ((gui_app._headless_update,
+                         [_plain[0], "@@INSTALLED@@|0|no|no", _plain[1], "@@DONE@@|ok"]),
+                        (gui_app._headless_check,
+                         [_plain[0], "@@CHECK@@|TOTAL|0|x", _plain[1]])):
+        _c, _, _out, _ = _headless(_fn, _lines)
+        check(f"INV-6 {_fn.__name__} writes every engine line back out, in order",
+              _out.splitlines() == _lines)
+
+    # INV-4: no tray message on either path — only the notification service.
+    _trays = []
+
+    class _RecordingTray(tray.QSystemTrayIcon):
+        def __init__(self, *a, **kw):
+            _trays.append(1)
+            super().__init__(*a, **kw)
+
+    for _fn, _lines in ((gui_app._headless_update, ["@@INSTALLED@@|2|yes|no", "@@DONE@@|ok"]),
+                        (gui_app._headless_check, ["@@CHECK@@|TOTAL|2|x"])):
+        _patch(tray, "QSystemTrayIcon", _RecordingTray)
+        _patch(gui_app, "QSystemTrayIcon", _RecordingTray)
+        try:
+            _c, _, _, _notes = _headless(_fn, _lines)
+        finally:
+            _unpatch_all()
+        check(f"INV-4 {_fn.__name__} raised its notification through notify-send",
+              len(_notes) == 1)
+    check("INV-4 and constructed no tray icon on either path", _trays == [])
+
+    # INV-5 (transitional — ONEUP-0032 retires it): in a process of its own, neither
+    # path constructs a QCoreApplication. The child says so itself, because exiting
+    # cleanly would prove nothing (ONEUP-0077 INV-5).
+    _child = (
+        "import os, sys\n"
+        f"sys.path.insert(0, {str(Path(__file__).resolve().parents[1])!r})\n"
+        "from PySide6.QtCore import QCoreApplication\n"
+        "from oneup.gui import app, paths\n"
+        f"paths._resolve_engine = lambda: ([sys.executable, {_mock_engine!r}], ['mock'])\n"
+        "getattr(app, sys.argv[1])()\n"
+        "print('NO-APP' if QCoreApplication.instance() is None else 'APP')\n")
+    for _name, _lines in (("_headless_update", ["@@INSTALLED@@|2|yes|no", "@@DONE@@|ok"]),
+                          ("_headless_check", ["@@CHECK@@|TOTAL|2|x"])):
+        with open(_mock_env["ONEUP_MOCK_OUT"], "w") as _f:
+            _f.write("".join(f"{ln}\n" for ln in _lines))
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(_NOTIFY_LOG)
+        _r = subprocess.run(  # noqa: S603 — this interpreter, a fixed script.
+            [sys.executable, "-c", _child, _name], capture_output=True, text=True,
+            # The suite rewrites HOME, which hides a per-user PySide6 from a fresh
+            # interpreter; the child gets this one's module search path instead.
+            env={**os.environ, **_mock_env, "ONEUP_MOCK_RC": "0",
+                 "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}, timeout=60)
+        check(f"INV-5 {_name} in its own process constructs no QCoreApplication",
+              _r.returncode == 0 and _r.stdout.rstrip().endswith("NO-APP"))
+        check(f"INV-5 and still raised its notification ({_name})", _wait_for_notify())
 
     # --- Settings popup groups the three background toggles --------------------
     w = window.Updater()
@@ -2140,21 +2296,6 @@ def main() -> int:
     check("skip_repos adds one --skip-repo per alias", "--skip-repo=google-chrome" in args)
     check("no skip_repos → no --skip-repo flag",
           "--skip-repo" not in " ".join(run._engine_args(["system"], check=False)))
-
-    # Unattended update passes --auto-skip-repos, additively alongside --notify (and
-    # still never forwards the GUI-only --update token — mirrors the guard above).
-    _cap = {}
-    _orig = gui_app.subprocess.run              # same module as _headless_update
-    gui_app.subprocess.run = lambda a, *_ar, **kw: (
-        _cap.update(argv=a) or type("R", (), {"returncode": 0})())
-    try:
-        gui_app._headless_update()
-    finally:
-        gui_app.subprocess.run = _orig
-    check("headless update auto-skips broken sources",
-          "--auto-skip-repos" in _cap.get("argv", []))
-    check("headless update still passes --notify, not --update",
-          "--notify" in _cap.get("argv", []) and "--update" not in _cap.get("argv", []))
 
     # --- ONEUP-0025: REPO_SKIPPED is recorded; skip-repo remedy arms a named
     # banner action ("Skip <source> & update the rest") -------------------------

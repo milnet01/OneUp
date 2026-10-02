@@ -17,6 +17,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The weekly timers' notification is written by the app, not the engine** (ONEUP-0077)
+  The weekly check and the weekly update now read what the engine
+  reports and raise the desktop notification themselves. Each run
+  also keeps its own log in OneUp's log folder, so a failure
+  notification can name the file. The terminal and the system journal
+  still show the whole run.
+
 - **The engine sends codes, and the window words every message itself (ONEUP-0072, ONEUP-0108)**
   Step results, hints, fixes, "couldn't check" reasons and the reason
   for a restart now travel from the engine as short codes, and the
@@ -60,6 +67,11 @@ All notable changes to OneUp are documented here. The format follows
   makes future changes safer to make and easier to review.
 
 ### Fixed
+
+- **A weekly update you stopped no longer says "Already up to date"** (ONEUP-0074)
+  It now says the update was stopped and points at the log. A weekly
+  check that could not read a software source now says so, instead of
+  staying silent.
 
 - **Two test runs at once no longer fail each other** (ONEUP-0203)
   Running the pre-release test gate twice at the same time on one

@@ -79,6 +79,8 @@ These channels use this protocol, and only the first goes through `handle_marker
 | Authorization change | `--grant-auth` / `--revoke-auth` | `auth._on_auth_finished` — reads `HINT` |
 | Snapshot thinning | `--thin-snapshots` | `rollback._on_thin_finished` — reads `SNAPSHOTS|thinned` and `HINT` |
 | Tray check | `--check`, the tray's own background check | `tray._parse_tray_line` — reads `CHECK` and `CHECK_UNKNOWN` |
+| Weekly check timer | `oneup --check` → `--check --log=…` | `app._headless_check` — reads `CHECK\|TOTAL` and `CHECK_UNKNOWN`, and echoes every line to its own stdout |
+| Weekly update timer | `oneup --update` → `--auto-skip-repos --log=…` | `app._headless_update` — reads `INSTALLED`, `REPO_SKIPPED` and `DONE`, and echoes every line to its own stdout |
 
 This matters when adding a marker: **a marker emitted only on a side channel is not seen
 by `handle_marker`**, and one emitted during a run is not seen by the side-channel readers.
@@ -245,8 +247,9 @@ is empty for Flatpaks** — the Flatpak path knows the new version only.
 ### 4.7 `INSTALLED|count|sys_changed|fw_changed`
 
 `sys_changed` and `fw_changed` are the literal strings `yes` or `no`. The window reads
-`count` and `sys_changed`; **`fw_changed` is emitted and currently unread** — it is part of
-the layout (a positional regression test pins all three) and must keep its position.
+`count` and `sys_changed`; the update timer's reader reads all three, since either flag
+turns its notification into *"Updates were installed"* (ONEUP-0077). A positional
+regression test pins all three.
 
 ### 4.8 `REBOOT|yes[|reason]` or `REBOOT|no`
 
@@ -275,6 +278,10 @@ errored** — belongs to the engine, not to this field.
   (`Updater._attach_to_running_engine`): there is no exit code to read, so `DONE` is the
   only verdict there is. **A followed run that never printed one is reported as errors,
   never as success.**
+- **The update timer's reader has both, and `DONE` wins** (`app._headless_update`,
+  ONEUP-0077 §6). The two disagree on exactly the case that matters: a stopped run exits
+  zero. So `DONE` decides whenever it arrives, and a run that never printed one is
+  reported as errors on either exit status.
 
 ### 4.10 `REMEDY` — the one-click fixes
 

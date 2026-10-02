@@ -1,6 +1,6 @@
 # ONEUP-0077 — the window builds the timer notification
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** implement
 **Roadmap:** ONEUP-0077
 **Branch:** v2
@@ -240,11 +240,11 @@ this item does not touch (§10), so it cannot assert any of these.
 - **INV-5** *(transitional — `ONEUP-0032` retires it, see §8)* This item requires no
   `QCoreApplication` on either headless path, and constructs none.
   *Test:* `tests/gui-smoke.py` runs each entry point in a **subprocess** with no Qt
-  application constructed. `ENGINE` is a module-level constant (`ENGINE = _find_engine()`)
-  with **no environment override**, and an in-process patch does not cross `subprocess`, so
-  the child gets the mock the way the suite already isolates everything else — by running with
-  `HOME` rewritten, which is one of the two paths `_find_engine` searches
-  (`docs/standards/testing.md` §2). The case asserts
+  application constructed. An in-process patch does not cross `subprocess`, so the child
+  script patches the engine resolver, `paths._resolve_engine`, to the mock itself before
+  calling the entry point (`docs/standards/testing.md` §2). *(Recorded 2026-10-02: this
+  clause first named `_find_engine` and a rewritten `HOME`, which ONEUP-0054 stage 9
+  replaced with the resolver.)* The case asserts
   it exits cleanly, records its `notify-send` call, and **constructs no `QCoreApplication`
   and installs no translator**. It must be a subprocess: the suite builds its own application
   at import (`QApplication.instance() or QApplication([])`), so an in-process call would pass
@@ -300,10 +300,10 @@ case are two that will disagree. The engine suite is not involved: `update_syste
 `--notify` output is unchanged and out of scope (§10).
 
 What the suite gains is a **mock engine** the two headless paths can be driven against: a
-script emitting a chosen set of markers and exiting with a chosen status, placed where
-`_find_engine` resolves — which for this suite means under the rewritten `HOME` it already
-uses for isolation, not on `PATH` (`_find_engine` does not search `PATH`). Plus the
-subprocess harness INV-5 and INV-6 need. The mock `notify-send` those cases assert against is
+script emitting a chosen set of markers and exiting with a chosen status, which the suite
+hands the two paths by patching `paths._resolve_engine` — in the suite's own process, and
+inside the child INV-5 runs. Plus the subprocess harness INV-5 needs; INV-6 reads the
+path's stdout in-process. The mock `notify-send` those cases assert against is
 already on the suite's PATH.
 
 ## 8. Docs & release

@@ -200,6 +200,69 @@ def render_reboot_reason(field: str) -> str:
     return sentence.format(items=_join_items(rendered))
 
 
+# The weekly timers' desktop notification (ONEUP-0077 §4): a title and a body per case.
+# The engine raised it until this item, with the English carried across from there;
+# `run.stopped` and the two `check.partial` cases are new. Selected from the markers a
+# run already emits by `run_notification` and `check_notification` below.
+NOTIFICATIONS: dict[str, tuple[str, str]] = {
+    "run.failed": ("Update failed", "One or more steps failed — see the log: {log}"),
+    "run.stopped": ("Update stopped", "The update was stopped before it finished. "
+                    "The steps that ran are in the log: {log}"),
+    "run.installed": ("Update complete", "{count} system package(s) installed.{skipped}"),
+    "run.changed": ("Update complete", "Updates were installed.{skipped}"),
+    "run.uptodate": ("Already up to date", "No updates were needed.{skipped}"),
+    "check.available": ("Updates available",
+                        "{count} update(s) ready to install. Open OneUp to update."),
+    "check.partial": ("Couldn't check for updates", "{reasons}"),
+    "check.partial_count": ("Updates available",
+                            "{count} update(s) ready to install, and there may be more. "
+                            "{reasons} Open OneUp to update."),
+}
+# Appended to the three run texts the engine appended it to — never to a failure.
+_SKIPPED = " (skipped: {aliases} — will retry next time)"
+
+
+def run_notification(done: str | None, count: str, changed: bool,
+                     skipped: list[str], log: str) -> tuple[str, str]:
+    """The end-of-run notification, by the engine's fall-through plus the stopped case.
+
+    `@@DONE@@` decides, never the exit status (ONEUP-0077 §6, INV-7): a stopped run
+    exits zero, so reading the exit first would call it a success. With no DONE at all
+    the run did not finish, which is a failure on either exit status — so the status
+    never changes the answer and is not taken. `stopped` comes straight after a
+    failure, so it is never reported as a success; whatever it installed before the
+    stop is in the log (INV-1, INV-7).
+    """
+    failed = done not in ("ok", "stopped")   # errors, absent, or a verdict it can't read
+    note = _SKIPPED.format(aliases=" ".join(skipped)) if skipped else ""
+    if failed:
+        key = "run.failed"
+    elif done == "stopped":
+        key = "run.stopped"
+    elif count and count != "0":
+        key = "run.installed"
+    elif changed:
+        key = "run.changed"
+    else:
+        key = "run.uptodate"
+    title, body = NOTIFICATIONS[key]
+    return title, body.format(log=log, count=count, skipped=note)
+
+
+def check_notification(total: int, reasons: list[str]) -> tuple[str, str] | None:
+    """The `--check` notification, or None for silence. Silent only when nothing is
+    waiting AND every source was read: an unreadable source makes the total a floor,
+    so it fires whatever the total (ONEUP-0077 INV-3, ONEUP-0056)."""
+    if reasons:
+        key = "check.partial_count" if total > 0 else "check.partial"
+    elif total > 0:
+        key = "check.available"
+    else:
+        return None
+    title, body = NOTIFICATIONS[key]
+    return title, body.format(count=total, reasons=" ".join(reasons))
+
+
 def split_marker(line: str) -> tuple[str, list[str], str] | None:
     """Split an `@@TAG@@|payload` line into (tag, fields, raw payload).
 

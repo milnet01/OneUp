@@ -6,41 +6,113 @@ copy that is already running, tray or no tray (ONEUP-0084).
 """
 from __future__ import annotations
 
+import contextlib
+import shutil
 import subprocess
 import sys
+from datetime import datetime
 
 from PySide6.QtCore import QSettings
 from PySide6.QtNetwork import QLocalSocket
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from .. import APP_ID, APP_NAME
-from . import paths, tray
+from . import markers, paths, tray
 from .theme import _app_icon, apply_app_theme
 from .window import Updater
 
 
+def _headless_engine(args: list[str], read) -> int:
+    """Run the engine for a timer, echoing every line it prints and handing each marker
+    to `read`. Returns its exit status.
+
+    The output is read line by line and written straight back out, so a terminal user
+    and the systemd journal still see the run go past (ONEUP-0077 INV-6) and nothing
+    buffers a whole transcript. stderr is left inherited: it carries no markers, and
+    redirecting it would swallow the engine's own refusals."""
+    proc = subprocess.Popen(  # noqa: S603 — the resolver's argv, no shell.
+        paths.engine_argv(*args), stdout=subprocess.PIPE, text=True,
+        errors="replace", bufsize=1)
+    for line in proc.stdout or ():
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        if line.startswith("@@"):
+            parsed = markers.split_marker(line.rstrip("\n"))
+            if parsed:
+                read(parsed[0], parsed[1])
+    return proc.wait()
+
+
+def _notify(title: str, body: str) -> None:
+    """Raise a desktop notification with no display and no Qt: the desktop's
+    notification service, as the engine did (ONEUP-0077 INV-4). Never fatal."""
+    if not shutil.which("notify-send"):
+        return
+    with contextlib.suppress(OSError, subprocess.SubprocessError):
+        subprocess.run(  # noqa: S603 — fixed argv, no shell.
+            ["notify-send", "-a", APP_NAME, "-i", APP_ID, title, body],  # noqa: S607
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, check=False)
+
+
+def _headless_log(suffix: str) -> str | None:
+    """A timestamped log under the window's own log folder, so a notification can
+    name it (ONEUP-0077 §4). None, said on stderr, when the folder can't be made."""
+    if not paths.log_dir_ready(quiet=True):
+        return None
+    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    return str(paths.STATE_LOG_DIR / f"{stamp}{suffix}")
+
+
 def _headless_check() -> int:
-    """`oneup --check`: run the engine's read-only check + notification, no GUI.
+    """`oneup --check`: the engine's read-only check, and the window's notification.
     This is what the optional weekly systemd-user timer invokes."""
     if not paths.engine_available():     # the resolver has said what it tried, on stderr
         return 1
-    return subprocess.run(  # noqa: S603
-        paths.engine_argv("--check", "--notify")
-    ).returncode
+    log = _headless_log(".check.log")
+    if log is None:
+        return 1
+    seen = {"total": 0, "reasons": []}
+
+    def read(tag: str, parts: list[str]) -> None:
+        if tag == "CHECK" and len(parts) > 1 and parts[0] == "TOTAL":
+            seen["total"] = int(parts[1]) if parts[1].isdecimal() else 0
+        elif tag == "CHECK_UNKNOWN":
+            seen["reasons"].append(markers.render_check_unknown(parts[1:]))
+
+    rc = _headless_engine(["--check", f"--log={log}"], read)
+    note = markers.check_notification(seen["total"], seen["reasons"])
+    if note:
+        _notify(*note)
+    return rc
 
 
 def _headless_update() -> int:
-    """`oneup --update`: run the FULL engine + its end-of-run notification, no GUI.
-    This is what the optional weekly systemd-user UPDATE timer invokes. `--update`
-    is a GUI-only token — the engine is run with just --notify (its default STEPS is
-    every step) and is NEVER handed --update (its arg parser would reject it).
-    Also passes --auto-skip-repos (additive): an unattended run should set a single
-    broken software source aside and finish the rest, not fail the whole update."""
+    """`oneup --update`: the FULL engine and the window's end-of-run notification, no
+    GUI. This is what the optional weekly systemd-user UPDATE timer invokes. `--update`
+    is a GUI-only token — the engine runs its default steps, which is every step, and
+    is NEVER handed --update (its arg parser would reject it). --auto-skip-repos is
+    additive: an unattended run should set a single broken software source aside and
+    finish the rest, not fail the whole update."""
     if not paths.engine_available():     # the resolver has said what it tried, on stderr
         return 1
-    return subprocess.run(  # noqa: S603
-        paths.engine_argv("--notify", "--auto-skip-repos")
-    ).returncode
+    log = _headless_log(".log")
+    if log is None:
+        return 1
+    seen = {"done": None, "count": "", "changed": False, "skipped": []}
+
+    def read(tag: str, parts: list[str]) -> None:
+        if tag == "DONE" and parts:
+            seen["done"] = parts[0]
+        elif tag == "INSTALLED" and parts:
+            seen["count"] = parts[0]
+            seen["changed"] = "yes" in parts[1:3]
+        elif tag == "REPO_SKIPPED" and parts and parts[0]:
+            seen["skipped"].append(parts[0])
+
+    rc = _headless_engine(["--auto-skip-repos", f"--log={log}"], read)
+    _notify(*markers.run_notification(seen["done"], seen["count"], seen["changed"],
+                                      seen["skipped"], log))
+    return rc
 
 
 def _raise_existing_instance(intent: str) -> bool:

@@ -6589,7 +6589,7 @@ when complete (that document's §7).
   English, the differential harness is retired. Engine 416/0, window
   590/0, local-CI green in 4m25s.
 
-- 📋 [ONEUP-0074] **A run the user stopped notifies "Already up to date".**
+- ✅ [ONEUP-0074] **A run the user stopped notifies "Already up to date".**
   Found while writing docs/specs/ONEUP-0072-marker-codes.md; filed by that
   spec's section 10 as out of its scope, because section 3.2 forbids it
   re-wording anything it converts — its gate is that behaviour did not
@@ -6621,11 +6621,13 @@ when complete (that document's §7).
   boundary and asserts the notification text is not "Already up to date";
   today the suite's _notify_case coverage checks the three reachable
   texts and never exercises the stopped path.
+  Fixed 2026-10-02 by ONEUP-0077: a stopped timer run notifies 'Update
+  stopped' and names its log, and @@DONE@@ outranks the exit status.
   **Layman:** If you stop an update part-way, the desktop notification says everything was already up to date — which is not what happened.
   Kind: fix.
   Source: oneup-0072-cold-eyes-loop-3-2026-08-03.
 
-- 📋 [ONEUP-0077] **The window builds the timer notification, instead of asking the engine for it.**
+- ✅ [ONEUP-0077] **The window builds the timer notification, instead of asking the engine for it.**
   Split out of ONEUP-0072 on 2026-08-03, on the user's decision. That spec's
   section 11 recommended splitting section 4.4 rather than running a fourth
   cold-eyes loop: it had converged by cap at 654 lines, and every collateral
@@ -6673,6 +6675,11 @@ when complete (that document's §7).
   output must not stop it reaching the terminal and the journal) and INV-7
   (`@@DONE@@` outranks the exit status, because a stopped run exits zero).
   ONEUP-0082 was filed from it.
+  Shipped 2026-10-02 on v2: both timer paths drop --notify, pass a
+  --log= under the window's log folder, echo the engine's output line by
+  line and raise the notification from markers.NOTIFICATIONS. INV-1 to
+  INV-7 tested and each seen red. The spec's test recipe now names
+  paths._resolve_engine, which stage 9 put in place of _find_engine.
 
 - 📋 [ONEUP-0082] **Nothing prunes the run-log directory, and ONEUP-0077 starts adding to it weekly.**
   `~/.local/state/oneup/logs/` is only ever read by `updater.py` —
