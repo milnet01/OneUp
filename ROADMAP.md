@@ -5436,6 +5436,41 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: user-request-2026-10-02.
 
+- 📋 [ONEUP-0231] **A run launched from a terminal loses its credential after five minutes, and the next password-needing call waits five minutes on a prompt nobody sees.**
+  Measured on the ONEUP-0054 stage-8 run (2026-10-02, v2 engine,
+  launched from Konsole). The journal shows two `pam_unix(sudo:auth):
+  conversation failed` lines exactly 300 s after the cache step's two
+  `sudo du -sB1 /var/cache/zypp` calls began, and Konsole shows two
+  "OneUp needs administrator rights ... Password:" prompts.
+  Cause: the keep-alive starts in its own SESSION (`start_new_session`
+  in privilege.py, `setsid` in update_system.sh), so it has no
+  controlling terminal. With a terminal, sudo keys the cached credential
+  to the tty; the keep-alive's `sudo -n -v` refreshes a different record,
+  so the tty one expires after sudo's 5-minute timeout. Calls covered by
+  the NOPASSWD drop-in never notice; the first that needs the credential
+  prompts on the tty. This morning's desktop-launched run (no tty) ran
+  the same `du` 10 minutes in without a prompt.
+  Both engines share the shape, so the fix lands on main first.
+  Likely fix: own process GROUP, not own session (Python
+  `process_group=0`), so the group kill still works and the tty stays.
+  **Layman:** Started from a terminal, OneUp could quietly ask for your password a second time in that terminal and sit waiting for five minutes.
+  Kind: fix.
+  Source: user-real-run-2026-10-02.
+  Lanes: engine.
+
+- 📋 [ONEUP-0232] **The stall line blames the server while flatpak is installing from a finished download on a busy disk.**
+  Seen on the ONEUP-0054 stage-8 run (2026-10-02): flatpak had printed
+  100% for Discord and was deploying to /mnt/Games (sdb at ~100% util,
+  flatpak in state D, still reading). The window said "nothing received
+  for 2m 52s — the server may have stalled". The run then finished
+  normally. The line should not name the server as the cause when
+  nothing shows a download is in progress. Wording item; check whether
+  main's window says the same before choosing the branch.
+  **Layman:** When the download had finished and the disk was just slow, the window said the server may have stalled, which was wrong.
+  Kind: fix.
+  Source: user-real-run-2026-10-02.
+  Lanes: gui.
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of
@@ -5776,6 +5811,13 @@ when complete (that document's §7).
   `./local-CI.sh` green on `v2`: 322/0 engine, 57/0 parsers, 31/0 differential, 447/0 and 452/0 window, 8/0 structure, 21354 documentation checks. Re-measured for `workflow.md` §6: 5m25s total, engine suite 2m52s, differential 50s, window pass ~32s each.
 
   Stage 8 is next: a real run on the user's own machine, which earns G6.
+  Progress (2026-10-02): stage 8 run done by the user, v2 engine confirmed
+  by process list (`python3 -m oneup.engine`), launched from Konsole.
+  All five steps OK, one password prompt, snapshot #3183 taken, no
+  reboot advised (correct), nothing left running afterwards. Two defects
+  found, neither v2-only: ONEUP-0231 (keep-alive loses a tty-keyed
+  credential; both engines) and ONEUP-0232 (stall line blames the server
+  during a disk-bound flatpak deploy). G6 judged met pending 0231's fix.
 
 - 🚧 [ONEUP-0057] **Write the OneUp 2.0 documentation set before any 2.0 code is written.**
   Agreed with the user 2026-07-26. Deliverables, in order: nine standards
