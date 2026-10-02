@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import shiboken6
-from PySide6.QtCore import QProcess, QTimer
+from PySide6.QtCore import QCoreApplication, QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox
 
 from . import autostart, markers, paths
@@ -19,7 +19,8 @@ from . import autostart, markers, paths
 
 def _refresh_auth_label(win):
     on = win.auth_btn.isChecked()
-    win.auth_btn.setText("Passwordless: on" if on else "Passwordless: off")
+    win.auth_btn.setText(QCoreApplication.translate("auth", "Passwordless: on") if on
+                         else QCoreApplication.translate("auth", "Passwordless: off"))
 
 
 def _set_auth_checked(win, on: bool):
@@ -82,7 +83,8 @@ def _on_auth_status_finished(win, proc: QProcess):
     # out to systemctl and so reports the machine, not the toggle, so a timer enabled
     # outside OneUp would answer the user's "on" click with "we switched it off".
     if "@@AUTH@@|off" in out and not win._pending_autoupdate:
-        _stand_down_autoupdate(win, "OneUp's passwordless rule is no longer active.\n\n")
+        _stand_down_autoupdate(win, QCoreApplication.translate(
+            "auth", "OneUp's passwordless rule is no longer active.\n\n"))
     # Re-enable the auto-update toggle if a pending enable had disabled it.
     win.autoupdate_btn.setEnabled(True)
     if win._pending_autoupdate:
@@ -93,8 +95,10 @@ def _on_auth_status_finished(win, proc: QProcess):
             autostart._set_autoupdate_checked(win, enabled)
             if not enabled:
                 QMessageBox.warning(
-                    win, "Could not enable automatic updates",
-                    "The weekly update timer could not be enabled.")
+                    win, QCoreApplication.translate("auth", "Could not enable automatic updates"),
+                    QCoreApplication.translate(
+                        "auth",
+                        "The weekly update timer could not be enabled."))
         else:
             # Passwordless came back off (popup cancelled / visudo rejected / failed).
             # The grant's @@HINT@@ was already surfaced in _on_auth_finished.
@@ -107,20 +111,24 @@ def _confirm_passwordless(win, lead: str = "") -> bool:
     both call sites present the SAME security warning — never a shortened rewrite."""
     box = QMessageBox(win)
     box.setIcon(QMessageBox.Warning)
-    box.setWindowTitle("Skip the password prompt for updates?")
-    box.setText("Let OneUp run updates without asking for your password?")
-    box.setInformativeText(
-        lead +
-        "OneUp will add a system rule so its update commands — zypper, "
+    box.setWindowTitle(QCoreApplication.translate(
+        "auth",
+        "Skip the password prompt for updates?"))
+    box.setText(QCoreApplication.translate(
+        "auth",
+        "Let OneUp run updates without asking for your password?"))
+    box.setInformativeText(QCoreApplication.translate(
+        "auth",
+        "{lead}OneUp will add a system rule so its update commands — zypper, "
         "Flatpak, firmware and snapshots — can run without a password.\n\n"
         "Your password is never stored. The system only remembers the "
         "decision, and only for these specific commands.\n\n"
         "Because updates run as administrator, this is effectively "
         "passwordless administrator access on this machine — enable it "
         "only on a computer you trust and control. You can switch it off "
-        "at any time to revoke it instantly.")
+        "at any time to revoke it instantly.").format(lead=lead))
     box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
-    box.button(QMessageBox.Ok).setText("Enable")
+    box.button(QMessageBox.Ok).setText(QCoreApplication.translate("auth", "Enable"))
     box.setDefaultButton(QMessageBox.Cancel)
     # Centre over the main window once laid out (mirrors show_about).
     QTimer.singleShot(0, lambda: win._center_child(box))
@@ -142,9 +150,11 @@ def _stand_down_autoupdate(win, lead: str = ""):
     autostart._remove_user_timer("oneup-update")
     autostart._set_autoupdate_checked(win, False)
     QMessageBox.information(
-        win, "Automatic updates turned off", lead +
-        "Automatic weekly updates were switched off because they need "
-        "the passwordless setting to run unattended.")
+        win, QCoreApplication.translate("auth", "Automatic updates turned off"),
+        QCoreApplication.translate(
+            "auth",
+            "{lead}Automatic weekly updates were switched off because they need "
+            "the passwordless setting to run unattended.").format(lead=lead))
 
 
 def on_auth_toggled(win, on: bool):
@@ -155,7 +165,8 @@ def on_auth_toggled(win, on: bool):
         if not _confirm_passwordless(win):
             _set_auth_checked(win, False)   # user backed out
             return
-        _run_auth(win, "--grant-auth", "Setting up… (approve the password popup)")
+        _run_auth(win, "--grant-auth", QCoreApplication.translate(
+            "auth", "Setting up… (approve the password popup)"))
     else:
         # Coupling rule 3: a schedule can't outlive the passwordless rule it needs.
         # Hooked to the revoke ACTION (not the toggle signal), so the programmatic
@@ -163,7 +174,8 @@ def on_auth_toggled(win, on: bool):
         # independent of the revoke process's own outcome.
         _stand_down_autoupdate(win)
         win._pending_autoupdate = False    # a revoke mid-enable can't leave a stale latch
-        _run_auth(win, "--revoke-auth", "Revoking authorization…")
+        _run_auth(win, "--revoke-auth",
+                  QCoreApplication.translate("auth", "Revoking authorization…"))
 
 
 def _run_auth(win, action: str, status_text: str):
@@ -196,11 +208,13 @@ def _on_auth_finished(win, proc: QProcess):
         return
     out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
     win.auth_btn.setEnabled(True)
-    win.status.setText("Ready.")
+    win.status.setText(QCoreApplication.translate("auth", "Ready."))
     win._settings_status("")
     for line in out.splitlines():
         if line.startswith("@@HINT@@|"):
-            QMessageBox.warning(win, "Couldn't change the setting",
+            QMessageBox.warning(win, QCoreApplication.translate(
+                "auth",
+                "Couldn't change the setting"),
                                 markers.render_hint(line.split("|")[1:]))
     # Re-probe the real state rather than trusting the toggle: a cancelled
     # password prompt or a failure must leave the switch showing the truth.

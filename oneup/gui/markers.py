@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
+
+from . import i18n
 
 
 def fallback_long(*codes: str) -> str:
@@ -16,8 +18,9 @@ def fallback_long(*codes: str) -> str:
     sent (ONEUP-0108 §4.3): a code it has no entry for, a known code whose arguments
     do not fit, an unknown step key. Readable, never the bare token, never empty; it
     names what it could not word, for a bug report, and points at the log."""
-    return (f"This version of OneUp has no wording for what the update reported "
-            f"({', '.join(codes)}). The log has the details.")
+    return QCoreApplication.translate(
+        "markers", "This version of OneUp has no wording for what the update reported "
+        "({codes}). The log has the details.").format(codes=i18n.join_names(codes))
 
 
 # @@HINT@@'s codes (ONEUP-0072 §4.2): one per sentence, allocated with the engine
@@ -25,79 +28,150 @@ def fallback_long(*codes: str) -> str:
 # (§3.2). Each entry is the argument names, in the order they arrive, and the
 # sentence. A shipped code is never reused for another meaning; a retired one is
 # commented out here, not deleted — this table is the register.
-_SIZE = "Couldn't work out the download size: "
-_DOWNLOAD = ("openSUSE's servers are still catching up with this update. Nothing was "
-             "installed and everything already downloaded has been kept; try again later.")
-_BUSY = ("Something else is installing or removing software right now — {name} (process "
-         "{pid}). That is often OneUp's own earlier run still finishing in the background; "
-         "it clears on its own. Nothing was changed, so just run the update again in a "
-         "minute.")
 HINTS: dict[str, tuple[tuple[str, ...], str]] = {
-    "downloads-kept": ((), "Kept the already-downloaded packages, so retrying the update "
-                           "doesn't fetch them all over again."),
-    "refresh-failed-cached": ((), "Couldn't refresh one or more repositories — upgraded from "
-                                  "cached metadata. A future run should refresh cleanly."),
-    "progress-unrecognised": ((), "Packages were installed, but OneUp couldn't follow the "
-                                  "progress — zypper has probably renamed the lines it reports "
-                                  "progress on. The update itself was fine; please report this "
-                                  "so the progress display can be updated."),
-    "repos-set-aside": (("aliases",), "Updated everything except: {aliases} — set aside this run "
-                                      "(temporary problem); OneUp will retry next time."),
-    "download-recovered": ((), "Recovered from a failed download — some packages were fetched "
-                               "from openSUSE's content delivery network instead of the mirror "
-                               "that failed."),
-    "repos-failing-systemic": ((), "Several repositories are failing at once — likely a network "
-                                   "or system problem, not a single bad source. Check your "
-                                   "connection and retry."),
-    "download-failed-package": (("package",), "Could not download {package} — " + _DOWNLOAD),
-    "download-failed": ((), "A package could not be downloaded — " + _DOWNLOAD),
-    "disk-full": ((), "Ran out of disk space — free some room (clear the package cache, delete "
-                      "old snapshots) and retry."),
-    "repo-key-still-rejected": ((), "A repository signing key is still rejected even after "
-                                    "importing keys — check the log for the offending "
-                                    "repository, or run: sudo zypper --gpg-auto-import-keys "
-                                    "refresh, then retry."),
-    "repo-key-expired": ((), 'A repository signing key is out of date. Use "Import signing key '
-                             '& retry" to fix it, or run: sudo zypper --gpg-auto-import-keys '
-                             "refresh, then retry."),
-    "network-failed": ((), "A download failed — check your internet connection, then retry."),
-    "package-conflict": ((), "A package conflict — often a third-party repo. Check the log; you "
-                             "may need to disable a conflicting repository."),
-    "go-ahead-unverified": ((), "OneUp could not verify the request to start the update, so "
-                                "nothing was changed. Press Update again."),
-    "package-manager-busy": (("pid", "name"), _BUSY),
-    "package-manager-busy-unnamed": (("pid",), _BUSY.replace("{name}", "another program")),
-    "oneup-already-running": (("pid",), "Another OneUp update is already running (process "
-                                        "{pid}). Nothing was changed. Open OneUp to follow it, "
-                                        "or run the update again once it has finished."),
-    "passwordless-unsupported": ((), "Passwordless authorization can't be set up on this "
-                                     "machine: zypper, timeout or du was not found, or the "
-                                     "refresh budget is not a whole number of seconds."),
-    "size-busy": ((), _SIZE + "another program is using the package manager (PackageKit, or a "
-                              "zypper you have open elsewhere) — close it and try again."),
-    "size-cancelled": ((), _SIZE + "OneUp wasn't allowed to run the check as administrator — "
-                                   "the password prompt may have been cancelled."),
-    "size-no-sources": ((), _SIZE + "no software sources are enabled, so there is nothing to "
-                                    "weigh up."),
-    "size-failed": (("code",), _SIZE + "the package manager reported an error (code {code}) — "
-                                       "see the lines below."),
-    "temp-file-failed": ((), "Could not create a temporary file."),
-    "auth-rule-invalid": ((), "The generated authorization rule failed validation — nothing "
-                              "was changed."),
-    "guard-write-failed": (("path",), "Could not write the download helper ({path})."),
-    "auth-write-failed": (("path",), "Could not write the authorization rule ({path})."),
-    "auth-remove-failed": (("path",), "Could not remove the authorization rule ({path})."),
-    "snapper-missing": ((), "Snapper isn't installed, so there are no snapshots to thin."),
-    "snapshots-unreadable": ((), "Couldn't read the list of restore points, so OneUp can't "
-                                 "tell whether any were removed."),
-    "snapper-cleanup-failed": ((), "Snapper's cleanup failed, so no restore points were "
-                                   "removed."),
-    "stopped": ((), "Stopped at your request. Anything already installed stays installed — a "
-                    "stop never interrupts an install half-way, because that can leave programs "
-                    "broken. Run the update again whenever you like."),
-    "repo-slow": (("alias",), "The '{alias}' source is serving updates too slowly to wait for, "
-                              'so OneUp moved on. Use "Skip {alias} & update the rest" to leave '
-                              "it out of the next run, or try again later."),
+    "downloads-kept": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Kept the already-downloaded packages, so retrying the update "
+        "doesn't fetch them all over again.")),
+    "refresh-failed-cached": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Couldn't refresh one or more repositories — upgraded from "
+        "cached metadata. A future run should refresh cleanly.")),
+    "progress-unrecognised": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Packages were installed, but OneUp couldn't follow the "
+        "progress — zypper has probably renamed the lines it reports "
+        "progress on. The update itself was fine; please report this so "
+        "the progress display can be updated.")),
+    "repos-set-aside": (('aliases',), QT_TRANSLATE_NOOP(
+        "markers",
+        "Updated everything except: {aliases} — set aside this run "
+        "(temporary problem); OneUp will retry next time.")),
+    "download-recovered": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Recovered from a failed download — some packages were fetched "
+        "from openSUSE's content delivery network instead of the mirror "
+        "that failed.")),
+    "repos-failing-systemic": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Several repositories are failing at once — likely a network or "
+        "system problem, not a single bad source. Check your connection "
+        "and retry.")),
+    "download-failed-package": (('package',), QT_TRANSLATE_NOOP(
+        "markers",
+        "Could not download {package} — openSUSE's servers are still "
+        "catching up with this update. Nothing was installed and "
+        "everything already downloaded has been kept; try again later.")),
+    "download-failed": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "A package could not be downloaded — openSUSE's servers are "
+        "still catching up with this update. Nothing was installed and "
+        "everything already downloaded has been kept; try again later.")),
+    "disk-full": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Ran out of disk space — free some room (clear the package "
+        "cache, delete old snapshots) and retry.")),
+    "repo-key-still-rejected": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "A repository signing key is still rejected even after "
+        "importing keys — check the log for the offending repository, "
+        "or run: sudo zypper --gpg-auto-import-keys refresh, then "
+        "retry.")),
+    "repo-key-expired": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "A repository signing key is out of date. Use \"Import signing "
+        "key & retry\" to fix it, or run: sudo zypper "
+        "--gpg-auto-import-keys refresh, then retry.")),
+    "network-failed": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "A download failed — check your internet connection, then "
+        "retry.")),
+    "package-conflict": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "A package conflict — often a third-party repo. Check the log; "
+        "you may need to disable a conflicting repository.")),
+    "go-ahead-unverified": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "OneUp could not verify the request to start the update, so "
+        "nothing was changed. Press Update again.")),
+    "package-manager-busy": (('pid', 'name'), QT_TRANSLATE_NOOP(
+        "markers",
+        "Something else is installing or removing software right now — "
+        "{name} (process {pid}). That is often OneUp's own earlier run "
+        "still finishing in the background; it clears on its own. "
+        "Nothing was changed, so just run the update again in a minute.")),
+    "package-manager-busy-unnamed": (('pid',), QT_TRANSLATE_NOOP(
+        "markers",
+        "Something else is installing or removing software right now — "
+        "another program (process {pid}). That is often OneUp's own "
+        "earlier run still finishing in the background; it clears on "
+        "its own. Nothing was changed, so just run the update again in "
+        "a minute.")),
+    "oneup-already-running": (('pid',), QT_TRANSLATE_NOOP(
+        "markers",
+        "Another OneUp update is already running (process {pid}). "
+        "Nothing was changed. Open OneUp to follow it, or run the "
+        "update again once it has finished.")),
+    "passwordless-unsupported": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Passwordless authorization can't be set up on this machine: "
+        "zypper, timeout or du was not found, or the refresh budget is "
+        "not a whole number of seconds.")),
+    "size-busy": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Couldn't work out the download size: another program is using "
+        "the package manager (PackageKit, or a zypper you have open "
+        "elsewhere) — close it and try again.")),
+    "size-cancelled": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Couldn't work out the download size: OneUp wasn't allowed to "
+        "run the check as administrator — the password prompt may have "
+        "been cancelled.")),
+    "size-no-sources": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Couldn't work out the download size: no software sources are "
+        "enabled, so there is nothing to weigh up.")),
+    "size-failed": (('code',), QT_TRANSLATE_NOOP(
+        "markers",
+        "Couldn't work out the download size: the package manager "
+        "reported an error (code {code}) — see the lines below.")),
+    "temp-file-failed": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Could not create a temporary file.")),
+    "auth-rule-invalid": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "The generated authorization rule failed validation — nothing "
+        "was changed.")),
+    "guard-write-failed": (('path',), QT_TRANSLATE_NOOP(
+        "markers",
+        "Could not write the download helper ({path}).")),
+    "auth-write-failed": (('path',), QT_TRANSLATE_NOOP(
+        "markers",
+        "Could not write the authorization rule ({path}).")),
+    "auth-remove-failed": (('path',), QT_TRANSLATE_NOOP(
+        "markers",
+        "Could not remove the authorization rule ({path}).")),
+    "snapper-missing": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Snapper isn't installed, so there are no snapshots to thin.")),
+    "snapshots-unreadable": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Couldn't read the list of restore points, so OneUp can't tell "
+        "whether any were removed.")),
+    "snapper-cleanup-failed": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Snapper's cleanup failed, so no restore points were removed.")),
+    "stopped": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Stopped at your request. Anything already installed stays "
+        "installed — a stop never interrupts an install half-way, "
+        "because that can leave programs broken. Run the update again "
+        "whenever you like.")),
+    "repo-slow": (('alias',), QT_TRANSLATE_NOOP(
+        "markers",
+        "The '{alias}' source is serving updates too slowly to wait "
+        "for, so OneUp moved on. Use \"Skip {alias} & update the rest\" "
+        "to leave it out of the next run, or try again later.")),
 }
 
 
@@ -108,33 +182,42 @@ def render_hint(fields: list[str]) -> str:
     code, args = (fields[0] if fields else ""), fields[1:]
     entry = HINTS.get(code)
     if entry is None or len(args) != len(entry[0]):
-        return fallback_long(code or "an empty hint")
-    return entry[1].format(**dict(zip(entry[0], args, strict=True)))
+        return fallback_long(code or QCoreApplication.translate("markers", "an empty hint"))
+    # Marked at definition, translated here: the language can change without the
+    # table being rebuilt (ONEUP-0032 §4.3).
+    return QCoreApplication.translate("markers", entry[1]).format(
+        **dict(zip(entry[0], args, strict=True)))
 
 
 def fallback_remedy(code: str) -> str:
     """What the banner says beside the run's hint when the engine offers a fix this
     window does not know: no button is armed, since there is no action it can
     perform (ONEUP-0072 §4.1, ONEUP-0108 INV-1)."""
-    return (f"This version of OneUp has no fix for what the update reported ({code}). "
-            "The log has the details.")
+    return QCoreApplication.translate(
+        "markers", "This version of OneUp has no fix for what the update reported ({code}). "
+        "The log has the details.").format(code=code)
 
 
 # @@CHECK_UNKNOWN@@'s codes (ONEUP-0072 §4.1): why a --check could not read a source.
 # Each entry is its fixed argument count — None for a variable tail of names, where
 # any count is valid data (ONEUP-0108 §4.1) — and the function that words it. The
-# two lists join with ", " and keep their tails, as the engine wrote them (§4.2);
-# zero names is an engine defect and renders the sentence with an empty list (§4.3).
-_INCOMPLETE = " — this list may be incomplete."
-_REFRESH = " Running an update refreshes them."
+# two lists join with the language's separator — ", " in English, as the engine
+# wrote them (§4.2) — and keep their tails; zero names is an engine defect and
+# renders the sentence with an empty list (§4.3).
 CHECK_UNKNOWN: dict[str, tuple[int | None, Callable[[list[str]], str]]] = {
-    "sources-unreadable": (None, lambda names: "OneUp couldn't read these software "
-                           "sources: " + ", ".join(names) + _INCOMPLETE + _REFRESH),
-    "sources-unknown-error": (1, lambda a: "OneUp couldn't read the software sources "
-                              f"(zypper exited {a[0]})" + _INCOMPLETE + _REFRESH),
-    "flatpak-remotes-unreachable": (None, lambda names: "OneUp couldn't reach these "
-                                    "Flatpak sources: " + ", ".join(names) + _INCOMPLETE),
-    "fwupd-unreachable": (0, lambda _a: "OneUp couldn't ask fwupd"),
+    "sources-unreadable": (None, lambda names: QCoreApplication.translate(
+        "markers", "OneUp couldn't read these software sources: {names} — this list may "
+        "be incomplete. Running an update refreshes them.").format(
+            names=i18n.join_names(names))),
+    "sources-unknown-error": (1, lambda a: QCoreApplication.translate(
+        "markers", "OneUp couldn't read the software sources (zypper exited {status}) — "
+        "this list may be incomplete. Running an update refreshes them.").format(
+            status=a[0])),
+    "flatpak-remotes-unreachable": (None, lambda names: QCoreApplication.translate(
+        "markers", "OneUp couldn't reach these Flatpak sources: {names} — this list may "
+        "be incomplete.").format(names=i18n.join_names(names))),
+    "fwupd-unreachable": (0, lambda _a: QCoreApplication.translate(
+        "markers", "OneUp couldn't ask fwupd")),
 }
 
 
@@ -145,7 +228,7 @@ def render_check_unknown(fields: list[str]) -> str:
     code, args = (fields[0] if fields else ""), fields[1:]
     entry = CHECK_UNKNOWN.get(code)
     if entry is None or (entry[0] is not None and len(args) != entry[0]):
-        return fallback_long(code or "an empty reason")
+        return fallback_long(code or QCoreApplication.translate("markers", "an empty reason"))
     return entry[1](args)
 
 
@@ -153,46 +236,61 @@ def render_check_unknown(fields: list[str]) -> str:
 # one standalone code with a sentence of its own. The two sets are disjoint. Each
 # component is a fragment joined into "… was/were installed" — the one carve-out from
 # wording-and-translation.md §6.2 — and its English is the engine's, unchanged.
-REBOOT_COMPONENTS = {
-    "kernel-new": "a new kernel",
-    "graphics-driver-nvidia": "your NVIDIA graphics driver",
-    "graphics-driver-generic": "your graphics driver",
-    "kernel-modules": "kernel driver modules",
+# The reason opens the reboot banner's sentence, so each component carries the form
+# it takes there first and the form it takes after it: a sentence-start form written
+# into the source rather than derived by a case change, which a language without
+# case cannot do (ONEUP-0032 §4.5).
+REBOOT_COMPONENTS: dict[str, tuple[str, str]] = {
+    "kernel-new": (QT_TRANSLATE_NOOP("markers", "A new kernel"),
+                   QT_TRANSLATE_NOOP("markers", "a new kernel")),
+    "graphics-driver-nvidia": (QT_TRANSLATE_NOOP("markers", "Your NVIDIA graphics driver"),
+                               QT_TRANSLATE_NOOP("markers", "your NVIDIA graphics driver")),
+    "graphics-driver-generic": (QT_TRANSLATE_NOOP("markers", "Your graphics driver"),
+                                QT_TRANSLATE_NOOP("markers", "your graphics driver")),
+    "kernel-modules": (QT_TRANSLATE_NOOP("markers", "Kernel driver modules"),
+                       QT_TRANSLATE_NOOP("markers", "kernel driver modules")),
 }
 REBOOT_STANDALONE = {
-    "core-packages-updated": "core system packages were updated",
-    "firmware-updated": "firmware was updated",
+    "core-packages-updated": QT_TRANSLATE_NOOP("markers", "Core system packages were updated"),
+    "firmware-updated": QT_TRANSLATE_NOOP("markers", "Firmware was updated"),
 }
-_INSTALLED = "{items} were installed"
+_INSTALLED = "{items} were installed"     # the plural sentence's source, see i18n
 
 
 def _join_items(items: list[str]) -> str:
     """The engine's English join (ONEUP-0108 §4.2): one bare, two with " and ",
-    three or more as "a, b, and c" with the serial comma."""
-    if len(items) <= 2:
-        return " and ".join(items)
-    return ", ".join(items[:-1]) + ", and " + items[-1]
+    three or more as "a, b, and c" with the serial comma. Each connective is the
+    language's to word (ONEUP-0032 §4.5)."""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return QCoreApplication.translate("markers", "{first} and {second}").format(
+            first=items[0], second=items[1])
+    separator = QCoreApplication.translate(
+        "markers", ", ", "separator between the things a reboot reason lists")
+    return QCoreApplication.translate("markers", "{items}, and {last}").format(
+        items=separator.join(items[:-1]), last=items[-1])
 
 
 def render_reboot_reason(field: str) -> str:
     """The sentence for @@REBOOT@@'s reason field, by ONEUP-0108 §4.4's rows in
-    order. "" when the field is absent: nothing was reported, so there is nothing
-    the window failed to word."""
+    order, in the form that opens a sentence. "" when the field is absent: nothing
+    was reported, so there is nothing the window failed to word."""
     elems = field.split()
     if not elems:
         return ""
     if len(elems) == 1 and elems[0] in REBOOT_STANDALONE:
-        return REBOOT_STANDALONE[elems[0]]
+        return QCoreApplication.translate("markers", REBOOT_STANDALONE[elems[0]])
     unknown = [e for e in elems if e not in REBOOT_COMPONENTS and e not in REBOOT_STANDALONE]
     if any(e in REBOOT_STANDALONE for e in elems) or len(unknown) == len(elems):
         # Both vocabularies, or neither: never the join (§4.4). Name what it could
         # not recognise, or every element when it recognised them all (§4.3).
         return fallback_long(*(unknown or elems))
-    rendered = [REBOOT_COMPONENTS.get(e, e) for e in elems]   # unknowns as bare codes
+    # Unknown codes appear as themselves; known ones in their first or later form.
+    rendered = [QCoreApplication.translate("markers", REBOOT_COMPONENTS[e][0 if i == 0 else 1])
+                if e in REBOOT_COMPONENTS else e for i, e in enumerate(elems)]
     n = len(rendered)
-    sentence = QCoreApplication.translate(
-        "markers", _INSTALLED,
-        "reboot reason; {items} is a joined list of things like 'a new kernel'", n)
+    sentence = i18n.counted("reboot-installed", n)
     if sentence == _INSTALLED and n == 1:
         # No catalogue answered, and a verb has no "(s)" idiom: English agrees with
         # what the sentence lists, unknown codes included (ONEUP-0108 §4.2, INV-2).
@@ -203,23 +301,32 @@ def render_reboot_reason(field: str) -> str:
 # The weekly timers' desktop notification (ONEUP-0077 §4): a title and a body per case.
 # The engine raised it until this item, with the English carried across from there;
 # `run.stopped` and the two `check.partial` cases are new. Selected from the markers a
-# run already emits by `run_notification` and `check_notification` below.
-NOTIFICATIONS: dict[str, tuple[str, str]] = {
-    "run.failed": ("Update failed", "One or more steps failed — see the log: {log}"),
-    "run.stopped": ("Update stopped", "The update was stopped before it finished. "
-                    "The steps that ran are in the log: {log}"),
-    "run.installed": ("Update complete", "{count} system package(s) installed.{skipped}"),
-    "run.changed": ("Update complete", "Updates were installed.{skipped}"),
-    "run.uptodate": ("Already up to date", "No updates were needed.{skipped}"),
-    "check.available": ("Updates available",
-                        "{count} update(s) ready to install. Open OneUp to update."),
-    "check.partial": ("Couldn't check for updates", "{reasons}"),
-    "check.partial_count": ("Updates available",
-                            "{count} update(s) ready to install, and there may be more. "
-                            "{reasons} Open OneUp to update."),
+# run already emits by `run_notification` and `check_notification` below. A body that
+# carries a count is a plural, so it lives in `i18n.counted` and is None here.
+NOTIFICATIONS: dict[str, tuple[str, str | None]] = {
+    "run.failed": (QT_TRANSLATE_NOOP("markers", "Update failed"),
+                   QT_TRANSLATE_NOOP("markers", "One or more steps failed — see the log: {log}")),
+    "run.stopped": (QT_TRANSLATE_NOOP("markers", "Update stopped"),
+                    QT_TRANSLATE_NOOP("markers", "The update was stopped before it finished. "
+                                                 "The steps that ran are in the log: {log}")),
+    "run.installed": (QT_TRANSLATE_NOOP("markers", "Update complete"), None),
+    "run.changed": (QT_TRANSLATE_NOOP("markers", "Update complete"),
+                    QT_TRANSLATE_NOOP("markers", "Updates were installed.{skipped}")),
+    "run.uptodate": (QT_TRANSLATE_NOOP("markers", "Already up to date"),
+                     QT_TRANSLATE_NOOP("markers", "No updates were needed.{skipped}")),
+    "check.available": (QT_TRANSLATE_NOOP("markers", "Updates available"), None),
+    "check.partial": (QT_TRANSLATE_NOOP("markers", "Couldn't check for updates"), "{reasons}"),
+    "check.partial_count": (QT_TRANSLATE_NOOP("markers", "Updates available"), None),
 }
-# Appended to the three run texts the engine appended it to — never to a failure.
-_SKIPPED = " (skipped: {aliases} — will retry next time)"
+_COUNTED = {"run.installed": "notify-installed", "check.available": "notify-available",
+            "check.partial_count": "notify-partial-count"}
+
+
+def _notification(key: str, n: int, **fields: str) -> tuple[str, str]:
+    title, body = NOTIFICATIONS[key]
+    text = (i18n.counted(_COUNTED[key], n) if body is None
+            else QCoreApplication.translate("markers", body))
+    return QCoreApplication.translate("markers", title), text.format(**fields)
 
 
 def run_notification(done: str | None, count: str, changed: bool,
@@ -234,7 +341,13 @@ def run_notification(done: str | None, count: str, changed: bool,
     stop is in the log (INV-1, INV-7).
     """
     failed = done not in ("ok", "stopped")   # errors, absent, or a verdict it can't read
-    note = _SKIPPED.format(aliases=" ".join(skipped)) if skipped else ""
+    # Appended to the three run texts the engine appended it to — never to a failure.
+    # The names are space-separated, as the engine wrote them.
+    note = QCoreApplication.translate(
+        "markers", " (skipped: {aliases} — will retry next time)").format(
+            aliases=QCoreApplication.translate(
+                "markers", " ", "separator between source names in a notification")
+            .join(skipped)) if skipped else ""
     if failed:
         key = "run.failed"
     elif done == "stopped":
@@ -245,8 +358,8 @@ def run_notification(done: str | None, count: str, changed: bool,
         key = "run.changed"
     else:
         key = "run.uptodate"
-    title, body = NOTIFICATIONS[key]
-    return title, body.format(log=log, count=count, skipped=note)
+    return _notification(key, int(count) if count.isdecimal() else 0,
+                         log=log, skipped=note)
 
 
 def check_notification(total: int, reasons: list[str]) -> tuple[str, str] | None:
@@ -259,8 +372,9 @@ def check_notification(total: int, reasons: list[str]) -> tuple[str, str] | None
         key = "check.available"
     else:
         return None
-    title, body = NOTIFICATIONS[key]
-    return title, body.format(count=total, reasons=" ".join(reasons))
+    between = QCoreApplication.translate(
+        "markers", " ", "separator between whole sentences in a notification")
+    return _notification(key, total, reasons=between.join(reasons))
 
 
 def split_marker(line: str) -> tuple[str, list[str], str] | None:
@@ -284,14 +398,14 @@ def split_marker(line: str) -> tuple[str, list[str], str] | None:
 # for another meaning; a retired one is commented out here, not deleted, because
 # this table is the register (ONEUP-0072 §4.2).
 STEP_BADGES: dict[str, tuple[int, str]] = {
-    "up-to-date": (0, "Up to date"),
-    "installed": (1, "{count} installed"),
-    "removed": (1, "{count} removed"),
-    "updated": (0, "Updated"),
-    "done": (0, "Done"),
-    "not-installed": (0, "Not installed"),
-    "skipped": (0, "Skipped"),
-    "failed": (0, "Failed"),
+    "up-to-date": (0, QT_TRANSLATE_NOOP("markers", "Up to date")),
+    "installed": (1, QT_TRANSLATE_NOOP("markers", "{count} installed")),
+    "removed": (1, QT_TRANSLATE_NOOP("markers", "{count} removed")),
+    "updated": (0, QT_TRANSLATE_NOOP("markers", "Updated")),
+    "done": (0, QT_TRANSLATE_NOOP("markers", "Done")),
+    "not-installed": (0, QT_TRANSLATE_NOOP("markers", "Not installed")),
+    "skipped": (0, QT_TRANSLATE_NOOP("markers", "Skipped")),
+    "failed": (0, QT_TRANSLATE_NOOP("markers", "Failed")),
 }
 
 
@@ -306,18 +420,19 @@ def _step_badge(status: str, code: str, args: list[str]) -> str:
     §4.3) — and never raises out of the read slot.
     """
     if status == "fail":
-        return "Failed"
+        return QCoreApplication.translate("markers", "Failed")
     # ONEUP-0190: the status field is exactly one of ok / skip / fail. Anything
     # else earned no success badge, so say we cannot tell rather than "Done".
     if status not in ("ok", "skip"):
-        return "Result unknown"
+        return QCoreApplication.translate("markers", "Result unknown")
     entry = STEP_BADGES.get(code)
     if entry is None or len(args) != entry[0] or not all(a.isdecimal() for a in args):
         # An empty code has no token to show — the frozen Bash fallback sends one
         # for the cache step's success (ONEUP-0072 §6) — so it reads like any
         # other outcome the window cannot tell.
-        return code or "Result unknown"
-    return entry[1].format(count=args[0]) if args else entry[1]
+        return code or QCoreApplication.translate("markers", "Result unknown")
+    badge = QCoreApplication.translate("markers", entry[1])
+    return badge.format(count=args[0]) if args else badge
 
 
 def _format_duration(secs: int) -> str:

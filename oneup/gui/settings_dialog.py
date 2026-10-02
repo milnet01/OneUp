@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import itertools
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -32,64 +32,94 @@ class SettingsDialog(QDialog):
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.setWindowTitle("Settings")
+        self.setWindowTitle(QCoreApplication.translate("settings_dialog", "Settings"))
         self.setMinimumWidth(460)
         root = QVBoxLayout(self)
         # The old intro said "Each is off until you turn it on", which is true of
         # the first heading's five toggles and false of the other two headings'
         # rows — the same defect the original had once the groups existed.
-        intro = QLabel("How OneUp behaves on its own, how it looks, and what it "
-                       "does on this machine.")
+        intro = QLabel(QCoreApplication.translate(
+            "settings_dialog",
+            "How OneUp behaves on its own, how it looks, and what it does on "
+            "this machine."))
         intro.setWordWrap(True)
         root.addWidget(intro)
 
         # Three headings rather than a flat column of ghost buttons. The grouping
         # is exhaustive over every row: a row with no home here is a defect in
         # this list rather than a judgement call (ONEUP-0064 §4.1).
-        _tray_note = "" if parent._tray_available else "  (your desktop has no system tray)"
-        root.addWidget(self._heading("Automatic behaviour"))
+        _tray_note = ("" if parent._tray_available else QCoreApplication.translate(
+            "settings_dialog", "  (your desktop has no system tray)"))
+        root.addWidget(self._heading(QCoreApplication.translate(
+            "settings_dialog",
+            "Automatic behaviour")))
         root.addWidget(self._row(
-            "Check weekly in the background and notify you when updates are ready.",
+            QCoreApplication.translate(
+                "settings_dialog",
+                "Check weekly in the background and notify you when updates are "
+                "ready."),
             parent.auto_btn))
         root.addWidget(self._row(
-            "Skip the password prompt for OneUp's update commands (opt-in; you can "
-            "switch it off to revoke instantly).", parent.auth_btn))
+            QCoreApplication.translate(
+                "settings_dialog",
+                "Skip the password prompt for OneUp's update commands (opt-in; "
+                "you can switch it off to revoke instantly)."), parent.auth_btn))
         root.addWidget(self._row(
-            "Install all updates automatically on a weekly schedule. Needs the "
-            "passwordless setting, and keeps the snapshot/rollback safety net.",
+            QCoreApplication.translate(
+                "settings_dialog",
+                "Install all updates automatically on a weekly schedule. Needs "
+                "the passwordless setting, and keeps the snapshot/rollback safety "
+                "net."),
             parent.autoupdate_btn))
-        root.addWidget(self._row(
-            "Show a small icon near the clock that turns amber when updates are waiting."
-            + _tray_note, parent.tray_btn))
-        root.addWidget(self._row(
-            "Start OneUp automatically at login, hidden in the tray." + _tray_note,
-            parent.startboot_btn))
+        root.addWidget(self._row(QCoreApplication.translate(
+            "settings_dialog",
+            "Show a small icon near the clock that turns amber when updates are "
+            "waiting.{note}").format(note=_tray_note), parent.tray_btn))
+        root.addWidget(self._row(QCoreApplication.translate(
+            "settings_dialog",
+            "Start OneUp automatically at login, hidden in the tray.{note}").format(
+                note=_tray_note), parent.startboot_btn))
 
-        root.addWidget(self._heading("Appearance"))
+        root.addWidget(self._heading(QCoreApplication.translate("settings_dialog", "Appearance")))
         root.addWidget(self._row(
-            "Colour scheme for the whole app. Follow system uses your desktop's "
-            "light or dark setting; the rest are fixed.", parent.theme_combo))
+            QCoreApplication.translate(
+                "settings_dialog",
+                "Colour scheme for the whole app. Follow system uses your "
+                "desktop's light or dark setting; the rest are fixed."), parent.theme_combo))
         # Only shown when a theme could not be applied — a control that silently
         # does nothing is the one outcome ui-and-accessibility.md §7 forbids.
         parent._show_theme_error()
         root.addWidget(parent.theme_note)
         root.addWidget(self._row(
-            "Make all text bigger. OneUp already follows your desktop's font size — "
-            "this enlarges it further.", parent.textsize_btn))
+            QCoreApplication.translate(
+                "settings_dialog",
+                "Make all text bigger. OneUp already follows your desktop's font "
+                "size — this enlarges it further."), parent.textsize_btn))
         root.addWidget(self._row(
-            "Switch to high-contrast colours: plain black and white with strong "
-            "outlines, for easier reading.", parent.contrast_btn))
+            QCoreApplication.translate(
+                "settings_dialog",
+                "Switch to high-contrast colours: plain black and white with "
+                "strong outlines, for easier reading."), parent.contrast_btn))
 
         # Repositories and Recenter arrive here from the header. `_row` takes a
         # description per row and does not read a tooltip, so both need one.
-        root.addWidget(self._heading("This machine"))
+        root.addWidget(self._heading(QCoreApplication.translate(
+            "settings_dialog",
+            "This machine")))
         root.addWidget(self._row(
-            "Choose which software sources OneUp updates from.", parent.repos_btn))
+            QCoreApplication.translate(
+                "settings_dialog",
+                "Choose which software sources OneUp updates from."), parent.repos_btn))
         root.addWidget(self._row(
-            "Put the window back in the middle of the screen.", parent.recenter_btn))
+            QCoreApplication.translate(
+                "settings_dialog",
+                "Put the window back in the middle of the screen."), parent.recenter_btn))
         root.addWidget(self._row(
-            "Copy a bug report — version info plus your latest update log — to the "
-            "clipboard, so filing an issue doesn't mean hunting through hidden folders.",
+            QCoreApplication.translate(
+                "settings_dialog",
+                "Copy a bug report — version info plus your latest update log — "
+                "to the clipboard, so filing an issue doesn't mean hunting "
+                "through hidden folders."),
             parent.diag_btn))
         self.status = QLabel("")
         self.status.setObjectName("Tagline")
@@ -102,7 +132,7 @@ class SettingsDialog(QDialog):
         btns = QHBoxLayout(strip)
         btns.setContentsMargins(0, 0, 0, 0)
         btns.addStretch(1)
-        self.close_btn = QPushButton("Close")
+        self.close_btn = QPushButton(QCoreApplication.translate("settings_dialog", "Close"))
         self.close_btn.setObjectName("GhostBtn")
         self.close_btn.clicked.connect(self.reject)
         btns.addWidget(self.close_btn)

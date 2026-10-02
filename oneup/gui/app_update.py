@@ -11,7 +11,7 @@ import re
 import time
 from functools import partial
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QCoreApplication, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import QMessageBox
@@ -35,15 +35,26 @@ def _update_check_error(reply: QNetworkReply) -> str:
     status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
     if status in (403, 429):
         reset = bytes(reply.rawHeader(b"x-ratelimit-reset")).decode(errors="replace")
-        when = (time.strftime(" Try again after %H:%M.", time.localtime(int(reset)))
+        when = (QCoreApplication.translate("app_update", " Try again after {time}.").format(
+                    time=time.strftime("%H:%M", time.localtime(int(reset))))
                 if reset.isdecimal() else "")
-        return ("GitHub limits how often OneUp may check for a new version — 60 times "
-                "an hour from one address, shared with anything else here that uses "
-                f"GitHub.{when}\n\nThis doesn't affect updating your system.")
+        return QCoreApplication.translate(
+            "app_update",
+            "GitHub limits how often OneUp may check for a new version — 60 times "
+            "an hour from one address, shared with anything else here that uses "
+            "GitHub.{when}\n\nThis doesn't affect updating your system.").format(when=when)
     if status:
-        return (f"GitHub answered with an error (HTTP {status}) when asked for the "
-                "latest OneUp version.")
-    return "Couldn't reach GitHub to check for a newer OneUp."
+        return QCoreApplication.translate(
+            "app_update",
+            "GitHub answered with an error (HTTP {status}) when asked for the "
+            "latest OneUp version.").format(status=status)
+    return QCoreApplication.translate("app_update",
+                                      "Couldn't reach GitHub to check for a newer OneUp.")
+
+
+def _title() -> str:
+    """The title every update-check message box carries."""
+    return QCoreApplication.translate("app_update", "Check for updates")
 
 
 def _check_app_update(win, manual: bool = False):
@@ -62,30 +73,34 @@ def _on_app_update_reply(win, reply: QNetworkReply):
     try:
         if reply.error() != QNetworkReply.NetworkError.NoError:
             if manual:
-                QMessageBox.warning(win, "Check for updates",
+                QMessageBox.warning(win, _title(),
                                     _update_check_error(reply))
             return
         data = json.loads(bytes(reply.readAll()).decode(errors="replace"))
         tag = str(data.get("tag_name", "")).lstrip("vV")
         if tag and _version_tuple(tag) > _version_tuple(APP_VERSION):
             win._latest_tag = tag
-            win.appupdate_label.setText(
-                f"A newer OneUp ({tag}) is available — you have {APP_VERSION}.")
+            newer = QCoreApplication.translate(
+                "app_update", "A newer OneUp ({tag}) is available — you have {version}.").format(
+                    tag=tag, version=APP_VERSION)
+            win.appupdate_label.setText(newer)
             win.appupdate_banner.setVisible(True)
             if manual:
-                QMessageBox.information(win, "Check for updates",
-                                        f"A newer OneUp ({tag}) is available — "
-                                        f"you have {APP_VERSION}.")
+                QMessageBox.information(win, _title(), newer)
         elif manual:
-            QMessageBox.information(win, "Check for updates",
-                                    f"You're on the latest version ({APP_VERSION}).")
+            QMessageBox.information(win, _title(), QCoreApplication.translate(
+                "app_update", "You're on the latest version ({version}).").format(
+                    version=APP_VERSION))
     except (ValueError, KeyError, AttributeError, TypeError):
         # ValueError/KeyError: bad JSON / missing key; AttributeError/TypeError:
         # a non-object JSON body (list, string, null) has no .get(). A flaky
         # update check must never throw out of this network slot.
         if manual:
-            QMessageBox.warning(win, "Check for updates",
-                                "Couldn't read GitHub's reply while checking for updates.")
+            QMessageBox.warning(win, _title(),
+                                QCoreApplication.translate(
+                                    "app_update",
+                                    "Couldn't read GitHub's reply while checking for "
+                                    "updates."))
     finally:
         reply.deleteLater()
 

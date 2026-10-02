@@ -15,13 +15,13 @@ from datetime import datetime
 from functools import partial
 
 import shiboken6
-from PySide6.QtCore import QProcess, QRectF, Qt, QTimer
+from PySide6.QtCore import QCoreApplication, QProcess, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .. import APP_ID, APP_NAME
-from . import autostart, paths, run, theme
+from . import autostart, i18n, paths, run, theme
 from .theme import _app_icon
 
 # Single-instance handshake budget (ONEUP-0084). Both ends are local sockets on the
@@ -171,19 +171,23 @@ def _on_traycheck_finished(win, *args):
         win._traycheck_proc = None
 
 
+def _tooltip(n: int, uncertain: bool = False) -> str:
+    """What the tray icon says on hover once a check has answered."""
+    if uncertain:
+        return (i18n.counted("tray-waiting-partial", n).format(app=APP_NAME) if n > 0
+                else QCoreApplication.translate(
+                    "tray", "{app} — couldn't check for updates").format(app=APP_NAME))
+    return (i18n.counted("tray-waiting", n).format(app=APP_NAME) if n > 0
+            else QCoreApplication.translate("tray", "{app} — up to date").format(app=APP_NAME))
+
+
 def _apply_tray_total(win, n: int, uncertain: bool = False):
     win._tray_total = n
     win._tray_checked_at = datetime.now()
     if win._tray is None:
         return
     win._tray.setIcon(_tray_icon(n > 0))
-    if uncertain:
-        tip = (f"{APP_NAME} — {n} update(s) waiting (some sources couldn't be checked)"
-               if n > 0 else f"{APP_NAME} — couldn't check for updates")
-    else:
-        tip = (f"{APP_NAME} — {n} update(s) waiting" if n > 0
-               else f"{APP_NAME} — up to date")
-    win._tray.setToolTip(tip)
+    win._tray.setToolTip(_tooltip(n, uncertain))
 
 
 def _arm_single_instance(win):
@@ -281,18 +285,17 @@ def _ensure_tray(win):
     # Parent the menu to win: setContextMenu does not reparent it, and an
     # unparented QMenu can be garbage-collected out from under the tray icon.
     menu = QMenu(win)
-    menu.addAction("Check now", partial(_tray_check, win))
-    menu.addAction("Update now", partial(_tray_update, win))
-    menu.addAction("Open OneUp", partial(_show_window, win))
+    menu.addAction(QCoreApplication.translate("tray", "Check now"), partial(_tray_check, win))
+    menu.addAction(QCoreApplication.translate("tray", "Update now"), partial(_tray_update, win))
+    menu.addAction(QCoreApplication.translate("tray", "Open OneUp"), partial(_show_window, win))
     menu.addSeparator()
-    menu.addAction("Quit", win._quit_requested)
+    menu.addAction(QCoreApplication.translate("tray", "Quit"), win._quit_requested)
     win._tray.setContextMenu(menu)
     win._tray.activated.connect(partial(_on_tray_activated, win))
     win._tray.setIcon(_tray_icon(win._tray_total > 0))
     win._tray.setToolTip(
-        f"{APP_NAME} — not checked yet" if win._tray_checked_at is None
-        else f"{APP_NAME} — {win._tray_total} update(s) waiting" if win._tray_total > 0
-        else f"{APP_NAME} — up to date")
+        QCoreApplication.translate("tray", "{app} — not checked yet").format(app=APP_NAME)
+        if win._tray_checked_at is None else _tooltip(win._tray_total))
     win._tray.show()
     _arm_single_instance(win)
     win._tray_timer = QTimer(win)
@@ -322,7 +325,10 @@ def _teardown_tray(win):
 
 
 def _refresh_tray_label(win):
-    win.tray_btn.setText("Tray icon: on" if win.tray_btn.isChecked() else "Tray icon: off")
+    win.tray_btn.setText(QCoreApplication.translate(
+        "tray", "Tray icon: on") if win.tray_btn.isChecked() else QCoreApplication.translate(
+        "tray",
+        "Tray icon: off"))
 
 
 def _set_tray_checked(win, on: bool):
@@ -351,10 +357,11 @@ def _notify_tray_hint(win):
     suppress it since the window is still active at close time)."""
     if not shutil.which("notify-send"):
         return
+    body = QCoreApplication.translate(
+        "tray", "OneUp is still running in the tray — right-click the icon to quit.")
     try:
         subprocess.Popen(  # noqa: S603 — fixed argv, no shell.
-            ["notify-send", "-a", APP_NAME, "-i", APP_ID, APP_NAME,  # noqa: S607
-             "OneUp is still running in the tray — right-click the icon to quit."],
+            ["notify-send", "-a", APP_NAME, "-i", APP_ID, APP_NAME, body],  # noqa: S607
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         pass

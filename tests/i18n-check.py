@@ -13,6 +13,18 @@ for right-to-left languages, without any test noticing:
   INV-6   no left- or right-handed stylesheet property and no AlignLeft or
           AlignRight anywhere under oneup/: Qt mirrors neither, so each is a
           control on the wrong side in Arabic and Hebrew only.
+  INV-7   every string handed to a user in oneup/gui/ is wrapped for
+          translation: no bare literal, f-string, `+`, `%` or `.join` at any
+          call on the closed list below. It reads the argument at the call, so a
+          sentence assembled into a variable first is invisible to it.
+  INV-12  no wording is derived by a case change or joined with a literal
+          separator under oneup/gui/: CJK has no case and its list separator is
+          not ", ". Every such call is data — a search key, an argv, a log line —
+          and is on the closed exemption list below with the reason.
+  INV-8   the catalogue extracts and compiles, and a finished translation
+          survives the round trip. pyside6-lupdate is given the .py files, never
+          the directory, which extracts nothing. The one check that needs the Qt
+          tools: it alone skips without them, and says so.
   INV-10  nothing sets QFont.NoFontMerging, so a glyph the chosen font lacks is
           always drawn from a font that has it — CJK text never draws as boxes.
   INV-11  no widget caps the size its text can grow to. Every fixed- or
@@ -21,15 +33,21 @@ for right-to-left languages, without any test noticing:
           each entry says why that site shows no text or scrolls it.
 
 An AST walk, not a grep: a mention in a docstring or comment is prose and must
-not fail the gate. Stdlib-only, exit 0 on success and 1 on any failure.
+not fail the gate. The source checks are stdlib-only and always run; INV-8 alone
+uses the Qt tools, in subprocesses. Exit 0 on success and 1 on any failure.
 `local-CI.sh` and the release workflow both name it by hand, because nothing in
 this project discovers tests.
 
 Contract: `docs/specs/ONEUP-0032-i18n.md` §5.
 """
 import ast
+import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -82,6 +100,119 @@ QSS_CAP_EXEMPT = {
     ("QComboBox#ThemeCombo::drop-down", "width"):
         "the combo box's arrow sub-control, which shows no text",
 }
+# INV-7's closed list: every call that hands a sentence to a user, with the
+# positions of the arguments that carry one. Adding a text-setting call to the
+# window means adding it here in the same commit, or it is silently exempt.
+_SETTERS = {name: (0,) for name in (
+    "setText", "setToolTip", "setWindowTitle", "setAccessibleName",
+    "setAccessibleDescription", "setPlaceholderText", "addItem", "setInformativeText",
+    "setStatusTip", "setWhatsThis", "setTitle", "addAction", "addMenu",
+    "_announce",                        # the screen-reader announcement, a window method
+    "setFormat",                        # the progress bar's caption
+    "set_badge", "set_size_result",     # TaskRow helpers that set a label's text
+    "_heading", "_row", "_settings_status")}   # the Settings dialog's own helpers
+_SETTERS.update({"showMessage": (0, 1),  # QSystemTrayIcon: title, message
+                 "addButton": (0,)})
+_MESSAGE_BOX = {"warning", "critical", "information", "question"}   # (parent, title, text)
+_HELPERS = {                             # project helpers whose parameter reaches a user
+    "_show_warning": (1,), "_confirm_reboot": (1, 2), "_set_activity": (1,),
+    "_notify_when_away": (1,), "_notify": (0, 1),
+    "_make_banner": (3,)}                # (win, frame name, button name, button text, …)
+_WIDGETS = {"QLabel", "QPushButton", "QCheckBox", "QAction", "QGroupBox",
+            "QToolButton", "QRadioButton", "QMenu"}                  # text as argument 0
+
+
+def _translated(node: ast.AST) -> bool:
+    return (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+            and node.func.attr in ("translate", "tr"))
+
+
+def _unwrapped(node: ast.AST) -> str | None:
+    """Why this argument is an unwrapped sentence, or None if it is not one. A
+    translate/tr call passes — and so does `.format` on one, which is
+    `wording-and-translation.md` §6.2's own form, and a `.join` whose separator is
+    not a literal, which is how ONEUP-0032 §4.5 joins a list. A literal with no
+    letter in it (an empty string, a lone symbol) is not a sentence."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return "a bare literal" if any(c.isalpha() for c in node.value) else None
+    if isinstance(node, ast.JoinedStr):
+        return "an f-string"
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Mod)):
+        return "a + or % concatenation"
+    if isinstance(node, ast.IfExp):
+        return _unwrapped(node.body) or _unwrapped(node.orelse)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        if node.func.attr == "join" and isinstance(node.func.value, ast.Constant):
+            return "a .join on a literal separator"   # a translated separator passes
+        if node.func.attr == "format" and not _translated(node.func.value):
+            return "a .format on something not translated"
+    return None
+
+
+def _sentence_args(call: ast.Call) -> tuple[int, ...]:
+    func = call.func
+    name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+    if (isinstance(func, ast.Attribute) and name in _MESSAGE_BOX
+            and isinstance(func.value, ast.Name) and func.value.id == "QMessageBox"):
+        return (1, 2)
+    if name in _HELPERS:
+        return _HELPERS[name]
+    if name in _WIDGETS and isinstance(func, ast.Name):
+        return (0,)
+    return _SETTERS.get(name, ()) if isinstance(func, ast.Attribute) else ()
+
+
+# INV-12's closed exemption list, keyed by (file, enclosing function, call). Every
+# entry is data no user reads as wording.
+WORD_LOGIC_EXEMPT = {
+    ("oneup/gui/autostart.py", "_arg", "join ''"):
+        "quotes one argument for a systemd unit's or .desktop file's command line",
+    ("oneup/gui/contrast.py", "bad_exceptions", "lower"):
+        "a search key: looks for deferral words in a contrast exemption's reason",
+    ("oneup/gui/contrast.py", "report", "join '\\n'"):
+        "a developer's contrast report, printed for a palette author",
+    ("oneup/gui/diagnostics.py", "build_diagnostics", "join '  '"):
+        "the bug-report payload, read by a developer (ONEUP-0032 §10)",
+    ("oneup/gui/diagnostics.py", "build_diagnostics", "join '\\n'"):
+        "the bug-report payload's lines, read by a developer",
+    ("oneup/gui/paths.py", "_resolve_engine", "join '; '"):
+        "the stderr line naming the paths the resolver tried",
+    ("oneup/gui/paths.py", "engine_argv", "join '; '"):
+        "an exception message, for a developer",
+    ("oneup/gui/paths.py", "engine_tried", "join '\\n'"):
+        "one path or tool name per line — data, not a sentence",
+    ("oneup/gui/repos.py", "_parse_repos", "lower"):
+        "reads zypper's Yes/No column as a flag",
+    ("oneup/gui/repos.py", "_repo_purpose", "lower"):
+        "a search key over the alias, name and URL",
+    ("oneup/gui/repos.py", "_build_apply_command", "join ' '"):
+        "builds a zypper command line",
+    ("oneup/gui/repos.py", "_build_apply_command", "join ' && '"):
+        "chains shell commands for pkexec",
+    ("oneup/gui/run.py", "_engine_args", "join ','"):
+        "the engine's --steps= argument",
+    ("oneup/gui/run.py", "_adopt_held_engine", "join ','"):
+        "the go-ahead file's step list, read by the engine",
+    ("oneup/gui/theme.py", "derive_focus", "join ', '"):
+        "an exception message naming colours, for a palette author",
+}
+_CASE_CALLS = {"lower", "upper", "capitalize", "title", "swapcase", "casefold"}
+
+
+def _enclosing(tree: ast.AST) -> dict[int, str]:
+    """id(node) -> the name of the function it sits in."""
+    where: dict[int, str] = {}
+
+    def walk(node, name):
+        for child in ast.iter_child_nodes(node):
+            inner = child.name if isinstance(child, (ast.FunctionDef,
+                                                     ast.AsyncFunctionDef)) else name
+            where[id(child)] = inner
+            walk(child, inner)
+    walk(tree, "<module>")
+    return where
+
+
 _CAP_CALLS = {"setFixedWidth", "setFixedHeight", "setFixedSize",
               "setMaximumWidth", "setMaximumHeight", "setMaximumSize"}
 _HANDED_QSS = re.compile(
@@ -103,6 +234,54 @@ def _stylesheets() -> dict[str, str]:
                 value = value.args[0]
             sheets[node.targets[0].id] = ast.literal_eval(value)
     return sheets
+
+
+_ROUND_TRIP = """
+import sys
+from PySide6.QtCore import QCoreApplication, QTranslator
+app = QCoreApplication([])
+t = QTranslator()
+ok = t.load(sys.argv[1]) and app.installTranslator(t)
+print("TRANSLATED" if ok and QCoreApplication.translate(sys.argv[2], sys.argv[3])
+      == sys.argv[4] else "ENGLISH")
+"""
+
+
+def _catalogue_round_trip() -> None:
+    """INV-8: extract, finish one message, compile, and read it back through Qt."""
+    lupdate, lrelease = shutil.which("pyside6-lupdate"), shutil.which("pyside6-lrelease")
+    if not (lupdate and lrelease):
+        print("  SKIP - INV-8 needs pyside6-lupdate and pyside6-lrelease, not installed")
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        ts, qm = os.path.join(tmp, "oneup_xx.ts"), os.path.join(tmp, "oneup_xx.qm")
+        files = [str(p) for p in sorted(PKG.rglob("*.py"))]
+        subprocess.run([lupdate, *files, "-ts", ts],  # noqa: S603 — fixed argv, no shell.
+                       capture_output=True, check=True)
+        tree = ET.parse(ts)   # noqa: S314 — the file lupdate wrote a moment ago
+        contexts = {c.findtext("name"): c for c in tree.getroot().iter("context")}
+        wanted = {"markers", "steps", "run", "window", "_Counted"}
+        check(f"INV-8: extraction reaches the window and its tables (missing: "
+              f"{_found(sorted(wanted - set(contexts)))})", wanted <= set(contexts))
+        check("INV-8: the counted sentences extract as plurals",
+              any(m.get("numerus") == "yes" for m in contexts.get("_Counted", ET.Element("x"))
+                  .iter("message")))
+        if "markers" not in contexts:
+            return              # reported above; there is nothing to round-trip
+        target = next(m for m in contexts["markers"].iter("message")
+                      if m.get("numerus") != "yes")
+        source = target.findtext("source")
+        translation = target.find("translation")
+        translation.attrib.pop("type", None)
+        translation.text = "INV-8 round trip"
+        tree.write(ts, encoding="utf-8", xml_declaration=True)
+        subprocess.run([lrelease, ts, "-qm", qm],  # noqa: S603 — fixed argv, no shell.
+                       capture_output=True, check=True)
+        out = subprocess.run(  # noqa: S603 — this interpreter, a fixed script.
+            [sys.executable, "-c", _ROUND_TRIP, qm, "markers", source, "INV-8 round trip"],
+            capture_output=True, text=True, env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
+        check("INV-8: a finished translation survives extract, compile and load",
+              out.stdout.strip() == "TRANSLATED")
 
 
 def main() -> int:
@@ -156,6 +335,39 @@ def main() -> int:
     check(f"INV-6: nothing under oneup/ is left- or right-handed ({_found(offenders)})",
           not offenders)
 
+    # --- INV-7: every sentence a user is handed is wrapped.
+    offenders = []
+    for path, tree in _modules(GUI):
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                for i in _sentence_args(node):
+                    if i < len(node.args) and (why := _unwrapped(node.args[i])):
+                        offenders.append(f"{_rel(path)}:{node.lineno} {why}")
+    check(f"INV-7: every sentence handed to a user is wrapped ({len(offenders)} not: "
+          f"{_found(offenders)})", not offenders)
+
+    # --- INV-12: no wording by case change or literal-separator join.
+    offenders, seen = [], set()
+    for path, tree in _modules(GUI):
+        where = _enclosing(tree)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+                continue
+            if node.func.attr in _CASE_CALLS and not node.args:
+                call = node.func.attr
+            elif node.func.attr == "join" and isinstance(node.func.value, ast.Constant):
+                call = f"join {node.func.value.value!r}"
+            else:
+                continue
+            key = (_rel(path), where.get(id(node), "<module>"), call)
+            seen.add(key)
+            if key not in WORD_LOGIC_EXEMPT:
+                offenders.append(f"{key[0]}:{node.lineno} {key[2]} in {key[1]}")
+    check(f"INV-12: no wording by a case change or a literal separator ({_found(offenders)})",
+          not offenders)
+    stale = [str(k) for k in WORD_LOGIC_EXEMPT if k not in seen]
+    check(f"INV-12: every exemption still names a real site ({_found(stale)})", not stale)
+
     # --- INV-10: font fallback is never switched off.
     offenders = [f"{_rel(path)}:{node.lineno}"
                  for path, tree in _modules(PKG) for node in ast.walk(tree)
@@ -187,6 +399,8 @@ def main() -> int:
           not offenders)
     stale = [str(k) for k in (*SIZE_CAP_EXEMPT, *QSS_CAP_EXEMPT) if k not in seen]
     check(f"INV-11: every exemption still names a real site ({_found(stale)})", not stale)
+
+    _catalogue_round_trip()
 
     print(f"\n  Passed: {PASS}   Failed: {FAIL}")
     return 1 if FAIL else 0

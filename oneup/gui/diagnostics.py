@@ -10,6 +10,7 @@ import socket
 from datetime import datetime
 from pathlib import Path
 
+from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QApplication
 
 from .. import APP_VERSION
@@ -124,5 +125,7 @@ def copy_diagnostics(win):
         log_name, log_text, datetime.now().strftime("%Y-%m-%d %H:%M"),
         str(Path.home()), socket.gethostname())
     QApplication.clipboard().setText(report)
-    win.diag_btn.setText("Copied ✓")
-    win._settings_status("Diagnostics copied — paste them into your bug report.")
+    win.diag_btn.setText(QCoreApplication.translate("diagnostics", "Copied ✓"))
+    win._settings_status(QCoreApplication.translate(
+        "diagnostics",
+        "Diagnostics copied — paste them into your bug report."))

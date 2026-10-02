@@ -84,9 +84,13 @@ def log_dir_ready(win=None, quiet: bool = False) -> bool:
         if quiet or win is None:
             print(f"OneUp: cannot write logs to {STATE_LOG_DIR}: {exc}", file=sys.stderr)
         else:
+            from PySide6.QtCore import QCoreApplication
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(win, "Can't write OneUp's logs",
-                                f"OneUp couldn't create its log folder:\n{STATE_LOG_DIR}\n\n{exc}")
+            QMessageBox.warning(
+                win, QCoreApplication.translate("paths", "Can't write OneUp's logs"),
+                QCoreApplication.translate(
+                    "paths", "OneUp couldn't create its log folder:\n{folder}\n\n{error}").format(
+                        folder=STATE_LOG_DIR, error=exc))
         return False
 
 

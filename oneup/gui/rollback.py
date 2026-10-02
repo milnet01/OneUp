@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import shiboken6
-from PySide6.QtCore import QProcess, Qt, QTimer
+from PySide6.QtCore import QCoreApplication, QProcess, Qt, QTimer
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from . import markers, paths
+from . import i18n, markers, paths
 from .placement import center_on_parent
 
 
@@ -39,20 +39,23 @@ class RollbackDialog(QDialog):
 
     def __init__(self, parent, snapshots: list[tuple[str, str, str]], preselect_id: str):
         super().__init__(parent)
-        self.setWindowTitle("Roll back this update")
+        self.setWindowTitle(QCoreApplication.translate("rollback", "Roll back this update"))
         self.setMinimumWidth(560)
 
         root = QVBoxLayout(self)
         intro = QLabel(
-            "Choose the restore point to return to. OneUp will restore the system "
-            "to that snapshot and then reboot — anything changed since then will be "
-            "lost. The point taken just before this update is selected for you.")
+            QCoreApplication.translate(
+                "rollback",
+                "Choose the restore point to return to. OneUp will restore the "
+                "system to that snapshot and then reboot — anything changed since "
+                "then will be lost. The point taken just before this update is "
+                "selected for you."))
         intro.setWordWrap(True)
         root.addWidget(intro)
 
         self.list = QListWidget()
         self.list.setObjectName("RollbackList")   # see RepoScroll (ONEUP-0076)
-        self.list.setAccessibleName("Restore points")
+        self.list.setAccessibleName(QCoreApplication.translate("rollback", "Restore points"))
         for sid, date, desc in reversed(snapshots):
             item = QListWidgetItem(f"{date}  —  {desc or 'snapshot'}   (#{sid})")
             item.setData(Qt.UserRole, sid)
@@ -69,10 +72,10 @@ class RollbackDialog(QDialog):
         btns = QHBoxLayout(strip)
         btns.setContentsMargins(0, 0, 0, 0)
         btns.addStretch(1)
-        ok = QPushButton("Roll back & reboot")
+        ok = QPushButton(QCoreApplication.translate("rollback", "Roll back & reboot"))
         ok.setObjectName("RunBtn")
         ok.clicked.connect(self.accept)
-        cancel = QPushButton("Cancel")
+        cancel = QPushButton(QCoreApplication.translate("rollback", "Cancel"))
         cancel.setObjectName("GhostBtn")
         cancel.clicked.connect(self.reject)
         btns.addWidget(ok)
@@ -108,10 +111,12 @@ def rollback(win):
     if not target.isdecimal():
         return
     answer = QMessageBox.warning(
-        win, "Roll back this update?",
-        f"This restores the system to restore point #{target} and then "
-        "REBOOTS. Anything changed since that snapshot will be lost."
-        "\n\nContinue?",
+        win, QCoreApplication.translate("rollback", "Roll back this update?"),
+        QCoreApplication.translate(
+            "rollback",
+            "This restores the system to restore point #{target} and then "
+            "REBOOTS. Anything changed since that snapshot will be "
+            "lost.\n\nContinue?").format(target=target),
         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
     if answer == QMessageBox.Yes:
         # ONEUP-0157: each half exits with its own code, so a failure says which
@@ -131,23 +136,32 @@ def _on_rollback_finished(win, code: int, target: str):
         return   # the restart is under way
     if code in (126, 127):   # pkexec: prompt dismissed, or not authorised
         QMessageBox.information(
-            win, "Roll back",
-            "Nothing was changed — the administrator prompt was cancelled or refused.")
+            win, QCoreApplication.translate("rollback", "Roll back"),
+            QCoreApplication.translate(
+                "rollback",
+                "Nothing was changed — the administrator prompt was cancelled or "
+                "refused."))
     elif code == 3:
         QMessageBox.warning(
-            win, "Roll back",
-            f"Snapper couldn't roll back to restore point #{target}, so OneUp "
-            "did not restart the computer.")
+            win, QCoreApplication.translate("rollback", "Roll back"),
+            QCoreApplication.translate(
+                "rollback",
+                "Snapper couldn't roll back to restore point #{target}, so OneUp "
+                "did not restart the computer.").format(target=target))
     elif code == 4:
         QMessageBox.warning(
-            win, "Roll back",
-            f"Restore point #{target} is set, but the restart failed. Restart the "
-            "computer yourself to finish the rollback.")
+            win, QCoreApplication.translate("rollback", "Roll back"),
+            QCoreApplication.translate(
+                "rollback",
+                "Restore point #{target} is set, but the restart failed. Restart "
+                "the computer yourself to finish the rollback.").format(target=target))
     else:
         QMessageBox.warning(
-            win, "Roll back",
-            f"The rollback ended unexpectedly (exit code {code}). Before restarting, "
-            "check the restore points with: sudo snapper list")
+            win, QCoreApplication.translate("rollback", "Roll back"),
+            QCoreApplication.translate(
+                "rollback",
+                "The rollback ended unexpectedly (exit code {code}). Before "
+                "restarting, check the restore points with: sudo snapper list").format(code=code))
 
 
 def _thin_snapshots(win):
@@ -159,25 +173,34 @@ def _thin_snapshots(win):
         return  # a thin is already in flight
     if win._run_active:
         QMessageBox.information(
-            win, "Update in progress",
-            "Let the current update finish, then thin the snapshots.")
+            win, QCoreApplication.translate("rollback", "Update in progress"),
+            QCoreApplication.translate(
+                "rollback",
+                "Let the current update finish, then thin the snapshots."))
         return
     box = QMessageBox(win)
     box.setIcon(QMessageBox.Question)
-    box.setWindowTitle("Thin old snapshots?")
-    box.setText("Remove older system restore points to free disk space?")
+    box.setWindowTitle(QCoreApplication.translate("rollback", "Thin old snapshots?"))
+    box.setText(QCoreApplication.translate(
+        "rollback",
+        "Remove older system restore points to free disk space?"))
     box.setInformativeText(
-        "OneUp will ask Btrfs's snapshot tool (snapper) to clear out the older "
-        "restore points its own retention policy considers expendable. Your most "
-        "recent restore points are kept, so you can still roll back a bad update.")
+        QCoreApplication.translate(
+            "rollback",
+            "OneUp will ask Btrfs's snapshot tool (snapper) to clear out the "
+            "older restore points its own retention policy considers "
+            "expendable. Your most recent restore points are kept, so you can "
+            "still roll back a bad update."))
     box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
-    box.button(QMessageBox.Ok).setText("Thin snapshots")
+    box.button(QMessageBox.Ok).setText(QCoreApplication.translate("rollback", "Thin snapshots"))
     box.setDefaultButton(QMessageBox.Cancel)
     QTimer.singleShot(0, lambda: win._center_child(box))
     if box.exec() != QMessageBox.Ok or not paths.log_dir_ready(win):
         return
     win.warn_btn.setEnabled(False)
-    win.status.setText("Thinning snapshots… (approve the password popup)")
+    win.status.setText(QCoreApplication.translate(
+        "rollback",
+        "Thinning snapshots… (approve the password popup)"))
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
@@ -200,16 +223,20 @@ def _on_thin_finished(win, proc: QProcess):
             n = line.split("|")[-1]
             removed = int(n) if n.isdecimal() else None
         elif line.startswith("@@HINT@@|"):
-            QMessageBox.warning(win, "Couldn't thin snapshots",
+            QMessageBox.warning(win, QCoreApplication.translate(
+                "rollback",
+                "Couldn't thin snapshots"),
                                 markers.render_hint(line.split("|")[1:]))
     if removed:
-        win.status.setText(f"Thinned {removed} old snapshot(s).")
+        win.status.setText(i18n.counted("snapshots-thinned", removed))
         win._warn_snapshots = False
         win.warn_banner.setVisible(False)
     elif removed == 0:
-        win.status.setText("No old snapshots needed thinning.")
+        win.status.setText(QCoreApplication.translate(
+            "rollback",
+            "No old snapshots needed thinning."))
         win._warn_snapshots = False
         win.warn_banner.setVisible(False)
     else:
         # No marker (auth cancelled / error): leave the banner so it can be retried.
-        win.status.setText("Ready.")
+        win.status.setText(QCoreApplication.translate("rollback", "Ready."))

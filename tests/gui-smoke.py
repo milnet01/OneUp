@@ -981,7 +981,7 @@ def main() -> int:
                  "@@REBOOT@@|yes|kernel-new graphics-driver-nvidia"):
         run.handle_line(w, line)
     check("reboot reason worded from the marker's codes",
-          w._reboot_reason == "a new kernel and your NVIDIA graphics driver were installed")
+          w._reboot_reason == "A new kernel and your NVIDIA graphics driver were installed")
     w.proc = QProcess(w)
     run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("reboot banner names the kernel + driver, keeping NVIDIA casing",
@@ -993,18 +993,20 @@ def main() -> int:
         wR = window.Updater()
         run.handle_line(wR, "@@REBOOT@@|yes" + (f"|{field}" if field is not None else ""))
         return wR._reboot_reason
-    # INV-2: the verb agrees with what the sentence lists, unknown codes included.
+    # INV-2: the verb agrees with what the sentence lists, unknown codes included. The
+    # reason opens the banner's sentence, so it arrives in that form — written into
+    # the table, never derived by a case change (ONEUP-0032 §4.5).
     check("INV-2 one component reads 'was'",
-          _reason("kernel-new") == "a new kernel was installed")
+          _reason("kernel-new") == "A new kernel was installed")
     check("INV-2 two components read 'were', joined with ' and '",
           _reason("kernel-new kernel-modules")
-          == "a new kernel and kernel driver modules were installed")
+          == "A new kernel and kernel driver modules were installed")
     check("INV-2 one known plus one unknown reads 'were', the unknown as its code",
           _reason("kernel-new gpu-firmware-blob")
-          == "a new kernel and gpu-firmware-blob were installed")
+          == "A new kernel and gpu-firmware-blob were installed")
     check("three components take the serial comma, as the engine joins them",
           _reason("kernel-new graphics-driver-generic kernel-modules")
-          == "a new kernel, your graphics driver, and kernel driver modules were installed")
+          == "A new kernel, your graphics driver, and kernel driver modules were installed")
     # INV-3: a known standalone reason is its own sentence — no join, no fallback.
     for _code in ("firmware-updated", "core-packages-updated"):
         _r = _reason(_code)

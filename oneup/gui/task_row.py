@@ -1,7 +1,7 @@
 """One task's row: its switch, badge, timing and details."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QCoreApplication, Qt, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -13,7 +13,24 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from . import steps
 from .toggle_switch import ToggleSwitch
+
+_PACKAGE_LINES = "\n"
+
+
+def _detail_name(key: str, title: str, which: int) -> str:
+    """The package list's screen-reader name (0) or its scroll area's (1), written
+    out per step in `steps.DETAIL_NAMES`. A row for a step that table lacks names
+    its list after the title as given — never a case change of it (ONEUP-0032 §4.5)."""
+    names = steps.DETAIL_NAMES.get(key)
+    if names:
+        return QCoreApplication.translate("steps", names[which])
+    if which == 0:
+        return QCoreApplication.translate("task_row", "Packages that {title} will change").format(
+            title=title)
+    return QCoreApplication.translate(
+        "task_row", "List of packages that {title} will change").format(title=title)
 
 
 def _collapsed_arrow() -> Qt.ArrowType:
@@ -43,7 +60,9 @@ class TaskRow(QFrame):
         self.switch = ToggleSwitch()
         # The switch carries no text, so without a name a screen reader announces
         # the app's PRIMARY control as an unnamed check box (ONEUP-0028).
-        self.switch.setAccessibleName(f"{title} — include in this update")
+        self.switch.setAccessibleName(QCoreApplication.translate(
+            "task_row",
+            "{title} — include in this update").format(title=title))
         self.switch.setAccessibleDescription(description)
 
         name = QLabel(title)
@@ -73,7 +92,7 @@ class TaskRow(QFrame):
         self.disclosure.toggled.connect(self._on_disclosure)
         # An arrow-only button is unnamed to a screen reader. State-agnostic
         # wording, since the control toggles — Qt reports expanded/collapsed itself.
-        self.disclosure.setAccessibleName(f"Packages that {title.lower()} will change")
+        self.disclosure.setAccessibleName(_detail_name(key, title, 0))
 
         inner = QFrame()
         inner.setObjectName("RowCard")
@@ -105,11 +124,11 @@ class TaskRow(QFrame):
         scroll.setWidget(self._items_label)
         # Focusable (it scrolls), so it needs a name of its own — the arrow key
         # user lands here and would otherwise hear an unnamed scroll area.
-        scroll.setAccessibleName(f"List of packages that {title.lower()} will change")
+        scroll.setAccessibleName(_detail_name(key, title, 1))
         self.detail_scroll = scroll   # named: the window's tab chain includes it
         dcol.addWidget(scroll)
 
-        self.size_btn = QPushButton("Show download size")
+        self.size_btn = QPushButton(QCoreApplication.translate("task_row", "Show download size"))
         self.size_btn.setObjectName("LinkBtn")
         self.size_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.size_btn.clicked.connect(lambda: self.size_requested.emit(self.key))
@@ -190,7 +209,9 @@ class TaskRow(QFrame):
         """Append one changed package to the panel (name  old → new)."""
         line = f"{name:<32}  {frm}  →  {to}" if (frm or to) else name
         self._items.append(line)
-        self._items_label.setText("\n".join(self._items))
+        # One package per line. The lines are data — names and version numbers —
+        # and a line break is not a separator any language words differently.
+        self._items_label.setText(_PACKAGE_LINES.join(self._items))
         self.disclosure.setVisible(True)
 
     def set_size_result(self, text: str):
@@ -206,12 +227,14 @@ class TaskRow(QFrame):
         # on a big Tumbleweed upgrade; a bare "Calculating…" for that long reads as
         # a hung button, so the label says up front that it's normal.
         self.size_btn.setEnabled(False)
-        self.size_btn.setText("Calculating… (up to a minute)")
+        self.size_btn.setText(QCoreApplication.translate(
+            "task_row",
+            "Calculating… (up to a minute)"))
 
     def size_failed(self):
         """Re-arm the link so the user can retry after a failed size fetch."""
         self.size_btn.setEnabled(True)
-        self.size_btn.setText("Show download size")
+        self.size_btn.setText(QCoreApplication.translate("task_row", "Show download size"))
 
     def has_size(self) -> bool:
         return self._has_size
@@ -227,7 +250,8 @@ class TaskRow(QFrame):
 
     def _render_badge(self):
         parts = [p for p in (self._badge_text, self._timing) if p]
-        text = "  ·  ".join(parts)
+        text = QCoreApplication.translate(
+            "task_row", "  ·  ", "separator between a row's outcome and its timing").join(parts)
         self.badge.setText(text)
         self.badge.setVisible(bool(parts))
         # The outcome otherwise lives only on an unfocusable label. Fold it into
@@ -257,4 +281,4 @@ class TaskRow(QFrame):
         if self.key == "system":
             self.size_btn.setVisible(True)
             self.size_btn.setEnabled(True)
-            self.size_btn.setText("Show download size")
+            self.size_btn.setText(QCoreApplication.translate("task_row", "Show download size"))

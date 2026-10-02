@@ -23,6 +23,7 @@ from pathlib import Path
 
 from PySide6.QtCore import (
     QByteArray,
+    QCoreApplication,
     QDate,
     QDateTime,
     QLocale,
@@ -67,6 +68,7 @@ from . import (
     autostart,
     banners,
     diagnostics,
+    i18n,
     paths,
     placement,
     repos,
@@ -109,10 +111,22 @@ class _ProgressBar(QProgressBar):
         self._caption.setText(fmt)
 
 
+def _last_run_outcome(status: str) -> str:
+    """The saved outcome of the last run, in words. The history file stores a
+    fixed token, so the wording stays the window's; an unknown one shows as stored."""
+    return {
+        "OK": QCoreApplication.translate("window", "OK"),
+        "errors": QCoreApplication.translate("window", "errors"),
+        "stopped": QCoreApplication.translate("window", "stopped"),
+    }.get(status, status)
+
+
 class Updater(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"{APP_NAME} {APP_VERSION}")
+        self.setWindowTitle(QCoreApplication.translate(
+            "window",
+            "{APP_NAME} {APP_VERSION}").format(APP_NAME=APP_NAME, APP_VERSION=APP_VERSION))
         # Four header controls (Settings · Repositories · Recenter · About); the
         # three background toggles now live inside the Settings popup.
         self.setMinimumWidth(560)
@@ -194,7 +208,10 @@ class Updater(QMainWindow):
         # Header: title + tagline on the left; weekly-check + recenter on the right.
         header = QLabel(APP_NAME)
         header.setObjectName("Header")
-        tagline = QLabel(f"Keep openSUSE, Flatpak and firmware up to date  ·  v{APP_VERSION}")
+        tagline = QLabel(QCoreApplication.translate(
+            "window",
+            "Keep openSUSE, Flatpak and firmware up to date  ·  "
+            "v{APP_VERSION}").format(APP_VERSION=APP_VERSION))
         tagline.setObjectName("Tagline")
         titleblock = QVBoxLayout()
         titleblock.setSpacing(2)
@@ -207,7 +224,10 @@ class Updater(QMainWindow):
         self.auto_btn.setCheckable(True)
         self.auto_btn.setCursor(Qt.PointingHandCursor)
         self.auto_btn.setToolTip(
-            "Check weekly in the background and notify you when updates are ready")
+            QCoreApplication.translate(
+                "window",
+                "Check weekly in the background and notify you when updates are "
+                "ready"))
         self.auto_btn.setChecked(autostart._autocheck_enabled())
         autostart._refresh_autocheck_label(self)
         self.auto_btn.toggled.connect(partial(autostart.on_autocheck_toggled, self))
@@ -219,8 +239,10 @@ class Updater(QMainWindow):
         self.auth_btn.setObjectName("GhostBtn")
         self.auth_btn.setCheckable(True)
         self.auth_btn.setCursor(Qt.PointingHandCursor)
-        self.auth_btn.setToolTip("Stop asking for your password on every update "
-                                 "(opt-in; can be switched off to revoke instantly)")
+        self.auth_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Stop asking for your password on every update (opt-in; can be "
+            "switched off to revoke instantly)"))
         auth._refresh_auth_label(self)
         self.auth_btn.toggled.connect(partial(auth.on_auth_toggled, self))
 
@@ -231,8 +253,10 @@ class Updater(QMainWindow):
         self.autoupdate_btn.setObjectName("GhostBtn")
         self.autoupdate_btn.setCheckable(True)
         self.autoupdate_btn.setCursor(Qt.PointingHandCursor)
-        self.autoupdate_btn.setToolTip("Install all updates automatically every week "
-                                       "(needs Passwordless)")
+        self.autoupdate_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Install all updates automatically every week (needs "
+            "Passwordless)"))
         self.autoupdate_btn.setChecked(autostart._autoupdate_enabled())
         autostart._refresh_autoupdate_label(self)
         self.autoupdate_btn.toggled.connect(partial(autostart.on_autoupdate_toggled, self))
@@ -244,7 +268,9 @@ class Updater(QMainWindow):
         self.tray_btn.setObjectName("GhostBtn")
         self.tray_btn.setCheckable(True)
         self.tray_btn.setCursor(Qt.PointingHandCursor)
-        self.tray_btn.setToolTip("Show a small tray icon that turns amber when updates are waiting")
+        self.tray_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Show a small tray icon that turns amber when updates are waiting"))
         self.tray_btn.setChecked(self.settings.value("tray_enabled", False, type=bool))
         tray._refresh_tray_label(self)
         self.tray_btn.toggled.connect(partial(tray.on_tray_toggled, self))
@@ -253,7 +279,9 @@ class Updater(QMainWindow):
         self.startboot_btn.setObjectName("GhostBtn")
         self.startboot_btn.setCheckable(True)
         self.startboot_btn.setCursor(Qt.PointingHandCursor)
-        self.startboot_btn.setToolTip("Start OneUp automatically at login (needs the tray icon)")
+        self.startboot_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Start OneUp automatically at login (needs the tray icon)"))
         self.startboot_btn.setChecked(autostart._startboot_enabled())
         autostart._refresh_startboot_label(self)
         self.startboot_btn.toggled.connect(partial(autostart.on_startboot_toggled, self))
@@ -264,11 +292,13 @@ class Updater(QMainWindow):
 
         # Laid out inside the Settings dialog (like the toggle buttons above), but
         # owned here so it persists across dialog opens.
-        self.diag_btn = QPushButton("Copy diagnostics")
+        self.diag_btn = QPushButton(QCoreApplication.translate("window", "Copy diagnostics"))
         self.diag_btn.setObjectName("GhostBtn")
         self.diag_btn.setCursor(Qt.PointingHandCursor)
-        self.diag_btn.setToolTip("Copy version info and your latest update log to "
-                                 "the clipboard, ready to paste into a bug report")
+        self.diag_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Copy version info and your latest update log to the clipboard, "
+            "ready to paste into a bug report"))
         self.diag_btn.clicked.connect(partial(diagnostics.copy_diagnostics, self))
 
         # Accessibility controls (ONEUP-0028), laid out in the Settings popup but
@@ -277,7 +307,9 @@ class Updater(QMainWindow):
         self.textsize_btn = QPushButton()
         self.textsize_btn.setObjectName("GhostBtn")
         self.textsize_btn.setCursor(Qt.PointingHandCursor)
-        self.textsize_btn.setToolTip("Make all text larger (on top of your desktop's font size)")
+        self.textsize_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Make all text larger (on top of your desktop's font size)"))
         self._refresh_textsize_label()
         self.textsize_btn.clicked.connect(self.on_textsize_clicked)
 
@@ -285,7 +317,9 @@ class Updater(QMainWindow):
         self.contrast_btn.setObjectName("GhostBtn")
         self.contrast_btn.setCheckable(True)
         self.contrast_btn.setCursor(Qt.PointingHandCursor)
-        self.contrast_btn.setToolTip("Plain black-and-white colours with strong outlines")
+        self.contrast_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Plain black-and-white colours with strong outlines"))
         self.contrast_btn.setChecked(self.settings.value("high_contrast", False, type=bool))
         self._refresh_contrast_label()
         self.contrast_btn.toggled.connect(self.on_contrast_toggled)
@@ -297,14 +331,19 @@ class Updater(QMainWindow):
         self.theme_combo = QComboBox()
         self.theme_combo.setObjectName("ThemeCombo")
         self.theme_combo.setCursor(Qt.PointingHandCursor)
-        self.theme_combo.setToolTip("Colour scheme for the whole app")
-        self.theme_combo.setAccessibleName("Colour theme")
+        self.theme_combo.setToolTip(QCoreApplication.translate(
+            "window",
+            "Colour scheme for the whole app"))
+        self.theme_combo.setAccessibleName(QCoreApplication.translate("window", "Colour theme"))
         # The popup is a separate focusable child. It gets a name of ours so
         # it can be styled and so it is not an anonymous focusable widget,
         # which is the shape that named #RepoScroll and #RollbackList.
         self.theme_combo.view().setObjectName("ThemeList")
-        self.theme_combo.view().setAccessibleName("Colour theme choices")
-        self.theme_combo.addItem("Follow system", theme_mod.SYSTEM)
+        self.theme_combo.view().setAccessibleName(QCoreApplication.translate(
+            "window",
+            "Colour theme choices"))
+        self.theme_combo.addItem(QCoreApplication.translate(
+            "window", "Follow system"), theme_mod.SYSTEM)
         for _th in theme_mod.THEMES:
             self.theme_combo.addItem(_th.label, _th.id)
         self._refresh_theme_combo()
@@ -318,29 +357,37 @@ class Updater(QMainWindow):
         self.theme_note.setWordWrap(True)
         self.theme_note.setVisible(False)
 
-        self.settings_btn = QPushButton("⚙ Settings")
+        self.settings_btn = QPushButton(QCoreApplication.translate("window", "⚙ Settings"))
         self.settings_btn.setObjectName("GhostBtn")
         self.settings_btn.setCursor(Qt.PointingHandCursor)
-        self.settings_btn.setToolTip("Background behaviours: weekly check, "
-                                     "passwordless, automatic updates")
+        self.settings_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Background behaviours: weekly check, passwordless, automatic "
+            "updates"))
         self.settings_btn.clicked.connect(self.open_settings)
 
-        self.recenter_btn = QPushButton("Recenter")
+        self.recenter_btn = QPushButton(QCoreApplication.translate("window", "Recenter"))
         self.recenter_btn.setObjectName("GhostBtn")
         self.recenter_btn.setCursor(Qt.PointingHandCursor)
-        self.recenter_btn.setToolTip("Move the window back to the centre of the screen")
+        self.recenter_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Move the window back to the centre of the screen"))
         self.recenter_btn.clicked.connect(self.recenter)
 
-        self.repos_btn = QPushButton("Repositories")
+        self.repos_btn = QPushButton(QCoreApplication.translate("window", "Repositories"))
         self.repos_btn.setObjectName("GhostBtn")
         self.repos_btn.setCursor(Qt.PointingHandCursor)
-        self.repos_btn.setToolTip("Turn software repositories on/off and clean up duplicates")
+        self.repos_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Turn software repositories on/off and clean up duplicates"))
         self.repos_btn.clicked.connect(self.open_repos)
 
-        self.about_btn = QPushButton("About")
+        self.about_btn = QPushButton(QCoreApplication.translate("window", "About"))
         self.about_btn.setObjectName("GhostBtn")
         self.about_btn.setCursor(Qt.PointingHandCursor)
-        self.about_btn.setToolTip("Version, licence, links and a manual update check")
+        self.about_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Version, licence, links and a manual update check"))
         self.about_btn.clicked.connect(self.show_about)
 
         # Two buttons, not four. Four of identical weight beside the app title
@@ -359,7 +406,8 @@ class Updater(QMainWindow):
         # Task rows — each a gradient-bordered card.
         self.rows: dict[str, TaskRow] = {}
         for key, title, desc in steps.TASKS:
-            r = TaskRow(key, title, desc)
+            r = TaskRow(key, QCoreApplication.translate("steps", title),
+                        QCoreApplication.translate("steps", desc))
             r.size_requested.connect(partial(run.request_size, self))
             self.rows[key] = r
             root.addWidget(r)
@@ -367,13 +415,15 @@ class Updater(QMainWindow):
         root.addSpacing(4)
 
         # Action row: Check (secondary) + Run (primary).
-        self.check_btn = QPushButton("Check for updates")
+        self.check_btn = QPushButton(QCoreApplication.translate("window", "Check for updates"))
         self.check_btn.setObjectName("GhostBtn")
         self.check_btn.setCursor(Qt.PointingHandCursor)
-        self.check_btn.setToolTip("See what would update — installs nothing")
+        self.check_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "See what would update — installs nothing"))
         self.check_btn.clicked.connect(partial(run.start_check, self))
 
-        self.run_btn = QPushButton("Run selected updates")
+        self.run_btn = QPushButton(QCoreApplication.translate("window", "Run selected updates"))
         self.run_btn.setObjectName("RunBtn")
         self.run_btn.setMinimumHeight(44)
         self.run_btn.setCursor(Qt.PointingHandCursor)
@@ -386,13 +436,16 @@ class Updater(QMainWindow):
         # transparent fill but takes the danger colour for its border and label,
         # and the focus derivation matches a styled control BY NAME — a restyled
         # control still called GhostBtn would be invisible to it (ONEUP-0064).
-        self.stop_btn = QPushButton("Stop")
+        self.stop_btn = QPushButton(QCoreApplication.translate("window", "Stop"))
         self.stop_btn.setObjectName("StopBtn")
         self.stop_btn.setCursor(Qt.PointingHandCursor)
-        self.stop_btn.setAccessibleName("Stop the update")
+        self.stop_btn.setAccessibleName(QCoreApplication.translate("window", "Stop the update"))
         self.stop_btn.setToolTip(
-            "Stop after the current step. Anything already installed stays installed — "
-            "an install is never cut off half-way, because that can break programs.")
+            QCoreApplication.translate(
+                "window",
+                "Stop after the current step. Anything already installed stays "
+                "installed — an install is never cut off half-way, because that "
+                "can break programs."))
         self.stop_btn.clicked.connect(partial(run.request_stop, self))
         self.stop_btn.setVisible(False)
 
@@ -412,32 +465,36 @@ class Updater(QMainWindow):
         # warning banner, appended below once that banner exists, so the remedy
         # sits beside the thing it remedies rather than reading as a fourth
         # member of the action row above while belonging to none of it.
-        self.retry_btn = QPushButton("Retry failed steps")
+        self.retry_btn = QPushButton(QCoreApplication.translate("window", "Retry failed steps"))
         self.retry_btn.setObjectName("GhostBtn")
         self.retry_btn.setCursor(Qt.PointingHandCursor)
         self.retry_btn.clicked.connect(partial(run.retry_failed, self))
         self.retry_btn.setVisible(False)
 
         # Progress + current step.
-        self.status = QLabel("Ready.")
+        self.status = QLabel(QCoreApplication.translate("window", "Ready."))
         self.status.setObjectName("Status")
         # NOT setAccessibleName: an explicit name on a QLabel is permanent, and this
         # label is `_announce`'s default `source` — so a name here makes the reader
         # say "Current status" for every run summary instead of the summary
         # (ONEUP-0028 § the fallback deliberately does not name the borrowed label).
         # A description carries the role without displacing the text.
-        self.status.setAccessibleDescription("Current status")
+        self.status.setAccessibleDescription(QCoreApplication.translate(
+            "window",
+            "Current status"))
         root.addWidget(self.status)
         # The caption sits under the bar rather than on its fill (ONEUP-0163).
         # A description, not a name: this label's text is replaced on every
         # progress line, and an explicit name on a QLabel is permanent.
         self.bar_caption = QLabel("")
         self.bar_caption.setObjectName("ProgressCaption")
-        self.bar_caption.setAccessibleDescription("Update progress detail")
+        self.bar_caption.setAccessibleDescription(QCoreApplication.translate(
+            "window",
+            "Update progress detail"))
         self.bar = _ProgressBar(self.bar_caption)
         self.bar.setRange(0, 1)
         self.bar.setValue(0)
-        self.bar.setAccessibleName("Update progress")
+        self.bar.setAccessibleName(QCoreApplication.translate("window", "Update progress"))
         root.addWidget(self.bar)
         root.addWidget(self.bar_caption)
         # Liveness, on its own line under the bar (ONEUP-0048): how long the current
@@ -447,7 +504,7 @@ class Updater(QMainWindow):
         # nothing for the log pane to draw, and a working run reads as frozen.
         self.activity = QLabel("")
         self.activity.setObjectName("Activity")
-        self.activity.setAccessibleName("Activity")
+        self.activity.setAccessibleName(QCoreApplication.translate("window", "Activity"))
         self.activity.setVisible(False)
         root.addWidget(self.activity)
         # Five seconds, not one: the label is a live region, and a screen reader reading a
@@ -461,24 +518,29 @@ class Updater(QMainWindow):
         # Each banner is named for its ROLE, so a screen reader describes what the
         # frame is rather than announcing an unnamed panel (ONEUP-0028).
         self.reboot_banner, self.reboot_label, self.restart_btn = banners._make_banner(self,
-            "RebootBanner", "RestartBtn", "Restart now", partial(banners.restart_now, self),
-            name="Restart recommended")
+            "RebootBanner", "RestartBtn", QCoreApplication.translate("window", "Restart now"),
+            partial(banners.restart_now, self),
+            name=QCoreApplication.translate("window", "Restart recommended"))
         root.addWidget(self.reboot_banner)
 
         self.services_banner, self.services_label, self.services_btn = banners._make_banner(self,
-            "InfoBanner", "BannerBtn", "Restart services", partial(banners.restart_services, self),
-            name="Services should restart")
+            "InfoBanner", "BannerBtn", QCoreApplication.translate("window", "Restart services"),
+            partial(banners.restart_services, self),
+            name=QCoreApplication.translate("window", "Services should restart"))
         root.addWidget(self.services_banner)
 
         self.warn_banner, self.warn_label, self.warn_btn = banners._make_banner(self,
-            "WarnBanner", "BannerBtn", "Show details", partial(banners._warn_action, self),
-            name="Warning")
+            "WarnBanner", "BannerBtn", QCoreApplication.translate("window", "Show details"),
+            partial(banners._warn_action, self),
+            name=QCoreApplication.translate("window", "Warning"))
         # A copy-the-suggested-command button, shown only when a hint carries a
         # runnable command the app couldn't run for you — the copy-fallback.
-        self.warn_copy_btn = QPushButton("Copy command")
+        self.warn_copy_btn = QPushButton(QCoreApplication.translate("window", "Copy command"))
         self.warn_copy_btn.setObjectName("LinkBtn")
         self.warn_copy_btn.setCursor(Qt.PointingHandCursor)
-        self.warn_copy_btn.setToolTip("Copy the suggested command to the clipboard")
+        self.warn_copy_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Copy the suggested command to the clipboard"))
         self.warn_copy_btn.clicked.connect(partial(banners._copy_hint_command, self))
         self.warn_copy_btn.setVisible(False)
         self.warn_banner.layout().insertWidget(1, self.warn_copy_btn)
@@ -491,7 +553,9 @@ class Updater(QMainWindow):
         self.warn_btn2.setObjectName("BannerBtn")
         # Its label is set only when shown, so it needs a standing accessible name
         # — otherwise it is a nameless button in the widget tree.
-        self.warn_btn2.setAccessibleName("Alternative fix for this warning")
+        self.warn_btn2.setAccessibleName(QCoreApplication.translate(
+            "window",
+            "Alternative fix for this warning"))
         self.warn_btn2.setCursor(Qt.PointingHandCursor)
         self.warn_btn2.clicked.connect(partial(banners._fix_keys_and_retry, self))
         self.warn_btn2.setVisible(False)
@@ -503,12 +567,15 @@ class Updater(QMainWindow):
         root.addWidget(self.warn_banner)
 
         self.appupdate_banner, self.appupdate_label, self.appupdate_btn = banners._make_banner(self,
-            "InfoBanner", "BannerBtn", "View release", partial(app_update._open_release, self),
-            name="OneUp update available")
+            "InfoBanner", "BannerBtn", QCoreApplication.translate("window", "View release"),
+            partial(app_update._open_release, self),
+            name=QCoreApplication.translate("window", "OneUp update available"))
         root.addWidget(self.appupdate_banner)
 
         # Rollback link (shown after the system actually changed).
-        self.rollback_btn = QPushButton("Roll back this update…")
+        self.rollback_btn = QPushButton(QCoreApplication.translate(
+            "window",
+            "Roll back this update…"))
         self.rollback_btn.setObjectName("LinkBtn")
         self.rollback_btn.setCursor(Qt.PointingHandCursor)
         self.rollback_btn.clicked.connect(partial(rollback.rollback, self))
@@ -516,11 +583,11 @@ class Updater(QMainWindow):
         root.addWidget(self.rollback_btn)
 
         # Log controls: show/hide on the left, open-file on the right.
-        self.log_toggle = QPushButton("Show details ▸")
+        self.log_toggle = QPushButton(QCoreApplication.translate("window", "Show details ▸"))
         self.log_toggle.setObjectName("LinkBtn")
         self.log_toggle.setCursor(Qt.PointingHandCursor)
         self.log_toggle.clicked.connect(self.toggle_log)
-        self.openlog_btn = QPushButton("Open log file")
+        self.openlog_btn = QPushButton(QCoreApplication.translate("window", "Open log file"))
         self.openlog_btn.setObjectName("LinkBtn")
         self.openlog_btn.setCursor(Qt.PointingHandCursor)
         self.openlog_btn.clicked.connect(self.open_log)
@@ -533,11 +600,13 @@ class Updater(QMainWindow):
         self.log = QPlainTextEdit()
         self.log.setObjectName("Log")
         self.log.setReadOnly(True)
-        self.log.setPlaceholderText("Update details will appear here when you run an update.")
+        self.log.setPlaceholderText(QCoreApplication.translate(
+            "window",
+            "Update details will appear here when you run an update."))
         # Named, focusable and readable on demand. Deliberately NOT announced line
         # by line — a run emits hundreds of zypper lines (see the spec's Out of
         # scope): a screen reader would be unusable.
-        self.log.setAccessibleName("Update log")
+        self.log.setAccessibleName(QCoreApplication.translate("window", "Update log"))
         self.log.setMinimumHeight(180)
         self.log.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         root.addWidget(self.log, 1)
@@ -545,12 +614,13 @@ class Updater(QMainWindow):
         # Restore the log show/hide preference (shown by default on first run).
         show_log = self.settings.value("log_shown", True, type=bool)
         self.log.setVisible(show_log)
-        self.log_toggle.setText("Hide details ▾" if show_log else "Show details ▸")
+        self.log_toggle.setText(QCoreApplication.translate("window", "Hide details ▾") if show_log
+                                else QCoreApplication.translate("window", "Show details ▸"))
 
         # Last-run line.
         self.last_run = QLabel()
         self.last_run.setObjectName("LastRun")
-        self.last_run.setAccessibleName("Last update run")
+        self.last_run.setAccessibleName(QCoreApplication.translate("window", "Last update run"))
         root.addWidget(self.last_run)
         self.refresh_last_run()
 
@@ -644,7 +714,9 @@ class Updater(QMainWindow):
         self._total = len([s for s in steps.split(",") if s])
         self.bar.setRange(0, max(self._total, 1))
         self.set_controls_enabled(False)
-        self.status.setText("An update started earlier is still running — following it…")
+        self.status.setText(QCoreApplication.translate(
+            "window",
+            "An update started earlier is still running — following it…"))
         self._announce(self.status.text())
         self._attach_timer = QTimer(self)
         self._attach_timer.setInterval(1000)
@@ -686,15 +758,19 @@ class Updater(QMainWindow):
         from _confirm_quit so the decision logic stays testable without a dialog."""
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
-        box.setWindowTitle("An update is still running")
-        box.setText("An update is still running.")
+        box.setWindowTitle(QCoreApplication.translate("window", "An update is still running"))
+        box.setText(QCoreApplication.translate("window", "An update is still running."))
         box.setInformativeText(
-            "Closing OneUp won't stop it. Interrupting an update half-way can leave "
-            "programs broken, so it carries on in the background and finishes on its "
-            "own — but you won't be able to watch it, and the next update can't start "
-            "until it's done.")
-        stay = box.addButton("Keep OneUp open", QMessageBox.ButtonRole.RejectRole)
-        box.addButton("Close anyway", QMessageBox.ButtonRole.AcceptRole)
+            QCoreApplication.translate(
+                "window",
+                "Closing OneUp won't stop it. Interrupting an update half-way can "
+                "leave programs broken, so it carries on in the background and "
+                "finishes on its own — but you won't be able to watch it, and the "
+                "next update can't start until it's done."))
+        stay = box.addButton(QCoreApplication.translate(
+            "window", "Keep OneUp open"), QMessageBox.ButtonRole.RejectRole)
+        box.addButton(QCoreApplication.translate(
+            "window", "Close anyway"), QMessageBox.ButtonRole.AcceptRole)
         box.setDefaultButton(stay)          # the safe choice is the one Enter picks
         box.exec()
         return box.clickedButton() is not stay
@@ -752,7 +828,9 @@ class Updater(QMainWindow):
         return 0
 
     def _refresh_textsize_label(self):
-        self.textsize_btn.setText(f"Text size: {TEXT_SCALES[self._text_scale_index()][0]}")
+        self.textsize_btn.setText(QCoreApplication.translate(
+            "window",
+            "Text size: {value}").format(value=TEXT_SCALES[self._text_scale_index()][0]))
 
     def on_textsize_clicked(self):
         nxt = (self._text_scale_index() + 1) % len(TEXT_SCALES)
@@ -796,7 +874,9 @@ class Updater(QMainWindow):
 
     def _refresh_contrast_label(self):
         self.contrast_btn.setText(
-            "High contrast: on" if self.contrast_btn.isChecked() else "High contrast: off")
+            QCoreApplication.translate("window", "High contrast: on")
+            if self.contrast_btn.isChecked()
+            else QCoreApplication.translate("window", "High contrast: off"))
 
     def on_contrast_toggled(self, on: bool):
         self.settings.setValue("high_contrast", on)
@@ -809,12 +889,13 @@ class Updater(QMainWindow):
             data = json.loads(paths.HISTORY.read_text())
             when = datetime.fromisoformat(data["when"])
             days = (datetime.now().date() - when.date()).days
-            relative = ("today" if days <= 0 else
-                        "yesterday" if days == 1 else f"{days} days ago")
+            relative = (QCoreApplication.translate("window", "today") if days <= 0 else
+                        QCoreApplication.translate("window", "yesterday") if days == 1
+                        else i18n.counted("days-ago", days))
             stale = days >= STALE_AFTER_DAYS
             # "Overdue" in WORDS as well as amber: colour alone carries no meaning
             # for a colour-blind user. ⚠ matches the banners' existing idiom.
-            overdue = "  ·  ⚠ overdue" if stale else ""
+            overdue = QCoreApplication.translate("window", "  ·  ⚠ overdue") if stale else ""
             # The user's layout (day, month name, year — ONEUP-0182, 2026-10-02) with the
             # month name from their locale. strftime's %b is always the C locale's, since
             # Python never calls setlocale(LC_TIME); the full locale format was declined
@@ -823,9 +904,15 @@ class Updater(QMainWindow):
                 QDateTime(QDate(when.year, when.month, when.day), QTime(when.hour, when.minute)),
                 "dd MMM yyyy, HH:mm")
             self.last_run.setText(
-                f"Last run: {stamp}  ·  {relative}  —  {data['status']}{overdue}")
+                QCoreApplication.translate(
+                    "window",
+                    "Last run: {stamp}  ·  {relative}  —  {value}{overdue}").format(
+                    stamp=stamp,
+                    relative=relative,
+                    value=_last_run_outcome(data['status']),
+                    overdue=overdue))
         except (OSError, ValueError, KeyError):
-            self.last_run.setText("Last run: never")
+            self.last_run.setText(QCoreApplication.translate("window", "Last run: never"))
         # Amber the line once a run is overdue: flip the dynamic property and
         # repolish so the QLabel#LastRun[stale="true"] stylesheet rule re-evaluates.
         self.last_run.setProperty("stale", "true" if stale else "false")
@@ -845,8 +932,10 @@ class Updater(QMainWindow):
         repo_list = repos.read_repos()
         if not repo_list:
             QMessageBox.information(
-                self, "Repositories",
-                "Couldn't read the repository list. Is zypper available?")
+                self, QCoreApplication.translate("window", "Repositories"),
+                QCoreApplication.translate(
+                    "window",
+                    "Couldn't read the repository list. Is zypper available?"))
             return
         repos.RepoManagerDialog(self, repo_list).exec()
 
@@ -855,7 +944,8 @@ class Updater(QMainWindow):
         toggle buttons live in it permanently."""
         if self._settings_dialog is None:
             self._settings_dialog = SettingsDialog(self)
-        self.diag_btn.setText("Copy diagnostics")  # reset any lingering "Copied ✓"
+        self.diag_btn.setText(QCoreApplication.translate(
+            "window", "Copy diagnostics"))  # reset any lingering "Copied ✓"
         self._settings_dialog.show()
         self._settings_dialog.raise_()
         self._settings_dialog.activateWindow()
@@ -869,15 +959,19 @@ class Updater(QMainWindow):
 
     def _show_log(self, show: bool = True):
         self.log.setVisible(show)
-        self.log_toggle.setText("Hide details ▾" if show else "Show details ▸")
+        self.log_toggle.setText(QCoreApplication.translate("window", "Hide details ▾") if show
+                                else QCoreApplication.translate("window", "Show details ▸"))
         self.settings.setValue("log_shown", show)
 
     def open_log(self):
         if self._log_path and self._log_path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._log_path)))
         else:
-            QMessageBox.information(self, "No log yet",
-                                    "Run an update or a check first — then the log opens here.")
+            QMessageBox.information(self, QCoreApplication.translate("window", "No log yet"),
+                                    QCoreApplication.translate(
+                                        "window",
+                                        "Run an update or a check first — then the log "
+                                        "opens here."))
 
     def focus_chain(self) -> list[QWidget]:
         """Every focusable control in the window, in the order it is laid out.
@@ -920,30 +1014,39 @@ class Updater(QMainWindow):
         self.stop_btn.setVisible(stoppable)
         if stoppable:
             self.stop_btn.setEnabled(True)
-            self.stop_btn.setText("Stop")
+            self.stop_btn.setText(QCoreApplication.translate("window", "Stop"))
 
     def show_about(self):
         """A small About window: version, licence, links, and a manual update check."""
         box = QMessageBox(self)
-        box.setWindowTitle(f"About {APP_NAME}")
+        box.setWindowTitle(QCoreApplication.translate(
+            "window",
+            "About {APP_NAME}").format(APP_NAME=APP_NAME))
         icon = _app_icon()
         if not icon.isNull():
             box.setIconPixmap(icon.pixmap(64, 64))
         box.setTextFormat(Qt.RichText)
-        box.setText(f"<b>{APP_NAME} {APP_VERSION}</b>")
+        box.setText(QCoreApplication.translate(
+            "window",
+            "<b>{APP_NAME} {APP_VERSION}</b>").format(APP_NAME=APP_NAME, APP_VERSION=APP_VERSION))
         box.setInformativeText(
-            "One-click updates for openSUSE — system packages, Flatpaks, firmware, "
-            "leftover-package removal and cache cleanup.<br><br>"
-            "Released under the <b>MIT Licence</b>.<br><br>"
-            f'<a href="https://github.com/{REPO_SLUG}">GitHub repository</a> &nbsp;·&nbsp; '
-            '<a href="https://software.opensuse.org/package/oneup">openSUSE package (OBS)</a>')
+            QCoreApplication.translate(
+                "window",
+                "One-click updates for openSUSE — system packages, Flatpaks, "
+                "firmware, leftover-package removal and cache "
+                "cleanup.<br><br>Released under the <b>MIT Licence</b>.<br><br><a "
+                "href=\"https://github.com/{REPO_SLUG}\">GitHub repository</a> "
+                "&nbsp;·&nbsp; <a "
+                "href=\"https://software.opensuse.org/package/oneup\">openSUSE "
+                "package (OBS)</a>").format(REPO_SLUG=REPO_SLUG))
         for lbl in box.findChildren(QLabel):
             lbl.setOpenExternalLinks(True)  # let the links open in the browser.
             # setOpenExternalLinks only grants LinksAccessibleByMouse, so without
             # this the two links above are reachable by mouse alone and there is no
             # other route to either URL — WCAG 2.2 SC 2.1.1 Keyboard, Level A.
             lbl.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        check_btn = box.addButton("Check for updates", QMessageBox.ActionRole)
+        check_btn = box.addButton(QCoreApplication.translate(
+            "window", "Check for updates"), QMessageBox.ActionRole)
         box.addButton(QMessageBox.Close)
         # Centre over the main window once it's laid out (a QMessageBox sizes to its
         # content on show, so we re-position from inside the event loop).

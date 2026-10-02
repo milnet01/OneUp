@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 import re
 
-from PySide6.QtCore import QProcess, Qt, QTimer
+from PySide6.QtCore import QCoreApplication, QProcess, Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QPushButton,
 )
 
-from . import repos, rollback, run
+from . import i18n, repos, rollback, run
 
 # --- services that must never be restarted from the window -------------------
 # Restarting one of these ends the user's graphical session, kills this window, or
@@ -111,24 +111,25 @@ def _extract_command(hint: str) -> str:
 def _show_warning(win, text: str):
     """Show the warning banner with `text`, exposing a Copy button when the
     text contains a runnable command."""
-    win.warn_label.setText("⚠  " + text)
+    win.warn_label.setText(QCoreApplication.translate("banners", "⚠  {text}").format(text=text))
     cmd = _extract_command(text)
     win._hint_command = cmd
     win.warn_copy_btn.setVisible(bool(cmd))
     if cmd:
-        win.warn_copy_btn.setText("Copy command")
+        win.warn_copy_btn.setText(QCoreApplication.translate("banners", "Copy command"))
     win.warn_banner.setVisible(True)
     # A banner that merely appears is silent to a screen reader. Announced last
     # in on_finished's ordering, so the warning — the more urgent message —
     # is the one left standing rather than the summary.
-    win._announce(f"Warning: {text}", win.warn_label)
+    win._announce(QCoreApplication.translate("banners", "Warning: {text}").format(text=text),
+                  win.warn_label)
 
 
 def _copy_hint_command(win):
     if not win._hint_command:
         return
     QApplication.clipboard().setText(win._hint_command)
-    win.warn_copy_btn.setText("Copied ✓")
+    win.warn_copy_btn.setText(QCoreApplication.translate("banners", "Copied ✓"))
 
 
 def _warn_action(win):
@@ -154,17 +155,23 @@ def _confirm_key_import(win) -> bool:
     and return whether the user approved."""
     box = QMessageBox(win)
     box.setIcon(QMessageBox.Warning)
-    box.setWindowTitle("Import the repository's signing key?")
-    box.setText("Import the new signing key and retry the update?")
+    box.setWindowTitle(QCoreApplication.translate(
+        "banners",
+        "Import the repository's signing key?"))
+    box.setText(QCoreApplication.translate(
+        "banners",
+        "Import the new signing key and retry the update?"))
     box.setInformativeText(
-        "A repository's signing key has changed or expired, which is why the "
-        "update was refused.\n\n"
-        "To continue, OneUp will import the repository's new key and run the "
-        "update again. Importing a key means trusting it — only do this for "
-        "repositories you set up and trust. A key you don't recognise could let "
-        "unverified software be installed on your computer.")
+        QCoreApplication.translate(
+            "banners",
+            "A repository's signing key has changed or expired, which is why "
+            "the update was refused.\n\nTo continue, OneUp will import the "
+            "repository's new key and run the update again. Importing a key "
+            "means trusting it — only do this for repositories you set up and "
+            "trust. A key you don't recognise could let unverified software "
+            "be installed on your computer."))
     box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
-    box.button(QMessageBox.Ok).setText("Import && retry")
+    box.button(QMessageBox.Ok).setText(QCoreApplication.translate("banners", "Import && retry"))
     box.setDefaultButton(QMessageBox.Cancel)
     # Centre over the main window once laid out (mirrors show_about).
     QTimer.singleShot(0, lambda: win._center_child(box))
@@ -228,8 +235,10 @@ def _confirm_reboot(win, title: str, body: str):
 
 
 def restart_now(win):
-    _confirm_reboot(win, "Restart now?",
-                         "Save your work first. Restart the computer now?")
+    _confirm_reboot(win, QCoreApplication.translate("banners", "Restart now?"),
+                         QCoreApplication.translate(
+                             "banners",
+                             "Save your work first. Restart the computer now?"))
 
 
 def restart_services(win):
@@ -245,21 +254,29 @@ def restart_services(win):
         # somewhere else. on_finished now shows the reboot banner instead of this one
         # in that state, so reaching here means something went round the banner.
         _confirm_reboot(win,
-            "Restart the computer?",
-            "Everything that needs restarting is part of what runs your desktop "
-            "session, so restarting it here would break or end that session:\n\n"
-            + ", ".join(critical)
-            + "\n\nRestarting the computer is the clean way to pick up the new "
-              "libraries. Save your work first. Restart now?")
+            QCoreApplication.translate("banners", "Restart the computer?"),
+            QCoreApplication.translate(
+                "banners",
+                "Everything that needs restarting is part of what runs your desktop "
+                "session, so restarting it here would break or end that session:\n\n"
+                "{names}\n\nRestarting the computer is the clean way to pick up the new "
+                "libraries. Save your work first. Restart now?").format(
+                    names=i18n.join_names(critical)))
         return
-    body = "These will be restarted now:\n\n" + ", ".join(safe)
     if critical:
-        body += ("\n\nThese need a restart of the computer instead, because "
-                 "restarting them here would break or end your desktop session:"
-                 "\n\n" + ", ".join(critical)
-                 + "\n\nThe Restart now button above will do that when you are "
-                   "ready.")
-    if QMessageBox.question(win, "Restart services?", body) == QMessageBox.Yes:
+        body = QCoreApplication.translate(
+            "banners",
+            "These will be restarted now:\n\n{names}\n\nThese need a restart of the "
+            "computer instead, because restarting them here would break or end your "
+            "desktop session:\n\n{critical}\n\nThe Restart now button above will do "
+            "that when you are ready.").format(names=i18n.join_names(safe),
+                                                 critical=i18n.join_names(critical))
+    else:
+        body = QCoreApplication.translate(
+            "banners", "These will be restarted now:\n\n{names}").format(
+                names=i18n.join_names(safe))
+    title = QCoreApplication.translate("banners", "Restart services?")
+    if QMessageBox.question(win, title, body) == QMessageBox.Yes:
         _start_service_restart(win, "pkexec", ["systemctl", "restart", *safe])
         # Hidden while it runs, and shown again only if the restart fails, so a failed
         # one can be retried. Anything still needing a reboot is carried by the reboot
@@ -277,8 +294,10 @@ def _start_service_restart(win, prog: str, args: list[str]) -> None:
     p.finished.connect(lambda code, _status, p=p: _on_services_restarted(
         win, code, bytes(p.readAll()).decode(errors="replace"), units))
     p.errorOccurred.connect(lambda err: err == QProcess.FailedToStart
-                            and _on_services_restarted(win, -1, f"{prog} could not be started.",
-                                                       units))
+                            and _on_services_restarted(
+                                win, -1, QCoreApplication.translate(
+                                    "banners", "{program} could not be started.").format(
+                                        program=prog), units))
     win._restart_proc = p
     p.start(prog, args)
 
@@ -288,18 +307,29 @@ def _on_services_restarted(win, code: int, output: str, units: list[str]) -> Non
     user's choice 2026-10-02). pkexec exits 126 when its password prompt is dismissed
     and 127 when authorisation fails or pkexec itself errs (pkexec(1)); any other
     non-zero status is systemctl's own failure, and its output is the reason."""
-    names = ", ".join(units)
+    names = i18n.join_names(units)
     if code == 0:
-        QMessageBox.information(win, "Services restarted",
-                                f"These services were restarted:\n\n{names}")
+        QMessageBox.information(
+            win, QCoreApplication.translate("banners", "Services restarted"),
+            QCoreApplication.translate(
+                "banners", "These services were restarted:\n\n{names}").format(names=names))
         return
     if code == 126:
-        reason = "The password prompt was closed, so nothing was restarted."
+        reason = QCoreApplication.translate(
+            "banners", "The password prompt was closed, so nothing was restarted.")
     elif code == 127:
-        reason = "Permission to restart them was refused, or could not be asked for."
+        reason = QCoreApplication.translate(
+            "banners", "Permission to restart them was refused, or could not be asked for.")
     else:
-        reason = "The restart failed:\n\n" + (output.strip()[-600:] or f"exit code {code}")
+        # The tool's own output is data, shown as it came; only the frame is worded.
+        detail = output.strip()[-600:] or QCoreApplication.translate(
+            "banners", "exit code {code}").format(code=code)
+        reason = QCoreApplication.translate(
+            "banners", "The restart failed:\n\n{detail}").format(detail=detail)
     win.services_banner.setVisible(True)
-    QMessageBox.warning(win, "Services not restarted", f"{reason}\n\nServices: {names}")
+    QMessageBox.warning(
+        win, QCoreApplication.translate("banners", "Services not restarted"),
+        QCoreApplication.translate(
+            "banners", "{reason}\n\nServices: {names}").format(reason=reason, names=names))
 
 

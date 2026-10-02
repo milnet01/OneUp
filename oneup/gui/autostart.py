@@ -15,6 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QMessageBox
 
 from .. import APP_ID
@@ -139,7 +140,9 @@ def _install_autostart(win) -> bool:
     try:
         paths.write_whole(path, _autostart_text())
     except OSError as exc:
-        QMessageBox.warning(win, "Could not change start-at-boot", str(exc))
+        QMessageBox.warning(win, QCoreApplication.translate(
+            "autostart",
+            "Could not change start-at-boot"), str(exc))
         return False
     return path.exists()
 
@@ -182,7 +185,9 @@ def _install_user_timer(win, basename: str, description: str, exec_flag: str) ->
         subprocess.run(["systemctl", "--user", "enable", "--now",  # noqa: S603,S607
                         f"{basename}.timer"], check=False)
     except OSError as exc:
-        QMessageBox.warning(win, "Could not change the schedule", str(exc))
+        QMessageBox.warning(win, QCoreApplication.translate(
+            "autostart",
+            "Could not change the schedule"), str(exc))
         return False
     return _timer_enabled(f"{basename}.timer")
 
@@ -201,7 +206,8 @@ def _remove_user_timer(basename: str):
 
 def _refresh_autocheck_label(win):
     on = win.auto_btn.isChecked()
-    win.auto_btn.setText("Weekly check: on" if on else "Weekly check: off")
+    win.auto_btn.setText(QCoreApplication.translate("autostart", "Weekly check: on") if on
+                         else QCoreApplication.translate("autostart", "Weekly check: off"))
 
 
 def on_autocheck_toggled(win, on: bool):
@@ -218,7 +224,8 @@ def on_autocheck_toggled(win, on: bool):
 def _refresh_autoupdate_label(win):
     on = win.autoupdate_btn.isChecked()
     win.autoupdate_btn.setText(
-        "Automatic updates: on" if on else "Automatic updates: off")
+        QCoreApplication.translate("autostart", "Automatic updates: on") if on
+        else QCoreApplication.translate("autostart", "Automatic updates: off"))
 
 
 def _set_autoupdate_checked(win, on: bool):
@@ -249,10 +256,10 @@ def on_autoupdate_toggled(win, on: bool):
             auth._query_auth_status(win)
         else:
             # Offer to enable BOTH at once, with the shared consent caveat.
-            if auth._confirm_passwordless(win,
-                    lead="Automatic updates need OneUp to run without a password.\n\n"):
-                auth._run_auth(win, "--grant-auth",
-                               "Setting up… (approve the password popup)")
+            if auth._confirm_passwordless(win, lead=QCoreApplication.translate(
+                    "autostart", "Automatic updates need OneUp to run without a password.\n\n")):
+                auth._run_auth(win, "--grant-auth", QCoreApplication.translate(
+                    "auth", "Setting up… (approve the password popup)"))
                 # _run_auth -> _on_auth_finished -> _query_auth_status -> settle installs.
             else:
                 win._pending_autoupdate = False
@@ -267,7 +274,9 @@ def on_autoupdate_toggled(win, on: bool):
 
 def _refresh_startboot_label(win):
     win.startboot_btn.setText(
-        "Start at boot: on" if win.startboot_btn.isChecked() else "Start at boot: off")
+        QCoreApplication.translate("autostart", "Start at boot: on")
+        if win.startboot_btn.isChecked()
+        else QCoreApplication.translate("autostart", "Start at boot: off"))
 
 
 def _set_startboot_checked(win, on: bool):

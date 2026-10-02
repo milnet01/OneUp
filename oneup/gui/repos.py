@@ -13,7 +13,7 @@ import shutil
 import subprocess
 from collections import Counter
 
-from PySide6.QtCore import QByteArray, QProcess, QSettings, Qt
+from PySide6.QtCore import QByteArray, QCoreApplication, QProcess, QSettings, Qt
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -62,28 +62,33 @@ def _repo_purpose(repo: dict) -> str:
     narrower patterns (debug, source) come before the broad ones (oss)."""
     hay = f"{repo['alias']} {repo['name']} {repo['url']}".lower()
     if "debug" in hay:
-        return "Debug symbols — for diagnosing crashes. Usually left off."
+        return QCoreApplication.translate(
+            "repos", "Debug symbols — for diagnosing crashes. Usually left off.")
     if "source" in hay or "/src" in hay:
-        return "Source-code packages — for building software yourself. Usually left off."
+        return QCoreApplication.translate(
+            "repos", "Source-code packages — for building software yourself. Usually left off.")
     if "packman" in hay:
-        return "Packman — extra multimedia codecs and media apps."
+        return QCoreApplication.translate(
+            "repos", "Packman — extra multimedia codecs and media apps.")
     if "nvidia" in hay:
-        return "NVIDIA graphics drivers."
+        return QCoreApplication.translate("repos", "NVIDIA graphics drivers.")
     if "packages.microsoft.com" in hay or "vscode" in hay:
-        return "Microsoft — e.g. Visual Studio Code."
+        return QCoreApplication.translate("repos", "Microsoft — e.g. Visual Studio Code.")
     if "dl.google.com" in hay or "google-chrome" in hay:
-        return "Google Chrome browser."
+        return QCoreApplication.translate("repos", "Google Chrome browser.")
     if "brave" in hay:
-        return "Brave browser."
+        return QCoreApplication.translate("repos", "Brave browser.")
     if "non-oss" in hay or "nonoss" in hay:
-        return "Non-open-source packages — some drivers, firmware and codecs."
+        return QCoreApplication.translate(
+            "repos", "Non-open-source packages — some drivers, firmware and codecs.")
     if "update" in hay:
-        return "Official security and bug-fix updates."
+        return QCoreApplication.translate("repos", "Official security and bug-fix updates.")
     if "home:" in hay or "/repositories/" in hay:
-        return "Community package repository (openSUSE Build Service)."
+        return QCoreApplication.translate(
+            "repos", "Community package repository (openSUSE Build Service).")
     if "oss" in hay or "repo-main" in hay or "-main" in hay:
-        return "Main openSUSE package collection."
-    return "Software package repository."
+        return QCoreApplication.translate("repos", "Main openSUSE package collection.")
+    return QCoreApplication.translate("repos", "Software package repository.")
 
 
 def read_repos() -> list[dict]:
@@ -107,7 +112,7 @@ class RepoManagerDialog(QDialog):
 
     def __init__(self, parent, repos: list[dict]):
         super().__init__(parent)
-        self.setWindowTitle("Repositories")
+        self.setWindowTitle(QCoreApplication.translate("repos", "Repositories"))
         self.setMinimumWidth(720)   # wide enough that repo URLs aren't cut off
         self._rows: list[dict] = []   # {repo, switch, remove(bool), frame, rm}
         self._repos = repos           # the state the rows were built from
@@ -123,9 +128,11 @@ class RepoManagerDialog(QDialog):
 
         root = QVBoxLayout(self)
         intro = QLabel(
-            "Turn repositories on or off. ⚠ marks a URL used by more than one "
-            "repository — a common cause of update conflicts; you can remove the "
-            "extra copy. Nothing changes until you press Apply.")
+            QCoreApplication.translate(
+                "repos",
+                "Turn repositories on or off. ⚠ marks a URL used by more than one "
+                "repository — a common cause of update conflicts; you can remove "
+                "the extra copy. Nothing changes until you press Apply."))
         intro.setWordWrap(True)
         root.addWidget(intro)
 
@@ -136,7 +143,7 @@ class RepoManagerDialog(QDialog):
         scroll.setObjectName("RepoScroll")
         scroll.setWidgetResizable(True)
         scroll.setMinimumHeight(280)
-        scroll.setAccessibleName("Repository list")
+        scroll.setAccessibleName(QCoreApplication.translate("repos", "Repository list"))
         # Named `repo_scroll`, not `scroll`: a plain `self.scroll` shadows the
         # inherited QWidget.scroll(dx, dy), so any later call to it would raise
         # TypeError. Matches `detail_scroll` in task_row.py.
@@ -149,10 +156,10 @@ class RepoManagerDialog(QDialog):
         btns = QHBoxLayout(strip)
         btns.setContentsMargins(0, 0, 0, 0)
         btns.addStretch(1)
-        self.apply_btn = QPushButton("Apply changes")
+        self.apply_btn = QPushButton(QCoreApplication.translate("repos", "Apply changes"))
         self.apply_btn.setObjectName("RunBtn")
         self.apply_btn.clicked.connect(self._apply)
-        self.close_btn = QPushButton("Close")
+        self.close_btn = QPushButton(QCoreApplication.translate("repos", "Close"))
         self.close_btn.setObjectName("GhostBtn")
         self.close_btn.clicked.connect(self.reject)
         btns.addWidget(self.apply_btn)
@@ -184,7 +191,8 @@ class RepoManagerDialog(QDialog):
 
         text = QVBoxLayout()
         text.setSpacing(1)
-        name = QLabel(("⚠  " if is_dup else "") + repo["name"])
+        name = QLabel(QCoreApplication.translate("repos", "⚠  {name}").format(name=repo["name"])
+                      if is_dup else repo["name"])
         name.setObjectName("TaskName")
         # A plain-English line describing what the repo is for, then its URL (dim).
         purpose = QLabel(_repo_purpose(repo))
@@ -199,7 +207,7 @@ class RepoManagerDialog(QDialog):
 
         entry: dict = {"repo": repo, "remove": False, "frame": fr, "rm": None}
         if is_dup:
-            rm = QPushButton("Remove")
+            rm = QPushButton(QCoreApplication.translate("repos", "Remove"))
             entry["rm"] = rm
             rm.setObjectName("LinkBtn")
             rm.setCursor(Qt.PointingHandCursor)
@@ -209,7 +217,9 @@ class RepoManagerDialog(QDialog):
         switch.setChecked(repo["enabled"])
         # Named, but NOT with the on/off state baked in ("… — enabled" would
         # announce "enabled" for a disabled repo). Qt reports checked state itself.
-        switch.setAccessibleName(f"{repo['name']} — include this repository")
+        switch.setAccessibleName(QCoreApplication.translate(
+            "repos",
+            "{value} — include this repository").format(value=repo['name']))
         lay.addWidget(switch, 0, Qt.AlignVCenter)
         entry["switch"] = switch
         self._rows.append(entry)
@@ -257,13 +267,17 @@ class RepoManagerDialog(QDialog):
             self.accept()
             return
         if cmd is None:
-            QMessageBox.warning(self, "Repositories",
-                                "A repository name looked unsafe — nothing was changed.")
+            QMessageBox.warning(self, QCoreApplication.translate("repos", "Repositories"),
+                                QCoreApplication.translate(
+                                    "repos",
+                                    "A repository name looked unsafe — nothing was changed."))
             return
         if QMessageBox.question(
-                self, "Apply repository changes",
-                "OneUp will apply your repository changes. This needs administrator "
-                "rights and is reversible.\n\nApply now?",
+                self, QCoreApplication.translate("repos", "Apply repository changes"),
+                QCoreApplication.translate(
+                    "repos",
+                    "OneUp will apply your repository changes. This needs "
+                    "administrator rights and is reversible.\n\nApply now?"),
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
         self.apply_btn.setEnabled(False)
@@ -273,7 +287,10 @@ class RepoManagerDialog(QDialog):
 
     def _on_applied(self, code: int, _status):
         if code == 0:
-            QMessageBox.information(self, "Repositories", "Repository changes applied.")
+            QMessageBox.information(self, QCoreApplication.translate(
+                "repos", "Repositories"), QCoreApplication.translate(
+                "repos",
+                "Repository changes applied."))
             self.accept()
             return
         # ONEUP-0157: the sub-commands run in sequence, so a failure part-way leaves
@@ -281,19 +298,26 @@ class RepoManagerDialog(QDialog):
         before = {r["alias"]: r["enabled"] for r in self._repos}
         now_repos = read_repos()
         if not now_repos:
-            text = ("Couldn't apply every change, and couldn't re-read the repositories "
-                    "to check what did change. Close and reopen this window to see.")
+            text = QCoreApplication.translate(
+                "repos",
+                "Couldn't apply every change, and couldn't re-read the repositories "
+                "to check what did change. Close and reopen this window to see.")
         else:
             now = {r["alias"]: r["enabled"] for r in now_repos}
             if now != before:
-                text = ("Some of the changes were applied and some weren't. The list "
-                        "now shows each repository as it actually is.")
+                text = QCoreApplication.translate(
+                    "repos",
+                    "Some of the changes were applied and some weren't. The list "
+                    "now shows each repository as it actually is.")
             elif code in (126, 127):   # pkexec: prompt dismissed, or not authorised
-                text = "Nothing was changed — the administrator prompt was cancelled or refused."
+                text = QCoreApplication.translate(
+                    "repos",
+                    "Nothing was changed — the administrator prompt was cancelled or refused.")
             else:
-                text = "Nothing was changed — the repository commands failed."
+                text = QCoreApplication.translate(
+                    "repos", "Nothing was changed — the repository commands failed.")
             self._populate(now_repos)
-        QMessageBox.warning(self, "Repositories", text)
+        QMessageBox.warning(self, QCoreApplication.translate("repos", "Repositories"), text)
         self.apply_btn.setEnabled(True)
 
     def showEvent(self, event):

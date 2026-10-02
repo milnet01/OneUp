@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QLibraryInfo, QLocale, QTranslator
+from PySide6.QtCore import QCoreApplication, QLibraryInfo, QLocale, QObject, QTranslator
 
 from . import paths
 
@@ -66,3 +66,70 @@ def unload() -> None:
         for translator in _installed:
             app.removeTranslator(translator)
     _installed.clear()
+
+
+def join_names(names) -> str:
+    """Join a list of names a user reads — services, software sources — with the
+    language's own separator. A literal ", " is English: a CJK catalogue joins with
+    "、" (ONEUP-0032 §4.5), so the separator is itself a translatable string."""
+    return QCoreApplication.translate("i18n", ", ", "separator between names in a list").join(names)
+
+
+class _Counted(QObject):
+    """Every sentence that carries a count, in one place.
+
+    `self.tr(…, "", n)` is the only spelling `pyside6-lupdate` marks as a plural
+    (measured 2026-10-02 on PySide6 6.11: `QCoreApplication.translate` with a count
+    extracts as an ordinary message, and PySide6 has no `QT_TRANSLATE_N_NOOP`), so a
+    language with several plural forms gets them only through a class method. Each
+    entry is a lambda so only the one asked for is translated. `%n` is the count;
+    any other value is a named field the caller fills with `.format`.
+    """
+
+    def phrase(self, key: str, n: int) -> str:
+        return {
+            "updates-partial": lambda: self.tr(
+                "%n update(s) found, but some sources couldn't be checked.", "", n),
+            "updates-available-run": lambda: self.tr(
+                "%n update(s) available — turn on what you want and hit Run.", "", n),
+            "updates-available": lambda: self.tr("%n update(s) available.", "", n),
+            "updates-installed": lambda: self.tr("%n update(s) installed", "", n),
+            "sources-set-aside": lambda: self.tr(" %n source(s) set aside: {names}.", "", n),
+            "reboot-updates-installed": lambda: self.tr(
+                "⚠  %n update(s) installed — restart so everything uses the latest "
+                "libraries.", "", n),
+            "services-restart": lambda: self.tr(
+                "%n service(s) should restart to use the new libraries.", "", n),
+            "services-restart-no-reboot": lambda: self.tr(
+                "No reboot needed — but %n service(s) should restart to use the new "
+                "libraries.", "", n),
+            "services-session": lambda: self.tr(
+                "⚠  %n service(s) still using the old libraries are part of your "
+                "desktop session — restart the computer to finish.", "", n),
+            "tray-waiting": lambda: self.tr("{app} — %n update(s) waiting", "", n),
+            "tray-waiting-partial": lambda: self.tr(
+                "{app} — %n update(s) waiting (some sources couldn't be checked)", "", n),
+            "snapshots-thinned": lambda: self.tr("Thinned %n old snapshot(s).", "", n),
+            "days-ago": lambda: self.tr("%n days ago", "", n),
+            # No %n: the count picks the verb, not a number shown. Qt selects the
+            # plural form from n all the same (ONEUP-0108 §4.2).
+            "reboot-installed": lambda: self.tr("{items} were installed", "", n),
+            "notify-installed": lambda: self.tr(
+                "%n system package(s) installed.{skipped}", "", n),
+            "notify-available": lambda: self.tr(
+                "%n update(s) ready to install. Open OneUp to update.", "", n),
+            "notify-partial-count": lambda: self.tr(
+                "%n update(s) ready to install, and there may be more. {reasons} "
+                "Open OneUp to update.", "", n),
+        }[key]()
+
+
+_counted: _Counted | None = None
+
+
+def counted(key: str, n: int) -> str:
+    """The sentence `key` for a count of `n`, in the plural form the language needs."""
+    global _counted
+    if _counted is None:
+        _counted = _Counted()
+    return _counted.phrase(key, n)
