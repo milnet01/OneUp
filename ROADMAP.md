@@ -3837,11 +3837,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   the fix. Related and smaller: `task_row.py:68` and `:100` build a sentence with
   `title.lower()`, which is locale-naive (Turkish dotted/dotless I) on a fragment
   that is meant to become translatable.
+  Open question for the user (2026-10-02), not yet decided: QLocale().toString
+  (ShortFormat) would turn this machine's "02 Oct 2026, 14:05" into
+  "2026/10/02 14:05" (LC_TIME=en_ZA), a visible change. Options: (a) full
+  locale format; (b) keep day-month-name-year but take the month name from
+  the locale. Recommendation to put: (b), readable for a low-vision user and
+  still translated. Ask before building.
   **Layman:** The date on the last-run line is always in English and always day-month-year.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-window.
 
-- 📋 [ONEUP-0184] **Non-atomic writes and unguarded state access in the window's peripheral services.**
+- ✅ [ONEUP-0184] **Non-atomic writes and unguarded state access in the window's peripheral services.**
   `autostart.py:94` and `:138` write the systemd unit and the .desktop entry with a
   bare `write_text`, so a failure part-way leaves a truncated unit systemd refuses.
   `window.py:777` does the same for the run history, which then reads as "never".
@@ -3851,6 +3857,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   wraps its glob, so a log rotated away mid-call raises out of a button handler.
   And several `mkdir`/`write_text` calls under the state directory are unguarded,
   so a full or read-only disk throws out of a timer or slot rather than degrading.
+  Resolved (2026-10-02): main 22601c8, merged to v2. Unit, autostart entry
+  and history.json written whole (temp file + rename; now 0600). Saved
+  geometry restored only when it is a QByteArray, in the repos dialog and
+  the main window, which had the same line. _latest_run_log skips a log
+  that vanished mid-call. Every launcher checks the log folder before
+  changing state; a failed grant puts both toggles back.
   **Layman:** Several small files the app writes can be left half-written, and one bad saved value can stop a dialog opening.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-services.
@@ -6388,6 +6400,11 @@ when complete (that document's §7).
   converting now puts ONEUP-0108's fallback on every badge of an ordinary run.
   Spec §3's first row says the same: the conversion follows the rewrite's gate.
   User chose to do the stage-8 real run (G6) now; stage 9 then this item.
+  Status note (2026-10-02): this spec and ONEUP-0108's both still read Draft
+  after their review runs ended at the cap. documentation.md §3 says Draft
+  forbids implementation; review-contract says a capped spec takes the ready
+  value (ONEUP-0032 was set Reviewed on that ground today). Set both to
+  Reviewed, or ask the user, before building them after ONEUP-0054 stage 9.
 
 - 📋 [ONEUP-0074] **A run the user stopped notifies "Already up to date".**
   Found while writing docs/specs/ONEUP-0072-marker-codes.md; filed by that
