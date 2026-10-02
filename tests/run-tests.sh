@@ -2287,6 +2287,40 @@ check "orphan autoremove reports count" "@@STEP_END@@|orphans|ok|removed 2 packa
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0226. zypper prints two progress lines on stdout BEFORE its table, so skipping
+# two lines landed on the heading row and the step tried to remove a package called
+# "Name" — seen in a real run's log on 2026-10-02, where the removal was then marked
+# failed although the real package had gone. The mocks above print the heading as
+# line 1, which is why nothing caught it; this one replays zypper's real output, and
+# its `remove` refuses "Name" the way the real one does.
+echo "TEST: the orphans step reads zypper's real table, progress lines and all (ONEUP-0226)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+table() {
+  printf 'Loading repository data...\nReading installed packages...\n'
+  printf 'S  | Repository | Name   | Version | Arch\n'
+  printf -- '---+------------+--------+---------+-------\n'
+  printf 'i  | %-10s | %-6s | 1.0-1.1 | x86_64\n' "$1" "$2"
+}
+case "$*" in
+  *packages*--unneeded*) table repo-oss libfoo; exit 0 ;;
+  *packages*--orphaned*) table @System libbar; exit 0 ;;
+  *remove*)
+    if [[ " $* " == *" Name "* ]]; then echo "'Name' not found in package names."; exit 104; fi
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=orphans)
+check "only the real package is removed" \
+      "@@STEP_END@@|orphans|ok|removed 1 package(s)" "$out"
+check "the no-repository count leaves out the heading" \
+      "Note: 1 package(s) have no active repository" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: a FAILED orphan removal is marked fail, not success (it deletes packages)"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'

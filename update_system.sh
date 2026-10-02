@@ -2132,8 +2132,12 @@ if step_selected orphans && ! stop_pending; then
         echo "Couldn't list leftover dependency packages (zypper exit $UNNEEDED_QUERY_RC)."
         end_step orphans fail "couldn't list leftover packages"
     else
+    # Rows start after the `---+---` line under the heading. zypper prints progress
+    # lines on stdout before the table, so a fixed line count lands on the heading
+    # and reads its "Name" as a package (ONEUP-0226).
     mapfile -t UNNEEDED < <(awk -F'|' \
-        'NR>2 && $3 !~ /^[[:space:]]*$/ {gsub(/ /,"",$3); print $3}' <<<"$UNNEEDED_RAW")
+        '/^-+\+/ {rows=1; next} rows && $3 !~ /^[[:space:]]*$/ {gsub(/ /,"",$3); print $3}' \
+        <<<"$UNNEEDED_RAW")
     # Shape-checked before it reaches a ROOT `zypper remove`, for the same reason
     # valid_alias exists: this column is parsed out of zypper's own table, which
     # security.md §4 names as untrusted. Fail CLOSED (§4.2) — dropping the bad row
@@ -2166,7 +2170,8 @@ if step_selected orphans && ! stop_pending; then
     fi
     # Report-only: packages with no active repo (do NOT auto-remove these).
     sudo_capture ORPHAN_RAW zypper --non-interactive --no-refresh packages --orphaned
-    ORPHAN_COUNT=$(awk -F'|' 'NR>2 && $3 !~ /^[[:space:]]*$/' <<<"$ORPHAN_RAW" | wc -l)
+    ORPHAN_COUNT=$(awk -F'|' '/^-+\+/ {rows=1; next} rows && $3 !~ /^[[:space:]]*$/' \
+                   <<<"$ORPHAN_RAW" | wc -l)
     if ((ORPHAN_COUNT > 0)); then
         echo
         echo "Note: $ORPHAN_COUNT package(s) have no active repository (possibly"

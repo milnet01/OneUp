@@ -44,6 +44,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Removing leftover packages no longer fails on a package called "Name"** (ONEUP-0226)
+  OneUp read the heading of the package manager's list as a package,
+  tried to remove it, and marked the step failed even though the real
+  packages were removed. The count of packages with no active source
+  was also one too high. Both now read only the list's rows.
+
 - **The Flatpak step no longer says "up to date" right after updating an app** (ONEUP-0146)
   When one Flatpak source couldn't be read — a leftover from an app
   installed from a file is enough — OneUp lost count of every other
