@@ -403,6 +403,35 @@ emit_check() {  # key, count, label, [what-was-unreadable]
     fi
 }
 
+# Read-only: what would `flatpak update` change? Sets FLATPAK_ROWS (one
+# "app-id version" line per pending update) and FLATPAK_UNREACHABLE (the remotes
+# that could not be asked, comma-separated). Both --check and the run count this
+# way. `flatpak remote-ls --updates` with no remote named abandons the WHOLE
+# listing — exit 1, empty stdout — the moment any single remote can't be
+# summarised, and a local `--no-enumerate` origin (what `flatpak install
+# ./app.flatpak` leaves behind) never can be. Measured: six such leftovers on one
+# box hid a real Discord update behind "0" for weeks. Per-remote, one broken
+# source costs only itself. --columns pins the output to app-id + version so count
+# and detail parse the same way on any flatpak build.
+flatpak_updates() {
+    FLATPAK_ROWS="" FLATPAK_UNREACHABLE=""
+    local scope remote opts rows
+    for scope in --user --system; do
+        while IFS=$'\t' read -r remote opts; do
+            [[ -n "$remote" ]] || continue
+            if rows=$(flatpak remote-ls --updates "$scope" "$remote" \
+                          --columns=application,version 2>/dev/null); then
+                [[ -n "$rows" ]] && FLATPAK_ROWS+="$rows"$'\n'
+            elif [[ "$opts" != *no-enumerate* ]]; then
+                # A no-enumerate origin serves no listing BY DESIGN — apps installed
+                # from a local file have no remote updates to miss, so it is not a
+                # failed check. Any other remote failing means apps went uncounted.
+                FLATPAK_UNREACHABLE+="${FLATPAK_UNREACHABLE:+, }$remote"
+            fi
+        done < <(flatpak remotes "$scope" --columns=name,options 2>/dev/null)
+    done
+}
+
 # ---------------------------------------------------------------------------
 # --check: read-only "what would update?" pass. Deliberately avoids root (and a
 # password popup) so an unattended timer can run it; it reads cached repo
@@ -454,28 +483,8 @@ run_check() {
         (( total += n ))
     fi
     if step_selected flatpak && command -v flatpak &>/dev/null; then
-        # Ask each remote for its own updates. `flatpak remote-ls --updates` with no
-        # remote named abandons the WHOLE listing — exit 1, empty stdout — the moment
-        # any single remote can't be summarised, and a local `--no-enumerate` origin
-        # (what `flatpak install ./app.flatpak` leaves behind) never can be. Measured:
-        # six such leftovers on one box hid a real Discord update behind "0" for weeks.
-        # Per-remote, one broken source costs only itself. --columns pins the output to
-        # app-id + version so count and detail parse the same way on any flatpak build.
-        local flatpaks="" scope remote opts rows unreadable=""
-        for scope in --user --system; do
-            while IFS=$'\t' read -r remote opts; do
-                [[ -n "$remote" ]] || continue
-                if rows=$(flatpak remote-ls --updates "$scope" "$remote" \
-                              --columns=application,version 2>/dev/null); then
-                    [[ -n "$rows" ]] && flatpaks+="$rows"$'\n'
-                elif [[ "$opts" != *no-enumerate* ]]; then
-                    # A no-enumerate origin serves no listing BY DESIGN — apps installed
-                    # from a local file have no remote updates to miss, so it is not a
-                    # failed check. Any other remote failing means apps went uncounted.
-                    unreadable+="${unreadable:+, }$remote"
-                fi
-            done < <(flatpak remotes "$scope" --columns=name,options 2>/dev/null)
-        done
+        flatpak_updates       # asks each remote separately — see the function
+        local flatpaks="$FLATPAK_ROWS" unreadable="$FLATPAK_UNREACHABLE"
         n=$(grep -c '[^[:space:]]' <<<"$flatpaks")
         if [[ -n "$unreadable" ]]; then
             unreadable="OneUp couldn't reach these Flatpak sources: $unreadable — this list may be incomplete."
@@ -1791,8 +1800,8 @@ if step_selected flatpak && ! stop_pending; then
         ok=true
         # Count what will update first (same read-only check --check uses), so the
         # summary and GUI can report how many apps were updated, not just "done".
-        flat_count=$(( $(flatpak remote-ls --updates --user 2>/dev/null | wc -l) \
-                     + $(flatpak remote-ls --updates --system 2>/dev/null | wc -l) ))
+        flatpak_updates
+        flat_count=$(grep -c '[^[:space:]]' <<<"$FLATPAK_ROWS")
         flatpak update --user -y || ok=false
         sudo flatpak update --system -y || ok=false
         echo "Cleaning up unused Flatpak runtimes..."

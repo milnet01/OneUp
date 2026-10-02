@@ -2057,6 +2057,7 @@ d=$(mktemp -d); setup_common "$d"
 cat > "$d/flatpak" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
+  *remotes*)                      printf 'flathub\t\n'; exit 0 ;;             # one per scope
   *remote-ls*--updates*--user*)   printf 'org.x.App\norg.y.App\n'; exit 0 ;;  # 2 user
   *remote-ls*--updates*--system*) printf 'org.z.App\n'; exit 0 ;;             # 1 system
   *) exit 0 ;;                                                                # update/uninstall
@@ -2065,6 +2066,31 @@ EOF
 chmod +x "$d/flatpak"
 out=$(run_engine "$d" --steps=flatpak)
 check "flatpak reports updated count" "@@STEP_END@@|flatpak|ok|3 app(s) updated" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# The run counts the way the check does — remote by remote (ONEUP-0146). Asked with no
+# remote named, `remote-ls --updates` abandons the whole listing when any one remote
+# can't be summarised, so the step said "up to date" right after updating an app. The
+# mock models that: the bulk query fails, the per-remote one for flathub answers.
+echo "TEST: the flatpak run counts updates even when one remote is unreadable"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/flatpak" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  remotes)
+    [[ "$*" == *--user* ]] && printf 'flathub\t\nbroken-origin\tno-enumerate,no-gpg-verify\n'
+    exit 0 ;;
+  remote-ls)
+    if [[ "$*" == *flathub* ]]; then echo "com.discordapp.Discord 1.0.150"; exit 0; fi
+    echo "error: Unable to load summary from remote broken-origin" >&2; exit 1 ;;
+esac
+exit 0                                                                        # update/uninstall
+EOF
+chmod +x "$d/flatpak"
+out=$(run_engine "$d" --steps=flatpak)
+check "the working remote's update is counted" \
+      "@@STEP_END@@|flatpak|ok|1 app(s) updated" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
