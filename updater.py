@@ -91,6 +91,14 @@ from PySide6.QtWidgets import (
 )
 
 APP_ID = "za.co.antsprojectshub.OneUp"
+
+# The two weekly timers: basename -> (unit Description, headless flag). One table, so
+# installing a timer and refreshing an installed one write the same unit (ONEUP-0158).
+TIMERS = {
+    "oneup-check": ("OneUp weekly update check", "--check"),
+    "oneup-update": ("OneUp weekly automatic update", "--update"),
+}
+
 APP_NAME = "OneUp"
 APP_VERSION = "1.4.5"
 REPO_SLUG = "milnet01/OneUp"
@@ -1492,6 +1500,7 @@ class Updater(QMainWindow):
         titleblock.addWidget(header)
         titleblock.addWidget(tagline)
 
+        self._refresh_stale_launchers()
         self.auto_btn = QPushButton()
         self.auto_btn.setObjectName("GhostBtn")
         self.auto_btn.setCheckable(True)
@@ -2102,6 +2111,12 @@ for (var i = 0; i < wins.length; i++) {{
             return f"{_arg(launcher)} {flag}"
         return f"{_arg(sys.executable)} {_arg(Path(__file__).resolve())} {flag}"
 
+    @classmethod
+    def _timer_service_text(cls, description: str, flag: str) -> str:
+        return (f"[Unit]\nDescription={description}\n\n"
+                f"[Service]\nType=oneshot\n"
+                f"ExecStart={cls._headless_command(flag)}\n")
+
     def _autostart_path(self) -> Path:
         return Path.home() / ".config" / "autostart" / f"{APP_ID}-tray.desktop"
 
@@ -2141,23 +2156,46 @@ for (var i = 0; i < wins.length; i++) {{
             return f"{_arg(launcher)} --tray"
         return f"{_arg(sys.executable)} {_arg(Path(__file__).resolve())} --tray"
 
+    @classmethod
+    def _autostart_text(cls) -> str:
+        return ("[Desktop Entry]\n"
+                "Type=Application\n"
+                "Name=OneUp (tray)\n"
+                "Comment=OneUp update status in the system tray\n"
+                f"Exec={cls._autostart_exec()}\n"
+                f"Icon={APP_ID}\n"
+                "Terminal=false\n"
+                "NoDisplay=true\n"
+                "X-GNOME-Autostart-enabled=true\n")
+
+    def _refresh_stale_launchers(self):
+        """ONEUP-0158: an installed start-at-boot entry or timer service names the
+        executable that was running when it was ENABLED. An AppImage upgrade deletes
+        that file, and both toggles keep reading on while nothing runs. So at startup,
+        rewrite any installed entry whose text differs from what this copy would write
+        now. Only entries that exist: enabling one stays the user's act."""
+        wanted = [(self._autostart_path(), self._autostart_text(), False)]
+        units = self._user_units_dir()
+        wanted += [(units / f"{base}.service", self._timer_service_text(*args), True)
+                   for base, args in TIMERS.items()]
+        reload = False
+        for path, text, is_unit in wanted:
+            try:
+                if path.is_file() and path.read_text() != text:
+                    path.write_text(text)
+                    reload = reload or is_unit
+            except OSError as exc:
+                print(f"OneUp: could not refresh {path}: {exc}", file=sys.stderr)
+        if reload:
+            subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+
     def _install_autostart(self) -> bool:
         """Write the autostart .desktop entry; return True iff it lands on disk.
         A plain file drop — no systemctl reload (unlike the update timers)."""
         path = self._autostart_path()
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(
-                "[Desktop Entry]\n"
-                "Type=Application\n"
-                "Name=OneUp (tray)\n"
-                "Comment=OneUp update status in the system tray\n"
-                f"Exec={self._autostart_exec()}\n"
-                f"Icon={APP_ID}\n"
-                "Terminal=false\n"
-                "NoDisplay=true\n"
-                "X-GNOME-Autostart-enabled=true\n"
-            )
+            path.write_text(self._autostart_text())
         except OSError as exc:
             QMessageBox.warning(self, "Could not change start-at-boot", str(exc))
             return False
@@ -2408,10 +2446,7 @@ for (var i = 0; i < wins.length; i++) {{
         try:
             units.mkdir(parents=True, exist_ok=True)
             (units / f"{basename}.service").write_text(
-                f"[Unit]\nDescription={description}\n\n"
-                f"[Service]\nType=oneshot\n"
-                f"ExecStart={self._headless_command(exec_flag)}\n"
-            )
+                self._timer_service_text(description, exec_flag))
             (units / f"{basename}.timer").write_text(
                 f"[Unit]\nDescription={description}\n\n"
                 "[Timer]\nOnCalendar=weekly\nPersistent=true\n\n"
@@ -2445,7 +2480,7 @@ for (var i = 0; i < wins.length; i++) {{
         # It deliberately does NOT revert its toggle on a failed install (see the
         # ONEUP-0022 spec's "Open questions" — hardening weekly-check is a separate item).
         if on:
-            self._install_user_timer("oneup-check", "OneUp weekly update check", "--check")
+            self._install_user_timer("oneup-check", *TIMERS["oneup-check"])
         else:
             self._remove_user_timer("oneup-check")
         self._refresh_autocheck_label()
@@ -2623,8 +2658,7 @@ for (var i = 0; i < wins.length; i++) {{
         if self._pending_autoupdate:
             self._pending_autoupdate = False        # consume unconditionally
             if is_on:
-                enabled = self._install_user_timer(
-                    "oneup-update", "OneUp weekly automatic update", "--update")
+                enabled = self._install_user_timer("oneup-update", *TIMERS["oneup-update"])
                 self._set_autoupdate_checked(enabled)
                 if not enabled:
                     QMessageBox.warning(
