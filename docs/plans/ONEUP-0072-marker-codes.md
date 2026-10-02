@@ -3,7 +3,7 @@
 **Specs:** [docs/specs/ONEUP-0072-marker-codes.md](../specs/ONEUP-0072-marker-codes.md) (the
 engine side) and [docs/specs/ONEUP-0108-window-wording.md](../specs/ONEUP-0108-window-wording.md)
 (the window side). One plan, because the two land in one commit (`docs/reference/marker-protocol.md` §5).
-**Status:** not started.
+**Status:** not started; gated (loop log below).
 
 ## Scope of this file
 
@@ -42,9 +42,13 @@ expects codes — ONEUP-0072 §6's last row, and the CHANGELOG says so (step 9).
    line says *"(see @@HINT@@ above)"*, which after this commit points at a bare code — so its
    hint passes the sentence too, and the line points at the hint rather than the marker.
 4. **The set-aside hint's alias list.** `Updated everything except: <aliases>` lists
-   repository aliases. `repos.valid_alias` forbids a space in one, so they travel as one
-   space-separated argument (§4.2's rule for values that cannot contain a space), which
-   keeps the code fixed-arity (ONEUP-0108 §4.1).
+   repository aliases. **This departs from ONEUP-0072 §4.2**, which sends any value
+   recovered from another tool's output one per trailing field: these aliases come from
+   zypper's `lr`, but `repos.DISABLED` is filled only by `disable_repo` after
+   `repos.valid_alias` has passed, and `valid_alias` forbids a space. So they travel as one
+   space-separated argument, which keeps the code fixed-arity (ONEUP-0108 §4.1, which
+   allows a variable tail only for two `CHECK_UNKNOWN` codes). The spec is not amended; this
+   plan records the ground.
 
 ## Steps
 
@@ -134,19 +138,27 @@ expects codes — ONEUP-0072 §6's last row, and the CHANGELOG says so (step 9).
    suites' reboot assertions to codes; the firmware-only reboot's standalone reason is
    asserted by no engine scenario today, so it gains one.
    → **verify:** the reboot banner reads as before for a kernel, a kernel and a driver, and
-   firmware; INV-2 and INV-3 pass and are seen red against a render keyed on the element
-   count; both suites green.
+   firmware; INV-2 is seen red against a hard-coded *were* and against counting only the
+   known components, and INV-3 against a render keyed on the element or component count;
+   both suites green.
 
 7. **The checks that cross families.** Steps 2–6 each converted their own family's
    assertions; this step adds what spans them.
    - `tests/run-tests.sh` (ONEUP-0072 INV-1, INV-2): a shape-or-membership check on the code
      field of every `HINT`, `REMEDY`, `STEP_END`, `CHECK_UNKNOWN` and `REBOOT` the suite
-     produces; a lock-holder name containing a `|`; `REBOOT|no` with one field; two source
-     names as two fields; and a direct emitter call raising on a middle `None`.
+     produces, **run over the six scenarios INV-1 names**, since the check is vacuous for a
+     family nothing emits: a failing step (`HINT`), *"a source too slow to refresh is
+     bounded, named, and offers the skip"* (`REMEDY`), any completed step (`STEP_END`),
+     *"--check reports an unreadable repository instead of claiming up to date"*
+     (`CHECK_UNKNOWN`), *"reboot advice NAMES the kernel and graphics driver that triggered
+     it"* (the components half of `REBOOT`) and step 6's firmware-only scenario (the
+     standalone half). Plus a lock-holder name containing a `|`; `REBOOT|no` with one field;
+     two source names as two fields; and a direct emitter call raising on a middle `None`.
    - `tests/gui-smoke.py` (ONEUP-0072 INV-4): the log pane still shows ordinary engine lines
-     verbatim and looks none up.
-   → **verify:** each new check seen red against the code with that behaviour removed; both
-   suites green.
+     verbatim and looks none up, and no **known** code field's raw text reaches any widget
+     but the log pane — ONEUP-0108 §4.3's bare-code fallbacks being the one exception.
+   → **verify:** the shape check seen red **once per family**, with that family's conversion
+   reverted; the other new checks seen red with their behaviour removed; both suites green.
 
 8. **Retire the differential harness (ONEUP-0072 §7).** Delete
    `tests/differential-test.sh`; remove it from `local-CI.sh` (its step and the
@@ -187,3 +199,4 @@ commit.
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-10-02 | 2 lanes, cold, each holding every question; genre pinned plan; Q1 0 · Q2 0 · Q3 4 · Q4 0 — 4 verified, 0 dismissed, all 4 fixed | First gate on this plan. **Both lanes led with the same defect**: steps 2–6 named verifies (INV-1–3, "the suite's assertions read codes") that only step 7 wrote, so no step could be confirmed done in order — each family's assertions and tests now move in the step that converts it, and step 7 keeps only what crosses families. One lane found step 8 would leave `docs/reference/marker-protocol.md`'s loop-log row naming the deleted harness, which `tests/docs-check.py` §9 reads (measured: that check skips no section) — the check now skips loop-log sections, and the design's G2 row stays as the gate's record. The other found the progress canary's own line pointing at "@@HINT@@ above", which would become a bare code; the site is named. A lane's open question became the fourth: hint codes are per sentence, not per call site (`_note`'s three callers; the download branch with and without a package name). Resolved clean: `repos.DISABLED` is filled only after `valid_alias` passes, so site 4's alias list cannot hold a space. Lane spend 1.15 + 1.08 USD |
+| 2 | 2026-10-02 | 2 lanes, cold, each holding every question; genre pinned plan; Q1 0 · Q2 2 · Q3 0 · Q4 2 — 4 verified, 0 dismissed, all 4 fixed. Cap reached (2 for a plan); the run files no tail and exits | **A calm cap: 1 of the 4 landed on text loop 1 wrote** — step 6's verify, rewritten last loop, promised INV-2 red against a render keyed on the element count, which is what INV-2 requires; it now names a hard-coded *were* and known-component counting, and keeps the element-count red for INV-3. Pre-existing: step 7's shape check named no scenario per family, which ONEUP-0072 INV-1 says makes it vacuous for an unemitted one — the six scenarios are now named and the red is per family; step 7's INV-4 bullet dropped the third assertion (no known code's raw text reaches a widget), now carried; and site 4's space-joined aliases contradict §4.2's one-per-field rule for another tool's output — now recorded as a deliberate departure on `valid_alias`'s ground. Open questions resolved clean: `steps.py`'s wrapped skip detail is "stopped before installing anything"; neither `CLAUDE.md` nor `README.md` names the harness; `run.py`'s warning banner does show `_unchecked`. **This loop's four fixes are read by no lane**; the build is their reader. Second share: every finding of the run fell in the armed document, a new one, so the share carries no information. Lane spend 0.94 + 0.96 USD |
