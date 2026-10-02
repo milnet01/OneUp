@@ -44,6 +44,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A run started from a terminal no longer asks for the password again, unseen, after five minutes** (ONEUP-0231)
+  When OneUp's updater was started from a terminal window, the helper
+  that keeps your password remembered was refreshing the wrong record.
+  After five minutes the real one ran out, and the next step that needed
+  it asked for the password in the terminal and waited there for five
+  minutes. The helper now stays with the terminal, so one password still
+  covers the whole run.
+
 - **A full or read-only disk, or a damaged settings value, no longer breaks OneUp's window** (ONEUP-0184)
   If the disk filled up while OneUp saved a file, the file could be left
   half-written, and a damaged saved window size could stop OneUp or the

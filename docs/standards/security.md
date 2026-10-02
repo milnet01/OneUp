@@ -200,11 +200,19 @@ owner. Write that down at the helper.
 
 **2.4 — Nothing the engine spawns may outlive it.** `cleanup`'s trap cannot run when the
 engine is `SIGKILL`ed, so the keep-alive **also watches the engine's pid and exits on its
-own**. It runs under `setsid` in its own process group so `cleanup` can kill the whole
-group (`kill -- -PGID`) — a plain `kill` on the subshell orphans the inner `sleep 50`,
-which reparents to `systemd --user` rather than to pid 1, so an orphan check written
-against pid 1 can never fire. The live idiom is polling `kill -0` on the captured engine
-pid, never a re-read of `$PPID`. It carries the tag `oneup-keepalive` in `$0` so a test can find it.
+own**. It runs in its own process group so `cleanup` can kill the whole group
+(`kill -- -PGID`) — a plain `kill` on the subshell orphans the inner `sleep 50`, which
+reparents to `systemd --user` rather than to pid 1, so an orphan check written against
+pid 1 can never fire. The live idiom is polling `kill -0` on the captured engine pid, never
+a re-read of `$PPID`. It carries the tag `oneup-keepalive` in `$0` so a test can find it.
+
+That group is a new process group, **never a new session**. Started from a terminal, sudo
+keys the cached credential to that terminal's session. A helper in a new session has no
+terminal, so its refresh renews a different record. Measured 2026-10-02 on a run started
+from Konsole: the real credential expired after five minutes, and the next call needing it
+prompted unseen in the terminal (ONEUP-0231). The Bash engine gets the group by turning on
+job control for that one launch (`set -m`), not with `setsid`; the Python engine passes
+`process_group=0`, not `start_new_session=True`.
 
 Measured: before this, two keep-alives were found still calling `sudo -n -v` every 50
 seconds, **40 minutes after** the runs that spawned them had been killed (ONEUP-0041). Any
@@ -626,6 +634,7 @@ developer happens to have granted passwordless. The incidents and the current li
 | §7.3 captured privileged output is not echoed to the log | nothing automatic — the §10 checklist is the only gate |
 | §8 supply chain | nothing automatic |
 | nothing the engine spawns outlives it | `tests/run-tests.sh` — the sudo keep-alive leaves no orphaned process when a run ends |
+| §2.4 a new process group, never a new session | `tests/run-tests.sh` — run under `script` for a real terminal, the keep-alive's refresh comes from the engine's session and terminal, and from a group that is not the engine's |
 
 **This is the best-gated standard in the set**, and the reason is worth copying rather than
 admiring: each rule was written so that breaking it produces a *visible symptom* — a second

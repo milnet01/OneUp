@@ -860,24 +860,31 @@ sudo_init() {
     # blip): a single miss must not permanently stop the keeper mid-run. cleanup kills
     # this loop when the script exits, so it never outlives the run.
     #
-    # setsid puts the loop in its own process group so cleanup can kill the WHOLE
-    # group (kill -- -PGID): a plain `kill $subshell` leaves the inner `sleep 50`
-    # orphaned (reparented to init, lingering up to 50s) after a cancelled run.
+    # `set -m` (job control, for this one launch) puts the loop in its own process
+    # group so cleanup can kill the WHOLE group (kill -- -PGID): a plain `kill
+    # $subshell` leaves the inner `sleep 50` orphaned (reparented to init, lingering
+    # up to 50s) after a cancelled run. A new process group, NOT a new session: with
+    # a terminal, sudo keys the cached credential to that terminal's session, and a
+    # `setsid` loop has no terminal — so it refreshed a different record, the real one
+    # expired after five minutes, and the next call needing it prompted unseen in the
+    # terminal (ONEUP-0231, measured on a run started from Konsole).
     # It also watches OUR pid and exits on its own once we're gone. cleanup's group
     # kill is the fast path, but a trap cannot run if the engine is SIGKILLed — and
     # then the loop ran forever: two of them were found still calling `sudo -n -v`
     # every 50 seconds, 40 minutes after the runs that spawned them were killed
     # (ONEUP-0041). $0 carries a grep-able tag so a test can identify these without
     # matching every `sleep 50` on the machine.
+    set -m
     # shellcheck disable=SC2016  # the single quotes are the point: "$1" and "$2" must reach
     # the INNER shell unexpanded, where they are the engine pid and the refresh interval
     # passed as arguments below.
-    setsid bash -c '
+    bash -c '
         while kill -0 "$1" 2>/dev/null; do
             sudo -n -v 2>/dev/null || true
             sleep "$2"
         done' oneup-keepalive "$$" "$KEEPALIVE_SECONDS" >/dev/null 2>&1 &
     SUDO_KEEPALIVE=$!
+    set +m
 }
 
 # Capture a privileged command's output without letting sudo re-authenticate:
@@ -917,7 +924,7 @@ sudo_capture() {
     return $_cap_rc
 }
 # Negative PID targets the keep-alive's process group (the loop shell + its sleep),
-# so nothing survives the run. See sudo_init for why setsid makes this a lone group.
+# so nothing survives the run. See sudo_init for why `set -m` makes this a lone group.
 # Re-enable every repo we disabled BEFORE killing the keep-alive (sudo cred still
 # warm), non-interactively (-n) so a cold-credential exit logs the manual fix
 # instead of blocking on a ksshaskpass popup inside the trap.

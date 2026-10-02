@@ -400,7 +400,7 @@ it calls the engine directly.
 
 **The keep-alive's scenario is the one existing scenario G1 permits to be replaced rather
 than carried, and the reason is worth stating.** *"the keep-alive exits on its own once the engine is gone
-(SIGKILL-proof)"* does not run the engine at all: it `sed`s the `setsid bash -c` block out
+(SIGKILL-proof)"* does not run the engine at all: it `sed`s the keep-alive's `bash -c` block out
 of `update_system.sh`, substitutes a shorter sleep, and executes that Bash fragment, so what
 it asserts is the `kill -0` guard **verbatim** — the exact mechanism this section proposes to
 delete. Against a Python engine it fails at its first step, on "could not find the keep-alive
@@ -727,7 +727,7 @@ When the switch lands in stage 9:
   §2.3 and §3 (the engine suite asserts on what `update_system.sh` prints; the throwaway-
   directory and mock-`PATH` figures; the keep-alive-guard scenario §4.3.5 replaces);
   `docs/standards/security.md` §1.3, §2.2, §2.4 and §6.3 — the Bash-imports-nothing framing,
-  and the three mechanisms this rewrite deletes (`sudo_capture`, the `setsid`
+  and the three mechanisms this rewrite deletes (`sudo_capture`, the
   `oneup-keepalive` loop, and `tee -a -p`); and `docs/standards/files-and-naming.md` §1
   and §7.
 - **`local-CI.sh` and `.github/workflows/release.yml`** — both name every suite by hand, so

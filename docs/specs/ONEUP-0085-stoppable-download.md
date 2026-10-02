@@ -111,7 +111,7 @@ partner — it stops the cache step discarding those bytes after a failed system
   outcome. Splitting the marker stream would break the GUI's step model
   (`marker-protocol.md` §3) for a change that is internal.
 - **Poll in the foreground; spawn no watcher.** The engine's existing precedent — the sudo
-  keep-alive in `sudo_init` — needs `setsid` and a process-group kill precisely because it
+  keep-alive in `sudo_init` — needs its own process group and a group kill precisely because it
   is a spawned helper that could outlive the run (§2.4 of `security.md`). This item needs no
   helper: the download runs as a background job of the engine and the engine's own
   foreground loop polls. Nothing is spawned, so nothing can be orphaned.
