@@ -633,12 +633,11 @@ through it alongside `--check`, a real update and a rollback offer.
 When the switch lands in stage 9:
 
 - **`docs/reference/marker-protocol.md`** — the "known drift in the engine's own header
-  comment" section (§7) dies with the Bash header it describes. **§5.1's freeze survives
-  stage 9**: only ONEUP-0072 may move the contract before the 2.0.0 tag, and §5.1 is
-  rewritten at the tag, not at the switch-over. That
-  section places one obligation on this work, and stage 9 discharges it: **ONEUP-0066** —
-  carry the *corrected* marker list into the Python engine's own header, rather than
-  copying the stale one forward.
+  comment" section (§7) shrinks to a note that the retained fallback's list is stale and
+  this reference is the authority. ONEUP-0066 is closed: the Python engine carries no
+  list, and `oneup/engine/markers.py` names this reference as the contract. **§5.1's
+  freeze survives stage 9**: only ONEUP-0072 may move the contract before the 2.0.0 tag,
+  and §5.1 is rewritten at the tag, not at the switch-over.
 - **`tests/docs-check.py`** — its marker gate reads `update_system.sh` for `marker NAME`
   call sites. Point it at the Python emitters in the same commit, or the contract stops
   being checked at the moment it is most likely to move.
@@ -647,9 +646,8 @@ When the switch lands in stage 9:
   the sudo one becomes a property (§4.3.1), the `tee` one becomes `BrokenPipeError`
   handling.
 - **`README.md`** — the standalone-engine instructions name `update_system.sh`.
-- **`CHANGELOG.md`** and the **six version sites** — a major bump to **2.0.0**, which is
-  also the honest signal: the engine anyone shelling out to OneUp depended on has changed.
-  `docs/standards/workflow.md` §5.1 owns the lockstep.
+- **`CHANGELOG.md`** — an `[Unreleased]` entry. The six version sites move to **2.0.0**
+  at the release, not here (§4.6); `docs/standards/workflow.md` §5.1 owns the lockstep.
 - **The standards that describe the Bash engine as current.** Design §7's G9 requires them
   current at the tag, and this work is what makes them stale: `docs/standards/testing.md` §1,
   §2.3 and §3 (the engine suite asserts on what `update_system.sh` prints; the throwaway-
@@ -702,3 +700,4 @@ When the switch lands in stage 9:
 | 6 | 2026-07-27 | 4 high, 5 medium, 8 low — **15 verified, 2 dismissed** | No critical. §4.2 said two functions cross a module boundary; four do, and the one that matters is `cleanup` — it deletes the state files, re-enables every disabled repository and reaps the keep-alive, which is three of this spec's own modules. The repo re-enable has a scenario guarding it and is exactly what gets lost when one function is split three ways. §8 also listed no CI script, so the two test programmes this spec commissions would have run nowhere — `workflow.md` §10 names that as a trap by name. Two passages still described `marker-protocol.md` §8 as pinning the layout nowhere; it now points here |
 | 7 | 2026-07-27 | 1 critical, 4 high, 5 medium, 5 low — **13 verified, 2 dismissed** | The critical came from the design's own previous loop: §4.1 still froze the state files' *location* when ONEUP-0059 moves it, in both halves, four items before this one starts. An implementer building `runstate.py` would have hard-coded the path 0059 had just changed. Two module placements were wrong for the same reason — `reboot_reason_from_log` reads a file and `notify_send` emits no marker, so neither belonged where it sat — and `__main__.py`'s run driver and final summary, which emit half the markers INV-1 and INV-2 assert on, were owed by no stage at all |
 | 8 | 2026-07-27 | **none verified** (one raised and dropped — see the design's loop 9 row) | **Converged.** `Draft` → `Reviewed`; implementation of ONEUP-0054 is unblocked |
+| 9 | 2026-10-02 | 2 verified in this document, as the companion of an admitted pair whose subject was the build plan (the plan's loop log, row 15, carries the run) | §4.7 was amended for stage 9 (the AppImage runs a copy of the engine outside its bundle; the switch variable goes). Both lanes read it cold. Two §8 bullets were fixed: ONEUP-0066's obligation to carry a marker list into the Python engine, which that item closed the other way, and a 2.0.0 bump at stage 9 that §4.6 puts at the release |
