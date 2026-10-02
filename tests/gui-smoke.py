@@ -376,10 +376,17 @@ def main() -> int:
     # placement), which is why every dialog opened away from the window. X11 still moves
     # directly; Wayland has to ask KWin, so the one thing to prove here is that each
     # session type takes its own path and neither throws.
+    # ONEUP-0181: the session is Qt's platform plugin, not XDG_SESSION_TYPE — a Wayland
+    # session launched without that variable would take the X11 branch, where move() is
+    # accepted and ignored. The platform name is stubbed through updater._platform_name.
     _orig_session = os.environ.get("XDG_SESSION_TYPE", "")
+    _orig_platform = getattr(updater, "_platform_name", None)
     try:
-        os.environ["XDG_SESSION_TYPE"] = "x11"
-        check("the session type is read from the environment", not updater._on_wayland())
+        os.environ["XDG_SESSION_TYPE"] = "wayland"
+        updater._platform_name = lambda: "xcb"
+        check("the session follows Qt's platform, not XDG_SESSION_TYPE (ONEUP-0181)",
+              not updater._on_wayland())
+        os.environ["XDG_SESSION_TYPE"] = "x11"     # both signals agree from here on
         host = updater.QWidget()
         host.setGeometry(100, 100, 800, 600)
         dlg = updater.QDialog(host)
@@ -388,14 +395,23 @@ def main() -> int:
         check("on X11 a dialog is moved onto its parent's centre",
               abs(dlg.frameGeometry().center().x() - host.frameGeometry().center().x()) <= 2
               and abs(dlg.frameGeometry().center().y() - host.frameGeometry().center().y()) <= 2)
-        os.environ["XDG_SESSION_TYPE"] = "wayland"
-        check("Wayland is detected", updater._on_wayland())
+        tall = updater.QDialog(host)
+        tall.resize(200, 4000)               # taller than any screen the suite runs on
+        updater.center_on_parent(tall)
+        area = host.screen().availableGeometry()
+        check("on X11 a dialog taller than its parent stays on the screen (ONEUP-0181)",
+              tall.frameGeometry().top() >= area.top())
+        os.environ["XDG_SESSION_TYPE"] = ""
+        updater._platform_name = lambda: "wayland"
+        check("Wayland is detected from the platform alone (ONEUP-0181)",
+              updater._on_wayland())
         moved_to = dlg.pos()
         updater.center_on_parent(dlg)   # queues a KWin request; must not move it itself
         check("on Wayland placement is left to the compositor, not a futile move()",
               dlg.pos() == moved_to)
     finally:
         os.environ["XDG_SESSION_TYPE"] = _orig_session
+        updater._platform_name = _orig_platform
 
     # --- Stop button (ONEUP-0047) -----------------------------------------------
     # Stop is deliberately cooperative: it asks, and the engine honours it at a safe

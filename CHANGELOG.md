@@ -8,6 +8,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A tall window, such as the software sources manager, no longer opens with its top off the screen on X11** (ONEUP-0181)
+  OneUp centres each window over the main one. On X11 a window taller
+  than the main one could end up with its title bar above the top of the
+  screen. It is now kept on screen, as it already was on Wayland. OneUp
+  also asks Qt which kind of desktop session it is in, instead of
+  trusting a setting that is sometimes missing.
+
 - **Turning on automatic updates right after opening OneUp no longer switches itself back off** (ONEUP-0178)
   If you turned it on while OneUp was still checking the password
   setting it found at startup, OneUp used that older answer, decided the

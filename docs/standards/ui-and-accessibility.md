@@ -223,7 +223,8 @@ def showEvent(self, event):
     center_on_parent(self)
 ```
 
-**`center_on_parent` is the canonical helper** and the only one that handles Wayland;
+**`center_on_parent` is the canonical helper** and the only one that handles Wayland — on
+KDE Plasma only, since it asks KWin, and on another Wayland compositor it does nothing;
 `Updater._center_child` is a one-line wrapper around it for the deferred case below. Do not
 hand-roll `frameGeometry().moveCenter(...)` + `move(...)` — that is the X11-only path
 ONEUP-0049 replaced, and on Wayland it silently does nothing.
