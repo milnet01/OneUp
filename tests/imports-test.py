@@ -18,10 +18,10 @@ place that looks unrelated:
   INV-12 the entry point runs as `__main__`, so importing it by name from inside
          the package would execute the whole file a second time under a second
          name — two QApplication set-ups, two of everything.
-  engine a launch site that names its own program cannot reach the Python engine,
-         and reads as correct because the Bash one still runs. The tell is
-         `paths.ENGINE` at a call site: naming your own program means naming the
-         script too, so the constant escaping paths.py IS the hardcoded launch.
+  engine a launch site that builds its own argv bypasses the resolver, so it can
+         launch an engine the window no longer runs, or one the AppImage cannot
+         reach. The tell is the engine's name outside paths.py: naming
+         `update_system.sh` or `oneup.engine` in code means building the launch.
 
 An AST walk, not a grep: a mention inside a docstring or a comment is prose and
 must not fail the gate, and `# noqa`-style evasion is not available.
@@ -131,21 +131,26 @@ def main() -> int:
               and any(isinstance(t, ast.Name) and t.id == "HERE" for t in n.targets)
               for n in ast.walk(ast.parse(PATHS_MODULE.read_text()))))
 
-    # --- ONEUP-0054 stage 7: every engine launch goes through paths.engine_argv.
-    # The tell is `paths.ENGINE` read at a call site: a launch that names its own
-    # program has to name the script too, so the constant escaping paths.py IS the
-    # hardcoded `bash` this stage removed. Checking for the `bash` literal instead
-    # would be unrunnable — engine_argv's own v1 arm is one, so the honest count
-    # there is one and not zero.
+    # --- ONEUP-0054: every engine launch goes through paths.engine_argv. Stage 7
+    # keyed this on `paths.ENGINE`, which stage 9 removed; the tell now is either
+    # engine's NAME in a string outside paths.py, since a launch that builds its own
+    # argv has to name what it launches. Docstrings are prose and are skipped — two
+    # modules describe the Bash engine in theirs.
     offenders = []
     for path, tree in _modules(GUI):
         if path == PATHS_MODULE:
             continue
+        docstrings = {id(body[0].value) for node in ast.walk(tree)
+                      if isinstance(node, (ast.Module, ast.FunctionDef,
+                                           ast.AsyncFunctionDef, ast.ClassDef))
+                      and (body := node.body) and isinstance(body[0], ast.Expr)
+                      and isinstance(body[0].value, ast.Constant)}
         for node in ast.walk(tree):
-            if (isinstance(node, ast.Attribute) and node.attr == "ENGINE"
-                    and isinstance(node.value, ast.Name) and node.value.id == "paths"):
+            if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                    and id(node) not in docstrings
+                    and ("update_system.sh" in node.value or "oneup.engine" in node.value)):
                 offenders.append(f"{_rel(path)}:{node.lineno}")
-    check("engine launches go through paths.engine_argv, not paths.ENGINE "
+    check("engine launches go through paths.engine_argv: no engine named outside paths.py "
           f"({'; '.join(offenders) or 'none'})", not offenders)
 
     # --- INV-12: nothing under oneup/ imports the entry point.

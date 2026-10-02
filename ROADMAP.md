@@ -6717,7 +6717,7 @@ when complete (that document's §7).
   Kind: chore.
   Source: check-code --tree 2026-08-31 (mypy var-annotated).
 
-- 📋 [ONEUP-0149] **The Python engine's re-exec target may not resolve, turning "no inhibitor" into "no run".**
+- 🚫 [ONEUP-0149] **The Python engine's re-exec target may not resolve, turning "no inhibitor" into "no run".**
   `_reexec_under_inhibitor` re-execs `sys.executable -m oneup.engine`, which
   resolves only if `oneup` is importable from the re-exec'd interpreter's path.
   Nothing packages it that way yet, and QProcess gives the engine the window's cwd.
@@ -6727,6 +6727,17 @@ when complete (that document's §7).
   when the --size --hold exclusion was fixed on 2026-08-31, so it is worth closing
   before stage 9's packaging. Guard with `importlib.util.find_spec` and set
   PYTHONPATH to the package root before the exec.
+  Closed without a code change (2026-10-02, ONEUP-0054 stage 9 step 5):
+  the re-exec loses the package in no launch shape the switch leaves. Every
+  shape carries the package root in the ENVIRONMENT (env PYTHONPATH=...),
+  which the re-exec inherits. Measured with the suite's own inhibitor
+  scenarios (a mock systemd-inhibit that execs its command): the checkout
+  default, env PYTHONPATH=<repo> python3 -m oneup.engine, all pass (393/0);
+  the AppImage's copied-out tree, env -u LD_LIBRARY_PATH PYTHONPATH=<copy>
+  python3 -m oneup.engine with the suite run from /, both inhibitor
+  scenarios pass. The RPM's oneup-engine wrapper uses the same env
+  PYTHONPATH=<dir> form and was not driven through the suite separately.
+  A guard for a path nothing reaches is not owed.
   **Layman:** A safety step could stop the update from starting at all.
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-driver.

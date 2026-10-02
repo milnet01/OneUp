@@ -296,9 +296,10 @@ notes from it, so there is nothing to derive.
 
 **`./local-CI.sh` must be green before every push.** It runs everything GitHub CI runs except
 the AppImage build, plus the gates CI never runs. Measured on `v2` on the development
-machine, `time ./local-CI.sh` reported **5m25s** on one warm run on 2026-09-03, of which the
-engine suite is **2m52s**, the differential harness **50s**, and the window suite **~32s a
-pass** — it runs twice, and the table below says why. The **4m10s–4m25s** recorded here
+machine, a timed `./local-CI.sh` took **5m46s** on one run on 2026-10-02, after ONEUP-0054
+stage 9 cut the window suite to one pass. Its parts were last measured on their own on
+2026-09-03: the engine suite **2m52s**, the differential harness **50s**, the window suite
+**~32s a pass**; that run took **5m25s** with two window passes. The **4m10s–4m25s** recorded here
 before that date was taken before the second window pass existed and before the scenarios
 added since; the components above were re-measured on their own rather than carried.
 
@@ -332,11 +333,10 @@ pushed commits for secrets** by handing its stdin to the machine-wide hook's
 
 | Gate | What it proves |
 | --- | --- |
-| `Engine test suite` | `tests/run-tests.sh` — the markers `update_system.sh` prints |
+| `Engine test suite` | `tests/run-tests.sh` — the markers the engine prints; the `oneup.engine` package by default since ONEUP-0054 stage 9 |
 | `Engine parser unit tests` | `tests/parsers-test.py` — the pure half of the engine (`oneup/engine/parsers.py`): `to_bytes`, the two download-size wordings, the progress wordings, `zypper lr -u` output and the lock file's text, table-driven against real captured output |
 | `Engine differential (v1 vs v2)` | `tests/differential-test.sh` — `update_system.sh` and `python3 -m oneup.engine` driven through the same mocks, their whole output and exit status diffed per scenario: gate G2 of ONEUP-0054. Local-only against §6.1 step 3, deliberately — the reason is ONEUP-0195 |
-| `GUI smoke test (offscreen)` | `tests/gui-smoke.py` — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip). Run with `ONEUP_ENGINE` cleared, not merely unset: this script does not scrub its environment, so an exported switch would make both passes v2 passes |
-| `GUI smoke test (offscreen, the window driving the v2 engine)` | the same suite under `ONEUP_ENGINE=v2`, which is the only pass its G3 pairing scenario runs in — that scenario launches the Python engine through the window's own code path and reads what came back, where every other scenario feeds the window lines the suite wrote itself. Gate G3 of ONEUP-0054, and unlike the differential harness above it does have a `release.yml` leg |
+| `GUI smoke test (offscreen)` | `tests/gui-smoke.py` — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip), plus its G3 pairing scenario, which launches the Python engine through the window's own code path and reads what came back, where every other scenario feeds the window lines the suite wrote itself. Gate G3 of ONEUP-0054; unlike the differential harness above it has a `release.yml` leg |
 | `Package structure (oneup/)` | `tests/imports-test.py` — the package rules a reader passes by eye: no path constant bound by name, no engine module importing `oneup/gui/`, no module building paths from its own `__file__`, the entry point never imported from inside the package, and every engine launch going through `paths.engine_argv` |
 | `Python compile (updater.py, bump.py, oneup/)` | `py_compile updater.py bump.py` plus `compileall oneup` — `compileall` over the package rather than a file list, because a module nobody has imported yet is exactly the one a split leaves broken |
 | `bump.py functional test` | `tests/bump-test.py` — a real bump in a throwaway copy still parses the five real version sites, and rewrites the (synthetic) `CHANGELOG.md`'s heading and both links correctly |
@@ -369,7 +369,7 @@ itself is broken. A failing test is fixed, not bypassed.
 
 **The two gate sets are not identical, deliberately.** `release.yml` runs the test gates —
 the engine suite, the parser unit tests, the `bump.py` functional test, the package structure
-check and both GUI smoke passes — and the AppImage build, and nothing else. So **every other
+check and the GUI smoke test — and the AppImage build, and nothing else. So **every other
 gate in the §6 table has never run in GitHub CI**: the differential harness (deliberately,
 ONEUP-0195), the compile check, lint, packaging validation, version lockstep and
 documentation. Written as names rather than a count, because a count goes stale

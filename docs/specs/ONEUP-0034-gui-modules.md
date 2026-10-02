@@ -257,8 +257,8 @@ build steps out of specs.
 - **INV-4** `HERE` and every path derived from it are computed in `paths.py` alone; no other
   module builds a path from its own `__file__`. *Test:* `tests/imports-test.py` fails on
   `__file__` under `oneup/` outside `paths.py`; and two **new** assertions in
-  `tests/gui-smoke.py` — that `paths.ENGINE` resolves to the repo root's `update_system.sh`,
-  and that `_headless_command`'s last-resort branch names the root entry point rather than a
+  `tests/gui-smoke.py` — that the engine resolves from the repo root (it asserted
+  `paths.ENGINE` until ONEUP-0054 stage 9 replaced that with a resolver), and that `_headless_command`'s last-resort branch names the root entry point rather than a
   package module. The assertions there today pass either way, which §4.4 explains.
 
 - **INV-5** Every focusable widget in the window and in the three dialogs still reports a
@@ -348,7 +348,7 @@ build steps out of specs.
 | INV-1 | `tests/gui-smoke.py` — the loader | changed |
 | INV-2 | `local-CI.sh` grep gate + `tests/gui-smoke.py` redirect checks | new gate, changed checks |
 | INV-3 | `tests/imports-test.py` | new |
-| INV-4 | `tests/imports-test.py`, plus `tests/gui-smoke.py` assertions on `paths.ENGINE` and on `_headless_command`'s last-resort branch | new file, new assertions |
+| INV-4 | `tests/imports-test.py`, plus `tests/gui-smoke.py` assertions on the engine resolving from the repo root and on `_headless_command`'s last-resort branch | new file, new assertions |
 | INV-5 | `tests/gui-smoke.py` — the existing accessible-name sweep | unchanged, and that is the point |
 | INV-6 | `tests/gui-smoke.py` — the existing centring checks, plus a `showEvent` sweep | new check |
 | INV-7 | `tests/gui-smoke.py` — the locale checks | new |

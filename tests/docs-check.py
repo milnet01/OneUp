@@ -329,9 +329,12 @@ def check_marker_table() -> None:
               f"markers the Python engine emits that the Bash engine does not: "
               f"{sorted(py_engine - engine)}")
     # The engine suite is what proves each marker is really produced. A marker nothing
-    # asserts on is a row in the contract with no evidence behind it.
+    # asserts on is a row in the contract with no evidence behind it. Keyed on the
+    # Python emitters wherever they exist — the engine the window runs since
+    # ONEUP-0054 stage 9 — so a marker only the Python engine emits cannot go
+    # untested unnoticed; the Bash set stands in on a branch without the package.
     tested = set(re.findall(r"@@([A-Z_]+)@@", (ROOT / "tests/run-tests.sh").read_text()))
-    untested = engine - tested - KNOWN_UNTESTED_MARKERS
+    untested = (py_engine if py_files else engine) - tested - KNOWN_UNTESTED_MARKERS
     check(not untested, doc, 0, "§3",
           f"markers the engine emits that no engine-suite scenario asserts on: "
           f"{sorted(untested)}")

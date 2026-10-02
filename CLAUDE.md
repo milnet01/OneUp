@@ -18,17 +18,18 @@ removal, and cache cleanup — the way the distro's docs recommend, behind per-t
 
 ```bash
 python3 updater.py                      # launch the GUI (needs PySide6 / Qt 6)
-./update_system.sh                      # run the engine standalone in a terminal (all steps)
-./update_system.sh --steps=system,cache # run only selected steps
-./update_system.sh --check --notify     # read-only "updates available?" pass (no root)
+python3 -m oneup.engine                 # run the engine standalone, from the repo root (all steps)
+python3 -m oneup.engine --steps=system,cache  # run only selected steps
+python3 -m oneup.engine --check --notify      # read-only "updates available?" pass (no root)
+./update_system.sh                      # the retired Bash engine, kept as a fallback through 2.0
 tests/run-tests.sh                      # engine suite; non-zero exit on any failure
 python3 tests/gui-smoke.py              # window suite (needs PySide6; exit 77 = skipped)
 ./local-CI.sh                           # every gate that runs before a push (workflow.md §6)
 ./local-CI.sh --full                    # also build the AppImage (needs a good connection)
 ```
 
-There is no build step: a Python script plus a Bash script, run directly from the
-checkout. The suites take no arguments and run every scenario; to focus on one, comment
+There is no build step: a Python package (plus the retained Bash fallback), run directly
+from the checkout. On `main` the engine is still `./update_system.sh`. The suites take no arguments and run every scenario; to focus on one, comment
 out the others in `tests/run-tests.sh` — there is no per-test selector.
 
 **`./local-CI.sh` must be green before every push.** What it gates, why the AppImage build
@@ -63,11 +64,13 @@ with `roadmap_log`, never by editing the file, which is generated output (§6).
 
 **Read the branch you are on.** On `main` the app is the two files below. On `v2`, as of
 ONEUP-0034, the window is a package — `oneup/gui/`, a module per job, behind a shim still
-called `updater.py` — and the state paths in **both halves** honour `XDG_STATE_HOME`
+called `updater.py`; as of ONEUP-0054 stage 9 the engine is one too — `oneup/engine/`, run
+as `python3 -m oneup.engine`, with `update_system.sh` kept only as a terminal fallback,
+frozen at the switch — and the state paths in **both halves** honour `XDG_STATE_HOME`
 when it is set to an ABSOLUTE path, falling back to `~/.local/state/oneup/` when it is
 unset, empty or relative (ONEUP-0059).
 The privilege split, the marker contract, the step keys and everything else in this
-section are unchanged by that; only the file boundaries moved.
+section are unchanged by either; only the file boundaries and the engine's language moved.
 
 **No document `tests/docs-check.py` scans may backtick a path that exists only on `v2`** —
 and it scans four: `docs/standards/`, `docs/reference/`, this file and `README.md`. Its §9
@@ -79,11 +82,11 @@ bare directory nor a bare filename matches that pattern, which is how
 to code `main` does not have; `docs/standards/workflow.md` §9 decides the branch, and this
 file does not restate it.
 
-Two files, split by privilege:
+Two halves, split by privilege:
 
-- **`update_system.sh`** — the engine. Does all the real work and is the only part that
-  becomes root. Authenticates once up front and keeps the credential warm for the run.
-  Fully usable on its own in a terminal.
+- **The engine** — `update_system.sh` on `main`, the `oneup/engine/` package on `v2`. Does
+  all the real work and is the only part that becomes root. Authenticates once up front and
+  keeps the credential warm for the run. Fully usable on its own in a terminal.
 - **`updater.py`** — a PySide6 (Qt 6) front-end. **Never runs as root.** It shells out to
   the engine with `QProcess` and reads its stdout line by line.
 
@@ -95,7 +98,8 @@ suites — plus the reference itself, in one commit. §5 names them; this file d
 
 Step keys, the run order both halves share: `system, flatpak, firmware, orphans, cache` —
 the `TASKS` list (in `updater.py` on `main`; inside the package on `v2`, where `updater.py`
-is only the shim) and the `LABEL` map in `update_system.sh`.
+is only the shim) and the engine's `LABEL` map (in `update_system.sh` on `main`; in the
+engine package's step module on `v2`).
 
 A step whose tool is absent (`flatpak`, `fwupd`) is **skipped cleanly, never errored**.
 Keep new steps tolerant of a missing binary.
@@ -111,8 +115,8 @@ ONEUP-0044 so one engine can span the size preview and the run. (On `v2`
 that directory follows an absolute `XDG_STATE_HOME` — in **both** halves, in one commit,
 because moving one side alone leaves Stop writing where the engine never looks.)
 
-**2.0 replaces both files** — the engine becomes Python, the window has become a package
-(ONEUP-0034, on `v2`).
+**2.0 replaces both files** — on `v2` the window is a package (ONEUP-0034) and the engine is
+Python (ONEUP-0054, the window's only engine since stage 9).
 `docs/design/oneup-2.0.md` is the programme; `main` is frozen at 1.4.0 and takes only
 qualifying bug fixes (`docs/standards/workflow.md` §1).
 
@@ -147,9 +151,11 @@ measurement and the exact shape of the rule are in the document named beside eac
   `docs/standards/security.md` §2.2, and §2.3 for the shape this takes in the Python
   engine.
 
-- **A run must survive the GUI going away.** The logging `exec` uses `tee -a -p`; without
-  `-p`, quitting the window kills `tee`, `SIGPIPE`s the engine, and leaves zypper orphaned
-  mid-transaction. Never add a code path that kills the engine mid-run —
+- **A run must survive the GUI going away.** The Bash engine's logging `exec` uses `tee -a
+  -p`; without `-p`, quitting the window kills `tee`, `SIGPIPE`s the engine, and leaves
+  zypper orphaned mid-transaction. The Python engine's log mirror catches the
+  `BrokenPipeError` instead and carries on, and no child it starts inherits the window's
+  pipe. Never add a code path that kills the engine mid-run —
   `docs/standards/security.md` §6.3.
 
 - **Nothing the engine spawns may outlive it.** A trap cannot run when the engine is

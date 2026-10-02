@@ -375,7 +375,7 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
     if not paths.engine_available():
         QMessageBox.critical(win, "Engine missing",
                              "Could not find the update engine:\n"
-                             f"{' '.join(paths.engine_argv())}")
+                             f"{paths.engine_tried()}")
         return
     # Never start a second engine while a download-size preview is in flight. Doing so
     # IS the ONEUP-0044 defect: with no terminal sudo keys its cached credential to the

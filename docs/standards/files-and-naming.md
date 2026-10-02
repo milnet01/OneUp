@@ -25,7 +25,7 @@ exist yet, and saying so is the point.
 
 | Path | What belongs there |
 | --- | --- |
-| *(repo root)* | The two programs (`updater.py`, `update_system.sh`), the three developer scripts (`bump.py`, `local-CI.sh`, `release.sh`), and the four documents every reader starts from (`README.md`, `CLAUDE.md`, `ROADMAP.md`, `CHANGELOG.md`) plus `LICENSE`. |
+| *(repo root)* | The window's entry point (`updater.py`), the retired Bash engine kept as a fallback through 2.0 (`update_system.sh`), the three developer scripts (`bump.py`, `local-CI.sh`, `release.sh`), and the four documents every reader starts from (`README.md`, `CLAUDE.md`, `ROADMAP.md`, `CHANGELOG.md`) plus `LICENSE`. |
 | `oneup/` | The application: `engine/` (the Python engine) and `gui/` (the window). §4 owns its shape. |
 | `data/` | Everything the desktop installs and the user never edits: the launcher entry, the icon, the app-store metadata. |
 | `docs/design/` | Programme-level decisions that several items share. |
@@ -196,10 +196,9 @@ else:
 
 Before the split this was `Path(__file__).resolve().parent` in `updater.py`, which gave
 the repo root only because `updater.py` sits there. **A module under `oneup/gui/` that
-computes that expression gets `oneup/gui/`** — and `_find_engine()` then looks for
-`update_system.sh` in the wrong directory, falls through its
-`~/Documents/update_system.sh` fallback, and returns a path that does not exist. The
-window opens and the Run button fails.
+computes that expression gets `oneup/gui/`** — and the engine resolver then looks for the
+engine package in the wrong directory and finds none. The window opens and the Run button
+fails.
 
 **The rule:** `HERE` is computed in **exactly one place** in the package, `paths.py`, and
 every other module reads it as `paths.HERE`, never binding it by name (§5.1). No other
@@ -215,7 +214,8 @@ The same applies inside the AppImage, where PyInstaller unpacks bundled data fla
 Three directories hold everything OneUp writes at runtime:
 
 - **`~/.local/state/oneup/`** — `history.json`, `logs/`, and the four state files in
-  §5.1's table
+  §5.1's table; and, from the AppImage only, `engine/` — the engine copied out of the
+  bundle, one directory per digest of its source, never pruned (ONEUP-0054 §4.7)
 - **`~/Documents/update-logs/`** — the engine's own copy of each run's log, kept in a
   place a user can find without being told where `.local/state` is
 - **`~/.config/`** — the window's settings, through `QSettings("OneUp", "OneUp")`, and the
@@ -268,14 +268,6 @@ were true would have misled the 2.0 implementer.** What is actually true:
   recovery declines when no `download.opensuse.org` baseurl is present — an empty
   directory would make every recovery scenario exercise the skip path while appearing to
   test recovery.
-- **`ONEUP_ENGINE` is not in the table above either, and for the same reason.** It
-  overrides no path or setting: it names *which engine* the window launches — `v2` for
-  `python3 -m oneup.engine`, anything else (unset, `v1`, a typo) for the Bash engine.
-  Read by the **window** alone, per call rather than at import, so a scenario can flip
-  it (`ONEUP-0054` §4.7). It is **temporary**: stage 9 of that item flips the default and
-  the variable goes with it. Not to be confused with the suite's `ONEUP_ENGINE_CMD`,
-  which is a whole argv the test harness pins per side; one variable for both would let
-  an export aimed at the suite reach the window.
 - **`ONEUP_INHIBITED` is not in the table either: it is the engine's own re-exec guard,
   not a setting.** The engine exports it just before re-running itself under
   `systemd-inhibit`, so the second copy does not do it again. Set by hand, it skips the
@@ -326,9 +318,10 @@ ships in none of them:
    needs its compile step here and in the AppImage script.
 2. `packaging/appimage/build-appimage.sh` — PyInstaller follows the window's `import`
    statements by itself, but **data files need an explicit `--add-data`** — the script's
-   two `--add-data` flags do this for `update_system.sh` and the icon. `oneup/engine/` is
-   not reached: the window launches it as a separate process and never imports it, so it
-   is not in the AppImage until ONEUP-0054 stage 9 adds it (that spec's §4.7).
+   `--add-data` flags do this for `update_system.sh`, the icon and the engine's source.
+   `oneup/engine/` is not reached by the imports — the window launches it as a separate
+   process and never imports it — so it travels as data under `engine-src/`, which the
+   window copies out of the bundle before running it (ONEUP-0054 §4.7).
 3. `packaging/obs/_service` — rolls the tarball the RPM spec expects; a layout change
    means checking it still matches.
 
@@ -385,12 +378,11 @@ already. **What has not changed is the reason `HOME` is still redirected**: it i
 covers the paths with no XDG equivalent — the engine's `~/Documents/update-logs`, and the
 autostart entry and timers built from `Path.home()` (§5).
 
-**Trap 4 — `_find_engine`'s fallback leaves each caller to notice.** It tries
-`HERE/update_system.sh`, then `~/Documents/update_system.sh`, then returns the first path
-regardless of whether it exists — so whether a packaging mistake is legible depends on the
-caller. `start_run` in the window's `run.py` checks and names the missing engine; the tray check does not, and
-there it surfaces as nothing happening. Any 2.0 equivalent must say which paths it tried, so
-that no caller has to.
+**Trap 4 — CLOSED by ONEUP-0054 stage 9: `_find_engine`'s fallback left each caller to
+notice.** It returned its first candidate whether or not it existed, so the tray check
+surfaced a missing engine as nothing happening. The resolver that replaced it reports what
+it tried — on stderr once per process, and in the Run and headless messages — so no caller
+has to.
 
 **Trap 5 — three of the four root scripts are not in any packaging list.** `bump.py`,
 `local-CI.sh` and `release.sh` are developer tools and are correctly absent from the RPM
@@ -419,7 +411,7 @@ which category it is in — the answer decides whether §6 applies at all.
 | §1 the root is closed | nothing automatic — the reason for a new root file goes in the commit message, where a reader finds it and a script does not |
 | §2.1 the naming rules | nothing automatic |
 | §4.1 the rules the `oneup/` split must obey | `tests/imports-test.py` covers **rule 2 in full** — it fails the build on any `oneup.gui` import under `oneup/engine/`. It also fails when `oneup/` is absent, which covers part of rule 5. Rules 1 and 3 — the shim stays at the root, `snake_case.py` names that say what a module does — and rule 5's *lowercase, singular* are checked by **nothing**; they held through ONEUP-0034 by review |
-| §4.2 `HERE` is computed in exactly one place | `tests/imports-test.py` fails the build on `__file__` anywhere under `oneup/` but `paths.py`, and on a `from …paths import <name>` that would bind a path constant by value. `tests/gui-smoke.py` adds the two the AST cannot see: that `paths.ENGINE` resolves to the repo root's `update_system.sh`, and that `_headless_command`'s last-resort branch names the root entry point rather than a package module |
+| §4.2 `HERE` is computed in exactly one place | `tests/imports-test.py` fails the build on `__file__` anywhere under `oneup/` but `paths.py`, and on a `from …paths import <name>` that would bind a path constant by value. `tests/gui-smoke.py` adds the two the AST cannot see: that the engine resolves from the repo root, and that `_headless_command`'s last-resort branch names the root entry point rather than a package module |
 | §5 runtime state paths, and which are redirectable | `run_engine` in `tests/mock-env.sh` redirects the engine's on every scenario of both engine suites; `tests/gui-smoke.py` redirects the window's by rewriting `HOME` before import. Nothing checks that a new state path is redirectable (§5.2) |
 | §6 what a new file obliges you to update | nothing automatic. §8's checklist is the only catcher, and it works only if the author opens it |
 

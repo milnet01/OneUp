@@ -3474,15 +3474,17 @@ fi
 # ---------------------------------------------------------------------------
 echo "TEST: a per-call deadline fires on a step other than the repo refresh (§4.3.2)"
 # An ADDITION under §4.4, not a replacement: v1 has no budget outside refresh_repos, so
-# this scenario is asserted against the Python engine only and skips LOUDLY otherwise —
-# ONEUP-0068's rule, because a silent skip lets the check go inert unnoticed.
+# this scenario is asserted against the Python engine only and skips LOUDLY when the suite
+# drives the Bash one — ONEUP-0068's rule, because a silent skip lets the check go inert
+# unnoticed. It asks the resolved ENGINE_CMD, not ONEUP_ENGINE_CMD: since ONEUP-0054 stage
+# 9 the Python engine is the default, with no variable set.
 #
 # `flatpak remote-ls --updates` reaches every configured remote. The mock below accepts
 # the call and then never answers, which is the shape a real dead remote takes: without a
 # budget the step never ends, so a scenario that merely "takes longer" would not
 # distinguish the two engines — it hangs the suite against one of them.
-if [[ "${ONEUP_ENGINE_CMD:-}" != *oneup.engine* ]]; then
-    echo "  SKIP - the per-call deadline is the Python engine's; set ONEUP_ENGINE_CMD to run it"
+if [[ "${ENGINE_CMD[*]}" != *oneup.engine* ]]; then
+    echo "  SKIP - the per-call deadline is the Python engine's; this run drives another engine"
 else
     d=$(mktemp -d); setup_common "$d"
     cat > "$d/flatpak" <<'FLATPAK_EOF'

@@ -75,7 +75,7 @@ needed, and a run history.
 ## Design notes
 
 - **OneUp never runs as root.** The GUI is a thin front-end; all privileged work
-  happens in `update_system.sh`, which authenticates **once** through your desktop's
+  happens in a separate engine, which authenticates **once** through your desktop's
   standard password prompt and keeps the credential warm for the run.
 - **It gets PackageKit out of the way.** The desktop's background updater grabs the
   package lock shortly after login; OneUp stops it first so `zypper` can work, and
@@ -96,8 +96,11 @@ needed, and a run history.
   waiting — and says so plainly when nothing has arrived for a while. It also stops waiting
   on any one source after two minutes and offers to leave it out, rather than sitting there
   for hours.
-- **The engine is usable on its own.** `update_system.sh` runs fine in a plain
-  terminal (`./update_system.sh --steps=system,cache`); the GUI just drives it.
+- **The engine is usable on its own.** It runs fine in a plain terminal — from a
+  checkout, `python3 -m oneup.engine --steps=system,cache`; from the RPM,
+  `oneup-engine --steps=system,cache` — and the GUI just drives it. The previous engine,
+  `update_system.sh`, still ships as a fallback you can run the same way; from a later
+  2.0 change it no longer works with the window, only in a terminal.
 
 ## Accessibility
 
@@ -195,7 +198,8 @@ Build your own AppImage or RPM from `packaging/appimage/build-appimage.sh` and
 - openSUSE Tumbleweed or Leap
 - `zypper` (always present), and optionally `flatpak` and `fwupd` — steps for tools
   you don't have are skipped cleanly
-- Python 3 + PySide6 (Qt 6) for the GUI
+- Python 3.13 or newer — for the engine, and with PySide6 (Qt 6) for the GUI. The
+  AppImage brings its own Qt but runs the engine on the computer's own Python.
 - A polkit/askpass agent for the password prompt (standard on KDE and GNOME)
 
 ## Licence

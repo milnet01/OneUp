@@ -89,12 +89,9 @@ fi
 # Constructs the PySide6 window offscreen and feeds it engine markers. Exit 77
 # means PySide6 isn't installed here — a skip, not a failure (matches the
 # engine's skip-cleanly-for-absent-tools convention).
-# Run TWICE (ONEUP-0054 stage 7, gate G3). The suite feeds the window marker lines
-# and launches no engine, so on its own it proves the window rather than the pair;
-# its G3 scenario runs only under ONEUP_ENGINE=v2 and skips otherwise. The first
-# pass CLEARS the variable rather than assuming it is unset — this script does not
-# scrub its environment, so an exported switch would make both passes v2 passes and
-# the second could no longer fail on its own.
+# Its G3 scenario (ONEUP-0054) launches the real Python engine through the window's
+# own code path, so this one pass proves the pair as well as the window. It ran
+# twice while stage 7's ONEUP_ENGINE switch existed; stage 9 removed the switch.
 gui_smoke_pass() {   # $1 = label ('' for the default pass), $2.. = env arguments
     local label="$1"; shift
     local name="tests/gui-smoke.py${label:+ ($label)}"
@@ -111,10 +108,7 @@ gui_smoke_pass() {   # $1 = label ('' for the default pass), $2.. = env argument
 }
 
 step "GUI smoke test (offscreen)"
-gui_smoke_pass "" -u ONEUP_ENGINE
-
-step "GUI smoke test (offscreen, the window driving the v2 engine)"
-gui_smoke_pass "v2" ONEUP_ENGINE=v2
+gui_smoke_pass ""
 
 # --- package structure (docs/specs/ONEUP-0034-gui-modules.md §5) ------------
 # INV-2/3/4/12, plus ONEUP-0054's engine-launch rule: the ones that pass review by

@@ -2,6 +2,11 @@
 #
 # System Updater engine — openSUSE Tumbleweed / Leap
 #
+# RETIRED on this branch (ONEUP-0054 stage 9): the window runs the Python engine,
+# `python3 -m oneup.engine`. This script is kept as a terminal fallback through 2.0,
+# frozen at the switch-over, and is removed in 2.1 (docs/design/oneup-2.0.md §4). The
+# GUI route described below is how it was driven before the switch.
+#
 # Usable two ways:
 #   1. Standalone in a terminal:  ./update_system.sh            (runs everything)
 #                                 ./update_system.sh --steps=cache

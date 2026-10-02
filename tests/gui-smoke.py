@@ -13,8 +13,10 @@ engine's own skip-cleanly-for-absent-tools convention.
 
 Run directly, or via tests/run-tests.sh / local-CI.sh.
 """
+import contextlib
 import importlib.util
 import inspect
+import io
 import os
 import pkgutil
 import re
@@ -1131,12 +1133,18 @@ def main() -> int:
     # --- ONEUP-0034 INV-4: HERE is computed in exactly one place ---------------
     # Both of these pass whatever the answer is under the assertions above, which is
     # why they are written out. A module under oneup/gui/ that computes the parent of
-    # its own file gets oneup/gui/, so ENGINE would name a file that does not exist and
-    # Run would fail; and a systemd unit built from a package module's __file__ would
+    # its own file gets oneup/gui/, so the engine would not be found and Run would
+    # fail; and a systemd unit built from a package module's __file__ would
     # run `python3 …/oneup/gui/autostart.py --check`, which does nothing whatever, on a
     # weekly timer nobody watches.
-    check("paths.ENGINE resolves to the repo root's update_system.sh",
-          paths.ENGINE == REPO / "update_system.sh" and paths.ENGINE.exists())
+    # ONEUP-0054 stage 9 replaced `paths.ENGINE` with a resolver; INV-4 is now that the
+    # checkout arm finds the engine package under HERE and puts HERE on PYTHONPATH.
+    paths._reset_engine_cache()
+    _argv = paths.engine_argv("--help")
+    check("the engine resolves from the repo root (INV-4)",
+          paths.engine_available() and _argv[0] == "env"
+          and _argv[1].split("=", 1)[1].split(os.pathsep)[0] == str(REPO)
+          and _argv[2:] == [sys.executable, "-m", "oneup.engine", "--help"])
     check("paths.HERE is the repo root, not the package directory", paths.HERE == REPO)
     # The last-resort branch: no $APPIMAGE, no `oneup` launcher on PATH. It is the one
     # branch that names a file rather than a launcher, and on a developer machine with
@@ -1152,6 +1160,67 @@ def main() -> int:
             autostart.os.environ["APPIMAGE"] = _orig_appimage
     check("the last-resort headless command names the ROOT entry point, not a package module",
           str(REPO / "updater.py") in _cmd and "oneup/gui" not in _cmd)
+
+    # --- ONEUP-0054 stage 9: the AppImage runs a copy of the engine outside its bundle.
+    # The bundle's mount goes when the window exits, so an engine read from inside it
+    # could lose its own files mid-run (INV-5). Faked here: sys.frozen set, HERE a
+    # sandbox holding the source the build puts under engine-src/, state sandboxed.
+    _fz = Path(tempfile.mkdtemp(dir=_SANDBOX))
+    _src = _fz / "engine-src" / "oneup"
+    (_src / "engine").mkdir(parents=True)
+    shutil.copyfile(REPO / "oneup" / "__init__.py", _src / "__init__.py")
+    for _f in (REPO / "oneup" / "engine").glob("*.py"):
+        shutil.copyfile(_f, _src / "engine" / _f.name)
+    _copies_dir = _fz / "state" / "engine"
+    _saved = (paths.HERE, paths.STATE_DIR, paths.shutil.which, sys.__dict__.get("frozen"),
+              os.environ.pop("LD_LIBRARY_PATH_ORIG", None))
+    paths.HERE, paths.STATE_DIR, sys.frozen = _fz, _fz / "state", True
+    try:
+        paths._reset_engine_cache()
+        _a = paths.engine_argv("--help")
+        _copies = sorted(_copies_dir.iterdir())
+        check("the frozen arm copies the engine source out of the bundle",
+              len(_copies) == 1 and (_copies[0] / "oneup" / "engine" / "__main__.py").is_file())
+        check("and runs the machine's python3 from that copy",
+              f"PYTHONPATH={_copies[0]}" in _a and _a[-3:] == ["-m", "oneup.engine", "--help"])
+        check("and removes the bundle's LD_LIBRARY_PATH",
+              _a[:3] == ["env", "-u", "LD_LIBRARY_PATH"])
+        # Run from outside the repo: `-m` puts the working directory first on the
+        # path, so from the repo root the checkout's own package would answer.
+        _help = subprocess.run(_a, capture_output=True, text=True,  # noqa: S603
+                               timeout=60, cwd=_fz)
+        check("the copied engine answers --help",
+              _help.returncode == 0 and "Usage:" in _help.stdout)
+        paths._reset_engine_cache()
+        paths.engine_argv()
+        check("a second resolve reuses the copy", sorted(_copies_dir.iterdir()) == _copies)
+        os.environ["LD_LIBRARY_PATH_ORIG"] = "/orig/lib"
+        check("an original LD_LIBRARY_PATH is restored instead",
+              paths.engine_argv()[:2] == ["env", "LD_LIBRARY_PATH=/orig/lib"])
+        os.environ.pop("LD_LIBRARY_PATH_ORIG")
+        with (_src / "engine" / "markers.py").open("a") as _fh:
+            _fh.write("\n# one more byte\n")
+        paths.engine_argv()
+        check("an edited source gets a copy of its own", len(list(_copies_dir.iterdir())) == 2)
+        paths.shutil.which = lambda _name: None
+        paths._reset_engine_cache()
+        _err = io.StringIO()
+        with contextlib.redirect_stderr(_err):
+            _avail = paths.engine_available()
+            paths.engine_available()
+            _tried = paths.engine_tried()
+        check("with no usable python3 the engine is unavailable", not _avail)
+        check("and what was tried names the interpreter", "python3 of 3.13 or newer" in _tried)
+        check("and stderr says so once, not per call", _err.getvalue().count("not found") == 1)
+    finally:
+        paths.HERE, paths.STATE_DIR, paths.shutil.which = _saved[0], _saved[1], _saved[2]
+        if _saved[3] is None:
+            del sys.frozen
+        else:
+            sys.frozen = _saved[3]
+        if _saved[4] is not None:
+            os.environ["LD_LIBRARY_PATH_ORIG"] = _saved[4]
+        paths._reset_engine_cache()
 
     # --- ONEUP-0059: both halves must resolve the state directory identically ---
     # run.state and stop.request are a contract between the window and the engine
@@ -1174,6 +1243,8 @@ def main() -> int:
     _report = '\nprintf "%s\\n%s\\n" "$RUN_STATE_FILE" "$STOP_FILE"'
     _read_paths = (f"import sys;sys.path.insert(0, {str(REPO)!r});"
                    "import oneup.gui.paths as P;print(P.RUN_STATE);print(P.STOP_REQUEST)")
+    _read_py_paths = (f"import sys;sys.path.insert(0, {str(REPO)!r});"
+                      "import oneup.engine.runstate as R;print(R.RUN_STATE);print(R.STOP_REQUEST)")
     for _label, _xdg in (("unset", None), ("absolute", str(Path(_SANDBOX) / "xdg-probe")),
                          ("relative — must be ignored", "not/absolute")):
         _env = {"HOME": "/home/oneup-probe", "PATH": os.environ["PATH"]}
@@ -1187,6 +1258,13 @@ def main() -> int:
             capture_output=True, text=True, env=_env).stdout.split()
         check(f"window and engine agree on run.state / stop.request ({_label})",
               len(_engine) == 2 and _engine == _win)
+        # The Python engine is the one the window runs since ONEUP-0054 stage 9; the
+        # Bash comparison above stays while update_system.sh ships as the fallback.
+        _py = subprocess.run(  # noqa: S603
+            [sys.executable, "-c", _read_py_paths],
+            capture_output=True, text=True, env=_env).stdout.split()
+        check(f"window and Python engine agree on run.state / stop.request ({_label})",
+              len(_py) == 2 and _py == _win)
 
     # Regression guard: the GUI-only --update token must NEVER be forwarded to the
     # engine (it exits 2 on unknown flags, which would make the 2am weekly run
@@ -3166,19 +3244,16 @@ def main() -> int:
     # Every other scenario in this file feeds the window marker lines it wrote
     # itself, so the suite proves the window and not the pair. This one launches
     # the real Python engine through the window's own code path and reads what
-    # came back (docs/design/oneup-2.0.md §7, G3's row).
-    #
-    # It READS the ambient switch rather than setting one. A self-setting
-    # scenario would run in both of local-CI.sh's window passes, leaving the
-    # second pass nothing it alone can prove and no way to fail.
+    # came back (docs/design/oneup-2.0.md §7, G3's row). Since stage 9 the Python
+    # engine is the window's only engine, so this runs whenever one resolves.
     #
     # --auth-status is the probe because it cannot hurt the machine running it:
     # read-only, and its privileged leg is sudo -k -n, which refuses to prompt
     # (oneup/engine/actions.py's auth_current, whose comment records that -k
     # leaves a warm credential intact).
-    if os.environ.get("ONEUP_ENGINE", "") != "v2":
-        print("  SKIP - G3 pairing: ONEUP_ENGINE is not v2 "
-              "(local-CI.sh's second window pass runs it)")
+    paths._reset_engine_cache()
+    if not paths.engine_available():
+        print("  SKIP - G3 pairing: no engine resolves from this tree")
     else:
         wG3 = window.Updater()
         # _on_auth_status_finished calls this on an explicit @@AUTH@@|off, and it

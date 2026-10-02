@@ -3,10 +3,8 @@
 **The one module in the package allowed to know where things are.** Every other
 module imports from here; none builds a path from its own `__file__`. A module
 under `oneup/gui/` that computes the parent of its own file gets `oneup/gui/`,
-so `_find_engine` would look for `update_system.sh` in the wrong directory,
-fall through to its `~/Documents` fallback, and return a path that does not
-exist — the window opens and Run fails
-(`docs/standards/files-and-naming.md` §4.2).
+so the engine would be looked for in the wrong directory and never found — the
+window opens and Run fails (`docs/standards/files-and-naming.md` §4.2).
 
 **Read these through the module — `paths.RUN_STATE`, never
 `from .paths import RUN_STATE`.** The suite redirects them to a sandbox so it
@@ -18,31 +16,24 @@ the real run's `run.state`
 """
 from __future__ import annotations
 
+import hashlib
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-# Where our bundled files (update_system.sh, the icon) live. Normally the repo
-# root; inside a PyInstaller/AppImage bundle they are unpacked flat to _MEIPASS,
-# where a nested package directory does not exist at all.
+# Where our bundled files (the engine, the icon) live. Normally the repo root;
+# inside a PyInstaller/AppImage bundle they are unpacked flat to _MEIPASS, where
+# a nested package directory does not exist at all — which is why the AppImage
+# carries the engine's source as data under `engine-src/` (ONEUP-0054 §4.7).
 if getattr(sys, "frozen", False):
     HERE = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
 else:
     # …/oneup/gui/paths.py -> …/ — parents[2] is the repo root, which is where
-    # updater.py and update_system.sh sit and what HERE meant before the split.
+    # updater.py and the oneup package sit and what HERE meant before the split.
     HERE = Path(__file__).resolve().parents[2]
-
-
-def _find_engine() -> Path:
-    """Locate update_system.sh. It normally sits next to this file (git checkout,
-    RPM or AppImage install); fall back to the legacy ~/Documents path so an
-    existing hand-installed setup keeps working."""
-    for candidate in (HERE / "update_system.sh",
-                      Path.home() / "Documents" / "update_system.sh"):
-        if candidate.exists():
-            return candidate
-    return HERE / "update_system.sh"  # default; start_run() warns if it's missing
 
 
 def _state_home() -> Path:
@@ -60,8 +51,6 @@ def _state_home() -> Path:
     xdg = os.environ.get("XDG_STATE_HOME", "")
     return Path(xdg) if xdg.startswith("/") else Path.home() / ".local" / "state"
 
-
-ENGINE = _find_engine()
 
 
 def write_whole(path: Path, text: str) -> None:
@@ -101,20 +90,112 @@ def log_dir_ready(win=None, quiet: bool = False) -> bool:
         return False
 
 
-def _engine_is_v2() -> bool:
-    """Is the window pointed at the Python engine? (ONEUP-0054 §4.7.)
+# The lowest Python the engine runs on: `docs/standards/coding.md` §1's floor. Only
+# the AppImage asks, because only there is the interpreter the machine's own.
+PYTHON_FLOOR = (3, 13)
 
-    Read PER CALL, never bound at import: the suite flips the variable between
-    scenarios, and a value captured at import would ignore the flip — the same
-    reason every path here is read through the module (ONEUP-0034 §4.4, INV-2).
+# What the resolver learned once per process: the machine's python3 (AppImage only)
+# and whether the "not found" line has gone to stderr. One dict, so the suite can
+# clear it before each case — a cached answer would otherwise leak between them.
+_engine_cache: dict = {}
 
-    `v2` selects it; anything else — unset, `v1`, a typo — is the Bash engine,
-    which stays the default until stage 9 flips it. Not the suite's
-    `ONEUP_ENGINE_CMD`, which is a whole argv the harness pins per side: this
-    one names a side, and one variable for both would let an export aimed at
-    the suite reach the window.
-    """
-    return os.environ.get("ONEUP_ENGINE", "") == "v2"
+
+def _reset_engine_cache() -> None:
+    _engine_cache.clear()
+
+
+def _library_path_env() -> list[str]:
+    """`env` arguments undoing what a PyInstaller one-file bundle does to
+    `LD_LIBRARY_PATH`: it points it at its own `_MEI…` directory, and every child
+    inherits that (measured 2026-10-02). The machine's python3 must load the
+    machine's libraries — the bundle's go when the window exits, mid-run.
+    The bootloader keeps the original in `LD_LIBRARY_PATH_ORIG` when there was one."""
+    orig = os.environ.get("LD_LIBRARY_PATH_ORIG")
+    return [f"LD_LIBRARY_PATH={orig}"] if orig is not None else ["-u", "LD_LIBRARY_PATH"]
+
+
+def _machine_python() -> str | None:
+    """The machine's python3, if it meets PYTHON_FLOOR. Asked once per process."""
+    if "python3" not in _engine_cache:
+        found, ok = shutil.which("python3"), False
+        if found:
+            env = {k: v for k, v in os.environ.items() if k != "LD_LIBRARY_PATH"}
+            if "LD_LIBRARY_PATH_ORIG" in os.environ:
+                env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH_ORIG"]
+            probe = f"import sys; sys.exit(sys.version_info < {PYTHON_FLOOR!r})"
+            try:
+                ok = subprocess.run([found, "-c", probe], env=env,  # noqa: S603
+                                    capture_output=True, timeout=10).returncode == 0
+            except (OSError, subprocess.SubprocessError):
+                ok = False
+        _engine_cache["python3"] = found if ok else None
+    return _engine_cache["python3"]
+
+
+def _engine_copy() -> Path | None:
+    """The AppImage's engine, copied out of the bundle (ONEUP-0054 §4.7).
+
+    The bundle's mount goes when the window exits, and an engine still reading
+    from it mid-transaction would break INV-5 — so the source is copied to a
+    directory named for its own content and run from there. Written whole into a
+    temporary sibling and renamed into place, so a half-written copy is never
+    launched. Older copies are left alone: nothing records which one a live engine
+    is using, so no deletion can be shown safe."""
+    src = HERE / "engine-src"
+    files = sorted(p for p in src.rglob("*.py") if "__pycache__" not in p.parts) \
+        if src.is_dir() else []
+    if not files:
+        return None
+    digest = hashlib.sha256()
+    for path in files:
+        digest.update(path.relative_to(src).as_posix().encode() + b"\0")
+        digest.update(path.read_bytes() + b"\0")
+    dest = STATE_DIR / "engine" / digest.hexdigest()[:16]
+    if (dest / "oneup" / "engine" / "__main__.py").is_file():
+        return dest
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        tmp = Path(tempfile.mkdtemp(prefix=dest.name + ".", dir=dest.parent))
+        try:
+            for path in files:
+                target = tmp / path.relative_to(src)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(path, target)
+            os.replace(tmp, dest)
+        except OSError:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
+    except OSError:
+        pass                     # another process won the rename, or the disk is full
+    return dest if (dest / "oneup" / "engine" / "__main__.py").is_file() else None
+
+
+def _resolve_engine() -> tuple[list[str] | None, list[str]]:
+    """The argv prefix that launches the engine, or None — plus what was tried.
+
+    Replaces `_find_engine`, which returned its first candidate whether or not it
+    existed, so each caller decided what a missing engine looked like
+    (`docs/standards/files-and-naming.md` §7 Trap 4). This reports what it tried,
+    and says so on stderr once per process, so a guard that returns silently still
+    leaves a trace (ONEUP-0054 §4.7: "so no caller has to")."""
+    if getattr(sys, "frozen", False):
+        python, copy = _machine_python(), _engine_copy()
+        tried = [f"the engine source in {HERE / 'engine-src'}",
+                 f"a python3 of {PYTHON_FLOOR[0]}.{PYTHON_FLOOR[1]} or newer on PATH"]
+        prefix = (["env", *_library_path_env(), f"PYTHONPATH={copy}",
+                   python, "-m", "oneup.engine"] if python and copy else None)
+    else:
+        main = HERE / "oneup" / "engine" / "__main__.py"
+        tried = [str(main)]
+        inherited = os.environ.get("PYTHONPATH", "")
+        pythonpath = f"{HERE}{os.pathsep}{inherited}" if inherited else str(HERE)
+        prefix = (["env", f"PYTHONPATH={pythonpath}", sys.executable, "-m", "oneup.engine"]
+                  if main.is_file() else None)
+    if prefix is None and not _engine_cache.get("reported"):
+        _engine_cache["reported"] = True
+        print(f"OneUp: the update engine was not found; tried {'; '.join(tried)}",
+              file=sys.stderr)
+    return prefix, tried
 
 
 def engine_argv(*args: str) -> list[str]:
@@ -122,29 +203,28 @@ def engine_argv(*args: str) -> list[str]:
 
     A `QProcess` site takes `argv[0]` as the program and `argv[1:]` as its
     arguments; a `subprocess` site passes the list whole. Every launch in the
-    window goes through here, so the window can launch a non-Bash engine at all.
+    window goes through here. Call it only where `engine_available()` said yes —
+    with no engine there is no command to give, and it raises.
 
-    The v2 arm is headed by `env` carrying `PYTHONPATH`: `-m` resolves only
-    from the checkout root otherwise, and an argv cannot carry an environment
-    any other way. Not by mutating `os.environ`, which would reach the v1 bash
-    child too; not by a per-site environment, which would change the work at
-    all eight call sites to serve one arm of one helper. The engine spells a
-    call the same way (`sudo env LC_ALL=C bash -c` in `oneup/engine/steps.py`).
+    The argv is headed by `env` carrying `PYTHONPATH`: `-m` resolves only from
+    the package's parent otherwise, and an argv cannot carry an environment any
+    other way short of a per-site environment at all eight call sites. The engine
+    spells a call the same way (`sudo env LC_ALL=C bash -c` in `oneup/engine/steps.py`).
     """
-    if _engine_is_v2():
-        inherited = os.environ.get("PYTHONPATH", "")
-        pythonpath = f"{HERE}{os.pathsep}{inherited}" if inherited else str(HERE)
-        return ["env", f"PYTHONPATH={pythonpath}",
-                sys.executable, "-m", "oneup.engine", *args]
-    return ["bash", str(ENGINE), *args]
+    prefix, tried = _resolve_engine()
+    if prefix is None:
+        raise FileNotFoundError(f"no update engine; tried {'; '.join(tried)}")
+    return [*prefix, *args]
 
 
 def engine_available() -> bool:
-    """Is the SELECTED engine present? `ENGINE.exists()` asks it of a Bash file,
-    which answers about the wrong engine once the switch is on."""
-    if _engine_is_v2():
-        return (HERE / "oneup" / "engine" / "__main__.py").is_file()
-    return ENGINE.exists()
+    """Can the engine be launched? The guard every launch site checks first."""
+    return _resolve_engine()[0] is not None
+
+
+def engine_tried() -> str:
+    """What the resolver looked for, for a "could not find" message."""
+    return "\n".join(_resolve_engine()[1])
 
 
 # The root updater.py — the thing a launcher names. Resolved once, here, because

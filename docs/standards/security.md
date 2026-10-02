@@ -99,9 +99,9 @@ The GUI launches the engine with `QProcess` and reads its output; it never launc
 **privileged** `zypper`. It does make one direct, unprivileged call — `read_repos` runs
 `zypper --non-interactive lr -u` to list repositories, which needs no root.
 
-**1.3 — The engine never imports Qt.** It is Bash, so it imports nothing; measured, the
-only occurrences of a Qt name in `update_system.sh` are two comments mentioning
-`QProcess`. The property that matters, and the one gate **G5** tests, is that the engine
+**1.3 — The engine never imports Qt.** The Python engine imports nothing from PySide6 or
+from the window's package (`tests/imports-test.py`'s INV-3 fails on the second); the Bash
+fallback imports nothing at all. The property that matters, and the one gate **G5** tests, is that the engine
 runs with **PySide6 absent**. This is gate **G5** in the 2.0 design, and it tests HALF of
 the split — the dependency direction. The other half is the import rule,
 `docs/standards/files-and-naming.md` §4.1 rule 2: an engine module importing a Qt-free
@@ -148,8 +148,8 @@ without validation is a root shell injection, full stop.
 
 ## 2. One authentication per run
 
-**2.1 — The engine authenticates once, up front.** `sudo_init` in `update_system.sh`
-raises a single graphical prompt via `sudo -A -p "<label>" -v`, then starts a keep-alive that refreshes
+**2.1 — The engine authenticates once, up front.** The engine's `sudo_init` (in its
+privilege module; the Bash fallback has a function of the same name) raises a single graphical prompt via `sudo -A -p "<label>" -v`, then starts a keep-alive that refreshes
 the credential every 50 seconds for the life of the run. **Zero** prompts, and no
 keep-alive at all, when §5's passwordless drop-in is active **and covers what this engine
 issues** — `sudo_init` asks `auth_current`, not merely whether a rule exists, and returns
@@ -162,8 +162,9 @@ return skipped the bootstrap and the user met sudo's own bare prompt in the midd
 labelled prompt up front, which is the honest failure and the safety net for anything the
 rule turns out not to cover.
 
-**2.2 — Privileged output is captured with `sudo_capture`, never a subshell.** This is the
-most expensive trap in the project's history and the reason the helper exists:
+**2.2 — In the Bash engine, privileged output is captured with `sudo_capture`, never a
+subshell.** It binds `main`'s engine and the retained fallback; §2.3 is the Python form.
+This is the most expensive trap in the project's history and the reason the helper exists:
 
 With no terminal — and there is none, because the GUI runs the engine through `QProcess` —
 sudo keys its cached credential to the **parent process id** (`sudoers(5)`, `timestamp_type`:
@@ -189,8 +190,8 @@ A **top-level** `sudo … | tee` is fine — sudo remains the caller's own child
 **2.3 — In the Python engine (ONEUP-0054), the same trap takes a different shape.** There
 is no subshell in Python, so the rule translates to: **one runner object owns every
 privileged child process.** Do not scatter `subprocess.run(["sudo", …])` calls across
-modules; route them through a single helper that is the sudo parent for the whole run,
-exactly as `sudo_capture` is today. **The failure mode carries over; the symptom does
+modules; route them through a single helper that is the sudo parent for the whole run, as
+`sudo_capture` is in the Bash engine. That helper is the privilege module's `sudo`. **The failure mode carries over; the symptom does
 NOT.** In Python every `subprocess.run(["sudo", …])` has the one engine process as sudo's
 parent, so scattered calls share a credential and raise no extra dialog — the Bash symptom
 exists only because bash forks a real subshell with its own pid (§2.2). **So prompt
@@ -236,8 +237,8 @@ plain `sudo` **on purpose**: each inherits the exported `SUDO_ASKPASS` and `SUDO
 anyway. That is why the export is mandatory rather than a convenience: it is what makes
 "every prompt is attributable" true of a call site that never mentions it.
 `ASKPASS` defaults to `/usr/libexec/ssh/ksshaskpass` and is overridable via
-`ONEUP_ASKPASS` so tests point it at a mock (the `ASKPASS=` constant near the top of
-`update_system.sh`).
+`ONEUP_ASKPASS` so tests point it at a mock (the engine's `ASKPASS` constant in its
+privilege module; the Bash fallback's near the top of `update_system.sh`).
 
 **3.2 — `SUDO_ASKPASS` is exported, not merely set.** sudo consults
 the askpass helper only when it finds the variable **in the environment**. Without the
@@ -389,7 +390,7 @@ OneUp's update commands as root without a password. It stores **no password anyw
 not in a keyring, not in a file, not in memory.
 
 **5.2 — The exact scope**, built from resolved absolute paths at grant time
-(`build_auth_rule` in `update_system.sh`):
+(`build_auth_rule` in the engine's actions module; the Bash fallback has its own):
 
 | Entry | Why |
 | --- | --- |
@@ -477,10 +478,13 @@ and still prints its summary, so the user sees what did happen, and reports
 judged by modification time rather than by deleting the file at startup, because deleting
 would swallow a stop the user clicked a moment earlier.
 
-**6.3 — A run must survive the GUI going away.** The logging `exec` uses `tee -a -p`
-(`--output-error=warn-nopipe`). Without `-p`, quitting the GUI kills `tee`, which `SIGPIPE`s
-the engine on its next line, so `cleanup` never runs and zypper is orphaned mid-transaction.
-`-p` is **probed, not assumed**, with a `PIPE` trap as the fallback. Correspondingly the GUI
+**6.3 — A run must survive the GUI going away.** The Python engine mirrors its own log:
+when the window's end of stdout goes, the mirror catches the `BrokenPipeError`, marks the
+console gone and carries on writing the log, and no child it starts inherits the window's
+pipe, so none can be `SIGPIPE`d by the quit. The Bash engine's logging `exec` uses `tee -a
+-p` (`--output-error=warn-nopipe`); without `-p`, quitting the GUI kills `tee`, which
+`SIGPIPE`s the engine on its next line, so `cleanup` never runs and zypper is orphaned
+mid-transaction. There `-p` is **probed, not assumed**, with a `PIPE` trap as the fallback. Correspondingly the GUI
 warns before quitting during a run and explains that it continues in the background.
 
 **Never add a code path that kills the engine mid-run.** Closing to the tray is not a quit

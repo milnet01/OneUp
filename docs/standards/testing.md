@@ -25,10 +25,10 @@ harness is deliberately not among them (ONEUP-0195).
 
 | Suite | File | Asserts on |
 | --- | --- | --- |
-| Engine | `tests/run-tests.sh` | the `@@MARKER@@` lines `update_system.sh` prints |
+| Engine | `tests/run-tests.sh` | the `@@MARKER@@` lines the engine prints — the `oneup.engine` package by default since ONEUP-0054 stage 9, any other command through `ONEUP_ENGINE_CMD` |
 | Engine parsers | `tests/parsers-test.py` | the pure half of the engine, `oneup/engine/parsers.py`, table-driven against real captured zypper output and the lock file's text |
 | Engine differential | `tests/differential-test.sh` | that `update_system.sh` and the `oneup.engine` package produce the same whole output and exit status when driven through the same mocks — gate G2 of ONEUP-0054, and what makes the rewrite auditable rather than trusted |
-| GUI | `tests/gui-smoke.py` | the window's state after being fed those same marker lines — and, in its `ONEUP_ENGINE=v2` pass only, one scenario that launches the Python engine through the window's own code path and asserts the window acted on what the engine actually sent (gate G3 of ONEUP-0054). That scenario skips in the default pass |
+| GUI | `tests/gui-smoke.py` | the window's state after being fed those same marker lines — and one scenario that launches the Python engine through the window's own code path and asserts the window acted on what the engine actually sent (gate G3 of ONEUP-0054) |
 | Version bump | `tests/bump-test.py` | that a real bump still parses the five real version sites, and rewrites the CHANGELOG heading and both links correctly (`docs/standards/workflow.md` §5.1's row owns the exact split) |
 | Package structure | `tests/imports-test.py` | the `oneup/` package's structural rules — how path constants are imported, which way the engine and window may depend on each other, and how the engine is launched (`docs/standards/workflow.md` §6's row names each) |
 
@@ -166,8 +166,8 @@ with a stated one:
   real external service, an opt-in gate, and a loud SKIP — or it is a breach, not a
   precedent.
 
-The engine suite creates **one throwaway directory per scenario and removes every one** —
-the keep-alive-guard scenario is the only one that needs none. The invariant is the
+The engine suite creates **one throwaway directory per scenario that needs one, and removes
+every one**. The invariant is the
 *pairing*, not a total: every `X=$(mktemp -d)` has an `rm -rf "$X"`, and a scenario that
 adds the first without the second is the leak this rule exists to catch. Two totals cannot
 show it — the suite's own directories are not all called `$d`. A scenario adds the removal as
@@ -177,12 +177,7 @@ when a scenario is commented out during debugging.
 ## 3. The mock-PATH sandbox
 
 Almost every engine scenario builds a directory of fake system tools and prepends it to
-`PATH`. (The exception is the keep-alive-guard scenario, which executes a
-`sed`-extracted fragment of the engine rather than the engine, and is safe only because its
-`kill -0` guard fails before the body runs. **Its safety rests on that guard and nothing
-asserts the guard** — the suite does assert what the keep-alive *does* (it exits once the
-engine is gone, SIGKILL and all), but not that this scenario's extracted fragment stays
-harmless when it does not.)
+`PATH`.
 `setup_common` in `tests/mock-env.sh` supplies the ones every scenario needs — `sudo`,
 `systemctl`, `snapper`, `notify-send`, `flatpak`, `fwupdmgr`, `df` — and the scenario
 overwrites whichever it needs to behave differently, usually `zypper`.
@@ -337,9 +332,9 @@ And **a test that cannot be made quiet says why in a comment, with a roadmap id.
 
 ## 8. New in 2.0: unit tests become possible
 
-The Bash engine can only be tested end-to-end — there is no way to call `progress_filter`
+The Bash engine could only be tested end-to-end — there was no way to call `progress_filter`
 with a line and inspect what it returns without running a whole scenario. The Python engine
-(ONEUP-0054) changes that, and the suite should take the offer:
+(ONEUP-0054) changed that, and the suite should take the offer:
 
 - **Unit-test the parsers.** zypper's `Retrieving: … (12/77)`, `( 7/77) Installing:`,
   `Preloading:`, `Package download size:` / `Overall download size:` — one function, a

@@ -2,10 +2,14 @@
 #
 # Build a single-file OneUp AppImage.
 #
-# PyInstaller freezes the GUI + the engine script + the icon into ONE self-
-# contained binary (Python and Qt included), then appimagetool wraps it with
-# desktop integration. The result — OneUp-x86_64.AppImage — needs nothing
-# installed on the target machine except FUSE to run it (libfuse2).
+# PyInstaller freezes the GUI + the icon into ONE self-contained binary (Python
+# and Qt included), then appimagetool wraps it with desktop integration. The
+# engine travels as source under engine-src/: the window copies it out of the
+# bundle and runs it on the machine's own python3, because the bundle's mount
+# goes when the window exits and the engine must outlive it (ONEUP-0054 §4.7).
+# So the result — OneUp-x86_64.AppImage — needs FUSE (libfuse2) and a python3 of
+# 3.13 or newer on the target machine (docs/standards/coding.md §1's floor, which
+# every supported openSUSE ships).
 #
 # Usage:  packaging/appimage/build-appimage.sh
 # Deps :  python3 (+venv), curl, and libfuse2 on the build host.
@@ -30,6 +34,8 @@ python3 -m venv "$work/venv"
     --name oneup \
     --paths "$here" \
     --add-data "$here/update_system.sh:." \
+    --add-data "$here/oneup/__init__.py:engine-src/oneup" \
+    --add-data "$here/oneup/engine:engine-src/oneup/engine" \
     --add-data "$here/data/$app_id.svg:data" \
     --distpath "$work/dist" --workpath "$work/build" --specpath "$work" \
     "$here/updater.py"

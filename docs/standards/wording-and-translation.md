@@ -147,7 +147,7 @@ and says why.
 **Once that lands:** a marker payload is an **identifier, not text**. It is never
 translated, never shown to the user verbatim, and renaming one is a contract change
 (`docs/reference/marker-protocol.md`). The engine's terminal output — the plain log lines a
-user sees when running `./update_system.sh` in a terminal — stays English, because it is a
+user sees when running the engine (`python3 -m oneup.engine`) in a terminal — stays English, because it is a
 system tool's output and the engine has no locale machinery by design.
 
 ## 6. Writing a translatable string

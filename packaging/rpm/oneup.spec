@@ -34,8 +34,9 @@ and firmware, and cleans up leftover packages and the download cache — each an
 optional toggle. It can check for updates read-only, follow the desktop
 light/dark theme, and optionally check weekly in the background and notify you.
 
-The GUI never runs as root; a small engine script (update_system.sh) does the
-privileged work behind a single password prompt.
+The GUI never runs as root; a separate engine (the oneup.engine Python package,
+also runnable as oneup-engine) does the privileged work behind a single password
+prompt. The previous shell engine, update_system.sh, ships as a fallback.
 
 %prep
 %autosetup -n oneup-%{version}
@@ -66,6 +67,14 @@ exec python3 %{_datadir}/oneup/updater.py "$@"
 EOF
 chmod 0755 %{buildroot}%{_bindir}/oneup
 
+# The engine on its own, for a terminal (ONEUP-0054 §4.7). The window does not use
+# it: it launches `python3 -m oneup.engine` itself, with the same PYTHONPATH.
+cat > %{buildroot}%{_bindir}/oneup-engine <<'EOF'
+#!/bin/sh
+exec env "PYTHONPATH=%{_datadir}/oneup${PYTHONPATH:+:$PYTHONPATH}" python3 -m oneup.engine "$@"
+EOF
+chmod 0755 %{buildroot}%{_bindir}/oneup-engine
+
 # Desktop entry, icon and AppStream metadata.
 install -Dm0644 data/%{app_id}.desktop \
     %{buildroot}%{_datadir}/applications/%{app_id}.desktop
@@ -78,6 +87,7 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %license LICENSE
 %doc README.md
 %{_bindir}/oneup
+%{_bindir}/oneup-engine
 %{_datadir}/oneup/
 %{_datadir}/applications/%{app_id}.desktop
 %{_datadir}/icons/hicolor/scalable/apps/%{app_id}.svg

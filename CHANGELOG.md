@@ -17,6 +17,15 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **OneUp now runs its updates with a new engine written in Python** (ONEUP-0054)
+  The part of OneUp that does the actual updating has been rewritten in
+  Python, the same language as the window, and the window now uses it for
+  every update. It does the same five jobs in the same order and asks for
+  your password once, as before. The AppImage runs it with your computer's
+  own Python, which needs to be version 3.13 or newer; every supported
+  openSUSE has it. The old engine, update_system.sh, still ships for now
+  and can be run by hand in a terminal, but the window no longer uses it.
+
 - **The window has been reworked so there is one obvious thing to press.** (ONEUP-0064)
   The title bar carries two buttons instead of four — Repositories and Recenter
   have moved into Settings, which is now grouped under three headings instead of

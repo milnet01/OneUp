@@ -34,9 +34,10 @@ see §7.
 
 Each side writes or reads it through one helper:
 
-- Engine: `update_system.sh`'s `marker()` — `printf '@@%s@@|%s\n' "$1" "$2"`. The Python
-  engine's is `oneup/engine/markers.py`'s `marker`, which also folds every line break in a
-  payload to a space, so a payload cannot fabricate a second marker line (ONEUP-0152).
+- Engine: `oneup/engine/markers.py`'s `marker`, which also folds every line break in a
+  payload to a space, so a payload cannot fabricate a second marker line (ONEUP-0152). The
+  retained Bash fallback's is `update_system.sh`'s `marker()` —
+  `printf '@@%s@@|%s\n' "$1" "$2"`.
 - Window: `oneup/gui/run.py`'s `handle_line` sends any line starting with `@@` to
   `handle_marker`, which calls `oneup/gui/markers.py`'s `split_marker` to cut the tag from
   the fields. (Both were methods of `Updater` in `updater.py` until ONEUP-0034.)
@@ -91,7 +92,7 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@STEP_BEGIN@@` | `key\|index\|total\|label` | `begin_step` | `handle_marker` |
 | `@@STEP_END@@` | `key\|status\|detail` | `end_step` | `handle_marker` |
 | `@@TIMING@@` | `key\|seconds` | `end_step` | `handle_marker` |
-| `@@PROGRESS@@` | `key\|done\|total\|phase[\|bytes\|bytes_total]` | `emit_progress`, `progress_filter` | `handle_marker` |
+| `@@PROGRESS@@` | `key\|done\|total\|phase[\|bytes\|bytes_total]` | `emit_progress`, fed by `stream_filtered` (`progress_filter` in the Bash fallback) | `handle_marker` |
 | `@@REFRESH@@` | `done\|total\|alias` | `refresh_repos` | `handle_marker` |
 | `@@SNAPSHOT@@` | `id` | the pre-update snapshot block | `handle_marker` |
 | `@@SNAPSHOT_ITEM@@` | `id\|date\|description` | the same block, once per restore point | `handle_marker` |
@@ -307,8 +308,9 @@ this contract during 2.0.
 **A marker's name and field layout are a contract between the files below.** Changing one
 means changing all of them **in the same commit**:
 
-1. the emitters — `update_system.sh`, and every call to `oneup/engine/markers.py`'s helpers
-   that builds that marker's payload, wherever under `oneup/engine/` it sits,
+1. the emitters — every call to `oneup/engine/markers.py`'s helpers that builds that
+   marker's payload, wherever under `oneup/engine/` it sits. `update_system.sh` is frozen
+   at the switch-over and is not converted with them (`docs/design/oneup-2.0.md` §4),
 2. the window's parser — `oneup/gui/run.py`'s `handle_marker`, and every side-channel
    reader §2 lists for that marker. It was `Updater.handle_marker` in
    `updater.py` until ONEUP-0034; that file is now the shim and holds no parser,
@@ -371,15 +373,17 @@ Until that lands, the payloads are English prose (§4.10, §5.1).
 - **Confusing `SNAPSHOT` with `SNAPSHOTS`** (§4.5).
 - **Assuming a new marker reaches the window.** If it is emitted on a side channel, only
   that channel's reader sees it (§2).
-- **Emitting a marker from inside a subshell that also runs `sudo`.** Not a protocol rule,
-  but it bites here: privileged capture goes through `sudo_capture`, never `$(sudo …)` —
-  see `docs/standards/security.md`.
+- **Running `sudo` anywhere but the engine's one privileged runner.** Not a protocol rule,
+  but it bites here: every privileged call goes through `privilege.sudo`, so each shares the
+  one authentication (`docs/standards/security.md` §2.3). In the Bash fallback the same rule
+  is `sudo_capture`, never `$(sudo …)`.
 
-## 7. Known drift in the engine's own header comment
+## 7. Known drift in the fallback's header comment
 
-`update_system.sh` carries an abbreviated marker list in its header. It is convenient and
-mostly right, but **these entries are inaccurate at `58ea3bc`**, and a reader who trusts
-them writes a wrong parser:
+The Python engine carries no marker list: `oneup/engine/markers.py` names this document as
+the contract (ONEUP-0066). The retained `update_system.sh` still carries an abbreviated
+list in its header, frozen at the switch-over, and **these entries are inaccurate**, so a
+reader who trusts them writes a wrong parser:
 
 | Entry | The header says | Actually |
 | --- | --- | --- |
@@ -388,9 +392,8 @@ them writes a wrong parser:
 | done | `ok\|errors` | `stopped` is a third value, and the one with a behaviour rule attached (§4.9) |
 | reboot | `yes\|no[\|reason]` | `yes[\|reason]` *or* `no` — the reason follows `yes` only (§4.8) |
 
-Left as-is rather than patched: `main` is frozen (`docs/standards/workflow.md` §1) and none
-of them is a defect in running code. **ONEUP-0066** tracks carrying the corrected list
-into the Python engine, where the rewrite replaces this comment anyway. Until then, this
+Left as-is rather than patched: `main` is frozen (`docs/standards/workflow.md` §1), the
+fallback is frozen at the switch-over, and none of them is a defect in running code. This
 document is the authority.
 
 ## 8. The four state files — a contract this protocol does *not* cover
@@ -447,9 +450,9 @@ path, and falls back to `~/.local/state` when it is unset, empty or relative —
 `update_system.sh`'s `ONEUP_STATE_DIR`, the Python engine in `oneup/engine/runstate.py`'s
 `_state_home`, the window in `oneup/gui/paths.py`'s `_state_home`.
 **Change one side alone and Stop stops working with nothing failing anywhere**: the window
-writes `stop.request` where the engine never looks. `tests/gui-smoke.py` asserts the Bash
-engine's answer equals the window's, by running the engine's own resolution lines against
-the window's over the same three inputs. Nothing compares the Python engine's.
+writes `stop.request` where the engine never looks. `tests/gui-smoke.py` asserts both
+engines' answers equal the window's over the same three inputs — the Python engine's by
+importing its own state module, the Bash fallback's by running its own resolution lines.
 
 The window is still isolated in tests by rewriting `HOME` as well
 (`docs/standards/files-and-naming.md` §5), because that is what covers the paths with no
@@ -470,7 +473,7 @@ the four lines, which three the window reads, and how each half deletes the file
 | §3's table matches the markers the engine emits | `tests/docs-check.py`, both ways: a marker the engine emits and this table omits, and a marker this table names that the engine never emits. It reads the `marker NAME` **call sites**, not the `@@NAME@@` literals in the engine's header comment — §7 records inaccuracies in that comment, so comparing against it would validate one stale list against another |
 | §1.1 a payload contains no `\|` | nothing automatic. The engine rewrites `\|` to `/` before emitting `SNAPSHOT_ITEM`; a new free-text field that forgets to is caught by nobody |
 | §1.2 a marker read must survive being spliced with stderr | nothing automatic — the three guards are in the window's `handle_marker`, and nothing checks a fourth has one |
-| §5.1 the contract is frozen for 1.x | nothing automatic |
+| §5.1 the contract is frozen during 2.0 | nothing automatic |
 
 **The gap left is the GUI half.** The engine's side of the contract is now compared against
 this table on every push, but nothing proves the window *handles* each marker it is told to.
