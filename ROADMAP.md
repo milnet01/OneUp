@@ -5582,7 +5582,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Source: user-real-run-2026-10-02.
   Lanes: gui.
 
-- 📋 [ONEUP-0234] **zypper's exit 103 (restart the package manager) is counted as a finished update, but the rest was not installed.**
+- ✅ [ONEUP-0234] **zypper's exit 103 (restart the package manager) is counted as a finished update, but the rest was not installed.**
   Reported by the Groundwork session from `man zypper` EXIT CODES: 103
   ZYPPER_EXIT_INF_RESTART_NEEDED is returned after a successful patch that
   requires the package manager itself to restart, so the rest of the
@@ -5592,6 +5592,12 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   once on 103. Both engines need the same change (main first, then v2's
   Python engine); a regression scenario with a mock that exits 103 once and 0
   on the second run.
+  Fixed 2026-10-02. main (96b3772): the install pass runs once more on
+  103; main had read 103 as a failed step, not a success — the
+  verification note above was taken on v2, where ONEUP-0166's zypper_ok
+  counted it as success. v2 (ea5ba63): both engines loop once and judge
+  with zypper_ok. Scenario: mock exits 103 then 0; red on both old
+  engines, main 337/0, v2 418/0.
   **Layman:** When zypper updates itself first, OneUp says the update finished, though the other updates still need another pass.
   Kind: fix.
   Source: peer-report groundwork 2026-10-02, verified in-session.
