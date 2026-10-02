@@ -362,7 +362,7 @@ Expected: FAIL — `AttributeError: ... '_tray_check_args'`.
         if line.startswith("@@CHECK@@|"):
             parts = line[len("@@CHECK@@|"):].split("|")
             if len(parts) >= 2 and parts[0] == "TOTAL":
-                self._apply_tray_total(int(parts[1]) if parts[1].isdigit() else 0)
+                self._apply_tray_total(int(parts[1]) if parts[1].isdecimal() else 0)  # isdigit() until ONEUP-0153
 
     def _on_traycheck_finished(self, *args):
         if self._traycheck_proc is not None:

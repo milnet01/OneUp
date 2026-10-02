@@ -259,9 +259,10 @@ a fresh total, refresh the tray too, so the icon doesn't lie while the window is
 These hooks live in `on_finished`, which already branches on
 `self._check_mode`:
 - **Check branch** (`_check_mode` true): `_apply_tray_total(int(self._installed_count) if
-  self._installed_count.isdigit() else 0)` — mirror the `.isdigit()` guard `on_finished` itself
-  uses (`_installed_count` is a free-form string, so a bare `int(...)` can
-  raise). The count came from the CHECK/TOTAL handling.
+  self._installed_count.isdecimal() else 0)` — mirror the `.isdecimal()` guard `on_finished`
+  itself uses (`_installed_count` is a free-form string, so a bare `int(...)` can
+  raise). Both read `.isdigit()` until ONEUP-0153: that also accepts superscript digits,
+  which `int()` refuses. The count came from the CHECK/TOTAL handling.
 - **Run branch** (`_check_mode` false) **and only when the run succeeded** (`ok`): set the tray
   neutral (updates were just installed → nothing waiting): `_apply_tray_total(0)`. On a **failed**
   run, do **not** touch the tray — its last known state stands (blanking it would falsely claim
