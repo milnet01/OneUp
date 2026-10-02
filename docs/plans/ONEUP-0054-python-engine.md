@@ -1,7 +1,7 @@
 # ONEUP-0054 — Python engine — build plan
 
 **Spec:** [docs/specs/ONEUP-0054-python-engine.md](../specs/ONEUP-0054-python-engine.md)
-**Status:** in progress — stages 1–4 done (2026-08-25), stage 5 done (2026-08-31), stage 6 done (2026-09-02); stage 7 under way.
+**Status:** in progress — stages 1–4 done (2026-08-25), stage 5 done (2026-08-31), stage 6 done (2026-09-02), stage 7 done (2026-09-03), stage 8 done (2026-10-02); stage 9 under way.
 
 ## Scope of this file
 
@@ -1649,6 +1649,171 @@ selectable; selecting is all this stage does.
 
 **ONEUP-0133, 0134 and 0135 are still run past**, as at stages 5 and 6.
 
+## Stage 8 — the real run
+
+No build steps: the user ran a full update through the window driving `v2` on 2026-10-02.
+Its findings are ONEUP-0231 (fixed on both branches) and ONEUP-0232, and the item's own
+roadmap body records the run.
+
+## Stage 9 — the switch-over
+
+**Branch: `v2` for the code, the packaging and every standard; the plan text and the
+spec's §4.7 amendment take the `main`-then-merge route**, as stages 6 and 7 settled. The
+standards edits name `oneup/engine/` files, which `docs/standards/workflow.md` §9's second
+binding sends to `v2`.
+
+**What this stage is.** Spec §4.6's row: the window defaults to the Python engine,
+packaging follows the package layout, and `update_system.sh` becomes the documented
+fallback. §4.7, as amended 2026-10-02, settles the three choices this stage turns on — the
+switch variable goes, the RPM gains an `oneup-engine` console script, and the AppImage runs
+a copy of the engine outside its bundle on the machine's own `python3`.
+
+**The fallback is a terminal fallback.** With `ONEUP_ENGINE` gone the window launches only
+the Python engine. `update_system.sh` keeps shipping through 2.0 (`docs/design/oneup-2.0.md`
+§4) and is run by hand; `README.md` says how, and says that from ONEUP-0072 onward it no
+longer speaks the window's protocol.
+
+**G1–G6 are not re-earned here.** Each was met at its own stage; this is the commit they
+are measured against (§4.6). What this stage must not do is break one: step 4 changes the
+engine suite's *default* engine and no assertion, which is what G1's diff review permits.
+
+### Steps
+
+1. **ONEUP-0149 — reproduce it before fixing it.** `_reexec_under_inhibitor` re-execs
+   `sys.executable -m oneup.engine`, which resolves only where `oneup` is importable from
+   the re-exec'd process. Drive the engine through every launch shape this stage leaves —
+   the checkout's `engine_argv`, the RPM wrapper of step 5, and step 2's copied-out tree —
+   with a mock `systemd-inhibit` that execs its command, and see whether any loses the
+   package. **If one does**, make the re-exec carry the package root on `PYTHONPATH` and
+   add the scenario that failed. **If none does**, record the measurement on ONEUP-0149
+   and close it without a code change; a guard for a path nothing reaches is not owed.
+   → **verify:** either a scenario red before the fix and green after, or ONEUP-0149's
+   closing note naming each launch shape driven and what it printed.
+
+2. **`oneup/gui/paths.py` — the flip and the resolver.** Remove `_engine_is_v2`,
+   `_find_engine` and `ENGINE`. A resolver returns either the argv prefix that launches the
+   engine or nothing, **plus the list of what it tried** (§4.7, and
+   `docs/standards/files-and-naming.md` §7 Trap 4's requirement). Two arms:
+   - **Not frozen** (a checkout, the RPM): `env PYTHONPATH=<HERE>[:inherited]`, the running
+     interpreter, `-m oneup.engine` — stage 7's v2 arm unchanged — and present only where
+     `<HERE>/oneup/engine/__main__.py` is a file.
+   - **Frozen** (the AppImage): copy the bundled engine source to
+     `<STATE_DIR>/engine/<digest>/`, where `<digest>` is a hash of the source's relative paths
+     and bytes, then launch `env PYTHONPATH=<that directory>`, the machine's `python3`,
+     `-m oneup.engine`. Copy into a temporary sibling and rename it into place, so a
+     half-written copy is never launched; reuse an existing directory with that digest
+     unchanged. Take `*.py` files only, never a `__pycache__`. Find `python3` on `PATH`
+     and accept it only if it reports a version at or above `docs/standards/coding.md`
+     §1's floor; ask once per process. Remove other digests' directories only when no run
+     is recorded in `run.state`, so an engine started by an older window is never deleted
+     from under it.
+
+   `engine_argv` and `engine_available` keep their names and contracts, so no call site
+   changes for the launch itself.
+   → **verify:** in `tests/gui-smoke.py`, with the state paths sandboxed (testing.md §2):
+   the checkout arm's argv is exactly stage 7's v2 argv; with `sys.frozen` faked and
+   `HERE` pointed at a sandbox holding a source tree, the resolver copies it, the copy
+   answers `--help`, a second resolve reuses the directory, and an edit to one source byte
+   produces a new digest; with `python3` made unresolvable it reports unavailable and the
+   tried list names the interpreter it looked for. The old assertion that `paths.ENGINE`
+   resolves to `update_system.sh` goes, replaced by these. Each new check seen red against
+   a resolver with that behaviour removed.
+
+3. **The "could not find" messages name what was tried.** Every site that today prints
+   `' '.join(paths.engine_argv())` on a missing engine — `app.py` twice, `run.py` — prints
+   the resolver's tried list instead, and the two sites that skip silently (`tray.py`,
+   `autostart.py`) keep doing so, being background probes with nobody to tell.
+   → **verify:** with the engine's entry module moved aside, Run warns and the warning
+   names the path it looked for; the headless `--check` entry prints the same list to
+   stderr and exits non-zero.
+
+4. **The suites and gates follow the default.** `tests/mock-env.sh`'s default
+   `ENGINE_CMD` becomes the Python engine, so `tests/run-tests.sh` with nothing set tests
+   what users now run; `ONEUP_ENGINE_CMD` still overrides it. `tests/gui-smoke.py`'s G3
+   scenario drops its `ONEUP_ENGINE` skip and always runs. `local-CI.sh` and
+   `.github/workflows/release.yml` drop the second window pass, which existed only to set
+   the variable this stage removes. `tests/differential-test.sh` already pins both engines
+   per side and keeps comparing them while `update_system.sh` ships. Add the state-path
+   parity check `docs/reference/marker-protocol.md` §8 says is missing: the window's
+   `paths._state_home` against the Python engine's, as the existing check does against the
+   Bash one.
+   → **verify:** the engine suite with both variables unset reports the same passed and
+   failed counts as with `ONEUP_ENGINE_CMD='python3 -m oneup.engine'`, and goes red with
+   the Python engine's entry module replaced by a stub — so the default really moved; run
+   from the repo root and from another directory. The suite diff touches no assertion. The
+   window suite is green in one pass with the G3 scenario reported as run, not skipped.
+
+5. **Packaging.**
+   - **RPM** (`packaging/rpm/oneup.spec`): install `%{_bindir}/oneup-engine`, a wrapper
+     that runs `python3 -m oneup.engine` with `%{_datadir}/oneup` on `PYTHONPATH`, and list
+     it in `%files`. `update_system.sh` stays installed. `%description` names the Python
+     engine.
+   - **AppImage** (`packaging/appimage/build-appimage.sh`): add the engine's source as data,
+     at the path step 2's frozen arm reads, alongside the existing `update_system.sh` and
+     icon entries.
+   - **OBS** (`packaging/obs/_service`): nothing. It rolls the tagged source, which carries
+     the package already.
+
+   → **verify:** `rpmbuild -bb` from a `git archive` tarball, in a scratch tree on a real
+   disk, succeeds and `rpm -qlp` lists both `oneup-engine` and `update_system.sh`.
+   `./local-CI.sh --full` builds the AppImage. That AppImage's headless `--check`, run with
+   `XDG_STATE_HOME` pointed at a scratch directory, exits as a source checkout's does,
+   leaves one digest directory there, and while it runs the process list shows the
+   machine's `python3` running from that directory and not from the bundle's mount.
+
+6. **`tests/docs-check.py`'s marker gate.** Its untested-marker check reads only the Bash
+   engine's `marker NAME` call sites, so a marker the Python engine alone emits could go
+   untested unnoticed. Key it on the Python emitters; keep the Bash/Python parity check
+   while `update_system.sh` ships.
+   → **verify:** a temporary `marker("ZZ_PROBE", …)` call in an engine module, asserted by
+   no scenario, is reported; removed, the check is clean.
+
+7. **Mark the fallback.** A comment at the head of `update_system.sh` says it is the
+   retired fallback, frozen at the switch, removed in 2.1, and names the Python engine as
+   current. Comments only: its `--help` and output are what G2 compared.
+   → **verify:** `tests/differential-test.sh` reports no new divergence.
+
+8. **The documents the switch makes false** — spec §8's list, each now recording code that
+   exists, which is rule 14's exception rather than a direction:
+   - `CLAUDE.md` §2's engine commands, §4's two-file description of `v2` and its `TASKS` /
+     `LABEL` pointer, and §6's Bash-specific traps — rewritten as properties of the
+     package (§8), each keeping its measurement.
+   - `README.md`: the design notes name the Python engine; the standalone instructions
+     name `python3 -m oneup.engine` and the RPM's `oneup-engine`, and give
+     `update_system.sh` as the fallback with ONEUP-0072's caveat.
+   - `docs/reference/marker-protocol.md`: §1 and §3 name the Python emitters; §5's
+     emitter list leads with them; §6's `sudo_capture` trap becomes the single-runner rule;
+     §7 shrinks to a note that the fallback's header list is stale and this document is
+     the authority (ONEUP-0066's resolution); §8's missing-check sentence goes with step 4's
+     check. **§5.1's freeze is untouched** (spec §8).
+   - `docs/standards/testing.md` §1's engine, differential and window rows, §2.3, §3's
+     stale keep-alive-guard parenthetical, §8.
+   - `docs/standards/security.md` §1.3, §2.1–§2.4, §3.1, §5.2, §6.3 — leading with the
+     Python mechanism and keeping the Bash one only where the fallback still has it.
+   - `docs/standards/files-and-naming.md` §1, §5 (the engine copy is a new path under the
+     state directory), §5.1's `ONEUP_ENGINE` bullet removed, §6 item 2, §7 Trap 4 closed by
+     step 2, and its *What checks this* row for the replaced assertion.
+   - `docs/standards/workflow.md` §6's gate table — one window row, the engine row naming
+     the Python engine — with the stated range re-measured in the same edit.
+   - `docs/standards/wording-and-translation.md`'s line naming `./update_system.sh` as the
+     terminal path.
+   - `CHANGELOG.md` `[Unreleased]`: one user-facing entry.
+   → **verify:** `python3 tests/docs-check.py` clean; a search of these files for
+   `update_system.sh` returns only passages about the fallback; `./local-CI.sh` green with
+   both variables unset **and the measured time in the commit body**.
+
+9. **The live check.** Launch the window from the checkout and press *Check for updates*.
+   → **verify:** the process list shows `python3 -m oneup.engine` and no `bash` running
+   `update_system.sh`, and the window reports the check as it did on `v1`.
+
+### Not stage 9's
+
+**The 2.0.0 version bump, the `Implemented` status flips and G8's three launches** are the
+release's (`docs/design/oneup-2.0.md` §7, G8 and G9). **Refreshing that document's §4
+packaging bullets** is G9's, at the tag. **Deleting `update_system.sh`** is 2.1's.
+**ONEUP-0072** follows this stage (§5.2), and with it the fallback stops being a drop-in for
+the window.
+
 ## Definition of done
 
 **Stage 1 is done** when `main`'s §4.4 matches `v2`'s; neither call site in
@@ -1767,6 +1932,15 @@ is not local-only; when step 8's amendment has landed on `main` and merged; and 
 `./local-CI.sh` is green on `v2` with both variables unset. **G3 and G5 are met here.**
 **The seen-to-fail clauses are in this list because nothing else holds them** — a scenario
 that has never been red is not yet known to be a test. `main`'s behaviour is unchanged.
+
+**Stage 9 is done** when the window launches the Python engine with nothing set and
+`ONEUP_ENGINE` is read nowhere; when the resolver reports what it tried and each of step
+2's checks has been seen red; when ONEUP-0149 is closed by a scenario or by its recorded
+measurement; when the engine suite's default is the Python engine and its counts match the
+overridden run's; when the RPM builds with `oneup-engine` listed, and the AppImage's
+headless `--check` runs its engine from a copy outside the bundle; when the marker gate
+reports a Python-only untested marker; when step 8's documents read true on `v2`; and when
+`./local-CI.sh` is green on `v2` with both variables unset.
 
 **The item is done** at stage 9, when G1–G6 are met. `docs/design/oneup-2.0.md`
 §7 owns the gate; spec §4.6 says which stage earns each of them and that stage 9

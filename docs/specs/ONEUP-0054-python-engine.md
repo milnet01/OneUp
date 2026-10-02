@@ -460,10 +460,12 @@ engine changes hands. ONEUP-0032 still follows it (`docs/design/oneup-2.0.md` §
 ### 4.7 Packaging and the switch
 
 - **Entry points.** `python3 -m oneup.engine` from a checkout; an `oneup-engine` console
-  script when installed — created at stage 9, in the RPM's `%files` and the AppImage build
-  alongside the existing `oneup` wrapper. Every hardcoded `bash`-plus-`ENGINE` launch in the window becomes
+  script in the RPM, created at stage 9 in its `%files` alongside the existing `oneup`
+  wrapper. Every hardcoded `bash`-plus-`ENGINE` launch in the window becomes
   one helper, and that helper *is* the switch: an `ONEUP_ENGINE=v1|v2` environment variable
-  during stages 7–8, then a default flip. **There are eight, not six** — the six `QProcess`
+  during stages 7–8, then a default flip **that removes the variable** — the window then
+  launches only the Python engine, and the way back is `update_system.sh` run in a terminal.
+  **There are eight, not six** — the six `QProcess`
   sites (`.start("bash", …)`) and **two `subprocess.run(["bash", str(ENGINE), …])` calls in
   the headless timer entry points**, `_headless_check` and `_headless_update`. Missing those
   two is the expensive mistake: they are the unattended paths, so a pair still launching v1
@@ -507,7 +509,17 @@ engine changes hands. ONEUP-0032 still follows it (`docs/design/oneup-2.0.md` §
   the drop-in is not.
 - **The three packaging paths** — what each does today and what each therefore needs — are
   `docs/design/oneup-2.0.md` §4, which owns them because ONEUP-0034 must move with them.
-  Nothing engine-specific to add beyond the entry points above.
+  **One engine-specific addition, for the AppImage** (the user's decision, 2026-10-02,
+  recorded on ONEUP-0054). The window there is a PyInstaller bundle with no interpreter
+  `-m` can run, and the engine must **not** run from inside the bundle's mount: measured
+  with a throwaway type-2 AppImage, a child started with inherited descriptors closed —
+  Python's `subprocess` default — loses the mount the moment the launcher exits, and its
+  next read fails. An engine doing that mid-transaction breaks INV-5. So the bundle carries
+  the engine's source as data; the window copies it to a directory under the state
+  directory named for the source's content, and runs it with the machine's own `python3`,
+  which must meet `docs/standards/coding.md` §1's floor. Where no such interpreter exists
+  the resolver reports that, and the paths it tried, rather than launching. The AppImage
+  carries no `oneup-engine` console script — nothing outside the bundle could reach one.
 - **`update_system.sh` is retired, not deleted**, in stage 9. The schedule and the reason
   are `docs/design/oneup-2.0.md` §4's, which owns them; what this spec adds is that stage 9
   is where the retirement happens.
