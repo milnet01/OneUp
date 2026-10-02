@@ -5477,7 +5477,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Source: user-real-run-2026-10-02.
   Lanes: engine.
 
-- 📋 [ONEUP-0232] **The stall line blames the server while flatpak is installing from a finished download on a busy disk.**
+- ✅ [ONEUP-0232] **The stall line blames the server while flatpak is installing from a finished download on a busy disk.**
   Seen on the ONEUP-0054 stage-8 run (2026-10-02): flatpak had printed
   100% for Discord and was deploying to /mnt/Games (sdb at ~100% util,
   flatpak in state D, still reading). The window said "nothing received
@@ -5485,6 +5485,13 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   normally. The line should not name the server as the cause when
   nothing shows a download is in progress. Wording item; check whether
   main's window says the same before choosing the branch.
+  Resolved (2026-10-02): main 71165e0, v2 8cdffbb (merge, ported to
+  oneup/gui/run.py). The stall line names the server only while a source is
+  being fetched before any package phase, or during the system step's
+  download phase; otherwise it says the update is still working and makes
+  no prompt-stop promise (ONEUP-0085 gives that only while downloading).
+  Four gui-smoke checks, red first on main (383/4), green after (387/0;
+  v2 510/0). Ships with 1.4.6 when that is cut.
   **Layman:** When the download had finished and the disk was just slow, the window said the server may have stalled, which was wrong.
   Kind: fix.
   Source: user-real-run-2026-10-02.
