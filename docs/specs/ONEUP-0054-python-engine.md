@@ -568,7 +568,8 @@ engine changes hands. ONEUP-0032 still follows it (`docs/design/oneup-2.0.md` §
   `ENGINE.exists()`, which is a question about a Bash file and answers about the wrong
   engine once the switch is on.
 
-  **The switch is two variables, not one.** `ONEUP_ENGINE=v1|v2` is the window's; §4.4's
+  **The switch is two variables, not one** (until stage 9, below, removed the window's).
+  `ONEUP_ENGINE=v1|v2` is the window's; §4.4's
   `ONEUP_ENGINE_CMD` stays the suite's. They answer different questions — the harness must
   pin an *arbitrary* command per side, while a scenario or a user switching the window
   names a side — and one name for both would let an export aimed at the suite reach the
@@ -580,9 +581,8 @@ engine changes hands. ONEUP-0032 still follows it (`docs/design/oneup-2.0.md` §
   environment, which would change the work at all eight sites to serve one arm of one
   helper.
 
-  **`_find_engine` was NOT replaced, and `ENGINE` stays.** v1 is what an ordinary launch
-  resolves until the flip, so the replacement and the path reporting the bullet above
-  describes land with stage 9 rather than with the switch.
+  **`_find_engine` was NOT replaced, and `ENGINE` stayed** — v1 was what an ordinary launch
+  resolved until the flip, so the replacement and its path reporting landed with stage 9.
 
   **G3's probe is `--auth-status`**, driven through the window's own `_query_auth_status`:
   read-only, and its privileged leg is `sudo` with `-k -n`, which refuses to prompt, so
@@ -590,6 +590,18 @@ engine changes hands. ONEUP-0032 still follows it (`docs/design/oneup-2.0.md` §
   `_stand_down_autoupdate` for its duration — the finish handler reaches that on an
   explicit `@@AUTH@@|off`, and it opens a modal dialog wherever the weekly timer is on and
   the drop-in is not.
+- **What stage 9 built** (2026-10-02, on `v2`). `ONEUP_ENGINE`, `_find_engine` and `ENGINE`
+  are gone; the window launches only the Python engine. A resolver returns the argv prefix
+  or nothing, plus what it tried, and writes that list to stderr itself once per process,
+  so the guards that return silently still leave a trace; the Run and headless messages
+  show the same list. `engine_argv` raises where no engine resolves, so every launch site
+  checks `engine_available` first, as each already did. **The AppImage arm** copies the
+  source the build puts under `engine-src/` to a directory under the state directory named
+  for a digest of that source, and launches the machine's `python3` from it through `env`,
+  which also restores `LD_LIBRARY_PATH` from `LD_LIBRARY_PATH_ORIG`, or removes it: a
+  PyInstaller one-file bundle points it at its own extraction directory and every child
+  inherits that (measured). The interpreter answer and the stderr flag are module state
+  the suite clears per case. Older digests are never pruned.
 - **The three packaging paths** — what each does today and what each therefore needs — are
   `docs/design/oneup-2.0.md` §4, which owns them because ONEUP-0034 must move with them.
   **One engine-specific addition, for the AppImage** (the user's decision, 2026-10-02,

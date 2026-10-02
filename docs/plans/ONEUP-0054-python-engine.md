@@ -1,7 +1,7 @@
 # ONEUP-0054 — Python engine — build plan
 
 **Spec:** [docs/specs/ONEUP-0054-python-engine.md](../specs/ONEUP-0054-python-engine.md)
-**Status:** in progress — stages 1–4 done (2026-08-25), stage 5 done (2026-08-31), stage 6 done (2026-09-02), stage 7 done (2026-09-03), stage 8 done (2026-10-02); stage 9 under way.
+**Status:** in progress — stages 1–4 done (2026-08-25), stage 5 done (2026-08-31), stage 6 done (2026-09-02), stage 7 done (2026-09-03), stage 8 done (2026-10-02), stage 9 built (2026-10-02, `v2` 6ecdf53).
 
 ## Scope of this file
 
