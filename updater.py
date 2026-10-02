@@ -3353,9 +3353,18 @@ for (var i = 0; i < wins.length; i++) {{
                 bits.append(f"{self._format_size(int(moved / secs))}/s")
         quiet = int(now - self._activity_at) if self._activity_at else 0
         stalled = quiet >= STALL_SECONDS
-        if stalled:
+        # The server is blamed only while something is known to be downloading: a source
+        # being fetched before any package phase, or the system step's download phase
+        # (ONEUP-0232). Anything else going quiet — flatpak deploying to a busy disk, an
+        # install — is not the server's, and Stop is prompt only while downloading
+        # (ONEUP-0085), so neither claim is made there.
+        fetching = (self._progress_phase == "download"
+                    or (not self._progress_phase and bool(self._activity_what)))
+        if stalled and fetching:
             bits.append(f"nothing received for {self._format_duration(quiet)}"
                         " — the server may have stalled. Stopping now is safe.")
+        elif stalled:
+            bits.append(f"nothing new for {self._format_duration(quiet)} — still working")
         elif bits:
             bits.append("still working")
         self._set_activity(" · ".join(bits))
@@ -3364,7 +3373,8 @@ for (var i = 0; i < wins.length; i++) {{
         if stalled != self._activity_stalled:
             self._activity_stalled = stalled
             if stalled:
-                self._announce("No response from the server. Stopping now is safe.")
+                self._announce("No response from the server. Stopping now is safe."
+                               if fetching else "No new output for a while. Still working.")
 
     def handle_marker(self, line: str):
         try:

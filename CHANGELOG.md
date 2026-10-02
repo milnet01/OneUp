@@ -8,6 +8,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The window no longer blames the server when an update is just busy writing to a slow disk** (ONEUP-0232)
+  When a step went quiet for a while, the window always said the server
+  might have stalled. That was wrong when nothing was downloading, for
+  example while Flatpak installed an app onto a busy disk. The window now
+  blames the server only while it knows a download is going on, and
+  otherwise says the update is still working.
+
 - **A run started from a terminal no longer asks for the password again, unseen, after five minutes** (ONEUP-0231)
   When OneUp's updater was started from a terminal window, the helper
   that keeps your password remembered was refreshing the wrong record.

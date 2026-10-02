@@ -323,6 +323,28 @@ def main() -> int:
         wL.handle_line("@@STEP_BEGIN@@|flatpak|2|5|Updating Flatpak apps")
         check("a new step drops the previous source", "games" not in wL.activity.text())
         check("a new step resets the byte counters", wL._dl_bytes == 0 and wL._dl_total == 0)
+        # ONEUP-0232: a quiet step that is not known to be downloading — flatpak deploying
+        # to a busy disk, measured on a real run — must not blame the server, and must not
+        # promise the prompt stop ONEUP-0085 gives only while downloading.
+        wL._activity_at = time.monotonic() - (updater.STALL_SECONDS + 5)
+        wL._tick_activity()
+        check("a quiet step with no download does not blame the server",
+              "server" not in wL.activity.text() and "still working" in wL.activity.text())
+        check("nor does it promise a prompt stop", "Stopping now is safe" not in wL.activity.text())
+        check("nor is the quiet announced as the server's",
+              "server" not in wL._last_announcement)
+        # The system step's install phase is past the download, so the same holds there,
+        # even though a source was fetched earlier in the step.
+        wL._activity_at = time.monotonic()
+        wL._tick_activity()
+        wL.handle_line("@@STEP_BEGIN@@|system|1|5|Updating system packages")
+        wL.handle_line("@@REFRESH@@|9|9|games")
+        wL.handle_line("@@PROGRESS@@|system|3|141|install")
+        wL._activity_at = time.monotonic() - (updater.STALL_SECONDS + 5)
+        wL._tick_activity()
+        check("a quiet install does not blame the server", "server" not in wL.activity.text())
+        wL._activity_at = time.monotonic()
+        wL._tick_activity()
         # Same splice-safety contract as PROGRESS: merged stdout/stderr can cut a marker.
         for bad in ("@@REFRESH@@|6", "@@REFRESH@@|x|9|games", "@@REFRESH@@|6|y|games",
                     "@@PROGRESS@@|system|1|2|download|notanumber"):
