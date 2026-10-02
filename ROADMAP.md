@@ -5864,6 +5864,19 @@ when complete (that document's §7).
   its own _MEI directory and children inherit it, so the AppImage's
   copied-out engine must have it restored. Plan rows 15-16 (main abbc009).
   Building next.
+  Progress (2026-10-02): stage 9 built on v2 (6ecdf53) — the switch-over.
+  The window launches only the Python engine; ONEUP_ENGINE, _find_engine
+  and ENGINE are gone; a resolver reports what it tried (Trap 4 closed).
+  The AppImage copies the engine out of its bundle and runs it on the
+  machine's python3 with LD_LIBRARY_PATH restored; verified on a real
+  AppImage build (engine = /usr/bin/python3.13 from the copy, no _MEI in
+  its maps, exit 0). RPM gains /usr/bin/oneup-engine. The engine suite
+  defaults to the Python engine (393/0, same as the explicit override);
+  local-CI green in 346 s. ONEUP-0149 closed with no change (measured).
+  Left 🚧 on purpose until the user's next real run from the window,
+  which is the first real run with the Python engine as the default and
+  also confirms ONEUP-0231 from a terminal. G1-G6 stand as earned at their
+  stages; stage 9 is the commit they are measured against.
 
 - 🚧 [ONEUP-0057] **Write the OneUp 2.0 documentation set before any 2.0 code is written.**
   Agreed with the user 2026-07-26. Deliverables, in order: nine standards
