@@ -44,6 +44,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The Flatpak step no longer says "up to date" right after updating an app** (ONEUP-0146)
+  When one Flatpak source couldn't be read — a leftover from an app
+  installed from a file is enough — OneUp lost count of every other
+  source's updates. It now asks each source on its own, as OneUp's
+  read-only update check already did.
+
 - **"Show download size" no longer says "nothing to fetch" when part of the update is already downloaded** (ONEUP-0223)
   When some packages were already downloaded, the package manager
   reports the size in a different layout, and OneUp missed it. It
