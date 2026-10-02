@@ -3439,7 +3439,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-services.
 
-- 📋 [ONEUP-0159] **The diagnostics host scrub is an unanchored substring replace and can corrupt the report.**
+- ✅ [ONEUP-0159] **The diagnostics host scrub is an unanchored substring replace and can corrupt the report.**
   `build_diagnostics` does `report.replace(host, "<host>")` over the whole payload.
   openSUSE hostnames are routinely short generic words, so a machine called `oss`,
   `linux` or `tumbleweed` rewrites `repo-oss`, `linux-firmware` and every matching
@@ -3447,6 +3447,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   word-boundary regex and skip the scrub for very short or generic names. Related:
   security.md §7.4 states the goal as not publishing the username, and the scrub
   covers the home PATH rather than a bare username in a log line.
+  Resolved (2026-10-02): main 390fb2d, merged to v2. The scrub matches the
+  host name only where no word character, `.`, `/` or `-` precedes it and
+  no word character, `/` or `-` follows it. Skipping short names was not
+  taken: whole-name matching already stops the corruption, and skipping
+  would publish the name security.md §7.4 protects.
   **Layman:** On a machine with a short name, the diagnostic report can come out mangled.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-services.
@@ -3733,7 +3738,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lanes engine-privilege and engine-shell.
 
-- 📋 [ONEUP-0178] **A stale auth probe makes the Automatic-updates toggle flip back after the user approves it.**
+- ✅ [ONEUP-0178] **A stale auth probe makes the Automatic-updates toggle flip back after the user approves it.**
   `oneup/gui/auth.py:40` returns early when a probe is already in flight, which
   makes the "fresh settle" `autostart.on_autoupdate_toggled` relies on stale. The
   sequence: the window's startup probe is still running when the user enables
@@ -3744,6 +3749,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Security-coupled state landing silently in the wrong place is worse than a
   visible failure. Set a re-run flag on the early return and re-probe when the
   in-flight one finishes.
+  Resolved (2026-10-02): main 457ba2b, merged to v2. A probe asked for while
+  one runs is recorded, and the finishing probe discards its stale answer
+  and probes again, so the enable latch settles on a post-grant answer.
   **Layman:** You type your password to turn on weekly updates, and the switch quietly turns itself off again.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-services.
@@ -3798,7 +3806,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: perf.
   Source: review-code 2026-08-31, lane gui-theme.
 
-- 📋 [ONEUP-0181] **Dialog placement: the X11 branch has no screen clamp, and the session type is read from the environment.**
+- ✅ [ONEUP-0181] **Dialog placement: the X11 branch has no screen clamp, and the session type is read from the environment.**
   `placement.py:66-72` and `:82-84` are the same computation and only one has been
   patched: the Wayland branch clamps against the available geometry with the
   comment "a dialog taller than its parent would otherwise hang off it", and the
@@ -3811,6 +3819,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   only and swallows every failure, so centring is a silent no-op on other Wayland
   compositors — while ui-and-accessibility.md §6.2 calls the helper "the only one
   that handles Wayland" with no KDE qualifier, which is the document's half.
+  Resolved (2026-10-02): main b9c37d8, merged to v2. Session from Qt's
+  platform plugin; the X11 branch clamps to the screen; §6.2 says the
+  helper is KDE Plasma only. run_kwin_script still fails silently off
+  KDE, which is now the documented limit rather than a hidden one.
   **Layman:** A tall dialog can open with its title bar off the top of the screen.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-window.
