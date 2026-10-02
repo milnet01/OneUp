@@ -5837,6 +5837,17 @@ when complete (that document's §7).
   found, neither v2-only: ONEUP-0231 (keep-alive loses a tty-keyed
   credential; both engines) and ONEUP-0232 (stall line blames the server
   during a disk-bound flatpak deploy). G6 judged met pending 0231's fix.
+  Decision (2026-10-02, user, stage 9): the AppImage runs the Python engine
+  from a copy written OUTSIDE the bundle, using the machine's own python3
+  (3.11+), and says so plainly when no such Python exists. Measured first: a
+  throwaway type-2 AppImage whose launcher exits while a child keeps running
+  from the mount — with inherited descriptors kept, the mount stays up until
+  the child ends; with them closed (Python's subprocess default) the mount
+  goes at once and the child's later read fails. So an engine run from inside
+  the bundle could lose its own files mid-transaction when the window closes,
+  which breaks INV-5. Rejected: running from inside the bundle (relies on that
+  inheritance), and keeping the AppImage on the Bash fallback (stops working
+  with the window once ONEUP-0072 lands).
 
 - 🚧 [ONEUP-0057] **Write the OneUp 2.0 documentation set before any 2.0 code is written.**
   Agreed with the user 2026-07-26. Deliverables, in order: nine standards
