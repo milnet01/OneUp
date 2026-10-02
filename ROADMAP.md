@@ -4228,7 +4228,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: close-findings sweep 2026-09-21, found next door.
 
-- 📋 [ONEUP-0205] **ONEUP-0018's spec and plan quote isdigit() for code that now uses isdecimal().**
+- ✅ [ONEUP-0205] **ONEUP-0018's spec and plan quote isdigit() for code that now uses isdecimal().**
   Both documents reproduce the tray's CHECK/TOTAL handling as `int(parts[1])
   if parts[1].isdigit() else 0` and instruct mirroring "the `.isdigit()`
   guard `on_finished` itself uses". ONEUP-0153 changed both sites.
@@ -4239,6 +4239,11 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   the answer is that these are past-tense records to leave alone, that is a
   fine disposition — but it should be decided rather than left unnoticed,
   because the next reader cannot tell a stale quotation from a current one.
+  Resolved (2026-10-02): main be6fc66, merged to v2. Both records now
+  quote isdecimal(), with one line saying isdigit() was the guard until
+  ONEUP-0153. Decided rather than left: the spec's sentence is an
+  instruction, so a stale quote would be copied. Checked against main's
+  updater.py: both guards use isdecimal().
   **Layman:** Two older design documents quote the old check; they describe finished work, so this is tidying.
   Kind: doc-fix.
   Source: close-findings sweep 2026-09-21, collateral of ONEUP-0153.
@@ -4562,7 +4567,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: test.
   Source: in-session-2026-08-12.
 
-- 📋 [ONEUP-0106] **Every standard breaches documentation.md §4's bold-nothing form.**
+- ✅ [ONEUP-0106] **Every standard breaches documentation.md §4's bold-nothing form.**
   Found by a cold lane during documentation.md's gate 2026-08-12. §4
   requires a What-checks-this cell with no gate to write "**`nothing`, in
   bold**, followed by why". Not one row in the project did, across every
@@ -4586,6 +4591,12 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   let documentation.md's rows go back. Nothing gates the form either way
   (docs-check.py checks the section exists, not its cell shape), which is
   itself part of the answer.
+  Resolved (2026-10-02): main f277d93, merged to v2. The rule changed,
+  not eight documents: §4 now asks for nothing as the cell's first word,
+  bold allowed and not required. Its own purpose (gate and no-gate never
+  blur) is met by the leading word. Decided in-session; no tool checks
+  the form, so it is cheap to reverse if the user prefers bold
+  everywhere.
   **Layman:** A formatting rule that no document actually follows — decide whether to follow it or drop it.
   Kind: doc-fix.
   Source: in-session-2026-08-12.
