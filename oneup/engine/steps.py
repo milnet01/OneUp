@@ -203,14 +203,24 @@ def valid_package(name: str) -> bool:
 
 
 def _package_column(text: str) -> list[str] | None:
-    """The name column of a `zypper packages` table: field 3, past the header.
+    """The name column of a `zypper packages` table: field 3 of each row.
+
+    Rows start after the `---+---` line under the heading. zypper prints progress
+    lines on stdout before the table, so a fixed line count lands on the heading
+    and reads its "Name" as a package (ONEUP-0226).
 
     Returns None when any row fails the shape test — fail closed, per security.md
     §4.2. Dropping the bad row and removing the rest would be a clean-up-and-
     continue on the argv of a root package removal, which §4.4 forbids.
     """
     names = []
-    for line in text.splitlines()[2:]:
+    rows = False
+    for line in text.splitlines():
+        if re.match(r"-+\+", line):
+            rows = True
+            continue
+        if not rows:
+            continue
         fields = line.split("|")
         if len(fields) < 3:
             continue
