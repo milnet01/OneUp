@@ -485,10 +485,17 @@ def main() -> int:
     # placement), which is why every dialog opened away from the window. X11 still moves
     # directly; Wayland has to ask KWin, so the one thing to prove here is that each
     # session type takes its own path and neither throws.
+    # ONEUP-0181: the session is Qt's platform plugin, not XDG_SESSION_TYPE — a Wayland
+    # session launched without that variable would take the X11 branch, where move() is
+    # accepted and ignored. The platform name is stubbed through updater._platform_name.
     _orig_session = os.environ.get("XDG_SESSION_TYPE", "")
+    _orig_platform = getattr(placement, "_platform_name", None)
     try:
-        os.environ["XDG_SESSION_TYPE"] = "x11"
-        check("the session type is read from the environment", not placement._on_wayland())
+        os.environ["XDG_SESSION_TYPE"] = "wayland"
+        placement._platform_name = lambda: "xcb"
+        check("the session follows Qt's platform, not XDG_SESSION_TYPE (ONEUP-0181)",
+              not placement._on_wayland())
+        os.environ["XDG_SESSION_TYPE"] = "x11"     # both signals agree from here on
         host = QWidget()
         host.setGeometry(100, 100, 800, 600)
         dlg = QDialog(host)
@@ -497,14 +504,23 @@ def main() -> int:
         check("on X11 a dialog is moved onto its parent's centre",
               abs(dlg.frameGeometry().center().x() - host.frameGeometry().center().x()) <= 2
               and abs(dlg.frameGeometry().center().y() - host.frameGeometry().center().y()) <= 2)
-        os.environ["XDG_SESSION_TYPE"] = "wayland"
-        check("Wayland is detected", placement._on_wayland())
+        tall = QDialog(host)
+        tall.resize(200, 4000)               # taller than any screen the suite runs on
+        placement.center_on_parent(tall)
+        area = host.screen().availableGeometry()
+        check("on X11 a dialog taller than its parent stays on the screen (ONEUP-0181)",
+              tall.frameGeometry().top() >= area.top())
+        os.environ["XDG_SESSION_TYPE"] = ""
+        placement._platform_name = lambda: "wayland"
+        check("Wayland is detected from the platform alone (ONEUP-0181)",
+              placement._on_wayland())
         moved_to = dlg.pos()
         placement.center_on_parent(dlg)   # queues a KWin request; must not move it itself
         check("on Wayland placement is left to the compositor, not a futile move()",
               dlg.pos() == moved_to)
     finally:
         os.environ["XDG_SESSION_TYPE"] = _orig_session
+        placement._platform_name = _orig_platform
 
     # --- Stop button (ONEUP-0047) -----------------------------------------------
     # Stop is deliberately cooperative: it asks, and the engine honours it at a safe
@@ -1280,6 +1296,32 @@ def main() -> int:
           not w.auth_btn.isChecked())
     _unpatch_all()
 
+    # (h) ONEUP-0178: a probe asked for while another is still running must not be
+    # dropped. The window's startup probe is in flight when the user enables automatic
+    # updates; the grant succeeds and asks for a fresh probe. The startup probe's answer
+    # predates the grant, so letting it consume the latch reverts the toggle.
+    w = window.Updater()
+    if getattr(w, "_authstat_proc", None) is not None:
+        w._authstat_proc.waitForFinished(5000)       # settle the real startup probe first
+    installed_h = []
+    _patch(autostart, "_install_user_timer", lambda *a, **k: (installed_h.append(a) or True))
+
+    class _Running:
+        def state(self): return QProcess.Running
+
+    w._authstat_proc = _Running()                    # a probe that started before the grant
+    auth._query_auth_status(w)                       # the grant's re-probe arrives
+    reprobes = []
+    _patch(auth, "_query_auth_status", lambda win: reprobes.append(1))
+    w._pending_autoupdate = True
+    auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|off\n"))   # the pre-grant answer
+    check("ONEUP-0178: a stale probe's answer does not consume the enable latch",
+          w._pending_autoupdate is True and not installed_h)
+    check("ONEUP-0178: a probe dropped while one ran is asked again", reprobes == [1])
+    auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|on\n"))    # the fresh answer
+    check("ONEUP-0178: the fresh answer installs the update timer", bool(installed_h))
+    _unpatch_all()
+
     QMessageBox.information = _orig_msg_info
     QMessageBox.warning = _orig_msg_warn
 
@@ -1930,6 +1972,21 @@ def main() -> int:
     check("diagnostics: disabled tasks marked off", "flatpak ✗" in _rep)
     check("diagnostics: home path scrubbed to ~", "/home/ants" not in _rep and "~/x" in _rep)
     check("diagnostics: hostname scrubbed", "boxname" not in _rep and "<host>" in _rep)
+    # ONEUP-0159: openSUSE host names are often words the log also uses, so the scrub
+    # matches the name only where it stands alone, never inside a longer token or path.
+    _short = _build("1", "x", [], "r.log",
+                    "repo-oss refreshed\nhttps://download.opensuse.org/tumbleweed/repo/oss/ ok\n"
+                    "oss sudo[42]: session opened\nreached oss.lan\n",
+                    "w", "", "oss")
+    check("diagnostics: a host name inside a repo alias survives (ONEUP-0159)",
+          "repo-oss refreshed" in _short)
+    check("diagnostics: a host name inside a URL path survives (ONEUP-0159)",
+          "/repo/oss/ ok" in _short)
+    check("diagnostics: a standalone host name is still scrubbed (ONEUP-0159)",
+          "<host> sudo[42]" in _short and "<host>.lan" in _short)
+    check("diagnostics: a host name prefixing a package name survives (ONEUP-0159)",
+          "linux-firmware updated" in _build("1", "x", [], "r.log", "linux-firmware updated",
+                                             "w", "", "linux"))
     check("diagnostics: no-run placeholder shown",
           "no update has been run yet" in _build("1", "x", [], None, None, "w", "", ""))
     _big = "H" * 20 + "T" * (diagnostics.DIAG_LOG_CAP + 3000)

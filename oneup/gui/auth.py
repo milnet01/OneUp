@@ -39,6 +39,9 @@ def _query_auth_status(win):
         return
     p = getattr(win, "_authstat_proc", None)
     if p is not None and p.state() != QProcess.NotRunning:
+        # ONEUP-0178: the caller wants an answer from after its own change, and the
+        # probe in flight started before it. Ask again when that one finishes.
+        win._authstat_rerun = True
         return
     paths.STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -55,6 +58,13 @@ def _on_auth_status_finished(win, proc: QProcess):
     # The probe can finish after Qt destroyed the window or the process (quitting
     # mid-probe, or teardown at exit); reading either then raises (ONEUP-0204).
     if not (shiboken6.isValid(win) and shiboken6.isValid(proc)):
+        return
+    if getattr(win, "_authstat_rerun", False):
+        # ONEUP-0178: this probe started before a change that asked for a fresh one,
+        # so its answer is stale. Acting on it would settle the enable latch with the
+        # pre-grant state and revert the toggle. Discard it and probe again.
+        win._authstat_rerun = False
+        _query_auth_status(win)
         return
     out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
     is_on = "@@AUTH@@|on" in out

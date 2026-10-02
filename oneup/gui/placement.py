@@ -13,10 +13,18 @@ import subprocess
 import tempfile
 
 from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication
+
+
+def _platform_name() -> str:
+    return QApplication.platformName()
 
 
 def _on_wayland() -> bool:
-    return os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
+    # Qt's platform plugin, not XDG_SESSION_TYPE (ONEUP-0181): a Wayland session started
+    # without that variable would otherwise take the X11 branch, where move() is accepted
+    # and ignored.
+    return _platform_name().startswith("wayland")
 
 
 def run_kwin_script(js: str) -> None:
@@ -68,6 +76,13 @@ def center_on_parent(widget) -> None:
         if parent is not None:
             fg = widget.frameGeometry()
             fg.moveCenter(parent.frameGeometry().center())
+            # Clamp to the screen, as the Wayland branch below does: a dialog taller
+            # than its parent would otherwise hang off it (ONEUP-0181).
+            screen = parent.screen() or QApplication.primaryScreen()
+            if screen is not None:
+                area = screen.availableGeometry()
+                fg.moveLeft(max(area.left(), min(fg.left(), area.right() + 1 - fg.width())))
+                fg.moveTop(max(area.top(), min(fg.top(), area.bottom() + 1 - fg.height())))
             widget.move(fg.topLeft())
         return
     js = f"""\
