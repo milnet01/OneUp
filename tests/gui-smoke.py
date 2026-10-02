@@ -1516,6 +1516,45 @@ def main() -> int:
     autostart._remove_autostart()
     check("remove_autostart deletes the file", not autostart._startboot_enabled())
 
+    # ONEUP-0158: an entry installed by an older copy names an executable an AppImage
+    # upgrade deleted, so start-at-boot and the timer stop while their toggles read on.
+    # A window starting up rewrites any installed entry that names something else.
+    # The daemon-reload is spied, so the suite never reaches the user's systemd.
+    stale_ap = autostart._autostart_path()
+    stale_ap.parent.mkdir(parents=True, exist_ok=True)
+    stale_ap.write_text('[Desktop Entry]\nExec="/gone/OneUp-1.4.5.AppImage" --tray\n')
+    units = autostart._user_units_dir()
+    units.mkdir(parents=True, exist_ok=True)
+    stale_svc = units / "oneup-check.service"
+    stale_svc.write_text('[Service]\nExecStart="/gone/OneUp-1.4.5.AppImage" --check\n')
+    reloads = []
+    _orig_run = autostart.subprocess.run
+
+    def _spy_run(args, *a, **k):
+        if list(args[:3]) == ["systemctl", "--user", "daemon-reload"]:
+            reloads.append(args)
+            return autostart.subprocess.CompletedProcess(args, 0)
+        return _orig_run(args, *a, **k)
+
+    autostart.subprocess.run = _spy_run
+    try:
+        window.Updater()
+        check("ONEUP-0158: a stale start-at-boot entry is rewritten at startup",
+              f"Exec={autostart._autostart_exec()}\n" in stale_ap.read_text())
+        check("ONEUP-0158: a stale timer service is rewritten at startup",
+              f"ExecStart={autostart._headless_command('--check')}\n"
+              in stale_svc.read_text())
+        check("ONEUP-0158: a rewritten service reloads systemd once", len(reloads) == 1)
+        check("ONEUP-0158: a timer that was never installed is not created",
+              not (units / "oneup-update.service").exists())
+        reloads.clear()
+        window.Updater()
+        check("ONEUP-0158: entries already current are left alone", not reloads)
+    finally:
+        autostart.subprocess.run = _orig_run
+        stale_ap.unlink(missing_ok=True)
+        stale_svc.unlink(missing_ok=True)
+
     _orig_exe = autostart.sys.executable
     autostart.sys.executable = "/opt/o$ne%up/oneup"
     autostart.shutil.which = lambda name: None

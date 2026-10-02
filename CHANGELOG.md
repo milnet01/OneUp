@@ -44,6 +44,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Updating the OneUp AppImage no longer silently stops the weekly check, automatic updates or start-at-boot** (ONEUP-0158)
+  Each of those remembers the OneUp file that switched it on. Replacing
+  that file with a newer one left them pointing at a file that was gone,
+  while their toggles still read "on". OneUp now points them at itself
+  each time it opens.
+
 - **Removing leftover packages no longer fails on a package called "Name"** (ONEUP-0226)
   OneUp read the heading of the package manager's list as a package,
   tried to remove it, and marked the step failed even though the real

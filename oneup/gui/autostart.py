@@ -20,6 +20,13 @@ from PySide6.QtWidgets import QMessageBox
 from .. import APP_ID
 from . import auth, paths
 
+# The two weekly timers: basename -> (unit Description, headless flag). One table, so
+# installing a timer and refreshing an installed one write the same unit (ONEUP-0158).
+TIMERS = {
+    "oneup-check": ("OneUp weekly update check", "--check"),
+    "oneup-update": ("OneUp weekly automatic update", "--update"),
+}
+
 
 def _user_units_dir() -> Path:
     return Path.home() / ".config" / "systemd" / "user"
@@ -42,6 +49,12 @@ def _headless_command(flag: str) -> str:
     if launcher:
         return f"{_arg(launcher)} {flag}"
     return f"{_arg(sys.executable)} {_arg(paths.ENTRY_POINT)} {flag}"
+
+
+def _timer_service_text(description: str, flag: str) -> str:
+    return (f"[Unit]\nDescription={description}\n\n"
+            f"[Service]\nType=oneshot\n"
+            f"ExecStart={_headless_command(flag)}\n")
 
 
 def _autostart_path() -> Path:
@@ -85,14 +98,8 @@ def _autostart_exec() -> str:
     return f"{_arg(sys.executable)} {_arg(paths.ENTRY_POINT)} --tray"
 
 
-def _install_autostart(win) -> bool:
-    """Write the autostart .desktop entry; return True iff it lands on disk.
-    A plain file drop — no systemctl reload (unlike the update timers)."""
-    path = _autostart_path()
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            "[Desktop Entry]\n"
+def _autostart_text() -> str:
+    return ("[Desktop Entry]\n"
             "Type=Application\n"
             "Name=OneUp (tray)\n"
             "Comment=OneUp update status in the system tray\n"
@@ -100,8 +107,38 @@ def _install_autostart(win) -> bool:
             f"Icon={APP_ID}\n"
             "Terminal=false\n"
             "NoDisplay=true\n"
-            "X-GNOME-Autostart-enabled=true\n"
-        )
+            "X-GNOME-Autostart-enabled=true\n")
+
+
+def _refresh_stale_launchers():
+    """ONEUP-0158: an installed start-at-boot entry or timer service names the
+    executable that was running when it was ENABLED. An AppImage upgrade deletes
+    that file, and both toggles keep reading on while nothing runs. So at startup,
+    rewrite any installed entry whose text differs from what this copy would write
+    now. Only entries that exist: enabling one stays the user's act."""
+    wanted = [(_autostart_path(), _autostart_text(), False)]
+    units = _user_units_dir()
+    wanted += [(units / f"{base}.service", _timer_service_text(*args), True)
+               for base, args in TIMERS.items()]
+    reload = False
+    for path, text, is_unit in wanted:
+        try:
+            if path.is_file() and path.read_text() != text:
+                path.write_text(text)
+                reload = reload or is_unit
+        except OSError as exc:
+            print(f"OneUp: could not refresh {path}: {exc}", file=sys.stderr)
+    if reload:
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)  # noqa: S607
+
+
+def _install_autostart(win) -> bool:
+    """Write the autostart .desktop entry; return True iff it lands on disk.
+    A plain file drop — no systemctl reload (unlike the update timers)."""
+    path = _autostart_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_autostart_text())
     except OSError as exc:
         QMessageBox.warning(win, "Could not change start-at-boot", str(exc))
         return False
@@ -136,10 +173,7 @@ def _install_user_timer(win, basename: str, description: str, exec_flag: str) ->
     try:
         units.mkdir(parents=True, exist_ok=True)
         (units / f"{basename}.service").write_text(
-            f"[Unit]\nDescription={description}\n\n"
-            f"[Service]\nType=oneshot\n"
-            f"ExecStart={_headless_command(exec_flag)}\n"
-        )
+            _timer_service_text(description, exec_flag))
         (units / f"{basename}.timer").write_text(
             f"[Unit]\nDescription={description}\n\n"
             "[Timer]\nOnCalendar=weekly\nPersistent=true\n\n"
@@ -176,7 +210,7 @@ def on_autocheck_toggled(win, on: bool):
     # It deliberately does NOT revert its toggle on a failed install (see the
     # ONEUP-0022 spec's "Open questions" — hardening weekly-check is a separate item).
     if on:
-        _install_user_timer(win, "oneup-check", "OneUp weekly update check", "--check")
+        _install_user_timer(win, "oneup-check", *TIMERS["oneup-check"])
     else:
         _remove_user_timer("oneup-check")
     _refresh_autocheck_label(win)

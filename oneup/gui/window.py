@@ -188,6 +188,7 @@ class Updater(QMainWindow):
         titleblock.addWidget(header)
         titleblock.addWidget(tagline)
 
+        autostart._refresh_stale_launchers()
         self.auto_btn = QPushButton()
         self.auto_btn.setObjectName("GhostBtn")
         self.auto_btn.setCheckable(True)

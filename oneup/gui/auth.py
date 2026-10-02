@@ -77,8 +77,8 @@ def _on_auth_status_finished(win, proc: QProcess):
     if win._pending_autoupdate:
         win._pending_autoupdate = False        # consume unconditionally
         if is_on:
-            enabled = autostart._install_user_timer(win,
-                "oneup-update", "OneUp weekly automatic update", "--update")
+            enabled = autostart._install_user_timer(
+                win, "oneup-update", *autostart.TIMERS["oneup-update"])
             autostart._set_autoupdate_checked(win, enabled)
             if not enabled:
                 QMessageBox.warning(
