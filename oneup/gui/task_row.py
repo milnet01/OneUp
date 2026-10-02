@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -13,6 +14,13 @@ from PySide6.QtWidgets import (
 )
 
 from .toggle_switch import ToggleSwitch
+
+
+def _collapsed_arrow() -> Qt.ArrowType:
+    """The closed disclosure arrow points along the reading direction. Qt does not
+    mirror an arrow type — a grab with and without `-reverse` was byte-identical
+    (ONEUP-0032 §4.4) — so a mirrored window asks for the left one itself."""
+    return Qt.ArrowType.LeftArrow if QApplication.isRightToLeft() else Qt.ArrowType.RightArrow
 
 
 class TaskRow(QFrame):
@@ -58,7 +66,7 @@ class TaskRow(QFrame):
         # Disclosure arrow: revealed only once there are detail items to show.
         self.disclosure = QToolButton()
         self.disclosure.setObjectName("Disclose")
-        self.disclosure.setArrowType(Qt.ArrowType.RightArrow)
+        self.disclosure.setArrowType(_collapsed_arrow())
         self.disclosure.setCheckable(True)
         self.disclosure.setCursor(Qt.CursorShape.PointingHandCursor)
         self.disclosure.setVisible(False)
@@ -176,7 +184,7 @@ class TaskRow(QFrame):
     def _on_disclosure(self, on: bool):
         self.details.setVisible(on)
         self.disclosure.setArrowType(
-            Qt.ArrowType.DownArrow if on else Qt.ArrowType.RightArrow)
+            Qt.ArrowType.DownArrow if on else _collapsed_arrow())
 
     def add_detail_item(self, name: str, frm: str, to: str):
         """Append one changed package to the panel (name  old → new)."""

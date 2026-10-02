@@ -65,6 +65,15 @@ jobs:
             [ "$rc" -eq 77 ] || exit "$rc"
           }
 
+      # The same suite mirrored right-to-left (ONEUP-0032 INV-5). Mirrors local-CI.sh.
+      - name: GUI smoke test (offscreen, right-to-left)
+        run: |
+          python tests/gui-smoke.py -reverse || {
+            rc=$?
+            [ "$rc" -eq 77 ] && echo "PySide6 unavailable — skipped"
+            [ "$rc" -eq 77 ] || exit "$rc"
+          }
+
       - name: Install FUSE (needed to pack the AppImage)
         run: sudo apt-get update && sudo apt-get install -y libfuse2
 

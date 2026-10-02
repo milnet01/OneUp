@@ -217,6 +217,11 @@ def main() -> int:
     # run left to right while reporting a pass (ONEUP-0032 §4.2, INV-5).
     app = QApplication.instance() or QApplication(sys.argv)
     app  # noqa: B018 — keep a reference so it isn't GC'd mid-test.
+    # ONEUP-0032 INV-5: the second pass runs this whole suite with Qt's -reverse. Its
+    # FIRST assertion is that the direction really is right-to-left — a pass that
+    # silently ran left to right would prove nothing.
+    if "-reverse" in sys.argv[1:]:
+        check("INV-5 the -reverse pass really is right-to-left", app.isRightToLeft())
 
     # --- 1. A malformed / spliced marker never throws out of the read slot ------
     w = window.Updater()
@@ -1089,6 +1094,15 @@ def main() -> int:
           any(ln.strip() == "zypper" for ln in _detail.splitlines()))
     check("the detail disclosure appears once there is something to show",
           not wI.rows["system"].disclosure.isHidden())
+    # Qt does not mirror an arrow type, so the closed arrow follows the direction
+    # itself (ONEUP-0032 §4.4); the -reverse pass is what sees the left one.
+    _closed = Qt.ArrowType.LeftArrow if app.isRightToLeft() else Qt.ArrowType.RightArrow
+    _dis = wI.rows["system"].disclosure
+    check("the closed disclosure arrow points along the reading direction",
+          _dis.arrowType() == _closed)
+    _dis.setChecked(True)
+    _dis.setChecked(False)
+    check("and points that way again once collapsed", _dis.arrowType() == _closed)
 
     # --- 5c. @@HINT@@ goes through the parser, not straight into _hints ---------
     # Every other hint scenario assigns w._hints directly, so the dispatch line that
@@ -2786,18 +2800,27 @@ def main() -> int:
     # drawn. A colour-only track leaves that region a solid fill, so this fails on
     # a switch that lost its shape cue. NB a bare "checked vs unchecked images
     # differ" check would pass even then, because the knob itself moves.
-    def shape_pixels(checked: bool) -> int:
+    def shape_pixels(checked: bool, knob_end: bool = False) -> int:
         s = toggle_switch.ToggleSwitch()
         s.setChecked(checked)
         s._anim.stop()                      # settle the 130 ms knob slide first
         s.set_knob_pos(1.0 if checked else 0.0)
         img = s.grab().toImage()
-        # Knob sits right when on, so inspect the LEFT third; and vice versa.
-        xs = range(0, img.width() // 3) if checked else \
+        # The state shape sits opposite the knob: at the LEFT when on in a
+        # left-to-right window, at the right when on in a mirrored one (ONEUP-0032
+        # §8); `knob_end` samples the knob's own third instead. Picking the third
+        # from `checked` alone would look in the wrong place
+        # on the -reverse pass, or pass without having looked at the shape.
+        at_left = (checked != QApplication.isRightToLeft()) != knob_end
+        xs = range(0, img.width() // 3) if at_left else \
              range(img.width() * 2 // 3, img.width())
+        # Middle rows only. The grab paints the window background outside the
+        # track's rounded ends, and that background is near-white too: counted
+        # over the full height, each outer third held ~84 such pixels with no
+        # shape at all, so `> 0` could not fail (measured 2026-10-02).
         n = 0
         for x in xs:
-            for y in range(img.height()):
+            for y in range(img.height() // 3, img.height() * 2 // 3):
                 c = img.pixelColor(x, y)
                 if c.red() > 200 and c.green() > 200 and c.blue() > 200:
                     n += 1
@@ -2805,6 +2828,11 @@ def main() -> int:
 
     check("switch 'on' is shown by a shape, not only by green", shape_pixels(True) > 0)
     check("switch 'off' is shown by a shape, not only by red", shape_pixels(False) > 0)
+    # The knob is white as well, so a knob at the wrong end would sit in the
+    # sampled third and pass the two checks above. Its own end must be the whiter.
+    for _on in (True, False):
+        check(f"the knob sits at the {'on' if _on else 'off'} end for the reading direction",
+              shape_pixels(_on, knob_end=True) > shape_pixels(_on))
 
     # INV-2 (tray): the attention badge must differ in SHAPE. Count near-white
     # pixels INSIDE the amber disc, inset to exclude the disc's own white outline.
@@ -3065,8 +3093,12 @@ def main() -> int:
         sw._anim.stop()
         sw.set_knob_pos(1.0)
         img = sw.grab().toImage()
-        # The track, sampled where the knob is not: knob sits right when on.
-        return img.pixelColor(img.width() // 6, img.height() // 2)
+        # The track, sampled where the knob is not: the knob sits at the far end
+        # when on — the right in a left-to-right window, the left when mirrored.
+        x = img.width() // 6
+        if QApplication.isRightToLeft():
+            x = img.width() - 1 - x
+        return img.pixelColor(x, img.height() // 2)
 
     _mid = _track_pixel("midnight")
     _for = _track_pixel("forest")

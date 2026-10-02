@@ -10,6 +10,9 @@ for right-to-left languages, without any test noticing:
           explicit setLayoutDirection overrides `-reverse`, so the right-to-left
           pass would go green while running left to right. tests/ is read too:
           one in the suite defeats `-reverse` exactly as one in the window does.
+  INV-6   no left- or right-handed stylesheet property and no AlignLeft or
+          AlignRight anywhere under oneup/: Qt mirrors neither, so each is a
+          control on the wrong side in Arabic and Hebrew only.
   INV-10  nothing sets QFont.NoFontMerging, so a glyph the chosen font lacks is
           always drawn from a font that has it — CJK text never draws as boxes.
   INV-11  no widget caps the size its text can grow to. Every fixed- or
@@ -81,6 +84,9 @@ QSS_CAP_EXEMPT = {
 }
 _CAP_CALLS = {"setFixedWidth", "setFixedHeight", "setFixedSize",
               "setMaximumWidth", "setMaximumHeight", "setMaximumSize"}
+_HANDED_QSS = re.compile(
+    r"\b(?:margin|padding|border)-(?:left|right)\s*:|\btext-align\s*:\s*(?:left|right)\b"
+    r"|\bqproperty-alignment\b")
 _QSS_RULE = re.compile(r"([^{}]+)\{([^{}]*)\}")
 _QSS_CAP = re.compile(r"(?:^|;)\s*(max-width|max-height|width|height)\s*:")
 
@@ -129,6 +135,26 @@ def main() -> int:
                     offenders.append(f"{_rel(path)}:{node.lineno} {node.attr}")
     check(f"INV-3: nothing sets the layout direction or reads a widget's own "
           f"({_found(offenders)})", not offenders)
+
+    # --- INV-6: nothing handed — not in any string under oneup/ (every stylesheet
+    # the window applies is one), and no fixed-side alignment flag. Docstrings are
+    # prose and are skipped; `text-align: center` has no hand and is not matched.
+    offenders = []
+    for path, tree in _modules(PKG):
+        docs = {id(n.body[0].value) for n in ast.walk(tree)
+                if isinstance(n, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                  ast.AsyncFunctionDef))
+                and n.body and isinstance(n.body[0], ast.Expr)
+                and isinstance(n.body[0].value, ast.Constant)}
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                    and id(node) not in docs):
+                offenders += [f"{_rel(path)}:{node.lineno} {m.group(0).strip()}"
+                              for m in _HANDED_QSS.finditer(node.value)]
+            elif isinstance(node, ast.Attribute) and node.attr in ("AlignLeft", "AlignRight"):
+                offenders.append(f"{_rel(path)}:{node.lineno} {node.attr}")
+    check(f"INV-6: nothing under oneup/ is left- or right-handed ({_found(offenders)})",
+          not offenders)
 
     # --- INV-10: font fallback is never switched off.
     offenders = [f"{_rel(path)}:{node.lineno}"

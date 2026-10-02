@@ -82,11 +82,11 @@ fi
 # Its G3 scenario (ONEUP-0054) launches the real Python engine through the window's
 # own code path, so this one pass proves the pair as well as the window. It ran
 # twice while stage 7's ONEUP_ENGINE switch existed; stage 9 removed the switch.
-gui_smoke_pass() {   # $1 = label ('' for the default pass), $2.. = env arguments
+gui_smoke_pass() {   # $1 = label ('' for the default pass), $2.. = the suite's arguments
     local label="$1"; shift
     local name="tests/gui-smoke.py${label:+ ($label)}"
     local log="$LOGS/gui${label:+-$label}.log"
-    env "$@" python3 tests/gui-smoke.py >"$log" 2>&1
+    python3 tests/gui-smoke.py "$@" >"$log" 2>&1
     local rc=$?
     if [[ $rc -eq 0 ]]; then
         ok "$name — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$log" | tail -1)"
@@ -99,6 +99,11 @@ gui_smoke_pass() {   # $1 = label ('' for the default pass), $2.. = env argument
 
 step "GUI smoke test (offscreen)"
 gui_smoke_pass ""
+# ONEUP-0032 INV-5: the whole suite again with Qt's -reverse, so a widget that
+# hard-codes a side fails here rather than in front of a Hebrew or Arabic user.
+# A second process, because -reverse is read when the QApplication is built; the
+# suite's first assertion in this pass is that it really is right-to-left.
+gui_smoke_pass "right-to-left" -reverse
 
 # --- package structure (docs/specs/ONEUP-0034-gui-modules.md §5) ------------
 # INV-2/3/4/12, plus ONEUP-0054's engine-launch rule: the ones that pass review by

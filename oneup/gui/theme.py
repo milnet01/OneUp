@@ -359,7 +359,7 @@ QPushButton#StopBtn:hover { border-color: $stophov; color: $stophov; }
 QPushButton#StopBtn:disabled { color: $disfg; border-color: $disbg; }
 
 QPushButton#LinkBtn {
-    color: $linkfg; font-weight: 600; text-align: left;
+    color: $linkfg; font-weight: 600;
     background: transparent; border: none; padding: 4px 2px;
     min-width: 24px; min-height: 24px;
 }

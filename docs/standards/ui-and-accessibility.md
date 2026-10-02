@@ -417,17 +417,14 @@ it mirrors nothing else. These four rules are what "nothing else" means in pract
 not mirror stylesheets, so each one is a bug that appears only in Arabic or Hebrew and is
 invisible to everyone testing in English.
 
-The six margin/padding/border properties are at **0** in `oneup/gui/theme.py`, which holds
-both stylesheets. `text-align` is
-**not**: `QPushButton#LinkBtn` in `_QSS` carries `text-align: left`, which will not mirror.
-That is one known site, to be resolved by ONEUP-0032 along with the painting in §8.3 —
-`text-align: center` on the progress bar is fine, because centre has no handedness. The
-rule exists to keep the count from growing: use the symmetric form, or set alignment in
-code from the application's layout direction.
+None of them appears anywhere under `oneup/` since ONEUP-0032 removed the last,
+`QPushButton#LinkBtn`'s `text-align: left`. `text-align: center` on the progress bar is
+fine, because centre has no handedness. Use the symmetric form, or set alignment in code
+from the application's layout direction.
 
 ### 8.2 Never hard-code `AlignLeft` or `AlignRight` for translatable text
 
-Also **0** today. Use the default alignment, or `Qt.AlignmentFlag` combined with the
+None appears under `oneup/`. Use the default alignment, or `Qt.AlignmentFlag` combined with the
 application's layout direction — never a fixed side. A left-aligned label in a mirrored
 window points away from the text it labels.
 
@@ -458,8 +455,14 @@ cx = (self._margin + diameter / 2 if self.isChecked()
 ```
 
 In a right-to-left window the switch must travel the other way, or "on" sits on the side the
-user reads as "off". A new painted widget either computes its geometry from the layout
-direction or states in a comment why it is direction-independent.
+user reads as "off". Since ONEUP-0032 both sites read `QApplication.isRightToLeft()`: the
+knob's travel is reversed, and the shape sits opposite the knob in either direction. A new
+painted widget either computes its geometry from the layout direction or states in a
+comment why it is direction-independent.
+
+**An arrow type is handed too, and Qt does not mirror it.** `TaskRow`'s closed disclosure
+arrow points right; a `QToolButton` grabbed with and without `-reverse` gave byte-identical
+images (2026-10-02). So the closed arrow is the left one when the window is mirrored.
 
 The tray icon is painted the same way (`Updater._tray_icon`) but is not laid out by Qt at
 all, so it
@@ -469,8 +472,8 @@ is out of scope — named here so its absence reads as a decision.
 
 `QApplication.isRightToLeft()` — one source, so every widget agrees. Do not read
 `self.layoutDirection()` on a widget that may have inherited a stale value, and never infer
-direction from the current language code. There are **0** direction reads anywhere under `oneup/`
-today; the RTL work adds them, and this is the form they take.
+direction from the current language code. Every direction read under `oneup/` takes this
+form.
 
 ## 9. Traps
 
@@ -519,9 +522,9 @@ today; the RTL work adds them, and this is the form they take.
 | §5.6 tab order follows visual order | `tests/gui-smoke.py` — ONEUP-0064 INV-1 flattens the layout tree to visual order and walks the focus chain end to end against it, once for the window and once for `SettingsDialog`, which has a chain of its own. It is the first thing to actually check this rule |
 | §6.1 a dialog inherits the theme | `tests/gui-smoke.py` catches the half that is a rule breach — no widget carries a stylesheet of its own. **Nothing checks the background a dialog actually paints**, which is why `_QSS`'s missing `QDialog` rule went unnoticed; ONEUP-0076 §8 prescribes the rule and ONEUP-0027 INV-7 is the nearest test to it |
 | §7 themes | **`oneup/gui/contrast.py`, driven from `tests/gui-smoke.py`** — every pair in its table, over all eight palettes and both overlay states, plus the exception list's shape and the coverage rule that stops a token escaping measurement. The light theme's `lastrun` was darkened to clear 4.5:1 when the check landed |
-| §8.1 no directional QSS property | nothing automatic |
-| §8.2 no hard-coded `AlignLeft` / `AlignRight` | nothing automatic. Nothing violates it today — the `#LinkBtn` violation is §8.1's `text-align: left`, not this rule |
-| §8.3 custom painting applies the direction | **nothing** — the toggle knob does not apply it (ONEUP-0032) |
+| §8.1 no directional QSS property | `tests/i18n-check.py` (ONEUP-0032 INV-6) fails on any handed property or `qproperty-alignment` in a string under `oneup/` |
+| §8.2 no hard-coded `AlignLeft` / `AlignRight` | `tests/i18n-check.py` (ONEUP-0032 INV-6) |
+| §8.3 custom painting applies the direction | **`ToggleSwitch` only**: `tests/gui-smoke.py`'s pixel sample, run again mirrored by `tests/gui-smoke.py -reverse`, finds the state shape and the knob each at its end for the direction; the disclosure arrow is asserted on the same pass. A widget painted after ONEUP-0032 is caught by **nothing** until its own check is written with it |
 
 **The gated half is the half a script can see.** A name is present or absent; a font size is
 points or pixels; an outline is drawn or not. What is left ungated is the judgement §3's row

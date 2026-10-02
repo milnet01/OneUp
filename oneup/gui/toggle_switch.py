@@ -13,7 +13,7 @@ from PySide6.QtCore import (
     Qt,
 )
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QAbstractButton
+from PySide6.QtWidgets import QAbstractButton, QApplication
 
 from . import theme
 
@@ -36,7 +36,7 @@ class ToggleSwitch(QAbstractButton):
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedSize(56, 30)
         self._margin = 3
-        self._pos = 1.0  # 0.0 = off (left), 1.0 = on (right)
+        self._pos = 1.0  # 0.0 = off, 1.0 = on — the end it reaches follows the direction
         self._high_contrast = False   # set from the stylesheet (qproperty-highContrast)
         # The two focused tracks, likewise set from the stylesheet. No colour rule
         # can reach what paintEvent draws, so a Qt property is the only seam —
@@ -106,8 +106,14 @@ class ToggleSwitch(QAbstractButton):
         """A bar for on, an open circle for off, drawn in the track half OPPOSITE
         the knob (the iOS convention). Painted as geometry rather than a text
         glyph: a painted widget has no font-fallback chain, so a missing character
-        would silently vanish and take the only colour-independent cue with it."""
-        cx = (self._margin + diameter / 2 if self.isChecked()
+        would silently vanish and take the only colour-independent cue with it.
+
+        Qt does not mirror a paintEvent, so the side is chosen here: the shape sits
+        at the left when on in a left-to-right window, and at the right when on in
+        a mirrored one (`ui-and-accessibility.md` §8.3). The direction is the
+        application's, never this widget's own (§8.4)."""
+        at_left = self.isChecked() != QApplication.isRightToLeft()
+        cx = (self._margin + diameter / 2 if at_left
               else self.width() - self._margin - diameter / 2)
         cy = self.height() / 2
         p.setBrush(Qt.NoBrush)
@@ -136,7 +142,10 @@ class ToggleSwitch(QAbstractButton):
 
         diameter = self.height() - 2 * self._margin
         travel = self.width() - 2 * self._margin - diameter
-        x = self._margin + self._pos * travel
+        # `_pos` runs off→on; a mirrored window runs that travel right to left, so
+        # "on" sits on the side its reader reads as on (§8.3).
+        along = 1.0 - self._pos if QApplication.isRightToLeft() else self._pos
+        x = self._margin + along * travel
         self._paint_state_shape(p, diameter)
 
         if self._high_contrast:
