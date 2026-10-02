@@ -494,9 +494,18 @@ def _tick_activity(win):
             bits.append(f"{markers._format_size(int(moved / secs))}/s")
     quiet = int(now - win._activity_at) if win._activity_at else 0
     stalled = quiet >= STALL_SECONDS
-    if stalled:
+    # The server is blamed only while something is known to be downloading: a source
+    # being fetched before any package phase, or the system step's download phase
+    # (ONEUP-0232). Anything else going quiet — flatpak deploying to a busy disk, an
+    # install — is not the server's, and Stop is prompt only while downloading
+    # (ONEUP-0085), so neither claim is made there.
+    fetching = (win._progress_phase == "download"
+                or (not win._progress_phase and bool(win._activity_what)))
+    if stalled and fetching:
         bits.append(f"nothing received for {markers._format_duration(quiet)}"
                     " — the server may have stalled. Stopping now is safe.")
+    elif stalled:
+        bits.append(f"nothing new for {markers._format_duration(quiet)} — still working")
     elif bits:
         bits.append("still working")
     _set_activity(win, " · ".join(bits))
@@ -505,7 +514,8 @@ def _tick_activity(win):
     if stalled != win._activity_stalled:
         win._activity_stalled = stalled
         if stalled:
-            win._announce("No response from the server. Stopping now is safe.")
+            win._announce("No response from the server. Stopping now is safe."
+                          if fetching else "No new output for a while. Still working.")
 
 
 def handle_marker(win, line: str):

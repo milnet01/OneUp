@@ -543,10 +543,12 @@ engine changes hands. ONEUP-0032 still follows it (`docs/design/oneup-2.0.md` §
 ### 4.7 Packaging and the switch
 
 - **Entry points.** `python3 -m oneup.engine` from a checkout; an `oneup-engine` console
-  script when installed — created at stage 9, in the RPM's `%files` and the AppImage build
-  alongside the existing `oneup` wrapper. Every hardcoded `bash`-plus-`ENGINE` launch in the window becomes
+  script in the RPM, created at stage 9 in its `%files` alongside the existing `oneup`
+  wrapper. Every hardcoded `bash`-plus-`ENGINE` launch in the window becomes
   one helper, and that helper *is* the switch: an `ONEUP_ENGINE=v1|v2` environment variable
-  during stages 7–8, then a default flip. **There are eight, not six** — the six `QProcess`
+  during stages 7–8, then a default flip **that removes the variable** — the window then
+  launches only the Python engine, and the way back is `update_system.sh` run in a terminal.
+  **There are eight, not six** — the six `QProcess`
   sites (`.start("bash", …)`) and **two `subprocess.run(["bash", str(ENGINE), …])` calls in
   the headless timer entry points**, `_headless_check` and `_headless_update`. Missing those
   two is the expensive mistake: they are the unattended paths, so a pair still launching v1
@@ -590,7 +592,17 @@ engine changes hands. ONEUP-0032 still follows it (`docs/design/oneup-2.0.md` §
   the drop-in is not.
 - **The three packaging paths** — what each does today and what each therefore needs — are
   `docs/design/oneup-2.0.md` §4, which owns them because ONEUP-0034 must move with them.
-  Nothing engine-specific to add beyond the entry points above.
+  **One engine-specific addition, for the AppImage** (the user's decision, 2026-10-02,
+  recorded on ONEUP-0054). The window there is a PyInstaller bundle with no interpreter
+  `-m` can run, and the engine must **not** run from inside the bundle's mount: measured
+  with a throwaway type-2 AppImage, a child started with inherited descriptors closed —
+  Python's `subprocess` default — loses the mount the moment the launcher exits, and its
+  next read fails. An engine doing that mid-transaction breaks INV-5. So the bundle carries
+  the engine's source as data; the window copies it to a directory under the state
+  directory named for the source's content, and runs it with the machine's own `python3`,
+  which must meet `docs/standards/coding.md` §1's floor. Where no such interpreter exists
+  the resolver reports that, and the paths it tried, rather than launching. The AppImage
+  carries no `oneup-engine` console script — nothing outside the bundle could reach one.
 - **`update_system.sh` is retired, not deleted**, in stage 9. The schedule and the reason
   are `docs/design/oneup-2.0.md` §4's, which owns them; what this spec adds is that stage 9
   is where the retirement happens.
@@ -705,12 +717,11 @@ through it alongside `--check`, a real update and a rollback offer.
 When the switch lands in stage 9:
 
 - **`docs/reference/marker-protocol.md`** — the "known drift in the engine's own header
-  comment" section (§7) dies with the Bash header it describes. **§5.1's freeze survives
-  stage 9**: only ONEUP-0072 may move the contract before the 2.0.0 tag, and §5.1 is
-  rewritten at the tag, not at the switch-over. That
-  section places one obligation on this work, and stage 9 discharges it: **ONEUP-0066** —
-  carry the *corrected* marker list into the Python engine's own header, rather than
-  copying the stale one forward.
+  comment" section (§7) shrinks to a note that the retained fallback's list is stale and
+  this reference is the authority. ONEUP-0066 is closed: the Python engine carries no
+  list, and `oneup/engine/markers.py` names this reference as the contract. **§5.1's
+  freeze survives stage 9**: only ONEUP-0072 may move the contract before the 2.0.0 tag,
+  and §5.1 is rewritten at the tag, not at the switch-over.
 - **`tests/docs-check.py`** — its marker gate reads `update_system.sh` for `marker NAME`
   call sites. Point it at the Python emitters in the same commit, or the contract stops
   being checked at the moment it is most likely to move.
@@ -719,9 +730,8 @@ When the switch lands in stage 9:
   the sudo one becomes a property (§4.3.1), the `tee` one becomes `BrokenPipeError`
   handling.
 - **`README.md`** — the standalone-engine instructions name `update_system.sh`.
-- **`CHANGELOG.md`** and the **six version sites** — a major bump to **2.0.0**, which is
-  also the honest signal: the engine anyone shelling out to OneUp depended on has changed.
-  `docs/standards/workflow.md` §5.1 owns the lockstep.
+- **`CHANGELOG.md`** — an `[Unreleased]` entry. The six version sites move to **2.0.0**
+  at the release, not here (§4.6); `docs/standards/workflow.md` §5.1 owns the lockstep.
 - **The standards that describe the Bash engine as current.** Design §7's G9 requires them
   current at the tag, and this work is what makes them stale: `docs/standards/testing.md` §1,
   §2.3 and §3 (the engine suite asserts on what `update_system.sh` prints; the throwaway-
@@ -776,3 +786,4 @@ When the switch lands in stage 9:
 | 8 | 2026-07-27 | **none verified** (one raised and dropped — see the design's loop 9 row) | **Converged.** `Draft` → `Reviewed`; implementation of ONEUP-0054 is unblocked |
 | 9 | 2026-08-24 | Q1 6 · Q2 1 · Q3 1 · Q4 0 — 8 verified, 1 dismissed | Loop 1 of a new run (ONEUP-0127): ONEUP-0044 edited §4.1.1 on 2026-08-23, so the `Reviewed` stamp no longer covered the text. **All three lanes independently found the same four defects**, and every one is drift the intervening items left behind. INV-4 named a scenario that no longer exists — ONEUP-0085 renamed it, so the invariant pointed at nothing. §4.4 said the suite reaches the engine at three places and "all three must be handled together"; ONEUP-0044 added a fourth, the `--hold` scenario, which stage 1 would have left launching v1 forever with G1 green — and the branch split matters, since `main` genuinely has two and `v2` has three. §4.1 assigned the window-side `LOG_DIR` rename to ONEUP-0034, which shipped without it, orphaning the obligation. And §4.2's "the table places every function" was false by twelve, the costly pair being `hold_for_go_ahead`/`adopt_go_ahead` — §4.1.1's own contract with no module. Two more the lanes found: §4.4's table named one `$ENGINE`-as-file reader where there are three, leaving the privileged-call-site guard with no disposition, and §4.1 promised stage 2 would pin the exit codes while stage 2's row never mentioned them. The orchestrator added one, resolving a lane's open question: §4.1.1 said an invalid `go.request` "is treated as absent", where `adopt_go_ahead` refuses and the refusal *ends* the hold — a Python engine built to the sentence would poll on until the ceiling. Dismissed: the 34-privileged-call-sites figure, now 29 live, but stamped past-tense and attributed to `security.md` §1.2, which does say 34 at `58ea3bc` — no line is built differently. The fix pass produced three pieces of its own collateral, all caught by 4b and all one shape: an ordinal into the table this loop lengthened ("the third"), which is what ONEUP-0108's review recorded three loops running. Every row is now cited by content |
 | 10 | 2026-08-24 | Q1 1 · Q2 4 · Q3 2 · Q4 0 — 7 verified, 0 dismissed | **Cap reached (2 for a spec), and it is a VIOLENT one: 5 of the 7 landed on text loop 9 wrote**, every one of them in text a fix *added* — 4a-min's pattern exactly. The worst was found by all three lanes: loop 9 repaired the ONEUP-0034 half of Trap 1 and left the bolded **"This spec renames only the engine's"** standing three lines above its own correction, so the document gave two answers to which constants stage 2 renames. Loop 9's other additions went the same way: "the four rows above it are re-pointings" when the keep-alive row is fourth of five and the structural check *does* move the figure it pins; "All five must be handled together" against a §4.6 that splits them across stages 1, 2 and 5; and a split-table row asserting "the run path never reads `STEPS`" when `run.state`'s writer reads exactly that, which is why `adopt_go_ahead` sets it — built to the sentence, line 3 would record a selection the run never performed. Two were pre-existing and both are the run's most valuable: `ONEUP_ENGINE_CMD` was pinned by name and default but never by **encoding**, and a Bash array cannot cross a process boundary (measured: `export` drops it), so a harness and a suite settling it differently make G2 diff v1 against v1 and go green; and §4.1.1's "Two rules v2 must keep" omitted the hold's third exit — the `kill -0 "$WINDOW_PID"` liveness poll — so a Python hold would keep a root-authenticated engine waiting to the ceiling after its window died, invisibly, since that exit emits no marker. **Not to be re-gated**: at 671 lines this is the smallest of its recent siblings (684–965), so size is not the problem, and a third cold read would be repairing the second. It goes to implementation, which exercises the contract against real code. `Reviewed` stands — the project defines it as ready-to-implement (`documentation.md` §3) |
+| 11 | 2026-10-02 | 2 verified in this document, as the companion of an admitted pair whose subject was the build plan (the plan's loop log, row 15, carries the run) | §4.7 was amended for stage 9 (the AppImage runs a copy of the engine outside its bundle; the switch variable goes). Both lanes read it cold. Two §8 bullets were fixed: ONEUP-0066's obligation to carry a marker list into the Python engine, which that item closed the other way, and a 2.0.0 bump at stage 9 that §4.6 puts at the release |
