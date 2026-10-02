@@ -6356,6 +6356,12 @@ when complete (that document's §7).
   Progress (2026-08-05): cold-eyes gate two loops in, session ended cleanly, still Draft. Loop 1: 24 verified, all fixed (3 criticals — INV-4 asserted ONEUP-0077's contract and was false on landing day; §4.1 misread _step_badge's skip branch; the only table of concrete REBOOT codes held English prose). Loop 2: 25 verified, 24 fixed, 1 surfaced, 0 criticals. Run state and both loops' fix ledger are committed at docs/reviews/ONEUP-0072-RESUME.md and docs/reviews/ONEUP-0072-fix-ledger.md — read the RESUME before re-reviewing anything; do NOT re-run a loop to rediscover what is written there. ONE OPEN QUESTION FOR THE USER, written into §4.3 as a marked block: §4.3 routes @@REBOOT@@'s was/were agreement through Qt's plural form, and measured against PySide6 6.11 that works only where a catalogue exists — with none loaded translate() returns the source verbatim, and 2.0 ships English only, so as written this item would regress wording the engine gets right today. Three ways out are stated; the choice is the user's. Loop 3 is owed, but 597->812 lines across two loops and a 15-collateral-vs-10-draft split mean splitting §4 may beat looping again.
   User 2026-10-02: pulled forward with ONEUP-0032, which depends on it — do this
   next after ONEUP-0146 and ONEUP-0226, ahead of the other 2.0 features.
+  Blocked (2026-10-02): needs ONEUP-0054 stages 8 and 9 first. The window
+  still launches the Bash engine by default (paths.engine_argv, ONEUP_ENGINE
+  unset), and spec §6's last row has that engine frozen emitting prose, so
+  converting now puts ONEUP-0108's fallback on every badge of an ordinary run.
+  Spec §3's first row says the same: the conversion follows the rewrite's gate.
+  User chose to do the stage-8 real run (G6) now; stage 9 then this item.
 
 - 📋 [ONEUP-0074] **A run the user stopped notifies "Already up to date".**
   Found while writing docs/specs/ONEUP-0072-marker-codes.md; filed by that

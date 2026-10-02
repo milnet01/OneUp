@@ -342,6 +342,10 @@ translation (0032)             ← last: wrapping strings before the split means
 
 The double-password investigation (0044) runs alongside the rewrite; see §6.2.
 
+**0032 is last of the items above, not of 2.0.** The user pulled it forward on 2026-10-02:
+it lands straight after 0077, ahead of every 2.0 feature filed after this diagram, so the
+groundwork is in before more features add strings. The chain above is unchanged.
+
 **Why the redesign sits between the split and themes.** All three touch the same
 widgets. Doing the split first means the existing GUI assertions judge it with nothing
 else in flight (it changes no behaviour); doing the redesign next means themes style the

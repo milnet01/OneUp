@@ -6,7 +6,8 @@
 **Branch:** v2
 **Verified at:** `36599ea` — every Qt behaviour below was measured against the installed
 PySide6 6.11 / Qt 6.11 on 2026-07-27, not recalled, and every quoted symbol was read from
-the tree.
+the tree. §2.2's last two rows and every site §4.5 names were measured and read on
+2026-10-02, when §4.5 was added.
 
 **Sections:** 1 goal · 2 background · 3 scope decisions · 4 design · 5 correctness
 invariants · 6 failure modes · 7 tests · 8 docs & release · 9 alternatives · 10 out of
@@ -14,7 +15,8 @@ scope · 11 cold-eyes log
 
 **In one sentence:** OneUp 2.0 ships in English and in English only, but every sentence a
 user can read is wrapped so a later contributor can translate it with a data file, the
-window is proven to mirror for Hebrew and Arabic by a test rather than by hope.
+window is proven to mirror for Hebrew and Arabic by a test rather than by hope, and nothing
+in it stops Chinese, Japanese or Korean text from fitting and rendering.
 
 **This item was split in two** at its fifth review loop, because it held two contracts.
 **`docs/specs/ONEUP-0072-marker-codes.md`** now owns the engine→window payload conversion —
@@ -43,7 +45,10 @@ window renders every sentence itself, through Qt's translation layer, with plura
 named placeholders. And `tests/gui-smoke.py` runs a second time with the layout direction forced
 right-to-left, so a widget that hard-codes a side is caught by a gate rather than by a
 Hebrew user — with three stated limits, in §7; chiefly that a *newly hand-painted* widget
-still needs somebody to write its own check.
+still needs somebody to write its own check. And a Chinese, Japanese or Korean catalogue
+needs no code change either: no setting blocks the system's font fallback, no control caps
+the size its text can grow to, and no wording is built by changing case or by joining with
+a separator a translator cannot replace (§4.5).
 
 ## 2. Background
 
@@ -73,6 +78,8 @@ most of them contradict what the mechanism is usually assumed to be.
 | Does any of it work with no application object? | No. `installTranslator` prints *"Please instantiate the QApplication object first"* and returns `False`; `translate` returns the English. A plain `QCoreApplication` — no display needed — is enough |
 | Does `-reverse` work with **no** catalogue installed? | **Yes** — `QApplication(sys.argv)` with `-reverse` and no translator reports `isRightToLeft()` `True`. This is the case the gate actually runs in, since 2.0 ships no catalogue |
 | Does Qt consume the arguments it reads? | No. `sys.argv` is byte-identical before and after `QApplication(sys.argv)`, so `--check`/`--tray` membership tests are unaffected |
+| Does the stylesheet's Latin font list block a script those fonts lack? *(2026-10-02)* | **No.** Under the window's own `font-family: "Inter", "Noto Sans", "Segoe UI", "Cantarell", sans-serif`, a `QTextLayout` of Hebrew text draws from Liberation Sans, which none of the five names. A font list with no generic family falls back the same way. **Only `QFont.NoFontMerging` stops it**: the same text then draws from Noto Sans with missing-glyph boxes. Measured with Hebrew because this machine has no CJK font (`fc-list :lang=ja` is empty); fallback is one mechanism for every script |
+| Does word-wrap break text with no spaces? *(2026-10-02)* | **Yes, for CJK.** Sixty CJK characters laid out at 120 px wrap to 5 lines; sixty Latin letters with no space stay on 1. Qt finds the break points itself, so the window needs no line-breaking code of its own |
 
 Rows three, four and five are the ones that would have shipped as bugs. A window that sets
 its own direction at startup makes the `-reverse` test pass while proving nothing; a
@@ -93,7 +100,8 @@ the translated text where it returned the English before.
 | 2.0 ships the **groundwork only** — English alone. Another language is a post-2.0 data file | the user, 2026-07-26 (design §5.1) |
 | **Right-to-left is in scope** and lands with the groundwork, not with the languages | the user, 2026-07-26 (design §5.1) |
 | The gate tests the **machinery**, not a translation: the GUI suite passes with the direction forced right-to-left | inherited, not chosen here — design §5.1, gate **G10** |
-| This item is **last** in 2.0, and starts only after the engine rewrite has passed its gate | inherited, not chosen here — design §5.2 |
+| This item comes **after ONEUP-0072 and ONEUP-0077** and ahead of the 2.0 features filed later; it starts only after the engine rewrite has passed its gate | the user, 2026-10-02, pulling it forward from last in 2.0 — recorded on the roadmap item; design §5.2 still owns the order |
+| **Preparation for Chinese, Japanese and Korean** is in scope beside right-to-left: fonts, sizes and word-based logic (§4.5). No CJK catalogue ships | the user, 2026-10-02 |
 
 ### 3.1 What this spec does not decide
 
@@ -239,6 +247,42 @@ under them is:
 The tray icon is painted by hand too and is deliberately untouched — it is an icon in a
 system tray, not a widget in a mirrored layout (§8.3).
 
+### 4.5 Chinese, Japanese and Korean: three things the window must not do
+
+No CJK catalogue ships, so this is groundwork in the same sense as §4.4: the window is
+built so a later catalogue fits, and three guards keep it that way. §2.2's last two rows
+are why each guard is a ban rather than new machinery — Qt already falls back to an
+installed CJK font and already wraps CJK text, so the work is not to defeat either.
+
+- **No setting that switches off font fallback.** `QFont.NoFontMerging` is the one setting
+  measured to do it (§2.2), and nothing under `oneup/` sets it today. The stylesheet's named
+  families stay as they are: they choose the Latin look and cost a CJK reader nothing.
+  Bundling a CJK font is not this item's (§10).
+- **No cap on the size a control's text can grow to.** `docs/standards/ui-and-accessibility.md`
+  §4 already forbids a fixed height that text can outgrow, for scaled text; this extends it
+  to widths and to maximums, because a translation grows sideways too. CJK glyphs are wider
+  than Latin ones and their fonts have taller lines, so a control sized for English clips
+  them. A widget
+  that shows a translatable string takes a *minimum* size, never a fixed or maximum one —
+  `setFixedWidth`, `setFixedHeight`, `setFixedSize`, `setMaximumWidth`,
+  `setMaximumHeight`, `setMaximumSize`, and the stylesheet's `width`, `height`,
+  `max-width` and `max-height`. Three existing sites cap a size and show no text, and are
+  the check's starting exemptions: `ToggleSwitch`'s `setFixedSize`, painted geometry with no
+  label; the package list's `setMaximumHeight` in `oneup/gui/task_row.py`, a scroll area
+  whose content scrolls rather than clips; and `QComboBox#ThemeCombo::drop-down`'s `width`,
+  the arrow sub-control.
+- **No wording built by changing case or by joining with a literal separator.** CJK has no
+  case, and its list separator is not `, `. So a cased form is written into the source
+  string, never derived from another one at run time, and a list a user reads is joined
+  with a separator that is itself a wrapped string, so a catalogue can supply `、`. Today
+  the window breaks both: `TaskRow` lower-cases its title into two accessible names, the
+  reboot banner in `oneup/gui/run.py` upper-cases the reason's first letter, and the
+  service and repository banners join names with a literal `", "`. **ONEUP-0108's English
+  join is the same rule's case** — its `@@REBOOT@@` and `@@CHECK_UNKNOWN@@` render functions
+  join with today's English separators (that spec's §4.2), and this item wraps those
+  separators with the rest of the table. A join of data no translator touches — an argv, a
+  log line, a search key — is outside the rule, and the check's exemption list names each.
+
 ## 5. Correctness invariants
 
 - **INV-1** Nothing under `oneup/engine/` imports or calls translation machinery —
@@ -304,7 +348,7 @@ system tray, not a widget in a mirrored layout (§8.3).
   translation into one extracted message, compiles, and asserts that string comes back from
   `QCoreApplication.translate`.
   *Test:* `tests/i18n-check.py`, the catalogue-build check. It alone skips when the Qt
-  translation tools are absent; the suite's four grep checks still run (§7).
+  translation tools are absent; the suite's source checks still run (§7).
 - **INV-9** Both headless entry points construct a `QCoreApplication` and load the
   catalogues **before** the first sentence is rendered. This replaces `ONEUP-0077`'s INV-5,
   which §8 deletes: that invariant asserted the opposite and is the only thing guarding the
@@ -314,6 +358,28 @@ system tray, not a widget in a mirrored layout (§8.3).
   *Test:* `tests/gui-smoke.py`, INV-5's own subprocess harness inverted — each entry point
   run in a subprocess, asserting the application object exists by the time a sentence is
   composed.
+- **INV-10** Nothing under `oneup/` sets `QFont.NoFontMerging`, so a glyph the chosen font
+  lacks is always drawn from a font that has it (§4.5, §2.2).
+  *Test:* `tests/i18n-check.py`, the font-fallback check — a source search for the name.
+  Breaks the moment one widget sets it: its CJK text draws as boxes on a machine that has a
+  CJK font.
+- **INV-11** No widget caps the size its text can grow to: every fixed- or maximum-size call
+  §4.5 lists, and every `width`, `height`, `max-width` or `max-height` in a stylesheet the
+  window applies, is on the check's exemption list, and each entry there says why that site
+  shows no text or scrolls it. **The list is closed and lives in `tests/i18n-check.py`**, as
+  INV-7's is.
+  *Test:* `tests/i18n-check.py`, the size-cap check. It reads every `setStyleSheet` argument
+  and the theme template, not `oneup/gui/placement.py`'s KWin script, whose `width:` is a
+  window geometry and not a stylesheet. Breaks when a label is given `setFixedWidth`: a
+  translation longer or wider than the English is cut off.
+- **INV-12** No wording is derived by a case change or joined with a literal separator:
+  under `oneup/gui/`, every `.lower()`, `.upper()`, `.capitalize()`, `.title()`,
+  `.swapcase()` and `.casefold()` call, and every `.join` on a string literal, is on the
+  check's exemption list as data — a search key, an environment value, an argv, a log or
+  diagnostics line. **Closed, in `tests/i18n-check.py`.** The check's first run on today's
+  tree is the worklist for §4.5's third bullet.
+  *Test:* `tests/i18n-check.py`, the word-logic check. Breaks on `TaskRow`'s
+  `title.lower()` as it stands, which is the proof it can see a real site.
 
 ## 6. Failure modes
 
@@ -325,6 +391,9 @@ system tray, not a widget in a mirrored layout (§8.3).
 | A new widget hard-codes a side in a stylesheet or an alignment flag | A control on the wrong side, in Arabic and Hebrew only | INV-6 catches it in the source, whatever the widget |
 | A new widget hard-codes a side in its own `paintEvent` | The same, and **nothing catches it** | The RTL pass only samples the pixels of the one painted widget that exists today. §7 |
 | A sentence is added without `tr()` | It stays English in every language | INV-7 catches it at the call site. A sentence assembled through a variable is not caught — §7 |
+| A widget sets `NoFontMerging` | Boxes in place of CJK text, even with a CJK font installed | INV-10 catches it in the source |
+| A control showing text is given a fixed or maximum size | A CJK or German translation cut off | INV-11 catches the call or the stylesheet property. A size forced some other way — a parent layout with no room — is not caught |
+| Wording is derived by a case change or a literal-separator join | A wrong or untranslatable fragment in every non-English language | INV-12 catches the call. A case change through a helper in another module is not caught |
 
 ## 7. Tests
 
@@ -332,18 +401,18 @@ system tray, not a widget in a mirrored layout (§8.3).
 | --- | --- |
 | INV-2, INV-4 — the catalogue pair and the translator's lifetime | `tests/gui-smoke.py`, new checks |
 | INV-5 — the whole window under right-to-left | `tests/gui-smoke.py -reverse`, a second run wired into `local-CI.sh` and `.github/workflows/release.yml` |
-| INV-1, INV-3, INV-6, INV-7, INV-8 — the five source-level guards | `tests/i18n-check.py`, a new suite |
+| INV-1, INV-3, INV-6, INV-7, INV-8, INV-10, INV-11, INV-12 — the eight source-level guards | `tests/i18n-check.py`, a new suite |
 | INV-9 — an application object on both headless paths | `tests/gui-smoke.py`, replacing `ONEUP-0077`'s INV-5 case |
 
 **`tests/i18n-check.py` is a new suite and must be named in both places or it runs
 nowhere** — `local-CI.sh` and `.github/workflows/release.yml` each name every Python suite
 by hand (`docs/standards/files-and-naming.md` §2.2).
 
-**Only the checks that need the Qt tools skip without them — never the suite.** Four of the
-five checks in `tests/i18n-check.py` are source greps needing no Qt at all, so a suite-wide
-exit `77` would silently disable INV-1, INV-3, INV-6 and INV-7 on any machine missing
-`pyside6-lupdate`, and report a skip rather than a failure. The suite runs its four grep
-checks always, skips the catalogue build (INV-8) when the tools are absent, and returns `0`
+**Only the checks that need the Qt tools skip without them — never the suite.** Every
+check in `tests/i18n-check.py` but INV-8's is a source search needing no Qt at all, so a
+suite-wide exit `77` would silently disable INV-1, INV-3, INV-6, INV-7, INV-10, INV-11 and
+INV-12 on any machine missing `pyside6-lupdate`, and report a skip rather than a failure.
+The suite runs its source checks always, skips the catalogue build (INV-8) when the tools are absent, and returns `0`
 with the skip named in its output. `tests/gui-smoke.py` does the same for INV-2 and INV-4,
 which need `pyside6-lrelease` to synthesise a catalogue: those two checks skip, the rest of
 the suite runs, and its existing exit `77` keeps its one meaning — PySide6 is absent.
@@ -381,9 +450,9 @@ to the same commit as 2.0-only code.
 
 - **`local-CI.sh` and `.github/workflows/release.yml`** — both name `tests/i18n-check.py`,
   and both gain the second, `-reverse` run of `tests/gui-smoke.py`. A suite named in neither
-  runs nowhere (`docs/standards/files-and-naming.md` §2.2), and six of the nine invariants
-  here are carried by those two additions — INV-1, INV-3, INV-6, INV-7 and INV-8 by the new
-  suite, INV-5 by the second run. INV-2, INV-4 and INV-9 ride the ordinary
+  runs nowhere (`docs/standards/files-and-naming.md` §2.2), and most invariants here
+  are carried by those two additions — INV-1, INV-3, INV-6, INV-7, INV-8, INV-10, INV-11
+  and INV-12 by the new suite, INV-5 by the second run. INV-2, INV-4 and INV-9 ride the ordinary
   `tests/gui-smoke.py` pass.
 - **`oneup/gui/app.py` and `tests/gui-smoke.py`** — both construct their `QApplication` with
   `sys.argv`, or the `-reverse` run is silently left-to-right (§4.2). `app.py`'s two headless
@@ -437,6 +506,13 @@ to the same commit as 2.0-only code.
   Rejected: `markers.py` already owns turning a marker into English, and the loading has to
   run before any widget exists. Two responsibilities, two homes
   (`docs/standards/coding.md` §4.2).
+- **Bundle a CJK font** so the window renders CJK on a machine without one. Rejected: a
+  desktop set up for those languages already has one, and §2.2 measured that Qt uses it
+  unaided.
+- **Prove the CJK guards with a pseudo-translation** — a generated catalogue that widens
+  every string — run through the window suite. Not taken in 2.0: it needs INV-8's catalogue
+  pipeline on every run, while INV-10 to INV-12 catch the three ways the window could break
+  CJK at the line that does it. Worth revisiting when the first real catalogue lands.
 - **Keep the payload conversion in this spec.** Rejected at the fifth review loop: the two
   are separate contracts, every finding in loops 4 and 5 sat on one side of the seam, and a
   document that needs more than three loops is oversized rather than well reviewed
@@ -455,6 +531,11 @@ to the same commit as 2.0-only code.
 - **Locale-aware number, date and byte formatting.** Worth doing, not this item; the sizes
   the engine reports are data (ONEUP-0072 §4.1).
 - **Mirroring the tray icon** (§4.4).
+- **Any CJK font, input method or vertical text.** The system supplies the font (§9); the
+  window's one text field is the read-only log pane, so nothing takes typed input; and
+  nothing in OneUp is laid out vertically.
+- **Promoting §4.5's three rules into `docs/standards/ui-and-accessibility.md`.** They live
+  here and in INV-10 to INV-12 until a standard has reason to own them.
 - **Re-wording any message.** Wrapping a string is not a licence to rewrite it (§3.1).
 
 ## 11. Cold-eyes loop log
