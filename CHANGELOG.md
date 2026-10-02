@@ -53,6 +53,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Two test runs at once no longer fail each other** (ONEUP-0203)
+  Running the pre-release test gate twice at the same time on one
+  computer made one of them report a failure that was not real, and could
+  stop a background helper the other run needed. Each run now keeps its
+  own logs and checks only its own helpers.
+
 - **The "Last run" date uses your language's name for the month** (ONEUP-0182)
   The date on the last-run line always showed the English month name,
   whatever language your computer uses. It now uses your language's, in

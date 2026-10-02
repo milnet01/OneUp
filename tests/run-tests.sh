@@ -1060,7 +1060,7 @@ rm -rf "$canary"
 # running one from a real update (docs/standards/testing.md §2).
 echo "TEST: a held run leaves no orphaned keep-alive behind"
 d=$(mktemp -d); setup_hold_dir "$d" allow
-ka_before=$(pgrep -f oneup-keepalive | sort)
+ka_before=$(keepalives_of "$d")
 if ! start_held_engine "$d"; then
     echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+1))
     reap_held_engine >/dev/null 2>&1
@@ -1069,7 +1069,7 @@ else
     reap_held_engine >/dev/null 2>&1
     leaked=""
     for _ in $(seq 1 40); do      # the group kill is asynchronous, so poll rather than sleep
-        ka_after=$(pgrep -f oneup-keepalive | sort)
+        ka_after=$(keepalives_of "$d")
         leaked=$(comm -13 <(echo "$ka_before") <(echo "$ka_after") | grep -v '^$' || true)
         [[ -z "$leaked" ]] && break
         sleep 0.1
@@ -2530,13 +2530,14 @@ chmod +x "$d/zypper"
 # 50'`: the loop spawns a fresh sleep every 50s, so ANY keep-alive already leaked on
 # the machine — including one left by a real interrupted run — made this test fail
 # roughly one run in six with a pid that had nothing to do with the run under test.
-# The loop shell's pid is stable for the life of the run, so this can't false-positive.
-ka_before=$(pgrep -f oneup-keepalive | sort)
+# The loop shell's pid is stable for the life of the run. keepalives_of (mock-env.sh)
+# counts only this scenario's own, which is what keeps another run out (ONEUP-0203).
+ka_before=$(keepalives_of "$d")
 run_engine "$d" --steps=system >/dev/null 2>&1
 # The process-group kill is asynchronous, so poll rather than guessing a fixed delay.
 ka_leaked=""
 for _ in $(seq 1 40); do          # up to 4s, returns as soon as it is clean
-    ka_after=$(pgrep -f oneup-keepalive | sort)
+    ka_after=$(keepalives_of "$d")
     ka_leaked=$(comm -13 <(echo "$ka_before") <(echo "$ka_after") | grep -v '^$' || true)
     [[ -z "$ka_leaked" ]] && break
     sleep 0.1

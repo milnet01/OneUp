@@ -168,3 +168,16 @@ run_engine() {
         ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}" \
         "${ENGINE_CMD[@]}" "$@" --log="$mockdir/run.log" 2>&1
 }
+
+# The keep-alive processes a scenario's OWN engine started (ONEUP-0203). They inherit
+# the engine's environment, so the sandbox run.state path run_engine sets picks them
+# out. A machine-wide `pgrep -f oneup-keepalive` also sees another run's — a second suite
+# on this machine, or a real update — reports it as this run's leak, and then kills it.
+# Measured: two suites run side by side failed that way with the other suite's pid.
+keepalives_of() {   # $1 = the scenario's sandbox directory
+    local p
+    for p in $(pgrep -f oneup-keepalive); do
+        tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null \
+            | grep -qxF "ONEUP_RUN_STATE=$1/run.state" && echo "$p"
+    done | sort
+}
