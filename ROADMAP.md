@@ -5341,7 +5341,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: in-session-2026-10-01, found while running gui-smoke for ONEUP-0204.
 
-- 📋 [ONEUP-0226] **The leftover-package parser reads zypper's table heading as a package called "Name".**
+- ✅ [ONEUP-0226] **The leftover-package parser reads zypper's table heading as a package called "Name".**
   `zypper packages --unneeded` / `--orphaned` print `Loading repository data...` and
   `Reading installed packages...` on stdout before the table, so skipping two lines
   lands on the header row, whose third field is "Name" and passes ONEUP-0171's
@@ -5355,6 +5355,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   `---+` separator line. The suite's mocks print the header as line 1, which is
   why nothing caught it; the regression test replays zypper's real output.
   User 2026-10-02: jump this ahead of the oldest-first order.
+  Resolved 2026-10-02: both engines read the table from its `---+---` line
+  (main 05658ea; Python engine on v2). Regression scenario "the orphans step
+  reads zypper's real table, progress lines and all", red then green against
+  both engines; it also covers the off-by-one "no active repository" count.
   **Layman:** When there are leftover packages, OneUp tries to remove one called "Name", then marks the step failed although the real removal worked.
   Kind: fix.
   Source: update-log review 2026-10-02.
