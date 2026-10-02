@@ -452,6 +452,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   loops (10 and 11), 12 verified, 12 fixed, cap reached calmly; Status is
   Reviewed. Build order is 0072, then 0077, then this item, because INV-9
   retires 0077's INV-5; 0072 is blocked on ONEUP-0054 stages 8 and 9.
+  Handed on from ONEUP-0182 (2026-10-02): oneup/gui/task_row.py builds a
+  sentence with title.lower(), which is locale-naive (Turkish dotted and
+  dotless I) on a fragment this item makes translatable. Settle it when
+  that string is wrapped.
 
 - ✅ [ONEUP-0033] **bump.py: advance the CHANGELOG [Unreleased] compare-link base to the new tag.**
   bump.py rewrites the six version sites and adds a new `[x.y.z]: .../releases/tag/vX.Y.Z` reference link, but leaves the `[Unreleased]: .../compare/vPREV...HEAD` link pointing at the PREVIOUS tag. After releasing 1.2.0 the link still reads `compare/v1.1.0...HEAD` (CHANGELOG.md:207) — it should read `compare/v1.2.0...HEAD`. Fix: in bump.py, when moving `## [Unreleased]` to `## [X.Y.Z]`, also rewrite the `[Unreleased]:` compare base from the old tag to `vX.Y.Z`. Cosmetic (the link 404s on the stale range only until the next commit), pre-existing since at least 1.1.0. Add/adjust a bump.py test to assert the Unreleased compare base advances. No version-lockstep impact (local-CI's lockstep gate doesn't check this link).
@@ -3827,7 +3831,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-window.
 
-- 📋 [ONEUP-0182] **The last-run line assumes the C locale for its date, which ONEUP-0032 does not cover.**
+- ✅ [ONEUP-0182] **The last-run line assumes the C locale for its date, which ONEUP-0032 does not cover.**
   `oneup/gui/window.py:767` formats with `%d %b %Y, %H:%M`. Python does not call
   `setlocale(LC_TIME, "")`, so `%b` renders from the C locale regardless of the
   user's; day-month-year ordering and 24-hour time are hardcoded too. This is the
@@ -3846,6 +3850,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Decision (user, 2026-10-02): option (b). Keep day, month name, year
   order ("02 Oct 2026, 14:05"), with the month name taken from the
   locale. Not the full locale format, which renders all-numeric here.
+  Resolved (2026-10-02): v2 5d70ccf. QLocale().toString(..., "dd MMM yyyy,
+  HH:mm") — the user's option (b). Red first (German locale, March date:
+  528/1), green after (529/0). v2 only; on English locales nothing visible
+  changes. The task_row.py title.lower() half is left to ONEUP-0032.
   **Layman:** The date on the last-run line is always in English and always day-month-year.
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-window.
@@ -4144,7 +4152,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: close-findings sweep 2026-09-21, collateral of ONEUP-0153.
 
-- 📋 [ONEUP-0203] **local-CI.sh cannot be run twice at once, and a concurrent run reports a false failure.**
+- 🚧 [ONEUP-0203] **local-CI.sh cannot be run twice at once, and a concurrent run reports a false failure.**
   Two `local-CI.sh` runs overlapping produced `tests/run-tests.sh` "Passed:
   299 Failed: 1" on a tree whose engine suite passes 300/0 in isolation. The
   failing run was a `git push`, whose pre-push hook runs the gate — so it
@@ -4179,6 +4187,19 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   the engine outside `run_engine` must redirect `/run/zypp.pid` and `run.state` by
   hand — both machine-global, and neither namespaced per repository either. If
   those are the real collision, a log-path fix would hide the symptom and leave it.
+  Progress (2026-10-02): fixed on v2 (e133caf). Cause measured: the suites
+  collide, not only their logs — both keep-alive leak checks diffed the
+  machine-wide pgrep, so another run's keep-alive read as this run's leak
+  and was then killed (reproduced with two suites side by side). Fixed by
+  counting only keep-alives carrying the scenario's own ONEUP_RUN_STATE;
+  local-CI.sh logs now go in a per-run mktemp directory. CPU load is not a
+  cause (393/0 under 12 busy loops); the 300/301 totals were the network
+  check (on in local-CI, off in the hook). Red/green on both branches.
+  DECISION FOR THE USER: main's half (its run-end check plus local-CI.sh)
+  needs a workflow.md §1.2 exception, which only the user grants. It is
+  saved as `git stash` in the main worktree (OneUp-main-wt). Recommendation:
+  grant it, for ONEUP-0224's reason — main's own pre-push gate runs this
+  suite on every push of main. No 1.4.x is owed (nothing user-facing).
   **Layman:** Running the test gate twice at the same time makes it report a failure that is not real.
   Kind: fix.
   Source: close-findings sweep 2026-09-21, found during the run.
