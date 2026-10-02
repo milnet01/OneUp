@@ -434,6 +434,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   inside 2.0; a translated catalogue for a specific language is a data file
   contributed after 2.0 ships (docs/design/oneup-2.0.md section 5.1), which is
   why no bullet exists for "ship German" and none should be opened.
+  User 2026-10-02: pull this forward — the groundwork goes in now, before more
+  features add strings; no second language ships. Order: after ONEUP-0146 and
+  ONEUP-0226, do ONEUP-0072 then this item, ahead of the other 2.0 features. This
+  supersedes the 2026-08-03 "stays last in 2.0" placement; the dependency on
+  ONEUP-0072 is unchanged. Scope ADDED the same day: preparation for East Asian
+  languages (Chinese, Japanese, Korean) alongside right-to-left — no hard-coded
+  font families that block CJK fallback, no fixed widths that clip wider glyphs,
+  no logic that assumes words are space-separated. The reviewed spec
+  (docs/specs/ONEUP-0032-i18n.md) does not yet say this, so the spec is amended
+  and re-gated before building.
 
 - ✅ [ONEUP-0033] **bump.py: advance the CHANGELOG [Unreleased] compare-link base to the new tag.**
   bump.py rewrites the six version sites and adds a new `[x.y.z]: .../releases/tag/vX.Y.Z` reference link, but leaves the `[Unreleased]: .../compare/vPREV...HEAD` link pointing at the PREVIOUS tag. After releasing 1.2.0 the link still reads `compare/v1.1.0...HEAD` (CHANGELOG.md:207) — it should read `compare/v1.2.0...HEAD`. Fix: in bump.py, when moving `## [Unreleased]` to `## [X.Y.Z]`, also rewrite the `[Unreleased]:` compare base from the old tag to `vX.Y.Z`. Cosmetic (the link 404s on the stale range only until the next commit), pre-existing since at least 1.1.0. Add/adjust a bump.py test to assert the Unreleased compare base advances. No version-lockstep impact (local-CI's lockstep gate doesn't check this link).
@@ -3199,7 +3209,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-shell.
 
-- 📋 [ONEUP-0146] **The bulk flatpak query is used in the run where the check already abandoned it.**
+- ✅ [ONEUP-0146] **The bulk flatpak query is used in the run where the check already abandoned it.**
   `flatpak remote-ls --updates` with no remote named abandons the WHOLE listing the
   moment any single remote cannot be summarised, and a local --no-enumerate origin
   never can. The check arm was fixed and records the measurement — six such
@@ -3207,6 +3217,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   carries the abandoned form in both engines, under a comment claiming it is the
   "same read-only check --check uses". The fix is to factor the per-remote loop out
   and call it from both, so the comment becomes true.
+  Resolved 2026-10-02: both engines count Flatpak updates remote by remote in
+  the run too — flatpak_updates in update_system.sh (main 897785a) and
+  steps.flatpak_updates in the Python engine (v2). Regression scenario "the
+  flatpak run counts updates even when one remote is unreadable", red then green
+  against both engines.
   **Layman:** The Flatpak step can say "up to date" right after it updated something.
   Kind: fix.
   Source: review-code 2026-08-31, lanes engine-shell + engine-steps.
@@ -6335,6 +6350,8 @@ when complete (that document's §7).
   that reference, oneup-2.0.md section 5.1 and testing.md section 5 are all
   amended in the same commit as the code.
   Progress (2026-08-05): cold-eyes gate two loops in, session ended cleanly, still Draft. Loop 1: 24 verified, all fixed (3 criticals — INV-4 asserted ONEUP-0077's contract and was false on landing day; §4.1 misread _step_badge's skip branch; the only table of concrete REBOOT codes held English prose). Loop 2: 25 verified, 24 fixed, 1 surfaced, 0 criticals. Run state and both loops' fix ledger are committed at docs/reviews/ONEUP-0072-RESUME.md and docs/reviews/ONEUP-0072-fix-ledger.md — read the RESUME before re-reviewing anything; do NOT re-run a loop to rediscover what is written there. ONE OPEN QUESTION FOR THE USER, written into §4.3 as a marked block: §4.3 routes @@REBOOT@@'s was/were agreement through Qt's plural form, and measured against PySide6 6.11 that works only where a catalogue exists — with none loaded translate() returns the source verbatim, and 2.0 ships English only, so as written this item would regress wording the engine gets right today. Three ways out are stated; the choice is the user's. Loop 3 is owed, but 597->812 lines across two loops and a 15-collateral-vs-10-draft split mean splitting §4 may beat looping again.
+  User 2026-10-02: pulled forward with ONEUP-0032, which depends on it — do this
+  next after ONEUP-0146 and ONEUP-0226, ahead of the other 2.0 features.
 
 - 📋 [ONEUP-0074] **A run the user stopped notifies "Already up to date".**
   Found while writing docs/specs/ONEUP-0072-marker-codes.md; filed by that
