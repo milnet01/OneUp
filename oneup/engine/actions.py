@@ -232,30 +232,7 @@ def _check_system() -> tuple[int, bool]:
 
 def _check_flatpak() -> tuple[int, bool]:
     """Count pending Flatpak updates, asking each remote separately."""
-    # `flatpak remote-ls --updates` with no remote named abandons the WHOLE listing
-    # the moment any single remote can't be summarised — and a local --no-enumerate
-    # origin (what `flatpak install ./app.flatpak` leaves behind) never can be.
-    # Measured: six such leftovers on one box hid a real Discord update for weeks.
-    # Per-remote, one broken source costs only itself.
-    rows: list[str] = []
-    unreachable: list[str] = []
-    for scope in ("--user", "--system"):
-        _, listing = proc.run(["flatpak", "remotes", scope, "--columns=name,options"])
-        for entry in listing.splitlines():
-            remote, _, opts = entry.partition("\t")
-            if not remote.strip():
-                continue
-            rc, out = proc.run(
-                ["flatpak", "remote-ls", "--updates", scope, remote,
-                 "--columns=application,version"],
-            )
-            if rc == 0:
-                rows += [r for r in out.splitlines() if r.strip()]
-            elif "no-enumerate" not in opts:
-                # A no-enumerate origin serves no listing BY DESIGN — apps installed
-                # from a local file have no remote updates to miss, so it is not a
-                # failed check. Any other remote failing means apps went uncounted.
-                unreachable.append(remote)
+    rows, unreachable = steps.flatpak_updates()   # why per remote: see the helper
     n = len(rows)
     unreadable = ""
     if unreachable:

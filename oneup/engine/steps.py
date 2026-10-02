@@ -96,9 +96,39 @@ def end_step(key: str, status: str, detail: str = "") -> None:
 FLATPAK_QUERY_SECONDS = float(os.environ.get("ONEUP_FLATPAK_TIMEOUT") or "60")
 
 
-def _lines(text: str) -> int:
-    """`wc -l`: how many newline-terminated lines the text carries."""
-    return text.count("\n")
+def flatpak_updates(deadline: float | None = None) -> tuple[list[str], list[str]]:
+    """Ask each Flatpak remote for its pending updates.
+
+    Returns the "app-id version" rows and the remotes that could not be asked.
+    Both `--check` and the run count this way.
+    """
+    # `flatpak remote-ls --updates` with no remote named abandons the WHOLE listing
+    # the moment any single remote can't be summarised — and a local --no-enumerate
+    # origin (what `flatpak install ./app.flatpak` leaves behind) never can be.
+    # Measured: six such leftovers on one box hid a real Discord update for weeks.
+    # Per-remote, one broken source costs only itself.
+    rows: list[str] = []
+    unreachable: list[str] = []
+    for scope in ("--user", "--system"):
+        _, listing = proc.run(["flatpak", "remotes", scope, "--columns=name,options"],
+                              deadline=deadline)
+        for entry in listing.splitlines():
+            remote, _, opts = entry.partition("\t")
+            if not remote.strip():
+                continue
+            rc, out = proc.run(
+                ["flatpak", "remote-ls", "--updates", scope, remote,
+                 "--columns=application,version"],
+                deadline=deadline,
+            )
+            if rc == 0:
+                rows += [r for r in out.splitlines() if r.strip()]
+            elif "no-enumerate" not in opts:
+                # A no-enumerate origin serves no listing BY DESIGN — apps installed
+                # from a local file have no remote updates to miss, so it is not a
+                # failed check. Any other remote failing means apps went uncounted.
+                unreachable.append(remote)
+    return rows, unreachable
 
 
 def run_flatpak() -> None:
@@ -111,12 +141,7 @@ def run_flatpak() -> None:
     ok = True
     # Count what will update FIRST — the same read-only query `--check` uses — so
     # the detail can say how many apps were updated rather than just "done".
-    count = 0
-    for scope in ("--user", "--system"):
-        rc, out = proc.run(["flatpak", "remote-ls", "--updates", scope],
-                           deadline=FLATPAK_QUERY_SECONDS)
-        if rc == 0:
-            count += _lines(out)
+    count = len(flatpak_updates(deadline=FLATPAK_QUERY_SECONDS)[0])
     if proc.run(["flatpak", "update", "--user", "-y"], stream=True)[0] != 0:
         ok = False
     if privilege.sudo(["flatpak", "update", "--system", "-y"], stream=True)[0] != 0:

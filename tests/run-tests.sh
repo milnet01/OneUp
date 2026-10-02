@@ -3409,7 +3409,8 @@ else
     cat > "$d/flatpak" <<'FLATPAK_EOF'
 #!/usr/bin/env bash
 case "$*" in
-  *remote-ls*) sleep 300 ;;   # accepts, never answers
+  *remotes*)   printf 'flathub\t\n'; exit 0 ;;          # the count asks each remote
+  *remote-ls*) touch "$0.asked"; sleep 300 ;;           # accepts, never answers
   *) exit 0 ;;
 esac
 FLATPAK_EOF
@@ -3417,6 +3418,9 @@ FLATPAK_EOF
     started=$(date +%s)
     out=$(ONEUP_FLATPAK_TIMEOUT=1 run_engine "$d" --steps=flatpak)
     elapsed=$(( $(date +%s) - started ))
+    # Without this the scenario passes vacuously when no query is made at all.
+    check_eq "the never-answering query was actually made" "yes" \
+             "$([[ -e "$d/flatpak.asked" ]] && echo yes || echo no)"
     if (( elapsed < 60 )); then
         echo "  ok   - the budget ended a query that would never answer (${elapsed}s)"; PASS=$((PASS+1))
     else
