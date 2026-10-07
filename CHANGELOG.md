@@ -8,6 +8,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The Stop button greys out while packages install** (ONEUP-0095)
+  Installing packages cannot be stopped safely part-way, so a click on
+  Stop then did nothing until the step ended. Stop now greys out while
+  packages install, says why when you point at it, and comes back as
+  soon as the step finishes.
+
 - **An update that first updated zypper itself now finishes the rest** (ONEUP-0234)
   When zypper updates itself it asks to be run again for the remaining
   updates. OneUp now does that once, instead of stopping there and

@@ -134,6 +134,11 @@ RUN_STATE = STATE_DIR / "run.state"
 # Creating this file asks a running engine to stop at its next safe point. Must match
 # STOP_FILE in update_system.sh.
 STOP_REQUEST = STATE_DIR / "stop.request"
+# Stop's two tooltips: which one is true depends on what the run is doing (ONEUP-0095).
+STOP_TIP = ("Stop after the current step. Anything already installed stays installed — "
+            "an install is never cut off half-way, because that can break programs.")
+STOP_TIP_INSTALLING = ("Packages are being installed, and that cannot be stopped safely "
+                       "part-way. Stop comes back as soon as this step finishes.")
 # How long the engine may produce NOTHING before the liveness line calls it stalled
 # (ONEUP-0048). Generously past a normal gap — a big repository's cache rebuild is quiet
 # for a while — so the wording is trustworthy when it does appear.
@@ -1470,6 +1475,7 @@ class Updater(QMainWindow):
         self._sys_changed = False
         self._step_caption = ""      # current step's bar caption, so @@PROGRESS@@ can extend it
         self._progress_phase = ""    # download/install; a change is what gets announced
+        self._stop_asked = False     # Stop was pressed this run; never offer it again
         # Liveness state (ONEUP-0048). _activity_at is the last time ANY output arrived —
         # including a partial line, which is all zypper's dots ever are — so "quiet for
         # 4m" means genuinely nothing, not merely nothing complete enough to draw.
@@ -1693,9 +1699,7 @@ class Updater(QMainWindow):
         self.stop_btn.setObjectName("GhostBtn")
         self.stop_btn.setCursor(Qt.PointingHandCursor)
         self.stop_btn.setAccessibleName("Stop the update")
-        self.stop_btn.setToolTip(
-            "Stop after the current step. Anything already installed stays installed — "
-            "an install is never cut off half-way, because that can break programs.")
+        self.stop_btn.setToolTip(STOP_TIP)
         self.stop_btn.clicked.connect(self.request_stop)
         self.stop_btn.setVisible(False)
 
@@ -3055,8 +3059,22 @@ for (var i = 0; i < wins.length; i++) {{
         stoppable = (not enabled) and self._run_active and not self._check_mode
         self.stop_btn.setVisible(stoppable)
         if stoppable:
-            self.stop_btn.setEnabled(True)
+            self._stop_asked = False
             self.stop_btn.setText("Stop")
+            self._sync_stop()
+
+    def _sync_stop(self):
+        """Stop is clickable only while a click can take effect soon (ONEUP-0095). In the
+        install phase rpm is mid-transaction, which is never interrupted (security.md
+        §6.1), so a click there would sit on "Stopping…" until the step ends — grey it
+        out and say why instead. Re-run whenever _progress_phase changes."""
+        if self._stop_asked:
+            return
+        installing = self._progress_phase == "install"
+        self.stop_btn.setEnabled(not installing)
+        tip = STOP_TIP_INSTALLING if installing else STOP_TIP
+        self.stop_btn.setToolTip(tip)
+        self.stop_btn.setAccessibleDescription(tip)
 
     def request_stop(self):
         """Ask the engine to stop at its next safe point by creating the file it watches.
@@ -3068,6 +3086,7 @@ for (var i = 0; i < wins.length; i++) {{
         except OSError as exc:
             QMessageBox.warning(self, "Stop", f"Could not ask the update to stop:\n{exc}")
             return
+        self._stop_asked = True
         self.stop_btn.setEnabled(False)
         self.stop_btn.setText("Stopping…")
         self.status.setText("Stopping after the current step — nothing new will start…")
@@ -3401,6 +3420,7 @@ for (var i = 0; i < wins.length; i++) {{
             # the step's label and position from a marker it doesn't carry.
             self._step_caption = f"{label}  (step {index} of {total})"
             self._progress_phase = ""
+            self._sync_stop()
             # A new step is a new thing to wait on, and its own download: carrying the
             # previous step's elapsed time or byte rate over would misreport both.
             self._activity_what = ""
@@ -3515,6 +3535,7 @@ for (var i = 0; i < wins.length; i++) {{
             # longest stretch is exactly what made it look hung.
             announce = phase != self._progress_phase
             self._progress_phase = phase
+            self._sync_stop()
             # Optional trailing byte fields: how much zypper says has come down, and its
             # total for the transaction. Either may be 0 for "not known" — during the
             # prefetch phase zypper reports no sizes at all, and the liveness line falls
