@@ -41,6 +41,34 @@ STALL_SECONDS = 45
 HOLD_WAIT_POLL_MS = 200
 
 
+def stop_tooltip(installing: bool) -> str:
+    """Stop's tooltip. Which one is true depends on what the run is doing (ONEUP-0095)."""
+    if installing:
+        return QCoreApplication.translate(
+            "run",
+            "Packages are being installed, and that cannot be stopped safely "
+            "part-way. Stop comes back as soon as this step finishes.")
+    return QCoreApplication.translate(
+        "run",
+        "Stop after the current step. Anything already installed stays "
+        "installed — an install is never cut off half-way, because that "
+        "can break programs.")
+
+
+def sync_stop(win):
+    """Stop is clickable only while a click can take effect soon (ONEUP-0095). In the
+    install phase rpm is mid-transaction, which is never interrupted (security.md
+    §6.1), so a click there would sit on "Stopping…" until the step ends — grey it
+    out and say why instead. Re-run whenever _progress_phase changes."""
+    if win._stop_asked:
+        return
+    installing = win._progress_phase == "install"
+    win.stop_btn.setEnabled(not installing)
+    tip = stop_tooltip(installing)
+    win.stop_btn.setToolTip(tip)
+    win.stop_btn.setAccessibleDescription(tip)
+
+
 def request_stop(win):
     """Ask the engine to stop at its next safe point by creating the file it watches.
     Not a signal: signalling mid-transaction would either leave rpm half-applied or
@@ -54,6 +82,7 @@ def request_stop(win):
             "run",
             "Could not ask the update to stop:\n{exc}").format(exc=exc))
         return
+    win._stop_asked = True
     win.stop_btn.setEnabled(False)
     win.stop_btn.setText(QCoreApplication.translate("run", "Stopping…"))
     win.status.setText(QCoreApplication.translate(
@@ -594,6 +623,7 @@ def handle_marker(win, line: str):
             "run", "{phrasing}  (step {index} of {total})").format(
                 phrasing=phrasing or key, index=index, total=total)
         win._progress_phase = ""
+        sync_stop(win)
         # A new step is a new thing to wait on, and its own download: carrying the
         # previous step's elapsed time or byte rate over would misreport both.
         win._activity_what = ""
@@ -724,6 +754,7 @@ def handle_marker(win, line: str):
         # longest stretch is exactly what made it look hung.
         announce = phase != win._progress_phase
         win._progress_phase = phase
+        sync_stop(win)
         # Optional trailing byte fields: how much zypper says has come down, and its
         # total for the transaction. Either may be 0 for "not known" — during the
         # prefetch phase zypper reports no sizes at all, and the liveness line falls

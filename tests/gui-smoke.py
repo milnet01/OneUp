@@ -602,6 +602,17 @@ def main() -> int:
         wS._run_active, wS._check_mode = True, False
         wS.set_controls_enabled(False)
         check("Stop appears once a real run is going", wS.stop_btn.isVisibleTo(wS))
+        # ONEUP-0095: while rpm installs, nothing can stop it until the step ends, so a
+        # click there would sit on "Stopping…" for minutes. Stop greys out and says why.
+        run.handle_line(wS, "@@PROGRESS@@|system|3|141|download")
+        check("Stop stays usable while packages download", wS.stop_btn.isEnabled())
+        run.handle_line(wS, "@@PROGRESS@@|system|7|141|install")
+        check("Stop is greyed out while packages install", not wS.stop_btn.isEnabled())
+        check("the greyed-out Stop says why",
+              "cannot be stopped safely" in wS.stop_btn.toolTip())
+        run.handle_line(wS, "@@STEP_BEGIN@@|flatpak|2|5")
+        check("Stop comes back once the install is over",
+              wS.stop_btn.isEnabled() and "after the current step" in wS.stop_btn.toolTip())
         run.request_stop(wS)
         check("asking to stop creates the file the engine watches",
               paths.STOP_REQUEST.exists())
@@ -609,6 +620,11 @@ def main() -> int:
         check("it cannot be clicked twice", not wS.stop_btn.isEnabled())
         check("the status says what will actually happen",
               "after the current step" in wS.status.text())
+        # An install phase ending must not re-offer a stop that was already asked for.
+        run.handle_line(wS, "@@PROGRESS@@|flatpak|1|4|install")
+        run.handle_line(wS, "@@STEP_BEGIN@@|firmware|3|5")
+        check("a stop already asked for is not offered again",
+              not wS.stop_btn.isEnabled() and wS.stop_btn.text() == "Stopping…")
         # A stopped run must claim neither success nor failure.
         run.handle_line(wS, "@@DONE@@|stopped")
         run.on_finished(wS, 0, None)

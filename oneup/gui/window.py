@@ -142,6 +142,7 @@ class Updater(QMainWindow):
         self._sys_changed = False
         self._step_caption = ""      # current step's bar caption, so @@PROGRESS@@ can extend it
         self._progress_phase = ""    # download/install; a change is what gets announced
+        self._stop_asked = False     # Stop was pressed this run; never offer it again
         # Liveness state (ONEUP-0048). _activity_at is the last time ANY output arrived —
         # including a partial line, which is all zypper's dots ever are — so "quiet for
         # 4m" means genuinely nothing, not merely nothing complete enough to draw.
@@ -441,12 +442,7 @@ class Updater(QMainWindow):
         self.stop_btn.setObjectName("StopBtn")
         self.stop_btn.setCursor(Qt.PointingHandCursor)
         self.stop_btn.setAccessibleName(QCoreApplication.translate("window", "Stop the update"))
-        self.stop_btn.setToolTip(
-            QCoreApplication.translate(
-                "window",
-                "Stop after the current step. Anything already installed stays "
-                "installed — an install is never cut off half-way, because that "
-                "can break programs."))
+        self.stop_btn.setToolTip(run.stop_tooltip(installing=False))
         self.stop_btn.clicked.connect(partial(run.request_stop, self))
         self.stop_btn.setVisible(False)
 
@@ -1014,8 +1010,9 @@ class Updater(QMainWindow):
         self.check_btn.setVisible(not stoppable)
         self.stop_btn.setVisible(stoppable)
         if stoppable:
-            self.stop_btn.setEnabled(True)
+            self._stop_asked = False
             self.stop_btn.setText(QCoreApplication.translate("window", "Stop"))
+            run.sync_stop(self)
 
     def show_about(self):
         """A small About window: version, licence, links, and a manual update check."""
