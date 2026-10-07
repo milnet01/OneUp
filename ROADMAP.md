@@ -4183,6 +4183,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: in-session-2026-10-02 ONEUP-0032 build.
 
+- 📋 [ONEUP-0236] **The six project standards carry no marker saying they are this project's own, so the copied-standards check reports each as an undeclared copy.**
+  ~/.claude/.githooks/check-copied-standards over the main worktree
+  (2026-10-07) reported docs/standards/workflow.md, security.md,
+  dependencies.md, coding.md, documentation.md and testing.md as
+  UNDECLARED: each wears a global standard's name, overlaps it 0-1%,
+  and declares nothing. They are this project's own rules, not
+  forks, so the likely fix is an OWNED-HERE marker in each, per
+  ~/.claude/standards/README.md. Seen while adding ONEUP-0203's
+  exception; not fixed there.
+  **Layman:** A checking tool mistakes OneUp's own rule documents for out-of-date copies, because they don't say they belong to OneUp.
+  Kind: chore.
+  Source: in-session-2026-10-07 ONEUP-0203 write-doc.
+
 ## 1.4.6 — fixes to the released app
 
 **Theme:** fixes for the 1.4 app people use today, landed on `main`. No
@@ -5582,6 +5595,8 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   another session ("on ?, engine on pts/26"), on both engines; it also
   fails if the keep-alive shares the engine's group. security.md §2.4
   records the rule. Not yet confirmed on a real terminal-launched run.
+  Decision (user, 2026-10-07): once the next real Konsole run
+  confirms this fix, release 1.4.6 from main without asking again.
   **Layman:** Started from a terminal, OneUp could quietly ask for your password a second time in that terminal and sit waiting for five minutes.
   Kind: fix.
   Source: user-real-run-2026-10-02.
@@ -6007,6 +6022,8 @@ when complete (that document's §7).
   which is the first real run with the Python engine as the default and
   also confirms ONEUP-0231 from a terminal. G1-G6 stand as earned at their
   stages; stage 9 is the commit they are measured against.
+  Decision (user, 2026-10-07): once the next real Konsole run
+  confirms ONEUP-0231, flip this item shipped without asking again.
 
 - 🚧 [ONEUP-0057] **Write the OneUp 2.0 documentation set before any 2.0 code is written.**
   Agreed with the user 2026-07-26. Deliverables, in order: nine standards
