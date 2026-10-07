@@ -2238,13 +2238,26 @@ chmod +x "$d/zypper"
 # 50'`: the loop spawns a fresh sleep every 50s, so ANY keep-alive already leaked on
 # the machine — including one left by a real interrupted run — made this test fail
 # roughly one run in six with a pid that had nothing to do with the run under test.
-# The loop shell's pid is stable for the life of the run, so this can't false-positive.
-ka_before=$(pgrep -f oneup-keepalive | sort)
+# The loop shell's pid is stable for the life of the run.
+#
+# Only THIS scenario's keep-alives count (ONEUP-0203): they inherit the engine's
+# environment, so the sandbox's run.state path picks them out. A machine-wide pgrep also
+# saw another run's — a second suite on this machine, or a real update — reported it as
+# this run's leak, and then killed it. Measured: two suites run side by side failed this
+# way with the other suite's keep-alive pid.
+keepalives_of() {
+    local p
+    for p in $(pgrep -f oneup-keepalive); do
+        tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null \
+            | grep -qxF "ONEUP_RUN_STATE=$1/run.state" && echo "$p"
+    done | sort
+}
+ka_before=$(keepalives_of "$d")
 run_engine "$d" --steps=system >/dev/null 2>&1
 # The process-group kill is asynchronous, so poll rather than guessing a fixed delay.
 ka_leaked=""
 for _ in $(seq 1 40); do          # up to 4s, returns as soon as it is clean
-    ka_after=$(pgrep -f oneup-keepalive | sort)
+    ka_after=$(keepalives_of "$d")
     ka_leaked=$(comm -13 <(echo "$ka_before") <(echo "$ka_after") | grep -v '^$' || true)
     [[ -z "$ka_leaked" ]] && break
     sleep 0.1

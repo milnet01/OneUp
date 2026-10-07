@@ -36,6 +36,11 @@ case "${1:-}" in
 esac
 
 fail=0
+# Every suite's log goes in a directory of this run's own (ONEUP-0203). The fixed
+# /tmp/local-ci-*.log names were shared by every gate run on the machine, so two runs
+# at once overwrote each other's logs and read each other's tallies. Removed when the
+# run passes; kept, and named in the verdict, when it fails.
+LOGS=$(mktemp -d "${TMPDIR:-/tmp}/local-ci.XXXXXX")
 step() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 ok()   { printf '  \033[32mok\033[0m   %s\n' "$1"; }
 bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=1; }
@@ -52,10 +57,10 @@ skip() { printf '  --   skip %s (%s)\n' "$1" "$2"; }
 if ! $DOCS; then
 
 step "Engine test suite"
-if ONEUP_TEST_NETWORK="${ONEUP_TEST_NETWORK:-1}" bash tests/run-tests.sh >/tmp/local-ci-tests.log 2>&1; then
-    ok "tests/run-tests.sh — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' /tmp/local-ci-tests.log | tail -1)"
+if ONEUP_TEST_NETWORK="${ONEUP_TEST_NETWORK:-1}" bash tests/run-tests.sh >"$LOGS/tests.log" 2>&1; then
+    ok "tests/run-tests.sh — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/tests.log" | tail -1)"
 else
-    bad "tests/run-tests.sh"; tail -25 /tmp/local-ci-tests.log
+    bad "tests/run-tests.sh"; tail -25 "$LOGS/tests.log"
 fi
 
 # --- headless GUI smoke test ------------------------------------------------
@@ -63,14 +68,14 @@ fi
 # means PySide6 isn't installed here — a skip, not a failure (matches the
 # engine's skip-cleanly-for-absent-tools convention).
 step "GUI smoke test (offscreen)"
-python3 tests/gui-smoke.py >/tmp/local-ci-gui.log 2>&1
+python3 tests/gui-smoke.py >"$LOGS/gui.log" 2>&1
 rc=$?
 if [[ $rc -eq 0 ]]; then
-    ok "tests/gui-smoke.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' /tmp/local-ci-gui.log | tail -1)"
+    ok "tests/gui-smoke.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/gui.log" | tail -1)"
 elif [[ $rc -eq 77 ]]; then
     skip "tests/gui-smoke.py" "PySide6 not installed"
 else
-    bad "tests/gui-smoke.py"; tail -25 /tmp/local-ci-gui.log
+    bad "tests/gui-smoke.py"; tail -25 "$LOGS/gui.log"
 fi
 
 # --- Python syntax ----------------------------------------------------------
@@ -85,10 +90,10 @@ fi   # end of the first code-gate block skipped by --docs
 # Runs a real bump in a throwaway repo copy and asserts every version site
 # advances (incl. the CHANGELOG [Unreleased] compare base). Stdlib-only, exit 0/1.
 step "bump.py functional test"
-if python3 tests/bump-test.py >/tmp/local-ci-bump.log 2>&1; then
-    ok "tests/bump-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' /tmp/local-ci-bump.log | tail -1)"
+if python3 tests/bump-test.py >"$LOGS/bump.log" 2>&1; then
+    ok "tests/bump-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/bump.log" | tail -1)"
 else
-    bad "tests/bump-test.py"; tail -25 /tmp/local-ci-bump.log
+    bad "tests/bump-test.py"; tail -25 "$LOGS/bump.log"
 fi
 
 if ! $DOCS; then
@@ -115,8 +120,8 @@ if command -v desktop-file-validate >/dev/null 2>&1; then
 else skip "desktop-file-validate" "not installed"; fi
 if command -v appstreamcli >/dev/null 2>&1; then
     if appstreamcli validate --no-net data/za.co.antsprojectshub.OneUp.metainfo.xml \
-            >/tmp/local-ci-appstream.log 2>&1; then ok "appstreamcli validate"
-    else bad "appstreamcli validate"; cat /tmp/local-ci-appstream.log; fi
+            >"$LOGS/appstream.log" 2>&1; then ok "appstreamcli validate"
+    else bad "appstreamcli validate"; cat "$LOGS/appstream.log"; fi
 else skip "appstreamcli" "not installed"; fi
 
 fi   # end of the code gates skipped by --docs
@@ -144,10 +149,10 @@ fi
 # Reports, never repairs (workflow.md §6.1): it names the file, the line and the rule, and
 # the author decides what the right text is.
 step "Documentation"
-if python3 tests/docs-check.py >/tmp/local-ci-docs.log 2>&1; then
-    ok "tests/docs-check.py — $(grep -oE 'Checked: [0-9]+   Failed: [0-9]+' /tmp/local-ci-docs.log | tail -1)"
+if python3 tests/docs-check.py >"$LOGS/docs.log" 2>&1; then
+    ok "tests/docs-check.py — $(grep -oE 'Checked: [0-9]+   Failed: [0-9]+' "$LOGS/docs.log" | tail -1)"
 else
-    bad "tests/docs-check.py"; cat /tmp/local-ci-docs.log
+    bad "tests/docs-check.py"; cat "$LOGS/docs.log"
 fi
 
 # --- AppImage build (opt-in; also built + verified by GitHub CI on a tag push) ---
@@ -172,8 +177,10 @@ fi
 # --- verdict ----------------------------------------------------------------
 echo
 if [[ $fail -eq 0 ]]; then
+    rm -rf "$LOGS"
     printf '\033[32m✔ Local CI passed — safe to push.\033[0m\n'
 else
     printf '\033[31m✗ Local CI FAILED — fix the above before pushing.\033[0m\n'
+    echo "  The suites' full logs are in $LOGS"
 fi
 exit $fail
