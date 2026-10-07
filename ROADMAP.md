@@ -4483,7 +4483,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc.
   Source: in-session-2026-08-04.
 
-- 📋 [ONEUP-0095] **Disable Stop while stopping is not possible, instead of accepting a click that does nothing.**
+- ✅ [ONEUP-0095] **Disable Stop while stopping is not possible, instead of accepting a click that does nothing.**
   Today Stop is enabled for the whole of a real run (set_controls_enabled shows
   it whenever `_run_active and not _check_mode`), so during the rpm transaction
   the user can press a button that is guaranteed to do nothing until the step
@@ -4509,6 +4509,11 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   current state.
   Decided (2026-09-18, user): a fix, 1.4.6 + 2.0.0. A Stop button that accepts
   a click and does nothing is broken behaviour, so it lands on main too.
+  Resolved (2026-10-07): main 468caca, v2 merge d7fc104. Stop is disabled while
+  the PROGRESS phase is install, with a tooltip and accessible description
+  saying why, and re-enabled at the next STEP_BEGIN; a stop already asked for
+  is never re-offered. The stall line's "Stopping now is safe" was already
+  gated to download by ONEUP-0232. Five gui-smoke checks, proved red on both.
   **Layman:** The Stop button should go grey while the installer is running, so it never looks like it will work when it cannot.
   Kind: ux.
   Source: user-request-2026-08-07.
