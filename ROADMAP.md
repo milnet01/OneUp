@@ -4200,7 +4200,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: close-findings sweep 2026-09-21, collateral of ONEUP-0153.
 
-- 🚧 [ONEUP-0203] **local-CI.sh cannot be run twice at once, and a concurrent run reports a false failure.**
+- ✅ [ONEUP-0203] **local-CI.sh cannot be run twice at once, and a concurrent run reports a false failure.**
   Two `local-CI.sh` runs overlapping produced `tests/run-tests.sh` "Passed:
   299 Failed: 1" on a tree whose engine suite passes 300/0 in isolation. The
   failing run was a `git push`, whose pre-push hook runs the gate — so it
@@ -4248,6 +4248,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   saved as `git stash` in the main worktree (OneUp-main-wt). Recommendation:
   grant it, for ONEUP-0224's reason — main's own pre-push gate runs this
   suite on every push of main. No 1.4.x is owed (nothing user-facing).
+  Resolved (2026-10-07): the user granted main's half as workflow.md
+  §1.2's sixth exception. Landed on main as 4762c34 (gate: engine
+  337/0, window 393/0, docs-check clean) and merged to v2 as 642b5e0,
+  keeping v2's side of both files. No 1.4.x is owed.
   **Layman:** Running the test gate twice at the same time makes it report a failure that is not real.
   Kind: fix.
   Source: close-findings sweep 2026-09-21, found during the run.
