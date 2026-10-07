@@ -1112,11 +1112,50 @@ def main() -> int:
     wH = window.Updater()
     run.handle_line(wH, "@@HINT@@|repo-key-expired")
     check("a @@HINT@@ code is parsed into _hints as the window's own sentence",
-          wH._hints == [markers.HINTS["repo-key-expired"][1]]
+          wH._hints == [markers.render_hint(["repo-key-expired"])]
           and wH._hints[0].startswith("A repository signing key is out of date."))
+    check("the command a hint names is filled into its sentence (ONEUP-0235)",
+          "run: sudo zypper --gpg-auto-import-keys refresh, then retry." in wH._hints[0]
+          and wH._hint_commands == ["sudo zypper --gpg-auto-import-keys refresh"])
     run.handle_line(wH, "@@HINT@@|repo-slow|packman")
     check("a hint's argument is substituted into its sentence",
           "The 'packman' source is serving updates too slowly" in wH._hints[-1])
+
+    # --- 5c-a. ONEUP-0235: a translated hint still offers Copy command -----------
+    # The command is the hint's data, never found by an English cue in its sentence.
+    # The stand-in translation does what a real one does: keeps the command (as the
+    # {command} slot, where the source has one) and drops the English around it.
+    from PySide6.QtCore import QCoreApplication, QTranslator
+
+    class _Hebrew(QTranslator):
+        def isEmpty(self):
+            return False
+
+        def translate(self, context, source, disambiguation=None, n=-1):
+            # None, not "": Qt takes an empty string as a translation and blanks
+            # the message, where None passes it on untranslated.
+            if context != "markers" or "signing key is out of date" not in source:
+                return None
+            cmd = "{command}" if "{command}" in source else \
+                "sudo zypper --gpg-auto-import-keys refresh"
+            return f"מפתח החתימה של המאגר פג תוקף. הריצו {cmd} ואז נסו שוב."
+
+    _he = _Hebrew()
+    QCoreApplication.installTranslator(_he)
+    try:
+        wT = window.Updater()
+        run.handle_line(wT, "@@HINT@@|repo-key-expired")
+        run.handle_line(wT, "@@DONE@@|errors")
+        wT.proc = QProcess(wT)
+        run.on_finished(wT, 1, QProcess.ExitStatus.NormalExit)
+        check("the stand-in translation reached the banner",
+              "מפתח החתימה" in wT.warn_label.text())
+        check("a translated hint still shows Copy command (ONEUP-0235)",
+              wT.warn_copy_btn.isVisibleTo(wT.warn_banner))
+        check("and copies the command itself",
+              wT._hint_command == "sudo zypper --gpg-auto-import-keys refresh")
+    finally:
+        QCoreApplication.removeTranslator(_he)
 
     # --- 5c-i. ONEUP-0108 INV-1 for @@HINT@@ and @@REMEDY@@ ----------------------
     # A code the window has no entry for, or a known one whose arguments do not fit,
@@ -2077,17 +2116,22 @@ def main() -> int:
     finally:
         QMessageBox.warning, QMessageBox.information, QProcess.start = _warn, _info, _start
 
-    # --- failure-hint "Copy command" fallback ---------------------------------
-    E = banners._extract_command
-    check("extract_command pulls the runnable command",
-          E("A repository signing key is still rejected after an automatic import — "
-            "as a last resort run: sudo zypper --gpg-auto-import-keys refresh, then "
-            "retry, or check the log for the offending repo.")
-          == "sudo zypper --gpg-auto-import-keys refresh")
-    check("extract_command returns empty when there is no command",
-          E("A package conflict — check the log.") == "")
+    # --- failure-hint "Copy command" ------------------------------------------
+    # The command is each hint's data (ONEUP-0235). A hint telling the user to run
+    # something must take it from HINT_COMMANDS through {command}: one typed into the
+    # sentence would show, and never reach the Copy button.
+    _typed = [c for c, (_a, s) in markers.HINTS.items()
+              if "run: " in s and "{command}" not in s]
+    check("no hint types a command into its sentence instead of {command}", _typed == [])
+    _stray = [c for c in markers.HINT_COMMANDS
+              if c not in markers.HINTS or "{command}" not in markers.HINTS[c][1]]
+    check("every hint command belongs to a hint whose sentence names it", _stray == [])
+    check("a hint that names no command offers none",
+          markers.hint_command(["disk-full"]) == ""
+          and markers.hint_command(["zzz-new-hint"]) == ""
+          and markers.hint_command(["repo-key-expired", "extra"]) == "")
     w = window.Updater()
-    banners._show_warning(w, "Something failed — run: sudo zypper refresh, then retry.")
+    banners._show_warning(w, "Something failed — run it, then retry.", "sudo zypper refresh")
     check("copy button appears when a hint carries a command",
           w.warn_copy_btn.isVisibleTo(w.warn_banner)
           and w._hint_command == "sudo zypper refresh")
@@ -2095,7 +2139,7 @@ def main() -> int:
     check("copy button hidden when a hint carries no command",
           not w.warn_copy_btn.isVisibleTo(w.warn_banner))
     try:
-        banners._show_warning(w, "run: sudo zypper refresh, then retry.")
+        banners._show_warning(w, "Retry.", "sudo zypper refresh")
         banners._copy_hint_command(w)   # must not throw under offscreen Qt
         check("copy command runs without error", True)
     except Exception as exc:  # noqa: BLE001

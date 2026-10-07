@@ -27,7 +27,8 @@ def fallback_long(*codes: str) -> str:
 # branch that sends it, and its sentence carried across from the engine unchanged
 # (§3.2). Each entry is the argument names, in the order they arrive, and the
 # sentence. A shipped code is never reused for another meaning; a retired one is
-# commented out here, not deleted — this table is the register.
+# commented out here, not deleted — this table is the register. A hint that tells
+# the user to run a command names it as {command}, filled from HINT_COMMANDS.
 HINTS: dict[str, tuple[tuple[str, ...], str]] = {
     "downloads-kept": ((), QT_TRANSLATE_NOOP(
         "markers",
@@ -75,13 +76,11 @@ HINTS: dict[str, tuple[tuple[str, ...], str]] = {
         "markers",
         "A repository signing key is still rejected even after "
         "importing keys — check the log for the offending repository, "
-        "or run: sudo zypper --gpg-auto-import-keys refresh, then "
-        "retry.")),
+        "or run: {command}, then retry.")),
     "repo-key-expired": ((), QT_TRANSLATE_NOOP(
         "markers",
         "A repository signing key is out of date. Use \"Import signing "
-        "key & retry\" to fix it, or run: sudo zypper "
-        "--gpg-auto-import-keys refresh, then retry.")),
+        "key & retry\" to fix it, or run: {command}, then retry.")),
     "network-failed": ((), QT_TRANSLATE_NOOP(
         "markers",
         "A download failed — check your internet connection, then "
@@ -175,18 +174,48 @@ HINTS: dict[str, tuple[tuple[str, ...], str]] = {
 }
 
 
+# The command a hint tells the user to run, by code (ONEUP-0235). It is data, not
+# prose: the sentence carries it as {command}, so a translation moves the slot and
+# never retypes it, and the warning banner's Copy command button copies it from
+# here rather than finding it by an English cue in the sentence. Never translated —
+# it is what the user types.
+HINT_COMMANDS: dict[str, str] = {
+    "repo-key-still-rejected": "sudo zypper --gpg-auto-import-keys refresh",
+    "repo-key-expired": "sudo zypper --gpg-auto-import-keys refresh",
+}
+
+
+def _hint_entry(fields: list[str]):
+    """The code and its table entry, or None where the sentence cannot be worded."""
+    code, args = (fields[0] if fields else ""), fields[1:]
+    entry = HINTS.get(code)
+    if entry is None or len(args) != len(entry[0]):
+        return None
+    return code, entry, args
+
+
 def render_hint(fields: list[str]) -> str:
     """The sentence for a @@HINT@@'s fields — the code, then its arguments. A code
     the table does not know, or whose arguments do not fit, gets the long fallback
     (ONEUP-0108 §4.3) rather than a bare token or an exception in the read slot."""
-    code, args = (fields[0] if fields else ""), fields[1:]
-    entry = HINTS.get(code)
-    if entry is None or len(args) != len(entry[0]):
+    found = _hint_entry(fields)
+    if found is None:
+        code = fields[0] if fields else ""
         return fallback_long(code or QCoreApplication.translate("markers", "an empty hint"))
+    code, entry, args = found
+    values = dict(zip(entry[0], args, strict=True))
+    if code in HINT_COMMANDS:
+        values["command"] = HINT_COMMANDS[code]
     # Marked at definition, translated here: the language can change without the
     # table being rebuilt (ONEUP-0032 §4.3).
-    return QCoreApplication.translate("markers", entry[1]).format(
-        **dict(zip(entry[0], args, strict=True)))
+    return QCoreApplication.translate("markers", entry[1]).format(**values)
+
+
+def hint_command(fields: list[str]) -> str:
+    """The command the hint for these fields tells the user to run, or '' — also ''
+    where the sentence fell back, since that sentence names no command."""
+    found = _hint_entry(fields)
+    return HINT_COMMANDS.get(found[0], "") if found else ""
 
 
 def fallback_remedy(code: str) -> str:

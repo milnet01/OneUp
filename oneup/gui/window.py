@@ -165,7 +165,8 @@ class Updater(QMainWindow):
         self._snapshot = ""
         self._snapshots: list[tuple[str, str, str]] = []  # (id, date, desc) for the rollback picker
         self._hints: list[str] = []
-        self._hint_command = ""   # a runnable command parsed from the shown hint, for Copy
+        self._hint_commands: list[str] = []   # the command each hint names, or '' (ONEUP-0235)
+        self._hint_command = ""   # the command the shown hint names, for Copy
         self._remedy_keys = False  # engine flagged a fixable signing-key error (@@REMEDY@@)
         self._skipped_repos: list[str] = []  # aliases set aside this run (@@REPO_SKIPPED@@)
         self._remedy_skips: list[str] = []  # aliases to offer "Skip … & update the rest" for

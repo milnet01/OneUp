@@ -91,31 +91,14 @@ def _make_banner(win, frame_obj: str, btn_obj: str, btn_text: str, slot,
     return fr, lbl, btn
 
 
-def _extract_command(hint: str) -> str:
-    """Pull a runnable command out of a failure hint of the form
-    '… run: <command>, then …'. Returns '' when the hint carries no command,
-    so the Copy button only appears when there's actually something to copy."""
-    marker = "run: "
-    i = hint.find(marker)
-    if i == -1:
-        return ""
-    rest = hint[i + len(marker):]
-    cut = len(rest)
-    for sep in (", then", ", or", ";"):   # the command ends at the first clause break
-        j = rest.find(sep)
-        if j != -1:
-            cut = min(cut, j)
-    return rest[:cut].strip().rstrip(".").strip()
-
-
-def _show_warning(win, text: str):
-    """Show the warning banner with `text`, exposing a Copy button when the
-    text contains a runnable command."""
+def _show_warning(win, text: str, command: str = ""):
+    """Show the warning banner with `text`, exposing a Copy button when the hint
+    it shows names a `command` — passed as data (`markers.hint_command`), never
+    found by an English cue in a sentence a translation rewords (ONEUP-0235)."""
     win.warn_label.setText(QCoreApplication.translate("banners", "⚠  {text}").format(text=text))
-    cmd = _extract_command(text)
-    win._hint_command = cmd
-    win.warn_copy_btn.setVisible(bool(cmd))
-    if cmd:
+    win._hint_command = command
+    win.warn_copy_btn.setVisible(bool(command))
+    if command:
         win.warn_copy_btn.setText(QCoreApplication.translate("banners", "Copy command"))
     win.warn_banner.setVisible(True)
     # A banner that merely appears is silent to a screen reader. Announced last

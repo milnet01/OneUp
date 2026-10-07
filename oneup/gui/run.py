@@ -348,6 +348,7 @@ def _reset_for_run(win, steps: list[str], check: bool):
     win._snapshot = ""
     win._snapshots = []
     win._hints = []
+    win._hint_commands = []
     win._skipped_repos = []
     win._unchecked = []
     win._buf = ""
@@ -755,8 +756,10 @@ def handle_marker(win, line: str):
     elif tag == "SERVICES":
         win._services = rest.strip()
     elif tag == "HINT":
-        # A code and its arguments; the window holds the sentence (ONEUP-0108).
+        # A code and its arguments; the window holds the sentence (ONEUP-0108), and
+        # the command it names beside it, for Copy command (ONEUP-0235).
         win._hints.append(markers.render_hint(parts))
+        win._hint_commands.append(markers.hint_command(parts))
     elif tag == "REPO_SKIPPED":
         # A source was set aside for this run (disabled, upgrade ran, will be
         # re-enabled by the engine on exit — see --skip-repo/--auto-skip-repos).
@@ -867,6 +870,11 @@ def _notify_when_away(win, body: str, urgency: str = "normal"):
         pass
 
 
+def _first_hint_command(win) -> str:
+    """The command the first hint names, recorded beside it as it arrived, or ''."""
+    return win._hint_commands[0] if win._hints and win._hint_commands else ""
+
+
 def on_finished(win, exit_code: int, _status):
     # Flush any final line the engine emitted without a trailing newline before
     # computing the summary, so a last marker can't be silently dropped.
@@ -940,7 +948,7 @@ def on_finished(win, exit_code: int, _status):
         win.save_last_run("stopped")
         win.refresh_last_run()
         if win._hints:
-            banners._show_warning(win, win._hints[0])
+            banners._show_warning(win, win._hints[0], _first_hint_command(win))
         if win._sys_changed and win._snapshot:
             win.rollback_btn.setVisible(True)
         return
@@ -1041,9 +1049,9 @@ def on_finished(win, exit_code: int, _status):
                 "run", "  ", "separator between whole sentences in one banner")
             sentences = [*win._hints[:1],
                          *(markers.fallback_remedy(c) for c in win._remedy_unknown)]
-            banners._show_warning(win, between.join(sentences))
+            banners._show_warning(win, between.join(sentences), _first_hint_command(win))
         elif win._hints:
-            banners._show_warning(win, win._hints[0])
+            banners._show_warning(win, win._hints[0], _first_hint_command(win))
         elif win._remedy_skips:
             names = i18n.join_names(banners._repo_display_name(a) for a in win._remedy_skips)
             if len(win._remedy_skips) == 1:

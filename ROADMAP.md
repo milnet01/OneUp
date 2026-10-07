@@ -4162,13 +4162,23 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: in-session-2026-10-02.
 
-- 📋 [ONEUP-0235] **The warning banner's Copy command button finds its command by English words.**
+- ✅ [ONEUP-0235] **The warning banner's Copy command button finds its command by English words.**
   banners._extract_command finds the command in a hint by the English cue
   "run: " and ends it at ", then", ", or" or ";". A translated hint carries
   neither, so the Copy command button would never show. Found while building
   ONEUP-0032, outside its scope. The fix is for the hint table to carry the
   command as data — a separate field per entry — rather than the window
   fishing it out of the sentence. No effect in 2.0, which ships English only.
+  Resolved (2026-10-07): markers.HINT_COMMANDS holds each hint's
+  command by code, and the two signing-key sentences name it as
+  {command}, so a translation moves the slot and never retypes it.
+  The window records each hint's command beside its sentence and
+  passes the first to the banner; banners._extract_command is gone.
+  The English shown is unchanged. Red first: a stand-in Hebrew
+  translation reached the banner and Copy command did not appear;
+  green after. A table check now refuses a hint that types a command
+  into its sentence. Window suite 638/0, i18n-check 13/0. No main
+  half: main has no translation, so the English cue still holds there.
   **Layman:** Once OneUp is translated, the button that copies a suggested fix command would stop appearing, because it looks for English words in the message.
   Kind: fix.
   Source: in-session-2026-10-02 ONEUP-0032 build.
