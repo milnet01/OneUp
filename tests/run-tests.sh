@@ -1149,7 +1149,12 @@ canary=$(mktemp -d)
 for payload in 'cache,nosuchstep' 'cache,$(touch '"$canary"'/PWNED)' 'cache;touch '"$canary"'/PWNED2'; do
     echo "TEST: a tampered go-ahead is refused whole, not run in part [${payload:0:20}…]"
     d=$(mktemp -d); setup_hold_dir "$d" allow
-    if ! start_held_engine "$d" ONEUP_HOLD_SECONDS=6; then
+    # The ceiling is a safety net here, never part of the result: a refused go-ahead ends
+    # the hold at once. It must outlast a suite stalled before it writes go.request — at 6
+    # a 5.5 s stall let the hold expire first and end `ok`, the shape of a request never
+    # seen (ONEUP-0233) — and stay under reap_held_engine's 60 s, so an engine that
+    # ignores the go-ahead still ends by itself and fails the checks below.
+    if ! start_held_engine "$d" ONEUP_HOLD_SECONDS=30; then
         echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+1))
         reap_held_engine >/dev/null 2>&1
     else

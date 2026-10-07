@@ -4135,7 +4135,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: investigate.
   Source: in-session-2026-10-01, while proving ONEUP-0204/0224 on main.
 
-- 📋 [ONEUP-0233] **The tampered go-ahead scenario can fail under load: the hold ends "ok" without seeing the request.**
+- ✅ [ONEUP-0233] **The tampered go-ahead scenario can fail under load: the hold ends "ok" without seeing the request.**
   Seen 2026-10-02 on v2 while two window-suite runs overlapped the engine
   suite: "a tampered go-ahead is refused whole" passed its first check (no
   step ran) for the payload "cache;touch /tmp/…" but the run ended
@@ -4147,6 +4147,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   holds for CPU load, not for this. Suspects to measure first: the
   go.request-newer-than-hold.state mtime test at one-second granularity,
   and the 6-second ceiling under load.
+  Resolved (2026-10-07): the ceiling, not the timestamps. Measured
+  first: with both writers in their real shapes (the engine's
+  write_whole for hold.state, a bash printf or the window's
+  _write_go_request for go.request, written microseconds after
+  hold.state appears) the go-ahead read as newer 750/750 times, so
+  the mtime test is sound. Reproduced with the real scenario: a
+  5.5 s stall before go.request is written, at ONEUP_HOLD_SECONDS=6,
+  ends @@DONE@@|ok with no refusal — the exact failure; at 30 the
+  same stall is refused correctly. The scenario's ceiling is a
+  safety net only (a refused go-ahead ends the hold at once), so it
+  is now 30, under reap_held_engine's 60. Engine suite 418/0.
   **Layman:** One of the update-safety tests sometimes fails when the computer is busy, even though nothing is wrong.
   Kind: fix.
   Source: in-session-2026-10-02.
