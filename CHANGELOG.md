@@ -6,6 +6,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.6] - 2026-10-08
+
 ### Fixed
 
 - **The words on the progress bar are readable again where the bar is filled.** (ONEUP-0214)
@@ -609,7 +611,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.5...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.6...HEAD
+[1.4.6]: https://github.com/milnet01/OneUp/releases/tag/v1.4.6
 [1.4.5]: https://github.com/milnet01/OneUp/releases/tag/v1.4.5
 [1.4.4]: https://github.com/milnet01/OneUp/releases/tag/v1.4.4
 [1.4.3]: https://github.com/milnet01/OneUp/releases/tag/v1.4.3
