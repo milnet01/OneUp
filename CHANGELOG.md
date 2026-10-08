@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The words on the progress bar are readable again where the bar is filled.** (ONEUP-0214)
+  They were pale grey on bright blue in the dark theme, and white on
+  white in high contrast. They now turn dark wherever the bar has
+  filled, and keep their usual colour on the empty part.
+
 - **The Stop button greys out while packages install** (ONEUP-0095)
   Installing packages cannot be stopped safely part-way, so a click on
   Stop then did nothing until the step ended. Stop now greys out while

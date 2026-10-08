@@ -1959,6 +1959,44 @@ def main() -> int:
     check("the tray attention badge carries a glyph, not just amber",
           badge_glyph_pixels() > 0)
 
+    # ONEUP-0214: the bar's caption straddles two surfaces — the bright accent fill
+    # and the near-black track — and no one colour reads on both in the dark theme.
+    # So count caption pixels per surface: DARK ink on the fill, LIGHT ink on the
+    # track. Neither surface is itself dark-on-fill or light-on-track, so only the
+    # caption can supply them. Sampling stays 12 px clear of both ends of the fill,
+    # whose rounded corners show the dark track through.
+    def caption_ink(bar) -> tuple[int, int]:
+        saved = (bar.minimum(), bar.maximum(), bar.value(), bar.format(), bar.size())
+        bar.setStyleSheet(updater.build_theme(True))
+        bar.resize(480, 24)
+        bar.setRange(0, 100)
+        bar.setValue(50)
+        bar.setFormat("Updating system packages — downloading")
+        img = bar.grab().toImage()
+        bar.setStyleSheet("")
+        bar.setRange(saved[0], saved[1])
+        bar.setValue(saved[2])
+        bar.setFormat(saved[3])
+        bar.resize(saved[4])
+        edge = img.width() // 2
+        dark_on_fill = light_on_track = 0
+        for y in range(img.height()):
+            for x in range(12, edge - 12):
+                c = img.pixelColor(x, y)
+                if max(c.red(), c.green(), c.blue()) < 70:
+                    dark_on_fill += 1
+            for x in range(edge + 12, img.width() - 12):
+                c = img.pixelColor(x, y)
+                if min(c.red(), c.green(), c.blue()) > 150:
+                    light_on_track += 1
+        return dark_on_fill, light_on_track
+
+    on_fill, on_track = caption_ink(wA.bar)
+    check("the progress caption is dark where it sits on the fill (ONEUP-0214)",
+          on_fill > 0)
+    check("the progress caption stays light where it sits on the track",
+          on_track > 0)
+
     # INV-3: no absolute pixel font size survives, and every size scales. The
     # regex targets the DECLARATION — a plain `"px" in line` test would false-fail
     # on the lines that legitimately keep a px length beside a font-size.

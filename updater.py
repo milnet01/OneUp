@@ -37,6 +37,7 @@ from PySide6.QtCore import (
     QPointF,
     QProcess,
     QPropertyAnimation,
+    QRect,
     QRectF,
     QSettings,
     Qt,
@@ -55,6 +56,7 @@ from PySide6.QtGui import (
     QPainter,
     QPen,
     QPixmap,
+    QRegion,
 )
 
 try:  # Qt 6.8+: "speak this now" for a screen reader.
@@ -85,6 +87,9 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStyle,
+    QStyleOptionProgressBar,
+    QStylePainter,
     QSystemTrayIcon,
     QToolButton,
     QVBoxLayout,
@@ -289,6 +294,10 @@ QMainWindow { background: $win; }
    it a switch would stay stuck in high-contrast paint after HC is turned off. */
 ToggleSwitch { qproperty-highContrast: false; }
 
+/* TwoToneBar paints its own caption, one ink per surface it crosses (ONEUP-0214);
+   the base sheet must set both so leaving high contrast reverts them. */
+TwoToneBar { qproperty-chunkInk: $chunkink; qproperty-trackInk: $status; }
+
 #Frame { border-radius: 16px; background: $accent; }
 #Card  { border-radius: 14px; background: $card; }
 
@@ -454,6 +463,7 @@ QLabel#DetailList { background: $card; border: 1px solid $border; }
 QPlainTextEdit#Log { background: $card; color: $text; border: 1px solid $border; }
 QProgressBar { background: $card; border: 1px solid $border; color: $text; }
 QProgressBar::chunk { background: $text; }
+TwoToneBar { qproperty-chunkInk: $card; qproperty-trackInk: $text; }
 QToolTip { background: $card; color: $text; border: 1px solid $border; }
 
 QPushButton#RunBtn, QPushButton#RestartBtn, QPushButton#BannerBtn {
@@ -489,7 +499,7 @@ _DARK = dict(
     badgebg="#20304a", badgefg="#cfe0ff", logbg="#0b0e12", logfg="#cdd6e2",
     logbd="#262d38", status="#c3ccd9", lastrun="#828d9d", amber="#f5a623", progbg="#0c0f13",
     ghostbd="#38414f", ghostfg="#c7d0dd", disbg="#262b34", disfg="#aeb7c4",
-    tip="#1a1f27", tipfg="#e9edf3", focus="#66b8ff",
+    tip="#1a1f27", tipfg="#e9edf3", focus="#66b8ff", chunkink="#0c0f13",
 )
 _LIGHT = dict(
     win="#eef1f5", card="#ffffff", header="#1b2027", tag="#5c6673",
@@ -497,7 +507,7 @@ _LIGHT = dict(
     badgebg="#dbe8ff", badgefg="#1f4e9c", logbg="#f6f8fa", logfg="#2a2f36",
     logbd="#d5dbe2", status="#3a424d", lastrun="#8a94a2", amber="#b5730a", progbg="#dfe4ea",
     ghostbd="#c4ccd6", ghostfg="#3a424d", disbg="#d5dbe2", disfg="#9aa3ad",
-    tip="#ffffff", tipfg="#1b2027", focus="#0b5fd0",
+    tip="#ffffff", tipfg="#1b2027", focus="#0b5fd0", chunkink="#0c0f13",
 )
 
 # High-contrast palettes: pure black/white surfaces and text (21:1), one saturated
@@ -805,6 +815,67 @@ class ToggleSwitch(QAbstractButton):
         # state SHAPE above is what carries meaning; Qt still reports focus to a
         # screen reader, so keyboard operability is unaffected — only the sighted
         # keyboard-only cue is absent.
+
+
+class TwoToneBar(QProgressBar):
+    """A progress bar whose caption changes colour where the fill ends (ONEUP-0214).
+
+    The centred caption straddles two surfaces: the bright accent fill and the
+    track. In the dark theme no single colour reads on both — it would need to be
+    lighter than the track and darker than the fill at once — so the style draws
+    the bar with no text, and the caption is painted twice, each pass clipped to
+    one surface in that surface's ink. The inks come from the stylesheet
+    (qproperty-chunkInk / qproperty-trackInk), like ToggleSwitch's state.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._chunk_ink = QColor("#0c0f13")
+        self._track_ink = QColor("#c3ccd9")
+
+    def get_chunk_ink(self) -> QColor:
+        return self._chunk_ink
+
+    def set_chunk_ink(self, value: QColor):
+        self._chunk_ink = QColor(value)
+        self.update()
+
+    def get_track_ink(self) -> QColor:
+        return self._track_ink
+
+    def set_track_ink(self, value: QColor):
+        self._track_ink = QColor(value)
+        self.update()
+
+    # Set by the stylesheet, not by code — see the qproperty- note in _QSS.
+    chunkInk = Property(QColor, get_chunk_ink, set_chunk_ink)
+    trackInk = Property(QColor, get_track_ink, set_track_ink)
+
+    def paintEvent(self, _event):
+        opt = QStyleOptionProgressBar()
+        self.initStyleOption(opt)
+        caption = opt.text if opt.textVisible else ""
+        opt.textVisible = False
+        p = QStylePainter(self)
+        p.drawControl(QStyle.CE_ProgressBar, opt)
+        span = self.maximum() - self.minimum()
+        if not caption or span <= 0:
+            return                      # a busy bar has no caption to place
+        rect = self.style().subElementRect(QStyle.SE_ProgressBarContents, opt, self)
+        done = min(max(self.value() - self.minimum(), 0), span)
+        filled = round(rect.width() * done / span)
+        # The fill grows from the right in a right-to-left layout.
+        if self.isRightToLeft() != self.invertedAppearance():
+            chunk = QRect(rect.right() - filled + 1, rect.top(), filled, rect.height())
+        else:
+            chunk = QRect(rect.left(), rect.top(), filled, rect.height())
+        whole = QRegion(self.rect())
+        p.setFont(self.font())
+        for ink, region in ((self._track_ink, whole.subtracted(QRegion(chunk))),
+                            (self._chunk_ink, QRegion(chunk))):
+            p.setClipRegion(region)
+            p.setPen(ink)
+            p.drawText(self.rect(), Qt.AlignCenter, caption)
 
 
 class TaskRow(QFrame):
@@ -1723,7 +1794,7 @@ class Updater(QMainWindow):
         self.status.setObjectName("Status")
         self.status.setAccessibleName("Current status")
         root.addWidget(self.status)
-        self.bar = QProgressBar()
+        self.bar = TwoToneBar()
         self.bar.setTextVisible(True)
         self.bar.setRange(0, 1)
         self.bar.setValue(0)
