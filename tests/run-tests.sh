@@ -1099,6 +1099,72 @@ fi
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0238. The real systemd-inhibit FORKS its command and waits for it; it does not
+# exec it. So a held engine re-exec'd under it (ONEUP-0086) is a CHILD of the process the
+# window started, and two things broke on a real run: hold.state named a pid the window
+# never started, so Update never adopted the hold and the user was asked for the password
+# again; and the engine's "has my window gone?" check watched systemd-inhibit, which lives
+# exactly as long as the engine, so it could never fire. Every other scenario pre-sets
+# ONEUP_INHIBITED and so never re-execs, and the ONEUP-0086 mock above execs — either one
+# hides this. Here both are lifted: the mock forks like the real tool, and a stand-in
+# window is the engine's parent, as QProcess makes the real one.
+echo "TEST: a held engine under a forking systemd-inhibit names the process its window started, and notices the window go (ONEUP-0238)"
+d=$(mktemp -d); setup_hold_dir "$d" refuse
+cat > "$d/systemd-inhibit" <<EOF
+#!/usr/bin/env bash
+while [[ "\$1" == --* ]]; do shift; done
+"\$@" &
+echo \$! >> "$d/inhibited.pids"
+wait \$!
+EOF
+# The window: starts the engine, records the pid it started — the one the real window
+# compares hold.state's line 1 against — and lives until it is killed.
+cat > "$d/window" <<EOF
+#!/usr/bin/env bash
+"\$@" &
+echo \$! > "$d/started.pid"
+wait
+EOF
+chmod +x "$d/systemd-inhibit" "$d/window"
+saved_engine_cmd=("${ENGINE_CMD[@]}")
+ENGINE_CMD=("$d/window" "${saved_engine_cmd[@]}")
+# A long ceiling, so an engine that ends its hold within the wait below can only have
+# done so because it saw its window go.
+staged=0; start_held_engine "$d" ONEUP_INHIBITED= ONEUP_HOLD_SECONDS=60 && staged=1
+ENGINE_CMD=("${saved_engine_cmd[@]}")
+if [[ "$staged" != 1 ]]; then
+    echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+3))
+    tail -5 "$d/out" 2>/dev/null | awk '{print "         " $0}'
+else
+    started=$(cat "$d/started.pid" 2>/dev/null)
+    line1=$(head -1 "$d/hold.state" 2>/dev/null)
+    if [[ -n "$started" && "$line1" == "$started" ]]; then
+        echo "  ok   - hold.state's line 1 is the pid the window started"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - hold.state's line 1 is the pid the window started (window started ${started:-?}, line 1 is ${line1:-empty})"; FAIL=$((FAIL+1))
+    fi
+    engine=$(tail -1 "$d/inhibited.pids" 2>/dev/null)
+    kill -9 "$HELD_PID" 2>/dev/null; wait "$HELD_PID" 2>/dev/null   # the window crashes
+    for _i in $(seq 1 100); do kill -0 "$engine" 2>/dev/null || break; sleep 0.1; done
+    if [[ -n "$engine" ]] && ! kill -0 "$engine" 2>/dev/null && [[ ! -f "$d/hold.state" ]]; then
+        echo "  ok   - the hold ends once its window has gone, well before the ceiling"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - the hold ends once its window has gone, well before the ceiling (engine ${engine:-?} still holding after 10 s)"; FAIL=$((FAIL+1))
+    fi
+    if [[ -f "$d/transactions" ]]; then
+        echo "  FAIL - an engine whose window went began a transaction"; FAIL=$((FAIL+1))
+        awk '{print "         " $0}' "$d/transactions"
+    else
+        echo "  ok   - nothing was installed for a window that went"; PASS=$((PASS+1))
+    fi
+fi
+# Never leave an engine behind, whatever the verdict: the window, the wrapper and the
+# engine are three processes here, not one.
+kill -9 "$HELD_PID" $(cat "$d/started.pid" "$d/inhibited.pids" 2>/dev/null) 2>/dev/null
+wait "$HELD_PID" 2>/dev/null
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 # ONEUP-0044 INV-6: the run uses the steps the go-ahead carried, not the step the preview
 # was started for. This is the one place the fall-through can look right and run the wrong
 # thing: the run path never reads STEPS. RUN_KEYS, TOTAL and STEP_INDEX are all derived at
