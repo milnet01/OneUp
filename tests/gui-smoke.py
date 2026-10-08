@@ -1413,6 +1413,34 @@ def main() -> int:
         run._launch = _real_launch
     paths.HOLD_STATE.unlink(missing_ok=True)
 
+    # ONEUP-0238: a waiting window says what it waits for and how long it has waited, so
+    # nobody closes it believing nothing is happening (the user's rule, 2026-10-08). The
+    # clock counts up, because the dry run's length cannot be known in advance.
+    wC = window.Updater()
+    wC._size_proc = _SizeProc(16180)
+    paths.HOLD_STATE.unlink(missing_ok=True)
+    _launched = []
+    run._launch = lambda w, st, check, **kw: _launched.append((list(st), check))
+    _real_monotonic = time.monotonic
+    try:
+        run.start_run(wC)
+        _first = wC.status.text()
+        _start = _real_monotonic()
+        time.monotonic = lambda: _start + 65.2   # as if the dry run had run a while
+        run._hold_wait_tick(wC)
+        time.monotonic = _real_monotonic
+        _later = wC.status.text()
+        check("ONEUP-0238 the wait names what it is waiting for", "download size" in _first)
+        check("ONEUP-0238 the wait shows how long it has waited so far",
+              "so far" in _first and "1m 5s so far" in _later)
+        check("ONEUP-0238 a tick keeps waiting rather than starting a second engine",
+              wC._hold_wait.isActive() and not _launched)
+    finally:
+        time.monotonic = _real_monotonic
+        if getattr(wC, "_hold_wait", None) is not None:
+            wC._hold_wait.stop()
+        run._launch = _real_launch
+
     # --- 5e. --thin-snapshots outcomes -----------------------------------------
     # Three branches, and each decides whether the advisory banner stays up for a retry.
     for _out, _want, _banner_stays in (("@@SNAPSHOTS@@|thinned|7\n", "7", False),

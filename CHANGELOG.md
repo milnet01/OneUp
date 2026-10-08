@@ -76,6 +76,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Pressing Update after "Show download size" carries on from the size check instead of asking for your password again** (ONEUP-0238)
+  The window now recognises the size check it started. While it
+  waits for that check to finish, it says what it is waiting for and
+  how long it has waited so far.
+
 - **The Stop button greys out while packages install** (ONEUP-0095)
   Installing packages cannot be stopped safely part-way, so a click on
   Stop then did nothing until the step ended. Stop now greys out while

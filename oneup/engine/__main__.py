@@ -204,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
         # not been re-derived and start-up's default is all five steps, so a
         # tampered go.request would become a full system upgrade.
         asked = runstate.hold_for_go_ahead(
-            log_file, actions.HOLD_SIZE, _WINDOW_PID, _poll_seconds())
+            log_file, actions.HOLD_SIZE, _LAUNCH_PID, _WINDOW_PID, _poll_seconds())
         if asked is None:
             markers.marker("DONE", "ok")      # withheld by size_delivered, emitted here
             return 0
@@ -226,10 +226,20 @@ def main(argv: list[str] | None = None) -> int:
     return run(opts, run_keys, log_file, held_auth)
 
 
+def _passed_pid(name: str, default: int) -> int:
+    """A pid `_reexec_under_inhibitor` passed on, or `default` when none was.
+    Popped, so nothing this engine starts inherits it."""
+    value = os.environ.pop(name, "")
+    return int(value) if value.isdecimal() else default
+
+
 # Captured once, at start-up. Re-reading a parent id later can never fire: it is
 # not refreshed on reparenting, and systemd reparents a user session's orphans to
-# `systemd --user` rather than to pid 1 (`CLAUDE.md` §6).
-_WINDOW_PID = os.getppid()
+# `systemd --user` rather than to pid 1 (`CLAUDE.md` §6). Under the inhibitor our
+# parent is the systemd-inhibit wrapper, so the window's pid and the pid the
+# window started come from the re-exec instead (ONEUP-0238).
+_WINDOW_PID = _passed_pid("ONEUP_WINDOW_PID", os.getppid())
+_LAUNCH_PID = _passed_pid("ONEUP_LAUNCH_PID", os.getpid())
 
 
 def _poll_seconds() -> float:
@@ -309,6 +319,12 @@ def _reexec_under_inhibitor(opts: Options, argv: list[str]) -> None:
     except OSError:
         return                                    # not installed at all
     os.environ["ONEUP_INHIBITED"] = "1"
+    # The real systemd-inhibit FORKS its command, so the engine we become is the
+    # wrapper's child: this pid stays with the wrapper, and this parent is the
+    # window. Pass both on, or a held preview names a pid the window never started
+    # and watches a wrapper that lives exactly as long as it does (ONEUP-0238).
+    os.environ["ONEUP_LAUNCH_PID"] = str(os.getpid())
+    os.environ["ONEUP_WINDOW_PID"] = str(os.getppid())
     with contextlib.suppress(OSError):
         # S607: a bare name, on purpose — the probe two lines up ran the same
         # name through PATH, so resolving it here would answer a different question.

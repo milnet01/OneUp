@@ -292,12 +292,14 @@ def claim_run_state(log_file: Path, steps: str) -> int | None:
 HOLD_SECONDS = int(os.environ.get("ONEUP_HOLD_SECONDS") or "120")
 
 
-def hold_for_go_ahead(log_file: Path, size: str, window_pid: int,
+def hold_for_go_ahead(log_file: Path, size: str, launch_pid: int, window_pid: int,
                       poll: float) -> str | None:
     """Wait for the window's go-ahead. Returns its step list, or None.
 
-    RECORDS a decision; it never runs a step. `hold.state` is three lines — our
-    pid, the log path verbatim, the quoted size — and §4.1.1 pins that order.
+    RECORDS a decision; it never runs a step. `hold.state` is three lines — the
+    pid the window started (ours, or the systemd-inhibit wrapper's when we were
+    re-exec'd under it), the log path verbatim, the quoted size — and §4.1.1
+    pins that order.
 
     Cancel reuses `stop.request`, but it may NOT be read through `stop_pending`:
     that requires `run.state` to exist and the request to be newer than it, and
@@ -310,7 +312,7 @@ def hold_for_go_ahead(log_file: Path, size: str, window_pid: int,
     with contextlib.suppress(OSError):
         HOLD_STATE.parent.mkdir(parents=True, exist_ok=True)
     try:
-        write_whole(HOLD_STATE, f"{os.getpid()}\n{log_file}\n{size}\n")
+        write_whole(HOLD_STATE, f"{launch_pid}\n{log_file}\n{size}\n")
     except OSError:
         # A hold that cannot be recorded ends at once; the window falls back to a
         # fresh engine (INV-7), as the Bash engine's hold does.

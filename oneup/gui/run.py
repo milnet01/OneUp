@@ -200,16 +200,26 @@ def _wait_for_hold(win):
         win._hold_wait = QTimer(win)
         win._hold_wait.setInterval(HOLD_WAIT_POLL_MS)
         win._hold_wait.timeout.connect(partial(_hold_wait_tick, win))
-    win.status.setText(QCoreApplication.translate(
-        "run",
-        "Working out the download size first — the update starts as soon "
-        "as that finishes…"))
+    win._hold_wait_since = time.monotonic()
+    _show_hold_wait(win)
     win._announce(QCoreApplication.translate(
         "run",
         "Working out the download size first. The update will start as "
         "soon as that finishes."))
     win.set_controls_enabled(False)
     win._hold_wait.start()
+
+
+def _show_hold_wait(win):
+    """Say what the window is waiting for, and for how long so far (ONEUP-0238). A
+    wait with no sign of life reads as a hang, and the user closes the window. The
+    clock counts up because the dry run's length cannot be known in advance. Spoken
+    once by `_wait_for_hold`; the ticking figure updates silently."""
+    waited = markers._format_duration(int(time.monotonic() - win._hold_wait_since))
+    win.status.setText(QCoreApplication.translate(
+        "run",
+        "Working out the download size first — the update starts as soon "
+        "as that finishes. {waited} so far.").format(waited=waited))
 
 
 def _hold_wait_tick(win):
@@ -231,6 +241,8 @@ def _hold_wait_tick(win):
         win._hold_wait.stop()
         win.set_controls_enabled(True)
         _launch(win, win.selected_steps(), check=False)
+    else:
+        _show_hold_wait(win)
 
 
 def retry_failed(win):
