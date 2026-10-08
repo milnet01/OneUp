@@ -4196,6 +4196,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: chore.
   Source: in-session-2026-10-07 ONEUP-0203 write-doc.
 
+- 📋 [ONEUP-0242] **Trim main's CLAUDE.md the way v2's was trimmed in 9722f16.**
+  claude-config (messages 476 and 501) asked every project to cut
+  start-up load. v2 moved the engine traps, the focus-ring trap and the
+  v2-only-paths rule into path-scoped .claude/rules/ files, leaving a
+  headline per trap in CLAUDE.md §6 (6.9k -> 4.5k tokens). main's CLAUDE.md,
+  used by sessions in the main worktree, was not trimmed. Same method:
+  verbatim moves, quotation-check per block, a pointer under each moved
+  heading. Send claude-config the before/after "Memory files" figure.
+  **Layman:** Make the project notes that load at the start of every 1.4 session shorter, without losing any rule.
+  Kind: chore.
+  Source: claude-config-request-2026-10-08.
+  Lanes: docs.
+
 ## 1.4.6 — fixes to the released app
 
 **Theme:** fixes for the 1.4 app people use today, landed on `main`. No
