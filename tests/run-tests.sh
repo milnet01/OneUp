@@ -1127,7 +1127,11 @@ wait
 EOF
 chmod +x "$d/systemd-inhibit" "$d/window"
 saved_engine_cmd=("${ENGINE_CMD[@]}")
-ENGINE_CMD=("$d/window" "${saved_engine_cmd[@]}")
+# Pinned to the Python engine, as INV-11's scenario is, whatever ONEUP_ENGINE_CMD says:
+# the frozen Bash fallback re-execs the same way and keeps this defect on purpose (the
+# window never starts it), so under it this scenario would fail for a known reason.
+ENGINE_CMD=("$d/window" env "PYTHONPATH=$(dirname "$ENGINE")${PYTHONPATH:+:$PYTHONPATH}"
+            python3 -m oneup.engine)
 # A long ceiling, so an engine that ends its hold within the wait below can only have
 # done so because it saw its window go.
 staged=0; start_held_engine "$d" ONEUP_INHIBITED= ONEUP_HOLD_SECONDS=60 && staged=1
