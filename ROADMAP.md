@@ -5618,6 +5618,16 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   09:37:01, 11 min after the only authentication, with no prompt and no
   `conversation failed` in the journal. Main's Bash half not yet seen
   on a real run; user chose one more run on main before releasing 1.4.6.
+  Pending: the 1.4.6 (main, Bash engine) real run. Needs updates waiting
+  (the size link appears only then; on 2026-10-08 after the run, all up
+  to date). Procedure: quit OneUp from the tray; in Konsole
+  `cd /mnt/Games/Scripts/Linux/OneUp-main-wt && ONEUP_HOLD_SECONDS=600
+  python3 updater.py`; Check for updates; System row arrow, Show
+  download size, password once, note the time; press Run 6-9 minutes
+  later (hold ends at 10). Pass = no further prompt, and the journal
+  shows `sudo du -sB1 /var/cache/zypp` with no `conversation failed`.
+  The wait is a test device only. On pass: release 1.4.6 from main
+  (./release.sh 1.4.6), user-approved 2026-10-08.
   **Layman:** Started from a terminal, OneUp could quietly ask for your password a second time in that terminal and sit waiting for five minutes.
   Kind: fix.
   Source: user-real-run-2026-10-02.
@@ -7078,6 +7088,11 @@ when complete (that document's §7).
   Red first: the suites evidently run without a working systemd-inhibit
   or with ONEUP_INHIBITED set; find which before writing the test.
   Blocks the ONEUP-0054 flip (the confirming run goes through the hold).
+  User, 2026-10-08: users must never be left watching a window where
+  nothing seems to happen ("they will think nothing is happening and
+  close the app"). Promised with the fix: whenever the window waits, it
+  says what it is waiting for and roughly how long. Next item to work
+  on after 0214 (user not yet asked to confirm the order).
   **Layman:** If you check the download size and then press Update, OneUp sits on "Working out the download size first" for up to two minutes and then asks for your password a second time.
   Kind: fix.
   Source: user-real-run-2026-10-08.
