@@ -455,8 +455,11 @@ this file, and finding nothing would suggest there is nothing to agree on.
   one is the window's Cancel.
 - **`hold.state`** — written by the engine when a `--size --hold` preview begins waiting
   for a go-ahead, and deleted on every exit from that wait (ONEUP-0044). It is written
-  whole, never truncated mid-write (ONEUP-0177). Line 1 is the
-  engine's pid, which is the only line the window reads: it is how a live hold is told
+  whole, never truncated mid-write (ONEUP-0177). Line 1 is the pid the window started,
+  and it is the only line the window reads. That is the engine's own pid, or, where the
+  engine re-exec'd itself under `systemd-inhibit` (ONEUP-0086), the wrapper's: the real
+  tool forks its command rather than exec'ing it, so the engine is the wrapper's child
+  (ONEUP-0238). Line 1 is how a live hold is told
   from one a `SIGKILL`ed engine left behind, and it is also what stops a second window
   adopting a hold it did not start.
 - **`go.request`** — created by the *window* to tell a held engine to proceed, written

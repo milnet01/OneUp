@@ -216,7 +216,7 @@ a `--size --hold` preview begins waiting, and deletes it on every exit from that
 
 | Line | Field | Example |
 | --- | --- | --- |
-| 1 | the engine's pid | `48213` |
+| 1 | the pid the window started — the engine's own, or its `systemd-inhibit` wrapper's (below) | `48213` |
 | 2 | this preview's log path — the `--log=` value **verbatim** | `/home/u/.local/state/oneup/logs/2026-08-23_0914.log` |
 | 3 | the size just quoted | `371.4 MiB` |
 
@@ -224,6 +224,18 @@ a `--size --hold` preview begins waiting, and deletes it on every exit from that
 as no hold at all. Line 1 may not be reordered or dropped. That one comparison — is this
 pid our own `_size_proc`'s? — is what refuses both a `hold.state` a `SIGKILL`ed engine
 left behind and a second window's hold.
+
+**Under the shutdown inhibitor, the engine is not the process the window started.** The
+engine re-execs a `--size --hold` preview under `systemd-inhibit` (ONEUP-0086). The real
+tool forks its command and waits for it, so the engine is the wrapper's child and the
+window's grandchild. So the process
+that re-execs passes on two pids that only it knows. Its own pid is kept by the wrapper,
+and `hold.state` line 1 carries it. Its parent's pid is the window's, and the hold watches
+it. Measured on a real run on 2026-10-08: without them, Update never adopted the hold, and
+the window-gone check watched the wrapper, which lives exactly as long as the engine
+(ONEUP-0238). `tests/run-tests.sh` covers both with a mock that forks the way the real
+tool does. The Bash fallback re-execs the same way and is not changed: it is frozen at the
+switch, and the window starts only the Python engine, so no window reads its line 1.
 
 **`go.request`** — the *window* creates it to tell a held engine to proceed, and the
 **engine** deletes it, both when it reads one and when the hold ends by any other route.
@@ -246,8 +258,8 @@ any step runs, or the whole go-ahead is refused**. That is deliberately stricter
 that leniency would let a `go.request` reading `cache,../../evil` run the cache step and
 report success. `--steps=` is a flag a person types on their own command line;
 `go.request` is an authorisation read by a root process. And third, **the wait ends when
-the window that started it does** — the engine captures the window's pid at start-up and
-polls `kill -0` on it each time round, breaking when it stops existing. Without that a
+the window that started it does** — the engine captures the window's pid at start-up
+(under the inhibitor, the pid the re-exec passed on) and polls `kill -0` on it each time round, breaking when it stops existing. Without that a
 preview whose window was killed keeps a root-authenticated engine waiting to the full
 ceiling, and nothing reports it: a hold that ends this way emits no marker, so the
 differential harness cannot see the difference either. Capture the pid once and probe the
