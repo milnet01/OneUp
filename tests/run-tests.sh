@@ -1164,7 +1164,9 @@ else
 fi
 # Never leave an engine behind, whatever the verdict: the window, the wrapper and the
 # engine are three processes here, not one.
-kill -9 "$HELD_PID" $(cat "$d/started.pid" "$d/inhibited.pids" 2>/dev/null) 2>/dev/null
+kill -9 "$HELD_PID" 2>/dev/null
+while read -r _pid; do kill -9 "$_pid" 2>/dev/null; done \
+    < <(cat "$d/started.pid" "$d/inhibited.pids" 2>/dev/null)
 wait "$HELD_PID" 2>/dev/null
 rm -rf "$d"
 
