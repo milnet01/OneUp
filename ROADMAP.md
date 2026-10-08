@@ -7121,6 +7121,11 @@ when complete (that document's §7).
   and the window suite faked the pid. New scenario red 419/2 at 7deb4f8,
   green after. The wait now shows "… 1m 5s so far." (gui-smoke). Still
   owed: a real run through the hold, which also confirms ONEUP-0054.
+  Decided (user, 2026-10-08): the Update wait keeps "1m 5s so far",
+  matching the app's other times, not the mock-up's "0:25 so far".
+  The real Konsole run (size check, then Update) is still owed: on
+  2026-10-08 the 94 waiting updates went to the 1.4.6 test on main
+  instead, so it waits for the next batch of updates.
   **Layman:** If you check the download size and then press Update, OneUp sits on "Working out the download size first" for up to two minutes and then asks for your password a second time.
   Kind: fix.
   Source: user-real-run-2026-10-08.
