@@ -5367,7 +5367,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: review-contract loop 20 on workflow.md, 2026-09-27 (filed at the cap).
 
-- 📋 [ONEUP-0214] **The progress bar's text is unreadable where it sits on the filled part.**
+- ✅ [ONEUP-0214] **The progress bar's text is unreadable where it sits on the filled part.**
   Reported by the Hub website session from the published dark screenshot.
   Measured against build_theme's QSS on main (updater.py) and v2
   (oneup/gui/theme.py); the rule is identical on both branches.
@@ -5394,6 +5394,15 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   would need luminance >= 0.197 and <= 0.039 at once. Look and
   layout unchanged, so the published screenshots stay valid.
   High contrast uses its own chunk/track rule; measure it too.
+  Resolved (2026-10-08): main 67a4613 — TwoToneBar draws the bar with no
+  text and paints the caption twice, clipped per surface: #0c0f13 on the
+  fill, $status on the track; high contrast uses $card on the fill and
+  $text on the track (it was white on white there too). Inks arrive as
+  qproperty- values like ToggleSwitch's; right-to-left handled. Red
+  first: gui-smoke 399/1, then 400/0; main local-CI green. v2 merge
+  2563a5b changes nothing: v2 already moved the caption under the bar
+  (ONEUP-0163), so the two-tone code, its test and the 1.4.6 changelog
+  wording stay on main.
   **Layman:** The words on the progress bar, like "Check complete", are pale grey on bright blue and cyan in the dark theme, so they are very hard to read.
   Kind: accessibility.
   Source: hub-website-session-2026-09-28.
