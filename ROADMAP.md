@@ -5641,6 +5641,13 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   shows `sudo du -sB1 /var/cache/zypp` with no `conversation failed`.
   The wait is a test device only. On pass: release 1.4.6 from main
   (./release.sh 1.4.6), user-approved 2026-10-08.
+  Main run (2026-10-08, Bash engine, Konsole pts/26, 90 packages):
+  one password prompt, all five steps OK, no `conversation failed`
+  in the journal. Inconclusive for this fix: main has no size-check
+  hold, and the cache step's `sudo du` ran 18:55:40, under 4 min after
+  authentication (18:51:50), so the 5-minute expiry was never reached.
+  The user chose to release 1.4.6 on this run plus the script(1)
+  regression scenario and the v2 confirmation (2026-10-08).
   **Layman:** Started from a terminal, OneUp could quietly ask for your password a second time in that terminal and sit waiting for five minutes.
   Kind: fix.
   Source: user-real-run-2026-10-02.
