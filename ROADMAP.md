@@ -7067,7 +7067,7 @@ when complete (that document's §7).
   Kind: fix.
   Source: user-request-2026-10-02.
 
-- 📋 [ONEUP-0238] **Update after "Show download size" never adopts the held engine on v2, so it waits out the hold and asks for the password again.**
+- ✅ [ONEUP-0238] **Update after "Show download size" never adopts the held engine on v2, so it waits out the hold and asks for the password again.**
   Measured on the user's real run, 2026-10-08, v2 from Konsole with
   ONEUP_HOLD_SECONDS=600. Size check authenticated at 09:25:42 and held;
   Update pressed at 09:32 stayed on "Working out the download size
@@ -7093,6 +7093,14 @@ when complete (that document's §7).
   close the app"). Promised with the fix: whenever the window waits, it
   says what it is waiting for and roughly how long. Next item to work
   on after 0214 (user not yet asked to confirm the order).
+  Resolved (2026-10-08, v2 17a978f): the re-exec passes on its own pid
+  and the window's; hold.state line 1 is the pid the window started, and
+  the hold watches the window (spec ONEUP-0054 §4.1.1, review-contract
+  loops 12-13, converged). Why the suites missed it: every scenario
+  pre-set ONEUP_INHIBITED, the ONEUP-0086 mock exec'd instead of forking,
+  and the window suite faked the pid. New scenario red 419/2 at 7deb4f8,
+  green after. The wait now shows "… 1m 5s so far." (gui-smoke). Still
+  owed: a real run through the hold, which also confirms ONEUP-0054.
   **Layman:** If you check the download size and then press Update, OneUp sits on "Working out the download size first" for up to two minutes and then asks for your password a second time.
   Kind: fix.
   Source: user-real-run-2026-10-08.
