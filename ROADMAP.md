@@ -5602,6 +5602,13 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   records the rule. Not yet confirmed on a real terminal-launched run.
   Decision (user, 2026-10-07): once the next real Konsole run
   confirms this fix, release 1.4.6 from main without asking again.
+  Confirmed on a real run (2026-10-08, v2 Python engine, Konsole, pts/26):
+  size check authenticated 09:25:42 and held (ONEUP_HOLD_SECONDS=600);
+  the run started 09:35:57 with no prompt, and the cache step's
+  `sudo du -sB1 /var/cache/zypp` (not in the user's old drop-in) ran
+  09:37:01, 11 min after the only authentication, with no prompt and no
+  `conversation failed` in the journal. Main's Bash half not yet seen
+  on a real run; user chose one more run on main before releasing 1.4.6.
   **Layman:** Started from a terminal, OneUp could quietly ask for your password a second time in that terminal and sit waiting for five minutes.
   Kind: fix.
   Source: user-real-run-2026-10-02.
@@ -5646,6 +5653,21 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   **Layman:** When zypper updates itself first, OneUp says the update finished, though the other updates still need another pass.
   Kind: fix.
   Source: peer-report groundwork 2026-10-02, verified in-session.
+
+- 📋 [ONEUP-0237] **The "Show download size" link is hard to read on the opened System packages panel, and nearly invisible on hover.**
+  Seen by the user on v2 (dark theme, launched from Konsole), screenshots
+  2026-10-08. With the system row's panel open, the area behind the
+  LinkBtn is a teal-to-cyan fill; the link's blue sits on it at low
+  contrast, and on hover the link goes paler still and almost vanishes.
+  #RowDetails is transparent on both branches, so the fill comes from
+  the card behind it — not yet traced. Main has the same link and the
+  same transparent panel; check whether it shows the same fill before
+  choosing a branch. Measure the link against both gradient ends, in
+  both themes and high contrast, normal and hover.
+  **Layman:** When you open the System packages list, the blue "Show download size" link sits on a bright teal background and almost disappears when the mouse is over it.
+  Kind: accessibility.
+  Source: user-real-run-2026-10-08.
+  Lanes: gui, theme.
 
 ## 2.0.0 — the rewrite
 
@@ -6029,6 +6051,12 @@ when complete (that document's §7).
   stages; stage 9 is the commit they are measured against.
   Decision (user, 2026-10-07): once the next real Konsole run
   confirms ONEUP-0231, flip this item shipped without asking again.
+  Real run 2026-10-08: the Python engine ran all five steps cleanly from
+  Konsole and confirmed ONEUP-0231's v2 half. The same run found
+  ONEUP-0238 (Update after Show download size never adopts the held
+  engine). User decided 2026-10-08: keep this item open until 0238 is
+  fixed and a run goes through the hold properly; this replaces the
+  2026-10-07 decision to flip it on the next good run.
 
 - 🚧 [ONEUP-0057] **Write the OneUp 2.0 documentation set before any 2.0 code is written.**
   Agreed with the user 2026-07-26. Deliverables, in order: nine standards
@@ -7019,6 +7047,75 @@ when complete (that document's §7).
   **Layman:** After choosing to thin out backups you aren't told whether it worked or how many were removed.
   Kind: fix.
   Source: user-request-2026-10-02.
+
+- 📋 [ONEUP-0238] **Update after "Show download size" never adopts the held engine on v2, so it waits out the hold and asks for the password again.**
+  Measured on the user's real run, 2026-10-08, v2 from Konsole with
+  ONEUP_HOLD_SECONDS=600. Size check authenticated at 09:25:42 and held;
+  Update pressed at 09:32 stayed on "Working out the download size
+  first" until the hold expired at 09:35:57, then a fresh engine started
+  and prompted again. No go.request was ever written.
+  Cause: _reexec_under_inhibitor (oneup/engine/__main__.py) re-execs a
+  `--size --hold` engine under systemd-inhibit on purpose, so the window's
+  QProcess pid (1850086) is systemd-inhibit and the engine that writes
+  hold.state is its child (1850112). run._adopt_held_engine requires
+  hold.state line 1 == proc.processId(), so it never matches and
+  _wait_for_hold polls until the engine exits.
+  v2 only: main's update_system.sh skips the re-exec whenever
+  SIZE_STEP is set, so its held engine keeps the window's pid.
+  Fix needs a choice against marker-protocol.md §8 and ONEUP-0044 §6
+  (what hold.state line 1 means): the window accepting its own pid or
+  that pid's direct child keeps both impostor refusals; the engine
+  writing its parent's pid when ONEUP_INHIBITED changes the contract.
+  Red first: the suites evidently run without a working systemd-inhibit
+  or with ONEUP_INHIBITED set; find which before writing the test.
+  Blocks the ONEUP-0054 flip (the confirming run goes through the hold).
+  **Layman:** If you check the download size and then press Update, OneUp sits on "Working out the download size first" for up to two minutes and then asks for your password a second time.
+  Kind: fix.
+  Source: user-real-run-2026-10-08.
+  Lanes: engine, gui.
+
+- 📋 [ONEUP-0239] **Nothing in the window moves or resizes: a fixed layout with per-step progress, one tabbed details area, and a status line.**
+  User feedback, 2026-10-08: buttons and boxes move and resize as detail
+  appears (a row's package list opening pushes everything down), which
+  reads as unprofessional. Rule wanted: everything fixed in place, and
+  the layout caters for any extra detail.
+  User's idea: steps side by side, each with its own log and progress
+  bar, plus a status bar saying exactly what is happening.
+  Recommended to the user instead (not yet decided): keep the five
+  rows, fixed height, each with a thin progress bar of its own; one
+  fixed-size details area below with a tab per step (All, System,
+  Flatpak, ...) that replaces both the per-row package lists and the
+  log; a status line at the bottom. Five columns leave each about
+  phone-width, so package names and versions wrap or clip, worse with
+  large text. Offered to sketch both for comparison.
+  Spans the window's layout, the run view, theming and accessibility,
+  and has a real design choice: apply spec-format.md section 1 first.
+  **Layman:** Buttons and boxes stay put however much detail appears; each step gets its own progress bar and its own log tab.
+  Kind: ux.
+  Source: user-real-run-2026-10-08.
+  Lanes: gui, theme.
+
+- 📋 [ONEUP-0240] **The Check for updates button shrinks when it becomes Stop; keep its width and keep the red.**
+  User feedback, 2026-10-08: the button narrows to fit "Stop" during a
+  run, and the big Run button widens to fill the gap. Keep one width for
+  both texts (the wider of the two, in every language and at large
+  text); keep the red Stop colouring, which the user liked. Same rule
+  as the fixed-layout item filed with it.
+  **Layman:** While an update runs, the Check for updates button turns into a smaller red Stop button; it should stay the same size.
+  Kind: ux.
+  Source: user-real-run-2026-10-08.
+  Lanes: gui.
+
+- 📋 [ONEUP-0241] **Flatpak apps show no download size; find out whether Flatpak can report one.**
+  User feedback, 2026-10-08: the system row has Show download size, the
+  Flatpak row has none. Check whether flatpak can report a download
+  size for pending updates without root and without downloading (e.g.
+  remote-ls --updates with a size column), and how reliable it is,
+  before promising anything.
+  **Layman:** OneUp tells you how much the system update will download, but not how much the Flatpak apps will.
+  Kind: investigate.
+  Source: user-real-run-2026-10-08.
+  Lanes: engine, gui.
 
 ## 2.1.0 — after 2.0
 
