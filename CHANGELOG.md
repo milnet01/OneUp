@@ -6,6 +6,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Three buttons showed a stray underline where an "&" belongs** (ONEUP-0251)
+  "Roll back & reboot", "Import signing key & retry" and "Skip … &
+  update the rest" now read as written, instead of "Roll back _reboot"
+  and the like.
+
 ## [1.4.7] - 2026-10-10
 
 ### Fixed

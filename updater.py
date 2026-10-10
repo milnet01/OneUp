@@ -1504,7 +1504,7 @@ class RollbackDialog(QDialog):
 
         btns = QHBoxLayout()
         btns.addStretch(1)
-        ok = QPushButton("Roll back & reboot")
+        ok = QPushButton("Roll back && reboot")   # "&&": a lone "&" is a mnemonic
         ok.setObjectName("RunBtn")
         ok.clicked.connect(self.accept)
         cancel = QPushButton("Cancel")
@@ -3881,14 +3881,15 @@ for (var i = 0; i < wins.length; i++) {{
             if self._remedy_skips:
                 if len(self._remedy_skips) == 1:
                     self.warn_btn.setText(
-                        f"Skip {self._repo_display_name(self._remedy_skips[0])} & update the rest")
+                        f"Skip {self._repo_display_name(self._remedy_skips[0]).replace('&', '&&')} "
+                        "&& update the rest")   # "&&" draws one "&" (ONEUP-0251)
                 else:
                     self.warn_btn.setText(
-                        f"Skip {len(self._remedy_skips)} sources & update the rest")
+                        f"Skip {len(self._remedy_skips)} sources && update the rest")
             elif self._remedy_keys:
-                self.warn_btn.setText("Import signing key & retry")
+                self.warn_btn.setText("Import signing key && retry")
             if both_armed:
-                self.warn_btn2.setText("Import signing key & retry")
+                self.warn_btn2.setText("Import signing key && retry")
                 self.warn_btn2.setVisible(True)
 
         if self._failed_steps:
