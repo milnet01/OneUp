@@ -4222,6 +4222,21 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: in-session-2026-10-10.
   Lanes: gui, theme.
 
+- 📋 [ONEUP-0252] **The engine suite's check count dropped by one between two runs on 2026-10-10 with no engine or suite change.**
+  tests/run-tests.sh counted 422 on v2 at 15:42 (local-CI for 73488ab)
+  and 421 at 16:22 and 16:31; main went 338 to 337 the same way. The
+  commits between touched only oneup/gui, tests/gui-smoke.py,
+  CHANGELOG.md and ROADMAP.md. Both runs exit 0, so a check is counted
+  on some runs and not others: diff the TEST/ok lines of two runs. A
+  421-count log is kept at
+  /mnt/Games/Scripts/Linux/oneup-suite-421-2026-10-10.log (outside the
+  repo; delete once compared). Not the two pgrep-dependent checks,
+  which count on both branches of their if.
+  **Layman:** One of OneUp's automatic engine checks seems to run only some of the time; find out which one and why.
+  Kind: investigate.
+  Source: in-session-2026-10-10.
+  Lanes: engine, tests.
+
 ## 1.4.6 — fixes to the released app
 
 **Theme:** fixes for the 1.4 app people use today, landed on `main`. No
