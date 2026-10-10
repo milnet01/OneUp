@@ -26,6 +26,7 @@ from PySide6.QtCore import (
     QCoreApplication,
     QDate,
     QDateTime,
+    QEvent,
     QLocale,
     QProcess,
     QSettings,
@@ -634,6 +635,9 @@ class Updater(QMainWindow):
         geo = self.settings.value("geometry")
         if isinstance(geo, QByteArray):         # a corrupt value must not stop startup
             self.restoreGeometry(geo)
+        # On Wayland restoreGeometry() brings back the size only; the position is replayed
+        # through KWin on each show (ONEUP-0246, showEvent).
+        self._placement_pending = False
 
         # Non-blocking: is there a newer OneUp release?
         app_update._check_app_update(self)
@@ -783,10 +787,59 @@ class Updater(QMainWindow):
 
     def _quit_requested(self):
         if self._confirm_quit():
+            # Quit from the tray menu never reaches closeEvent (ONEUP-0246).
+            self._remember_geometry()
             QApplication.quit()
 
-    def closeEvent(self, event):
+    def _remember_geometry(self):
+        """Save the size and, on Wayland, the position KWin has the frame at.
+
+        Qt reports 0,0 for its own position on Wayland, so saveGeometry() keeps only the
+        size there; KWin is asked instead. A hidden window is unknown to KWin, and the
+        position saved when it hid is still the right one."""
         self.settings.setValue("geometry", self.saveGeometry())
+        if placement._on_wayland() and self.isVisible():
+            pos = placement.main_frame_position()
+            if pos is not None:
+                self.settings.setValue("frame_pos", f"{pos[0]},{pos[1]}")
+
+    def _saved_frame_pos(self) -> tuple[int, int] | None:
+        try:
+            x, y = str(self.settings.value("frame_pos", "")).split(",")
+            return int(x), int(y)
+        except ValueError:                  # absent or corrupt: let KWin place it
+            return None
+
+    # Measured by LocalWebServerManager on real KWin (its ADR-0007): a script run as the
+    # window shows is ignored, the first Expose alone is too early, and Expose plus one
+    # event-loop tick works; 50 ms is the fallback when no Expose arrives.
+    PLACEMENT_FALLBACK_MS = 50
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if placement._on_wayland() and self._saved_frame_pos() is not None:
+            self._placement_pending = True
+            handle = self.windowHandle()
+            if handle is not None:
+                handle.installEventFilter(self)
+            QTimer.singleShot(self.PLACEMENT_FALLBACK_MS, self._restore_position)
+
+    def eventFilter(self, obj, event):
+        if (self._placement_pending and event.type() == QEvent.Type.Expose
+                and obj is self.windowHandle()):
+            QTimer.singleShot(0, self._restore_position)
+        return super().eventFilter(obj, event)
+
+    def _restore_position(self):
+        if not self._placement_pending:     # the Expose path or the fallback got here first
+            return
+        self._placement_pending = False
+        pos = self._saved_frame_pos()
+        if pos is not None:
+            placement.kwin_restore_position(*pos)
+
+    def closeEvent(self, event):
+        self._remember_geometry()
         if self._tray is not None:
             # Resident: hide to the tray instead of quitting. The run stays visible on
             # reopening, so this needs no warning — it isn't a quit.

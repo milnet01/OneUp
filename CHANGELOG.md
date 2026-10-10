@@ -76,6 +76,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The window opens where you last left it, including after a restart, on KDE Wayland** (ONEUP-0246)
+  Wayland never tells an app where its window is, so OneUp now asks
+  KDE for the position when the window hides or quits, and asks KDE to
+  put it back when it opens. Quitting from the tray menu also saves the
+  window's size and position now; before, only closing the window did.
+
 - **Pressing Update after "Show download size" carries on from the size check instead of asking for your password again** (ONEUP-0238)
   The window now recognises the size check it started. While it
   waits for that check to finish, it says what it is waiting for and

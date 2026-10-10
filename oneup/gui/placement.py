@@ -11,6 +11,8 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
+import uuid
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
@@ -27,15 +29,19 @@ def _on_wayland() -> bool:
     return _platform_name().startswith("wayland")
 
 
-def run_kwin_script(js: str) -> None:
+def run_kwin_script(js: str) -> bool:
     """Load, run and unload a one-shot KWin script (Plasma 5 & 6).
 
     On Wayland an application may not place its own windows — the compositor owns
     placement, so Qt's move() is accepted and silently ignored. Asking KWin is the only
     way to position anything, which is why both window recentring and dialog placement
-    come through here."""
+    come through here.
+
+    True means KWin accepted the script, never that it did anything: `dbus-send` exits
+    non-zero only when the call did not land (no KWin on the bus), and says nothing
+    about the script itself."""
     if not shutil.which("dbus-send"):
-        return
+        return False
     script_path = None
     name = "oneup_place"
     try:
@@ -45,16 +51,17 @@ def run_kwin_script(js: str) -> None:
             f.write(js)
         base = ["dbus-send", "--session", "--dest=org.kde.KWin",
                 "--print-reply", "/Scripting"]
-        subprocess.run([*base, "org.kde.kwin.Scripting.loadScript",  # noqa: S603 — fixed argv.
-                        f"string:{script_path}", f"string:{name}"],
-                       capture_output=True, timeout=3)
+        loaded = subprocess.run([*base, "org.kde.kwin.Scripting.loadScript",  # noqa: S603 — fixed argv.
+                                 f"string:{script_path}", f"string:{name}"],
+                                capture_output=True, timeout=3)
         subprocess.run([*base, "org.kde.kwin.Scripting.start"],  # noqa: S603
                        capture_output=True, timeout=3)
         subprocess.run([*base, "org.kde.kwin.Scripting.unloadScript",  # noqa: S603
                         f"string:{name}"],
                        capture_output=True, timeout=3)
+        return loaded.returncode == 0
     except (OSError, subprocess.SubprocessError):
-        pass
+        return False
     finally:
         if script_path:
             try:
@@ -124,6 +131,89 @@ for (var i = 0; i < wins.length; i++) {{
         width: c.frameGeometry.width,
         height: c.frameGeometry.height
     }};
+    break;
+}}
+""")
+
+
+# How long to wait for KWin's answer to reach the journal. Measured on Plasma 6.7.5: about
+# 10 ms, 600 ms on the first query of a session. Bounded because it runs as the window
+# hides, on the GUI thread.
+FRAME_ANSWER_TIMEOUT = 1.5
+
+
+def _frame_from_journal(text: str, marker: str) -> tuple[int, int] | None:
+    """The x, y KWin printed after `marker`, or None if no line carries two integers."""
+    for line in text.splitlines():
+        if marker in line:
+            try:
+                x, y = line.split(marker, 1)[1].split()[:2]
+                return int(x), int(y)
+            except ValueError:
+                return None
+    return None
+
+
+def main_frame_position() -> tuple[int, int] | None:
+    """Where KWin has the main window's frame, as x, y — or None if it cannot say.
+
+    Wayland gives a client no global coordinates, so Qt reports 0,0 wherever the window
+    is (ONEUP-0246). KWin knows, and a script's print() is the one channel back from it:
+    the line lands in the user journal, tagged with a marker no other line carries. Only
+    meaningful while the window is mapped — a hidden window is unknown to KWin."""
+    if not shutil.which("journalctl"):
+        return None
+    marker = f"oneup_frame_{uuid.uuid4().hex}"
+    since = f"@{int(time.time()) - 2}"
+    if not run_kwin_script(f"""\
+var wins = workspace.windowList();
+for (var i = 0; i < wins.length; i++) {{
+    var c = wins[i];
+    if (c.pid !== {os.getpid()} || c.transientFor) continue;
+    print("{marker}", c.frameGeometry.x, c.frameGeometry.y);
+    break;
+}}
+"""):
+        return None
+    deadline = time.monotonic() + FRAME_ANSWER_TIMEOUT
+    while True:
+        try:
+            out = subprocess.run(["journalctl", "--user", "-b", "--since", since,  # noqa: S603, S607
+                                  "-o", "cat"],
+                                 capture_output=True, text=True, timeout=2).stdout
+        except (OSError, subprocess.SubprocessError):
+            return None
+        pos = _frame_from_journal(out, marker)
+        if pos is not None or time.monotonic() >= deadline:
+            return pos
+        time.sleep(0.05)
+
+
+def kwin_restore_position(x: int, y: int) -> None:
+    """Ask KWin to put the main window's frame at x, y, keeping its current size.
+
+    Clamped to the usable area of the screen holding that point, or of the window's own
+    screen when that monitor is gone. The size is written too: KWin takes the whole
+    rectangle as given. `KWin.PlacementArea`, not `workspace.PlacementArea`, which is
+    undefined on Plasma 6 (measured 2026-10-10)."""
+    run_kwin_script(f"""\
+var x = {int(x)};
+var y = {int(y)};
+var wins = workspace.windowList();
+for (var i = 0; i < wins.length; i++) {{
+    var c = wins[i];
+    if (c.pid !== {os.getpid()} || c.transientFor) continue;
+    var g = c.frameGeometry, area = null;
+    for (var j = 0; j < workspace.screens.length; j++) {{
+        var s = workspace.screens[j].geometry;
+        if (x >= s.x && x < s.x + s.width && y >= s.y && y < s.y + s.height)
+            area = workspace.clientArea(KWin.PlacementArea, workspace.screens[j],
+                                        workspace.currentDesktop);
+    }}
+    if (area === null) area = workspace.clientArea(KWin.PlacementArea, c);
+    x = Math.max(area.x, Math.min(x, area.x + area.width - g.width));
+    y = Math.max(area.y, Math.min(y, area.y + area.height - g.height));
+    c.frameGeometry = {{ x: x, y: y, width: g.width, height: g.height }};
     break;
 }}
 """)

@@ -2410,6 +2410,88 @@ def main() -> int:
     check("close-to-tray does not re-hint on a second close", hints == [True])
     _unpatch_all()
 
+    # (11b) ONEUP-0246: the window reopens where it was left. On Wayland Qt cannot read its
+    # own position (it reports 0,0), so the window asks KWin for its frame before it hides
+    # and replays it on the next show. Quit from the tray menu never reaches closeEvent, so
+    # before this item it saved nothing at all.
+    from PySide6.QtCore import QSettings
+    _gs = QSettings("OneUp", "OneUp")
+    def _pump(ms, until=lambda: False):
+        # Waits on the condition, not a fixed time: the replay is a 50 ms timer, and a
+        # loaded run reached it only after 200 ms.
+        end = time.monotonic() + ms / 1000
+        while time.monotonic() < end and not until():
+            QApplication.processEvents()
+            time.sleep(0.005)
+    w = window.Updater()
+    w.show()
+    _gs.remove("geometry")
+    _patch(window.QApplication, "quit", lambda: None)
+    w._quit_requested()
+    check("ONEUP-0246: Quit from the tray saves the window's size", _gs.contains("geometry"))
+    _unpatch_all()
+    w.hide()
+
+    asked = []
+    def _frame():
+        asked.append(True)
+        return (333, 222)
+    _patch(placement, "_platform_name", lambda: "wayland")
+    _patch(placement, "main_frame_position", _frame)
+    _patch(placement, "run_kwin_script", lambda js: True)   # nothing reaches the real KWin
+    _gs.remove("frame_pos")
+    w = window.Updater()
+    w._tray = object()
+    w.show()
+    w.closeEvent(_Evt())
+    check("ONEUP-0246: on Wayland, closing to the tray saves KWin's frame position",
+          _gs.value("frame_pos") == "333,222")
+    asked.clear()
+    _patch(window.QApplication, "quit", lambda: None)
+    w._quit_requested()
+    check("ONEUP-0246: a hidden window does not ask KWin, which no longer knows it",
+          asked == [] and _gs.value("frame_pos") == "333,222")
+    _unpatch_all()
+
+    scripts = []
+    _patch(placement, "_platform_name", lambda: "wayland")
+    _patch(placement, "run_kwin_script", lambda js: scripts.append(js) or True)
+    _gs.setValue("frame_pos", "333,222")
+    w = window.Updater()
+    w.show()
+    _pump(3000, until=lambda: not w._placement_pending)
+    placed = [js for js in scripts if "var x = 333" in js and "var y = 222" in js]
+    check("ONEUP-0246: on Wayland the saved position is replayed through KWin once per show",
+          len(placed) == 1)
+    check("ONEUP-0246: the replay clamps to the usable area with KWin.PlacementArea",
+          bool(placed) and "KWin.PlacementArea" in placed[0])
+    w.hide()
+    w.show()
+    _pump(3000, until=lambda: not w._placement_pending)
+    check("ONEUP-0246: showing again from the tray replays it again",
+          len([js for js in scripts if "var x = 333" in js]) == 2)
+    w.hide()
+    _unpatch_all()
+
+    scripts = []
+    _patch(placement, "_platform_name", lambda: "xcb")
+    _patch(placement, "run_kwin_script", lambda js: scripts.append(js) or True)
+    w = window.Updater()
+    w.show()
+    _pump(100)
+    check("ONEUP-0246: off Wayland nothing is sent to KWin (restoreGeometry places it)",
+          scripts == [])
+    w.hide()
+    _unpatch_all()
+    _gs.remove("frame_pos")
+
+    check("ONEUP-0246: KWin's answer is read from its own marked journal line",
+          placement._frame_from_journal("noise\nkwin: oneup_frame_ab 1447 -12\n",
+                                        "oneup_frame_ab") == (1447, -12))
+    check("ONEUP-0246: an answer that is not two numbers is no position",
+          placement._frame_from_journal("oneup_frame_ab here there\n", "oneup_frame_ab")
+          is None and placement._frame_from_journal("", "oneup_frame_ab") is None)
+
     # (12) on_finished refreshes the tray: a successful run -> neutral; a check -> the count.
     w = window.Updater()
     applied = []

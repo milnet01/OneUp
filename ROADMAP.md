@@ -7279,7 +7279,7 @@ when complete (that document's §7).
   Source: user-request-2026-10-10.
   Lanes: gui.
 
-- 📋 [ONEUP-0246] **The window is not centred when it first opens after a reboot.**
+- 🚧 [ONEUP-0246] **The window is not centred when it first opens after a reboot.**
   User report, 2026-10-10: after every reboot the window has to be
   recentred by hand. Not yet investigated: which branch, whether it is
   the autostart launch or any first launch, and where KWin puts it.
@@ -7337,6 +7337,29 @@ when complete (that document's §7).
   (placement.position_is_readable) and keeps size and maximised state
   only. The read-back half is OneUp's own and needs its own tests.
   Also still owed: Quit from the tray saves nothing (closeEvent only).
+  Built 2026-10-10 (v2): placement.main_frame_position (KWin script
+  print, read back from the journal by a per-call marker, 1.5 s cap)
+  and placement.kwin_restore_position (clamped to the target screen's
+  KWin.PlacementArea, size kept); Updater._remember_geometry from
+  closeEvent and _quit_requested (Quit from the tray now saves), and a
+  replay on every show (first Expose plus one tick, 50 ms fallback).
+  gui-smoke red 650/6 with only the placement half in, green 656/0;
+  local-CI green. Live KWin probe, same functions, plain test window:
+  replay landed exactly (400,300 and 700,350), off-screen 9000,9000
+  clamped to 3240,1636, read-back about 10 ms, None once hidden.
+  Found: kwin_recenter and center_on_parent pass workspace.PlacementArea,
+  undefined on Plasma 6 (works only because undefined acts as 0).
+  Research (2026-10-10, KWin v6.7.5 source): Remember values never
+  reach kwinrulesrc since KWin 6.1 (commit d2d92cdf removed the
+  setRules() save path; RuleBook::save writes RuleBookSettings, which
+  Rules::update never touches); no bugs.kde.org report found. Size
+  Remember fails when position is Remember too: bug 526560. Wayland
+  xdg-session-management is in KWin 6.7, but Qt 6.11.2 here speaks
+  only the older xx protocol (needs Qt 6.12) and the restore id is
+  private Qt API, out of PySide6's reach.
+  Left open until the real app is seen reopening in place after a
+  restart. The hand-written OneUp rule in ~/.config/kwinrulesrc still
+  exists and will place the window first; removal is the user's call.
   **Layman:** After a restart, OneUp should open in the middle of the screen without you having to move it.
   Kind: fix.
   Source: user-report-2026-10-10.
