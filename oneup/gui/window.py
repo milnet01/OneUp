@@ -127,8 +127,8 @@ class Updater(QMainWindow):
         self.setWindowTitle(QCoreApplication.translate(
             "window",
             "{APP_NAME} {APP_VERSION}").format(APP_NAME=APP_NAME, APP_VERSION=APP_VERSION))
-        # Four header controls (Settings · Repositories · Recenter · About); the
-        # three background toggles now live inside the Settings popup.
+        # Three header controls (Settings · Recenter · About); the background
+        # toggles and Repositories live inside the Settings popup.
         self.setMinimumWidth(560)
         self.settings = QSettings("OneUp", "OneUp")
         self.proc: QProcess | None = None
@@ -392,14 +392,15 @@ class Updater(QMainWindow):
             "Version, licence, links and a manual update check"))
         self.about_btn.clicked.connect(self.show_about)
 
-        # Two buttons, not four. Four of identical weight beside the app title
+        # Fewer than four buttons. Four of identical weight beside the app title
         # make none of them findable — the uniform weight is the complaint, not
-        # the count — so Repositories and Recenter move into Settings, where the
-        # second is a Wayland workaround rather than a feature that earned a
-        # place in the header (ONEUP-0064).
+        # the count — so Repositories moves into Settings (ONEUP-0064). Recenter
+        # went with it and is back, by the user's request, until the window
+        # opens centred after a reboot (ONEUP-0245, ONEUP-0246).
         header_row = QHBoxLayout()
         header_row.addLayout(titleblock, 1)
         header_row.addWidget(self.settings_btn, 0, Qt.AlignTop)
+        header_row.addWidget(self.recenter_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.about_btn, 0, Qt.AlignTop)
         self.header_row = header_row
         root.addLayout(header_row)
@@ -979,7 +980,7 @@ class Updater(QMainWindow):
         layout tree — a control added here without a place in the visual order is
         the failure this replaces, and a second hand-written list would drift.
         """
-        chain: list[QWidget] = [self.settings_btn, self.about_btn]
+        chain: list[QWidget] = [self.settings_btn, self.recenter_btn, self.about_btn]
         for key, _t, _d in steps.TASKS:
             r = self.rows[key]
             chain += [r.disclosure, r.switch, r.detail_scroll]

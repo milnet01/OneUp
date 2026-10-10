@@ -7212,6 +7212,54 @@ when complete (that document's §7).
   Kind: test.
   Source: in-session-2026-10-10.
 
+- ✅ [ONEUP-0245] **Put Recenter back in the main window's header on v2 until the window opens centred after a reboot.**
+  User request, 2026-10-10: ONEUP-0064 moved Recenter from the header
+  into Settings (spec docs/specs/ONEUP-0064-interface-redesign.md,
+  "This machine" row), on the grounds that it is a Wayland workaround.
+  The user needs it often because the window is off-centre after every
+  reboot (ONEUP-0246), so one click in the header beats two via Settings.
+  Temporary: once ONEUP-0246 is fixed, ask whether it goes back.
+  Touches window.py's header row, settings_dialog.py's This-machine
+  row and focus chain, and gui-smoke's INV-1/INV-6 checks that place
+  recenter_btn in SettingsDialog. main already has it in the header.
+  Resolved (2026-10-10, v2): header is Settings, Recenter, About;
+  Recenter's row left SettingsDialog and its focus chain. gui-smoke red
+  645/2 on the two new checks before the header line, green 647/0 after.
+  CHANGELOG's ONEUP-0064 entry corrected (three buttons, not two).
+  Departs from spec ONEUP-0064's This-machine row by the user's request;
+  the spec is left as written, since this is temporary.
+  **Layman:** The Recenter button goes back on the main window, so putting the window back in the middle is one click again.
+  Kind: ux.
+  Source: user-request-2026-10-10.
+  Lanes: gui.
+
+- 📋 [ONEUP-0246] **The window is not centred when it first opens after a reboot.**
+  User report, 2026-10-10: after every reboot the window has to be
+  recentred by hand. Not yet investigated: which branch, whether it is
+  the autostart launch or any first launch, and where KWin puts it.
+  First step: ask the user what they see, then locate-defect.
+  See memory: Qt cannot place its own window on Wayland; Recenter uses
+  KWin scripting (placement.kwin_recenter).
+  Research (2026-10-10), four sibling projects read; checked here:
+  v2's window.py has no showEvent and calls restoreGeometry in
+  __init__, so nothing places the main window at start (a normal
+  launch, or the first show from the tray after an autostart
+  `--tray`). On Wayland that leaves KWin's own placement.
+  Model to copy: LocalWebServerManager src/lwsm/mainwindow.py
+  (showEvent, eventFilter, _restore_position) and src/lwsm/placement.py,
+  which says it was transcribed from OneUp's placement.py. Measured
+  there on real KWin: a KWin script run 0 ms after show is ignored;
+  first Expose plus one event-loop tick works; 50 ms fallback. It also
+  hardens run_kwin_script (one 3 s deadline, private state dir, unload
+  before load, checks org.kde.KWin is on the bus). Ants_Terminal
+  instead centres on every first show after 150 ms. No project records
+  a reboot-specific cause. Open choice for the user: always centre
+  (Ants_Terminal) or restore the last position (LWSM).
+  **Layman:** After a restart, OneUp should open in the middle of the screen without you having to move it.
+  Kind: fix.
+  Source: user-report-2026-10-10.
+  Lanes: gui.
+
 ## 2.1.0 — after 2.0
 
 **Theme:** features raised after 2.0's list closed. They wait for 2.0.0 to ship

@@ -2976,7 +2976,8 @@ def main() -> int:
     # a walk rooted in the window can no longer reach either and would collect an
     # empty list. That dialog's chain is asserted whole by ONEUP-0064 INV-1 below,
     # which covers the same guarantee — the grouping puts Repositories above
-    # Recenter and the walk compares against visual order.
+    # Recenter and the walk compares against visual order. (ONEUP-0245 has since
+    # put Recenter back in the header for now; the window's chain covers it.)
 
     # INV-6: high contrast only ADDS an overlay — the base sheet is untouched.
     qss_hc = theme.build_theme(True, high_contrast=True)
@@ -3316,23 +3317,29 @@ def main() -> int:
         print(f"       actual   {describe(dlg_actual)}")
     check("INV-1 that dialog's order is the one its layout draws",
           visual_order(set_dlg) == dlg_expect)
-    # The guarantee the removed window-rooted assertion used to carry.
-    check("INV-1 Repositories still comes before Recenter",
-          dlg_expect.index(wR.repos_btn) < dlg_expect.index(wR.recenter_btn))
+    # ONEUP-0245: Recenter is back in the header for now, so it sits in the
+    # window's own chain, between Settings and About.
+    win_chain = wR.focus_chain()
+    check("ONEUP-0245 Recenter is in the window's chain between Settings and About",
+          win_chain[:3] == [wR.settings_btn, wR.recenter_btn, wR.about_btn])
 
     # INV-6: the moves are where the spec says, and none of them is half-done —
     # the one class of defect here that changes nothing measurable and everything
     # visible. header_row is asserted BY LAYOUT INDEX: "children of the header"
     # names nothing testable, since `header` is the object-named QLabel and the
     # buttons' Qt parent is the card.
-    check("INV-6 Repositories and Recenter are children of SettingsDialog",
-          wR.repos_btn.window() is set_dlg and wR.recenter_btn.window() is set_dlg)
+    check("INV-6 Repositories is a child of SettingsDialog",
+          wR.repos_btn.window() is set_dlg)
+    check("ONEUP-0245 Recenter is in the main window, not SettingsDialog",
+          wR.recenter_btn.window() is wR)
     header_items = [wR.header_row.itemAt(i) for i in range(wR.header_row.count())]
-    check("INV-6 the header carries the title block and two buttons, in that order",
-          len(header_items) == 3
+    check("INV-6 the header carries the title block, then Settings, Recenter "
+          "(ONEUP-0245) and About",
+          len(header_items) == 4
           and header_items[0].layout() is not None
           and header_items[1].widget() is wR.settings_btn
-          and header_items[2].widget() is wR.about_btn)
+          and header_items[2].widget() is wR.recenter_btn
+          and header_items[3].widget() is wR.about_btn)
     check("INV-6 the action row is Run, then Check, then Stop",
           [wR.action_row.itemAt(i).widget() for i in range(wR.action_row.count())]
           == [wR.run_btn, wR.check_btn, wR.stop_btn])

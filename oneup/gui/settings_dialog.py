@@ -101,8 +101,9 @@ class SettingsDialog(QDialog):
                 "Switch to high-contrast colours: plain black and white with "
                 "strong outlines, for easier reading."), parent.contrast_btn))
 
-        # Repositories and Recenter arrive here from the header. `_row` takes a
-        # description per row and does not read a tooltip, so both need one.
+        # Repositories arrives here from the header. `_row` takes a description
+        # per row and does not read a tooltip, so it needs one. Recenter is back
+        # in the header for now (ONEUP-0245).
         root.addWidget(self._heading(QCoreApplication.translate(
             "settings_dialog",
             "This machine")))
@@ -110,10 +111,6 @@ class SettingsDialog(QDialog):
             QCoreApplication.translate(
                 "settings_dialog",
                 "Choose which software sources OneUp updates from."), parent.repos_btn))
-        root.addWidget(self._row(
-            QCoreApplication.translate(
-                "settings_dialog",
-                "Put the window back in the middle of the screen."), parent.recenter_btn))
         root.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
@@ -149,7 +146,7 @@ class SettingsDialog(QDialog):
         p = self.parent()
         return [p.auto_btn, p.auth_btn, p.autoupdate_btn, p.tray_btn, p.startboot_btn,
                 p.theme_combo, p.textsize_btn, p.contrast_btn,
-                p.repos_btn, p.recenter_btn, p.diag_btn, self.close_btn]
+                p.repos_btn, p.diag_btn, self.close_btn]
 
     def _heading(self, text: str) -> QLabel:
         lbl = QLabel(text)

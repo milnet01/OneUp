@@ -50,8 +50,8 @@ All notable changes to OneUp are documented here. The format follows
   and can be run by hand in a terminal, but the window no longer uses it.
 
 - **The window has been reworked so there is one obvious thing to press.** (ONEUP-0064)
-  The title bar carries two buttons instead of four — Repositories and Recenter
-  have moved into Settings, which is now grouped under three headings instead of
+  The title bar carries three buttons instead of four — Repositories has moved
+  into Settings, which is now grouped under three headings instead of
   being one long list. "Run selected updates" comes first in the button row, and
   "Stop" now takes the place of "Check for updates" while an update is running
   rather than sitting beside it. Clicking anywhere on a task's row turns that task
