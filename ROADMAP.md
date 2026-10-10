@@ -5764,7 +5764,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
 
 ## 1.4.8 — fixes to the released app
 
-- 🚧 [ONEUP-0251] **Button labels with a lone "&" draw an underline instead: "Roll back _reboot", "Import signing key _retry", "Skip … _update the rest".**
+- ✅ [ONEUP-0251] **Button labels with a lone "&" draw an underline instead: "Roll back _reboot", "Import signing key _retry", "Skip … _update the rest".**
   Reported 2026-10-10 by the website session from OneUp's trailer
   footage. In a Qt button a lone "&" marks the next character as the
   keyboard shortcut and is not drawn; "&&" draws one "&". Affects the
@@ -5777,6 +5777,11 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   396/5 before, green 401/0 after; main local-CI green. Owed: the same
   fix on v2 (oneup/gui/rollback.py, run.py) through the merge, and a
   re-shot trailer clip5 for the website session.
+  Done 2026-10-10: v2 d5367f9 (gui-smoke red 652/5, green 657/0),
+  merged main into v2 at 7e2d108; both branches pushed with local-CI
+  green (main gui-smoke 401/0, v2 657/0 and 658/0 right-to-left).
+  Trailer clip5 re-shot from the fixed code and handed to the website
+  session. Ships to users with 1.4.8.
   **Layman:** Three buttons showed a stray underline where an "&" belongs, such as "Roll back _reboot".
   Kind: fix.
   Source: peer-report-ants-projects-hub-website-2026-10-10.
