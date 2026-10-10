@@ -7336,6 +7336,18 @@ when complete (that document's §7).
   checks. Discover's 48.5 MiB against zypper's 17.5 MiB for the same
   24 updates is not yet explained (guess: full package size against
   delta downloads; unverified).
+  User asked 2026-10-10: does PackageKit lack things OneUp works
+  around? What OneUp's system step does (oneup/engine/steps.py,
+  repos.py, __main__.py): dup --allow-vendor-change on Tumbleweed;
+  ONEUP-0094's CDN retry when mirror routing fails a download; a
+  per-repository refresh bounded by timeout, with a broken repository
+  skipped for the run and restored after; a named snapper snapshot
+  with its rollback number; reboot advice and services to restart;
+  plain hints for disk full, GPG keys and conflicts. Known PackageKit
+  gap: no vendor change. The rest not yet measured against
+  PackageKit. Leaning (to confirm in the design): PackageKit for the
+  check and the size, where nothing is installed; keep OneUp's own
+  path for the install so none of the above is lost.
   **Layman:** OneUp checks for updates and shows how big the download is without asking for your password, like openSUSE's own updater.
   Kind: feature.
   Source: user-request-2026-10-10.
