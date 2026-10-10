@@ -48,6 +48,14 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.4.7" date="2026-10-10">
+      <description>
+        <p>Release 1.4.7.</p>
+        <ul>
+          <li>The release build finishes again, so this version gets a GitHub release page and an AppImage</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.4.6" date="2026-10-08">
       <description>
         <p>Release 1.4.6.</p>

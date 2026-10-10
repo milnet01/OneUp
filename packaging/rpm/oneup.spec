@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.4.6
+Version:        1.4.7
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -74,6 +74,8 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Sat Oct 10 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.7-0
+- The release build finishes again, so this version gets a GitHub release page and an AppImage
 * Thu Oct 08 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.6-0
 - The words on the progress bar are readable again where the bar is filled.
 - The Stop button greys out while packages install
