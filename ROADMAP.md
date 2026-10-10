@@ -7502,6 +7502,15 @@ when complete (that document's §7).
   design must say how that path gets it. Placed in 2.1 by the
   2026-09-18 rule (a feature raised after 2.0's list closed).
   Supersedes ONEUP-0248.
+  Decided (user, 2026-10-10): a second service beside PackageKit, not
+  a replacement. Offered the replacement; declined after the cost was
+  shown (Discover and its notifier, PackageKit-gstreamer-plugin and
+  simple-scan depend on it here; 46 members on its main D-Bus object).
+  The service serves OneUp only. To apply updates it stops packagekit
+  first, as the engine does today (repos.release_zypper_lock, systemctl
+  stop packagekit). Design must note packagekitd is D-Bus activated, so
+  Discover can start it again mid-run; the zypp lock should then make
+  it wait, which the spec should confirm.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
