@@ -7300,7 +7300,7 @@ when complete (that document's §7).
   Source: user-screenshot-2026-10-10.
   Lanes: gui.
 
-- 📋 [ONEUP-0248] **Check for updates and show the download size without a password, the way Discover does, through PackageKit.**
+- 🚫 [ONEUP-0248] **Check for updates and show the download size without a password, the way Discover does, through PackageKit.**
   User question, 2026-10-10: Discover checks automatically and shows
   sizes (Flatpak too) with no password; OneUp asks for one.
   Research (2026-10-10, upstream source plus this machine): Discover
@@ -7348,6 +7348,8 @@ when complete (that document's §7).
   PackageKit. Leaning (to confirm in the design): PackageKit for the
   check and the size, where nothing is installed; keep OneUp's own
   path for the install so none of the above is lost.
+  Superseded (user, 2026-10-10) by ONEUP-0249: OneUp's own system
+  service instead of PackageKit. The research above carries over.
   **Layman:** OneUp checks for updates and shows how big the download is without asking for your password, like openSUSE's own updater.
   Kind: feature.
   Source: user-request-2026-10-10.
@@ -7478,3 +7480,30 @@ when complete (that document's §7).
   **Layman:** Every colour theme currently highlights in the same blue; each should highlight in its own colour.
   Kind: ux.
   Source: user decision 2026-09-02, arising from ONEUP-0179.
+
+- 📋 [ONEUP-0249] **A OneUp system service, installed with OneUp, that checks, sizes and installs updates for authorised users without a password prompt.**
+  Decided (user, 2026-10-10): build our own root service rather than
+  use the existing Passwordless setting (ONEUP-0023) or PackageKit,
+  after both were offered. PackageKit stays installed for Discover.
+  The service must keep everything OneUp's system step does today
+  (vendor change for Packman, ONEUP-0094 download rescue, repository
+  skip-and-restore, named snapshot, reboot advice, plain failure
+  hints; see ONEUP-0248's notes) and may refresh the update lists in
+  the background so Check is never stale.
+  User's security brief: only authorised individuals may update, plus
+  whatever hardening the design finds. Starting points: polkit action
+  per operation (query, size, install) with a OneUp-owned group;
+  a narrow D-Bus API with no arbitrary package names or commands;
+  systemd sandboxing; audit log of who ran what; shares the zypp lock
+  with packagekitd.
+  Needs a spec (spec-format.md section 1: security boundary, several
+  subsystems, hard to reverse) and review-contract before building.
+  Open: AppImage cannot install a system service by itself; the
+  design must say how that path gets it. Placed in 2.1 by the
+  2026-09-18 rule (a feature raised after 2.0's list closed).
+  Supersedes ONEUP-0248.
+  **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
+  Kind: feature.
+  Source: user-decision-2026-10-10.
+  Lanes: engine, gui, packaging, security.
+  Supersedes: ONEUP-0248.
