@@ -81,17 +81,6 @@ All notable changes to OneUp are documented here. The format follows
   waits for that check to finish, it says what it is waiting for and
   how long it has waited so far.
 
-- **The Stop button greys out while packages install** (ONEUP-0095)
-  Installing packages cannot be stopped safely part-way, so a click on
-  Stop then did nothing until the step ended. Stop now greys out while
-  packages install, says why when you point at it, and comes back as
-  soon as the step finishes.
-
-- **An update that first updated zypper itself now finishes the rest** (ONEUP-0234)
-  When zypper updates itself it asks to be run again for the remaining
-  updates. OneUp now does that once, instead of stopping there with
-  the rest of the update not installed.
-
 - **A weekly update you stopped no longer says "Already up to date"** (ONEUP-0074)
   It now says the update was stopped and points at the log. A weekly
   check that could not read a software source now says so, instead of
@@ -107,112 +96,6 @@ All notable changes to OneUp are documented here. The format follows
   The date on the last-run line always showed the English month name,
   whatever language your computer uses. It now uses your language's, in
   the same day, month, year order as before.
-
-- **An update that stops on a package conflict now says so** (ONEUP-0227)
-  When the package manager could not work out how to update because of
-  a conflict, often caused by a third-party source, OneUp showed no
-  explanation. It now gives the same advice as for other conflicts:
-  check the log, and you may need to turn off the conflicting source.
-
-- **OneUp no longer claims it kept downloaded packages when nothing was downloaded** (ONEUP-0228)
-  After a failed update OneUp kept the downloaded packages for a retry
-  and said so, even when the update failed before anything had
-  downloaded. It now keeps them, and says so, only when a download had
-  actually started; otherwise it cleans up as normal.
-
-- **"Restart services" now tells you whether it worked** (ONEUP-0229)
-  Clicking "Restart services" gave no sign of what happened. A short
-  message now says the services were restarted, or why they were not,
-  for example that the password prompt was closed.
-
-- **The window no longer blames the server when an update is just busy writing to a slow disk** (ONEUP-0232)
-  When a step went quiet for a while, the window always said the server
-  might have stalled. That was wrong when nothing was downloading, for
-  example while Flatpak installed an app onto a busy disk. The window now
-  blames the server only while it knows a download is going on, and
-  otherwise says the update is still working.
-
-- **A run started from a terminal no longer asks for the password again, unseen, after five minutes** (ONEUP-0231)
-  When OneUp's updater was started from a terminal window, the helper
-  that keeps your password remembered was refreshing the wrong record.
-  After five minutes the real one ran out, and the next step that needed
-  it asked for the password in the terminal and waited there for five
-  minutes. The helper now stays with the terminal, so one password still
-  covers the whole run.
-
-- **A full or read-only disk, or a damaged settings value, no longer breaks OneUp's window** (ONEUP-0184)
-  If the disk filled up while OneUp saved a file, the file could be left
-  half-written, and a damaged saved window size could stop OneUp or the
-  software sources window from opening. If OneUp can't write its logs, it
-  now says so and leaves everything as it was, instead of leaving buttons
-  stuck. Files are now saved whole or not at all.
-
-- **A tall window, such as the software sources manager, no longer opens with its top off the screen on X11** (ONEUP-0181)
-  OneUp centres each window over the main one. On X11 a window taller
-  than the main one could end up with its title bar above the top of the
-  screen. It is now kept on screen, as it already was on Wayland. OneUp
-  also asks Qt which kind of desktop session it is in, instead of
-  trusting a setting that is sometimes missing.
-
-- **Turning on automatic updates right after opening OneUp no longer switches itself back off** (ONEUP-0178)
-  If you turned it on while OneUp was still checking the password
-  setting it found at startup, OneUp used that older answer, decided the
-  password setting was off, and turned automatic updates back off. It
-  now waits for a fresh answer.
-
-- **"Copy diagnostics" no longer mangles the report on a computer with a short name** (ONEUP-0159)
-  OneUp hides your computer's name before you share the report. On a
-  computer called something like "oss", it also changed every "oss" in
-  the log, so "repo-oss" became "repo-<host>". It now hides the name only
-  where it appears on its own.
-
-- **Updating the OneUp AppImage no longer silently stops the weekly check, automatic updates or start-at-boot** (ONEUP-0158)
-  Each of those remembers the OneUp file that switched it on. Replacing
-  that file with a newer one left them pointing at a file that was gone,
-  while their toggles still read "on". OneUp now points them at itself
-  each time it opens.
-
-- **Removing leftover packages no longer fails on a package called "Name"** (ONEUP-0226)
-  OneUp read the heading of the package manager's list as a package,
-  tried to remove it, and marked the step failed even though the real
-  packages were removed. The count of packages with no active source
-  was also one too high. Both now read only the list's rows.
-
-- **The Flatpak step no longer says "up to date" right after updating an app** (ONEUP-0146)
-  When one Flatpak source couldn't be read — a leftover from an app
-  installed from a file is enough — OneUp lost count of every other
-  source's updates. It now asks each source on its own, as OneUp's
-  read-only update check already did.
-
-- **"Show download size" no longer says "nothing to fetch" when part of the update is already downloaded** (ONEUP-0223)
-  When some packages were already downloaded, the package manager
-  reports the size in a different layout, and OneUp missed it. It
-  answered "nothing to fetch" and showed no total while downloading.
-  It now reads that layout and shows what is still to download.
-
-- **A safety snapshot that failed is no longer offered as this update's restore point** (ONEUP-0147)
-  If taking the snapshot before an update failed (a full disk, say), OneUp
-  used to offer the newest older snapshot as this update's restore point,
-  and rolling back to it would have undone more than this update. Now it
-  says no snapshot was taken and offers none.
-
-- **Tidying old snapshots no longer says there was nothing to tidy when it failed** (ONEUP-0189)
-  If the snapshot tool could not run, OneUp reported that no snapshots
-  needed removing. It now says it couldn't read or clean up the snapshots,
-  and keeps the warning up so you can try again.
-
-- **Sizes use the right unit names, and an unknown result no longer shows as Done** (ONEUP-0190)
-  Download sizes are measured in binary units and are now labelled that
-  way (MiB, GiB), matching the package manager's own log. A step result
-  OneUp does not recognise now shows "Result unknown" instead of "Done".
-
-- **The Repositories and Roll back windows say what actually changed** (ONEUP-0157)
-  If applying repository changes failed part-way, OneUp said they had
-  probably been cancelled and kept showing what you had asked for. It now
-  checks the machine and shows each repository as it really is. The last
-  copy of a duplicated repository can no longer be removed. A roll back
-  that fails, or that is set but cannot restart the computer, now says so
-  instead of saying nothing.
 
 - **The window can no longer stop following a run because of one odd character** (ONEUP-0153)
   A numeric field in an engine message was checked with a test that accepts
@@ -247,17 +130,6 @@ All notable changes to OneUp are documented here. The format follows
   half-way. One character the terminal could not display no longer made the
   window think the update had frozen. And a command that finished just as
   its time limit ran out is no longer reported as having timed out.
-
-- **Starting a second update no longer breaks the Stop button of the first** (ONEUP-0145)
-  If an update was already running and another was started (say, from a
-  terminal), both claimed the same record and the first to finish deleted
-  it, so Stop stopped working for the other. A second update now says one
-  is already running and changes nothing.
-
-- **The window can no longer catch the run record half-written** (ONEUP-0177)
-  The small file that tells the window an update is running is now written
-  in one step, so a window opening at that moment cannot mistake it for no
-  update at all.
 
 - **A bad keep-alive interval no longer makes the engine spin** (ONEUP-0175)
   An invalid ONEUP_KEEPALIVE_SECONDS used to make the credential keep-alive
@@ -366,10 +238,6 @@ All notable changes to OneUp are documented here. The format follows
   Turning on passwordless updates now writes its permission for the account
   you are actually signed in as, even if the environment claims otherwise.
 
-- **Software-source names are checked before any root command sees them** (ONEUP-0144)
-  A software source with an unsafe name is now refused with a message,
-  instead of being passed to the package manager as administrator.
-
 - **Package names from the system are checked before reaching a privileged removal** (ONEUP-0171)
   The list of leftover packages is parsed out of another tool's output, and was
   handed to a privileged removal command without being checked. It is now
@@ -381,6 +249,164 @@ All notable changes to OneUp are documented here. The format follows
   time without the build noticing. Each is now named by its exact contents. The
   build also no longer keeps its access token lying around after it has finished
   checking out the code.
+
+## [1.4.7] - 2026-10-10
+
+### Fixed
+
+- **The release build finishes again, so this version gets a GitHub release page and an AppImage** (ONEUP-0243)
+  1.4.6's build froze on one test that behaved differently on the
+  older Linux the build machine uses, so 1.4.6 never appeared on
+  GitHub. The app itself is unchanged from 1.4.6; only that test was
+  fixed.
+
+## [1.4.6] - 2026-10-08
+
+### Fixed
+
+- **The words on the progress bar are readable again where the bar is filled.** (ONEUP-0214)
+  They were pale grey on bright blue in the dark theme, and white on
+  white in high contrast. They now turn dark wherever the bar has
+  filled, and keep their usual colour on the empty part.
+
+- **The Stop button greys out while packages install** (ONEUP-0095)
+  Installing packages cannot be stopped safely part-way, so a click on
+  Stop then did nothing until the step ended. Stop now greys out while
+  packages install, says why when you point at it, and comes back as
+  soon as the step finishes.
+
+- **An update that first updated zypper itself now finishes the rest** (ONEUP-0234)
+  When zypper updates itself it asks to be run again for the remaining
+  updates. OneUp now does that once, instead of stopping there and
+  reporting the step as failed.
+
+- **An update that stops on a package conflict now says so** (ONEUP-0227)
+  When the package manager could not work out how to update because of
+  a conflict, often caused by a third-party source, OneUp showed no
+  explanation. It now gives the same advice as for other conflicts:
+  check the log, and you may need to turn off the conflicting source.
+
+- **OneUp no longer claims it kept downloaded packages when nothing was downloaded** (ONEUP-0228)
+  After a failed update OneUp kept the downloaded packages for a retry
+  and said so, even when the update failed before anything had
+  downloaded. It now keeps them, and says so, only when a download had
+  actually started; otherwise it cleans up as normal.
+
+- **"Restart services" now tells you whether it worked** (ONEUP-0229)
+  Clicking "Restart services" gave no sign of what happened. A short
+  message now says the services were restarted, or why they were not,
+  for example that the password prompt was closed.
+
+- **The window no longer blames the server when an update is just busy writing to a slow disk** (ONEUP-0232)
+  When a step went quiet for a while, the window always said the server
+  might have stalled. That was wrong when nothing was downloading, for
+  example while Flatpak installed an app onto a busy disk. The window now
+  blames the server only while it knows a download is going on, and
+  otherwise says the update is still working.
+
+- **A run started from a terminal no longer asks for the password again, unseen, after five minutes** (ONEUP-0231)
+  When OneUp's updater was started from a terminal window, the helper
+  that keeps your password remembered was refreshing the wrong record.
+  After five minutes the real one ran out, and the next step that needed
+  it asked for the password in the terminal and waited there for five
+  minutes. The helper now stays with the terminal, so one password still
+  covers the whole run.
+
+- **A full or read-only disk, or a damaged settings value, no longer breaks OneUp's window** (ONEUP-0184)
+  If the disk filled up while OneUp saved a file, the file could be left
+  half-written, and a damaged saved window size could stop OneUp or the
+  software sources window from opening. If OneUp can't write its logs, it
+  now says so and leaves everything as it was, instead of leaving buttons
+  stuck. Files are now saved whole or not at all.
+
+- **A tall window, such as the software sources manager, no longer opens with its top off the screen on X11** (ONEUP-0181)
+  OneUp centres each window over the main one. On X11 a window taller
+  than the main one could end up with its title bar above the top of the
+  screen. It is now kept on screen, as it already was on Wayland. OneUp
+  also asks Qt which kind of desktop session it is in, instead of
+  trusting a setting that is sometimes missing.
+
+- **Turning on automatic updates right after opening OneUp no longer switches itself back off** (ONEUP-0178)
+  If you turned it on while OneUp was still checking the password
+  setting it found at startup, OneUp used that older answer, decided the
+  password setting was off, and turned automatic updates back off. It
+  now waits for a fresh answer.
+
+- **"Copy diagnostics" no longer mangles the report on a computer with a short name** (ONEUP-0159)
+  OneUp hides your computer's name before you share the report. On a
+  computer called something like "oss", it also changed every "oss" in
+  the log, so "repo-oss" became "repo-<host>". It now hides the name only
+  where it appears on its own.
+
+- **Updating the OneUp AppImage no longer silently stops the weekly check, automatic updates or start-at-boot** (ONEUP-0158)
+  Each of those remembers the OneUp file that switched it on. Replacing
+  that file with a newer one left them pointing at a file that was gone,
+  while their toggles still read "on". OneUp now points them at itself
+  each time it opens.
+
+- **Removing leftover packages no longer fails on a package called "Name"** (ONEUP-0226)
+  OneUp read the heading of the package manager's list as a package,
+  tried to remove it, and marked the step failed even though the real
+  packages were removed. The count of packages with no active source
+  was also one too high. Both now read only the list's rows.
+
+- **The Flatpak step no longer says "up to date" right after updating an app** (ONEUP-0146)
+  When one Flatpak source couldn't be read — a leftover from an app
+  installed from a file is enough — OneUp lost count of every other
+  source's updates. It now asks each source on its own, as OneUp's
+  read-only update check already did.
+
+- **"Show download size" no longer says "nothing to fetch" when part of the update is already downloaded** (ONEUP-0223)
+  When some packages were already downloaded, the package manager
+  reports the size in a different layout, and OneUp missed it. It
+  answered "nothing to fetch" and showed no total while downloading.
+  It now reads that layout and shows what is still to download.
+
+- **Firmware is no longer reported as up to date when OneUp couldn't ask** (ONEUP-0166)
+  If the firmware tool failed to answer, OneUp said your firmware was
+  current. Now the update check says it couldn't check firmware, and an
+  update run marks the firmware step as failed.
+
+- **A safety snapshot that failed is no longer offered as this update's restore point** (ONEUP-0147)
+  If taking the snapshot before an update failed (a full disk, say), OneUp
+  used to offer the newest older snapshot as this update's restore point,
+  and rolling back to it would have undone more than this update. Now it
+  says no snapshot was taken and offers none.
+
+- **Tidying old snapshots no longer says there was nothing to tidy when it failed** (ONEUP-0189)
+  If the snapshot tool could not run, OneUp reported that no snapshots
+  needed removing. It now says it couldn't read or clean up the snapshots,
+  and keeps the warning up so you can try again.
+
+- **Sizes use the right unit names, and an unknown result no longer shows as Done** (ONEUP-0190)
+  Download sizes are measured in binary units and are now labelled that
+  way (MiB, GiB), matching the package manager's own log. A step result
+  OneUp does not recognise now shows "Result unknown" instead of "Done".
+
+- **The Repositories and Roll back windows say what actually changed** (ONEUP-0157)
+  If applying repository changes failed part-way, OneUp said they had
+  probably been cancelled and kept showing what you had asked for. It now
+  checks the machine and shows each repository as it really is. The last
+  copy of a duplicated repository can no longer be removed. A roll back
+  that fails, or that is set but cannot restart the computer, now says so
+  instead of saying nothing.
+
+- **Starting a second update no longer breaks the Stop button of the first** (ONEUP-0145)
+  If an update was already running and another was started (say, from a
+  terminal), both claimed the same record and the first to finish deleted
+  it, so Stop stopped working for the other. A second update now says one
+  is already running and changes nothing.
+
+- **The window can no longer catch the run record half-written** (ONEUP-0177)
+  The small file that tells the window an update is running is now written
+  in one step, so a window opening at that moment cannot mistake it for no
+  update at all.
+
+### Security
+
+- **Software-source names are checked before any root command sees them** (ONEUP-0144)
+  A software source with an unsafe name is now refused with a message,
+  instead of being passed to the package manager as administrator.
 
 ## [1.4.5] - 2026-08-19
 
@@ -839,7 +865,9 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.5...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.7...HEAD
+[1.4.7]: https://github.com/milnet01/OneUp/releases/tag/v1.4.7
+[1.4.6]: https://github.com/milnet01/OneUp/releases/tag/v1.4.6
 [1.4.5]: https://github.com/milnet01/OneUp/releases/tag/v1.4.5
 [1.4.4]: https://github.com/milnet01/OneUp/releases/tag/v1.4.4
 [1.4.3]: https://github.com/milnet01/OneUp/releases/tag/v1.4.3

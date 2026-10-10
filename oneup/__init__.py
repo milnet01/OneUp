@@ -8,5 +8,5 @@ GUI toolkit installed (`docs/standards/files-and-naming.md` §4.1 rule 2).
 
 APP_ID = "za.co.antsprojectshub.OneUp"
 APP_NAME = "OneUp"
-APP_VERSION = "1.4.5"
+APP_VERSION = "1.4.7"
 REPO_SLUG = "milnet01/OneUp"

@@ -5708,6 +5708,32 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Source: user-real-run-2026-10-08.
   Lanes: gui, theme.
 
+## 1.4.7 — release-build fix
+
+- ✅ [ONEUP-0243] **Make the keep-alive terminal test run on Ubuntu 22.04, so the release build finishes.**
+  The 1.4.6 tag's Release workflow (run 37813657203) hung in "Run engine
+  tests" on the scenario "the keep-alive shares the engine's terminal
+  session but has its own group" (added by ONEUP-0231) and was cancelled
+  at the six-hour job limit. No GitHub release or AppImage exists for
+  1.4.6; OBS built it from source.
+
+  Cause, reproduced in an ubuntu:22.04 container: util-linux 2.37's
+  `script` ignores a command after `--` and opens an interactive $SHELL,
+  which never exits. The `script -qec "<command>" /dev/null` form runs
+  the command there. Fix: the scenario wraps the engine in a helper that
+  passes the quoted command to `script -c`, under `timeout 60`. The
+  engine suite then ran 336 passed, 0 failed in ubuntu:22.04.
+
+  The same scenario exists on v2 and gets the same fix after the merge.
+  Shipped 2026-10-10 in 1.4.7 (main 4df1778, release 1b737ac, tag
+  v1.4.7; OBS revision 25). The Release workflow (run 38035662291)
+  finished and published the v1.4.7 release with OneUp-x86_64.AppImage.
+  Merged into v2; v2's local-CI green (run-tests 422/0, all six version
+  sites 1.4.7). v1.4.6 stays a tag with no GitHub release.
+  **Layman:** GitHub's 1.4.6 release build froze on one test, so no 1.4.6 release page or AppImage was published; this fixes the test and ships them as 1.4.7.
+  Kind: test.
+  Source: in-session-2026-10-10.
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of

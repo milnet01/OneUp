@@ -2861,7 +2861,15 @@ exec "$d/sudo-inner" "\$@"
 EOF
 chmod +x "$d/sudo" "$d/zypper"
 saved_cmd=("${ENGINE_CMD[@]}")
-ENGINE_CMD=(script -qe /dev/null -- "${saved_cmd[@]}")
+# The command goes to `script -c` as one quoted string. Ubuntu 22.04's util-linux
+# (2.37) ignores a command after `--` and opens an interactive shell that waits
+# forever, which hung the 1.4.6 release build for six hours. `timeout` bounds a repeat.
+cat > "$d/in-tty" <<'EOF'
+#!/usr/bin/env bash
+exec timeout 60 script -qec "$(printf '%q ' "$@")" /dev/null
+EOF
+chmod +x "$d/in-tty"
+ENGINE_CMD=("$d/in-tty" "${saved_cmd[@]}")
 run_engine "$d" --steps=system >/dev/null 2>&1 </dev/null
 ENGINE_CMD=("${saved_cmd[@]}")
 calls=$(cat "$d/sudo-calls.log" 2>/dev/null)

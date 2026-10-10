@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.4.5
+Version:        1.4.7
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -94,6 +94,33 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Sat Oct 10 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.7-0
+- The release build finishes again, so this version gets a GitHub release page and an AppImage
+* Thu Oct 08 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.6-0
+- The words on the progress bar are readable again where the bar is filled.
+- The Stop button greys out while packages install
+- An update that first updated zypper itself now finishes the rest
+- An update that stops on a package conflict now says so
+- OneUp no longer claims it kept downloaded packages when nothing was downloaded
+- "Restart services" now tells you whether it worked
+- The window no longer blames the server when an update is just busy writing to a slow disk
+- A run started from a terminal no longer asks for the password again, unseen, after five minutes
+- A full or read-only disk, or a damaged settings value, no longer breaks OneUp's window
+- A tall window, such as the software sources manager, no longer opens with its top off the screen on X11
+- Turning on automatic updates right after opening OneUp no longer switches itself back off
+- "Copy diagnostics" no longer mangles the report on a computer with a short name
+- Updating the OneUp AppImage no longer silently stops the weekly check, automatic updates or start-at-boot
+- Removing leftover packages no longer fails on a package called "Name"
+- The Flatpak step no longer says "up to date" right after updating an app
+- "Show download size" no longer says "nothing to fetch" when part of the update is already downloaded
+- Firmware is no longer reported as up to date when OneUp couldn't ask
+- A safety snapshot that failed is no longer offered as this update's restore point
+- Tidying old snapshots no longer says there was nothing to tidy when it failed
+- Sizes use the right unit names, and an unknown result no longer shows as Done
+- The Repositories and Roll back windows say what actually changed
+- Starting a second update no longer breaks the Stop button of the first
+- The window can no longer catch the run record half-written
+- Software-source names are checked before any root command sees them
 * Wed Aug 19 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.5-0
 - Offers the restart instead of telling you one is needed
 * Tue Aug 18 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.4-0
