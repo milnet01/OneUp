@@ -5782,6 +5782,9 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   green (main gui-smoke 401/0, v2 657/0 and 658/0 right-to-left).
   Trailer clip5 re-shot from the fixed code and handed to the website
   session. Ships to users with 1.4.8.
+  Owed on release (2026-10-10): the ants-projects-hub-website session
+  keeps the current trailer and will re-render it with the re-shot
+  clip5 once 1.4.8 is published. Tell that session when 1.4.8 is out.
   **Layman:** Three buttons showed a stray underline where an "&" belongs, such as "Roll back _reboot".
   Kind: fix.
   Source: peer-report-ants-projects-hub-website-2026-10-10.
