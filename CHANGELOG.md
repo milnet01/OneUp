@@ -76,6 +76,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Three buttons showed a stray underline where an "&" belongs** (ONEUP-0251)
+  "Roll back & reboot", "Import signing key & retry" and "Skip … &
+  update the rest" now read as written, instead of "Roll back _reboot"
+  and the like.
+
 - **The window opens where you last left it, including after a restart, on KDE Wayland** (ONEUP-0246)
   Wayland never tells an app where its window is, so OneUp now asks
   KDE for the position when the window hides or quits, and asks KDE to
