@@ -7200,6 +7200,18 @@ when complete (that document's §7).
   Source: user-real-run-2026-10-08.
   Lanes: engine, gui.
 
+- 📋 [ONEUP-0244] **Run v2's full suites on Ubuntu 22.04 before the 2.0 release build.**
+  The release workflow builds and tests on ubuntu-22.04. 1.4.6's build
+  hung there for six hours because a test drove a tool (util-linux
+  `script`) whose older version behaves differently (ONEUP-0243). v2
+  has no CI on push, so its Python engine and window suites have never
+  run on 22.04. Run them in an ubuntu:22.04 container (the same way
+  ONEUP-0243 was proved) before tagging 2.0.0, and fix anything that
+  assumes a newer tool or Python.
+  **Layman:** Check the new 2.0 app passes its tests on the older Linux that GitHub builds releases on, so the 2.0 release doesn't stall the way 1.4.6 did.
+  Kind: test.
+  Source: in-session-2026-10-10.
+
 ## 2.1.0 — after 2.0
 
 **Theme:** features raised after 2.0's list closed. They wait for 2.0.0 to ship
