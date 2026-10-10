@@ -5747,6 +5747,26 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: test.
   Source: in-session-2026-10-10.
 
+## 1.4.8 — fixes to the released app
+
+- 🚧 [ONEUP-0251] **Button labels with a lone "&" draw an underline instead: "Roll back _reboot", "Import signing key _retry", "Skip … _update the rest".**
+  Reported 2026-10-10 by the website session from OneUp's trailer
+  footage. In a Qt button a lone "&" marks the next character as the
+  keyboard shortcut and is not drawn; "&&" draws one "&". Affects the
+  restore-point dialog's button, the signing-key remedy button (both
+  banner slots) and both forms of the skip-source remedy, on main and
+  v2. The source name in "Skip <name> && update the rest" is escaped
+  too, so a name holding "&" shows it. Engine hint prose shown in a
+  QLabel is not affected and stays as written.
+  Fixed on main: gui-smoke checks the labels as drawn (_shown); red
+  396/5 before, green 401/0 after; main local-CI green. Owed: the same
+  fix on v2 (oneup/gui/rollback.py, run.py) through the merge, and a
+  re-shot trailer clip5 for the website session.
+  **Layman:** Three buttons showed a stray underline where an "&" belongs, such as "Roll back _reboot".
+  Kind: fix.
+  Source: peer-report-ants-projects-hub-website-2026-10-10.
+  Lanes: gui.
+
 ## 2.0.0 — the rewrite
 
 **Theme:** the Python engine, the split window and the rest of

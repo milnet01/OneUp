@@ -136,6 +136,13 @@ PASS = 0
 FAIL = 0
 
 
+def _drawn(text: str) -> str:
+    """A button label as Qt draws it: "&&" is a literal ampersand, and a lone "&" marks
+    the next character as the keyboard shortcut and is not drawn — so "Roll back &
+    reboot" showed as "Roll back _reboot" (ONEUP-0251)."""
+    return re.sub(r"&(.)", r"\1", text)
+
+
 def check(name: str, cond: bool):
     global PASS, FAIL
     if cond:
@@ -800,6 +807,8 @@ def main() -> int:
     check("picker pre-selects the pre-update snapshot", dlg.selected_id() == "100")
     dlg.list.setCurrentRow(dlg.list.count() - 1)   # choose the oldest listed
     check("picker returns the chosen snapshot id", dlg.selected_id() == "98")
+    check("the rollback button reads \"Roll back & reboot\", not a mnemonic underline",
+          any(_drawn(b.text()) == "Roll back & reboot" for b in dlg.findChildren(QPushButton)))
     dlg.reject()
 
     # --- 3. on_finished promotes the accumulated state into the right banners ---
@@ -2199,7 +2208,7 @@ def main() -> int:
     w.proc = QProcess(w)
     run.on_finished(w, 1, QProcess.ExitStatus.NormalExit)
     check("warn button offers the key-import fix",
-          w.warn_btn.text() == "Import signing key & retry")
+          _drawn(w.warn_btn.text()) == "Import signing key & retry")
 
     launched = {}
     _patch(run, "_launch",
@@ -2599,10 +2608,10 @@ def main() -> int:
         w2.proc = QProcess(w2)
         run.on_finished(w2, 1, QProcess.ExitStatus.NormalExit)
         check("both remedies armed: primary button is the named skip action",
-              w2.warn_btn.text() == "Skip Google Chrome & update the rest")
+              _drawn(w2.warn_btn.text()) == "Skip Google Chrome & update the rest")
         check("both remedies armed: second button offers the key-import fix",
               w2.warn_btn2.isVisibleTo(w2.warn_banner)
-              and w2.warn_btn2.text() == "Import signing key & retry")
+              and _drawn(w2.warn_btn2.text()) == "Import signing key & retry")
 
         # The second button still goes through the same warned confirmation as
         # the single-remedy import-keys path (mirrors _fix_keys_and_retry's guard).
@@ -2624,7 +2633,7 @@ def main() -> int:
         w3.proc = QProcess(w3)
         run.on_finished(w3, 1, QProcess.ExitStatus.NormalExit)
         check("import-keys only: warn button keeps the original single-action text",
-              w3.warn_btn.text() == "Import signing key & retry")
+              _drawn(w3.warn_btn.text()) == "Import signing key & retry")
         check("import-keys only: second banner button stays hidden",
               not w3.warn_btn2.isVisibleTo(w3.warn_banner))
     finally:

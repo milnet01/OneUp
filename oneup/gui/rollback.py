@@ -72,7 +72,7 @@ class RollbackDialog(QDialog):
         btns = QHBoxLayout(strip)
         btns.setContentsMargins(0, 0, 0, 0)
         btns.addStretch(1)
-        ok = QPushButton(QCoreApplication.translate("rollback", "Roll back & reboot"))
+        ok = QPushButton(QCoreApplication.translate("rollback", "Roll back && reboot"))
         ok.setObjectName("RunBtn")
         ok.clicked.connect(self.accept)
         cancel = QPushButton(QCoreApplication.translate("rollback", "Cancel"))

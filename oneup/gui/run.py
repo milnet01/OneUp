@@ -1123,16 +1123,17 @@ def on_finished(win, exit_code: int, _status):
         if win._remedy_skips:
             if len(win._remedy_skips) == 1:
                 win.warn_btn.setText(
-                    QCoreApplication.translate("run", "Skip {source} & update the rest").format(
-                        source=banners._repo_display_name(win._remedy_skips[0])))
+                    # "&&" draws one "&"; a lone "&" is a mnemonic (ONEUP-0251).
+                    QCoreApplication.translate("run", "Skip {source} && update the rest").format(
+                        source=banners._repo_display_name(win._remedy_skips[0]).replace("&", "&&")))
             else:
                 win.warn_btn.setText(
-                    QCoreApplication.translate("run", "Skip {count} sources & update the rest")
+                    QCoreApplication.translate("run", "Skip {count} sources && update the rest")
                     .format(count=len(win._remedy_skips)))
         elif win._remedy_keys:
-            win.warn_btn.setText(QCoreApplication.translate("run", "Import signing key & retry"))
+            win.warn_btn.setText(QCoreApplication.translate("run", "Import signing key && retry"))
         if both_armed:
-            win.warn_btn2.setText(QCoreApplication.translate("run", "Import signing key & retry"))
+            win.warn_btn2.setText(QCoreApplication.translate("run", "Import signing key && retry"))
             win.warn_btn2.setVisible(True)
 
     # Retry now lives INSIDE the warning banner (ONEUP-0064), so the banner's
