@@ -7287,6 +7287,21 @@ when complete (that document's §7).
   hand on the user's machine before building it in. Also: geometry is
   saved only in closeEvent, so Quit from the tray (QApplication.quit)
   never saves it.
+  Measured 2026-10-10 on the live Plasma 6.7.5 Wayland session, no user
+  needed (LWSM's method: run a window, ask KWin by script, read the
+  journal). A OneUp rule already exists in ~/.config/kwinrulesrc
+  (position and size = Remember, written by hand 2026-07-21,
+  position=100,100). A probe window with OneUp's desktop file name,
+  moved by script to 333,222 and closed, reopened at 333,222, and a
+  fresh process opened there too: KWin remembers, but only in memory.
+  kwinrulesrc was not written on close, on destroy or on exit, and has
+  not changed since 2026-07-21. After a reboot KWin reads 100,100 from
+  disk, which is the off-centre spot the user reports. Size was not
+  applied either (500x428 window, rule says 560x760). So the chosen
+  rule route does not survive a reboot here. Back to the user with the
+  alternative: OneUp asks KWin for its frame at hide and quit, saves
+  it, and replays it at show (LWSM's timing: first Expose plus one
+  tick, 50 ms fallback).
   **Layman:** After a restart, OneUp should open in the middle of the screen without you having to move it.
   Kind: fix.
   Source: user-report-2026-10-10.
