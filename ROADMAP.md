@@ -7255,10 +7255,65 @@ when complete (that document's §7).
   instead centres on every first show after 150 ms. No project records
   a reboot-specific cause. Open choice for the user: always centre
   (Ants_Terminal) or restore the last position (LWSM).
+  Decided (user, 2026-10-10): open where it was last left, size
+  included. On Wayland the app cannot read its own position (LWSM
+  ADR-0007; Qt reports 0,0), so the chosen route is a KWin window rule
+  for OneUp with position and size set to Remember, written once by
+  OneUp (kwinrulesrc, then KWin reconfigure). Rejected: OneUp asking
+  KWin for the position at hide/close and replaying it (more code, a
+  new D-Bus channel); size only (not what was asked). Test the rule by
+  hand on the user's machine before building it in. Also: geometry is
+  saved only in closeEvent, so Quit from the tray (QApplication.quit)
+  never saves it.
   **Layman:** After a restart, OneUp should open in the middle of the screen without you having to move it.
   Kind: fix.
   Source: user-report-2026-10-10.
   Lanes: gui.
+
+- 📋 [ONEUP-0247] **Message boxes opened with QMessageBox's static helpers skip centring, so on Wayland they land in the screen's corner.**
+  User screenshot, 2026-10-10: About, then Check for updates, showed
+  "You're on the latest version (1.4.7)." at the top-left of the screen,
+  away from the window. app_update.py calls QMessageBox.information(win,
+  ...) directly, so center_on_parent never runs; only boxes built by hand
+  (window.py show_about's box) go through _center_child. The static
+  helpers are used on both branches (git grep for
+  QMessageBox.information/warning/question/critical in updater.py on
+  main and oneup/gui on v2). gui-smoke's ONEUP-0034 INV-6 check covers
+  QDialog subclasses only, which is why it stayed green.
+  Fix on main first if it qualifies under workflow.md section 1, then
+  merge (memory: a fix goes to main by kind).
+  **Layman:** Small pop-up messages should appear over the OneUp window, not in the corner of the screen.
+  Kind: fix.
+  Source: user-screenshot-2026-10-10.
+  Lanes: gui.
+
+- 📋 [ONEUP-0248] **Check for updates and show the download size without a password, the way Discover does, through PackageKit.**
+  User question, 2026-10-10: Discover checks automatically and shows
+  sizes (Flatpak too) with no password; OneUp asks for one.
+  Research (2026-10-10, upstream source plus this machine): Discover
+  never runs zypper. It asks packagekitd (root) over D-Bus.
+  PackageKit's GetUpdates, GetDetails and GetUpdateDetail run no polkit
+  check (src/pk-transaction.c), and SIMULATE transactions skip
+  authorisation. openSUSE's standard polkit profile allows
+  system-sources-refresh for the active user. Measured as the user, no
+  prompt: pkcon get-updates found 24 Packman updates; a simulated
+  update_packages via PackageKitGlib summed download-size to
+  18,336,450 bytes. On Tumbleweed the zypp backend's update is a dup
+  (doUpgrade). Flatpak: flatpak remote-ls --updates
+  --columns=application,branch,download-size needs no root.
+  Found on the way: OneUp's --check reads zypper --no-refresh, so it
+  said 0 updates today until PackageKit's refresh updated the shared
+  cache; the check can be stale by days.
+  Catches: PackageKit's dup does not allow vendor change, OneUp's does,
+  so the quoted size can differ; packagekitd holds the zypp lock while
+  it works (idle exit 15 s here); a timer with no active session cannot
+  RefreshCache. Needs a design choice (and spec-format.md section 1):
+  it touches the engine's check and size actions, the hold (ONEUP-0044),
+  markers and the window.
+  **Layman:** OneUp checks for updates and shows how big the download is without asking for your password, like openSUSE's own updater.
+  Kind: feature.
+  Source: user-request-2026-10-10.
+  Lanes: engine, gui.
 
 ## 2.1.0 — after 2.0
 
