@@ -7186,6 +7186,15 @@ when complete (that document's §7).
   large text. Offered to sketch both for comparison.
   Spans the window's layout, the run view, theming and accessibility,
   and has a real design choice: apply spec-format.md section 1 first.
+  User direction, 2026-10-10: for 2.0.0, move away from the log-style
+  view altogether. Show the updates the way Discover does (each package
+  with its versions and size, a total), but not Discover's layout,
+  which the user finds boring. This replaces the tabbed-log idea above:
+  the details area becomes a structured package view, with the raw log
+  kept behind a link. Open for the design: where per-package download
+  sizes come from (zypper's dry run gives only a total; PackageKit and
+  libzypp know each package's size), and what the view shows while a
+  run is in progress. Sketches next, before any spec.
   **Layman:** Buttons and boxes stay put however much detail appears; each step gets its own progress bar and its own log tab.
   Kind: ux.
   Source: user-real-run-2026-10-08.
