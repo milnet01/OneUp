@@ -7205,6 +7205,20 @@ when complete (that document's §7).
   one package-and-progress model so each layout is only a view of it,
   and every layout carries the same accessibility and theme checks.
   Spec next (spec-format.md section 1).
+  User, 2026-10-10: clicking a package shows its details in a modal
+  dialog (Discover's inline panel moves things, which the user does not
+  want): what it is (About) and what changed (changelog), where
+  available. A package with neither shows no info button at all.
+  Measured here without root: zypper --no-refresh info gives summary,
+  description, upstream URL and installed size (libavcodec62 from
+  Packman). rpm --changelog gives the INSTALLED version's notes for
+  openSUSE packages (zypper has them) but nothing for Packman's
+  libavcodec62. The NEW version's notes are not cached (no other.xml in
+  /var/cache/zypp/raw); they need the downloaded rpm or the repo's
+  other.xml. The design must say which. Also: Discover's per-package
+  figures are INSTALLED sizes (libavcodec62: 14.8 MiB, matching
+  zypper's Installed Size), which explains its 48.5 MiB total against
+  zypper's 17.5 MiB download.
   **Layman:** Buttons and boxes stay put however much detail appears; each step gets its own progress bar and its own log tab.
   Kind: ux.
   Source: user-real-run-2026-10-08.
@@ -7312,6 +7326,17 @@ when complete (that document's §7).
   alternative: OneUp asks KWin for its frame at hide and quit, saves
   it, and replays it at show (LWSM's timing: first Expose plus one
   tick, 50 ms fallback).
+  Decided (user, 2026-10-10, replacing the same day's KWin-rule choice
+  after the measurement above): OneUp remembers its own place. At hide
+  and quit it asks KWin by script for its frame and reads the answer
+  from the journal (proven here: the 2026-07-23 probe and today's),
+  saves it, and at show asks KWin to put it back. Correction to what
+  the user was told: LWSM only does the PLACING half (showEvent, first
+  Expose plus one tick, 50 ms fallback, size in the script, clamp to
+  clientArea); it never reads a position under Wayland
+  (placement.position_is_readable) and keeps size and maximised state
+  only. The read-back half is OneUp's own and needs its own tests.
+  Also still owed: Quit from the tray saves nothing (closeEvent only).
   **Layman:** After a restart, OneUp should open in the middle of the screen without you having to move it.
   Kind: fix.
   Source: user-report-2026-10-10.
