@@ -6122,6 +6122,15 @@ when complete (that document's §7).
   engine). User decided 2026-10-08: keep this item open until 0238 is
   fixed and a run goes through the hold properly; this replaces the
   2026-10-07 decision to flip it on the next good run.
+  Real run 2026-10-10 (v2, 24 Packman updates): Show download size
+  (17.5 MiB, one prompt, log 143920) then Update installed all 24, all
+  five steps OK, no second prompt. NOT the confirming run: Update was
+  pressed about 4.5 minutes after the size check, past the hold's
+  HOLD_SECONDS ceiling (120 s), so a fresh engine ran (its own log,
+  144351) and sudo's still-warm credential is why no prompt came. The
+  hold was never adopted. Still owed: Update pressed within two minutes
+  of the size result; an adopted run continues in the size check's log
+  file. Stays open until then.
 
 - 🚧 [ONEUP-0057] **Write the OneUp 2.0 documentation set before any 2.0 code is written.**
   Agreed with the user 2026-07-26. Deliverables, in order: nine standards
@@ -7152,6 +7161,10 @@ when complete (that document's §7).
   The real Konsole run (size check, then Update) is still owed: on
   2026-10-08 the 94 waiting updates went to the 1.4.6 test on main
   instead, so it waits for the next batch of updates.
+  2026-10-10: the attempted confirming run missed the hold (Update
+  came about 4.5 minutes after the size check, past the 120 s ceiling);
+  see ONEUP-0054. Next try: press Update within two minutes, and check
+  that the run continues in the size check's log file.
   **Layman:** If you check the download size and then press Update, OneUp sits on "Working out the download size first" for up to two minutes and then asks for your password a second time.
   Kind: fix.
   Source: user-real-run-2026-10-08.
@@ -7310,6 +7323,19 @@ when complete (that document's §7).
   RefreshCache. Needs a design choice (and spec-format.md section 1):
   it touches the engine's check and size actions, the hold (ONEUP-0044),
   markers and the window.
+  User, 2026-10-10: also show each package's size, as Discover
+  does, not only the total. Asked whether Discover needs a password to
+  INSTALL updates. Measured on this machine (pkaction, polkit-default-
+  privs profiles): org.freedesktop.packagekit.system-update is
+  auth_admin_keep:auth_admin_keep:yes in the standard and easy
+  profiles (this machine runs "easy local"), so the active local user
+  updates with NO password; only the restrictive profile asks.
+  package-install (new packages) asks (auth_admin_keep). So a
+  passwordless Update through PackageKit is in scope too, for the
+  system step; orphans, cache, firmware and Flatpak need their own
+  checks. Discover's 48.5 MiB against zypper's 17.5 MiB for the same
+  24 updates is not yet explained (guess: full package size against
+  delta downloads; unverified).
   **Layman:** OneUp checks for updates and shows how big the download is without asking for your password, like openSUSE's own updater.
   Kind: feature.
   Source: user-request-2026-10-10.
