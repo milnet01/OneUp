@@ -4209,6 +4209,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: claude-config-request-2026-10-08.
   Lanes: docs.
 
+- 📋 [ONEUP-0250] **The "Show download size" link is nearly invisible on an opened System row (blue text on the light-blue tint).**
+  Seen 2026-10-10 on main (1.4.7, dark theme, text size Larger) while
+  recording trailer footage: the opened row's gradient tint is light
+  blue and the link keeps the normal link blue, so it reads as almost
+  no contrast (picture: /mnt/Games/Trailers/work/oneup/shot4.png, not
+  in the repo). Not yet measured with contrast.py, not yet checked on
+  v2 or the light theme. Placement (main for 1.4.x, or v2 only) waits
+  on that check: git grep the link's style on main first.
+  **Layman:** When you open the list of system updates, the link to show the download size is so faint it is almost impossible to read.
+  Kind: accessibility.
+  Source: in-session-2026-10-10.
+  Lanes: gui, theme.
+
 ## 1.4.6 — fixes to the released app
 
 **Theme:** fixes for the 1.4 app people use today, landed on `main`. No
