@@ -7355,6 +7355,50 @@ when complete (that document's §7).
   Source: user-request-2026-10-10.
   Lanes: engine, gui.
 
+- 📋 [ONEUP-0249] **A OneUp system service, installed with OneUp, that checks, sizes and installs updates for authorised users without a password prompt.**
+  Decided (user, 2026-10-10): build our own root service rather than
+  use the existing Passwordless setting (ONEUP-0023) or PackageKit,
+  after both were offered. PackageKit stays installed for Discover.
+  The service must keep everything OneUp's system step does today
+  (vendor change for Packman, ONEUP-0094 download rescue, repository
+  skip-and-restore, named snapshot, reboot advice, plain failure
+  hints; see ONEUP-0248's notes) and may refresh the update lists in
+  the background so Check is never stale.
+  User's security brief: only authorised individuals may update, plus
+  whatever hardening the design finds. Starting points: polkit action
+  per operation (query, size, install) with a OneUp-owned group;
+  a narrow D-Bus API with no arbitrary package names or commands;
+  systemd sandboxing; audit log of who ran what; shares the zypp lock
+  with packagekitd.
+  Needs a spec (spec-format.md section 1: security boundary, several
+  subsystems, hard to reverse) and review-contract before building.
+  Open: AppImage cannot install a system service by itself; the
+  design must say how that path gets it. First placed in 2.1 by the
+  2026-09-18 rule; moved to 2.0.0 the same day (below).
+  Supersedes ONEUP-0248.
+  Decided (user, 2026-10-10): a second service beside PackageKit, not
+  a replacement. Offered the replacement; declined after the cost was
+  shown (Discover and its notifier, PackageKit-gstreamer-plugin and
+  simple-scan depend on it here; 46 members on its main D-Bus object).
+  The service serves OneUp only. To apply updates it stops packagekit
+  first, as the engine does today (repos.release_zypper_lock, systemctl
+  stop packagekit). Design must note packagekitd is D-Bus activated, so
+  Discover can start it again mid-run; the zypp lock should then make
+  it wait, which the spec should confirm.
+  Decided (user, 2026-10-10): moved to 2.0.0. "v2.0.0 is supposed to
+  be a whole new way of running the app and the service falls within
+  that." This overrides docs/design/oneup-2.0.md section 1, whose list
+  closed when the engine rewrite started, and changes section 3 item 4
+  (the privilege split: the engine authenticates once). That design
+  document owes an amendment adding this item and the new boundary,
+  gated by review-contract, alongside this item's own spec. G7 then
+  waits on this item too.
+  **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
+  Kind: feature.
+  Source: user-decision-2026-10-10.
+  Lanes: engine, gui, packaging, security.
+  Supersedes: ONEUP-0248.
+
 ## 2.1.0 — after 2.0
 
 **Theme:** features raised after 2.0's list closed. They wait for 2.0.0 to ship
@@ -7480,39 +7524,3 @@ when complete (that document's §7).
   **Layman:** Every colour theme currently highlights in the same blue; each should highlight in its own colour.
   Kind: ux.
   Source: user decision 2026-09-02, arising from ONEUP-0179.
-
-- 📋 [ONEUP-0249] **A OneUp system service, installed with OneUp, that checks, sizes and installs updates for authorised users without a password prompt.**
-  Decided (user, 2026-10-10): build our own root service rather than
-  use the existing Passwordless setting (ONEUP-0023) or PackageKit,
-  after both were offered. PackageKit stays installed for Discover.
-  The service must keep everything OneUp's system step does today
-  (vendor change for Packman, ONEUP-0094 download rescue, repository
-  skip-and-restore, named snapshot, reboot advice, plain failure
-  hints; see ONEUP-0248's notes) and may refresh the update lists in
-  the background so Check is never stale.
-  User's security brief: only authorised individuals may update, plus
-  whatever hardening the design finds. Starting points: polkit action
-  per operation (query, size, install) with a OneUp-owned group;
-  a narrow D-Bus API with no arbitrary package names or commands;
-  systemd sandboxing; audit log of who ran what; shares the zypp lock
-  with packagekitd.
-  Needs a spec (spec-format.md section 1: security boundary, several
-  subsystems, hard to reverse) and review-contract before building.
-  Open: AppImage cannot install a system service by itself; the
-  design must say how that path gets it. Placed in 2.1 by the
-  2026-09-18 rule (a feature raised after 2.0's list closed).
-  Supersedes ONEUP-0248.
-  Decided (user, 2026-10-10): a second service beside PackageKit, not
-  a replacement. Offered the replacement; declined after the cost was
-  shown (Discover and its notifier, PackageKit-gstreamer-plugin and
-  simple-scan depend on it here; 46 members on its main D-Bus object).
-  The service serves OneUp only. To apply updates it stops packagekit
-  first, as the engine does today (repos.release_zypper_lock, systemctl
-  stop packagekit). Design must note packagekitd is D-Bus activated, so
-  Discover can start it again mid-run; the zypp lock should then make
-  it wait, which the spec should confirm.
-  **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
-  Kind: feature.
-  Source: user-decision-2026-10-10.
-  Lanes: engine, gui, packaging, security.
-  Supersedes: ONEUP-0248.
