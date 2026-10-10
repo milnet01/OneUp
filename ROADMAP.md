@@ -7195,6 +7195,16 @@ when complete (that document's §7).
   sizes come from (zypper's dry run gives only a total; PackageKit and
   libzypp know each package's size), and what the view shows while a
   run is in progress. Sketches next, before any spec.
+  Decided (user, 2026-10-10): build all three sketched layouts and
+  let the user pick one in Settings. Sketches:
+  https://claude.ai/artifact/Hyayn8bEhpqa3TFzRqHZXm (private). A, rows
+  plus a tabbed package list; B, a step rail with a package board and a
+  size-weighted bar; C, a big-type "now" spotlight with Up next and
+  Done lists. All three keep the toggles, the palette, a fixed layout
+  and the raw log behind a link. Design note: the three should share
+  one package-and-progress model so each layout is only a view of it,
+  and every layout carries the same accessibility and theme checks.
+  Spec next (spec-format.md section 1).
   **Layman:** Buttons and boxes stay put however much detail appears; each step gets its own progress bar and its own log tab.
   Kind: ux.
   Source: user-real-run-2026-10-08.
