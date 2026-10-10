@@ -6,6 +6,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The release build finishes again, so this version gets a GitHub release page and an AppImage** (ONEUP-0243)
+  1.4.6's build froze on one test that behaved differently on the
+  older Linux the build machine uses, so 1.4.6 never appeared on
+  GitHub. The app itself is unchanged from 1.4.6; only that test was
+  fixed.
+
 ## [1.4.6] - 2026-10-08
 
 ### Fixed
