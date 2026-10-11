@@ -1965,6 +1965,31 @@ def main() -> int:
     check("Settings dialog hosts the passwordless toggle", w.auth_btn in hosted)
     check("Settings dialog hosts the auto-update toggle", w.autoupdate_btn in hosted)
 
+    # --- The start-up version check can be switched off (ONEUP-0191) -------------
+    # OneUp asked GitHub for a newer version at every start, login included, with no
+    # way to decline. The switch defaults on; off, a new window must not ask.
+    check("Settings dialog hosts the new-version-check toggle", w.appcheck_btn in hosted)
+    _stub_check = app_update._check_app_update
+    asked = []
+    app_update._check_app_update = lambda self, manual=False: asked.append(manual)
+    try:
+        w.settings.remove("app_update_check")
+        w_on = window.Updater()
+        check("the new-version check defaults on, and a window started with it on asks",
+              w_on.appcheck_btn.isChecked() and asked == [False]
+              and w_on.appcheck_btn.text() == "New-version check: on")
+        w_on.appcheck_btn.setChecked(False)
+        check("switching the new-version check off is remembered",
+              w_on.settings.value("app_update_check", True, type=bool) is False
+              and w_on.appcheck_btn.text() == "New-version check: off")
+        asked.clear()
+        w_off = window.Updater()
+        check("a window started with the new-version check off does not ask GitHub",
+              not w_off.appcheck_btn.isChecked() and asked == [])
+    finally:
+        app_update._check_app_update = _stub_check
+        w.settings.remove("app_update_check")
+
     # --- coupling: auto-update never enables without passwordless ---------------
     # Stubbed so the checks below never block on a modal. Captured and restored at the
     # end of the block: every other module-level patch in this file is, and a dialog stub

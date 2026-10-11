@@ -8,6 +8,10 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **You can stop OneUp asking GitHub for a newer version as it starts** (ONEUP-0191)
+  A new "New-version check" switch in Settings, on by default. Off,
+  OneUp no longer contacts GitHub when it starts or at login; the
+  "Check for updates" button in About still works.
 - **OneUp is ready to be translated, including into right-to-left languages** (ONEUP-0032)
   Every sentence the window shows, speaks or sends as a notification
   can now be translated with a data file alone; OneUp itself still

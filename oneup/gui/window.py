@@ -327,6 +327,20 @@ class Updater(QMainWindow):
         self._refresh_contrast_label()
         self.contrast_btn.toggled.connect(self.on_contrast_toggled)
 
+        # Whether OneUp asks GitHub for a newer version as it starts — at login too,
+        # when it starts in the tray. On by default; the About dialog's button checks
+        # either way, because pressing it is the asking (ONEUP-0191).
+        self.appcheck_btn = QPushButton()
+        self.appcheck_btn.setObjectName("GhostBtn")
+        self.appcheck_btn.setCheckable(True)
+        self.appcheck_btn.setCursor(Qt.PointingHandCursor)
+        self.appcheck_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Look for a newer OneUp each time it starts"))
+        self.appcheck_btn.setChecked(self.settings.value("app_update_check", True, type=bool))
+        self._refresh_appcheck_label()
+        self.appcheck_btn.toggled.connect(self.on_appcheck_toggled)
+
         # The theme picker (ONEUP-0027 §4.6). A combo box rather than the
         # cycling-button idiom the two controls above use: nine entries is too
         # many to cycle through, and a combo shows what else is on offer. Built
@@ -639,8 +653,9 @@ class Updater(QMainWindow):
         # through KWin on each show (ONEUP-0246, showEvent).
         self._placement_pending = False
 
-        # Non-blocking: is there a newer OneUp release?
-        app_update._check_app_update(self)
+        # Non-blocking: is there a newer OneUp release? Only if the user lets it ask.
+        if self.appcheck_btn.isChecked():
+            app_update._check_app_update(self)
 
         # Non-blocking: reflect whether passwordless authorization is active.
         auth._query_auth_status(self)
@@ -933,6 +948,16 @@ class Updater(QMainWindow):
         self.settings.setValue("high_contrast", on)
         self._refresh_contrast_label()
         apply_app_theme(QApplication.instance())
+
+    def _refresh_appcheck_label(self):
+        self.appcheck_btn.setText(
+            QCoreApplication.translate("window", "New-version check: on")
+            if self.appcheck_btn.isChecked()
+            else QCoreApplication.translate("window", "New-version check: off"))
+
+    def on_appcheck_toggled(self, on: bool):
+        self.settings.setValue("app_update_check", on)
+        self._refresh_appcheck_label()
 
     def refresh_last_run(self):
         stale = False

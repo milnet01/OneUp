@@ -65,6 +65,8 @@ OneUp can:
   password**: the system just remembers the decision for OneUp's update commands,
   and switching it off revokes it instantly. The one exception is firmware, which
   asks the system for permission its own way and may still show a prompt.
+- **Tell you when a newer OneUp is out.** It asks GitHub each time it starts; switch
+  "New-version check" off in Settings if you would rather it did not.
 - **Explain failures** in plain English, warn about low disk space or duplicate
   repos before starting, and follow your desktop's **light/dark** theme — or take one of
   **eight colour themes** you pick yourself.

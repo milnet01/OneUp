@@ -79,6 +79,10 @@ class SettingsDialog(QDialog):
             "settings_dialog",
             "Start OneUp automatically at login, hidden in the tray.{note}").format(
                 note=_tray_note), parent.startboot_btn))
+        root.addWidget(self._row(QCoreApplication.translate(
+            "settings_dialog",
+            "Ask GitHub whether a newer OneUp exists each time OneUp starts. "
+            "Check for updates in About works either way."), parent.appcheck_btn))
 
         root.addWidget(self._heading(QCoreApplication.translate("settings_dialog", "Appearance")))
         root.addWidget(self._row(
@@ -145,7 +149,7 @@ class SettingsDialog(QDialog):
         """This dialog's controls, in the order the headings lay them out."""
         p = self.parent()
         return [p.auto_btn, p.auth_btn, p.autoupdate_btn, p.tray_btn, p.startboot_btn,
-                p.theme_combo, p.textsize_btn, p.contrast_btn,
+                p.appcheck_btn, p.theme_combo, p.textsize_btn, p.contrast_btn,
                 p.repos_btn, p.diag_btn, self.close_btn]
 
     def _heading(self, text: str) -> QLabel:

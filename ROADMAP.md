@@ -2903,7 +2903,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: investigate.
   Source: adopt-project, two independent runs, 2026-08-19.
 
-- 💭 [ONEUP-0122] **Decide whether the window parameter crossing every gui module boundary should be type-annotated.**
+- 🚫 [ONEUP-0122] **Decide whether the window parameter crossing every gui module boundary should be type-annotated.**
   ONEUP-0034 turned each subsystem's methods into module-level functions taking the
   window as their first parameter, so that parameter now crosses a real module
   boundary -- and `docs/standards/coding.md` §3 requires an annotation on anything
@@ -2928,6 +2928,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Not urgent. It changes no behaviour and nothing is currently wrong; what it
   settles is whether coding.md §3 has an exception or a breach.
+  Decided by the user (2026-10-11): no type annotations. With
+  ONEUP-0139's mypy trial (229 errors, 0 real defects) the work buys
+  no user-visible benefit. Closed with ONEUP-0139.
   **Layman:** A small typing detail the package split left open — worth a decision, not necessarily a change.
   Kind: refactor.
   Source: in-session-2026-08-20 (implementing ONEUP-0034).
@@ -3177,7 +3180,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: check-code --tree 2026-08-31 (mypy method-assign).
 
-- 💭 [ONEUP-0139] **Decide whether OneUp wants a type-checking posture at all — mypy finds 229 errors and 0 real defects.**
+- 🚫 [ONEUP-0139] **Decide whether OneUp wants a type-checking posture at all — mypy finds 229 errors and 0 real defects.**
   There is no mypy or pyright config, no type-check gate in `local-CI.sh` and
   nothing in `coding.md`. Run unconfigured it returns 229 errors in 16 files.
   All were triaged against source and NONE is a runtime defect: 68 are PySide6
@@ -3188,6 +3191,8 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   by design. Recorded in `.ants_review_falsepos.jsonl`.
   The question is whether a posture would pay for itself, not whether these
   specific findings should be fixed — they should not.
+  Decided by the user (2026-10-11): OneUp takes no type-checking
+  posture; mypy is not adopted. Closed with ONEUP-0122.
   **Layman:** A type checker has never been run here; it reports a lot, and every single report turned out to be the tool's limitation rather than a bug.
   Kind: investigate.
   Source: check-code --tree 2026-08-31 (mypy, unconfigured).
@@ -4003,7 +4008,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-run.
 
-- 💭 [ONEUP-0191] **OneUp contacts api.github.com on every launch, with no consent and no opt-out.**
+- ✅ [ONEUP-0191] **OneUp contacts api.github.com on every launch, with no consent and no opt-out.**
   `oneup/gui/app_update.py`'s update check fires from the window's startup path on
   every launch, including the `--tray` autostart at login. There is no setting, no
   prompt and no documented way to decline. Reported raw because nothing in the
@@ -4017,6 +4022,18 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   escapes the reply slot; the message drops the time instead. gui-smoke
   check red without the fix, green with it. Still open: the user's
   decision on contacting GitHub at launch without asking.
+  Decided by the user (2026-10-11): add a Settings switch, "Check for
+  new OneUp versions", on by default, on v2 for 2.0. The automatic
+  check at start and login honours it; the About button's manual check
+  always runs.
+  Resolved (2026-10-11, v2 only, for 2.0): Settings > Automatic
+  behaviour gains "New-version check" (appcheck_btn, QSettings key
+  app_update_check, default on). Updater.__init__ asks GitHub only when
+  it is on; About's Check for updates always asks. gui-smoke: four new
+  checks, the "does not ask" one red with the gate removed (666/1),
+  green with it (667/0); ./local-CI.sh green. README and CHANGELOG
+  [Unreleased] Added updated. main keeps the unconditional check: it is
+  frozen to bug fixes, and this is a new setting.
   **Layman:** The app checks GitHub for a new version every time it starts, and there is no way to turn that off.
   Kind: security.
   Source: review-code 2026-08-31, lane gui-services.
