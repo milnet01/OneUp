@@ -41,6 +41,7 @@ CHANGELOG_FIXTURE = """\
 ## [Unreleased]
 ### Added
 - **A brand-new widget.**
+- **Downloads finish in 50% of the time.**
 
 ## [1.2.0] - 2026-07-22
 ### Added
@@ -120,6 +121,33 @@ def main() -> int:
         for rel, site, pattern in sites:
             found = re.search(pattern, (tmp / rel).read_text(), re.M) is not None
             check(found, f"{rel} {site}: bumped to {NEW}")
+
+        # '%' is the spec file's macro sigil, so a bare one in a release note breaks the
+        # RPM build on OBS, unattended (ONEUP-0160). It must arrive escaped as '%%'.
+        spec = (tmp / "packaging/rpm/oneup.spec").read_text()
+        check("- Downloads finish in 50%% of the time." in spec,
+              "a '%' in a release note reaches the RPM %changelog escaped as '%%'")
+
+    # A version lower than (or equal to) the current one must be refused before any file
+    # is touched: every site would agree, the lockstep gate would pass, and users on the
+    # newer version would never be offered an update again (ONEUP-0160).
+    current = re.search(r'APP_VERSION = "(\d+\.\d+\.\d+)"',
+                        (ROOT / "updater.py").read_text()).group(1)
+    for older in ("0.0.1", current):
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            for rel in REAL_FILES:
+                dst = tmp / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(ROOT / rel, dst)
+            (tmp / "CHANGELOG.md").write_text(CHANGELOG_FIXTURE)
+            before = {rel: (tmp / rel).read_text() for rel in [*REAL_FILES, "CHANGELOG.md"]}
+            proc = subprocess.run([sys.executable, str(tmp / "bump.py"), older],
+                                  capture_output=True, text=True)
+            check(proc.returncode != 0,
+                  f"bump.py {older} (not above the current {current}) is refused")
+            check(all((tmp / rel).read_text() == text for rel, text in before.items()),
+                  f"bump.py {older} leaves every file untouched")
 
     print(f"\nPassed: {passed}   Failed: {failed}")
     return 1 if failed else 0
