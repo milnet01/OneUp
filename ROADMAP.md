@@ -3411,7 +3411,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-run.
 
-- 📋 [ONEUP-0154] **The warning banner's text and its button role can decouple within one run.**
+- ✅ [ONEUP-0154] **The warning banner's text and its button role can decouple within one run.**
   `_show_warning` sets the banner text but never resets the button role, so a
   pre-flight snapshot warning that sets the button to "Thin snapshots…" leaves it
   there when a later download failure replaces the text. The user then reads "A
@@ -3419,6 +3419,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   snapshots. The remedy paths escape only because `on_finished` happens to re-set
   the text afterwards. Reset the role in `_show_warning` and have the two
   pre-flight callers re-arm it.
+  Resolved (2026-10-11): 2402d8e on main, merged (ed9c2f5), then the v2
+  half. _show_warning resets the button's role with its text; the two
+  pre-flight callers pass theirs. v2 also: the generic "Some steps did not
+  finish" banner keyed on isVisible, so a run ending while hidden to the
+  tray overwrote the real warning; now isHidden.
   **Layman:** The warning message can end up above a button that does something unrelated.
   Kind: ux.
   Source: review-code 2026-08-31, lane gui-run.
