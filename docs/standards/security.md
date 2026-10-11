@@ -78,8 +78,9 @@ answers OneUp's own supply chain. Physical access, and a hostile kernel or init.
 
 This is rule one. Everything else in this document exists to keep it true.
 
-**1.1 — The GUI process never becomes root, and never calls `sudo`.** Measured: `updater.py`
-contains **zero** `sudo` invocations. Root work is delegated, never assumed.
+**1.1 — The GUI process never becomes root, and never calls `sudo`.** Measured: the window
+package `oneup/gui/` and the `updater.py` shim contain **zero** `sudo` invocations.
+Root work is delegated, never assumed.
 
 **1.2 — The engine is the only thing that runs privileged commands during an update.**
 Measured at `58ea3bc`, `update_system.sh` made **34** privileged invocations: **14**
@@ -121,15 +122,15 @@ update run:
 | Site | Command | Guard |
 | --- | --- | --- |
 | `RepoManagerDialog._build_apply_command` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must match `_ALIAS_RE`, else the whole command is `None` and nothing runs |
-| `Updater.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped; and every **session-critical** unit removed before the command is built (§4.6) |
-| `Updater.rollback` | `pkexec sh -c "snapper rollback <id> \|\| exit 3; systemctl reboot \|\| exit 4"` | `id` must satisfy `str.isdecimal()` — never `isdigit()`, which also accepts superscript digits such as `²` |
+| `banners.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped; and every **session-critical** unit removed before the command is built (§4.6) |
+| `rollback.rollback` | `pkexec sh -c "snapper rollback <id> \|\| exit 3; systemctl reboot \|\| exit 4"` | `id` must satisfy `str.isdecimal()` — never `isdigit()`, which also accepts superscript digits such as `²` |
 
 One more privileged action does not go through `pkexec` at all and must not be forgotten
 when this list is checked:
 
 | Site | Command | Guard |
 | --- | --- | --- |
-| `Updater.restart_now` | `QProcess.startDetached("systemctl", ["reboot"])` — argv form | **no arguments, so nothing to validate**; logind's own polkit policy decides whether an active local session may reboot |
+| `banners.restart_now` | `QProcess.startDetached("systemctl", ["reboot"])` — argv form | **no arguments, so nothing to validate**; logind's own polkit policy decides whether an active local session may reboot |
 
 It is listed because the *shape* is the risk: a future `startDetached` that interpolates a
 value would be a privileged call with no validation and no `pkexec` to make it obvious.
@@ -281,22 +282,22 @@ trustworthy. They are not:
 or an exact test, never a `search` — a `re.match` would accept trailing junk:
 
 ```python
-# updater.py, the module-level _ALIAS_RE — repo aliases. The first character
+# oneup/gui/repos.py, the module-level _ALIAS_RE — repo aliases. The first character
 # class excludes '-', so an alias can never be read as an option by zypper; no
 # space, quote, ';', '&', '$' or backtick is permitted, so it cannot break out
 # of the sh -c string either.
 _ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
 # …used as: if not _ALIAS_RE.fullmatch(alias): return None
 
-# Updater.rollback — the rollback target is interpolated into a root shell.
+# rollback.rollback — the rollback target is interpolated into a root shell.
 if not target.isdecimal(): return        # isdecimal() also rejects empty
 # Not isdigit(): it also accepts superscript digits ('²'), which int() refuses (ONEUP-0153).
 
-# Updater.restart_services — service units, argv form. The first character class excludes
+# banners._service_units, behind restart_services — service units, argv form. The first character class excludes
 # '-' so a spliced token cannot be read as a systemctl option; the startswith test repeats
 # that structurally. No ".service" suffix is required, because `zypper ps -sss` prints bare
 # unit names (ONEUP-0110).
-svcs = [s for s in self._services.split()
+return [s for s in win._services.split()
         if not s.startswith("-") and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9:@._-]*", s)]
 ```
 
@@ -324,7 +325,7 @@ separate test alone.
 
 **4.6 — A privileged command may be correct and still be unsafe to run.** Validation
 answers *can this value hurt me on the way to root*. It does not answer *should this run at
-all*, and `Updater.restart_services` is where the difference bites: `systemctl restart
+all*, and `banners.restart_services` is where the difference bites: `systemctl restart
 display-manager` is perfectly well-formed and ends the user's session.
 
 `zypper ps -sss` reports whatever holds a replaced library, so after a glibc, systemd, Qt or
@@ -352,7 +353,7 @@ and not the services one; a mixed list shows both, because the safe half can gen
 restarted now. Recommending a restart and then leaving the user to find the control is the
 failure this closes.
 
-**The split is made once, from one list.** `Updater._service_units` filters the marker
+**The split is made once, from one list.** `banners._service_units` filters the marker
 payload and both the banner and the handler read it. ONEUP-0110 was invisible for months
 because the banner was drawn from the raw payload while the handler acted on a filtered
 copy, so the two could disagree with nothing on screen to show it.
@@ -510,7 +511,7 @@ repository URLs with embedded credentials. Anything routed to the log is a delib
 choice, not a reflex `echo "$captured"`.
 
 **7.4 — Anything leaving the machine is scrubbed.** The "Copy diagnostics" bundle
-(`build_diagnostics` in `updater.py`) replaces the home path with `~` and the hostname
+(`build_diagnostics` in `oneup/gui/diagnostics.py`) replaces the home path with `~` and the hostname
 with `<host>` **across the whole payload, log body included**, and trims an oversized log to
 its last `DIAG_LOG_CAP` (200 KiB of text, tail-first, because errors sit at the end). A user pasting
 that into a public issue tracker must not thereby publish their username and machine name.

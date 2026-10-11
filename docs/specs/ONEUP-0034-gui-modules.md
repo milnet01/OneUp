@@ -494,3 +494,10 @@ intercepts nothing once callers go through a module, so the ~35 such spies becam
 patches through a `_patch`/`_unpatch_all` pair restoring in reverse order at each scenario's
 end. Eight assertions are new (327 → 339), and each was verified red by breaking the thing it
 guards. `ONEUP-0122` records the one boundary left unannotated and why.
+
+**Later items renamed or added names in §4.2's `paths.py` row (recorded 2026-10-11, ONEUP-0187).**
+The row was true at `f0d13e7` and is not rewritten. Since then:
+- ONEUP-0044 (`16153cc`) added `HOLD_STATE` and `GO_REQUEST` to `paths.py`.
+- ONEUP-0054 stage 2 (`5fff026`) renamed `LOG_DIR` to `STATE_LOG_DIR`.
+- ONEUP-0054 stage 7 (`785648c`) added `engine_argv`.
+- ONEUP-0054 stage 9 (`6ecdf53`) replaced `_find_engine` and `ENGINE` with `_resolve_engine`.

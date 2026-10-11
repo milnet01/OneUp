@@ -328,7 +328,7 @@ ships in none of them:
 
 **Any new file that carries a version number** — four more places, and the tests:
 
-- `bump.py` must learn to edit it — the six `edit(...)` calls in `main()`.
+- `bump.py` must learn to edit it — an `edit(...)` call in `main()`.
 - `local-CI.sh`'s lockstep gate must read it — the `# --- version lockstep` step. Note
   that gate greps **`oneup/__init__.py` by name** for `APP_VERSION`, so moving the
   constant means editing the `v_py=` line in the same change.
