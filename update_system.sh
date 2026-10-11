@@ -106,7 +106,11 @@ HOLD_SECONDS="${ONEUP_HOLD_SECONDS:-120}"  # the hold ends by itself after this 
                    # and prompt again — the very second dialog this fixes; and a held
                    # engine is unattended privilege with nobody left to authorise it.
 # Whose departure ends the hold. Under QProcess the engine is a direct child of the
-# window, so $PPID at shell start IS the window. Captured ONCE here and afterwards asked
+# window, so $PPID at shell start is the window — EXCEPT on `--size --hold`, which is
+# re-exec'd under systemd-inhibit below. That tool forks, so there $PPID is the wrapper,
+# which lives exactly as long as this engine, and a departed window goes unseen. Known
+# and kept: the window never starts this fallback, and the Python engine fixes it by
+# passing the pid through the re-exec (ONEUP-0238, ONEUP-0192). Captured ONCE and asked
 # with `kill -0` — the idiom sudo_init's keep-alive already uses. Do NOT re-read $PPID to
 # detect the change: bash sets it once at shell start and never refreshes it on
 # reparenting, so the comparison is a constant against a copy of itself and can never

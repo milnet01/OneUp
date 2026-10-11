@@ -169,9 +169,6 @@ def _cdn_line(line: str) -> str:
 REFRESH_FAILED = False
 REPOS_REFRESHED = False
 
-# "<alias> <reason>" per enabled repository that fails its own refresh.
-FAILING: list[str] = []
-
 _SIGNATURE = re.compile(r"signature|GPG|key", re.IGNORECASE)
 _METADATA = re.compile(r"metadata|Valid metadata not found", re.IGNORECASE)
 
@@ -211,12 +208,13 @@ def disable_repo(alias: str, reason: str) -> bool:
 def find_failing_repos() -> list[str]:
     """Which enabled repositories fail their own refresh, and why.
 
-    Fills `FAILING` and returns it. The classification stays here rather than in
-    `parsers.py`: §4.2 places this function whole and its `parsers.py` row names
-    nothing of it.
+    Returns "<alias> <reason>" per failing repository. A local list, not the
+    Bash's `FAILING` global: the Bash needed one to keep the loop out of a
+    subshell, and Python has no subshell to avoid (ONEUP-0192). The
+    classification stays here rather than in `parsers.py`: §4.2 places this
+    function whole and its `parsers.py` row names nothing of it.
     """
-    global FAILING
-    FAILING = []
+    failing: list[str] = []
     for alias in enabled_repo_aliases():
         if not alias:
             continue
@@ -242,8 +240,8 @@ def find_failing_repos() -> list[str]:
             reason = "metadata"
         else:
             reason = "unreachable"
-        FAILING.append(f"{alias} {reason}")
-    return FAILING
+        failing.append(f"{alias} {reason}")
+    return failing
 
 
 def refresh_repos(*, import_keys: bool = False) -> None:
