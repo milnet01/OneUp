@@ -85,6 +85,11 @@ HINTS: dict[str, tuple[tuple[str, ...], str]] = {
         "markers",
         "A download failed — check your internet connection, then "
         "retry.")),
+    "firmware-list-stale": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "Couldn't download the latest firmware list, so the firmware "
+        "check used the last one downloaded. Check your internet "
+        "connection, then retry.")),
     "package-conflict": ((), QT_TRANSLATE_NOOP(
         "markers",
         "A package conflict — often a third-party repo. Check the log; "

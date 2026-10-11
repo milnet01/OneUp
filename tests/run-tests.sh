@@ -596,8 +596,11 @@ case "$1" in refresh) exit 1 ;; get-updates) exit 2 ;; *) exit 0 ;; esac
 EOF
 chmod +x "$d/fwupdmgr"
 out=$(run_engine "$d" --steps=firmware)
-check        "run: stale fwupd list says so"            "@@STEP_END@@|firmware|ok|up to date as of the last check" "$out"
-check        "run: stale fwupd list warns"              "@@HINT@@|Couldn't download the latest firmware list" "$out"
+# On v2 the markers carry codes (ONEUP-0072): the step keeps its closed-set code, the
+# hint code carries the warning, and the English age lands in the terminal summary.
+check        "run: stale fwupd list passes"             "@@STEP_END@@|firmware|ok|up-to-date" "$out"
+check        "run: stale fwupd list warns"              "@@HINT@@|firmware-list-stale" "$out"
+check        "run: stale fwupd list says so"            "up to date as of the last check" "$out"
 rm -rf "$d"
 
 # fwupdmgr can stop to ask a question (old metadata, an unreported upload) when it

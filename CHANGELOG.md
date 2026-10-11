@@ -80,6 +80,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Offline, the firmware step no longer says "up to date" from an old firmware list** (ONEUP-0222)
+  When the latest firmware list can't be downloaded, OneUp now warns that
+  the firmware check used the last list downloaded, and to check your
+  connection. The firmware tool also can no longer stop a terminal run
+  with a question nobody can see.
+
 - **The signing-key messages say "source", like the rest of the window** (ONEUP-0218)
   When a source's signing key is out of date, or is still refused after
   importing keys, the message no longer uses the word "repository".

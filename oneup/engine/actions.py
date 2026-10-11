@@ -259,7 +259,7 @@ def _check_firmware() -> tuple[int, bool]:
     is no unreadable case", which is a property the tool's exit surface does not
     have — an unreachable daemon rendered as a bare zero, i.e. "you're up to date".
     """
-    fw_rc, _ = proc.run(["fwupdmgr", "get-updates"])
+    fw_rc, _ = proc.run(["fwupdmgr", "get-updates"], no_input=True)  # ONEUP-0222
     if fw_rc not in (0, 2):
         markers.marker("CHECK_UNKNOWN", "firmware", "fwupd-unreachable")
         markers.out("  Firmware: couldn't check")

@@ -36,11 +36,17 @@ def run(
     env: Mapping[str, str] | None = None,
     stream: bool = False,
     deadline: float | None = None,
+    no_input: bool = False,
 ) -> tuple[int, str]:
     """Run `argv`; return its exit status and its captured stdout.
 
     With `merge_stderr`, stderr is folded into the returned text — the shape
     `sudo_capture -e` has today.
+
+    With `no_input`, the child reads `/dev/null` instead of the run's stdin, so a
+    tool that asks a question when it has a keyboard cannot stop a terminal run on
+    a prompt nobody sees — fwupdmgr's case (ONEUP-0222). Opt-in, because some
+    children here are meant to share the terminal.
 
     `env` overlays the engine's own environment for this child only. The Bash
     engine writes `LC_ALL=C zypper …` as a per-command prefix; putting the same
@@ -62,15 +68,17 @@ def run(
     `_Mirror` already survives it breaking.
     """
     overlay = {**os.environ, **env} if env else None
+    stdin = subprocess.DEVNULL if no_input else None
     if deadline is not None:
         return _run_bounded(argv, deadline, merge_stderr=merge_stderr,
-                            env=overlay, stream=stream)
+                            env=overlay, stream=stream, stdin=stdin)
     if stream:
-        return _pump(argv, env=overlay), ""
+        return _pump(argv, env=overlay, stdin=stdin), ""
 
     completed = subprocess.run(  # noqa: S603 — fixed argv list, no shell; the caller
         # builds every element, and nothing here is interpolated from engine or user text.
         list(argv),
+        stdin=stdin,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT if merge_stderr else subprocess.DEVNULL,
         text=True,
@@ -85,7 +93,8 @@ def run(
     return completed.returncode, completed.stdout or ""
 
 
-def _pump(argv: Sequence[str], *, env: Mapping[str, str] | None) -> int:
+def _pump(argv: Sequence[str], *, env: Mapping[str, str] | None,
+          stdin: int | None = None) -> int:
     """Run `argv`, relaying each line through `sys.stdout` as it arrives.
 
     `print` here is the point: `sys.stdout` is the log mirror, so the line reaches
@@ -94,6 +103,7 @@ def _pump(argv: Sequence[str], *, env: Mapping[str, str] | None) -> int:
     """
     child = subprocess.Popen(  # noqa: S603 — fixed argv list, no shell, as in `run`
         list(argv),
+        stdin=stdin,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -108,7 +118,8 @@ def _pump(argv: Sequence[str], *, env: Mapping[str, str] | None) -> int:
 
 
 def _run_bounded(argv: Sequence[str], deadline: float, *, merge_stderr: bool,
-                 env: Mapping[str, str] | None, stream: bool) -> tuple[int, str]:
+                 env: Mapping[str, str] | None, stream: bool,
+                 stdin: int | None = None) -> tuple[int, str]:
     """`run` with a budget. Its own SESSION, so expiry can kill the whole group.
 
     Killing only the child is not enough and that is the trap: a mock whose
@@ -118,6 +129,7 @@ def _run_bounded(argv: Sequence[str], deadline: float, *, merge_stderr: bool,
     """
     child = subprocess.Popen(  # noqa: S603 — fixed argv list, no shell, as in `run`
         list(argv),
+        stdin=stdin,
         # Captured on BOTH paths: a streaming child that inherited fd 1 would
         # bypass the log mirror and die on SIGPIPE when the window quits (see
         # `run`). Streamed output is relayed below as it is read.

@@ -1290,6 +1290,12 @@ def main() -> int:
           "A source's signing key is out of date." in wK.warn_label.text()
           and "repositor" not in wK.warn_label.text().lower())
     wK.hide()
+    # ONEUP-0222: the engine's stale-firmware-list hint has a sentence of the window's
+    # own, not the unknown-code fallback.
+    check("the firmware-list-stale hint has its own sentence (ONEUP-0222)",
+          "firmware-list-stale" in markers.HINTS
+          and markers.render_hint(["firmware-list-stale"])
+          == markers.HINTS["firmware-list-stale"][1])
     check("the command a hint names is filled into its sentence (ONEUP-0235)",
           "run: sudo zypper --gpg-auto-import-keys refresh, then retry." in wH._hints[0]
           and wH._hint_commands == ["sudo zypper --gpg-auto-import-keys refresh"])

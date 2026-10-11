@@ -175,11 +175,24 @@ def run_firmware() -> None:
         markers.out("fwupd is not installed. Skipping.")
         end_step("firmware", "skip", "not-installed", "not installed")
         return
-    proc.run(["fwupdmgr", "refresh"], stream=True)
+    # Every fwupdmgr call reads no input: with a keyboard it may stop to ask a
+    # question (old metadata, an unreported upload) that nobody sees (ONEUP-0222).
+    # refresh exits 0 when it downloaded the list, and 2 on fwupd versions that
+    # report an already-current list as "nothing to do".
+    refresh_rc, _ = proc.run(["fwupdmgr", "refresh"], stream=True, no_input=True)
     # fwupdmgr(1) EXIT STATUS: 0 = ran and found something, 2 = ran with no actions,
     # 1/3 = it could not answer. Treating every non-zero as "nothing to do" tells a
     # user their firmware is current when we never managed to ask.
-    fw_rc, _ = proc.run(["fwupdmgr", "get-updates"])
+    fw_rc, _ = proc.run(["fwupdmgr", "get-updates"], no_input=True)
+    if fw_rc == 2 and refresh_rc not in (0, 2):
+        # get-updates answered from the last-downloaded list, not today's.
+        markers.out("No firmware updates in the last firmware list downloaded "
+                    "(couldn't refresh it).")
+        markers.hint("firmware-list-stale", say=(
+            "Couldn't download the latest firmware list, so the firmware check used "
+            "the last one downloaded. Check your internet connection, then retry."))
+        end_step("firmware", "ok", "up-to-date", "up to date as of the last check")
+        return
     if fw_rc == 2:
         markers.out("No firmware updates available.")
         end_step("firmware", "ok", "up-to-date", "up to date")
@@ -190,7 +203,7 @@ def run_firmware() -> None:
         return
     # Claim success only if the flash itself succeeded: a failed update must not
     # report "applied", because that is what advises the reboot.
-    if proc.run(["fwupdmgr", "update", "-y"], stream=True)[0] == 0:
+    if proc.run(["fwupdmgr", "update", "-y"], stream=True, no_input=True)[0] == 0:
         FW_CHANGED = True
         end_step("firmware", "ok", "updated", "updates applied")
     else:
