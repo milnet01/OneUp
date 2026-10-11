@@ -7242,7 +7242,7 @@ when complete (that document's §7).
   Kind: chore.
   Source: review-code 2026-08-31, lanes engine-shell and engine-steps.
 
-- 📋 [ONEUP-0215] **v2's security.md names the window's methods as Updater.* that now live in oneup/gui modules.**
+- ✅ [ONEUP-0215] **v2's security.md names the window's methods as Updater.* that now live in oneup/gui modules.**
   Found by ONEUP-0107's review-contract run on coding.md (loop 1),
   which fixed the same class in coding.md on v2. security.md on v2
   still names Updater.restart_services, Updater.rollback,
@@ -7255,6 +7255,11 @@ when complete (that document's §7).
   only. testing.md carries the same class (Updater._check_app_update,
   Updater._query_auth_status) and is next in ONEUP-0107's queue, so
   its own review takes it.
+  Resolved (2026-10-11): already fixed by 4978ecc (ONEUP-0187, v2 half).
+  Re-checked on v2: security.md names banners.restart_services,
+  banners.restart_now, banners._service_units, rollback.rollback and
+  oneup/gui/repos.py's _ALIAS_RE, each found at that home; the only
+  Updater.* left is a dated loop-log row, a record left as written.
   **Layman:** A security rule points at code by names from before the window was split into parts, so a reader looks in the wrong file.
   Kind: doc-fix.
   Source: review-contract-2026-09-28 coding.md loop 1 (out of scope).
