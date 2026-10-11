@@ -1270,7 +1270,26 @@ def main() -> int:
     run.handle_line(wH, "@@HINT@@|repo-key-expired")
     check("a @@HINT@@ code is parsed into _hints as the window's own sentence",
           wH._hints == [markers.render_hint(["repo-key-expired"])]
-          and wH._hints[0].startswith("A repository signing key is out of date."))
+          and wH._hints[0].startswith("A source's signing key is out of date."))
+    # ONEUP-0218: a repository is a "source" to the user (wording-and-translation.md
+    # §2.1). Both signing-key hints, and the banner the window builds itself when only
+    # the key-import remedy is armed, must say so.
+    for code in ("repo-key-expired", "repo-key-still-rejected"):
+        sentence = markers.render_hint([code])
+        check(f"the {code} hint says 'source', never 'repository' (ONEUP-0218)",
+              "source" in sentence and "repositor" not in sentence.lower())
+    wK = window.Updater()
+    run.handle_line(wK, "@@REMEDY@@|import-keys")
+    wK._failed_steps = ["system"]
+    wK.proc = QProcess(wK)
+    # Shown, as in a real run: on a never-shown window every banner reads as hidden,
+    # so the generic "Some steps did not finish" banner would overwrite this one.
+    wK.show()
+    run.on_finished(wK, 1, QProcess.ExitStatus.NormalExit)
+    check("the key-only banner says 'source', never 'repository' (ONEUP-0218)",
+          "A source's signing key is out of date." in wK.warn_label.text()
+          and "repositor" not in wK.warn_label.text().lower())
+    wK.hide()
     check("the command a hint names is filled into its sentence (ONEUP-0235)",
           "run: sudo zypper --gpg-auto-import-keys refresh, then retry." in wH._hints[0]
           and wH._hint_commands == ["sudo zypper --gpg-auto-import-keys refresh"])

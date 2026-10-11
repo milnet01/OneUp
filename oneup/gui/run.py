@@ -1118,7 +1118,7 @@ def on_finished(win, exit_code: int, _status):
         else:
             banners._show_warning(win, QCoreApplication.translate(
                 "run",
-                "A repository signing key is out of date."))
+                "A source's signing key is out of date."))
         # When a one-click remedy is available, the banner button offers it
         # (behind a warned confirmation for the key import) rather than just
         # showing the log. A skip remedy takes the primary button; when a

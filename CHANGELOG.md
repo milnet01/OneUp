@@ -80,6 +80,10 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The signing-key messages say "source", like the rest of the window** (ONEUP-0218)
+  When a source's signing key is out of date, or is still refused after
+  importing keys, the message no longer uses the word "repository".
+
 - **Three buttons showed a stray underline where an "&" belongs** (ONEUP-0251)
   "Roll back & reboot", "Import signing key & retry" and "Skip … &
   update the rest" now read as written, instead of "Roll back _reboot"

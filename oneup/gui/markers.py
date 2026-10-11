@@ -74,12 +74,12 @@ HINTS: dict[str, tuple[tuple[str, ...], str]] = {
         "cache, delete old snapshots) and retry.")),
     "repo-key-still-rejected": ((), QT_TRANSLATE_NOOP(
         "markers",
-        "A repository signing key is still rejected even after "
-        "importing keys — check the log for the offending repository, "
+        "A source's signing key is still rejected even after "
+        "importing keys — check the log for the source that failed, "
         "or run: {command}, then retry.")),
     "repo-key-expired": ((), QT_TRANSLATE_NOOP(
         "markers",
-        "A repository signing key is out of date. Use \"Import signing "
+        "A source's signing key is out of date. Use \"Import signing "
         "key & retry\" to fix it, or run: {command}, then retry.")),
     "network-failed": ((), QT_TRANSLATE_NOOP(
         "markers",
