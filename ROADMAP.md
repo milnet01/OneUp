@@ -7714,6 +7714,11 @@ when complete (that document's §7).
   Hard parts: a patched package that lags the rest of its stack after
   an update (vendor stickiness can hold it back), a patch that stops
   applying, and the privilege boundary (docs/standards/security.md).
+  Progress (2026-10-11): a first instance exists outside OneUp, done by
+  hand at the user's request: OBS subproject home:milnet:kde-fixes links
+  openSUSE:Factory's kwin6 and adds the ONEUP-0246 KWin patch. Branch
+  with `osc branch --nodevelproject`; without it osc followed the devel
+  project to a beta. Stays considered for OneUp.
   **Layman:** If you have a fix for a program that its makers haven't released yet, OneUp could put it back after every update.
   Kind: feature.
   Source: user-request-2026-10-11.
