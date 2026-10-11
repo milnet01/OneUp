@@ -605,12 +605,26 @@ def main() -> int:
                 QApplication.processEvents()
                 time.sleep(0.01)
             shown.close()
+            # Hidden before the script runs: KWin no longer lists it, so an older
+            # same-size dialog would be the one moved. No script at all.
+            hidden = QDialog(host)
+            hidden.show()
+            placement.center_on_parent(hidden)
+            hidden.hide()
+            before = len(scripts)
+            deadline = time.monotonic() + 0.3
+            while time.monotonic() < deadline:
+                QApplication.processEvents()
+                time.sleep(0.01)
         finally:
             placement.run_kwin_script = _orig_run
         js = scripts[0] if scripts else ""
         check("on Wayland only the dialog being centred is moved, not every one of ours "
               "(ONEUP-0254)",
-              "cg.width - 321" in js and "cg.height - 123" in js and "break;" in js)
+              "cg.width - 321" in js and "cg.height - 123" in js and "break;" in js
+              and "pc.width - 800" in js and "pc.height - 600" in js)
+        check("a dialog hidden before its centring runs is not centred (ONEUP-0254)",
+              len(scripts) == before)
     finally:
         os.environ["XDG_SESSION_TYPE"] = _orig_session
         placement._platform_name = _orig_platform
