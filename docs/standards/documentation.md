@@ -145,7 +145,7 @@ marker because a parser reads it, and these nine carry none because nothing does
 the three `~/.claude/standards/skeletons/`,
 `~/.claude/standards/roadmap-store-decisions-2026-08-09.md`, `~/.claude/foundation.md`,
 `~/.claude/workflow.md` and `~/.claude/CLAUDE.md` — whose rule 14 owns the review gate §7
-invokes and the loop caps that gate runs to.
+invokes.
 
 **The Python and Qt language files are the live ones, but they are already displaced in
 part.** `coding.md` §1 is *"The Python floor: **3.13**"* and its §6 is *"Qt idioms (the GUI
@@ -202,7 +202,7 @@ read two ways:
 | Value | Means |
 | --- | --- |
 | `Draft` | written, not yet through `review-contract`. **Implementation may not start** (§7) |
-| `Reviewed` | a `review-contract` pass converged. Ready to implement |
+| `Reviewed` | a `review-contract` run converged, or reached its cap and filed what was left. Ready to implement |
 | `Implemented` | the work shipped; the document is now a record |
 | `Superseded by <id>` | replaced. Kept, not deleted (§9) |
 
@@ -497,21 +497,14 @@ nobody checks is a measurement wearing a contract's clothes.
 it.** Older text says `/cold-eyes`, the skill `review-contract` replaced on 2026-08-12, and
 the loop-log headings keep the name. Where either appears, run `review-contract` (ONEUP-0103).
 
-**Every design document, spec, standard and reference goes through `review-contract`, and is
-looped until a pass finds nothing substantive left.** Implementation does not start before
-that.
+**Every design document, spec, standard and reference goes through `review-contract`.**
+Implementation does not start before that.
 
-**Converged means one of two things**, and the distinction matters because chasing the
-first one forever is its own waste:
+**When a run stops is `review-contract`'s rule, not this document's**: it converges on a
+loop with no verified finding, or ends at its cap and files what is left.
 
-- **Clean** — the pass returned zero verified findings.
-- **Polish only** — everything it verified was precision: wording, an exact citation, a
-  stale parenthetical. Nothing structural, nothing that changes a mechanism or a contract.
-  Fix the polish and stop; another loop to re-check wording buys nothing.
-
-Keep looping while any verified finding is **substantive** — a missing section, a claim the
-code contradicts, or an approach that is itself wrong. Should the project ever adopt per-feature test contracts (a `spec.md` beside
-a test), those are exempt — they are too small to warrant it. OneUp has none today.
+Should the project ever adopt per-feature test contracts (a `spec.md` beside a test), those
+are exempt — they are too small to warrant it. OneUp has none today.
 
 - **Run it before implementation, not after.** A spec is a contract for the implementer;
   if the contract is wrong, the implementation is wrong by construction.
@@ -527,9 +520,8 @@ a test), those are exempt — they are too small to warrant it. OneUp has none t
   severity, as the bullets below describe. Rows 7 and 8 of this document's log were
   written under the old scale and stay as written — a loop log records what each pass
   found.
-- **Fix every actionable severity** — critical, high, medium, low. Only informational
-  findings are left. A low finding that turns out to be wrong is **dropped explicitly**,
-  with a line saying so — never silently filtered.
+- **Fix every verified finding.** No grade lets one be left. A finding that turns out to
+  be wrong is **dismissed explicitly**, with a line saying so — never silently filtered.
 - **Write the log as the loops happen.** Back-filling it destroys the audit trail, which
   is the only evidence the review was real.
 - **The tally must balance.** A row saying 8 findings and 6 outcomes is a row where two
@@ -545,8 +537,8 @@ a test), those are exempt — they are too small to warrant it. OneUp has none t
     were all low, so `9 low` is what balances it.
   - **The check knows three outcome words: `verified`, `dismissed` and `info`.** Any other
     word is not counted. So `28 verified, 1 dismissed, 1 carried` comes up one outcome
-    short and fails. Count a carried finding inside `verified` and say it was carried in
-    the prose, or write it as `1 info` (ONEUP-0083).
+    short and fails. Count a carried finding inside `verified` and say in the prose
+    where it was filed (ONEUP-0083).
 
 **Spend a cold reader only on what a script cannot do.** The catchers, cheapest first:
 
@@ -737,6 +729,7 @@ fact only to make a *different* point with it, and say where it came from.
 | §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design — and **that is the whole of its reach**. `docs/specs/` is exempt until ONEUP-0065 converts the `path:line` citations the older specs carry; `CLAUDE.md` and `ROADMAP.md` are inside §6a.2's scope and are scanned by **nothing**, as is the prose form — *"around line 786"* |
 | §6b most counts taken from the code stay out of the document | `tests/docs-check.py`, over standards, reference and design: a number beside a counting unit, in a paragraph with no commit, date or past-tense verb. **An approximation** — a count written without a unit it knows, or in specs and plans, is left to a cold reader (ONEUP-0104) |
 | §7 a loop tally balances | `tests/docs-check.py` |
+| §7 every verified finding is fixed, and a run stops only where `review-contract` says | **nothing** automatic — the loop log says what each pass verified, and only a reader can set it against the fixes that landed |
 | §7.1 a run-state note is deleted when its run ends | **nothing** automatic — whether a run has ended is not a fact on disk. The catcher is the closing commit itself; a later reader can only spot a breach by the `-run-state.md` name §7.1 pins |
 | §7.1 a file under `docs/reviews/` is named `-run-state.md`, `-fix-ledger.md` or `-loop-log.md` | **nothing** automatic — `tests/docs-check.py` reads that directory for loop-log rows only and checks no file's name, which is the same gap the row above rests on |
 | §8.2 every standard opens with an `**In one sentence:**` line | `tests/docs-check.py` |
