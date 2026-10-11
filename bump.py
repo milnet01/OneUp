@@ -11,7 +11,9 @@ source of truth. Afterwards, review `git diff` and run ./local-CI.sh (its
 version-lockstep gate confirms all six agree). ./release.sh calls this for you.
 """
 import datetime
+import os
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -31,7 +33,12 @@ def edit(rel_path: str, pattern: str, repl: str, count: int = 1, flags: int = 0)
     new, n = re.subn(pattern, repl, text, count=count, flags=flags)
     if n == 0:
         die(f"no match for {pattern!r} in {rel_path} — file drifted from the expected format")
-    path.write_text(new)
+    # Written beside the file and renamed over it, so an interruption leaves the old
+    # file or the new one, never an empty or half-written one (ONEUP-0186).
+    tmp = path.with_name(path.name + ".bump-tmp")
+    tmp.write_text(new)
+    shutil.copymode(path, tmp)
+    os.replace(tmp, path)
 
 
 def xml_escape(s: str) -> str:
@@ -99,8 +106,10 @@ def main():
     #    release link, and advance the [Unreleased] compare base to the tag just
     #    cut (else it keeps pointing at the previous release, a stale range — ONEUP-0033).
     edit("CHANGELOG.md", r'## \[Unreleased\]', f'## [Unreleased]\n\n## [{ver}] - {today}')
-    edit("CHANGELOG.md", r'(\n\[\d)',
-         f'\n[{ver}]: https://github.com/{REPO}/releases/tag/v{ver}\\g<1>')
+    # Anchored to the first version LINK definition: unanchored, it matched the first
+    # line anywhere opening with "[" and a digit (ONEUP-0186).
+    edit("CHANGELOG.md", r'^(?=\[\d+\.\d+\.\d+\]: )',
+         f'[{ver}]: https://github.com/{REPO}/releases/tag/v{ver}\n', flags=re.M)
     edit("CHANGELOG.md", r'(\[Unreleased\]: \S+/compare/)v\d+\.\d+\.\d+(\.\.\.HEAD)',
          rf'\g<1>v{ver}\g<2>')
 

@@ -411,8 +411,8 @@ it to the GitHub release.
 
 `./release.sh X.Y.Z` does the whole thing. `--no-obs` stops after GitHub.
 
-It validates its argument first — `X.Y.Z` or nothing happens — and `--no-obs` is read as the
-second argument. Then its preconditions, which are checks rather than suggestions, and it
+It validates its arguments first — `X.Y.Z` or nothing happens, and every option after it
+must be `--no-obs` or it refuses. Then its preconditions, which are checks rather than suggestions, and it
 exits on any of them:
 
 1. a clean working tree,
@@ -430,9 +430,11 @@ to your fix exactly as it applies to the bump — an uncommitted fix is refused 
 
 **A refusal part-way through the bump leaves a partial one.** `bump.py` writes the six
 sites one at a time and stops at the first whose format has drifted, so the sites before it
-are already rewritten. Same recovery, same order: discard, fix the drifted file, re-run.
+are already rewritten. Each file is written whole or not at all, so an interruption never
+leaves one empty. Same recovery, same order: discard, fix the drifted file, re-run.
 
 **A failed `git push` is the awkward one**, because it fires after the commit *and* the tag.
+The push is `--atomic`, so when it fails neither the branch nor the tag reached GitHub.
 `git checkout -- .` recovers nothing there. Undo is `git tag -d vX.Y.Z`, then
 `git reset HEAD~1` — a mixed reset, so the bump lands back in the working tree — then
 `git checkout -- .` to discard it, and only then re-run. A `--soft` reset leaves everything
@@ -442,12 +444,14 @@ Three things about that sequence are worth knowing before you run it:
 
 - **It stops and waits for a yes.** A release is not unattended. Answering anything but
   `y` or `Y` aborts and leaves the bump in your tree; `git checkout -- .` discards it.
-- **The clean-tree precondition is what makes its `git add -A` safe.** With a clean tree,
-  everything staged is exactly what `bump.py` wrote. Starting from a dirty tree would sweep
-  unrelated edits into a release commit — which is why the check comes first and is fatal.
-- **The OBS step needs `osc` configured, and degrades rather than failing.** If `osc` is
-  missing, or the checkout fails, or the commit fails, it says so and points at
-  `packaging/obs/README.md` for the web-UI route. The GitHub release has already happened by then and is unaffected.
+- **The commit takes only the five files `bump.py` writes**, by name. The clean-tree
+  precondition runs before the bump, local CI and the prompt, so it cannot see a file the
+  suites leave behind or an edit made while the prompt waits. Any change outside those
+  five files stops the release before the commit, naming the files.
+- **The OBS step needs `osc` configured.** If `osc` is missing, or the checkout fails, or
+  the commit fails, it says so and points at `packaging/obs/README.md` for the web-UI route.
+  The GitHub release has already happened by then and is unaffected. The run then ends with
+  *"OBS was NOT updated"* and exit status 3, never *"Released"*.
 
 **What the user still has to do by hand:** nothing on the GitHub side — CI builds and
 publishes. The OBS rebuild is the one step that can need finishing manually.

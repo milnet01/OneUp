@@ -47,6 +47,8 @@ CHANGELOG_FIXTURE = """\
 ### Added
 - **Something already shipped.**
 
+[1] A footnote — a line that starts with "[" and a digit but is not a link.
+
 [Unreleased]: https://github.com/milnet01/OneUp/compare/v1.2.0...HEAD
 [1.2.0]: https://github.com/milnet01/OneUp/releases/tag/v1.2.0
 """
@@ -77,6 +79,8 @@ def main() -> int:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / rel, dst)
         (tmp / "CHANGELOG.md").write_text(CHANGELOG_FIXTURE)
+        # An unusual mode, so a rewrite that swaps in a fresh file and drops it shows.
+        (tmp / "CHANGELOG.md").chmod(0o640)
 
         # bump.py resolves ROOT from its own location, so running the copy makes
         # it edit the temp tree, never the real checkout.
@@ -87,6 +91,9 @@ def main() -> int:
         check(proc.returncode == 0, f"bump.py {NEW} exits 0 (stderr: {proc.stderr.strip()!r})")
 
         chg = (tmp / "CHANGELOG.md").read_text()
+        check((tmp / "CHANGELOG.md").stat().st_mode & 0o777 == 0o640,
+              "a rewritten file keeps its permissions")
+        check(not list(tmp.rglob("*.bump-tmp")), "no temporary file is left behind")
         check(f"## [{NEW}] - " in chg, f"[Unreleased] heading promoted to ## [{NEW}]")
         # Not just that the heading exists — that the section under it is EMPTY. A bug that
         # left the old bullets in place instead of moving them under the promoted version
@@ -96,6 +103,11 @@ def main() -> int:
               "fresh EMPTY ## [Unreleased] section left for the next cycle")
         check(f"[{NEW}]: https://github.com/milnet01/OneUp/releases/tag/v{NEW}" in chg,
               f"release link [{NEW}] added")
+        # Among the link definitions, not before the first line anywhere that opens with
+        # "[" and a digit — the footnote above is the trap (ONEUP-0186).
+        check(f"[{NEW}]: https://github.com/milnet01/OneUp/releases/tag/v{NEW}\n"
+              "[1.2.0]: https://github.com/milnet01/OneUp/releases/tag/v1.2.0" in chg,
+              f"release link [{NEW}] sits directly above the [1.2.0] link")
         # The ONEUP-0033 fix: the compare base must advance to the released tag.
         check(f"[Unreleased]: https://github.com/milnet01/OneUp/compare/v{NEW}...HEAD" in chg,
               f"[Unreleased] compare base advanced to v{NEW}")
