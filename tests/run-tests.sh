@@ -2059,6 +2059,43 @@ check_absent "a locked package manager reports no size"       "@@SIZE@@" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# release_zypper_lock stops PackageKit only when it is running (ONEUP-0135). The
+# shared systemctl mock once keyed on "$1 $2", and the engine asks `is-active
+# --quiet packagekit`, so the mock always answered active and the inactive branch —
+# the ordinary case — ran in no scenario. The wrapper below logs every call and
+# defers the answer to setup_common's own mock, so the default is what is tested.
+echo "TEST: PackageKit is stopped only when it is running (ONEUP-0135)"
+for state in inactive active; do
+    d=$(mktemp -d); setup_common "$d"
+    mv "$d/systemctl" "$d/systemctl.shared"
+    if [[ $state == active ]]; then
+        # shellcheck disable=SC2016  # the single quotes are the point: the text is the stub's own code.
+        printf '#!/usr/bin/env bash\n[[ "$1" == is-active ]] && exit 0\nexec "%s" "$@"\n' \
+            "$d/systemctl.shared" > "$d/systemctl.answer"
+    else
+        ln -s "$d/systemctl.shared" "$d/systemctl.answer"
+    fi
+    printf '#!/usr/bin/env bash\necho "$*" >> "%s"\nexec "%s" "$@"\n' \
+        "$d/systemctl-calls" "$d/systemctl.answer" > "$d/systemctl"
+    chmod +x "$d/systemctl" "$d/systemctl.shared" "$d/systemctl.answer"
+    printf '#!/usr/bin/env bash\n[[ "$*" == *--dry-run* ]] && { echo "Nothing to do."; exit 0; }\nexit 0\n' > "$d/zypper"
+    chmod +x "$d/zypper"
+    out=$(run_engine "$d" --size=system)
+    calls=$(cat "$d/systemctl-calls" 2>/dev/null)
+    check "PackageKit $state: the engine asked whether it is running" \
+        "is-active --quiet packagekit" "$calls"
+    if [[ $state == active ]]; then
+        check "PackageKit active: the engine stops it" "stop packagekit" "$calls"
+        check "PackageKit active: the engine says so" "Stopping the desktop updater" "$out"
+    else
+        check_absent "PackageKit inactive: the engine does not stop it" "stop packagekit" "$calls"
+        check_absent "PackageKit inactive: the engine says nothing about it" \
+            "Stopping the desktop updater" "$out"
+    fi
+    rm -rf "$d"
+done
+
+# ---------------------------------------------------------------------------
 # zypper's 100-103 exits are INFORMATIONAL (update/reboot/restart needed), not
 # failures — a nothing-to-fetch answer under one of them is still trustworthy.
 echo "TEST: --size treats zypper's informational exit codes as success"

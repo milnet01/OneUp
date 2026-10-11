@@ -71,7 +71,9 @@ exec "$@"
 EOF
     cat > "$d/systemctl" <<'EOF'
 #!/usr/bin/env bash
-[[ "$1 $2" == "is-active packagekit" ]] && exit 3   # inactive
+# PackageKit is inactive. Keyed on the words, not their positions: the engine asks
+# `is-active --quiet packagekit`, which "$1 $2" never matched (ONEUP-0135).
+[[ "$1" == is-active && " $* " == *" packagekit "* ]] && exit 3
 exit 0
 EOF
     cat > "$d/snapper" <<'EOF'

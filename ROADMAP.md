@@ -3127,7 +3127,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: in-session-2026-08-25 (verified while closing ONEUP-0054 stage 2).
   Lanes: tests.
 
-- 📋 [ONEUP-0135] **The suite's systemctl mock never reports PackageKit inactive.**
+- ✅ [ONEUP-0135] **The suite's systemctl mock never reports PackageKit inactive.**
   `setup_common`'s mock is `[[ "$1 $2" == "is-active packagekit" ]] && exit 3`
   with the comment `# inactive`, and the engine calls `systemctl is-active
   --quiet packagekit`. `$2` is `--quiet`, so the guard never matches and the
@@ -3141,6 +3141,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Not fixed here: changing `setup_common` changes every scenario's sudo call
   count at once, which is its own change with its own blast radius.
+  Resolved (2026-10-11, v2): setup_common's systemctl mock now keys
+  on the words (is-active ... packagekit), not their positions, so it
+  answers inactive as its comment always said. A new scenario drives both
+  branches through the shared mock: red first (inactive case stopped
+  PackageKit), green 427/0 after, and an inverted engine check fails all
+  four. No other scenario's counts changed. v2 only: tests-only, main frozen.
   **Layman:** A test stand-in meant to say a background updater is switched off actually says it is running, so the switched-off case is never tried.
   Kind: test.
   Source: in-session-2026-08-25 ONEUP-0054 stage 4 step 9.
