@@ -5154,7 +5154,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: review-contract-2026-08-25 ONEUP-0054 stage 4 loop 2.
 
-- 📋 [ONEUP-0134] **Spec §4.6's stage-4 row gives the wrong reason for excluding the --hold scenario.**
+- ✅ [ONEUP-0134] **Spec §4.6's stage-4 row gives the wrong reason for excluding the --hold scenario.**
   §4.6 says the --hold scenario "falls through into a full run and so
   cannot pass before stage 5's run driver exists". Several of that family
   never reach a run at all: a hold nobody answers, a go-ahead left over
@@ -5164,6 +5164,11 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   driver as the whole barrier would build the hold at stage 4 to turn
   those green. The plan now states the barrier correctly; the spec still
   does not, and editing it re-arms its own review gate.
+  Resolved (2026-10-11, v2): §4.6's stage-4 row now names the
+  hold itself as the barrier (start_held_engine waits for hold.state) and
+  says several --hold scenarios never reach a run. main's copy of the spec
+  has no such row (it is behind; ONEUP-0199), so v2 only. No gate: stage 4
+  is built, so no conformer builds anything differently from the row.
   **Layman:** A note in the design says why one test cannot pass yet, and the reason it gives is not the real one.
   Kind: doc-fix.
   Source: review-contract-2026-08-25 ONEUP-0054 stage 4 loop 2.
