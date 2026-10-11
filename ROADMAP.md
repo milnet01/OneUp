@@ -5373,7 +5373,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: review-code 2026-08-31, lane tooling.
 
-- 📋 [ONEUP-0187] **Nine document claims the review found false against the code they describe.**
+- ✅ [ONEUP-0187] **Nine document claims the review found false against the code they describe.**
   Reported by lanes and judged document-side, so they are for review-contract or a
   docs pass rather than a code fix. `workflow.md` §6's gate table has no row for
   Package structure or the INV-5 gate while claiming to list them in run order;
@@ -5389,6 +5389,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   for `_ALIAS_RE`, `Updater.rollback` and `Updater.restart_services`.
   `marker-protocol.md` §2 says `_on_size_output` reads SIZE only; it also handles
   HINT and appends non-marker lines.
+  Resolved (2026-10-11): main 2a9e0c6 fixes the three claims false on
+  main (workflow.md skip-gate count, files-and-naming.md edit() count,
+  marker-protocol.md §2 size reader). v2 4978ecc fixes those plus
+  security.md's updater.py/Updater.* citations and records the later
+  paths.py renames in ONEUP-0034 §12; merged 3ff605a. Already fixed on
+  v2 before this item: the gate table, release.yml suite list, Lint
+  row, lockstep and RPM-spec sentences. Main's updater.py wording is
+  true for main and was left alone.
   **Layman:** Nine places where a document describes the code inaccurately.
   Kind: doc-fix.
   Source: review-code 2026-08-31, lanes tooling, gui-services, gui-run, engine-protocol.
