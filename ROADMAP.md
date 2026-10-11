@@ -4012,6 +4012,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   written down. Note the rate-limit handler is also unguarded against an absurd
   `x-ratelimit-reset`, where `int()` can raise `OverflowError`, which is not in the
   handler's except tuple and escapes the network slot.
+  Progress (2026-10-11): the OverflowError half is fixed (main 2fb4d47,
+  v2 03640f1): an all-digit x-ratelimit-reset past time_t no longer
+  escapes the reply slot; the message drops the time instead. gui-smoke
+  check red without the fix, green with it. Still open: the user's
+  decision on contacting GitHub at launch without asking.
   **Layman:** The app checks GitHub for a new version every time it starts, and there is no way to turn that off.
   Kind: security.
   Source: review-code 2026-08-31, lane gui-services.
@@ -4267,6 +4272,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   the box was centred, on both branches. gui-smoke check red without
   the fix, green with it. The X11 child-widget note from the same read
   was not changed: every caller passes a window.
+  Follow-up (2026-10-11): ut-ants-39's cold read of fb9142a found no
+  definite bug and three weak spots, all closed (main a292cf5, v2
+  89e1bd0): the script also matches the parent's size, a widget hidden
+  before it runs is skipped, and the plain timers take the widget as
+  context. Confirmed in KWin's source that windowList() is creation
+  order (Workspace::windows() only appends).
   **Layman:** If you moved a OneUp window such as Repositories and a message pops up, that window jumps back to the middle.
   Kind: fix.
   Source: peer-review-2026-10-11 demoreel.
