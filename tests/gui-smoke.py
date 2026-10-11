@@ -439,6 +439,28 @@ def main() -> int:
         updater.center_on_parent(dlg)   # queues a KWin request; must not move it itself
         check("on Wayland placement is left to the compositor, not a futile move()",
               dlg.pos() == moved_to)
+        # ONEUP-0254: the script once centred every dialog of ours, so a message box
+        # pulled back a dialog the user had moved. It must pick only the widget being
+        # centred — by its size, newest first — and stop there.
+        scripts = []
+        _orig_run = updater.run_kwin_script
+        updater.run_kwin_script = scripts.append
+        try:
+            shown = updater.QDialog(host)
+            shown.resize(321, 123)
+            shown.show()
+            updater.center_on_parent(shown)
+            deadline = time.monotonic() + 2
+            while not scripts and time.monotonic() < deadline:
+                app.processEvents()
+                time.sleep(0.01)
+            shown.close()
+        finally:
+            updater.run_kwin_script = _orig_run
+        js = scripts[0] if scripts else ""
+        check("on Wayland only the dialog being centred is moved, not every one of ours "
+              "(ONEUP-0254)",
+              "cg.width - 321" in js and "cg.height - 123" in js and "break;" in js)
     finally:
         os.environ["XDG_SESSION_TYPE"] = _orig_session
         updater._platform_name = _orig_platform
