@@ -192,11 +192,34 @@ def _wait_for_notify(timeout: float = 5.0) -> bool:
     return False
 
 
+def _block_network() -> list:
+    """Replace every QNetworkAccessManager request method with one that records the call
+    and sends nothing. Returns the record; it is never restored, so the whole run is
+    covered."""
+    from PySide6.QtNetwork import QNetworkAccessManager
+    calls = []
+    for name in ("get", "post", "put", "head", "deleteResource", "sendCustomRequest",
+                 "connectToHost", "connectToHostEncrypted"):
+        def _refuse(self, *args, _name=name, **kwargs):
+            url = args[0].url().toString() if args and hasattr(args[0], "url") else args
+            calls.append(f"{_name} {url}")
+        setattr(QNetworkAccessManager, name, _refuse)
+    return calls
+
+
 def main() -> int:
     # The shim is loaded for what loading it PROVES — that the thing every launcher
     # names still starts the app — not for anything read off the module afterwards;
     # the package modules imported above are where the names live now.
     _load_updater()
+
+    # The gate under the stub below (ONEUP-0098). That stub covers one known caller, and
+    # only from the line it sits on: a window built above it, or a new network call
+    # anywhere in the window, reached GitHub with nothing turning red. So the transport is
+    # replaced instead — on the class, so a module that imported it by name is covered
+    # too — every request is recorded and refused, and the end of the run asserts none
+    # was made. Installed first, so it is above every window this file builds.
+    network_calls = _block_network()
 
     # Updater.__init__ asks GitHub whether a newer OneUp exists, and this file builds
     # 56 windows — so an unstubbed run fires 56 unauthenticated requests at
@@ -4122,6 +4145,11 @@ def main() -> int:
         p.waitForFinished(5000)
     check("every probe a window started has finished before the suite exits",
           all(p.state() == QProcess.NotRunning for p in left if shiboken6.isValid(p)))
+
+    check("no window in the suite tried to reach the network (testing.md §2.3)",
+          not network_calls)
+    for call in network_calls:
+        print(f"         {call}")
 
     print()
     print("======================================")

@@ -135,8 +135,14 @@ first `updater.Updater()`**. Unauthenticated GitHub allows 60 calls an hour per 
 before the stub, one run spent 56 of them and a few runs exhausted for real the budget the
 app's own *Check for updates* button needs (**ONEUP-0090**, which also closed the earlier
 duplicate ONEUP-0067). Nothing in the suite asserts on the check or its reply handler, so
-the stub costs no coverage — but a window constructed above that line restores the defect
-silently, and nothing catches that.
+the stub costs no coverage.
+
+**A gate under the stub catches what the stub alone cannot** (**ONEUP-0098**). Before
+anything else, `main()` replaces every request method of `QNetworkAccessManager` — on the
+class, so a module that imported it by name is covered too — with one that records the call
+and sends nothing. The last check of the run fails if anything was recorded, and prints each
+request. So a window built above the stub, or a new network call anywhere in the window,
+turns the suite red instead of reaching GitHub.
 
 **Two exceptions exist today. One is a defect and one is a deliberate carve-out**, and the
 difference between those is the point — a rule with a silent exception is worse than a rule
@@ -393,7 +399,7 @@ with the layout direction forced right-to-left.
 | §2.3 no root | **half-covered.** `run_engine` puts the mock directory in front of the real `PATH`, so a name the scenario mocks — `setup_common` mocks `sudo` — shadows the real one. The real tools are still behind it: a scenario without `setup_common`, an absolute path, or `pkexec` (mocked nowhere) reaches the real binary, and nothing catches that |
 | §2.3 a test writes only inside its own temporary directory | **on `v2`, the ONEUP-0058 scenario** — it redirects `HOME` and asserts no log directory appears when `--log=` points elsewhere. **On `main`, nothing:** `update_system.sh` there builds `LOG_DIR` from `$HOME` and creates it before looking at `--log=`, and `tests/run-tests.sh` does not redirect `HOME`, so every scenario creates `~/Documents/update-logs` on the real machine (ONEUP-0058) |
 | §2.3 every `mktemp -d` is paired with its `rm -rf` | **nothing** — a scenario that drops the removal leaks its directory silently, and a count of the two cannot show it |
-| §2.3 no network | **nothing automated, but the rule now holds.** Verified 2026-08-07 by running each suite inside an empty network namespace (`unshare -rn`): engine **246 passed / 0 failed** with T-1 SKIPping loudly, GUI **307 / 0** — identical to their networked results but for T-1. That is one measurement, not a gate: a *new* network call, or a window constructed above `gui-smoke.py`'s `_check_app_update` stub, would not be caught |
+| §2.3 no network | **GUI suite: its closing check. Engine suite: nothing automated.** Verified 2026-08-07 by running each suite inside an empty network namespace (`unshare -rn`): engine **246 passed / 0 failed** with T-1 SKIPping loudly, GUI **307 / 0** — identical to their networked results but for T-1. For the GUI suite there is now a gate as well: its last check fails if any window made a `QNetworkAccessManager` request (ONEUP-0098). The engine suite has no such gate |
 | §3 a mock fails loudly rather than quietly | several scenarios carry an `exit 99` trap. Nothing checks that a *new* mock has one |
 | §4 one invariant, one test | nothing automatic |
 | §5 the four correctness invariants | `tests/run-tests.sh` — this is what the suite is for, and the reason it exists |

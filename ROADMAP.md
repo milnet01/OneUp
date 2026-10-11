@@ -2259,7 +2259,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   not a decision. A script that calls the owning run inherits its opt-ins
   silently, and no amount of naming the owning run prevents that.
 
-- 📋 [ONEUP-0098] **Nothing stops the GUI suite reaching the network again.**
+- ✅ [ONEUP-0098] **Nothing stops the GUI suite reaching the network again.**
   ONEUP-0090 stopped the GUI suite firing 56 requests at api.github.com by
   setting Updater._check_app_update to a no-op in gui-smoke.py's main(). The
   fix works -- the suite was measured at 307/0 inside an empty network
@@ -2281,6 +2281,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   -- a further exception is the user's decision, not an inference. It is
   cheap enough (~10 lines) to fold into ONEUP-0064 or ONEUP-0032, both of
   which already rework this suite, or to take on v2 with the rest.
+  Resolved (2026-10-11, v2): gui-smoke.py patches every
+  QNetworkAccessManager request method on the class first thing in main()
+  and its last check fails if any request was recorded. Proved red on two
+  mutated copies (stub removed; a new request from another module), green
+  668/0. testing.md 2.3 updated. v2 only: tests-only, main frozen.
   **Layman:** The tests no longer phone GitHub, but nothing would notice if that came back.
   Kind: test.
   Source: in-session-2026-08-07 (deferred while closing ONEUP-0090).
