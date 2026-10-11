@@ -212,31 +212,47 @@ def _thin_snapshots(win):
 
 
 def _on_thin_finished(win, proc: QProcess):
-    """Report the outcome of a --thin-snapshots run and clear the advisory banner."""
+    """Report the outcome of a --thin-snapshots run and clear the advisory banner.
+
+    Every outcome ends in one message box closed with OK — the user's choice
+    (ONEUP-0230): the status line alone was easy to miss, and a failure the engine
+    gave no hint for said nothing at all."""
     if not (shiboken6.isValid(win) and shiboken6.isValid(proc)):   # ONEUP-0204
         return
     out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
     win.warn_btn.setEnabled(True)
+    title = QCoreApplication.translate("rollback", "Thin snapshots")
     removed = None
+    hinted = False
     for line in out.splitlines():
         if line.startswith("@@SNAPSHOTS@@|thinned|"):
             n = line.split("|")[-1]
             removed = int(n) if n.isdecimal() else None
         elif line.startswith("@@HINT@@|"):
+            hinted = True
             QMessageBox.warning(win, QCoreApplication.translate(
                 "rollback",
                 "Couldn't thin snapshots"),
                                 markers.render_hint(line.split("|")[1:]))
     if removed:
-        win.status.setText(i18n.counted("snapshots-thinned", removed))
+        done = i18n.counted("snapshots-thinned", removed)
+        win.status.setText(done)
         win._warn_snapshots = False
         win.warn_banner.setVisible(False)
+        QMessageBox.information(win, title, done)
     elif removed == 0:
-        win.status.setText(QCoreApplication.translate(
-            "rollback",
-            "No old snapshots needed thinning."))
+        done = QCoreApplication.translate("rollback", "No old snapshots needed thinning.")
+        win.status.setText(done)
         win._warn_snapshots = False
         win.warn_banner.setVisible(False)
+        QMessageBox.information(win, title, done)
     else:
         # No marker (auth cancelled / error): leave the banner so it can be retried.
         win.status.setText(QCoreApplication.translate("rollback", "Ready."))
+        if not hinted:   # a hint has already said why, in its own box
+            QMessageBox.warning(win, title, QCoreApplication.translate(
+                "rollback",
+                "The snapshots were not thinned. The password request may have been "
+                "cancelled, or snapper may have stopped with an error. The log in "
+                "{folder} says which; you can try again from the banner.").format(
+                    folder=paths.STATE_LOG_DIR))

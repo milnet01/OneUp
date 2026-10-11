@@ -80,6 +80,10 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Thinning old snapshots now tells you how it went** (ONEUP-0230)
+  A short message says how many restore points were removed, that none
+  needed removing, or that it did not work and where the log is.
+
 - **Offline, the firmware step no longer says "up to date" from an old firmware list** (ONEUP-0222)
   When the latest firmware list can't be downloaded, OneUp now warns that
   the firmware check used the last list downloaded, and to check your

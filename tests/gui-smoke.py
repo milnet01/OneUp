@@ -1608,22 +1608,37 @@ def main() -> int:
         run._launch = _real_launch
 
     # --- 5e. --thin-snapshots outcomes -----------------------------------------
-    # Three branches, and each decides whether the advisory banner stays up for a retry.
-    for _out, _want, _banner_stays in (("@@SNAPSHOTS@@|thinned|7\n", "7", False),
-                                       ("@@SNAPSHOTS@@|thinned|0\n", "No old snapshots", False),
-                                       ("", "Ready.", True)):
-        _label = _out.strip() or "(no marker — cancelled or error)"
-        wT = window.Updater()
-        wT._warn_snapshots = True
-        wT.warn_banner.setVisible(True)
-        # Move the status off its constructor default first. It is built as QLabel("Ready."),
-        # which is exactly what the no-marker branch sets — so without this the third case
-        # would pass even if that branch never ran.
-        wT.status.setText("(the handler did not set this)")
-        rollback._on_thin_finished(wT, _StubProc(_out))
-        check(f"thin {_label}: status reports it", _want in wT.status.text())
-        check(f"thin {_label}: banner still up = {_banner_stays}",
-              wT.warn_banner.isVisibleTo(wT) is _banner_stays)
+    # Each branch decides whether the advisory banner stays up for a retry — and, since
+    # ONEUP-0230, each says how it went in ONE message box closed with OK: the status line
+    # alone was easy to miss, and a failure with no hint said nothing at all.
+    _boxes = []
+    _orig_info, _orig_warn = QMessageBox.information, QMessageBox.warning
+    QMessageBox.information = staticmethod(lambda *a, **k: _boxes.append(("info", a[2])) or 0)
+    QMessageBox.warning = staticmethod(lambda *a, **k: _boxes.append(("warn", a[2])) or 0)
+    try:
+        for _out, _want, _banner_stays, _box, _says in (
+                ("@@SNAPSHOTS@@|thinned|7\n", "7", False, "info", "7"),
+                ("@@SNAPSHOTS@@|thinned|0\n", "No old snapshots", False, "info",
+                 "No old snapshots"),
+                ("", "Ready.", True, "warn", "not thinned"),
+                ("@@HINT@@|zzz-thin-code\n", "Ready.", True, "warn", "zzz-thin-code")):
+            _label = _out.strip() or "(no marker — cancelled or error)"
+            wT = window.Updater()
+            wT._warn_snapshots = True
+            wT.warn_banner.setVisible(True)
+            # Move the status off its constructor default first. It is built as
+            # QLabel("Ready."), which is exactly what the no-marker branch sets — so
+            # without this the third case would pass even if that branch never ran.
+            wT.status.setText("(the handler did not set this)")
+            _boxes.clear()
+            rollback._on_thin_finished(wT, _StubProc(_out))
+            check(f"thin {_label}: status reports it", _want in wT.status.text())
+            check(f"thin {_label}: banner still up = {_banner_stays}",
+                  wT.warn_banner.isVisibleTo(wT) is _banner_stays)
+            check(f"thin {_label}: one {_box} box saying so (ONEUP-0230)",
+                  len(_boxes) == 1 and _boxes[0][0] == _box and _says in _boxes[0][1])
+    finally:
+        QMessageBox.information, QMessageBox.warning = _orig_info, _orig_warn
 
     # --- 5f. the engine failing to start ---------------------------------------
     wE = window.Updater()
