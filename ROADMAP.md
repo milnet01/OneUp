@@ -5472,7 +5472,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc.
   Source: carried in session handoffs since 2026-08-31; filed 2026-09-02 to stop the prose relay.
 
-- 📋 [ONEUP-0199] **Reconcile ONEUP-0054's spec between main and v2 — main's copy is behind.**
+- ✅ [ONEUP-0199] **Reconcile ONEUP-0054's spec between main and v2 — main's copy is behind.**
   Found while building the stage-7 review packet. `docs/specs/ONEUP-0054-python-engine.md` differs between the branches, and `v2` holds the newer text: §4.6's rows 1, 2, 4 and 5 each carry detail `main`'s copy lacks (the named call sites at stage 1, the window's `STATE_LOG_DIR` rename and the four unpinned exit codes at stage 2, the `--hold` exception at stage 4, the two structural checks at stage 5). §4.6 row 7 and the whole of §4.7 are byte-identical on both, so stage 7's own gate was unaffected.
 
   Why it matters: the plan's stage 8 amends the spec on `main` and merges, which assumes the two are in step. They are not, so an amendment written against `main`'s text can be written against a passage `v2` has already replaced. A session reading the spec on `main` to learn what stage 7 owes reads an older contract with nothing saying so.
@@ -5481,6 +5481,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Decided (2026-09-18, user): v2's copy is authoritative. Copy it whole onto
   main, as stage 1 did for §4.4. A catch-up to already-gated text, so it does
   not re-arm rule 14. Do this before stage 8 amends the spec.
+  Resolved (2026-10-11): v2's docs/specs/ONEUP-0054-python-engine.md
+  copied whole onto main per the user's 2026-09-18 decision, then merged;
+  the file is byte-identical on both branches. No gate: catch-up to gated
+  text.
   **Layman:** Two branches hold different versions of the same design document, so a session reading it on the wrong branch builds from stale instructions.
   Kind: doc-fix.
   Source: in-session-2026-09-03 (ONEUP-0054 stage 7 plan gate, Phase 1b).
