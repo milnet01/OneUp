@@ -7445,6 +7445,10 @@ when complete (that document's §7).
   the KDE bug and merge request: /mnt/Games/Scripts/Linux/kde-kwin/SUBMISSION.md.
   Still owed by the user: restart OneUp from Konsole, then report
   after the next reboot whether it reopened in place.
+  Progress (2026-10-11): KDE bug 526933 filed; the KWin fix opened as
+  merge request plasma/kwin!10090 (ported to master; master needs newer
+  Plasma libraries than Tumbleweed ships, so KDE's CI tests it there).
+  State and next steps: kde-kwin/SUBMISSION.md.
   **Layman:** After a restart, OneUp should open in the middle of the screen without you having to move it.
   Kind: fix.
   Source: user-report-2026-10-10.
