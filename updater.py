@@ -4242,8 +4242,12 @@ def _update_check_error(reply: QNetworkReply) -> str:
     status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
     if status in (403, 429):
         reset = bytes(reply.rawHeader(b"x-ratelimit-reset")).decode(errors="replace")
-        when = (time.strftime(" Try again after %H:%M.", time.localtime(int(reset)))
-                if reset.isdecimal() else "")
+        when = ""
+        if reset.isdecimal():
+            try:
+                when = time.strftime(" Try again after %H:%M.", time.localtime(int(reset)))
+            except (OverflowError, OSError, ValueError):   # a reset time past time_t (ONEUP-0191)
+                pass
         return ("GitHub limits how often OneUp may check for a new version — 60 times "
                 "an hour from one address, shared with anything else here that uses "
                 f"GitHub.{when}\n\nThis doesn't affect updating your system.")
