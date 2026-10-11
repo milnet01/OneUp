@@ -4245,6 +4245,23 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: in-session-2026-10-10.
   Lanes: engine, tests.
 
+- 📋 [ONEUP-0254] **On Wayland, showing any message box re-centres every other open OneUp dialog too, undoing where the user moved it.**
+  Found by the demoreel session's cold read of ONEUP-0247 (main 12fced5),
+  2026-10-11; not yet seen on the live desktop. center_on_parent's KWin
+  script centres every transient window of OneUp's pid, not only the one
+  being shown. That was already true for the four hand-built boxes;
+  ONEUP-0247's app-wide filter makes every static-helper box trigger it.
+  Fix shape to decide: match only the newest transient, or only the one
+  whose caption and size match the box. Reproduce first: open
+  Repositories, move it, make it show a message box. Also from the same
+  read, not filed separately: center_on_parent's X11 branch uses the
+  parent's frameGeometry, which is wrong for a child-widget parent (all
+  current callers pass a window; parent.window() would guard it).
+  **Layman:** If you moved a OneUp window such as Repositories and a message pops up, that window jumps back to the middle.
+  Kind: fix.
+  Source: peer-review-2026-10-11 demoreel.
+  Lanes: gui.
+
 ## 1.4.6 — fixes to the released app
 
 **Theme:** fixes for the 1.4 app people use today, landed on `main`. No
