@@ -127,9 +127,9 @@ read as one item. It does share the package. It is not one item.
   `Updater.on_finished` sets `ok = exit_code == 0`, with `@@DONE@@` as belt and braces. The
   codes stay identical, and the differential harness asserts it (§4.5) — **for the codes a
   scenario reaches**. Nothing pins the full set anywhere, and `exit 2` (unknown flag) and the
-  trap codes 130/143/141 are in no scenario, so v2 could change those three with every gate
+  trap codes 130/143/141 are in no scenario, so v2 could change those four with every gate
   green. Stage 2 writes them down beside §4.1.1, the same way and for the same reason.
-- **The two state files.** `run.state` and `stop.request` keep their **layout** (§4.1.1) and
+- **The four state files.** `run.state`, `stop.request`, `hold.state` and `go.request` keep their **layout** (§4.1.1) and
   their `ONEUP_RUN_STATE` / `ONEUP_STOP_FILE` overrides — as does every other `ONEUP_*`
   override in `docs/standards/files-and-naming.md` §5.1, several of which the suite depends
   on. Their **location** is not this item's to keep: `docs/design/oneup-2.0.md` §6.5 settles
@@ -147,15 +147,17 @@ read as one item. It does share the package. It is not one item.
   plain terminal as `./update_system.sh` is today.
 
 **What is *not* an engine contract, though an earlier draft said so:** `history.json` and
-`~/.local/state/oneup/logs/` belong to the **window** — `updater.py`'s `HISTORY` and
-`LOG_DIR` constants. The engine never *resolves* either path; it writes into that log directory only when the
+`~/.local/state/oneup/logs/` belong to the **window** — its `HISTORY` and
+`LOG_DIR` constants, which ONEUP-0034 moved into `oneup/gui/paths.py`.
+The engine never *resolves* either path; it writes into that log directory only when the
 window's `--log=` points there. `docs/standards/files-and-naming.md`
 §5.1 is the owner of the full path table, and its §7 "Trap 1" is the one this rewrite must
 act on: `LOG_DIR` names two different directories in the two programs, which is harmless
 only while they are in different languages. Give them distinct names — `USER_LOG_DIR` and
-`STATE_LOG_DIR`, or equivalent — before either is imported anywhere. **This spec renames
-only the engine's**, at §4.6 stage 2 with `runstate.py`; the window's belongs to ONEUP-0034,
-which must land the matching name or the collision simply moves.
+`STATE_LOG_DIR`, or equivalent. **Stage 2 renames both halves, in one commit** (§4.6).
+ONEUP-0034 shipped without renaming the window's, and `LOG_DIR` is now imported across
+`oneup/gui/`, so that half was left unowned; splitting the rename across two commits is
+what lets the collision simply move.
 
 ### 4.1.1 The state-file layout, written down
 
@@ -164,8 +166,12 @@ engine "must reproduce it exactly or run-following breaks silently". Measured
 from `update_system.sh`'s `RUN_STATE_FILE` writer and `updater.py`'s `_read_run_state` at
 `8d4c93e`:
 
-**`run.state`** — plain text, four lines, `\n`-terminated, written in one `printf` when the
-run commits.
+**`run.state`** — plain text, four lines, `\n`-terminated, written when the run commits:
+to a temporary file first, then hard-linked into place, so it appears whole or not at all
+(ONEUP-0177). The link also refuses to replace a record that is already there. An engine
+that finds one owned by another live engine — its pid alive and its command line naming
+`update_system` or `oneup.engine` — refuses the run with `@@DONE@@|errors` rather than
+take it over (ONEUP-0145); a stale record is removed and the link retried.
 
 | Line | Field | Example |
 | --- | --- | --- |
@@ -202,6 +208,96 @@ and v2 must keep it rather than deleting stale requests at start-up, which would
 clicked in the same moment. `cleanup`'s deletion is tidiness and cannot be relied on: a
 `SIGKILL`ed engine never runs it, which is precisely the case the comparison exists for.
 
+**`hold.state`** — added by ONEUP-0044, and pinned here for the same reason as the pair
+above: the Python engine must reproduce it or the one-authentication fix silently stops
+working. The **engine** writes it whole — a temporary file renamed into place (ONEUP-0177) — when
+a `--size --hold` preview begins waiting, and deletes it on every exit from that wait. Plain text, three lines,
+`\n`-terminated.
+
+| Line | Field | Example |
+| --- | --- | --- |
+| 1 | the pid the window started — the engine's own, or its `systemd-inhibit` wrapper's (below) | `48213` |
+| 2 | this preview's log path — the `--log=` value **verbatim** | `/home/u/.local/state/oneup/logs/2026-08-23_0914.log` |
+| 3 | the size just quoted | `371.4 MiB` |
+
+**The window reads line 1 and nothing else**, and treats a missing or non-numeric line 1
+as no hold at all. Line 1 may not be reordered or dropped. That one comparison — is this
+pid our own `_size_proc`'s? — is what refuses both a `hold.state` a `SIGKILL`ed engine
+left behind and a second window's hold.
+
+**Under the shutdown inhibitor, the engine is not the process the window started.** The
+engine re-execs a `--size --hold` preview under `systemd-inhibit` (ONEUP-0086). The real
+tool forks its command and waits for it, so the engine is the wrapper's child and the
+window's grandchild. So the process
+that re-execs passes on two pids that only it knows. Its own pid is kept by the wrapper,
+and `hold.state` line 1 carries it. Its parent's pid is the window's, and the hold watches
+it. Measured on a real run on 2026-10-08: without them, Update never adopted the hold, and
+the window-gone check watched the wrapper, which lives exactly as long as the engine
+(ONEUP-0238). `tests/run-tests.sh` covers both with a mock that forks the way the real
+tool does, and that scenario pins the Python engine, as INV-11's does. The Bash fallback
+re-execs the same way and is not changed: it is frozen at the switch, and the window starts
+only the Python engine, so no window reads its line 1.
+
+**`go.request`** — the *window* creates it to tell a held engine to proceed, and the
+**engine** deletes it, both when it reads one and when the hold ends by any other route.
+Line 1 is a comma-separated step list and is the only line the engine reads; extra lines
+are ignored. An empty or unresolvable line 1 does **not** put the engine back to waiting:
+`adopt_go_ahead` refuses, and the refusal ends the hold — the stamp and the request are
+already deleted by then, so the engine exits rather than polling on — with
+`@@DONE@@|errors` and exit 1, never the `ok` a Cancel ends with, so a refused
+authorisation leaves a trace (ONEUP-0150). v2 must keep that,
+because a refusal that resumed the wait would sit there until the ceiling with the window
+believing it had been answered.
+
+**Three rules v2 must keep, and the second is a security property rather than a
+convenience.** Staleness is the same mtime comparison `stop.request` uses, against
+`hold.state` instead of `run.state` — a go-ahead not newer than the stamp is a leftover
+and is ignored, and deleting leftovers at start-up instead would race a go-ahead pressed
+in that same moment. And **every key must resolve in the engine's step-label map before
+any step runs, or the whole go-ahead is refused**. That is deliberately stricter than
+`--steps=`, which iterates the known keys and so silently *drops* an unknown one: reusing
+that leniency would let a `go.request` reading `cache,../../evil` run the cache step and
+report success. `--steps=` is a flag a person types on their own command line;
+`go.request` is an authorisation read by a root process. And third, **the wait ends when
+the window that started it does** — the engine captures the window's pid at start-up
+(under the inhibitor, the pid the re-exec passed on) and polls `kill -0` on it each time
+round, breaking when it stops existing. Without that a preview whose window was killed
+keeps a root-authenticated engine waiting to the full ceiling. A hold that ends this way
+emits the same `@@DONE@@|ok` a Cancel or the ceiling does, so the differential harness
+cannot see the difference either. Capture the pid once and probe the
+captured value — re-reading the parent pid is the dead guard `CLAUDE.md` §6 records, since
+an orphan is reparented and the comparison can then never fire.
+
+**Cancelling a hold reuses `stop.request` and adds no fifth file** — but the held engine
+may **not** read it through the ordinary stop check, which requires `run.state` to exist.
+A hold has deliberately not written `run.state`, so that check is false for the entire
+hold and a Cancel routed through it would do nothing until the ceiling. The hold compares
+`stop.request` against `hold.state`, its own stamp.
+
+### 4.1.2 The exit codes, written down
+
+§4.1 freezes the exit codes and records that four of them are pinned by nothing:
+no scenario reaches them, so v2 could change all four with every gate green.
+Measured from `update_system.sh` at the constructs named in the third column.
+
+| Code | Meaning | Read from |
+| --- | --- | --- |
+| `2` | an unrecognised flag | the argument loop's `*)` arm, which prints `Unknown option: <arg>` and the usage to **stderr** |
+| `130` | interrupted (128 + SIGINT) | `trap 'exit 130' INT` |
+| `143` | terminated (128 + SIGTERM, and SIGHUP) | `trap 'exit 143' TERM HUP` |
+| `141` | broken pipe (128 + SIGPIPE) | `trap 'exit 141' PIPE` |
+
+**The three signal traps `exit` rather than merely running `cleanup`, and that is
+load-bearing.** A plain `trap cleanup INT` would tidy up and then *resume* after the
+interrupted command, carrying on through the remaining privileged steps the user just
+cancelled. Exiting fires the EXIT trap, so `cleanup` still runs. The SIGPIPE trap is
+reachable only on a `tee` without `-p`; its point is that `cleanup` runs at all, since an
+untrapped SIGPIPE kills the shell outright and leaves the keep-alive looping and disabled
+repositories disabled.
+
+**`--help` and `-h` exit `0`**, and that one is not in the table because a scenario already
+covers it.
+
 ### 4.2 Module layout
 
 Nine modules, each tracing to an existing cluster of the Bash file rather than to a
@@ -215,22 +311,23 @@ split must obey. Paths are relative to `oneup/engine/`.
 | `markers.py` | every marker emitter — the protocol in **one** place | `marker`, `emit_progress`, `emit_check`, and every `marker NAME` call site |
 | `privilege.py` | become root once, and stay root safely for the run | `sudo_init`, `sudo_capture`, `reap_orphaned_askpass`, `cleanup` |
 | `proc.py` | run a child process and stream it — deadline, incremental bytes, cooperative cancel | the ad-hoc pipelines, `progress_filter`, `stop_pending` |
-| `runstate.py` | own the two state files and the log paths (§4.1.1) | the logging `exec` preamble and the state writes around it |
+| `runstate.py` | own the four state files and the log paths (§4.1.1) | the logging `exec` preamble and the state writes around it |
 | `parsers.py` | turn zypper's text into values — **pure functions, no I/O, no privilege** | `to_bytes`, `lock_holder`'s parsing, the progress and download-size wordings, `lr` output, and `reboot_reason_from_log`'s phrase-building (its log **read** is `steps.py`'s — see the split table) |
-| `repos.py` | refresh, skip and disable repositories | `refresh_repos`, `enabled_repo_aliases`, `find_failing_repos`, `disable_repo`, `release_zypper_lock`, `valid_alias`, `repo_scoped_failure` |
-| `steps.py` | run the five steps: `system, flatpak, firmware, orphans, cache` | `begin_step`, `end_step`, `run_system_upgrade`, the per-step bodies |
-| `actions.py` | the runs that are not an update: `--check`, `--size=`, the three auth actions, `--thin-snapshots`, and `--notify`'s `notify_send` (a desktop notification, not a marker) | `run_check`, `run_size`, `grant_auth`, `revoke_auth`, `auth_status`, `thin_snapshots`, `build_auth_rule` |
+| `repos.py` | refresh, skip and disable repositories | `refresh_repos`, `enabled_repo_aliases`, `find_failing_repos`, `disable_repo`, `release_zypper_lock`, `valid_alias`, `repo_scoped_failure`, `make_cdn_reposd` |
+| `steps.py` | run the five steps: `system, flatpak, firmware, orphans, cache` | `begin_step`, `end_step`, `run_system_upgrade`, `_run_system_upgrade_inner`, `run_system_download`, `run_system_commit`, `system_txn_argv`, the per-step bodies |
+| `actions.py` | the runs that are not an update: `--check`, `--size=`, the three auth actions, `--thin-snapshots`, and `--notify`'s `notify_send` (a desktop notification, not a marker) | `run_check`, `run_size`, `size_delivered`, `grant_auth`, `revoke_auth`, `auth_status`, `thin_snapshots`, `build_auth_rule`, `auth_cmnds`, `download_guard_src`, `guard_current`, `auth_current` |
 
-The table places every function in `update_system.sh`; it is a map, not a sample. **Five
-functions cross a module boundary**, and each split is deliberate:
+The table places every function in `update_system.sh`; it is a map, not a sample. **Six
+splits cross a module boundary**, and each is deliberate:
 
 | Function | Split how |
 | --- | --- |
 | `lock_holder` | the `$ZYPP_PID_FILE` and `/proc/<pid>/comm` probe → `repos.py`; only the text it parses → `parsers.py` |
 | `progress_filter` | the streaming loop → `proc.py`; the wordings it recognises → `parsers.py` |
 | `cleanup` | it does four things across three modules: deleting the two state files → `runstate.py`; re-enabling every alias in `DISABLED_REPOS` → `repos.py`; reaping the askpass and killing the keep-alive → `privilege.py`. **The repo re-enable is the one to be careful with** — the scenario *"an interrupted --skip-repo run still re-enables the source (trap restore)"* is what asserts it, and it is easy to lose when one function is split three ways |
-| `stop_pending` | the decision (is a stop pending at this boundary?) → `proc.py`; reading the two state files it decides from → `runstate.py` |
+| `stop_pending` | the decision (is a stop pending at this boundary?) → `proc.py`; reading the two state files it decides from → `runstate.py` (the hold's own stop check compares against `hold.state` instead, §4.1.1) |
 | `reboot_reason_from_log` | reading the run's log → `steps.py`; turning the lines it finds into the reason phrase → `parsers.py` |
+| `hold_for_go_ahead` / `adopt_go_ahead` | the wait itself — writing `hold.state`, the two `-nt` staleness comparisons, the window-pid liveness poll, deleting both files on every exit → `runstate.py`; entering and leaving the hold as part of `--size --hold` → `actions.py`; re-deriving `RUN_KEYS`, `TOTAL` and `STEP_INDEX` on a go-ahead → `__main__.py`, which owns that derivation. **The re-derivation is the one to be careful with**, and it cuts both ways — the step dispatch never reads `STEPS`, so setting that alone leaves start-up's selection running, which is all five; but `run.state`'s writer *does* read it, so a go-ahead must set `STEPS` as well or line 3 records a selection the run never performed (§4.1.1) |
 
 Keeping I/O out of `parsers.py` is what makes §4.3.4's table-driven tests possible at all.
 
@@ -441,11 +538,11 @@ each stage is what makes the next one safe to attempt.
 
 | # | Work | What it satisfies |
 | --- | --- | --- |
-| 1 | `ONEUP_ENGINE_CMD` indirection at the two call sites that keep running the engine, on `main` (the third is replaced outright at stage 2 — §4.4) | §4.4 — the suite still green on `main`, unchanged |
-| 2 | `__main__.py`'s flag parsing, plus `markers.py`, `runstate.py`, `proc.py`, `privilege.py`, and `actions.py`'s `auth_status` — enough for `--help` and `--auth-status`, nothing more. `runstate.py` also renames the engine's `LOG_DIR` to `USER_LOG_DIR` (§4.1, Trap 1) and discharges `files-and-naming.md` §7 Trap 2 (ONEUP-0058): create the log directory only when about to write it — with a scenario asserting no directory appears when `--log=` points elsewhere, because a fix nothing checks is a wish. Plus the three suite additions this stage owes: the replacement keep-alive test (§4.3.5), the absent-tool skip test (INV-9), and the assertion on `run.state`'s fourth line that INV-13 records as missing | the `--auth-status` scenario passes against v2; INV-9 gains its first test ever, and INV-7's SIGKILL leg is replaced |
+| 1 | `ONEUP_ENGINE_CMD` indirection at the two call sites `main` runs the engine from — `run_engine` and the broken-pipe scenario. The keep-alive scenario is replaced outright at stage 2, and the `--hold` scenario does not exist on `main` (§4.4) | §4.4 — the suite still green on `main`, unchanged |
+| 2 | `__main__.py`'s flag parsing, plus `markers.py`, `runstate.py`, `proc.py`, `privilege.py`, and `actions.py`'s `auth_status` — enough for `--help` and `--auth-status`, nothing more. `runstate.py` also renames the engine's `LOG_DIR` to `USER_LOG_DIR`, and the same commit renames the window's to `STATE_LOG_DIR` (§4.1, Trap 1). This stage also writes down the four unpinned exit codes beside §4.1.1 (§4.1) and applies the `--hold` scenario's `ONEUP_ENGINE_CMD` override (§4.4) and discharges `files-and-naming.md` §7 Trap 2 (ONEUP-0058): create the log directory only when about to write it — with a scenario asserting no directory appears when `--log=` points elsewhere, because a fix nothing checks is a wish. Plus the three suite additions this stage owes: the replacement keep-alive test (§4.3.5), the absent-tool skip test (INV-9), and the assertion on `run.state`'s fourth line that INV-13 records as missing | the `--auth-status` scenario passes against v2; INV-9 gains its first test ever, and INV-7's SIGKILL leg is replaced |
 | 3 | `actions.py`'s `--check` — read-only and needs no root, so the safest real behaviour to build first | every `--check` scenario green against v2 |
-| 4 | `parsers.py`, `repos.py`, and `actions.py`'s `--size=`; parser unit tests | §4.3.4; the `--size` scenarios green |
-| 5 | `__main__.py`'s run driver, pre-flight (`@@DISK@@`, `@@REPO@@`, `@@SNAPSHOTS@@`) and final summary. `steps.py` — the five steps, the pre-update snapshot block, remedies, repo skipping. The rest of `actions.py` (`--grant-auth`, `--revoke-auth`, `thin_snapshots`). Plus §4.3.2's new scenario: a per-call deadline firing on a step other than the repo refresh | the remaining scenarios → G1, and G4 with them — the one-prompt scenario is an engine-suite scenario and needs no window |
+| 4 | `parsers.py`, `repos.py`, and `actions.py`'s `--size=`; parser unit tests | §4.3.4; the `--size` scenarios green **except the `--hold` ones**, which wait for `hold.state` and so cannot pass until the hold itself is built — several of them never reach a run at all (a hold nobody answers, a stale or tampered go-ahead, a killed engine), so the run driver alone is not the barrier |
+| 5 | `__main__.py`'s run driver, pre-flight (`@@DISK@@`, `@@REPO@@`, `@@SNAPSHOTS@@`) and final summary. `steps.py` — the five steps, the pre-update snapshot block, remedies, repo skipping. The rest of `actions.py` (`--grant-auth`, `--revoke-auth`, `thin_snapshots`). Plus §4.3.2's new scenario: a per-call deadline firing on a step other than the repo refresh, and the two structural `$ENGINE`-as-file checks re-expressed against `oneup/engine/` now that the last privileged call site has moved (§4.4) | the remaining scenarios → G1, and G4 with them — the one-prompt scenario is an engine-suite scenario and needs no window |
 | 6 | The differential harness | G2, and the list of what it cannot see |
 | 7 | The window pointed at v2 behind an environment switch, plus INV-11's new scenario: the engine run with PySide6 hidden from the import path | G3, G5 |
 | 8 | A real run on the user's machine | G6 |
@@ -557,7 +654,8 @@ rewrite; this list is the index, not the mechanism. Scenario names are the ones 
 
 - **INV-4** Stopping is **cooperative**, checked only at safe boundaries, never mid-
   transaction. `docs/standards/security.md` §6 owns the rule and why signalling is banned.
-  *Test:* *"a stop DURING the run lets the running transaction finish, then stops"* and
+  *Test:* *"a stop during the COMMIT is ignored until the step ends (ONEUP-0085 INV-2)"*,
+  *"a stop DURING the download ends the run without installing (ONEUP-0085 INV-1)"* and
   *"Stop is honoured DURING the refresh, before anything is installed"*.
 
 - **INV-5** A run survives the window going away, and still finishes.
@@ -602,7 +700,7 @@ rewrite; this list is the index, not the mechanism. Scenario names are the ones 
   *Test:* the scenario *"package-only change offers a SERVICE restart, not a reboot"*,
   whose `@@SERVICES@@` assertion is what proves it.
 
-- **INV-13** The two state files keep the layout §4.1.1 pins, so a window can find and
+- **INV-13** The four state files keep the layout §4.1.1 pins, so a window can find and
   follow a run the previous window started.
   *Test:* the scenarios *"a real run records itself in a run-state file and clears it on
   exit"* — which asserts lines 1–3 and the deletion — and *"a read-only --check run does NOT
@@ -712,4 +810,8 @@ When the switch lands in stage 9:
 | 6 | 2026-07-27 | 4 high, 5 medium, 8 low — **15 verified, 2 dismissed** | No critical. §4.2 said two functions cross a module boundary; four do, and the one that matters is `cleanup` — it deletes the state files, re-enables every disabled repository and reaps the keep-alive, which is three of this spec's own modules. The repo re-enable has a scenario guarding it and is exactly what gets lost when one function is split three ways. §8 also listed no CI script, so the two test programmes this spec commissions would have run nowhere — `workflow.md` §10 names that as a trap by name. Two passages still described `marker-protocol.md` §8 as pinning the layout nowhere; it now points here |
 | 7 | 2026-07-27 | 1 critical, 4 high, 5 medium, 5 low — **13 verified, 2 dismissed** | The critical came from the design's own previous loop: §4.1 still froze the state files' *location* when ONEUP-0059 moves it, in both halves, four items before this one starts. An implementer building `runstate.py` would have hard-coded the path 0059 had just changed. Two module placements were wrong for the same reason — `reboot_reason_from_log` reads a file and `notify_send` emits no marker, so neither belonged where it sat — and `__main__.py`'s run driver and final summary, which emit half the markers INV-1 and INV-2 assert on, were owed by no stage at all |
 | 8 | 2026-07-27 | **none verified** (one raised and dropped — see the design's loop 9 row) | **Converged.** `Draft` → `Reviewed`; implementation of ONEUP-0054 is unblocked |
-| 9 | 2026-10-02 | 2 verified in this document, as the companion of an admitted pair whose subject was the build plan (the plan's loop log, row 15, carries the run) | §4.7 was amended for stage 9 (the AppImage runs a copy of the engine outside its bundle; the switch variable goes). Both lanes read it cold. Two §8 bullets were fixed: ONEUP-0066's obligation to carry a marker list into the Python engine, which that item closed the other way, and a 2.0.0 bump at stage 9 that §4.6 puts at the release |
+| 9 | 2026-08-24 | Q1 6 · Q2 1 · Q3 1 · Q4 0 — 8 verified, 1 dismissed | Loop 1 of a new run (ONEUP-0127): ONEUP-0044 edited §4.1.1 on 2026-08-23, so the `Reviewed` stamp no longer covered the text. **All three lanes independently found the same four defects**, and every one is drift the intervening items left behind. INV-4 named a scenario that no longer exists — ONEUP-0085 renamed it, so the invariant pointed at nothing. §4.4 said the suite reaches the engine at three places and "all three must be handled together"; ONEUP-0044 added a fourth, the `--hold` scenario, which stage 1 would have left launching v1 forever with G1 green — and the branch split matters, since `main` genuinely has two and `v2` has three. §4.1 assigned the window-side `LOG_DIR` rename to ONEUP-0034, which shipped without it, orphaning the obligation. And §4.2's "the table places every function" was false by twelve, the costly pair being `hold_for_go_ahead`/`adopt_go_ahead` — §4.1.1's own contract with no module. Two more the lanes found: §4.4's table named one `$ENGINE`-as-file reader where there are three, leaving the privileged-call-site guard with no disposition, and §4.1 promised stage 2 would pin the exit codes while stage 2's row never mentioned them. The orchestrator added one, resolving a lane's open question: §4.1.1 said an invalid `go.request` "is treated as absent", where `adopt_go_ahead` refuses and the refusal *ends* the hold — a Python engine built to the sentence would poll on until the ceiling. Dismissed: the 34-privileged-call-sites figure, now 29 live, but stamped past-tense and attributed to `security.md` §1.2, which does say 34 at `58ea3bc` — no line is built differently. The fix pass produced three pieces of its own collateral, all caught by 4b and all one shape: an ordinal into the table this loop lengthened ("the third"), which is what ONEUP-0108's review recorded three loops running. Every row is now cited by content |
+| 10 | 2026-08-24 | Q1 1 · Q2 4 · Q3 2 · Q4 0 — 7 verified, 0 dismissed | **Cap reached (2 for a spec), and it is a VIOLENT one: 5 of the 7 landed on text loop 9 wrote**, every one of them in text a fix *added* — 4a-min's pattern exactly. The worst was found by all three lanes: loop 9 repaired the ONEUP-0034 half of Trap 1 and left the bolded **"This spec renames only the engine's"** standing three lines above its own correction, so the document gave two answers to which constants stage 2 renames. Loop 9's other additions went the same way: "the four rows above it are re-pointings" when the keep-alive row is fourth of five and the structural check *does* move the figure it pins; "All five must be handled together" against a §4.6 that splits them across stages 1, 2 and 5; and a split-table row asserting "the run path never reads `STEPS`" when `run.state`'s writer reads exactly that, which is why `adopt_go_ahead` sets it — built to the sentence, line 3 would record a selection the run never performed. Two were pre-existing and both are the run's most valuable: `ONEUP_ENGINE_CMD` was pinned by name and default but never by **encoding**, and a Bash array cannot cross a process boundary (measured: `export` drops it), so a harness and a suite settling it differently make G2 diff v1 against v1 and go green; and §4.1.1's "Two rules v2 must keep" omitted the hold's third exit — the `kill -0 "$WINDOW_PID"` liveness poll — so a Python hold would keep a root-authenticated engine waiting to the ceiling after its window died, invisibly, since that exit emits no marker. **Not to be re-gated**: at 671 lines this is the smallest of its recent siblings (684–965), so size is not the problem, and a third cold read would be repairing the second. It goes to implementation, which exercises the contract against real code. `Reviewed` stands — the project defines it as ready-to-implement (`documentation.md` §3) |
+| 11 | 2026-10-02 | 2 verified in this document, as the companion of an admitted pair whose subject was the build plan (the plan's loop log, row 15, carries the run) | §4.7 was amended for stage 9 (the AppImage runs a copy of the engine outside its bundle; the switch variable goes). Both lanes read it cold. Two §8 bullets were fixed: ONEUP-0066's obligation to carry a marker list into the Python engine, which that item closed the other way, and a 2.0.0 bump at stage 9 that §4.6 puts at the release |
+| 12 | 2026-10-08 | 2 lanes, cold, every lane held every question; genre pinned `spec`. Q1 1 · Q2 1 · Q3 0 · Q4 0 — 2 verified, 1 dismissed, 2 fixed | Loop 1 of a new run (ONEUP-0238): §4.1.1 amended so `hold.state` line 1 is the pid the window started and the window's pid crosses the inhibitor re-exec. **[Q2]**: the amendment said the new suite scenario covers the fix and that the Bash fallback is unchanged, but named no engine for the scenario; run under the fallback through `ONEUP_ENGINE_CMD`, it fails for a known reason. It now pins the Python engine, as INV-11's does. **[Q1]**, pre-existing in the amended paragraph: a hold ended by its window going "emits no marker", where `main` emits the same `@@DONE@@\|ok` a Cancel or the ceiling does. Dismissed: §4.4's sentences naming Bash as the suite's default, which are stage-1 and stage-5 records. Two open questions resolved clean: how the pids cross the re-exec (only the engine reads them) and `run.state`'s pid (the window reads it from the file, never compares it to its own process) |
+| 13 | 2026-10-08 | 2 lanes, cold, briefed exactly as loop 12 with the packet rebuilt from disk; every lane held every question. Q1 0 · Q2 0 · Q3 0 · Q4 0 — 0 verified, 1 dismissed | **Converged**; `Reviewed` stands. Dismissed after measurement: a [Q1] that an engine could outlive a killed `systemd-inhibit` wrapper once the hold watches the window rather than the wrapper. Killing the wrapper with `TERM` and with `KILL` (`systemd-inhibit … sh -c 'sleep 30'`, 2026-10-08) left no child either time, the engine exits on `SIGTERM` and `SIGHUP` (`privilege.install_exit_handlers`), and nothing in `oneup/gui/` kills `_size_proc`. One open question resolved clean: with `ONEUP_INHIBITED` set and no pids passed on, the engine uses its own pid and its start-up parent, which every pre-set scenario exercises |
