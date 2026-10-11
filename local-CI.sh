@@ -28,12 +28,20 @@ cd "$(dirname "$0")" || exit 1
 
 FULL=false
 DOCS=false
-case "${1:-}" in
-    --full) FULL=true ;;
-    --docs) DOCS=true ;;
-    "")     ;;
-    *)      printf 'local-CI: unknown argument %s (expected --full or --docs)\n' "$1" >&2; exit 2 ;;
-esac
+# Every argument is read: reading only the first let `--docs --full` drop --full and
+# `--docs --bogus` pass a typo silently (ONEUP-0186).
+for arg in "$@"; do
+    case "$arg" in
+        --full) FULL=true ;;
+        --docs) DOCS=true ;;
+        *)      printf 'local-CI: unknown argument %s (expected --full or --docs)\n' "$arg" >&2
+                exit 2 ;;
+    esac
+done
+if $FULL && $DOCS; then
+    echo "local-CI: --docs runs only the document gates, so it cannot be combined with --full" >&2
+    exit 2
+fi
 
 fail=0
 # Every suite's log goes in a directory of this run's own (ONEUP-0203). The fixed
