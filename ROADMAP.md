@@ -7362,7 +7362,7 @@ when complete (that document's §7).
   Source: user-request-2026-10-10.
   Lanes: gui.
 
-- 🚧 [ONEUP-0246] **The window is not centred when it first opens after a reboot.**
+- ✅ [ONEUP-0246] **The window is not centred when it first opens after a reboot.**
   User report, 2026-10-10: after every reboot the window has to be
   recentred by hand. Not yet investigated: which branch, whether it is
   the autostart launch or any first launch, and where KWin puts it.
@@ -7472,6 +7472,13 @@ when complete (that document's §7).
   Remember rule for KCalc wrote the dragged position to kwinrulesrc on
   close; test rule removed. Still owed: after the next reboot, ask the
   user whether OneUp reopened in place; if yes, flip shipped.
+  Resolved (2026-10-11): after a reboot at 13:11 with the patched
+  KWin installed, the user reports OneUp (v2 checkout, tray autostart)
+  opened in the middle of the screen without being moved. KWin probe:
+  main frame at 1448,482, size 945x1151, equal to the saved frame_pos
+  in ~/.config/OneUp/OneUp.conf. That saved spot is itself the centre,
+  so this reboot does not tell the replay apart from KWin's own
+  centring; the replay itself was proven by the 2026-10-10 live probe.
   **Layman:** After a restart, OneUp should open in the middle of the screen without you having to move it.
   Kind: fix.
   Source: user-report-2026-10-10.
