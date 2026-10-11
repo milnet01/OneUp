@@ -608,7 +608,7 @@ states it and owns what "complete" means.
 | §6.1 a new gate is proved to fail before it is trusted | nothing automatic |
 | §6.1 step 2 — a new gate's row is named as the script labels it, in script order | nothing automatic. The table and the script are compared by a reader or not at all |
 | §6.1 a gate reports and does not repair | nothing automatic, but it is self-punishing: a gate that edited prose would be rewriting a claim it does not understand, and the next cold read finds it |
-| §6 a gate whose tool is absent is reported skipped, never silently passed | the `skip` helper. Three of the eight gates reach for it — GUI smoke, Lint and Packaging validation — at five call sites between them; the rest depend only on `bash` and `python3`. Nothing checks that a new optional-tool gate reaches for it rather than a bare `ok` |
+| §6 a gate whose tool is absent is reported skipped, never silently passed | the `skip` helper. GUI smoke, Lint and Packaging validation reach for it; every other gate depends only on `bash` and `python3`. Nothing checks that a new optional-tool gate reaches for it rather than a bare `ok` |
 | §6 `--no-verify` is not a way past a red gate | **nothing, by construction** — it is the flag that turns the check off. Only the author's intent stands behind this one |
 | §3 the body says *why*, and records any measurement | nothing automatic |
 | §4 a finding is filed the moment it is found | nothing automatic, and by its nature nothing could: an unfiled finding leaves no trace to check |

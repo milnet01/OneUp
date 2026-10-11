@@ -70,7 +70,7 @@ These channels use this protocol, and only the first goes through `handle_marker
 | Channel | How the engine is invoked | Who reads it |
 | --- | --- | --- |
 | A run | `--steps=…` | `Updater.handle_marker` |
-| Download size | `--size=<step>` | `Updater._on_size_output` — reads `SIZE` and `HINT` |
+| Download size | `--size=<step>` | `Updater._on_size_output` — reads `SIZE` and `HINT`, and copies every non-marker line to the log |
 | Authorization state | `--auth-status` | `Updater._on_auth_status_finished` — matches `@@AUTH@@|on` and `@@AUTH@@|off` in the whole output |
 | Authorization change | `--grant-auth` / `--revoke-auth` | `Updater._on_auth_finished` — reads `HINT` |
 | Snapshot thinning | `--thin-snapshots` | `Updater._on_thin_finished` — reads `SNAPSHOTS|thinned` and `HINT` |
