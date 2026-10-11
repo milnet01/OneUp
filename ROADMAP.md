@@ -3962,7 +3962,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: security.
   Source: review-code 2026-08-31, threat-model calibration.
 
-- 📋 [ONEUP-0188] **Engine polish below the filed items: help text, verbatim log path, and a few dead or misleading lines.**
+- ✅ [ONEUP-0188] **Engine polish below the filed items: help text, verbatim log path, and a few dead or misleading lines.**
   `__main__.py:91` drops the Examples block the Bash `--help` prints, and `:87`
   drops the skip-repo ceiling — a user-facing regression on the "fully usable in a
   terminal" contract; `update_system.sh:177` omits `--size=`, `--hold` and
@@ -3985,6 +3985,25 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   longer applies, `theme.py:555` derives the HC focus fill from `btn` while the
   rest fill is `card`, `theme.py:622`'s `focus` token is substituted into nothing,
   and `_ink_for`'s docstring states a guarantee the function does not have.
+  Resolved (2026-10-11): main 23566db, v2 merge 12464b0 + a424e7c. Every
+  point was re-checked against today's code first. Already fixed before
+  this item: the help text's Examples block and the skip-repo ceiling.
+  Fixed with a red-then-green test each: the verbatim log path, the
+  snapshot fallback's number check (main too), the import-time crash on a
+  bad ONEUP_HOLD_SECONDS, the hold ceiling surviving a suspend (both
+  engines on v2), PermissionError read as alive, the interrupted
+  re-enable, and the CDN copy's encoding. Comment fixes: INV-9's real
+  guard, the keep-alive tag's argv slot, the reaper's "parent pid 1"
+  header (main too). Theme: the HC theme combo takes the ghost pair; the
+  theme list keeps its fill (its selection is btnhov) and focus_report now
+  measures it against card; _ink_for's floor is stated for one fill.
+  Deliberately not done: --hold and --emit-guard stay out of --help
+  (window-only, and hidden by ONEUP-0092's design). The base palettes'
+  unpainted `focus` token is a pair ONEUP-0027 and ONEUP-0076 name, so
+  removing it is a spec change. The accent exemption's reason still holds.
+  update_system.sh's :288, :894's neighbours, :1048 and the ASKPASS
+  default came with no description, and nothing wrong was found there;
+  :1048 is the download guard, whose text is a re-grant for every user.
   **Layman:** A collection of small inaccuracies and tidy-ups across the engine.
   Kind: chore.
   Source: review-code 2026-08-31, lanes engine-driver, engine-privilege, engine-shell, engine-steps, gui-theme.
