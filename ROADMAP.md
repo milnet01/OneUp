@@ -7326,7 +7326,7 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: review-contract-2026-10-01 wording-and-translation.md loop 7 (out of scope).
 
-- 📋 [ONEUP-0221] **Move every document's review loop log into its own file, as the user's history rule requires.**
+- ✅ [ONEUP-0221] **Move every document's review loop log into its own file, as the user's history rule requires.**
   The user's document rules (2026-10-01) say history that does not serve a
   document's purpose moves to its own file, linked. A Cold-eyes loop log is
   review history. documentation.md §4 currently requires every standard to
@@ -7335,6 +7335,14 @@ when complete (that document's §7).
   teaching docs-check to read the log from docs/reviews/<doc>-loop-log.md,
   and moving the logs. The global documentation.md §9.1 already defines the
   pointer form: heading plus one-line pointer, rows in the record.
+  Resolved (2026-10-11): 7c952e8 and de5a695 on v2. The nine standards and
+  the marker reference keep their loop-log heading and a one-line pointer;
+  rows moved verbatim to docs/reviews/<name>-loop-log.md. documentation.md
+  §4 requires the form, docs-check reads the records and fails a section
+  with neither rows nor a resolving pointer. Gated: review-contract loop
+  13, converged; its one out-of-radius finding filed as ONEUP-0257. v2
+  only (a tests/ change); main keeps inline logs until the 2.0.0 merge.
+  Specs keep their rows inline.
   **Layman:** Each rule document carries a long record of past reviews that readers do not need; it should live in a separate file instead.
   Kind: doc-fix.
   Source: user-request-2026-10-01.
@@ -7761,6 +7769,21 @@ when complete (that document's §7).
   Kind: fix.
   Source: in-session-2026-10-11 (found while fixing ONEUP-0218).
   Lanes: gui.
+
+- 📋 [ONEUP-0257] **documentation.md §7 says to fix every actionable severity, which a question-tagged review cannot apply.**
+  §7's bullet "Fix every actionable severity — critical, high, medium, low.
+  Only informational findings are left" sits two bullets below the one
+  saying review-contract emits no severity scale; its findings carry
+  [Q1]-[Q4] instead. A conformer running the current gate cannot tell
+  which verified findings it lets them leave, and the "1 info" outcome
+  word below invites writing one off. Global CLAUDE.md rule 14 says every
+  verified finding is fixed. Both lanes found it. Also check §7's "Polish
+  only ... stop" against that rule (a lane's open question). A direction
+  change to a standard: rule 14 gate.
+  **Layman:** A review rule sorts problems by severity grades the current review no longer gives, so nobody can tell which problems it lets them leave unfixed.
+  Kind: doc-fix.
+  Source: review-contract-2026-10-11 documentation.md loop 13 (out of radius, filed).
+  Lanes: docs.
 
 ## 2.1.0 — after 2.0
 
