@@ -92,8 +92,8 @@ HINTS: dict[str, tuple[tuple[str, ...], str]] = {
         "connection, then retry.")),
     "package-conflict": ((), QT_TRANSLATE_NOOP(
         "markers",
-        "A package conflict — often a third-party repo. Check the log; "
-        "you may need to disable a conflicting repository.")),
+        "A package conflict — often a third-party source. Check the log; "
+        "you may need to turn off a conflicting source.")),
     "go-ahead-unverified": ((), QT_TRANSLATE_NOOP(
         "markers",
         "OneUp could not verify the request to start the update, so "

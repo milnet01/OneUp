@@ -1300,6 +1300,26 @@ def main() -> int:
           "A source's signing key is out of date." in wK.warn_label.text()
           and "repositor" not in wK.warn_label.text().lower())
     wK.hide()
+    # ONEUP-0256: the rest of 0218's class — the package-conflict hint and all three
+    # texts of the key-import confirmation. "repo" is matched as a word, as well as
+    # "repositor", because the conflict hint said "a third-party repo".
+    _jargon = re.compile(r"\brepos?\b|repositor", re.IGNORECASE)
+    _conflict = markers.render_hint(["package-conflict"])
+    check("the package-conflict hint says 'source', never 'repo' (ONEUP-0256)",
+          "source" in _conflict and not _jargon.search(_conflict))
+    _seen = []
+
+    class _CapturedBox(banners.QMessageBox):
+        def exec(self):
+            _seen.extend([self.windowTitle(), self.text(), self.informativeText()])
+            return banners.QMessageBox.Cancel
+
+    _patch(banners, "QMessageBox", _CapturedBox)
+    _approved = banners._confirm_key_import(wK)
+    _unpatch_all()
+    check("the key-import dialog says 'source', never 'repository' (ONEUP-0256)",
+          len(_seen) == 3 and not _approved
+          and "source" in " ".join(_seen) and not any(_jargon.search(t) for t in _seen))
     # ONEUP-0222: the engine's stale-firmware-list hint has a sentence of the window's
     # own, not the unknown-code fallback.
     check("the firmware-list-stale hint has its own sentence (ONEUP-0222)",

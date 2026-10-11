@@ -80,6 +80,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The key-import dialog and the package-conflict hint say "source", like the rest of the window** (ONEUP-0256)
+  They were the last window messages still saying "repository" or "repo".
+
 - **Engine tidy-ups: exact log path, a hold that ends on time after sleep, and no lost repository after an interrupted cleanup** (ONEUP-0188)
   The run record now keeps the `--log=` path exactly as given. The two-minute
   wait after "Show download size" counts real time, so a laptop put to sleep

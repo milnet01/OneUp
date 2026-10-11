@@ -155,17 +155,17 @@ def _confirm_key_import(win) -> bool:
     box.setIcon(QMessageBox.Warning)
     box.setWindowTitle(QCoreApplication.translate(
         "banners",
-        "Import the repository's signing key?"))
+        "Import the source's signing key?"))
     box.setText(QCoreApplication.translate(
         "banners",
         "Import the new signing key and retry the update?"))
     box.setInformativeText(
         QCoreApplication.translate(
             "banners",
-            "A repository's signing key has changed or expired, which is why "
+            "A source's signing key has changed or expired, which is why "
             "the update was refused.\n\nTo continue, OneUp will import the "
-            "repository's new key and run the update again. Importing a key "
-            "means trusting it — only do this for repositories you set up and "
+            "source's new key and run the update again. Importing a key "
+            "means trusting it — only do this for sources you set up and "
             "trust. A key you don't recognise could let unverified software "
             "be installed on your computer."))
     box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
