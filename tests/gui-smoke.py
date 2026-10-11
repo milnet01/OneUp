@@ -3322,6 +3322,23 @@ def main() -> int:
     theme.apply_app_theme(app_inst)
     check("turning high contrast back off really reverts it",
           "qproperty-highContrast: true" not in app_inst.styleSheet())
+    # The focus derivation is the expensive part of a theme change — two gradients of
+    # up to 100 steps x 101 samples, six pow() calls each — and its input never
+    # changes for a given theme. apply_app_theme ran it in build_theme and again for
+    # the painters' palette, on every apply (ONEUP-0180). Two more applies of the
+    # same theme must run it at most once between them.
+    derivations = []
+    _real_focus_keys = theme.focus_keys
+    theme.focus_keys = lambda p: derivations.append(1) or _real_focus_keys(p)
+    try:
+        theme.apply_app_theme(app_inst)
+        theme.apply_app_theme(app_inst)
+    finally:
+        theme.focus_keys = _real_focus_keys
+    check("re-applying the same theme does not re-run the focus derivation",
+          len(derivations) <= 1)
+    check("the painters' palette still carries the derived focus keys",
+          "focusfill" in theme.current_palette() and "accentfocus" in theme.current_palette())
     check("the text-size button cycles through the offered sizes",
           wA._text_scale_index() == 0)
     wA.on_textsize_clicked()

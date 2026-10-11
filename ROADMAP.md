@@ -3824,7 +3824,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: review-code 2026-08-31, lane gui-theme.
 
-- 📋 [ONEUP-0180] **The focus derivation runs twice on every theme change — about 40,000 contrast calls each time.**
+- ✅ [ONEUP-0180] **The focus derivation runs twice on every theme change — about 40,000 contrast calls each time.**
   `theme.py:1220` re-runs `derived_keys` in `apply_app_theme` having already paid
   for it inside `build_theme`. One derivation evaluates up to 2 x 100 steps x 101
   samples per gradient, twice, with six pow() calls each and no memoisation. It
@@ -3832,6 +3832,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   controls, and the fallback path makes it three. Have `build_theme` return the
   resolved palette alongside the QSS, or memoise on the theme id — the input is
   immutable per theme.
+  Resolved (2026-10-11, v2): derived_keys remembers its result per
+  palette and returns a copy; a raising derivation is not remembered. Two
+  re-applies of one theme now run the focus derivation at most once (red:
+  it ran four times). Measured here: 7.8 ms first, 0.013 ms repeat. v2
+  only: main has no derived_keys.
   **Layman:** Switching themes does the same expensive colour calculation twice.
   Kind: perf.
   Source: review-code 2026-08-31, lane gui-theme.

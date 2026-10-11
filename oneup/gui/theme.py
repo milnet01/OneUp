@@ -1100,6 +1100,12 @@ def _font_metrics(scale: float) -> dict:
     return metrics
 
 
+# One derivation per distinct palette. It is a pure function of the palette, and the
+# focus half of it is expensive — two gradients of up to 100 steps x 101 samples, six
+# pow() calls each — while a theme change asked for it twice (ONEUP-0180).
+_DERIVED: dict = {}
+
+
 def derived_keys(palette: dict) -> dict:
     """Everything `build_theme` computes from an authored palette.
 
@@ -1107,7 +1113,18 @@ def derived_keys(palette: dict) -> dict:
     key set the sheet is substituted with — ONEUP-0027 INV-4's universe is the
     authored keys plus these, and a check that iterated only the authored ones
     would exempt the tokens no theme author ever sees.
+
+    Remembered per palette, and a fresh copy returned each time, so a caller that
+    edits the result cannot change what the next caller gets. A derivation that
+    raises is not remembered, so an unusable palette fails every time it is asked.
     """
+    key = tuple(sorted(palette.items()))
+    if key not in _DERIVED:
+        _DERIVED[key] = _derive_keys(palette)
+    return dict(_DERIVED[key])
+
+
+def _derive_keys(palette: dict) -> dict:
     keys = {
         # The button fills, built from the stop pairs the palette authors so the
         # sheet and the focus derivation cannot disagree about what is painted.
