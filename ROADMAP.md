@@ -7454,7 +7454,7 @@ when complete (that document's §7).
   Source: user-report-2026-10-10.
   Lanes: gui.
 
-- 📋 [ONEUP-0247] **Message boxes opened with QMessageBox's static helpers skip centring, so on Wayland they land in the screen's corner.**
+- ✅ [ONEUP-0247] **Message boxes opened with QMessageBox's static helpers skip centring, so on Wayland they land in the screen's corner.**
   User screenshot, 2026-10-10: About, then Check for updates, showed
   "You're on the latest version (1.4.7)." at the top-left of the screen,
   away from the window. app_update.py calls QMessageBox.information(win,
@@ -7466,6 +7466,13 @@ when complete (that document's §7).
   QDialog subclasses only, which is why it stayed green.
   Fix on main first if it qualifies under workflow.md section 1, then
   merge (memory: a fix goes to main by kind).
+  Resolved (2026-10-11): an application-wide event filter, installed in
+  main(), centres every QMessageBox that has a parent as it is shown, so
+  all the static-helper call sites are covered without touching them.
+  main 12fced5 (updater.py), v2 f5a8099 (placement.py, app.py), merged in
+  70ebbf7. gui-smoke check red on its own assertion before (main 401/1,
+  v2 657/1), green after; local-CI green on both. Not yet seen on the
+  live Wayland desktop.
   **Layman:** Small pop-up messages should appear over the OneUp window, not in the corner of the screen.
   Kind: fix.
   Source: user-screenshot-2026-10-10.
