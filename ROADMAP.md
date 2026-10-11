@@ -7352,10 +7352,14 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: user-request-2026-10-01.
 
-- 📋 [ONEUP-0230] **Thinning backups gives no feedback on whether it worked.**
+- ✅ [ONEUP-0230] **Thinning backups gives no feedback on whether it worked.**
   Reported by the user 2026-10-02. `_thin_snapshots` / `_on_thin_finished` in
   oneup/gui/rollback.py (v2 only). User's choice 2026-10-02: a short message box
   when it finishes — success, or failure with the reason — closed with OK.
+  Resolved (2026-10-11): on v2. Every thinning outcome ends in one message
+  box closed with OK: the count, "none needed thinning", the engine's hint,
+  or a warning naming the likely causes and the log folder. gui-smoke 5e
+  asserts all four, proven red then green.
   **Layman:** After choosing to thin out backups you aren't told whether it worked or how many were removed.
   Kind: fix.
   Source: user-request-2026-10-02.
