@@ -80,6 +80,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A warning's button always matches the warning above it** (ONEUP-0154)
+  After a "too many restore points" or "duplicate source" notice, a later
+  warning no longer keeps the earlier button underneath it. And a run that
+  finishes while OneUp is hidden in the tray keeps its real warning and
+  button instead of a general "Some steps did not finish".
+
 - **Thinning old snapshots now tells you how it went** (ONEUP-0230)
   A short message says how many restore points were removed, that none
   needed removing, or that it did not work and where the log is.

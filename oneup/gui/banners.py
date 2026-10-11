@@ -91,10 +91,24 @@ def _make_banner(win, frame_obj: str, btn_obj: str, btn_text: str, slot,
     return fr, lbl, btn
 
 
-def _show_warning(win, text: str, command: str = ""):
+def _show_warning(win, text: str, command: str = "", role: str = ""):
     """Show the warning banner with `text`, exposing a Copy button when the hint
     it shows names a `command` — passed as data (`markers.hint_command`), never
-    found by an English cue in a sentence a translation rewords (ONEUP-0235)."""
+    found by an English cue in a sentence a translation rewords (ONEUP-0235).
+
+    The button's role goes with the text (ONEUP-0154): it resets to "Show
+    details" unless `role` names one — "snapshots" (thin them) or "repo-dup"
+    (open the repository manager). Without the reset, a pre-flight snapshot
+    advisory left "Thin snapshots…" under a later "A download failed…". A remedy
+    that on_finished arms sets its own label after this call."""
+    win._warn_snapshots = role == "snapshots"
+    win._warn_repo_dup = role == "repo-dup"
+    if role == "snapshots":
+        win.warn_btn.setText(QCoreApplication.translate("run", "Thin snapshots…"))
+    elif role == "repo-dup":
+        win.warn_btn.setText(QCoreApplication.translate("run", "Manage repositories…"))
+    else:
+        win.warn_btn.setText(QCoreApplication.translate("run", "Show details"))
     win.warn_label.setText(QCoreApplication.translate("banners", "⚠  {text}").format(text=text))
     win._hint_command = command
     win.warn_copy_btn.setVisible(bool(command))

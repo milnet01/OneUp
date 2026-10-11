@@ -848,18 +848,17 @@ def handle_marker(win, line: str):
         # warn banner. The "thinned|N" variant comes from the dedicated
         # --thin-snapshots process and is read in _on_thin_finished, not here.
         win._snapshot_count = int(parts[1]) if len(parts) > 1 and parts[1].isdecimal() else 0
-        win._warn_snapshots = True
-        win.warn_btn.setText(QCoreApplication.translate("run", "Thin snapshots…"))
         banners._show_warning(win,
             QCoreApplication.translate(
                 "run",
                 "{snapshot_count} system restore points (snapshots) are stored. "
                 "On Tumbleweed these build up with each update and can use a lot "
                 "of disk space — you can safely thin the older ones.").format(
-                    snapshot_count=win._snapshot_count))
+                    snapshot_count=win._snapshot_count), role="snapshots")
     elif tag in ("DISK", "REPO"):
         # Pre-flight warnings (low disk / duplicate repos). Surface immediately so
         # the advertised warning is visible during the run, not buried in the log.
+        role = ""
         if tag == "DISK" and len(parts) >= 3:
             msg = QCoreApplication.translate(
                 "run", "Low disk space on {mount} — only {free} free. Updating may fail.").format(
@@ -876,11 +875,10 @@ def handle_marker(win, line: str):
                 msg = QCoreApplication.translate(
                     "run",
                     "Duplicate repository URLs detected — a common cause of update conflicts.")
-            win._warn_repo_dup = True
-            win.warn_btn.setText(QCoreApplication.translate("run", "Manage repositories…"))
+            role = "repo-dup"
         else:
             msg = QCoreApplication.translate("run", "Pre-flight warning — see the log for details.")
-        banners._show_warning(win, msg)
+        banners._show_warning(win, msg, role=role)
     elif tag == "DONE":
         # The overall result normally comes from the process exit code in
         # on_finished (the two always agree). It is recorded here as well for the
@@ -1149,7 +1147,9 @@ def on_finished(win, exit_code: int, _status):
     # hidden, and reparenting it unchanged would have left no way to retry at all.
     # A stopped run is untouched: the `if stopped:` branch returns before here.
     if win._failed_steps:
-        if not win.warn_banner.isVisible():
+        # isHidden, not isVisible: a window hidden to the tray reports every child
+        # as invisible, which would overwrite the warning (and its button) just set.
+        if win.warn_banner.isHidden():
             banners._show_warning(win, QCoreApplication.translate(
                 "run",
                 "Some steps did not finish. Open the log to see what went wrong, "
