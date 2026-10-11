@@ -7416,6 +7416,11 @@ when complete (that document's §7).
   Left open until the real app is seen reopening in place after a
   restart. The hand-written OneUp rule in ~/.config/kwinrulesrc still
   exists and will place the window first; removal is the user's call.
+  2026-10-11: user chose to delete the hand-written OneUp rule. Removed
+  from ~/.config/kwinrulesrc (Konsole rule kept; copy of the file
+  before the edit at ~/.config/kwinrulesrc.oneup-bak-2026-10-11) and
+  KWin reconfigured. User will restart OneUp from Konsole and report
+  after the next reboot whether it reopened in place.
   **Layman:** After a restart, OneUp should open in the middle of the screen without you having to move it.
   Kind: fix.
   Source: user-report-2026-10-10.
