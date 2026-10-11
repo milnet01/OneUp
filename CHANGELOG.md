@@ -18,6 +18,10 @@ All notable changes to OneUp are documented here. The format follows
 - **A window you moved stays where you put it when a message appears** (ONEUP-0254)
   On Wayland, opening any message or dialog pulled every other open
   OneUp window, such as Repositories, back to the middle.
+- **The window no longer stutters during a big download** (ONEUP-0155)
+  It re-measured the whole package download folder on every progress
+  update, several times a second. It now measures it once every five
+  seconds, as the download figure always updated.
 
 ## [1.4.7] - 2026-10-10
 

@@ -397,6 +397,23 @@ def main() -> int:
         wC2._tick_activity()
         check("already-cached packages are excluded from this run's figure",
               "20 MiB" not in wC2.activity.text())
+        # The cache holds thousands of files by mid-download, and PROGRESS markers can
+        # arrive several times a second; weighing it on each one stalled the window
+        # (ONEUP-0155). Only the 5-second timer weighs; a marker reuses its figure.
+        weighed = []
+        _real_weigh = updater.cache_bytes
+        updater.cache_bytes = lambda: weighed.append(1) or _real_weigh()
+        try:
+            for n in range(1, 11):
+                wC.handle_line(f"@@PROGRESS@@|system|{n}|0|download|{n}|90596966")
+            check("a burst of progress markers does not re-weigh the package cache",
+                  not weighed)
+            check("a marker-driven redraw keeps the last weighed figure",
+                  "20 MiB of 86 MiB" in wC.activity.text())
+            wC._tick_activity()
+            check("the timer's tick does re-weigh it", len(weighed) == 1)
+        finally:
+            updater.cache_bytes = _real_weigh
     finally:
         updater.ZYPP_PACKAGE_CACHE = _orig_cache
         shutil.rmtree(cache_dir, ignore_errors=True)

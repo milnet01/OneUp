@@ -1646,6 +1646,7 @@ class Updater(QMainWindow):
         self._dl_bytes = 0           # bytes fetched so far, as reported by zypper
         self._dl_total = 0           # transaction's total download size (0 = unknown)
         self._dl_base = 0            # package-cache weight before the run started
+        self._dl_grown = 0           # its growth at the last weighing (ONEUP-0155)
         self._done_status = ""       # the run's own @@DONE@@ verdict; the only result
                                      # available for a run we attached to (no exit code)
         self._attached_pid = 0       # engine we're following that another window started
@@ -3492,17 +3493,21 @@ for (var i = 0; i < wins.length; i++) {{
         self._activity_what = ""
         self._activity_since = 0.0
         self._activity_stalled = False
-        self._dl_at = self._dl_from = self._dl_bytes = self._dl_total = 0
+        self._dl_at = self._dl_from = self._dl_bytes = self._dl_total = self._dl_grown = 0
         # Weighed once, before anything is fetched, so later samples measure THIS run's
         # download. Packages already cached are inside the baseline and rightly excluded —
         # zypper won't re-fetch them, and counting them would flatter the rate.
         self._dl_base = cache_bytes()
         self._set_activity("")
 
-    def _tick_activity(self):
+    def _tick_activity(self, reweigh: bool = True):
         """Redraw the liveness line: what we're waiting on, for how long, and how fast
         it's moving. Runs every 5s for the length of a run, and again whenever fresh
-        figures arrive, so the answer to "has it stalled?" is always on screen."""
+        figures arrive, so the answer to "has it stalled?" is always on screen.
+
+        Only the 5s tick re-weighs the package cache. By mid-download it holds thousands
+        of files and markers can arrive several times a second, so a marker-driven redraw
+        (reweigh=False) reuses the last weight rather than stall the window (ONEUP-0155)."""
         if not self._run_active:
             return
         now = time.monotonic()
@@ -3516,7 +3521,9 @@ for (var i = 0; i < wins.length; i++) {{
         # download spends its time in, and the one that reports nothing whatsoever.
         got = self._dl_bytes
         if self._progress_phase == "download":
-            got = max(got, cache_bytes() - self._dl_base)
+            if reweigh:
+                self._dl_grown = cache_bytes() - self._dl_base
+            got = max(got, self._dl_grown)
         if got > 0:
             human = self._format_size(got)
             bits.append(f"{human} of {self._format_size(self._dl_total)}"
@@ -3583,7 +3590,7 @@ for (var i = 0; i < wins.length; i++) {{
             # previous step's elapsed time or byte rate over would misreport both.
             self._activity_what = ""
             self._activity_since = 0.0
-            self._dl_at = self._dl_from = self._dl_bytes = self._dl_total = 0
+            self._dl_at = self._dl_from = self._dl_bytes = self._dl_total = self._dl_grown = 0
             self._tick_activity()   # redraw now; a 5s-stale line would name the old step
             self.bar.setFormat(self._step_caption)
             self.bar.setValue(int(index) - 1)
@@ -3703,7 +3710,7 @@ for (var i = 0; i < wins.length; i++) {{
                 self._dl_bytes = max(self._dl_bytes, int(parts[4]))
                 if len(parts) > 5 and parts[5].isdecimal() and int(parts[5]):
                     self._dl_total = int(parts[5])
-                self._tick_activity()
+                self._tick_activity(reweigh=False)
             if announce:
                 self._announce(f"{verb} packages.")
         elif tag == "REFRESH":
