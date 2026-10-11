@@ -34,6 +34,8 @@ from PySide6.QtCore import (
     Property,
     QByteArray,
     QEasingCurve,
+    QEvent,
+    QObject,
     QPointF,
     QProcess,
     QPropertyAnimation,
@@ -713,6 +715,27 @@ for (var i = 0; i < wins.length; i++) {{
     # Deferred by a tick: KWin can only move a window it already knows about, and on
     # Wayland the surface isn't committed yet while showEvent is still running.
     QTimer.singleShot(0, lambda: run_kwin_script(js))
+
+
+class _MessageBoxCentrer(QObject):
+    """Centres every message box that has a parent, as it is shown (ONEUP-0247).
+
+    QMessageBox.information(win, ...) and its siblings build, show and run their own
+    box, so no call site gets a chance to centre it — and on Wayland it then opened in
+    the screen's corner. Watching the whole application catches every one of them."""
+
+    def eventFilter(self, obj, event):
+        if (event.type() == QEvent.Show and isinstance(obj, QMessageBox)
+                and obj.parent() is not None):
+            # A tick later, as _center_child does: the box sizes to its content on show.
+            # Passing obj as the context drops the call if the box is gone by then.
+            QTimer.singleShot(0, obj, lambda: center_on_parent(obj))
+        return False
+
+
+def install_message_box_centring(app) -> None:
+    app._message_box_centrer = _MessageBoxCentrer(app)
+    app.installEventFilter(app._message_box_centrer)
 
 
 class ToggleSwitch(QAbstractButton):
@@ -4249,6 +4272,7 @@ def main():
     app = QApplication([])
     app.setApplicationName(APP_NAME)
     app.setDesktopFileName(APP_ID)  # ties the window to its .desktop/icon
+    install_message_box_centring(app)
 
     # One theming entry point (module-level apply_app_theme): it folds in the
     # user's text-size and high-contrast settings, and the Settings controls call

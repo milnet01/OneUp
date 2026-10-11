@@ -28,7 +28,7 @@ each invariant is tested; this file is the rule a new widget must obey.
 | No state is signalled by colour alone | `gui-smoke.py` INV-2 checks |
 | No hard-coded pixel font size | `gui-smoke.py` INV-3 — a regex over the built stylesheet |
 | Focus never draws a ring or adds a border | `gui-smoke.py` INV-4 — asserts no ring, and that the `:focus` rules are emitted after `:hover`/`:checked` (§5) |
-| Dialogs inherit the app theme and open centred on the window | `gui-smoke.py`'s X11 and Wayland `center_on_parent` assertions (§6) |
+| Dialogs inherit the app theme and open centred on the window | `gui-smoke.py`'s X11 and Wayland `center_on_parent` assertions, and its ONEUP-0247 static-helper check (§6) |
 | Every theme passes the same contrast checks | **not enforced yet** — the check is ONEUP-0027's to write (§7) |
 | The window mirrors for Hebrew and Arabic | §8, gate G10 |
 
@@ -247,10 +247,10 @@ box.exec()
 | --- | --- | --- |
 | `QDialog` subclass | inherited app QSS | `showEvent` override |
 | Hand-built `QMessageBox` we `exec()` | inherited app QSS | `QTimer.singleShot(0, _center_child)` before `exec()` |
-| Static `QMessageBox.warning/information/question/critical(self, …)` | inherited app QSS | Qt's parent-relative default — acceptable for a transient one-line notice; do **not** rewrite these into hand-built boxes just to centre them |
+| Static `QMessageBox.warning/information/question/critical(self, …)` | inherited app QSS | Nothing at the call site: `install_message_box_centring`, run in `main()`, centres every message box that has a parent as it is shown (ONEUP-0247). Qt's own default leaves it in the screen's corner on Wayland |
 
 **Rule of thumb:** if you construct the box and hold a reference to it, centre it. If it is
-a one-line convenience call, parenting to `self` is enough.
+a one-line convenience call, parenting to `self` is enough — the app-wide filter does the rest.
 
 ### 6.4 Adding a dialog — the four steps
 

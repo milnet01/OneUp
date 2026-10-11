@@ -12,6 +12,9 @@ All notable changes to OneUp are documented here. The format follows
   "Roll back & reboot", "Import signing key & retry" and "Skip … &
   update the rest" now read as written, instead of "Roll back _reboot"
   and the like.
+- **Small messages now open over the OneUp window, not in the corner of the screen** (ONEUP-0247)
+  On Wayland, short notices such as "You're on the latest version"
+  appeared at the top-left of the screen, away from the window.
 
 ## [1.4.7] - 2026-10-10
 
