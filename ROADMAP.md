@@ -7314,10 +7314,14 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: review-contract-2026-10-01 wording-and-translation.md loop 5 (out of scope).
 
-- 📋 [ONEUP-0220] **testing.md §5 invariant 2 requires a plain-English @@HINT@@, which ONEUP-0072's codes make false.**
+- ✅ [ONEUP-0220] **testing.md §5 invariant 2 requires a plain-English @@HINT@@, which ONEUP-0072's codes make false.**
   Once ONEUP-0072 lands a HINT payload is an identifier, not text
   (wording-and-translation.md §5). Check that testing.md is on ONEUP-0072's
   list of files the codes change updates, or reword invariant 2 to "a hint".
+  Resolved (2026-10-11): already fixed by 156c8cc (ONEUP-0072 + ONEUP-0108),
+  which reworded v2's invariant 2 to "emits a @@HINT@@ the window words in
+  plain English". main's "plain-English @@HINT@@" is true of main's engine
+  and stays (workflow.md §9 third binding).
   **Layman:** A test rule still expects English text in a message that a planned change turns into a short code.
   Kind: doc-fix.
   Source: review-contract-2026-10-01 wording-and-translation.md loop 7 (out of scope).
