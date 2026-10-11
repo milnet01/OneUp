@@ -182,6 +182,10 @@ else skip "ruff" "not installed"; fi
 #
 # It does NOT catch a colour computed at run time; nothing does, and INV-6's
 # repaint check is what would notice the effect.
+# An empty hit list is a pass only if files were actually read: a glob matching
+# nothing, or an awk that failed to open them, also leaves it empty, and the gate
+# then reported ok having scanned nothing (ONEUP-0161).
+inv5_files=(oneup/gui/*.py)
 inv5_hits=$(
     awk '
         # Inside a palette dict: from `_NAME = dict(` to the closing paren.
@@ -218,9 +222,12 @@ inv5_hits=$(
         # not by reading it (CLAUDE.md § 6).
         /(^|[^A-Za-z0-9_.])Qt\.(white|black|red|green|blue|cyan|magenta|yellow|gray|darkGray|lightGray)([^A-Za-z0-9_]|$)/ {
                                      print FILENAME ":" FNR ": " $0 }
-    ' oneup/gui/*.py
+    ' "${inv5_files[@]}"
 )
-if [ -z "$inv5_hits" ]; then
+inv5_rc=$?
+if [[ ! -e "${inv5_files[0]}" || $inv5_rc -ne 0 ]]; then
+    bad "INV-5 scanned nothing (no oneup/gui/*.py, or awk failed: exit $inv5_rc)"
+elif [ -z "$inv5_hits" ]; then
     ok "INV-5 no colour literal outside a palette"
 else
     printf '%s\n' "$inv5_hits" | head -20
