@@ -5963,7 +5963,7 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: review-code 2026-08-31, lane engine-protocol (doc half of ONEUP-0151).
 
-- 📋 [ONEUP-0207] **ONEUP-0072 INV-2 plans an emitter guard for the pipe alone, and a line break needs one too.**
+- ✅ [ONEUP-0207] **ONEUP-0072 INV-2 plans an emitter guard for the pipe alone, and a line break needs one too.**
   INV-2 reads "No marker field contains a `|`: the emitter rewrites it to `/`
   before the line is emitted". ONEUP-0152 found the neighbouring hole — the
   emitter substituted nothing at all, so a line break in a payload fabricated
@@ -5982,6 +5982,12 @@ when complete (that document's §7).
   has more than one field.
 
   A gated edit — it changes what the implementer builds.
+  Resolved (2026-10-11): 260caaf on main, merged into v2. INV-2 names both
+  guards and why they sit at different levels inside the emitter: the pipe
+  rewrite per field before the join, the line-break fold on the joined line.
+  The premise that the pipe guard cannot sit in the emitter was wrong for
+  the shipped design (section 4.2 moved the join there). No gate: the code
+  already exists and is tested.
   **Layman:** A planned rule covers one bad character; we just fixed a second one and the rule should mention both.
   Kind: doc-fix.
   Source: review-code 2026-08-31, lane engine-protocol (spec half of ONEUP-0152).
