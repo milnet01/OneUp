@@ -90,6 +90,8 @@ Usage: oneup-engine [--steps=LIST] [--check] [--notify] [--log=FILE] [--help]
                  skip the culprit(s) (up to {MAX_SKIP}), then continue.
   --thin-snapshots  Ask snapper to remove old, expendable Btrfs snapshots (its own
                  retention cleanup — keeps the recent ones), then report how many.
+  --size=system  Report the exact download size of the system update and exit.
+                 Asks for your password: zypper works the size out only as root.
   --log=FILE     Write the run log here. Default: """
 
 _USAGE_TAIL = """/<timestamp>.log
@@ -159,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     # the auth actions are all logged. Installed after the parse guard above, so
     # `--help` and an unknown flag still write nothing — the Bash's own order.
     log_file = runstate.resolve_log_path(opts.log_file)
-    runstate.install_log_mirror(log_file)
+    runstate.install_log_mirror(Path(log_file))
 
     # The selection and its rejection sit ABOVE every dispatch, exactly where the
     # Bash puts them: a `--steps=sytem` typo must be refused whatever mode was
@@ -362,6 +364,10 @@ def _pre_update_snapshot() -> None:
         _, listing = privilege.sudo(["snapper", "--no-headers", "list"])
         tail = listing.splitlines()
         snap_id = tail[-1].split()[0] if tail and tail[-1].split() else ""
+        # Only a number names a snapshot, as the picker's loop below requires.
+        # Anything else is an error or a heading (ONEUP-0188).
+        if not snap_id.isdecimal():
+            snap_id = ""
     if snap_id:
         markers.out(f"Pre-update snapshot #{snap_id} recorded  "
                     f"(roll back with: sudo snapper rollback {snap_id})")
@@ -557,7 +563,7 @@ def _summary(opts: Options, run_keys: list[str], reboot: str, reason: str,
             markers.out(f"      {risky}")
 
 
-def _notify(opts: Options, log_file: Path) -> None:
+def _notify(opts: Options, log_file: str) -> None:
     """The end-of-run desktop notification, for the unattended weekly timer."""
     if not opts.notify:
         return
@@ -577,7 +583,7 @@ def _notify(opts: Options, log_file: Path) -> None:
         actions.notify_send("Already up to date", f"No updates were needed.{skip_note}")
 
 
-def run(opts: Options, run_keys: list[str], log_file: Path, held_auth: bool = False) -> int:
+def run(opts: Options, run_keys: list[str], log_file: str, held_auth: bool = False) -> int:
     """One full run, in the Bash's order — which is itself the deliverable.
 
     Four points where the order is load-bearing and the suite can only see it
@@ -595,10 +601,11 @@ def run(opts: Options, run_keys: list[str], log_file: Path, held_auth: bool = Fa
     # Firmware elevates through polkit on its own; every other root step reuses
     # the cached credential, so we only bootstrap when a sudo step is selected.
     needs_sudo = any(opts.selected(k) for k in ("system", "flatpak", "orphans", "cache"))
-    # A held preview already authenticated in THIS process and `sudo_init` has no
-    # re-entry guard, so re-entering it would re-run the interactive validate AND
-    # spawn a second keep-alive — overwriting the handle `cleanup`'s group kill
-    # uses, and orphaning the first (ONEUP-0041, security.md §2.4). INV-9 pins it.
+    # A held preview already authenticated in THIS process, so `sudo_init` is not
+    # run again: it would repeat the interactive validate. A second keep-alive is
+    # not the risk here — `_start_keepalive` refuses to start one while the first
+    # is running, and that refusal is what keeps INV-9 (ONEUP-0041, security.md
+    # §2.4).
     if needs_sudo and not held_auth:
         privilege.sudo_init()
     if needs_sudo:

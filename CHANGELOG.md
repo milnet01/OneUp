@@ -80,6 +80,16 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Engine tidy-ups: exact log path, a hold that ends on time after sleep, and no lost repository after an interrupted cleanup** (ONEUP-0188)
+  The run record now keeps the `--log=` path exactly as given. The two-minute
+  wait after "Show download size" counts real time, so a laptop put to sleep
+  mid-wait no longer keeps the update permission open past it. A mistyped
+  `ONEUP_HOLD_SECONDS` falls back to two minutes instead of stopping the
+  engine. A cleanup cut short still re-enables every source it set aside,
+  and repository files with accented names survive the download retry under
+  a non-UTF-8 locale. A snapshot listing ending in an error is no longer
+  reported as a restore point, and `--help` lists `--size=system`.
+
 - **Five small window fixes: safer restart questions, honest results, no stuck buttons** (ONEUP-0183)
   Pressing Enter on "Restart now?" or "Restart services?" now picks No,
   never Yes. A download size is no longer missed and shown as "Nothing to

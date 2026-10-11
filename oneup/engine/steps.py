@@ -526,7 +526,7 @@ _NOT_TRANSFER = re.compile(
 
 def _log_text() -> str:
     try:
-        return _SYS_LOG.read_text(errors="replace")
+        return _SYS_LOG.read_text(encoding="utf-8", errors="replace")  # proc writes UTF-8
     except OSError:
         return ""
 
@@ -573,7 +573,7 @@ def _system_upgrade_inner() -> bool:
                 os.close(handle)
                 _SYS_LOG_FIRST = Path(first)
                 with contextlib.suppress(OSError):
-                    _SYS_LOG_FIRST.write_text(log)
+                    _SYS_LOG_FIRST.write_text(log, encoding="utf-8", errors="replace")
                 REPOSD_OVERRIDE = cdn_dir
                 markers.out("  Recovery: retrying downloads via "
                             "downloadcontentcdn.opensuse.org "
@@ -611,7 +611,7 @@ def _failed_package() -> str:
     if _SYS_LOG_FIRST is None:
         return ""
     try:
-        text = _SYS_LOG_FIRST.read_text(errors="replace")
+        text = _SYS_LOG_FIRST.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return ""
     for name, state in _FAILED_PKG.findall(text):

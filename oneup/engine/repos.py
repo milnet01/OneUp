@@ -133,11 +133,16 @@ def make_cdn_reposd() -> str:
             shutil.rmtree(directory, ignore_errors=True)
             return ""
         for src in sources:
-            text = src.read_text(errors="replace")
+            # UTF-8 with surrogateescape on both sides, so every byte zypper wrote
+            # comes back out unchanged. With the locale's codec and no handler, a
+            # non-ASCII name under a C locale raised UnicodeEncodeError, which the
+            # OSError handler below does not catch (ONEUP-0188).
+            text = src.read_text(encoding="utf-8", errors="surrogateescape")
             rewritten = "\n".join(
                 _cdn_line(line) for line in text.split("\n")
             )
-            (Path(directory) / src.name).write_text(rewritten)
+            (Path(directory) / src.name).write_text(
+                rewritten, encoding="utf-8", errors="surrogateescape")
     except OSError:
         shutil.rmtree(directory, ignore_errors=True)
         return ""
@@ -306,12 +311,19 @@ def restore_disabled() -> None:
     Non-interactively (`-n`): a cold credential must log the manual fix rather
     than block the exit on a password dialog nobody is watching.
     """
-    pending, DISABLED[:] = list(DISABLED), []      # idempotent: cleanup can be reached twice
-    for alias in pending:
+    # Each alias leaves the list only once its re-enable has been TRIED, so a
+    # cleanup interrupted part-way leaves the rest for the next one — as the Bash,
+    # which never clears the array, does. Emptying it up front left a repository
+    # disabled with no retry (ONEUP-0188). Still idempotent: a finished pass leaves
+    # nothing for a second one.
+    while DISABLED:
+        alias = DISABLED[0]
         if not alias:
+            DISABLED.pop(0)
             continue
         rc, _ = privilege.sudo(
             ["zypper", "--non-interactive", "modifyrepo", "--enable", alias], flags=("-n",))
+        DISABLED.pop(0)
         if rc != 0:
             markers.err(f"  ! Couldn't re-enable repository '{alias}' — run: "
                         f"sudo zypper modifyrepo --enable {alias}")

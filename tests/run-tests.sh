@@ -4087,6 +4087,96 @@ EOF
     rm -rf "$d"
 fi
 
+# ---------------------------------------------------------------------------
+# ONEUP-0188: engine behaviours no end-to-end run can reach cheaply, by direct call
+# like the emitter scenario above. Each script exits 0 when the behaviour holds and
+# prints what it saw otherwise. State lives in a scratch XDG_STATE_HOME, so nothing
+# here reads or writes the user's own run records (testing.md §2).
+py_case() {  # name, python source, [extra env assignments...]
+    local name="$1" src="$2"; shift 2
+    local d; d=$(mktemp -d)
+    local why
+    if why=$(env "PYTHONPATH=$(dirname "$ENGINE")" "XDG_STATE_HOME=$d" "$@" \
+                 python3 -c "$src" 2>&1); then
+        echo "  ok   - $name"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - $name (${why##*$'\n'})"; FAIL=$((FAIL+1))
+    fi
+    rm -rf "$d"
+}
+
+echo "TEST: the --log= path reaches run.state and the banner verbatim"
+py_case "a --log= value is not normalised" '
+from oneup.engine import runstate
+got = str(runstate.resolve_log_path("logs//./run.log"))
+raise SystemExit(0 if got == "logs//./run.log" else f"got {got!r}")'
+
+echo "TEST: a mistyped hold ceiling falls back to its default instead of killing the engine"
+py_case "ONEUP_HOLD_SECONDS=abc still imports, at 120" '
+from oneup.engine import runstate
+raise SystemExit(0 if runstate.HOLD_SECONDS == 120 else f"got {runstate.HOLD_SECONDS!r}")' \
+    ONEUP_HOLD_SECONDS=abc
+
+echo "TEST: the hold ceiling counts elapsed time, so a suspend cannot stretch it"
+py_case "a hold that slept through its ceiling ends at the next wake" '
+import os, time
+from oneup.engine import runstate
+clock = [1000.0]
+sleeps = []
+time.clock_gettime = lambda _id: clock[0]
+def suspend(s):
+    sleeps.append(s)
+    clock[0] += 500.0          # the machine was asleep for longer than the ceiling
+time.sleep = suspend
+got = runstate.hold_for_go_ahead("x.log", "1 MiB", os.getpid(), os.getpid(), 1.0)
+raise SystemExit(0 if got is None and len(sleeps) == 1 else f"{len(sleeps)} sleeps")'
+
+echo "TEST: a window pid we may not signal still counts as alive"
+py_case "the hold treats PermissionError as alive, as the window does" '
+import os
+from oneup.engine import runstate
+if os.geteuid() == 0:
+    raise SystemExit(0)        # root may signal pid 1, so there is nothing to see
+raise SystemExit(0 if runstate._alive(1) else "pid 1 read as gone")'
+
+echo "TEST: an interrupted re-enable leaves the repository to the next cleanup"
+py_case "restore_disabled keeps what it has not yet re-enabled" '
+from oneup.engine import privilege, repos
+repos.DISABLED[:] = ["first", "second"]
+def interrupted(argv, **kw):
+    raise KeyboardInterrupt
+privilege.sudo = interrupted
+try:
+    repos.restore_disabled()
+except KeyboardInterrupt:
+    pass
+tried = []
+privilege.sudo = lambda argv, **kw: (tried.append(argv[-1]), (0, ""))[1]
+repos.restore_disabled()
+raise SystemExit(0 if tried == ["first", "second"] else f"retried {tried}")'
+
+echo "TEST: the CDN copy of the repository files survives a non-UTF-8 locale"
+py_case "make_cdn_reposd copies a non-ASCII repo file byte for byte" '
+import shutil, tempfile
+from pathlib import Path
+from oneup.engine import repos
+name = "D" + chr(0xE9) + "p" + chr(0xF4) + "t"   # kept ASCII: argv is decoded as C
+src = Path(tempfile.mkdtemp())
+(src / "oss.repo").write_bytes(
+    f"[oss]\nname={name}\nbaseurl=http://download.opensuse.org/tw/\n".encode())
+repos.REPOS_DIR = src
+try:
+    out = repos.make_cdn_reposd()
+except UnicodeError as exc:
+    raise SystemExit(f"raised {type(exc).__name__}")
+finally:
+    shutil.rmtree(src)
+data = (Path(out) / "oss.repo").read_bytes() if out else b""
+shutil.rmtree(out, ignore_errors=True)
+ok = name.encode() in data and b"downloadcontentcdn.opensuse.org" in data
+raise SystemExit(0 if ok else f"copy held {data!r}")' \
+    LC_ALL=C PYTHONUTF8=0 PYTHONCOERCECLOCALE=0
+
 echo
 echo "======================================"
 echo "  Passed: $PASS   Failed: $FAIL"

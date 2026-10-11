@@ -67,18 +67,22 @@ def stop_and_run_mtimes() -> tuple[float | None, float | None]:
     return mtime(STOP_REQUEST), mtime(RUN_STATE)
 
 
-def resolve_log_path(explicit: str | None) -> Path:
+def resolve_log_path(explicit: str | None) -> str:
     """The path this run logs to — creating `USER_LOG_DIR` only if we default into it.
 
     ONEUP-0058: the Bash engine runs its `mkdir` before looking at `--log=`, so
     the test suite creates `~/Documents/update-logs` on any machine it runs on,
     including one that has never installed OneUp. A directory is made when it is
     about to be written to, and not before.
+
+    A string, not a `Path`: §4.1.1 pins `run.state` line 2 as the `--log=` value
+    VERBATIM, and a `Path` normalises it — `logs//./run.log` became `logs/run.log`
+    (ONEUP-0188).
     """
     if explicit:
-        return Path(explicit)
+        return explicit
     USER_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    return USER_LOG_DIR / f"{datetime.now().strftime('%Y-%m-%d_%H%M')}.log"
+    return str(USER_LOG_DIR / f"{datetime.now().strftime('%Y-%m-%d_%H%M')}.log")
 
 
 # Only the process that WROTE the run-state file clears it, so a `--check` or a
@@ -238,7 +242,7 @@ def run_state_holder() -> int | None:
     return int(first) if any(mark in cmdline for mark in _ENGINE_MARKS) else None
 
 
-def claim_run_state(log_file: Path, steps: str) -> int | None:
+def claim_run_state(log_file: str, steps: str) -> int | None:
     """Record this run so a starting window can find it and follow the log.
 
     Four lines, in this order: our pid, the log path verbatim, the selected
@@ -288,11 +292,24 @@ def claim_run_state(log_file: Path, steps: str) -> int | None:
 
 # How long a hold waits before ending by itself. Two minutes: long enough for a
 # user to read the quoted size and decide, short enough that a forgotten window
-# does not hold a warm credential open indefinitely.
-HOLD_SECONDS = int(os.environ.get("ONEUP_HOLD_SECONDS") or "120")
+# does not hold a warm credential open indefinitely. A value that is not a whole
+# number falls back to the default, as the keep-alive interval does: read at
+# import, a bad one raised before any mode ran, `--check` included (ONEUP-0188).
+_HOLD_ENV = os.environ.get("ONEUP_HOLD_SECONDS") or ""
+HOLD_SECONDS = int(_HOLD_ENV) if _HOLD_ENV.isdecimal() else 120
 
 
-def hold_for_go_ahead(log_file: Path, size: str, launch_pid: int, window_pid: int,
+def _elapsed_clock() -> float:
+    """Seconds on a clock that keeps running while the machine is suspended.
+
+    Not `time.monotonic`, which stops during a suspend on Linux, and not a count
+    of sleeps either: a hold held across a suspend must still end at its ceiling,
+    because what it holds open is a root credential.
+    """
+    return time.clock_gettime(time.CLOCK_BOOTTIME)
+
+
+def hold_for_go_ahead(log_file: str, size: str, launch_pid: int, window_pid: int,
                       poll: float) -> str | None:
     """Wait for the window's go-ahead. Returns its step list, or None.
 
@@ -319,9 +336,9 @@ def hold_for_go_ahead(log_file: Path, size: str, launch_pid: int, window_pid: in
         return None
     try:
         stamp = HOLD_STATE.stat().st_mtime
-        waited = 0.0
+        started = _elapsed_clock()
         step = poll if poll > 0 else 1.0
-        while waited < HOLD_SECONDS:
+        while _elapsed_clock() - started < HOLD_SECONDS:
             # Staleness the way `stop_pending` decides it: a request older than
             # our own stamp is a leftover from an earlier session. Deleting
             # leftovers at start-up instead would race a go-ahead pressed in
@@ -333,7 +350,6 @@ def hold_for_go_ahead(log_file: Path, size: str, launch_pid: int, window_pid: in
             if not _alive(window_pid):
                 return None                              # the window has gone
             time.sleep(step)
-            waited += step
         return None                                      # the ceiling
     finally:
         for path in (HOLD_STATE, GO_REQUEST):
@@ -354,9 +370,14 @@ def _alive(pid: int) -> bool:
     Bash sets `PPID` once and never refreshes it on reparenting, and systemd
     reparents a user session's orphans to `systemd --user` rather than to pid 1,
     so both of the obvious spellings are dead code (`CLAUDE.md` §6).
+
+    A pid we may not signal still exists, so PermissionError reads as alive —
+    as the window's twin probe reads it (ONEUP-0188).
     """
     try:
         os.kill(pid, 0)
+    except PermissionError:
+        return True
     except OSError:
         return False
     return True

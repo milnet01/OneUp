@@ -100,11 +100,11 @@ def sudo_init() -> None:
     kill it is the shape `CLAUDE.md` §6's fourth trap names, so it is started
     only where `cleanup` can already reach it.
 
-    NOT re-entrant, and there is no guard: its one early return is
-    `auth_current`, which is false for precisely the users the held path is for.
-    Re-entering it would re-run the validate AND spawn a second keep-alive,
-    overwriting the handle `cleanup`'s group kill uses. The run driver's
-    `held_auth` is what keeps that from happening (INV-9).
+    Re-entering it re-runs the validate: its one early return is `auth_current`,
+    which is false for precisely the users the held path is for, and the run
+    driver's `held_auth` is what skips the second call. It does NOT start a
+    second keep-alive — `_start_keepalive` refuses while one is running, and
+    that refusal is what keeps INV-9.
     """
     # Deferred: `auth_current` is `actions.py`'s by §4.2, and `actions` imports
     # this module — a module-level import back would be a cycle.
@@ -138,9 +138,10 @@ def sudo_init() -> None:
 # exit inside its own patience — a 50-second sleep makes the property unobservable.
 KEEPALIVE_SECONDS = os.environ.get("ONEUP_KEEPALIVE_SECONDS") or "50"
 
-# `argv[0]` of the keep-alive child. A grep-able tag so a test can find these
-# without matching every `sleep` on the machine; `pgrep -f oneup-keepalive` is
-# what both scenarios use, so renaming it makes them pass by finding nothing.
+# `argv[1]` of the keep-alive child — under `-c`, `argv[0]` is "-c". A grep-able
+# tag so a test can find these without matching every `sleep` on the machine;
+# `pgrep -f oneup-keepalive` is what both scenarios use, so renaming it makes them
+# pass by finding nothing.
 KEEPALIVE_TAG = "oneup-keepalive"
 
 _KEEPALIVE: subprocess.Popen | None = None
@@ -182,9 +183,9 @@ def _start_keepalive() -> None:
     Detached from our stdout and stderr so it never pollutes the log stream, and
     so a consumer capturing our output is not held open by its sleep.
 
-    Never two. `sudo_init` has no re-entry guard of its own beyond `auth_current`,
-    and a second keep-alive would overwrite the handle so `cleanup`'s group kill
-    could only reach the later group — the orphan leak of ONEUP-0041 (INV-9).
+    Never two, and the early return below is what enforces it: a second
+    keep-alive would overwrite the handle so `cleanup`'s group kill could only
+    reach the later group — the orphan leak of ONEUP-0041 (INV-9).
     """
     global _KEEPALIVE
     if _KEEPALIVE is not None:

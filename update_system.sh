@@ -789,7 +789,11 @@ adopt_go_ahead() {
 # was started for succeeded and was already reported (§4.4). A go-ahead that arrived
 # and was refused returns 2, which the caller reports as an error (ONEUP-0150).
 hold_for_go_ahead() {
-    local waited=0 step=$STOP_POLL_SECONDS rc=1 steps=""
+    local step=$STOP_POLL_SECONDS rc=1 steps="" deadline
+    # The ceiling is wall-clock time, not a count of sleeps: a suspend mid-hold must
+    # not keep a warm root credential held past it (ONEUP-0188). Bash's SECONDS keeps
+    # counting across a suspend; the Python engine reads CLOCK_BOOTTIME for the same.
+    deadline=$((SECONDS + HOLD_SECONDS))
     (( step > 0 )) || step=1
     mkdir -p "$(dirname "$HOLD_STATE_FILE")" 2>/dev/null || true
     # Layout pinned line by line in ONEUP-0044 §4.3, the way run.state's is, so the
@@ -805,7 +809,7 @@ hold_for_go_ahead() {
         rm -f "$tmp"
         return 1
     fi
-    while (( waited < HOLD_SECONDS )); do
+    while (( SECONDS < deadline )); do
         # Staleness is decided the way stop_pending decides it, and for the same reason:
         # a request older than our own stamp is a leftover from an earlier session.
         # Deleting leftovers at startup instead would race a go-ahead pressed in that
@@ -825,7 +829,6 @@ hold_for_go_ahead() {
         fi
         kill -0 "$WINDOW_PID" 2>/dev/null || break
         sleep "$step"
-        waited=$((waited + step))
     done
     rm -f "$HOLD_STATE_FILE" "$GO_FILE"
     (( rc == 0 )) || return 1

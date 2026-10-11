@@ -105,8 +105,11 @@ def composite(over: str, alpha: float, under: str) -> str:
 def _ink_for(fills) -> str:
     """Black or white, whichever contrasts more with the WORST of `fills`.
 
-    Always clears 4.5:1: the two directions are equal at relative luminance
-    0.1791, where both measure 4.58:1, so the larger of them is never below that.
+    For ONE fill it always clears 4.5:1: the two directions are equal at relative
+    luminance 0.1791, where both measure 4.58:1, so the larger is never below
+    that. For several fills — a gradient's samples — there is no such floor: a
+    gradient running from dark to light defeats both inks. What holds the result
+    to 4.5:1 there is `focus_report`'s ink row, not this function.
     """
     black = min(contrast(f, _BLACK) for f in fills)
     white = min(contrast(f, _WHITE) for f in fills)
@@ -548,9 +551,15 @@ QListView#ThemeList {
     background: $card; color: $text; border: 2px solid $border;
     selection-background-color: $btnhov; selection-color: $btntext;
 }
+/* The list keeps the primary pair, because $btnhov is its selection colour and a
+   focused list filled with it would hide the selected row. focus_report measures
+   that fill against $card, the surface the list rests on. The combo rests where a
+   ghost button does and takes the ghost pair (ONEUP-0188). */
 QListView#ThemeList:focus { background: $hcfocusfill; color: $hcfocusink; }
 QLabel#ThemeNote { color: $text; }
-QComboBox#ThemeCombo:focus { background: $hcfocusfill; color: $hcfocusink; }
+QComboBox#ThemeCombo:focus {
+    background: $btnhov; color: $btntext; border: 2px solid $btntext;
+}
 /* Stop takes the shape the overlay gives every ghost button, with the danger
    token in place of the ordinary border — the overlay never carries a literal
    red. Without this set the rename would leave the one control that interrupts a
@@ -1010,6 +1019,9 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
         add("ghost family (HC)", "ink", hc["btntext"], hc["btnhov"], INK_MIN)
         add("ghost family (HC)", "border", hc["btntext"], hc["btnhov"], FOCUS_MIN)
         add("panel border (HC)", "border", hc["hcbdfocus"], hc["border"], FOCUS_MIN)
+        # The theme list borrows the primary fill, which is derived against `btn`;
+        # what the list rests on is `card`, so that is what it is held to.
+        add("theme list (HC)", "fill", hc["hcfocusfill"], hc["card"], FOCUS_MIN)
         return rows
 
     palette = dict(theme.palette)
