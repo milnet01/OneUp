@@ -7695,3 +7695,18 @@ when complete (that document's §7).
   **Layman:** Every colour theme currently highlights in the same blue; each should highlight in its own colour.
   Kind: ux.
   Source: user decision 2026-09-02, arising from ONEUP-0179.
+
+- 💭 [ONEUP-0253] **Let the user keep their own patches to system packages, reapplied after each update.**
+  Raised by the user 2026-10-11 while ONEUP-0246's KWin fix waited on
+  KDE (bug 526933, merge request plasma/kwin!10090): a local patch is
+  lost each time Tumbleweed replaces the package. Not wanted for that
+  fix, since nothing on the machine uses a Remember rule any more.
+  Candidate shape, to be decided in a spec: an OBS branch of the
+  distro package carrying the patch, which rebuilds by itself when the
+  distro package changes, instead of OneUp rebuilding locally as root.
+  Hard parts: a patched package that lags the rest of its stack after
+  an update (vendor stickiness can hold it back), a patch that stops
+  applying, and the privilege boundary (docs/standards/security.md).
+  **Layman:** If you have a fix for a program that its makers haven't released yet, OneUp could put it back after every update.
+  Kind: feature.
+  Source: user-request-2026-10-11.
