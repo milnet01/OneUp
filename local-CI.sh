@@ -138,7 +138,16 @@ v_meta=$(grep -oP '<release version="\K[^"]+' data/za.co.antsprojectshub.OneUp.m
 v_chg=$(grep -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | head -1)
 printf '  updater.py=%s spec=%s spec%%changelog=%s _service.fmt=%s _service.rev=%s metainfo=%s CHANGELOG=%s\n' \
     "$v_py" "$v_spec" "$v_speclog" "$v_fmt" "$v_rev" "$v_meta" "$v_chg"
-if [[ "$v_py" == "$v_spec" && "$v_py" == "$v_speclog" && "$v_py" == "$v_fmt" \
+# Seven empty strings also compare equal, so a site read as nothing must fail first:
+# a grep without -P support returns nothing for every one of them, and this gate then
+# printed a green tick having checked nothing (ONEUP-0161).
+unread=""
+for site in v_py v_spec v_speclog v_fmt v_rev v_meta v_chg; do
+    [[ -n "${!site}" ]] || unread+=" $site"
+done
+if [[ -n "$unread" ]]; then
+    bad "could not read the version at:$unread (is grep built with -P support?)"
+elif [[ "$v_py" == "$v_spec" && "$v_py" == "$v_speclog" && "$v_py" == "$v_fmt" \
       && "$v_py" == "$v_rev" && "$v_py" == "$v_meta" && "$v_py" == "$v_chg" ]]; then
     ok "all six version sites = $v_py"
 else
