@@ -43,6 +43,15 @@ def main():
     if len(sys.argv) != 2 or not re.fullmatch(r"\d+\.\d+\.\d+", sys.argv[1]):
         die("usage: ./bump.py X.Y.Z")
     ver = sys.argv[1]
+    # Refuse anything not above the current version, before any file is touched: all six
+    # sites would agree and the lockstep gate pass, while the release lists fall out of
+    # newest-first order and users already on the newer version are never offered an
+    # update again, since the in-app check compares against APP_VERSION (ONEUP-0160).
+    cur = re.search(r'APP_VERSION = "(\d+\.\d+\.\d+)"', (ROOT / "oneup/__init__.py").read_text())
+    if not cur:
+        die("no APP_VERSION in oneup/__init__.py — file drifted from the expected format")
+    if tuple(map(int, ver.split("."))) <= tuple(map(int, cur.group(1).split("."))):
+        die(f"{ver} is not above the current version {cur.group(1)}")
     today = datetime.date.today().isoformat()               # 2026-07-21
     rpmdate = datetime.date.today().strftime("%a %b %d %Y")  # Tue Jul 21 2026
 
@@ -66,7 +75,9 @@ def main():
          rf'\g<1>{ver}', flags=re.M)
 
     # 3. RPM spec %changelog — prepend a stanza
-    stanza = f"* {rpmdate} {AUTHOR} - {ver}-0\n" + "".join(f"- {it}\n" for it in plain)
+    # '%' is the spec file's macro sigil; a bare one breaks the OBS build (ONEUP-0160).
+    stanza = f"* {rpmdate} {AUTHOR} - {ver}-0\n" + "".join(
+        f"- {it.replace('%', '%%')}\n" for it in plain)
     edit("packaging/rpm/oneup.spec", r'(%changelog\n)', lambda mo: mo.group(1) + stanza)
 
     # 4. OBS _service versionformat + revision (revision is the git tag vX.Y.Z)
