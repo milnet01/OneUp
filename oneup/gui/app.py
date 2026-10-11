@@ -17,7 +17,7 @@ from PySide6.QtNetwork import QLocalSocket
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from .. import APP_ID, APP_NAME
-from . import i18n, markers, paths, tray
+from . import i18n, markers, paths, placement, tray
 from .theme import _app_icon, apply_app_theme
 from .window import Updater
 
@@ -155,6 +155,7 @@ def main():
     i18n.load()
     app.setApplicationName(APP_NAME)
     app.setDesktopFileName(APP_ID)  # ties the window to its .desktop/icon
+    placement.install_message_box_centring(app)
 
     # One theming entry point (module-level apply_app_theme): it folds in the
     # user's text-size and high-contrast settings, and the Settings controls call

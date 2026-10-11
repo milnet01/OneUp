@@ -36,7 +36,7 @@ each invariant is tested; this file is the rule a new widget must obey.
 | No state is signalled by colour alone | `gui-smoke.py` — the switch's shape counted in both states, the "overdue" wording, and ONEUP-0076 INV-6 (§3) |
 | No hard-coded pixel font size | `gui-smoke.py` INV-3 — a regex over the built stylesheet. **The stylesheet half only** (§4) |
 | Focus never draws a ring or adds a border, and every focusable control HAS a cue | `gui-smoke.py` INV-4 — asserts no ring, that no `:focus` rule moves anything but colour, and that the `:focus` rules are emitted after `:hover`/`:checked`; ONEUP-0076 INV-1 fails any focusable widget with no treatment at all (§5) |
-| Dialogs inherit the app theme and open centred on the window | `gui-smoke.py`'s X11 and Wayland `center_on_parent` assertions (§6) |
+| Dialogs inherit the app theme and open centred on the window | `gui-smoke.py`'s X11 and Wayland `center_on_parent` assertions, and its ONEUP-0247 static-helper check (§6) |
 | Every theme passes the same contrast checks | **enforced** — ONEUP-0076's focus computation and ONEUP-0027's whole-palette sweep both run over every palette, from `tests/gui-smoke.py` (§7) |
 | The window mirrors for Hebrew and Arabic | §8, gate G10 |
 
@@ -332,10 +332,10 @@ choice — which is why both forms are given rather than the one.
 | --- | --- | --- |
 | `QDialog` subclass | inherited app QSS | `showEvent` override |
 | Hand-built `QMessageBox` we `exec()` | inherited app QSS | `QTimer.singleShot(0, _center_child)` before `exec()` |
-| Static `QMessageBox.warning/information/question/critical(self, …)` | inherited app QSS | Qt's parent-relative default — acceptable for a transient one-line notice; do **not** rewrite these into hand-built boxes just to centre them |
+| Static `QMessageBox.warning/information/question/critical(self, …)` | inherited app QSS | Nothing at the call site: `install_message_box_centring`, run in `main()`, centres every message box that has a parent as it is shown (ONEUP-0247). Qt's own default leaves it in the screen's corner on Wayland |
 
 **Rule of thumb:** if you construct the box and hold a reference to it, centre it. If it is
-a one-line convenience call, parenting to `self` is enough.
+a one-line convenience call, parenting to `self` is enough — the app-wide filter does the rest.
 
 ### 6.4 Adding a dialog — the four steps
 

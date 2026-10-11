@@ -593,6 +593,32 @@ def main() -> int:
         os.environ["XDG_SESSION_TYPE"] = _orig_session
         placement._platform_name = _orig_platform
 
+    # --- Message boxes from QMessageBox's static helpers are centred (ONEUP-0247) ----
+    # QMessageBox.information(win, ...) builds, shows and runs its own box, so no call
+    # site can centre it; on Wayland it then opened in the screen's corner. An
+    # app-wide filter centres every message box with a parent as it is shown.
+    _orig_center = placement.center_on_parent
+    centred = []
+    try:
+        placement.install_message_box_centring(app)
+        placement.center_on_parent = lambda w: centred.append(w)
+        host = QWidget()
+        host.setGeometry(100, 100, 800, 600)
+        host.show()
+
+        def _close_box():
+            for w in QApplication.topLevelWidgets():
+                if isinstance(w, QMessageBox) and w.isVisible():
+                    w.done(0)
+
+        QTimer.singleShot(200, _close_box)
+        QMessageBox.information(host, "Check for updates", "You're on the latest version.")
+        check("a message box from QMessageBox.information is centred on its window (ONEUP-0247)",
+              any(isinstance(w, QMessageBox) for w in centred))
+        host.close()
+    finally:
+        placement.center_on_parent = _orig_center
+
     # --- Stop button (ONEUP-0047) -----------------------------------------------
     # Stop is deliberately cooperative: it asks, and the engine honours it at a safe
     # point. The UI must promise exactly that and never imply an instant abort.
