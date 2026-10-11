@@ -5339,7 +5339,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: chore.
   Source: review-code 2026-08-31, lanes gui-window, gui-run, gui-services.
 
-- 📋 [ONEUP-0186] **Release-script and gate defects below the ones already filed.**
+- ✅ [ONEUP-0186] **Release-script and gate defects below the ones already filed.**
   `release.sh:27` checks the clean-tree precondition, then runs the full local CI
   and an unbounded interactive prompt before `git add -A` — so anything created by
   the suites or edited while the prompt waits is swept into the release commit,
@@ -5359,6 +5359,16 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   the remote. Fix in the script: `git push --atomic origin main
   "v$ver"`, which makes §8's recovery true as written. Code, so filed
   here rather than fixed by the doc review.
+  Resolved (2026-10-11, main 750112b, v2 875140b): release.sh commits the
+  five version files by name and refuses any other change; pushes
+  --atomic; a failed OBS step ends "OBS was NOT updated", exit 3; the OBS
+  checkout is removed by a guarded EXIT trap; every option is read. A
+  successful --no-obs release used to exit 1 (last line `$do_obs && echo`);
+  fixed too. bump.py anchors the release link to the first version link
+  and writes each file via a temporary renamed over it, keeping its mode.
+  local-CI.sh reads every option and refuses --docs --full. Proved by
+  running old and new release.sh in a throwaway clone with a local remote
+  and fake osc. Follow-up: ONEUP-0255.
   **Layman:** Smaller problems in the release scripts that can let a bad release through quietly.
   Kind: fix.
   Source: review-code 2026-08-31, lane tooling.
