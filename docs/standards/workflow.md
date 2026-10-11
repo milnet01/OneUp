@@ -389,6 +389,11 @@ Adding a gate:
    in the position the script runs it.
 3. **If it is a *test* gate, add it to `.github/workflows/release.yml` as well** — a test
    gate that runs only locally catches its first regression after the tag is pushed.
+   **A test gate is a suite `docs/standards/testing.md` §1 lists**: a program that asserts on
+   what OneUp or its release tooling does. A check that documents, packaging metadata or the
+   version sites (§5.1) are well-formed or agree is not one — so `tests/docs-check.py` is not,
+   though it lives under `tests/`. A new suite goes in that table first; the table is what
+   makes it a test gate.
 4. **Prove it fails.** Break the thing it checks, run it, see red, put the thing back. A gate
    nobody has seen fail is a gate nobody knows works — this is the same rule as
    `docs/standards/testing.md` §9's trap *"confirm a new test fails before it passes"*,
