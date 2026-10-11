@@ -114,7 +114,10 @@ def check_sections() -> None:
               "no '**In one sentence:**' opener")
         check("## What checks this" in text, path, 0, "§4",
               "no '## What checks this' section")
-        check("Cold-eyes loop log" in text, path, 0, "§4",
+        # A heading, not the phrase: a sentence naming the log would otherwise pass for
+        # the section, and check_log_pointer below would then find no section to check.
+        check(any(ln.startswith("#") and "Cold-eyes loop log" in ln
+                  for ln in text.split("\n")), path, 0, "§4",
               "no 'Cold-eyes loop log' section")
         check_log_pointer(path, text)
 

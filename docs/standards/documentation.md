@@ -520,15 +520,13 @@ a test), those are exempt — they are too small to warrant it. OneUp has none t
 - **Verify each finding before acting on it.** A reviewer's claim is a hypothesis; check
   it against the tree like any other claim (§6).
 - **The severity scale below is the OLD gate's, and `review-contract` does not emit one** —
-  its findings carry the question they answer (`[Q1]`–`[Q4]`) instead. The mismatch reaches
-  `tests/docs-check.py`, whose loop-log tally balances severity counts against dispositions,
-  so a row written from a current run has to be worded to skip that check. **The compliant
-  form is to leave the disposition clause unbolded** — `check_loop_tallies` skips a row only
-  when no **bolded** span contains `<digits> verified|dismissed|info`, so
-  `Q1 4 · Q2 1 · Q3 3 — all 8 verified, 0 dismissed` passes while `**8 verified**` fails.
-  The newest rows of this document's own log (§10 points at it) are written that way. **ONEUP-0100 owns the mismatch itself**; renaming the gate here does not fix it, and this paragraph exists so the next reader
-  is not left to rediscover why. Rows 7 and 8 of that log were written under the old scale and
-  stay as written — a loop log records what each pass found.
+  its findings carry the question they answer (`[Q1]`–`[Q4]`) instead. **A row carrying a
+  question tally is balanced on it, bold or not**: in `Q1 4 · Q2 1 · Q3 3 — 8 verified,
+  0 dismissed` the question counts must sum to the verified number, because a dismissed
+  finding is given no question (ONEUP-0100). A row with no question tally is balanced by
+  severity, as the bullets below describe. Rows 7 and 8 of this document's log were
+  written under the old scale and stay as written — a loop log records what each pass
+  found.
 - **Fix every actionable severity** — critical, high, medium, low. Only informational
   findings are left. A low finding that turns out to be wrong is **dropped explicitly**,
   with a line saying so — never silently filtered.
@@ -537,20 +535,14 @@ a test), those are exempt — they are too small to warrant it. OneUp has none t
 - **The tally must balance.** A row saying 8 findings and 6 outcomes is a row where two
   findings were dropped without a decision. `tests/docs-check.py` fails on it.
 
-  Three things about that check are worth knowing before you write a row, because each cost
-  a red `local-CI.sh` (2026-08-03, and the third 2026-08-04):
+  Two things about the severity form are worth knowing before you write such a row, because
+  each cost a red `local-CI.sh`:
 
   - **A dismissed finding still needs a severity.** The check compares the severity counts
     against *verified + dismissed*, so four findings you checked and dropped have to appear
     in the severity breakdown too. Writing `2 critical, 7 high, 8 medium, 5 low, 2 info —
     24 verified, 4 dismissed` fails: 24 findings against 28 outcomes. The dismissed four
     were all low, so `9 low` is what balances it.
-  - **Do not bold a bare number in the Outcome cell.** The check pairs `**…**` spans across
-    the whole row and then hunts `<number> verified|dismissed|info` inside them. A bolded
-    decimal sitting near a bolded disposition word — `**0.069**` a few clauses before
-    `**Dismissed: two.**` — pairs into one span and contributes a phantom `069 Dismissed`,
-    which read as 105 outcomes against 36 findings. Leave measurements unbolded in that
-    cell; bold the prose instead.
   - **The check knows three outcome words: `verified`, `dismissed` and `info`.** Any other
     word is not counted. So `28 verified, 1 dismissed, 1 carried` comes up one outcome
     short and fails. Count a carried finding inside `verified` and say it was carried in
@@ -701,8 +693,8 @@ Every contradiction the first review loop found existed because a fact lived in 
 the privileged-call count in `security.md` and in the design document (21 of 22 against 14 of
 34), and the cause of the GUI suite's teardown crash, given differently in two standards. A
 pointer can go stale in exactly one way, and `tests/docs-check.py` catches **some** of it:
-only a path containing a `/`, and only in a standard, the reference, `CLAUDE.md` or
-`README.md`. Its `PATH_RE` requires the slash, so a bare `foo.py` — and the `security.md`
+only a path containing a `/` and ending in an extension `PATH_RE` lists, and only in a
+standard, the reference, `CLAUDE.md` or `README.md`. Its `PATH_RE` requires the slash, so a bare `foo.py` — and the `security.md`
 §9.6 form this section itself recommends — is caught by nothing, and no spec, plan or design
 document is scanned. The hand search below is the only catcher there. A restatement can go
 stale in every way, silently.
@@ -749,8 +741,8 @@ fact only to make a *different* point with it, and say where it came from.
 | §7.1 a file under `docs/reviews/` is named `-run-state.md`, `-fix-ledger.md` or `-loop-log.md` | **nothing** automatic — `tests/docs-check.py` reads that directory for loop-log rows only and checks no file's name, which is the same gap the row above rests on |
 | §8.2 every standard opens with an `**In one sentence:**` line | `tests/docs-check.py` |
 | §8 the rest of plain language | **nothing** automatic — a cold reader, and the author reading their own sentence as an opponent |
-| §9 a pointer resolves | `tests/docs-check.py`, over the documents that describe the tree as it is: standards, reference, `CLAUDE.md`, `README.md`. A spec, design document or plan is excluded, because each legitimately names files it is going to create. **Only paths containing a `/` are checked** — a bare `foo.py` is not, because the same form is used for naming-pattern examples (`snake_case.py`), for 2.0 modules that do not exist yet, and for runtime files that are never in git. A renamed script therefore leaves residue this gate cannot see; the 2026-07-26 review found five such references after `check-docs.py` became `tests/docs-check.py` |
-| §7 implementation does not start before the gate has run | `tests/docs-check.py` proves a gated document has a `Status` and a loop log — it cannot prove anyone **waited** for them. That half is **nothing** automatic |
+| §9 a pointer resolves | `tests/docs-check.py`, over the documents that describe the tree as it is: standards, reference, `CLAUDE.md`, `README.md`. A spec, design document or plan is excluded, because each legitimately names files it is going to create. **Only paths containing a `/` and ending in an extension `PATH_RE` lists are checked**, so a `.txt` or `.desktop` path is not — and a bare `foo.py` is not, because the same form is used for naming-pattern examples (`snake_case.py`), for 2.0 modules that do not exist yet, and for runtime files that are never in git. A renamed script therefore leaves residue this gate cannot see; the 2026-07-26 review found five such references after `check-docs.py` became `tests/docs-check.py` |
+| §7 implementation does not start before the gate has run | `tests/docs-check.py` proves a standard, reference, design document or spec has a `Status`, and that a standard or reference has a loop-log section; nothing checks a spec's or design document's loop log. It cannot prove anyone **waited** for either. That half is **nothing** automatic |
 | §8.2 every roadmap bullet carries a `**Layman:**` line | **nothing** automatic — `ROADMAP.md` is outside this gate's scope entirely, though the rule is mechanical enough to check |
 | §9 never rewrite `CHANGELOG.md` history | **nothing** automatic — a released entry rewritten looks exactly like one written correctly the first time. Git history is the only record, and nothing reads it |
 | §9 a superseded document is marked, not deleted | **nothing** automatic — a deleted file leaves nothing behind to check |
