@@ -4245,7 +4245,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: in-session-2026-10-10.
   Lanes: engine, tests.
 
-- 📋 [ONEUP-0254] **On Wayland, showing any message box re-centres every other open OneUp dialog too, undoing where the user moved it.**
+- ✅ [ONEUP-0254] **On Wayland, showing any message box re-centres every other open OneUp dialog too, undoing where the user moved it.**
   Found by the demoreel session's cold read of ONEUP-0247 (main 12fced5),
   2026-10-11; not yet seen on the live desktop. center_on_parent's KWin
   script centres every transient window of OneUp's pid, not only the one
@@ -4257,6 +4257,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   read, not filed separately: center_on_parent's X11 branch uses the
   parent's frameGeometry, which is wrong for a child-widget parent (all
   current callers pass a window; parent.window() would guard it).
+  Resolved (2026-10-11): main fb9142a, v2 f8c3058. Reproduced live
+  first: a test dialog moved to 150,150 jumped to 1770,943 when a
+  message box was centred. Measured: one tick after show KWin does not
+  yet list the new box, so "newest transient" alone still picked the
+  moved dialog. Fix: run a tick after the first Expose (50 ms
+  fallback), move only the newest transient of ours whose client size
+  is the widget's, then stop. After: the dialog stayed at 150,150 and
+  the box was centred, on both branches. gui-smoke check red without
+  the fix, green with it. The X11 child-widget note from the same read
+  was not changed: every caller passes a window.
   **Layman:** If you moved a OneUp window such as Repositories and a message pops up, that window jumps back to the middle.
   Kind: fix.
   Source: peer-review-2026-10-11 demoreel.
