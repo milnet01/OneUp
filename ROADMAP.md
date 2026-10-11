@@ -5837,6 +5837,20 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Source: user-real-run-2026-10-08.
   Lanes: gui, theme.
 
+- 📋 [ONEUP-0255] **Does main's release.sh need v2's `osc add || true` OBS fix?**
+  v2's release.sh (83e8cb9) took `osc add` out of the && chain: its
+  comment says the checkout is of an existing package, both files are
+  already versioned, `add` errors on them, and so every release after the
+  first reported "osc commit failed" without attempting one. main's
+  release.sh still chains it. The 2026-08-07 release-facts memory says
+  `osc add` completed unattended at 1.4.2, which contradicts that comment.
+  Not settled offline. Since ONEUP-0186 a failed OBS step ends with exit 3
+  and "OBS was NOT updated", so the next main release will show which is
+  true. If it reports failure, backport v2's line to main.
+  **Layman:** On the released version, the release script might report the package-repository update as failed every time; one real release would settle it.
+  Kind: investigate.
+  Source: in-session-2026-10-11 (ONEUP-0186 port to v2).
+
 ## 1.4.7 — release-build fix
 
 - ✅ [ONEUP-0243] **Make the keep-alive terminal test run on Ubuntu 22.04, so the release build finishes.**
