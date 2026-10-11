@@ -647,6 +647,29 @@ def main() -> int:
         placement.center_on_parent = _orig_center
         app.removeEventFilter(app._message_box_centrer)
 
+    # --- An absurd rate-limit reset time cannot crash the update check (ONEUP-0191) --
+    # int() takes any length of digits, but localtime() raises OverflowError past
+    # time_t, and that escaped the reply slot: the manual check then showed nothing.
+    class _RateLimitedReply:
+        def __init__(self, reset):
+            self._reset = reset
+
+        def attribute(self, _attr):
+            return 403
+
+        def rawHeader(self, _name):
+            return self._reset
+
+    try:
+        msg = app_update._update_check_error(_RateLimitedReply(b"9" * 20))
+        absurd_ok = "GitHub limits" in msg and "Try again" not in msg
+    except Exception:  # noqa: BLE001 — any escape is the defect under test
+        absurd_ok = False
+    check("an absurd x-ratelimit-reset gives the plain rate-limit message (ONEUP-0191)",
+          absurd_ok)
+    check("a real x-ratelimit-reset still says when to try again (ONEUP-0089)",
+          "Try again after" in app_update._update_check_error(_RateLimitedReply(b"1760000000")))
+
     # --- Stop button (ONEUP-0047) -----------------------------------------------
     # Stop is deliberately cooperative: it asks, and the engine honours it at a safe
     # point. The UI must promise exactly that and never imply an instant abort.
