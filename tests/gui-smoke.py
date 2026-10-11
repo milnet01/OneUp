@@ -14,6 +14,7 @@ engine's own skip-cleanly-for-absent-tools convention.
 Run directly, or via tests/run-tests.sh / local-CI.sh.
 """
 import importlib.util
+import inspect
 import os
 import re
 import shutil
@@ -450,7 +451,10 @@ def main() -> int:
     centred = []
     try:
         updater.install_message_box_centring(app)
-        updater.center_on_parent = lambda w: centred.append(w)
+        # Record whether the call came from inside the Show event: it must not, because
+        # the box sizes to its content on show and is centred a tick later.
+        updater.center_on_parent = lambda w: centred.append(
+            (w, any(f.function == "eventFilter" for f in inspect.stack())))
         host = updater.QWidget()
         host.setGeometry(100, 100, 800, 600)
         host.show()
@@ -463,10 +467,13 @@ def main() -> int:
         QTimer.singleShot(200, _close_box)
         updater.QMessageBox.information(host, "Check for updates", "You're on the latest version.")
         check("a message box from QMessageBox.information is centred on its window (ONEUP-0247)",
-              any(isinstance(w, updater.QMessageBox) for w in centred))
+              any(isinstance(w, updater.QMessageBox) for w, _ in centred))
+        check("the centring waits a tick, not inside the Show event (ONEUP-0247)",
+              bool(centred) and not any(inside for _, inside in centred))
         host.close()
     finally:
         updater.center_on_parent = _orig_center
+        app.removeEventFilter(app._message_box_centrer)
 
     # --- Stop button (ONEUP-0047) -----------------------------------------------
     # Stop is deliberately cooperative: it asks, and the engine honours it at a safe
