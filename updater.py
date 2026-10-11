@@ -699,16 +699,27 @@ def center_on_parent(widget) -> None:
                 fg.moveTop(max(area.top(), min(fg.top(), area.bottom() + 1 - fg.height())))
             widget.move(fg.topLeft())
         return
-    _when_exposed(widget, lambda: run_kwin_script(_centre_script(widget)))
+    def centre():
+        if widget.isVisible():              # hidden meanwhile: KWin no longer lists it
+            run_kwin_script(_centre_script(widget))
+    _when_exposed(widget, centre)
 
 
 def _centre_script(widget) -> str:
     """The KWin script that centres `widget`, and no other window, over its parent.
 
     KWin cannot be told which of our windows is which, so the script picks the newest
-    transient of ours whose client area is the widget's size. A dialog the user moved is
-    older or another size, so it stays put; if KWin does not know the widget yet,
-    nothing matches and nothing moves (ONEUP-0254)."""
+    transient of ours whose client area is the widget's size and whose parent's is the
+    parent's. KWin appends each new window to the list, so the newest is last. A dialog
+    the user moved is older or another size, so it stays put; if KWin does not know the
+    widget yet, a same-size older one could still match, which the parent check narrows
+    (ONEUP-0254)."""
+    parent = widget.parentWidget()
+    parent = parent.window() if parent is not None else None
+    parent_check = "" if parent is None else f"""
+    var pc = c.transientFor.clientGeometry;
+    if (Math.abs(pc.width - {parent.width()}) > 1
+            || Math.abs(pc.height - {parent.height()}) > 1) continue;"""
     return f"""\
 var wins = workspace.windowList();
 for (var i = wins.length - 1; i >= 0; i--) {{
@@ -716,7 +727,7 @@ for (var i = wins.length - 1; i >= 0; i--) {{
     if (c.pid !== {os.getpid()} || !c.transientFor) continue;
     var cg = c.clientGeometry;
     if (Math.abs(cg.width - {widget.width()}) > 1
-            || Math.abs(cg.height - {widget.height()}) > 1) continue;
+            || Math.abs(cg.height - {widget.height()}) > 1) continue;{parent_check}
     var g = c.frameGeometry, pg = c.transientFor.frameGeometry;
     var area = workspace.clientArea(workspace.PlacementArea, c);
     var x = pg.x + Math.round((pg.width - g.width) / 2);
@@ -761,10 +772,11 @@ class _ExposeOnce(QObject):
 
 def _when_exposed(widget, action) -> None:
     handle = widget.windowHandle()
+    # The widget as context drops the call if the widget is deleted first.
     if handle is None:                      # not shown yet: no Expose to wait for
-        QTimer.singleShot(PLACEMENT_FALLBACK_MS, action)
+        QTimer.singleShot(PLACEMENT_FALLBACK_MS, widget, action)
     elif handle.isExposed():
-        QTimer.singleShot(0, action)
+        QTimer.singleShot(0, widget, action)
     else:
         _ExposeOnce(handle, action)
 
