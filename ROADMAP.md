@@ -7281,7 +7281,7 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: review-contract-2026-10-01 files-and-naming.md loop 7.
 
-- 📋 [ONEUP-0218] **The signing-key hint shows users "repository", which wording-and-translation.md §2.1 forbids.**
+- ✅ [ONEUP-0218] **The signing-key hint shows users "repository", which wording-and-translation.md §2.1 forbids.**
   Both engines emit "A repository signing key is out of date…" (update_system.sh,
   oneup/engine/steps.py) and tests/gui-smoke.py asserts that text. The
   standard's model message now reads "A source's signing key…". The natural
@@ -7291,6 +7291,10 @@ when complete (that document's §7).
   1.4.x fix there is the user's call.
   Decided (user, 2026-10-01): fix in 2.0 only, through ONEUP-0108's
   code-to-sentence map. No 1.4.x change; main keeps the old wording.
+  Resolved (2026-10-11): 5d1177c on v2. Both signing-key hints and the
+  key-only banner say "source"; gui-smoke 5c asserts it, proven red
+  then green. The dialog and the package-conflict hint are filed
+  separately.
   **Layman:** One error message uses a technical word our own wording rules say to replace with "source".
   Kind: fix.
   Source: review-contract-2026-10-01 wording-and-translation.md loop 5 (surfaced).
@@ -7736,6 +7740,19 @@ when complete (that document's §7).
   Source: user-decision-2026-10-10.
   Lanes: engine, gui, packaging, security.
   Supersedes: ONEUP-0248.
+
+- 📋 [ONEUP-0256] **The key-import dialog and the package-conflict hint still show users "repository" and "repo".**
+  wording-and-translation.md §2.1 says a repository is a "source" to the
+  user. ONEUP-0218 fixed the signing-key hints and banner. Still wrong on
+  v2: banners._confirm_key_import's title and text ("Import the
+  repository's signing key?", "A repository's signing key has changed…",
+  "only do this for repositories you set up"), and oneup/gui/markers.py's
+  package-conflict hint ("often a third-party repo … disable a
+  conflicting repository"). v2 only, the same way as ONEUP-0218.
+  **Layman:** Two more messages use the technical word "repository" where the app elsewhere says "source".
+  Kind: fix.
+  Source: in-session-2026-10-11 (found while fixing ONEUP-0218).
+  Lanes: gui.
 
 ## 2.1.0 — after 2.0
 
