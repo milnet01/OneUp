@@ -2091,9 +2091,19 @@ class Updater(QMainWindow):
                 cut = min(cut, j)
         return rest[:cut].strip().rstrip(".").strip()
 
-    def _show_warning(self, text: str):
+    def _show_warning(self, text: str, role: str = ""):
         """Show the warning banner with `text`, exposing a Copy button when the
-        text contains a runnable command."""
+        text contains a runnable command.
+
+        The button's role goes with the text (ONEUP-0154): it resets to "Show
+        details" unless `role` names one — "snapshots" (thin them) or "repo-dup"
+        (open the repository manager). Without the reset, a pre-flight snapshot
+        advisory left "Thin snapshots…" under a later "A download failed…".
+        A remedy that on_finished arms sets its own label after this call."""
+        self._warn_snapshots = role == "snapshots"
+        self._warn_repo_dup = role == "repo-dup"
+        self.warn_btn.setText({"snapshots": "Thin snapshots…",
+                               "repo-dup": "Manage repositories…"}.get(role, "Show details"))
         self.warn_label.setText("⚠  " + text)
         cmd = self._extract_command(text)
         self._hint_command = cmd
@@ -3761,15 +3771,14 @@ for (var i = 0; i < wins.length; i++) {{
             # warn banner. The "thinned|N" variant comes from the dedicated
             # --thin-snapshots process and is read in _on_thin_finished, not here.
             self._snapshot_count = int(parts[1]) if len(parts) > 1 and parts[1].isdecimal() else 0
-            self._warn_snapshots = True
-            self.warn_btn.setText("Thin snapshots…")
             self._show_warning(
                 f"{self._snapshot_count} system restore points (snapshots) are stored. "
                 "On Tumbleweed these build up with each update and can use a lot of disk "
-                "space — you can safely thin the older ones.")
+                "space — you can safely thin the older ones.", role="snapshots")
         elif tag in ("DISK", "REPO"):
             # Pre-flight warnings (low disk / duplicate repos). Surface immediately so
             # the advertised warning is visible during the run, not buried in the log.
+            role = ""
             if tag == "DISK" and len(parts) >= 3:
                 msg = f"Low disk space on {parts[1]} — only {parts[2]} free. Updating may fail."
             elif tag == "REPO":
@@ -3781,11 +3790,10 @@ for (var i = 0; i < wins.length; i++) {{
                            "turn off or remove the extra copy.")
                 else:
                     msg = "Duplicate repository URLs detected — a common cause of update conflicts."
-                self._warn_repo_dup = True
-                self.warn_btn.setText("Manage repositories…")
+                role = "repo-dup"
             else:
                 msg = "Pre-flight warning — see the log for details."
-            self._show_warning(msg)
+            self._show_warning(msg, role=role)
         elif tag == "DONE":
             # The overall result normally comes from the process exit code in
             # on_finished (the two always agree). It is recorded here as well for the

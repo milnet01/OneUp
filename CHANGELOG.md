@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A warning's button always matches the warning above it** (ONEUP-0154)
+  After a "too many restore points" or "duplicate source" notice, a later
+  warning — a failed download, say — no longer keeps the earlier button,
+  such as "Thin snapshots…", underneath it.
+
 - **Offline, the firmware step no longer says "up to date" from an old firmware list** (ONEUP-0222)
   When the latest firmware list can't be downloaded, the step now says
   "up to date as of the last check" and warns you to check your connection.
