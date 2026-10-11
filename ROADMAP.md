@@ -5793,6 +5793,8 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Owed on release (2026-10-10): the ants-projects-hub-website session
   keeps the current trailer and will re-render it with the re-shot
   clip5 once 1.4.8 is published. Tell that session when 1.4.8 is out.
+  Decided (user, 2026-10-11): do not cut 1.4.8 yet; wait for more
+  1.4.x fixes, as with the 2026-09 batching decision.
   **Layman:** Three buttons showed a stray underline where an "&" belongs, such as "Roll back _reboot".
   Kind: fix.
   Source: peer-report-ants-projects-hub-website-2026-10-10.
@@ -7438,6 +7440,11 @@ when complete (that document's §7).
   testShortcutApply and testShortcutApplyNow fail here with and without
   the fix (machine setup). Developer packages installed for the build
   are listed in kde-kwin/installed-for-kwin.txt, for removal later.
+  2026-10-11: KWin fix committed locally (kde-kwin/kwin, branch
+  fix-remember-persist). State, decisions and next steps for filing
+  the KDE bug and merge request: /mnt/Games/Scripts/Linux/kde-kwin/SUBMISSION.md.
+  Still owed by the user: restart OneUp from Konsole, then report
+  after the next reboot whether it reopened in place.
   **Layman:** After a restart, OneUp should open in the middle of the screen without you having to move it.
   Kind: fix.
   Source: user-report-2026-10-10.
