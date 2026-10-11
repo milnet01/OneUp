@@ -5214,7 +5214,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: chore.
   Source: check-code --tree 2026-08-31.
 
-- 📋 [ONEUP-0155] **cache_bytes() walks the package cache on the GUI thread, once per progress marker.**
+- ✅ [ONEUP-0155] **cache_bytes() walks the package cache on the GUI thread, once per progress marker.**
   `_tick_activity` is called from the 5-second timer AND from the PROGRESS handler
   on every marker carrying a byte field — potentially several times a second
   through a large download — and each call rglobs `/var/cache/zypp/packages` with a
@@ -5223,6 +5223,12 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   weight with a monotonic stamp and re-weigh at most once per stall interval.
   Decided (2026-09-18, user): a fix, 1.4.6 + 2.0.0. The effect is the window
   freezing during a download, in main's updater.py and in v2's package alike.
+  Resolved (2026-10-11, main e2812a6 + v2): the PROGRESS handler
+  redraws with reweigh=False and reuses the growth the last 5 s timer tick
+  measured; only the tick weighs the cache. Not "once per stall interval":
+  in the prefetch phase the cache weight is the only figure shown, and 45 s
+  between updates would look like the stall it rules out. Red first on both
+  branches (ten markers, ten weighs); green main 410/0, v2 671/0.
   **Layman:** The window can stutter during a big download because it keeps re-measuring a folder.
   Kind: perf.
   Source: review-code 2026-08-31, lane gui-run.

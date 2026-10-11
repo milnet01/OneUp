@@ -529,7 +529,7 @@ def _reset_activity(win):
     win._activity_what = ""
     win._activity_since = 0.0
     win._activity_stalled = False
-    win._dl_at = win._dl_from = win._dl_bytes = win._dl_total = 0
+    win._dl_at = win._dl_from = win._dl_bytes = win._dl_total = win._dl_grown = 0
     # Weighed once, before anything is fetched, so later samples measure THIS run's
     # download. Packages already cached are inside the baseline and rightly excluded —
     # zypper won't re-fetch them, and counting them would flatter the rate.
@@ -537,10 +537,14 @@ def _reset_activity(win):
     _set_activity(win, "")
 
 
-def _tick_activity(win):
+def _tick_activity(win, reweigh: bool = True):
     """Redraw the liveness line: what we're waiting on, for how long, and how fast
     it's moving. Runs every 5s for the length of a run, and again whenever fresh
-    figures arrive, so the answer to "has it stalled?" is always on screen."""
+    figures arrive, so the answer to "has it stalled?" is always on screen.
+
+    Only the 5s tick re-weighs the package cache. By mid-download it holds thousands
+    of files and markers can arrive several times a second, so a marker-driven redraw
+    (reweigh=False) reuses the last weight rather than stall the window (ONEUP-0155)."""
     if not getattr(win, "_liveness_active", False):
         return
     now = time.monotonic()
@@ -555,7 +559,9 @@ def _tick_activity(win):
     # download spends its time in, and the one that reports nothing whatsoever.
     got = win._dl_bytes
     if win._progress_phase == "download":
-        got = max(got, cache_bytes() - win._dl_base)
+        if reweigh:
+            win._dl_grown = cache_bytes() - win._dl_base
+        got = max(got, win._dl_grown)
     if got > 0:
         human = markers._format_size(got)
         bits.append(f"{human} of {markers._format_size(win._dl_total)}"
@@ -640,7 +646,7 @@ def handle_marker(win, line: str):
         # previous step's elapsed time or byte rate over would misreport both.
         win._activity_what = ""
         win._activity_since = 0.0
-        win._dl_at = win._dl_from = win._dl_bytes = win._dl_total = 0
+        win._dl_at = win._dl_from = win._dl_bytes = win._dl_total = win._dl_grown = 0
         _tick_activity(win)   # redraw now; a 5s-stale line would name the old step
         win.bar.setFormat(win._step_caption)
         win.bar.setValue(int(index) - 1)
@@ -776,7 +782,7 @@ def handle_marker(win, line: str):
             win._dl_bytes = max(win._dl_bytes, int(parts[4]))
             if len(parts) > 5 and parts[5].isdecimal() and int(parts[5]):
                 win._dl_total = int(parts[5])
-            _tick_activity(win)
+            _tick_activity(win, reweigh=False)
         if announce:
             win._announce(QCoreApplication.translate("run", "Downloading packages.")
                           if downloading else

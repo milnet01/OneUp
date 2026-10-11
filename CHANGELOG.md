@@ -91,6 +91,11 @@ All notable changes to OneUp are documented here. The format follows
   On Wayland, opening any message or dialog pulled every other open
   OneUp window, such as Repositories, back to the middle.
 
+- **The window no longer stutters during a big download** (ONEUP-0155)
+  It re-measured the whole package download folder on every progress
+  update, several times a second. It now measures it once every five
+  seconds, as the download figure always updated.
+
 - **The window opens where you last left it, including after a restart, on KDE Wayland** (ONEUP-0246)
   Wayland never tells an app where its window is, so OneUp now asks
   KDE for the position when the window hides or quits, and asks KDE to

@@ -156,6 +156,7 @@ class Updater(QMainWindow):
         self._dl_bytes = 0           # bytes fetched so far, as reported by zypper
         self._dl_total = 0           # transaction's total download size (0 = unknown)
         self._dl_base = 0            # package-cache weight before the run started
+        self._dl_grown = 0           # its growth at the last weighing (ONEUP-0155)
         self._done_status = ""       # the run's own @@DONE@@ verdict; the only result
                                      # available for a run we attached to (no exit code)
         self._attached_pid = 0       # engine we're following that another window started
