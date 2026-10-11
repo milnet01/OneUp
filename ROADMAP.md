@@ -1,5 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
+<!-- ants-roadmap-id-high-water: ONEUP=257 -->
 
 # OneUp Roadmap
 
@@ -5318,7 +5319,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: security.
   Source: review-code 2026-08-31, lane engine-privilege.
 
-- 📋 [ONEUP-0183] **Text formats, default buttons and dialog lifetimes across the window layer.**
+- ✅ [ONEUP-0183] **Text formats, default buttons and dialog lifetimes across the window layer.**
   Five small classes, grouped because each is a one-line fix in the same layer.
   Labels fed by the engine keep Qt's AutoText, so text containing a known HTML tag
   renders as rich text — `window.py:383`, `:398`, `:501`, `task_row.py:52`, `:108`
@@ -5343,6 +5344,15 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   _on_size_finished and _on_auth_status_finished run on a QProcess
   or button already deleted ("Internal C++ object ... already
   deleted"). The exit code stays 0; it is the same lifetime class.
+  Resolved (2026-10-11): all five defects were live on both branches.
+  main 545f6df, v2 c877acc (merge fc3b314). Engine-fed labels are now
+  PlainText; the reboot and restart-services questions default to No;
+  the size probe reads a final unterminated line and is deleteLater'd;
+  repos, rollback and auth handle FailedToStart (button back, message
+  shown); _poll_attached_run probes the pid before reading the log.
+  Red then green on both suites (main 414/14 -> 428/0, v2 687/16 ->
+  703/0). The "already deleted after Passed" note no longer reproduces
+  (ONEUP-0204). Ships in 1.4.6 and 2.0.0.
   **Layman:** A set of small window defects: text that could render as markup, dialogs where Enter picks the wrong button, and objects that are never released.
   Kind: chore.
   Source: review-code 2026-08-31, lanes gui-window, gui-run, gui-services.
