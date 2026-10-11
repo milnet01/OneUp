@@ -4222,7 +4222,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: in-session-2026-10-10.
   Lanes: gui, theme.
 
-- 📋 [ONEUP-0252] **The engine suite's check count dropped by one between two runs on 2026-10-10 with no engine or suite change.**
+- ✅ [ONEUP-0252] **The engine suite's check count dropped by one between two runs on 2026-10-10 with no engine or suite change.**
   tests/run-tests.sh counted 422 on v2 at 15:42 (local-CI for 73488ab)
   and 421 at 16:22 and 16:31; main went 338 to 337 the same way. The
   commits between touched only oneup/gui, tests/gui-smoke.py,
@@ -4232,6 +4232,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   /mnt/Games/Scripts/Linux/oneup-suite-421-2026-10-10.log (outside the
   repo; delete once compared). Not the two pgrep-dependent checks,
   which count on both branches of their if.
+  Resolved (2026-10-11), no defect: the count depends on
+  ONEUP_TEST_NETWORK. local-CI.sh run by hand sets it to 1, so T-1
+  (downloadcontentcdn.opensuse.org) runs and counts; githooks/pre-push
+  sets it to 0, so T-1 prints SKIP and counts nothing. The 421 log held
+  exactly that SKIP. Measured on v2: network on 422, off 421, and in
+  both runs the printed ok lines equal the count; the only line that
+  differs is T-1. main uses the same switch (git grep). Comparison logs
+  deleted.
   **Layman:** One of OneUp's automatic engine checks seems to run only some of the time; find out which one and why.
   Kind: investigate.
   Source: in-session-2026-10-10.
@@ -7421,6 +7429,15 @@ when complete (that document's §7).
   before the edit at ~/.config/kwinrulesrc.oneup-bak-2026-10-11) and
   KWin reconfigured. User will restart OneUp from Konsole and report
   after the next reboot whether it reopened in place.
+  2026-10-11, the KWin side: user chose to report the Remember bug
+  and send a fix. Work tree /mnt/Games/Scripts/Linux/kde-kwin (outside
+  this repo), branch fix-remember-persist off Plasma/6.7. New
+  integration test testPositionRememberPersists: red on unchanged code
+  (config kept 42,42 after a move to 50,42), green with the fix
+  (WindowRules::update copies an updated rule into its RuleSettings).
+  testShortcutApply and testShortcutApplyNow fail here with and without
+  the fix (machine setup). Developer packages installed for the build
+  are listed in kde-kwin/installed-for-kwin.txt, for removal later.
   **Layman:** After a restart, OneUp should open in the middle of the screen without you having to move it.
   Kind: fix.
   Source: user-report-2026-10-10.
