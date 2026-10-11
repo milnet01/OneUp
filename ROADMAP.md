@@ -7808,7 +7808,7 @@ when complete (that document's §7).
   Lanes: engine, gui, packaging, security.
   Supersedes: ONEUP-0248.
 
-- 📋 [ONEUP-0256] **The key-import dialog and the package-conflict hint still show users "repository" and "repo".**
+- ✅ [ONEUP-0256] **The key-import dialog and the package-conflict hint still show users "repository" and "repo".**
   wording-and-translation.md §2.1 says a repository is a "source" to the
   user. ONEUP-0218 fixed the signing-key hints and banner. Still wrong on
   v2: banners._confirm_key_import's title and text ("Import the
@@ -7816,6 +7816,9 @@ when complete (that document's §7).
   "only do this for repositories you set up"), and oneup/gui/markers.py's
   package-conflict hint ("often a third-party repo … disable a
   conflicting repository"). v2 only, the same way as ONEUP-0218.
+  Resolved (2026-10-11): the key-import dialog's title and text and the
+  package-conflict hint now say "source". v2 only, following the
+  2026-10-01 decision on ONEUP-0218. Two gui-smoke checks, red then green.
   **Layman:** Two more messages use the technical word "repository" where the app elsewhere says "source".
   Kind: fix.
   Source: in-session-2026-10-11 (found while fixing ONEUP-0218).
