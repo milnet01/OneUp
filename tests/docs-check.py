@@ -116,11 +116,36 @@ def check_sections() -> None:
               "no '## What checks this' section")
         check("Cold-eyes loop log" in text, path, 0, "§4",
               "no 'Cold-eyes loop log' section")
+        check_log_pointer(path, text)
+
+
+def check_log_pointer(path: Path, text: str) -> None:
+    """A loop-log section with no rows of its own must point at the record that holds them
+    (§4). Without this, moving the rows out leaves a heading over nothing, and the tally
+    check below balances an empty table."""
+    lines = text.split("\n")
+    start = next((i for i, ln in enumerate(lines) if ln.startswith("#")
+                  and "Cold-eyes loop log" in ln), None)
+    if start is None:
+        return
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")),
+               len(lines))
+    body = lines[start + 1:end]
+    if any(ln.startswith("|") for ln in body):
+        return
+    targets = [t for ln in body for t in LINK_RE.findall(ln) if t.endswith("-loop-log.md")]
+    check(any((path.parent / t).resolve().parent == ROOT / "docs" / "reviews"
+              and (path.parent / t).is_file() for t in targets), path, start + 1, "§4",
+          "the loop-log section holds no rows and no link to a docs/reviews/*-loop-log.md "
+          "record that exists")
 
 
 # --- §7: a loop-log tally must balance --------------------------------------
 def check_loop_tallies() -> None:
-    for path in docs("docs/standards", "docs/reference", "docs/design", "docs/specs"):
+    # docs/reviews/ holds the records a loop-log section may point at (§4); a ledger or a
+    # run-state note there has no loop-log heading, so nothing in it is read as a row.
+    for path in docs("docs/standards", "docs/reference", "docs/design", "docs/specs",
+                     "docs/reviews"):
         in_log = False
         for i, ln in enumerate(path.read_text().split("\n"), 1):
             if ln.startswith("#"):
