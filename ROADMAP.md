@@ -7270,7 +7270,7 @@ when complete (that document's §7).
   Kind: fix.
   Source: review-code 2026-08-31, lane engine-driver.
 
-- 📋 [ONEUP-0192] **Two dead or misleading guards left over from the Bash engine.**
+- ✅ [ONEUP-0192] **Two dead or misleading guards left over from the Bash engine.**
   `update_system.sh` sets `WINDOW_PID=$PPID` and documents it as "the window". That
   holds only because `--size` skipped the shutdown-inhibitor re-exec; now that the
   `--size --hold` path IS inhibited (ONEUP-0165), `$PPID` on that path is the
@@ -7281,6 +7281,10 @@ when complete (that document's §7).
   anyway with every caller using the return value. Neither is a zombie under
   review-code's own test — no contract promises either as an entry point — so they
   are filed here rather than reported as dead code.
+  Resolved (2026-10-11): FAILING is a local list in find_failing_repos.
+  WINDOW_PID's comment now states the --size --hold exception; the code is
+  kept as is, because the ONEUP-0238 scenario records that the Bash
+  fallback keeps that defect on purpose (the window never starts it).
   **Layman:** Two leftovers that read like safety checks but are not doing anything.
   Kind: chore.
   Source: review-code 2026-08-31, lanes engine-shell and engine-steps.
