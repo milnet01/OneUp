@@ -2932,6 +2932,22 @@ out=$(run_engine "$d" --steps=system)
 check "silent create: the newest listed snapshot is reported" "@@SNAPSHOT@@|41" "$out"
 rm -rf "$d"
 
+# ONEUP-0188: the listing fallback takes the last line's first word. Anything but a
+# number there is not a snapshot, and reporting it would offer a rollback to nothing.
+echo "TEST: a listing whose last line is not a snapshot reports no rollback point"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/snapper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$*" == *--print-number* ]] && exit 0
+[[ "$1" == "--no-headers" ]] && { printf '39 | single\nError: config not found\n'; exit 0; }
+exit 0
+EOF
+printf '#!/usr/bin/env bash\ncase "$*" in *dup*|*update*) echo "Nothing to do."; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
+chmod +x "$d/snapper" "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check_absent "non-numeric listing: no SNAPSHOT marker" "@@SNAPSHOT@@|" "$out"
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 # ONEUP-0094 — a truncated download recovers itself instead of failing the update
 # ---------------------------------------------------------------------------

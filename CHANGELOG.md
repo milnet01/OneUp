@@ -8,6 +8,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A run no longer offers a restore point that does not exist, and the terminal help lists --size** (ONEUP-0188)
+  When snapper created a snapshot without printing its number, OneUp read the
+  number from snapper's list, and an error line there was reported as a
+  snapshot to roll back to. Only a number is accepted now. `--help` also
+  describes `--size=system`, which works from a terminal and was missing.
+
 - **Five small window fixes: safer restart questions, honest results, no stuck buttons** (ONEUP-0183)
   Pressing Enter on "Restart now?" or "Restart services?" now picks No,
   never Yes. A download size is no longer missed and shown as "Nothing to

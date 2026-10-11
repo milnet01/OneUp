@@ -153,6 +153,8 @@ Usage: $(basename "$0") [--steps=LIST] [--check] [--notify] [--log=FILE] [--help
                  skip the culprit(s) (up to $MAX_SKIP_REPOS), then continue.
   --thin-snapshots  Ask snapper to remove old, expendable Btrfs snapshots (its own
                  retention cleanup — keeps the recent ones), then report how many.
+  --size=system  Report the exact download size of the system update and exit.
+                 Asks for your password: zypper works the size out only as root.
   --log=FILE     Write the run log here. Default: $LOG_DIR/<timestamp>.log
   --help         Show this help.
 
@@ -732,17 +734,13 @@ sudo_capture() {
     rm -f "$_cap_tmp"
     return $_cap_rc
 }
-# Negative PID targets the keep-alive's process group (the loop shell + its sleep),
-# so nothing survives the run. See sudo_init for why `set -m` makes this a lone group.
-# Re-enable every repo we disabled BEFORE killing the keep-alive (sudo cred still
-# warm), non-interactively (-n) so a cold-credential exit logs the manual fix
-# instead of blocking on a ksshaskpass popup inside the trap.
 # An askpass helper whose sudo has gone is a password dialog nobody is waiting on — it
 # just sits on the user's screen. Eleven had piled up on the reporter's machine, and one
 # was still open 5.7 hours after its run had finished and exited cleanly, which is a
 # large part of why "three prompts in a row" felt like more than three. Only processes
-# that are BOTH orphaned (parent pid 1) and carrying one of OUR prompts are touched, so
-# a live dialog that another OneUp process is still waiting on is never killed. Why a
+# that are BOTH orphaned (their parent is no longer a sudo) and carrying one of OUR
+# prompts are touched, so a live dialog that another OneUp process is still waiting on
+# is never killed. Why a
 # duplicate gets raised in the first place is still unexplained — see ONEUP-0043.
 reap_orphaned_askpass() {
     local pid ppid args pcmd
@@ -768,6 +766,11 @@ reap_orphaned_askpass() {
 }
 RUN_STATE_OWNED=false      # only the process that wrote the run-state file clears it,
                            # so a --check or --size run can't erase a real run's entry
+# Re-enable every repo we disabled BEFORE killing the keep-alive (sudo cred still
+# warm), non-interactively (-n) so a cold-credential exit logs the manual fix
+# instead of blocking on a ksshaskpass popup inside the trap.
+# Negative PID targets the keep-alive's process group (the loop shell + its sleep),
+# so nothing survives the run. See sudo_init for why `set -m` makes this a lone group.
 cleanup() {
     local a
     $RUN_STATE_OWNED && rm -f "$RUN_STATE_FILE" "$STOP_FILE"
@@ -1190,6 +1193,9 @@ if step_selected system && command -v snapper &>/dev/null; then
     elif [[ -z "$SNAP_ID" ]]; then
         sudo_capture SNAP_LIST snapper --no-headers list
         SNAP_ID=$(tail -n1 <<<"$SNAP_LIST" | awk '{print $1}')
+        # Only a number names a snapshot. Anything else is an error or a heading, and
+        # reporting it would offer a rollback to nothing (ONEUP-0188).
+        [[ "$SNAP_ID" =~ ^[0-9]+$ ]] || SNAP_ID=""
     fi
     if [[ -n "$SNAP_ID" ]]; then
         echo "Pre-update snapshot #$SNAP_ID recorded  (roll back with: sudo snapper rollback $SNAP_ID)"
