@@ -2024,6 +2024,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   cached. The parser defect this check exposed is ONEUP-0223. Re-measure
   this item on a run that SUCCEEDS from a warm cache before changing the
   window's arithmetic.
+  Progress (2026-10-11): the user agreed to run OneUp normally the next
+  time updates are waiting and then say so, so a session can read that
+  run's log. Until they report, keep skipping this item.
 
 - ✅ [ONEUP-0094] **Retry a truncated download with mirror striping disabled.**
   Observed twice THROUGH ONEUP on 2026-08-07 (four reproductions in total --
