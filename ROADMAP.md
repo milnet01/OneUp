@@ -5233,7 +5233,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: perf.
   Source: review-code 2026-08-31, lane gui-run.
 
-- 📋 [ONEUP-0160] **bump.py writes an unescaped % into the RPM %changelog, and cannot detect a downgrade.**
+- ✅ [ONEUP-0160] **bump.py writes an unescaped % into the RPM %changelog, and cannot detect a downgrade.**
   Two independent defects in the release path, neither caught locally because
   nothing in this repository builds the RPM. `%` is the spec-file macro sigil and
   the escape is `%%`; CHANGELOG.md has already shipped bullets containing a bare
@@ -5242,11 +5242,16 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   the lockstep gate passes, leaving the AppStream releases list and the CHANGELOG
   out of newest-first order and every existing user never offered an update again,
   since the in-app check reads APP_VERSION.
+  Resolved (2026-10-11, main f240af6, v2 f5e24e6): bump.py writes release
+  notes into the RPM %changelog with '%' escaped as '%%', and refuses any
+  version not above the current APP_VERSION before touching a file.
+  rpmspec -P showed the premise: a bare "%{name}" note came out "oneup".
+  bump-test.py red 12/5, green 17/0 on both branches.
   **Layman:** A percent sign in a release note can break the package build, and nothing stops a version going backwards.
   Kind: fix.
   Source: review-code 2026-08-31, lane tooling.
 
-- 📋 [ONEUP-0161] **local-CI's lockstep gate passes vacuously when grep has no -P, and two gates report ok on an empty result.**
+- ✅ [ONEUP-0161] **local-CI's lockstep gate passes vacuously when grep has no -P, and two gates report ok on an empty result.**
   `local-CI.sh` reads the six version sites with `grep -oP`. Without PCRE support
   all six variables are empty, all six compare equal, and the gate prints
   `ok "all six version sites = "` — a green tick on the check every other version
@@ -5254,6 +5259,12 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   forbids. The INV-5 colour-literal gate has the same shape: it reports ok whenever
   its hit list is empty, which is true both for "no violations" and for "the glob
   matched nothing". Assert the inputs are non-empty before comparing.
+  Resolved (2026-10-11, main 12fa8c8, v2 f5e24e6 + the INV-5 commit): the
+  lockstep gate names any site it read as empty and fails before comparing
+  (red: a grep lacking -P printed a green tick over seven empty reads).
+  The INV-5 colour gate (v2 only) now fails unless its glob found files and
+  awk exited 0 (red: run with no oneup/gui/, awk could not open the file
+  and the gate said ok).
   **Layman:** A safety check can report a green tick while having checked nothing.
   Kind: fix.
   Source: review-code 2026-08-31, lane tooling.
