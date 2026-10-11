@@ -5597,7 +5597,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: security.
   Source: session-message-claude-config-2026-09-28.
 
-- 📋 [ONEUP-0222] **The firmware step trusts fwupd's cached answer offline, and fwupdmgr may prompt invisibly.**
+- ✅ [ONEUP-0222] **The firmware step trusts fwupd's cached answer offline, and fwupdmgr may prompt invisibly.**
   Two residuals the ONEUP-0166 fix did not introduce, found by a cold
   read. Both engines, unverified on this machine.
 
@@ -5614,6 +5614,11 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   run invisibly. GUI runs use QProcess, so stdin is not a terminal
   there. Suggested: `</dev/null`, or the --no-metadata-check /
   --no-unreported-check flags; check which flags 2.1.x honours first.
+  Resolved (2026-10-11): 72b2028 on main, merged (34becaf), 52134dc on
+  v2. Every fwupdmgr call reads /dev/null, in both engines and in --check.
+  A failed refresh with get-updates at 2 now reports "up to date as of the
+  last check" with a hint to check the connection (main: English HINT;
+  v2: hint code firmware-list-stale). Proven red then green on both suites.
   **Layman:** With no internet, OneUp can still say your firmware is current using an old copy of the firmware list, and in a terminal run the firmware tool might wait for an answer nobody can see.
   Kind: fix.
   Source: cold read by the Pressless session, 2026-10-01, of the ONEUP-0166 main backport.
