@@ -7299,13 +7299,17 @@ when complete (that document's §7).
   Kind: fix.
   Source: review-contract-2026-10-01 wording-and-translation.md loop 5 (surfaced).
 
-- 📋 [ONEUP-0219] **ONEUP-0032's spec §4.2 cites wording-and-translation.md §7 for a claim §7 no longer makes.**
+- ✅ [ONEUP-0219] **ONEUP-0032's spec §4.2 cites wording-and-translation.md §7 for a claim §7 no longer makes.**
   §4.2 says the catalogue directory is resolved "from the package's own
   location", which makes every layout find it "by the same relative path
   (wording-and-translation.md §7)". §7 now defers to files-and-naming.md §4,
   which says the loader finds HERE/oneup/translations/ through paths.py,
   and tests/imports-test.py fails on __file__ anywhere under oneup/ but
   paths.py. Fix at the spec's own gate, before ONEUP-0032 is built.
+  Resolved (2026-10-11): a7be0e2 on v2. §4.2 now names the built
+  loader's default, paths.py's TRANSLATIONS_DIR (HERE/oneup/translations/),
+  defers each layout's placement to files-and-naming.md §4, and ties the
+  no-__file__ rule to imports-test.py INV-4. No gate: code already exists.
   **Layman:** A plan document points at a rule that has since moved, and disagrees with where the rule now lives.
   Kind: doc-fix.
   Source: review-contract-2026-10-01 wording-and-translation.md loop 5 (out of scope).
