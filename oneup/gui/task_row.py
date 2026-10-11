@@ -78,6 +78,7 @@ class TaskRow(QFrame):
 
         self.badge = QLabel("")
         self.badge.setObjectName("Badge")
+        self.badge.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
         self.badge.setVisible(False)
         self._badge_text = ""   # the outcome ("3 installed"); timing is appended
         self._timing = ""       # "42s" — kept apart so a repeated marker can't stack
@@ -134,6 +135,7 @@ class TaskRow(QFrame):
         self.size_btn.clicked.connect(lambda: self.size_requested.emit(self.key))
         self.size_result = QLabel("")
         self.size_result.setObjectName("SizeResult")
+        self.size_result.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
         self.size_result.setVisible(False)
         self._has_size = False  # explicit — survives the panel being collapsed
         if key == "system":

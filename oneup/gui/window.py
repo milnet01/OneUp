@@ -372,6 +372,7 @@ class Updater(QMainWindow):
         # apply_app_theme prints is not a user-visible report.
         self.theme_note = QLabel()
         self.theme_note.setObjectName("ThemeNote")
+        self.theme_note.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
         self.theme_note.setWordWrap(True)
         self.theme_note.setVisible(False)
 
@@ -488,6 +489,7 @@ class Updater(QMainWindow):
         # Progress + current step.
         self.status = QLabel(QCoreApplication.translate("window", "Ready."))
         self.status.setObjectName("Status")
+        self.status.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
         # NOT setAccessibleName: an explicit name on a QLabel is permanent, and this
         # label is `_announce`'s default `source` — so a name here makes the reader
         # say "Current status" for every run summary instead of the summary
@@ -502,6 +504,7 @@ class Updater(QMainWindow):
         # progress line, and an explicit name on a QLabel is permanent.
         self.bar_caption = QLabel("")
         self.bar_caption.setObjectName("ProgressCaption")
+        self.bar_caption.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
         self.bar_caption.setAccessibleDescription(QCoreApplication.translate(
             "window",
             "Update progress detail"))
@@ -518,6 +521,7 @@ class Updater(QMainWindow):
         # nothing for the log pane to draw, and a working run reads as frozen.
         self.activity = QLabel("")
         self.activity.setObjectName("Activity")
+        self.activity.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
         self.activity.setAccessibleName(QCoreApplication.translate("window", "Activity"))
         self.activity.setVisible(False)
         root.addWidget(self.activity)
@@ -744,7 +748,19 @@ class Updater(QMainWindow):
         return True
 
     def _poll_attached_run(self):
-        """Read whatever the attached run has appended, then notice when it finishes."""
+        """Read whatever the attached run has appended, then notice when it finishes.
+
+        The pid is asked about BEFORE the log is read (ONEUP-0183). Read-then-ask let a
+        run write its @@DONE@@ and exit in the gap: the read saw no verdict, the pid was
+        gone, and a successful run was recorded as failed. Asked first, a run found
+        gone has already written everything it will write, so the read below has it."""
+        try:
+            os.kill(self._attached_pid, 0)
+            alive = True
+        except PermissionError:
+            alive = True                            # alive, just not ours to signal
+        except ProcessLookupError:
+            alive = False
         try:
             with self._attached_log.open("r", errors="replace") as fh:
                 fh.seek(self._attached_pos)
@@ -756,13 +772,8 @@ class Updater(QMainWindow):
             self._activity_at = time.monotonic()   # the log grew: the run is alive
         for line in new.splitlines():
             run.handle_line(self, line)
-        try:
-            os.kill(self._attached_pid, 0)
+        if alive:
             return                                  # still going
-        except PermissionError:
-            return
-        except ProcessLookupError:
-            pass
         self._attach_timer.stop()
         paths.RUN_STATE.unlink(missing_ok=True)
         # No exit code to read for someone else's process, so the run's own @@DONE@@ is

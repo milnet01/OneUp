@@ -197,10 +197,27 @@ def _run_auth(win, action: str, status_text: str):
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.finished.connect(lambda _c, _s, pr=p: _on_auth_finished(win, pr))
+    p.errorOccurred.connect(lambda err, pr=p: err == QProcess.FailedToStart
+                            and _on_auth_not_started(win, pr))
     win._authchg_proc = p
     log = paths.STATE_LOG_DIR / f"{stamp}.auth.log"
     argv = paths.engine_argv(action, f"--log={log}")
     p.start(argv[0], argv[1:])
+
+
+def _on_auth_not_started(win, proc: QProcess):
+    """The engine could not start, so `finished` never comes. Give the switch back and
+    say so, rather than leave it greyed out (ONEUP-0183)."""
+    if not (shiboken6.isValid(win) and shiboken6.isValid(proc)):
+        return
+    win.auth_btn.setEnabled(True)
+    win.status.setText(QCoreApplication.translate("auth", "Ready."))
+    win._settings_status("")
+    QMessageBox.warning(win, QCoreApplication.translate("auth", "Couldn't change the setting"),
+                        QCoreApplication.translate(
+                            "auth",
+                            "Nothing was changed — OneUp's engine could not be started."))
+    _query_auth_status(win)
 
 
 def _on_auth_finished(win, proc: QProcess):

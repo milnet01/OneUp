@@ -283,7 +283,19 @@ class RepoManagerDialog(QDialog):
         self.apply_btn.setEnabled(False)
         self._proc = QProcess(self)
         self._proc.finished.connect(self._on_applied)
+        self._proc.errorOccurred.connect(
+            lambda err: err == QProcess.FailedToStart and self._on_apply_not_started())
         self._proc.start(cmd[0], cmd[1:])
+
+    def _on_apply_not_started(self):
+        """pkexec could not start, so nothing ran and `finished` never comes. Give the
+        button back and say so, rather than leave it greyed out (ONEUP-0183)."""
+        QMessageBox.warning(self, QCoreApplication.translate("repos", "Repositories"),
+                            QCoreApplication.translate(
+                                "repos",
+                                "Nothing was changed — the administrator prompt (pkexec) "
+                                "could not be started."))
+        self.apply_btn.setEnabled(True)
 
     def _on_applied(self, code: int, _status):
         if code == 0:

@@ -125,6 +125,13 @@ def rollback(win):
         win._rollback_proc = QProcess(win)
         win._rollback_proc.finished.connect(
             lambda code, _status=None, t=target: _on_rollback_finished(win, code, t))
+        win._rollback_proc.errorOccurred.connect(   # no `finished` follows (ONEUP-0183)
+            lambda err: err == QProcess.FailedToStart and QMessageBox.information(
+                win, QCoreApplication.translate("rollback", "Roll back"),
+                QCoreApplication.translate(
+                    "rollback",
+                    "Nothing was changed — the administrator prompt (pkexec) could not "
+                    "be started.")))
         win._rollback_proc.start(
             "pkexec", ["sh", "-c",
                        f"snapper rollback {target} || exit 3; systemctl reboot || exit 4"])

@@ -74,6 +74,7 @@ def _make_banner(win, frame_obj: str, btn_obj: str, btn_text: str, slot,
     lay.setContentsMargins(14, 10, 12, 10)
     lbl = QLabel("")
     lbl.setObjectName("BannerText")
+    lbl.setTextFormat(Qt.TextFormat.PlainText)  # repository names and URLs reach it (ONEUP-0183)
     lbl.setWordWrap(True)
     # The FRAME carries the name; the label carries it as a DESCRIPTION. An explicit
     # name on a QLabel is permanent and this label is the `source` `_show_warning`
@@ -226,8 +227,10 @@ def _service_units(win) -> list[str]:
 
 
 def _confirm_reboot(win, title: str, body: str):
-    """Ask, and restart the machine on yes — the one place the window reboots."""
-    if QMessageBox.question(win, title, body) == QMessageBox.Yes:
+    """Ask, and restart the machine on yes — the one place the window reboots.
+    No is the default, so Enter never reboots (ONEUP-0183)."""
+    if QMessageBox.question(win, title, body, QMessageBox.Yes | QMessageBox.No,
+                            QMessageBox.No) == QMessageBox.Yes:
         QProcess.startDetached("systemctl", ["reboot"])
 
 
@@ -273,7 +276,8 @@ def restart_services(win):
             "banners", "These will be restarted now:\n\n{names}").format(
                 names=i18n.join_names(safe))
     title = QCoreApplication.translate("banners", "Restart services?")
-    if QMessageBox.question(win, title, body) == QMessageBox.Yes:
+    if QMessageBox.question(win, title, body, QMessageBox.Yes | QMessageBox.No,
+                            QMessageBox.No) == QMessageBox.Yes:   # Enter = No (ONEUP-0183)
         _start_service_restart(win, "pkexec", ["systemctl", "restart", *safe])
         # Hidden while it runs, and shown again only if the restart fails, so a failed
         # one can be retried. Anything still needing a reboot is carried by the reboot

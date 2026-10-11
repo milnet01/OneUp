@@ -59,7 +59,7 @@ os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
     import shiboken6
-    from PySide6.QtCore import QPoint, QProcess, Qt, QTimer
+    from PySide6.QtCore import QEvent, QPoint, QProcess, Qt, QTimer
     from PySide6.QtGui import QAccessible, QCloseEvent, QFont, QFontInfo
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import (
@@ -3360,8 +3360,9 @@ def main() -> int:
     # --- ONEUP-0183: window defects from review-code 2026-08-31 ----------------
     # Labels the engine feeds show text as typed. Under Qt's default AutoText, a
     # repository name or URL holding a known HTML tag renders as markup instead.
-    wT = updater.Updater()
-    for _name, _lbl in (("status", wT.status), ("activity", wT.activity),
+    wT = window.Updater()
+    for _name, _lbl in (("status", wT.status), ("progress caption", wT.bar_caption),
+                        ("activity", wT.activity), ("theme note", wT.theme_note),
                         ("warning banner", wT.warn_label),
                         ("row badge", wT.rows["system"].badge),
                         ("size result", wT.rows["system"].size_result)):
@@ -3371,53 +3372,53 @@ def main() -> int:
     # A question that restarts the machine or its services makes No the button Enter
     # picks — the choice the three sibling questions already make deliberately.
     asked_q = []
-    _orig_q = updater.QMessageBox.question
-    updater.QMessageBox.question = staticmethod(
-        lambda *a, **k: asked_q.append((a, k)) or updater.QMessageBox.No)
+    _orig_q = QMessageBox.question
+    QMessageBox.question = staticmethod(
+        lambda *a, **k: asked_q.append((a, k)) or QMessageBox.No)
     try:
-        wT.restart_now()
+        banners.restart_now(wT)
         wT._services = "cups.service"
-        wT.restart_services()
+        banners.restart_services(wT)
     finally:
-        updater.QMessageBox.question = _orig_q
+        QMessageBox.question = _orig_q
     check("both restart questions were asked", len(asked_q) == 2)
     check("Enter on a restart question picks No, never Yes",
           len(asked_q) == 2
           and all(k.get("defaultButton", a[4] if len(a) > 4 else None)
-                  == updater.QMessageBox.No for a, k in asked_q))
+                  == QMessageBox.No for a, k in asked_q))
 
     # A size line with no line ending is still a line, and the finished process is
     # released. The last chunk used to be dropped, so a real size read as "Nothing to
     # download" — a result the probe did not earn.
-    wSF = updater.Updater()
+    wSF = window.Updater()
     wSF._size_buf = ""
     pSF = QProcess(wSF)
     pSF.setProcessChannelMode(QProcess.MergedChannels)
-    pSF.readyReadStandardOutput.connect(wSF._on_size_output)
-    pSF.finished.connect(wSF._on_size_finished)
+    pSF.readyReadStandardOutput.connect(lambda: run._on_size_output(wSF))
+    pSF.finished.connect(lambda c, st: run._on_size_finished(wSF, c, st))
     wSF._size_proc = pSF
     pSF.start("printf", ["%s", "@@SIZE@@|system|9 MB"])
     pSF.waitForFinished(5000)
     check("a SIZE marker with no line ending still reaches the row",
           "9 MB" in wSF.rows["system"].size_result.text())
-    QApplication.sendPostedEvents(None, updater.QEvent.Type.DeferredDelete)
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     check("the finished size process is released", not shiboken6.isValid(pSF))
 
     # An admin action whose program cannot start gives its button back and says why.
-    # An empty PATH makes pkexec and bash unfindable, so start() fails as it does on
-    # a machine without them. The windows are built first: they start probes too.
-    wAu = updater.Updater()
-    wRb = updater.Updater()
+    # An empty PATH makes pkexec and the engine's interpreter unfindable, so start()
+    # fails as it does on a machine without them. The windows are built first: they
+    # start probes too.
+    wAu = window.Updater()
+    wRb = window.Updater()
     wRb._snapshots, wRb._snapshot = [], "42"
-    dRp = updater.RepoManagerDialog(None, repos)
+    dRp = repos.RepoManagerDialog(None, parsed)
     dRp._rows[1]["switch"].setChecked(not dRp._rows[1]["switch"].isChecked())
     said = []
-    _orig_mb = (updater.QMessageBox.question, updater.QMessageBox.warning,
-                updater.QMessageBox.information)
-    updater.QMessageBox.question = staticmethod(lambda *a, **k: updater.QMessageBox.Yes)
-    updater.QMessageBox.warning = staticmethod(
-        lambda *a, **k: said.append(" ".join(map(str, a))) or updater.QMessageBox.Yes)
-    updater.QMessageBox.information = staticmethod(
+    _orig_mb = (QMessageBox.question, QMessageBox.warning, QMessageBox.information)
+    QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
+    QMessageBox.warning = staticmethod(
+        lambda *a, **k: said.append(" ".join(map(str, a))) or QMessageBox.Yes)
+    QMessageBox.information = staticmethod(
         lambda *a, **k: said.append(" ".join(map(str, a))))
     empty_bin = tempfile.mkdtemp()
     saved_path = os.environ["PATH"]
@@ -3429,12 +3430,12 @@ def main() -> int:
         check("the repository dialog says pkexec could not start",
               any("could not be started" in s for s in said))
         said.clear()
-        wRb.rollback()
+        rollback.rollback(wRb)
         wRb._rollback_proc.waitForStarted(2000)
         check("a rollback whose pkexec cannot start says so",
               any("could not be started" in s for s in said))
         said.clear()
-        wAu._run_auth("--grant-auth", "Setting up…")
+        auth._run_auth(wAu, "--grant-auth", "Setting up…")
         wAu._authchg_proc.waitForStarted(2000)
         check("the passwordless switch comes back when its engine cannot start",
               wAu.auth_btn.isEnabled())
@@ -3442,8 +3443,7 @@ def main() -> int:
               any("could not be started" in s for s in said))
     finally:
         os.environ["PATH"] = saved_path
-        (updater.QMessageBox.question, updater.QMessageBox.warning,
-         updater.QMessageBox.information) = _orig_mb
+        QMessageBox.question, QMessageBox.warning, QMessageBox.information = _orig_mb
         shutil.rmtree(empty_bin, ignore_errors=True)
 
     # A followed run that ends between the window reading its log and asking whether
@@ -3451,12 +3451,12 @@ def main() -> int:
     # dead pid, and recorded a successful run as failed.
     race_dir = tempfile.mkdtemp()
     race_log = os.path.join(race_dir, "run.log")
-    Path(race_log).write_text("@@STEP_BEGIN@@|system|1|1|Updating system packages\n")
-    racer = _sp.Popen(["sleep", "60"])
-    orig_rs = updater.RUN_STATE
-    updater.RUN_STATE = Path(race_dir) / "run.state"
-    updater.RUN_STATE.write_text(f"{racer.pid}\n{race_log}\nsystem\n0\n")
-    real_kill = os.kill
+    Path(race_log).write_text("@@STEP_BEGIN@@|system|1|1\n")
+    racer = _sp.Popen(["sleep", "60"])  # noqa: S607 — fixed argv.
+    orig_rs = paths.RUN_STATE
+    paths.RUN_STATE = Path(race_dir) / "run.state"
+    paths.RUN_STATE.write_text(f"{racer.pid}\n{race_log}\nsystem\n0\n")
+    real_kill, real_finished = os.kill, run.on_finished
 
     def _ends_in_the_gap(pid, sig):
         if pid == racer.pid and sig == 0:
@@ -3466,20 +3466,20 @@ def main() -> int:
         return real_kill(pid, sig)
 
     try:
-        wR = updater.Updater()
+        wR = window.Updater()
         verdicts = []
-        wR.on_finished = lambda code, _status: verdicts.append(code)
-        updater.os.kill = _ends_in_the_gap
+        run.on_finished = lambda _win, code, _status: verdicts.append(code)
+        os.kill = _ends_in_the_gap
         try:
             wR._poll_attached_run()
         finally:
-            updater.os.kill = real_kill
+            os.kill, run.on_finished = real_kill, real_finished
         check("a run ending between the log read and the pid check keeps its verdict",
               verdicts == [0])
     finally:
         racer.terminate()
         racer.wait()
-        updater.RUN_STATE = orig_rs
+        paths.RUN_STATE = orig_rs
         shutil.rmtree(race_dir, ignore_errors=True)
 
     # INV-8: both settings persist and apply live, with no restart.

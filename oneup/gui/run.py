@@ -295,9 +295,11 @@ def request_size(win, key: str):
     p.start(argv[0], argv[1:])
 
 
-def _on_size_output(win):
+def _on_size_output(win, final: bool = False):
     chunk = bytes(win._size_proc.readAllStandardOutput()).decode(errors="replace")
     win._size_buf = (win._size_buf + chunk).replace("\r\n", "\n").replace("\r", "\n")
+    if final and win._size_buf:
+        win._size_buf += "\n"   # the last line had no line ending; it is still a line
     while "\n" in win._size_buf:
         line, win._size_buf = win._size_buf.split("\n", 1)
         if line.startswith("@@SIZE@@|"):
@@ -323,6 +325,14 @@ def _on_size_finished(win, exit_code: int, _status):
     # gone. Expiry, Cancel and a killed engine all land here, and all three must degrade
     # to today's behaviour rather than to an error: the next Update simply launches a
     # fresh engine (ONEUP-0044 §4.2, INV-7).
+    # Read what the probe printed last before judging it, then release it (ONEUP-0183).
+    # A SIZE line with no line ending sat in the buffer unread, so a real size was
+    # reported as "Nothing to download"; and the process was never deleted.
+    proc = getattr(win, "_size_proc", None)
+    if proc is not None and shiboken6.isValid(proc):
+        if shiboken6.isValid(win):
+            _on_size_output(win, final=True)
+        proc.deleteLater()
     win._size_proc = None
     win._hold_log = None
     # A window Qt already destroyed (quitting mid-probe, or teardown at exit) has nothing
