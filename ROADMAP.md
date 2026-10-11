@@ -7466,6 +7466,12 @@ when complete (that document's §7).
   merge request plasma/kwin!10090 (ported to master; master needs newer
   Plasma libraries than Tumbleweed ships, so KDE's CI tests it there).
   State and next steps: kde-kwin/SUBMISSION.md.
+  Progress (2026-10-11): patched KWin installed from OBS repo
+  home_milnet_kde-fixes (priority 80): kwin6 and libkwin6 6.7.5-3.1;
+  the rules code is in libkwin6. Verified after a re-login: a test
+  Remember rule for KCalc wrote the dragged position to kwinrulesrc on
+  close; test rule removed. Still owed: after the next reboot, ask the
+  user whether OneUp reopened in place; if yes, flip shipped.
   **Layman:** After a restart, OneUp should open in the middle of the screen without you having to move it.
   Kind: fix.
   Source: user-report-2026-10-10.
