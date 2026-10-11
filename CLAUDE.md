@@ -73,7 +73,8 @@ The privilege split, the marker contract, the step keys and everything else in t
 section are unchanged by either; only the file boundaries and the engine's language moved.
 
 **Before writing a document `tests/docs-check.py` scans, read `.claude/rules/docs-v2-paths.md`:**
-no such document may backtick a path that exists only on `v2`.
+on `main`, no such document may backtick a path that exists only on `v2`. `v2`'s own copies
+may, because there the path resolves.
 
 Two halves, split by privilege:
 
