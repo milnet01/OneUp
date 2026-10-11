@@ -607,6 +607,38 @@ out=$(run_engine "$d" --steps=firmware)
 check        "run: fwupd exit 2 is up to date"          "@@STEP_END@@|firmware|ok|up to date" "$out"
 rm -rf "$d"
 
+# ONEUP-0222. A refresh that failed (offline, say) leaves get-updates answering
+# from the last-downloaded list, so its "nothing to do" is not today's answer.
+# The step may still pass, but must say how old its answer is and warn.
+echo "TEST: a failed fwupd refresh does not report a plain 'up to date'"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/fwupdmgr" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in refresh) exit 1 ;; get-updates) exit 2 ;; *) exit 0 ;; esac
+EOF
+chmod +x "$d/fwupdmgr"
+out=$(run_engine "$d" --steps=firmware)
+check        "run: stale fwupd list says so"            "@@STEP_END@@|firmware|ok|up to date as of the last check" "$out"
+check        "run: stale fwupd list warns"              "@@HINT@@|Couldn't download the latest firmware list" "$out"
+rm -rf "$d"
+
+# fwupdmgr can stop to ask a question (old metadata, an unreported upload) when it
+# has a keyboard, and the run sends its output nowhere — so a terminal run would
+# hang on a prompt nobody sees. Every call must get no input at all.
+echo "TEST: fwupdmgr is never given the run's input to read a prompt answer from"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/fwupdmgr" <<'EOF'
+#!/usr/bin/env bash
+# Recorded in a file: the engine sends get-updates' output to /dev/null.
+if read -r -t 2 _; then echo "BUG: fwupdmgr $1 read input" >> "${0%/*}/stdin-read"; fi
+case "$1" in get-updates) exit 2 ;; *) exit 0 ;; esac
+EOF
+chmod +x "$d/fwupdmgr"
+yes | run_engine "$d" --steps=firmware >/dev/null
+yes | run_engine "$d" --check --steps=firmware >/dev/null
+check_absent "fwupdmgr reads no input, in the run or --check" "BUG: fwupdmgr" "$(cat "$d/stdin-read" 2>/dev/null)"
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 # One unreadable remote must not hide every other remote's updates. `flatpak
 # remote-ls --updates` aborts the WHOLE listing (exit 1, empty stdout) when any

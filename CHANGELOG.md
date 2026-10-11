@@ -8,6 +8,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Offline, the firmware step no longer says "up to date" from an old firmware list** (ONEUP-0222)
+  When the latest firmware list can't be downloaded, the step now says
+  "up to date as of the last check" and warns you to check your connection.
+  The firmware tool also can no longer stop a terminal run with a question
+  nobody can see.
+
 - **Three buttons showed a stray underline where an "&" belongs** (ONEUP-0251)
   "Roll back & reboot", "Import signing key & retry" and "Skip … &
   update the rest" now read as written, instead of "Roll back _reboot"
