@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=257 -->
+<!-- ants-roadmap-id-high-water: ONEUP=258 -->
 
 # OneUp Roadmap
 
@@ -4344,6 +4344,33 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: peer-review-2026-10-11 demoreel.
   Lanes: gui.
 
+- 📋 [ONEUP-0258] **main's documentation.md §7 misdescribes its own loop-tally check.**
+  Three defects in main's copy, all pre-existing, both lanes found each.
+  (1) What-checks-this row "§7 a loop tally balances | tests/docs-check.py"
+  and §7's "tests/docs-check.py fails on it": check_loop_tallies skips a
+  row with no bolded disposition (`if not counts: continue`), and §7 tells
+  current rows to leave it unbolded, so every current-form row is checked
+  by nothing. (2) §7's log-format template still shows a severity row
+  ("3 high, 2 medium, 3 low") and "a dismissed finding still needs a
+  severity", under a gate that emits none. (3) The "do not bold a bare
+  number" bullet describes the span-pairing bug check_loop_tallies has
+  since fixed (it matches each bold span on its own). v2's copy differs
+  here (ONEUP-0100 balanced question tallies there), so check each branch
+  against its own checker.
+  Added (2026-10-11, loop 14 of the same run, both outside ONEUP-0257's
+  change): (4) global CLAUDE.md rule 14 says a landed loop-log row is never
+  edited; §7 states the loop-log subject without that clause, and §1.2's
+  "read as the whole rule ... do not merge in the global file's extra
+  clauses" could be read as dropping it. Say it in §7's "write the log"
+  bullet. (5) §7's "every design document ... goes through review-contract"
+  does not say whether a later edit to a Reviewed document needs a new
+  run; with §1.2's displacement rule a reader may take it as replacing
+  rule 14's trigger. Say that rule 14's trigger decides it.
+  **Layman:** The rules for writing review records describe the checker wrongly in three places, so a record can be wrong while the check stays green.
+  Kind: doc-fix.
+  Source: review-contract-2026-10-11 documentation.md (main) loop 13, outside ONEUP-0257's radius.
+  Lanes: docs.
+
 ## 1.4.6 — fixes to the released app
 
 **Theme:** fixes for the 1.4 app people use today, landed on `main`. No
@@ -7824,7 +7851,7 @@ when complete (that document's §7).
   Source: in-session-2026-10-11 (found while fixing ONEUP-0218).
   Lanes: gui.
 
-- 📋 [ONEUP-0257] **documentation.md §7 says to fix every actionable severity, which a question-tagged review cannot apply.**
+- ✅ [ONEUP-0257] **documentation.md §7 says to fix every actionable severity, which a question-tagged review cannot apply.**
   §7's bullet "Fix every actionable severity — critical, high, medium, low.
   Only informational findings are left" sits two bullets below the one
   saying review-contract emits no severity scale; its findings carry
@@ -7834,6 +7861,14 @@ when complete (that document's §7).
   verified finding is fixed. Both lanes found it. Also check §7's "Polish
   only ... stop" against that rule (a lane's open question). A direction
   change to a standard: rule 14 gate.
+  Resolved (2026-10-11): main e4b0797 (amendment), 7728075 and 1556161
+  (review-contract loops 13-14 on main's copy, converged on the change),
+  merged into v2. §7 now says when a run stops is review-contract's rule
+  (no verified finding, or the cap), and every verified finding is fixed;
+  the "polish only" exit and the "or write it as 1 info" escape are gone.
+  The gate also moved §3's Reviewed to cover a cap exit and dropped §1.2's
+  claim that rule 14 owns the loop caps. Five findings outside the change
+  are filed as ONEUP-0258.
   **Layman:** A review rule sorts problems by severity grades the current review no longer gives, so nobody can tell which problems it lets them leave unfixed.
   Kind: doc-fix.
   Source: review-contract-2026-10-11 documentation.md loop 13 (out of radius, filed).
