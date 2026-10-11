@@ -83,6 +83,9 @@ All notable changes to OneUp are documented here. The format follows
 - **Small messages now open over the OneUp window, not in the corner of the screen** (ONEUP-0247)
   On Wayland, short notices such as "You're on the latest version"
   appeared at the top-left of the screen, away from the window.
+- **A window you moved stays where you put it when a message appears** (ONEUP-0254)
+  On Wayland, opening any message or dialog pulled every other open
+  OneUp window, such as Repositories, back to the middle.
 
 - **The window opens where you last left it, including after a restart, on KDE Wayland** (ONEUP-0246)
   Wayland never tells an app where its window is, so OneUp now asks

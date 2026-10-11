@@ -75,9 +75,11 @@ def center_on_parent(widget) -> None:
 
     On X11 the direct move works. On Wayland it does nothing whatsoever, which is why
     OneUp's dialogs kept opening away from the window (ONEUP-0049) — there we ask KWin to
-    centre each of our transient windows over its own parent. Matching on `transientFor`
-    rather than on a window title means every dialog is covered, including the message
-    boxes that have no title of their own."""
+    centre this one over its parent, and no other: centring every transient window of
+    ours also pulled back a dialog the user had moved (ONEUP-0254). Matching on
+    `transientFor` rather than on a window title means every dialog is covered, including
+    the message boxes that have no title of their own; `_centre_script` says how the
+    widget is picked out."""
     if not _on_wayland():
         parent = widget.parent()
         if parent is not None:
@@ -92,11 +94,24 @@ def center_on_parent(widget) -> None:
                 fg.moveTop(max(area.top(), min(fg.top(), area.bottom() + 1 - fg.height())))
             widget.move(fg.topLeft())
         return
-    js = f"""\
+    _when_exposed(widget, lambda: run_kwin_script(_centre_script(widget)))
+
+
+def _centre_script(widget) -> str:
+    """The KWin script that centres `widget`, and no other window, over its parent.
+
+    KWin cannot be told which of our windows is which, so the script picks the newest
+    transient of ours whose client area is the widget's size. A dialog the user moved is
+    older or another size, so it stays put; if KWin does not know the widget yet,
+    nothing matches and nothing moves (ONEUP-0254)."""
+    return f"""\
 var wins = workspace.windowList();
-for (var i = 0; i < wins.length; i++) {{
+for (var i = wins.length - 1; i >= 0; i--) {{
     var c = wins[i];
     if (c.pid !== {os.getpid()} || !c.transientFor) continue;
+    var cg = c.clientGeometry;
+    if (Math.abs(cg.width - {widget.width()}) > 1
+            || Math.abs(cg.height - {widget.height()}) > 1) continue;
     var g = c.frameGeometry, pg = c.transientFor.frameGeometry;
     var area = workspace.clientArea(workspace.PlacementArea, c);
     var x = pg.x + Math.round((pg.width - g.width) / 2);
@@ -105,11 +120,48 @@ for (var i = 0; i < wins.length; i++) {{
     x = Math.max(area.x, Math.min(x, area.x + area.width - g.width));
     y = Math.max(area.y, Math.min(y, area.y + area.height - g.height));
     c.frameGeometry = {{ x: x, y: y, width: g.width, height: g.height }};
+    break;
 }}
 """
-    # Deferred by a tick: KWin can only move a window it already knows about, and on
-    # Wayland the surface isn't committed yet while showEvent is still running.
-    QTimer.singleShot(0, lambda: run_kwin_script(js))
+
+
+# KWin can only move a window it already knows about. A script run as the window shows,
+# or one tick later, comes too early (ONEUP-0254 measured it); the first Expose plus one
+# tick works, and 50 ms is the fallback when no Expose arrives.
+PLACEMENT_FALLBACK_MS = 50
+
+
+class _ExposeOnce(QObject):
+    """Runs `action` once: a tick after the window's first Expose, or at the fallback."""
+
+    def __init__(self, handle, action):
+        super().__init__(handle)
+        self._action = action
+        handle.installEventFilter(self)
+        QTimer.singleShot(PLACEMENT_FALLBACK_MS, self, self._fire)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Expose and obj.isExposed():
+            QTimer.singleShot(0, self, self._fire)
+        return False
+
+    def _fire(self):
+        if self._action is None:            # the Expose path or the fallback got here first
+            return
+        action, self._action = self._action, None
+        self.parent().removeEventFilter(self)
+        self.deleteLater()
+        action()
+
+
+def _when_exposed(widget, action) -> None:
+    handle = widget.windowHandle()
+    if handle is None:                      # not shown yet: no Expose to wait for
+        QTimer.singleShot(PLACEMENT_FALLBACK_MS, action)
+    elif handle.isExposed():
+        QTimer.singleShot(0, action)
+    else:
+        _ExposeOnce(handle, action)
 
 
 class _MessageBoxCentrer(QObject):
