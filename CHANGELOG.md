@@ -8,6 +8,15 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Five small window fixes: safer restart questions, honest results, no stuck buttons** (ONEUP-0183)
+  Pressing Enter on "Restart now?" or "Restart services?" now picks No,
+  never Yes. A download size is no longer missed and shown as "Nothing to
+  download". If the password helper (pkexec) is missing, the Repositories,
+  roll-back and passwordless buttons now say so instead of greying out for
+  good. A run that finishes while OneUp is following it is no longer
+  recorded as failed. Repository names and other text from the update now
+  always show exactly as written.
+
 - **A warning's button always matches the warning above it** (ONEUP-0154)
   After a "too many restore points" or "duplicate source" notice, a later
   warning — a failed download, say — no longer keeps the earlier button,

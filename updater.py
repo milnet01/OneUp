@@ -1001,6 +1001,7 @@ class TaskRow(QFrame):
 
         self.badge = QLabel("")
         self.badge.setObjectName("Badge")
+        self.badge.setTextFormat(Qt.TextFormat.PlainText)  # engine text, shown as typed (ONEUP-0183)
         self.badge.setVisible(False)
         self._badge_text = ""   # the outcome ("3 installed"); timing is appended
         self._timing = ""       # "42s" — kept apart so a repeated marker can't stack
@@ -1056,6 +1057,7 @@ class TaskRow(QFrame):
         self.size_btn.clicked.connect(lambda: self.size_requested.emit(self.key))
         self.size_result = QLabel("")
         self.size_result.setObjectName("SizeResult")
+        self.size_result.setTextFormat(Qt.TextFormat.PlainText)  # engine text, shown as typed (ONEUP-0183)
         self.size_result.setVisible(False)
         self._has_size = False  # explicit — survives the panel being collapsed
         if key == "system":
@@ -1444,7 +1446,17 @@ class RepoManagerDialog(QDialog):
         self.apply_btn.setEnabled(False)
         self._proc = QProcess(self)
         self._proc.finished.connect(self._on_applied)
+        self._proc.errorOccurred.connect(
+            lambda err: err == QProcess.FailedToStart and self._on_apply_not_started())
         self._proc.start(cmd[0], cmd[1:])
+
+    def _on_apply_not_started(self):
+        """pkexec could not start, so nothing ran and `finished` never comes. Give the
+        button back and say so, rather than leave it greyed out (ONEUP-0183)."""
+        QMessageBox.warning(self, "Repositories",
+                            "Nothing was changed — the administrator prompt (pkexec) "
+                            "could not be started.")
+        self.apply_btn.setEnabled(True)
 
     def _on_applied(self, code: int, _status):
         if code == 0:
@@ -1880,6 +1892,7 @@ class Updater(QMainWindow):
         # Progress + current step.
         self.status = QLabel("Ready.")
         self.status.setObjectName("Status")
+        self.status.setTextFormat(Qt.TextFormat.PlainText)  # engine text, shown as typed (ONEUP-0183)
         self.status.setAccessibleName("Current status")
         root.addWidget(self.status)
         self.bar = TwoToneBar()
@@ -1895,6 +1908,7 @@ class Updater(QMainWindow):
         # nothing for the log pane to draw, and a working run reads as frozen.
         self.activity = QLabel("")
         self.activity.setObjectName("Activity")
+        self.activity.setTextFormat(Qt.TextFormat.PlainText)  # engine text, shown as typed (ONEUP-0183)
         self.activity.setAccessibleName("Activity")
         self.activity.setVisible(False)
         root.addWidget(self.activity)
@@ -2062,6 +2076,7 @@ class Updater(QMainWindow):
         lay.setContentsMargins(14, 10, 12, 10)
         lbl = QLabel("")
         lbl.setObjectName("BannerText")
+        lbl.setTextFormat(Qt.TextFormat.PlainText)  # repository names and URLs reach it (ONEUP-0183)
         lbl.setWordWrap(True)
         if name:
             lbl.setAccessibleName(name)
@@ -2175,7 +2190,19 @@ class Updater(QMainWindow):
         return True
 
     def _poll_attached_run(self):
-        """Read whatever the attached run has appended, then notice when it finishes."""
+        """Read whatever the attached run has appended, then notice when it finishes.
+
+        The pid is asked about BEFORE the log is read (ONEUP-0183). Read-then-ask let a
+        run write its @@DONE@@ and exit in the gap: the read saw no verdict, the pid was
+        gone, and a successful run was recorded as failed. Asked first, a run found
+        gone has already written everything it will write, so the read below has it."""
+        try:
+            os.kill(self._attached_pid, 0)
+            alive = True
+        except PermissionError:
+            alive = True                            # alive, just not ours to signal
+        except ProcessLookupError:
+            alive = False
         try:
             with self._attached_log.open("r", errors="replace") as fh:
                 fh.seek(self._attached_pos)
@@ -2187,13 +2214,8 @@ class Updater(QMainWindow):
             self._activity_at = time.monotonic()   # the log grew: the run is alive
         for line in new.splitlines():
             self.handle_line(line)
-        try:
-            os.kill(self._attached_pid, 0)
+        if alive:
             return                                  # still going
-        except PermissionError:
-            return
-        except ProcessLookupError:
-            pass
         self._attach_timer.stop()
         RUN_STATE.unlink(missing_ok=True)
         # No exit code to read for someone else's process, so the run's own @@DONE@@ is
@@ -2979,8 +3001,22 @@ for (var i = 0; i < wins.length; i++) {{
         p = QProcess(self)
         p.setProcessChannelMode(QProcess.MergedChannels)
         p.finished.connect(lambda _c, _s, pr=p: self._on_auth_finished(pr))
+        p.errorOccurred.connect(lambda err, pr=p: err == QProcess.FailedToStart
+                                and self._on_auth_not_started(pr))
         self._authchg_proc = p
         p.start("bash", [str(ENGINE), action, f"--log={LOG_DIR / f'{stamp}.auth.log'}"])
+
+    def _on_auth_not_started(self, proc: QProcess):
+        """The engine could not start, so `finished` never comes. Give the switch back
+        and say so, rather than leave it greyed out (ONEUP-0183)."""
+        if not _alive(self, proc):
+            return
+        self.auth_btn.setEnabled(True)
+        self.status.setText("Ready.")
+        self._settings_status("")
+        QMessageBox.warning(self, "Couldn't change the setting",
+                            "Nothing was changed — OneUp's engine could not be started.")
+        self._query_auth_status()
 
     def _on_auth_finished(self, proc: QProcess):
         if not _alive(self, proc):
@@ -3300,9 +3336,11 @@ for (var i = 0; i < wins.length; i++) {{
         self._size_proc = p
         p.start("bash", [str(ENGINE), f"--size={key}", f"--log={size_log}"])
 
-    def _on_size_output(self):
+    def _on_size_output(self, final: bool = False):
         chunk = bytes(self._size_proc.readAllStandardOutput()).decode(errors="replace")
         self._size_buf = (self._size_buf + chunk).replace("\r\n", "\n").replace("\r", "\n")
+        if final and self._size_buf:
+            self._size_buf += "\n"   # the last line had no line ending; it is still a line
         while "\n" in self._size_buf:
             line, self._size_buf = self._size_buf.split("\n", 1)
             if line.startswith("@@SIZE@@|"):
@@ -3320,6 +3358,15 @@ for (var i = 0; i < wins.length; i++) {{
                 self.log.appendPlainText(line)
 
     def _on_size_finished(self, exit_code: int, _status):
+        # Read what the probe printed last before judging it, then release it (ONEUP-0183).
+        # A SIZE line with no line ending sat in the buffer unread, so a real size was
+        # reported as "Nothing to download"; and the process was never deleted.
+        proc = getattr(self, "_size_proc", None)
+        if proc is not None and _alive(proc):
+            if _alive(self):
+                self._on_size_output(final=True)
+            proc.deleteLater()
+        self._size_proc = None
         if not _alive(self):
             return
         row = self.rows.get("system")
@@ -4030,8 +4077,10 @@ for (var i = 0; i < wins.length; i++) {{
                 and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9:@._-]*", s)]
 
     def _confirm_reboot(self, title: str, body: str):
-        """Ask, and restart the machine on yes — the one place the window reboots."""
-        if QMessageBox.question(self, title, body) == QMessageBox.Yes:
+        """Ask, and restart the machine on yes — the one place the window reboots.
+        No is the default, so Enter never reboots (ONEUP-0183)."""
+        if QMessageBox.question(self, title, body, QMessageBox.Yes | QMessageBox.No,
+                                QMessageBox.No) == QMessageBox.Yes:
             QProcess.startDetached("systemctl", ["reboot"])
 
     def restart_now(self):
@@ -4065,7 +4114,9 @@ for (var i = 0; i < wins.length; i++) {{
                      "\n\n" + ", ".join(critical)
                      + "\n\nThe Restart now button above will do that when you are "
                        "ready.")
-        if QMessageBox.question(self, "Restart services?", body) == QMessageBox.Yes:
+        if QMessageBox.question(self, "Restart services?", body,
+                                QMessageBox.Yes | QMessageBox.No,
+                                QMessageBox.No) == QMessageBox.Yes:   # Enter = No (ONEUP-0183)
             self._start_service_restart("pkexec", ["systemctl", "restart", *safe])
             # Hidden while it runs, and shown again only if the restart fails, so a failed
             # one can be retried. Anything still needing a reboot is carried by the reboot
@@ -4134,6 +4185,10 @@ for (var i = 0; i < wins.length; i++) {{
             self._rollback_target = target
             self._rollback_proc = QProcess(self)
             self._rollback_proc.finished.connect(self._on_rollback_finished)
+            self._rollback_proc.errorOccurred.connect(   # no `finished` follows (ONEUP-0183)
+                lambda err: err == QProcess.FailedToStart and QMessageBox.information(
+                    self, "Roll back", "Nothing was changed — the administrator prompt "
+                    "(pkexec) could not be started."))
             self._rollback_proc.start(
                 "pkexec", ["sh", "-c",
                            f"snapper rollback {target} || exit 3; systemctl reboot || exit 4"])
