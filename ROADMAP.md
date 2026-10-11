@@ -7264,7 +7264,7 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: review-contract-2026-09-28 coding.md loop 1 (out of scope).
 
-- 📋 [ONEUP-0217] **v2's CLAUDE.md §4 forbids backticking a v2-only path in a scanned document, which every v2 standard does.**
+- ✅ [ONEUP-0217] **v2's CLAUDE.md §4 forbids backticking a v2-only path in a scanned document, which every v2 standard does.**
   Found by a cold lane on files-and-naming.md (ONEUP-0107, loop 7) as an open
   question. CLAUDE.md §4 on v2 says no document tests/docs-check.py scans may
   backtick a path that exists only on v2, because its §9 check fails an
@@ -7273,6 +7273,10 @@ when complete (that document's §7).
   workflow.md on v2 all backtick oneup/ paths. The paragraph is main's text,
   merged in unchanged. Fix on v2 only: say the rule binds main's copies, and
   that v2's copies may name the package (workflow.md §9 decides the branch).
+  Resolved (2026-10-11): c1340de on v2 only. CLAUDE.md §4's pointer and
+  .claude/rules/docs-v2-paths.md now say the rule binds main's copies;
+  v2's copies name package files freely, and the rule bites on v2 only
+  for an edit workflow.md §9 sends to main.
   **Layman:** A rule in v2's guide for Claude says the standards may not name the new package's files, but on v2 they all do and the checker is happy — the rule was written for main.
   Kind: doc-fix.
   Source: review-contract-2026-10-01 files-and-naming.md loop 7.
