@@ -920,6 +920,16 @@ def main() -> int:
     check("snapshot advisory button becomes 'Thin snapshots…'",
           w3.warn_btn.text() == "Thin snapshots…")
     check("snapshot advisory shows the warning banner", w3.warn_banner.isVisibleTo(w3))
+    # ONEUP-0154: a later warning replaces the text, so it must replace the button's role
+    # too — never "A download failed…" above a button that thins snapshots.
+    w3.handle_line("@@DISK@@|warn|/|1.0G")
+    check("a later pre-flight warning resets the button's label",
+          w3.warn_btn.text() == "Show details")
+    check("a later pre-flight warning disarms the thin action", w3._warn_snapshots is False)
+    w3.handle_line("@@REPO@@|warn|duplicate|http://a")
+    w3._show_warning("A download failed — check your internet connection, then retry.")
+    check("a failure hint resets the button after a repository advisory",
+          w3.warn_btn.text() == "Show details" and w3._warn_repo_dup is False)
 
     # SNAPSHOT_ITEM markers feed the rollback picker (ONEUP-0020): well-formed ids
     # are captured, a non-numeric id is dropped, and the dialog lists them
