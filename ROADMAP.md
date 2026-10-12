@@ -7605,6 +7605,22 @@ when complete (that document's §7).
   write-spec Step 8 amendment in the finishing commit. INV-1 seen red on
   today's window (35 movements); INV-2 was green there and still needs a
   break-and-restore red.
+  Progress (2026-10-12, later): commit 7ef45f8 on oneup-0239-wip
+  (local; v2 untouched). The window starts and runs in Rows, Rail and
+  Spotlight; switching mid-run keeps the run's state (INV-6 green).
+  gui-smoke.py forward: 787 passed, 6 failed, all INV-1. Rows/Rail: the
+  status column narrows 178 -> 91 px at the "finished with every banner"
+  stage (something in the action bar or footer widens). Spotlight: 36
+  movements from the check stage, the large-type status growing 15 ->
+  23 px (font applied late?). "Stages showed every banner and Stop" fails
+  in all three; the test's own staging may be at fault. Not yet run: the
+  -reverse pass since _fit_minimum, i18n-check.py (INV-12 will flag the
+  "\n".join card text; INV-11 needs MessageStrip's setFixedHeight added and
+  task_row.py's entry dropped), run-tests.sh, local-CI. Still to do: INV-2
+  break-and-restore red, spec §8 doc edits, §9 amendment (LinesDelegate),
+  CHANGELOG line, merge to v2, push, flip. Noted, outside this item: the
+  theme styles no scrollbars, so the log and package views show the
+  platform's plain ones.
   **Layman:** Buttons and boxes stay put however much detail appears; each step gets its own progress bar and its own log tab.
   Kind: ux.
   Source: user-real-run-2026-10-08.
