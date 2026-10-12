@@ -286,13 +286,38 @@ def fit_board(view: QListView) -> None:
     view.setGridSize(QSize(fm.averageCharWidth() * 26, fm.lineSpacing() * 3 + 16))
 
 
+class _Sentence(QLabel):
+    """A wrapping label that does not ask its layout for height-for-width.
+
+    QLabel turns height-for-width on with word wrap, again on every new text and
+    font. Inside the package area that switched the whole window into Qt's
+    height-for-width pass, which at the window's minimum squeezed Spotlight's
+    fixed-height panel whenever the sentence page was current (ONEUP-0239 INV-1).
+    The area's own height is set by the font (§4.2), so the sentence needs none.
+    """
+
+    def _drop_height_for_width(self) -> None:
+        policy = self.sizePolicy()
+        if policy.hasHeightForWidth():
+            policy.setHeightForWidth(False)
+            self.setSizePolicy(policy)
+
+    def setText(self, text: str) -> None:
+        super().setText(text)
+        self._drop_height_for_width()
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        self._drop_height_for_width()
+
+
 class EmptyOr(QStackedWidget):
     """A view, or the one sentence a page shows in place of an empty one."""
 
     def __init__(self, content: QWidget) -> None:
         super().__init__()
         self.content = content
-        self.sentence = QLabel("")
+        self.sentence = _Sentence("")
         self.sentence.setObjectName("Tagline")
         self.sentence.setWordWrap(True)
         self.sentence.setAlignment(Qt.AlignmentFlag.AlignCenter)

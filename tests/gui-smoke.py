@@ -4641,7 +4641,9 @@ def main() -> int:
         stage("run progress")
         run._set_activity(wM, "Fetching repo-oss — 4m · 12 MiB of 40 MiB · still working")
         stage("activity")
-        wM._reboot, wM._services = True, "cups.service"
+        # No reboot flag: with one, on_finished offers the reboot alone. "dbus" is
+        # session-critical, so it raises the reboot banner; "cups" the services one.
+        wM._reboot, wM._services = False, "cups dbus"
         wM._hints, wM._hint_commands = ["Something failed."], ["sudo zypper refresh"]
         wM._remedy_skips, wM._remedy_keys = ["repo-oss"], True
         wM._failed_steps = ["system"]

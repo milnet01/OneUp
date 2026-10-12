@@ -1276,8 +1276,13 @@ class Updater(QMainWindow):
         # Check in the row rather than sitting beside it, so the two are never on
         # screen at once; during a check the slot holds Check, disabled.
         stoppable = (not enabled) and self._run_active and not self._check_mode
-        self.check_btn.setVisible(not stoppable)
-        self.stop_btn.setVisible(stoppable)
+        # The outgoing button is hidden first. Showing a widget lays its row out at
+        # once, so showing first put both in the row for that pass and pushed the
+        # status column aside (ONEUP-0239 INV-1).
+        shown, gone = ((self.stop_btn, self.check_btn) if stoppable
+                       else (self.check_btn, self.stop_btn))
+        gone.setVisible(False)
+        shown.setVisible(True)
         if stoppable:
             self._stop_asked = False
             self.stop_btn.setText(QCoreApplication.translate("window", "Stop"))

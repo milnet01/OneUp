@@ -93,8 +93,8 @@ def _found(offenders: list[str]) -> str:
 SIZE_CAP_EXEMPT = {
     ("oneup/gui/toggle_switch.py", "setFixedSize", "self"):
         "ToggleSwitch is painted geometry with no label of its own",
-    ("oneup/gui/task_row.py", "setMaximumHeight", "scroll"):
-        "the package list is a scroll area: its content scrolls rather than clips",
+    ("oneup/gui/banners.py", "setFixedHeight", "self"):
+        "the message strip is a scroll area: its banners scroll rather than clip",
 }
 QSS_CAP_EXEMPT = {
     ("QComboBox#ThemeCombo::drop-down", "width"):
@@ -175,6 +175,10 @@ WORD_LOGIC_EXEMPT = {
         "the bug-report payload, read by a developer (ONEUP-0032 §10)",
     ("oneup/gui/diagnostics.py", "build_diagnostics", "join '\\n'"):
         "the bug-report payload's lines, read by a developer",
+    ("oneup/gui/layout_rail.py", "__init__", "join '\\n'"):
+        "layout, not wording: a card's three lines, each one its own field",
+    ("oneup/gui/layout_rows.py", "__init__", "join '\\n'"):
+        "layout, not wording: the package cell's name above its source",
     ("oneup/gui/paths.py", "_resolve_engine", "join '; '"):
         "the stderr line naming the paths the resolver tried",
     ("oneup/gui/paths.py", "engine_argv", "join '; '"):
