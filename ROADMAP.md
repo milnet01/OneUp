@@ -7240,7 +7240,7 @@ when complete (that document's §7).
   the two fallback forms, the reboot render rows and was/were branch.
   INV-1 to INV-3 tested and seen red.
 
-- 📋 [ONEUP-0117] **Give ONEUP-0108 INV-1 a case for an empty code field.**
+- ✅ [ONEUP-0117] **Give ONEUP-0108 INV-1 a case for an empty code field.**
   Filed by ONEUP-0072's loop 5 rather than fixed, because it is a contract
   addition to a document with its own gate, not a sentence that can be
   corrected in passing.
@@ -7270,15 +7270,23 @@ when complete (that document's §7).
   Pick this up with ONEUP-0108's next gate. That document is Status: Draft
   with four loop rows and is not currently queued for one, which is why this
   is a bullet rather than a note in a plan block.
+  Resolved (2026-10-12, v2 874b8a6): the window already badged an empty
+  code "Result unknown" and the suite already asserted it (156c8cc). The
+  spec now says so: ONEUP-0108 §4.3 has the empty-field case and INV-1's
+  test line names the check. No gate: the amendment only records shipped,
+  tested behaviour.
   **Layman:** The frozen old engine sends one blank answer the new window has no words for. Decide what it should say.
   Kind: doc.
   Source: review-contract-2026-08-19 loop 5 on ONEUP-0072, filed not fixed.
 
-- 📋 [ONEUP-0142] **Four collections in `oneup/gui` need a type annotation mypy cannot infer.**
+- 🚫 [ONEUP-0142] **Four collections in `oneup/gui` need a type annotation mypy cannot infer.**
   `repos.py:216` (`enable`, `disable`) and `banners.py:60` (`safe`, `risky`) are
   empty list literals whose element type mypy cannot infer. Harmless today and
   only worth doing if ONEUP-0139's question is answered yes; filed so the two are
   not re-discovered separately.
+  Dropped (2026-10-12): this was worth doing only if ONEUP-0139 answered
+  yes, and the user decided on 2026-10-11 that OneUp takes no type-checking
+  posture. Nothing reads these annotations, so there is nothing to fix.
   **Layman:** Four empty lists that a type checker cannot work out the contents of on its own.
   Kind: chore.
   Source: check-code --tree 2026-08-31 (mypy var-annotated).
