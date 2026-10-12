@@ -171,6 +171,8 @@ WORD_LOGIC_EXEMPT = {
         "a search key: looks for deferral words in a contrast exemption's reason",
     ("oneup/gui/contrast.py", "report", "join '\\n'"):
         "a developer's contrast report, printed for a palette author",
+    ("oneup/gui/details_dialog.py", "details_text", "join '\\n'"):
+        "layout, not wording: the details box's lines, each translated or zypper's own",
     ("oneup/gui/diagnostics.py", "build_diagnostics", "join '  '"):
         "the bug-report payload, read by a developer (ONEUP-0032 §10)",
     ("oneup/gui/diagnostics.py", "build_diagnostics", "join '\\n'"):
@@ -179,6 +181,8 @@ WORD_LOGIC_EXEMPT = {
         "layout, not wording: a card's three lines, each one its own field",
     ("oneup/gui/layout_rows.py", "__init__", "join '\\n'"):
         "layout, not wording: the package cell's name above its source",
+    ("oneup/gui/package_details.py", "parse_info", "join '\\n'"):
+        "zypper's own description lines, shown as zypper gives them (ONEUP-0260 §10)",
     ("oneup/gui/paths.py", "_resolve_engine", "join '; '"):
         "the stderr line naming the paths the resolver tried",
     ("oneup/gui/paths.py", "engine_argv", "join '; '"):

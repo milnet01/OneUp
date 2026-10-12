@@ -55,6 +55,26 @@ _sudo_mock = os.path.join(_BIN, "sudo")
 with open(_sudo_mock, "w") as _f:
     _f.write(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> {_SUDO_LOG}\nexit 1\n')
 os.chmod(_sudo_mock, 0o755)  # noqa: S103 — a PATH mock must be executable.
+# A mock zypper and rpm beside them, for the package details (ONEUP-0260 INV-8): a
+# check's system packages start a details fetch, which otherwise read the REAL rpm
+# database and repositories. Each records "$LC_ALL|argv" and prints its fixture file,
+# which a scenario writes; with none it prints nothing. ONEUP_MOCK_ZYPPER_SLEEP makes
+# zypper hang, by exec so that killing it leaves no child behind.
+_DETAILS = os.path.join(_SANDBOX, "details")
+os.makedirs(os.path.join(_DETAILS, "packages"), exist_ok=True)
+_ZYPPER_LOG = os.path.join(_SANDBOX, "zypper.log")
+_RPM_LOG = os.path.join(_SANDBOX, "rpm.log")
+with open(os.path.join(_BIN, "zypper"), "w") as _f:
+    _f.write(f'#!/usr/bin/env bash\nprintf "%s|%s\\n" "$LC_ALL" "$*" >> {_ZYPPER_LOG}\n'
+             '[[ -n $ONEUP_MOCK_ZYPPER_SLEEP ]] && exec sleep "$ONEUP_MOCK_ZYPPER_SLEEP"\n'
+             f'cat {_DETAILS}/zypper-info.txt 2>/dev/null\nexit 0\n')
+with open(os.path.join(_BIN, "rpm"), "w") as _f:
+    _f.write(f'#!/usr/bin/env bash\nprintf "%s|%s\\n" "$LC_ALL" "$*" >> {_RPM_LOG}\n'
+             f'case "$3" in *%{{NAME}}*) f=baseline ;; *) f=changelog ;; esac\n'
+             f'cat {_DETAILS}/rpm-$f.txt 2>/dev/null\nexit 0\n')
+for _mock in ("zypper", "rpm"):
+    os.chmod(os.path.join(_BIN, _mock), 0o755)  # noqa: S103 — a PATH mock must be executable.
+os.environ["ONEUP_ZYPP_PACKAGES"] = os.path.join(_DETAILS, "packages")
 os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
@@ -4801,7 +4821,8 @@ def main() -> int:
               any("alpha" in t and app.translate("steps", "downloaded") in t
                   for t in _package_lines(w6)))
         check(f"ONEUP-0239 INV-6 only the current layout listens to the model ({_lid})",
-              len(w6.packages._callbacks) == 1)
+              # The details store listens for the window's whole life (ONEUP-0260).
+              len([c for c in w6.packages._callbacks if c != w6.details._on_model]) == 1)
         run.handle_line(w6, "@@PKG@@|system|downloading|beta|2")   # a fresh state to carry
 
     # INV-7: each layout lays out every shared control exactly once.

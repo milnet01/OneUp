@@ -83,6 +83,7 @@ from . import (
     tray,
 )
 from . import theme as theme_mod
+from .details_dialog import DetailsStore
 from .elided_label import ElidedLabel
 from .layout_rail import RailLayout
 from .layout_rows import RowsLayout
@@ -492,6 +493,8 @@ class Updater(QMainWindow):
         # The packages this check or run touches (ONEUP-0259), which every view of
         # them reads.
         self.packages = PackageModel()
+        # What each system package is, fetched without root (ONEUP-0260 §4.2).
+        self.details = DetailsStore(self.packages, self)
         # Task rows — each a gradient-bordered card. Built here and laid out by the
         # current layout, which never owns them (ONEUP-0239 §4.1).
         self.rows: dict[str, TaskRow] = {}
@@ -882,6 +885,7 @@ class Updater(QMainWindow):
         if self._confirm_quit():
             # Quit from the tray menu never reaches closeEvent (ONEUP-0246).
             self._remember_geometry()
+            self.details.stop()
             QApplication.quit()
 
     def _remember_geometry(self):
@@ -978,6 +982,7 @@ class Updater(QMainWindow):
         if not self._confirm_quit():
             event.ignore()
             return
+        self.details.stop()     # quitting, never hiding, ends a details fetch
         super().closeEvent(event)
 
     def recenter(self):
