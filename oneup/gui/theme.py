@@ -398,6 +398,21 @@ QListWidget#RollbackList {
     background: $logbg; color: $logfg;
     border: 2px solid $logbd; border-radius: 10px; padding: 4px;
 }
+/* Scrollbars (ONEUP-0262). The trough is transparent, so the handle is read
+   against whatever panel holds it — `logbg`, `card` or `win` — and §4.7 measures
+   it on all three. It takes the ghost button's boundary pair: both are a control's
+   edge on a neutral surface, held to 3:1. No step arrows: styling a bar means
+   styling every sub-control, and the wheel, the keyboard and the trough's own
+   page-click all still scroll. */
+QScrollBar:vertical { background: transparent; border: none; width: 14px; margin: 0; }
+QScrollBar:horizontal { background: transparent; border: none; height: 14px; margin: 0; }
+QScrollBar::handle { background: $ghostbd; border-radius: 4px; }
+QScrollBar::handle:vertical { min-height: 32px; margin: 3px; }
+QScrollBar::handle:horizontal { min-width: 32px; margin: 3px; }
+QScrollBar::handle:hover, QScrollBar::handle:pressed { background: $ghosthov; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; border: none; background: none; }
+QScrollBar::add-page, QScrollBar::sub-page { background: none; }
+QAbstractScrollArea::corner { background: transparent; }
 
 #RebootBanner {
     border: 1px solid $dangerbd; border-radius: 10px;
@@ -541,6 +556,12 @@ QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border
 #SizeStrip { qproperty-ink: $text; }
 QScrollArea#RepoScroll { background: transparent; border: 2px solid $border; }
 QListWidget#RollbackList { background: $card; color: $text; border: 2px solid $border; }
+/* The overlay's surfaces are all `card` or `win`, which it makes one colour, so
+   the handle takes `text` at rest and `focus` under the cursor — both already
+   measured on those two surfaces. :hover and :pressed are restated because the
+   base sheet's pseudo-state rule would otherwise outrank a bare one here. */
+QScrollBar::handle { background: $text; }
+QScrollBar::handle:hover, QScrollBar::handle:pressed { background: $focus; }
 QProgressBar { background: $card; border: 1px solid $border; color: $text; }
 QProgressBar::chunk { background: $progchunk; }
 QToolTip { background: $card; color: $text; border: 1px solid $border; }

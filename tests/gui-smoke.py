@@ -3847,6 +3847,43 @@ def main() -> int:
     check("INV-6 and it is not the colour it started with",
           _mid.name().lower() == theme.BY_ID["midnight"].palette["switchon"].lower())
 
+    # ONEUP-0262: the scrollbar handle is drawn in the theme's own token, in every
+    # theme and with the overlay on. Sampled from real pixels: a rule the sheet
+    # carries but Qt does not apply to the sub-control would pass a text check.
+    # The contrast table measures the token; this proves the handle wears it.
+    def _handle_pixel(theme_id, hc):
+        from PySide6.QtWidgets import QPlainTextEdit
+        _qs.setValue("theme", theme_id)
+        _qs.setValue("high_contrast", hc)
+        theme.apply_app_theme(app_inst)
+        ed = QPlainTextEdit()
+        ed.setPlainText("\n".join(f"line {i}" for i in range(200)))
+        ed.resize(240, 160)
+        ed.show()
+        QApplication.processEvents()
+        sb = ed.verticalScrollBar()
+        img = sb.grab().toImage()
+        # The handle rests at the top of the trough, centred across its width.
+        c = img.pixelColor(img.width() // 2, 12)
+        ed.close()
+        ed.deleteLater()
+        return c.name().lower()
+
+    _bad = []
+    for _th in theme.THEMES:
+        for _on, _want in ((False, _th.palette["ghostbd"]),
+                           (True, (theme._HC_DARK if _th.dark
+                                   else theme._HC_LIGHT)["text"])):
+            _got = _handle_pixel(_th.id, _on)
+            if _got != _want.lower():
+                _bad.append(f"{_th.id} overlay {'on' if _on else 'off'}: "
+                            f"{_got} != {_want}")
+    _qs.setValue("high_contrast", False)
+    check(f"ONEUP-0262 the scrollbar handle wears its theme's token "
+          f"({len(_bad)} wrong)", not _bad)
+    for line in _bad[:6]:
+        print(f"       {line}")
+
     # INV-8: a theme change rebuilds the tray icon. The ATTENTION state is what to
     # capture — the idle icon is the app's own SVG, which no theme touches, so an
     # idle comparison would pass unchanged whether the invariant held or not.

@@ -126,6 +126,11 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     # hair in every theme and failed on the other two surfaces in all eight — the
     # §4.7 rule that every surface a token renders on is its own row.
     ("ghostbd", ("card", "rowcard", "rowhov"), MARK),
+    # The scrollbar handle wears `ghostbd` at rest and `ghosthov` under the
+    # cursor, on a transparent trough, so it is read against each panel that
+    # holds a scrolling view (ONEUP-0262).
+    ("ghostbd", ("logbg", "win"), MARK),
+    ("ghosthov", ("logbg", "win"), MARK),
     # The danger family's banner border, and the two boundaries ONEUP-0076 left
     # as borders: the ghost button's hover border shares one token with its ink
     # above, so moving one moves both.

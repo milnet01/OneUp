@@ -50,6 +50,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **Scrollbars now follow the chosen theme** (ONEUP-0262)
+  They were Qt's plain light-grey default in every theme. The handle now
+  takes the theme's own boundary colour, clears 3:1 against every panel
+  it sits on in all eight themes, and turns black or white with high
+  contrast on. The small step arrows are gone; the wheel, the keyboard
+  and clicking the empty track still scroll.
+
 - **The weekly timers' notification is written by the app, not the engine** (ONEUP-0077)
   The weekly check and the weekly update now read what the engine
   reports and raise the desktop notification themselves. Each run
