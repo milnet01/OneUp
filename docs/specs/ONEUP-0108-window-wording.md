@@ -243,6 +243,12 @@ unknown code, **in whichever of the two forms that site takes** — so an arity-
 `@@STEP_END@@` shows the bare code in its badge, exactly as an unknown one does, and never a
 sentence in a slot with no room for one.
 
+**An empty code field names nothing, so the badge says the result is unknown.** One sender
+produces it: the frozen Bash fallback's `end_step cache ok`, which emits
+`@@STEP_END@@|cache|ok|` (ONEUP-0072 §6). A bare empty code would be a blank badge, so
+`markers._step_badge` shows *Result unknown* instead — the badge it already shows for a
+status it cannot read (ONEUP-0117).
+
 Zero names on a list-bearing `@@CHECK_UNKNOWN@@` code is the one case that should never
 happen — the engine emits the code only when it has at least one — but it is a defect in
 the engine, not a version mismatch, so it renders as that code's sentence with an empty
@@ -326,7 +332,8 @@ and both guard behaviour that spec's invariants never asserted.
   ONEUP-0072 §4.1 converts, and once for each of the three side-channel `@@HINT@@` readers
   §4.5 names; feeds a known code with one argument too few and one too many, asserting each
   names **that code** (§4.3's third case — the code was recognised, so there is no unknown
-  one to name); feeds a
+  one to name); feeds an `@@STEP_END@@` with an empty code, asserting *Result unknown*
+  (§4.3's empty field); feeds a
   `@@REBOOT@@` with one known and one unknown component, and one whose elements are **all**
   unknown; feeds `@@REBOOT@@|yes|firmware-updated kernel-new`, the mixed-vocabulary case
   where nothing is unrecognised, and asserts the long form names **both** elements; and feeds
