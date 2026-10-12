@@ -7136,7 +7136,7 @@ when complete (that document's §7).
   INV-7 tested and each seen red. The spec's test recipe now names
   paths._resolve_engine, which stage 9 put in place of _find_engine.
 
-- 📋 [ONEUP-0082] **Nothing prunes the run-log directory, and ONEUP-0077 starts adding to it weekly.**
+- ✅ [ONEUP-0082] **Nothing prunes the run-log directory, and ONEUP-0077 starts adding to it weekly.**
   `~/.local/state/oneup/logs/` is only ever read by `updater.py` —
   `_latest_run_log` globs it and nothing deletes anything. Harmless today
   because a log is written only when the user runs an update from the
@@ -7184,6 +7184,12 @@ when complete (that document's §7).
   waits its turn to be built; what is settled is where it sits in the queue.
   Decided (2026-09-18, user): 2.0.0. ONEUP-0077, on the 2.0 list, is what starts
   filling the log folder weekly, so this goes with that work.
+  Resolved (2026-10-12, v2 a457602): paths.log_dir_ready, which every
+  log-writing path calls, prunes logs older than the user's choice
+  (Settings > This machine > Keep logs: 7/14/30/90/365 days, default 30).
+  Age is mtime. The log run.state names and the newest update-run log are
+  always kept. gui-smoke checks each rule, and each was proven to fail when
+  its rule was removed.
 
 - ✅ [ONEUP-0108] **The window's wording tables, and what it shows for a code it has never heard of.**
   The window half of ONEUP-0072, split out on 2026-08-12 under
