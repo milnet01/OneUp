@@ -7585,6 +7585,11 @@ when complete (that document's §7).
   (one new marker, a named freeze exception, owned by ONEUP-0259);
   What changed only once downloaded or installed. This item's spec
   waits for ONEUP-0259's.
+  Spec: docs/specs/ONEUP-0239-fixed-layouts.md, Reviewed
+  2026-10-12 at the cap (two loops, 21 verified, all fixed). The
+  user settled four calls the same day: one fixed message strip,
+  the log swaps in place, a layout change applies at once, Rows is
+  the default. Ready to build with write-code.
   **Layman:** Buttons and boxes stay put however much detail appears; each step gets its own progress bar and its own log tab.
   Kind: ux.
   Source: user-real-run-2026-10-08.
