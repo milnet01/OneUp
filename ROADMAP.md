@@ -7660,6 +7660,25 @@ when complete (that document's §7).
   file) or installed (rpm --changelog); no repository change notes
   are fetched. About comes from zypper --no-refresh info (no root).
   See ONEUP-0239's body for what was measured.
+  Progress (2026-10-12): spec docs/specs/ONEUP-0260-package-details.md
+  written and gated (review-contract, 2 loops, 22 findings fixed;
+  Status Reviewed). Build step 1 of 5 done in 6c56860: the Qt-free
+  oneup/gui/package_details.py plus tests in tests/parsers-test.py
+  (129/0, red seen first). Remaining, in order: (2) details_dialog.py
+  with DetailsStore (baseline rpm -q first and synchronous, then
+  zypper info via QProcess; notifies subscribers) and
+  PackageDetailsDialog (#Log text box, Close in #DialogButtons);
+  window owns the store, kills its fetch on quit only. (3) wire the
+  three layouts: the mark in each name callable (Rows: Package
+  column), AccessibleTextRole in PackageItems, activated opens the
+  dialog, layouts also subscribe to the store; current-item focus
+  fill in LinesDelegate. Plan for the fill colours: QSS
+  selection-background-color/selection-color on the three views,
+  derived in theme.focus_keys (source logbg) and hc_focus_keys
+  (source card), plus a focus_report row. (4) gui-smoke scenarios
+  for INV-1, 4-8 with mock zypper/rpm on _BIN; docs per spec §8;
+  CHANGELOG line. (5) ./local-CI.sh green, push, then flip this and
+  ONEUP-0239.
   **Layman:** Clicking a package opens a window saying what it is and, once it has downloaded, what changed in the new version.
   Kind: feature.
   Source: split-from-ONEUP-0239-2026-10-12.
