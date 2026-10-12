@@ -6825,7 +6825,7 @@ when complete (that document's §7).
   Kind: security.
   Source: in-session-2026-07-26 (ONEUP-0057 Task 3 gotcha sweep).
 
-- 📋 [ONEUP-0061] **Migrate QSettings if 2.0 renames the settings organisation.**
+- ✅ [ONEUP-0061] **Migrate QSettings if 2.0 renames the settings organisation.**
   updater.py constructs QSettings("OneUp", "OneUp") at four sites (522,
   1008, 1299, 3698), which writes ~/.config/OneUp/OneUp.conf — verified
   present on this machine, holding geometry, repos_geometry, log_shown and
@@ -6841,6 +6841,11 @@ when complete (that document's §7).
   keys across on first run before reading them. Whichever is chosen, the
   GUI suite needs a regression check that an old-format config is still
   honoured.
+  Resolved (2026-10-12, v2 343c6d0): the organisation stays "OneUp", so
+  the 1.x file is read unchanged; files-and-naming.md says why. Two
+  gui-smoke checks lock it: a fresh process loads a 1.x OneUp.conf and the
+  window honours every key, and every QSettings in oneup/gui names that
+  file. Renaming it in window.py, theme.py or repos.py fails the suite.
   **Layman:** The app's saved preferences live under a folder name that doesn't match the app's official ID; tidying that up in 2.0 would silently wipe everyone's settings unless we copy them across first.
   Kind: implement.
   Source: in-session-2026-07-26 (ONEUP-0057 Task 3 gotcha sweep).
