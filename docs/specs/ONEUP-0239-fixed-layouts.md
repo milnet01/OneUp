@@ -1,6 +1,6 @@
 # ONEUP-0239 — three fixed layouts, and the Settings choice between them
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** feature
 **Roadmap:** ONEUP-0239
 **Branch:** v2

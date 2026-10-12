@@ -8,6 +8,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Three window layouts — Rows, Rail and Spotlight — to choose from in Settings, none of which moves or resizes while an update runs** (ONEUP-0239)
+
 - **Each package in the list shows its download size, its source and, during an update, its progress** (ONEUP-0259)
   After Check for updates, each system package shows its old and new
   version, how much it will download and where it comes from (for
