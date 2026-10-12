@@ -411,6 +411,9 @@ they are laid out.
   *Copy command*, and on the four-button banner §4.1 leaves behind if *Retry* is appended
   without a `setTabOrder` call.
 
+  **Removed by ONEUP-0239:** the disclosure arrow and the detail panel no longer exist, so
+  the walk neither reveals nor expands them (`docs/specs/ONEUP-0239-fixed-layouts.md` §4.1, §7).
+
 - **INV-2** Every focusable widget still reports a non-empty accessible name **or visible
   text**.
   *Test:* the existing `tests/gui-smoke.py` name sweep — ONEUP-0028's guarantee, **re-run
@@ -449,6 +452,9 @@ they are laid out.
   excluding its children — which for the switch shows up as a double toggle, leaving the
   primary control looking dead rather than throwing.
 
+  **Removed by ONEUP-0239:** the disclosure arrow and the detail panel no longer exist, so
+  the test clicks neither; the body, switch and badge cases stay, run once per row form (`docs/specs/ONEUP-0239-fixed-layouts.md` §4.1, §7).
+
 - **INV-5** Every **pointer target** measures at least 24×24, width and height, at 6 pt —
   the floor below which `_font_metrics` stops honouring the desktop font at all. **The set
   is §4.1's table**, not this spec's
@@ -477,6 +483,9 @@ they are laid out.
   **Varying `TEXT_SCALES` instead would test nothing:** its smallest entry is `1.0`, the
   default, so the run would sit at whatever point size the machine happens to use — and §6's
   failure mode is a small *desktop* font, which is `QApplication.font()`, not a scale.
+
+  **Removed by ONEUP-0239:** the disclosure arrow and the detail panel no longer exist, so
+  the walk measures neither, and `size_btn` is measured in the window-level size link (`docs/specs/ONEUP-0239-fixed-layouts.md` §4.1, §7).
 
 - **INV-6** The controls this redesign moves are where it says they are, the two that swap
   do so at one index, and *Retry* is reachable whenever it is offered: `repos_btn` and

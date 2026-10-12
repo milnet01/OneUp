@@ -279,6 +279,8 @@ class PackageModel:
     def finished(self, key: str) -> bool                 # STEP_END seen for key
     def subscribe(self, callback: Callable[[str | None], None]) -> None
         # called with the step key that changed; reset() calls it once with None
+    def unsubscribe(self, callback: Callable[[str | None], None]) -> None
+        # added by ONEUP-0239 §4.1: a layout gives its callback back before deletion
 ```
 
 - `Updater` owns one, as `win.packages`. `_reset_for_run` calls `reset()` for a check and
@@ -290,6 +292,10 @@ class PackageModel:
   `STEP_BEGIN` and `PROGRESS`.
 
 ### 4.7 Until ONEUP-0239: the per-row list shows the model
+
+**Replaced by ONEUP-0239:** `TaskRow`'s list, its disclosure arrow and its detail panel are
+gone; each layout's package page shows the model instead
+(`docs/specs/ONEUP-0239-fixed-layouts.md` §4.1, §4.3). `STATE_WORDS` stays as below.
 
 `TaskRow` drops `add_detail_item` and `_items`. It subscribes to the model and redraws its
 list from `packages(key)`, one line per package: name, `old → edition`, size, and a state

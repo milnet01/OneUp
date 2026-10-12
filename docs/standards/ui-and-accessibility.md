@@ -430,10 +430,11 @@ window points away from the text it labels.
 
 ### 8.3 Custom painting must apply the direction itself
 
-Qt mirrors layouts, not `paintEvent`. There is exactly one custom-painted *widget* in the
-layout — `ToggleSwitch` — and it is the one thing that would mirror wrongly. (The tray icon
-is painted too, but it is an icon in a system tray, not a widget in a mirrored layout, so
-it is unaffected.)
+Qt mirrors layouts, not `paintEvent`. The custom-painted *widgets* in a layout that are
+handed are `ToggleSwitch` and `SizeStrip`, Rail's size strip (ONEUP-0239 §4.3.2); they are
+what would mirror wrongly. `SizeStrip` lays its blocks out from the edge the reading
+direction starts at. (The tray icon is painted too, but it is an icon in a system tray, not
+a widget in a mirrored layout, so it is unaffected.)
 
 **Two places inside `ToggleSwitch` are handed, not one, and they are handed differently.**
 The knob is the obvious one, and it is unconditionally left-anchored.
@@ -459,10 +460,6 @@ user reads as "off". Since ONEUP-0032 both sites read `QApplication.isRightToLef
 knob's travel is reversed, and the shape sits opposite the knob in either direction. A new
 painted widget either computes its geometry from the layout direction or states in a
 comment why it is direction-independent.
-
-**An arrow type is handed too, and Qt does not mirror it.** `TaskRow`'s closed disclosure
-arrow points right; a `QToolButton` grabbed with and without `-reverse` gave byte-identical
-images (2026-10-02). So the closed arrow is the left one when the window is mirrored.
 
 The tray icon is painted the same way (`Updater._tray_icon`) but is not laid out by Qt at
 all, so it
@@ -524,7 +521,7 @@ form.
 | §7 themes | **`oneup/gui/contrast.py`, driven from `tests/gui-smoke.py`** — every pair in its table, over all eight palettes and both overlay states, plus the exception list's shape and the coverage rule that stops a token escaping measurement. The light theme's `lastrun` was darkened to clear 4.5:1 when the check landed |
 | §8.1 no directional QSS property | `tests/i18n-check.py` (ONEUP-0032 INV-6) fails on any handed property or `qproperty-alignment` in a string under `oneup/` |
 | §8.2 no hard-coded `AlignLeft` / `AlignRight` | `tests/i18n-check.py` (ONEUP-0032 INV-6) |
-| §8.3 custom painting applies the direction | **`ToggleSwitch` only**: `tests/gui-smoke.py`'s pixel sample, run again mirrored by `tests/gui-smoke.py -reverse`, finds the state shape and the knob each at its end for the direction; the disclosure arrow is asserted on the same pass. A widget painted after ONEUP-0032 is caught by **nothing** until its own check is written with it |
+| §8.3 custom painting applies the direction | **`ToggleSwitch` and `SizeStrip` only**: `tests/gui-smoke.py`'s pixel sample, run again mirrored by `tests/gui-smoke.py -reverse`, finds the switch's state shape and knob each at its end for the direction; ONEUP-0239 INV-10 finds the strip's first block at the edge the reading starts from. A widget painted after ONEUP-0239 is caught by **nothing** until its own check is written with it |
 
 **The gated half is the half a script can see.** A name is present or absent; a font size is
 points or pixels; an outline is drawn or not. What is left ungated is the judgement §3's row

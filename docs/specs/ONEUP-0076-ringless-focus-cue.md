@@ -290,12 +290,13 @@ the base `card` would be wrong, and why §4.1's floor keeps that pair instead.
 | `#GhostBtn` in the warning banner (`retry_btn`), moved there by `docs/specs/ONEUP-0064-interface-redesign.md` §4.1, which keeps the object name | A | `#WarnBanner` only — the same composited tint `warn_copy_btn` takes, resolved the same way in §4.4 |
 | `#LinkBtn`, on the card (`log_toggle`, `openlog_btn`, `rollback_btn`) | A | `card` |
 | `#LinkBtn` in a banner (`warn_copy_btn`) | A | `#WarnBanner` only — it is inserted into that one banner and no other |
-| `#LinkBtn` inside a row's detail panel (`size_btn`) | A | `rowcard` **and** `rowhov` |
+| `#LinkBtn` inside a row's detail panel (`size_btn`) | A | `rowcard` **and** `rowhov`. **Removed by ONEUP-0239** (`docs/specs/ONEUP-0239-fixed-layouts.md` §4.1): `size_btn` moved to the window's size link, on `card` |
 | `#LinkBtn` inside a `RepoManagerDialog` row (`rm`, the *Remove* button `_make_row` builds for each duplicate-URL repo) | A | `rowcard` **and** `rowhov` — that dialog's rows use the same `#RowCard` frame the task rows do, so it qualifies on `#RowCard` and takes the disclosure's pair and published value. Its own rows carry no `:hover` variant, so `rowhov` is one surface more than it needs; covering it costs nothing and is what lets one derived colour serve both (the rule below the table) |
-| `QToolButton#Disclose` | A | `rowcard` **and** `rowhov` |
+| `QToolButton#Disclose` | A | `rowcard` **and** `rowhov`. **Removed by ONEUP-0239** (`docs/specs/ONEUP-0239-fixed-layouts.md` §4.1), with the arrow |
 | `ToggleSwitch` | A, in `paintEvent` | its own track — `GREEN` / `RED` today, which `ONEUP-0027` §4.3 renames `switchon` / `switchoff`. **The one control whose derived fill carries a second constraint:** the state shape is painted *on* the track, so the fill must also clear 3:1 against `switchmark` and `switchknob`, or INV-6 is red with no route. Today both tracks darken and the white mark reads 6.46:1 and 11.68:1 on them; a palette whose "on" track is light enough to blend toward white would swallow it |
 | `QPlainTextEdit#Log` | B | `logbd`, widened to 2 px |
-| `QScrollArea#DetailScroll` | B | `logbd`, at 2 px — the panel gains a rest border |
+| `QScrollArea#DetailScroll` | B | `logbd`, at 2 px — the panel gains a rest border. **Removed by ONEUP-0239** (`docs/specs/ONEUP-0239-fixed-layouts.md` §4.1), with the panel |
+| `QTableView#PackageTable`, `QListView#PackageBoard` and `QListView#PackageLists` (`docs/specs/ONEUP-0239-fixed-layouts.md` §4.8) | B | `logbd`, at 2 px; `$border` with the high-contrast overlay on |
 | `QScrollArea#RepoScroll` (`RepoManagerDialog`) and `QListWidget#RollbackList` (`RollbackDialog`) | B | `logbd`, at 2 px — both gain a rest border. Both are unnamed in `updater.py` today; this item names them, §8. Their surface is `win`, per the rule below the table, which is what makes a `logbd` border visible on them |
 | `QPlainTextEdit#Log`, `QScrollArea#DetailScroll`, `QScrollArea#RepoScroll` and `QListWidget#RollbackList`, high-contrast overlay on | B | `$border`, at 2 px. `logbd` is a base key the overlay does not carry, so the overlay row is the one that applies when it is on |
 | The primary button family, high-contrast overlay on | A | `$btn`. The overlay's `#GhostBtn` rule already clears 3:1 and is kept unchanged — §4.1's floor, §4.3's note |
