@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=260 -->
+<!-- ants-roadmap-id-high-water: ONEUP=261 -->
 
 # OneUp Roadmap
 
@@ -7963,6 +7963,16 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: review-contract-2026-10-11 documentation.md loop 13 (out of radius, filed).
   Lanes: docs.
+
+- 📋 [ONEUP-0261] **Reshoot the OneUp trailer once 2.0.0 is released.**
+  User, 2026-10-12: the current trailer (https://youtu.be/QNPvuABx4AQ,
+  published 2026-10-12) shows the 1.x window. Once v2.0.0 is out it
+  needs reshooting. Waits for the 2.0.0 release; the record-demo skill
+  records on a private virtual display, never the real desktop.
+  **Layman:** After 2.0.0 ships, make a new trailer that shows the new window.
+  Kind: marketing.
+  Source: user-request-2026-10-12.
+  Lanes: marketing.
 
 ## 2.1.0 — after 2.0
 
