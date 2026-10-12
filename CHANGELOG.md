@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Clicking a system package shows what it is and, once its new version has downloaded or installed, what changed in it.** (ONEUP-0260)
+  A package OneUp can describe shows ⓘ after its name, in every
+  layout; clicking it, or pressing Enter on it, opens the details. The
+  package the keyboard is on is now highlighted while the list has focus.
+
 - **Three window layouts — Rows, Rail and Spotlight — to choose from in Settings, none of which moves or resizes while an update runs** (ONEUP-0239)
 
 - **Each package in the list shows its download size, its source and, during an update, its progress** (ONEUP-0259)

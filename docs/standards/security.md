@@ -97,8 +97,10 @@ review found. The direct calls are the streaming and fire-and-forget ones that
 exactly what §2.2 requires.
 
 The GUI launches the engine with `QProcess` and reads its output; it never launches a
-**privileged** `zypper`. It does make one direct, unprivileged call — `read_repos` runs
-`zypper --non-interactive lr -u` to list repositories, which needs no root.
+**privileged** `zypper`. It does make direct, unprivileged calls, none of which needs
+root: `read_repos` runs `zypper --non-interactive lr -u` to list repositories, and the
+package details (ONEUP-0260) run `zypper --no-refresh --non-interactive info` and
+`rpm -q` / `rpm -qp` queries, each a fixed list argv with `LC_ALL=C` (§4.5).
 
 **1.3 — The engine never imports Qt.** The Python engine imports nothing from PySide6 or
 from the window's package (`tests/imports-test.py`'s INV-3 fails on the second); the Bash
@@ -313,6 +315,23 @@ such in a comment at the site.
 
 **4.4 — Validation is not sanitisation.** Reject; do not clean up and continue. There is no
 "escape it and pass it on" path in this codebase and there should not be one.
+
+**4.5 — The unprivileged details reads take the same shape test.** A package name or
+edition from the package list reaches a `zypper` or `rpm` argv, and an rpm file glob,
+in `oneup/gui/package_details.py`. Neither command is privileged, but a name read as an
+option would still change what runs:
+
+```python
+# oneup/gui/package_details.py — a package name. The first character excludes '-',
+# so a name can never be read as an option; neither class holds a glob character.
+_NAME_RE = re.compile(r"[A-Za-z0-9_+][A-Za-z0-9._+-]*")
+# An edition once its epoch ("N:") is removed; rpm file names carry none.
+_EDITION_RE = re.compile(r"[A-Za-z0-9._+~^-]+")
+```
+
+A name that fails `_NAME_RE` is left out of the batched argv; an edition that fails
+`_EDITION_RE` gets no What changed and runs nothing. `tests/parsers-test.py` covers
+both (ONEUP-0260 INV-2).
 
 **4.5 — Resolved 2026-08-18 (ONEUP-0110).** The unit-name pattern in 4.1 permitted a
 literal **backslash** — a typo for `\-`, never exploitable, since that site is argv-form and
