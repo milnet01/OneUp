@@ -4896,6 +4896,18 @@ def main() -> int:
     run.handle_line(w11, "@@PROGRESS@@|flatpak|1|0|download")
     check("ONEUP-0239 INV-11 a total of 0 leaves the bar busy rather than at 1 of 0",
           fpbar.maximum() == 0 and sysbar.value() == sysbar.maximum())
+
+    # Rail's cards: a card is its grid cell's width whatever its text, so a long
+    # line elides inside the card rather than running into the next one (§4.3 Rail).
+    wB = _at_minimum("rail")
+    for i in range(3):
+        run.handle_line(wB, f"@@CHECK_ITEM@@|system|package-{i}-{'x' * 60}|1.0|1.1|99|"
+                            f"repository-{'y' * 60}")
+    QApplication.processEvents()
+    _cell = wB.host.board.gridSize().width()
+    _wide = [wB.host.board.visualRect(wB.host.items.index(i, 0)).width() for i in range(3)]
+    check(f"ONEUP-0239 a Rail card stays inside its grid cell (cell {_cell}: {_wide})",
+          all(0 < wd <= _cell for wd in _wide))
     _unpatch_all()
 
     # ONEUP-0204: nothing this suite starts may outlive it. With no event loop running, a

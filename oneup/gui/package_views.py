@@ -188,12 +188,12 @@ class PackageItems(QAbstractTableModel):
 class LinesDelegate(QStyledItemDelegate):
     """Draws an item's text one line at a time, each through Qt's own item drawing.
 
-    Qt's default drawing of a multi-line item showed two of a card's three lines,
-    measured 2026-10-12 under PySide6 6.11 offscreen, with either a newline or
-    Qt's line separator between them. Handing each line to the style on its own
-    keeps Qt's eliding and its right-to-left mirroring, which is why this is not a
-    painter of its own. It also drops the focus frame Qt draws on the current item
-    — a ring, which the app never draws (`ui-and-accessibility.md` §5).
+    It sizes an item from the font — a fixed number of lines, and on a board the
+    grid's width — and elides each line on its own. It drops the focus frame Qt
+    draws on the current item: a ring, which the app never draws
+    (`ui-and-accessibility.md` §5). Handing each line to the style keeps Qt's
+    eliding and its right-to-left mirroring, which is why this is not a painter of
+    its own.
     """
 
     def __init__(self, lines: int, parent=None) -> None:
@@ -205,7 +205,12 @@ class LinesDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option, index) -> QSize:
         base = super().sizeHint(option, index)
-        return QSize(base.width(), self._lines * self._line_height(option) + 8)
+        # On a board the grid sets a card's width, never its text: a card as wide
+        # as its longest line ran into the next card. Its lines elide instead.
+        view = self.parent()
+        grid = view.gridSize() if isinstance(view, QListView) else QSize()
+        width = grid.width() - 8 if grid.isValid() else base.width()
+        return QSize(width, self._lines * self._line_height(option) + 8)
 
     def paint(self, painter, option, index) -> None:
         opt = QStyleOptionViewItem(option)
