@@ -116,7 +116,7 @@ engine never rebuilds one from parts for the window to match against.
 | --- | --- | --- |
 | `key` | the step: `system` or `flatpak` | never unknown |
 | `name` | the package or Flatpak application id | never unknown |
-| `edition` | the version being installed | never unknown |
+| `edition` | the version being installed | `""` — a Flatpak row can carry none |
 | `old` | the version installed now | `""` |
 | `size` | download size in bytes | `0` |
 | `repo` | the source's display name: a repository name, or a Flatpak remote | `""` |
@@ -133,7 +133,9 @@ PKG|key|state|name|edition[|bytes|from|repo]       a run only
 ```
 
 - `CHECK_ITEM` keeps its four fields and their meaning, and gains `bytes` (decimal, `0` for
-  unknown) and `repo`. Reference §5 calls a trailing optional field the cheap change.
+  unknown) and `repo`. Reference §5 calls a trailing optional field the cheap change. A
+  `CHECK_ITEM` carrying only `key` and `name` stays valid, as today; its versions are
+  `""`.
 - `PKG` is new. A `queued` line carries all seven fields; a later state needs only the
   first four. `bytes` on a `downloading` line is the size zypper printed on that line.
 
@@ -142,17 +144,22 @@ PKG|key|state|name|edition[|bytes|from|repo]       a run only
 **The system check** (`_check_system`):
 
 1. The listing becomes `zypper --xmlout --no-refresh --non-interactive list-updates`,
-   still `LC_ALL=C` and stderr still merged. The count is the number of
-   `<update kind="package">` elements. A skipped repository is still found by `_SKIPPED`,
-   which searches the whole output rather than table rows. **How zypper words that
-   warning in XML mode has not been measured** — no repository could be made to fail
-   here without altering the system. The implementer captures it from a real failure
-   before writing the fixture, and the non-zero exit status stays the signal either way
-   (§6).
+   still `LC_ALL=C`, with stderr **kept apart from stdout**: the XML parser reads stdout
+   alone, so a warning on stderr cannot make it ill-formed. `proc.run` returns stdout
+   only, or both merged, so this needs a capture that returns them separately — a new
+   `proc` helper this spec creates. The count is the number of `<update kind="package">`
+   elements. `_SKIPPED` searches stdout and stderr together. Which of the two carries the
+   skipped-repository warning in XML mode has not been measured — no repository could
+   be made to fail here without altering the system — and searching both makes the
+   answer not matter. The non-zero exit status stays the signal either way (§6).
 2. One `zypper --xmlout repos` call maps each alias to its display name. A repository with
    no name, or a call that fails, falls back to the alias.
-3. The sizes come from `oneup/engine/pkgsizes.py` (§4.5). Skipped under `--notify`, which
-   is the tray's background check (`Options.notify` in `oneup/engine/__main__.py`).
+3. The sizes come from `oneup/engine/pkgsizes.py` (§4.5), and only when the engine is
+   given a new `--sizes` option. The window's own check passes it: `_engine_args` in
+   `oneup/gui/run.py` appends it beside `--check`. The tray's background
+   check does not: `_tray_check_args` in `oneup/gui/tray.py` passes `--check` and
+   `--log=` alone. Nor does the headless `--check --notify`.
+   `Options` in `oneup/engine/__main__.py` gains `sizes`, and `usage()` a line for it.
 4. One `CHECK_ITEM|system|name|edition-old|edition|bytes|repo` per update, in zypper's
    order.
 
@@ -161,7 +168,8 @@ The parsing of step 1's XML is a function of its own in `oneup/engine/parsers.py
 
 **The Flatpak check** (`_check_flatpak`): `steps.flatpak_updates` returns each row's
 remote and scope (`--user` or `--system`) alongside it, and the marker becomes
-`CHECK_ITEM|flatpak|app||version|0|remote`. `bytes` stays `0` (§3 item 4).
+`CHECK_ITEM|flatpak|app||version|0|remote`. `bytes` stays `0` (§3 item 4). An app pending
+in both scopes at one version is one row, carrying the first scope's remote.
 
 **A run, system step**: after the repository refresh and before `_download_pass`, the step
 lists its updates exactly as the check does — the same function, unprivileged, with the
@@ -178,15 +186,18 @@ in addition to its `PROGRESS` markers and never instead of them:
 `<nvra>` is split from the right: the architecture after the last `.`, then the release
 after the last `-`, then the version after the `-` before it. What is left is the name.
 This works because neither a version nor a release may contain `-`. The edition is
-`version-release`, which keeps any `epoch:` prefix inside `version`. A line ending in
-anything other than `done]`, or `[already in cache]` for `Preloading:`, emits nothing.
+`version-release`, which keeps any `epoch:` prefix inside `version`. A `Retrieving:` line
+needs no particular ending to emit. A `Preloading:` line emits only when it ends in `[done]` or
+`[already in cache]`; an `Installing:`, `Upgrading:` or `Removing:` line only when it
+ends in `done]`.
 `stream_filtered` runs only for the system step, so these are always `PKG|system|…`.
 
 **A run, Flatpak step**: `run_flatpak` already lists the updates before updating, to count
 them. It emits `PKG|flatpak|queued|app|version|0||remote` for each row. It then runs
 `flatpak update --user -y` and `flatpak update --system -y` separately, and either can fail
-alone. When one returns 0, it emits `PKG|flatpak|installed|app|version` for each row of
-that scope. A scope whose update failed emits nothing more.
+alone. It emits `PKG|flatpak|installed|app|version` for a row only when the update of
+every scope that listed it returned 0. A row is listed once even when both scopes hold
+it, so a failure in either keeps it from `installed`.
 
 **No new privileged call.** Every command above runs as the user. So no sudoers drop-in
 line changes, and `.claude/rules/engine-traps.md`'s drop-in trap does not fire.
@@ -253,15 +264,16 @@ class PackageModel:
     def end_step(self, key: str) -> None                 # on STEP_END
     def packages(self, key: str | None = None) -> list[Package]   # engine order
     def finished(self, key: str) -> bool                 # STEP_END seen for key
-    def subscribe(self, callback: Callable[[str], None]) -> None  # called with the key
+    def subscribe(self, callback: Callable[[str | None], None]) -> None
+        # called with the step key that changed; reset() calls it once with None
 ```
 
 - `Updater` owns one, as `win.packages`. `_reset_for_run` calls `reset()` for a check and
   a run alike, so the model always describes the engine that is running.
 - `handle_marker` feeds it: `CHECK_ITEM` to `add_check_item`, `PKG` to `apply`, and
   `STEP_END` to `end_step` in addition to what that branch does today.
-- A malformed payload — too few fields, an unknown state, a non-decimal `bytes` — changes
-  nothing and raises nothing (INV-8). This is how `handle_marker` already guards
+- A malformed payload — fewer than two fields for `CHECK_ITEM` or four for `PKG`, an
+  unknown state, a non-decimal `bytes` — changes nothing and raises nothing (INV-8). This is how `handle_marker` already guards
   `STEP_BEGIN` and `PROGRESS`.
 
 ### 4.7 Until ONEUP-0239: the per-row list shows the model
@@ -311,10 +323,11 @@ ONEUP-0239 replaces this list, so nothing here is designed to outlive it.
   listing, every `bytes` is `0`, and no `zstdcat` process outlives the engine.
   *Breaks when:* the read has no deadline, or the deadline drops packages from the list.
 
-- **INV-5** The tray's background check (`--check --notify`) does no size lookup.
+- **INV-5** A `--check` without `--sizes` does no size lookup, so the tray's background
+  check never pays for one.
   *Test:* `tests/run-tests.sh` — a mock `zstdcat` that records being called; it is called
-  under `--check` and not under `--check --notify`.
-  *Breaks when:* the lookup ignores `Options.notify`.
+  under `--check --sizes` and not under `--check`.
+  *Breaks when:* the lookup ignores `Options.sizes`, or the tray passes `--sizes`.
 
 - **INV-6** The engine emits `installed` or `removed` only for a line whose action
   completed: an `Installing:`, `Upgrading:` or `Removing:` line ending in `done]`.
@@ -343,32 +356,33 @@ ONEUP-0239 replaces this list, so nothing here is designed to outlive it.
 - **INV-10** Every `PROGRESS` marker the engine printed before this change, it still
   prints, with the same fields and in the same order relative to the zypper lines.
   *Test:* `tests/run-tests.sh`'s existing `PROGRESS` and ONEUP-0046 canary assertions pass
-  unmodified (gate G1, `docs/standards/testing.md` §8). They cover the `PROGRESS` lines
+  unmodified. They cover the `PROGRESS` lines
   their scenarios assert on, not every line a run can print; nothing checks the rest.
   *Breaks when:* `PKG` emission replaces a `PROGRESS` emission or changes `seen`.
 
 - **INV-11** Every `name` the engine writes into `CHECK_ITEM` or `PKG` passes
-  `steps.valid_package` — rows that fail are dropped — and every `repo` has each `|`
-  replaced by `/`. **This is the trust boundary**: package names and repository names come
-  from repository metadata the user does not write, and a `|` would shift every later
-  field. The existing defence stays: `markers.marker` strips line breaks
+  `steps.valid_package` — rows that fail are dropped. **This is the trust boundary**:
+  package names and repository names come from repository metadata the user does not
+  write, and a `|` would shift every later field. The existing defences stay:
+  `markers.marker` replaces a `|` inside any field with `/`, and strips line breaks
   (`_LINE_BREAKS`).
   *Test:* `tests/run-tests.sh` — a mock repository named `Main | Extra` arrives as
   `Main / Extra`, and a listed name `-rf` produces no marker.
   *Breaks when:* a field is written without the check.
 
-- **INV-12** A Flatpak app is `installed` only after the `flatpak update` for its own
-  scope returned 0, and its `bytes` is `0`.
-  *Test:* `tests/run-tests.sh` — one user app and one system app; mock
-  `flatpak update --user` exits 0 and `--system` exits 1; only the user app gets an
-  `installed` line.
-  *Breaks when:* `installed` is emitted before the update, regardless of its result, or on
-  the other scope's result.
+- **INV-12** A Flatpak app is `installed` only after the `flatpak update` of every scope
+  that listed it returned 0, and its `bytes` is `0`.
+  *Test:* `tests/run-tests.sh` — one user-only app, one system-only app, and one app
+  pending in both; mock `flatpak update --user` exits 0 and `--system` exits 1; only the
+  user-only app gets an `installed` line.
+  *Breaks when:* `installed` is emitted before the update, regardless of its result, or
+  on one scope's result for an app both scopes listed.
 
 - **INV-13** Every state word in §4.7 is translatable, and two states never differ only by
   colour.
-  *Test:* `tests/i18n-check.py` lists the strings; `tests/gui-smoke.py` asserts each state
-  in INV-7's scenario reads as a different word.
+  *Test:* `tests/i18n-check.py` fails an untranslated literal passed to a helper on its
+  list, and the helper that sets a row's package list joins that list beside `set_badge`;
+  `tests/gui-smoke.py` asserts each state in INV-7's scenario reads as a different word.
   *Breaks when:* a state is shown by colour or an icon alone, or a word is built from
   pieces.
 
@@ -382,6 +396,7 @@ ONEUP-0239 replaces this list, so nothing here is designed to outlive it.
 | `list-updates` names what `dup` installs | Tumbleweed's `dup` adds, removes or changes vendor | Extra packages appear as zypper reaches them. Listed ones zypper skips read "not changed" |
 | The NVRA split matches zypper's edition | An edition string formatted differently in the two outputs | The package appears twice: the queued entry ends "not changed", and the run's entry shows the real state. Visible, and never a false "installed" |
 | The window reads every marker | A window that attaches to a run already in progress (ONEUP-0045) | The list holds only packages from the markers it read. Same limit as today's badges |
+| `flatpak update -y` exits non-zero when any one app fails | Not measured; no Flatpak update could be made to fail here | If it can exit 0 after one app failed, that app reads "installed". The step's own result is unaffected |
 | The lookup finishes in time | A slow disk, or a very large repository | Sizes still unfound at the deadline show nothing; the check finishes on time (INV-4) |
 | zypper's XML is well-formed | Output cut short by a crash | The parse fails: the check emits `CHECK_UNKNOWN|system|sources-unknown-error|<exit status>`, the code a non-zero `list-updates` exit already uses, and the badge reads "couldn't check" |
 
@@ -392,13 +407,14 @@ Each invariant's test is named in §5. Where they live:
 - `tests/parsers-test.py` — the XML listing parser and the NVRA split (INV-6). Unit tests,
   called directly, per `docs/standards/testing.md` §8.
 - `tests/run-tests.sh` — INV-1, INV-2, INV-3, INV-4, INV-5, INV-10, INV-11 and INV-12,
-  through the mock sandbox. The mock `zypper` gains `--xmlout list-updates` and `--xmlout repos`; the mock
-  directory gains an `ONEUP_ZYPP_RAW` tree. The existing `CHECK_ITEM` assertions are
-  rewritten for the new trailing fields — the only existing assertions this item may
-  change.
+  through the mock sandbox. The mock `zypper` gains `--xmlout list-updates` and
+  `--xmlout repos`; the mock directory gains an `ONEUP_ZYPP_RAW` tree. The existing
+  `CHECK_ITEM` assertions are not changed: the suite's `check` matches a substring
+  (`grep -qF`), so they still pass with the new trailing fields.
 - `tests/gui-smoke.py` — INV-7, INV-8, INV-9 and INV-13's distinct words. Scenario 5b
   ("CHECK_ITEM: the expandable per-package preview") is rewritten to read the model and
-  the redrawn list instead of `_items`.
+  the redrawn list instead of `_items`. Its two-field `CHECK_ITEM`, and the assertion
+  that such a package still lists its name, stay (§4.2).
 - `tests/i18n-check.py` — the state words (INV-13).
 
 Each new test is seen failing first: the parser tests against a stub returning nothing, the
@@ -412,6 +428,8 @@ In the commit that changes the markers, per `docs/reference/marker-protocol.md` 
   fields; §4 gains a `PKG` entry with §4.4's state order and the "not changed" rule;
   §5.1 names this as the second exception.
 - `docs/standards/testing.md` §2.1 — `ONEUP_ZYPP_RAW` joins the redirect list.
+- `CLAUDE.md` §2 — a new example line for `--check --sizes`, beside the `usage()` line
+  §4.3 adds.
 - `CHANGELOG.md` `[Unreleased]` — one user-facing line: the package list shows each
   package's size, source and progress.
 
@@ -437,7 +455,8 @@ neither marker (reference §5 item 1).
   installed sizes for the same reason).
 - **Inferring "installed" for a system step's leftovers from a successful `STEP_END`.**
   Rejected: a step must never claim what it did not earn (`docs/standards/testing.md` §5).
-  Flatpak differs (INV-12) because `flatpak update` updates every listed app or fails.
+  Flatpak differs (INV-12) because no per-app line is parsed, so the update's exit status
+  is the only evidence there is (§6).
 
 ## 10. Out of scope
 
@@ -455,3 +474,4 @@ neither marker (reference §5 item 1).
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 1 | 2026-10-12 | Q1 4 · Q2 1 · Q3 4 — 9 verified, 0 dismissed | all 9 fixed. Two lanes, each holding every question; both found the `Retrieving:` contradiction, the empty-edition gap, the merged-stderr parse risk and the Flatpak two-scope identity. Three Q1s came from settling the lanes' open questions: the tray check passes no `--notify`, the G1 citation, and the `i18n-check.py` test wording. Two measurements stay open and are written as such: zypper's XML-mode warning stream, and whether `flatpak update -y` can exit 0 after one app fails |
