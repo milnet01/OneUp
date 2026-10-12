@@ -1827,6 +1827,43 @@ def main() -> int:
         check(f"window and Python engine agree on run.state / stop.request ({_label})",
               len(_py) == 2 and _py == _win)
 
+    # --- ONEUP-0061: a 1.x settings file is still honoured ------------------------
+    # 1.x keeps its preferences in ~/.config/OneUp/OneUp.conf, through
+    # QSettings("OneUp", "OneUp"). Renaming that organisation to the app ID would make
+    # 2.0 read an empty file and silently reset every upgrading user's choices. A fresh
+    # process gets a config directory holding only the file 1.x writes — this process's
+    # QSettings has long since cached its own — and the window must pick every key up.
+    _old = Path(tempfile.mkdtemp(dir=_SANDBOX))
+    (_old / "config" / "OneUp").mkdir(parents=True)
+    (_old / "config" / "OneUp" / "OneUp.conf").write_text(
+        "[General]\nhigh_contrast=true\nlog_shown=false\ntext_scale=1.45\ntray_enabled=true\n")
+    _read_old = (
+        f"import sys;sys.path.insert(0, {str(REPO)!r})\n"
+        "from PySide6.QtWidgets import QApplication\n"
+        "from oneup.gui import theme, window\n"
+        "app = QApplication([])\n"
+        "theme.apply_app_theme(app)\n"
+        "w = window.Updater()\n"
+        "print(w.tray_btn.isChecked(), w.contrast_btn.isChecked(), w.log.isHidden(),\n"
+        "      w._text_scale_index(),\n"
+        "      'qproperty-highContrast: true' in app.styleSheet())\n")
+    _old_env = {"HOME": str(_old), "XDG_CONFIG_HOME": str(_old / "config"),
+                "XDG_STATE_HOME": str(_old / "state"), "PATH": os.environ["PATH"],
+                "QT_QPA_PLATFORM": "offscreen",
+                # PySide6 may sit in the user's own site-packages, which a new HOME hides.
+                "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}
+    _seen = subprocess.run(  # noqa: S603 — the running interpreter, a fixed script.
+        [sys.executable, "-c", _read_old],
+        capture_output=True, text=True, env=_old_env, timeout=60).stdout.split()
+    check("a 1.x OneUp.conf is honoured: tray, contrast, hidden log, text size, stylesheet",
+          _seen == ["True", "True", "True", "2", "True"])
+    # The window's own reads are not every reader: the tray decision at start-up and the
+    # repository dialog's size build their own QSettings. Each must name the same file.
+    _orgs = sorted({m for _f in (REPO / "oneup" / "gui").glob("*.py")
+                    for m in re.findall(r"QSettings\(([^)]*)\)", _f.read_text())})
+    check("every QSettings in the window package names the 1.x file",
+          _orgs == ['"OneUp", "OneUp"'])
+
     # --- ONEUP-0077: the timers' two headless paths build their own notification ----
     # A mock engine stands in for the real one through the resolver, so no real check or
     # update runs (docs/standards/testing.md §2): it records its argv, prints what the

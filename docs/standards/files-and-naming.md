@@ -222,7 +222,10 @@ Three directories hold everything OneUp writes at runtime:
 - **`~/.config/`** — the window's settings, through `QSettings("OneUp", "OneUp")`, and the
   autostart entry and systemd user timers the window can install. `QSettings` follows
   `XDG_CONFIG_HOME`; the autostart entry and the timers are built from `Path.home()`, so
-  only rewriting `HOME` redirects them. None has an `ONEUP_*` override
+  only rewriting `HOME` redirects them. None has an `ONEUP_*` override. The settings
+  organisation stays `OneUp`, not the app ID: that is the file 1.x wrote, and renaming it
+  would silently reset every upgrading user's preferences. The GUI suite's ONEUP-0061
+  checks load a 1.x settings file and fail on a rename
 
 `run.state` and `stop.request` are a **contract between the window and the engine** — each
 file is defined independently in three places: the window's `RUN_STATE` / `STOP_REQUEST`
