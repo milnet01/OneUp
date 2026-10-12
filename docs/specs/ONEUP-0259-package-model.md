@@ -1,6 +1,6 @@
 # ONEUP-0259 — one package model: name, versions, size and live state for every update
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** feature
 **Roadmap:** ONEUP-0259
 **Branch:** v2
