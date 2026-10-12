@@ -1,60 +1,34 @@
-"""One task's row: its switch, badge, timing and details."""
+"""One task's row: its switch, badge, timing and progress."""
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, Qt, Signal
+import shiboken6
+from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import (
-    QApplication,
     QFrame,
     QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QScrollArea,
-    QToolButton,
+    QProgressBar,
+    QSizePolicy,
     QVBoxLayout,
 )
 
-from . import steps
-from .markers import _format_size
-from .packages import PackageModel
+from .elided_label import ElidedLabel
 from .toggle_switch import ToggleSwitch
 
-_PACKAGE_LINES = "\n"
-# Between a package line's columns — name, versions, size, state word. Layout
-# between data, as the line break above is; no language words it differently.
-_COLUMNS = "  "
-
-
-def _detail_name(key: str, title: str, which: int) -> str:
-    """The package list's screen-reader name (0) or its scroll area's (1), written
-    out per step in `steps.DETAIL_NAMES`. A row for a step that table lacks names
-    its list after the title as given — never a case change of it (ONEUP-0032 §4.5)."""
-    names = steps.DETAIL_NAMES.get(key)
-    if names:
-        return QCoreApplication.translate("steps", names[which])
-    if which == 0:
-        return QCoreApplication.translate("task_row", "Packages that {title} will change").format(
-            title=title)
-    return QCoreApplication.translate(
-        "task_row", "List of packages that {title} will change").format(title=title)
-
-
-def _collapsed_arrow() -> Qt.ArrowType:
-    """The closed disclosure arrow points along the reading direction. Qt does not
-    mirror an arrow type — a grab with and without `-reverse` was byte-identical
-    (ONEUP-0032 §4.4) — so a mirrored window asks for the left one itself."""
-    return Qt.ArrowType.LeftArrow if QApplication.isRightToLeft() else Qt.ArrowType.RightArrow
+# The badge's width in the full form, in average characters at its own font:
+# room for "3 installed  ·  42s" and its kind. Longer text elides (ONEUP-0239 §4.1).
+_BADGE_CHARS = 20
+FORMS = ("full", "rail", "tile")
 
 
 class TaskRow(QFrame):
     """One task, drawn as a card with a hover-lit gradient border: the 1px
     outer frame shows the accent gradient, an inner card sits 1px inside it. A
-    badge on the right shows how many updates a --check found; an expandable
-    panel below lists the exact packages that will change, drawn from the
-    window's package model (ONEUP-0259), with a "Show download size" link on the
-    system row."""
+    badge shows what a check found or a run did, and a thin bar along the row
+    shows that step's own progress.
 
-    # Emitted when the user clicks "Show download size"; carries the step key.
-    size_requested = Signal(str)
+    The row holds the same children in every layout; `set_form` only arranges
+    them (ONEUP-0239 §4.1). The packages the step changes are shown by the
+    layout's package page, not here."""
 
     def __init__(self, key: str, title: str, description: str):
         super().__init__()
@@ -71,109 +45,110 @@ class TaskRow(QFrame):
             "{title} — include in this update").format(title=title))
         self.switch.setAccessibleDescription(description)
 
-        name = QLabel(title)
-        name.setObjectName("TaskName")
-        desc = QLabel(description)
-        desc.setObjectName("TaskDesc")
-        desc.setWordWrap(True)
+        self.name = ElidedLabel(title)
+        self.name.setObjectName("TaskName")
+        self.desc = ElidedLabel(description)
+        self.desc.setObjectName("TaskDesc")
 
-        text = QVBoxLayout()
-        text.setSpacing(2)
-        text.addWidget(name)
-        text.addWidget(desc)
-
-        self.badge = QLabel("")
+        # Never hidden, and as wide in the full form whatever it says: a badge that
+        # appeared, or grew from "3/10" to "3 installed · 42s", moved the row's other
+        # children. Empty, it paints nothing in its space.
+        self.badge = ElidedLabel("")
         self.badge.setObjectName("Badge")
-        self.badge.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
-        self.badge.setVisible(False)
         self._badge_text = ""   # the outcome ("3 installed"); timing is appended
         self._timing = ""       # "42s" — kept apart so a repeated marker can't stack
 
-        # Disclosure arrow: revealed only once there are detail items to show.
-        self.disclosure = QToolButton()
-        self.disclosure.setObjectName("Disclose")
-        self.disclosure.setArrowType(_collapsed_arrow())
-        self.disclosure.setCheckable(True)
-        self.disclosure.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.disclosure.setVisible(False)
-        self.disclosure.toggled.connect(self._on_disclosure)
-        # An arrow-only button is unnamed to a screen reader. State-agnostic
-        # wording, since the control toggles — Qt reports expanded/collapsed itself.
-        self.disclosure.setAccessibleName(_detail_name(key, title, 0))
+        # This step's own progress. Its meaning is in the badge's words too, so the
+        # bar is never the only signal (ui-and-accessibility.md §3).
+        self.progress = QProgressBar()
+        self.progress.setObjectName("RowProgress")
+        self.progress.setTextVisible(False)
+        self.progress.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.progress.setAccessibleName(QCoreApplication.translate(
+            "task_row", "Progress of {title}").format(title=title))
+        self.clear_progress()
 
-        inner = QFrame()
-        inner.setObjectName("RowCard")
-        row = QHBoxLayout(inner)
-        row.setContentsMargins(15, 12, 15, 12)
-        row.setSpacing(10)
-        row.addLayout(text, 1)
-        row.addWidget(self.badge, 0, Qt.AlignVCenter)
-        row.addWidget(self.disclosure, 0, Qt.AlignVCenter)
-        row.addWidget(self.switch, 0, Qt.AlignVCenter)
-
-        # Collapsible detail panel: the changed-package list, plus (system only)
-        # a link that fetches the exact download size on demand.
-        self._model: PackageModel | None = None
-        self.details = QFrame()
-        self.details.setObjectName("RowDetails")
-        self.details.setVisible(False)
-        dcol = QVBoxLayout(self.details)
-        dcol.setContentsMargins(16, 0, 16, 12)
-        dcol.setSpacing(8)
-
-        self._items_label = QLabel("")
-        self._items_label.setObjectName("DetailList")
-        self._items_label.setTextFormat(Qt.TextFormat.PlainText)
-        scroll = QScrollArea()
-        scroll.setObjectName("DetailScroll")
-        scroll.setWidgetResizable(True)
-        scroll.setMaximumHeight(180)
-        scroll.setWidget(self._items_label)
-        # Focusable (it scrolls), so it needs a name of its own — the arrow key
-        # user lands here and would otherwise hear an unnamed scroll area.
-        scroll.setAccessibleName(_detail_name(key, title, 1))
-        self.detail_scroll = scroll   # named: the window's tab chain includes it
-        dcol.addWidget(scroll)
-
-        self.size_btn = QPushButton(QCoreApplication.translate("task_row", "Show download size"))
-        self.size_btn.setObjectName("LinkBtn")
-        self.size_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.size_btn.clicked.connect(lambda: self.size_requested.emit(self.key))
-        self.size_result = QLabel("")
-        self.size_result.setObjectName("SizeResult")
-        self.size_result.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
-        self.size_result.setVisible(False)
-        self._has_size = False  # explicit — survives the panel being collapsed
-        if key == "system":
-            srow = QHBoxLayout()
-            srow.setSpacing(10)
-            srow.addWidget(self.size_btn, 0)
-            srow.addWidget(self.size_result, 0)
-            srow.addStretch(1)
-            dcol.addLayout(srow)
-        else:
-            self.size_btn.setVisible(False)
-
+        self.card = QFrame()
+        self.card.setObjectName("RowCard")
         outer = QVBoxLayout(self)
         outer.setContentsMargins(1, 1, 1, 1)  # 1px gradient border
         outer.setSpacing(0)
-        outer.addWidget(inner)
-        outer.addWidget(self.details)
+        outer.addWidget(self.card)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.form = ""
+        self.set_form("full")
+
+    # --- forms (ONEUP-0239 §4.1, §4.3) ----------------------------------------
+
+    def set_form(self, form: str) -> None:
+        """Arrange the row's own children for one layout. Never changes what the
+        row holds: the badge, the switch and the bar keep their state."""
+        if form not in FORMS:
+            raise ValueError(form)
+        old = self.card.layout()
+        if old is not None:
+            shiboken6.delete(old)       # a widget takes a new layout only once the old is gone
+        lay = QVBoxLayout(self.card)
+        lay.setContentsMargins(15, 12, 15, 10)
+        lay.setSpacing(6)
+        top = QHBoxLayout()
+        top.setSpacing(10)
+        badge_policy = QSizePolicy.Policy.Fixed
+        if form == "full":
+            text = QVBoxLayout()
+            text.setSpacing(2)
+            text.addWidget(self.name)
+            text.addWidget(self.desc)
+            top.addLayout(text, 1)
+            top.addWidget(self.badge, 0, Qt.AlignmentFlag.AlignVCenter)
+            top.addWidget(self.switch, 0, Qt.AlignmentFlag.AlignVCenter)
+            lay.addLayout(top)
+        else:
+            top.addWidget(self.name, 1)
+            top.addWidget(self.switch, 0, Qt.AlignmentFlag.AlignTop)
+            lay.addLayout(top)
+            lay.addWidget(self.badge)
+            badge_policy = QSizePolicy.Policy.Expanding   # as wide as the row, not its text
+        lay.addWidget(self.progress)
+        self.badge.setSizePolicy(badge_policy, QSizePolicy.Policy.Fixed)
+        self.desc.setVisible(form == "full")
+        # A tile's title wraps to two lines rather than elide (§4.3).
+        self.name.setWordWrap(form == "tile")
+        self.form = form
+        self.apply_metrics()
+
+    def apply_metrics(self) -> None:
+        """Sizes from the current font, never from the text (§4.2). Called again
+        when the text size or the desktop font changes."""
+        fm = self.badge.fontMetrics()
+        m = self.badge.contentsMargins()
+        self.badge.setMinimumWidth(
+            fm.averageCharWidth() * _BADGE_CHARS + m.left() + m.right()
+            if self.form == "full" else 0)
+        self.progress.setMinimumHeight(max(4, fm.height() // 4))
+        if self.form == "tile":
+            nfm = self.name.fontMetrics()
+            self.name.setMinimumHeight(nfm.lineSpacing() * 2)
+            # The longest word fits on a line, so a title of two words takes two.
+            self.name.setMinimumWidth(max(nfm.horizontalAdvance(w) for w in self.title.split())
+                                      if self.title.split() else 0)
+        else:
+            self.name.setMinimumHeight(0)
+            self.name.setMinimumWidth(0)
 
     # --- the row itself is the click target (ONEUP-0064) ---------------------
     # The switch is 56x30 in a row as wide as the window, so the wider the user
     # makes the window the smaller the fraction of a row that answers a click.
     # That ratio, not any one width, is the argument: the whole body now toggles.
 
-    _EXCLUDED = ("switch", "badge", "disclosure", "details")
+    _EXCLUDED = ("switch", "badge")
 
     def _is_body(self, point) -> bool:
-        """Is `point` in the row's BODY rather than one of its four own controls?
+        """Is `point` in the row's BODY rather than one of its own controls?
 
         The switch is excluded so one click is not counted twice — it already
         handles its own, and a double toggle leaves the app's primary control
-        looking dead rather than throwing. The badge is not clickable at all, and
-        the disclosure and the detail panel each keep the behaviour they have.
+        looking dead rather than throwing. The badge is not clickable at all.
         """
         if not self.rect().contains(point):
             return False
@@ -208,62 +183,27 @@ class TaskRow(QFrame):
             return
         super().mouseReleaseEvent(event)
 
-    def _on_disclosure(self, on: bool):
-        self.details.setVisible(on)
-        self.disclosure.setArrowType(
-            Qt.ArrowType.DownArrow if on else _collapsed_arrow())
+    # --- progress (ONEUP-0239 §4.1, INV-11) ------------------------------------
 
-    def watch(self, model: PackageModel):
-        """Draw this row's list from `model`, and redraw it whenever it changes."""
-        self._model = model
-        model.subscribe(self._on_model)
+    def progress_busy(self) -> None:
+        self.progress.setRange(0, 0)
 
-    def _on_model(self, key: str | None):
-        if key is None or key == self.key:
-            self._redraw()
+    def set_progress(self, done: int, total: int) -> None:
+        """`done` of `total`; a total of 0 says nothing about how far, so the bar
+        stays busy rather than divide by it."""
+        if total:
+            self.progress.setRange(0, total)
+            self.progress.setValue(min(done, total))
 
-    def _redraw(self):
-        """One package per line: name, old → new, size, and its state as a word."""
-        packages = self._model.packages(self.key) if self._model else []
-        lines = []
-        for package in packages:
-            versions = f"{package.old}  →  {package.edition}" \
-                if (package.old or package.edition) else ""
-            size = _format_size(package.size) if package.size else ""
-            word = QCoreApplication.translate(
-                "steps", steps.STATE_WORDS[self._model.shown_state(package)])
-            lines.append(_COLUMNS.join(part for part in (
-                f"{package.name:<32}", versions, size, word) if part))
-        # The lines are data — names and version numbers — and a line break is not
-        # a separator any language words differently.
-        self._items_label.setText(_PACKAGE_LINES.join(lines))
-        if lines:
-            self.disclosure.setVisible(True)
+    def progress_done(self) -> None:
+        self.progress.setRange(0, 1)
+        self.progress.setValue(1)
 
-    def set_size_result(self, text: str):
-        """Show the download-size figure and retire the "Show download size" link."""
-        self.size_btn.setVisible(False)
-        self.size_result.setText(text)
-        self.size_result.setVisible(True)
-        self._has_size = True
+    def clear_progress(self) -> None:
+        self.progress.setRange(0, 1)
+        self.progress.setValue(0)
 
-    def size_pending(self):
-        # Name the expected wait. Getting the figure means asking zypper's solver to
-        # work out the WHOLE transaction (a --dry-run), which takes tens of seconds
-        # on a big Tumbleweed upgrade; a bare "Calculating…" for that long reads as
-        # a hung button, so the label says up front that it's normal.
-        self.size_btn.setEnabled(False)
-        self.size_btn.setText(QCoreApplication.translate(
-            "task_row",
-            "Calculating… (up to a minute)"))
-
-    def size_failed(self):
-        """Re-arm the link so the user can retry after a failed size fetch."""
-        self.size_btn.setEnabled(True)
-        self.size_btn.setText(QCoreApplication.translate("task_row", "Show download size"))
-
-    def has_size(self) -> bool:
-        return self._has_size
+    # --- the badge --------------------------------------------------------------
 
     def set_badge(self, text: str):
         self._badge_text = text
@@ -279,7 +219,6 @@ class TaskRow(QFrame):
         text = QCoreApplication.translate(
             "task_row", "  ·  ", "separator between a row's outcome and its timing").join(parts)
         self.badge.setText(text)
-        self.badge.setVisible(bool(parts))
         # The outcome otherwise lives only on an unfocusable label. Fold it into
         # the row's own control so a screen-reader user can Tab to it and hear
         # "System packages … 3 installed · 42s" (ONEUP-0028).
@@ -293,17 +232,3 @@ class TaskRow(QFrame):
         # every row at the start of each run, and without the re-render the switch
         # would keep announcing the PREVIOUS run's outcome on a row that hasn't run.
         self._render_badge()
-
-    def clear_details(self):
-        """Reset the expandable panel between runs."""
-        self._items_label.setText("")
-        self.disclosure.setChecked(False)
-        self.disclosure.setVisible(False)
-        self.details.setVisible(False)
-        self.size_result.setVisible(False)
-        self.size_result.setText("")
-        self._has_size = False
-        if self.key == "system":
-            self.size_btn.setVisible(True)
-            self.size_btn.setEnabled(True)
-            self.size_btn.setText(QCoreApplication.translate("task_row", "Show download size"))

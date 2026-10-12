@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import re
 
+import shiboken6
 from PySide6.QtCore import QCoreApplication, QProcess, Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
@@ -19,6 +20,9 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
 
 from . import i18n, repos, rollback, run
@@ -90,6 +94,53 @@ def _make_banner(win, frame_obj: str, btn_obj: str, btn_text: str, slot,
     lay.addWidget(btn, 0)
     fr.setVisible(False)
     return fr, lbl, btn
+
+
+class MessageStrip(QScrollArea):
+    """The one fixed place every layout shows its messages (ONEUP-0239 §4.4).
+
+    The four banners stack inside it in their usual order, each keeping its own
+    rules for when it shows. The strip itself is three lines of banner text tall
+    whatever it holds, so a banner appearing moves nothing outside it; more than
+    fits scrolls. Empty, it paints nothing.
+    """
+
+    def __init__(self, banner_list) -> None:
+        super().__init__()
+        self.setObjectName("MessageStrip")
+        # A QScrollArea takes keyboard focus by default (focusPolicy() 11, measured
+        # 2026-10-12); the strip is not a stop of its own, its buttons are.
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        inner = QWidget()
+        inner.setObjectName("MessageStack")
+        lay = QVBoxLayout(inner)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+        for banner in banner_list:
+            lay.addWidget(banner)
+        lay.addStretch(1)
+        self.setWidget(inner)
+        self._banners = list(banner_list)
+        self._sample = banner_list[0]
+        # Qt does not scroll a child into view when Tab arrives from outside the
+        # strip (measured 2026-10-12: the value stayed 0 of 116), so the strip does.
+        QApplication.instance().focusChanged.connect(self._on_focus)
+
+    def _on_focus(self, _old, new) -> None:
+        if new is not None and shiboken6.isValid(self) and self.widget().isAncestorOf(new):
+            self.ensureWidgetVisible(new)
+
+    def apply_metrics(self) -> None:
+        """Three lines of banner text plus a banner's own padding, from the font
+        the banner text is drawn in; called again when the text size changes."""
+        label = self._sample.findChild(QLabel, "BannerText")
+        fm = label.fontMetrics()
+        m = self._sample.layout().contentsMargins()
+        frame = 2 * self._sample.frameWidth() if isinstance(self._sample, QFrame) else 0
+        self.setFixedHeight(fm.lineSpacing() * 3 + m.top() + m.bottom() + frame + 2)
 
 
 def _show_warning(win, text: str, command: str = "", role: str = ""):

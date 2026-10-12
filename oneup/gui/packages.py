@@ -98,6 +98,12 @@ class PackageModel:
         """Called with the step key that changed; `reset()` calls it once with None."""
         self._callbacks.append(callback)
 
+    def unsubscribe(self, callback: Callable[[str | None], None]) -> None:
+        """The inverse of `subscribe`. A view about to be deleted calls it, or the
+        next change calls into a deleted widget (ONEUP-0239 §4.1)."""
+        if callback in self._callbacks:
+            self._callbacks.remove(callback)
+
     def _notify(self, key: str | None) -> None:
         for callback in self._callbacks:
             callback(key)

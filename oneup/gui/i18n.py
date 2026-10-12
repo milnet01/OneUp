@@ -94,6 +94,7 @@ class _Counted(QObject):
                 "%n update(s) available — turn on what you want and hit Run.", "", n),
             "updates-available": lambda: self.tr("%n update(s) available.", "", n),
             "updates-installed": lambda: self.tr("%n update(s) installed", "", n),
+            "package-count": lambda: self.tr("%n update(s)", "", n),
             "sources-set-aside": lambda: self.tr(" %n source(s) set aside: {names}.", "", n),
             "reboot-updates-installed": lambda: self.tr(
                 "⚠  %n update(s) installed — restart so everything uses the latest "
