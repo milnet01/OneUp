@@ -7576,6 +7576,17 @@ when complete (that document's §7).
   size for pending updates without root and without downloading (e.g.
   remote-ls --updates with a size column), and how reliable it is,
   before promising anything.
+  Progress (2026-10-12, Flatpak 1.18.4, measured without root):
+  `flatpak remote-ls --user|--system --updates --columns=application,
+  branch,download-size` lists pending updates with a size and downloads
+  nothing. But that column is the WHOLE app's compressed size, not the
+  update's: com.brave.Browser shows 221.1 MB download, 518.3 MB installed.
+  Flatpak fetches only changed objects (or a static delta), so a sum is an
+  upper bound, often far above the real download. The real figure should be
+  in the transaction table `flatpak update` prints before it asks to
+  proceed; not verified, because nothing was pending here. Open: whether to
+  show "up to N MB", or measure that table on a machine with pending
+  Flatpak updates first. Asked the user.
   **Layman:** OneUp tells you how much the system update will download, but not how much the Flatpak apps will.
   Kind: investigate.
   Source: user-real-run-2026-10-08.
