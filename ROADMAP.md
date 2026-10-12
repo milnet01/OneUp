@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=261 -->
+<!-- ants-roadmap-id-high-water: ONEUP=262 -->
 
 # OneUp Roadmap
 
@@ -8022,6 +8022,15 @@ when complete (that document's §7).
   Kind: marketing.
   Source: user-request-2026-10-12.
   Lanes: marketing.
+
+- 📋 [ONEUP-0262] **The window's scrollbars use Qt's unstyled default look and do not follow the eight themes.**
+  Seen while building ONEUP-0239 and kept out of its scope. Style
+  them from the theme tokens, as the other controls are, and check
+  the 3:1 contrast rule in docs/standards/ui-and-accessibility.md
+  for the handle against its trough in all eight themes.
+  **Layman:** The scroll bars look plain and out of place next to the rest of the themed window.
+  Kind: ux.
+  Source: user-request-2026-10-12.
 
 ## 2.1.0 — after 2.0
 
