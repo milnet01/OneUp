@@ -7621,6 +7621,15 @@ when complete (that document's §7).
   CHANGELOG line, merge to v2, push, flip. Noted, outside this item: the
   theme styles no scrollbars, so the log and package views show the
   platform's plain ones.
+  Built (2026-10-12): pushed to v2 at 0f1dd00; spec Implemented;
+  CHANGELOG line written. INV-1 fixed in the window: Check is no longer
+  shown before Stop is hidden; the empty-page sentence no longer turns
+  on height-for-width. Rail cards now stay inside their grid cell.
+  local-CI green: gui-smoke 794/0, -reverse 795/0, run-tests 466/0, i18n
+  13/0. The planned §9 amendment was not made: Qt's default drawing
+  measured 3 of 3 card lines, so §9's claim holds. Not flipped to
+  shipped: roadmap_log refuses while ONEUP-0260, split from this item,
+  is open.
   **Layman:** Buttons and boxes stay put however much detail appears; each step gets its own progress bar and its own log tab.
   Kind: ux.
   Source: user-real-run-2026-10-08.
