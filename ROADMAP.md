@@ -5038,6 +5038,8 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   slowest observed good run. Note that a workflow edit only takes effect for tags
   pushed AFTER it lands: re-running an existing tag uses the workflow file from
   that tag's commit.
+  User, 2026-10-12: main's owed 1.4.x release goes out with
+  the next batch of main fixes, not on its own.
   **Layman:** If GitHub's build machine gets stuck, the release just sits there instead of failing quickly so it can be retried.
   Kind: chore.
   Source: in-session-2026-08-19 (v1.4.5 release).
@@ -7941,6 +7943,8 @@ when complete (that document's §7).
   Resolved (2026-10-11): the key-import dialog's title and text and the
   package-conflict hint now say "source". v2 only, following the
   2026-10-01 decision on ONEUP-0218. Two gui-smoke checks, red then green.
+  User, 2026-10-12: the 2026-10-01 decision stands. The
+  word changes in 2.0 only; 1.4.x keeps "repository".
   **Layman:** Two more messages use the technical word "repository" where the app elsewhere says "source".
   Kind: fix.
   Source: in-session-2026-10-11 (found while fixing ONEUP-0218).
@@ -7974,6 +7978,8 @@ when complete (that document's §7).
   published 2026-10-12) shows the 1.x window. Once v2.0.0 is out it
   needs reshooting. Waits for the 2.0.0 release; the record-demo skill
   records on a private virtual display, never the real desktop.
+  User, 2026-10-12: no trailer link yet, in the README or
+  on the website. Both wait for this reshoot.
   **Layman:** After 2.0.0 ships, make a new trailer that shows the new window.
   Kind: marketing.
   Source: user-request-2026-10-12.
