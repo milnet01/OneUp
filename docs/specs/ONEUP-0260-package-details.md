@@ -57,8 +57,9 @@ runs `zypper --non-interactive lr -u` with `LC_ALL=C`, a fixed argv and a timeou
   line. Read as: a rootless `info` does not wait on a running update's lock.
 - `rpm -q --qf` with `%{CHANGELOGTIME}` and `%{CHANGELOGNAME}` answered three installed
   packages and one missing one in 0.054 s. A Packman package (`libavcodec62`) answered
-  `(none)`: it carries no changelog. `bash` carries 122 entries
-  (`rpm -q --qf '[%{CHANGELOGTIME}\x1e]' bash | tr '\x1e' '\n' | wc -l`).
+  `(none)`: it carries no changelog. `bash` carries 27 entries
+  (`rpm -q --qf '[%{CHANGELOGTIME}\n]' bash | wc -l`). rpm's `--qf` does not read a `\x1e`
+  escape: it printed the four characters `x1e`.
 - Changelog times are dates: every `bash` entry reads `14:00:00`. Two entries on one day
   share a time.
 - All six repositories here set `keeppackages=0`
@@ -93,15 +94,21 @@ Decided here, each for the reason given in §4 or §9:
 
 ### 4.1 Where the details come from — `oneup/gui/package_details.py`
 
-A new module, plain Python apart from one `QProcess`, holding three things:
+A new module with no Qt in it, like `oneup/gui/packages.py`, so `tests/parsers-test.py`
+can import it and stay stdlib-only. The `QProcess`, the store and the dialog live in a
+second new module, `oneup/gui/details_dialog.py` (§4.2, §4.6). The first holds:
 
 - **`build_info_argv(names)`** → `["zypper", "--no-refresh", "--non-interactive", "info",
   *names]`, and **`parse_info(text)`** → `{name: About}`, where `About` holds `summary`,
   `description` and `url`. It splits on `Information for package <name>:` lines; a name
   with no block, or a block with an empty summary and description, has no About.
-- **`build_baseline_argv(names)`** → an `rpm -q --qf` call printing each name with its
-  newest changelog entry's time and author, and **`parse_baseline(text)`** →
-  `{name: (time, author)}`. `(none)` and `is not installed` lines give no entry.
+- **`build_baseline_argv(names)`** → an `rpm -q --qf` call printing, per installed
+  version, the name, its `%{VERSION}-%{RELEASE}`, and its newest changelog entry's time
+  and author; **`parse_baseline(text, old)`** → `{name: (time, author)}`, taking for each
+  name the line whose version-release equals that package's `old` with any epoch removed.
+  A multiversion package prints one line per installed version (`kernel-default` printed
+  two here, `7.2.8-1.1` and `7.2.9-1.1`). `(none)`, `is not installed` and a name with no
+  matching line give no entry.
 - **`changelog(package, baseline)`** → the entries the new version adds (§4.3), read with
   `subprocess.run` and a 5 s timeout. rpm answers in well under a second (§2), so a
   synchronous read is the `read_repos` idiom, not a stall.
@@ -113,13 +120,17 @@ list, run with no shell and `LC_ALL=C` (`docs/standards/security.md` §4.3). The
 unprivileged reads, not part of a run, so §1.5's "it goes in the engine" does not reach
 them; §9 records the engine route anyway.
 
-### 4.2 When About is fetched
+### 4.2 When About and the baseline are fetched
 
 **`DetailsStore`**, one per window beside the `PackageModel`, subscribes to it. When the
-model gains system packages whose About has not been asked for, it starts a 500 ms
-single-shot timer, restarted by each addition. When the timer fires it runs one batched
-`zypper info` for every such name, through `QProcess`, and one batched baseline `rpm -q` for
-the same names.
+model gains system packages whose About has not been asked for, or whose baseline it does
+not hold, it starts a 500 ms single-shot timer, restarted by each addition. When the timer
+fires it runs one batched `zypper info` for the names still lacking an About, through
+`QProcess`, and one batched baseline `rpm -q` for the names still lacking a baseline.
+
+**When a fetch completes, `DetailsStore` notifies its own subscribers**, and each layout's
+`PackageItems` redraws on that. The model's subscription does not fire then: About lands in
+the store, not in the model.
 
 - **The timer is what makes it one call.** A check sends its `CHECK_ITEM` lines in one
   burst, and a run sends its `queued` lines in one burst after its refresh
@@ -128,27 +139,37 @@ the same names.
   1,500 names took 13.5 s (§2). Past the deadline the
   process is killed; names it had not answered stay without About and are not asked again
   this session. One fetch runs at a time; names that arrive during it wait for the next.
-- **The baseline is taken before the run can change it.** After a check, nothing has been
-  installed. During a run, the `queued` burst comes after the refresh and before the
-  commit. A package first seen after its install has no baseline (§4.3).
-- **The window closing kills a running fetch.** Nothing the window spawns outlives it.
-- **`PackageModel.reset()` keeps the store.** About for a name does not change between a
-  check and the run that follows it, so the run re-asks nothing.
+- **A baseline is recorded only for a package not yet `installed` or `removed`** when the
+  query runs. For one already installed, `rpm -q` answers the NEW version, and the walk in
+  §4.3 would then find nothing new. Such a package has no baseline (§4.3).
+- **`PackageModel.reset()` drops the baselines and keeps About.** A baseline is true only
+  until the next install, and the window can stay resident across runs. About for a name
+  does not change, so a run re-asks none. Each run's `queued` burst comes after its refresh
+  and before its commit, so it re-takes every baseline in time.
+- **Quitting kills a running fetch; hiding to the tray does not.** `Updater.closeEvent`
+  hides the window when a tray exists, and the fetch carries on. Nothing the window spawns
+  outlives the app.
 
 ### 4.3 What changed — the entries the new version adds
 
 **Where the new version's changelog is read from**, first match wins:
 
-1. The package's state is `installed`: `rpm -q --qf <entries> <name>`.
+`<edition>` below is the package's edition with any leading epoch (`N:`) removed: rpm file
+names and `rpm -q` names carry none. It must then match `^[A-Za-z0-9._+~^-]+$`, or there
+is no What changed. "State" is `Package.state`, never `shown_state`, here and in §4.4.
+
+1. The state is `installed`: `rpm -q --qf <entries> <name>-<edition>`. Naming the edition
+   picks the new version of a multiversion package.
 2. The state is `downloaded` or `downloading`: `rpm -qp --qf <entries> <file>`, where
    `<file>` is the one match of `<name>-<edition>.*.rpm` under any directory below
-   `$ONEUP_ZYPP_PACKAGES` (default `/var/cache/zypp/packages`). `<edition>` must match
-   `^[A-Za-z0-9._+~^:-]+$` first, and neither part may hold a glob character. Zero
-   matches, or more than one, is "not found".
+   `$ONEUP_ZYPP_PACKAGES` (default `/var/cache/zypp/packages`). Zero matches, or more than
+   one, is "not found", and the dialog says *"The downloaded package is not in the cache;
+   its notes show once it is installed."*
 3. Anything else: no What changed yet.
 
-`<entries>` prints each entry's time, author and text, separated by `\x1e` between entries
-and `\x1f` between fields, so a multi-line text stays one field.
+`<entries>` prints each entry's time, author and text, with the control characters U+001E
+between entries and U+001F between fields, so a multi-line text stays one field. The
+characters themselves go in the argv; rpm does not expand an escape for them (§2).
 
 **Which entries are new.** Walk the new version's entries newest first and stop at the
 first whose time and author equal the baseline's. The entries before it are what changed.
@@ -171,8 +192,7 @@ half says What changed may exist; the dialog says so when it does not (§4.3).
 `ⓘ` (U+24D8) after the name on the item's first line, in every layout. `PackageItems.data`
 adds it. Its `AccessibleTextRole` text gains the words *"details available"*, so a screen
 reader hears what the glyph shows, and the mark is a shape, never only a colour
-(`docs/standards/ui-and-accessibility.md` §3). When About arrives the views redraw, through
-the model's existing subscription.
+(`docs/standards/ui-and-accessibility.md` §3). When About arrives the views redraw (§4.2).
 
 ### 4.5 Opening it
 
@@ -182,8 +202,10 @@ double-click setting and fires on Enter, so mouse and keyboard reach it the same
 
 **The current item gets a focus cue.** While a package view has focus, `LinesDelegate`
 fills the current item with the derived focus fill and draws its text in the derived ink —
-`docs/standards/ui-and-accessibility.md` §5.1, with `$logbg`, the view's own background, as
-both the source and the one rest pixel. It is a fill, so the no-ring rule holds. The view's
+`docs/standards/ui-and-accessibility.md` §5.1, with the view's own background as both the
+source and the one rest pixel: `$logbg`, or `$card` with the high-contrast overlay on,
+whose rule repaints the views on `$card` (ONEUP-0076 §4.2: an overlay row replaces the
+base row). It is a fill, so the no-ring rule holds. The view's
 own border cue (mechanism B, ONEUP-0239 §4.8) is unchanged; the two answer different
 questions — which view, and which package in it.
 
@@ -208,15 +230,17 @@ questions — which view, and which package in it.
 - **INV-1** No details query runs as root or through a shell: every `zypper` and `rpm` call
   the window makes for this item is a fixed list argv with `LC_ALL=C`, and none starts with
   `sudo` or `pkexec`.
-  *Test:* `tests/gui-smoke.py` — the mock `zypper` and `rpm` on `_BIN` record their argv;
-  after a check and a dialog open, every recorded call is checked, and the existing mock
-  `sudo` records no call.
+  *Test:* `tests/gui-smoke.py` — the mock `zypper` and `rpm` on `_BIN` record their argv,
+  their `$LC_ALL`, and their parent process's command name (`ps -o comm= -p $PPID`); after
+  a check and a dialog open, every recorded call has `LC_ALL` of `C` and a parent that is
+  not `sh` or `bash`, and the existing mock `sudo` records no call. The parent name is what
+  catches a shell string: through `sh -c` the mock receives the same argv.
   *Breaks when:* a details call is routed through privilege, or built as a string.
 
 - **INV-2** A package name or edition that fails its pattern reaches no argv and no glob.
   *Test:* `tests/parsers-test.py` — `build_info_argv(["bash", "-rf", "a*b"])` holds `bash`
   only, and `changelog` for a package whose edition holds `*` returns no entries without
-  calling `rpm`. The leading `-` is what isolates the rule: the other two would also fail a
+  calling `rpm`. An edition `1:2.3-4` builds the glob `<name>-2.3-4.*.rpm`. The leading `-` is what isolates the rule: the other two would also fail a
   plain shell-quoting check.
   *Breaks when:* `_NAME_RE` is dropped, or allows a leading `-`.
 
@@ -244,8 +268,8 @@ questions — which view, and which package in it.
   *Breaks when:* a layout's view is not connected, or the has-details test is skipped.
 
 - **INV-6** The current item of a focused package view is drawn in the derived focus fill,
-  and that fill measures at least 3:1 against `$logbg` in every theme, high contrast
-  included.
+  and that fill measures at least 3:1 against the views' background in every theme:
+  `$logbg`, and `$card` with the high-contrast overlay on.
   *Test:* `tests/gui-smoke.py` — `theme.focus_report` gains a row for the current-item
   pair, and the scenario asserts that row clears 3:1 for every theme, with and without high
   contrast. A grab of a focused view's current item differs from the same item unfocused.
@@ -256,8 +280,9 @@ questions — which view, and which package in it.
 - **INV-7** A details fetch never outlives its deadline or the window.
   *Test:* `tests/gui-smoke.py` — a mock `zypper` that sleeps past a test deadline set by
   `ONEUP_DETAILS_TIMEOUT=1`; the fetch ends, the packages have no mark, and no mock process
-  is left running. A second fetch closed by closing the window leaves none either.
-  *Breaks when:* the `QProcess` has no deadline, or the window does not kill it on close.
+  is left running. A second fetch in a window with no tray, ended by closing the window,
+  leaves none either; a third, in a window with a tray, survives the window hiding.
+  *Breaks when:* the `QProcess` has no deadline, quitting does not kill it, or hiding does.
 
 - **INV-8** No test reads the real machine's rpm database or package cache.
   *Test:* `tests/gui-smoke.py` sets `ONEUP_ZYPP_PACKAGES` to a scenario directory and puts
@@ -282,8 +307,10 @@ questions — which view, and which package in it.
 
 Each invariant's test is named in §5. Where they live:
 
-- `tests/parsers-test.py` — `parse_info`, `parse_baseline`, the name and edition patterns
-  and the new-entries walk (INV-2, INV-3), called directly, with no process.
+- `tests/parsers-test.py` — `parse_info`, `parse_baseline` (with a two-version
+  multiversion fixture), the name and edition patterns, the epoch removal and the
+  new-entries walk (INV-2, INV-3), imported from the Qt-free `package_details.py` and called
+  directly, with no process.
 - `tests/gui-smoke.py` — INV-1, INV-4, INV-5, INV-6, INV-7 and INV-8. The suite gains mock
   `zypper` and `rpm` scripts on `_BIN` beside its mock `notify-send` and `sudo`, each
   printing a fixture and recording its argv, and sets `ONEUP_ZYPP_PACKAGES` to a scenario
@@ -295,14 +322,16 @@ window scenarios before the store, the mark or the connection exists.
 ## 8. Docs & release
 
 - `docs/specs/ONEUP-0076-ringless-focus-cue.md` §4.2 — a row for the package views'
-  current item: fill, source `$logbg`, rest pixel `$logbg`.
+  current item: fill, source and rest pixel `$logbg`; and its high-contrast overlay row:
+  source and rest pixel `$card`.
 - `docs/standards/security.md` — §1's paragraph naming `read_repos` as the window's one
   direct zypper call gains `zypper info` and the `rpm` queries, and §4's pattern list gains
   `_NAME_RE` and the edition pattern.
 - `docs/standards/testing.md` §2.1 — `ONEUP_ZYPP_PACKAGES` and `ONEUP_DETAILS_TIMEOUT` join
-  the redirect list.
-- `docs/standards/files-and-naming.md` — `package_details.py` is a new file inside
-  `oneup/gui/`, so no packaging change (§6 there).
+  the redirect list; the suite table's `tests/parsers-test.py` row gains the window's
+  pure details parsers.
+- `docs/standards/files-and-naming.md` — `package_details.py` and `details_dialog.py` are
+  new files inside `oneup/gui/`, so no packaging change (§6 there).
 - `CHANGELOG.md` `[Unreleased]` — one line: clicking a package shows what it is and what
   changed.
 - ONEUP-0239 flips to shipped once this ships (its `open_parts` refusal names this item).
@@ -339,3 +368,4 @@ No marker, engine, sudoers or download-guard change.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 1 | 2026-10-12 | Q1 5 · Q2 3 · Q3 3 · Q4 1 — 12 verified, 1 dismissed | all 12 fixed. Two lanes, each holding every question. Two Q1s came from building the packet and were fixed before dispatch: a wrong changelog count (122, from a command that miscounted; 27 measured) and the claim that rpm reads a `\x1e` escape. Both lanes found the high-contrast rest pixel and the untestable `LC_ALL`/shell half of INV-1. One lane each found the missing redraw path, the baseline going stale across runs, the baseline taken after an install, multiversion `rpm -q`, the epoch in a file glob, the Qt import breaking `tests/parsers-test.py`'s stdlib rule, raw versus shown state, and hide-to-tray killing the fetch. Dismissed: which Rows column carries the mark, an implementer's detail. Four open questions resolved clean: the second `#Log` object name, the `system` step key, the 27 count, and the two separator quotes |
