@@ -3931,6 +3931,39 @@ def main() -> int:
     check("INV-6 a check keeps Check in the slot, disabled",
           checking == (True, False) and not wS.check_btn.isEnabled())
 
+    # ONEUP-0240: the swap moves nothing. Stop takes Check's width, and so does
+    # "Stopping…", so neither Stop nor the Run button beside it changes size.
+    wS._check_mode = False
+    wS.set_controls_enabled(True)
+    QApplication.processEvents()
+    _idle = (wS.check_btn.width(), wS.run_btn.width())
+    wS.set_controls_enabled(False)
+    QApplication.processEvents()
+    _run = (wS.stop_btn.width(), wS.run_btn.width())
+    wS.stop_btn.setText(QCoreApplication.translate("run", "Stopping…"))
+    QApplication.processEvents()
+    _stopping = (wS.stop_btn.width(), wS.run_btn.width())
+    check(f"ONEUP-0240 Stop keeps Check's width and Run keeps its own "
+          f"(idle {_idle}, run {_run}, stopping {_stopping})",
+          _idle == _run == _stopping)
+    # A bigger desktop font widens every label; the two must still match afterwards.
+    wS.set_controls_enabled(True)
+    _font0 = QApplication.font()
+    _font1 = QFont(_font0)
+    _font1.setPointSizeF(_font0.pointSizeF() * 2)
+    QApplication.setFont(_font1)
+    theme.apply_app_theme(QApplication.instance())
+    QApplication.processEvents()
+    _big = wS.check_btn.width()
+    wS.set_controls_enabled(False)
+    QApplication.processEvents()
+    check(f"ONEUP-0240 with a bigger desktop font too ({_big} vs {wS.stop_btn.width()})",
+          _big == wS.stop_btn.width() and _big > _idle[0])
+    QApplication.setFont(_font0)
+    theme.apply_app_theme(QApplication.instance())
+    wS._run_active = False
+    wS.set_controls_enabled(True)
+
     # INV-6, the case today's code gets wrong: a run that FINISHED with a failed
     # step carrying no hint and no armed remedy. Retry was revealed for any
     # failure while the banner was raised only for a hint or a remedy, so

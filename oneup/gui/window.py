@@ -486,6 +486,12 @@ class Updater(QMainWindow):
         actions.addWidget(self.stop_btn, 0)
         self.action_row = actions
         root.addLayout(actions)
+        # ONEUP-0240: Check and Stop take turns in one slot, so they share one width —
+        # the widest any of their labels needs — or the swap resizes Run beside them.
+        # Re-measured when a style or font change reaches either button.
+        self._pin_check_stop_width()
+        self.check_btn.installEventFilter(self)
+        self.stop_btn.installEventFilter(self)
 
         # Retry-failed (hidden until a run has failures). It lives INSIDE the
         # warning banner, appended below once that banner exists, so the remedy
@@ -863,10 +869,25 @@ class Updater(QMainWindow):
             QTimer.singleShot(self.PLACEMENT_FALLBACK_MS, self._restore_position)
 
     def eventFilter(self, obj, event):
+        if (event.type() in (QEvent.Type.StyleChange, QEvent.Type.FontChange)
+                and obj in (self.check_btn, self.stop_btn)):
+            QTimer.singleShot(0, self._pin_check_stop_width)
         if (self._placement_pending and event.type() == QEvent.Type.Expose
                 and obj is self.windowHandle()):
             QTimer.singleShot(0, self._restore_position)
         return super().eventFilter(obj, event)
+
+    def _pin_check_stop_width(self):
+        """Give Check and Stop the width of the widest label either can show."""
+        shown = self.stop_btn.text()
+        widths = [self.check_btn.sizeHint().width()]
+        for label in (QCoreApplication.translate("window", "Stop"),
+                      QCoreApplication.translate("run", "Stopping…")):
+            self.stop_btn.setText(label)
+            widths.append(self.stop_btn.sizeHint().width())
+        self.stop_btn.setText(shown)
+        for btn in (self.check_btn, self.stop_btn):
+            btn.setMinimumWidth(max(widths))
 
     def _restore_position(self):
         if not self._placement_pending:     # the Expose path or the fallback got here first

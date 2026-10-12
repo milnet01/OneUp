@@ -86,6 +86,10 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The Stop button no longer shrinks when it replaces Check for updates.** (ONEUP-0240)
+  Both buttons now keep one width, so the Run button beside them no longer
+  grows and shrinks as an update starts and ends. Stop keeps its red.
+
 - **The key-import dialog and the package-conflict hint say "source", like the rest of the window** (ONEUP-0256)
   They were the last window messages still saying "repository" or "repo".
 
