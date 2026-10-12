@@ -7500,7 +7500,7 @@ when complete (that document's §7).
   Source: user-real-run-2026-10-08.
   Lanes: engine, gui.
 
-- 📋 [ONEUP-0259] **One package model for the window: each update's name, versions, size and live state, shared by every layout.**
+- ✅ [ONEUP-0259] **One package model for the window: each update's name, versions, size and live state, shared by every layout.**
   Part 1 of 3 split from ONEUP-0239 (user, 2026-10-12), built first.
   Holds the data the three layouts show; no layout of its own.
   User decisions, 2026-10-12: live per-package states are wanted,
@@ -7517,6 +7517,12 @@ when complete (that document's §7).
   build it with write-code. Two measurements stay open and the spec
   says so: where zypper puts the skipped-repository warning in XML
   mode, and whether flatpak update -y can exit 0 after one app fails.
+  Resolved (2026-10-12, 52325d4): built to its spec. CHECK_ITEM gains
+  bytes and repo, a new PKG marker carries each package's state, and
+  oneup/gui/packages.py holds the model ONEUP-0239's layouts will read.
+  Sizes come from zypper's cached repository data under --sizes. Still
+  unmeasured, as the spec says: zypper's XML-mode warning stream, and
+  whether flatpak update -y can exit 0 after one app fails.
   **Layman:** Every package waiting to update is listed with its old and new version and its download size, and each one shows waiting, downloading or installed as the update runs.
   Kind: feature.
   Source: split-from-ONEUP-0239-2026-10-12.
