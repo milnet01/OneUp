@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=262 -->
+<!-- ants-roadmap-id-high-water: ONEUP=263 -->
 
 # OneUp Roadmap
 
@@ -8059,6 +8059,18 @@ when complete (that document's §7).
   **Layman:** The scroll bars look plain and out of place next to the rest of the themed window.
   Kind: ux.
   Source: user-request-2026-10-12.
+
+- 📋 [ONEUP-0263] **The engine suite failed 3 tests once inside a pre-push run and never again; find out which and why.**
+  Seen 2026-10-12 19:38 (cc-job oneup-0260-push1, gating fb5e9a5
+  in place): tests/run-tests.sh reported Passed 462, Failed 3. The
+  pre-push hook printed only the suite's tail, so the 3 failing names
+  were lost. Re-run alone at 19:53 on the same tree: exit 0. The next
+  two pushes (119c802, ab0d0ef) ran it at 465/0. No other edits were
+  made while it ran. Next time it reds, keep the whole log: the first
+  fix may be making the hook print every FAIL line, not just the tail.
+  **Layman:** The update engine's tests failed once during an upload check and passed every time after; find out what caused the one-off failure.
+  Kind: investigate.
+  Source: in-session-2026-10-12.
 
 ## 2.1.0 — after 2.0
 
