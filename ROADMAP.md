@@ -7554,12 +7554,17 @@ when complete (that document's §7).
   Source: user-real-run-2026-10-08.
   Lanes: gui, theme.
 
-- 📋 [ONEUP-0240] **The Check for updates button shrinks when it becomes Stop; keep its width and keep the red.**
+- ✅ [ONEUP-0240] **The Check for updates button shrinks when it becomes Stop; keep its width and keep the red.**
   User feedback, 2026-10-08: the button narrows to fit "Stop" during a
   run, and the big Run button widens to fill the gap. Keep one width for
   both texts (the wider of the two, in every language and at large
   text); keep the red Stop colouring, which the user liked. Same rule
   as the fixed-layout item filed with it.
+  Resolved (2026-10-12, v2 37bd741): Check and Stop share one minimum
+  width, the widest of "Check for updates", "Stop" and "Stopping…",
+  re-measured on any style or font change. Run no longer resizes during a
+  run; Stop keeps its red. gui-smoke checks the widths at normal and
+  doubled font size.
   **Layman:** While an update runs, the Check for updates button turns into a smaller red Stop button; it should stay the same size.
   Kind: ux.
   Source: user-real-run-2026-10-08.
