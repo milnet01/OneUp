@@ -7592,6 +7592,19 @@ when complete (that document's §7).
   user settled four calls the same day: one fixed message strip,
   the log swaps in place, a layout change applies at once, Rows is
   the default. Ready to build with write-code.
+  Progress (2026-10-12): build started on branch oneup-0239-wip (commit
+  9c823f5), v2 untouched. Done: PackageModel.unsubscribe, ElidedLabel,
+  SizeLink, package_views (in-place item model, LinesDelegate, counts,
+  SizeStrip), TaskRow forms and per-row bar, MessageStrip, LayoutHost,
+  RowsLayout. The window does not start yet: window.py and run.py still
+  call TaskRow's removed pieces. Next: wire window.py and run.py, then
+  RailLayout, SpotlightLayout, layout_btn, stylesheets, tests, docs.
+  Measured: Qt's default item drawing shows two of a card's three lines,
+  so spec §9's reason for rejecting custom card painting is false;
+  LinesDelegate hands each line to Qt's own drawing. Record it as a
+  write-spec Step 8 amendment in the finishing commit. INV-1 seen red on
+  today's window (35 movements); INV-2 was green there and still needs a
+  break-and-restore red.
   **Layman:** Buttons and boxes stay put however much detail appears; each step gets its own progress bar and its own log tab.
   Kind: ux.
   Source: user-real-run-2026-10-08.
