@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=258 -->
+<!-- ants-roadmap-id-high-water: ONEUP=260 -->
 
 # OneUp Roadmap
 
@@ -7500,6 +7500,24 @@ when complete (that document's §7).
   Source: user-real-run-2026-10-08.
   Lanes: engine, gui.
 
+- 📋 [ONEUP-0259] **One package model for the window: each update's name, versions, size and live state, shared by every layout.**
+  Part 1 of 3 split from ONEUP-0239 (user, 2026-10-12), built first.
+  Holds the data the three layouts show; no layout of its own.
+  User decisions, 2026-10-12: live per-package states are wanted,
+  which needs one new engine marker: a second, named exception to
+  the 2.0 marker freeze (marker-protocol.md section 5.1), landed in
+  its own commit with both suites. Flatpak sizes stay blank until
+  ONEUP-0241 has measured a real update.
+  Measured 2026-10-12 without root: the cached repository data
+  (/var/cache/zypp/raw/<alias>/repodata, primary.xml) carries each
+  package's download size as <size package=...>, and is refreshed
+  together with zypper's own index. Spec next (write-spec).
+  **Layman:** Every package waiting to update is listed with its old and new version and its download size, and each one shows waiting, downloading or installed as the update runs.
+  Kind: feature.
+  Source: split-from-ONEUP-0239-2026-10-12.
+  Lanes: engine, gui.
+  Splits-from: ONEUP-0239.
+
 - 📋 [ONEUP-0239] **Nothing in the window moves or resizes: a fixed layout with per-step progress, one tabbed details area, and a status line.**
   User feedback, 2026-10-08: buttons and boxes move and resize as detail
   appears (a row's package list opening pushes everything down), which
@@ -7549,6 +7567,13 @@ when complete (that document's §7).
   figures are INSTALLED sizes (libavcodec62: 14.8 MiB, matching
   zypper's Installed Size), which explains its 48.5 MiB total against
   zypper's 17.5 MiB download.
+  Split (user, 2026-10-12) into three, built in order: ONEUP-0259
+  the package model and its data (first), this item the three
+  fixed layouts plus the Settings choice, ONEUP-0260 the package
+  details dialog. Same day the user chose: live per-package states
+  (one new marker, a named freeze exception, owned by ONEUP-0259);
+  What changed only once downloaded or installed. This item's spec
+  waits for ONEUP-0259's.
   **Layman:** Buttons and boxes stay put however much detail appears; each step gets its own progress bar and its own log tab.
   Kind: ux.
   Source: user-real-run-2026-10-08.
@@ -7570,6 +7595,21 @@ when complete (that document's §7).
   Source: user-real-run-2026-10-08.
   Lanes: gui.
 
+- 📋 [ONEUP-0260] **Package details dialog: About and What changed for one package, opened from any layout.**
+  Part 3 of 3 split from ONEUP-0239 (user, 2026-10-12), built after
+  the layouts. A modal dialog (user, 2026-10-10), never an inline
+  panel. A package with neither About nor What changed shows no
+  info button. User decision, 2026-10-12: What changed shows only
+  once the package has downloaded (from the downloaded package
+  file) or installed (rpm --changelog); no repository change notes
+  are fetched. About comes from zypper --no-refresh info (no root).
+  See ONEUP-0239's body for what was measured.
+  **Layman:** Clicking a package opens a window saying what it is and, once it has downloaded, what changed in the new version.
+  Kind: feature.
+  Source: split-from-ONEUP-0239-2026-10-12.
+  Lanes: gui, engine.
+  Splits-from: ONEUP-0239.
+
 - 📋 [ONEUP-0241] **Flatpak apps show no download size; find out whether Flatpak can report one.**
   User feedback, 2026-10-08: the system row has Show download size, the
   Flatpak row has none. Check whether flatpak can report a download
@@ -7587,6 +7627,10 @@ when complete (that document's §7).
   proceed; not verified, because nothing was pending here. Open: whether to
   show "up to N MB", or measure that table on a machine with pending
   Flatpak updates first. Asked the user.
+  User, 2026-10-12: measure first. The next time Flatpak updates
+  are pending, compare remote-ls download-size with what flatpak
+  update really downloads, then decide. Until then the package
+  view (ONEUP-0259) shows no size for a Flatpak app.
   **Layman:** OneUp tells you how much the system update will download, but not how much the Flatpak apps will.
   Kind: investigate.
   Source: user-real-run-2026-10-08.
