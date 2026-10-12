@@ -60,6 +60,11 @@ def versions(package: Package) -> str:
     return package.edition or package.old
 
 
+def join_parts(*parts: str) -> str:
+    """The parts of one line of a package's text, the empty ones left out."""
+    return _PARTS.join(p for p in parts if p)
+
+
 def size_text(package: Package) -> str:
     return _format_size(package.size) if package.size else ""
 

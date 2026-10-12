@@ -21,7 +21,9 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 
+import shiboken6
 from PySide6.QtCore import (
+    QT_TRANSLATE_NOOP,
     QByteArray,
     QCoreApplication,
     QDate,
@@ -30,6 +32,7 @@ from PySide6.QtCore import (
     QLocale,
     QProcess,
     QSettings,
+    QSize,
     Qt,
     QTime,
     QTimer,
@@ -57,6 +60,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
+    QStackedWidget,
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
@@ -79,14 +83,30 @@ from . import (
     tray,
 )
 from . import theme as theme_mod
+from .elided_label import ElidedLabel
+from .layout_rail import RailLayout
+from .layout_rows import RowsLayout
+from .layout_spotlight import SpotlightLayout
 from .packages import PackageModel
 from .settings_dialog import SettingsDialog
+from .size_link import SizeLink
 from .task_row import TaskRow
 from .theme import TEXT_SCALES, _app_icon, apply_app_theme
 
 # The last-run line turns amber once the last run is this old, nudging the user
 # that an update is overdue (ONEUP-0030).
 STALE_AFTER_DAYS = 14
+
+# The window's layouts, in the order the Settings button cycles through them
+# (ONEUP-0239 §4.7). The id is what is stored; the name is only ever shown.
+LAYOUTS = (
+    ("rows", QT_TRANSLATE_NOOP("window", "Rows"), RowsLayout),
+    ("rail", QT_TRANSLATE_NOOP("window", "Rail"), RailLayout),
+    ("spotlight", QT_TRANSLATE_NOOP("window", "Spotlight"), SpotlightLayout),
+)
+DEFAULT_LAYOUT = "rows"
+# The window's narrowest, whatever the layout: room for the header's three buttons.
+MIN_WIDTH = 560
 
 
 class _ProgressBar(QProgressBar):
@@ -113,6 +133,18 @@ class _ProgressBar(QProgressBar):
         self._caption.setText(fmt)
 
 
+def _retain_space(widget: QWidget) -> None:
+    """Hidden, `widget` keeps its place, so showing it moves nothing (ONEUP-0239 §4.2)."""
+    policy = widget.sizePolicy()
+    policy.setRetainSizeWhenHidden(True)
+    widget.setSizePolicy(policy)
+
+
+def _log_toggle_text(log_shown: bool) -> str:
+    return (QCoreApplication.translate("window", "Show packages") if log_shown
+            else QCoreApplication.translate("window", "Show technical log"))
+
+
 def _last_run_outcome(status: str) -> str:
     """The saved outcome of the last run, in words. The history file stores a
     fixed token, so the wording stays the window's; an unknown one shows as stored."""
@@ -130,8 +162,9 @@ class Updater(QMainWindow):
             "window",
             "{APP_NAME} {APP_VERSION}").format(APP_NAME=APP_NAME, APP_VERSION=APP_VERSION))
         # Three header controls (Settings · Recenter · About); the background
-        # toggles and Repositories live inside the Settings popup.
-        self.setMinimumWidth(560)
+        # toggles and Repositories live inside the Settings popup. The current
+        # layout may need more, and _fit_minimum raises the floor to it.
+        self.setMinimumWidth(MIN_WIDTH)
         self.settings = QSettings("OneUp", "OneUp")
         self.proc: QProcess | None = None
         self._buf = ""
@@ -195,6 +228,15 @@ class Updater(QMainWindow):
         self._traycheck_unknown = False
         self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
         self._last_announcement = ""   # what _announce last spoke (see _announce)
+        # Run state the layouts read and never own (ONEUP-0239 §4.1), so a layout
+        # change mid-run keeps it. All three are cleared by run._reset_for_run.
+        self.current_step = ""         # the step running now, or ""
+        self.latest_package = None     # (key, name, edition) of the last PKG line
+        self.engine_finished = False   # set by on_finished; the empty pages read it
+        self.host = None               # the current layout (layout_host.LayoutHost)
+        # Set here, not after construction: eventFilter reads it, and the controls it
+        # filters receive events while the layout is being built.
+        self._placement_pending = False
 
         # Gradient ring: a 2px accent border (outer #Frame) around the card.
         outer_frame = QFrame()
@@ -329,6 +371,17 @@ class Updater(QMainWindow):
         self._refresh_logkeep_label()
         self.logkeep_btn.clicked.connect(self.on_logkeep_clicked)
 
+        # Which of the three layouts the window uses (ONEUP-0239 §4.7). Cycles like
+        # Text size; laid out in Settings, owned here.
+        self.layout_btn = QPushButton()
+        self.layout_btn.setObjectName("GhostBtn")
+        self.layout_btn.setCursor(Qt.PointingHandCursor)
+        self.layout_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "How the main window is arranged"))
+        self._refresh_layout_label()
+        self.layout_btn.clicked.connect(self.on_layout_clicked)
+
         self.contrast_btn = QPushButton()
         self.contrast_btn.setObjectName("GhostBtn")
         self.contrast_btn.setCheckable(True)
@@ -434,21 +487,17 @@ class Updater(QMainWindow):
         self.header_row = header_row
         root.addLayout(header_row)
         root.addSpacing(2)
+        self._card_root = root      # the current layout sits below the header
 
         # The packages this check or run touches (ONEUP-0259), which every view of
-        # them reads. Built before the rows, which watch it.
+        # them reads.
         self.packages = PackageModel()
-        # Task rows — each a gradient-bordered card.
+        # Task rows — each a gradient-bordered card. Built here and laid out by the
+        # current layout, which never owns them (ONEUP-0239 §4.1).
         self.rows: dict[str, TaskRow] = {}
         for key, title, desc in steps.TASKS:
-            r = TaskRow(key, QCoreApplication.translate("steps", title),
-                        QCoreApplication.translate("steps", desc))
-            r.size_requested.connect(partial(run.request_size, self))
-            r.watch(self.packages)
-            self.rows[key] = r
-            root.addWidget(r)
-
-        root.addSpacing(4)
+            self.rows[key] = TaskRow(key, QCoreApplication.translate("steps", title),
+                                     QCoreApplication.translate("steps", desc))
 
         # Action row: Check (secondary) + Run (primary).
         self.check_btn = QPushButton(QCoreApplication.translate("window", "Check for updates"))
@@ -484,13 +533,16 @@ class Updater(QMainWindow):
         # widget still holds its own layout item — so the row has three items for
         # the window's whole life and exactly one of indices 1 and 2 is ever
         # visible. What reads as one slot is the visibility rule, not the geometry.
-        actions = QHBoxLayout()
+        # The row sits on a widget of its own so each layout can place it whole
+        # (ONEUP-0239 §4.1); the row itself is unchanged.
+        self.action_bar = QWidget()
+        actions = QHBoxLayout(self.action_bar)
+        actions.setContentsMargins(0, 0, 0, 0)
         actions.setSpacing(10)
         actions.addWidget(self.run_btn, 1)
         actions.addWidget(self.check_btn, 0)
         actions.addWidget(self.stop_btn, 0)
         self.action_row = actions
-        root.addLayout(actions)
         # ONEUP-0240: Check and Stop take turns in one slot, so they share one width —
         # the widest any of their labels needs — or the swap resizes Run beside them.
         # Re-measured when a style or font change reaches either button.
@@ -509,7 +561,7 @@ class Updater(QMainWindow):
         self.retry_btn.setVisible(False)
 
         # Progress + current step.
-        self.status = QLabel(QCoreApplication.translate("window", "Ready."))
+        self.status = ElidedLabel(QCoreApplication.translate("window", "Ready."))
         self.status.setObjectName("Status")
         self.status.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
         # NOT setAccessibleName: an explicit name on a QLabel is permanent, and this
@@ -520,11 +572,10 @@ class Updater(QMainWindow):
         self.status.setAccessibleDescription(QCoreApplication.translate(
             "window",
             "Current status"))
-        root.addWidget(self.status)
         # The caption sits under the bar rather than on its fill (ONEUP-0163).
         # A description, not a name: this label's text is replaced on every
         # progress line, and an explicit name on a QLabel is permanent.
-        self.bar_caption = QLabel("")
+        self.bar_caption = ElidedLabel("")
         self.bar_caption.setObjectName("ProgressCaption")
         self.bar_caption.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
         self.bar_caption.setAccessibleDescription(QCoreApplication.translate(
@@ -534,19 +585,18 @@ class Updater(QMainWindow):
         self.bar.setRange(0, 1)
         self.bar.setValue(0)
         self.bar.setAccessibleName(QCoreApplication.translate("window", "Update progress"))
-        root.addWidget(self.bar)
-        root.addWidget(self.bar_caption)
         # Liveness, on its own line under the bar (ONEUP-0048): how long the current
         # phase has been going, the download rate, and — when the engine has gone quiet —
         # how long for. A slow mirror and a hung one look identical without this: zypper
         # reports a metadata fetch as undelimited dots with no line ending, so there is
         # nothing for the log pane to draw, and a working run reads as frozen.
-        self.activity = QLabel("")
+        self.activity = ElidedLabel("")
         self.activity.setObjectName("Activity")
         self.activity.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
         self.activity.setAccessibleName(QCoreApplication.translate("window", "Activity"))
         self.activity.setVisible(False)
-        root.addWidget(self.activity)
+        # Hidden, it keeps its line, so the line appearing moves nothing (ONEUP-0239 §4.2).
+        _retain_space(self.activity)
         # Five seconds, not one: the label is a live region, and a screen reader reading a
         # ticking counter aloud would bury everything else. _tick_activity only re-announces
         # when the WORDING changes, so the elapsed figure updates silently.
@@ -561,13 +611,11 @@ class Updater(QMainWindow):
             "RebootBanner", "RestartBtn", QCoreApplication.translate("window", "Restart now"),
             partial(banners.restart_now, self),
             name=QCoreApplication.translate("window", "Restart recommended"))
-        root.addWidget(self.reboot_banner)
 
         self.services_banner, self.services_label, self.services_btn = banners._make_banner(self,
             "InfoBanner", "BannerBtn", QCoreApplication.translate("window", "Restart services"),
             partial(banners.restart_services, self),
             name=QCoreApplication.translate("window", "Services should restart"))
-        root.addWidget(self.services_banner)
 
         self.warn_banner, self.warn_label, self.warn_btn = banners._make_banner(self,
             "WarnBanner", "BannerBtn", QCoreApplication.translate("window", "Show details"),
@@ -604,13 +652,15 @@ class Updater(QMainWindow):
         # focus chain — parenting order does, which is how this banner's chain
         # came to run backwards — so the chain below states it explicitly.
         self.warn_banner.layout().addWidget(self.retry_btn)
-        root.addWidget(self.warn_banner)
 
         self.appupdate_banner, self.appupdate_label, self.appupdate_btn = banners._make_banner(self,
             "InfoBanner", "BannerBtn", QCoreApplication.translate("window", "View release"),
             partial(app_update._open_release, self),
             name=QCoreApplication.translate("window", "OneUp update available"))
-        root.addWidget(self.appupdate_banner)
+        # The one fixed place the four banners show, in this order (ONEUP-0239 §4.4).
+        self.message_strip = banners.MessageStrip(
+            [self.reboot_banner, self.services_banner, self.warn_banner,
+             self.appupdate_banner])
 
         # Rollback link (shown after the system actually changed).
         self.rollback_btn = QPushButton(QCoreApplication.translate(
@@ -620,10 +670,10 @@ class Updater(QMainWindow):
         self.rollback_btn.setCursor(Qt.PointingHandCursor)
         self.rollback_btn.clicked.connect(partial(rollback.rollback, self))
         self.rollback_btn.setVisible(False)
-        root.addWidget(self.rollback_btn)
+        _retain_space(self.rollback_btn)
 
-        # Log controls: show/hide on the left, open-file on the right.
-        self.log_toggle = QPushButton(QCoreApplication.translate("window", "Show details ▸"))
+        # Log controls: the swap between the packages and the log, and open-file.
+        self.log_toggle = QPushButton(_log_toggle_text(False))
         self.log_toggle.setObjectName("LinkBtn")
         self.log_toggle.setCursor(Qt.PointingHandCursor)
         self.log_toggle.clicked.connect(self.toggle_log)
@@ -631,11 +681,9 @@ class Updater(QMainWindow):
         self.openlog_btn.setObjectName("LinkBtn")
         self.openlog_btn.setCursor(Qt.PointingHandCursor)
         self.openlog_btn.clicked.connect(self.open_log)
-        logrow = QHBoxLayout()
-        logrow.addWidget(self.log_toggle, 0)
-        logrow.addStretch(1)
-        logrow.addWidget(self.openlog_btn, 0)
-        root.addLayout(logrow)
+        # Its label changes, so it is pinned to the wider one (ONEUP-0239 §4.2).
+        self._pin_log_toggle_width()
+        self.log_toggle.installEventFilter(self)
 
         self.log = QPlainTextEdit()
         self.log.setObjectName("Log")
@@ -647,30 +695,27 @@ class Updater(QMainWindow):
         # by line — a run emits hundreds of zypper lines (see the spec's Out of
         # scope): a screen reader would be unusable.
         self.log.setAccessibleName(QCoreApplication.translate("window", "Update log"))
-        self.log.setMinimumHeight(180)
         self.log.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        root.addWidget(self.log, 1)
 
-        # Restore the log show/hide preference (shown by default on first run).
-        show_log = self.settings.value("log_shown", True, type=bool)
-        self.log.setVisible(show_log)
-        self.log_toggle.setText(QCoreApplication.translate("window", "Hide details ▾") if show_log
-                                else QCoreApplication.translate("window", "Show details ▸"))
+        # The package area: the layout's own package page, or the log, in one place
+        # of one size (ONEUP-0239 §4.5). It always opens on the packages; the old
+        # `log_shown` setting is no longer read (§3).
+        self.package_area = QStackedWidget()
+        self.package_area.addWidget(self.log)
+
+        # The download-size link and its result, moved out of the system row
+        # (ONEUP-0239 §4.6). Each layout places it.
+        self.size_link = SizeLink(partial(run.request_size, self, "system"))
 
         # Last-run line.
-        self.last_run = QLabel()
+        self.last_run = ElidedLabel()
         self.last_run.setObjectName("LastRun")
         self.last_run.setAccessibleName(QCoreApplication.translate("window", "Last update run"))
-        root.addWidget(self.last_run)
         self.refresh_last_run()
 
-        # Tab order must follow the VISUAL order, for EVERY control rather than
-        # the first eleven: what setTabOrder does not state falls back to
-        # parenting order, which is where the warning banner's backwards chain
-        # came from — its own button is parented before Copy command is inserted
-        # ahead of it (ONEUP-0064, ui-and-accessibility.md §5.6).
-        for a, b in itertools.pairwise(self.focus_chain()):
-            self.setTabOrder(a, b)
+        # Everything below the header is the current layout's to arrange. An
+        # unknown stored id shows Rows and is left as stored (§4.7).
+        self.apply_layout(self._layout_id())
 
         # Restore the last size + position, if we saved one before.
         geo = self.settings.value("geometry")
@@ -678,7 +723,6 @@ class Updater(QMainWindow):
             self.restoreGeometry(geo)
         # On Wayland restoreGeometry() brings back the size only; the position is replayed
         # through KWin on each show (ONEUP-0246, showEvent).
-        self._placement_pending = False
 
         # Non-blocking: is there a newer OneUp release? Only if the user lets it ask.
         if self.appcheck_btn.isChecked():
@@ -877,6 +921,11 @@ class Updater(QMainWindow):
         if (event.type() in (QEvent.Type.StyleChange, QEvent.Type.FontChange)
                 and obj in (self.check_btn, self.stop_btn)):
             QTimer.singleShot(0, self._pin_check_stop_width)
+        if (event.type() in (QEvent.Type.StyleChange, QEvent.Type.FontChange)
+                and obj is self.log_toggle):
+            # Every size a layout takes from the font is re-taken with it (§4.2).
+            QTimer.singleShot(0, self._pin_log_toggle_width)
+            QTimer.singleShot(0, self._remeasure_layout)
         if (self._placement_pending and event.type() == QEvent.Type.Expose
                 and obj is self.windowHandle()):
             QTimer.singleShot(0, self._restore_position)
@@ -893,6 +942,18 @@ class Updater(QMainWindow):
         self.stop_btn.setText(shown)
         for btn in (self.check_btn, self.stop_btn):
             btn.setMinimumWidth(max(widths))
+
+    def _remeasure_layout(self):
+        if self.host is not None and shiboken6.isValid(self.host):
+            self.host.apply_metrics()
+            self._fit_minimum()
+
+    def _fit_minimum(self):
+        """The window's minimum is the layout's at the current text size, never
+        below MIN_WIDTH (ONEUP-0239 §4.2 item 5). An explicit minimum stops Qt
+        taking the layout's for itself, so it is set here; a window smaller than
+        the new minimum is grown by Qt."""
+        self.setMinimumSize(self.minimumSizeHint().expandedTo(QSize(MIN_WIDTH, 0)))
 
     def _restore_position(self):
         if not self._placement_pending:     # the Expose path or the fallback got here first
@@ -1092,13 +1153,93 @@ class Updater(QMainWindow):
             self._settings_dialog.status.setText(text)
 
     def toggle_log(self):
-        self._show_log(not self.log.isVisible())
+        self._show_log(self.package_area.currentWidget() is not self.log)
 
     def _show_log(self, show: bool = True):
-        self.log.setVisible(show)
-        self.log_toggle.setText(QCoreApplication.translate("window", "Hide details ▾") if show
-                                else QCoreApplication.translate("window", "Show details ▸"))
-        self.settings.setValue("log_shown", show)
+        """Swap the package area between the layout's package page and the log, in
+        place (ONEUP-0239 §4.5). Nothing is stored: the window opens on the packages."""
+        self.package_area.setCurrentWidget(self.log if show else self.host.page)
+        self.log_toggle.setText(_log_toggle_text(show))
+
+    def _pin_log_toggle_width(self):
+        """Give the log toggle the width of the wider of its two labels."""
+        shown = self.log_toggle.text()
+        widths = []
+        for label in (_log_toggle_text(False), _log_toggle_text(True)):
+            self.log_toggle.setText(label)
+            widths.append(self.log_toggle.sizeHint().width())
+        self.log_toggle.setText(shown)
+        self.log_toggle.setMinimumWidth(max(widths))
+
+    # --- layouts (ONEUP-0239) -------------------------------------------------
+
+    def _layout_id(self) -> str:
+        """The stored layout id, or Rows for an id this version does not know."""
+        stored = str(self.settings.value("layout", DEFAULT_LAYOUT))
+        return stored if any(lid == stored for lid, _n, _c in LAYOUTS) else DEFAULT_LAYOUT
+
+    def _refresh_layout_label(self):
+        name = next(n for lid, n, _c in LAYOUTS if lid == self._layout_id())
+        self.layout_btn.setText(QCoreApplication.translate("window", "Layout: {name}").format(
+            name=QCoreApplication.translate("window", name)))
+
+    def on_layout_clicked(self):
+        ids = [lid for lid, _n, _c in LAYOUTS]
+        nxt = ids[(ids.index(self._layout_id()) + 1) % len(ids)]
+        # The id, never the label: a label is translatable (as on_theme_changed).
+        self.settings.setValue("layout", nxt)
+        self._refresh_layout_label()
+        self.apply_layout(nxt)
+
+    def _shared_widgets(self) -> list[QWidget]:
+        """The window's controls a layout places directly. Their own children move
+        with them."""
+        return [*self.rows.values(), self.action_bar, self.status, self.bar, self.bar_caption,
+                self.activity, self.message_strip, self.package_area, self.size_link,
+                self.last_run, self.rollback_btn, self.log_toggle, self.openlog_btn]
+
+    def apply_layout(self, layout_id: str):
+        """Arrange the window's body as `layout_id`, at once, even mid-run.
+
+        The new layout re-parents the window's controls into itself, so nothing
+        the run has drawn — badges, bars, banners, the log — is lost. The old
+        layout gives back its model callbacks before it is deleted, or the next
+        marker would call into a deleted widget (§4.1)."""
+        cls = next((c for lid, _n, c in LAYOUTS if lid == layout_id), RowsLayout)
+        # A re-parented widget is hidden by Qt until shown again, so each one's
+        # own visibility is carried across by hand. "Hidden" means hidden on
+        # purpose: a widget never yet shown also reports isHidden().
+        explicit = Qt.WidgetAttribute.WA_WState_ExplicitShowHide
+        hidden = {w: w.isHidden() and w.testAttribute(explicit) for w in self._shared_widgets()}
+        old = self.host
+        log_current = old is not None and self.package_area.currentWidget() is self.log
+        if old is not None:
+            old.release()
+        new = cls(self)
+        self.package_area.insertWidget(0, new.page)
+        self.package_area.setCurrentWidget(self.log if log_current else new.page)
+        if old is None:
+            self._card_root.addWidget(new, 1)
+        else:
+            self._card_root.replaceWidget(old, new)
+            self.package_area.removeWidget(old.page)
+            shiboken6.delete(old.page)
+            shiboken6.delete(old)
+        self.host = new
+        # Qt would show the new layout from the event queue; until then it counts
+        # as empty, and the minimum below would be measured without it.
+        new.setVisible(True)
+        for w, was_hidden in hidden.items():
+            w.setVisible(not was_hidden)
+        new.apply_metrics()
+        new.refresh()
+        self._fit_minimum()
+        # Tab order must follow the VISUAL order, for EVERY control: what
+        # setTabOrder does not state falls back to parenting order, which is
+        # where the warning banner's backwards chain came from (ONEUP-0064,
+        # ui-and-accessibility.md §5.6).
+        for a, b in itertools.pairwise(self.focus_chain()):
+            self.setTabOrder(a, b)
 
     def open_log(self):
         if self._log_path and self._log_path.exists():
@@ -1111,28 +1252,16 @@ class Updater(QMainWindow):
                                         "opens here."))
 
     def focus_chain(self) -> list[QWidget]:
-        """Every focusable control in the window, in the order it is laid out.
+        """Every focusable control in the window, in the order it is laid out:
+        the header's three buttons, then the current layout's own chain.
 
-        Top to bottom, then along each row: within a task row that is the
-        disclosure and the switch, then the detail panel underneath it. Stated as
-        one list because the chain is set from it AND asserted against the built
-        layout tree — a control added here without a place in the visual order is
-        the failure this replaces, and a second hand-written list would drift.
+        Stated as one list because the chain is set from it AND asserted against
+        the built layout tree — a control added without a place in the visual
+        order is the failure this replaces, and a second hand-written list would
+        drift. Each layout states its half (ONEUP-0239 §4.1).
         """
-        chain: list[QWidget] = [self.settings_btn, self.recenter_btn, self.about_btn]
-        for key, _t, _d in steps.TASKS:
-            r = self.rows[key]
-            chain += [r.disclosure, r.switch, r.detail_scroll]
-            # Only the system row lays its size link out; the other four are
-            # built, hidden and never given a parent, so they are not in the tree.
-            if r.size_btn.parentWidget() is not None:
-                chain.append(r.size_btn)
-        chain += [self.run_btn, self.check_btn, self.stop_btn,
-                  self.restart_btn, self.services_btn,
-                  self.warn_copy_btn, self.warn_btn, self.warn_btn2, self.retry_btn,
-                  self.appupdate_btn, self.rollback_btn,
-                  self.log_toggle, self.openlog_btn, self.log]
-        return chain
+        return [self.settings_btn, self.recenter_btn, self.about_btn,
+                *self.host.focus_chain()]
 
     def selected_steps(self) -> list[str]:
         return [key for key, _t, _d in steps.TASKS if self.rows[key].switch.isChecked()]

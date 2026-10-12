@@ -26,7 +26,7 @@ from PySide6.QtCore import QCoreApplication, QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox
 
 from .. import APP_ID, APP_NAME
-from . import banners, i18n, markers, paths, repos, steps, tray
+from . import banners, i18n, markers, packages, paths, repos, steps, tray
 from .diagnostics import cache_bytes
 
 # How long the engine may produce NOTHING before the liveness line calls it stalled
@@ -256,21 +256,19 @@ def request_size(win, key: str):
     --dry-run`, so it stays out of the password-free --check path."""
     if key != "system" or not paths.engine_available():
         return
-    row = win.rows.get(key)
-    if not row:
-        return
+    link = win.size_link
     proc = getattr(win, "_size_proc", None)
     if proc is not None and proc.state() != QProcess.NotRunning:
         return  # a fetch is already in flight
     if not paths.log_dir_ready(win):
         return
-    row.size_pending()
+    link.size_pending()
     # The button's "up to a minute" label is invisible to a screen reader, so
     # say it out loud too — otherwise a blind user gets silence for the wait.
     win._announce(QCoreApplication.translate(
         "run",
         "Working out the download size — this can take up to a minute."),
-                   row.size_btn)
+                   link.size_btn)
     win._size_buf = ""
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     # Named as a RUN log, not `<stamp>.size.log`, because --hold means this preview may
@@ -304,11 +302,10 @@ def _on_size_output(win, final: bool = False):
         line, win._size_buf = win._size_buf.split("\n", 1)
         if line.startswith("@@SIZE@@|"):
             parts = line[len("@@SIZE@@|"):].split("|")
-            if len(parts) >= 2:
-                row = win.rows.get(parts[0])
-                if row:
-                    row.set_size_result(QCoreApplication.translate(
-                        "run", "↓ {size} to download").format(size=parts[1]))
+            # Only the system step has a size to fetch (`request_size`).
+            if len(parts) >= 2 and parts[0] == "system":
+                win.size_link.set_size_result(QCoreApplication.translate(
+                    "run", "↓ {size} to download").format(size=parts[1]))
         elif line.startswith("@@HINT@@|"):
             # The size probe failed (busy package manager, cancelled password
             # prompt). Say why in the log — the link re-arms itself for a retry
@@ -339,15 +336,15 @@ def _on_size_finished(win, exit_code: int, _status):
     # left to update, and touching its row raises (ONEUP-0204).
     if not shiboken6.isValid(win):
         return
-    row = win.rows.get("system")
-    if not row or not shiboken6.isValid(row) or row.has_size():
+    link = win.size_link
+    if not shiboken6.isValid(link) or link.has_size():
         return
     # No SIZE marker arrived. Exit 0 = solver found nothing to fetch; non-zero
     # = auth cancelled or an error, so re-arm the link for a retry.
     if exit_code == 0:
-        row.set_size_result(QCoreApplication.translate("run", "Nothing to download"))
+        link.set_size_result(QCoreApplication.translate("run", "Nothing to download"))
     else:
-        row.size_failed()
+        link.size_failed()
 
 
 def _engine_args(steps: list[str], check: bool = False, import_keys: bool = False,
@@ -430,9 +427,15 @@ def _reset_for_run(win, steps: list[str], check: bool):
     win.warn_btn2.setVisible(False)
     win.retry_btn.setVisible(False)
     win.rollback_btn.setVisible(False)
+    # The run state the layouts read (ONEUP-0239 §4.1), cleared before the model
+    # reset below notifies the layouts, so they redraw from a clean slate.
+    win.current_step = ""
+    win.latest_package = None
+    win.engine_finished = False
     for r in win.rows.values():
         r.clear_badge()
-        r.clear_details()
+        r.clear_progress()
+    win.size_link.reset()
     win.packages.reset()
     win.log.clear()
 
@@ -530,9 +533,16 @@ def handle_line(win, line: str):
     win.log.appendPlainText(line)
 
 
+def _refresh_layout(win):
+    """Redraw the current layout from the window's run state (ONEUP-0239 §4.1)."""
+    host = getattr(win, "host", None)
+    if host is not None and shiboken6.isValid(host):
+        host.refresh()
+
+
 def _set_activity(win, text: str):
     win.activity.setText(text)
-    win.activity.setVisible(bool(text))
+    win.activity.setVisible(bool(text))   # it keeps its line hidden (ONEUP-0239 §4.2)
 
 
 def _reset_activity(win):
@@ -663,6 +673,12 @@ def handle_marker(win, line: str):
         _tick_activity(win)   # redraw now; a 5s-stale line would name the old step
         win.bar.setFormat(win._step_caption)
         win.bar.setValue(int(index) - 1)
+        # The step's own bar (ONEUP-0239 §4.1): busy until PROGRESS gives a total.
+        row = win.rows.get(key)
+        if row:
+            row.progress_busy()
+        win.current_step = key
+        _refresh_layout(win)
         # Progress out loud: without this a blind user gets silence for the
         # whole run. Announced AFTER status.setText, so the fallback path's
         # Alert reads text that already matches.
@@ -689,6 +705,11 @@ def handle_marker(win, line: str):
             win._announce(QCoreApplication.translate(
                 "run",
                 "{title}: {badge}").format(title=row.title, badge=badge), row.badge)
+        if row:
+            row.progress_done()
+        if key and key == win.current_step:
+            win.current_step = ""
+            _refresh_layout(win)
         if status == "fail":
             win._failed_steps.append(key)
         # From here a package this step did not install or remove reads "not
@@ -738,6 +759,11 @@ def handle_marker(win, line: str):
         win.packages.add_check_item(parts)
     elif tag == "PKG":
         # One package's place in a run, key|state|name|edition[|bytes|from|repo].
+        # The latest package is set BEFORE the model notifies the layouts, and on
+        # apply's own guard, so Spotlight never names a line the model refused.
+        if (len(parts) >= 4 and parts[0] and parts[2] and parts[1] in packages.STATES
+                and (len(parts) < 5 or not parts[4] or parts[4].isdecimal())):
+            win.latest_package = (parts[0], parts[2], parts[3])
         win.packages.apply(parts)
     elif tag == "INSTALLED":
         win._installed_count = parts[0]
@@ -783,6 +809,7 @@ def handle_marker(win, line: str):
             row.set_badge(QCoreApplication.translate(
                 "run",
                 "{n}/{total}").format(n=n, total=total) if total else str(n))
+            row.set_progress(n, total)
         # Spoken once per phase, not per package: a screen reader announcing all
         # 141 packages would bury everything else, but silence through the run's
         # longest stretch is exactly what made it look hung.
@@ -946,8 +973,11 @@ def on_finished(win, exit_code: int, _status):
     win._buf = ""
     win._run_active = False
     win._liveness_active = False
+    win.engine_finished = True     # the package pages' empty sentence reads it
+    win.current_step = ""
     win._activity_timer.stop()
     _set_activity(win, "")
+    _refresh_layout(win)
     # Release the finished process so QProcess instances don't accumulate on the
     # window across a long session (each run parents a new one to win). There may be
     # no process at all: a run we merely FOLLOWED belongs to another window, and this

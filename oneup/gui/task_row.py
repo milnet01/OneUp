@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import shiboken6
-from PySide6.QtCore import QCoreApplication, Qt
+from PySide6.QtCore import QCoreApplication, QSize, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -18,6 +18,17 @@ from .toggle_switch import ToggleSwitch
 # room for "3 installed  ·  42s" and its kind. Longer text elides (ONEUP-0239 §4.1).
 _BADGE_CHARS = 20
 FORMS = ("full", "rail", "tile")
+
+
+class _RowBar(QProgressBar):
+    """A thin bar: a quarter of a text line tall at the current font, so it grows
+    with the text size and never with anything else (ONEUP-0239 §4.2)."""
+
+    def sizeHint(self) -> QSize:
+        return QSize(super().sizeHint().width(), max(4, self.fontMetrics().height() // 4))
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(super().minimumSizeHint().width(), self.sizeHint().height())
 
 
 class TaskRow(QFrame):
@@ -60,7 +71,7 @@ class TaskRow(QFrame):
 
         # This step's own progress. Its meaning is in the badge's words too, so the
         # bar is never the only signal (ui-and-accessibility.md §3).
-        self.progress = QProgressBar()
+        self.progress = _RowBar()
         self.progress.setObjectName("RowProgress")
         self.progress.setTextVisible(False)
         self.progress.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -125,7 +136,6 @@ class TaskRow(QFrame):
         self.badge.setMinimumWidth(
             fm.averageCharWidth() * _BADGE_CHARS + m.left() + m.right()
             if self.form == "full" else 0)
-        self.progress.setMinimumHeight(max(4, fm.height() // 4))
         if self.form == "tile":
             nfm = self.name.fontMetrics()
             self.name.setMinimumHeight(nfm.lineSpacing() * 2)

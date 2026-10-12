@@ -97,6 +97,11 @@ class SettingsDialog(QDialog):
         root.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
+                "How the main window is arranged. Changing it keeps whatever is "
+                "running."), parent.layout_btn))
+        root.addWidget(self._row(
+            QCoreApplication.translate(
+                "settings_dialog",
                 "Make all text bigger. OneUp already follows your desktop's font "
                 "size — this enlarges it further."), parent.textsize_btn))
         root.addWidget(self._row(
@@ -155,7 +160,7 @@ class SettingsDialog(QDialog):
         """This dialog's controls, in the order the headings lay them out."""
         p = self.parent()
         return [p.auto_btn, p.auth_btn, p.autoupdate_btn, p.tray_btn, p.startboot_btn,
-                p.appcheck_btn, p.theme_combo, p.textsize_btn, p.contrast_btn,
+                p.appcheck_btn, p.theme_combo, p.layout_btn, p.textsize_btn, p.contrast_btn,
                 p.repos_btn, p.diag_btn, p.logkeep_btn, self.close_btn]
 
     def _heading(self, text: str) -> QLabel:

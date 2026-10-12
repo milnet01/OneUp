@@ -20,9 +20,9 @@ class ElidedLabel(QLabel):
     """One line of plain text, elided at the end that reads last.
 
     Its size hint is the same whatever it holds, so a new sentence moves nothing
-    around it. An empty label paints nothing at all — not even a styled
-    background — so a badge with no outcome yet leaves a blank space rather than an
-    empty pill.
+    around it. An empty label paints no text, and carries `empty="true"` so the
+    stylesheet drops its background — a badge with no outcome yet leaves a blank
+    space rather than an empty pill.
     """
 
     def __init__(self, text: str = "", parent=None):
@@ -34,6 +34,13 @@ class ElidedLabel(QLabel):
     def setText(self, text: str) -> None:
         super().setText(text)
         self.setToolTip(text)
+        # Qt paints a styled background before paintEvent runs, so an empty
+        # label's pill is the stylesheet's to drop, keyed on this property.
+        empty = "true" if not text else "false"
+        if self.property("empty") != empty:
+            self.setProperty("empty", empty)
+            self.style().unpolish(self)
+            self.style().polish(self)
 
     # With word wrap on — a Spotlight tile's title — it is an ordinary wrapping
     # label: its height follows its width, and its area allows for that.

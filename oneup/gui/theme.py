@@ -240,7 +240,8 @@ TEXT_SCALES = [("Normal", 1.0), ("Large", 1.2), ("Larger", 1.45)]
 # Font sizes as multiples of the desktop's default point size. The ratios are the
 # app's original pixel sizes over a 10 pt (~13.3 px at 96 dpi) default, so
 # "Normal" reproduces the pre-ONEUP-0028 look to within a fraction of a point.
-_FONT_SCALE = dict(fs_header=1.58, fs_med=1.05, fs_body=0.90, fs_small=0.83)
+_FONT_SCALE = dict(fs_header=1.58, fs_med=1.05, fs_body=0.90, fs_small=0.83,
+                   fs_spot=1.45)   # Spotlight's status, in large type (ONEUP-0239)
 
 _QSS = Template(r"""
 * { font-family: "Inter", "Noto Sans", "Segoe UI", "Cantarell", sans-serif; }
@@ -281,30 +282,12 @@ QLabel#Badge {
     background: $badgebg; color: $badgefg; border-radius: 9px;
     padding: $badgepad; font-size: $fs_small; font-weight: 600;
 }
-/* 24x24 is SC 2.5.8's floor for a POINTER target, width as well as height, and a
-   stylesheet minimum is what puts it in one place: the controls it applies to are
-   built in five different methods across three dialogs, and the sheet is set on
-   the application, so a dialog this spec does not check still gets the floor.
-   These are BOX dimensions, not text sizes — the no-hard-coded-px rule is about
-   `font-size` and is not engaged. */
-QToolButton#Disclose {
-    color: $tdesc; background: transparent; border: none; padding: 0px;
-    min-width: 24px; min-height: 24px;
-}
-/* The arrow has neither a fill nor a border, so the only pixels it can move on
-   hover are its ink. Both colours are existing palette keys, so every theme
-   ONEUP-0027 authors gets this for free. */
-QToolButton#Disclose:hover { color: $tname; }
-#RowDetails { background: transparent; }
-QLabel#DetailList {
-    color: $tdesc; background: $logbg; border-radius: 8px; padding: 6px 8px;
-    font-family: "JetBrains Mono", "Fira Code", "Noto Sans Mono", monospace; font-size: $fs_small;
-}
-/* A 2px rest border, present focused or not — mechanism B. Only its COLOUR moves
-   on focus, because recolouring the fill of a panel that holds its own content
-   would recolour the content. 2px and not 1px because SC 2.4.13's area half asks
-   for at least a 2px perimeter, which a 1px recolour does not reach. */
-QScrollArea#DetailScroll { border: 2px solid $logbd; background: transparent; }
+/* A badge with nothing to say keeps its space and shows nothing in it
+   (ONEUP-0239 §4.1); Qt paints the pill before the label can decline to. */
+QLabel#Badge[empty="true"] { background: transparent; }
+/* A row's own bar: thin, its height set by the widget from the font. */
+QProgressBar#RowProgress { min-height: 0px; border-radius: 2px; }
+QProgressBar#RowProgress::chunk { border-radius: 2px; }
 QLabel#SizeResult { color: $tname; font-size: $fs_body; font-weight: 600; }
 
 QPushButton#RunBtn {
@@ -385,6 +368,25 @@ QPlainTextEdit#Log {
     border: 2px solid $logbd; border-radius: 10px; padding: 6px;
     font-family: "JetBrains Mono", "Fira Code", "Noto Sans Mono", monospace; font-size: $fs_small;
 }
+/* The package views share the log's place and are scrolling content like it, so
+   they take its panel and its focus mechanism B: a 2px rest border, present
+   focused or not, whose COLOUR alone moves on focus — recolouring the fill of a
+   panel that holds its own content would recolour the content (ONEUP-0239 §4.8). */
+QTableView#PackageTable, QListView#PackageBoard, QListView#PackageLists {
+    background: $logbg; color: $logfg;
+    border: 2px solid $logbd; border-radius: 10px;
+}
+QTableView#PackageTable QHeaderView::section {
+    background: $logbg; color: $logfg; font-weight: 600;
+    border: none; border-bottom: 1px solid $logbd; padding: 4px 6px;
+}
+/* These paint nothing, so every button on them rests on the card and takes the
+   card's focus pair. */
+#PackageFilter, #PackageSummary, #SpotlightPanel { background: transparent; }
+#SpotlightPanel QLabel#Status { font-size: $fs_spot; font-weight: 600; }
+QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border: none; }
+/* The size strip is painted, so its ink arrives as a property. */
+#SizeStrip { qproperty-ink: $tname; }
 /* The two dialog panels, on `win` rather than on the card. Same mechanism, same
    2px rest border; both were unnamed until ONEUP-0076 named them, which is what
    let two OneUp-built focusable widgets sit outside the sweep entirely. */
@@ -446,7 +448,7 @@ QToolTip {
    One object name can rest on several surfaces, and each of those takes a
    selector QUALIFIED by the nearest container unique to it, never a rename:
    #Card contains every on-card case and is useless as a qualifier, while
-   #RowCard, #RowDetails, #WarnBanner and #DialogButtons each contain exactly
+   #RowCard, #WarnBanner and #DialogButtons each contain exactly
    one surface. Qt resolves them by specificity, so the qualified rule wins. */
 QPushButton#RunBtn:focus, QPushButton#BannerBtn:focus {
     background: $accentfocus; color: $accentfocusink;
@@ -473,15 +475,13 @@ QComboBox#ThemeCombo:focus {
 }
 
 QPushButton#LinkBtn:focus { background: $focusfill; color: $focusink; }
-#RowCard QPushButton#LinkBtn:focus, #RowDetails QPushButton#LinkBtn:focus {
+#RowCard QPushButton#LinkBtn:focus {
     background: $rowfocusfill; color: $rowfocusink;
 }
 #WarnBanner QPushButton#LinkBtn:focus { background: $warnfocusfill; color: $warnfocusink; }
 
-QToolButton#Disclose:focus { background: $rowfocusfill; color: $rowfocusink; }
-
-QPlainTextEdit#Log:focus, QScrollArea#DetailScroll:focus,
-QScrollArea#RepoScroll:focus, QListWidget#RollbackList:focus {
+QPlainTextEdit#Log:focus, QTableView#PackageTable:focus, QListView#PackageBoard:focus,
+QListView#PackageLists:focus, QScrollArea#RepoScroll:focus, QListWidget#RollbackList:focus {
     border-color: $logbdfocus;
 }
 """)
@@ -510,25 +510,33 @@ QMainWindow, QDialog { background: $win; }
 QLabel { color: $text; }
 QLabel#Header, QLabel#GroupHeading, QLabel#TaskName, QLabel#SizeResult,
 QLabel#BannerText { color: $text; }
-QLabel#Tagline, QLabel#TaskDesc, QLabel#Status, QLabel#LastRun, QLabel#DetailList,
+QLabel#Tagline, QLabel#TaskDesc, QLabel#Status, QLabel#LastRun,
 QLabel#ProgressCaption { color: $text; }
 QLabel#LastRun[stale="true"] { color: $text; font-weight: 700; }
 QLabel#Badge {
     background: $card; color: $text; border: 1px solid $border;
     padding: $badgepad; font-size: $fs_small; font-weight: 700;
 }
-QLabel#DetailList { background: $card; border: 1px solid $border; }
+QLabel#Badge[empty="true"] { background: transparent; border: none; }
+QProgressBar#RowProgress { border: 1px solid $border; }
 /* 2px, not the 1px this rule used to restate: the overlay is APPENDED, so a 1px
    border here would override the base sheet's 2px rest border and drop the focus
    cue below SC 2.4.13's area threshold in exactly the appearance mode that most
-   needs it. #DetailScroll and the two dialog panels carried no overlay rule at
-   all, so theirs are created rather than widened. */
+   needs it. The package views and the two dialog panels carried no overlay rule
+   at all, so theirs are created rather than widened. */
 QPlainTextEdit#Log { background: $card; color: $text; border: 2px solid $border; }
-QScrollArea#DetailScroll { background: transparent; border: 2px solid $border; }
+QTableView#PackageTable, QListView#PackageBoard, QListView#PackageLists {
+    background: $card; color: $text; border: 2px solid $border;
+}
+QTableView#PackageTable QHeaderView::section {
+    background: $card; color: $text; border: none; border-bottom: 1px solid $border;
+}
+#PackageFilter, #PackageSummary, #SpotlightPanel { background: transparent; }
+#SpotlightPanel QLabel#Status { color: $text; }
+QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border: none; }
+#SizeStrip { qproperty-ink: $text; }
 QScrollArea#RepoScroll { background: transparent; border: 2px solid $border; }
 QListWidget#RollbackList { background: $card; color: $text; border: 2px solid $border; }
-QToolButton#Disclose { color: $text; min-width: 24px; min-height: 24px; }
-QToolButton#Disclose:hover { color: $btnhov; }
 QProgressBar { background: $card; border: 1px solid $border; color: $text; }
 QProgressBar::chunk { background: $progchunk; }
 QToolTip { background: $card; color: $text; border: 1px solid $border; }
@@ -599,13 +607,13 @@ QPushButton#GhostBtn:focus, QPushButton#StopBtn:focus,
 /* The overlay's own link rule is the one that fails outright rather than merely
    weakening: it moves text alone, $link → $text, which is 1.65:1 dark and 1.87:1
    light. No recolour of that text can carry the cue, so it takes a fill. */
-QPushButton#LinkBtn:focus, QToolButton#Disclose:focus,
-#RowCard QPushButton#LinkBtn:focus, #RowDetails QPushButton#LinkBtn:focus,
+QPushButton#LinkBtn:focus,
+#RowCard QPushButton#LinkBtn:focus,
 #WarnBanner QPushButton#LinkBtn:focus {
     background: $btnhov; color: $btntext;
 }
-QPlainTextEdit#Log:focus, QScrollArea#DetailScroll:focus,
-QScrollArea#RepoScroll:focus, QListWidget#RollbackList:focus {
+QPlainTextEdit#Log:focus, QTableView#PackageTable:focus, QListView#PackageBoard:focus,
+QListView#PackageLists:focus, QScrollArea#RepoScroll:focus, QListWidget#RollbackList:focus {
     border-color: $hcbdfocus;
 }
 """)
@@ -931,11 +939,9 @@ def focus_keys(palette: dict) -> dict:
         # `card` — the header and action-row ghost buttons, Stop, and the three
         # link buttons that sit directly on the card.
         ("focus", palette["card"], (palette["card"],)),
-        # A row's two hover states: the disclosure arrow, every SettingsDialog
-        # row's ghost button, `size_btn` in a detail panel, and the repository
-        # dialog's Remove link. One fill has to clear 3:1 on BOTH, which is what
-        # the disclosure paragraph in §4.2 exists to show — a fill derived from
-        # `rowcard` alone measures 2.83:1 on `rowhov`.
+        # A row's two hover states: every SettingsDialog row's ghost button and
+        # the repository dialog's Remove link. One fill has to clear 3:1 on BOTH
+        # — a fill derived from `rowcard` alone measures 2.83:1 on `rowhov`.
         ("rowfocus", palette["rowcard"], (palette["rowcard"], palette["rowhov"])),
         # A dialog's own Close / Cancel, in its button strip rather than a row.
         ("winfocus", palette["win"], (palette["win"],)),
@@ -1033,7 +1039,7 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
     # derived from `rowcard` alone measures 2.83:1 on `rowhov`.
     for control, prefix, surfaces in (
         ("ghost / link / stop on the card", "focus", (palette["card"],)),
-        ("disclosure and row buttons", "rowfocus",
+        ("row buttons", "rowfocus",
          (palette["rowcard"], palette["rowhov"])),
         ("dialog Close / Cancel", "winfocus", (palette["win"],)),
         ("warning-banner buttons", "warnfocus", tint),
@@ -1063,7 +1069,7 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
         # would take the only colour-independent cue this app has with it.
         add(control, "state shape", palette["switchmark"], keys[key], FOCUS_MIN)
         add(control, "knob", palette["switchknob"], keys[key], FOCUS_MIN)
-    add("log / detail / dialog panels", "border",
+    add("log / package / dialog panels", "border",
         keys["logbdfocus"], palette["logbd"], FOCUS_MIN)
 
     # The rest and hover colours this item MOVED, on every surface they land on
@@ -1085,12 +1091,6 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
     add("stop button, rest border", "border", palette["stopfg"], palette["card"], FOCUS_MIN)
     add("stop button, hover border", "border", palette["stophov"],
         palette["card"], FOCUS_MIN)
-    # The disclosure carries meaning without being text, so 3:1 is its floor;
-    # both values clear 4.5:1 as well.
-    for control, colour in (("disclosure, rest", palette["tdesc"]),
-                            ("disclosure, hover", palette["tname"])):
-        for s in (palette["rowcard"], palette["rowhov"]):
-            add(control, "text", colour, s, FOCUS_MIN)
     return rows
 
 

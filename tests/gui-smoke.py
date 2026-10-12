@@ -118,8 +118,10 @@ from oneup.gui import (  # noqa: E402 — same reason.
     banners,
     contrast,
     diagnostics,
+    elided_label,
     i18n,
     markers,
+    package_views,
     packages,
     paths,
     placement,
@@ -1251,29 +1253,32 @@ def main() -> int:
     run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("check: no reboot banner", not w.reboot_banner.isVisibleTo(w))
 
-    # --- 5b. CHECK_ITEM: the expandable per-package preview ---------------------
+    # --- 5b. CHECK_ITEM: each package reaches the package page -----------------
     # CHECK_ITEM was the one marker in handle_marker's dispatch that no GUI scenario fed,
-    # so nothing proved the window still builds the detail rows --check emits for it.
+    # so nothing proved the window still shows the packages --check emits it for.
+    def _package_lines(win):
+        """Every package line the current layout's views show, one string per
+        package per view, its columns joined — read from the views' own models."""
+        out = []
+        for items in vars(win.host).values():
+            if isinstance(items, package_views.PackageItems):
+                for r in range(items.rowCount()):
+                    out.append(" | ".join(items.data(items.index(r, c))
+                                          for c in range(items.columnCount())))
+        return out
+
     wI = window.Updater()
     wI._check_mode = True
     run.handle_line(wI, "@@CHECK_ITEM@@|system|bash|5.2.21|5.2.37")
     run.handle_line(wI, "@@CHECK_ITEM@@|system|zypper")
-    _detail = wI.rows["system"]._items_label.text()
-    check("a changed package lands in the detail panel with both versions",
-          "bash" in _detail and "5.2.21" in _detail and "5.2.37" in _detail)
+    _detail = _package_lines(wI)
+    check("a changed package lands in the package page with both versions",
+          any("bash" in t and "5.2.21" in t and "5.2.37" in t for t in _detail))
     check("a package with no version pair still lists its name",
-          any(ln.split()[:1] == ["zypper"] for ln in _detail.splitlines()))
-    check("the detail disclosure appears once there is something to show",
-          not wI.rows["system"].disclosure.isHidden())
-    # Qt does not mirror an arrow type, so the closed arrow follows the direction
-    # itself (ONEUP-0032 §4.4); the -reverse pass is what sees the left one.
-    _closed = Qt.ArrowType.LeftArrow if app.isRightToLeft() else Qt.ArrowType.RightArrow
-    _dis = wI.rows["system"].disclosure
-    check("the closed disclosure arrow points along the reading direction",
-          _dis.arrowType() == _closed)
-    _dis.setChecked(True)
-    _dis.setChecked(False)
-    check("and points that way again once collapsed", _dis.arrowType() == _closed)
+          any("zypper" in t for t in _detail))
+    _body = wI.host.bodies[0]
+    check("the package page shows its view once there are packages, not the sentence",
+          _body.currentWidget() is _body.content)
 
     # --- 5b-i. ONEUP-0259: the package model -----------------------------------
     # The engine's CHECK_ITEM and PKG lines land in one model, which the row's
@@ -1289,10 +1294,9 @@ def main() -> int:
     check("ONEUP-0259 CHECK_ITEM fills the model with versions, size and source",
           len(_vlc) == 1 and (_vlc[0].old, _vlc[0].edition, _vlc[0].size, _vlc[0].repo)
           == ("3.0-1.1", "3.0-2.1", 222, "Packman"))
-    _detail = wP.rows["system"]._items_label.text()
-    check("ONEUP-0259 the row's list shows the size and the state as a word",
-          "222 B" in _detail
-          and _word("queued") in _detail)
+    _detail = _package_lines(wP)
+    check("ONEUP-0259 the package page shows the size and the state as a word",
+          any("222 B" in t and _word("queued") in t for t in _detail))
     _before = [(p.name, p.state) for p in wP.packages.packages()]
     for bad in ("@@PKG@@|system|installed",                 # too few fields
                 "@@PKG@@|system|exploded|vlc|3.0-2.1",       # not a state
@@ -1317,16 +1321,14 @@ def main() -> int:
     check("ONEUP-0259 INV-13 every state the model accepts, plus unchanged, has a word",
           set(steps.STATE_WORDS) == {*packages.STATES, "unchanged"} and all(_words))
     check("ONEUP-0259 INV-13 no two states share a word", len(set(_words)) == len(_words))
-    _lines = wP.rows["system"]._items_label.text().splitlines()
-    check("ONEUP-0259 INV-13 the redrawn list shows the table's word for each package",
-          any(ln.split()[0] == "a" and ln.endswith(_word("installed")) for ln in _lines)
-          and any(ln.split()[0] == "b" and ln.endswith(_word("unchanged")) for ln in _lines))
+    # ONEUP-0259 INV-13's "the redrawn list shows the table's word" moved to
+    # ONEUP-0239 INV-3, which reads every layout's views (ONEUP-0239 §7).
     _calls = []
     wP.packages.subscribe(_calls.append)
     run._reset_for_run(wP, ["system"], check=True)
     check("ONEUP-0259 a new check or run empties the model and says so once, with None",
           wP.packages.packages() == [] and _calls == [None]
-          and wP.rows["system"]._items_label.text() == "")
+          and _package_lines(wP) == [])
 
     # --- 5c. @@HINT@@ goes through the parser, not straight into _hints ---------
     # Every other hint scenario assigns w._hints directly, so the dispatch line that
@@ -1526,15 +1528,14 @@ def main() -> int:
     wS._size_buf = ""
     wS._size_proc = _StubProc("weighing things up\n@@SIZE@@|system|412 MB\n")
     run._on_size_output(wS)
-    check("a SIZE marker reaches the system row",
-          "412 MB" in wS.rows["system"].size_result.text())
-    # isVisibleTo(row) would be False here whatever set_size_result did — size_btn lives
-    # inside the collapsed `details` frame, so the row is the wrong ancestor to ask about.
-    # Ask about the frame it actually sits in, which isolates the button's own visibility.
+    # The link and its result are one window-level slot since ONEUP-0239 §4.6.
+    check("a SIZE marker reaches the download-size slot",
+          "412 MB" in wS.size_link.size_result.text())
+    # isVisibleTo(the slot) isolates the button's own visibility from the window's.
     check("a SIZE marker retires the 'Show download size' link",
-          not wS.rows["system"].size_btn.isVisibleTo(wS.rows["system"].details))
-    check("a SIZE marker records that the row now carries a size",
-          wS.rows["system"].has_size())
+          not wS.size_link.size_btn.isVisibleTo(wS.size_link))
+    check("a SIZE marker records that the slot now carries a size",
+          wS.size_link.has_size())
     check("a non-marker line from the size probe is logged",
           "weighing things up" in wS.log.toPlainText())
 
@@ -1544,11 +1545,11 @@ def main() -> int:
     wS0 = window.Updater()
     run._on_size_finished(wS0, 0, None)
     check("size probe exiting 0 with no marker reports nothing to download",
-          wS0.rows["system"].size_result.text() == "Nothing to download")
+          wS0.size_link.size_result.text() == "Nothing to download")
     wS1 = window.Updater()
     run._on_size_finished(wS1, 1, None)
     check("a failed size probe never claims a size it didn't earn",
-          not wS1.rows["system"].has_size())
+          not wS1.size_link.has_size())
 
     # --- 5d-i. ONEUP-0044: the held engine, and what Update does with it --------
     # The engine half is covered in tests/run-tests.sh; this is the window half of
@@ -1899,7 +1900,8 @@ def main() -> int:
         "app = QApplication([])\n"
         "theme.apply_app_theme(app)\n"
         "w = window.Updater()\n"
-        "print(w.tray_btn.isChecked(), w.contrast_btn.isChecked(), w.log.isHidden(),\n"
+        "print(w.tray_btn.isChecked(), w.contrast_btn.isChecked(),\n"
+        "      w.package_area.currentWidget() is w.log, w.host.LAYOUT_ID,\n"
         "      w._text_scale_index(),\n"
         "      'qproperty-highContrast: true' in app.styleSheet())\n")
     _old_env = {"HOME": str(_old), "XDG_CONFIG_HOME": str(_old / "config"),
@@ -1910,8 +1912,11 @@ def main() -> int:
     _seen = subprocess.run(  # noqa: S603 — the running interpreter, a fixed script.
         [sys.executable, "-c", _read_old],
         capture_output=True, text=True, env=_old_env, timeout=60).stdout.split()
-    check("a 1.x OneUp.conf is honoured: tray, contrast, hidden log, text size, stylesheet",
-          _seen == ["True", "True", "True", "2", "True"])
+    # `log_shown` is deliberately no longer read: the window opens on the packages
+    # every launch, and a 1.x user gets Rows, the default (ONEUP-0239 §3).
+    check("a 1.x OneUp.conf is honoured: tray, contrast, text size, stylesheet; "
+          "it opens on the packages, in Rows",
+          _seen == ["True", "True", "False", "rows", "2", "True"])
     # The window's own reads are not every reader: the tray decision at start-up and the
     # repository dialog's size build their own QSettings. Each must name the same file.
     _orgs = sorted({m for _f in (REPO / "oneup" / "gui").glob("*.py")
@@ -3519,12 +3524,12 @@ def main() -> int:
     # next run (clear_badge routes through _render_badge for exactly this reason).
     # The size probe's wait is announced, since the button label is invisible to a
     # screen reader (the figure itself can take tens of seconds to arrive).
-    wB.rows["system"].size_requested.emit("system")
+    wB.size_link.size_btn.click()
     check("the download-size wait is announced, and sets the expectation",
           "up to a minute" in wB._last_announcement)
     check("the size button says the wait is expected",
-          "up to a minute" in wB.rows["system"].size_btn.text())
-    # ONEUP-0224: that emit launched the real engine. Its sudo must be this suite's mock,
+          "up to a minute" in wB.size_link.size_btn.text())
+    # ONEUP-0224: that click launched the real engine. Its sudo must be this suite's mock,
     # refusing as a cancelled prompt does — never the system one, which opens a real
     # password dialog on the desktop.
     wB._size_proc.waitForFinished(30000)
@@ -3546,7 +3551,7 @@ def main() -> int:
                         ("activity", wT.activity), ("theme note", wT.theme_note),
                         ("warning banner", wT.warn_label),
                         ("row badge", wT.rows["system"].badge),
-                        ("size result", wT.rows["system"].size_result)):
+                        ("size result", wT.size_link.size_result)):
         check(f"the {_name} label shows engine text as plain text",
               _lbl.textFormat() == Qt.TextFormat.PlainText)
 
@@ -3580,8 +3585,8 @@ def main() -> int:
     wSF._size_proc = pSF
     pSF.start("printf", ["%s", "@@SIZE@@|system|9 MB"])
     pSF.waitForFinished(5000)
-    check("a SIZE marker with no line ending still reaches the row",
-          "9 MB" in wSF.rows["system"].size_result.text())
+    check("a SIZE marker with no line ending still reaches the size slot",
+          "9 MB" in wSF.size_link.size_result.text())
     QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     check("the finished size process is released", not shiboken6.isValid(pSF))
 
@@ -3844,7 +3849,7 @@ def main() -> int:
 
     # --- ONEUP-0064: the interface redesign ------------------------------------
     # Every sweep below REVEALS before it walks. Each banner, and stop_btn,
-    # retry_btn, warn_copy_btn, warn_btn2, rollback_btn and each row's disclosure,
+    # retry_btn, warn_copy_btn, warn_btn2 and rollback_btn,
     # is constructed hidden — and visual order and geometry are both undefined for
     # a widget that has never been laid out, so a walk that skipped them would
     # pass vacuously rather than prove anything.
@@ -3853,17 +3858,15 @@ def main() -> int:
             b.setVisible(True)
         for btn in (w.stop_btn, w.retry_btn, w.warn_copy_btn, w.warn_btn2, w.rollback_btn):
             btn.setVisible(True)
-        for r in w.rows.values():
-            r.badge.setVisible(True)
-            r.disclosure.setVisible(True)
-            r.disclosure.setChecked(True)     # expands the detail panel
         QApplication.processEvents()
 
     # A layout tree flattened to visual order: top to bottom, then along the
     # layout direction within a row. A scroll area is a leaf — recursing into one
-    # would collect Qt's own viewport and scrollbars, which are not our controls.
+    # would collect Qt's own viewport and scrollbars, which are not our controls —
+    # except the message strip, which takes no focus itself and holds the
+    # banners' buttons (ONEUP-0239 §4.4): the walk steps into its widget().
     def visual_order(widget):
-        from PySide6.QtWidgets import QAbstractScrollArea
+        from PySide6.QtWidgets import QAbstractScrollArea, QScrollArea
         out = []
 
         def walk_layout(lay):
@@ -3880,6 +3883,9 @@ def main() -> int:
             if w.focusPolicy() != Qt.FocusPolicy.NoFocus:
                 out.append(w)
             if isinstance(w, QAbstractScrollArea):
+                if (isinstance(w, QScrollArea) and w.widget() is not None
+                        and w.focusPolicy() == Qt.FocusPolicy.NoFocus):
+                    walk_widget(w.widget())
                 return
             if w.layout() is not None:
                 walk_layout(w.layout())
@@ -3909,20 +3915,25 @@ def main() -> int:
     reveal(wR)
     # INV-1, window half. Two walks and not one: Qt's focus chain is per
     # top-level widget, so a walk rooted in the window can never enter a dialog,
-    # and a single-walk test would pass the dialog half vacuously.
-    expect = [x for x in wR.focus_chain() if x.isVisible()]
-    actual = walk_chain(wR.settings_btn)
-    check("INV-1 the window's tab order follows its visual order",
-          actual == expect)
-    if actual != expect:
-        print(f"       expected {describe(expect)}")
-        print(f"       actual   {describe(actual)}")
-    laid_out = visual_order(wR.centralWidget())
-    check("INV-1 that order is the one the layout tree actually draws",
-          laid_out == expect)
-    if laid_out != expect:
-        print(f"       layout   {describe(laid_out)}")
-        print(f"       chain    {describe(expect)}")
+    # and a single-walk test would pass the dialog half vacuously. Run once per
+    # layout, each with packages in its views (ONEUP-0239 INV-9), ending on Rows.
+    run.handle_line(wR, "@@CHECK_ITEM@@|system|bash|5.2|5.3")
+    for _lid in ("rail", "spotlight", "rows"):
+        wR.apply_layout(_lid)
+        reveal(wR)
+        expect = [x for x in wR.focus_chain() if x.isVisible()]
+        actual = walk_chain(wR.settings_btn)
+        check(f"INV-1 the window's tab order follows its visual order ({_lid})",
+              actual == expect)
+        if actual != expect:
+            print(f"       expected {describe(expect)}")
+            print(f"       actual   {describe(actual)}")
+        laid_out = visual_order(wR.centralWidget())
+        check(f"INV-1 that order is the one the layout tree actually draws ({_lid})",
+              laid_out == expect)
+        if laid_out != expect:
+            print(f"       layout   {describe(laid_out)}")
+            print(f"       chain    {describe(expect)}")
 
     # INV-1, dialog half.
     wR.open_settings()
@@ -4043,8 +4054,8 @@ def main() -> int:
     # _font_metrics stops honouring the desktop font at all, because it
     # SUBSTITUTES 10.0 outright outside 6-30 pt rather than clamping, so pinning
     # 4 pt would silently test at 10 pt and prove less. #GhostBtn, #LinkBtn and
-    # #Disclose carry no font-size, so their geometry follows the application
-    # font directly and 6 pt puts both paths at their tightest in one run.
+    # carry no font-size, so their geometry follows the application font directly
+    # and 6 pt puts both paths at their tightest in one run.
     _app = QApplication.instance()
     _font_before = _app.font()
     _small = QFont(_font_before)
@@ -4063,11 +4074,12 @@ def main() -> int:
                ("retry", wT.retry_btn), ("close", tiny_dlg.close_btn),
                ("log toggle", wT.log_toggle), ("open log", wT.openlog_btn),
                ("rollback", wT.rollback_btn), ("copy command", wT.warn_copy_btn),
-               ("size", wT.rows["system"].size_btn),
+               ("size", wT.size_link.size_btn),
                ("restart", wT.restart_btn), ("services", wT.services_btn),
                ("warn", wT.warn_btn), ("warn 2", wT.warn_btn2),
                ("app update", wT.appupdate_btn)]
-    targets += [(f"{k} disclosure", wT.rows[k].disclosure) for k in wT.rows]
+    # Rows' filter buttons (ONEUP-0239 §7); layout_btn is in the dialog's chain below.
+    targets += [(f"filter {i}", b) for i, b in enumerate(wT.host.filter_buttons)]
     targets += [(f"{k} switch", wT.rows[k].switch) for k in wT.rows]
     targets += [(f"settings row {i}", b) for i, b in enumerate(tiny_dlg.focus_chain()[:-1])]
     undersized = [f"{n} {b.width()}x{b.height()}" for n, b in targets
@@ -4082,13 +4094,12 @@ def main() -> int:
     # comparing isChecked() before and after — a state comparison cannot tell one
     # toggle from three, and the double-toggle this guards against shows up as a
     # dead-looking control rather than as a throw.
+    # Once per form: a row holds the same children in every layout, arranged
+    # differently, and the body's edge moves with the arrangement (ONEUP-0239 §7).
     wC = window.Updater()
     wC.show()
     row = wC.rows["system"]
     row.badge.setText("3 waiting")
-    row.badge.setVisible(True)
-    run.handle_line(wC, "@@CHECK_ITEM@@|system|bash|5.2|5.3")   # reveals the disclosure
-    row.disclosure.setChecked(True)                 # expands the panel
     QApplication.processEvents()
     fired = []
     row.switch.toggled.connect(lambda on: fired.append(on))
@@ -4100,23 +4111,21 @@ def main() -> int:
         QApplication.processEvents()
         return len(fired)
 
-    body = QPoint(20, row.height() // 4)   # over the name/description column
-    check("INV-4 clicking a row's body toggles its switch exactly once",
-          clicks_at(row, body) == 1)
-    check("INV-4 clicking the switch itself toggles exactly once, not twice",
-          clicks_at(row.switch) == 1)
-    check("INV-4 clicking the badge does not toggle",
-          clicks_at(row, row.badge.geometry().center()
-                    + row.badge.parentWidget().pos()) == 0)
-    check("INV-4 clicking the disclosure does not toggle",
-          clicks_at(row, row.disclosure.geometry().center()
-                    + row.disclosure.parentWidget().pos()) == 0)
-    check("INV-4 clicking inside the detail panel does not toggle",
-          clicks_at(row, row.details.geometry().center()) == 0)
-    wC.set_controls_enabled(False)
-    check("INV-4 a body click is inert while the switch is disabled",
-          clicks_at(row, body) == 0)
-    wC.set_controls_enabled(True)
+    for _lid in ("rows", "rail", "spotlight"):
+        wC.apply_layout(_lid)
+        QApplication.processEvents()
+        # Over the title, which starts every form.
+        body = row.name.mapTo(row, QPoint(4, row.name.height() // 2))
+        check(f"INV-4 clicking a row's body toggles its switch exactly once ({row.form})",
+              clicks_at(row, body) == 1)
+        check(f"INV-4 clicking the switch itself toggles exactly once, not twice ({row.form})",
+              clicks_at(row.switch) == 1)
+        check(f"INV-4 clicking the badge does not toggle ({row.form})",
+              clicks_at(row, row.badge.mapTo(row, row.badge.rect().center())) == 0)
+        wC.set_controls_enabled(False)
+        check(f"INV-4 a body click is inert while the switch is disabled ({row.form})",
+              clicks_at(row, body) == 0)
+        wC.set_controls_enabled(True)
 
     # INV-7: every object name styled in the base sheet has a counterpart rule in
     # the overlay. Extracted from SELECTOR POSITION only — both templates carry
@@ -4131,13 +4140,10 @@ def main() -> int:
 
     base_names = styled_names(theme._QSS.template)
     hc_names = styled_names(theme._HC_QSS.template)
-    # Named rather than discovered: three names were base-only before this item,
-    # and a parity assertion that is red on arrival gets weakened rather than
-    # believed. #Disclose came off the list here (the 24 px floor gives it a rule
-    # in both). The other two are safe because their base rule sets no colour, so
-    # the appended overlay has nothing to leak — that is the criterion a third
-    # exemption would have to meet, and both now carry overlay rules anyway.
-    exceptions = {"RowDetails", "DetailScroll"}
+    # Named rather than discovered. The list is empty since ONEUP-0239 removed
+    # the two names it held; an exemption must show its base rule sets no colour,
+    # so the appended overlay has nothing to leak.
+    exceptions: set[str] = set()
     missing_hc = sorted((base_names - exceptions) - hc_names)
     check(f"INV-7 every styled object name has a high-contrast rule "
           f"(missing: {missing_hc})", not missing_hc)
@@ -4269,11 +4275,12 @@ def main() -> int:
     # reach one of them.
     FOCUS_TABLE = {
         "RunBtn": None, "BannerBtn": None, "RestartBtn": None,
-        "Log": None, "DetailScroll": None, "RepoScroll": None, "RollbackList": None,
+        "Log": None, "RepoScroll": None, "RollbackList": None,
+        # ONEUP-0239's package views: mechanism B, the log's rest border.
+        "PackageTable": None, "PackageBoard": None, "PackageLists": None,
         "StopBtn": {"Card"},
-        "Disclose": {"RowCard"},
         "GhostBtn": {"Card", "RowCard", "DialogButtons", "WarnBanner"},
-        "LinkBtn": {"Card", "RowCard", "RowDetails", "WarnBanner"},
+        "LinkBtn": {"Card", "RowCard", "WarnBanner"},
         # ONEUP-0027's picker and its popup. Both rules are unqualified,
         # because the picker only ever appears in one place.
         "ThemeCombo": None, "ThemeList": None,
@@ -4317,8 +4324,12 @@ def main() -> int:
 
     wU = window.Updater()
     wU.show()
-    reveal(wU)
-    gaps = uncovered(wU)
+    run.handle_line(wU, "@@CHECK_ITEM@@|system|bash|5.2|5.3")   # so the views show
+    gaps = []
+    for _lid in ("rail", "spotlight", "rows"):
+        wU.apply_layout(_lid)
+        reveal(wU)
+        gaps += uncovered(wU)
     wU.open_settings()
     su = wU._settings_dialog
     su.show()
@@ -4554,6 +4565,336 @@ def main() -> int:
         finally:
             auth._on_auth_status_finished = _orig_finished
             auth._stand_down_autoupdate = _orig_stand_down
+
+    # --- ONEUP-0239: three fixed layouts -----------------------------------------
+    # docs/specs/ONEUP-0239-fixed-layouts.md §5. Every layout is built by
+    # apply_layout, the one path the window and the Settings button both take.
+    from PySide6.QtCore import QRect, QSettings
+    from PySide6.QtWidgets import QAbstractScrollArea
+    _qs = QSettings("OneUp", "OneUp")
+    _ids = [lid for lid, _n, _c in window.LAYOUTS]
+    _patch(run, "_notify_when_away", lambda *a, **k: None)
+
+    def _at_minimum(lid):
+        """A window in layout `lid`, shown at that layout's minimum size."""
+        wL = window.Updater()
+        wL.apply_layout(lid)
+        wL.show()
+        QApplication.processEvents()
+        wL.resize(wL.minimumSize())
+        QApplication.processEvents()
+        return wL
+
+    # INV-1: nothing moves or resizes as a check or a run proceeds.
+    def _tracked(wL):
+        out = {f"row {k}": r for k, r in wL.rows.items()}
+        out.update({"package area": wL.package_area, "message strip": wL.message_strip})
+        if hasattr(wL.host, "panel"):
+            out["spotlight panel"] = wL.host.panel
+        for name in ("status", "bar", "bar_caption", "activity", "action_bar", "run_btn",
+                     "check_btn", "stop_btn", "last_run", "rollback_btn", "log_toggle",
+                     "openlog_btn", "size_link"):
+            out[name] = getattr(wL, name)
+        for k, r in wL.rows.items():
+            for part in ("name", "badge", "switch", "progress"):
+                out[f"{k} {part}"] = getattr(r, part)
+        return out
+
+    def _geometry(wL, wd):
+        return QRect(wd.mapTo(wL, QPoint(0, 0)), wd.size())
+
+    for _lid in _ids:
+        wM = _at_minimum(_lid)
+        tracked, first, moved = _tracked(wM), {}, []
+
+        def stage(label, wM=wM, tracked=tracked, first=first, moved=moved):
+            QApplication.processEvents()
+            for name, wd in tracked.items():
+                if not wd.isVisible():
+                    continue          # never laid out, or hidden: not a place (§5 INV-1)
+                g = _geometry(wM, wd)
+                if name not in first:
+                    first[name] = g
+                elif g != first[name]:
+                    moved.append(f"{name} at {label}: {first[name].getRect()} -> {g.getRect()}")
+
+        stage("idle")
+        run._reset_for_run(wM, ["system", "flatpak"], check=True)
+        wM.set_controls_enabled(False)
+        for i in range(200):
+            run.handle_line(
+                wM, f"@@CHECK_ITEM@@|system|package-{i}|1.{i}|1.{i + 1}|{i * 997}|repo-{i}")
+        run.handle_line(wM, "@@CHECK@@|system|200")
+        run.handle_line(wM, "@@CHECK@@|TOTAL|200")
+        stage("check")
+        run.on_finished(wM, 0, None)
+        stage("check finished")
+        run._reset_for_run(wM, ["system", "flatpak"], check=False)
+        wM._run_active = True
+        wM.set_controls_enabled(False)
+        stage("run started")
+        for line in ("@@STEP_BEGIN@@|system|1|2", "@@PROGRESS@@|system|3|200|download",
+                     *(f"@@PKG@@|system|downloading|package-{i}|1.{i + 1}|{i * 997}|1.{i}|repo-{i}"
+                       for i in range(40)),
+                     "@@PROGRESS@@|system|40|200|install"):
+            run.handle_line(wM, line)
+        stage("run progress")
+        run._set_activity(wM, "Fetching repo-oss — 4m · 12 MiB of 40 MiB · still working")
+        stage("activity")
+        wM._reboot, wM._services = True, "cups.service"
+        wM._hints, wM._hint_commands = ["Something failed."], ["sudo zypper refresh"]
+        wM._remedy_skips, wM._remedy_keys = ["repo-oss"], True
+        wM._failed_steps = ["system"]
+        wM._sys_changed, wM._snapshot = True, "42"
+        wM.appupdate_label.setText("OneUp 9.9 is available.")
+        wM.appupdate_banner.setVisible(True)
+        run.on_finished(wM, 1, None)
+        stage("finished with every banner")
+        wM._show_log(True)
+        stage("log page")
+        check(f"ONEUP-0239 INV-1 nothing moves or resizes as a check and a run proceed "
+              f"({_lid}: {len(moved)} moved)", not moved)
+        for m in moved[:8]:
+            print(f"       {m}")
+        check(f"ONEUP-0239 INV-1 the stages showed every banner and Stop ({_lid})",
+              all(wd.isVisible() for wd in (wM.reboot_banner, wM.services_banner,
+                                             wM.warn_banner, wM.appupdate_banner))
+              and "stop_btn" in first and "rollback_btn" in first)
+
+    # INV-2: no text outside a scroll area is cut off, at every text size.
+    _scale0 = _qs.value("text_scale", 1.0, type=float)
+    for _label, _mult in theme.TEXT_SCALES:
+        _qs.setValue("text_scale", _mult)
+        theme.apply_app_theme(QApplication.instance())
+        for _lid in _ids:
+            wC2 = _at_minimum(_lid)
+            run.handle_line(wC2, "@@CHECK_ITEM@@|system|bash|5.2|5.3|1024|repo-oss")
+            run._set_activity(wC2, "Fetching repo-oss — 4m")
+            QApplication.processEvents()
+            cut = []
+            for lbl in wC2.findChildren(QLabel):
+                if not lbl.isVisible() or not lbl.text():
+                    continue
+                node, scrolled = lbl.parentWidget(), False
+                while node is not None:
+                    if isinstance(node, QAbstractScrollArea):
+                        scrolled = True
+                        break
+                    node = node.parentWidget()
+                if scrolled:
+                    continue
+                if lbl.wordWrap():
+                    need = lbl.heightForWidth(lbl.width())
+                elif isinstance(lbl, elided_label.ElidedLabel) and lbl.toolTip() == lbl.text():
+                    need = lbl.fontMetrics().height()   # elided across, never cut down
+                else:
+                    need = lbl.sizeHint().height()
+                if lbl.height() < need:
+                    cut.append(f"{lbl.objectName() or type(lbl).__name__} "
+                               f"{lbl.height()} < {need}")
+            check(f"ONEUP-0239 INV-2 no text is cut off ({_lid}, {_label}: {cut})", not cut)
+    _qs.setValue("text_scale", _scale0)
+    theme.apply_app_theme(QApplication.instance())
+
+    # INV-3: every package view shows every package's state as a word.
+    def _six_states(wL):
+        run._reset_for_run(wL, ["system", "flatpak"], check=False)
+        for name in ("pkg-queued", "pkg-downloading", "pkg-downloaded", "pkg-installed",
+                     "pkg-removed"):
+            run.handle_line(wL, f"@@CHECK_ITEM@@|system|{name}|1|2|10|repo")
+        for name, state in (("pkg-downloading", "downloading"), ("pkg-downloaded", "downloaded"),
+                            ("pkg-installed", "installed"), ("pkg-removed", "removed")):
+            run.handle_line(wL, f"@@PKG@@|system|{state}|{name}|2")
+        run.handle_line(wL, "@@CHECK_ITEM@@|flatpak|pkg-unchanged|1|2|10|flathub")
+        run.handle_line(wL, "@@STEP_END@@|flatpak|ok|updated|0")    # supplies `unchanged`
+        return {"pkg-queued": "queued", "pkg-downloading": "downloading",
+                "pkg-downloaded": "downloaded", "pkg-installed": "installed",
+                "pkg-removed": "removed", "pkg-unchanged": "unchanged"}
+
+    for _lid in _ids:
+        w3 = window.Updater()
+        w3.apply_layout(_lid)
+        expected = _six_states(w3)
+        lines = _package_lines(w3)
+        wrong = [name for name, state in expected.items()
+                 if not [t for t in lines if name in t]
+                 or any(app.translate("steps", steps.STATE_WORDS[state]) not in t
+                        for t in lines if name in t)]
+        check(f"ONEUP-0239 INV-3 every view shows each package's state as a word "
+              f"({_lid}: wrong {wrong})", not wrong)
+
+    # INV-4: no layout writes to the package model.
+    for _lid in _ids:
+        w4 = window.Updater()
+        w4.apply_layout(_lid)
+        _six_states(w4)
+        writes = []
+        for name in ("reset", "add_check_item", "apply", "end_step"):
+            setattr(w4.packages, name, lambda *a, _n=name, _w=writes: _w.append(_n))
+        for callback in list(w4.packages._callbacks):
+            callback("system")
+            callback(None)
+        w4.host.refresh()
+        for name in ("reset", "add_check_item", "apply", "end_step"):
+            delattr(w4.packages, name)
+        check(f"ONEUP-0239 INV-4 a redraw writes nothing to the model ({_lid}: {writes})",
+              not writes)
+
+    # INV-5: a change to the model does not scroll a view.
+    for _lid in _ids:
+        w5 = _at_minimum(_lid)
+        run._reset_for_run(w5, ["system"], check=True)
+        for i in range(200):
+            run.handle_line(w5, f"@@CHECK_ITEM@@|system|package-{i}|1|2|{i + 1}|repo")
+        QApplication.processEvents()
+        views = [v for v in (getattr(w5.host, n, None)
+                             for n in ("table", "board", "next_list")) if v is not None]
+        for v in views:
+            v.scrollToBottom()
+        QApplication.processEvents()
+        before = [v.verticalScrollBar().value() for v in views]
+        run.handle_line(w5, "@@PKG@@|system|downloading|package-0|2|1|1|repo")
+        QApplication.processEvents()
+        after = [v.verticalScrollBar().value() for v in views]
+        check(f"ONEUP-0239 INV-5 a model change does not scroll a view "
+              f"({_lid}: {before} -> {after})",
+              views and all(b > 0 for b in before) and before == after)
+
+    # INV-6: switching layout during a run keeps the run's state on screen.
+    w6 = window.Updater()
+    w6.show()
+    run._reset_for_run(w6, ["system", "flatpak"], check=False)
+    w6._run_active = True
+    w6.set_controls_enabled(False)
+    for line in ("@@CHECK_ITEM@@|system|alpha|1|2|10|repo",
+                 "@@CHECK_ITEM@@|system|beta|1|2|10|repo",
+                 "@@STEP_BEGIN@@|system|1|2", "@@PROGRESS@@|system|1|2|download",
+                 "@@PKG@@|system|downloading|alpha|2"):
+        run.handle_line(w6, line)
+    banners._show_warning(w6, "A warning that must survive a layout change.")
+    w6._show_log(True)
+    QApplication.processEvents()
+
+    def _run_state(wL):
+        return (tuple((r.badge.text(), r.progress.value(), r.progress.maximum())
+                      for r in wL.rows.values()),
+                wL.status.text(), wL.bar.value(), wL.warn_banner.isVisible(),
+                wL.package_area.currentWidget() is wL.log, wL.current_step, wL.latest_package,
+                tuple((p.name, wL.packages.shown_state(p)) for p in wL.packages.packages()))
+
+    for _lid in (*_ids[1:], _ids[0]):
+        held = _run_state(w6)
+        w6.apply_layout(_lid)
+        QApplication.processEvents()
+        check(f"ONEUP-0239 INV-6 a switch to {_lid} mid-run keeps the run's state",
+              _run_state(w6) == held)
+        try:
+            run.handle_line(w6, "@@PKG@@|system|downloaded|alpha|2")
+            raised = ""
+        except Exception as exc:  # noqa: BLE001 — the point is that nothing raises
+            raised = repr(exc)
+        check(f"ONEUP-0239 INV-6 and a PKG line after it raises nothing ({_lid}: {raised})",
+              not raised)
+        check(f"ONEUP-0239 INV-6 and reaches the new layout's views ({_lid})",
+              any("alpha" in t and app.translate("steps", "downloaded") in t
+                  for t in _package_lines(w6)))
+        check(f"ONEUP-0239 INV-6 only the current layout listens to the model ({_lid})",
+              len(w6.packages._callbacks) == 1)
+        run.handle_line(w6, "@@PKG@@|system|downloading|beta|2")   # a fresh state to carry
+
+    # INV-7: each layout lays out every shared control exactly once.
+    def _layout_tree(lay, out):
+        for i in range(lay.count()):
+            item = lay.itemAt(i)
+            if item.widget() is not None:
+                out.append(item.widget())
+                if item.widget().layout() is not None:
+                    _layout_tree(item.widget().layout(), out)
+            elif item.layout() is not None:
+                out.append(item.layout())
+                _layout_tree(item.layout(), out)
+        return out
+
+    for _lid in _ids:
+        w7 = window.Updater()
+        w7.apply_layout(_lid)
+        reached = _layout_tree(w7.host.layout(), [])
+        shared = [*w7.rows.values(), w7.action_bar, w7.status, w7.bar, w7.bar_caption,
+                  w7.activity, w7.message_strip, w7.package_area, w7.log, w7.last_run,
+                  w7.rollback_btn, w7.log_toggle, w7.openlog_btn, w7.size_link]
+        counts = {wd.objectName() or type(wd).__name__: sum(x is wd for x in reached)
+                  for wd in shared}
+        check(f"ONEUP-0239 INV-7 every shared control is laid out exactly once "
+              f"({_lid}: {counts})", all(n == 1 for n in counts.values()))
+        stack = _layout_tree(w7.message_strip.widget().layout(), [])
+        check(f"ONEUP-0239 INV-7 the four banners are laid out in the message strip ({_lid})",
+              all(sum(x is b for x in stack) == 1
+                  for b in (w7.reboot_banner, w7.services_banner, w7.warn_banner,
+                            w7.appupdate_banner)))
+        check(f"ONEUP-0239 INV-7 the header is in no layout ({_lid})",
+              not any(x is w7.header_row or x is w7.settings_btn for x in reached))
+
+    # INV-8: the setting stores an id, cycles in order, and survives an unknown value.
+    _layout0 = _qs.value("layout")
+    _qs.remove("layout")
+    w8 = window.Updater()
+    check("ONEUP-0239 INV-8 with no stored value the window builds Rows",
+          w8.host.LAYOUT_ID == "rows")
+    seen = []
+    for _ in range(3):
+        w8.layout_btn.click()
+        seen.append((_qs.value("layout"), w8.host.LAYOUT_ID))
+    check(f"ONEUP-0239 INV-8 three clicks store and apply rail, spotlight, rows ({seen})",
+          seen == [("rail", "rail"), ("spotlight", "spotlight"), ("rows", "rows")])
+    _qs.setValue("layout", "nonsense")
+    w8b = window.Updater()
+    check("ONEUP-0239 INV-8 an unknown stored id builds Rows and is left as stored",
+          w8b.host.LAYOUT_ID == "rows" and _qs.value("layout") == "nonsense"
+          and "Rows" in w8b.layout_btn.text())
+    if _layout0 is None:
+        _qs.remove("layout")
+    else:
+        _qs.setValue("layout", _layout0)
+
+    # INV-9's walks are the ONEUP-0064 INV-1 walks above, run once per layout and in
+    # SettingsDialog. This pins the one place the dialog's chain gained a control.
+    w9 = window.Updater()
+    _chain = settings_dialog.SettingsDialog(w9).focus_chain()
+    check("ONEUP-0239 INV-9 the Layout button follows the theme picker in Settings",
+          _chain[_chain.index(w9.theme_combo) + 1] is w9.layout_btn)
+
+    # INV-10: each state group has its own fill, and blocks run in the reading direction.
+    fills = package_views.SizeStrip.FILLS
+    check("ONEUP-0239 INV-10 the three state groups have three different fills",
+          len({fills["done"], fills["now"], fills["togo"]}) == 3)
+    strip = package_views.SizeStrip()
+    strip.resize(200, 12)
+    strip.set_blocks([("done", 100)] + [("togo", 10)] * 10)
+    image = strip.grab().toImage()
+    ink = strip.get_ink().rgb()
+    near_start = image.pixelColor(*((194, 6) if app.isRightToLeft() else (5, 6))).rgb()
+    near_end = image.pixelColor(*((5, 6) if app.isRightToLeft() else (194, 6))).rgb()
+    check(f"ONEUP-0239 INV-10 the first package's block starts the reading direction "
+          f"({'right' if app.isRightToLeft() else 'left'} edge done, the other to go)",
+          near_start == ink and near_end != ink)
+
+    # INV-11: a row's progress bar follows its own step only.
+    w11 = window.Updater()
+    sysbar, fpbar = w11.rows["system"].progress, w11.rows["flatpak"].progress
+    run.handle_line(w11, "@@STEP_BEGIN@@|system|1|2")
+    check("ONEUP-0239 INV-11 STEP_BEGIN makes its own row's bar busy and no other",
+          sysbar.maximum() == 0 and fpbar.maximum() == 1 and fpbar.value() == 0)
+    run.handle_line(w11, "@@PROGRESS@@|system|3|10|download")
+    check("ONEUP-0239 INV-11 PROGRESS sets it to 3 of 10",
+          (sysbar.value(), sysbar.maximum()) == (3, 10))
+    run.handle_line(w11, "@@STEP_END@@|system|ok|installed|3")
+    check("ONEUP-0239 INV-11 STEP_END fills it",
+          sysbar.maximum() > 0 and sysbar.value() == sysbar.maximum())
+    run.handle_line(w11, "@@STEP_BEGIN@@|flatpak|2|2")
+    run.handle_line(w11, "@@PROGRESS@@|flatpak|1|0|download")
+    check("ONEUP-0239 INV-11 a total of 0 leaves the bar busy rather than at 1 of 0",
+          fpbar.maximum() == 0 and sysbar.value() == sysbar.maximum())
+    _unpatch_all()
 
     # ONEUP-0204: nothing this suite starts may outlive it. With no event loop running, a
     # probe that has exited is never reaped, so at interpreter exit Qt destroys it as

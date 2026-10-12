@@ -146,7 +146,7 @@ class RepoManagerDialog(QDialog):
         scroll.setAccessibleName(QCoreApplication.translate("repos", "Repository list"))
         # Named `repo_scroll`, not `scroll`: a plain `self.scroll` shadows the
         # inherited QWidget.scroll(dx, dy), so any later call to it would raise
-        # TypeError. Matches `detail_scroll` in task_row.py.
+        # TypeError.
         self.repo_scroll = scroll
         self._populate(repos)
         root.addWidget(scroll, 1)
