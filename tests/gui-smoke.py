@@ -3859,6 +3859,9 @@ def main() -> int:
         ed = QPlainTextEdit()
         ed.setPlainText("\n".join(f"line {i}" for i in range(200)))
         ed.resize(240, 160)
+        # Away from the offscreen pointer at the origin: mirrored, the bar sits on
+        # the left edge under it, and the handle would wear its hover colour.
+        ed.move(400, 400)
         ed.show()
         QApplication.processEvents()
         sb = ed.verticalScrollBar()

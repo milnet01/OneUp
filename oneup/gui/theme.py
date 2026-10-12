@@ -404,9 +404,9 @@ QListWidget#RollbackList {
    edge on a neutral surface, held to 3:1. No step arrows: styling a bar means
    styling every sub-control, and the wheel, the keyboard and the trough's own
    page-click all still scroll. */
+QScrollBar::handle { background: $ghostbd; border-radius: 4px; }
 QScrollBar:vertical { background: transparent; border: none; width: 14px; margin: 0; }
 QScrollBar:horizontal { background: transparent; border: none; height: 14px; margin: 0; }
-QScrollBar::handle { background: $ghostbd; border-radius: 4px; }
 QScrollBar::handle:vertical { min-height: 32px; margin: 3px; }
 QScrollBar::handle:horizontal { min-width: 32px; margin: 3px; }
 QScrollBar::handle:hover, QScrollBar::handle:pressed { background: $ghosthov; }

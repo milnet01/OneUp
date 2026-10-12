@@ -99,6 +99,12 @@ SIZE_CAP_EXEMPT = {
 QSS_CAP_EXEMPT = {
     ("QComboBox#ThemeCombo::drop-down", "width"):
         "the combo box's arrow sub-control, which shows no text",
+    ("QScrollBar:vertical", "width"): "a scrollbar, which shows no text",
+    ("QScrollBar:horizontal", "height"): "a scrollbar, which shows no text",
+    ("QScrollBar::add-line, QScrollBar::sub-line", "width"):
+        "the scrollbar's step arrows, hidden at zero size; they show no text",
+    ("QScrollBar::add-line, QScrollBar::sub-line", "height"):
+        "the scrollbar's step arrows, hidden at zero size; they show no text",
 }
 # INV-7's closed list: every call that hands a sentence to a user, with the
 # positions of the arguments that carry one. Adding a text-setting call to the
