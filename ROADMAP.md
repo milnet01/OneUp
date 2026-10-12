@@ -7531,7 +7531,7 @@ when complete (that document's §7).
   Lanes: engine, gui.
   Splits-from: ONEUP-0239.
 
-- 📋 [ONEUP-0239] **Nothing in the window moves or resizes: a fixed layout with per-step progress, one tabbed details area, and a status line.**
+- ✅ [ONEUP-0239] **Nothing in the window moves or resizes: a fixed layout with per-step progress, one tabbed details area, and a status line.**
   User feedback, 2026-10-08: buttons and boxes move and resize as detail
   appears (a row's package list opening pushes everything down), which
   reads as unprofessional. Rule wanted: everything fixed in place, and
@@ -7630,6 +7630,8 @@ when complete (that document's §7).
   measured 3 of 3 card lines, so §9's claim holds. Not flipped to
   shipped: roadmap_log refuses while ONEUP-0260, split from this item,
   is open.
+  Shipped (2026-10-12): its last open part, ONEUP-0260 (the
+  package details dialog), shipped in 119c802.
   **Layman:** Buttons and boxes stay put however much detail appears; each step gets its own progress bar and its own log tab.
   Kind: ux.
   Source: user-real-run-2026-10-08.
@@ -7651,7 +7653,7 @@ when complete (that document's §7).
   Source: user-real-run-2026-10-08.
   Lanes: gui.
 
-- 📋 [ONEUP-0260] **Package details dialog: About and What changed for one package, opened from any layout.**
+- ✅ [ONEUP-0260] **Package details dialog: About and What changed for one package, opened from any layout.**
   Part 3 of 3 split from ONEUP-0239 (user, 2026-10-12), built after
   the layouts. A modal dialog (user, 2026-10-10), never an inline
   panel. A package with neither About nor What changed shows no
@@ -7679,6 +7681,13 @@ when complete (that document's §7).
   for INV-1, 4-8 with mock zypper/rpm on _BIN; docs per spec §8;
   CHANGELOG line. (5) ./local-CI.sh green, push, then flip this and
   ONEUP-0239.
+  Shipped (2026-10-12) on v2: 5f988f2 DetailsStore and
+  PackageDetailsDialog; 22fb14a the mark, activation and current-item
+  focus fill in all three layouts, with gui-smoke scenarios for INV-1
+  and INV-4 to INV-8 (red seen first: six deliberate breaks, each
+  targeted check red); 119c802 docs per spec §8 and the CHANGELOG
+  line. Pushed with local CI green: engine 465/0, parsers 129/0,
+  gui-smoke 827/0 and 828/0 right-to-left.
   **Layman:** Clicking a package opens a window saying what it is and, once it has downloaded, what changed in the new version.
   Kind: feature.
   Source: split-from-ONEUP-0239-2026-10-12.
