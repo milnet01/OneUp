@@ -122,6 +122,12 @@ class SettingsDialog(QDialog):
                 "to the clipboard, so filing an issue doesn't mean hunting "
                 "through hidden folders."),
             parent.diag_btn))
+        root.addWidget(self._row(
+            QCoreApplication.translate(
+                "settings_dialog",
+                "Delete OneUp's update logs once they are this old. The log of "
+                "your latest update is always kept."),
+            parent.logkeep_btn))
         self.status = QLabel("")
         self.status.setObjectName("Tagline")
         root.addWidget(self.status)
@@ -150,7 +156,7 @@ class SettingsDialog(QDialog):
         p = self.parent()
         return [p.auto_btn, p.auth_btn, p.autoupdate_btn, p.tray_btn, p.startboot_btn,
                 p.appcheck_btn, p.theme_combo, p.textsize_btn, p.contrast_btn,
-                p.repos_btn, p.diag_btn, self.close_btn]
+                p.repos_btn, p.diag_btn, p.logkeep_btn, self.close_btn]
 
     def _heading(self, text: str) -> QLabel:
         lbl = QLabel(text)

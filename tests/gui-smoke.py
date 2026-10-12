@@ -3012,6 +3012,75 @@ def main() -> int:
     check("diagnostics: oversized log trimmed to its tail",
           "earlier output trimmed" in _trim and "H" * 20 not in _trim)
 
+    # --- ONEUP-0082: old run logs are pruned, never the live run's or the newest -------
+    # The log folder grows by one file per run, and the weekly timers write unattended,
+    # so every path that makes the folder prunes it by age. Ages are set with utime: the
+    # file's own name carries a timestamp too, and pruning must not read that instead.
+    _orig_dir, _orig_rs = paths.STATE_LOG_DIR, paths.RUN_STATE
+    with tempfile.TemporaryDirectory() as _pd:
+        _pdp = Path(_pd)
+        paths.STATE_LOG_DIR, paths.RUN_STATE = _pdp / "logs", _pdp / "run.state"
+        paths.STATE_LOG_DIR.mkdir()
+        _now = time.time()
+
+        def _aged(name: str, days: float) -> Path:
+            _p = paths.STATE_LOG_DIR / name
+            _p.write_text("x")
+            os.utime(_p, (_now - days * 86400, _now - days * 86400))
+            return _p
+
+        try:
+            _stale = _aged("2026-01-01_100000.check.log", 40)
+            _fresh = _aged("2026-02-01_100000.check.log", 2)
+            _live = _aged("2026-01-02_100000.log", 50)      # a run still going
+            _newest = _aged("2026-01-03_100000.log", 45)    # the newest real run
+            _older = _aged("2026-01-01_090000.log", 60)
+            paths.RUN_STATE.write_text(f"{os.getpid()}\n{_live}\nsystem\n")
+            from PySide6.QtCore import QSettings
+            _gs82 = QSettings("OneUp", "OneUp")
+            _gs82.remove("log_keep_days")
+            check("ONEUP-0082: making the log folder succeeds", paths.log_dir_ready(quiet=True))
+            check("ONEUP-0082: a log older than the default 30 days is deleted",
+                  not _stale.exists() and not _older.exists())
+            check("ONEUP-0082: a recent log is kept", _fresh.exists())
+            check("ONEUP-0082: the running run's log is kept, however old", _live.exists())
+            check("ONEUP-0082: the newest update-run log is kept, however old",
+                  _newest.exists())
+            _mid = _aged("2026-01-10_100000.check.log", 20)
+            _gs82.setValue("log_keep_days", 14)
+            paths.log_dir_ready(quiet=True)
+            check("ONEUP-0082: the Settings choice sets the age", not _mid.exists())
+            _mid = _aged("2026-01-10_100000.check.log", 20)
+            _gs82.setValue("log_keep_days", "nonsense")
+            paths.log_dir_ready(quiet=True)
+            check("ONEUP-0082: an unreadable choice falls back to 30 days", _mid.exists())
+            paths.RUN_STATE.write_bytes(b"\xff\xfe not text\n")
+            check("ONEUP-0082: a garbled run.state does not stop the log folder being made",
+                  paths.log_dir_ready(quiet=True))
+            _gs82.setValue("log_keep_days", 9)
+            check("ONEUP-0082: a value not on offer falls back to 30 days",
+                  paths.log_keep_days(_gs82.value("log_keep_days")) == 30)
+        finally:
+            _gs82.remove("log_keep_days")
+            paths.STATE_LOG_DIR, paths.RUN_STATE = _orig_dir, _orig_rs
+    # The control: a button that cycles, as Text size does, and shows the choice.
+    w82 = window.Updater()
+    w82.settings.remove("log_keep_days")
+    w82._refresh_logkeep_label()
+    check("ONEUP-0082: Keep logs starts at 30 days", "30" in w82.logkeep_btn.text())
+    w82.logkeep_btn.click()
+    check("ONEUP-0082: clicking Keep logs stores and shows the next choice",
+          w82.settings.value("log_keep_days", type=int) == 90 and "90" in w82.logkeep_btn.text())
+    for _ in range(len(paths.LOG_KEEP_DAYS) - 1):
+        w82.logkeep_btn.click()
+    check("ONEUP-0082: Keep logs cycles round to where it began",
+          w82.settings.value("log_keep_days", type=int) == 30)
+    w82.settings.remove("log_keep_days")
+    _sd82 = settings_dialog.SettingsDialog(w82)
+    check("ONEUP-0082: Keep logs is in the Settings dialog and its tab order",
+          w82.logkeep_btn.window() is _sd82 and w82.logkeep_btn in _sd82.focus_chain())
+    _sd82.reject()
+
     # --- ONEUP-0184: a bad saved value or an unwritable disk degrades, never raises ----
     # (a) a log rotated away between the glob and the stat is skipped, not raised.
     with tempfile.TemporaryDirectory() as _ld:

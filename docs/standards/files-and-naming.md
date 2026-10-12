@@ -216,7 +216,10 @@ Three directories hold everything OneUp writes at runtime:
 
 - **`~/.local/state/oneup/`** — `history.json`, `logs/`, and the four state files in
   §5.1's table; and, from the AppImage only, `engine/` — the engine copied out of the
-  bundle, one directory per digest of its source, never pruned (ONEUP-0054 §4.7)
+  bundle, one directory per digest of its source, never pruned (ONEUP-0054 §4.7).
+  `logs/` is pruned by age each time `paths.log_dir_ready` makes it, at the age the
+  user picks in Settings; the running run's log and the newest run log are always kept
+  (ONEUP-0082)
 - **`~/Documents/update-logs/`** — the engine's own copy of each run's log, kept in a
   place a user can find without being told where `.local/state` is
 - **`~/.config/`** — the window's settings, through `QSettings("OneUp", "OneUp")`, and the

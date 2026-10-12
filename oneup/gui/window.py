@@ -317,6 +317,17 @@ class Updater(QMainWindow):
         self._refresh_textsize_label()
         self.textsize_btn.clicked.connect(self.on_textsize_clicked)
 
+        # How long OneUp keeps its own logs (ONEUP-0082). Cycles like Text size: five
+        # choices fit the idiom, and the button names the current one.
+        self.logkeep_btn = QPushButton()
+        self.logkeep_btn.setObjectName("GhostBtn")
+        self.logkeep_btn.setCursor(Qt.PointingHandCursor)
+        self.logkeep_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "How long OneUp keeps its update logs before deleting them"))
+        self._refresh_logkeep_label()
+        self.logkeep_btn.clicked.connect(self.on_logkeep_clicked)
+
         self.contrast_btn = QPushButton()
         self.contrast_btn.setObjectName("GhostBtn")
         self.contrast_btn.setCheckable(True)
@@ -915,6 +926,18 @@ class Updater(QMainWindow):
         self.settings.setValue("text_scale", TEXT_SCALES[nxt][1])
         self._refresh_textsize_label()
         apply_app_theme(QApplication.instance())
+
+    def _log_keep_days(self) -> int:
+        return paths.log_keep_days(self.settings.value("log_keep_days"))
+
+    def _refresh_logkeep_label(self):
+        self.logkeep_btn.setText(i18n.counted("keep-logs", self._log_keep_days()))
+
+    def on_logkeep_clicked(self):
+        days = paths.LOG_KEEP_DAYS
+        nxt = days[(days.index(self._log_keep_days()) + 1) % len(days)]
+        self.settings.setValue("log_keep_days", nxt)
+        self._refresh_logkeep_label()
 
     def _refresh_theme_combo(self):
         """Point the combo at the stored id, without re-entering the handler.

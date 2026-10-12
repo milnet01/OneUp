@@ -8,6 +8,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **OneUp now deletes its own old update logs, after 30 days by default.** (ONEUP-0082)
+  Settings → This machine → Keep logs picks 7, 14, 30, 90 or 365 days.
+  The log of your latest update, and the log of a run still going, are
+  always kept. The weekly background check no longer fills the log
+  folder forever.
+
 - **You can stop OneUp asking GitHub for a newer version as it starts** (ONEUP-0191)
   A new "New-version check" switch in Settings, on by default. Off,
   OneUp no longer contacts GitHub when it starts or at login; the

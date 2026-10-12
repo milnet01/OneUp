@@ -111,6 +111,7 @@ class _Counted(QObject):
                 "{app} — %n update(s) waiting (some sources couldn't be checked)", "", n),
             "snapshots-thinned": lambda: self.tr("Thinned %n old snapshot(s).", "", n),
             "days-ago": lambda: self.tr("%n days ago", "", n),
+            "keep-logs": lambda: self.tr("Keep logs: %n day(s)", "", n),
             # No %n: the count picks the verb, not a number shown. Qt selects the
             # plural form from n all the same (ONEUP-0108 §4.2).
             "reboot-installed": lambda: self.tr("{items} were installed", "", n),

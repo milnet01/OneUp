@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 # Where our bundled files (the engine, the icon) live. Normally the repo root;
@@ -79,6 +80,7 @@ def log_dir_ready(win=None, quiet: bool = False) -> bool:
     failure path, so this module stays importable with no Qt at all."""
     try:
         STATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        _prune_by_setting()
         return True
     except OSError as exc:
         if quiet or win is None:
@@ -92,6 +94,62 @@ def log_dir_ready(win=None, quiet: bool = False) -> bool:
                     "paths", "OneUp couldn't create its log folder:\n{folder}\n\n{error}").format(
                         folder=STATE_LOG_DIR, error=exc))
         return False
+
+
+# How long OneUp keeps its own logs, in days — the choices Settings offers, in the
+# order its button cycles through them (ONEUP-0082). A stored value not on the list
+# means the default, so a hand-edited config can never leave the button showing one
+# age while pruning uses another.
+LOG_KEEP_DAYS = (7, 14, 30, 90, 365)
+LOG_KEEP_DEFAULT = 30
+
+
+def log_keep_days(stored) -> int:
+    """The age, in days, a stored `log_keep_days` value means."""
+    try:
+        days = int(stored)
+    except (TypeError, ValueError):
+        return LOG_KEEP_DEFAULT
+    return days if days in LOG_KEEP_DAYS else LOG_KEEP_DEFAULT
+
+
+def prune_logs(keep_days: int, keep: set[Path]) -> None:
+    """Delete the logs in `STATE_LOG_DIR` last written more than `keep_days` ago,
+    except those in `keep`. Age is the file's modification time, not the stamp in
+    its name: a long run's log is old by its start time and new by its last line.
+    A file that cannot be read or deleted is skipped — pruning never stops a run."""
+    cutoff = time.time() - keep_days * 86400
+    try:
+        logs = list(STATE_LOG_DIR.glob("*.log"))
+    except OSError:
+        return
+    for log in logs:
+        try:
+            if log not in keep and log.stat().st_mtime < cutoff:
+                log.unlink()
+        except OSError:
+            continue
+
+
+def _prune_by_setting() -> None:
+    """Prune at the age the user chose, keeping the two logs age must not decide:
+    the one a running engine names in `run.state`, and the newest update-run log,
+    which Copy diagnostics attaches to a bug report. Qt and `diagnostics` are
+    imported here, not at the top, so this module stays importable with no Qt."""
+    from PySide6.QtCore import QSettings
+
+    from .diagnostics import _latest_run_log
+    keep = set()
+    try:
+        lines = RUN_STATE.read_text().splitlines()
+        if len(lines) > 1:
+            keep.add(Path(lines[1]))
+    except (OSError, ValueError):   # unreadable or garbled: keep by age alone
+        pass
+    newest = _latest_run_log(STATE_LOG_DIR)
+    if newest is not None:
+        keep.add(newest)
+    prune_logs(log_keep_days(QSettings("OneUp", "OneUp").value("log_keep_days")), keep)
 
 
 # The lowest Python the engine runs on: `docs/standards/coding.md` §1's floor. Only
