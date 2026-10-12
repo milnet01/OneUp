@@ -1,6 +1,6 @@
 # ONEUP-0259 — one package model: name, versions, size and live state for every update
 
-**Status:** Draft
+**Status:** Reviewed
 **Kind:** feature
 **Roadmap:** ONEUP-0259
 **Branch:** v2
@@ -148,14 +148,16 @@ PKG|key|state|name|edition[|bytes|from|repo]       a run only
    alone, so a warning on stderr cannot make it ill-formed. `proc.run` returns stdout
    only, or both merged, so this needs a capture that returns them separately — a new
    `proc` helper this spec creates. The count is the number of `<update kind="package">`
-   elements. `_SKIPPED` searches stdout and stderr together. Which of the two carries the
-   skipped-repository warning in XML mode has not been measured — no repository could
-   be made to fail here without altering the system — and searching both makes the
-   answer not matter. The non-zero exit status stays the signal either way (§6).
+   elements. `_SKIPPED` searches stderr, and the text of each `<message>` element parsed
+   from stdout. The parser returns that text unescaped, so an `&apos;` cannot hide the
+   quote `_SKIPPED` matches. Which of the two carries the warning in XML mode has not
+   been measured — no repository could be made to fail here without altering the
+   system. The non-zero exit status stays the signal either way (§6).
 2. One `zypper --xmlout repos` call maps each alias to its display name. A repository with
    no name, or a call that fails, falls back to the alias.
-3. The sizes come from `oneup/engine/pkgsizes.py` (§4.5), and only when the engine is
-   given a new `--sizes` option. The window's own check passes it: `_engine_args` in
+3. The sizes come from `oneup/engine/pkgsizes.py` (§4.5). A run always looks them up. A
+   `--check` looks them up only when the engine is also given a new `--sizes` option.
+   The window's own check passes it: `_engine_args` in
    `oneup/gui/run.py` appends it beside `--check`. The tray's background
    check does not: `_tray_check_args` in `oneup/gui/tray.py` passes `--check` and
    `--log=` alone. Nor does the headless `--check --notify`.
@@ -166,10 +168,12 @@ PKG|key|state|name|edition[|bytes|from|repo]       a run only
 The parsing of step 1's XML is a function of its own in `oneup/engine/parsers.py`, so
 `tests/parsers-test.py` calls it directly (`docs/standards/testing.md` §8).
 
-**The Flatpak check** (`_check_flatpak`): `steps.flatpak_updates` returns each row's
-remote and scope (`--user` or `--system`) alongside it, and the marker becomes
-`CHECK_ITEM|flatpak|app||version|0|remote`. `bytes` stays `0` (§3 item 4). An app pending
-in both scopes at one version is one row, carrying the first scope's remote.
+**The Flatpak check** (`_check_flatpak`): `steps.flatpak_updates` returns one row per app
+and version, carrying the first remote that listed it and the set of scopes (`--user`,
+`--system`) that did. An app pending in both scopes is therefore one row, and the counts
+follow the rows: `CHECK|flatpak|n` and `run_flatpak`'s count are both the number of rows.
+The marker becomes `CHECK_ITEM|flatpak|app||version|0|remote`. `bytes` stays `0` (§3
+item 4).
 
 **A run, system step**: after the repository refresh and before `_download_pass`, the step
 lists its updates exactly as the check does — the same function, unprivileged, with the
@@ -183,21 +187,30 @@ in addition to its `PROGRESS` markers and never instead of them:
 | `( n/N) Installing:` or `Upgrading: <nvra> …done]` | `installed` |
 | `( n/N) Removing: <nvra> …done]` | `removed` |
 
-`<nvra>` is split from the right: the architecture after the last `.`, then the release
+A `Preloading:` name drops its trailing `.rpm` first. Then `<nvra>` is split from the
+right: the architecture after the last `.`, then the release
 after the last `-`, then the version after the `-` before it. What is left is the name.
 This works because neither a version nor a release may contain `-`. The edition is
 `version-release`, which keeps any `epoch:` prefix inside `version`. A `Retrieving:` line
 needs no particular ending to emit. A `Preloading:` line emits only when it ends in `[done]` or
-`[already in cache]`; an `Installing:`, `Upgrading:` or `Removing:` line only when it
-ends in `done]`.
+`[already in cache]`; an `Installing:`, `Upgrading:` or `Removing:` line only when its
+action ends in `done]`.
+
+**A package's own script can split that line.** Measured in a OneUp run log of
+2026-10-12: `(117/320) Installing: xorg-x11-server-21.1.24-2.1.x86_64 [...`, then the
+script's output (`Updating /etc/sysconfig/displaymanager ...`), then `done]` alone on
+its line; another package's closed with `.done]`. So an action line with no ending is
+held, and the next line that ends in `done]` and is not itself a zypper action line
+completes it. The next action line, or the end of the stream, drops it unemitted.
+Upgrades print `Installing:` for the new edition and no `Removing:` for the old one: in
+that log, every `Removing:` line belonged to a separate removal counter (`(1/6)`).
 `stream_filtered` runs only for the system step, so these are always `PKG|system|…`.
 
 **A run, Flatpak step**: `run_flatpak` already lists the updates before updating, to count
 them. It emits `PKG|flatpak|queued|app|version|0||remote` for each row. It then runs
 `flatpak update --user -y` and `flatpak update --system -y` separately, and either can fail
 alone. It emits `PKG|flatpak|installed|app|version` for a row only when the update of
-every scope that listed it returned 0. A row is listed once even when both scopes hold
-it, so a failure in either keeps it from `installed`.
+every scope in that row's set returned 0.
 
 **No new privileged call.** Every command above runs as the user. So no sudoers drop-in
 line changes, and `.claude/rules/engine-traps.md`'s drop-in trap does not fire.
@@ -280,11 +293,14 @@ class PackageModel:
 
 `TaskRow` drops `add_detail_item` and `_items`. It subscribes to the model and redraws its
 list from `packages(key)`, one line per package: name, `old → edition`, size, and a state
-word. The size uses the window's existing byte formatting. An unknown size prints nothing.
+word. The size uses `_format_size` in `oneup/gui/markers.py`. An unknown size prints
+nothing.
 
-The state words are `QCoreApplication.translate` strings, whole words, never colour:
-"waiting", "downloading", "downloaded", "installed", "removed" and "not changed".
-"waiting" is the `queued` state's word.
+The state words live in one table, `STATE_WORDS` in `oneup/gui/steps.py`, marked with
+`QT_TRANSLATE_NOOP` and translated where shown, as `IN_PROGRESS` beside it is. Its keys
+are the five states plus `unchanged`; its words are "waiting", "downloading",
+"downloaded", "installed", "removed" and "not changed". Whole words, never colour.
+ONEUP-0239's layouts read the same table.
 
 The disclosure arrow appears when the row's first package arrives, from either marker, as
 it does today on the first `CHECK_ITEM`. The list keeps `DetailScroll`'s maximum height.
@@ -329,12 +345,16 @@ ONEUP-0239 replaces this list, so nothing here is designed to outlive it.
   under `--check --sizes` and not under `--check`.
   *Breaks when:* the lookup ignores `Options.sizes`, or the tray passes `--sizes`.
 
-- **INV-6** The engine emits `installed` or `removed` only for a line whose action
-  completed: an `Installing:`, `Upgrading:` or `Removing:` line ending in `done]`.
-  *Test:* `tests/parsers-test.py` — the NVRA split and the state are one function, fed
-  `[...done]`, `[done]`, `[...error]` and a line cut short; only the first two yield a
-  state.
-  *Breaks when:* any `Installing:` line counts as installed.
+- **INV-6** The engine emits `installed` or `removed` only for an action that completed:
+  an `Installing:`, `Upgrading:` or `Removing:` line whose action ends in `done]`, on its
+  own line or on a later one (§4.3).
+  *Test:* `tests/parsers-test.py` — the NVRA split and the line-to-state reader are
+  called directly, over line sequences: `[...done]` and `[..done]` yield a state;
+  `[...error]` does not; an action cut at `[...`, followed by a script's line and then
+  `done]` alone, yields one; one cut and followed by the next action line yields none;
+  and `Preloading: a-1-2.x86_64.rpm [done]` yields name `a`, edition `1-2`.
+  *Breaks when:* any `Installing:` line counts as installed, a split action is lost, or
+  `.rpm` is left on a `Preloading:` name.
 
 - **INV-7** The model never shows a package as installed or removed without its own `PKG`
   line saying so. After `STEP_END`, a package in any other state reads "not changed",
@@ -380,11 +400,13 @@ ONEUP-0239 replaces this list, so nothing here is designed to outlive it.
 
 - **INV-13** Every state word in §4.7 is translatable, and two states never differ only by
   colour.
-  *Test:* `tests/i18n-check.py` fails an untranslated literal passed to a helper on its
-  list, and the helper that sets a row's package list joins that list beside `set_badge`;
-  `tests/gui-smoke.py` asserts each state in INV-7's scenario reads as a different word.
-  *Breaks when:* a state is shown by colour or an icon alone, or a word is built from
-  pieces.
+  *Test:* `tests/gui-smoke.py` asserts `STATE_WORDS` has a non-empty word for every state
+  `PackageModel.apply` accepts plus `unchanged`, that all six words differ, and that the
+  redrawn list shows the table's word for each package. **Partial**: nothing checks that
+  each entry is wrapped in `QT_TRANSLATE_NOOP`; that rests on review, as it does for
+  `IN_PROGRESS`.
+  *Breaks when:* a state is shown by colour or an icon alone, two states share a word, or
+  a word is built from pieces.
 
 ## 6. Failure modes
 
@@ -407,15 +429,16 @@ Each invariant's test is named in §5. Where they live:
 - `tests/parsers-test.py` — the XML listing parser and the NVRA split (INV-6). Unit tests,
   called directly, per `docs/standards/testing.md` §8.
 - `tests/run-tests.sh` — INV-1, INV-2, INV-3, INV-4, INV-5, INV-10, INV-11 and INV-12,
-  through the mock sandbox. The mock `zypper` gains `--xmlout list-updates` and
-  `--xmlout repos`; the mock directory gains an `ONEUP_ZYPP_RAW` tree. The existing
-  `CHECK_ITEM` assertions are not changed: the suite's `check` matches a substring
+  through the mock sandbox. Each scenario that reaches the system listing writes its own
+  mock `zypper` (the `--check` scenario's prints the text table), so each of those mocks
+  gains `--xmlout list-updates` and `--xmlout repos` output; a scenario directory gains
+  an `ONEUP_ZYPP_RAW` tree where it tests sizes. The existing `CHECK_ITEM` assertions are
+  not changed: the suite's `check` matches a substring
   (`grep -qF`), so they still pass with the new trailing fields.
 - `tests/gui-smoke.py` — INV-7, INV-8, INV-9 and INV-13's distinct words. Scenario 5b
   ("CHECK_ITEM: the expandable per-package preview") is rewritten to read the model and
   the redrawn list instead of `_items`. Its two-field `CHECK_ITEM`, and the assertion
   that such a package still lists its name, stay (§4.2).
-- `tests/i18n-check.py` — the state words (INV-13).
 
 Each new test is seen failing first: the parser tests against a stub returning nothing, the
 engine and window scenarios before the emitter or the model branch exists.
@@ -475,3 +498,4 @@ neither marker (reference §5 item 1).
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-10-12 | Q1 4 · Q2 1 · Q3 4 — 9 verified, 0 dismissed | all 9 fixed. Two lanes, each holding every question; both found the `Retrieving:` contradiction, the empty-edition gap, the merged-stderr parse risk and the Flatpak two-scope identity. Three Q1s came from settling the lanes' open questions: the tray check passes no `--notify`, the G1 citation, and the `i18n-check.py` test wording. Two measurements stay open and are written as such: zypper's XML-mode warning stream, and whether `flatpak update -y` can exit 0 after one app fails |
+| 2 | 2026-10-12 | Q1 4 · Q2 2 · Q3 1 · Q4 1 — 8 verified, 0 dismissed | all 8 fixed; the cap for a spec, so this loop's fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found the run-versus-`--sizes` contradiction and the untestable state words. One Q1 came from a measurement a lane asked for: a OneUp run log of 2026-10-12 shows a package script splitting an `Installing:` line before its `done]`. Own-fix share 5 of 8, read as a calm cap: unpropagated consequences of loop 1's decisions, not repairs of repairs. No second share: the gated change was the whole document |

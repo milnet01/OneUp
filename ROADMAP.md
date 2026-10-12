@@ -7512,6 +7512,11 @@ when complete (that document's §7).
   (/var/cache/zypp/raw/<alias>/repodata, primary.xml) carries each
   package's download size as <size package=...>, and is refreshed
   together with zypper's own index. Spec next (write-spec).
+  Spec: docs/specs/ONEUP-0259-package-model.md, Reviewed 2026-10-12
+  (review-contract, two loops to the spec cap, 17 findings fixed). Next:
+  build it with write-code. Two measurements stay open and the spec
+  says so: where zypper puts the skipped-repository warning in XML
+  mode, and whether flatpak update -y can exit 0 after one app fails.
   **Layman:** Every package waiting to update is listed with its old and new version and its download size, and each one shows waiting, downloading or installed as the update runs.
   Kind: feature.
   Source: split-from-ONEUP-0239-2026-10-12.
