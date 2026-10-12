@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Table-driven tests for the pure half of the Python engine — oneup/engine/parsers.py
-and the emitter predicates in oneup/engine/markers.py.
+and the emitter predicates in oneup/engine/markers.py — and for the window's
+Qt-free package-details parsers, oneup/gui/package_details.py (ONEUP-0260).
 
 `docs/specs/ONEUP-0054-python-engine.md` §4.3.4: `to_bytes`, the zypper progress
 wordings, the two download-size wordings, `lr` output and `lock_holder`'s text
@@ -21,12 +22,14 @@ nothing in this project discovers tests.
 import contextlib
 import io
 import sys
+import tempfile
 from pathlib import Path
 
 # The repo root, so `oneup.engine` imports without an install step.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from oneup.engine import markers, parsers
+from oneup.gui import package_details as pd
 
 PASS = 0
 FAIL = 0
@@ -242,6 +245,110 @@ UPDATE_XML = """<?xml version='1.0'?>
 """
 
 
+# --- the window's package details (oneup/gui/package_details.py) -----------
+# ONEUP-0260 §4.1 and §4.3. Qt-free on purpose, so these run here. The rpm
+# texts are built with the two separators the window's --qf formats use.
+_E, _F = "\x1e", "\x1f"
+
+INFO_TEXT = """Loading repository data...
+Reading installed packages...
+
+
+Information for package bash:
+-----------------------------
+Repository     : Main Repository (OSS)
+Name           : bash
+Version        : 5.3.20-9.1
+Upstream URL   : https://www.gnu.org/software/bash/bash.html
+Summary        : The GNU Bourne-Again Shell
+Description    :~
+    Bash is an sh-compatible command interpreter that executes commands
+    read from standard input or from a file.
+
+
+Information for package vlc:
+----------------------------
+Name           : vlc
+Summary        :~
+Description    :~
+
+package 'nosuchpkg-xyz' not found.
+""".replace("~", " ")   # zypper ends an empty value with a space
+
+
+def details_checks() -> None:
+    about = pd.parse_info(INFO_TEXT)
+    check("parse_info: bash's summary", about.get("bash") and about["bash"].summary,
+          "The GNU Bourne-Again Shell")
+    check("parse_info: the description's continuation lines, joined",
+          about.get("bash") and about["bash"].description,
+          "Bash is an sh-compatible command interpreter that executes commands\n"
+          "read from standard input or from a file.")
+    check("parse_info: the upstream address", about.get("bash") and about["bash"].url,
+          "https://www.gnu.org/software/bash/bash.html")
+    check("parse_info: a block with no summary and no description has no About",
+          "vlc" in about, False)
+    check("parse_info: a name zypper did not find has no About", "nosuchpkg-xyz" in about, False)
+
+    # INV-2. The leading "-" is the case only the name pattern rejects.
+    check("build_info_argv keeps only valid names, after fixed options",
+          pd.build_info_argv(["bash", "-rf", "a*b"]),
+          ["zypper", "--no-refresh", "--non-interactive", "info", "bash"])
+    check("build_info_argv with nothing valid is None", pd.build_info_argv(["-x"]), None)
+    check("strip_epoch drops a leading N:", pd.strip_epoch("1:2.3-4"), "2.3-4")
+    check("strip_epoch leaves an edition with none", pd.strip_epoch("5.3.20-9.1"), "5.3.20-9.1")
+
+    with tempfile.TemporaryDirectory() as root:
+        d = Path(root) / "repo-oss" / "x86_64"
+        d.mkdir(parents=True)
+        (d / "foo-2.3-4.x86_64.rpm").write_bytes(b"")
+        check("find_download: an epoched edition finds the file named without it",
+              pd.find_download("foo", "1:2.3-4", root), str(d / "foo-2.3-4.x86_64.rpm"))
+        check("find_download: an edition holding a glob character finds nothing",
+              pd.find_download("foo", "2.*", root), None)
+        check("find_download: no file is None", pd.find_download("bar", "1-1", root), None)
+
+    calls = []
+
+    def run(argv, **_kw):
+        calls.append(argv)
+        raise AssertionError("rpm must not be called")
+
+    got = pd.changelog("foo", "2.*", "installed", None, run=run)
+    check("changelog: an edition with '*' gives no entries and calls nothing",
+          (got.entries, calls), ([], []))
+
+    base = (_F.join(("bash", "5.3.20-9.1", "100", "A <a@x>", "old text")) + _E
+            + "package nosuch is not installed\n"
+            + _F.join(("kernel-default", "7.2.8-1.1", "50", "K <k@x>", "k old")) + _E
+            + _F.join(("kernel-default", "7.2.9-1.1", "60", "K <k@x>", "k new")) + _E
+            + _F.join(("libavcodec62", "1.0-1", "(none)", "(none)", "(none)")) + _E)
+    olds = {"bash": "5.3.20-9.1", "kernel-default": "7.2.8-1.1", "libavcodec62": "1.0-1"}
+    bl = pd.parse_baseline(base, olds)
+    check("parse_baseline: time, author and text", bl.get("bash"),
+          pd.Entry(100, "A <a@x>", "old text"))
+    check("parse_baseline: a multiversion name takes the line matching its old version",
+          bl.get("kernel-default"), pd.Entry(50, "K <k@x>", "k old"))
+    check("parse_baseline: (none) gives no entry", "libavcodec62" in bl, False)
+
+    # INV-3. Both new entries share the baseline's date AND author; only the text
+    # tells the baseline entry from the new one below it.
+    new = pd.parse_entries(_F.join(("200", "A <a@x>", "newest")) + _E
+                           + _F.join(("100", "A <a@x>", "same day, same author")) + _E
+                           + _F.join(("100", "A <a@x>", "old text")) + _E
+                           + _F.join(("90", "B <b@x>", "older")) + _E)
+    entries, known = pd.new_entries(new, pd.Entry(100, "A <a@x>", "old text"))
+    check("new_entries: matched on time, author and text",
+          ([e.text for e in entries], known), (["newest", "same day, same author"], True))
+    entries, known = pd.new_entries(new, None)
+    check("new_entries: no baseline shows the newest, flagged unknown",
+          (len(entries), known), (4, False))
+    entries, known = pd.new_entries(new, pd.Entry(5, "Z", "never"))
+    check("new_entries: a baseline never met is the same fallback", known, False)
+    many = pd.parse_entries(_E.join(_F.join((str(n), "A", f"t{n}")) for n in range(30, 0, -1)) + _E)
+    check("new_entries: the fallback stops at 20", len(pd.new_entries(many, None)[0]), 20)
+
+
 def main() -> int:
     for number, unit, want, why in TO_BYTES:
         check(f"to_bytes({number!r}, {unit!r}) — {why}",
@@ -378,6 +485,8 @@ def main() -> int:
         body = buf.getvalue().rstrip("\n")
         check(f"marker(HINT, {payload!r}) emits one line",
               not any(c in body for c in "\n\r\x0b\x0c"), True)
+
+    details_checks()
 
     print(f"\n  Passed: {PASS}   Failed: {FAIL}")
     return 1 if FAIL else 0
