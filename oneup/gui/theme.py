@@ -375,6 +375,9 @@ QPlainTextEdit#Log {
 QTableView#PackageTable, QListView#PackageBoard, QListView#PackageLists {
     background: $logbg; color: $logfg;
     border: 2px solid $logbd; border-radius: 10px;
+    /* The current package's focus pair, which LinesDelegate paints while the
+       view has focus. The views select nothing, so nothing else reads these. */
+    selection-background-color: $logfocusfill; selection-color: $logfocusink;
 }
 QTableView#PackageTable QHeaderView::section {
     background: $logbg; color: $logfg; font-weight: 600;
@@ -527,6 +530,7 @@ QProgressBar#RowProgress { border: 1px solid $border; }
 QPlainTextEdit#Log { background: $card; color: $text; border: 2px solid $border; }
 QTableView#PackageTable, QListView#PackageBoard, QListView#PackageLists {
     background: $card; color: $text; border: 2px solid $border;
+    selection-background-color: $hclogfocusfill; selection-color: $hclogfocusink;
 }
 QTableView#PackageTable QHeaderView::section {
     background: $card; color: $text; border: none; border-bottom: 1px solid $border;
@@ -945,6 +949,10 @@ def focus_keys(palette: dict) -> dict:
         ("rowfocus", palette["rowcard"], (palette["rowcard"], palette["rowhov"])),
         # A dialog's own Close / Cancel, in its button strip rather than a row.
         ("winfocus", palette["win"], (palette["win"],)),
+        # The current package in a focused package view, drawn by its delegate
+        # (ONEUP-0260 §4.5). An item is not a widget, so the fill reaches the
+        # views as their selection colours.
+        ("logfocus", palette["logbg"], (palette["logbg"],)),
         # Inside the warning banner: `warn_copy_btn` and, since ONEUP-0064,
         # `retry_btn`.
         ("warnfocus", tint[0], tint),
@@ -988,7 +996,11 @@ def hc_focus_keys(hc: dict) -> dict:
     """
     fill, ink = derive_focus(hc["btn"], (hc["btn"],), label="hc primary")
     border, _ = derive_focus(hc["border"], (hc["border"],), label="hc panel border")
-    return dict(hcfocusfill=fill, hcfocusink=ink, hcbdfocus=border)
+    # The overlay repaints the package views on `card`, so their current item's
+    # fill is derived from it (ONEUP-0260 §4.5).
+    item, item_ink = derive_focus(hc["card"], (hc["card"],), label="hc current package")
+    return dict(hcfocusfill=fill, hcfocusink=ink, hcbdfocus=border,
+                hclogfocusfill=item, hclogfocusink=item_ink)
 
 
 def focus_report(theme, high_contrast: bool = False) -> list[dict]:
@@ -1028,6 +1040,9 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
         # The theme list borrows the primary fill, which is derived against `btn`;
         # what the list rests on is `card`, so that is what it is held to.
         add("theme list (HC)", "fill", hc["hcfocusfill"], hc["card"], FOCUS_MIN)
+        add("current package (HC)", "fill", hc["hclogfocusfill"], hc["card"], FOCUS_MIN)
+        add("current package (HC)", "ink", hc["hclogfocusink"], hc["hclogfocusfill"],
+            INK_MIN)
         return rows
 
     palette = dict(theme.palette)
@@ -1043,6 +1058,7 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
          (palette["rowcard"], palette["rowhov"])),
         ("dialog Close / Cancel", "winfocus", (palette["win"],)),
         ("warning-banner buttons", "warnfocus", tint),
+        ("current package", "logfocus", (palette["logbg"],)),
     ):
         fill, ink = keys[prefix + "fill"], keys[prefix + "ink"]
         for s in surfaces:

@@ -77,15 +77,17 @@ class SpotlightLayout(LayoutHost):
         model = win.packages
 
         def line(p):
-            return pv.join_parts(p.name, pv.versions(p), pv.size_text(p), p.repo,
-                                 pv.state_word(model, p))
+            return pv.join_parts(pv.name_text(win, p), pv.versions(p), pv.size_text(p),
+                                 p.repo, pv.state_word(model, p))
 
-        self.next_items = pv.PackageItems(model, [line])
-        self.done_items = pv.PackageItems(model, [line])
+        self.next_items = pv.PackageItems(model, [line], has_details=win.details.has_details)
+        self.done_items = pv.PackageItems(model, [line], has_details=win.details.has_details)
         self.next_list = pv.package_list(self.next_items, QCoreApplication.translate(
             "layout_spotlight", "Up next"))
         self.done_list = pv.package_list(self.done_items, QCoreApplication.translate(
             "layout_spotlight", "Done"))
+        self.opens_details(self.next_list, self.next_items)
+        self.opens_details(self.done_list, self.done_items)
         lists = QWidget()
         ll = QHBoxLayout(lists)
         ll.setContentsMargins(0, 0, 0, 0)

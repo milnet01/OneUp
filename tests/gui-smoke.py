@@ -80,7 +80,7 @@ os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 try:
     import shiboken6
     from PySide6.QtCore import QEvent, QPoint, QProcess, Qt, QTimer
-    from PySide6.QtGui import QAccessible, QCloseEvent, QFont, QFontInfo
+    from PySide6.QtGui import QAccessible, QCloseEvent, QColor, QFont, QFontInfo, QPalette
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import (
         QApplication,
@@ -137,10 +137,12 @@ from oneup.gui import (  # noqa: E402 — same reason.
     autostart,
     banners,
     contrast,
+    details_dialog,
     diagnostics,
     elided_label,
     i18n,
     markers,
+    package_details,
     package_views,
     packages,
     paths,
@@ -4929,6 +4931,263 @@ def main() -> int:
     _wide = [wB.host.board.visualRect(wB.host.items.index(i, 0)).width() for i in range(3)]
     check(f"ONEUP-0239 a Rail card stays inside its grid cell (cell {_cell}: {_wide})",
           all(0 < wd <= _cell for wd in _wide))
+    _unpatch_all()
+
+    # --- ONEUP-0260: the package details dialog --------------------------------
+    # The mock zypper and rpm on _BIN answer from fixtures written here; the patches
+    # record every program details_dialog launches, which is what catches a shell
+    # string (INV-1): `sh -c` hands the mock the same argv.
+    _sep, _ent = "\x1f", "\x1e"
+    _old_entry = f"1700000000{_sep}Pat <pat@example.org>{_sep}- the old entry{_ent}"
+    _new_entry = f"1700000000{_sep}Pat <pat@example.org>{_sep}- the new entry{_ent}"
+    for _fname, _body in (
+            ("zypper-info.txt",
+             "Loading repository data...\nReading installed packages...\n\n\n"
+             "Information for package alpha:\n------------------------------\n"
+             "Repository     : Main\nName           : alpha\nSummary        : The alpha "
+             "tool\nDescription    :\n    Alpha does things.\n    On two lines.\n"
+             "Upstream URL   : https://example.org/alpha\n\npackage 'beta' not found.\n"),
+            ("rpm-baseline.txt", f"alpha{_sep}1{_sep}{_old_entry}"),
+            ("rpm-changelog.txt", _new_entry + _old_entry)):
+        Path(_DETAILS, _fname).write_text(_body)
+    _cache = Path(_DETAILS, "packages", "main", "x86_64")
+    _cache.mkdir(parents=True, exist_ok=True)
+    (_cache / "alpha-2.x86_64.rpm").write_text("")
+    for _log in (_ZYPPER_LOG, _RPM_LOG):
+        Path(_log).write_text("")
+    _sudo_before = Path(_SUDO_LOG).read_text() if os.path.exists(_SUDO_LOG) else ""
+    _launched = []
+    _orig_start, _orig_drun = details_dialog._start, details_dialog._run
+
+    def _rec_start(proc, argv):
+        _launched.append(argv)
+        _orig_start(proc, argv)
+
+    def _rec_run(argv, **kw):
+        _launched.append(argv)
+        return _orig_drun(argv, **kw)
+
+    _patch(details_dialog, "_start", _rec_start)
+    _patch(details_dialog, "_run", _rec_run)
+
+    def _fetch_done(wD, timeout=8.0):
+        """Wait out the batching timer and the zypper call it starts."""
+        QTest.qWait(details_dialog.BATCH_MS + 100)
+        deadline = time.monotonic() + timeout
+        while ((wD.details._proc is not None or wD.details._timer.isActive())
+               and time.monotonic() < deadline):
+            QTest.qWait(50)
+        return wD.details._proc is None
+
+    def _details_check(wD):
+        wD._check_mode = True
+        for line in ("@@CHECK_ITEM@@|system|alpha|1|2|10|Main",
+                     "@@CHECK_ITEM@@|system|beta|1|2|10|Main",
+                     "@@CHECK_ITEM@@|flatpak|alpha|1|2|10|flathub"):
+            run.handle_line(wD, line)
+
+    def _rows_of(wD):
+        """(package, display, accessible, column) for every cell of every view."""
+        out = []
+        for items in vars(wD.host).values():
+            if isinstance(items, package_views.PackageItems):
+                for r, pkg in enumerate(items.packages()):
+                    for c in range(items.columnCount()):
+                        ix = items.index(r, c)
+                        out.append((pkg, items.data(ix) or "",
+                                    items.data(ix, Qt.ItemDataRole.AccessibleTextRole) or "",
+                                    c))
+        return out
+
+    wD = window.Updater()
+    _details_check(wD)
+    _early = _rows_of(wD)
+    check("ONEUP-0260 INV-4 no package is marked before the fetch completes",
+          not any(package_views.MARK in d for _p, d, _a, _c in _early))
+    check("ONEUP-0260 the fetch ends", _fetch_done(wD))
+    _said = app.translate("package_views", "{text}, details available").format(text="")
+    for _lid in ("rows", "rail", "spotlight"):
+        wD.apply_layout(_lid)
+        QApplication.processEvents()
+        _cells = _rows_of(wD)
+        _sys_alpha = [(d, a, c) for p, d, a, c in _cells if p.key == "system" and p.name == "alpha"]
+        _marked = [(d, a, c) for d, a, c in _sys_alpha if package_views.MARK in d]
+        check(f"ONEUP-0260 INV-4 the described package carries the mark ({_lid})",
+              len(_marked) == 1 and _said.strip(", ") in _marked[0][1]
+              and package_views.MARK not in _marked[0][1])
+        check(f"ONEUP-0260 INV-4 the undescribed package and the Flatpak carry neither ({_lid})",
+              not any(package_views.MARK in d or _said.strip(", ") in a
+                      for p, d, a, _c in _cells
+                      if not (p.key == "system" and p.name == "alpha")))
+        if _lid == "rows":
+            check("ONEUP-0260 INV-4 in Rows the mark is in the package column",
+                  _marked and _marked[0][2] == 1)
+
+    # INV-5: activating a package with details opens one dialog for it; one without
+    # opens none. Closed by the scheduled-dismiss idiom of ui-and-accessibility §6.4.
+    _opened = []
+
+    def _dismiss_details():
+        for tl in app.topLevelWidgets():
+            if isinstance(tl, details_dialog.PackageDetailsDialog) and tl.isVisible():
+                _opened.append((tl.windowTitle(), tl.text.toPlainText()))
+                tl.done(0)
+
+    def _activate(view, items, name, key="system"):
+        row = next(n for n, p in enumerate(items.packages()) if p.name == name and p.key == key)
+        _opened.clear()
+        QTimer.singleShot(50, _dismiss_details)
+        view.activated.emit(items.index(row, 0))
+        QTest.qWait(100)
+        return list(_opened)
+
+    for _lid, _views in (("rows", lambda h: [(h.table, h.items)]),
+                         ("rail", lambda h: [(h.board, h.items)]),
+                         ("spotlight", lambda h: [(h.next_list, h.next_items)])):
+        wD.apply_layout(_lid)
+        QApplication.processEvents()
+        for _view, _items in _views(wD.host):
+            _got = _activate(_view, _items, "alpha")
+            check(f"ONEUP-0260 INV-5 activating a described package opens its dialog ({_lid})",
+                  len(_got) == 1 and _got[0][0] == "alpha")
+            check(f"ONEUP-0260 INV-5 activating an undescribed one opens none ({_lid})",
+                  _activate(_view, _items, "beta") == [])
+            check(f"ONEUP-0260 INV-5 nor does the Flatpak of the same name ({_lid})",
+                  _activate(_view, _items, "alpha", "flatpak") == [])
+    wD.apply_layout("rows")
+    QApplication.processEvents()
+    _first = _activate(wD.host.table, wD.host.items, "alpha")
+    check("ONEUP-0260 the dialog shows About and says the notes are not there yet",
+          _first and "The alpha tool" in _first[0][1] and "On two lines." in _first[0][1]
+          and "https://example.org/alpha" in _first[0][1]
+          and app.translate("details_dialog",
+                            "The notes show once the new version has downloaded.")
+          in _first[0][1])
+    run.handle_line(wD, "@@PKG@@|system|downloaded|alpha|2")
+    _got = _activate(wD.host.table, wD.host.items, "alpha")
+    check("ONEUP-0260 INV-8 a downloaded package's notes are read from the redirected cache",
+          any("-qp" in line and str(_cache / "alpha-2.x86_64.rpm") in line
+              for line in Path(_RPM_LOG).read_text().split("\n"))
+          and _got and "the new entry" in _got[0][1] and "the old entry" not in _got[0][1])
+    run.handle_line(wD, "@@PKG@@|system|installed|alpha|2")
+    _got = _activate(wD.host.table, wD.host.items, "alpha")
+    check("ONEUP-0260 an installed package lists only the entries after its baseline",
+          _got and "the new entry" in _got[0][1] and "the old entry" not in _got[0][1]
+          and any(line.startswith("C|-q --qf ") and line.endswith(" alpha-2")
+                  for line in Path(_RPM_LOG).read_text().split("\n")))
+
+    # INV-1: every program launched is zypper or rpm with a list argv, every mock
+    # call ran under LC_ALL=C, and nothing went through the mock sudo.
+    # Split on newlines alone: str.splitlines also splits on rpm's U+001E and U+001F.
+    _calls = [c for c in (Path(_ZYPPER_LOG).read_text().split("\n")
+                          + Path(_RPM_LOG).read_text().split("\n")) if c]
+    check(f"ONEUP-0260 INV-1 every details launch is zypper or rpm with a list argv "
+          f"({len(_launched)} launches)",
+          _launched and all(isinstance(a, list) and a[0] in ("zypper", "rpm")
+                            for a in _launched))
+    check(f"ONEUP-0260 INV-1 every details call ran with LC_ALL=C ({len(_calls)} calls)",
+          _calls and all(c.startswith("C|") for c in _calls))
+    for _c in _calls:
+        if not _c.startswith("C|"):
+            print(f"       not under LC_ALL=C: {_c[:160]!r}")
+    _sudo_after = Path(_SUDO_LOG).read_text() if os.path.exists(_SUDO_LOG) else ""
+    # The engine an earlier scenario launched may still be probing sudo, so the
+    # check is that no sudo call carries a details query, not that there are none.
+    _via_sudo = [c for c in _sudo_after[len(_sudo_before):].split("\n")
+                 if "rpm" in c or "zypper --no-refresh" in c or " info " in c]
+    check("ONEUP-0260 INV-1 no details call went through sudo", not _via_sudo)
+    for _c in _via_sudo:
+        print(f"       sudo: {_c[:160]!r}")
+    check("ONEUP-0260 INV-8 the mock zypper and rpm were both reached, the cache redirected",
+          Path(_ZYPPER_LOG).read_text() and Path(_RPM_LOG).read_text()
+          and package_details.packages_dir() == os.path.join(_DETAILS, "packages"))
+    wD.details.stop()
+
+    # INV-6: the current package of a focused view is drawn in the derived fill. An
+    # item is not a widget, so the focus report's row is what reaches it, in every
+    # theme with and without the overlay; the grab shows the delegate paints it.
+    _rows_seen = {(t.id, hc) for t in theme.THEMES for hc in (False, True)
+                  for r in theme.focus_report(t, hc)
+                  if r["control"].startswith("current package") and r["kind"] == "fill"
+                  and r["ratio"] + 1e-9 >= 3.0}
+    check("ONEUP-0260 INV-6 the current-package fill clears 3:1 in every theme, both modes",
+          len(_rows_seen) == 2 * len(theme.THEMES))
+    wF = window.Updater()
+    _details_check(wF)
+    wF.show()
+    QApplication.processEvents()
+    _table = wF.host.table
+    _ix = wF.host.items.index(0, 1)
+    _table.setCurrentIndex(_ix)
+
+    def _grab_current():
+        QApplication.processEvents()
+        return _table.viewport().grab(_table.visualRect(_ix)).toImage()
+
+    _table.setFocus()
+    _focused = _grab_current()
+    _was_focused = _table.hasFocus()
+    wF.check_btn.setFocus()
+    _unfocused = _grab_current()
+    check("ONEUP-0260 INV-6 a focused view's current package differs from it unfocused",
+          _was_focused and not _table.hasFocus() and _focused != _unfocused)
+    _fill = QColor(_table.palette().color(QPalette.ColorRole.Highlight))
+    _sheet_fills = re.findall(r"selection-background-color: (#[0-9a-fA-F]{6})",
+                              app.styleSheet())
+    check("ONEUP-0260 INV-6 and is drawn in the fill the sheet hands the view",
+          _focused.pixelColor(2, 2) == _fill and _sheet_fills
+          and _fill.name() == _sheet_fills[-1].lower())
+    wF.hide()
+    wF.details.stop()
+
+    # INV-7: a fetch never outlives its deadline or a quitting window, and survives
+    # the window hiding to the tray. The mock sleeps by exec, so a killed fetch
+    # leaves no child; a distinctive duration makes its process findable.
+    _nap = "29.17"
+    os.environ["ONEUP_MOCK_ZYPPER_SLEEP"] = _nap
+
+    def _sleepers():
+        out = subprocess.run(["pgrep", "-fx", f"sleep {_nap}"],  # noqa: S603, S607 — fixed argv
+                             capture_output=True, text=True).stdout
+        return out.split()
+
+    def _slow_window():
+        wS = window.Updater()
+        wS._check_mode = True
+        run.handle_line(wS, "@@CHECK_ITEM@@|system|slowpkg|1|2|10|Main")
+        QTest.qWait(details_dialog.BATCH_MS + 300)
+        return wS
+
+    os.environ["ONEUP_DETAILS_TIMEOUT"] = "1"
+    wT = _slow_window()
+    _started = wT.details._proc is not None
+    _ended = _fetch_done(wT, timeout=5.0)
+    check("ONEUP-0260 INV-7 a fetch past its deadline is killed, and marks nothing",
+          _started and _ended and not any(package_views.MARK in d
+                                          for _p, d, _a, _c in _rows_of(wT)))
+    check("ONEUP-0260 INV-7 and leaves no mock process running", not _sleepers())
+    os.environ["ONEUP_DETAILS_TIMEOUT"] = "60"
+    wN = _slow_window()
+    wN._tray = None
+    _running = wN.details._proc is not None and bool(_sleepers())
+    _ev = QCloseEvent()
+    _ev.setAccepted(True)
+    wN.closeEvent(_ev)
+    QTest.qWait(100)
+    check("ONEUP-0260 INV-7 closing a window with no tray ends its fetch",
+          _running and _ev.isAccepted() and wN.details._proc is None and not _sleepers())
+    wY = _slow_window()
+    wY._tray = object()             # resident: closing hides to the tray
+    wY._tray_hint_shown = True
+    _ev = QCloseEvent()
+    wY.closeEvent(_ev)
+    QTest.qWait(100)
+    check("ONEUP-0260 INV-7 hiding to the tray leaves the fetch running",
+          not _ev.isAccepted() and wY.details._proc is not None and bool(_sleepers()))
+    wY.details.stop()
+    check("ONEUP-0260 INV-7 and quitting then ends it", not _sleepers())
+    for _var in ("ONEUP_MOCK_ZYPPER_SLEEP", "ONEUP_DETAILS_TIMEOUT"):
+        os.environ.pop(_var, None)
     _unpatch_all()
 
     # ONEUP-0204: nothing this suite starts may outlive it. With no event loop running, a

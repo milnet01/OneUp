@@ -221,6 +221,12 @@ def details_text(about: package_details.About | None,
     return "\n".join(lines).rstrip()
 
 
+def open_details(win, package: Package) -> None:
+    """Open the dialog for a package with details; for one without, nothing."""
+    if win.details.has_details(package):
+        PackageDetailsDialog(win, win.details, package).exec()
+
+
 class PackageDetailsDialog(QDialog):
     """What one package is, and what its new version changed (§4.6). It reads
     its data once, when it opens; closing and reopening reads again."""

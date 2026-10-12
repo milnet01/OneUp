@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
-from . import package_views, steps
+from . import details_dialog, package_views, steps
 
 # The buttons inside the message strip, in the order its banners stack and each
 # banner lays them out. Layout order does NOT set the focus chain — parenting
@@ -47,6 +47,9 @@ class LayoutHost(QWidget):
     def listen(self) -> None:
         self.win.packages.subscribe(self._on_model)
         self._listening.append(self._on_model)
+        # About lands in the details store, not the model: its own subscription
+        # is what redraws the marks (ONEUP-0260 §4.2).
+        self.win.details.subscribe(self._on_details)
 
     def release(self) -> None:
         """Give back every callback this layout took. The window calls it before
@@ -55,9 +58,23 @@ class LayoutHost(QWidget):
         for callback in self._listening:
             self.win.packages.unsubscribe(callback)
         self._listening.clear()
+        self.win.details.unsubscribe(self._on_details)
 
     def _on_model(self, _key) -> None:
         self.refresh()
+
+    def _on_details(self) -> None:
+        self.refresh()
+
+    def opens_details(self, view, items: package_views.PackageItems) -> None:
+        """Activating a package with details opens its dialog; one without does
+        nothing. `activated` follows the desktop's click setting and fires on
+        Enter, so mouse and keyboard reach it alike (ONEUP-0260 §4.5)."""
+        def open_one(index) -> None:
+            rows = items.packages()
+            if index.isValid() and index.row() < len(rows):
+                details_dialog.open_details(self.win, rows[index.row()])
+        view.activated.connect(open_one)
 
     def refresh(self) -> None:
         """Redraw every view from the model and the window's run state."""

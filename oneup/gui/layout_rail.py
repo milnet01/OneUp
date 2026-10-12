@@ -61,10 +61,12 @@ class RailLayout(LayoutHost):
 
         model = win.packages
         self.items = pv.PackageItems(model, [lambda p: "\n".join((
-            p.name, pv.versions(p),
-            pv.join_parts(pv.size_text(p), p.repo, pv.state_word(model, p))))])
+            pv.name_text(win, p), pv.versions(p),
+            pv.join_parts(pv.size_text(p), p.repo, pv.state_word(model, p))))],
+            has_details=win.details.has_details)
         self.board = pv.package_board(self.items, QCoreApplication.translate(
             "layout_rail", "Packages of the step running now"))
+        self.opens_details(self.board, self.items)
 
         pl = QVBoxLayout(self.page)
         pl.setContentsMargins(0, 0, 0, 0)

@@ -194,11 +194,13 @@ EXEMPT: list[tuple[str, tuple[str, ...], str, str | None]] = [
 # in a table of fixed pairs. A declaration that names no measuring invariant is
 # not one, and fails the check like an undeclared key.
 MEASURED_ELSEWHERE: dict[str, str] = {
-    key: "ONEUP-0076 INV-2/INV-3, via theme.focus_report()"
-    for key in ("focusfill", "focusink", "rowfocusfill", "rowfocusink",
-                "winfocusfill", "winfocusink", "warnfocusfill", "warnfocusink",
-                "logbdfocus", "accentfocus", "accentfocusink", "dangerfocus",
-                "dangerfocusink", "switchfocuson", "switchfocusoff")
+    **{key: "ONEUP-0076 INV-2/INV-3, via theme.focus_report()"
+       for key in ("focusfill", "focusink", "rowfocusfill", "rowfocusink",
+                   "winfocusfill", "winfocusink", "warnfocusfill", "warnfocusink",
+                   "logbdfocus", "accentfocus", "accentfocusink", "dangerfocus",
+                   "dangerfocusink", "switchfocuson", "switchfocusoff")},
+    **{key: "ONEUP-0260 INV-6, via theme.focus_report()"
+       for key in ("logfocusfill", "logfocusink")},
 }
 
 # Derived RESTATEMENTS of a token that is already checked: `build_theme` builds

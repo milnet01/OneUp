@@ -76,15 +76,17 @@ class RowsLayout(LayoutHost):
         model = win.packages
         self.items = pv.PackageItems(model, [
             lambda p: pv.state_word(model, p),
-            lambda p: "\n".join(x for x in (p.name, p.repo) if x),
+            lambda p: "\n".join(x for x in (pv.name_text(win, p), p.repo) if x),
             pv.versions,
             pv.size_text,
         ], [QCoreApplication.translate("layout_rows", "State"),
             QCoreApplication.translate("layout_rows", "Package"),
             QCoreApplication.translate("layout_rows", "Versions"),
-            QCoreApplication.translate("layout_rows", "Size")])
+            QCoreApplication.translate("layout_rows", "Size")],
+            has_details=win.details.has_details, mark_column=1)
         self.table = pv.package_table(self.items, QCoreApplication.translate(
             "layout_rows", "Packages this update changes"))
+        self.opens_details(self.table, self.items)
 
         pl = QVBoxLayout(self.page)
         pl.setContentsMargins(0, 0, 0, 0)

@@ -20,7 +20,7 @@ from PySide6.QtCore import (
     QSize,
     Qt,
 )
-from PySide6.QtGui import QBrush, QColor, QPainter, QPen
+from PySide6.QtGui import QBrush, QColor, QPainter, QPalette, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -47,6 +47,9 @@ GROUP = {"queued": "togo", "downloading": "now", "downloaded": "now",
 # Between the parts of one line of a package's text — name, versions, size, state.
 # Layout between data; no language words it differently.
 _PARTS = "  ·  "
+# After the name of a package that has details: a shape, never only a colour
+# (ONEUP-0260 §4.4). The words a screen reader hears replace it.
+MARK = "ⓘ"
 
 
 def state_word(model: PackageModel, package: Package) -> str:
@@ -63,6 +66,15 @@ def versions(package: Package) -> str:
 def join_parts(*parts: str) -> str:
     """The parts of one line of a package's text, the empty ones left out."""
     return _PARTS.join(p for p in parts if p)
+
+
+def name_text(win, package: Package) -> str:
+    """The package's name, marked when it has details to open (ONEUP-0260 §4.4)."""
+    if not win.details.has_details(package):
+        return package.name
+    return QCoreApplication.translate(
+        "package_views", "{name} ⓘ", "a package name, marked as having details"
+    ).format(name=package.name)
 
 
 def size_text(package: Package) -> str:
@@ -119,12 +131,17 @@ class PackageItems(QAbstractTableModel):
     """A list of packages for one view, one column per `columns` entry."""
 
     def __init__(self, model: PackageModel, columns: list[Callable[[Package], str]],
-                 headers: list[str] | None = None) -> None:
+                 headers: list[str] | None = None, *,
+                 has_details: Callable[[Package], bool] | None = None,
+                 mark_column: int = 0) -> None:
         super().__init__()
         self._model = model
         self._columns = columns
         self._headers = headers or []
         self._rows: list[Package] = []
+        # The column carrying the details mark, and what says a package has one.
+        self._has_details = has_details
+        self._mark_column = mark_column
 
     def rowCount(self, parent=QModelIndex()):   # noqa: B008 — Qt's signature
         return 0 if parent.isValid() else len(self._rows)
@@ -137,6 +154,13 @@ class PackageItems(QAbstractTableModel):
             return None
         if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.ToolTipRole):
             return self._columns[index.column()](self._rows[index.row()])
+        if (role == Qt.ItemDataRole.AccessibleTextRole and self._has_details is not None
+                and index.column() == self._mark_column
+                and self._has_details(self._rows[index.row()])):
+            text = self._columns[index.column()](self._rows[index.row()])
+            return QCoreApplication.translate(
+                "package_views", "{text}, details available").format(
+                text=text.replace(MARK, "").strip())
         return None
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
@@ -212,10 +236,21 @@ class LinesDelegate(QStyledItemDelegate):
         width = grid.width() - 8 if grid.isValid() else base.width()
         return QSize(width, self._lines * self._line_height(option) + 8)
 
+    @staticmethod
+    def _current(opt, index) -> bool:
+        """The view has focus and this is its current package. A table's current
+        index is one cell; its whole row is the package, so the row is current."""
+        view = opt.widget
+        if not isinstance(view, QAbstractItemView) or not view.hasFocus():
+            return False
+        current = view.currentIndex()
+        return current.isValid() and current.row() == index.row()
+
     def paint(self, painter, option, index) -> None:
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
         opt.state &= ~QStyle.StateFlag.State_HasFocus
+        current = self._current(opt, index)
         # initStyleOption has already turned each newline into U+2028.
         lines = (opt.text or "").replace("\u2028", "\n").split("\n")
         style = opt.widget.style() if opt.widget else QApplication.style()
@@ -223,6 +258,12 @@ class LinesDelegate(QStyledItemDelegate):
         ground = QStyleOptionViewItem(opt)
         ground.text = ""
         style.drawControl(QStyle.ControlElement.CE_ItemViewItem, ground, painter, opt.widget)
+        if current:
+            # The derived focus fill and ink, which the sheet hands the view as its
+            # selection colours (ONEUP-0260 §4.5). A fill, never a ring.
+            painter.fillRect(opt.rect, opt.palette.color(QPalette.ColorRole.Highlight))
+            opt.palette.setColor(QPalette.ColorRole.Text,
+                                 opt.palette.color(QPalette.ColorRole.HighlightedText))
         h = self._line_height(opt)
         top = opt.rect.top() + (opt.rect.height() - h * len(lines)) // 2
         for n, line in enumerate(lines):
