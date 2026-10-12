@@ -1,6 +1,6 @@
 # ONEUP-0239 — three fixed layouts, and the Settings choice between them
 
-**Status:** Draft
+**Status:** Reviewed
 **Kind:** feature
 **Roadmap:** ONEUP-0239
 **Branch:** v2
@@ -54,8 +54,9 @@ holds every package with `key`, `name`, `edition`, `old`, `size`, `repo` and `st
 `STATE_WORDS` in `oneup/gui/steps.py` words each state. Today only `TaskRow._redraw` reads
 it, as one line of text per package.
 
-**What the sketches show that the window cannot give:** a percentage for one package (zypper prints none), a time left (nothing estimates one) and
-a package's one-line description (not in the model). None of the three appears below.
+**What the sketches show that the window cannot give:** a percentage for one package
+(zypper prints none), a time left (nothing estimates one) and a package's one-line
+description (not in the model). None of the three appears below.
 
 **The per-step progress the sketches show does exist.** `handle_marker`'s `STEP_BEGIN`
 and `STEP_END` branches carry the step key, and `PROGRESS` carries `key|done|total|phase`.
@@ -98,14 +99,17 @@ them.** This is `SettingsDialog`'s existing idiom — *"A host, not an owner"*, 
 docstring — applied to the window's body. So badges, switch states, the status text and
 the progress all survive a layout change, because none of them lives in the layout.
 
-Two pieces of run state are new, both on the window, both kept by `handle_marker`, and
-both cleared by `_reset_for_run`:
+Three pieces of run state are new, all on the window and all cleared by `_reset_for_run`:
 
 - `win.current_step` — the key of the step running now, or `""`. `STEP_BEGIN` sets it;
   `STEP_END` for that key clears it. Rail's board reads it (§4.3.1).
 - `win.latest_package` — `(key, name, edition)` of the package named by the last `PKG`
   line, or `None`. Spotlight's latest-package line reads it, and the package's state from
   `win.packages` (§4.3.3).
+- `win.engine_finished` — `False` until `on_finished` sets it. The package pages' empty
+  sentence reads it (§4.3.1).
+
+`current_step` and `latest_package` are kept by `handle_marker`.
 
 **The header is not a layout's.** `header_row` stays in `#Card`, above the host, unchanged
 in all three. The shared controls a host lays out, all built in `Updater.__init__`:
@@ -113,7 +117,7 @@ in all three. The shared controls a host lays out, all built in `Updater.__init_
 | Group | Controls |
 | --- | --- |
 | Steps | the five `TaskRow`s in `win.rows` |
-| Actions | `run_btn`, `check_btn`, `stop_btn` |
+| Actions | `win.action_bar`, a widget holding today's `action_row` unchanged — Run at index 0, Check at 1, Stop at 2 — so ONEUP-0064 INV-6 keeps holding |
 | Status | `status`, `bar`, `bar_caption`, `activity` |
 | Messages | the four banners, inside the new message strip (§4.4) |
 | Package area | `win.package_area`, a `QStackedWidget`: the layout's package page, and `log` (§4.5) |
@@ -138,6 +142,11 @@ place of the old host, deletes the old one, and re-runs the `setTabOrder` loop o
 `focus_chain()`, which becomes the header's three buttons plus the host's chain.
 `__init__` calls it with the stored id (§4.7).
 
+**A deleted host stops hearing the model.** `PackageModel` gains
+`unsubscribe(callback)`, the inverse of `subscribe`. Each host gives back every callback it
+subscribed, and `apply_layout` calls that before deleting it. Without it, the next marker
+calls into a deleted widget from inside `handle_marker`, which must never raise.
+
 `TaskRow` gains `set_form(form)`, with `form` one of `"full"`, `"rail"` and `"tile"`. It
 re-arranges the row's own children and shows or hides its description; it never changes
 what the row holds. Each host sets the form of all five rows.
@@ -152,7 +161,9 @@ INV-4).
 `Qt.NoFocus`, named for the screen reader *"Progress of {title}"*. `handle_marker` drives it
 beside what each branch does today: `STEP_BEGIN` makes it busy (range `0, 0`); `PROGRESS`
 for that key sets `done` of `total` when `total` is non-zero; `STEP_END` fills it.
-`_reset_for_run` empties it. A step the run skips stays empty. Its meaning is also in the
+`_reset_for_run` empties it. A step not selected for the run gets no markers and stays
+empty; one that starts and ends as skipped, its tool absent, fills like any other, and its
+badge says why. Its meaning is also in the
 badge text, so the bar is never the only signal.
 
 **The badge has a fixed width and is never hidden.** Today `TaskRow.__init__` hides it
@@ -179,8 +190,10 @@ The rule every layout follows, and the one §5 tests:
    **A control whose label changes is pinned to its widest label** the same way:
    `log_toggle` (§4.5).
 4. **Text longer than its area wraps inside a scroll area or is elided.** A label outside
-   a scroll area never wraps to more lines than its area holds. An elided label keeps its
-   full text in its tooltip and its accessible description.
+   a scroll area never wraps to more lines than its area holds. **Elision happens when the
+   label is painted**: `text()` keeps the full text, so `_announce`, which reads
+   `status`, and every test reading a label's text see it whole. The full text is also the
+   tooltip.
 5. **The window's minimum size is the layout's**, computed from the same metrics, so no
    window can be made too small to hold a layout at its current text size.
 
@@ -196,11 +209,12 @@ layout.
 
 1. The five rows in `full` form: title, description, badge, switch, and the bar along the
    row's foot.
-2. The package area. Its package page is a filter strip — three checkable `#GhostBtn`s in
-   an exclusive group, *All*, *System packages*, *Flatpak apps*, with *All* the default —
-   above a table: state, package (with its source under the name), versions, size. A
-   summary line above the table names what is shown, e.g. *"System packages · 24 updates ·
-   17.5 MiB"*, so the chosen filter is said in words and not only by the button's fill.
+2. The package area. Its package page holds a filter strip — three checkable `#GhostBtn`s
+   in an exclusive group, *All*, *System packages*, *Flatpak apps*, with *All* the default,
+   checked by the existing `#GhostBtn:checked` rule — then a summary line with the
+   download-size link, then a table: state, package (with its source under the name),
+   versions, size. The summary names what is shown, e.g. *"System packages · 24 updates ·
+   17.5 MiB"*, so the chosen filter is said in words and not only by the button's look.
 3. The message strip.
 4. Status, bar, caption and activity, with Run and Check/Stop beside them.
 5. Footer.
@@ -209,9 +223,10 @@ layout.
 
 1. Two columns. **The rail**: the five rows in `rail` form — title and switch, badge, bar.
    Its width is fixed from the font: the widest step title, plus the switch and padding.
-   It does not follow the badges, which elide to fit (§4.1). **The board**: a summary
-   (§4.3.1), the size strip (§4.3.2), and the package page — a grid of cards, one per
-   package, each a fixed number of text lines: name; versions; size, source and state.
+   It does not follow the badges, which elide to fit (§4.1). **The board** is the package
+   area, and its whole package page: a summary with the download-size link (§4.3.1), the
+   size strip (§4.3.2), and a grid of cards, one per package, each a fixed number of text
+   lines: name; versions; size, source and state.
 2. The message strip, full width.
 3. Status, bar, caption and activity, with Run and Check/Stop.
 4. Footer.
@@ -223,7 +238,8 @@ layout.
 2. The spotlight panel: the status, bar, caption and activity, the status in large type
    by a selector qualified on the panel; then the *latest package* line (§4.3.3), three
    figures (§4.3.1) and the download-size link (§4.6).
-3. The package area: two lists side by side, *Up next* and *Done* (§4.3.1).
+3. The package area, whose package page is two lists side by side, *Up next* and *Done*
+   (§4.3.1). The panel above stays in view when the log is shown.
 4. The message strip.
 5. Run and Check/Stop, then the footer.
 
@@ -239,8 +255,8 @@ All counts are over `win.packages.packages(key)`, using `shown_state`:
 
 - **Rows' table** shows the filter's packages, all steps under *All*.
 - **Rail's board** shows the packages of `win.current_step`, and all packages when it is
-  `""`. Its summary reads the step's title (or *All updates*), the number of
-  packages and their total size, then *"3 done · 1 now · 20 to go"*.
+  `""` or names a step with none. Its summary reads the step's title (or *All updates*),
+  the number of packages and their total size, then *"3 done · 1 now · 20 to go"*.
 - **Spotlight's lists**: *Up next* holds to go and now; *Done* holds done. Its three
   figures are *Downloaded* (packages past `downloading`, of all), *Installed* (installed or
   removed, of all) and *Download* (the bytes of packages past `downloading`, of the total
@@ -252,8 +268,9 @@ All counts are over `win.packages.packages(key)`, using `shown_state`:
   package. Spotlight's *Done* list mixes `installed`, `removed` and `unchanged`, so its
   group heading alone cannot carry the state.
 - **With no packages**, each package page shows one sentence instead: *"Press Check for
-  updates to see what will change."* before any check, and *"No package updates."* after
-  one that found none. It says nothing about the other steps, whose badges speak for them.
+  updates to see what will change."* while `win.engine_finished` is `False` and no engine
+  is running; nothing while one runs; and *"No package updates."* once it is `True`. It
+  says nothing about the other steps, whose badges speak for them.
 
 #### 4.3.2 Rail's size strip
 
@@ -279,16 +296,19 @@ Its height is three lines of banner text plus the banner's padding, at the curre
 Empty, it paints nothing and keeps its height. It takes no focus itself, so it is built
 with `setFocusPolicy(Qt.NoFocus)`: a `QScrollArea` takes focus by default (its
 `focusPolicy()` measured `11` under PySide6 6.11.0, 2026-10-12). The banners' buttons are
-in the tab chain, and a `QScrollArea` scrolls a focused child into view. A
-banner's own visibility rules are unchanged; only its parent moves.
+in the tab chain. **The strip scrolls a newly focused button into view itself**, with
+`ensureWidgetVisible`, on `QApplication.focusChanged`: Qt does not do it when Tab arrives
+from outside the strip (measured 2026-10-12, PySide6 6.11.0 offscreen — the scroll value
+stayed `0` of `116`). A banner's own visibility rules are unchanged; only its parent moves.
 
 ### 4.5 The package area and the log
 
 `win.package_area`, a `QStackedWidget` the window owns, with two pages: the current
-layout's package page, and `win.log`. A layout switch keeps whichever page is current. `log_toggle`
-reads *"Show technical log"* on the first page and *"Show packages"* on the second, and
-flips the page. It is pinned to the wider of the two labels (§4.2 item 3). `Updater._show_log` changes the page rather than the log's visibility, and
-stops writing `log_shown`. Every call that today makes the log visible, so that a failure's
+layout's package page, and `win.log`. A layout switch keeps whichever page is current.
+`log_toggle` reads *"Show technical log"* on the first page and *"Show packages"* on the
+second, and flips the page. It is pinned to the wider of the two labels (§4.2 item 3).
+`Updater._show_log` changes the page rather than the log's visibility, and stops writing
+`log_shown`. Every call that today makes the log visible, so that a failure's
 detail is on screen, makes the log page current instead.
 
 ### 4.6 The download-size link
@@ -296,8 +316,9 @@ detail is on screen, makes the log page current instead.
 `size_btn`, `size_result`, `size_pending`, `size_failed`, `set_size_result` and `has_size`
 move from `TaskRow` to one window-level control with the same behaviour. Rows and Rail
 show it in their package-page summary, Spotlight in its panel (§4.3).
-`TaskRow.size_requested` goes; the link calls `run.request_size` for `system` directly. The link and its result share one slot of fixed
-width — the widest of their texts — the way Check and Stop do.
+`TaskRow.size_requested` goes; the link calls `run.request_size` for `system` directly.
+The link and its result share one slot of fixed width — the widest of their texts — the
+way Check and Stop do.
 
 ### 4.7 The Settings choice
 
@@ -317,7 +338,10 @@ alone, as `_refresh_theme_combo` does. `SettingsDialog.focus_chain` gains it aft
 New object names: `#MessageStrip`, the three package views (`#PackageTable`,
 `#PackageBoard`, `#PackageLists` — the last on both of Spotlight's lists), `#SpotlightPanel`,
 `#SizeStrip`, `#PackageFilter` (the filter strip's frame) and `#PackageSummary`. Each styled
-name gets a rule in both `_QSS` and `_HC_QSS` (ONEUP-0064 INV-7). The focusable package
+name gets a rule in both `_QSS` and `_HC_QSS` (ONEUP-0064 INV-7). **The containers
+`#PackageFilter`, `#PackageSummary` and `#SpotlightPanel` paint no background**, so every
+button on them rests on `card` — the surface the `#GhostBtn` and `#LinkBtn` rows of
+ONEUP-0076 §4.2 already name, with their derived focus colours. The focusable package
 views are scrolling content, so they take focus mechanism B: a 2 px rest border in
 `$logbd`, `$border` under the overlay (ONEUP-0076 §4.2). Large type is a new `_FONT_SCALE`
 entry, so it follows the text size like every other. No new palette key: every colour
@@ -332,8 +356,8 @@ above is one the palettes already carry.
   minimum size and records, mapped to the window, the geometry of each area (each row,
   the package area, the message strip, the spotlight panel) and of each shared control
   outside the strip, recording a control only in stages where it is visible — a widget
-  never laid out reports a default geometry, not a place. It then feeds markers: 200 `CHECK_ITEM`s and their `CHECK`s; a run's `STEP_BEGIN`, `PROGRESS` and
-  `PKG` lines; `on_finished` with a reboot, services, a warning with all its buttons and an
+  never laid out reports a default geometry, not a place. It then feeds markers: 200
+  `CHECK_ITEM`s and their `CHECK`s; a run's `STEP_BEGIN`, `PROGRESS` and `PKG` lines; `on_finished` with a reboot, services, a warning with all its buttons and an
   app update; an activity line; `rollback_btn` shown; the log page made current. After each
   stage every recorded geometry is unchanged.
   *Breaks when:* a control is hidden without keeping its space, a label wraps to grow its
@@ -369,8 +393,10 @@ above is one the palettes already carry.
   warning shown, the log page current), records each row's badge text and bar value,
   `status.text()`, `bar.value()`, the warning's visibility, `package_area`'s current page,
   `current_step`, `latest_package` and each package's state word; switches to each other
-  layout in turn; every recorded value is the same after each switch.
-  *Breaks when:* any of these lives in a layout rather than in the window.
+  layout in turn; every recorded value is the same after each switch, and a `PKG` line fed
+  after each switch raises nothing and reaches the new layout's views.
+  *Breaks when:* any of these lives in a layout rather than in the window, or an old
+  layout's callback is left subscribed.
 
 - **INV-7** Each layout lays out every shared control exactly once.
   *Test:* `tests/gui-smoke.py` — for each layout, every control in §4.1's table is found by
@@ -433,6 +459,8 @@ tested in `tests/gui-smoke.py`, each as its §5 clause says. Beside them:
   `_HC_QSS` rule.
 - **ONEUP-0064 INV-4's** clicks on the disclosure and the detail panel go; its clicks on the
   row body, the switch and the badge stay, and run once per form.
+- **ONEUP-0064 INV-6's** action-row assertions keep holding: `win.action_bar` carries the
+  same `action_row`, at the same indices, into every layout (§4.1).
 - **ONEUP-0064 INV-5's** 24 px pointer-target walk gains the filter buttons and
   `layout_btn`, and loses the disclosure.
 - **ONEUP-0259 INV-13's** check that *"the redrawn list shows the table's word"* moves to
@@ -454,7 +482,7 @@ window as it is today, and the model tests before the views exist.
   `QScrollArea#DetailScroll` and `size_btn` inside a row's detail panel gain the same note,
   and the table gains the three package views.
 - `docs/specs/ONEUP-0259-package-model.md` — §4.7 gains a note that ONEUP-0239 replaced the
-  per-row list.
+  per-row list, and §4.6's API gains `unsubscribe` (§4.1).
 - `CHANGELOG.md` `[Unreleased]` — one user-facing line: three window layouts to choose from
   in Settings, none of which moves as an update runs.
 
@@ -501,3 +529,4 @@ No marker changes: the marker contract stays frozen (`docs/reference/marker-prot
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-10-12 | Q1 1 · Q2 3 · Q3 4 · Q4 3 — 11 verified, 6 dismissed | all 11 fixed. Two lanes, each holding every question; both found the header's owner, the rail sized from its badges, the missing slot for Spotlight's size link, the unnamed current-step state and INV-11's flatpak bar. Two Q3s and the Q1 came from settling open questions: the stack's owner, the latest package moved to the window, and a `QScrollArea`'s default focus (measured `11`). The six dismissed changed nothing built, each a false sentence corrected by deletion: four from a peer session's fact-check (the banner hide list, a ONEUP-0259 misquote, an over-cited §10, ONEUP-0064 INV-7 described as two-way), plus "three focusable views" and "every 1.4 user has it stored" |
+| 2 | 2026-10-12 | Q1 1 · Q2 3 · Q3 6 — 10 verified, 0 dismissed | all 10 fixed; the cap for a spec, so this loop's fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found the missing `unsubscribe` for a deleted layout and the unclear edge of the package page. The Q1 is a measurement a lane asked for: Tab arriving from outside the message strip does not scroll it (value stayed `0` of `116`). The Q2 on a skipped step's bar came from settling an open question. Own-fix share 3 of 10 — the package page's edge, the empty sentence and the board during a step with no packages — read as a calm cap, but the armed change was the whole document, so the share says little; no second share for the same reason |
