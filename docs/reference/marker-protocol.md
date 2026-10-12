@@ -87,7 +87,7 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 
 ## 3. The markers
 
-23 in total. `key` is always a step key — `system`, `flatpak`, `firmware`, `orphans`,
+24 in total. `key` is always a step key — `system`, `flatpak`, `firmware`, `orphans`,
 `cache` — except where noted.
 
 | Marker | Fields | Emitted by | Read by |
@@ -101,7 +101,8 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@SNAPSHOT_ITEM@@` | `id\|date\|description` | the same block, once per restore point | `handle_marker` |
 | `@@SNAPSHOTS@@` | `warn\|count` *or* `thinned\|removed` | pre-flight; `--thin-snapshots` | `handle_marker`; `_on_thin_finished` |
 | `@@CHECK@@` | `key\|count\|label` | `emit_check` | `handle_marker`; `_parse_tray_line` |
-| `@@CHECK_ITEM@@` | `key\|name\|from\|to` | the `--check` pass | `handle_marker` |
+| `@@CHECK_ITEM@@` | `key\|name\|from\|to[\|bytes\|repo]` | the `--check` pass | `handle_marker` |
+| `@@PKG@@` | `key\|state\|name\|edition[\|bytes\|from\|repo]` | `run_system`, `stream_filtered` and `run_flatpak`, during a run | `handle_marker` |
 | `@@CHECK_UNKNOWN@@` | `key\|code[\|name…]` | `emit_check` | `handle_marker`; `_parse_tray_line` |
 | `@@SIZE@@` | `key\|download` | the `--size` pass | `_on_size_output` |
 | `@@FREED@@` | `cache\|human` | the cache step | `handle_marker` |
@@ -241,8 +242,11 @@ while eight updates waited.
 - `label` is a human phrase (`"firmware update(s)"`). The window **does not use it** — it
   builds its own badge text. It is there for the terminal reader.
 
-`CHECK_ITEM|key|name|from|to` carries one changed package for the preview panel. **`from`
-is empty for Flatpaks** — the Flatpak path knows the new version only.
+`CHECK_ITEM|key|name|from|to[|bytes|repo]` carries one changed package for the package
+model (ONEUP-0259). **`from` is empty for Flatpaks** — the Flatpak path knows the new
+version only. `bytes` is the download size, `0` when unknown: always `0` for a Flatpak,
+and for a system package unless the check was given `--sizes`. `repo` is the repository's
+display name, or a Flatpak remote. A line carrying only `key` and `name` is still valid.
 
 ### 4.7 `INSTALLED|count|sys_changed|fw_changed`
 
@@ -341,6 +345,24 @@ banner, and the engine prints *"A REBOOT is recommended"*. `@@REBOOT@@` is untou
 path: `zypper needs-rebooting` did not ask for one, the presentation did, and §5.1 freezes
 this contract during 2.0.
 
+### 4.12 `PKG|key|state|name|edition[|bytes|from|repo]`
+
+One package's place in a run, for the package model (ONEUP-0259). `state` is one of
+`queued`, `downloading`, `downloaded`, `installed` and `removed`.
+
+- **`queued` opens the list, and carries every field.** The system step sends one per
+  pending update after its refresh; the Flatpak step one per app before updating. The
+  later states need only the first four fields; `downloading` adds `bytes`.
+- **A state never moves backwards.** The commit pass reprints `Preloading: … [already in
+  cache]` for packages already `installed`; the window keeps the later state.
+- **`installed` and `removed` are sent only for an action that completed** — a zypper
+  action line ending in `done]`, on its own line or a later one when a package's script
+  split it; for a Flatpak, only when the update of every scope that listed it exited 0.
+- **The window never infers them.** After a step's `STEP_END`, a package that reached
+  neither reads "not changed", whatever the step's status.
+- **A package can arrive with no `queued` line.** `dup` changes more than `list-updates`
+  lists; the window adds it on its first line.
+
 ## 5. Changing the contract
 
 **A marker's name and field layout are a contract between the files below.** Changing one
@@ -375,6 +397,11 @@ landed as one change touching every file §5 lists, plus this document
 (`docs/standards/wording-and-translation.md` §5). The two engines' payloads now differ by
 design, so G2's harness was retired with it (ONEUP-0072 §7). **The contract is frozen again
 for the rest of 2.0.**
+
+**The second exception, approved by the user on 2026-10-12:** ONEUP-0259 added `PKG` (§4.12)
+and two trailing fields on `CHECK_ITEM` (§4.6), so the window can show each package's size
+and source, and its progress during a run. It landed as one change touching every file §5
+lists, plus this document. Nothing else was opened: the contract is frozen again.
 
 Never a rewrite and a contract change at once. In the same step, a failing test cannot tell
 you which one broke it.

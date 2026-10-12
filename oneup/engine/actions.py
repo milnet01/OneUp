@@ -11,7 +11,6 @@ from __future__ import annotations
 import contextlib
 import os
 import pwd
-import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -181,10 +180,6 @@ def emit_guard() -> int:
 
 APP_ID = "za.co.antsprojectshub.OneUp"
 
-# zypper marks an upgradable package with `v` in its status column.
-_V_ROW = re.compile(r"^v[ \t]*\|")
-_SKIPPED = re.compile(r"Skipping repository '([^']*)'")
-
 
 def notify_send(title: str, body: str) -> None:
     """A desktop notification. Not a marker, and never fatal."""
@@ -192,42 +187,35 @@ def notify_send(title: str, body: str) -> None:
         proc.run(["notify-send", "-a", "OneUp", "-i", APP_ID, title, body])
 
 
-def _check_system() -> tuple[int, bool]:
-    """Count pending system updates. Returns (count, whether a source was unreadable)."""
-    # One read serves both the count and the per-package detail. stderr is MERGED
-    # rather than discarded: zypper reports a repository it had to set aside as a
-    # warning there (exit 106), and that warning is the only difference between
-    # "nothing to update" and "I couldn't read the repository that had the updates".
-    # Merging is safe — every line parsed below is anchored to the `v` status column.
-    rc, text = proc.run(
-        ["zypper", "--no-refresh", "--non-interactive", "list-updates"],
-        merge_stderr=True,
-        env={"LC_ALL": "C"},  # keeps the column layout parseable on any locale
-    )
-    rows = [line for line in text.splitlines() if _V_ROW.match(line)]
-    n = len(rows)
+def _check_system(sizes: bool) -> tuple[int, bool]:
+    """Count pending system updates. Returns (count, whether a source was unreadable).
+
+    One read serves the count and the per-package detail (`steps.system_updates`).
+    zypper reports a repository it had to set aside as a warning (exit 106), and
+    that warning is the only difference between "nothing to update" and "I
+    couldn't read the repository that had the updates".
+    """
+    listing = steps.system_updates(sizes)
+    n = listing.count
     unreadable: tuple[str, ...] = ()
-    if rc != 0:
-        # 106 = ZYPPER_EXIT_INF_REPO_SKIPPED. Name the repositories if zypper did;
-        # otherwise report the failure without guessing at a cause. The marker
-        # carries a code and one name per field; the terminal keeps the English.
-        skipped = sorted(set(_SKIPPED.findall(text)))
-        if skipped:
-            unreadable = ("sources-unreadable", *skipped)
-            why = "OneUp couldn't read these software sources: " + ", ".join(skipped)
+    if listing.rc != 0 or not listing.readable:
+        # Name the repositories if zypper did; otherwise report the failure without
+        # guessing at a cause. The marker carries a code and one name per field; the
+        # terminal keeps the English.
+        if listing.skipped:
+            unreadable = ("sources-unreadable", *listing.skipped)
+            why = "OneUp couldn't read these software sources: " + ", ".join(listing.skipped)
         else:
-            unreadable = ("sources-unknown-error", str(rc))
-            why = f"OneUp couldn't read the software sources (zypper exited {rc})"
+            unreadable = ("sources-unknown-error", str(listing.rc))
+            why = f"OneUp couldn't read the software sources (zypper exited {listing.rc})"
         why += " — this list may be incomplete. Running an update refreshes them."
         markers.out(f"  System packages: couldn't check — {why}")
     else:
         markers.out(f"  System packages: {n} update(s)")
     markers.emit_check("system", n, "system package(s)", unreadable)
-    # Columns: S | Repository | Name | Current | Available | Arch.
-    for line in rows:
-        f = [field.strip() for field in line.split("|")]
-        if len(f) >= 5 and f[2]:
-            markers.marker("CHECK_ITEM", "system", f[2], f[3], f[4])
+    for row in listing.rows:
+        markers.marker("CHECK_ITEM", "system", row.name, row.old, row.edition,
+                       row.size, row.repo)
     return n, bool(unreadable)
 
 
@@ -244,10 +232,8 @@ def _check_flatpak() -> tuple[int, bool]:
         markers.out(f"  Flatpak apps: {n} update(s)")
     markers.emit_check("flatpak", n, "Flatpak app(s)", unreadable)
     for row in rows:
-        parts = row.split()
-        if parts:
-            version = parts[1] if len(parts) > 1 else ""
-            markers.marker("CHECK_ITEM", "flatpak", parts[0], "", version)
+        if steps.valid_package(row.app):
+            markers.marker("CHECK_ITEM", "flatpak", row.app, "", row.version, 0, row.remote)
     return n, bool(unreadable)
 
 
@@ -282,7 +268,7 @@ def check(opts: Options) -> int:
     total = 0
     incomplete = False
     if opts.selected("system"):
-        n, bad = _check_system()
+        n, bad = _check_system(opts.sizes)
         total += n
         incomplete = incomplete or bad
     if opts.selected("flatpak") and shutil.which("flatpak"):

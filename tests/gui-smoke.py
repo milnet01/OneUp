@@ -120,12 +120,14 @@ from oneup.gui import (  # noqa: E402 — same reason.
     diagnostics,
     i18n,
     markers,
+    packages,
     paths,
     placement,
     repos,
     rollback,
     run,
     settings_dialog,
+    steps,
     theme,
     toggle_switch,
     tray,
@@ -1260,7 +1262,7 @@ def main() -> int:
     check("a changed package lands in the detail panel with both versions",
           "bash" in _detail and "5.2.21" in _detail and "5.2.37" in _detail)
     check("a package with no version pair still lists its name",
-          any(ln.strip() == "zypper" for ln in _detail.splitlines()))
+          any(ln.split()[:1] == ["zypper"] for ln in _detail.splitlines()))
     check("the detail disclosure appears once there is something to show",
           not wI.rows["system"].disclosure.isHidden())
     # Qt does not mirror an arrow type, so the closed arrow follows the direction
@@ -1272,6 +1274,59 @@ def main() -> int:
     _dis.setChecked(True)
     _dis.setChecked(False)
     check("and points that way again once collapsed", _dis.arrowType() == _closed)
+
+    # --- 5b-i. ONEUP-0259: the package model -----------------------------------
+    # The engine's CHECK_ITEM and PKG lines land in one model, which the row's
+    # list is drawn from. Words, never colour (INV-13); never "installed" without
+    # the package's own line saying so (INV-7); never backwards (INV-9); and a
+    # malformed line changes nothing (INV-8).
+    def _word(state):     # the word the row shows: translated where shown
+        return app.translate("steps", steps.STATE_WORDS[state])
+
+    wP = window.Updater()
+    run.handle_line(wP, "@@CHECK_ITEM@@|system|vlc|3.0-1.1|3.0-2.1|222|Packman")
+    _vlc = wP.packages.packages("system")
+    check("ONEUP-0259 CHECK_ITEM fills the model with versions, size and source",
+          len(_vlc) == 1 and (_vlc[0].old, _vlc[0].edition, _vlc[0].size, _vlc[0].repo)
+          == ("3.0-1.1", "3.0-2.1", 222, "Packman"))
+    _detail = wP.rows["system"]._items_label.text()
+    check("ONEUP-0259 the row's list shows the size and the state as a word",
+          "222 B" in _detail
+          and _word("queued") in _detail)
+    _before = [(p.name, p.state) for p in wP.packages.packages()]
+    for bad in ("@@PKG@@|system|installed",                 # too few fields
+                "@@PKG@@|system|exploded|vlc|3.0-2.1",       # not a state
+                "@@PKG@@|system|downloading|vlc|3.0-2.1|lots",   # bytes not a number
+                "@@CHECK_ITEM@@|system|x|1|2|lots"):
+        run.handle_line(wP, bad)
+    check("ONEUP-0259 INV-8 a malformed CHECK_ITEM or PKG changes nothing",
+          [(p.name, p.state) for p in wP.packages.packages()] == _before)
+    for line in ("@@PKG@@|system|queued|a|1-1|0||Main",
+                 "@@PKG@@|system|queued|b|1-1|0||Main",
+                 "@@PKG@@|system|installed|a|1-1",
+                 "@@PKG@@|system|downloaded|a|1-1"):
+        run.handle_line(wP, line)
+    _state = {p.name: wP.packages.shown_state(p) for p in wP.packages.packages("system")}
+    check("ONEUP-0259 INV-9 a package's state never moves backwards",
+          _state["a"] == "installed")
+    run.handle_line(wP, "@@STEP_END@@|system|ok|installed|1")
+    _state = {p.name: wP.packages.shown_state(p) for p in wP.packages.packages("system")}
+    check("ONEUP-0259 INV-7 after STEP_END, only a package said to be installed reads so",
+          _state["a"] == "installed" and _state["b"] == "unchanged")
+    _words = [_word(state) for state in steps.STATE_WORDS]
+    check("ONEUP-0259 INV-13 every state the model accepts, plus unchanged, has a word",
+          set(steps.STATE_WORDS) == {*packages.STATES, "unchanged"} and all(_words))
+    check("ONEUP-0259 INV-13 no two states share a word", len(set(_words)) == len(_words))
+    _lines = wP.rows["system"]._items_label.text().splitlines()
+    check("ONEUP-0259 INV-13 the redrawn list shows the table's word for each package",
+          any(ln.split()[0] == "a" and ln.endswith(_word("installed")) for ln in _lines)
+          and any(ln.split()[0] == "b" and ln.endswith(_word("unchanged")) for ln in _lines))
+    _calls = []
+    wP.packages.subscribe(_calls.append)
+    run._reset_for_run(wP, ["system"], check=True)
+    check("ONEUP-0259 a new check or run empties the model and says so once, with None",
+          wP.packages.packages() == [] and _calls == [None]
+          and wP.rows["system"]._items_label.text() == "")
 
     # --- 5c. @@HINT@@ goes through the parser, not straight into _hints ---------
     # Every other hint scenario assigns w._hints directly, so the dispatch line that
@@ -4032,7 +4087,7 @@ def main() -> int:
     row = wC.rows["system"]
     row.badge.setText("3 waiting")
     row.badge.setVisible(True)
-    row.add_detail_item("bash", "5.2", "5.3")       # reveals the disclosure
+    run.handle_line(wC, "@@CHECK_ITEM@@|system|bash|5.2|5.3")   # reveals the disclosure
     row.disclosure.setChecked(True)                 # expands the panel
     QApplication.processEvents()
     fired = []

@@ -153,6 +153,8 @@ run_engine() {
     #     so every scenario would take a genuine block-mode lock on the tester's own
     #     session (ONEUP-0086). Pre-set here, and note the `-` rather than `:-`: a
     #     scenario opts back IN by setting it to the empty string.
+    #   * the size lookup reads zypper's cached repository data, so a check's sizes
+    #     would be this machine's packages rather than the scenario's (ONEUP-0259 INV-3).
     PATH="$mockdir:$PATH" \
         ONEUP_ZYPP_PID_FILE="${ONEUP_ZYPP_PID_FILE:-$mockdir/no-zypp.pid}" \
         ONEUP_RUN_STATE="${ONEUP_RUN_STATE:-$mockdir/run.state}" \
@@ -162,6 +164,7 @@ run_engine() {
         ONEUP_GUARD_FILE="${ONEUP_GUARD_FILE:-$mockdir/oneup-download-guard}" \
         ONEUP_INHIBITED="${ONEUP_INHIBITED-1}" \
         ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}" \
+        ONEUP_ZYPP_RAW="${ONEUP_ZYPP_RAW:-$mockdir/zypp-raw}" \
         "${ENGINE_CMD[@]}" "$@" --log="$mockdir/run.log" 2>&1
 }
 

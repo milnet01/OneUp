@@ -14,9 +14,14 @@ from PySide6.QtWidgets import (
 )
 
 from . import steps
+from .markers import _format_size
+from .packages import PackageModel
 from .toggle_switch import ToggleSwitch
 
 _PACKAGE_LINES = "\n"
+# Between a package line's columns — name, versions, size, state word. Layout
+# between data, as the line break above is; no language words it differently.
+_COLUMNS = "  "
 
 
 def _detail_name(key: str, title: str, which: int) -> str:
@@ -44,8 +49,9 @@ class TaskRow(QFrame):
     """One task, drawn as a card with a hover-lit gradient border: the 1px
     outer frame shows the accent gradient, an inner card sits 1px inside it. A
     badge on the right shows how many updates a --check found; an expandable
-    panel below lists the exact packages that will change (fed by the engine's
-    @@CHECK_ITEM@@ markers), with a "Show download size" link on the system row."""
+    panel below lists the exact packages that will change, drawn from the
+    window's package model (ONEUP-0259), with a "Show download size" link on the
+    system row."""
 
     # Emitted when the user clicks "Show download size"; carries the step key.
     size_requested = Signal(str)
@@ -107,7 +113,7 @@ class TaskRow(QFrame):
 
         # Collapsible detail panel: the changed-package list, plus (system only)
         # a link that fetches the exact download size on demand.
-        self._items: list[str] = []
+        self._model: PackageModel | None = None
         self.details = QFrame()
         self.details.setObjectName("RowDetails")
         self.details.setVisible(False)
@@ -207,14 +213,32 @@ class TaskRow(QFrame):
         self.disclosure.setArrowType(
             Qt.ArrowType.DownArrow if on else _collapsed_arrow())
 
-    def add_detail_item(self, name: str, frm: str, to: str):
-        """Append one changed package to the panel (name  old → new)."""
-        line = f"{name:<32}  {frm}  →  {to}" if (frm or to) else name
-        self._items.append(line)
-        # One package per line. The lines are data — names and version numbers —
-        # and a line break is not a separator any language words differently.
-        self._items_label.setText(_PACKAGE_LINES.join(self._items))
-        self.disclosure.setVisible(True)
+    def watch(self, model: PackageModel):
+        """Draw this row's list from `model`, and redraw it whenever it changes."""
+        self._model = model
+        model.subscribe(self._on_model)
+
+    def _on_model(self, key: str | None):
+        if key is None or key == self.key:
+            self._redraw()
+
+    def _redraw(self):
+        """One package per line: name, old → new, size, and its state as a word."""
+        packages = self._model.packages(self.key) if self._model else []
+        lines = []
+        for package in packages:
+            versions = f"{package.old}  →  {package.edition}" \
+                if (package.old or package.edition) else ""
+            size = _format_size(package.size) if package.size else ""
+            word = QCoreApplication.translate(
+                "steps", steps.STATE_WORDS[self._model.shown_state(package)])
+            lines.append(_COLUMNS.join(part for part in (
+                f"{package.name:<32}", versions, size, word) if part))
+        # The lines are data — names and version numbers — and a line break is not
+        # a separator any language words differently.
+        self._items_label.setText(_PACKAGE_LINES.join(lines))
+        if lines:
+            self.disclosure.setVisible(True)
 
     def set_size_result(self, text: str):
         """Show the download-size figure and retire the "Show download size" link."""
@@ -272,7 +296,6 @@ class TaskRow(QFrame):
 
     def clear_details(self):
         """Reset the expandable panel between runs."""
-        self._items = []
         self._items_label.setText("")
         self.disclosure.setChecked(False)
         self.disclosure.setVisible(False)

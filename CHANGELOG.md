@@ -8,6 +8,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Each package in the list shows its download size, its source and, during an update, its progress** (ONEUP-0259)
+  After Check for updates, each system package shows its old and new
+  version, how much it will download and where it comes from (for
+  example, Packman). During an update, each one reads waiting,
+  downloading, downloaded, installed or removed as it happens, and
+  "not changed" if the update finished without touching it. Flatpak
+  apps show no size yet.
+
 - **OneUp now deletes its own old update logs, after 30 days by default.** (ONEUP-0082)
   Settings → This machine → Keep logs picks 7, 14, 30, 90 or 365 days.
   The log of your latest update, and the log of a run still going, are

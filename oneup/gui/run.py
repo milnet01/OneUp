@@ -359,7 +359,9 @@ def _engine_args(steps: list[str], check: bool = False, import_keys: bool = Fals
     time — this helper doesn't know about the log path."""
     args = [f"--steps={','.join(steps)}"]
     if check:
-        args.append("--check")
+        # The window's own check asks for each package's size; the tray's does not,
+        # so its background poll never pays for the lookup (ONEUP-0259 INV-5).
+        args += ["--check", "--sizes"]
     elif import_keys:
         args.append("--import-keys")
     for alias in (skip_repos or []):
@@ -431,6 +433,7 @@ def _reset_for_run(win, steps: list[str], check: bool):
     for r in win.rows.values():
         r.clear_badge()
         r.clear_details()
+    win.packages.reset()
     win.log.clear()
 
 
@@ -688,6 +691,10 @@ def handle_marker(win, line: str):
                 "{title}: {badge}").format(title=row.title, badge=badge), row.badge)
         if status == "fail":
             win._failed_steps.append(key)
+        # From here a package this step did not install or remove reads "not
+        # changed" — the step's own status is never taken as its evidence (INV-7).
+        if key:
+            win.packages.end_step(key)
     elif tag == "TIMING":
         # How long the step took, appended to its row badge ("3 installed · 42s").
         key = parts[0]
@@ -726,13 +733,12 @@ def handle_marker(win, line: str):
             # Text, not colour: the badge must read as unknown to everyone.
             row.set_badge(QCoreApplication.translate("run", "couldn't check"))
     elif tag == "CHECK_ITEM":
-        # One changed package for the expandable preview: key|name|from|to.
-        if len(parts) >= 2:
-            row = win.rows.get(parts[0])
-            if row:
-                frm = parts[2] if len(parts) > 2 else ""
-                to = parts[3] if len(parts) > 3 else ""
-                row.add_detail_item(parts[1], frm, to)
+        # One pending package, key|name|from|to[|bytes|repo], into the package
+        # model every view reads (ONEUP-0259). The model guards its own fields.
+        win.packages.add_check_item(parts)
+    elif tag == "PKG":
+        # One package's place in a run, key|state|name|edition[|bytes|from|repo].
+        win.packages.apply(parts)
     elif tag == "INSTALLED":
         win._installed_count = parts[0]
         win._sys_changed = len(parts) > 1 and parts[1] == "yes"

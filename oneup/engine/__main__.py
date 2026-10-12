@@ -47,6 +47,7 @@ class Options:
     auto_skip: bool = False
     thin_snapshots: bool = False
     notify: bool = False
+    sizes: bool = False
 
     def selected(self, key: str) -> bool:
         """`step_selected`: is this step in `--steps=`?"""
@@ -69,12 +70,14 @@ def usage() -> str:
 
 _USAGE_HEAD = """System Updater engine
 
-Usage: oneup-engine [--steps=LIST] [--check] [--notify] [--log=FILE] [--help]
+Usage: oneup-engine [--steps=LIST] [--check [--sizes]] [--notify] [--log=FILE] [--help]
 
   --steps=LIST   Comma-separated steps to run. Default: all.
                  Available: system, flatpak, firmware, orphans, cache
   --check        Read-only: report how many updates are available and exit.
                  Runs WITHOUT root, so it is safe for an unattended timer.
+  --sizes        With --check, also give each package's download size, read
+                 from zypper's cached repository data. Still needs no root.
   --notify       Raise a desktop notification: with --check when updates exist,
                  and at the end of a full run with the outcome.
   --grant-auth   Opt in to passwordless updates: install a scoped sudoers rule
@@ -100,7 +103,8 @@ _USAGE_TAIL = """/<timestamp>.log
 Examples:
   oneup-engine                       # update everything
   oneup-engine --steps=system,cache  # only system packages + cache clean
-  oneup-engine --check --notify      # background "updates available?" check"""
+  oneup-engine --check --notify      # background "updates available?" check
+  oneup-engine --check --sizes       # each pending package, with its size"""
 
 
 def parse(argv: list[str]) -> tuple[Options | None, int]:
@@ -137,6 +141,8 @@ def parse(argv: list[str]) -> tuple[Options | None, int]:
             opts.thin_snapshots = True
         elif arg == "--notify":
             opts.notify = True
+        elif arg == "--sizes":
+            opts.sizes = True
         elif arg in ("--help", "-h"):
             markers.out(usage())
             return None, 0

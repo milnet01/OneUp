@@ -21,6 +21,7 @@ python3 updater.py                      # launch the GUI (needs PySide6 / Qt 6)
 python3 -m oneup.engine                 # run the engine standalone, from the repo root (all steps)
 python3 -m oneup.engine --steps=system,cache  # run only selected steps
 python3 -m oneup.engine --check --notify      # read-only "updates available?" pass (no root)
+python3 -m oneup.engine --check --sizes       # the same, with each package's download size
 ./update_system.sh                      # the retired Bash engine, kept as a fallback through 2.0
 tests/run-tests.sh                      # engine suite; non-zero exit on any failure
 python3 tests/gui-smoke.py              # window suite (needs PySide6; exit 77 = skipped)

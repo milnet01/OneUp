@@ -79,6 +79,7 @@ from . import (
     tray,
 )
 from . import theme as theme_mod
+from .packages import PackageModel
 from .settings_dialog import SettingsDialog
 from .task_row import TaskRow
 from .theme import TEXT_SCALES, _app_icon, apply_app_theme
@@ -434,12 +435,16 @@ class Updater(QMainWindow):
         root.addLayout(header_row)
         root.addSpacing(2)
 
+        # The packages this check or run touches (ONEUP-0259), which every view of
+        # them reads. Built before the rows, which watch it.
+        self.packages = PackageModel()
         # Task rows — each a gradient-bordered card.
         self.rows: dict[str, TaskRow] = {}
         for key, title, desc in steps.TASKS:
             r = TaskRow(key, QCoreApplication.translate("steps", title),
                         QCoreApplication.translate("steps", desc))
             r.size_requested.connect(partial(run.request_size, self))
+            r.watch(self.packages)
             self.rows[key] = r
             root.addWidget(r)
 

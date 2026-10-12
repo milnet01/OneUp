@@ -12,6 +12,8 @@ where two of them disagree. Where the Bash rounds, this rounds the same way.
 from __future__ import annotations
 
 import re
+import xml.etree.ElementTree as ET
+from typing import NamedTuple
 
 # `to_bytes`' unit table. These four and no others: `progress_total_bytes` below
 # admits a `[KMG]?i?B` unit, so `KB` reaches here and must come back 0 rather
@@ -251,3 +253,137 @@ def reboot_phrase(components: list[str]) -> str:
         phrase = f"{parts[0]}, {parts[1]}, and {parts[2]}"
     return f"{phrase} {verb} installed"
 
+
+
+# --- one package at a time (ONEUP-0259) ----------------------------------------
+# Unlike everything above, these reproduce nothing in `update_system.sh`: the
+# Bash engine is frozen and never learnt to name a package. They are new parsers
+# for the package model, kept here for the same reason the others are — pure,
+# so `tests/parsers-test.py` can feed them lines.
+
+
+class Update(NamedTuple):
+    """One pending update, as `zypper --xmlout list-updates` names it."""
+
+    name: str
+    edition: str      # zypper's own string: version-release, `epoch:` kept
+    old: str          # the installed edition, "" when zypper gives none
+    arch: str
+    alias: str        # the repository's alias, "" when zypper gives none
+
+
+def update_list(xml_text: str) -> tuple[list[Update], list[str]] | None:
+    """`zypper --xmlout list-updates`' stdout: the package updates, in zypper's
+    order, and the text of every `<message>`. None when it is not well-formed.
+
+    The messages come back unescaped, which is why a caller searches them rather
+    than the raw text: an `&apos;` would otherwise hide the quote a pattern
+    looks for (ONEUP-0259 §4.3).
+    """
+    try:
+        # zypper's own stdout. ElementTree resolves no external entity, and the
+        # expat it uses refuses entity amplification — both measured on expat 2.9.0.
+        root = ET.fromstring(xml_text)  # noqa: S314 — local tool output, see above
+    except ET.ParseError:
+        return None
+    updates = []
+    for node in root.iter("update"):
+        if node.get("kind") != "package":
+            continue
+        source = node.find("source")
+        updates.append(Update(
+            node.get("name", ""), node.get("edition", ""), node.get("edition-old", ""),
+            node.get("arch", ""), source.get("alias", "") if source is not None else "",
+        ))
+    messages = [m.text or "" for m in root.iter("message")]
+    return updates, messages
+
+
+def repo_names(xml_text: str) -> dict[str, str]:
+    """`zypper --xmlout repos`: each alias's display name. Empty when unreadable."""
+    try:
+        root = ET.fromstring(xml_text)  # noqa: S314 — zypper's own stdout, see update_list
+    except ET.ParseError:
+        return {}
+    return {repo.get("alias", ""): repo.get("name", "") for repo in root.iter("repo")
+            if repo.get("alias")}
+
+
+def split_nvra(nvra: str) -> tuple[str, str, str] | None:
+    """`cpupower-lang-7.1.4-17.noarch` -> ("cpupower-lang", "7.1.4-17", "noarch").
+
+    From the right: the architecture after the last `.`, the release after the
+    last `-`, the version after the `-` before it. Neither a version nor a
+    release may contain `-`, so what is left is the name. An `epoch:` stays inside
+    the version, which is how zypper writes an edition. None when a part is
+    missing.
+    """
+    rest, dot, arch = nvra.rpartition(".")
+    if not dot or not arch:
+        return None
+    parts = rest.rsplit("-", 2)
+    if len(parts) != 3 or not all(parts):
+        return None
+    name, version, release = parts
+    return name, f"{version}-{release}", arch
+
+
+# An action line: `( 7/77) Installing: <nvra> [...done]`. Upgrading counts as
+# installing, as `stream_filtered` already counts it.
+_ACTION = re.compile(r"^\( *[0-9]+/[0-9]+\) (Installing|Upgrading|Removing): (\S+)")
+_ACTION_STATE = {"Installing": "installed", "Upgrading": "installed",
+                 "Removing": "removed"}
+
+
+class PackageLines:
+    """Turns zypper's transaction lines into `(state, name, edition, bytes)`.
+
+    One instance per pass, fed every line in order, because one fact spans
+    lines: a package's own script can split an action line before its `done]`.
+    Measured in a OneUp run log of 2026-10-12 —
+
+        (117/320) Installing: xorg-x11-server-21.1.24-2.1.x86_64 [...
+        Updating /etc/sysconfig/displaymanager ...
+        done]
+
+    so a cut action is held, and the next line ending in `done]` that is not
+    itself an action completes it. The next action, or `finish`, drops it: an
+    action never seen to complete is never reported as done (ONEUP-0259 INV-6).
+    """
+
+    def __init__(self) -> None:
+        self._held: tuple[str, str, str] | None = None
+
+    def feed(self, line: str) -> tuple[str, str, str, int] | None:
+        text = line.rstrip()
+        action = _ACTION.match(text)
+        if action:
+            self._held = None
+            split = split_nvra(action.group(2))
+            if split is None:
+                return None
+            state = _ACTION_STATE[action.group(1)]
+            if text.endswith("done]"):
+                return state, split[0], split[1], 0
+            if "]" not in text[action.end():]:
+                self._held = (state, split[0], split[1])
+            return None
+        if text.startswith("Retrieving:"):
+            token = text[len("Retrieving:"):].split(maxsplit=1)
+            split = split_nvra(token[0]) if token else None
+            return ("downloading", split[0], split[1], retrieving_bytes(text)) if split else None
+        if text.startswith("Preloading:"):
+            if not (text.endswith("[done]") or text.endswith("[already in cache]")):
+                return None
+            token = text[len("Preloading:"):].split(maxsplit=1)
+            split = split_nvra(token[0].removesuffix(".rpm")) if token else None
+            return ("downloaded", split[0], split[1], 0) if split else None
+        if self._held is not None and text.endswith("done]"):
+            state, name, edition = self._held
+            self._held = None
+            return state, name, edition, 0
+        return None
+
+    def finish(self) -> None:
+        """The stream ended: anything still held never completed."""
+        self._held = None

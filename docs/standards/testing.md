@@ -72,6 +72,7 @@ ONEUP_GO_FILE="${ONEUP_GO_FILE:-$mockdir/go.request}"
 ONEUP_GUARD_FILE="${ONEUP_GUARD_FILE:-$mockdir/oneup-download-guard}"
 ONEUP_INHIBITED="${ONEUP_INHIBITED-1}"
 ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}"
+ONEUP_ZYPP_RAW="${ONEUP_ZYPP_RAW:-$mockdir/zypp-raw}"
 ```
 
 It also puts the mock directory first on `PATH`, and passes `--log=` into the scenario
@@ -86,6 +87,9 @@ developer's real state directory, which is the exact damage §2 exists to preven
 `guard_current` **reads** that path on every run that reaches the download pass, so without
 a default the suite's result would depend on whether the developer's own machine happens to
 have OneUp's passwordless setting granted.
+
+`ONEUP_ZYPP_RAW` is ONEUP-0259's: the size lookup reads zypper's cached repository data
+there, so without it a scenario's sizes would be the developer's own packages.
 
 `ONEUP_INHIBITED` is the one that is not a path. Without it the engine re-runs itself under
 `systemd-inhibit` and takes a real shutdown lock on the developer's own session

@@ -93,6 +93,28 @@ def run(
     return completed.returncode, completed.stdout or ""
 
 
+def run_apart(argv: Sequence[str], *,
+              env: Mapping[str, str] | None = None) -> tuple[int, str, str]:
+    """Run `argv`; return its exit status, its stdout and its stderr, kept apart.
+
+    For output a parser must read whole — zypper's XML — where a warning merged
+    in from stderr would leave it ill-formed (ONEUP-0259 §4.3). Same capture as
+    `run`'s, decoding included.
+    """
+    overlay = {**os.environ, **env} if env else None
+    completed = subprocess.run(  # noqa: S603 — fixed argv list, no shell, as in `run`
+        list(argv),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+        env=overlay,
+    )
+    return completed.returncode, completed.stdout or "", completed.stderr or ""
+
+
 def _pump(argv: Sequence[str], *, env: Mapping[str, str] | None,
           stdin: int | None = None) -> int:
     """Run `argv`, relaying each line through `sys.stdout` as it arrives.
@@ -272,6 +294,9 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
     global PROGRESS_SEEN
     preloaded = seen = got = 0
     want = 0
+    # Each package's own progress, beside the counts above and never instead of
+    # them: PROGRESS and the canary's `seen` are untouched (ONEUP-0259 INV-10).
+    packages = parsers.PackageLines()
     child = subprocess.Popen(  # noqa: S603 — fixed argv list, no shell, as in `run`
         list(argv),
         stdout=subprocess.PIPE,
@@ -342,6 +367,14 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
                     "Installing:" in line or "Removing:" in line or "Upgrading:" in line):
                 if markers.emit_progress(step, parsers.install_fraction(line), "install"):
                     seen += 1
+            package = packages.feed(line)
+            if package is not None:
+                state, name, edition, size = package
+                if state == "downloading":
+                    markers.marker("PKG", step, state, name, edition, size)
+                else:
+                    markers.marker("PKG", step, state, name, edition)
+        packages.finish()
     # Wait for the child to EXIT without reaping it, so its pid still names it
     # while the watchdog is live: a child that closed its output and kept going
     # stays under its budget. Once settled, the watchdog can no longer fire.

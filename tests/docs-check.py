@@ -360,9 +360,13 @@ def check_marker_table() -> None:
         check(not engine - py_engine, doc, 0, "§3",
               f"markers the Bash engine emits that the Python engine does not: "
               f"{sorted(engine - py_engine)}")
-        check(not py_engine - engine, doc, 0, "§3",
+        # Named, never a blanket pass: a marker added under marker-protocol.md §5.1's
+        # second exception, which the frozen `update_system.sh` deliberately never
+        # learns (ONEUP-0259 §8). Anything else the Bash engine lacks still fails.
+        python_only = {"PKG"}
+        check(not py_engine - engine - python_only, doc, 0, "§3",
               f"markers the Python engine emits that the Bash engine does not: "
-              f"{sorted(py_engine - engine)}")
+              f"{sorted(py_engine - engine - python_only)}")
     # The engine suite is what proves each marker is really produced. A marker nothing
     # asserts on is a row in the contract with no evidence behind it. Keyed on the
     # Python emitters wherever they exist — the engine the window runs since

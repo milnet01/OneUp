@@ -23,8 +23,9 @@ import shutil
 import tempfile
 import time
 from pathlib import Path
+from typing import NamedTuple
 
-from . import markers, parsers, privilege, proc, repos, runstate
+from . import markers, parsers, pkgsizes, privilege, proc, repos, runstate
 
 # Set by the download-recovery path (ONEUP-0094) to a throwaway repos.d built by
 # `repos.make_cdn_reposd`. Empty means "use the system's own".
@@ -103,10 +104,20 @@ def end_step(key: str, status: str, code: str, detail: str = "",
 FLATPAK_QUERY_SECONDS = float(os.environ.get("ONEUP_FLATPAK_TIMEOUT") or "60")
 
 
-def flatpak_updates(deadline: float | None = None) -> tuple[list[str], list[str]]:
+class FlatpakRow(NamedTuple):
+    """One pending Flatpak update. An app pending in both scopes at one version is
+    one row: the counts follow the rows (ONEUP-0259 §4.3)."""
+
+    app: str
+    version: str             # "" when the remote gives none
+    remote: str              # the first remote that listed it
+    scopes: frozenset[str]   # "--user", "--system": every scope that listed it
+
+
+def flatpak_updates(deadline: float | None = None) -> tuple[list[FlatpakRow], list[str]]:
     """Ask each Flatpak remote for its pending updates.
 
-    Returns the "app-id version" rows and the remotes that could not be asked.
+    Returns one row per app and version, and the remotes that could not be asked.
     Both `--check` and the run count this way.
     """
     # `flatpak remote-ls --updates` with no remote named abandons the WHOLE listing
@@ -114,7 +125,7 @@ def flatpak_updates(deadline: float | None = None) -> tuple[list[str], list[str]
     # origin (what `flatpak install ./app.flatpak` leaves behind) never can be.
     # Measured: six such leftovers on one box hid a real Discord update for weeks.
     # Per-remote, one broken source costs only itself.
-    rows: list[str] = []
+    found: dict[tuple[str, str], FlatpakRow] = {}
     unreachable: list[str] = []
     for scope in ("--user", "--system"):
         _, listing = proc.run(["flatpak", "remotes", scope, "--columns=name,options"],
@@ -129,13 +140,71 @@ def flatpak_updates(deadline: float | None = None) -> tuple[list[str], list[str]
                 deadline=deadline,
             )
             if rc == 0:
-                rows += [r for r in out.splitlines() if r.strip()]
+                for line in out.splitlines():
+                    parts = line.split()
+                    if not parts:
+                        continue
+                    key = (parts[0], parts[1] if len(parts) > 1 else "")
+                    prior = found.get(key)
+                    found[key] = FlatpakRow(key[0], key[1], prior.remote if prior else remote,
+                                            (prior.scopes if prior else frozenset()) | {scope})
             elif "no-enumerate" not in opts:
                 # A no-enumerate origin serves no listing BY DESIGN — apps installed
                 # from a local file have no remote updates to miss, so it is not a
                 # failed check. Any other remote failing means apps went uncounted.
                 unreachable.append(remote)
-    return rows, unreachable
+    return list(found.values()), unreachable
+
+
+# zypper names a repository it had to set aside (exit 106) in this warning.
+SKIPPED_REPO = re.compile(r"Skipping repository '([^']*)'")
+
+
+class Pending(NamedTuple):
+    """One pending system update, as the package model carries it (ONEUP-0259 §4.1)."""
+
+    name: str
+    old: str
+    edition: str
+    size: int        # download bytes; 0 = unknown
+    repo: str        # the repository's display name, or its alias
+
+
+class SystemListing(NamedTuple):
+    rc: int                  # list-updates' exit status
+    readable: bool           # its stdout was well-formed XML
+    count: int               # every package update zypper listed
+    rows: list[Pending]      # those whose name passes `valid_package`, in zypper's order
+    skipped: list[str]       # repositories zypper said it set aside
+
+
+def system_updates(sizes: bool) -> SystemListing:
+    """The pending system updates, read without root. `--check` and the run share it.
+
+    stdout is the XML and is parsed alone, so a warning on stderr cannot make it
+    ill-formed; the skipped-repository warning is searched for in stderr and in
+    the parsed `<message>` text, because which of the two carries it in XML mode
+    has not been measured (ONEUP-0259 §4.3).
+    """
+    rc, out, err = proc.run_apart(
+        ["zypper", "--xmlout", "--no-refresh", "--non-interactive", "list-updates"],
+        env={"LC_ALL": "C"},     # keeps zypper's English, which SKIPPED_REPO matches
+    )
+    listed = parsers.update_list(out)
+    texts = [err, *(listed[1] if listed else [])]
+    skipped = sorted(set(SKIPPED_REPO.findall("\n".join(texts))))
+    if listed is None:
+        return SystemListing(rc, False, 0, [], skipped)
+    updates = listed[0]
+    found = (pkgsizes.download_sizes(
+        [(u.alias, u.name, u.edition, u.arch) for u in updates],
+        pkgsizes.SIZE_LOOKUP_SECONDS) if sizes else {})
+    names = parsers.repo_names(proc.run(["zypper", "--xmlout", "repos"])[1]) if updates else {}
+    rows = [Pending(u.name, u.old, u.edition,
+                    found.get((u.alias, u.name, u.edition, u.arch), 0),
+                    names.get(u.alias) or u.alias)
+            for u in updates if valid_package(u.name)]
+    return SystemListing(rc, True, len(updates), rows, skipped)
 
 
 def run_flatpak() -> None:
@@ -148,11 +217,25 @@ def run_flatpak() -> None:
     ok = True
     # Count what will update FIRST — the same read-only query `--check` uses — so
     # the detail can say how many apps were updated rather than just "done".
-    count = len(flatpak_updates(deadline=FLATPAK_QUERY_SECONDS)[0])
-    if proc.run(["flatpak", "update", "--user", "-y"], stream=True)[0] != 0:
+    rows = [row for row in flatpak_updates(deadline=FLATPAK_QUERY_SECONDS)[0]
+            if valid_package(row.app)]
+    count = len(rows)
+    for row in rows:
+        markers.marker("PKG", "flatpak", "queued", row.app, row.version, 0, "", row.remote)
+    succeeded = set()
+    if proc.run(["flatpak", "update", "--user", "-y"], stream=True)[0] == 0:
+        succeeded.add("--user")
+    else:
         ok = False
-    if privilege.sudo(["flatpak", "update", "--system", "-y"], stream=True)[0] != 0:
+    if privilege.sudo(["flatpak", "update", "--system", "-y"], stream=True)[0] == 0:
+        succeeded.add("--system")
+    else:
         ok = False
+    # The exit status is the only per-scope evidence there is, so an app is
+    # installed only when EVERY scope that listed it succeeded (ONEUP-0259 INV-12).
+    for row in rows:
+        if row.scopes <= succeeded:
+            markers.marker("PKG", "flatpak", "installed", row.app, row.version)
     markers.out("Cleaning up unused Flatpak runtimes...")
     proc.run(["flatpak", "uninstall", "--user", "--unused", "-y"], stream=True)
     privilege.sudo(["flatpak", "uninstall", "--system", "--unused", "-y"], stream=True)
@@ -779,6 +862,12 @@ def run_system(opts) -> None:
     if proc.stop_pending():
         end_step("system", "skip", "skipped", "stopped before installing anything")
         return
+    # The package model's list for this run, read as `--check` reads it: as the
+    # user, sizes included (ONEUP-0259 §4.3). The transaction's own lines then
+    # move each package on, and add any `dup` brings that this list lacks.
+    for row in system_updates(sizes=True).rows:
+        markers.marker("PKG", "system", "queued", row.name, row.edition, row.size,
+                       row.old, row.repo)
     handle, path = tempfile.mkstemp(prefix="oneup-sys-")
     os.close(handle)
     _SYS_LOG = Path(path)

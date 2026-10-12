@@ -54,3 +54,16 @@ IN_PROGRESS = {
     "cache": QT_TRANSLATE_NOOP("steps", "Cleaning package cache"),
 }
 
+
+# What a package's state reads as, wherever a package is shown (ONEUP-0259 §4.7).
+# Whole words, never a colour: two states always read differently. Keyed by the
+# package model's states, plus `unchanged` — what a package reads as once its step
+# has ended without installing or removing it.
+STATE_WORDS = {
+    "queued": QT_TRANSLATE_NOOP("steps", "waiting"),
+    "downloading": QT_TRANSLATE_NOOP("steps", "downloading"),
+    "downloaded": QT_TRANSLATE_NOOP("steps", "downloaded"),
+    "installed": QT_TRANSLATE_NOOP("steps", "installed"),
+    "removed": QT_TRANSLATE_NOOP("steps", "removed"),
+    "unchanged": QT_TRANSLATE_NOOP("steps", "not changed"),
+}

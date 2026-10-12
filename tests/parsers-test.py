@@ -167,6 +167,81 @@ REBOOT = [
 ]
 
 
+# --- one package at a time (ONEUP-0259) ---------------------------------------
+# Real lines from a OneUp run log of 2026-10-12, except where a row says it was
+# built to break the rule it tests.
+NVRA = [
+    ("cpupower-lang-7.1.4-17.noarch", ("cpupower-lang", "7.1.4-17", "noarch")),
+    ("ImageMagick-config-7-SUSE-7.1.2.32-2.1.noarch",
+     ("ImageMagick-config-7-SUSE", "7.1.2.32-2.1", "noarch")),
+    ("libgstvideo-1_0-0-32bit-1.28.8-1.1.x86_64",
+     ("libgstvideo-1_0-0-32bit", "1.28.8-1.1", "x86_64")),
+    ("foo-1:2.0-3.1.x86_64", ("foo", "1:2.0-3.1", "x86_64")),   # an epoch stays in the version
+    ("noarch-at-all", None),
+    ("onlyname.x86_64", None),
+    ("", None),
+]
+
+# (lines fed in order, the states that come out) — INV-6.
+PACKAGE_LINES = [
+    (["(  1/320) Installing: ImageMagick-config-7-SUSE-7.1.2.32-2.1.noarch [...done]"],
+     [("installed", "ImageMagick-config-7-SUSE", "7.1.2.32-2.1", 0)]),
+    (["(  3/320) Installing: akonadi-contacts-26.08.2-1.1.x86_64 [..done]"],
+     [("installed", "akonadi-contacts", "26.08.2-1.1", 0)]),
+    (["(1/6) Removing: mariadb-12.3.2-3.1.x86_64 [...done]"],
+     [("removed", "mariadb", "12.3.2-3.1", 0)]),
+    # Built to break it: an action that failed is never done.
+    (["(1/6) Removing: mariadb-12.3.2-3.1.x86_64 [...error]"], []),
+    # A package's script splits the line; a later `done]` completes it.
+    (["(117/320) Installing: xorg-x11-server-21.1.24-2.1.x86_64 [...",
+      "Updating /etc/sysconfig/displaymanager ...",
+      "done]"],
+     [("installed", "xorg-x11-server", "21.1.24-2.1", 0)]),
+    (["(153/320) Installing: gstreamer-1.28.8-1.1.x86_64 [..",
+      "/usr/libexec/gstreamer-1.0/gst-ptp-helper: setting to root:root 0755 "
+      '"cap_net_bind_service=ep". (missing capabilities)',
+      ".done]"],
+     [("installed", "gstreamer", "1.28.8-1.1", 0)]),
+    # Built to break it: a cut action followed by the NEXT action never completes.
+    (["(3/6) Removing: x-1-2.noarch [..",
+      "(4/6) Removing: y-1-2.noarch [..done]"],
+     [("removed", "y", "1-2", 0)]),
+    (["Preloading: libglfw3-3.4-67.34.x86_64.rpm [done]"],
+     [("downloaded", "libglfw3", "3.4-67.34", 0)]),
+    (["Preloading: libglfw3-3.4-67.34.x86_64.rpm [already in cache]"],
+     [("downloaded", "libglfw3", "3.4-67.34", 0)]),
+    (["Preloading: libglfw3-3.4-67.34.x86_64.rpm [error]"], []),
+    (["Retrieving: akonadi-calendar-26.08.2-1.1.x86_64 (Main Repository (OSS)) "
+      "(2/320),  36.3 KiB    "],
+     [("downloading", "akonadi-calendar", "26.08.2-1.1", 37171)]),
+]
+
+# `zypper --xmlout list-updates`, shaped by /usr/share/zypper/xml/xmlout.rnc's
+# `other-update`. A patch update is not a package and is left out.
+UPDATE_XML = """<?xml version='1.0'?>
+<stream>
+<message type="info">Loading repository data...</message>
+<message type="warning">Skipping repository &apos;Packman&apos; because of an error.</message>
+<update-status version="0.6">
+<update-list>
+<update name="vlc" edition="3.0.24-1699.5.pm.3" arch="x86_64" kind="package"
+ edition-old="3.0.24-1699.5.pm.1">
+<summary>Graphical media player</summary><description>x</description><license/>
+<source url="https://ftp.gwdg.de/pub/linux/misc/packman" alias="packman"/>
+</update>
+<update name="openSUSE-2026-1" edition="1" arch="noarch" kind="patch" status="needed"
+ pkgmanager="false" restart="false">
+<summary>p</summary><description>p</description><license/><source url="x" alias="oss"/>
+</update>
+<update name="bash" edition="5.3.9-1.1" arch="x86_64" kind="package">
+<summary>s</summary><description>d</description><license/>
+</update>
+</update-list>
+</update-status>
+</stream>
+"""
+
+
 def main() -> int:
     for number, unit, want, why in TO_BYTES:
         check(f"to_bytes({number!r}, {unit!r}) — {why}",
@@ -232,6 +307,37 @@ def main() -> int:
           ["kernel-new", "graphics-driver-generic", "kernel-modules"])
     check("reboot_components: nothing qualifying is empty",
           parsers.reboot_components("libfoo-1.2.3.x86_64"), [])
+
+    for nvra, want in NVRA:
+        check(f"split_nvra({nvra!r})", parsers.split_nvra(nvra), want)
+
+    for lines, want in PACKAGE_LINES:
+        reader = parsers.PackageLines()
+        got = [r for r in (reader.feed(line) for line in lines) if r is not None]
+        reader.finish()
+        check(f"PackageLines({lines[0][:44]!r}… x{len(lines)})", got, want)
+
+    listed = parsers.update_list(UPDATE_XML)
+    check("update_list: packages only, in zypper's order",
+          [u.name for u in listed[0]] if listed else None, ["vlc", "bash"])
+    check("update_list: edition, old edition, arch and alias",
+          listed[0][0] if listed else None,
+          parsers.Update("vlc", "3.0.24-1699.5.pm.3", "3.0.24-1699.5.pm.1", "x86_64", "packman"))
+    check("update_list: no edition-old and no source read as empty",
+          (listed[0][1].old, listed[0][1].alias) if listed else None, ("", ""))
+    check("update_list: a message comes back unescaped, so its quotes can be matched",
+          any("Skipping repository 'Packman'" in m for m in listed[1]) if listed else None, True)
+    check("repo_names maps each alias to its display name",
+          parsers.repo_names('<stream><repo-list>'
+                             '<repo alias="download.opensuse.org-non-oss" '
+                             'name="Main Repository (NON-OSS)"/>'
+                             '<repo alias="devel-tools" name="devel-tools"/></repo-list></stream>'),
+          {"download.opensuse.org-non-oss": "Main Repository (NON-OSS)",
+           "devel-tools": "devel-tools"})
+    check("repo_names on output that is not XML is empty",
+          parsers.repo_names("zypper: command not found"), {})
+    check("update_list: output that is not well-formed is None, never a partial list",
+          parsers.update_list(UPDATE_XML[:300]), None)
 
     # --- the emitter (oneup/engine/markers.py) ------------------------------
     # `emit_progress` returns False when there was no counter to parse, and that

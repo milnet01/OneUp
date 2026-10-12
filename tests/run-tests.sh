@@ -457,10 +457,22 @@ echo "TEST: --check reports counts read-only and never installs"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'
 #!/usr/bin/env bash
+# The check reads `--xmlout list-updates` and names each repository from `--xmlout repos`.
 if [[ "$*" == *list-updates* ]]; then
-  printf 'S | Repo | Name | Cur | Avail | Arch\n--+--+--+--+--+--\nv | r | a | 1 | 2 | x\nv | r | b | 1 | 2 | x\n'
+  cat <<'XML'
+<?xml version='1.0'?>
+<stream>
+<update-status version="0.6">
+<update-list>
+<update name="a" edition="2" arch="x86_64" kind="package" edition-old="1"><summary/><description/><license/><source url="http://r" alias="r"/></update>
+<update name="b" edition="2" arch="x86_64" kind="package" edition-old="1"><summary/><description/><license/><source url="http://r" alias="r"/></update>
+</update-list>
+</update-status>
+</stream>
+XML
   exit 0
 fi
+[[ "$*" == *repos* ]] && { echo '<stream><repo-list><repo alias="r" name="Main | Extra"/></repo-list></stream>'; exit 0; }
 # Any dup/update/clean during --check would be a bug: fail loudly.
 [[ "$*" == *dup* || "$*" == *update* ]] && { echo "BUG: mutated in --check" >&2; exit 99; }
 exit 0
@@ -484,6 +496,10 @@ check_absent "no mutation during check" "BUG: mutated"       "$out"
 check        "system detail item a 1->2" "@@CHECK_ITEM@@|system|a|1|2"       "$out"
 check        "system detail item b 1->2" "@@CHECK_ITEM@@|system|b|1|2"       "$out"
 check        "flatpak detail item"       "@@CHECK_ITEM@@|flatpak|org.x.App|" "$out"
+# ONEUP-0259: the trailing size and source. No --sizes, so no size; a `|` in a
+# repository's name must not shift the fields after it (INV-11).
+check        "system item carries size and source" "@@CHECK_ITEM@@|system|a|1|2|0|Main / Extra" "$out"
+check        "flatpak item carries its remote"     "@@CHECK_ITEM@@|flatpak|org.x.App||1|0|flathub" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -501,7 +517,7 @@ cat > "$d/zypper" <<'EOF'
 if [[ "$*" == *list-updates* ]]; then
   echo "Warning: Skipping repository 'packman' because of the above error." >&2
   echo "Some of the repositories have not been refreshed because of an error." >&2
-  printf 'S | Repo | Name | Cur | Avail | Arch\n--+--+--+--+--+--\n'
+  printf '<?xml version="1.0"?>\n<stream><update-status version="0.6"><update-list>\n</update-list></update-status></stream>\n'
   exit 106                      # ZYPPER_EXIT_INF_REPO_SKIPPED
 fi
 exit 0
@@ -513,6 +529,133 @@ check        "reason is a code and the name" "@@CHECK_UNKNOWN@@|system|sources-u
 check        "terminal keeps the English"    "couldn't read these software sources: packman" "$out"
 check_codes  "INV-1 CHECK_UNKNOWN carries a code" CHECK_UNKNOWN "$out"
 check_absent "no confident zero for system"  "@@CHECK@@|system|0"       "$out"
+rm -rf "$d"
+
+# ONEUP-0259 §4.3: in XML mode the warning may come on stdout instead, inside a
+# <message> with its quotes escaped. Read from the parsed text, it is still found.
+echo "TEST: --check finds a skipped repository named inside an XML message"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *list-updates* ]]; then
+  printf '<?xml version="1.0"?>\n<stream>\n<message type="warning">Skipping repository &apos;packman&apos; because of the above error.</message>\n<update-status version="0.6"><update-list>\n</update-list></update-status></stream>\n'
+  exit 106
+fi
+exit 0
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --check --steps=system)
+check        "the escaped name is read back" "@@CHECK_UNKNOWN@@|system|sources-unreadable|packman" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0259: each package's download size, read from zypper's cached repository
+# data under ONEUP_ZYPP_RAW — the scenario's own tree, never this machine's
+# (INV-3). `pkg_raw_tree DIR` builds one repository, `packman`, whose primary file
+# lists vlc twice: the edition list-updates does NOT name comes FIRST, so a lookup
+# matching on the name alone takes the wrong size (INV-2).
+pkg_raw_tree() {
+    local repo="$1/zypp-raw/packman/repodata"
+    mkdir -p "$repo"
+    cat > "$repo/repomd.xml" <<'XML'
+<?xml version="1.0"?>
+<repomd xmlns="http://linux.duke.edu/metadata/repo">
+<data type="primary"><location href="repodata/abc-primary.xml.zst"/></data>
+</repomd>
+XML
+    # Plain XML under a .zst name: the mock zstdcat below only cats it.
+    cat > "$repo/abc-primary.xml.zst" <<'XML'
+<?xml version="1.0"?>
+<metadata xmlns="http://linux.duke.edu/metadata/common" packages="2">
+<package type="rpm"><name>vlc</name><arch>x86_64</arch><version epoch="0" ver="3.0" rel="1.1"/><size package="111" installed="1" archive="1"/></package>
+<package type="rpm"><name>vlc</name><arch>x86_64</arch><version epoch="0" ver="3.0" rel="2.1"/><size package="222" installed="1" archive="1"/></package>
+</metadata>
+XML
+}
+pkg_zypper_mock() {   # a check's listing: vlc to 3.0-2.1, a name that is not a package name, one with no cached size
+    cat > "$1/zypper" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *list-updates* ]]; then
+  cat <<'XML'
+<?xml version='1.0'?>
+<stream><update-status version="0.6"><update-list>
+<update name="vlc" edition="3.0-2.1" arch="x86_64" kind="package" edition-old="3.0-1.1"><summary/><description/><license/><source url="http://p" alias="packman"/></update>
+<update name="-rf" edition="1-1" arch="x86_64" kind="package"><summary/><description/><license/><source url="http://p" alias="packman"/></update>
+<update name="nosize" edition="1-1" arch="x86_64" kind="package"><summary/><description/><license/><source url="http://m" alias="missing"/></update>
+</update-list></update-status></stream>
+XML
+  exit 0
+fi
+[[ "$*" == *repos* ]] && { echo '<stream><repo-list><repo alias="packman" name="Packman"/></repo-list></stream>'; exit 0; }
+case "$*" in
+  *refresh*) exit 0 ;;
+  *dup*|*update*)
+    echo "Retrieving: vlc-3.0-2.1.x86_64 (Packman) (1/1),  222 B"
+    echo "( 1/1) Installing: vlc-3.0-2.1.x86_64 [...done]"
+    exit 0 ;;
+esac
+exit 0
+EOF
+    chmod +x "$1/zypper"
+}
+
+echo "TEST: --check --sizes gives each package's size from the cached repository data"
+d=$(mktemp -d); setup_common "$d"; pkg_raw_tree "$d"; pkg_zypper_mock "$d"
+cat > "$d/zstdcat" <<EOF
+#!/usr/bin/env bash
+touch "$d/zstdcat-called"
+cat "\$2"
+EOF
+chmod +x "$d/zstdcat"
+# INV-1: a check never becomes root, so a sudo call here is a failure.
+cat > "$d/sudo" <<EOF
+#!/usr/bin/env bash
+touch "$d/sudo-called"; exit 1
+EOF
+chmod +x "$d/sudo"
+out=$(run_engine "$d" --check --sizes --steps=system)
+check        "INV-2 the named edition's size, not the first entry's" "@@CHECK_ITEM@@|system|vlc|3.0-1.1|3.0-2.1|222|Packman" "$out"
+check_absent "INV-2 never the other edition's size"  "|111|" "$out"
+check        "a package with no cached size reads 0"  "@@CHECK_ITEM@@|system|nosize||1-1|0|missing" "$out"
+check_absent "INV-11 a name that is not a package name is dropped" "@@CHECK_ITEM@@|system|-rf" "$out"
+check        "the count still includes every update zypper listed" "@@CHECK@@|system|3" "$out"
+check        "the lookup ran under --sizes" "yes" "$([[ -e "$d/zstdcat-called" ]] && echo yes)"
+check        "INV-1 the check never called sudo" "no" "$([[ -e "$d/sudo-called" ]] && echo yes || echo no)"
+rm -f "$d/zstdcat-called"
+out=$(run_engine "$d" --check --steps=system)
+check        "INV-5 no --sizes, no lookup" "no" "$([[ -e "$d/zstdcat-called" ]] && echo yes || echo no)"
+check        "INV-5 so the size reads 0"   "@@CHECK_ITEM@@|system|vlc|3.0-1.1|3.0-2.1|0|Packman" "$out"
+rm -rf "$d"
+
+echo "TEST: a stalled size lookup stops at its budget and leaves nothing running"
+d=$(mktemp -d); setup_common "$d"; pkg_raw_tree "$d"; pkg_zypper_mock "$d"
+cat > "$d/zstdcat" <<EOF
+#!/usr/bin/env bash
+echo \$\$ > "$d/zstdcat.pid"
+exec sleep 30
+EOF
+chmod +x "$d/zstdcat"
+started=$SECONDS
+out=$(ONEUP_SIZE_LOOKUP_TIMEOUT=1 run_engine "$d" --check --sizes --steps=system)
+check        "INV-4 the check finishes well inside the stall" "yes" "$( (( SECONDS - started < 15 )) && echo yes)"
+check        "INV-4 the count is unchanged"  "@@CHECK@@|system|3" "$out"
+check        "INV-4 an unfound size reads 0" "@@CHECK_ITEM@@|system|vlc|3.0-1.1|3.0-2.1|0|Packman" "$out"
+check        "INV-4 the stalled zstdcat is gone" "gone" \
+             "$(kill -0 "$(cat "$d/zstdcat.pid" 2>/dev/null)" 2>/dev/null && echo alive || echo gone)"
+rm -rf "$d"
+
+echo "TEST: a run lists its packages, then reports each one's progress"
+d=$(mktemp -d); setup_common "$d"; pkg_raw_tree "$d"; pkg_zypper_mock "$d"
+cat > "$d/zstdcat" <<'EOF'
+#!/usr/bin/env bash
+cat "$2"
+EOF
+chmod +x "$d/zstdcat"
+out=$(run_engine "$d" --steps=system)
+check        "the run's list carries size, old edition and source" \
+             "@@PKG@@|system|queued|vlc|3.0-2.1|222|3.0-1.1|Packman" "$out"
+check        "a retrieved package is downloading, with its size" "@@PKG@@|system|downloading|vlc|3.0-2.1|222" "$out"
+check        "an install that completed is installed" "@@PKG@@|system|installed|vlc|3.0-2.1" "$out"
 rm -rf "$d"
 
 # ONEUP-0072 step 5: the reason is a code with one name per field, so two names
@@ -1589,6 +1732,10 @@ check_absent "a non-package line emits no progress" "@@PROGRESS@@|system|0|" "$o
 # The filter is a pass-through: losing zypper's own words would blind the log.
 check "zypper's own output still reaches the log" "Checking for file conflicts" "$out"
 check "the step still succeeds through the filter" "@@STEP_END@@|system|ok" "$out"
+# ONEUP-0259: the same lines, one package at a time, beside the counts above.
+check "a preloaded package is downloaded"   "@@PKG@@|system|downloaded|libglfw3|3.4-67.34" "$out"
+check "a retrieved package is downloading"  "@@PKG@@|system|downloading|cpupower-lang|7.1.4-17.d_t.142|31744" "$out"
+check "a [..done] install is installed"     "@@PKG@@|system|installed|libcapstone5|5.0.6-18.d_t.5" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -2751,6 +2898,29 @@ EOF
 chmod +x "$d/flatpak"
 out=$(run_engine "$d" --steps=flatpak)
 check "flatpak reports updated count" "@@STEP_END@@|flatpak|ok|installed|3" "$out"
+rm -rf "$d"
+
+# ONEUP-0259 INV-12: an app is installed only when the update of EVERY scope that
+# listed it succeeded. One app in each scope, one in both; the system update fails.
+echo "TEST: a flatpak app is installed only when every scope that listed it updated"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/flatpak" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *remotes*)                      printf 'flathub\t\n'; exit 0 ;;
+  *remote-ls*--updates*--user*)   printf 'org.user.Only 1\norg.both.App 2\n'; exit 0 ;;
+  *remote-ls*--updates*--system*) printf 'org.system.Only 3\norg.both.App 2\n'; exit 0 ;;
+  *update*--system*)              exit 1 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/flatpak"
+out=$(run_engine "$d" --steps=flatpak)
+check        "each app is listed once, with its remote" "@@PKG@@|flatpak|queued|org.both.App|2|0||flathub" "$out"
+check        "the failed system update fails the step"  "@@STEP_END@@|flatpak|fail" "$out"
+check        "a user-only app is installed"             "@@PKG@@|flatpak|installed|org.user.Only|1" "$out"
+check_absent "a system-only app is not"                 "@@PKG@@|flatpak|installed|org.system.Only" "$out"
+check_absent "an app in both scopes is not"             "@@PKG@@|flatpak|installed|org.both.App" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
