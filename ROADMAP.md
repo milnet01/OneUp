@@ -5969,7 +5969,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: investigate.
   Source: in-session-2026-10-11 (ONEUP-0186 port to v2).
 
-- 📋 [ONEUP-0269] **On main, every link button uses one blue in all themes, which fails 4.5:1 on the light theme.**
+- ✅ [ONEUP-0269] **On main, every link button uses one blue in all themes, which fails 4.5:1 on the light theme.**
   Found while fixing ONEUP-0237. main's sheet hard-codes
   QPushButton#LinkBtn to #4aa3ff (hover and focus #6fb6ff) for every
   theme. Measured 2026-10-13 on the light card #f4f6f9: rest 2.43:1,
@@ -5979,6 +5979,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   contrast assertion. Porting those to main touches every link button
   and the focus colour, which ONEUP-0076's focus-cue rules govern, so
   it needs that spec read first. Not on v2.
+  Resolved (2026-10-13): main 2a04cef. Link colours are palette keys
+  linkfg/linkhov. Dark unchanged; light rest #326dab (ONEUP-0076 4.3),
+  light hover/focus #234c78, not v2's #446f9c: on main focus reuses
+  hover, and #446f9c sits 1.02:1 from rest. #234c78 sits 1.65:1 from
+  it and 7.58:1+ on every light surface. New gui-smoke pixel check:
+  red 433/3 (light card, row, banner), green 442/0; four mutants
+  killed. Merged into v2 (7bdbbce) with v2's side kept; v2 already
+  covers it through contrast.short.
   **Layman:** In the released app's light theme, blue links such as "Show download size" are too pale to read comfortably.
   Kind: accessibility.
   Source: in-session-2026-10-13.
