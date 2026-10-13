@@ -356,12 +356,11 @@ It is driven by a **table of pairs**, and that table is the substance of the che
 contrast function with no table checks nothing. Each row names a foreground token, the
 background token it is drawn on, and its threshold. **Where a token renders on more than
 one surface, every surface is a row**: the task labels are read on a hovered row as well as
-a resting one, and the progress bar's text is read on the bar, not on the card.
+a resting one, and a link is read on the warning banner's tint as well as on the card.
 
 - **4.5:1**, the foreground renders text — `header` on `win`; `tag` on `win`; `tname` and
   `tdesc` on `rowcard` and on `rowhov`; `badgefg` on `badgebg`; `logfg` on `logbg`;
-  `status`, `lastrun`, `ghostfg` and `amber` on `card`; `lastrun` on `win`; `status` on
-  `progbg`; `tipfg` on `tip`; the Run button's label on `btn_accent`, against both gradient
+  `status`, `lastrun`, `ghostfg` and `amber` on `card`; `lastrun` on `win`; `tipfg` on `tip`; the Run button's label on `btn_accent`, against both gradient
   stops; the link button's text on `card` in both its rest and hover colours; and the
   danger family's button label on its own fill.
   **ONEUP-0064 and ONEUP-0076 add five keys to this class, and each is checked on every
@@ -380,6 +379,9 @@ a resting one, and the progress bar's text is read on the bar, not on the card.
   `trayattn` and `trayidle`; `traymark` against `trayattn`; `focus` against `win` and
   `card`; `ghostbd` against `card`; and the danger family's banner borders against `win`
   and `card`.
+  **ONEUP-0198 adds the progress fill**: `progfill` against `progbg`, because the fill is
+  the progress. It replaces `status` on `progbg`, which stopped being a real pair when
+  ONEUP-0163 moved the caption off the bar.
   **Three more from ONEUP-0064 and ONEUP-0076**, each a boundary rather than text:
   `ghosthov` as the ghost button's hover *border* against `card` — it shares one literal
   with the ink above, so moving one moves both — and `stopfg` and `stophov` as the Stop

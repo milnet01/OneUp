@@ -361,7 +361,7 @@ QProgressBar {
 }
 /* The caption is a label under the bar, not text on the fill (ONEUP-0163). */
 QLabel#ProgressCaption { color: $status; font-size: $fs_body; }
-QProgressBar::chunk { border-radius: 9px; background: $accent; }
+QProgressBar::chunk { border-radius: 9px; background: $progfill; }
 
 QPlainTextEdit#Log {
     background: $logbg; color: $logfg;
@@ -683,6 +683,11 @@ _DARK = dict(
     # literals, which no theme could reach and the contrast check could not read
     # (it takes its colours from a token as hex). Values unchanged (ONEUP-0179).
     accent="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)",
+    # `progfill` is the progress bar's fill, a token of its own so a theme can
+    # deepen it without moving the row-hover `accent`. The fill IS the progress,
+    # so it is held to 3:1 against its own trough, `progbg` (ONEUP-0198); the
+    # dark themes reach that with the accent as it is.
+    progfill="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)",
     rowringtint="#4aa3ff", rowringtint2="#22d3ee",
     rowringhovtint="#68b8ff", rowringhovtint2="#3ae4fa",
     # ONEUP-0027 §4.8, decided with the user 2026-08-24: the TOP stop of each
@@ -725,6 +730,10 @@ _LIGHT = dict(
     trayattn="#ba7e1b", trayrim="#ffffff", traymark="#3a2600",
     btnfg="#ffffff", dangerbd="#e0553f", tipbd="#4aa3ff",
     accent="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)",
+    # ONEUP-0198, decided with the user 2026-10-13: the accent read about 1.4:1
+    # on the pale trough, so the bar looked empty however far it had got. The
+    # light themes deepen the same two hues instead; the trough does not move.
+    progfill="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1e66c8, stop:1 #0e7490)",
     rowringtint="#4aa3ff", rowringtint2="#22d3ee",
     rowringhovtint="#68b8ff", rowringhovtint2="#3ae4fa",
     # ONEUP-0027 §4.8, decided with the user 2026-08-24: the TOP stop of each
@@ -761,6 +770,7 @@ _CARBON = dict(
     switchknobrim='#000000', trayidle='#888888', trayattn='#d5901f', trayrim='#000000',
     traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
+    progfill='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
     rowringtint='#4aa3ff', rowringtint2='#22d3ee',
     rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
@@ -781,6 +791,7 @@ _FOREST = dict(
     switchknobrim='#000000', trayidle='#888888', trayattn='#c3981c', trayrim='#000000',
     traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
+    progfill='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
     rowringtint='#4aa3ff', rowringtint2='#22d3ee',
     rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
@@ -801,6 +812,7 @@ _PLUM = dict(
     switchknobrim='#000000', trayidle='#888888', trayattn='#de6920', trayrim='#000000',
     traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
+    progfill='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
     rowringtint='#4aa3ff', rowringtint2='#22d3ee',
     rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
@@ -821,6 +833,7 @@ _PAPER = dict(
     switchknobrim='#000000', trayidle='#888888', trayattn='#a86918', trayrim='#000000',
     traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
+    progfill='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1e66c8, stop:1 #0e7490)',
     rowringtint='#4aa3ff', rowringtint2='#22d3ee',
     rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
@@ -841,6 +854,7 @@ _SKY = dict(
     switchknobrim='#000000', trayidle='#888888', trayattn='#a48818', trayrim='#000000',
     traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
+    progfill='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1e66c8, stop:1 #0e7490)',
     rowringtint='#4aa3ff', rowringtint2='#22d3ee',
     rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
@@ -861,6 +875,7 @@ _SAND = dict(
     switchknobrim='#000000', trayidle='#888888', trayattn='#c7681d', trayrim='#000000',
     traymark='#241a00', btnfg='#ffffff', dangerbd='#e0553f', tipbd='#4aa3ff',
     accent='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
+    progfill='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1e66c8, stop:1 #0e7490)',
     rowringtint='#4aa3ff', rowringtint2='#22d3ee',
     rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
     btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),

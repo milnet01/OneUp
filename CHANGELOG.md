@@ -108,6 +108,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The progress bar's fill is easy to see in the four light themes** (ONEUP-0198)
+  Daylight, Paper, Sky and Sand fill the bar in a deeper blue-to-teal, so it
+  stands out from its pale track at better than 4:1 instead of about 1.4:1.
+  The dark themes are unchanged.
+
 - **The Stop button no longer shrinks when it replaces Check for updates.** (ONEUP-0240)
   Both buttons now keep one width, so the Run button beside them no longer
   grows and shrinks as an update starts and ends. Stop keeps its red.

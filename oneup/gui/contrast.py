@@ -87,7 +87,7 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     ("tdesc", ("rowcard", "rowhov"), TEXT),
     ("badgefg", ("badgebg",), TEXT),
     ("logfg", ("logbg",), TEXT),
-    ("status", ("card", "progbg"), TEXT),
+    ("status", ("card",), TEXT),
     ("lastrun", ("card", "win"), TEXT),
     ("ghostfg", ("card",), TEXT),
     # `amber` is also the ThemeNote colour, which sits on the dialog root (`win`),
@@ -138,6 +138,10 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     ("ghosthov", ("card",), MARK),
     ("stopfg", ("card",), MARK),
     ("stophov", ("card",), MARK),
+    # The progress bar's fill IS the progress, so it is a meaningful boundary
+    # against its own trough. The caption moved off the bar (ONEUP-0163), so
+    # nothing renders text on `progbg` any more; this row is what covers it.
+    ("progfill", ("progbg",), MARK),
 ]
 
 # ---------------------------------------------------------------------------
@@ -340,7 +344,7 @@ def hc_short(theme) -> list[str]:
     # The progress caption is centred and the bar is FULL when it carries its final
     # wording, so the caption is read on the CHUNK, not on the trough. With the
     # chunk painted in `text` that was 1.00:1 — white on white in HC dark. Nothing
-    # measured it: the PAIRS row for `status` names the trough (`progbg`) and stops.
+    # measured it: the base PAIRS measured `status` on the trough and stopped.
     for fg, bg, floor in (("text", "progchunk", TEXT),
                           ("progchunk", "card", MARK)):
         r = contrast(hc[fg], hc[bg])

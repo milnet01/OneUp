@@ -3887,6 +3887,45 @@ def main() -> int:
     for line in _bad[:6]:
         print(f"       {line}")
 
+    # ONEUP-0198: the progress fill stands out from its own trough at 3:1 in every
+    # theme. Real pixels, half-full bar, one sample on the fill and one on the
+    # trough: the table measures `progfill` on `progbg`, and this proves the
+    # chunk is painted in it rather than in a token the table does not hold.
+    def _bar_pixels(theme_id):
+        from PySide6.QtWidgets import QProgressBar
+        _qs.setValue("theme", theme_id)
+        theme.apply_app_theme(app_inst)
+        bar = QProgressBar()
+        bar.setRange(0, 100)
+        bar.setValue(50)
+        bar.setTextVisible(False)
+        bar.resize(240, 24)
+        bar.move(400, 400)
+        bar.show()
+        QApplication.processEvents()
+        img = bar.grab().toImage()
+        # The fill grows from the leading edge: the left, or the right mirrored.
+        xf, xt = img.width() // 4, img.width() * 3 // 4
+        if QApplication.isRightToLeft():
+            xf, xt = xt, xf
+        y = img.height() // 2
+        fill = img.pixelColor(xf, y).name()
+        trough = img.pixelColor(xt, y).name()
+        bar.close()
+        bar.deleteLater()
+        return fill, trough
+
+    _bad = []
+    for _th in theme.THEMES:
+        _f, _t = _bar_pixels(_th.id)
+        _r = theme.contrast(_f, _t)
+        if _r + 1e-9 < contrast.MARK or _t.lower() != _th.palette["progbg"].lower():
+            _bad.append(f"{_th.id}: fill {_f} on trough {_t} = {_r:.2f}:1")
+    check(f"ONEUP-0198 the progress fill clears 3:1 on its trough in every theme "
+          f"({len(_bad)} short)", not _bad)
+    for line in _bad[:8]:
+        print(f"       {line}")
+
     # INV-8: a theme change rebuilds the tray icon. The ATTENTION state is what to
     # capture — the idle icon is the app's own SVG, which no theme touches, so an
     # idle comparison would pass unchanged whether the invariant held or not.
