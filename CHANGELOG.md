@@ -108,6 +108,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The "Show download size" link is readable again on the opened System row** (ONEUP-0237)
+  The opened package list sat on the row's blue-to-teal edge colour instead
+  of the row itself, so the blue link almost disappeared, and more so under
+  the mouse. The list now sits on the row's own background.
+
 - **Check for updates works straight after the download size is shown** (ONEUP-0266)
   It used to say the size was still being worked out, and refuse, for up
   to two minutes after the size appeared. Retry failed steps still waits
