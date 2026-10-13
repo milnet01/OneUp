@@ -1,0 +1,16 @@
+# Paths check-code's tools skip in this project (ONEUP-0143).
+# check-code's default set, minus data/: here data/ holds the desktop entry and
+# the AppStream metainfo, whose strings users read, so they are spell-checked.
+# Images need no line: check-code keeps binaries out by extension.
+logs/
+database/
+node_modules/
+dist/
+build/
+_build/
+__pycache__/
+.venv/
+venv/
+env/
+static/images/
+static/videos/
