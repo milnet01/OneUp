@@ -8,6 +8,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Blue links are easy to read in the light theme** (ONEUP-0269)
+  Links such as "Show download size" used the dark theme's pale blue in the
+  light theme too, and were hard to read on the light background. The light
+  theme now has its own darker blue, which turns darker still under the mouse
+  or when the link has keyboard focus.
+
 - **The "Show download size" link is readable again on the opened System row** (ONEUP-0237)
   The opened package list sat on the row's blue-to-teal edge colour instead
   of the row itself, so the blue link almost disappeared, and more so under

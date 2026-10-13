@@ -355,10 +355,10 @@ QPushButton#GhostBtn:checked { border-color: #4aa3ff; color: #4aa3ff; }
 QPushButton#GhostBtn:disabled { color: $disfg; border-color: $disbg; }
 
 QPushButton#LinkBtn {
-    color: #4aa3ff; font-weight: 600; text-align: left;
+    color: $linkfg; font-weight: 600; text-align: left;
     background: transparent; border: none; padding: 4px 2px;
 }
-QPushButton#LinkBtn:hover { color: #6fb6ff; }
+QPushButton#LinkBtn:hover { color: $linkhov; }
 
 QLabel#Status  { font-size: $fs_body; color: $status; }
 QLabel#LastRun { font-size: $fs_body; color: $lastrun; }
@@ -423,7 +423,7 @@ QPushButton#RunBtn:focus {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
 }
 QPushButton#GhostBtn:focus { border-color: #4aa3ff; color: #4aa3ff; }
-QPushButton#LinkBtn:focus  { color: #6fb6ff; }
+QPushButton#LinkBtn:focus  { color: $linkhov; }
 QPushButton#BannerBtn:focus {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
 }
@@ -502,6 +502,7 @@ _DARK = dict(
     logbd="#262d38", status="#c3ccd9", lastrun="#828d9d", amber="#f5a623", progbg="#0c0f13",
     ghostbd="#38414f", ghostfg="#c7d0dd", disbg="#262b34", disfg="#aeb7c4",
     tip="#1a1f27", tipfg="#e9edf3", focus="#66b8ff", chunkink="#0c0f13",
+    linkfg="#4aa3ff", linkhov="#6fb6ff",
 )
 _LIGHT = dict(
     win="#eef1f5", card="#ffffff", header="#1b2027", tag="#5c6673",
@@ -510,6 +511,11 @@ _LIGHT = dict(
     logbd="#d5dbe2", status="#3a424d", lastrun="#8a94a2", amber="#b5730a", progbg="#dfe4ea",
     ghostbd="#c4ccd6", ghostfg="#3a424d", disbg="#d5dbe2", disfg="#9aa3ad",
     tip="#ffffff", tipfg="#1b2027", focus="#0b5fd0", chunkink="#0c0f13",
+    # The dark blues read at about 2:1 here; these clear 4.5:1 on every surface a
+    # link rests on (ONEUP-0269). Rest is ONEUP-0076 §4.3's value. Hover DARKENS,
+    # because on this branch focus reuses hover and v2's #446f9c sits 1.02:1 from
+    # rest, which would hide the focus cue; #234c78 sits 1.65:1 from it.
+    linkfg="#326dab", linkhov="#234c78",
 )
 
 # High-contrast palettes: pure black/white surfaces and text (21:1), one saturated

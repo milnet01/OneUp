@@ -151,7 +151,8 @@ changed area. Measured over the shipped palettes:
 | Control | Rest → focus | Ratio |
 | --- | --- | --- |
 | `#RunBtn` | `#4aa3ff` → `#5cb0ff` (gradient top) | **1.14:1** |
-| `#LinkBtn` | `#4aa3ff` → `#6fb6ff` | **1.23:1** |
+| `#LinkBtn`, dark | `#4aa3ff` → `#6fb6ff` | **1.23:1** |
+| `#LinkBtn`, light | `#326dab` → `#234c78` | **1.65:1** |
 | `#GhostBtn`, light | border `#c4ccd6` → `#4aa3ff` | **1.62:1** |
 | `#GhostBtn`, dark | border `#38414f` → `#4aa3ff` | **3.91:1** |
 

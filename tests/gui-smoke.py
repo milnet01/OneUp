@@ -56,12 +56,14 @@ try:
     import shiboken6
     from PySide6.QtCore import QPoint, QProcess, Qt, QTimer
     from PySide6.QtGui import QAccessible, QCloseEvent, QFontInfo
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import (
         QApplication,
         QFrame,
         QLabel,
         QMessageBox,
         QPushButton,
+        QVBoxLayout,
         QWidget,
     )
 except ImportError as exc:  # PySide6 absent — skip, don't fail the suite.
@@ -1050,6 +1052,92 @@ def main() -> int:
               f"({'dark' if dark else 'light'})", det_px.name() == card_px.name())
     rowS.setStyleSheet("")
     rowS.disclosure.setChecked(False)
+
+    # ONEUP-0269: a link button's text must read at 4.5:1 or better on every surface a
+    # link rests on, at rest, under the mouse and with keyboard focus, in both themes.
+    # The light theme once used the dark theme's blue and measured about 2:1.
+    # Measured from pixels: the ink is the glyph pixel furthest from the surface beside
+    # the button, drawn at 40pt so every glyph has solid full-ink pixels.
+    def _lum(c):
+        def ch(v):
+            v /= 255
+            return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+        return 0.2126 * ch(c.red()) + 0.7152 * ch(c.green()) + 0.0722 * ch(c.blue())
+
+    def _ratio(a, b):
+        hi, lo = sorted((_lum(a), _lum(b)), reverse=True)
+        return (hi + 0.05) / (lo + 0.05)
+
+    def _link_on(surface):
+        top = QWidget()
+        outer = QVBoxLayout(top)
+        outer.setContentsMargins(0, 0, 0, 0)
+        if surface == "row":
+            border = QFrame(objectName="RowBorder")
+            outer.addWidget(border)
+            QVBoxLayout(border).setContentsMargins(1, 1, 1, 1)
+            host = QFrame(objectName="RowCard")
+            border.layout().addWidget(host)
+        else:
+            host = card = QFrame(objectName="Card")
+            outer.addWidget(card)
+            if surface == "banner":
+                QVBoxLayout(card).setContentsMargins(0, 0, 0, 0)
+                host = QFrame(objectName="WarnBanner")
+                card.layout().addWidget(host)
+        inner = QVBoxLayout(host)
+        inner.setContentsMargins(30, 30, 30, 30)
+        btn = QPushButton("Show download size", objectName="LinkBtn")
+        inner.addWidget(btn)
+        return top, btn
+
+    for dark in (True, False):
+        for surface in ("card", "row", "banner"):
+            low, inks = [], {}
+            for state in ("rest", "hover", "focus"):
+                top, btn = _link_on(surface)
+                top.setStyleSheet(updater.build_theme(dark)
+                                  + "\nQPushButton#LinkBtn { font-size: 40pt; }")
+                top.resize(700, 200)
+                top.show()
+                if state == "focus":
+                    top.activateWindow()
+                    btn.setFocus(Qt.FocusReason.TabFocusReason)
+                else:
+                    btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+                    btn.clearFocus()
+                QApplication.processEvents()
+                # Off the button first: a window opening under a resting cursor gets no Enter.
+                QTest.mouseMove(top, top.rect().bottomRight())
+                QApplication.processEvents()
+                if state == "hover":
+                    QTest.mouseMove(btn, btn.rect().center())
+                    QApplication.processEvents()
+                state_ok = (btn.underMouse() == (state == "hover")
+                            and (top.focusWidget() is btn) == (state == "focus"))
+                img = top.grab().toImage()
+                r = btn.geometry().translated(btn.parentWidget().mapTo(top, QPoint(0, 0)))
+                bg = img.pixelColor(r.left() - 10, r.center().y())
+                ink = max((img.pixelColor(x, y) for x in range(r.left(), r.right())
+                           for y in range(r.top(), r.bottom())), key=lambda c: _ratio(c, bg))
+                inks[state] = ink
+                if not state_ok or _ratio(ink, bg) < 4.5:
+                    low.append(f"{state} {ink.name()} on {bg.name()} "
+                               f"{_ratio(ink, bg):.2f}:1" + ("" if state_ok else " (state not set)"))
+                # Leave the cursor off the button, or the next window opens under it hovered.
+                QTest.mouseMove(top, top.rect().bottomRight())
+                top.close()
+                top.deleteLater()
+            check(f"link text reads at 4.5:1 at rest, hover and focus on the {surface} "
+                  f"({'dark' if dark else 'light'})", not low)
+            for line in low:
+                print(f"         {line}")
+            # Focus reuses the hover colour on this branch, so a hover shade too close to
+            # rest hides the focus cue. Today's weakest cue is about 1.2:1 (ui-and-
+            # accessibility.md §5); a link must not drop below it.
+            check(f"a focused link differs visibly from a resting one on the {surface} "
+                  f"({'dark' if dark else 'light'})",
+                  _ratio(inks["focus"], inks["rest"]) >= 1.2)
 
     # Exit 0 with no SIZE marker means the solver found nothing to fetch — but a
     # non-zero exit must NEVER be reported as "nothing to download". Same
