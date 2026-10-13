@@ -5023,7 +5023,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc.
   Source: in-session-2026-08-12, measured across ONEUP-0108's three review loops.
 
-- 📋 [ONEUP-0116] **The release workflow has no timeout, so a stuck runner hangs the release indefinitely.**
+- ✅ [ONEUP-0116] **The release workflow has no timeout, so a stuck runner hangs the release indefinitely.**
   Found while releasing 1.4.5 on 2026-08-19. Two consecutive attempts of the
   v1.4.5 tag workflow hung inside `sudo apt-get update` in the "GUI smoke test
   (offscreen)" step — the runner's Ubuntu mirror was refusing every request
@@ -5063,6 +5063,14 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   that tag's commit.
   User, 2026-10-12: main's owed 1.4.x release goes out with
   the next batch of main fixes, not on its own.
+  Resolved (2026-10-13, main 4b8c134, merged into v2): job-level
+  timeout-minutes: 30 on both branches. v1.4.6 also stalled, in "Run
+  engine tests" (cancelled at 6h00m), so a job-wide limit rather than
+  per-step apt limits. Proved only by the next tag's run.
+  User, 2026-10-13: 1.4.x releases may go ahead where something is worth
+  releasing. Plan: cut 1.4.9 from main as a proving release for this
+  item, ONEUP-0271 (release page shows the CHANGELOG section) and
+  ONEUP-0255 (does main's OBS step work).
   **Layman:** If GitHub's build machine gets stuck, the release just sits there instead of failing quickly so it can be retried.
   Kind: chore.
   Source: in-session-2026-08-19 (v1.4.5 release).
@@ -5992,6 +6000,9 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Not settled offline. Since ONEUP-0186 a failed OBS step ends with exit 3
   and "OBS was NOT updated", so the next main release will show which is
   true. If it reports failure, backport v2's line to main.
+  Progress (2026-10-13): settle at the 1.4.9 release, cut from main as
+  a proving release (see ONEUP-0116's note). Read release.sh's OBS
+  outcome there; if it ends "OBS was NOT updated", backport v2's line.
   **Layman:** On the released version, the release script might report the package-repository update as failed every time; one real release would settle it.
   Kind: investigate.
   Source: in-session-2026-10-11 (ONEUP-0186 port to v2).
