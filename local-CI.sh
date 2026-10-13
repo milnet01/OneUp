@@ -90,28 +90,42 @@ fi
 # Its G3 scenario (ONEUP-0054) launches the real Python engine through the window's
 # own code path, so this one pass proves the pair as well as the window. It ran
 # twice while stage 7's ONEUP_ENGINE switch existed; stage 9 removed the switch.
-gui_smoke_pass() {   # $1 = label ('' for the default pass), $2.. = the suite's arguments
+# The two passes run side by side (ONEUP-0265): each is one single-threaded process
+# of about 640 MB in its own sandbox HOME, so together they take two of the machine's
+# cores rather than more, and the gate waits on the slower one instead of both in turn.
+# Nothing else runs beside them — the engine suite stays on its own (ONEUP-0263).
+# They became safe to overlap when ONEUP-0264 gave the ONEUP-0260 sleeper a duration
+# of its own; before that each pass counted the other's as a leak.
+gui_smoke_start() {  # $1 = label ('' for the default pass), $2.. = the suite's arguments
     local label="$1"; shift
+    local log="$LOGS/gui${label:+-$label}.log"
+    ( python3 tests/gui-smoke.py "$@" >"$log" 2>&1; echo $? >"$log.rc" ) &
+}
+gui_smoke_report() { # $1 = label, as given to gui_smoke_start
+    local label="$1"
     local name="tests/gui-smoke.py${label:+ ($label)}"
     local log="$LOGS/gui${label:+-$label}.log"
-    python3 tests/gui-smoke.py "$@" >"$log" 2>&1
-    local rc=$?
-    if [[ $rc -eq 0 ]]; then
+    local rc
+    rc=$(cat "$log.rc" 2>/dev/null) || rc=""
+    if [[ $rc == 0 ]]; then
         ok "$name — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$log" | tail -1)"
-    elif [[ $rc -eq 77 ]]; then
+    elif [[ $rc == 77 ]]; then
         skip "$name" "PySide6 not installed"
     else
-        bad "$name"; tail -25 "$log"
+        bad "$name${rc:+ (exit $rc)}"; tail -25 "$log"
     fi
 }
 
 step "GUI smoke test (offscreen)"
-gui_smoke_pass ""
+gui_smoke_start ""
 # ONEUP-0032 INV-5: the whole suite again with Qt's -reverse, so a widget that
 # hard-codes a side fails here rather than in front of a Hebrew or Arabic user.
 # A second process, because -reverse is read when the QApplication is built; the
 # suite's first assertion in this pass is that it really is right-to-left.
-gui_smoke_pass "right-to-left" -reverse
+gui_smoke_start "right-to-left" -reverse
+wait
+gui_smoke_report ""
+gui_smoke_report "right-to-left"
 
 # --- package structure (docs/specs/ONEUP-0034-gui-modules.md §5) ------------
 # INV-2/3/4/12, plus ONEUP-0054's engine-launch rule: the ones that pass review by

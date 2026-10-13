@@ -3851,12 +3851,14 @@ def main() -> int:
     # theme and with the overlay on. Sampled from real pixels: a rule the sheet
     # carries but Qt does not apply to the sub-control would pass a text check.
     # The contrast table measures the token; this proves the handle wears it.
+    # The sheet goes on the probe widget, not the app: an app-wide setStyleSheet
+    # re-polishes every widget the suite has built so far (18k by here, ~4.5 s a
+    # call), and a widget's own sheet outranks the app's whatever the specificity,
+    # so the probe is painted by exactly the sheet `apply_app_theme` would install.
     def _handle_pixel(theme_id, hc):
         from PySide6.QtWidgets import QPlainTextEdit
-        _qs.setValue("theme", theme_id)
-        _qs.setValue("high_contrast", hc)
-        theme.apply_app_theme(app_inst)
         ed = QPlainTextEdit()
+        ed.setStyleSheet(theme.build_theme(theme.BY_ID[theme_id], high_contrast=hc))
         ed.setPlainText("\n".join(f"line {i}" for i in range(200)))
         ed.resize(240, 160)
         # Away from the offscreen pointer at the origin: mirrored, the bar sits on
@@ -3893,9 +3895,9 @@ def main() -> int:
     # chunk is painted in it rather than in a token the table does not hold.
     def _bar_pixels(theme_id):
         from PySide6.QtWidgets import QProgressBar
-        _qs.setValue("theme", theme_id)
-        theme.apply_app_theme(app_inst)
         bar = QProgressBar()
+        # On the probe, not the app, for the reason `_handle_pixel` gives.
+        bar.setStyleSheet(theme.build_theme(theme.BY_ID[theme_id]))
         bar.setRange(0, 100)
         bar.setValue(50)
         bar.setTextVisible(False)
