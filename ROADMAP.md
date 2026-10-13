@@ -5285,7 +5285,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: chore.
   Source: check-code --tree 2026-08-31 (zizmor superfluous-actions, Informational).
 
-- 📋 [ONEUP-0143] **`screenshots/` is missing from the audit exclusion set, so typos scans two PNG binaries.**
+- ✅ [ONEUP-0143] **`screenshots/` is missing from the audit exclusion set, so typos scans two PNG binaries.**
   145 of the audit run's 462 findings — 31% — came from `screenshots/oneup.png`
   and `oneup-light.png`. The default exclusion set names `static/images/` and not
   `screenshots/`, and the project has no `audit-config.json` of its own.
@@ -5293,6 +5293,12 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   from every future run. Note the same set excludes `data/`, which here holds the
   desktop file, AppStream XML and icon rather than a data dump — so user-facing
   strings are currently NOT spell-checked. Both are one file to fix.
+  Resolved (2026-10-13): the PNG half was fixed upstream, as check-code
+  keeps binaries out by extension since 2026-09-01. The data/ half:
+  .claude/audit/audit-config.json names .claude/audit/scope.txt, the
+  default exclusion set minus data/, so the desktop entry and metainfo
+  are spell-checked. typos on both today: clean. v2 only: audit tooling,
+  not a defect in main's code.
   **Layman:** The spell-checker was reading the screenshot image files and reporting nonsense from inside them.
   Kind: chore.
   Source: check-code --tree 2026-08-31.
