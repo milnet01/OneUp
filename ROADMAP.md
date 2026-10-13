@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=267 -->
+<!-- ants-roadmap-id-high-water: ONEUP=268 -->
 
 # OneUp Roadmap
 
@@ -8163,6 +8163,19 @@ when complete (that document's §7).
   **Layman:** The window tests leave about 125 test windows open in the background, which makes them several times slower than they need to be.
   Kind: perf.
   Source: in-session-2026-10-13, measured under ONEUP-0265.
+  Lanes: tests.
+
+- 💭 [ONEUP-0268] **About 30 window-suite windows still survive every theme apply, because a later name or a closure holds them.**
+  After ONEUP-0267 the first theme apply sees ~7,200 widgets (48
+  Updaters before the del, ~30 after) at ~1.6 s an apply, ~24 applies a
+  pass. What is left is held by names read after the theme section
+  (wA, w, wR, wC, wM, wL, wD, wS, wT ...) or captured by a closure
+  (wZ, win, wSF), which _reap_windows rightly treats as reachable.
+  Releasing them means a del per scenario or narrowing each closure -
+  smaller gain than ONEUP-0267's, so filed as considered, not planned.
+  **Layman:** The window tests still keep about 30 old test windows alive; releasing them would make the tests a little faster again.
+  Kind: perf.
+  Source: in-session-2026-10-13, measured after ONEUP-0267.
   Lanes: tests.
 
 ## 2.1.0 — after 2.0
