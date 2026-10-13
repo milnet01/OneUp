@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=268 -->
+<!-- ants-roadmap-id-high-water: ONEUP=269 -->
 
 # OneUp Roadmap
 
@@ -5929,7 +5929,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: peer-report groundwork 2026-10-02, verified in-session.
 
-- 📋 [ONEUP-0237] **The "Show download size" link is hard to read on the opened System packages panel, and nearly invisible on hover.**
+- ✅ [ONEUP-0237] **The "Show download size" link is hard to read on the opened System packages panel, and nearly invisible on hover.**
   Seen by the user on v2 (dark theme, launched from Konsole), screenshots
   2026-10-08. With the system row's panel open, the area behind the
   LinkBtn is a teal-to-cyan fill; the link's blue sits on it at low
@@ -5943,6 +5943,13 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   filed as ONEUP-0250 and closed as a duplicate of this item. So main
   shows it too. Picture: /mnt/Games/Trailers/work/oneup/shot4.png
   (not in the repo).
+  Shipped 2026-10-13 on main (a9e857c), merged into v2 (7b735c5).
+  Cause: TaskRow put #RowDetails beside the RowCard instead of inside
+  it, so the transparent panel showed the border gradient. Fix moves it
+  onto the card; a gui-smoke pixel check failed on dark and light
+  before and passes after. Dark link now 6.28:1 rest, 7.73:1 hover. v2
+  needed no change: its link sits on the card in all three layouts.
+  main's light-theme link colour is a separate defect, filed apart.
   **Layman:** When you open the System packages list, the blue "Show download size" link sits on a bright teal background and almost disappears when the mouse is over it.
   Kind: accessibility.
   Source: user-real-run-2026-10-08.
@@ -5961,6 +5968,21 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   **Layman:** On the released version, the release script might report the package-repository update as failed every time; one real release would settle it.
   Kind: investigate.
   Source: in-session-2026-10-11 (ONEUP-0186 port to v2).
+
+- 📋 [ONEUP-0269] **On main, every link button uses one blue in all themes, which fails 4.5:1 on the light theme.**
+  Found while fixing ONEUP-0237. main's sheet hard-codes
+  QPushButton#LinkBtn to #4aa3ff (hover and focus #6fb6ff) for every
+  theme. Measured 2026-10-13 on the light card #f4f6f9: rest 2.43:1,
+  hover 1.98:1; on the light hover surface #eaeef3: 2.26:1 and 1.84:1.
+  Dark theme is fine (6.28:1 and 7.73:1). v2 already solved it with
+  per-theme linkfg/linkhov keys (light #326dab, hover #446f9c) and a
+  contrast assertion. Porting those to main touches every link button
+  and the focus colour, which ONEUP-0076's focus-cue rules govern, so
+  it needs that spec read first. Not on v2.
+  **Layman:** In the released app's light theme, blue links such as "Show download size" are too pale to read comfortably.
+  Kind: accessibility.
+  Source: in-session-2026-10-13.
+  Lanes: gui, theme.
 
 ## 1.4.7 — release-build fix
 
