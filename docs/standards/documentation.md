@@ -498,7 +498,8 @@ it.** Older text says `/cold-eyes`, the skill `review-contract` replaced on 2026
 the loop-log headings keep the name. Where either appears, run `review-contract` (ONEUP-0103).
 
 **Every design document, spec, standard and reference goes through `review-contract`.**
-Implementation does not start before that.
+Implementation does not start before that. Whether a later edit to a reviewed document needs
+a new run is global `CLAUDE.md` rule 14's trigger; this section does not replace it.
 
 **When a run stops is `review-contract`'s rule, not this document's**: it converges on a
 loop with no verified finding, or ends at its cap and files what is left.
@@ -523,7 +524,9 @@ are exempt — they are too small to warrant it. OneUp has none today.
 - **Fix every verified finding.** No grade lets one be left. A finding that turns out to
   be wrong is **dismissed explicitly**, with a line saying so — never silently filtered.
 - **Write the log as the loops happen.** Back-filling it destroys the audit trail, which
-  is the only evidence the review was real.
+  is the only evidence the review was real. **A landed row is never edited**: global
+  `documentation.md` §9.1's clauses on correcting a row bind here, and §1.2's displacement
+  does not remove them.
 - **The tally must balance.** A row saying 8 findings and 6 outcomes is a row where two
   findings were dropped without a decision. `tests/docs-check.py` fails on it.
 
@@ -560,7 +563,7 @@ The log format:
 ```markdown
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| 1 | 2026-07-26 | 3 high, 2 medium, 3 low | all fixed — see commit abc1234 |
+| 1 | 2026-07-26 | Q1 3 · Q2 2 · Q3 3 — all 8 verified, 0 dismissed | all fixed — see commit abc1234 |
 | 2 | 2026-07-27 | none | converged |
 ```
 

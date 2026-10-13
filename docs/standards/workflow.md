@@ -145,6 +145,13 @@ These are not feature work and are unaffected:
   ONEUP-0097 reason, since `main`'s gate runs both on every push of `main`. Nothing
   user-facing changed, so **no 1.4.x is owed**. A batch of changes, not a category.
 
+- **ONEUP-0200, the refresh-budget grant check** — the seventh exception, granted
+  2026-10-13 at the user's decision, after it had landed on `main` without one. The engine
+  suite's check that a non-numeric `ONEUP_REFRESH_TIMEOUT` blocks a passwordless grant ran
+  under mocks that failed every grant, so it could not fail. It qualifies for the
+  ONEUP-0097 reason, since `main`'s gate runs that suite on every push of `main`. Nothing
+  user-facing changed, so **no 1.4.x is owed**. A batch of changes, not a category.
+
 **Why the freeze is stated as a testable question rather than a preference:** the failure
 mode of any freeze is a slow slide back into 1.x work, one "small" fix at a time. *Is it a
 fix, a feature request, or neither?* has an answer; "is this important enough?" does not.
