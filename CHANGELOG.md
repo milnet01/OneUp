@@ -108,15 +108,6 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
-- **The GitHub release page lists what changed again** (ONEUP-0271)
-  1.4.7 and 1.4.8 went out with only a "Full Changelog" link on
-  their GitHub release page. Each release page now shows that
-  version's section of this changelog.
-- **A stuck release build now fails within 30 minutes** (ONEUP-0116)
-  The 1.4.6 build stalled and sat for six hours before GitHub gave
-  up, so the download waited on someone noticing. A stalled build
-  now stops after 30 minutes, and running it again publishes it.
-
 - **Check for updates works straight after the download size is shown** (ONEUP-0266)
   It used to say the size was still being worked out, and refuse, for up
   to two minutes after the size appeared. Retry failed steps still waits
@@ -343,6 +334,19 @@ All notable changes to OneUp are documented here. The format follows
   time without the build noticing. Each is now named by its exact contents. The
   build also no longer keeps its access token lying around after it has finished
   checking out the code.
+
+## [1.4.9] - 2026-10-13
+
+### Fixed
+
+- **The GitHub release page lists what changed again** (ONEUP-0271)
+  1.4.7 and 1.4.8 went out with only a "Full Changelog" link on
+  their GitHub release page. Each release page now shows that
+  version's section of this changelog.
+- **A stuck release build now fails within 30 minutes** (ONEUP-0116)
+  The 1.4.6 build stalled and sat for six hours before GitHub gave
+  up, so the download waited on someone noticing. A stalled build
+  now stops after 30 minutes, and running it again publishes it.
 
 ## [1.4.8] - 2026-10-13
 
@@ -1022,7 +1026,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.8...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.9...HEAD
+[1.4.9]: https://github.com/milnet01/OneUp/releases/tag/v1.4.9
 [1.4.8]: https://github.com/milnet01/OneUp/releases/tag/v1.4.8
 [1.4.7]: https://github.com/milnet01/OneUp/releases/tag/v1.4.7
 [1.4.6]: https://github.com/milnet01/OneUp/releases/tag/v1.4.6

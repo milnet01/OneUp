@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.4.8
+Version:        1.4.9
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -94,6 +94,9 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Tue Oct 13 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.9-0
+- The GitHub release page lists what changed again
+- A stuck release build now fails within 30 minutes
 * Tue Oct 13 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.8-0
 - Outlined buttons are easy to read in the light theme
 - Blue links are easy to read in the light theme
