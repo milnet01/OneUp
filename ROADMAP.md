@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=272 -->
+<!-- ants-roadmap-id-high-water: ONEUP=273 -->
 
 # OneUp Roadmap
 
@@ -6062,6 +6062,21 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: accessibility.
   Source: in-session-2026-10-13.
   Lanes: gui, theme.
+
+- 🚧 [ONEUP-0273] **Move the OBS package to its own subproject, home:milnet:oneup, keeping the old one updated until 2.0.0.**
+  User, 2026-10-13: move OneUp from home:milnet to a subproject like the
+  others, with a handover; it may land on main too (recorded in
+  workflow.md §1.2 as the eighth exception), since main's release.sh
+  publishes every 1.4.x. Also removes the GitHub-to-OBS webhook and
+  .obs/workflows.yml (ONEUP-0255's cause). Done on OBS 2026-10-13:
+  home:milnet:oneup created with Tumbleweed (i586, x86_64) and Leap 16.0,
+  package copied at 1.4.9; GitHub webhook deleted. Still open: OBS
+  workflow token 11691 refused deletion from osc (both calls hung), so
+  it is deleted by hand in the OBS web UI. At 2.0.0: drop home:milnet
+  from release.sh's obs_projects and delete the old package.
+  **Layman:** OneUp's openSUSE repository moves to its own folder on the build service, like your other projects, without cutting off anyone using the old address.
+  Kind: package.
+  Source: user-request-2026-10-13.
 
 ## 1.4.7 — release-build fix
 
