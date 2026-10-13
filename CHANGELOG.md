@@ -108,6 +108,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Check for updates works straight after the download size is shown** (ONEUP-0266)
+  It used to say the size was still being worked out, and refuse, for up
+  to two minutes after the size appeared. Retry failed steps still waits
+  then, and now says why.
+
 - **The progress bar's fill is easy to see in the four light themes** (ONEUP-0198)
   Daylight, Paper, Sky and Sand fill the bar in a deeper blue-to-teal, so it
   stands out from its pale track at better than 4:1 instead of about 1.4:1.

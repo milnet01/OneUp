@@ -1687,6 +1687,49 @@ def main() -> int:
         run._launch = _real_launch
     paths.HOLD_STATE.unlink(missing_ok=True)
 
+    # ONEUP-0266: once the size is known the preview engine HOLDS, alive for up to two
+    # minutes so Update can adopt it. `_launch`'s guard read "alive" as "still working
+    # out the size", so Check for updates said so and refused. A check never asks for a
+    # password, so it may run beside a hold; it still waits while the size is being
+    # worked out, because both drive zypper. A retry IS a run, so it still waits — but
+    # says why. `log_dir_ready` returning False stops `_launch` just past the guard, so
+    # no engine is started and the guard's decision is the whole of what is measured.
+    wH = window.Updater()               # built before the stubs: its start-up probe
+    wH._size_proc = _SizeProc(14142)    # reads log_dir_ready(quiet=True) for real
+    _boxes, _reached = [], []
+    _real_info, _real_ready = QMessageBox.information, paths.log_dir_ready
+    QMessageBox.information = staticmethod(lambda *a, **k: _boxes.append(a[2]) or 0)
+    paths.log_dir_ready = lambda *_a, **_k: _reached.append(True) and False
+
+    def _guard(win, check):
+        del _boxes[:], _reached[:]
+        run._launch(win, ["system"], check=check)
+        return (_boxes[0] if _boxes else None), bool(_reached)
+
+    try:
+        paths.HOLD_STATE.write_text(f"14142\n{paths.STATE_LOG_DIR / 'h.log'}\n104.5 MiB\n")
+        _box, _went = _guard(wH, check=True)
+        check("ONEUP-0266 Check for updates runs while a known size is held",
+              _box is None and _went)
+        _box, _went = _guard(wH, check=False)
+        check("ONEUP-0266 a retry still waits while the size is held",
+              _box is not None and not _went)
+        check("ONEUP-0266 and does not claim the size is still being worked out",
+              _box is not None and "working out" not in _box)
+        paths.HOLD_STATE.unlink(missing_ok=True)
+        _box, _went = _guard(wH, check=True)
+        check("ONEUP-0266 Check still waits while the size is being worked out",
+              _box is not None and "working out" in _box and not _went)
+        # A hold another engine left behind is not ours, so the size is not known yet.
+        paths.HOLD_STATE.write_text(f"424242\n{paths.STATE_LOG_DIR / 'x.log'}\n1 MB\n")
+        _box, _went = _guard(wH, check=True)
+        check("ONEUP-0266 a hold.state from another engine does not count as ours",
+              _box is not None and not _went)
+    finally:
+        QMessageBox.information = _real_info
+        paths.log_dir_ready = _real_ready
+    paths.HOLD_STATE.unlink(missing_ok=True)
+
     # ONEUP-0238: a waiting window says what it waits for and how long it has waited, so
     # nobody closes it believing nothing is happening (the user's rule, 2026-10-08). The
     # clock counts up, because the dry run's length cannot be known in advance.

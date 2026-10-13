@@ -123,19 +123,9 @@ def start_run(win):
 
 def _adopt_held_engine(win) -> bool:
     """Turn a held preview into the run. False means "cannot adopt" — never an error."""
-    proc = getattr(win, "_size_proc", None)
-    if proc is None or proc.state() == QProcess.NotRunning:
+    if not _holding(win):
         return False
-    try:
-        first = paths.HOLD_STATE.read_text().splitlines()[0].strip()
-    except (OSError, IndexError):
-        return False       # no hold yet, or a file with no line 1, which is not a hold
-    # Line 1 must be OUR engine's pid. That one test refuses both of §6's impostors: a
-    # `hold.state` a SIGKILLed engine left behind, and a second window's hold — which
-    # has no `_size_proc` of ours to match, so it launches its own engine rather than
-    # adopting a hold it did not start.
-    if not first.isdecimal() or int(first) != proc.processId():
-        return False
+    proc = win._size_proc
     steps = win.selected_steps()
     # The steps travel WITH the go-ahead rather than being fixed at preview time: the
     # preview is started for `system` alone, but the run uses whatever is selected when
@@ -173,6 +163,25 @@ def _adopt_held_engine(win) -> bool:
     win.proc = proc
     win._size_proc = None
     return True
+
+
+def _holding(win) -> bool:
+    """True when the preview has worked out the size and is now HOLDING for Update.
+
+    The process stays alive through the hold, so its being alive says nothing about
+    whether the size is known; `hold.state` says that. Line 1 must be OUR engine's pid.
+    That one test refuses both of §6's impostors: a `hold.state` a SIGKILLed engine left
+    behind, and a second window's hold — which has no `_size_proc` of ours to match, so
+    it launches its own engine rather than adopting a hold it did not start.
+    """
+    proc = getattr(win, "_size_proc", None)
+    if proc is None or proc.state() == QProcess.NotRunning:
+        return False
+    try:
+        first = paths.HOLD_STATE.read_text().splitlines()[0].strip()
+    except (OSError, IndexError):
+        return False       # no hold yet, or a file with no line 1, which is not a hold
+    return first.isdecimal() and int(first) == proc.processId()
 
 
 def _write_go_request(text: str) -> None:
@@ -459,15 +468,29 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
     # parent process id, so two engines are two timestamp records and two password
     # dialogs. `start_run` routes to the held engine instead of coming here; this guard
     # covers the other ways in — Check for updates, and Retry failed steps.
+    #
+    # Once the size is known the preview HOLDS, still running, so the guard asks which
+    # of the two it is (ONEUP-0266). A check never asks for a password, so it may run
+    # beside a hold; while the size is still being worked out it waits, because both
+    # drive zypper. A retry is a run and always waits, told the truth either way.
     size_proc = getattr(win, "_size_proc", None)
     if size_proc is not None and size_proc.state() != QProcess.NotRunning:
-        QMessageBox.information(
-            win, QCoreApplication.translate("run", "Just a moment"),
-            QCoreApplication.translate(
-                "run",
-                "OneUp is working out the download size.\n\nThat takes up to a "
-                "minute. Try again once it has finished."))
-        return
+        held = _holding(win)
+        if not (held and check):
+            if held:
+                text = QCoreApplication.translate(
+                    "run",
+                    "OneUp has worked out the download size and is keeping the update "
+                    "ready to start.\n\nPress Run selected updates to start it, or try "
+                    "again in two minutes.")
+            else:
+                text = QCoreApplication.translate(
+                    "run",
+                    "OneUp is working out the download size.\n\nThat takes up to a "
+                    "minute. Try again once it has finished.")
+            QMessageBox.information(
+                win, QCoreApplication.translate("run", "Just a moment"), text)
+            return
 
     if not paths.log_dir_ready(win):
         return
