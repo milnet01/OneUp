@@ -6,13 +6,18 @@
 # fourteen line-length findings in the 2026-08-31 audit were lines that already
 # conformed to the project's own limit and were only flagged against the tool's.
 #
-# Nothing else is relaxed. `document-start` and `truthy` still fire; the `on:`
-# key that `truthy` flags in a GitHub workflow is the schema's mandatory spelling
-# and cannot be written any other way.
+# Two more rules are set, and nothing else is relaxed (ONEUP-0140):
+#   * `document-start` is off. No YAML file here opens with `---`, and none holds
+#     more than one document, so the marker would separate nothing.
+#   * `truthy` skips keys. A GitHub workflow's `on:` key is the schema's mandatory
+#     spelling and cannot be written any other way; values are still checked.
 
 extends: default
 
 rules:
+  document-start: disable
+  truthy:
+    check-keys: false
   line-length:
     max: 100
     # A bare URL in a comment cannot be wrapped without breaking it.
