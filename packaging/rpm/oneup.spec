@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.4.7
+Version:        1.4.8
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -94,6 +94,18 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Tue Oct 13 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.8-0
+- Outlined buttons are easy to read in the light theme
+- Blue links are easy to read in the light theme
+- The "Show download size" link is readable again on the opened System row
+- A run no longer offers a restore point that does not exist, and the terminal help lists --size
+- Five small window fixes: safer restart questions, honest results, no stuck buttons
+- A warning's button always matches the warning above it
+- Offline, the firmware step no longer says "up to date" from an old firmware list
+- Three buttons showed a stray underline where an "&" belongs
+- Small messages now open over the OneUp window, not in the corner of the screen
+- A window you moved stays where you put it when a message appears
+- The window no longer stutters during a big download
 * Sat Oct 10 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.7-0
 - The release build finishes again, so this version gets a GitHub release page and an AppImage
 * Thu Oct 08 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.6-0

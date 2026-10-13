@@ -48,6 +48,24 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.4.8" date="2026-10-13">
+      <description>
+        <p>Release 1.4.8.</p>
+        <ul>
+          <li>Outlined buttons are easy to read in the light theme</li>
+          <li>Blue links are easy to read in the light theme</li>
+          <li>The "Show download size" link is readable again on the opened System row</li>
+          <li>A run no longer offers a restore point that does not exist, and the terminal help lists --size</li>
+          <li>Five small window fixes: safer restart questions, honest results, no stuck buttons</li>
+          <li>A warning's button always matches the warning above it</li>
+          <li>Offline, the firmware step no longer says "up to date" from an old firmware list</li>
+          <li>Three buttons showed a stray underline where an "&amp;" belongs</li>
+          <li>Small messages now open over the OneUp window, not in the corner of the screen</li>
+          <li>A window you moved stays where you put it when a message appears</li>
+          <li>The window no longer stutters during a big download</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.4.7" date="2026-10-10">
       <description>
         <p>Release 1.4.7.</p>

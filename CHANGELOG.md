@@ -108,11 +108,6 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
-- **The "Show download size" link is readable again on the opened System row** (ONEUP-0237)
-  The opened package list sat on the row's blue-to-teal edge colour instead
-  of the row itself, so the blue link almost disappeared, and more so under
-  the mouse. The list now sits on the row's own background.
-
 - **Check for updates works straight after the download size is shown** (ONEUP-0266)
   It used to say the size was still being worked out, and refuse, for up
   to two minutes after the size appeared. Retry failed steps still waits
@@ -140,15 +135,6 @@ All notable changes to OneUp are documented here. The format follows
   a non-UTF-8 locale. A snapshot listing ending in an error is no longer
   reported as a restore point, and `--help` lists `--size=system`.
 
-- **Five small window fixes: safer restart questions, honest results, no stuck buttons** (ONEUP-0183)
-  Pressing Enter on "Restart now?" or "Restart services?" now picks No,
-  never Yes. A download size is no longer missed and shown as "Nothing to
-  download". If the password helper (pkexec) is missing, the Repositories,
-  roll-back and passwordless buttons now say so instead of greying out for
-  good. A run that finishes while OneUp is following it is no longer
-  recorded as failed. Repository names and other text from the update now
-  always show exactly as written.
-
 - **A warning's button always matches the warning above it** (ONEUP-0154)
   After a "too many restore points" or "duplicate source" notice, a later
   warning no longer keeps the earlier button underneath it. And a run that
@@ -168,22 +154,6 @@ All notable changes to OneUp are documented here. The format follows
 - **The signing-key messages say "source", like the rest of the window** (ONEUP-0218)
   When a source's signing key is out of date, or is still refused after
   importing keys, the message no longer uses the word "repository".
-
-- **Three buttons showed a stray underline where an "&" belongs** (ONEUP-0251)
-  "Roll back & reboot", "Import signing key & retry" and "Skip … &
-  update the rest" now read as written, instead of "Roll back _reboot"
-  and the like.
-- **Small messages now open over the OneUp window, not in the corner of the screen** (ONEUP-0247)
-  On Wayland, short notices such as "You're on the latest version"
-  appeared at the top-left of the screen, away from the window.
-- **A window you moved stays where you put it when a message appears** (ONEUP-0254)
-  On Wayland, opening any message or dialog pulled every other open
-  OneUp window, such as Repositories, back to the middle.
-
-- **The window no longer stutters during a big download** (ONEUP-0155)
-  It re-measured the whole package download folder on every progress
-  update, several times a second. It now measures it once every five
-  seconds, as the download figure always updated.
 
 - **The window opens where you last left it, including after a restart, on KDE Wayland** (ONEUP-0246)
   Wayland never tells an app where its window is, so OneUp now asks
@@ -364,6 +334,69 @@ All notable changes to OneUp are documented here. The format follows
   time without the build noticing. Each is now named by its exact contents. The
   build also no longer keeps its access token lying around after it has finished
   checking out the code.
+
+## [1.4.8] - 2026-10-13
+
+### Fixed
+
+- **Outlined buttons are easy to read in the light theme** (ONEUP-0270)
+  Buttons with an outline, such as "Check for updates", turned the dark
+  theme's pale blue in the light theme when pointed at, switched on or
+  reached with the Tab key, and were hard to read. The light theme now uses
+  a darker blue for both the text and the outline, so the outline also
+  stands out more clearly when a button has keyboard focus.
+
+- **Blue links are easy to read in the light theme** (ONEUP-0269)
+  Links such as "Show download size" used the dark theme's pale blue in the
+  light theme too, and were hard to read on the light background. The light
+  theme now has its own darker blue, which turns darker still under the mouse
+  or when the link has keyboard focus.
+
+- **The "Show download size" link is readable again on the opened System row** (ONEUP-0237)
+  The opened package list sat on the row's blue-to-teal edge colour instead
+  of the row itself, so the blue link almost disappeared, and more so under
+  the mouse. The list now sits on the row's own background.
+
+- **A run no longer offers a restore point that does not exist, and the terminal help lists --size** (ONEUP-0188)
+  When snapper created a snapshot without printing its number, OneUp read the
+  number from snapper's list, and an error line there was reported as a
+  snapshot to roll back to. Only a number is accepted now. `--help` also
+  describes `--size=system`, which works from a terminal and was missing.
+
+- **Five small window fixes: safer restart questions, honest results, no stuck buttons** (ONEUP-0183)
+  Pressing Enter on "Restart now?" or "Restart services?" now picks No,
+  never Yes. A download size is no longer missed and shown as "Nothing to
+  download". If the password helper (pkexec) is missing, the Repositories,
+  roll-back and passwordless buttons now say so instead of greying out for
+  good. A run that finishes while OneUp is following it is no longer
+  recorded as failed. Repository names and other text from the update now
+  always show exactly as written.
+
+- **A warning's button always matches the warning above it** (ONEUP-0154)
+  After a "too many restore points" or "duplicate source" notice, a later
+  warning — a failed download, say — no longer keeps the earlier button,
+  such as "Thin snapshots…", underneath it.
+
+- **Offline, the firmware step no longer says "up to date" from an old firmware list** (ONEUP-0222)
+  When the latest firmware list can't be downloaded, the step now says
+  "up to date as of the last check" and warns you to check your connection.
+  The firmware tool also can no longer stop a terminal run with a question
+  nobody can see.
+
+- **Three buttons showed a stray underline where an "&" belongs** (ONEUP-0251)
+  "Roll back & reboot", "Import signing key & retry" and "Skip … &
+  update the rest" now read as written, instead of "Roll back _reboot"
+  and the like.
+- **Small messages now open over the OneUp window, not in the corner of the screen** (ONEUP-0247)
+  On Wayland, short notices such as "You're on the latest version"
+  appeared at the top-left of the screen, away from the window.
+- **A window you moved stays where you put it when a message appears** (ONEUP-0254)
+  On Wayland, opening any message or dialog pulled every other open
+  OneUp window, such as Repositories, back to the middle.
+- **The window no longer stutters during a big download** (ONEUP-0155)
+  It re-measured the whole package download folder on every progress
+  update, several times a second. It now measures it once every five
+  seconds, as the download figure always updated.
 
 ## [1.4.7] - 2026-10-10
 
@@ -980,7 +1013,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.7...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.8...HEAD
+[1.4.8]: https://github.com/milnet01/OneUp/releases/tag/v1.4.8
 [1.4.7]: https://github.com/milnet01/OneUp/releases/tag/v1.4.7
 [1.4.6]: https://github.com/milnet01/OneUp/releases/tag/v1.4.6
 [1.4.5]: https://github.com/milnet01/OneUp/releases/tag/v1.4.5
