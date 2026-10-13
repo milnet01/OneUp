@@ -5258,7 +5258,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: review-contract-2026-08-25 ONEUP-0054 stage 4 loop 2.
 
-- 📋 [ONEUP-0140] **Give the four remaining yamllint warnings a position: `document-start` x3 and `truthy` on `on:`.**
+- ✅ [ONEUP-0140] **Give the four remaining yamllint warnings a position: `document-start` x3 and `truthy` on `on:`.**
   Left standing deliberately rather than switched off. `document-start` wants a
   leading `---` on `FUNDING.yml`, `release.yml` and `.obs/workflows.yml`; the
   project has never adopted that convention. `truthy` fires on the workflow's
@@ -5266,6 +5266,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   schema requires spelled exactly that way — a genuine false positive, recorded
   in `.ants_review_falsepos.jsonl`. Nothing gates on either: `local-CI.sh` does
   not run yamllint.
+  Resolved (2026-10-13): .yamllint now disables document-start (no file
+  uses `---`) and sets truthy check-keys: false, so `on:` passes while a
+  truthy value still warns. yamllint over every tracked YAML file: no
+  findings. v2 only: main has no .yamllint.
   **Layman:** Four minor style warnings in the config files that nobody has decided about yet.
   Kind: chore.
   Source: check-code --tree 2026-08-31 (yamllint).
