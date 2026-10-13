@@ -4361,7 +4361,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: peer-review-2026-10-11 demoreel.
   Lanes: gui.
 
-- 📋 [ONEUP-0258] **main's documentation.md §7 misdescribes its own loop-tally check.**
+- ✅ [ONEUP-0258] **main's documentation.md §7 misdescribes its own loop-tally check.**
   Three defects in main's copy, all pre-existing, both lanes found each.
   (1) What-checks-this row "§7 a loop tally balances | tests/docs-check.py"
   and §7's "tests/docs-check.py fails on it": check_loop_tallies skips a
@@ -4383,6 +4383,12 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   does not say whether a later edit to a Reviewed document needs a new
   run; with §1.2's displacement rule a reader may take it as replacing
   rule 14's trigger. Say that rule 14's trigger decides it.
+  Resolved (2026-10-13, main 876e971): all five fixed in main's §7 and
+  its What-checks-this row. The tally row now says a current-form row is
+  checked by nothing; the template shows a Q-tally row; the severity and
+  bare-number bullets are gone; §7 adopts global documentation.md §9.1's
+  never-edited clauses and defers re-review to global rule 14's trigger.
+  v2's §7 differs (ONEUP-0100); its side kept at the merge.
   **Layman:** The rules for writing review records describe the checker wrongly in three places, so a record can be wrong while the check stays green.
   Kind: doc-fix.
   Source: review-contract-2026-10-11 documentation.md (main) loop 13, outside ONEUP-0257's radius.
