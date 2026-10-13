@@ -489,7 +489,8 @@ it.** Older text says `/cold-eyes`, the skill `review-contract` replaced on 2026
 the loop-log headings keep the name. Where either appears, run `review-contract` (ONEUP-0103).
 
 **Every design document, spec, standard and reference goes through `review-contract`.**
-Implementation does not start before that.
+Implementation does not start before that. Whether a later edit to a reviewed document needs
+a new run is global `CLAUDE.md` rule 14's trigger; this section does not replace it.
 
 **When a run stops is `review-contract`'s rule, not this document's**: it converges on a
 loop with no verified finding, or ends at its cap and files what is left.
@@ -503,7 +504,7 @@ are exempt — they are too small to warrant it. OneUp has none today.
   A finding that does not resurface is the proof the fix held.
 - **Verify each finding before acting on it.** A reviewer's claim is a hypothesis; check
   it against the tree like any other claim (§6).
-- **The severity scale below is the OLD gate's, and `review-contract` does not emit one** —
+- **A severity scale is the OLD gate's, and `review-contract` does not emit one** —
   its findings carry the question they answer (`[Q1]`–`[Q4]`) instead. The mismatch reaches
   `tests/docs-check.py`, whose loop-log tally balances severity counts against dispositions,
   so a row written from a current run has to be worded to skip that check. **The compliant
@@ -516,28 +517,17 @@ are exempt — they are too small to warrant it. OneUp has none today.
 - **Fix every verified finding.** No grade lets one be left. A finding that turns out to
   be wrong is **dismissed explicitly**, with a line saying so — never silently filtered.
 - **Write the log as the loops happen.** Back-filling it destroys the audit trail, which
-  is the only evidence the review was real.
+  is the only evidence the review was real. **A landed row is never edited**: global
+  `documentation.md` §9.1's clauses on correcting a row bind here, and §1.2's displacement
+  does not remove them.
 - **The tally must balance.** A row saying 8 findings and 6 outcomes is a row where two
-  findings were dropped without a decision. `tests/docs-check.py` fails on it.
+  findings were dropped without a decision. A current-form row leaves its disposition
+  clause unbolded, and `tests/docs-check.py` checks only a bolded one, so nothing checks a
+  current row's tally. Add it up before you commit.
 
-  Three things about that check are worth knowing before you write a row, because each cost
-  a red `local-CI.sh` (2026-08-03, and the third 2026-08-04):
-
-  - **A dismissed finding still needs a severity.** The check compares the severity counts
-    against *verified + dismissed*, so four findings you checked and dropped have to appear
-    in the severity breakdown too. Writing `2 critical, 7 high, 8 medium, 5 low, 2 info —
-    24 verified, 4 dismissed` fails: 24 findings against 28 outcomes. The dismissed four
-    were all low, so `9 low` is what balances it.
-  - **Do not bold a bare number in the Outcome cell.** The check pairs `**…**` spans across
-    the whole row and then hunts `<number> verified|dismissed|info` inside them. A bolded
-    decimal sitting near a bolded disposition word — `**0.069**` a few clauses before
-    `**Dismissed: two.**` — pairs into one span and contributes a phantom `069 Dismissed`,
-    which read as 105 outcomes against 36 findings. Leave measurements unbolded in that
-    cell; bold the prose instead.
-  - **The check knows three outcome words: `verified`, `dismissed` and `info`.** Any other
-    word is not counted. So `28 verified, 1 dismissed, 1 carried` comes up one outcome
-    short and fails. Count a carried finding inside `verified` and say in the prose
-    where it was filed (ONEUP-0083).
+  **Outcomes are counted in three words: `verified`, `dismissed` and `info`.** No other
+  word counts. So `28 verified, 1 dismissed, 1 carried` is one outcome short. Count a
+  carried finding inside `verified` and say in the prose where it was filed (ONEUP-0083).
 
 **Spend a cold reader only on what a script cannot do.** The catchers, cheapest first:
 
@@ -559,7 +549,7 @@ The log format:
 ```markdown
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
-| 1 | 2026-07-26 | 3 high, 2 medium, 3 low | all fixed — see commit abc1234 |
+| 1 | 2026-07-26 | Q1 3 · Q2 2 · Q3 3 — all 8 verified, 0 dismissed | all fixed — see commit abc1234 |
 | 2 | 2026-07-27 | none | converged |
 ```
 
@@ -724,7 +714,7 @@ fact only to make a *different* point with it, and say where it came from.
 | §6 no `TODO` / `TBD` / `FIXME` / `XXX` left in a document | `tests/docs-check.py` |
 | §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design — and **that is the whole of its reach**. `docs/specs/` is exempt until ONEUP-0065 converts the `path:line` citations the older specs carry; `CLAUDE.md` and `ROADMAP.md` are inside §6a.2's scope and are scanned by **nothing**, as is the prose form — *"around line 786"* |
 | §6b most counts taken from the code stay out of the document | **nothing** automatic — a cold reader. ONEUP-0104 would gate it |
-| §7 a loop tally balances | `tests/docs-check.py` |
+| §7 a loop tally balances | `tests/docs-check.py`, on a row whose disposition clause is bolded. A row in the current form leaves it unbolded (§7), so its tally is checked by **nothing** automatic |
 | §7 every verified finding is fixed, and a run stops only where `review-contract` says | **nothing** automatic — the loop log says what each pass verified, and only a reader can set it against the fixes that landed |
 | §7.1 a run-state note is deleted when its run ends | **nothing** automatic — whether a run has ended is not a fact on disk. The catcher is the closing commit itself; a later reader can only spot a breach by the `-run-state.md` name §7.1 pins |
 | §7.1 a file under `docs/reviews/` is named `-run-state.md` or `-fix-ledger.md` | **nothing** automatic — no gate scans that directory at all, which is the same gap the row above rests on |
