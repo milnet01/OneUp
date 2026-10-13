@@ -108,6 +108,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The GitHub release page lists what changed again** (ONEUP-0271)
+  1.4.7 and 1.4.8 went out with only a "Full Changelog" link on
+  their GitHub release page. Each release page now shows that
+  version's section of this changelog.
+
 - **Check for updates works straight after the download size is shown** (ONEUP-0266)
   It used to say the size was still being worked out, and refuse, for up
   to two minutes after the size appeared. Retry failed steps still waits
