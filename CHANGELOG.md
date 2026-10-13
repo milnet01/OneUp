@@ -6,6 +6,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The GitHub release page lists what changed again** (ONEUP-0271)
+  1.4.7 and 1.4.8 went out with only a "Full Changelog" link on
+  their GitHub release page. Each release page now shows that
+  version's section of this changelog.
+
 ## [1.4.8] - 2026-10-13
 
 ### Fixed

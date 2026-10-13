@@ -15,6 +15,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The release page shows the tag's dated CHANGELOG section, not GitHub's
+      # generated notes, which are one compare link (ONEUP-0271). First, so a tag
+      # with no section fails before the build rather than shipping blank notes.
+      - name: Release notes from CHANGELOG.md
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v head="## [$ver] - " '
+            index($0, head) == 1 { on = 1; next }
+            on && /^## \[/       { exit }
+            on && /^\[[^]]+\]: / { exit }
+            on                   { print }
+          ' CHANGELOG.md | sed -e '/./,$!d' > release-notes.md
+          grep -q '[^[:space:]]' release-notes.md || {
+            echo "::error::CHANGELOG.md has no '## [$ver] - <date>' section with entries"
+            exit 1
+          }
+
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
@@ -47,4 +64,4 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: OneUp-x86_64.AppImage
-          generate_release_notes: true
+          body_path: release-notes.md
