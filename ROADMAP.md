@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=273 -->
+<!-- ants-roadmap-id-high-water: ONEUP=274 -->
 
 # OneUp Roadmap
 
@@ -8493,3 +8493,21 @@ when complete (that document's §7).
   **Layman:** If you have a fix for a program that its makers haven't released yet, OneUp could put it back after every update.
   Kind: feature.
   Source: user-request-2026-10-11.
+
+- 📋 [ONEUP-0274] **One click to get Packman's video codecs, and a warning if an update moves them back to openSUSE's builds.**
+  Raised by demoreel 2026-10-13: its recordings need ffmpeg's libx264,
+  which openSUSE's ffmpeg/libavcodec leave out and Packman's include.
+  Approved for 2.1 by the user the same day.
+  Plan: in the Repositories manager (ONEUP-0016), a "Video codecs
+  (Packman)" action that adds Packman at priority 90 if missing, then
+  runs `zypper dup --from packman --allow-vendor-change`, openSUSE's
+  documented switch, rather than naming libavcodecNN packages. The
+  update check then reports codec packages whose vendor drifted back
+  to openSUSE and offers the same switch; priority 90 alone keeps them
+  during dup while Packman offers the version, so drift is the case to
+  watch. Unverified: that drift happens in practice.
+  Demoreel will point its README and `demoreel check` at OneUp once this
+  ships; tell it when it does.
+  **Layman:** OneUp can set up the extra video codecs most people want on openSUSE, and tells you if an update ever quietly swaps them back.
+  Kind: feature.
+  Source: user-request-2026-10-13 (raised by the demoreel session).
