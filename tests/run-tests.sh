@@ -2543,11 +2543,40 @@ if [[ -e "$d/oneup-download-guard" ]]; then
 else
     echo "  ok   - failed grant removed the guard it had installed"; PASS=$((PASS+1))
 fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: a non-numeric refresh budget is refused by a grant that would otherwise succeed"
 # A budget that is not a whole number of seconds reaches the one sudoers slot a wildcard
-# would make exploitable, so the grant refuses rather than writing it.
+# would make exploitable, so the grant refuses rather than writing it. Its own directory,
+# with mocks that let a grant succeed: under the all-or-nothing scenario's failing install
+# the grant refused whatever the budget was, so this check could not fail (ONEUP-0200).
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == "--version" ]] && { echo v; exit 0; }
+exit 0
+EOF
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/visudo"
+cat > "$d/install" <<'EOF'
+#!/usr/bin/env bash
+args=(); while [[ $# -gt 0 ]]; do case "$1" in -o|-g|-m) shift 2;; *) args+=("$1"); shift;; esac; done
+cp "${args[0]}" "${args[1]}"
+EOF
+chmod +x "$d/zypper" "$d/visudo" "$d/install"
+authfile="$d/oneup-sudoers"
 out=$(ONEUP_REFRESH_TIMEOUT='5 *' ONEUP_AUTH_FILE="$authfile" run_engine "$d" --grant-auth 2>&1)
 check_absent "a non-numeric refresh budget never reaches the rule" "@@AUTH@@|on" "$out"
 check "a non-numeric refresh budget is refused with a hint"        "@@HINT@@"    "$out"
+if [[ -e "$authfile" ]]; then
+    echo "  FAIL - a non-numeric refresh budget left a drop-in behind"; FAIL=$((FAIL+1))
+else
+    echo "  ok   - a non-numeric refresh budget left no drop-in"; PASS=$((PASS+1))
+fi
+# Control: the same mocks with a whole-number budget grant, so the refusal above is the
+# budget's and not the harness's.
+out=$(ONEUP_REFRESH_TIMEOUT=5 ONEUP_AUTH_FILE="$authfile" run_engine "$d" --grant-auth 2>&1)
+check "the same mocks grant with a whole-number budget"            "@@AUTH@@|on" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
