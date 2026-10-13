@@ -12,6 +12,10 @@ All notable changes to OneUp are documented here. The format follows
   1.4.7 and 1.4.8 went out with only a "Full Changelog" link on
   their GitHub release page. Each release page now shows that
   version's section of this changelog.
+- **A stuck release build now fails within 30 minutes** (ONEUP-0116)
+  The 1.4.6 build stalled and sat for six hours before GitHub gave
+  up, so the download waited on someone noticing. A stalled build
+  now stops after 30 minutes, and running it again publishes it.
 
 ## [1.4.8] - 2026-10-13
 

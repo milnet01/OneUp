@@ -12,6 +12,10 @@ permissions:
 jobs:
   appimage:
     runs-on: ubuntu-22.04   # build on an older glibc so the AppImage runs widely
+    # A good run takes about 5 minutes. A stalled one otherwise sits until GitHub's 6-hour
+    # default: apt at v1.4.5, the engine tests at v1.4.6. This makes it a red run a
+    # re-run clears (ONEUP-0116).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
