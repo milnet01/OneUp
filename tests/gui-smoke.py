@@ -14,6 +14,7 @@ engine's own skip-cleanly-for-absent-tools convention.
 Run directly, or via tests/run-tests.sh / local-CI.sh.
 """
 import contextlib
+import functools
 import importlib.util
 import inspect
 import io
@@ -26,6 +27,7 @@ import sys
 import tempfile
 import time
 import traceback
+import types
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -79,7 +81,7 @@ os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
     import shiboken6
-    from PySide6.QtCore import QEvent, QPoint, QProcess, Qt, QTimer
+    from PySide6.QtCore import QEvent, QObject, QPoint, QProcess, Qt, QTimer
     from PySide6.QtGui import QAccessible, QCloseEvent, QColor, QFont, QFontInfo, QPalette
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import (
@@ -233,6 +235,111 @@ def _block_network() -> list:
     return calls
 
 
+# Every window this file builds, so the finished ones can be deleted (ONEUP-0267). They
+# never free themselves: each wires its controls to a functools.partial holding the
+# window, and PySide keeps a connected callable alive from C++, where gc cannot see the
+# cycle. Left alone, ~125 windows and 18,000 widgets reached every app-wide setStyleSheet
+# at ~4.5 s each, most of the suite's run time.
+_BUILT = []
+
+
+def _track_windows():
+    """Record every Updater as it is built — on the class, so a window built inside a
+    helper is caught too. Never restored, like _block_network."""
+    init = window.Updater.__init__
+
+    def _init(self, *args, **kwargs):
+        init(self, *args, **kwargs)
+        _BUILT.append(self)
+    window.Updater.__init__ = _init
+
+
+def _reachable(frame) -> set:
+    """Ids of what scenario code can still reach from `frame` and its callers: their
+    locals, two levels into containers, closures, partials and bound methods, and every
+    QObject's parents — a dialog a scenario still holds keeps the window it sits in."""
+    seen, todo = set(), []
+    while frame is not None:
+        if frame.f_code.co_name != "<module>":   # module globals hold _BUILT itself
+            todo.extend(frame.f_locals.values())
+        frame = frame.f_back
+    for _depth in range(3):
+        nxt = []
+        for obj in todo:
+            if obj is _BUILT or id(obj) in seen:
+                continue
+            seen.add(id(obj))
+            if isinstance(obj, (list, tuple, set, frozenset)):
+                nxt.extend(obj)
+            elif isinstance(obj, dict):
+                nxt.extend(obj.values())
+            elif isinstance(obj, functools.partial):
+                nxt.extend((*obj.args, *obj.keywords.values()))
+            elif isinstance(obj, types.FunctionType):
+                for cell in obj.__closure__ or ():
+                    with contextlib.suppress(ValueError):   # an unfilled cell
+                        nxt.append(cell.cell_contents)
+            elif isinstance(obj, types.MethodType):
+                nxt.append(obj.__self__)
+            elif isinstance(obj, QObject) and shiboken6.isValid(obj):
+                parent = obj.parent()
+                while parent is not None:
+                    seen.add(id(parent))
+                    parent = parent.parent()
+        todo = nxt
+    return seen
+
+
+def _reap_windows():
+    """Delete every built window nothing on the stack can reach, with the parentless
+    controls it lends to the Settings dialog. Deleted, not closed: closeEvent asks
+    whether to quit, or hides to the tray. A visible window is left alone."""
+    live = _reachable(sys._getframe(1))
+    kept, doomed = [], []
+    for win in _BUILT:
+        if not shiboken6.isValid(win):
+            continue
+        lent = [v for v in vars(win).values()
+                if isinstance(v, QWidget) and shiboken6.isValid(v) and v.parent() is None]
+        if win.isVisible() or any(id(o) in live for o in (win, *lent)):
+            kept.append(win)
+        else:
+            doomed.append((win, lent))
+    _BUILT[:] = kept
+    if not doomed:
+        return
+    for win, _lent in doomed:
+        # A running process would be killed by its destructor, which emits finished
+        # into a handler whose window is half gone. The details fetch is not the
+        # window's child, so it is ended as closeEvent ends it.
+        win.details.stop()
+        for proc in win.findChildren(QProcess):
+            proc.blockSignals(True)
+            if proc.state() != QProcess.ProcessState.NotRunning:
+                proc.kill()
+                proc.waitForFinished(1000)
+        # The window filters its own buttons' events (and a size link its link's). As
+        # the children are torn down one by one, a later one's event reaches a filter
+        # that reads an earlier one, already deleted — so unhook the filters first.
+        watched = [win, *win.findChildren(QObject)]
+        if win.windowHandle() is not None:
+            watched.append(win.windowHandle())
+        filters = [o for o in (*watched, *vars(win).values())
+                   if isinstance(o, QObject) and type(o).__module__.startswith("oneup.")
+                   and "eventFilter" in type(o).__dict__]
+        for obj in watched:
+            for flt in filters:
+                obj.removeEventFilter(flt)
+    # Those filters queue zero-delay re-measures on a theme change, and a scenario that
+    # applies two themes back to back reaps between them — so the queue is run while
+    # every window is still whole.
+    QApplication.processEvents()
+    for win, lent in doomed:
+        for obj in (*lent, win):
+            obj.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+
+
 def main() -> int:
     # The shim is loaded for what loading it PROVES — that the thing every launcher
     # names still starts the app — not for anything read off the module afterwards;
@@ -278,6 +385,17 @@ def main() -> int:
     # silently ran left to right would prove nothing.
     if "-reverse" in sys.argv[1:]:
         check("INV-5 the -reverse pass really is right-to-left", app.isRightToLeft())
+
+    # Finished windows are deleted just before each app-wide theme apply, the one step
+    # whose cost grows with every widget alive (ONEUP-0267). Above the first Updater(),
+    # so every window is tracked; never restored, so the whole run is covered.
+    _track_windows()
+    _apply_app_theme = theme.apply_app_theme
+
+    def _apply_after_reaping(*args, **kwargs):
+        _reap_windows()
+        return _apply_app_theme(*args, **kwargs)
+    theme.apply_app_theme = _apply_after_reaping
 
     # --- 1. A malformed / spliced marker never throws out of the read slot ------
     w = window.Updater()
@@ -3732,6 +3850,11 @@ def main() -> int:
         racer.wait()
         paths.RUN_STATE = orig_rs
         shutil.rmtree(race_dir, ignore_errors=True)
+
+    # The windows nothing below reads, released so _reap_windows can delete them before
+    # the app-wide theme applies that follow (ONEUP-0267). Each name still bound holds
+    # its window through every apply; a closure's names stay, as a slot may yet read one.
+    del wQ, wI, wP, wK, wS0, wS1, wO, wW, wH, wE, w_on, w_off, wr, w_tmp, w2, w82
 
     # INV-8: both settings persist and apply live, with no restart.
     app_inst = QApplication.instance()
