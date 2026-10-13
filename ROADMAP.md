@@ -8141,7 +8141,7 @@ when complete (that document's §7).
   Source: user-report-2026-10-13.
   Lanes: gui.
 
-- 📋 [ONEUP-0267] **The window suite never closes the windows it builds, so every theme re-apply restyles 18,000 hidden widgets.**
+- ✅ [ONEUP-0267] **The window suite never closes the windows it builds, so every theme re-apply restyles 18,000 hidden widgets.**
   Measured 2026-10-13 with a wrapper around theme.apply_app_theme: at
   the first app-wide re-apply 18,253 widgets are alive, 2,011 of them
   top-level and only 2 visible (127 Updater windows; each also holds
@@ -8155,6 +8155,11 @@ when complete (that document's §7).
   125 sites in one main(), so do it in batches, and the suite must stay
   829/0 both directions. Deferred from ONEUP-0265 because it changes what
   those scenarios hold on to; deterministic, but too wide for that item.
+  Resolved 2026-10-13 in 1b67f12: gc frees none (PySide holds each
+  connected partial from C++), so the suite tracks every Updater and
+  deletes the unreachable ones before each app-wide theme apply, plus
+  one del of 16 finished names. Widgets at an apply 18,392 -> ~7,200;
+  one pass 145 s -> both passes side by side 60 s; same checks.
   **Layman:** The window tests leave about 125 test windows open in the background, which makes them several times slower than they need to be.
   Kind: perf.
   Source: in-session-2026-10-13, measured under ONEUP-0265.
