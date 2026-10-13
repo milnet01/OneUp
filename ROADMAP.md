@@ -6081,6 +6081,9 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   home:milnet:oneup then home:milnet; README, packaging/obs/README.md and
   workflow.md §1.2/§8 updated. release.sh's new loop is unexecuted until
   the next release. Left: token 11691 deleted by hand in the OBS web UI.
+  Done (2026-10-13): OBS token 11691 is gone. The hung `osc` delete went
+  through server-side; the user's Tokens page and `osc token` both list only
+  11768, which is not OneUp's (last triggered 14:49 UTC, before this work).
   **Layman:** OneUp's openSUSE repository moves to its own folder on the build service, like your other projects, without cutting off anyone using the old address.
   Kind: package.
   Source: user-request-2026-10-13.
