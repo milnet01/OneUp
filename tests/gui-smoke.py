@@ -54,7 +54,7 @@ os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
 
 try:
     import shiboken6
-    from PySide6.QtCore import QProcess, Qt, QTimer
+    from PySide6.QtCore import QPoint, QProcess, Qt, QTimer
     from PySide6.QtGui import QAccessible, QCloseEvent, QFontInfo
     from PySide6.QtWidgets import (
         QApplication,
@@ -1029,6 +1029,27 @@ def main() -> int:
           wS.rows["system"].has_size())
     check("a non-marker line from the size probe is logged",
           "weighing things up" in wS.log.toPlainText())
+
+    # ONEUP-0237: the opened panel must sit on the row's card, not on the
+    # blue-to-teal border gradient, or the blue "Show download size" link
+    # all but vanishes on it. Compare a margin pixel of the panel with one
+    # of the card's own top margin: one surface, so one colour.
+    rowS = wS.rows["system"]
+    cardS = rowS.findChild(QFrame, "RowCard")
+    rowS.disclosure.setChecked(True)
+    for dark in (True, False):
+        rowS.setStyleSheet(updater.build_theme(dark))
+        rowS.resize(600, rowS.sizeHint().height())
+        rowS.layout().activate()
+        imgS = rowS.grab().toImage()
+        card_px = imgS.pixelColor(rowS.width() // 2, cardS.mapTo(rowS, QPoint(0, 3)).y())
+        det_px = imgS.pixelColor(
+            rowS.width() // 2,
+            rowS.details.mapTo(rowS, QPoint(0, rowS.details.height() - 4)).y())
+        check(f"the opened System panel is painted with the row's card colour "
+              f"({'dark' if dark else 'light'})", det_px.name() == card_px.name())
+    rowS.setStyleSheet("")
+    rowS.disclosure.setChecked(False)
 
     # Exit 0 with no SIZE marker means the solver found nothing to fetch — but a
     # non-zero exit must NEVER be reported as "nothing to download". Same

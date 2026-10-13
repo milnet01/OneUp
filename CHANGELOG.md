@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The "Show download size" link is readable again on the opened System row** (ONEUP-0237)
+  The opened package list sat on the row's blue-to-teal edge colour instead
+  of the row itself, so the blue link almost disappeared, and more so under
+  the mouse. The list now sits on the row's own background.
+
 - **A run no longer offers a restore point that does not exist, and the terminal help lists --size** (ONEUP-0188)
   When snapper created a snapshot without printing its number, OneUp read the
   number from snapper's list, and an error line there was reported as a

@@ -1020,7 +1020,11 @@ class TaskRow(QFrame):
 
         inner = QFrame()
         inner.setObjectName("RowCard")
-        row = QHBoxLayout(inner)
+        card = QVBoxLayout(inner)
+        card.setContentsMargins(0, 0, 0, 0)
+        card.setSpacing(0)
+        row = QHBoxLayout()
+        card.addLayout(row)
         row.setContentsMargins(15, 12, 15, 12)
         row.setSpacing(10)
         row.addLayout(text, 1)
@@ -1074,7 +1078,9 @@ class TaskRow(QFrame):
         outer.setContentsMargins(1, 1, 1, 1)  # 1px gradient border
         outer.setSpacing(0)
         outer.addWidget(inner)
-        outer.addWidget(self.details)
+        # The panel goes on the card, never on the border: #RowDetails is
+        # transparent, so outside the card it shows the gradient (ONEUP-0237).
+        card.addWidget(self.details)
 
     def _on_disclosure(self, on: bool):
         self.details.setVisible(on)
