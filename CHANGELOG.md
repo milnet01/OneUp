@@ -50,6 +50,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The openSUSE repository has a new address** (ONEUP-0273)
+  OneUp's package now lives in its own project on the openSUSE
+  Build Service, home:milnet:oneup. The README gives the new
+  address. The old home:milnet repository keeps getting OneUp
+  updates until 2.0.0, so nobody is cut off; the README says how
+  to move.
+
 - **Scrollbars now follow the chosen theme** (ONEUP-0262)
   They were Qt's plain light-grey default in every theme. The handle now
   takes the theme's own boundary colour, clears 3:1 against every panel

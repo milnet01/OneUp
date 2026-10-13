@@ -43,7 +43,7 @@ exist yet, and saying so is the point.
 | `screenshots/` | Images the README and the app-store metadata point at. |
 | `branding/` | The OneUp wordmark, for pages outside this repository that show the project. Nothing in the app or its packages reads it. |
 | `.github/` | `FUNDING.yml`, and `workflows/` — GitHub CI. One workflow: `release.yml`, triggered by a `v*` tag. |
-| `.ants/`, `.obs/` | Tooling configuration, not application code. |
+| `.ants/` | Tooling configuration, not application code. |
 | `.claude/` | Claude Code configuration. `rules/` holds the traps that bind one part of the code (`CLAUDE.md` §6). `audit/` holds `check-code`'s project config: `audit-config.json` and the `scope.txt` it names, the paths the audit tools skip. |
 | *(root dotfiles)* | `.gitignore`, `.ants_review_falsepos.jsonl`, `.yamllint` — tooling state that has to sit at the root to be found. |
 

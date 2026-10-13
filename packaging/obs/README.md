@@ -7,18 +7,20 @@ done in the **web UI** — no local `osc` client required. `_service` fetches th
 source **server-side** on OBS (which has network) and packs it **at build time**,
 so you never run `osc service manualrun`.
 
-> Account note: the OBS project is **`home:milnet`** (your OBS username). The
+> Account note: the OBS project is **`home:milnet:oneup`**, a subproject of the
+> home project `home:milnet` (your OBS username), like the other projects there. The
 > GitHub source lives under **`milnet01`** (your GitHub username) — that's what
 > `_service`'s clone URL points at. They're different accounts on purpose.
 
 ## One-time setup (web UI)
 
 1. On [build.opensuse.org](https://build.opensuse.org), open **Your Home Project**
-   (`home:milnet`) → **Create Package** → name it `oneup`, add a title/description.
+   (`home:milnet`) → **Subprojects** → create `oneup`. In `home:milnet:oneup`,
+   **Create Package** → name it `oneup`, add a title/description.
 2. On the package's **Overview** → **Add local files**, upload both:
    - `packaging/rpm/oneup.spec`
    - `packaging/obs/_service`
-3. Add a build target: **project** `home:milnet` → **Repositories** →
+3. Add a build target: **project** `home:milnet:oneup` → **Repositories** →
    **Add from a distribution** → **openSUSE Tumbleweed** and **openSUSE Leap 16.0**
    (both are already configured — see *Build targets* below).
 4. On the package page → **Trigger Services** (runs `obs_scm` server-side to fetch
@@ -29,10 +31,10 @@ That's it — OBS clones the tag server-side, packs it (tar → recompress →
 Results**. Once green, the repo is live:
 
 ```
-https://download.opensuse.org/repositories/home:/milnet/openSUSE_Tumbleweed/
+https://download.opensuse.org/repositories/home:/milnet:/oneup/openSUSE_Tumbleweed/
 ```
 
-*(Prefer the CLI? `zypper install osc`, then `osc checkout home:milnet oneup`, drop
+*(Prefer the CLI? `zypper install osc`, then `osc checkout home:milnet:oneup oneup`, drop
 the two files in, `osc add oneup.spec _service`, `osc commit`. The build-time
 services mean you do **not** need `osc service manualrun`.)*
 
@@ -57,53 +59,22 @@ builds the AppImage), and — through your configured `osc` — commits the new
    `set_version` syncs the spec's `Version:` to the tag automatically.
 3. **Trigger Services** → it rebuilds.
 
-## Fully hands-off OBS rebuild (optional)
+## No GitHub → OBS webhook, on purpose
 
-`./release.sh` already retriggers the OBS build (its `osc` step commits the new
-`_service`/`oneup.spec`, which rebuilds the RPM). So the common path is **already
-automated** — you don't need a webhook to get an OBS rebuild on release.
+`./release.sh`'s `osc` step is what delivers each release to OBS. A webhook that
+re-ran the package's services on every tag push existed until 2026-10-13 and was
+removed (ONEUP-0255): it rebuilt whatever `_service` OBS already held — the
+*previous* version — and the extra revision it made could land between
+`release.sh`'s checkout and its commit, so the commit was refused as out of date.
+Do not re-add one without solving both.
 
-A GitHub → OBS **webhook** only adds value if you want a **bare `git push`**
-(bypassing `release.sh`) to poke OBS too. The repo ships the workflow config for it
-at [`.obs/workflows.yml`](../../.obs/workflows.yml) (inert until you complete the
-setup below). It's a one-time wiring — verified 2026-07-21 (home:milnet, token id
-11691):
+## The old location: `home:milnet`
 
-1. **Create the OBS workflow token.** OBS web UI: **Your Profile → Tokens → Create
-   Token**, then:
-   - **Type:** `workflow`
-   - **Description:** anything, e.g. `OneUp — rebuild on GitHub push`
-   - **SCM Token:** a **GitHub Personal Access Token** — OBS uses it to talk back to
-     the repo. Create one at GitHub → **Settings → Developer settings → Personal
-     access tokens → Tokens (classic)** with the **`public_repo`** scope (OneUp is
-     public), and paste it here.
-   - **Path for Workflows Configuration File:** `.obs/workflows.yml` (the default —
-     leave it; it's read from the ref that triggered the build).
-   - **URL to Workflows Configuration File:** leave **blank** (a URL, if given,
-     overrides the path).
-
-   On save, OBS shows the token's **Id**, its **Secret** (shown once — save it), and
-   a **trigger URL** like `https://build.opensuse.org/trigger/workflow?id=<ID>`.
-2. **Add the webhook on GitHub.** Repo **Settings → Webhooks → Add webhook**:
-   - **Payload URL:** the token's trigger URL from step 1.
-   - **Content type:** `application/json`
-   - **Secret:** the OBS token **Secret** from step 1 (OBS verifies the payload's
-     HMAC signature with it).
-   - **Events:** *Just the push event* (tag pushes arrive as push events).
-
-   A green "Last delivery was successful" on the webhook's ping means OBS accepted
-   the connection.
-3. **Push** and watch OBS: the `rebuild_on_tag` workflow in `.obs/workflows.yml`
-   fires `trigger_services`, so OBS re-runs the package's services. Verify the build
-   result before relying on it.
-
-> **Caveat (read `.obs/workflows.yml`'s header):** `trigger_services` rebuilds
-> whatever `_service` pins as `<revision>`. `release.sh` keeps that revision in
-> lockstep with the tag, so they agree. If you push tags **by hand**, bump
-> `_service`'s `<revision>` in the same push, or convert the OBS package to build
-> **directly from the git ref** (OBS's SCM-linked model) so any tag just works —
-> a bigger one-time restructure, worth it only if you routinely tag without
-> `release.sh`.
+Until 1.4.9 the package lived directly in the home project, `home:milnet/oneup`, and
+users added that repo. `release.sh` keeps it updated alongside `home:milnet:oneup`
+until 2.0.0, so nobody on it is stranded; the main README tells them how to move.
+Removing it is a 2.0.0 task: drop `home:milnet` from `obs_projects` in `release.sh`,
+then delete the package on OBS.
 
 ## Build targets
 
@@ -111,8 +82,8 @@ Two, both live since 1.4.1 (2026-08-07):
 
 | Target | Repository for users |
 | --- | --- |
-| `openSUSE_Tumbleweed` (i586, x86_64) | `https://download.opensuse.org/repositories/home:/milnet/openSUSE_Tumbleweed/` |
-| `openSUSE_Leap_16.0` (x86_64) | `https://download.opensuse.org/repositories/home:/milnet/openSUSE_Leap_16.0/` |
+| `openSUSE_Tumbleweed` (i586, x86_64) | `https://download.opensuse.org/repositories/home:/milnet:/oneup/openSUSE_Tumbleweed/` |
+| `openSUSE_Leap_16.0` (x86_64) | `https://download.opensuse.org/repositories/home:/milnet:/oneup/openSUSE_Leap_16.0/` |
 
 OneUp supports both at runtime — the engine runs `zypper update` on Leap and
 `zypper dup` on Tumbleweed — and `oneup.spec` is `BuildArch: noarch`, so the same
@@ -145,9 +116,9 @@ bundles its own Qt/PySide6 and does not depend on the distro's Python at all.
 Project meta rather than the web UI, so the change is reviewable:
 
 ```bash
-osc meta prj home:milnet > prj.xml     # edit: add a <repository> block
-osc meta prj home:milnet -F prj.xml
-osc results home:milnet oneup          # watch it build
+osc meta prj home:milnet:oneup > prj.xml     # edit: add a <repository> block
+osc meta prj home:milnet:oneup -F prj.xml
+osc results home:milnet:oneup oneup          # watch it build
 ```
 
 ## Notes
