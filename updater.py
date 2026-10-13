@@ -350,8 +350,8 @@ QPushButton#GhostBtn {
     color: $ghostfg; font-weight: 600; background: transparent;
     border: 1px solid $ghostbd; border-radius: 8px; padding: 8px 14px;
 }
-QPushButton#GhostBtn:hover { border-color: #4aa3ff; color: #4aa3ff; }
-QPushButton#GhostBtn:checked { border-color: #4aa3ff; color: #4aa3ff; }
+QPushButton#GhostBtn:hover { border-color: $ghosthov; color: $ghosthov; }
+QPushButton#GhostBtn:checked { border-color: $ghosthov; color: $ghosthov; }
 QPushButton#GhostBtn:disabled { color: $disfg; border-color: $disbg; }
 
 QPushButton#LinkBtn {
@@ -422,7 +422,7 @@ QToolTip {
 QPushButton#RunBtn:focus {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
 }
-QPushButton#GhostBtn:focus { border-color: #4aa3ff; color: #4aa3ff; }
+QPushButton#GhostBtn:focus { border-color: $ghosthov; color: $ghosthov; }
 QPushButton#LinkBtn:focus  { color: $linkhov; }
 QPushButton#BannerBtn:focus {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
@@ -502,7 +502,7 @@ _DARK = dict(
     logbd="#262d38", status="#c3ccd9", lastrun="#828d9d", amber="#f5a623", progbg="#0c0f13",
     ghostbd="#38414f", ghostfg="#c7d0dd", disbg="#262b34", disfg="#aeb7c4",
     tip="#1a1f27", tipfg="#e9edf3", focus="#66b8ff", chunkink="#0c0f13",
-    linkfg="#4aa3ff", linkhov="#6fb6ff",
+    linkfg="#4aa3ff", linkhov="#6fb6ff", ghosthov="#4aa3ff",
 )
 _LIGHT = dict(
     win="#eef1f5", card="#ffffff", header="#1b2027", tag="#5c6673",
@@ -516,6 +516,10 @@ _LIGHT = dict(
     # because on this branch focus reuses hover and v2's #446f9c sits 1.02:1 from
     # rest, which would hide the focus cue; #234c78 sits 1.65:1 from it.
     linkfg="#326dab", linkhov="#234c78",
+    # The ghost button's hover, checked and focus ink and border: the dark blue read
+    # 2.63:1 on the card (ONEUP-0270). ONEUP-0076 §4.3's value clears 4.5:1 there,
+    # and its border sits 3.31:1 from the resting #c4ccd6, where the old one was 1.62:1.
+    ghosthov="#326dab",
 )
 
 # High-contrast palettes: pure black/white surfaces and text (21:1), one saturated

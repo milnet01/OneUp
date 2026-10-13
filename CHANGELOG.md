@@ -8,6 +8,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Outlined buttons are easy to read in the light theme** (ONEUP-0270)
+  Buttons with an outline, such as "Check for updates", turned the dark
+  theme's pale blue in the light theme when pointed at, switched on or
+  reached with the Tab key, and were hard to read. The light theme now uses
+  a darker blue for both the text and the outline, so the outline also
+  stands out more clearly when a button has keyboard focus.
+
 - **Blue links are easy to read in the light theme** (ONEUP-0269)
   Links such as "Show download size" used the dark theme's pale blue in the
   light theme too, and were hard to read on the light background. The light

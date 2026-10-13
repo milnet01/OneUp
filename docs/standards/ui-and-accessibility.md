@@ -120,8 +120,8 @@ captures both halves and can be checked by reading a rule:
 ```css
 /* base sheet (_QSS) — a border that already exists changes COLOUR */
 QPushButton#GhostBtn        { border: 1px solid $ghostbd; }
-QPushButton#GhostBtn:hover  { border-color: #4aa3ff; color: #4aa3ff; }
-QPushButton#GhostBtn:focus  { border-color: #4aa3ff; color: #4aa3ff; }   /* same as hover */
+QPushButton#GhostBtn:hover  { border-color: $ghosthov; color: $ghosthov; }
+QPushButton#GhostBtn:focus  { border-color: $ghosthov; color: $ghosthov; }   /* same as hover */
 
 /* base sheet (_QSS) — a borderless button changes its FILL */
 QPushButton#RunBtn        { border: none; background: $btn_accent; }
@@ -153,10 +153,10 @@ changed area. Measured over the shipped palettes:
 | `#RunBtn` | `#4aa3ff` → `#5cb0ff` (gradient top) | **1.14:1** |
 | `#LinkBtn`, dark | `#4aa3ff` → `#6fb6ff` | **1.23:1** |
 | `#LinkBtn`, light | `#326dab` → `#234c78` | **1.65:1** |
-| `#GhostBtn`, light | border `#c4ccd6` → `#4aa3ff` | **1.62:1** |
+| `#GhostBtn`, light | border `#c4ccd6` → `#326dab` | **3.31:1** |
 | `#GhostBtn`, dark | border `#38414f` → `#4aa3ff` | **3.91:1** |
 
-Only the dark ghost button clears 3:1. **This is a real gap, not a rounding error**, and it
+Only the ghost buttons clear 3:1. **This is a real gap, not a rounding error**, and it
 is the redesign's to close: **ONEUP-0076** must pick a ringless focus treatment that
 measures ≥ 3:1 against its own rest state, in every shipped theme, and add the measurement
 to the test suite. Until it does, the honest statement is that OneUp's focus cue is visible

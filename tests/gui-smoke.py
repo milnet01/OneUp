@@ -1139,6 +1139,69 @@ def main() -> int:
                   f"({'dark' if dark else 'light'})",
                   _ratio(inks["focus"], inks["rest"]) >= 1.2)
 
+    # ONEUP-0270: a ghost button's text must read at 4.5:1 or better on the card it
+    # rests on, at rest, under the mouse, checked and with keyboard focus, in both
+    # themes. The light theme once used the dark theme's blue and measured 2.63:1.
+    # Focus reuses hover on this branch and recolours the border, so the focused
+    # border must also sit 3:1 from the resting one (ui-and-accessibility.md §5).
+    for dark in (True, False):
+        low, edges = [], {}
+        for state in ("rest", "hover", "checked", "focus"):
+            top = QWidget()
+            QVBoxLayout(top).setContentsMargins(0, 0, 0, 0)
+            card = QFrame(objectName="Card")
+            top.layout().addWidget(card)
+            inner = QVBoxLayout(card)
+            inner.setContentsMargins(30, 30, 30, 30)
+            btn = QPushButton("Check for updates", objectName="GhostBtn")
+            btn.setCheckable(True)
+            inner.addWidget(btn)
+            top.setStyleSheet(updater.build_theme(dark)
+                              + "\nQPushButton#GhostBtn { font-size: 40pt; }")
+            top.resize(700, 200)
+            top.show()
+            if state == "focus":
+                top.activateWindow()
+                btn.setFocus(Qt.FocusReason.TabFocusReason)
+            else:
+                btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+                btn.clearFocus()
+            btn.setChecked(state == "checked")
+            QApplication.processEvents()
+            QTest.mouseMove(top, top.rect().bottomRight())
+            QApplication.processEvents()
+            if state == "hover":
+                QTest.mouseMove(btn, btn.rect().center())
+                QApplication.processEvents()
+            state_ok = (btn.underMouse() == (state == "hover")
+                        and (top.focusWidget() is btn) == (state == "focus")
+                        and btn.isChecked() == (state == "checked"))
+            img = top.grab().toImage()
+            r = btn.geometry().translated(card.mapTo(top, QPoint(0, 0)))
+            bg = img.pixelColor(r.left() - 10, r.center().y())
+            # Inside the border, so the ink is the text's and never the outline's.
+            ink = max((img.pixelColor(x, y) for x in range(r.left() + 4, r.right() - 4)
+                       for y in range(r.top() + 4, r.bottom() - 4)),
+                      key=lambda c: _ratio(c, bg))
+            edges[state] = img.pixelColor(r.center().x(), r.top())
+            if not state_ok or _ratio(ink, bg) < 4.5:
+                low.append(f"{state} {ink.name()} on {bg.name()} "
+                           f"{_ratio(ink, bg):.2f}:1" + ("" if state_ok else " (state not set)"))
+            QTest.mouseMove(top, top.rect().bottomRight())
+            top.close()
+            top.deleteLater()
+        theme = "dark" if dark else "light"
+        check(f"ghost button text reads at 4.5:1 at rest, hover, checked and focus "
+              f"on the card ({theme})", not low)
+        for line in low:
+            print(f"         {line}")
+        cue = _ratio(edges["focus"], edges["rest"])
+        check(f"a focused ghost button's border sits 3:1 from a resting one ({theme})",
+              cue >= 3.0)
+        if cue < 3.0:
+            print(f"         border {edges['rest'].name()} -> {edges['focus'].name()} "
+                  f"{cue:.2f}:1")
+
     # Exit 0 with no SIZE marker means the solver found nothing to fetch — but a
     # non-zero exit must NEVER be reported as "nothing to download". Same
     # never-claim-what-you-didn't-earn rule the engine's step tests enforce.
