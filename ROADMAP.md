@@ -5992,7 +5992,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Source: in-session-2026-10-13.
   Lanes: gui, theme.
 
-- 📋 [ONEUP-0270] **On main, the ghost button's hover, checked and focus ink is one blue in all themes, which fails 4.5:1 on the light theme.**
+- ✅ [ONEUP-0270] **On main, the ghost button's hover, checked and focus ink is one blue in all themes, which fails 4.5:1 on the light theme.**
   Seen while fixing ONEUP-0269. main's _QSS sets
   QPushButton#GhostBtn:hover, :checked and :focus to border-color and
   color #4aa3ff in every theme: 2.63:1 on the light card #ffffff.
@@ -6001,6 +6001,12 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   in tests/gui-smoke.py (pattern: ONEUP-0269's block), and keep
   focus visibly different from rest, since on main focus reuses
   hover. Not on v2.
+  Resolved (2026-10-13): main 7830381. Ghost :hover, :checked and :focus
+  read palette key ghosthov; dark #4aa3ff, light #326dab (5.37:1 on the
+  card; focus border 3.31:1 from rest, was 1.62:1). New gui-smoke pixel
+  check red 444/2, green 446/0; five mutations all killed. Merged into
+  v2 (8200eb3) with v2's tree kept: v2 already had the fix via
+  ONEUP-0076.
   **Layman:** In the released app's light theme, the text on outlined buttons turns a pale blue when pointed at, selected or tabbed to, and is hard to read.
   Kind: accessibility.
   Source: in-session-2026-10-13.
