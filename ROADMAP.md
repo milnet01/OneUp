@@ -4105,7 +4105,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: chore.
   Source: ONEUP-0054 stage 6 step 6.
 
-- 📋 [ONEUP-0198] **The progress fill is barely visible against its own trough in the four light themes.**
+- ✅ [ONEUP-0198] **The progress fill is barely visible against its own trough in the four light themes.**
   Measured across all eight palettes with the project's own `contrast.worst`:
   `accent` against `progbg` is about 7.1:1 to 7.4:1 in the four dark themes
   and about 1.4:1 in Daylight, Paper, Sky and Sand. The fill IS the
@@ -4130,6 +4130,13 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
 
   Sequence with ONEUP-0197, which gives each theme its own accent: doing
   this first means re-measuring every value that item then changes.
+  Resolved (2026-10-13): decided with the user - the fill deepens, the
+  trough stays pale. New key `progfill`: the dark themes keep the accent
+  (7.1-7.4:1), the light themes take #1e66c8 -> #0e7490 (4.19-4.35:1).
+  PAIRS measures `progfill` on `progbg` and no longer lists `status` on
+  `progbg`; gui-smoke checks real pixels in all eight themes. When
+  ONEUP-0197 gives each theme its own accent, `progfill` is the key the
+  bar reads, so re-measure it there. Commit 3010821.
   **Layman:** In the light themes you can hardly see how far the progress bar has filled.
   Kind: accessibility.
   Source: measured 2026-09-02 while closing ONEUP-0163.
