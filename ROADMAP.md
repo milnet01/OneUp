@@ -5270,6 +5270,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Informational severity; not urgent. Worth weighing against
   `generate_release_notes: true`, which the action provides and a bare
   `gh release upload` does not.
+  Progress (2026-10-13): ONEUP-0271 replaced generate_release_notes
+  with body_path: release-notes.md, so the trade-off above is gone.
+  `gh release create --notes-file release-notes.md` plus `gh release
+  upload` would do the same job without the action.
   **Layman:** The release step uses a third-party action for something the built-in tooling can already do.
   Kind: chore.
   Source: check-code --tree 2026-08-31 (zizmor superfluous-actions, Informational).
@@ -6068,13 +6072,19 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Source: peer-report-ants-projects-hub-website-2026-10-10.
   Lanes: gui.
 
-- 📋 [ONEUP-0271] **The release workflow publishes GitHub's auto-generated notes, not the version's CHANGELOG section.**
+- ✅ [ONEUP-0271] **The release workflow publishes GitHub's auto-generated notes, not the version's CHANGELOG section.**
   release.yml's softprops/action-gh-release step sets
   generate_release_notes: true, so v1.4.7 and v1.4.8 shipped with a
   body of one compare link. 1.4.8's body was replaced by hand on
   2026-10-13 with gh release edit. Fix: extract the tag's dated
   CHANGELOG section and pass it as the release body. Check v2's
   release.yml too. Interacts with ONEUP-0141 (zizmor on that action).
+  Resolved (2026-10-13): main 0a6b649, merged into v2 081e3f2. A first
+  step in release.yml extracts the tag's dated CHANGELOG section into
+  release-notes.md, passed as body_path; a tag with no section fails
+  before the build. Proved without tagging: the step run from the YAML
+  on v1.4.8 is byte-identical to the live 1.4.8 notes, on both branches.
+  First real proof is the next tag's release page.
   **Layman:** The GitHub release page shows only a "Full Changelog" link instead of the list of what changed.
   Kind: fix.
   Source: in-session-2026-10-13.
