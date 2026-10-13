@@ -4141,7 +4141,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: accessibility.
   Source: measured 2026-09-02 while closing ONEUP-0163.
 
-- 📋 [ONEUP-0200] **The non-numeric refresh budget check can never fail.**
+- ✅ [ONEUP-0200] **The non-numeric refresh budget check can never fail.**
   ONEUP-0092 INV-4 requires a scenario that grants with
   `ONEUP_REFRESH_TIMEOUT='5 *'` and asserts no drop-in and a `@@HINT@@`. That
   check sits at the end of the "granting is all-or-nothing" scenario in
@@ -4150,6 +4150,13 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   swapped a bad budget for the default, so the grant would have succeeded, left
   the suite green. Give it its own directory with working mocks, and see it red
   against an engine that accepts the value.
+  Resolved (2026-10-13): the check has its own scenario in tests/run-tests.sh,
+  with mocks a grant succeeds under, a no-drop-in assertion and a control
+  that grants with a whole-number budget. Landed on main (7f394f7), merged
+  into v2. Proved red on both branches against a scratch copy with
+  auth_cmnds' digits guard removed: the three budget checks fail on their
+  assertions, the control passes. Under the old placement the same mutant
+  left them green.
   **Layman:** A test meant to prove a bad setting blocks passwordless setup passes even when it doesn't.
   Kind: test.
   Source: close-findings 2026-09-18, sweep of ONEUP-0175.
