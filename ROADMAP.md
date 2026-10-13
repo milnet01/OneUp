@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=263 -->
+<!-- ants-roadmap-id-high-water: ONEUP=267 -->
 
 # OneUp Roadmap
 
@@ -8082,6 +8082,83 @@ when complete (that document's §7).
   **Layman:** The update engine's tests failed once during an upload check and passed every time after; find out what caused the one-off failure.
   Kind: investigate.
   Source: in-session-2026-10-12.
+
+- ✅ [ONEUP-0264] **Two window suites at once fail ONEUP-0260's no-leftover-process check on each other's helper.**
+  Seen 2026-10-13: two tests/gui-smoke.py runs started together each
+  failed one ONEUP-0260 INV-7 check ("and leaves no mock process
+  running" in one, "closing a window with no tray ends its fetch" in
+  the other). `_sleepers()` runs `pgrep -fx "sleep 29.17"`, which is
+  machine-wide, so each run counts the other's mock sleeper. Same class
+  as ONEUP-0203: two gates at once - two sessions pushing - report a
+  failure that is not there. Fix: a sleep length unique to the process,
+  `29.<pid>`, so the pattern matches this run's helper only and a real
+  leak is still found (an ancestry filter would miss a sleeper that
+  reparented to systemd --user).
+  Resolved (2026-10-13): the sleeper's duration is 29.<pid>, so pgrep finds
+  this run's only. Two passes side by side: 829/0 and 830/0. Commit 0d31f11.
+  **Layman:** Running the window tests twice at the same time made each one report a stuck background process that actually belonged to the other.
+  Kind: fix.
+  Source: in-session-2026-10-13.
+  Lanes: tests.
+
+- ✅ [ONEUP-0265] **Make local CI and the release workflow faster without making either less reliable.**
+  Asked by the user 2026-10-13: no flaky or risky speed-ups, and mind
+  the machine's resources. Measured: local-CI about 13 min, of which
+  the window suite is about 4 min per pass, twice. cProfile: 225 of
+  278 s in 50 QApplication.setStyleSheet calls, about 4.5 s each,
+  because by then 18k widgets are alive (2,011 hidden top-levels) and
+  an app-wide sheet re-polishes all of them. The engine suite is 144
+  scenarios at about 1.4 s each with no single hot spot.
+  Resolved (2026-10-13): probes use widget-local sheets (a pass 3m53s ->
+  ~2m32s), the two window passes run side by side in local-CI.sh, and
+  release.yml refreshes apt once. Push gate measured 6m23s on a machine at
+  load 11, against ~13 min before. A pip cache was rejected: zizmor rates it
+  high cache-poisoning on the publishing job. The engine suite still runs
+  alone (ONEUP-0263). The remaining big win is ONEUP-0267. Commit 358cb3f.
+  **Layman:** The checks that run before every upload take about 13 minutes; make them quicker without making them unreliable or hogging the computer.
+  Kind: perf.
+  Source: user-request-2026-10-13.
+  Lanes: tests, ci.
+
+- ✅ [ONEUP-0266] **Check for updates says the size is still being worked out after it has been, for up to two minutes.**
+  Reported by the user 2026-10-13 with a screenshot: the bar read
+  "104.5 MiB to download" and Check for updates still showed "Just a
+  moment - OneUp is working out the download size". `_launch`'s guard
+  in oneup/gui/run.py blocks while `_size_proc` is running, and after
+  ONEUP-0044 that process stays alive in its hold (up to HOLD_SECONDS,
+  120 s) once the size is known, so Run can adopt its credential. The
+  guard cannot tell calculating from holding. Its reason - a second
+  engine means a second password - does not apply to Check: the
+  engine's `check` action never authenticates. Fix: while held, Check
+  runs; while still calculating it waits (both use zypper); Retry still
+  waits, with wording that is true in each state. v2 only: main has no
+  hold and no such guard.
+  Resolved (2026-10-13): `_holding()` tells a held size from one still
+  being worked out; Check runs beside a hold, Retry waits and says why.
+  Red 832/2 on the old run.py; push gate 834/0 and 835/0. Commit 8ee5c68.
+  **Layman:** After OneUp has shown the download size, pressing Check for updates wrongly says it is still working the size out and refuses to check.
+  Kind: fix.
+  Source: user-report-2026-10-13.
+  Lanes: gui.
+
+- 📋 [ONEUP-0267] **The window suite never closes the windows it builds, so every theme re-apply restyles 18,000 hidden widgets.**
+  Measured 2026-10-13 with a wrapper around theme.apply_app_theme: at
+  the first app-wide re-apply 18,253 widgets are alive, 2,011 of them
+  top-level and only 2 visible (127 Updater windows; each also holds
+  about 12 parentless settings controls - GhostBtn buttons, ThemeCombo,
+  ThemeNote, a QFrame - that it lends to the Settings dialog). Each
+  QApplication.setStyleSheet then takes about 4.5 s; ~22 such calls
+  remain after ONEUP-0265 moved the pixel probes to widget-local sheets.
+  workflow.md section 6 recorded the suite at ~32 s a pass on 2026-09-03;
+  it is ~2.5 min now. Fix shape, not yet chosen: dispose each scenario's
+  window when it is done (close, deleteLater, drop the reference) - about
+  125 sites in one main(), so do it in batches, and the suite must stay
+  829/0 both directions. Deferred from ONEUP-0265 because it changes what
+  those scenarios hold on to; deterministic, but too wide for that item.
+  **Layman:** The window tests leave about 125 test windows open in the background, which makes them several times slower than they need to be.
+  Kind: perf.
+  Source: in-session-2026-10-13, measured under ONEUP-0265.
+  Lanes: tests.
 
 ## 2.1.0 — after 2.0
 
