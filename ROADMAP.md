@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=270 -->
+<!-- ants-roadmap-id-high-water: ONEUP=271 -->
 
 # OneUp Roadmap
 
@@ -6067,6 +6067,18 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: fix.
   Source: peer-report-ants-projects-hub-website-2026-10-10.
   Lanes: gui.
+
+- 📋 [ONEUP-0271] **The release workflow publishes GitHub's auto-generated notes, not the version's CHANGELOG section.**
+  release.yml's softprops/action-gh-release step sets
+  generate_release_notes: true, so v1.4.7 and v1.4.8 shipped with a
+  body of one compare link. 1.4.8's body was replaced by hand on
+  2026-10-13 with gh release edit. Fix: extract the tag's dated
+  CHANGELOG section and pass it as the release body. Check v2's
+  release.yml too. Interacts with ONEUP-0141 (zizmor on that action).
+  **Layman:** The GitHub release page shows only a "Full Changelog" link instead of the list of what changed.
+  Kind: fix.
+  Source: in-session-2026-10-13.
+  Lanes: ci, release.
 
 ## 2.0.0 — the rewrite
 
