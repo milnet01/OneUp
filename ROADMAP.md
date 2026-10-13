@@ -8122,6 +8122,13 @@ when complete (that document's §7).
   records on a private virtual display, never the real desktop.
   User, 2026-10-12: no trailer link yet, in the README or
   on the website. Both wait for this reshoot.
+  Progress (2026-10-13): the user confirmed the trailer and the
+  website's OneUp page stay as they are until 2.0.0. On release,
+  message the ants-projects-hub-website session; it will ask for
+  footage of the new look and one clip per layout (Rows, Rail,
+  Spotlight; ONEUP-0239). Its earlier brief: 1920x1080, demo data
+  only, no personal data, clips into /mnt/Games/Trailers/incoming/oneup/
+  with an updated notes.md.
   **Layman:** After 2.0.0 ships, make a new trailer that shows the new window.
   Kind: marketing.
   Source: user-request-2026-10-12.
