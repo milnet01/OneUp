@@ -152,6 +152,13 @@ These are not feature work and are unaffected:
   ONEUP-0097 reason, since `main`'s gate runs that suite on every push of `main`. Nothing
   user-facing changed, so **no 1.4.x is owed**. A batch of changes, not a category.
 
+- **ONEUP-0273, the OBS package's move to `home:milnet:oneup`** — the eighth exception,
+  granted 2026-10-13 at the user's decision. It is neither a fix nor a feature, so on its
+  own it would wait for 2.0. It qualifies because `main`'s `release.sh` publishes every
+  1.4.x, so a move on `v2` alone would leave 1.4.x releases going to the old location. It
+  also removes the GitHub → OBS webhook and its OBS workflow file (ONEUP-0255). No 1.4.x
+  is owed for it. A batch of changes, not a category.
+
 **Why the freeze is stated as a testable question rather than a preference:** the failure
 mode of any freeze is a slow slide back into 1.x work, one "small" fix at a time. *Is it a
 fix, a feature request, or neither?* has an answer; "is this important enough?" does not.
@@ -421,7 +428,8 @@ it to the GitHub release.
 
 ## 8. Releasing
 
-`./release.sh X.Y.Z` does the whole thing. `--no-obs` stops after GitHub.
+`./release.sh X.Y.Z` does the whole thing. `--no-obs` stops after GitHub. The OBS step updates
+`home:milnet:oneup` and, until 2.0.0, the old `home:milnet` (`packaging/obs/README.md`).
 
 It validates its arguments first — `X.Y.Z` or nothing happens, and every option after it
 must be `--no-obs` or it refuses. Then its preconditions, which are checks rather than suggestions, and it

@@ -128,7 +128,7 @@ system.
 **Tumbleweed:**
 
 ```bash
-sudo zypper addrepo https://download.opensuse.org/repositories/home:/milnet/openSUSE_Tumbleweed/home:milnet.repo
+sudo zypper addrepo https://download.opensuse.org/repositories/home:/milnet:/oneup/openSUSE_Tumbleweed/home:milnet:oneup.repo
 sudo zypper refresh
 sudo zypper install oneup
 ```
@@ -136,13 +136,16 @@ sudo zypper install oneup
 **Leap 16.0:**
 
 ```bash
-sudo zypper addrepo https://download.opensuse.org/repositories/home:/milnet/openSUSE_Leap_16.0/home:milnet.repo
+sudo zypper addrepo https://download.opensuse.org/repositories/home:/milnet:/oneup/openSUSE_Leap_16.0/home:milnet:oneup.repo
 sudo zypper refresh
 sudo zypper install oneup
 ```
 
-Built on the [openSUSE Build Service](https://build.opensuse.org/package/show/home:milnet/oneup)
+Built on the [openSUSE Build Service](https://build.opensuse.org/package/show/home:milnet:oneup/oneup)
 and also searchable on [software.opensuse.org](https://software.opensuse.org/package/oneup).
+
+**Added the older `home:milnet` repo?** It keeps getting OneUp updates until 2.0.0.
+To move, remove it and add the new one above: `sudo zypper removerepo home_milnet`.
 
 ### AppImage — one file, nothing to install
 

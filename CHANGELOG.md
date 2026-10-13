@@ -6,6 +6,15 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The openSUSE repository has a new address** (ONEUP-0273)
+  OneUp's package now lives in its own project on the openSUSE
+  Build Service, home:milnet:oneup. The README gives the new
+  address. The old home:milnet repository keeps getting OneUp
+  updates until 2.0.0, so nobody is cut off; the README says how
+  to move.
+
 ## [1.4.9] - 2026-10-13
 
 ### Fixed

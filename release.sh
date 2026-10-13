@@ -5,8 +5,10 @@
 #   2. gate with ./local-CI.sh (tests, lint, validation, version lockstep),
 #   3. commit, tag vX.Y.Z, push to GitHub — which builds the AppImage and publishes
 #      the release (and the in-app update check then points users at it),
-#   4. update the OBS package home:milnet/oneup via osc — which rebuilds the zypper
-#      RPM so repo users get it on their next `zypper up`.
+#   4. update the OBS package home:milnet:oneup/oneup via osc — which rebuilds the
+#      zypper RPM so repo users get it on their next `zypper up`. Until 2.0.0 the old
+#      home:milnet/oneup is updated too, so users still on the old repo keep getting
+#      updates while they move.
 #
 # Usage:
 #   ./release.sh X.Y.Z            full release (GitHub + OBS)
@@ -34,6 +36,10 @@ done
 bumped=(updater.py packaging/rpm/oneup.spec packaging/obs/_service
         data/za.co.antsprojectshub.OneUp.metainfo.xml CHANGELOG.md)
 
+# The OBS projects that carry the oneup package. The first is the home; the second is
+# the old location, kept updated until 2.0.0 so nobody on it is stranded.
+obs_projects=(home:milnet:oneup home:milnet)
+
 # The OBS checkout is removed however the script ends, an interrupt included, and only
 # ever when it was actually made.
 work=""
@@ -58,7 +64,7 @@ echo
 git --no-pager diff --stat
 echo
 target="commit, tag v$ver and push to GitHub"
-$do_obs && target="$target, and update OBS (home:milnet/oneup)"
+$do_obs && target="$target, and update OBS (${obs_projects[*]})"
 read -rp "Proceed to $target? [y/N] " ans
 [[ "$ans" == [yY] ]] || die "aborted — bump left in your tree ('git checkout -- .' to discard)"
 
@@ -81,25 +87,33 @@ git push --atomic origin main "v$ver" || die "git push failed — nothing was pu
 echo "   GitHub is building the AppImage and publishing the v$ver release."
 
 if $do_obs; then
-    echo "==> Updating OBS package home:milnet/oneup"
-    if ! command -v osc >/dev/null 2>&1; then
-        echo "   osc not installed — re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
-    else
+    obs_updated=true
+    for proj in "${obs_projects[@]}"; do
+        echo "==> Updating OBS package $proj/oneup"
+        if ! command -v osc >/dev/null 2>&1; then
+            echo "   osc not installed — re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
+            obs_updated=false
+            continue
+        fi
+        cleanup
         work=$(mktemp -d) || work=""
-        if ( cd "$work" && osc checkout home:milnet oneup >/dev/null 2>&1 ); then
-            cp packaging/obs/_service packaging/rpm/oneup.spec "$work/home:milnet/oneup/"
-            if ( cd "$work/home:milnet/oneup" \
+        if ( cd "$work" && osc checkout "$proj" oneup >/dev/null 2>&1 ); then
+            cp packaging/obs/_service packaging/rpm/oneup.spec "$work/$proj/oneup/"
+            # `osc add` on a file the checkout already tracks only warns, so it cannot
+            # fail the chain (ONEUP-0255).
+            if ( cd "$work/$proj/oneup" \
                  && osc add _service oneup.spec >/dev/null 2>&1 \
                  && osc commit -m "oneup $ver" ); then
                 echo "   OBS updated — rebuild triggered."
-                obs_updated=true
             else
                 echo "   osc commit failed — re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
+                obs_updated=false
             fi
         else
             echo "   osc checkout failed — re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
+            obs_updated=false
         fi
-    fi
+    done
 fi
 
 # A release whose OBS half failed is not a clean release, and exiting 0 with

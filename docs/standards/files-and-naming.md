@@ -39,7 +39,7 @@ exist yet, and saying so is the point.
 | `screenshots/` | Images the README and the app-store metadata point at. |
 | `branding/` | The OneUp wordmark, for pages outside this repository that show the project. Nothing in the app or its packages reads it. |
 | `.github/workflows/` | GitHub CI. One file: `release.yml`, triggered by a `v*` tag. |
-| `.ants/`, `.obs/` | Tooling configuration, not application code. |
+| `.ants/` | Tooling configuration, not application code. |
 | *(root dotfiles)* | `.gitignore`, `.ants_review_falsepos.jsonl` — tooling state that has to sit at the root to be found. |
 
 **The root is closed.** Adding a third program or a fourth developer script to the root
