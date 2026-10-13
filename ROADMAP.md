@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=271 -->
+<!-- ants-roadmap-id-high-water: ONEUP=272 -->
 
 # OneUp Roadmap
 
@@ -5071,6 +5071,9 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   releasing. Plan: cut 1.4.9 from main as a proving release for this
   item, ONEUP-0271 (release page shows the CHANGELOG section) and
   ONEUP-0255 (does main's OBS step work).
+  Proved in part (2026-10-13, v1.4.9): run 38429805535 finished
+  normally in 5m10s under timeout-minutes: 30, AppImage attached. The
+  limit itself firing is proved only by a stalled run.
   **Layman:** If GitHub's build machine gets stuck, the release just sits there instead of failing quickly so it can be retried.
   Kind: chore.
   Source: in-session-2026-08-19 (v1.4.5 release).
@@ -6003,6 +6006,16 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Progress (2026-10-13): settle at the 1.4.9 release, cut from main as
   a proving release (see ONEUP-0116's note). Read release.sh's OBS
   outcome there; if it ends "OBS was NOT updated", backport v2's line.
+  Settled (2026-10-13, v1.4.9): main's release.sh ended "OBS was NOT
+  updated", but NOT because of `osc add`. `osc add` on files already
+  tracked only warns and exits 0, so the && chain reached `osc commit`,
+  which refused: "Working copy ... is out of date (rev 27 vs rev 28)".
+  r28 was made by the GitHub-push webhook token ("Service triggered by
+  ... Github push 593ea83 on v1.4.9"), which landed between the script's
+  checkout and its commit. A race, so v2's `|| true` does not fix it on
+  either branch. Fix to make: `osc up` immediately before `osc commit`
+  (or retry the commit once after `osc up`). Finished by hand: fresh
+  checkout, commit -> r29, Tumbleweed and Leap 16.0 built.
   **Layman:** On the released version, the release script might report the package-repository update as failed every time; one real release would settle it.
   Kind: investigate.
   Source: in-session-2026-10-11 (ONEUP-0186 port to v2).
@@ -6119,6 +6132,8 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   before the build. Proved without tagging: the step run from the YAML
   on v1.4.8 is byte-identical to the live 1.4.8 notes, on both branches.
   First real proof is the next tag's release page.
+  Proved (2026-10-13, v1.4.9): `gh release view v1.4.9 --json body`
+  returns the [1.4.9] CHANGELOG section verbatim, no compare link.
   **Layman:** The GitHub release page shows only a "Full Changelog" link instead of the list of what changed.
   Kind: fix.
   Source: in-session-2026-10-13.
@@ -8297,6 +8312,19 @@ when complete (that document's §7).
   Kind: perf.
   Source: in-session-2026-10-13, measured after ONEUP-0267.
   Lanes: tests.
+
+- 📋 [ONEUP-0272] **The v2 dev copy's version label should say "2.0 preview", not the last 1.4.x number.**
+  The app-menu OneUp (~/.local/bin/oneup) runs the v2 checkout, and
+  its label is v2's oneup/__init__.py APP_VERSION, which each release
+  merge sets to main's number (1.4.9 as of the 2026-10-13 merge).
+  Settle when picked up: APP_VERSION is one of the six lockstep sites
+  (workflow.md §5.1) and feeds the in-app update check, so the
+  "preview" text may need to be a display suffix rather than the
+  version string itself. The release-merge memory note sets
+  APP_VERSION by hand; it changes with this item.
+  **Layman:** The OneUp you start from the app menu is the unfinished 2.0, but it calls itself 1.4.9, so you can't tell which one you're running.
+  Kind: ux.
+  Source: user-request-2026-10-13.
 
 ## 2.1.0 — after 2.0
 
