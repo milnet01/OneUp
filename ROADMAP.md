@@ -5993,7 +5993,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Source: user-real-run-2026-10-08.
   Lanes: gui, theme.
 
-- 📋 [ONEUP-0255] **Does main's release.sh need v2's `osc add || true` OBS fix?**
+- ✅ [ONEUP-0255] **Does main's release.sh need v2's `osc add || true` OBS fix?**
   v2's release.sh (83e8cb9) took `osc add` out of the && chain: its
   comment says the checkout is of an existing package, both files are
   already versioned, `add` errors on them, and so every release after the
@@ -6016,6 +6016,9 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   either branch. Fix to make: `osc up` immediately before `osc commit`
   (or retry the commit once after `osc up`). Finished by hand: fresh
   checkout, commit -> r29, Tumbleweed and Leap 16.0 built.
+  Resolved (2026-10-13, main 6bdb6b0, merged into v2): the race's source,
+  the GitHub-to-OBS webhook and .obs/workflows.yml, is removed under
+  ONEUP-0273. v2 keeps its `osc add || true` guard inside the new loop.
   **Layman:** On the released version, the release script might report the package-repository update as failed every time; one real release would settle it.
   Kind: investigate.
   Source: in-session-2026-10-11 (ONEUP-0186 port to v2).
@@ -6063,7 +6066,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Source: in-session-2026-10-13.
   Lanes: gui, theme.
 
-- 🚧 [ONEUP-0273] **Move the OBS package to its own subproject, home:milnet:oneup, keeping the old one updated until 2.0.0.**
+- ✅ [ONEUP-0273] **Move the OBS package to its own subproject, home:milnet:oneup, keeping the old one updated until 2.0.0.**
   User, 2026-10-13: move OneUp from home:milnet to a subproject like the
   others, with a handover; it may land on main too (recorded in
   workflow.md §1.2 as the eighth exception), since main's release.sh
@@ -6074,6 +6077,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   workflow token 11691 refused deletion from osc (both calls hung), so
   it is deleted by hand in the OBS web UI. At 2.0.0: drop home:milnet
   from release.sh's obs_projects and delete the old package.
+  Shipped (2026-10-13, main 6bdb6b0, merged into v2): release.sh updates
+  home:milnet:oneup then home:milnet; README, packaging/obs/README.md and
+  workflow.md §1.2/§8 updated. release.sh's new loop is unexecuted until
+  the next release. Left: token 11691 deleted by hand in the OBS web UI.
   **Layman:** OneUp's openSUSE repository moves to its own folder on the build service, like your other projects, without cutting off anyone using the old address.
   Kind: package.
   Source: user-request-2026-10-13.
