@@ -5222,11 +5222,15 @@ def main() -> int:
     # INV-7: a fetch never outlives its deadline or a quitting window, and survives
     # the window hiding to the tray. The mock sleeps by exec, so a killed fetch
     # leaves no child; a distinctive duration makes its process findable.
-    _nap = "29.17"
+    # The duration carries this process's pid: pgrep is machine-wide, and with a
+    # fixed one a second suite running at the same time counted this one's
+    # sleeper as its own leak (ONEUP-0264). Not an ancestry filter — a leaked
+    # sleeper reparents to systemd --user, and that is exactly the one to find.
+    _nap = f"29.{os.getpid()}"
     os.environ["ONEUP_MOCK_ZYPPER_SLEEP"] = _nap
 
     def _sleepers():
-        out = subprocess.run(["pgrep", "-fx", f"sleep {_nap}"],  # noqa: S603, S607 — fixed argv
+        out = subprocess.run(["pgrep", "-fx", f"sleep {re.escape(_nap)}"],  # noqa: S603, S607 — fixed argv
                              capture_output=True, text=True).stdout
         return out.split()
 
