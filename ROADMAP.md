@@ -4282,7 +4282,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: claude-config-request-2026-10-08.
   Lanes: docs.
 
-- 📋 [ONEUP-0250] **The "Show download size" link is nearly invisible on an opened System row (blue text on the light-blue tint).**
+- 🚫 [ONEUP-0250] **The "Show download size" link is nearly invisible on an opened System row (blue text on the light-blue tint).**
   Seen 2026-10-10 on main (1.4.7, dark theme, text size Larger) while
   recording trailer footage: the opened row's gradient tint is light
   blue and the link keeps the normal link blue, so it reads as almost
@@ -4290,10 +4290,13 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   in the repo). Not yet measured with contrast.py, not yet checked on
   v2 or the light theme. Placement (main for 1.4.x, or v2 only) waits
   on that check: git grep the link's style on main first.
+  Dropped 2026-10-13: duplicate of ONEUP-0237 (same link, same opened
+  System panel). Its main-branch sighting is copied there.
   **Layman:** When you open the list of system updates, the link to show the download size is so faint it is almost impossible to read.
   Kind: accessibility.
   Source: in-session-2026-10-10.
   Lanes: gui, theme.
+  Duplicate-of: ONEUP-0237.
 
 - ✅ [ONEUP-0252] **The engine suite's check count dropped by one between two runs on 2026-10-10 with no engine or suite change.**
   tests/run-tests.sh counted 422 on v2 at 15:42 (local-CI for 73488ab)
@@ -5936,6 +5939,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   same transparent panel; check whether it shows the same fill before
   choosing a branch. Measure the link against both gradient ends, in
   both themes and high contrast, normal and hover.
+  Also seen 2026-10-10 on main (1.4.7, dark theme, text size Larger),
+  filed as ONEUP-0250 and closed as a duplicate of this item. So main
+  shows it too. Picture: /mnt/Games/Trailers/work/oneup/shot4.png
+  (not in the repo).
   **Layman:** When you open the System packages list, the blue "Show download size" link sits on a bright teal background and almost disappears when the mouse is over it.
   Kind: accessibility.
   Source: user-real-run-2026-10-08.
