@@ -729,7 +729,7 @@ fact only to make a *different* point with it, and say where it came from.
 | §5 an invariant names its test | **nothing** automatic — a cold reader |
 | §6 a claim is checked against the tree | **nothing** automatic. The review gate is the only catcher, which is why §7 is a gate and not advice |
 | §6 no `TODO` / `TBD` / `FIXME` / `XXX` left in a document | `tests/docs-check.py` |
-| §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design — and **that is the whole of its reach**. `docs/specs/` is exempt until ONEUP-0065 converts the `path:line` citations the older specs carry; `CLAUDE.md` and `ROADMAP.md` are inside §6a.2's scope and are scanned by **nothing**, as is the prose form — *"around line 786"* |
+| §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design — and **that is the whole of its reach**. `docs/specs/` is exempt until ONEUP-0065 converts the `path:line` citations the older specs carry, and `docs/plans/` with it, for the same reason; `CLAUDE.md` and `ROADMAP.md` are inside §6a.2's scope and are scanned by **nothing**, as is the prose form — *"around line 786"* |
 | §6b most counts taken from the code stay out of the document | `tests/docs-check.py`, over standards, reference and design: a number beside a counting unit, in a paragraph with no commit, date or past-tense verb. **An approximation** — a count written without a unit it knows, or in specs and plans, is left to a cold reader (ONEUP-0104) |
 | §7 a loop tally balances | `tests/docs-check.py` |
 | §7 every verified finding is fixed, and a run stops only where `review-contract` says | **nothing** automatic — the loop log says what each pass verified, and only a reader can set it against the fixes that landed |

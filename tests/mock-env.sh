@@ -155,6 +155,15 @@ run_engine() {
     #     scenario opts back IN by setting it to the empty string.
     #   * the size lookup reads zypper's cached repository data, so a check's sizes
     #     would be this machine's packages rather than the scenario's (ONEUP-0259 INV-3).
+    #
+    # ONEUP-0126: link this run's log into the suite's $HARVEST_DIR, where one is set. A hard
+    # link, not a copy: the engine appends to the log until it exits, so a copy taken here
+    # would be empty, and one taken after it returns could catch the log's tee mid-line. A
+    # failed link only shrinks the harvest, and the layout check's coverage half reports
+    # that loudly.
+    if [[ -n "${HARVEST_DIR:-}" && ! -e "$mockdir/run.log" ]]; then
+        ln "$(mktemp "$HARVEST_DIR/XXXXXX")" "$mockdir/run.log" 2>/dev/null || true
+    fi
     PATH="$mockdir:$PATH" \
         ONEUP_ZYPP_PID_FILE="${ONEUP_ZYPP_PID_FILE:-$mockdir/no-zypp.pid}" \
         ONEUP_RUN_STATE="${ONEUP_RUN_STATE:-$mockdir/run.state}" \

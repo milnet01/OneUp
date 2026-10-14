@@ -20,6 +20,11 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mock-env.sh"
 
 PASS=0 FAIL=0
 
+# ONEUP-0126: every run_engine log gets a second name in here, so the field-layout check at
+# the end of the suite can read every marker the suite saw, after each scenario has deleted
+# its own directory. run_engine (tests/mock-env.sh) does the linking.
+HARVEST_DIR=$(mktemp -d)
+
 check() {  # name, expected-substring, haystack
     local name="$1" needle="$2" hay="$3"
     if grep -qF -- "$needle" <<<"$hay"; then
@@ -4375,6 +4380,55 @@ shutil.rmtree(out, ignore_errors=True)
 ok = name.encode() in data and b"downloadcontentcdn.opensuse.org" in data
 raise SystemExit(0 if ok else f"copy held {data!r}")' \
     LC_ALL=C PYTHONUTF8=0 PYTHONCOERCECLOCALE=0
+echo "TEST: every marker keeps its field layout (ONEUP-0044 INV-5a, ONEUP-0126)"
+# The marker census counts distinct NAMES, so it cannot see a field appended to a marker
+# that already exists, and gate G2 compares the two engines' streams, so a change made in
+# both compares equal. This reads every marker line every scenario above produced through
+# run_engine and checks its field count against docs/reference/marker-protocol.md §3.
+#
+# Each entry is a set: "4/6" means exactly 4 or exactly 6 — PROGRESS carries its two byte
+# fields only while downloading, and STEP_END, CHECK_ITEM, PKG, REMEDY and REBOOT each have
+# an optional tail. PKG takes three counts: §4.12's prose has `downloading` add `bytes`
+# alone, which its heading's bracket does not show. "1+" is a floor, and only HINT and
+# CHECK_UNKNOWN take one: their trailing fields are a list of arguments whose length varies
+# with the code (§3). §1.1 has the Python emitter rewrite "|" in every field, so every other
+# count is exact.
+declare -A LAYOUT=(
+    [STEP_BEGIN]=3 [STEP_END]=3/4 [TIMING]=2 [PROGRESS]=4/6 [REFRESH]=3 [SNAPSHOT]=1
+    [SNAPSHOT_ITEM]=3 [SNAPSHOTS]=2 [CHECK]=3 [CHECK_ITEM]=4/6 [PKG]=4/5/7 [CHECK_UNKNOWN]=2+
+    [SIZE]=2 [FREED]=2 [AUTH]=1 [DISK]=3 [REPO]=3 [REPO_SKIPPED]=2 [HINT]=1+
+    [REMEDY]=1/2 [SERVICES]=1 [INSTALLED]=3 [REBOOT]=1/2 [DONE]=1
+)
+# Markers no scenario produces through run_engine, each with the reason. None today: DISK,
+# the last, gained its scenario with ONEUP-0069 (tests/docs-check.py's KNOWN_UNTESTED_MARKERS).
+LAYOUT_UNSEEN_OK=" "
+# "NAME fields" once per distinct pair. Only whole lines that open with a marker count.
+seen=$(cat "$HARVEST_DIR"/* 2>/dev/null \
+    | awk -F'|' '/^@@[A-Z_]+@@\|/ { name = substr($1, 3, length($1) - 4); print name, NF - 1 }' \
+    | sort -u)
+bad=""
+while read -r name n; do
+    [[ -z "$name" ]] && continue
+    spec="${LAYOUT[$name]:-}"
+    if [[ -z "$spec" ]]; then bad+=" $name(not in the table)"; continue; fi
+    ok=0
+    IFS='/' read -r -a allowed <<<"$spec"
+    for a in "${allowed[@]}"; do
+        if [[ "$a" == *+ ]]; then (( n >= ${a%+} )) && ok=1
+        else (( n == a )) && ok=1; fi
+    done
+    (( ok )) || bad+=" $name($n fields, table says $spec)"
+done <<<"$seen"
+check_eq "every harvested marker line has its pinned field count" "" "$bad"
+missing=""
+for name in "${!LAYOUT[@]}"; do
+    [[ "$LAYOUT_UNSEEN_OK" == *" $name "* ]] && continue
+    grep -q "^$name " <<<"$seen" || missing+=" $name"
+done
+# A table entry nothing exercised is a row with no evidence behind it — and an empty harvest
+# would otherwise pass the check above by having nothing to fail.
+check_eq "every marker in the table was seen at least once" "" "$(tr ' ' '\n' <<<"$missing" | sort | xargs)"
+rm -rf "$HARVEST_DIR"
 
 echo
 echo "======================================"
