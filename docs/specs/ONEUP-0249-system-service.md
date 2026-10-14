@@ -1,6 +1,6 @@
 # ONEUP-0249 — a system service that runs OneUp's root commands
 
-**Status:** Draft
+**Status:** Reviewed
 **Kind:** feature
 **Roadmap:** ONEUP-0249
 **Branch:** v2
@@ -133,7 +133,9 @@ Three properties follow, and each is load-bearing:
 
 1. **Network data is never parsed as root.** zypper's output is read by the user-side
    engine, as now. The threat model in `docs/standards/security.md` says "The attacker is
-   the data, not the person." The service relays bytes; it does not interpret them.
+   the data, not the person." The service relays bytes; it does not interpret them, with
+   one bounded exception: `orphans-remove`'s validator reads zypper's list of unneeded
+   packages with `steps._package_column` (§4.2), which refuses an unreadable name.
 2. **`docs/standards/security.md` §7.2 holds unchanged.** The engine is never root in its
    entirety, and the service never takes a path from the engine.
 3. **The marker stream cannot change.** The engine emits it, and the engine's logic is
@@ -148,9 +150,12 @@ engine siblings.
 
 Both routes build their argv from it. The sudo route prefixes `sudo`. The service runs the
 argv itself. **So the two routes cannot drift**, the same property ONEUP-0092 INV-3 gives
-the drop-in. One operation differs by route: on the sudo route, `system-download`'s argv
-is wrapped in the download guard or the stop wrapper, as `steps._download_pass` does today,
-because there the engine cannot signal a root child.
+the drop-in. One operation differs by route: on the sudo route, `system-download` keeps the argv
+`steps._download_pass` builds today, the guard or the stop wrapper around
+`system_txn_argv()`, because there the engine cannot signal a root child. Its table row is
+the service route's. `timeout` and `du` are the absolute paths today's call sites resolve
+(`privilege.REFRESH_SUDO_ARGV`, `privilege.CACHE_DU_ARGV`), because the drop-in grants
+those paths.
 
 The table (the argv column is what the builder returns, before any `sudo`):
 
@@ -231,10 +236,12 @@ Errors are `za.co.antsprojectshub.OneUp1.Error.NotAuthorized`, `.Busy`, `.Invali
   convention the engine already reads (143 is a stopped download). The relay is why
   `proc.stream_filtered`'s stall clock still sees each raw chunk (`.claude/rules/
   engine-traps.md`, "A slow server").
-- **The service relays rather than handing the child's own pipe to the client.** If the
-  client goes away mid-transaction, the service keeps draining the child's output into
-  its journal. A child whose reader vanished would otherwise die of `SIGPIPE`
-  mid-`zypper dup`. That is the shape of the first engine trap.
+- **The child writes to a file, never to a pipe.** Its output goes to a job file in the
+  service's runtime directory, `/run/oneup/`, and the service relays that file to the
+  client as it grows. A child writing to a pipe whose reader vanished dies of `SIGPIPE`
+  mid-`zypper dup`, the shape of the first engine trap. With a file, neither the client
+  leaving nor the service dying can reach the child. The job file is deleted when the job
+  ends and the relay has drained it.
 - **`CanUpdate` answers the non-interactive question** (§4.4), so `--auth-status` reports
   what an automatic update would actually get.
 
@@ -251,26 +258,28 @@ sender's unique name on every message, and passes file descriptors. It is packag
 2. The action is `org.freedesktop.packagekit.system-update`, with empty details.
 3. With `interactive` true, the flag `AllowUserInteraction` is set, so polkit's agent may
    ask a remote or background user for the administrator password. That is one box, at
-   the start of the run.
-4. With `interactive` false, no flag is set. The engine sends `interactive` false exactly
-   when its environment carries `ONEUP_NONINTERACTIVE=1`, which
-   `oneup/gui/app.py::_headless_engine` sets for every headless check and update, the
-   automatic ones included. If the bus-name check is not `yes`, the
-   service asks once more with a `unix-session` subject: the caller's uid's active local
-   session, from logind. That is the session the user sits at, the one Discover's own
-   automatic updates run in. If that check is `yes`, the session opens.
+   the start of the run. A caller with no polkit agent, such as an SSH shell, cannot be
+   asked: polkit answers with a challenge it could not put, and §4.7 sends that caller
+   to the sudo route.
+4. With `interactive` false, no flag is set, so polkit never puts a box on the screen for
+   a run nobody started by hand. The engine sends `interactive` false exactly when its
+   environment carries `ONEUP_NONINTERACTIVE=1`. `oneup/gui/app.py::_headless_engine` sets
+   no environment today; it is changed to set that variable for every headless check and
+   update, which the timer's `ExecStart` reaches.
 5. With `import_keys` true, the service also requires
    `org.freedesktop.packagekit.system-trust-signing-key`, under the same flag rule.
 6. **Any error is a refusal**: polkit unreachable, the action not registered, the
-   caller's uid or session unresolvable, or the caller gone. `NotAuthorized` carries a
-   short reason code, never a path.
+   caller's uid unresolvable, or the caller gone. `NotAuthorized` carries a short reason
+   code, never a path: `dismissed` when polkit reports the user dismissed its box,
+   `challenge` when it wanted to ask and could not, and `denied` otherwise.
 
-**Step 4 is a design choice, recorded so it is not mistaken for an accident.** A
-systemd user timer's process is not inside the user's login session. So the bus-name
-check alone would answer "not at the computer" for every automatic update (ONEUP-0022),
-even with the user at the desk. Step 4 grants exactly what Discover's notifier, which
-runs inside the session, already gets. It grants nothing when nobody is logged in at the
-computer, or when the user's session is not the active one.
+**A timer's process gets the same answer as the desktop.** Measured on the development
+machine (polkit 127): a process under `user@1000.service`, started with `systemd-run
+--user`, checked with `pkcheck --action-id org.freedesktop.packagekit.system-update
+--process` → `polkit\56result=yes`, exit 0, while the user's Wayland session was active.
+polkit places such a process in the user's display session. So an automatic update is
+allowed exactly when Discover's rule allows the user at the desk, and the service adds no
+rule of its own.
 
 A session records what was authorised: `import_keys` and the caller's uid. `Run` refuses
 either refresh operation with `import_keys` true in a session not opened with it. Nothing a client
@@ -329,18 +338,21 @@ sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
 
 - **The AppImage always sets `ONEUP_BACKEND=sudo`.** `oneup/gui/paths.py`
   `_resolve_engine`'s frozen branch adds it to the env prefix it already builds.
-- **A session that cannot open for a transport reason falls back to sudo, interactively
-  only.** The service missing from the bus, or a D-Bus error that is not `NotAuthorized`,
-  means the engine writes one line saying so and continues on the sudo route. That costs
-  one password box, never a failed run. Without interaction there is nobody to answer a
-  box, so the run stands down exactly as for `NotAuthorized`.
-- **`NotAuthorized` does not fall back.** Interactively it means the user cancelled
-  polkit's box, so the engine ends exactly as a cancelled `sudo_init` does today. Without
-  interaction it means "not allowed now", so an automatic update stands down.
+- **Falling back to sudo happens only on the `auto` route, and only interactively.** It
+  happens when the session cannot open for a transport reason (the service missing from
+  the bus, or a D-Bus error that is not `NotAuthorized`), or on `NotAuthorized` with
+  reason `challenge` (a caller polkit had no agent to ask, §4.4). The engine writes one
+  line saying so and continues on the sudo route, which asks on the terminal or through
+  askpass as today: one password box, never a failed run.
+- **Everything else ends the run without a box.** `ONEUP_BACKEND=service` never falls
+  back. `NotAuthorized` with reason `dismissed` or `denied` ends the run as a cancelled
+  `sudo_init` does today. Without interaction there is nobody to answer a box, so any
+  failure to open a session makes an automatic update stand down.
 - **No route switch mid-run.** If the service fails after the session opened, the
   operation returns a failure status and the step fails in the ordinary way.
 
-`sudo_init` on the service route opens the session and starts no keep-alive.
+`sudo_init` on the service route opens the session, or reuses the one this engine already
+holds, and starts no keep-alive.
 `actions.auth_status` on the service route emits `@@AUTH@@|on` when `CanUpdate` answers
 `yes`, and `@@AUTH@@|off` otherwise. The marker and its two values are unchanged.
 
@@ -378,6 +390,7 @@ ProtectKernelLogs=yes  ProtectControlGroups=yes  RestrictRealtime=yes
 LockPersonality=yes  SystemCallArchitectures=native
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 KillMode=process  TimeoutStopSec=30min
+RuntimeDirectory=oneup  RuntimeDirectoryPreserve=yes
 ```
 
 These are left out on purpose, because each would break a package transaction:
@@ -386,7 +399,10 @@ These are left out on purpose, because each would break a package transaction:
 updates" from `ProtectSystem`.
 
 - **`KillMode=process`** means that if the service dies or is stopped, systemd does not
-  kill the zypper it started. A killed service must never become a killed transaction.
+  kill the zypper it started, and the job file (§4.3) means the child has nothing that
+  dies with the service. `RuntimeDirectory=oneup` with `RuntimeDirectoryPreserve=yes`
+  keeps `/run/oneup/` across a restart. A killed service must never become a killed
+  transaction.
 - **Idle exit.** With no session and no job for 60 seconds, the service releases its bus
   name and exits. D-Bus starts it again on the next call.
 - **On `SIGTERM`** it refuses new sessions and exits when the running job ends.
@@ -415,14 +431,15 @@ The service writes one line to its journal for each of these:
   engine would take, the switch is replaced by one line saying updates follow this
   computer's software-update permission, the same as Discover's. The window answers that
   with the engine's own `engine_route` (§4.7), called with the environment
-  `_resolve_engine` gives the engine. `oneup/engine/` is in both builds: the AppImage
-  carries it for its copied-out engine. So the frozen build, whose engine environment holds
+  `_resolve_engine` gives the engine. The frozen window imports it like any other module,
+  so PyInstaller bundles it. So the frozen build, whose engine environment holds
   `ONEUP_BACKEND=sudo`, keeps the switch even on a computer that also has the RPM.
-- **An old drop-in.** If the download guard file (`actions.GUARD_FILE`) exists on a
-  service install, the window offers once to remove the old setting. That runs today's
-  `--revoke-auth` with `ONEUP_BACKEND=sudo`: one administrator password box. The guard
-  file is the one of the pair a user can see, because `/etc/sudoers.d` is not readable by
-  users.
+- **An old drop-in.** On a service install, the window offers once to remove the old
+  setting when a guard exists at either path `actions.revoke_auth` removes
+  (`/usr/libexec/oneup-download-guard`, `/usr/lib/oneup-download-guard`), or when
+  `sudo -n -l <zypper>` succeeds, which also finds a drop-in older than the guard.
+  `/etc/sudoers.d` itself is not readable by users. Removing runs today's
+  `--revoke-auth` with `ONEUP_BACKEND=sudo`: one administrator password box.
 - **Automatic updates keep their coupling** (ONEUP-0092 §4.7). They are offered only
   while `@@AUTH@@|on`, and on the service route that means `CanUpdate` says `yes`.
 
@@ -439,14 +456,16 @@ The service writes one line to its journal for each of these:
 
 ### 4.12 Measured before the code relies on it
 
-Two facts the design leans on have not been measured. Each is measured first, and a
+Three facts the design leans on have not been measured. Each is measured first, and a
 result that contradicts the design is a fold-back to this spec, not a workaround in code:
 
-1. **A `unix-session` subject from a root caller answers as the session's user would.**
-   The design leans on it in §4.4 step 4. Measure with `pkcheck --process` against a
-   process inside the session, and with the service's own call.
+1. **polkit answers `challenge`, not `dismissed`, for a caller with no agent.** §4.7's
+   sudo fallback for an SSH run leans on telling the two apart. Measure with the
+   service's own call from an SSH session.
 2. **A real Tumbleweed `dup` with a kernel update succeeds under the §4.8 unit.** Measure
    with each directive in, and drop any that fails.
+3. **PackageKit started by Discover mid-run waits on zypp's lock.** Measure by opening
+   Discover during a real run's commit.
 
 ## 5. Correctness invariants
 
@@ -462,8 +481,9 @@ result that contradicts the design is a fold-back to this spec, not a workaround
 - **INV-2** No operation runs without a session, and a session opens only when polkit
   answers `yes` for `org.freedesktop.packagekit.system-update` under §4.4's rules.
   *Test:* `tests/service-test.py`, with a fake polkit on a private bus answering `yes`,
-  `no`, `challenge` and an error in turn. Only `yes` opens a session; `Run` with no
-  session is `NoSession`.
+  `no`, `challenge`, a dismissed box and an error in turn. Only `yes` opens a session, and
+  each refusal carries the reason code §4.4 step 6 names. `Run` with no session is
+  `NoSession`.
   *Breaks when:* the check is skipped, cached past its session, or an error reads as
   success (CVE-2021-3560's shape).
 
@@ -474,20 +494,21 @@ result that contradicts the design is a fold-back to this spec, not a workaround
   *Breaks when:* a session's authorisation can be widened after `OpenSession`.
 
 - **INV-4** For every operation but `system-download`, built with `cdn` false, the sudo
-  route's argv equals `["sudo", *service_argv]`. `system-download`'s sudo route is the
-  table's argv inside the guard or the stop wrapper (§4.2).
+  route's argv, after `sudo` and sudo's own flags, equals the service's argv.
+  `system-download`'s sudo route stays exactly what `steps._download_pass` builds today
+  (§4.2).
   *Test:* `tests/run-tests.sh`, a structural scenario that builds each table entry with
   fixed arguments through both routes and compares.
   *Breaks when:* a call site builds its own argv instead of using the table, so the two
   routes run different commands.
 
-- **INV-5** A job is never stopped by its caller leaving, and `system-commit` is never
-  signalled.
+- **INV-5** A job is never stopped by its caller leaving or by the service dying, and
+  `system-commit` is never signalled.
   *Test:* `tests/service-test.py` starts a mock commit that sleeps then writes a done
-  file, kills the client, and asserts the done file appears. `Stop` during that job is
-  `NotStoppable`.
-  *Breaks when:* the relay dies with the client and the child takes `SIGPIPE`, or `Stop`
-  reaches a commit.
+  file, kills the client, and asserts the done file appears. A second run kills the
+  service instead. `Stop` during that job is `NotStoppable`.
+  *Breaks when:* the child writes to a pipe that dies with the client or the service and
+  takes `SIGPIPE`, or `Stop` reaches a commit.
 
 - **INV-6** `repo-enable` succeeds only for an alias this session disabled, and ending a
   session re-enables every alias it disabled and has not re-enabled.
@@ -553,19 +574,28 @@ result that contradicts the design is a fold-back to this spec, not a workaround
   service's own environment.
   *Breaks when:* the service lingers as root for no one.
 
+- **INV-16** A headless run opens its session with `interactive` false, and a run started
+  by hand opens it with `interactive` true.
+  *Test:* `tests/gui-smoke.py` checks that `_headless_engine` passes
+  `ONEUP_NONINTERACTIVE=1` in the engine's environment; `tests/run-tests.sh` checks, against
+  the fake service, that the engine sends `interactive` false with that variable and true
+  without it.
+  *Breaks when:* the variable is not set, so polkit may put a box on screen for a timer
+  run, or the engine ignores it.
+
 ## 6. Failure modes
 
 | What breaks | What happens |
 | --- | --- |
 | The service is not installed, or `jeepney` is missing | `auto` takes the sudo route. Nothing changes from today |
-| The bus call fails before the session opens | one line, then the sudo route: one password box, never a failed run (§4.7) |
-| polkit refuses, interactively | the run ends as a cancelled `sudo_init` does today |
+| The bus call fails before the session opens | interactively on the `auto` route: one line, then the sudo route. Otherwise the run ends, or an automatic update stands down (§4.7) |
+| polkit refuses, interactively | `dismissed` or `denied`: the run ends as a cancelled `sudo_init` does today. `challenge`, a caller with no agent: the sudo route (§4.7) |
 | polkit refuses, non-interactively | an automatic update stands down, as it does today when Passwordless is off |
 | PackageKit's policy file is absent | polkit reports the action unregistered, which is a refusal. The window's line then reads not allowed, and the user can still use `ONEUP_BACKEND=sudo` |
-| The service dies mid-job | `KillMode=process` leaves zypper running. The engine sees the status descriptor close with no line, treats it as failure, and the step fails. The journal has the job-start line and no end line |
+| The service dies mid-job | `KillMode=process` and the job file (§4.3) leave zypper running. The engine sees the status descriptor close with no line, treats it as failure, and the step fails. The journal has the job-start line and no end line |
 | The window quits mid-run | unchanged: the engine survives it. If the engine also dies, the service finishes the job and re-enables the session's repositories |
 | Another program holds the zypp lock | unchanged: `release-lock`, then the engine's existing `repos.lock_holder` check |
-| Discover starts PackageKit mid-run | PackageKit waits on zypp's lock, which zypper holds for the transaction. Measured as part of §4.12 item 2 |
+| Discover starts PackageKit mid-run | PackageKit waits on zypp's lock, which zypper holds for the transaction. Measured as §4.12 item 3 |
 | OneUp upgrades itself mid-run | the running service and engine keep the code they loaded. The RPM does not restart the service (§4.8) |
 
 ## 7. Tests
@@ -576,16 +606,17 @@ result that contradicts the design is a fold-back to this spec, not a workaround
   INV-6, INV-7, INV-9, INV-14 and INV-15. It joins `./local-CI.sh`. It exits 77
   (skipped) when `dbus-daemon` or `jeepney` is missing, like `tests/gui-smoke.py`
   without PySide6.
-- **`tests/run-tests.sh`**: new scenarios for INV-4, INV-8, INV-11, INV-12 and INV-13.
+- **`tests/run-tests.sh`**: new scenarios for INV-4, INV-8, INV-11, INV-12, INV-13 and
+  INV-16's engine half.
   INV-8's service-route arm runs the engine against the same fake service.
-- **`tests/gui-smoke.py`**: INV-10.
+- **`tests/gui-smoke.py`**: INV-10, and INV-16's window half.
 - **The existing ONEUP-0092 and ONEUP-0044 scenarios keep running on the sudo route.**
   They are the AppImage's contract, and nothing in this item retires them.
 - **Each new test is seen to fail first**: against the tree before the feature for
   INV-4, INV-8 and INV-10, and against a deliberately broken service for the rest.
-- **By hand**, before 2.0.0: §4.12's two measurements, then one real run from the window
-  on a packaged install with no password box, and one from an SSH session showing polkit's
-  password request.
+- **By hand**, before 2.0.0: §4.12's three measurements, then one real run from the window
+  on a packaged install with no password box, and one from an SSH session, which takes
+  the sudo route and its password request (§4.7).
 
 ## 8. Docs & release
 
@@ -651,3 +682,4 @@ Each of these is amended in the commit that lands the matching code:
 | Loop | Date | Lanes | Q1 | Q2 | Q3 | Q4 | Outcome |
 |------|------|-------|----|----|----|----|---------|
 | 1 | 2026-10-14 | 2, cold, via `neutral-lane`; genre pinned `spec`; every lane held every question; each read all 625 lines; project's `tests/docs-check.py` ran at 1d (0 failed) | 4 | 6 | 3 | 0 | **Thirteen verified, thirteen fixed, none dismissed.** Eleven came from the lanes and two from settling their open questions. **Both lanes found the same three defects independently**: INV-4 demanded `sudo` plus the table's argv for the download, which on the sudo route is wrapped by the guard or the stop wrapper, so the test could never pass without breaking Stop for passwordless users; the `system-download` row dropped the `env LC_ALL=C` pin today's download carries, which would have starved the progress parser on a non-English system; and the shared `locate.py` lived in a package the AppImage does not ship, while checking only the activation file, so an AppImage window would have failed to import it or shown the service line beside a sudo engine (now `oneup/engine/route.py::engine_route`, which both builds carry). **Both also flagged `python3 -I -m oneup.service`, and the orchestrator measured it**: `-I` leaves the current directory off `sys.path`, so it prints `No module named oneup`; a launcher at `/usr/libexec/oneup-service` now sets the path. One lane alone found that two output descriptors cannot be merged back into the single ordered stream every parser reads, with no encoding for a signal death; that session clean-up would re-enable repositories under a still-running job's zypp lock; that `Stop` named no owner; and that a headless run falling back to sudo would raise a password box nobody can answer. The other found that nothing said what makes the engine non-interactive, so every automatic update would have stood down (now `ONEUP_NONINTERACTIVE=1`, set by `_headless_engine`, which the timer's `ExecStart` reaches), and that the bulk refresh's empty alias failed the alias validator. **The two from open questions**: the service must import `steps`, because `_package_column` lives there; and the 600-second budget cap would have failed a refresh budget only on the service route. Four open questions resolved clean: `_snapshot_count` runs the `snapshot-list` argv, `cache-clean` matches `run_cache`, and the remaining two became the findings above. Lanes arrived holding the global `CLAUDE.md`, the lane prompt and hook text; no project `CLAUDE.md`, memory or git snapshot. Spend: 0.89 and 0.87 USD, four turns each. |
+| 2 | 2026-10-14 | 2, cold, via `neutral-lane`; genre pinned `spec`; every lane held every question; each read the whole document; packet rebuilt from disk with windows for every symbol loop 1's fixes named; `tests/docs-check.py` 0 failed | 4 | 5 | 3 | 2 | **Fourteen verified, fourteen fixed, none dismissed. Cap reached (2 for a spec), and the user said on 2026-10-14 not to review these fixes, so they are read by no lane; implementation is the third reviewer.** **A calm cap**: 4 of the 14 landed on text loop 1 wrote (the `_headless_engine` claim, INV-4's download wording, the fallback bullet, INV-4's `sudo -n`); the rest were in the draft. **The most consequential finding was settled by measurement, not argument.** §4.4 step 4 asked polkit again with the user's `unix-session` when a timer's bus-name check failed; one lane showed any process of that user, an SSH shell included, could claim it by setting the variable, a widening Discover's rule does not grant, and that nothing could test it. Measured: `systemd-run --user` → `pkcheck --action-id org.freedesktop.packagekit.system-update --process` → `polkit\56result=yes`, because polkit 127 places a `user@.service` process in the user's display session. Step 4 was deleted: the service adds no rule of its own. **Both lanes found** that `_headless_engine` sets no environment today, so the spec now says it is changed (INV-16), and that nothing registers a polkit agent for an SSH caller; a `challenge` reason now sends an interactive `auto` run to the sudo route (§4.12 item 1 measures it). **One lane alone found** that `KillMode=process` did not save the transaction, because a child writing to the dead service's pipe still takes `SIGPIPE`: children now write to a job file under `/run/oneup/`. The same lane found INV-4 would have stripped `restore_disabled`'s `sudo -n`, the `orphans-remove` validator parsing zypper output as root against property 1, `sudo_init` re-entry hitting `Busy`, a pre-guard drop-in going undetected, and a §6 row citing a measurement §4.12 never listed. The other found the forced-service route and §6's row both contradicting the interactive-only fallback, and that the sudo route's download wraps `system_txn_argv()`, not the table's argv. **From open questions**: `timeout` and `du` are absolute paths today (`REFRESH_SUDO_ARGV`, `CACHE_DU_ARGV`), now stated. One open question corrected by narrowing outside the tally: the AppImage window imports `engine_route` because PyInstaller follows imports, not because `engine-src/` carries it. Spend: 0.93 and 0.87 USD, four turns each. Run total: 27 verified, 27 fixed, over two loops. |
