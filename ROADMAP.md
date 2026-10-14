@@ -8343,6 +8343,15 @@ when complete (that document's §7).
   the run. run_engine pins ONEUP_BACKEND=sudo so the suite never reaches a
   real installed service. Next: the service and its client (§4.3-§4.9),
   tests/service-test.py, and §4.12's measurements.
+  Progress (2026-10-14): slice 3 landed. oneup/service/ (sessions, polkit check, caps, job
+  files under /run/oneup/, relay, Stop, idle exit, SIGTERM, audit) and its client,
+  oneup/engine/service_client.py, behind privilege.root(), root_stream() and
+  actions.auth_status. tests/service-test.py (private dbus-daemon, fake polkit, mocks)
+  locks INV-1/2/3/5/6/7/9/14/15 and joins ./local-CI.sh; run-tests.sh adds INV-8, 11,
+  12 (every engine module), 13 and 16's engine half. Unit, D-Bus policy and activation
+  files are in data/, the launcher in packaging/rpm/. Still owed: the RPM installing
+  them, the window (§4.10, INV-10, INV-16's window half), README and CHANGELOG, and
+  §4.12's three measurements on a real install.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.

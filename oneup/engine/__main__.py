@@ -181,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     steps.TOTAL = len(run_keys)
 
     privilege.install_exit_handlers()
+    privilege.IMPORT_KEYS = opts.import_keys
 
     if opts.auth_action == "status":
         return actions.auth_status()

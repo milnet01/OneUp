@@ -157,6 +157,17 @@ def auth_status() -> int:
     prompting (`docs/standards/security.md` §5.6 — report real state, never a
     saved preference).
     """
+    from . import route
+    if privilege.chosen_route() == route.SERVICE:
+        # On the service route the answer is polkit's, asked without a box (ONEUP-0249
+        # §4.7, INV-11): `on` means CanUpdate said yes just now, not that a service exists.
+        from . import service_client
+        try:
+            allowed = service_client.can_update() == "yes"
+        except (service_client.Refused, service_client.Unreachable):
+            allowed = False
+        markers.marker("AUTH", "on" if allowed else "off")
+        return 0
     markers.marker("AUTH", "on" if auth_current() else "off")
     return 0
 

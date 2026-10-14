@@ -556,7 +556,16 @@ def _download_pass() -> bool:
     passwordless run would otherwise meet a password dialog right here.
     """
     global SYS_DL_RC
-    from . import actions  # deferred: actions imports this module
+    from . import actions, route  # deferred: actions imports this module
+    if privilege.chosen_route() == route.SERVICE:
+        # The service runs the table's row and forwards the user's Stop as `SIGTERM`;
+        # the guard and the stop wrapper are the sudo route's (ONEUP-0249 §4.6).
+        SYS_DL_RC = privilege.root_stream(
+            "system-download", {"cdn": bool(REPOSD_OVERRIDE)}, cdn_dir=REPOSD_OVERRIDE,
+            step="system", phase="download", log=_SYS_LOG, append=False,
+            stop_poll=float(STOP_POLL_SECONDS) if STOP_POLL_SECONDS.replace(".", "", 1)
+            .isdecimal() else 2.0)
+        return _download_status()
     txn = system_txn_argv()
     stop_file, run_state = str(runstate.STOP_REQUEST), str(runstate.RUN_STATE)
     if actions.guard_current():
@@ -570,6 +579,12 @@ def _download_pass() -> bool:
                                     stop_file, run_state, STOP_POLL_SECONDS, *txn])
     SYS_DL_RC = proc.stream_filtered(argv, step="system", phase="download",
                                      log=_SYS_LOG, append=False)
+    return _download_status()
+
+
+def _download_status() -> bool:
+    """Read the download pass's status the same way on both routes to root."""
+    global SYS_DL_RC
     # zypper CATCHES the wrapper's SIGTERM, prints "Trying to exit gracefully..." and
     # exits 105 (ZYPPER_EXIT_ON_SIGNAL, man zypper), so a stop rarely arrives as 143.
     # Measured on 2026-10-14: two real Stops were reported as a failed step
@@ -592,17 +607,19 @@ def _commit_pass() -> bool:
     transaction log, because the download pass's output is where a download
     failure's evidence lives.
     """
-    argv = privilege.root_argv("system-commit", {"cdn": bool(REPOSD_OVERRIDE)},
-                               cdn_dir=REPOSD_OVERRIDE)
-    rc = proc.stream_filtered(argv, step="system", phase="install", log=_SYS_LOG, append=True)
+    def commit() -> int:
+        return privilege.root_stream("system-commit", {"cdn": bool(REPOSD_OVERRIDE)},
+                                     cdn_dir=REPOSD_OVERRIDE, step="system", phase="install",
+                                     log=_SYS_LOG, append=True)
+
+    rc = commit()
     # 103 = ZYPPER_EXIT_INF_RESTART_NEEDED: zypper installed an update to itself and must
     # run again to install the rest (zypper(8), EXIT CODES). `_zypper_ok` counts it as
     # informational, which read it as a finished update with the rest left uninstalled
     # (ONEUP-0234). The same transaction runs once more and that run decides.
     if rc == 103:
         markers.out("  zypper updated itself — running the update again for the rest.")
-        rc = proc.stream_filtered(argv, step="system", phase="install", log=_SYS_LOG,
-                                  append=True)
+        rc = commit()
     return _zypper_ok(rc)
 
 

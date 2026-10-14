@@ -90,6 +90,11 @@ on, and the answer is unchanged.
   pins, this is not a ledger entry: nothing is held back. The RPM takes the distro's
   `python3-pyside6` and pins nothing. Requires only Qt 6 idioms (new-style `connect`, scoped
   enums where practical).
+- **jeepney** → **`0.9.0`** — current (2026-10-14: `pip index versions jeepney` lists
+  0.9.0 as the newest, and Tumbleweed's `python313-jeepney` is `0.9.0-1.4`). The D-Bus
+  library on both sides of the system service (ONEUP-0249 §4.3). The RPM takes the
+  distro's package. The engine imports it only inside functions, so the AppImage's
+  engine, which takes the sudo route, runs without it (INV-12).
 - `zypper`, `flatpak`, `fwupd`, `snapper` — host tools, versioned by the user's openSUSE
   install; OneUp calls stable CLI surfaces.
 

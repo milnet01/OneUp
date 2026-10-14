@@ -1,0 +1,29 @@
+# OneUp's system service (docs/specs/ONEUP-0249-system-service.md §4.8). Started by D-Bus
+# on demand, never at boot, so there is no [Install] section. It exits when idle.
+#
+# KillMode=process: stopping or losing the service never kills the zypper it started; a
+# killed service must never become a killed transaction. Each hardening line stays only
+# if a real Tumbleweed update including a kernel passes under it (§4.12). Left out on
+# purpose, because each breaks a package transaction: ProtectSystem=,
+# ProtectKernelModules=, RestrictSUIDSGID=, PrivateDevices=, ProtectKernelTunables=.
+[Unit]
+Description=OneUp system service (runs OneUp's update commands as root)
+
+[Service]
+Type=dbus
+BusName=za.co.antsprojectshub.OneUp1
+ExecStart=/usr/libexec/oneup-service
+KillMode=process
+TimeoutStopSec=30min
+RuntimeDirectory=oneup
+RuntimeDirectoryPreserve=yes
+ProtectHome=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK

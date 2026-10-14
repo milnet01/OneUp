@@ -1,0 +1,6 @@
+# D-Bus activation for OneUp's system service (ONEUP-0249 §4.8): systemd starts it.
+[D-BUS Service]
+Name=za.co.antsprojectshub.OneUp1
+Exec=/bin/false
+User=root
+SystemdService=oneup-service.service

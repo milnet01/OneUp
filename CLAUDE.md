@@ -25,6 +25,7 @@ python3 -m oneup.engine --check --sizes       # the same, with each package's do
 ./update_system.sh                      # the retired Bash engine, kept as a fallback through 2.0
 tests/run-tests.sh                      # engine suite; non-zero exit on any failure
 python3 tests/gui-smoke.py              # window suite (needs PySide6; exit 77 = skipped)
+python3 tests/service-test.py           # system service suite (needs dbus-daemon, jeepney; 77 = skipped)
 ./local-CI.sh                           # every gate that runs before a push (workflow.md §6)
 ./local-CI.sh --full                    # also build the AppImage (needs a good connection)
 ```
@@ -77,11 +78,18 @@ section are unchanged by either; only the file boundaries and the engine's langu
 on `main`, no such document may backtick a path that exists only on `v2`. `v2`'s own copies
 may, because there the path resolves.
 
-Two halves, split by privilege:
+Two halves, split by privilege — and on a packaged `v2` install, a root service beside them:
 
 - **The engine** — `update_system.sh` on `main`, the `oneup/engine/` package on `v2`. Does
-  all the real work and is the only part that becomes root. Authenticates once up front and
-  keeps the credential warm for the run. Fully usable on its own in a terminal.
+  all the real work and decides every root command a run makes. On the sudo route it
+  becomes root itself, authenticates once up front and keeps the credential warm for the
+  run. Fully usable on its own in a terminal.
+- **The system service** — `oneup/service/`, on `v2` only (ONEUP-0249). On a packaged
+  install the engine asks it to run each root command by NAME, from
+  `oneup/engine/rootops.py`'s table, and the service builds and runs it as root after a
+  polkit check. The engine picks its route to root once per run
+  (`oneup/engine/route.py`); the AppImage always takes sudo. `security.md` §12 holds its
+  rules.
 - **`updater.py`** — a PySide6 (Qt 6) front-end. **Never runs as root.** It shells out to
   the engine with `QProcess` and reads its stdout line by line.
 
@@ -151,8 +159,8 @@ does not load it, so read it by hand before changing that part. Their headlines:
   - A shape check on a field of codes does not catch English — check membership instead.
   - A slow server must never be indistinguishable from a hang.
   - Rewriting a repository URL must never touch the alias — the alias is the cache key.
-  - A privileged call added without a matching drop-in entry is invisible until a
-    passwordless user meets it.
+  - A privileged call added without a matching drop-in entry, or without a `rootops`
+    entry, is invisible until a passwordless user meets it.
   - Editing the download guard's text is a re-grant for every existing user.
 - `.claude/rules/ui-traps.md` — the window:
   - The app draws no focus ring — and the cue is DERIVED, not copied from hover.

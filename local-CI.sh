@@ -103,6 +103,22 @@ else
     bad "tests/parsers-test.py"; show_failure "$LOGS/parsers.log"
 fi
 
+# --- the system service's own suite (ONEUP-0249 §7) -------------------------
+# A private dbus-daemon, a fake polkit and mock binaries: the service's sessions, caps,
+# validators and job relay, with no root. Exit 77 means dbus-daemon or jeepney is not
+# installed here — a skip, as for the GUI suite. Run after the engine suite, never beside
+# it (ONEUP-0263).
+step "System service suite"
+python3 tests/service-test.py >"$LOGS/service.log" 2>&1
+rc=$?
+if [[ $rc == 0 ]]; then
+    ok "tests/service-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/service.log" | tail -1)"
+elif [[ $rc == 77 ]]; then
+    skip "tests/service-test.py" "dbus-daemon or jeepney not installed"
+else
+    bad "tests/service-test.py (exit $rc)"; show_failure "$LOGS/service.log"
+fi
+
 # --- headless GUI smoke test ------------------------------------------------
 # Constructs the PySide6 window offscreen and feeds it engine markers. Exit 77
 # means PySide6 isn't installed here — a skip, not a failure (matches the
@@ -287,6 +303,12 @@ if command -v appstreamcli >/dev/null 2>&1; then
             >"$LOGS/appstream.log" 2>&1; then ok "appstreamcli validate"
     else bad "appstreamcli validate"; cat "$LOGS/appstream.log"; fi
 else skip "appstreamcli" "not installed"; fi
+
+# The service's D-Bus policy must parse, or the system bus ignores the whole file.
+if command -v xmllint >/dev/null 2>&1; then
+    if xmllint --noout data/za.co.antsprojectshub.OneUp1.conf; then ok "xmllint (D-Bus policy)"
+    else bad "xmllint (D-Bus policy)"; fi
+else skip "xmllint" "not installed"; fi
 
 fi   # end of the code gates skipped by --docs
 

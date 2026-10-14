@@ -4125,12 +4125,16 @@ else
     # the total at 34: 23 `privilege.sudo` sites became 22 `root` lines plus one
     # `sudo_argv` inside `root_argv`. A new table ROW is a new privileged shape too, and
     # the INV-4 scenario below pins the table's operations.
+    # `root_stream` is the transaction's form of `root`, on either route (ONEUP-0249 slice
+    # 3). It went 34 -> 35: the commit's `root_argv` site became a `root_stream` site, and
+    # the service route's download is a second. That one never runs on the sudo route,
+    # whose download keeps its guard or wrapper, so it adds no shape `auth_cmnds` must grant.
     pn=$(( $(grep -c '\["sudo"' <<<"$py_stripped") \
-         + $(grep -cE 'privilege\.(sudo|root)(_argv)?\(' <<<"$py_stripped") ))
-    if [[ "$pn" == "34" ]]; then
-        echo "  ok   - the Python engine has its known 34 privileged call sites"; PASS=$((PASS+1))
+         + $(grep -cE 'privilege\.(sudo|root)(_argv|_stream)?\(' <<<"$py_stripped") ))
+    if [[ "$pn" == "35" ]]; then
+        echo "  ok   - the Python engine has its known 35 privileged call sites"; PASS=$((PASS+1))
     else
-        echo "  FAIL - privileged call sites moved: $pn, expected 34. A NEW one needs a matching"; FAIL=$((FAIL+1))
+        echo "  FAIL - privileged call sites moved: $pn, expected 35. A NEW one needs a matching"; FAIL=$((FAIL+1))
         echo "         entry in auth_cmnds, or passwordless silently starts prompting again."
     fi
     # ONEUP-0249 INV-4: only the calls the spec keeps off the table build their own argv —
@@ -4647,6 +4651,21 @@ route.engine_route({})
 raise SystemExit(f"tried to import {asked}" if "jeepney" in asked else 0)
 PYEOF
 )"
+py_case "every engine module imports with jeepney missing (INV-12)" "$(cat <<'PYEOF'
+import importlib, pkgutil, sys
+import oneup.engine
+sys.modules["jeepney"] = None          # an import of it now fails, as an uninstalled one does
+bad = []
+for info in pkgutil.iter_modules(oneup.engine.__path__):
+    if info.name == "__main__":
+        continue
+    try:
+        importlib.import_module(f"oneup.engine.{info.name}")
+    except ImportError as exc:
+        bad.append(f"{info.name}: {exc}")
+raise SystemExit("; ".join(bad) or 0)
+PYEOF
+)"
 py_case "sudo_init falls back or ends the run when the service cannot be reached" "$(cat <<'PYEOF'
 import os
 from oneup.engine import actions, markers, privilege, proc, route
@@ -4657,6 +4676,9 @@ markers.err = said.append
 actions.auth_current = lambda: False
 privilege._start_keepalive = lambda: None
 route.engine_route = lambda environ: route.SERVICE
+# A bus that does not exist: the case must not ask this machine's real system bus,
+# whose answer depends on what is installed here (testing.md §2).
+os.environ["ONEUP_SERVICE_BUS"] = "unix:path=/nonexistent/oneup-test-bus"
 bad = []
 def init(backend, noninteractive=""):
     ran.clear(); said.clear()
@@ -4680,6 +4702,126 @@ if privilege.chosen_route() != route.SUDO:
 raise SystemExit("; ".join(bad) or 0)
 PYEOF
 )"
+fi
+
+echo "TEST: the service ships no polkit file and its unit never kills a transaction (ONEUP-0249 INV-13)"
+# CVE-2018-1106's shape is a convenience .rules file shipped with the package; an
+# [Install] section would start the service at boot; and without KillMode=process,
+# stopping the service would take the running zypper with it.
+root_dir=$(dirname "$ENGINE")
+unit="$root_dir/data/oneup-service.service"
+check_absent "the RPM spec installs nothing for polkit" "polkit" \
+    "$(grep -vE '^[[:space:]]*#' "$root_dir/packaging/rpm/oneup.spec")"
+check_absent "data/ holds no polkit rule or action" "found" \
+    "$(find "$root_dir/data" -name '*.rules' -o -name '*.policy' | sed 's/^/found /')"
+check_absent "the unit has no [Install] section" "[Install]" \
+    "$(grep -vE '^[[:space:]]*#' "$unit" 2>/dev/null)"
+check "the unit sets KillMode=process" "KillMode=process" \
+    "$(grep -vE '^[[:space:]]*#' "$unit" 2>/dev/null)"
+check "the unit starts the launcher the spec names" "ExecStart=/usr/libexec/oneup-service" \
+    "$(cat "$unit" 2>/dev/null)"
+
+echo "TEST: the service route updates with no sudo and the same markers (ONEUP-0249 INV-8, INV-11, INV-16)"
+# The real service, on a private bus with a fake polkit, run by tests/service-test.py's
+# --serve mode over THIS scenario's mocks. The same update runs on each route; the
+# service route must call sudo zero times and print the same marker stream.
+if ! command -v dbus-daemon >/dev/null || ! python3 -c 'import jeepney' 2>/dev/null; then
+    echo "  SKIP - needs dbus-daemon and jeepney"
+else
+d=$(mktemp -d); setup_common "$d"
+# Counts every sudo call, then behaves as setup_common's.
+mv "$d/sudo" "$d/sudo.real"
+printf '#!/usr/bin/env bash\necho "$*" >> "%s/sudo.calls"\nexec "%s/sudo.real" "$@"\n' \
+    "$d" "$d" > "$d/sudo"
+chmod +x "$d/sudo"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)          exit 0 ;;
+  # An alias setup_common's repository files define: the service checks it (§4.2).
+  *" lr "*|*" lr -u"*) echo "1 | download.opensuse.org-oss | X | Yes | (r ) | Yes | http://x"
+                      exit 0 ;;
+  *dry-run*)          echo "1 package to upgrade."; echo "Overall download size: 10.0 KiB."; exit 0 ;;
+  *download-only*)    echo "Retrieving: alpha-2.0-1.1.x86_64 (Main Repository) (1/1),  10.0 KiB"
+                      echo "Retrieving: alpha-2.0-1.1.x86_64.rpm [done]"; exit 0 ;;
+  *dup*|*update*)     echo "(1/1) Installing: alpha-2.0-1.1.x86_64 [...done]"; exit 0 ;;
+  *needs-rebooting*)  exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+python3 "$(dirname "$ENGINE")/tests/service-test.py" --serve "$d" &
+serve=$!
+for _ in $(seq 100); do [[ -e "$d/serve.ready" ]] && break; sleep 0.1; done
+bus=$(cat "$d/bus.address" 2>/dev/null)
+out_sudo=$(run_engine "$d" --steps=system)
+rm -f "$d/sudo.calls" "$d/polkit.log"
+out_service=$(ONEUP_BACKEND=service ONEUP_SERVICE_BUS="$bus" run_engine "$d" --steps=system)
+check "the service route's run succeeds" "@@STEP_END@@|system|ok" "$out_service"
+if [[ ! -s "$d/sudo.calls" ]]; then
+    echo "  ok   - the service route calls sudo zero times (INV-8)"; PASS=$((PASS+1))
+else
+    echo "  FAIL - the service route called sudo: $(head -3 "$d/sudo.calls" | tr '\n' ';')"
+    FAIL=$((FAIL+1))
+fi
+# @@TIMING@@ carries elapsed seconds, which no two runs share.
+markers_of() { grep '^@@' | grep -v '^@@TIMING@@'; }
+if diff <(markers_of <<<"$out_sudo") <(markers_of <<<"$out_service") >/dev/null; then
+    echo "  ok   - both routes print the same marker stream (INV-8)"; PASS=$((PASS+1))
+else
+    echo "  FAIL - the routes' marker streams differ:"; FAIL=$((FAIL+1))
+    diff <(markers_of <<<"$out_sudo") <(markers_of <<<"$out_service") | head -10 \
+        | sed 's/^/         /'
+fi
+check "a run started by hand lets polkit ask (INV-16)" '"flags": 1' \
+    "$(cat "$d/polkit.log" 2>/dev/null)"
+rm -f "$d/polkit.log"
+ONEUP_NONINTERACTIVE=1 ONEUP_BACKEND=service ONEUP_SERVICE_BUS="$bus" \
+    run_engine "$d" --steps=system >/dev/null
+check "ONEUP_NONINTERACTIVE=1 never lets polkit ask (INV-16)" '"flags": 0' \
+    "$(cat "$d/polkit.log" 2>/dev/null)"
+check_absent "and it never sends flags 1" '"flags": 1' "$(cat "$d/polkit.log" 2>/dev/null)"
+out=$(ONEUP_BACKEND=service ONEUP_SERVICE_BUS="$bus" run_engine "$d" --auth-status)
+check "--auth-status is on when CanUpdate says yes (INV-11)" "@@AUTH@@|on" "$out"
+echo '{"org.freedesktop.packagekit.system-update": "no"}' > "$d/polkit.answers"
+out=$(ONEUP_BACKEND=service ONEUP_SERVICE_BUS="$bus" run_engine "$d" --auth-status)
+check "--auth-status is off when CanUpdate says no (INV-11)" "@@AUTH@@|off" "$out"
+out=$(ONEUP_BACKEND=service ONEUP_SERVICE_BUS="$bus" run_engine "$d" --steps=system)
+check "polkit's no ends a forced service run without a password box" \
+    "Authentication failed or cancelled" "$out"
+check_absent "and runs no update" "@@STEP_END@@|system|ok" "$out"
+# The user's Stop on the service route: the engine forwards it once, the service sends
+# SIGTERM, and zypper's 105 reads as a stop, as on the sudo route (§4.6, ONEUP-0275).
+rm -f "$d/polkit.answers"
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *refresh*)        exit 0 ;;
+  *" lr "*|*" lr -u"*) echo "1 | download.opensuse.org-oss | X | Yes | (r ) | Yes | http://x"
+                    exit 0 ;;
+  *download-only*)
+      trap 'echo "Trying to exit gracefully..."; exit 105' TERM
+      echo "Preloading: demo-1.0.x86_64.rpm [done]"
+      touch "$d/stop.request"          # user hits Stop while packages are downloading
+      sleep 30 & wait \$!
+      exit 0 ;;
+  *dup*|*update*)   touch "$d/COMMIT-RAN"; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(ONEUP_STOP_POLL_SECONDS=0.2 ONEUP_BACKEND=service ONEUP_SERVICE_BUS="$bus" \
+      run_engine "$d" --steps=system 2>&1)
+check        "service route: Stop reaches zypper as SIGTERM" "Trying to exit gracefully" "$out"
+check        "service route: the stopped step is skipped"   "@@STEP_END@@|system|skip" "$out"
+check        "service route: the run reports stopped"       "@@DONE@@|stopped" "$out"
+if [[ ! -e "$d/COMMIT-RAN" ]]; then
+    echo "  ok   - service route: the commit pass never ran"; PASS=$((PASS+1))
+else
+    echo "  FAIL - service route: the commit pass ran after a stop"; FAIL=$((FAIL+1))
+fi
+kill "$serve" 2>/dev/null; wait "$serve" 2>/dev/null
+rm -rf "$d"
 fi
 
 echo "TEST: every marker keeps its field layout (ONEUP-0044 INV-5a, ONEUP-0126)"

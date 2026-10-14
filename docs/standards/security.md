@@ -102,6 +102,12 @@ root: `read_repos` runs `zypper --non-interactive lr -u` to list repositories, a
 package details (ONEUP-0260) run `zypper --no-refresh --non-interactive info` and
 `rpm -q` / `rpm -qp` queries, each a fixed list argv with `LC_ALL=C` (§4.5).
 
+**On a packaged install the engine asks rather than runs** (ONEUP-0249). Where OneUp's
+system service is installed, the engine sends it an operation's name and arguments, and
+the service runs the command as root (§12). The engine still decides every root command a
+run makes; it no longer runs them itself. Which route a run takes is
+`oneup/engine/route.py`'s `engine_route`, chosen once per run.
+
 **1.3 — The engine never imports Qt.** The Python engine imports nothing from PySide6 or
 from the window's package (`tests/imports-test.py`'s INV-3 fails on the second); the Bash
 fallback imports nothing at all. The property that matters, and the one gate **G5** tests, is that the engine
@@ -221,6 +227,13 @@ job control for that one launch (`set -m`), not with `setsid`; the Python engine
 Measured: before this, two keep-alives were found still calling `sudo -n -v` every 50
 seconds, **40 minutes after** the runs that spawned them had been killed (ONEUP-0041). Any
 new background helper inherits this rule.
+
+**2.5 — On the service route, the one authentication is one polkit check.** `sudo_init`
+opens a session with the service, which asks polkit once (§12.4), and starts no
+keep-alive. Discover's rule decides: under openSUSE's default policy a user at the desktop
+sees no box (ONEUP-0249 §2.4). When polkit answers `challenge`, because it had no way to ask
+the caller, the run falls back to the sudo route and its one prompt (§4.7). That an SSH
+shell gets `challenge` is not yet measured (§4.12 item 1).
 
 ---
 
@@ -401,6 +414,9 @@ because there a wildcard would make it exploitable (§5).
 ## 5. The passwordless drop-in
 
 Opt-in, never silent, scoped, revocable. All four properties are load-bearing.
+
+**The drop-in belongs to the sudo route**: the AppImage, and any install without the system
+service. On the service route the engine never consults it (§2.5, §12).
 
 **5.1 — What it is.** `--grant-auth` writes a `sudoers` drop-in that lets *this user* run
 OneUp's update commands as root without a password. It stores **no password anywhere** —
@@ -628,6 +644,48 @@ developer happens to have granted passwordless. The incidents and the current li
 
 ---
 
+## 12. The system service
+
+On a packaged install, the engine's root commands run in OneUp's system service,
+`oneup/service/`, instead of under `sudo` (ONEUP-0249). The spec,
+`docs/specs/ONEUP-0249-system-service.md` §4, holds the design. These are the rules a change
+to the service must keep.
+
+**12.1 — The service takes an operation's name, never a command.** It builds every argv from
+`oneup/engine/rootops.py`'s table, after that operation's validators pass. An unknown
+operation, an unknown or missing argument, or a wrong D-Bus type is refused, and no child
+starts (INV-1).
+
+**12.2 — The checks that need state live in the service.** An alias must name a repository
+in the repository files. `repo-enable` undoes only the session's own disable.
+`orphans-remove` takes only names that zypper itself just listed as unneeded (INV-6, INV-7).
+
+**12.3 — No operation takes a path, and no client sets the environment.** The service builds
+its own CDN copy of the repository files. Its test overrides come from its own environment,
+which only the unit or a test harness sets (§5.1 of `files-and-naming.md`).
+
+**12.4 — Who may is polkit's answer to Discover's permission.** The action is
+`org.freedesktop.packagekit.system-update`, and the subject is the caller's unique bus name,
+never a pid. Any error is a refusal, and a caller who left during the check is refused.
+Importing signing keys also needs `system-trust-signing-key`, and nothing sent after
+`OpenSession` widens a session (INV-2, INV-3). **The package ships no polkit file of any
+kind** (INV-13).
+
+**12.5 — Caps.** One session per caller, eight in all, and one running job in the whole
+service (INV-9).
+
+**12.6 — A job is never killed by its caller leaving or by the service dying.** The child
+writes to a job file under `/run/oneup/`, never to a pipe. The unit sets `KillMode=process`.
+Only `system-download` can be stopped, by `SIGTERM`; `system-commit` is never signalled
+(INV-5, §6.1).
+
+**12.7 — When a session ends, its repository changes are undone**, once no job holds zypp's
+lock (INV-6).
+
+**12.8 — Every session opened or refused, and every job started and ended, writes one
+journal line** (INV-14). With no session and no job for the idle period, the service exits
+(INV-15).
+
 ## What checks this
 
 | Rule | What catches a breach |
@@ -655,6 +713,8 @@ developer happens to have granted passwordless. The incidents and the current li
 | §7.3 captured privileged output is not echoed to the log | nothing automatic — the §10 checklist is the only gate |
 | §8 supply chain | nothing automatic |
 | nothing the engine spawns outlives it | `tests/run-tests.sh` — the sudo keep-alive leaves no orphaned process when a run ends |
+| §12.1–12.8 the system service's rules | `tests/service-test.py` — a private bus, a fake polkit and mock binaries; each invariant the section cites has its own scenario there. INV-13 is a structural check in `tests/run-tests.sh` |
+| §1.2 and §2.5 the service route runs no `sudo` and prints what the sudo route prints | `tests/run-tests.sh` — the same update on both routes against one set of mocks: zero `sudo` calls on the service route, and equal marker streams (INV-8) |
 | §2.4 a new process group, never a new session | `tests/run-tests.sh` — run under `script` for a real terminal, the keep-alive's refresh comes from the engine's session and terminal, and from a group that is not the engine's |
 
 **This is the best-gated standard in the set**, and the reason is worth copying rather than

@@ -96,13 +96,14 @@ exact shape of the rule are in the document named beside each.
   running `zypper --reposd-dir` against a copy and reading the aliases back —
   `docs/specs/ONEUP-0094-download-recovery.md` §4.2.
 
-- **A privileged call added without a matching drop-in entry is invisible until a
-  passwordless user meets it.** Nothing fails: the new `sudo …` line is correct code that
+- **A privileged call added without a matching drop-in entry, or without a `rootops`
+  entry, is invisible until a passwordless user meets it.** Nothing fails: the new `sudo …` line is correct code that
   simply prompts, and only someone who turned *Passwordless* on ever finds out — mid-run,
   in sudo's own bare wording. Three such calls accumulated that way (ONEUP-0092). A new
   privileged shape needs an entry in `auth_cmnds`, and the structural check in
   `tests/run-tests.sh` that pins the engine's privileged call-site count is what stops the
-  fourth — `docs/standards/security.md` §5.2.
+  fourth — `docs/standards/security.md` §5.2. On the service route, a root command is a
+  row in `oneup/engine/rootops.py`'s table or it cannot run at all (ONEUP-0249 §4.2).
 
 - **Editing the download guard's text is a re-grant for every existing user.** The engine
   compares the installed guard against what it would emit now, so a whitespace or comment

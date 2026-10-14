@@ -1,0 +1,15 @@
+#!/usr/bin/python3 -I
+"""Start OneUp's system service (docs/specs/ONEUP-0249-system-service.md §4.8).
+
+Installed as /usr/libexec/oneup-service and run by oneup-service.service. `-I` keeps
+the environment and the user's site-packages out of what it imports, and leaves the
+current directory off sys.path, so the installed package's directory goes first by hand.
+"""
+
+import sys
+
+sys.path.insert(0, "/usr/share/oneup")
+
+from oneup.service.server import main
+
+sys.exit(main())

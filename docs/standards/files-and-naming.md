@@ -26,8 +26,8 @@ exist yet, and saying so is the point.
 | Path | What belongs there |
 | --- | --- |
 | *(repo root)* | The window's entry point (`updater.py`), the retired Bash engine kept as a fallback through 2.0 (`update_system.sh`), the three developer scripts (`bump.py`, `local-CI.sh`, `release.sh`), and the four documents every reader starts from (`README.md`, `CLAUDE.md`, `ROADMAP.md`, `CHANGELOG.md`) plus `LICENSE`. |
-| `oneup/` | The application: `engine/` (the Python engine) and `gui/` (the window). §4 owns its shape. |
-| `data/` | Everything the desktop installs and the user never edits: the launcher entry, the icon, the app-store metadata. |
+| `oneup/` | The application: `engine/` (the Python engine), `gui/` (the window) and `service/` (the system service, ONEUP-0249). §4 owns its shape. |
+| `data/` | Everything the desktop installs and the user never edits: the launcher entry, the icon, the app-store metadata, and the system service's D-Bus policy, D-Bus activation file and systemd unit. |
 | `docs/design/` | Programme-level decisions that several items share. |
 | `docs/history/` | History moved out of a document so the document stays a rule. One file: `claude-md.md`. |
 | `docs/reviews/` | Review records kept outside the document they review: a run's `<ID>-fix-ledger.md`, and each standard's and reference's `<name>-loop-log.md`. `documentation.md` §7.1 names the kinds. |
@@ -35,10 +35,10 @@ exist yet, and saying so is the point.
 | `docs/plans/` | One item's build steps. |
 | `docs/standards/` | Standing rules, like this one. |
 | `docs/reference/` | Frozen contracts (formats, protocols). One file: `marker-protocol.md`. |
-| `packaging/rpm/` | `oneup.spec` — the `zypper`-installable package. |
+| `packaging/rpm/` | `oneup.spec` — the `zypper`-installable package — and `oneup-service`, the system service's launcher, which only the RPM installs. |
 | `packaging/appimage/` | `build-appimage.sh` — the single-file portable build — and `requirements.txt`, the exact packages it installs. |
 | `packaging/obs/` | `_service` + `README.md` — the openSUSE Build Service recipe. |
-| `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `imports-test.py` (the `oneup/` package's structural rules), `i18n-check.py` (the translation groundwork's source rules), `bump-test.py` (version lockstep), `parsers-test.py` (the engine's pure parsers), `mock-env.sh` (the mock sandbox both engine suites source), `docs-check.py` (the documentation rules a script can settle). |
+| `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `imports-test.py` (the `oneup/` package's structural rules), `i18n-check.py` (the translation groundwork's source rules), `bump-test.py` (version lockstep), `parsers-test.py` (the engine's pure parsers), `service-test.py` (the system service, on a private bus), `mock-env.sh` (the mock sandbox both engine suites source), `docs-check.py` (the documentation rules a script can settle). |
 | `githooks/` | Repo-local git hooks. One file: `pre-push`. Not active until `git config core.hooksPath githooks`. |
 | `screenshots/` | Images the README and the app-store metadata point at. |
 | `branding/` | The OneUp wordmark, for pages outside this repository that show the project. Nothing in the app or its packages reads it. |
@@ -149,6 +149,7 @@ oneup/
   __init__.py
   engine/          the Python replacement for update_system.sh
   gui/             the split-up updater.py
+  service/         the system service (ONEUP-0249); imports engine/, never gui/
   translations/    oneup_<lang>.ts catalogues (ONEUP-0032)
 updater.py         thin entry point — stays at the root
 update_system.sh   stays through 2.0 as a documented fallback, goes in 2.1
@@ -261,6 +262,11 @@ that has none:
 | Repository definitions | `/etc/zypp/repos.d` | engine | `ONEUP_REPOS_DIR` — **engine only** |
 | Stop-request poll interval, download pass | `2` seconds | engine | `ONEUP_STOP_POLL_SECONDS` |
 | Single-instance socket name | `OneUp-<uid>` | GUI | `ONEUP_INSTANCE_NAME` |
+| Route to root | the service where it is installed, else sudo | engine | `ONEUP_BACKEND` — `sudo`, `service` or `auto` (ONEUP-0249 §4.7) |
+| Whether polkit may ask the user | it may | engine | `ONEUP_NONINTERACTIVE=1` — no box; a headless run sets it (§4.4) |
+| The bus the service is on | the system bus | engine and service | `ONEUP_SERVICE_BUS` — **tests only**: `tests/service-test.py`'s private bus |
+| The service's job files | `/run/oneup` (systemd's `RUNTIME_DIRECTORY`) | service | `ONEUP_SERVICE_RUNTIME_DIR` — **tests only** |
+| The service's idle exit | `60` seconds | service | `ONEUP_SERVICE_IDLE_SECONDS` — **tests only** |
 | Engine's user-visible log dir | `~/Documents/update-logs` | engine | **none** |
 | GUI's log dir | `~/.local/state/oneup/logs` | GUI | `XDG_STATE_HOME` only, through the row above — no `ONEUP_*` |
 | Run history | `~/.local/state/oneup/history.json` | GUI | `XDG_STATE_HOME` only, through the row above — no `ONEUP_*` |
@@ -270,7 +276,8 @@ were true would have misled the 2.0 implementer.** What is actually true:
 
 - **The engine is isolated by environment variable.** `run_engine` in
   `tests/mock-env.sh` sets the four state-file overrides, `ONEUP_ZYPP_PID_FILE`,
-  `ONEUP_GUARD_FILE` and `ONEUP_REPOS_DIR`, unless the scenario sets them itself;
+  `ONEUP_GUARD_FILE`, `ONEUP_REPOS_DIR` and `ONEUP_BACKEND=sudo`, unless the scenario
+  sets them itself;
   scenarios that need `ONEUP_AUTH_FILE` set it themselves.
   `ONEUP_REPOS_DIR` is seeded by `setup_common` rather than left empty, because download
   recovery declines when no `download.opensuse.org` baseurl is present — an empty

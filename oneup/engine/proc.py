@@ -23,7 +23,7 @@ import os
 import signal
 import subprocess
 import threading
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 
 from . import markers, parsers, runstate
@@ -224,6 +224,17 @@ def succeeds(argv: Sequence[str]) -> bool:
 _STOP_ANNOUNCED = False
 
 
+def stop_requested() -> bool:
+    """`stop_pending`'s three tests alone, announcing nothing.
+
+    For the service route's Stop forwarder, which polls while the download's output
+    is still streaming (ONEUP-0249 §4.6): announcing from there would put the stop's
+    lines inside the transaction output, where the sudo route never prints them.
+    """
+    stop, started = runstate.stop_and_run_mtimes()
+    return not (stop is None or started is None or stop <= started)
+
+
 def stop_pending() -> bool:
     """Is a stop pending at this boundary? `stop_pending`'s decision half.
 
@@ -241,8 +252,7 @@ def stop_pending() -> bool:
     clicked in the moment before the engine got there.
     """
     global _STOP_ANNOUNCED
-    stop, started = runstate.stop_and_run_mtimes()
-    if stop is None or started is None or stop <= started:
+    if not stop_requested():
         return False
     if not _STOP_ANNOUNCED:
         _STOP_ANNOUNCED = True
@@ -274,6 +284,59 @@ DEADLINE_EXPIRED = 124
 PROGRESS_SEEN = 0
 
 
+def _filter_lines(lines: Iterable[str], *, step: str, phase: str, log: Path,
+                  append: bool) -> int:
+    """`stream_filtered`'s reading half: print, log and mark each line; return the tally.
+
+    Shared by both routes to root, so a transaction the system service runs is read
+    by the same code, line for line, as one sudo runs (ONEUP-0249 INV-8).
+    """
+    preloaded = seen = got = 0
+    want = 0
+    # Each package's own progress, beside the counts above and never instead of
+    # them: PROGRESS and the canary's `seen` are untouched (ONEUP-0259 INV-10).
+    packages = parsers.PackageLines()
+    with _closing_quietly(log.open("a" if append else "w", encoding="utf-8",
+                                   errors="replace")) as handle:
+        for raw in lines:
+            line = raw.rstrip("\n")
+            markers.out(line)
+            # Guarded as `_Mirror.write` guards the same operation: a full disk
+            # must not unwind this loop mid-transaction (ONEUP-0176).
+            with contextlib.suppress(OSError):
+                handle.write(line + "\n")
+                handle.flush()
+            total = parsers.progress_total_bytes(line)
+            if total is not None:
+                want = total
+            elif line.startswith("Preloading:"):
+                # The parallel prefetch: zypper gives it neither a counter nor a
+                # size, so all we can pass on is the tally and the transaction
+                # total. Emitted directly rather than through `emit_progress`,
+                # which needs an `n/m` there is none of here.
+                preloaded += 1
+                seen += 1
+                markers.marker("PROGRESS", step, preloaded, 0, phase, 0, want)
+            elif line.startswith("Retrieving:"):
+                got += parsers.retrieving_bytes(line)
+                if markers.emit_progress(step, parsers.retrieving_fraction(line),
+                                         phase, str(got), str(want)):
+                    seen += 1
+            elif line.startswith("(") and (
+                    "Installing:" in line or "Removing:" in line or "Upgrading:" in line):
+                if markers.emit_progress(step, parsers.install_fraction(line), "install"):
+                    seen += 1
+            package = packages.feed(line)
+            if package is not None:
+                state, name, edition, size = package
+                if state == "downloading":
+                    markers.marker("PKG", step, state, name, edition, size)
+                else:
+                    markers.marker("PKG", step, state, name, edition)
+        packages.finish()
+    return seen
+
+
 def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
                     append: bool, deadline: float | None = None) -> int:
     """Run `argv`, print every line unchanged, log it, and emit progress markers.
@@ -292,11 +355,6 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
     the transaction itself look like it failed.
     """
     global PROGRESS_SEEN
-    preloaded = seen = got = 0
-    want = 0
-    # Each package's own progress, beside the counts above and never instead of
-    # them: PROGRESS and the canary's `seen` are untouched (ONEUP-0259 INV-10).
-    packages = parsers.PackageLines()
     child = subprocess.Popen(  # noqa: S603 — fixed argv list, no shell, as in `run`
         list(argv),
         stdout=subprocess.PIPE,
@@ -337,44 +395,7 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
         # runs when a line arrives can never fire on it.
         timer = threading.Timer(deadline, _expire)
         timer.start()
-    with _closing_quietly(log.open("a" if append else "w", encoding="utf-8",
-                                   errors="replace")) as handle:
-        for raw in child.stdout:
-            line = raw.rstrip("\n")
-            markers.out(line)
-            # Guarded as `_Mirror.write` guards the same operation: a full disk
-            # must not unwind this loop mid-transaction (ONEUP-0176).
-            with contextlib.suppress(OSError):
-                handle.write(line + "\n")
-                handle.flush()
-            total = parsers.progress_total_bytes(line)
-            if total is not None:
-                want = total
-            elif line.startswith("Preloading:"):
-                # The parallel prefetch: zypper gives it neither a counter nor a
-                # size, so all we can pass on is the tally and the transaction
-                # total. Emitted directly rather than through `emit_progress`,
-                # which needs an `n/m` there is none of here.
-                preloaded += 1
-                seen += 1
-                markers.marker("PROGRESS", step, preloaded, 0, phase, 0, want)
-            elif line.startswith("Retrieving:"):
-                got += parsers.retrieving_bytes(line)
-                if markers.emit_progress(step, parsers.retrieving_fraction(line),
-                                         phase, str(got), str(want)):
-                    seen += 1
-            elif line.startswith("(") and (
-                    "Installing:" in line or "Removing:" in line or "Upgrading:" in line):
-                if markers.emit_progress(step, parsers.install_fraction(line), "install"):
-                    seen += 1
-            package = packages.feed(line)
-            if package is not None:
-                state, name, edition, size = package
-                if state == "downloading":
-                    markers.marker("PKG", step, state, name, edition, size)
-                else:
-                    markers.marker("PKG", step, state, name, edition)
-        packages.finish()
+    seen = _filter_lines(child.stdout, step=step, phase=phase, log=log, append=append)
     # Wait for the child to EXIT without reaping it, so its pid still names it
     # while the watchdog is live: a child that closed its output and kept going
     # stays under its budget. Once settled, the watchdog can no longer fire.
@@ -399,4 +420,20 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
         # would erase the download pass's count and trip the canary on a
         # perfectly healthy run.
         PROGRESS_SEEN = seen
+    return rc
+
+
+def stream_job(lines: Iterable[str], wait: Callable[[], int], *, step: str, phase: str,
+               log: Path, append: bool) -> int:
+    """`stream_filtered` for a child this process did not start: the system service's.
+
+    `lines` is the job's output and `wait` returns its status once the output ends
+    (ONEUP-0249 §4.3). Everything a line becomes is `_filter_lines`', as on the sudo
+    route, so the window cannot tell which route ran the transaction.
+    """
+    global PROGRESS_SEEN
+    seen = _filter_lines(lines, step=step, phase=phase, log=log, append=append)
+    rc = wait()
+    if phase == "download":
+        PROGRESS_SEEN = seen        # the download pass owns the tally, as above
     return rc

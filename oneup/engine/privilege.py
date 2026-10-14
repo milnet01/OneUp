@@ -25,6 +25,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 from collections.abc import Sequence
 
 from . import markers, proc
@@ -157,13 +158,34 @@ def chosen_route() -> str:
     return _ROUTE
 
 
-def _open_service() -> bool:
-    """Open this run's session with the service. False when it cannot be reached.
+# Whether this run refreshes with `--gpg-auto-import-keys`. Set by `__main__` before
+# `sudo_init`, because the service authorises it when the session opens and never
+# after (ONEUP-0249 §4.4).
+IMPORT_KEYS = False
 
-    The service and its client are later ONEUP-0249 slices. Until they land, nothing
-    answers on the bus, so the session never opens.
+
+def _open_service() -> bool:
+    """Open this run's session with the service, or reuse the one already open.
+
+    False when §4.7 allows falling back: the service unreachable, a D-Bus error that
+    is not `NotAuthorized`, or polkit's `challenge` for a caller it had no agent to
+    ask. A `dismissed` or `denied` answer ends the run as a cancelled validate does.
     """
-    return False
+    from . import service_client
+    if service_client.has_session():
+        return True
+    try:
+        service_client.open_session(
+            interactive=os.environ.get("ONEUP_NONINTERACTIVE") != "1",
+            import_keys=IMPORT_KEYS)
+    except service_client.Refused as exc:
+        if exc.code == "NotAuthorized" and exc.reason != "challenge":
+            markers.err("Authentication failed or cancelled — aborting.")
+            raise SystemExit(1) from None
+        return False
+    except service_client.Unreachable:
+        return False
+    return True
 
 
 def _service_unreachable() -> None:
@@ -267,19 +289,101 @@ def root(op: str, args: dict[str, object] | None = None, *, flags: Sequence[str]
          merge_stderr: bool = False, stream: bool = False) -> tuple[int, str]:
     """Run one operation from `rootops`' table as root, and return what `sudo()` does.
 
-    The sudo route's entry to the table (ONEUP-0249 §4.2): the argv is built
-    there, never at the call site, so this route and the service's run the same
-    command. A refused argument runs nothing and returns 1 with one line saying
-    why — the shape of any other failed root command, so no caller needs a
-    second error path.
+    Both routes' entry to the table (ONEUP-0249 §4.2): the argv is built there,
+    never at the call site, so the two routes run the same command. On the service
+    route the service builds it and `flags`, which are sudo's own, do not apply. A
+    refused argument runs nothing and returns 1 with one line saying why — the
+    shape of any other failed root command, so no caller needs a second error path.
     """
-    from . import rootops  # deferred: rootops reads this module's argvs
+    from . import rootops, route  # deferred: rootops reads this module's argvs
+    if chosen_route() == route.SERVICE:
+        return _service_root(op, args, merge_stderr=merge_stderr, stream=stream)
     try:
         argv = rootops.build(op, args)
     except rootops.Invalid as exc:
         markers.err(f"  Refusing root operation {op}: {exc}")
         return 1, ""
     return sudo(argv, flags=flags, merge_stderr=merge_stderr, stream=stream)
+
+
+def _service_session() -> bool:
+    """A session for a root call made before `sudo_init`, or False if the route fell back."""
+    from . import route, service_client
+    if not service_client.has_session():
+        sudo_init()
+    return chosen_route() == route.SERVICE
+
+
+def _service_job(op: str, args: dict[str, object] | None, *, merge_stderr: bool):
+    """Start `op` on the service, or say why not and return None (§4.7: no switch mid-run)."""
+    from . import service_client
+    try:
+        return service_client.run(op, dict(args or {}), merge_stderr=merge_stderr)
+    except service_client.Refused as exc:
+        if exc.code == "Invalid":
+            markers.err(f"  Refusing root operation {op}: {exc.reason}")
+        else:
+            markers.err(f"  OneUp's system service refused {op}: {exc.code} {exc.reason}")
+    except service_client.Unreachable as exc:
+        markers.err(f"  OneUp's system service could not run {op}: {exc}")
+    return None
+
+
+def _service_root(op: str, args: dict[str, object] | None, *, merge_stderr: bool,
+                  stream: bool) -> tuple[int, str]:
+    """`root()` on the service route: the same status and output, from the service's job.
+
+    A streamed call merges stderr, as `proc.run`'s pump does on the sudo route.
+    """
+    if not _service_session():
+        return root(op, args, merge_stderr=merge_stderr, stream=stream)
+    job = _service_job(op, args, merge_stderr=merge_stderr or stream)
+    if job is None:
+        return 1, ""
+    if stream:
+        for line in job.lines():
+            print(line.rstrip("\n"), flush=True)   # through the log mirror, as `_pump`
+        return job.wait(), ""
+    text = job.read()
+    return job.wait(), text
+
+
+def root_stream(op: str, args: dict[str, object] | None = None, *, cdn_dir: str = "",
+                step: str, phase: str, log: pathlib.Path, append: bool,
+                stop_poll: float | None = None) -> int:
+    """A transaction, read line by line by `proc` on either route; returns its status.
+
+    On the sudo route this is `proc.stream_filtered` over `root_argv`. On the service
+    route the service builds the argv, with its own CDN copy where `cdn` asks for one,
+    and `proc.stream_job` reads the same lines. With `stop_poll`, the user's Stop is
+    forwarded once while the job runs, because the service cannot read `stop.request`
+    (§4.6).
+    """
+    from . import route
+    if chosen_route() == route.SERVICE and _service_session():
+        job = _service_job(op, args, merge_stderr=True)
+        if job is None:
+            return 1
+        done = threading.Event()
+        if stop_poll is not None:
+            threading.Thread(target=_forward_stop, args=(done, stop_poll), daemon=True).start()
+        try:
+            return proc.stream_job(job.lines(), job.wait, step=step, phase=phase, log=log,
+                                   append=append)
+        finally:
+            done.set()
+    return proc.stream_filtered(root_argv(op, args, cdn_dir=cdn_dir), step=step, phase=phase,
+                                log=log, append=append)
+
+
+def _forward_stop(done: threading.Event, interval: float) -> None:
+    """Call `Stop` once, the first time a stop is requested while the job runs."""
+    from . import service_client
+    while not done.wait(interval):
+        if proc.stop_requested():
+            with contextlib.suppress(service_client.Refused, service_client.Unreachable):
+                service_client.stop()
+            return
 
 
 def root_argv(op: str, args: dict[str, object] | None = None, *,
@@ -374,7 +478,17 @@ def cleanup() -> None:
     runstate.clear_owned_state()
     reap_orphaned_askpass()
     repos.restore_disabled()
+    _close_service()
     kill_keepalive()
+
+
+def _close_service() -> None:
+    """End the service session, after the re-enables that need it. A no-op on sudo."""
+    if _ROUTE is not None:
+        from . import route
+        if _ROUTE == route.SERVICE:
+            from . import service_client
+            service_client.close()
 
 
 def _signal_exit(code: int):
