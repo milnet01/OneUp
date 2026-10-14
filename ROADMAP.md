@@ -8352,6 +8352,11 @@ when complete (that document's §7).
   files are in data/, the launcher in packaging/rpm/. Still owed: the RPM installing
   them, the window (§4.10, INV-10, INV-16's window half), README and CHANGELOG, and
   §4.12's three measurements on a real install.
+  Gotcha for the RPM slice (2026-10-14): data/oneup-service.service hard-codes
+  ExecStart=/usr/libexec/oneup-service, and run-tests.sh's INV-13 case pins that string.
+  On Leap 15.x %{_libexecdir} is /usr/lib, so the spec must install the launcher at the
+  path the unit names, or rewrite the unit's ExecStart at build time (and the INV-13
+  check with it). The launcher also hard-codes /usr/share/oneup.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
