@@ -8282,6 +8282,18 @@ when complete (that document's §7).
   two pushes (119c802, ab0d0ef) ran it at 465/0. No other edits were
   made while it ran. Next time it reds, keep the whole log: the first
   fix may be making the hook print every FAIL line, not just the tail.
+  Progress (2026-10-14, f74d128): the three names cannot be recovered.
+  The hook's output held only the suite's tail, and the full log was in
+  /tmp/local-ci.YDPBo7, gone at the next boot (/tmp is RAM). cc-job's
+  records show what that run overlapped: two ffmpeg trailer renders
+  writing to /mnt/Games (OneUp's own disk), an Ants_Terminal build plus
+  its ctest run, and a long bake. CPU load alone was already measured as
+  not a cause (ONEUP-0203), so disk contention on that drive is the open
+  hypothesis. Not reproduced on purpose: it would load other sessions'
+  disk. Fixed so the next red is readable: a failed suite now prints
+  every FAIL under its TEST: heading, then the tail and the load average,
+  and the logs stay under ~/.local/state/oneup-ci/. Keep this open until
+  a red is caught with names, then fix that scenario's timing.
   **Layman:** The update engine's tests failed once during an upload check and passed every time after; find out what caused the one-off failure.
   Kind: investigate.
   Source: in-session-2026-10-12.
