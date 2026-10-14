@@ -4549,7 +4549,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc.
   Source: user-request-2026-09-21.
 
-- 📋 [ONEUP-0209] **documentation.md §1's table has no row for a history file, and now one exists.**
+- ✅ [ONEUP-0209] **documentation.md §1's table has no row for a history file, and now one exists.**
   ONEUP-0208 created `docs/history/claude-md.md`. `documentation.md` §1's
   table names every document class and what each holds; it has no row for
   a history file, and §1.1's ranking does not place one. `docs/reviews/`
@@ -4563,6 +4563,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Both are descriptive, not authoritative: a history file records why a
   rule says what it says and binds nobody, so it ranks with `README.md`,
   `CHANGELOG.md` and `ROADMAP.md` rather than in the table above them.
+  Resolved (2026-10-14): main c318b0c. documentation.md §1 gains rows for
+  docs/history/ and docs/reviews/; §1.1 lists both as descriptive. On v2
+  the docs/reviews/ row also names an outside loop log. Gated with 0109
+  and 0128: review loops 15-17 on main (16-18 in v2's record), capped.
   **Layman:** The rulebook that says which folder each kind of document goes in does not yet mention the new history folder.
   Kind: doc.
   Source: in-session-2026-09-21.
@@ -4977,7 +4981,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: in-session-2026-08-12.
 
-- 📋 [ONEUP-0109] **Extend documentation.md §6a from code citations to citations inside a document.**
+- ✅ [ONEUP-0109] **Extend documentation.md §6a from code citations to citations inside a document.**
   §6a says cite code by name, never by line number, because a line
   number rots on the next edit. **A row ordinal inside a document rots
   exactly the same way, and §6a does not cover it.**
@@ -5019,6 +5023,11 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Ants MCP maintainers in
   /mnt/Games/Scripts/Linux/OneUp_Ants_MCP_Feedback.md; worth a line in
   `files-and-naming.md` or the trap list only if it bites a second time.
+  Resolved (2026-10-14): main c318b0c. documentation.md §6a now says a
+  row, list item or bullet is cited by its content, never its position,
+  with ONEUP-0108's measurement; What checks this records that nothing
+  automatic catches it. Gated with 0209 and 0128 (loops 15-17, capped).
+  The spec_lint tombstone note stays unfiled: it has not bitten twice.
   **Layman:** A rule that stops one kind of stale cross-reference already exists; the same mistake keeps happening in a place the rule does not cover.
   Kind: doc.
   Source: in-session-2026-08-12, measured across ONEUP-0108's three review loops.
@@ -5133,7 +5142,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: test.
   Source: in-session-2026-08-23, deferred from ONEUP-0044's implementation.
 
-- 📋 [ONEUP-0128] **Gate CLAUDE.md's new gate-drift trap, and decide whether documentation.md §7 should own it.**
+- ✅ [ONEUP-0128] **Gate CLAUDE.md's new gate-drift trap, and decide whether documentation.md §7 should own it.**
   ONEUP-0127 added a §6 trap to `CLAUDE.md`: a spec's `Reviewed` stamp does not
   survive another item editing it, and `spec_query mode:"gate_drift"` is what
   reports it.
@@ -5157,6 +5166,13 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Measured on 2026-08-24: `spec_query mode:"gate_drift"` reported 6 stale, 7
   current, 4 ungated. Stale is the normal state of a busy branch, so a rule that
   treats it as an incident would fire constantly and stop being read.
+  Resolved (2026-10-14): documentation.md §7 owns the rule now. A later
+  edit can leave a Reviewed stamp over unread text; check gate_drift for
+  a spec or git log for any other gated document, ask rule 14's trigger
+  (quoted) of each commit, and re-run where it says yes. Reviewed stands
+  until the re-run starts. Gated on main, loops 15-17, capped; 10
+  verified, all fixed. v2's CLAUDE.md trap is now a pointer, gated
+  separately (docs/reviews/claude-md-loop-log.md, converged loop 2).
   **Layman:** A note was added telling future sessions how to spot a design document whose review has gone stale. An independent reader should check it, and decide whether it belongs in the standard rather than the notes file.
   Kind: doc.
   Source: in-session-2026-08-24, consequence of ONEUP-0127.
@@ -5577,7 +5593,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: in-session-2026-09-02 (ONEUP-0054 stage 6 gate, loop 2).
 
-- 📋 [ONEUP-0196] **Decide whether the grandchild-holds-the-pipe trap belongs in CLAUDE.md §6.**
+- ✅ [ONEUP-0196] **Decide whether the grandchild-holds-the-pipe trap belongs in CLAUDE.md §6.**
   The trap: killing only the bounded child left a GRANDCHILD holding our read
   end, so the wait after the kill blocked on a pipe nobody would close and the
   "bounded" call never returned. proc._run_bounded therefore gives a bounded
@@ -5597,6 +5613,12 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Decided (2026-09-18, user): add it to CLAUDE.md §6. It cost a real bug, which
   is the list's entry test. CLAUDE.md is rule-14 gated, so the new trap goes
   through review-contract before it lands.
+  Resolved (2026-10-14): v2 75f4868. The trap is in
+  .claude/rules/engine-traps.md with its headline in CLAUDE.md §6:
+  bound an unprivileged child by killing its process group. Review
+  narrowed it: a background helper takes a group, never a session
+  (security.md §2.4), and a privileged call uses sudo timeout. Gate
+  converged in loop 2 (docs/reviews/engine-traps-loop-log.md).
   **Layman:** A hard-won lesson about killing background jobs is written in the code but not in the list of traps; someone should decide whether it belongs there.
   Kind: doc.
   Source: carried in session handoffs since 2026-08-31; filed 2026-09-02 to stop the prose relay.
