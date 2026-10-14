@@ -15,6 +15,31 @@ All notable changes to OneUp are documented here. The format follows
   updates until 2.0.0, so nobody is cut off; the README says how
   to move.
 
+### Fixed
+
+- **Stopping during the download is reported as a stop, not a failure** (ONEUP-0275)
+  Pressing Stop while packages downloaded made OneUp say the
+  system update had failed, with a red Failed badge. Nothing had
+  gone wrong and nothing was installed. It now says it stopped.
+
+- **The signing-key hint appears only for a real signing-key problem** (ONEUP-0276)
+  When an update that included a package with "gpg" or "key"
+  in its name failed for another reason, OneUp blamed an
+  out-of-date signing key and offered to import keys. It now
+  offers that only when zypper reports a key or signature
+  error, and names the real cause otherwise.
+
+- **The download figure reaches the end when some packages were already downloaded** (ONEUP-0093)
+  After a stopped run, packages already downloaded were left out
+  of the running figure but not out of the total, so it lagged
+  and could never reach the end. They now count as downloaded.
+
+- **A run that updated only Flatpak apps no longer says nothing was needed** (ONEUP-0277)
+  After installing Flatpak updates and no system ones, OneUp
+  said everything was already up to date. The window, the
+  summary and the desktop notification now say updates were
+  installed.
+
 ## [1.4.9] - 2026-10-13
 
 ### Fixed

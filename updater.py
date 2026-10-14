@@ -1659,6 +1659,7 @@ class Updater(QMainWindow):
         self._reboot_reason = ""     # optional "why a reboot matters" phrase from the engine
         self._installed_count = ""   # system packages changed, as reported by the engine
         self._sys_changed = False
+        self._other_changed = False  # Flatpak or firmware installed something (ONEUP-0277)
         self._step_caption = ""      # current step's bar caption, so @@PROGRESS@@ can extend it
         self._progress_phase = ""    # download/install; a change is what gets announced
         self._stop_asked = False     # Stop was pressed this run; never offer it again
@@ -3429,6 +3430,7 @@ for (var i = 0; i < wins.length; i++) {{
         self._reboot_reason = ""
         self._installed_count = ""
         self._sys_changed = False
+        self._other_changed = False  # Flatpak or firmware installed something (ONEUP-0277)
         self._step_caption = ""
         self._progress_phase = ""
         self._done_status = ""
@@ -3567,9 +3569,8 @@ for (var i = 0; i < wins.length; i++) {{
         self._activity_since = 0.0
         self._activity_stalled = False
         self._dl_at = self._dl_from = self._dl_bytes = self._dl_total = self._dl_grown = 0
-        # Weighed once, before anything is fetched, so later samples measure THIS run's
-        # download. Packages already cached are inside the baseline and rightly excluded —
-        # zypper won't re-fetch them, and counting them would flatter the rate.
+        # Weighed once, before anything is fetched, so later samples can tell what THIS
+        # run fetched from what an earlier, stopped run left behind (ONEUP-0093).
         self._dl_base = cache_bytes()
         self._set_activity("")
 
@@ -3596,7 +3597,16 @@ for (var i = 0; i < wins.length; i++) {{
         if self._progress_phase == "download":
             if reweigh:
                 self._dl_grown = cache_bytes() - self._dl_base
-            got = max(got, self._dl_grown)
+            have = self._dl_grown
+            if self._dl_total:
+                # zypper's total still counts packages an earlier, stopped run left in
+                # the cache (measured 2026-10-14: 166 MiB cached, total 695.5 MiB), so
+                # they count as fetched here too, or the figure lags and never reaches
+                # the total (ONEUP-0093). Capped, because a cache holding leftovers this
+                # transaction does not need must not run past it. The rate is unchanged:
+                # it is measured from the first figure, which already holds the baseline.
+                have = min(self._dl_base + self._dl_grown, self._dl_total)
+            got = max(got, have)
         if got > 0:
             human = self._format_size(got)
             bits.append(f"{human} of {self._format_size(self._dl_total)}"
@@ -3684,6 +3694,9 @@ for (var i = 0; i < wins.length; i++) {{
             if row:
                 badge = self._step_badge(status, detail)
                 row.set_badge(badge)
+                if key in ("flatpak", "firmware") and (
+                        badge.endswith(" installed") or badge == "Updated"):
+                    self._other_changed = True
                 # The outcome, spoken once. A later TIMING/FREED marker refines the
                 # badge but is NOT re-announced — it stays reachable by Tab via the
                 # switch's accessible description. Two utterances per step is the budget.
@@ -3954,7 +3967,7 @@ for (var i = 0; i < wins.length; i++) {{
         n = self._installed_count
         if n and n not in ("", "0"):
             installed = f"{n} update(s) installed"
-        elif self._sys_changed:
+        elif self._sys_changed or self._other_changed:
             installed = "updates installed"
         elif "system" in self.selected_steps():
             installed = "already up to date"
