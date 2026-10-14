@@ -6079,7 +6079,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: package.
   Source: user-request-2026-10-13.
 
-- 📋 [ONEUP-0275] **A Stop during the system download is reported as a failed step.**
+- ✅ [ONEUP-0275] **A Stop during the system download is reported as a failed step.**
   Seen twice on 2026-10-14 (logs 2026-10-14_103051 and _103405):
   Stop during the download pass gave "[FAIL] Updating system
   packages (zypper reported an error)", @@STEP_END@@|system|fail and
@@ -6096,12 +6096,15 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   port: in oneup/engine/steps.py _download_pass, map SYS_DL_RC 105 to 143
   when proc.stop_pending(). Test: run-tests.sh "a stop that real zypper
   answers with exit 105" (arrives by merge).
+  Shipped (2026-10-14): v2 port in 7004878 (steps._download_pass maps
+  105 to 143 when a stop is pending). Merge 4c85228 brought main's
+  scenario; red 5 on v2's unfixed engine, then green.
   **Layman:** Pressing Stop while packages download makes OneUp say the update failed, though nothing went wrong and nothing was installed.
   Kind: fix.
   Source: user-real-run-2026-10-14.
   Lanes: engine.
 
-- 📋 [ONEUP-0276] **Any failed system step on a machine whose refresh prints "gpg keys" gets the signing-key hint and remedy.**
+- ✅ [ONEUP-0276] **Any failed system step on a machine whose refresh prints "gpg keys" gets the signing-key hint and remedy.**
   _failure's key arm matches signature|GPG|key.*(expired|reject)
   case-insensitively over the whole log. A healthy refresh prints
   "Looking for gpg keys in repository devel-tools", so every failure
@@ -6120,12 +6123,16 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   sites. v2 still owes the port: oneup/engine/steps.py _NOT_TRANSFER and
   _failure's key arm, oneup/engine/repos.py _REPO_SCOPED and _SIGNATURE.
   Test: run-tests.sh "a package NAMED gpg2 or keyutils" (arrives by merge).
+  Shipped (2026-10-14): v2 port in 7004878 (repos.KEY_FAILURE_RE, used
+  by _REPO_SCOPED, _SIGNATURE, _NOT_TRANSFER and _failure). Red 3, then
+  green. v2's ONEUP-0094 spec line now names it; main's copy of that
+  line still quotes the old words.
   **Layman:** OneUp blamed an out-of-date signing key and offered to import keys, when the real cause was something else entirely.
   Kind: fix.
   Source: user-real-run-2026-10-14.
   Lanes: engine.
 
-- 📋 [ONEUP-0277] **A run that installed Flatpak updates but no system packages ends "All done — already up to date".**
+- ✅ [ONEUP-0277] **A run that installed Flatpak updates but no system packages ends "All done — already up to date".**
   Run 2026-10-14_104241.log: Flatpak step "4 installed", yet the
   headline read "All done — already up to date." and the summary
   "Updates installed: none — system was already up to date." The
@@ -6141,12 +6148,16 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   "All done — already up to date"; reset in run.py and window.py beside
   _sys_changed. Port main's gui-smoke check by hand; v2's gui-smoke
   differs from main's.
+  Shipped (2026-10-14): v2 port in 7004878 (engine FLATPAK_UPDATED in
+  summary and notify; window _other_changed from flatpak/firmware
+  STEP_END codes). Engine red 3, window red 2 (Flatpak-only and
+  firmware-only), then green.
   **Layman:** After installing four Flatpak updates, OneUp said everything was already up to date.
   Kind: fix.
   Source: user-real-run-2026-10-14.
   Lanes: gui, engine.
 
-- 📋 [ONEUP-0093] **The download progress bar compares new bytes against the whole transaction.**
+- ✅ [ONEUP-0093] **The download progress bar compares new bytes against the whole transaction.**
   _tick_activity computes what has arrived as `cache_bytes() - self._dl_base`
   -- deliberately, so packages already cached sit inside the baseline and do
   not flatter the rate (the comment says as much). But the total it divides
@@ -6214,6 +6225,9 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   encoded the defect and was replaced. v2 owes the same edit in
   oneup/gui/run.py _tick_activity and _reset_activity's comment, and the
   same test change in v2's tests/gui-smoke.py.
+  Shipped (2026-10-14): v2 port in 7004878 (run._tick_activity counts
+  the cached baseline, capped at the total). v2's gui-smoke check that
+  asserted the defect is replaced; red 4, then green.
 
 ## 1.4.7 — release-build fix
 
