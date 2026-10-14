@@ -144,6 +144,7 @@ does not load it, so read it by hand before changing that part. Their headlines:
   - A privileged call must not sit inside a subshell.
   - A run must survive the GUI going away.
   - Nothing the engine spawns may outlive it.
+  - To bound a child, kill its process group — never the child alone.
   - To ask "has my parent gone?", `kill -0` the pid you captured — never read `$PPID`
     again.
   - The suite's prompt counters cannot see a second `sudo_init` inside ONE process.
