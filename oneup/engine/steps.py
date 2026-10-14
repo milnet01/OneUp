@@ -229,7 +229,7 @@ def run_flatpak() -> None:
         succeeded.add("--user")
     else:
         ok = False
-    if privilege.sudo(["flatpak", "update", "--system", "-y"], stream=True)[0] == 0:
+    if privilege.root("flatpak-system-update", stream=True)[0] == 0:
         succeeded.add("--system")
     else:
         ok = False
@@ -240,7 +240,7 @@ def run_flatpak() -> None:
             markers.marker("PKG", "flatpak", "installed", row.app, row.version)
     markers.out("Cleaning up unused Flatpak runtimes...")
     proc.run(["flatpak", "uninstall", "--user", "--unused", "-y"], stream=True)
-    privilege.sudo(["flatpak", "uninstall", "--system", "--unused", "-y"], stream=True)
+    privilege.root("flatpak-system-unused", stream=True)
     if not ok:
         end_step("flatpak", "fail", "failed", "a flatpak update failed")
     elif count > 0:
@@ -364,8 +364,7 @@ def run_orphans(opts) -> None:
     # The status is checked, not discarded: a query that failed returns no rows,
     # which is byte-identical to a clean machine, so an unchecked call reports
     # "nothing to remove" for a step that never managed to look.
-    rc, raw = privilege.sudo(
-        ["zypper", "--non-interactive", "--no-refresh", "packages", "--unneeded"])
+    rc, raw = privilege.root("orphans-unneeded")
     if rc != 0:
         markers.out(f"Couldn't list leftover dependency packages (zypper exit {rc}).")
         end_step("orphans", "fail", "failed", "couldn't list leftover packages")
@@ -378,9 +377,7 @@ def run_orphans(opts) -> None:
         markers.out(f"Removing {len(unneeded)} leftover dependency package(s):")
         for name in unneeded:
             markers.out(f"  - {name}")
-        rc, _ = privilege.sudo(
-            ["zypper", "--non-interactive", "remove", "--clean-deps", *unneeded],
-            stream=True)
+        rc, _ = privilege.root("orphans-remove", {"names": unneeded}, stream=True)
         if rc == 0:
             end_step("orphans", "ok", "removed", f"removed {len(unneeded)} package(s)",
                      len(unneeded))
@@ -389,8 +386,7 @@ def run_orphans(opts) -> None:
     else:
         markers.out("No leftover dependency packages to remove.")
         end_step("orphans", "ok", "up-to-date", "nothing to remove")
-    _, raw = privilege.sudo(
-        ["zypper", "--non-interactive", "--no-refresh", "packages", "--orphaned"])
+    _, raw = privilege.root("orphans-orphaned")
     # Report-only, and nothing here reaches a privileged argv — so an unreadable
     # name is not fatal for this half; it just means the count cannot be stated.
     orphaned = len(_package_column(raw) or [])
@@ -424,7 +420,7 @@ def run_cache() -> None:
         end_step("cache", "skip", "skipped", "kept the downloads for a retry")
         return
     before = _cache_bytes()
-    if privilege.sudo(["zypper", "--non-interactive", "clean"], stream=True)[0] != 0:
+    if privilege.root("cache-clean", stream=True)[0] != 0:
         end_step("cache", "fail", "failed", "clean failed")
         return
     end_step("cache", "ok", "done")
@@ -441,7 +437,7 @@ def _cache_bytes() -> int | None:
     """`du -sB1 /var/cache/zypp`'s figure, or None when it could not be read."""
     if privilege.CACHE_DU_ARGV is None:
         return None
-    _, out = privilege.sudo(privilege.CACHE_DU_ARGV)
+    _, out = privilege.root("cache-size")
     first = out.split(maxsplit=1)
     if not first or not first[0].isdecimal():
         return None
@@ -461,14 +457,17 @@ def _have(binary: str) -> bool:
     return shutil.which(binary) is not None
 
 
-def system_txn_argv() -> list[str]:
+def system_txn_argv(reposd_dir: str | None = None) -> list[str]:
     """The system transaction's argv, without `--dry-run`.
 
     BOTH arms take `--reposd-dir`, or download recovery would be a no-op on Leap
     while working on Tumbleweed — a retry byte-identical to the attempt that just
-    failed (ONEUP-0094 §4.3).
+    failed (ONEUP-0094 §4.3). `reposd_dir` is the root operation table's: it
+    names the directory outright, where None reads `REPOSD_OVERRIDE`.
     """
-    reposd = ["--reposd-dir", REPOSD_OVERRIDE] if REPOSD_OVERRIDE else []
+    if reposd_dir is None:
+        reposd_dir = REPOSD_OVERRIDE
+    reposd = ["--reposd-dir", reposd_dir] if reposd_dir else []
     if _is_leap():
         return ["zypper", "--non-interactive", *reposd, "update"]
     # Tumbleweed: --allow-vendor-change lets Packman codec packages update
@@ -593,7 +592,8 @@ def _commit_pass() -> bool:
     transaction log, because the download pass's output is where a download
     failure's evidence lives.
     """
-    argv = privilege.sudo_argv(["env", "LC_ALL=C", *system_txn_argv()])
+    argv = privilege.root_argv("system-commit", {"cdn": bool(REPOSD_OVERRIDE)},
+                               cdn_dir=REPOSD_OVERRIDE)
     rc = proc.stream_filtered(argv, step="system", phase="install", log=_SYS_LOG, append=True)
     # 103 = ZYPPER_EXIT_INF_RESTART_NEEDED: zypper installed an update to itself and must
     # run again to install the rest (zypper(8), EXIT CODES). `_zypper_ok` counts it as

@@ -189,9 +189,12 @@ _TIMED_OUT = 124
 # Resolved once, and by path: the ONEUP-0023 drop-in grants
 # `timeout <budget> zypper *` against the path sudo will resolve, so the argv here and
 # the granted rule have to name the same binary.
-# The refresh argv lives in privilege.py, read by this call site and by the
-# sudoers rule that grants it (ONEUP-0092 §4.2).
+# The refresh argv is built in rootops.py from privilege.py's, which the sudoers
+# rule that grants it reads too (ONEUP-0092 §4.2).
 REFRESH_TIMEOUT = privilege.REFRESH_TIMEOUT
+# The same budget as the table's `u` argument. Anything but ASCII digits is 0,
+# which the table refuses, as the drop-in refuses to grant it.
+_BUDGET = int(REFRESH_TIMEOUT) if REFRESH_TIMEOUT.isascii() and REFRESH_TIMEOUT.isdecimal() else 0
 
 
 def release_zypper_lock() -> None:
@@ -199,7 +202,7 @@ def release_zypper_lock() -> None:
     if proc.succeeds(["systemctl", "is-active", "--quiet", "packagekit"]):
         markers.out("Stopping the desktop updater (PackageKit) so it isn't "
                     "holding the package lock...")
-        privilege.sudo(["systemctl", "stop", "packagekit"])
+        privilege.root("release-lock")
 
 
 def disable_repo(alias: str, reason: str) -> bool:
@@ -207,7 +210,7 @@ def disable_repo(alias: str, reason: str) -> bool:
     if not valid_alias(alias):
         markers.err(f"  Refusing unsafe repo alias: {alias}")
         return False
-    rc, _ = privilege.sudo(["zypper", "--non-interactive", "modifyrepo", "--disable", alias])
+    rc, _ = privilege.root("repo-disable", {"alias": alias})
     if rc != 0:
         return False
     DISABLED.append(alias)
@@ -235,9 +238,8 @@ def find_failing_repos() -> list[str]:
         # bounded argv above exists to prevent. The `timeout <budget> zypper *`
         # shape is already granted by security.md §5.2, so this needs no new
         # auth_cmnds entry.
-        rc, out = privilege.sudo(
-            [*(privilege.REFRESH_SUDO_ARGV or ["timeout", REFRESH_TIMEOUT, "zypper"]),
-             "--non-interactive", "refresh", alias],
+        rc, out = privilege.root(
+            "repo-refresh", {"alias": alias, "import_keys": False, "budget": _BUDGET},
             merge_stderr=True,
         )
         if rc == 0:
@@ -268,7 +270,6 @@ def refresh_repos(*, import_keys: bool = False) -> None:
     """
     global REFRESH_FAILED, REPOS_REFRESHED
     REPOS_REFRESHED = True
-    gpg = ["--gpg-auto-import-keys"] if import_keys else []
     aliases = [a for a in enabled_repo_aliases() if a]
     total = len(aliases)
     if total == 0:
@@ -276,9 +277,7 @@ def refresh_repos(*, import_keys: bool = False) -> None:
         # so it can come back empty. Fall back to one bulk refresh: upgrading
         # from stale metadata because we quietly skipped the refresh is far
         # worse than losing the per-source progress.
-        rc, _ = privilege.sudo(
-            ["zypper", "--non-interactive", *gpg, "refresh"], stream=True,
-        )
+        rc, _ = privilege.root("repo-refresh-all", {"import_keys": import_keys}, stream=True)
         if rc != 0:
             REFRESH_FAILED = True
         return
@@ -286,9 +285,8 @@ def refresh_repos(*, import_keys: bool = False) -> None:
         if proc.stop_pending():
             return
         markers.marker("REFRESH", i, total, alias)
-        rc, _ = privilege.sudo(
-            [*(privilege.REFRESH_SUDO_ARGV or ["timeout", REFRESH_TIMEOUT, "zypper"]),
-             "--non-interactive", *gpg, "refresh", alias],
+        rc, _ = privilege.root(
+            "repo-refresh", {"alias": alias, "import_keys": import_keys, "budget": _BUDGET},
             stream=True,
         )
         if rc == 0:
@@ -329,8 +327,7 @@ def restore_disabled() -> None:
         if not alias:
             DISABLED.pop(0)
             continue
-        rc, _ = privilege.sudo(
-            ["zypper", "--non-interactive", "modifyrepo", "--enable", alias], flags=("-n",))
+        rc, _ = privilege.root("repo-enable", {"alias": alias}, flags=("-n",))
         DISABLED.pop(0)
         if rc != 0:
             markers.err(f"  ! Couldn't re-enable repository '{alias}' — run: "

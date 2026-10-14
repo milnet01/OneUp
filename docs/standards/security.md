@@ -381,21 +381,18 @@ copy, so the two could disagree with nothing on screen to show it.
 well-formed command that should never be issued.** When a privileged call takes a *name*
 supplied by another program, ask what the worst legal name does.
 
-**4.7 — The one exception: the refresh budget is not checked on the run path.**
+**4.7 — A bad refresh budget fails the refresh; it never falls back.**
 `ONEUP_REFRESH_TIMEOUT` comes from the environment and reaches `sudo timeout <budget>
-zypper …` on every refresh unchecked. This is deliberate.
-`docs/specs/ONEUP-0092-passwordless-gaps.md` §6 decides that a non-numeric budget fails
-the refresh, rather than quietly falling back to the default. A check that substituted the
-default would hide the user's broken setting.
+zypper …` on every refresh. `docs/specs/ONEUP-0092-passwordless-gaps.md` §6 decides that a
+non-numeric budget fails the refresh, rather than quietly falling back to the default. A
+check that substituted the default would hide the user's broken setting.
 
-It is safe because the call is argv form, so no shell ever reads the value. `timeout`
-refuses a duration that is not a number and exits 125 before running anything. An
-option-shaped value only pushes `zypper` into the duration slot, which is refused the same
-way. Try `timeout '5 *' true` and `timeout --foreground zypper` to see both.
+`oneup/engine/rootops.py` builds that command and refuses any budget but a positive whole
+number of seconds (ONEUP-0249 §4.2). So a bad budget runs nothing, and each refresh fails
+with one line saying why.
 
-The budget **is** pinned to digits where it reaches the sudoers rule, in `auth_cmnds`,
-because there a wildcard would make it exploitable (§5). No other value reaching a
-privileged command gets this exception (ONEUP-0175).
+The budget is also pinned to digits where it reaches the sudoers rule, in `auth_cmnds`,
+because there a wildcard would make it exploitable (§5).
 
 ---
 

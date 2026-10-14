@@ -15,7 +15,6 @@ import os
 import re
 import shutil
 import sys
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -349,15 +348,12 @@ def _pre_update_snapshot() -> None:
 
     Read-only apart from the labelled `snapper create`: Tumbleweed already
     auto-snapshots around zypper, but a named entry is unambiguous. The
-    description is built FIRST — a nested substitution inside the capture would
-    fork a subshell in the Bash and cost a second password prompt, and keeping
-    the same shape keeps the two engines' privileged call sequence identical.
+    description, date included, is built by `rootops`' `snapshot-create`, so the
+    service's clock dates it on that route (ONEUP-0249 §4.2).
     """
     if not shutil.which("snapper"):
         return
-    desc = "OneUp pre-update " + time.strftime("%Y-%m-%d %H:%M")
-    rc, snap_id = privilege.sudo(["snapper", "create", "--description", desc,
-                                  "--cleanup-algorithm", "number", "--print-number"])
+    rc, snap_id = privilege.root("snapshot-create")
     snap_id = snap_id.strip()
     # ONEUP-0147: only a create that SUCCEEDED may fall back to the listing. After a
     # failed create the newest listed snapshot predates this run, and reporting it
@@ -367,7 +363,7 @@ def _pre_update_snapshot() -> None:
         markers.out("Couldn't create a pre-update snapshot, so this run has no "
                     "restore point of its own.")
     elif not snap_id:
-        _, listing = privilege.sudo(["snapper", "--no-headers", "list"])
+        _, listing = privilege.root("snapshot-list", {"csv": False})
         tail = listing.splitlines()
         snap_id = tail[-1].split()[0] if tail and tail[-1].split() else ""
         # Only a number names a snapshot, as the picker's loop below requires.
@@ -381,8 +377,7 @@ def _pre_update_snapshot() -> None:
     # ONEUP-0020: the newest restore points, for the GUI's rollback picker. Only
     # the id is trusted downstream; the date and description are display-only.
     # Snapshot 0 is the live "current" pseudo-entry and is not a rollback target.
-    _, csv = privilege.sudo(["snapper", "--machine-readable", "csv", "list",
-                             "--columns", "number,date,description"])
+    _, csv = privilege.root("snapshot-list", {"csv": True})
     rows = []
     for line in csv.splitlines()[1:]:
         fields = line.split(",")
@@ -423,7 +418,7 @@ def _preflight() -> None:
     # fill the root filesystem. Count is the honest signal: Btrfs shares extents
     # copy-on-write, so a byte figure would overcount.
     if shutil.which("snapper"):
-        _, listing = privilege.sudo(["snapper", "--no-headers", "list"])
+        _, listing = privilege.root("snapshot-list", {"csv": False})
         count = len([ln for ln in listing.splitlines() if ln.strip()])
         if count >= SNAP_WARN_COUNT:
             markers.out(f"  ! {count} system restore points (snapshots) stored — these build up")
@@ -493,7 +488,7 @@ def _reboot_and_services(opts: Options) -> tuple[str, str, str, str]:
 
     services = safe = risky = ""
     if steps.SYS_CHANGED and reboot == "no" and shutil.which("zypper"):
-        _, raw = privilege.sudo(["zypper", "ps", "-sss"])
+        _, raw = privilege.root("restart-list")
         services = " ".join(raw.split())
         if services:
             markers.marker("SERVICES", services)

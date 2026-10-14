@@ -359,9 +359,7 @@ def run_size(step: str) -> int:
     #
     # The same argv the run itself will use (ONEUP-0085 INV-5): a flag here that
     # the transaction does not have would quote a different transaction's size.
-    rc, out = privilege.sudo(
-        ["env", "LC_ALL=C", *steps.system_txn_argv(), "--dry-run"], merge_stderr=True,
-    )
+    rc, out = privilege.root("size-dry-run", {"cdn": False}, merge_stderr=True)
     size = parsers.download_size(out)
     if size:
         markers.marker("SIZE", "system", size)
@@ -510,7 +508,8 @@ def thin_snapshots() -> int:
     before = _snapshot_count()
     cleaned = True
     for algorithm in ("number", "timeline"):
-        rc, _ = privilege.sudo(["snapper", "cleanup", algorithm], merge_stderr=True, stream=True)
+        rc, _ = privilege.root("snapshot-thin", {"algorithm": algorithm},
+                               merge_stderr=True, stream=True)
         cleaned = cleaned and rc == 0
     after = _snapshot_count()
     # ONEUP-0189: an unreadable list is not "already satisfied". Say we could not
@@ -537,7 +536,7 @@ def thin_snapshots() -> int:
 
 def _snapshot_count() -> int | None:
     """How many snapshots snapper lists, or None when it could not be read."""
-    rc, listing = privilege.sudo(["snapper", "--no-headers", "list"])
+    rc, listing = privilege.root("snapshot-list", {"csv": False})
     if rc != 0:
         return None
     return len([line for line in listing.splitlines() if line.strip()])

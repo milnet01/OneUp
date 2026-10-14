@@ -4120,21 +4120,40 @@ else
     # `privilege.sudo_argv` is the streaming form of the same helper (ONEUP-0174), so its
     # call sites count too. It went 33 -> 34 when the three hand-built transaction argvs
     # moved behind it: the same three sites, plus the helper's own prefix line.
+    # `privilege.root` and `root_argv` run an operation from rootops.py's table
+    # (ONEUP-0249), so their call sites count as well. Moving 23 sites behind them left
+    # the total at 34: 23 `privilege.sudo` sites became 22 `root` lines plus one
+    # `sudo_argv` inside `root_argv`. A new table ROW is a new privileged shape too, and
+    # the INV-4 scenario below pins the table's operations.
     pn=$(( $(grep -c '\["sudo"' <<<"$py_stripped") \
-         + $(grep -cE 'privilege\.sudo(_argv)?\(' <<<"$py_stripped") ))
+         + $(grep -cE 'privilege\.(sudo|root)(_argv)?\(' <<<"$py_stripped") ))
     if [[ "$pn" == "34" ]]; then
         echo "  ok   - the Python engine has its known 34 privileged call sites"; PASS=$((PASS+1))
     else
         echo "  FAIL - privileged call sites moved: $pn, expected 34. A NEW one needs a matching"; FAIL=$((FAIL+1))
         echo "         entry in auth_cmnds, or passwordless silently starts prompting again."
     fi
+    # ONEUP-0249 INV-4: only the calls the spec keeps off the table build their own argv —
+    # sudo itself (validate, keep-alive, the auth probe), the grant and revoke, and the
+    # download pass's guard or wrapper. A call site that goes back to a hand-built argv
+    # moves this count while leaving the total above alone.
+    raw=$(( $(grep -c '\["sudo"' <<<"$py_stripped") \
+          + $(grep -cE 'privilege\.sudo(_argv)?\(' <<<"$py_stripped") ))
+    if [[ "$raw" == "12" ]]; then
+        echo "  ok   - only the 12 calls ONEUP-0249 §4.2 excludes bypass rootops.py"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - $raw calls bypass rootops.py, expected 12. A root command belongs in its"; FAIL=$((FAIL+1))
+        echo "         table, or the service route runs something else (ONEUP-0249 INV-4)."
+    fi
     # The shared-argv halves, one row each: each constant is written once and read by both
     # the call site and the rule that grants it, so neither side can be respelled alone.
     # REFRESH_SUDO_ARGV went 3 -> 4 when find_failing_repos was put under the same
     # per-source budget as refresh_repos: one more READER of the same granted argv,
     # not a new privileged shape, so auth_cmnds was unchanged and the call-site count
-    # above did not move.
-    for pair in "REFRESH_SUDO_ARGV:4" "CACHE_DU_ARGV:4"; do
+    # above did not move. ONEUP-0249 moved the readers into rootops.py's builders:
+    # REFRESH_SUDO_ARGV 4 -> 3 (one builder replaced repos.py's two sites), and
+    # CACHE_DU_ARGV 4 -> 5 (the builder reads it twice, and steps.py keeps its check).
+    for pair in "REFRESH_SUDO_ARGV:3" "CACHE_DU_ARGV:5"; do
         var="${pair%%:*}"; want="${pair##*:}"
         got=$(grep -c "$var" <<<"$py_stripped")
         if [[ "$got" == "$want" ]]; then
@@ -4481,6 +4500,105 @@ shutil.rmtree(out, ignore_errors=True)
 ok = name.encode() in data and b"downloadcontentcdn.opensuse.org" in data
 raise SystemExit(0 if ok else f"copy held {data!r}")' \
     LC_ALL=C PYTHONUTF8=0 PYTHONCOERCECLOCALE=0
+echo "TEST: both routes to root run the same command (ONEUP-0249 INV-4)"
+# The sudo route and the service build every root argv from rootops.py. The expected
+# argvs below are the ones the call sites built before the table existed, so a row that
+# drifts from today's command fails here, and an operation added or dropped fails the
+# name check. The sudo route is read off proc.run, where the command really leaves.
+if [[ ! -d "$PYENGINE" ]]; then
+    echo "  SKIP - no oneup/engine/ in this checkout, so there is no table to check"
+else
+py_case "every table operation builds the argv its call site built, and sudo adds only itself" "$(cat <<'PYEOF'
+from oneup.engine import actions, privilege, proc, rootops, steps
+rootops._now = lambda: "2026-10-14 12:00"
+timeout = (privilege.REFRESH_SUDO_ARGV or ["timeout"])[0]
+txn = ["env", "LC_ALL=C", *steps.system_txn_argv("")]
+Z = ["zypper", "--non-interactive"]
+cases = {
+    "size-dry-run": ({"cdn": False}, [*txn, "--dry-run"]),
+    "system-download": ({"cdn": False}, [*txn, "--download-only"]),
+    "system-commit": ({"cdn": False}, txn),
+    "repo-refresh": ({"alias": "repo-oss", "import_keys": True, "budget": 120},
+                     [timeout, "120", "zypper", "--non-interactive",
+                      "--gpg-auto-import-keys", "refresh", "repo-oss"]),
+    "repo-refresh-all": ({"import_keys": False}, [*Z, "refresh"]),
+    "repo-disable": ({"alias": "repo-oss"}, [*Z, "modifyrepo", "--disable", "repo-oss"]),
+    "repo-enable": ({"alias": "repo-oss"}, [*Z, "modifyrepo", "--enable", "repo-oss"]),
+    "release-lock": ({}, ["systemctl", "stop", "packagekit"]),
+    "snapshot-create": ({}, ["snapper", "create", "--description",
+                             "OneUp pre-update 2026-10-14 12:00",
+                             "--cleanup-algorithm", "number", "--print-number"]),
+    "snapshot-list": ({"csv": True}, ["snapper", "--machine-readable", "csv", "list",
+                                      "--columns", "number,date,description"]),
+    "snapshot-thin": ({"algorithm": "timeline"}, ["snapper", "cleanup", "timeline"]),
+    "restart-list": ({}, ["zypper", "ps", "-sss"]),
+    "flatpak-system-update": ({}, ["flatpak", "update", "--system", "-y"]),
+    "flatpak-system-unused": ({}, ["flatpak", "uninstall", "--system", "--unused", "-y"]),
+    "orphans-unneeded": ({}, [*Z, "--no-refresh", "packages", "--unneeded"]),
+    "orphans-orphaned": ({}, [*Z, "--no-refresh", "packages", "--orphaned"]),
+    "orphans-remove": ({"names": ["a", "b"]}, [*Z, "remove", "--clean-deps", "a", "b"]),
+    "cache-clean": ({}, [*Z, "clean"]),
+    "cache-size": ({}, list(privilege.CACHE_DU_ARGV or [])),
+}
+bad = []
+if set(cases) != set(rootops.OPS):
+    bad.append(f"operations {sorted(set(cases) ^ set(rootops.OPS))}")
+ran = []
+proc.run = lambda argv, **kw: (ran.append(list(argv)), (0, ""))[1]
+for op, (args, want) in cases.items():
+    if rootops.build(op, args) != want:
+        bad.append(f"{op} builds {rootops.build(op, args)}")
+    if op == "system-download":
+        continue    # its sudo route is the guard or the wrapper, checked below
+    ran.clear()
+    privilege.root(op, args, flags=("-n",))
+    if ran != [["sudo", "-n", *want]]:
+        bad.append(f"{op} ran {ran}")
+if privilege.root_argv("system-commit", {"cdn": False}) != ["sudo", *txn]:
+    bad.append("root_argv")
+cdn = rootops.build("system-commit", {"cdn": True}, cdn_dir="/x")
+if cdn != ["env", "LC_ALL=C", *steps.system_txn_argv("/x")] or "/x" not in cdn:
+    bad.append(f"cdn builds {cdn}")
+# system-download keeps the stop wrapper on the sudo route (INV-4, second sentence).
+seen = []
+proc.stream_filtered = lambda argv, **kw: (seen.append(list(argv)), 0)[1]
+actions.guard_current = lambda: False
+steps._download_pass()
+wrapper = ["sudo", "env", "LC_ALL=C", "bash", "-c", steps._STOP_WRAPPER, "_"]
+if len(seen) != 1 or seen[0][:7] != wrapper or seen[0][-len(txn) + 2:] != txn[2:]:
+    bad.append(f"download pass ran {seen}")
+raise SystemExit("; ".join(bad) or 0)
+PYEOF
+)"
+py_case "the table refuses what it does not define, and runs nothing" "$(cat <<'PYEOF'
+from oneup.engine import privilege, proc, rootops
+refused = [
+    ("no-such-op", {}), ("cache-clean", {"extra": True}), ("repo-disable", {}),
+    ("repo-disable", {"alias": "has space"}), ("repo-disable", {"alias": "/etc/passwd"}),
+    ("repo-refresh", {"alias": "oss", "import_keys": False, "budget": 0}),
+    ("repo-refresh", {"alias": "oss", "import_keys": False, "budget": True}),
+    ("repo-refresh", {"alias": "oss", "import_keys": 1, "budget": 5}),
+    ("snapshot-thin", {"algorithm": "all"}), ("orphans-remove", {"names": []}),
+    ("orphans-remove", {"names": ["-rf"]}), ("orphans-remove", {"names": ["x" * 256]}),
+    ("orphans-remove", {"names": ["a"] * (rootops.MAX_NAMES + 1)}),
+    ("system-commit", {"cdn": True}),
+]
+bad = []
+for op, args in refused:
+    try:
+        rootops.build(op, args)
+        bad.append(f"{op} {args} built")
+    except rootops.Invalid:
+        pass
+ran = []
+proc.run = lambda argv, **kw: (ran.append(argv), (0, ""))[1]
+if privilege.root("repo-disable", {"alias": "has space"}) != (1, "") or ran:
+    bad.append(f"a refused operation ran {ran}")
+raise SystemExit("; ".join(bad) or 0)
+PYEOF
+)"
+fi
+
 echo "TEST: every marker keeps its field layout (ONEUP-0044 INV-5a, ONEUP-0126)"
 # The marker census counts distinct NAMES, so it cannot see a field appended to a marker
 # that already exists, and gate G2 compares the two engines' streams, so a change made in

@@ -214,6 +214,36 @@ def sudo(argv: Sequence[str], *, flags: Sequence[str] = (), merge_stderr: bool =
     return proc.run(["sudo", *flags, *argv], merge_stderr=merge_stderr, stream=stream)
 
 
+def root(op: str, args: dict[str, object] | None = None, *, flags: Sequence[str] = (),
+         merge_stderr: bool = False, stream: bool = False) -> tuple[int, str]:
+    """Run one operation from `rootops`' table as root, and return what `sudo()` does.
+
+    The sudo route's entry to the table (ONEUP-0249 §4.2): the argv is built
+    there, never at the call site, so this route and the service's run the same
+    command. A refused argument runs nothing and returns 1 with one line saying
+    why — the shape of any other failed root command, so no caller needs a
+    second error path.
+    """
+    from . import rootops  # deferred: rootops reads this module's argvs
+    try:
+        argv = rootops.build(op, args)
+    except rootops.Invalid as exc:
+        markers.err(f"  Refusing root operation {op}: {exc}")
+        return 1, ""
+    return sudo(argv, flags=flags, merge_stderr=merge_stderr, stream=stream)
+
+
+def root_argv(op: str, args: dict[str, object] | None = None, *,
+              cdn_dir: str = "") -> list[str]:
+    """`root()`'s argv, sudo-headed, for a child the caller streams itself.
+
+    Raises `rootops.Invalid`: its one caller passes arguments it built itself,
+    so a refusal there is a bug to surface, not a run condition.
+    """
+    from . import rootops
+    return sudo_argv(rootops.build(op, args, cdn_dir=cdn_dir))
+
+
 def sudo_argv(argv: Sequence[str]) -> list[str]:
     """The sudo-headed argv for a child this module does not run itself.
 

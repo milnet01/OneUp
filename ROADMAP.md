@@ -8277,7 +8277,7 @@ when complete (that document's §7).
   Source: user-request-2026-10-10.
   Lanes: engine, gui.
 
-- 📋 [ONEUP-0249] **A OneUp system service, installed with OneUp, that checks, sizes and installs updates for authorised users without a password prompt.**
+- 🚧 [ONEUP-0249] **A OneUp system service, installed with OneUp, that checks, sizes and installs updates for authorised users without a password prompt.**
   Decided (user, 2026-10-10): build our own root service rather than
   use the existing Passwordless setting (ONEUP-0023) or PackageKit,
   after both were offered. PackageKit stays installed for Discover.
@@ -8327,6 +8327,13 @@ when complete (that document's §7).
   Decided (user, 2026-10-14): no separate review-contract run on the
   oneup-2.0.md amendment (dc5cbd4). It restates decisions the spec's own
   two-loop review already read. Recorded as no gate under CLAUDE.md rule 14.
+  Progress (2026-10-14): build slice 1 landed. oneup/engine/rootops.py
+  holds the §4.2 table; every root call site but the spec's exclusions
+  now goes through privilege.root / root_argv. INV-4's scenario is in
+  tests/run-tests.sh, seen red on a drifted row and on a call site
+  hand-building its argv again. Sudo route unchanged except one thing:
+  a non-digit ONEUP_REFRESH_TIMEOUT is now refused by the table instead
+  of by timeout(1); security.md §4.7 updated. Next: route.py (§4.7).
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
