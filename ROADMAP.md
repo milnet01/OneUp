@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=277 -->
+<!-- ants-roadmap-id-high-water: ONEUP=278 -->
 
 # OneUp Roadmap
 
@@ -6228,6 +6228,18 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Shipped (2026-10-14): v2 port in 7004878 (run._tick_activity counts
   the cached baseline, capped at the total). v2's gui-smoke check that
   asserted the defect is replaced; red 4, then green.
+
+- 📋 [ONEUP-0278] **main's ONEUP-0094 spec still lists the bare signature|GPG exclusion that ONEUP-0276 replaced.**
+  docs/specs/ONEUP-0094-download-recovery.md, the "transfer-shaped" condition's
+  exclusion list, ends in `signature|GPG` on main. main's e384371 replaced
+  those words with KEY_FAILURE_RE in update_system.sh. v2 fixed its copy in
+  7004878; copy that wording to main. Not urgent: the code is right, only
+  the document is stale. Fold it into the next main commit rather than a
+  commit of its own (user decision pending; recommendation 2026-10-14).
+  **Layman:** One line in a design document on the 1.4 branch still describes the old signing-key check.
+  Kind: doc-fix.
+  Source: in-session-2026-10-14.
+  Lanes: docs.
 
 ## 1.4.7 — release-build fix
 
