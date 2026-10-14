@@ -505,7 +505,7 @@ a new run is global `CLAUDE.md` rule 14's trigger; this section does not replace
 not say so.** One item pinning a field into another item's spec changes what that spec's
 implementer builds, so the gate is owed again — and the stamp still reads `Reviewed`, with
 no diff and no error to show it. The Ants MCP verb `spec_query mode:"gate_drift"` lists the
-specs edited since their last review loop, and names the commit that did it. **Run it before
+specs edited since their last review loop, with the commits made since. **Run it before
 trusting a stamp**, and before starting an item whose spec was written several items ago.
 A stale stamp is the normal state of a busy branch, not an incident: re-run the gate before
 building under that spec. Recorded on ONEUP-0127.
