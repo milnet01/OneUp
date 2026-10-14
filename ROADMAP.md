@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=274 -->
+<!-- ants-roadmap-id-high-water: ONEUP=277 -->
 
 # OneUp Roadmap
 
@@ -2028,6 +2028,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Progress (2026-10-11): the user agreed to run OneUp normally the next
   time updates are waiting and then say so, so a session can read that
   run's log. Until they report, keep skipping this item.
+  Re-measured (2026-10-14) on a run that SUCCEEDED from a warm cache
+  (2026-10-14_103652.log): 53 packages (165.7 MiB) were in the cache from
+  a stopped run, and the preload printed 53 "[already in cache]" lines,
+  yet zypper's download-only summary still said "Package download size:
+  695.5 MiB", the one-line form, counting nothing as cached. The machine
+  received about 555 MiB in that step. The liveness line (run.py
+  _tick_activity) showed "357 MiB of 696 MiB" with 113 of 115 packages
+  fetched: its numerator excludes the cached baseline, its total does
+  not. So the premise holds after all. The figures row ("Download: X of
+  693 MiB") tracked correctly. main's updater.py has the same arithmetic.
 
 - ✅ [ONEUP-0094] **Retry a truncated download with mirror striping disabled.**
   Observed twice THROUGH ONEUP on 2026-08-07 (four reproductions in total --
@@ -6131,6 +6141,50 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: package.
   Source: user-request-2026-10-13.
 
+- 📋 [ONEUP-0275] **A Stop during the system download is reported as a failed step.**
+  Seen twice on 2026-10-14 (logs 2026-10-14_103051 and _103405):
+  Stop during the download pass gave "[FAIL] Updating system
+  packages (zypper reported an error)", @@STEP_END@@|system|fail and
+  the red Failed badge. Cause: the stop wrapper sends zypper SIGTERM,
+  zypper catches it ("Trying to exit gracefully...") and exits 105,
+  ZYPPER_EXIT_ON_SIGNAL per man zypper. Both engines recognise a stop
+  only by 143, so 105 reads as a download failure and the stop
+  boundary in _system_upgrade_inner is never reached. The suite's mock
+  zypper dies of the signal (143), which is why no test saw it.
+  main's update_system.sh has the same 143-only test (SYS_DL_RC).
+  **Layman:** Pressing Stop while packages download makes OneUp say the update failed, though nothing went wrong and nothing was installed.
+  Kind: fix.
+  Source: user-real-run-2026-10-14.
+  Lanes: engine.
+
+- 📋 [ONEUP-0276] **Any failed system step on a machine whose refresh prints "gpg keys" gets the signing-key hint and remedy.**
+  _failure's key arm matches signature|GPG|key.*(expired|reject)
+  case-insensitively over the whole log. A healthy refresh prints
+  "Looking for gpg keys in repository devel-tools", so every failure
+  on this machine took the key arm, emitted @@REMEDY@@|import-keys and
+  the repo-key-expired hint, and offered "Import signing key & retry"
+  (seen on both stopped runs of 2026-10-14). The remedy imports keys
+  automatically, so a wrong offer is a trust decision made on bad
+  evidence. main's update_system.sh matches signature|GPG|key, wider
+  still, in its failure hint and in the repo-scoped-failure test.
+  **Layman:** OneUp blamed an out-of-date signing key and offered to import keys, when the real cause was something else entirely.
+  Kind: fix.
+  Source: user-real-run-2026-10-14.
+  Lanes: engine.
+
+- 📋 [ONEUP-0277] **A run that installed Flatpak updates but no system packages ends "All done — already up to date".**
+  Run 2026-10-14_104241.log: Flatpak step "4 installed", yet the
+  headline read "All done — already up to date." and the summary
+  "Updates installed: none — system was already up to date." The
+  window's summary in run.py keys on _sys_changed alone, the engine's
+  summary on SYS_COUNT, and the desktop notification on SYS_CHANGED or
+  FW_CHANGED, so a Flatpak-only run is reported as having changed
+  nothing. Check main's updater.py and update_system.sh for the same.
+  **Layman:** After installing four Flatpak updates, OneUp said everything was already up to date.
+  Kind: fix.
+  Source: user-real-run-2026-10-14.
+  Lanes: gui, engine.
+
 ## 1.4.7 — release-build fix
 
 - ✅ [ONEUP-0243] **Make the keep-alive terminal test run on Ubuntu 22.04, so the release build finishes.**
@@ -7897,7 +7951,7 @@ when complete (that document's §7).
   Lanes: gui, engine.
   Splits-from: ONEUP-0239.
 
-- 📋 [ONEUP-0241] **Flatpak apps show no download size; find out whether Flatpak can report one.**
+- ✅ [ONEUP-0241] **Flatpak apps show no download size; find out whether Flatpak can report one.**
   User feedback, 2026-10-08: the system row has Show download size, the
   Flatpak row has none. Check whether flatpak can report a download
   size for pending updates without root and without downloading (e.g.
@@ -7918,6 +7972,16 @@ when complete (that document's §7).
   are pending, compare remote-ls download-size with what flatpak
   update really downloads, then decide. Until then the package
   view (ONEUP-0259) shows no size for a Flatpak app.
+  Measured (2026-10-14, Flatpak 1.18.4, run 2026-10-14_104241.log):
+  flatpak update's own transaction table prints each size as "< N MB",
+  the same upper bound remote-ls gives, so Flatpak itself knows no real
+  figure before it downloads. It also lists Locale refs remote-ls
+  --updates omits. The bounds summed to 2906.8 MB (user 950.2, system
+  1956.6); the machine received 115.4 MB over the whole Flatpak step
+  (rx_bytes, all interfaces, appstream refresh included), so the bound
+  was about 25 times the real download. Outcome: no usable pre-download
+  size exists, so OneUp keeps showing none ("Download: not known"). No
+  code change.
   **Layman:** OneUp tells you how much the system update will download, but not how much the Flatpak apps will.
   Kind: investigate.
   Source: user-real-run-2026-10-08.
