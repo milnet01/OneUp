@@ -8324,6 +8324,9 @@ when complete (that document's §7).
   packaged installs; background refresh split out as ONEUP-0279.
   oneup-2.0.md amended (section 1, section 3 item 4, section 5.2). Next:
   the spec's section 4.12 measurements, then building.
+  Decided (user, 2026-10-14): no separate review-contract run on the
+  oneup-2.0.md amendment (dc5cbd4). It restates decisions the spec's own
+  two-loop review already read. Recorded as no gate under CLAUDE.md rule 14.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
