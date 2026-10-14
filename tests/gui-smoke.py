@@ -397,8 +397,17 @@ def main() -> int:
         return _apply_app_theme(*args, **kwargs)
     theme.apply_app_theme = _apply_after_reaping
 
-    # --- 1. A malformed / spliced marker never throws out of the read slot ------
+    # --- 0. A 1.x number on v2 is the 2.0 preview, and the window says so -------
+    # (ONEUP-0272). The number itself stays 1.x: the lockstep gate and the in-app
+    # update check compare it, so only what is shown changes.
+    import oneup as _oneup
     w = window.Updater()
+    if _oneup.APP_VERSION.startswith("1."):
+        check("a 1.x build titles itself the 2.0 preview (ONEUP-0272)",
+              "2.0 preview" in w.windowTitle()
+              and _oneup.APP_VERSION not in w.windowTitle())
+
+    # --- 1. A malformed / spliced marker never throws out of the read slot ------
     for bad in ("@@STEP_BEGIN@@|system",          # too few fields
                 "@@STEP_BEGIN@@|system|1",        # still too few: the floor is three
                 "@@STEP_BEGIN@@|system|x|3",  # non-numeric index

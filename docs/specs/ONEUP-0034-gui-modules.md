@@ -111,7 +111,7 @@ owns the subsystem it serves, and what stays in `window.py` is what the window i
 
 | Module | Owns | In one sentence |
 | --- | --- | --- |
-| `oneup/__init__.py` | `APP_ID`, `APP_NAME`, `APP_VERSION`, `REPO_SLUG` | who the application is, and the version site `bump.py` writes |
+| `oneup/__init__.py` | `APP_ID`, `APP_NAME`, `APP_VERSION`, `REPO_SLUG`, `APP_VERSION_LABEL` | who the application is, the version site `bump.py` writes, and the version the window shows (ONEUP-0272) |
 | `oneup/gui/__init__.py` | nothing | the package marker; no logic, no re-exports |
 | `oneup/gui/paths.py` | `HERE`, `_find_engine`, `ENGINE`, `ENTRY_POINT`, `STATE_DIR`, `HISTORY`, `LOG_DIR`, `RUN_STATE`, `STOP_REQUEST`, `ZYPP_PACKAGE_CACHE` | where everything OneUp reads or writes lives |
 | `oneup/gui/steps.py` | `TASKS` | the five update steps, their keys, titles and order |

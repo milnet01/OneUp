@@ -66,7 +66,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import APP_NAME, APP_VERSION, REPO_SLUG
+from .. import APP_NAME, APP_VERSION_LABEL, REPO_SLUG
 from . import (
     app_update,
     auth,
@@ -161,7 +161,7 @@ class Updater(QMainWindow):
         super().__init__()
         self.setWindowTitle(QCoreApplication.translate(
             "window",
-            "{APP_NAME} {APP_VERSION}").format(APP_NAME=APP_NAME, APP_VERSION=APP_VERSION))
+            "{APP_NAME} {APP_VERSION}").format(APP_NAME=APP_NAME, APP_VERSION=APP_VERSION_LABEL))
         # Three header controls (Settings · Recenter · About); the background
         # toggles and Repositories live inside the Settings popup. The current
         # layout may need more, and _fit_minimum raises the floor to it.
@@ -259,7 +259,7 @@ class Updater(QMainWindow):
         tagline = QLabel(QCoreApplication.translate(
             "window",
             "Keep openSUSE, Flatpak and firmware up to date  ·  "
-            "v{APP_VERSION}").format(APP_VERSION=APP_VERSION))
+            "v{APP_VERSION}").format(APP_VERSION=APP_VERSION_LABEL))
         tagline.setObjectName("Tagline")
         titleblock = QVBoxLayout()
         titleblock.setSpacing(2)
@@ -1305,7 +1305,8 @@ class Updater(QMainWindow):
         box.setTextFormat(Qt.RichText)
         box.setText(QCoreApplication.translate(
             "window",
-            "<b>{APP_NAME} {APP_VERSION}</b>").format(APP_NAME=APP_NAME, APP_VERSION=APP_VERSION))
+            "<b>{APP_NAME} {APP_VERSION}</b>").format(
+                APP_NAME=APP_NAME, APP_VERSION=APP_VERSION_LABEL))
         box.setInformativeText(
             QCoreApplication.translate(
                 "window",

@@ -13,7 +13,7 @@ from pathlib import Path
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QApplication
 
-from .. import APP_VERSION
+from .. import APP_VERSION, APP_VERSION_LABEL
 from . import paths, steps
 
 # multi-megabyte blob onto the clipboard. Errors sit near the end, so keep the tail.
@@ -120,8 +120,12 @@ def copy_diagnostics(win):
             log_text = log.read_text(errors="replace")
         except OSError as e:
             log_text = f"(could not read {log.name}: {e})"
+    # A preview build names the number underneath too, so a report says
+    # exactly which merge of main it was built from (ONEUP-0272).
+    version = (APP_VERSION if APP_VERSION_LABEL == APP_VERSION
+               else f"{APP_VERSION_LABEL} ({APP_VERSION})")
     report = build_diagnostics(
-        APP_VERSION, _os_release_pretty(), win.selected_steps(),
+        version, _os_release_pretty(), win.selected_steps(),
         log_name, log_text, datetime.now().strftime("%Y-%m-%d %H:%M"),
         str(Path.home()), socket.gethostname())
     QApplication.clipboard().setText(report)
