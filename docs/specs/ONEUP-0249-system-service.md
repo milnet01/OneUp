@@ -1,0 +1,625 @@
+# ONEUP-0249 — a system service that runs OneUp's root commands
+
+**Status:** Draft
+**Kind:** feature
+**Roadmap:** ONEUP-0249
+**Branch:** v2
+**Verified at:** `3b2d5cd` — every claim naming a symbol below was resolved against this
+tree, not recalled. Every measurement names the command that produced it.
+
+**Sections:** 1 goal · 2 background · 3 scope decisions · 4 design · 5 correctness
+invariants · 6 failure modes · 7 tests · 8 docs & release · 9 alternatives · 10 out of
+scope · 11 cold-eyes log
+
+**In one sentence:** On a packaged install, OneUp's root commands are run by a small
+system service that asks openSUSE the same permission question Discover asks, so a user
+sitting at the computer updates without a password box.
+
+## 1. Goal
+
+On a computer where OneUp was installed as a package (RPM or the OBS repository), a user
+at the computer starts an update and no password box appears. Whether they may is decided
+by the polkit permission openSUSE already applies to Discover's system updates, so an
+administrator who tightens or loosens Discover tightens or loosens OneUp with it. The
+engine's logic, its markers and the window are unchanged in behaviour. Only the way a root
+command gets run is new. The AppImage keeps today's route.
+
+## 2. Background
+
+### 2.1 How root is reached today
+
+The engine runs as the user and runs each root command through `sudo`. Every such call
+goes through `oneup/engine/privilege.py`: `sudo` for a captured or streamed call, and
+`sudo_argv` for the transaction passes that `proc.stream_filtered` reads line by line.
+`privilege.sudo_init` asks for the password once, up front, and starts a keep-alive.
+
+There are two ways to avoid the password box, and both have costs:
+
+1. **The Passwordless setting** (ONEUP-0023, ONEUP-0092). `actions.grant_auth` installs
+   `/etc/sudoers.d/oneup` and the download guard. The rule grants `zypper` with any
+   arguments, among others (`actions.auth_cmnds`). `docs/standards/security.md` §5.3
+   states the cost plainly: approximately passwordless root.
+2. **Nothing else.** Without the drop-in, every run shows sudo's password box.
+
+### 2.2 What the user asked for
+
+The roadmap item records the user's decisions of 2026-10-10. OneUp gets its own root
+service, a second service beside PackageKit rather than a replacement. The API is
+narrow, with no arbitrary package names or commands. Only authorised users may update. The
+design must say how the AppImage gets the service. The user's decisions of 2026-10-14 are
+§3.
+
+### 2.3 What prior art teaches
+
+Each lesson below shaped a clause in §4.
+
+- **A shipped polkit rule that grants a group is itself a vulnerability.** openSUSE fixed
+  CVE-2018-1106 by removing a rule that let `wheel` install packages without the root
+  password. The polkit(8) manual says packages "must never include any authorization
+  rules". Source: https://www.suse.com/security/cve/CVE-2018-1106.html,
+  https://polkit.pages.freedesktop.org/polkit/polkit.8.html
+- **Identify the caller by its bus name, and deny on any error.** CVE-2013-4288 was a
+  race in the pid-based subject. CVE-2021-3560 treated a caller who disconnected
+  mid-check as root. Source: https://bugzilla.redhat.com/show_bug.cgi?id=1002375,
+  https://github.blog/security/vulnerability-research/privilege-escalation-polkit-root-on-linux-with-bug/
+- **Accept no configuration or paths from a client.** dnf5daemon's CVE-2024-1929 and
+  CVE-2024-2746 let a client set `pluginpath` and then `reposdir`. Source:
+  https://openwall.com/lists/oss-security/2024/03/04/2,
+  https://openwall.com/lists/oss-security/2024/04/03/5
+- **Cap concurrent requests.** dnf5daemon's CVE-2024-1930 was unlimited sessions. Same
+  source.
+- **Run exactly what was authorised.** PackageKit's CVE-2026-41651 changed a
+  transaction's flags after the check. Source:
+  https://github.com/PackageKit/PackageKit/security/advisories/GHSA-f55j-vvr9-69xv
+- **Do not install system D-Bus or polkit files from outside the package system.**
+  openSUSE removed Deepin from Tumbleweed for doing so. Source:
+  https://security.opensuse.org/2025/05/07/deepin-desktop-removal.html
+
+### 2.4 Discover's permission on this machine
+
+Read from `/usr/etc/polkit-default-privs/profiles/standard` on the development machine
+(polkit-default-privs 1550+20261009), with
+`grep -h -E "packagekit|Flatpak" /usr/etc/polkit-default-privs/profiles/standard`:
+
+```
+org.freedesktop.packagekit.system-update             auth_admin_keep:auth_admin_keep:yes
+org.freedesktop.packagekit.system-trust-signing-key  auth_admin
+```
+
+The three fields are: any session, an inactive session, the active local session. So
+someone at the computer may update without a password. A remote or background session
+needs the administrator password. Accepting a signing key always needs it.
+
+## 3. Scope decisions (agreed with the user)
+
+1. **Who may update: Discover's rule.** Decided by the user on 2026-10-14. It replaced
+   their earlier choice that day of an approved `oneup` group. The service asks polkit
+   about `org.freedesktop.packagekit.system-update`, the action Discover's system updates
+   use. OneUp ships no polkit rule and no polkit action of its own.
+2. **One rule for the whole run.** Decided by the user on 2026-10-14. Flatpak updates for
+   everyone and leftover-package removal have no exact Discover match. Discover's nearest
+   actions on openSUSE (`org.freedesktop.Flatpak.app-update`,
+   `org.freedesktop.packagekit.package-remove`) ask for the password. The user chose the
+   system-update rule for every step of a run. Accepting a signing key keeps
+   `system-trust-signing-key`, which always asks.
+3. **The AppImage keeps today's route.** Decided by the user on 2026-10-14. It never uses
+   the service and keeps `sudo` and the Passwordless setting (§2.3, last bullet).
+4. **The service replaces the Passwordless setting where it is installed.** Decided by the
+   user on 2026-10-14. On a packaged install, the setting's switch is replaced by a line
+   saying updates follow the computer's software-update permission. The window offers to
+   remove an old drop-in once.
+5. **No background refresh of the update lists in this item.** Decided by the user on
+   2026-10-14. It is a separate roadmap item.
+6. **A second service beside PackageKit, stopping it before a transaction as the engine
+   does today.** Decided by the user on 2026-10-10 (roadmap item body).
+
+## 4. Design
+
+### 4.1 The shape: the engine stays the user's, root commands go to the service
+
+The engine keeps running as the user, exactly as now. Its logic, its parsers, its log,
+its state files and its markers stay on the user's side. Only the commands it runs as
+root change route. Instead of `sudo <argv>`, the engine asks the service to run a named
+operation, and the service builds the command itself.
+
+```
+window ──QProcess──▶ engine (user) ──D-Bus──▶ oneup-service (root) ──▶ zypper, snapper, …
+                         │                         │
+                         │◀── output bytes, exit ──┘
+                         └─▶ markers, log, run.state (user side, unchanged)
+```
+
+Three properties follow, and each is load-bearing:
+
+1. **Network data is never parsed as root.** zypper's output is read by the user-side
+   engine, as now. The threat model in `docs/standards/security.md` says "The attacker is
+   the data, not the person." The service relays bytes; it does not interpret them.
+2. **`docs/standards/security.md` §7.2 holds unchanged.** The engine is never root in its
+   entirety, and the service never takes a path from the engine.
+3. **The marker stream cannot change.** The engine emits it, and the engine's logic is
+   untouched. The window cannot tell which route ran a command.
+
+### 4.2 One table of root operations, shared by both routes
+
+A new module, `oneup/engine/rootops.py`, holds the only definition of every root command
+the engine runs. Each entry is a name, the typed arguments it accepts, a validator for
+each, and a function that builds the argv. It imports only the standard library and
+engine siblings.
+
+Both routes build their argv from it. The sudo route prefixes `sudo`. The service runs the
+argv itself. **So the two routes cannot drift**, the same property ONEUP-0092 INV-3 gives
+the drop-in.
+
+The table (the argv column is what the builder returns, before any `sudo`):
+
+| Operation | Arguments | argv |
+| --- | --- | --- |
+| `size-dry-run` | `cdn: b` | `env LC_ALL=C` + `steps.system_txn_argv()` + `--dry-run` |
+| `system-download` | `cdn: b` | the transaction argv + `--download-only`. Stoppable (§4.6) |
+| `system-commit` | `cdn: b` | `env LC_ALL=C` + the transaction argv. Never stoppable |
+| `repo-refresh` | `alias: s` (empty = all), `import_keys: b`, `budget: u` | `timeout <budget> zypper --non-interactive [--gpg-auto-import-keys] refresh [<alias>]` |
+| `repo-disable` | `alias: s` | `zypper --non-interactive modifyrepo --disable <alias>` |
+| `repo-enable` | `alias: s` | `zypper --non-interactive modifyrepo --enable <alias>` |
+| `release-lock` | none | `systemctl stop packagekit` |
+| `snapshot-create` | none | `snapper create --description "OneUp pre-update <date>" --cleanup-algorithm number --print-number` |
+| `snapshot-list` | `csv: b` | `snapper --no-headers list`, or the `--machine-readable csv` form `__main__._pre_update_snapshot` uses |
+| `snapshot-thin` | `algorithm: s` | `snapper cleanup <algorithm>` |
+| `restart-list` | none | `zypper ps -sss` |
+| `flatpak-system-update` | none | `flatpak update --system -y` |
+| `flatpak-system-unused` | none | `flatpak uninstall --system --unused -y` |
+| `orphans-unneeded` | none | `zypper --non-interactive --no-refresh packages --unneeded` |
+| `orphans-orphaned` | none | `zypper --non-interactive --no-refresh packages --orphaned` |
+| `orphans-remove` | `names: as` | `zypper --non-interactive remove --clean-deps <names>` |
+| `cache-clean` | none | `zypper --non-interactive clean` |
+| `cache-size` | none | `du -sB1 /var/cache/zypp` |
+
+The argv column restates the argvs the engine runs today, which
+`steps`, `repos`, `actions` and `__main__` build at their call sites. Where a row and the
+call site disagree when this is built, the call site is the truth and the row is
+corrected (§8). The sudo route's calls that are about sudo itself stay outside the table:
+`sudo_init`'s validate, the keep-alive, `actions.auth_current`'s probe, and
+`actions.grant_auth` / `revoke_auth`.
+
+**Validators.** Every one fails closed (`security.md` §4.2):
+
+- `alias` must pass `repos.valid_alias`, and must name a repository in
+  `/etc/zypp/repos.d` when the service reads it. `repo-enable` also requires that this
+  session disabled that alias (§4.5). So the service can never enable a repository an
+  administrator turned off.
+- `budget` is an integer from 1 to 600 seconds.
+- `algorithm` is `number` or `timeline`.
+- `names` is non-empty. Each name must be in the set the service itself just computed by
+  running `orphans-unneeded`, read with the engine's own parser. So a client can only
+  remove what zypper already calls unneeded.
+- `cdn` makes the service build the CDN repository directory itself, with
+  `repos.make_cdn_reposd`, in its own private `/tmp`. **No operation takes a path.**
+- An unknown operation, an unknown argument key, or a missing or wrong-typed argument is
+  refused.
+
+`<date>` in `snapshot-create` is the service's own clock. The engine passes no text.
+
+### 4.3 The D-Bus interface
+
+Bus name `za.co.antsprojectshub.OneUp1` on the system bus, object
+`/za/co/antsprojectshub/OneUp1`, interface `za.co.antsprojectshub.OneUp1`. The `1` is
+the interface version. An incompatible change takes a new name.
+
+```
+OpenSession(options a{sv}) -> ()
+    options: interactive b (default true), import_keys b (default false)
+Run(op s, args a{sv}) -> (stdout h, stderr h, status h)
+Stop() -> ()
+CloseSession() -> ()
+CanUpdate() -> (answer s)          # "yes" | "no"; never prompts
+Version  property u = 1
+```
+
+Errors are `za.co.antsprojectshub.OneUp1.Error.NotAuthorized`, `.Busy`, `.Invalid`,
+`.NoSession` and `.NotStoppable`.
+
+- **A session belongs to one caller's unique bus name.** A unique name is never reused,
+  so the session dies with the caller's connection. The service watches
+  `NameOwnerChanged` and ends the session when its owner leaves.
+- **`Run` returns three file descriptors.** `stdout` and `stderr` carry the child's
+  output, relayed by the service as raw bytes, as they arrive, with no line splitting.
+  `status` receives one line, the child's exit status, then closes. The relay is why
+  `proc.stream_filtered`'s stall clock still sees each raw chunk (`.claude/rules/
+  engine-traps.md`, "A slow server").
+- **The service relays rather than handing the child's own pipe to the client.** If the
+  client goes away mid-transaction, the service keeps draining the child's output into
+  its journal. A child whose reader vanished would otherwise die of `SIGPIPE`
+  mid-`zypper dup`. That is the shape of the first engine trap.
+- **`CanUpdate` answers the non-interactive question** (§4.4), so `--auth-status` reports
+  what an automatic update would actually get.
+
+The D-Bus library is `jeepney`, on both sides (§9). It is pure Python, gives the
+sender's unique name on every message, and passes file descriptors. It is packaged as
+`python313-jeepney` on Tumbleweed and Leap 16.0. The development machine has 0.9.0
+(`python3 -c "import jeepney; print(jeepney.__version__)"` → `0.9.0`).
+
+### 4.4 Who may: the polkit check
+
+`OpenSession` decides, once, and nothing else does:
+
+1. The subject is the caller's unique bus name, as a `system-bus-name` subject.
+2. The action is `org.freedesktop.packagekit.system-update`, with empty details.
+3. With `interactive` true, the flag `AllowUserInteraction` is set, so polkit's agent may
+   ask a remote or background user for the administrator password. That is one box, at
+   the start of the run.
+4. With `interactive` false, no flag is set. If the bus-name check is not `yes`, the
+   service asks once more with a `unix-session` subject: the caller's uid's active local
+   session, from logind. That is the session the user sits at, the one Discover's own
+   automatic updates run in. If that check is `yes`, the session opens.
+5. With `import_keys` true, the service also requires
+   `org.freedesktop.packagekit.system-trust-signing-key`, under the same flag rule.
+6. **Any error is a refusal**: polkit unreachable, the action not registered, the
+   caller's uid or session unresolvable, or the caller gone. `NotAuthorized` carries a
+   short reason code, never a path.
+
+**Step 4 is a design choice, recorded so it is not mistaken for an accident.** A
+systemd user timer's process is not inside the user's login session. So the bus-name
+check alone would answer "not at the computer" for every automatic update (ONEUP-0022),
+even with the user at the desk. Step 4 grants exactly what Discover's notifier, which
+runs inside the session, already gets. It grants nothing when nobody is logged in at the
+computer, or when the user's session is not the active one.
+
+A session records what was authorised: `import_keys` and the caller's uid. `Run` refuses
+`repo-refresh` with `import_keys` true in a session not opened with it. Nothing a client
+sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
+
+### 4.5 Sessions, jobs and caps
+
+- **At most one session per caller**, and at most 8 sessions in total. A second
+  `OpenSession` from the same caller, or a ninth overall, gets `Busy`.
+- **At most one running job in the whole service.** zypp's lock allows no more anyway.
+  `Run` while any job runs gets `Busy`.
+- **A session's repository changes are undone when it ends.** The service records each
+  alias a session disabled. On `CloseSession`, or when the caller leaves the bus, it
+  re-enables each one this session disabled and has not re-enabled. That closes a gap in
+  today's route, where an engine killed with `SIGKILL` never runs `repos.restore_disabled`.
+- **A session's CDN directory is deleted when it ends.** The commit after a download
+  recovery reuses it, so it lives for the session.
+- **A job outlives its session.** A running job is never stopped because its caller left
+  (§4.6).
+- **Argument limits.** `names` at most 5000 entries; each string at most 255 bytes.
+  Anything larger is `Invalid`.
+
+### 4.6 Stopping, and what is never stopped
+
+- **`system-download` is the one stoppable operation.** `Stop` sends `SIGTERM` to that
+  child, which zypper turns into exit 105, as the inline wrapper's own `kill -TERM` does
+  today. The engine's 105-means-stopped rule in `steps._download_pass` is unchanged.
+- **`Stop` on any other job is `NotStoppable`.** `system-commit` is never signalled
+  (`security.md` §6.1).
+- **The engine forwards the user's Stop.** The service cannot read `stop.request`: it is
+  in the user's home, and the unit hides home directories (§4.8). So on the service
+  route, while `system-download` runs, the engine polls `proc.stop_pending` every
+  `STOP_POLL_SECONDS` and calls `Stop` once. The stop wrapper and the download guard text
+  are untouched; the service route simply does not use them.
+- **Bounded calls stay bounded the way they are today.** `repo-refresh` carries its own
+  `timeout`. The service adds no other deadline, because each of the rest is bounded by
+  zypper's or snapper's own behaviour today, and a new deadline on a root child would be
+  a new way to kill one.
+
+### 4.7 Which route the engine takes
+
+`privilege.py` chooses once per run, before the first root command:
+
+| Condition | Route |
+| --- | --- |
+| `ONEUP_BACKEND=sudo` | sudo |
+| `ONEUP_BACKEND=service` | service, or the run fails if it is unreachable |
+| unset or `auto`, the activation file `/usr/share/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service` exists, and `jeepney` imports | service |
+| otherwise | sudo |
+
+- **The AppImage always sets `ONEUP_BACKEND=sudo`.** `oneup/gui/paths.py`
+  `_resolve_engine`'s frozen branch adds it to the env prefix it already builds.
+- **A session that cannot open for a transport reason falls back to sudo.** The service
+  missing from the bus, or a D-Bus error that is not `NotAuthorized`, means the engine
+  writes one line saying so and continues on the sudo route. That costs one password box,
+  never a failed run.
+- **`NotAuthorized` does not fall back.** Interactively it means the user cancelled
+  polkit's box, so the engine ends exactly as a cancelled `sudo_init` does today. Without
+  interaction it means "not allowed now", so an automatic update stands down.
+- **No route switch mid-run.** If the service fails after the session opened, the
+  operation returns a failure status and the step fails in the ordinary way.
+
+`sudo_init` on the service route opens the session and starts no keep-alive.
+`actions.auth_status` on the service route emits `@@AUTH@@|on` when `CanUpdate` answers
+`yes`, and `@@AUTH@@|off` otherwise. The marker and its two values are unchanged.
+
+### 4.8 The service process and its unit
+
+`oneup/service/` is a new package. It is run as `python3 -I -m oneup.service` from the
+root-owned install directory. `-I` means the environment and the user's site-packages
+cannot change what it imports. It imports the engine's `rootops`, `repos` and `parsers`
+modules and nothing from `oneup/gui/`.
+
+Files the RPM installs:
+
+```
+/usr/share/dbus-1/system.d/za.co.antsprojectshub.OneUp1.conf
+    root may own the name; anyone may send to it, interface by interface
+/usr/share/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service
+    [D-BUS Service] Name=… Exec=/bin/false User=root SystemdService=oneup-service.service
+/usr/lib/systemd/system/oneup-service.service
+    Type=dbus, BusName=za.co.antsprojectshub.OneUp1, no [Install] section
+```
+
+The unit starts with this hardening. Each directive stays only if a real Tumbleweed
+update that includes a kernel passes under it (§7):
+
+```
+ProtectHome=yes  PrivateTmp=yes  ProtectClock=yes  ProtectHostname=yes
+ProtectKernelLogs=yes  ProtectControlGroups=yes  RestrictRealtime=yes
+LockPersonality=yes  SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+KillMode=process  TimeoutStopSec=30min
+```
+
+These are left out on purpose, because each would break a package transaction:
+`ProtectSystem=`, `ProtectKernelModules=`, `RestrictSUIDSGID=`, `PrivateDevices=` and
+`ProtectKernelTunables=`. systemd.exec(5) itself excludes services "involved with system
+updates" from `ProtectSystem`.
+
+- **`KillMode=process`** means that if the service dies or is stopped, systemd does not
+  kill the zypper it started. A killed service must never become a killed transaction.
+- **Idle exit.** With no session and no job for 60 seconds, the service releases its bus
+  name and exits. D-Bus starts it again on the next call.
+- **On `SIGTERM`** it refuses new sessions and exits when the running job ends.
+- **The RPM never restarts it on upgrade.** The service may be the very thing running the
+  zypper that upgrades OneUp. The `%postun` uses `%service_del_postun_without_restart`.
+  The next start after idle exit loads the new code.
+- **The environment is the unit's.** The service reads no environment variable that a
+  client could set, because a client sets none. Test-only overrides are read from the
+  service's own environment, which only the unit or a test harness sets.
+
+### 4.9 Audit
+
+The service writes one line to its journal for each of these:
+
+- a session opened, with the caller's uid, user name and unique name;
+- a session refused, with the same and the reason code;
+- a job started, with uid, operation and arguments;
+- a job ended, with its status;
+- a session ended, with any repository it re-enabled.
+
+`journalctl -u oneup-service` answers "who updated this computer, and when".
+
+### 4.10 The window
+
+- **The Passwordless switch** (`oneup/gui/auth.py`). When the service route is the one the
+  engine would take, the switch is replaced by one line saying updates follow this
+  computer's software-update permission, the same as Discover's. Both sides answer that
+  with one shared function, `oneup/service/locate.py::service_installed`, a standard-library
+  check of the activation file. The engine and the window cannot disagree about it.
+- **An old drop-in.** If the download guard file (`actions.GUARD_FILE`) exists on a
+  service install, the window offers once to remove the old setting. That runs today's
+  `--revoke-auth` with `ONEUP_BACKEND=sudo`: one administrator password box. The guard
+  file is the one of the pair a user can see, because `/etc/sudoers.d` is not readable by
+  users.
+- **Automatic updates keep their coupling** (ONEUP-0092 §4.7). They are offered only
+  while `@@AUTH@@|on`, and on the service route that means `CanUpdate` says `yes`.
+
+### 4.11 Packaging
+
+- **RPM** (`packaging/rpm/oneup.spec`): installs §4.8's three files and `oneup/service/`.
+  It adds `Requires: python3-jeepney` and `Requires: dbus-1`. It ships no polkit file of
+  any kind.
+- **OBS**: the home project builds as now. openSUSE's rpmlint reports the D-Bus files as
+  `dbus-file-unauthorized`. That is not fatal outside openSUSE:Factory, where only the
+  `rpmlint-strict` flavour fails the build. Getting into Factory would need a SUSE
+  security review, which is out of scope (§10).
+- **AppImage**: unchanged. It does not bundle `oneup/service/`.
+
+### 4.12 Measured before the code relies on it
+
+Two facts the design leans on have not been measured. Each is measured first, and a
+result that contradicts the design is a fold-back to this spec, not a workaround in code:
+
+1. **A `unix-session` subject from a root caller answers as the session's user would.**
+   The design leans on it in §4.4 step 4. Measure with `pkcheck --process` against a
+   process inside the session, and with the service's own call.
+2. **A real Tumbleweed `dup` with a kernel update succeeds under the §4.8 unit.** Measure
+   with each directive in, and drop any that fails.
+
+## 5. Correctness invariants
+
+- **INV-1** The service runs no command that is not built by `oneup/engine/rootops.py`
+  from an operation in its table and arguments that passed that operation's validators.
+  An unknown operation, an unknown argument, or a failed validation starts no child.
+  *Test:* `tests/service-test.py` sends a bogus operation, an extra argument, an alias
+  with a space and a path-shaped `alias`. Each must return `Invalid` and leave the mock
+  binaries' call log empty.
+  *Breaks when:* the service accepts an argv, a path or a free-form flag from a client.
+  The fixture isolates the validator, because the session is open and no job is running.
+
+- **INV-2** No operation runs without a session, and a session opens only when polkit
+  answers `yes` for `org.freedesktop.packagekit.system-update` under §4.4's rules.
+  *Test:* `tests/service-test.py`, with a fake polkit on a private bus answering `yes`,
+  `no`, `challenge` and an error in turn. Only `yes` opens a session; `Run` with no
+  session is `NoSession`.
+  *Breaks when:* the check is skipped, cached past its session, or an error reads as
+  success (CVE-2021-3560's shape).
+
+- **INV-3** A session opened without `import_keys` cannot run `repo-refresh` with
+  `import_keys` true, and opening with it requires the signing-key action too.
+  *Test:* `tests/service-test.py`, a fake polkit that allows system-update and refuses
+  the signing-key action.
+  *Breaks when:* a session's authorisation can be widened after `OpenSession`.
+
+- **INV-4** For every operation, the sudo route's argv equals `["sudo", *service_argv]`.
+  *Test:* `tests/run-tests.sh`, a structural scenario that builds each table entry with
+  fixed arguments through both routes and compares.
+  *Breaks when:* a call site builds its own argv instead of using the table, so the two
+  routes run different commands.
+
+- **INV-5** A job is never stopped by its caller leaving, and `system-commit` is never
+  signalled.
+  *Test:* `tests/service-test.py` starts a mock commit that sleeps then writes a done
+  file, kills the client, and asserts the done file appears. `Stop` during that job is
+  `NotStoppable`.
+  *Breaks when:* the relay dies with the client and the child takes `SIGPIPE`, or `Stop`
+  reaches a commit.
+
+- **INV-6** `repo-enable` succeeds only for an alias this session disabled, and ending a
+  session re-enables every alias it disabled and has not re-enabled.
+  *Test:* `tests/service-test.py` enables an alias the session never disabled (`Invalid`).
+  Then it disables one and drops the connection, and asserts the mock `zypper` log shows
+  the re-enable.
+  *Breaks when:* a client can enable a repository an administrator disabled, or a killed
+  engine leaves a repository off.
+
+- **INV-7** `orphans-remove` runs only when every name is in the set the service computed
+  from `orphans-unneeded` in the same call.
+  *Test:* `tests/service-test.py`, with a mock `zypper` listing two unneeded packages. A
+  request naming a third is `Invalid`, and no removal appears in the call log.
+  *Breaks when:* the service trusts the client's list of names.
+
+- **INV-8** On the service route, a full run issues no `sudo` at all and emits the same
+  marker stream as the same scenario on the sudo route.
+  *Test:* `tests/run-tests.sh`, one scenario run on both routes against the same mocks.
+  The sudo mock's call count is zero on the service route, and the two marker streams
+  are equal.
+  *Breaks when:* any root call bypasses `privilege`'s route choice, or the service route
+  changes what the engine prints.
+
+- **INV-9** At most one job runs in the service, at most one session exists per caller,
+  and at most 8 sessions exist.
+  *Test:* `tests/service-test.py` opens a second session from one connection, and nine
+  from nine connections, and starts a second `Run` during a sleeping mock job. Each extra
+  is `Busy`.
+  *Breaks when:* a cap is missing or counts the wrong thing.
+
+- **INV-10** The AppImage's engine always takes the sudo route.
+  *Test:* `tests/gui-smoke.py` checks that `_resolve_engine`'s frozen branch puts
+  `ONEUP_BACKEND=sudo` in the argv it returns.
+  *Breaks when:* a frozen build reaches for a service whose version it does not match.
+
+- **INV-11** `@@AUTH@@|on` on the service route means `CanUpdate` returned `yes` just now.
+  *Test:* `tests/run-tests.sh`, `--auth-status` against a fake service answering `yes`,
+  then `no`.
+  *Breaks when:* the status reports that the service exists rather than that it would
+  allow an update.
+
+- **INV-12** The engine on the sudo route runs with `jeepney` absent.
+  *Test:* `tests/run-tests.sh` runs one sudo-route scenario with an import blocker on the
+  path that makes `import jeepney` fail.
+  *Breaks when:* a module imports `jeepney` at the top level, which would break the
+  AppImage's copied-out engine on a machine without it.
+
+- **INV-13** The package ships no polkit file, and the service's unit has no `[Install]`
+  section and sets `KillMode=process`.
+  *Test:* `tests/run-tests.sh`, a structural check over `packaging/rpm/oneup.spec` and
+  the unit file.
+  *Breaks when:* someone adds a convenience `.rules` file (CVE-2018-1106's shape), or an
+  install-time enable, or lets systemd kill the transaction with the service.
+
+- **INV-14** Every session opened or refused, and every job started and ended, writes one
+  audit line.
+  *Test:* `tests/service-test.py` reads the service's stdout, which is the journal under
+  systemd, after an allowed and a refused session.
+  *Breaks when:* a refusal or a job end leaves no trace.
+
+- **INV-15** With no session and no job for the idle period, the service exits.
+  *Test:* `tests/service-test.py` with the idle period set to 2 seconds through the
+  service's own environment.
+  *Breaks when:* the service lingers as root for no one.
+
+## 6. Failure modes
+
+| What breaks | What happens |
+| --- | --- |
+| The service is not installed, or `jeepney` is missing | `auto` takes the sudo route. Nothing changes from today |
+| The bus call fails before the session opens | one line, then the sudo route: one password box, never a failed run (§4.7) |
+| polkit refuses, interactively | the run ends as a cancelled `sudo_init` does today |
+| polkit refuses, non-interactively | an automatic update stands down, as it does today when Passwordless is off |
+| PackageKit's policy file is absent | polkit reports the action unregistered, which is a refusal. The window's line then reads not allowed, and the user can still use `ONEUP_BACKEND=sudo` |
+| The service dies mid-job | `KillMode=process` leaves zypper running. The engine sees the status descriptor close with no line, treats it as failure, and the step fails. The journal has the job-start line and no end line |
+| The window quits mid-run | unchanged: the engine survives it. If the engine also dies, the service finishes the job and re-enables the session's repositories |
+| Another program holds the zypp lock | unchanged: `release-lock`, then the engine's existing `repos.lock_holder` check |
+| Discover starts PackageKit mid-run | PackageKit waits on zypp's lock, which zypper holds for the transaction. Measured as part of §4.12 item 2 |
+| OneUp upgrades itself mid-run | the running service and engine keep the code they loaded. The RPM does not restart the service (§4.8) |
+
+## 7. Tests
+
+- **`tests/service-test.py`** (new): starts a private `dbus-daemon`, a fake polkit
+  authority on that bus, and the service with mock binaries on its `PATH`. It needs no
+  root, because the mocks only log their argv. It locks INV-1, INV-2, INV-3, INV-5,
+  INV-6, INV-7, INV-9, INV-14 and INV-15. It joins `./local-CI.sh`. It exits 77
+  (skipped) when `dbus-daemon` or `jeepney` is missing, like `tests/gui-smoke.py`
+  without PySide6.
+- **`tests/run-tests.sh`**: new scenarios for INV-4, INV-8, INV-11, INV-12 and INV-13.
+  INV-8's service-route arm runs the engine against the same fake service.
+- **`tests/gui-smoke.py`**: INV-10.
+- **The existing ONEUP-0092 and ONEUP-0044 scenarios keep running on the sudo route.**
+  They are the AppImage's contract, and nothing in this item retires them.
+- **Each new test is seen to fail first**: against the tree before the feature for
+  INV-4, INV-8 and INV-10, and against a deliberately broken service for the rest.
+- **By hand**, before 2.0.0: §4.12's two measurements, then one real run from the window
+  on a packaged install with no password box, and one from an SSH session showing polkit's
+  password request.
+
+## 8. Docs & release
+
+Each of these is amended in the commit that lands the matching code:
+
+- **`docs/design/oneup-2.0.md`**: §1 gains ONEUP-0249, and §3 item 4 gains the service as
+  the packaged install's root half. This amendment is gated by `review-contract` before
+  any code is built.
+- **`docs/standards/security.md`**: §1.2 (the service runs root commands for the engine),
+  §2 (one authentication per run: one polkit check, or one sudo validate), §5 (the drop-in
+  is the AppImage's route), and a new section for the service's rules (§4.4 to §4.9 here).
+- **`docs/reference/marker-protocol.md`**: no marker changes. §8's state files are
+  unchanged.
+- **`docs/standards/files-and-naming.md`**: `ONEUP_BACKEND`, and the service's test
+  overrides.
+- **`docs/standards/dependencies.md`**: a row for `jeepney`.
+- **`CLAUDE.md`** §4 and `.claude/rules/engine-traps.md`: the second route. The trap
+  about a privileged call without a drop-in entry now also reads "or without a
+  `rootops` entry".
+- **`README.md`** and **CHANGELOG**: what a packaged install now does about passwords, in
+  plain words.
+- **If a §4.2 row disagrees with its call site**, the row is corrected in this spec as a
+  Step 8 fold-back, with an implementation row in §11.
+
+## 9. Alternatives considered (and rejected)
+
+- **Run the whole engine as root inside the service.** Smaller change to the engine, but
+  every parser would read network data as root, the log would need a root-side writer,
+  and user-scope Flatpak would need a privilege drop back to the user. Rejected for the
+  first reason alone: the threat model's attacker is the data.
+- **Accept argv from the engine and match it against a list, like sudoers.** It would
+  avoid the table, but it repeats the drop-in's weakness: `zypper *` is approximately
+  root. The user's brief forbids arbitrary commands.
+- **Ship a polkit rule granting a `oneup` group.** The user's first choice on 2026-10-14,
+  replaced the same day by Discover's rule. A shipped group rule is CVE-2018-1106's shape,
+  and the group would have been one more thing to administer.
+- **Ship OneUp's own polkit action.** It would work without PackageKit's policy file. But
+  it would be a second permission for the same act, which an administrator who
+  configured Discover would not know to configure. It also draws openSUSE's
+  `polkit-untracked-privilege` and, with `yes`, `polkit-user-privilege`.
+- **Let the AppImage install the service.** Rejected by the user on 2026-10-14. It is
+  the Deepin pattern (§2.3), and a service file left behind by one AppImage version would
+  serve the next.
+- **D-Bus libraries.** `dbus-python` needs a GLib main loop. PyGObject is a large
+  dependency for a few methods. QtDBus would put Qt into the engine, against
+  `security.md` §1.3. `dbus-next` is unmaintained since 2021. `dbus-fast` hides the
+  sender in its high-level API. `sdbus` is not packaged for openSUSE. `jeepney` is small,
+  pure Python, packaged for both distributions, and exposes the sender.
+
+## 10. Out of scope
+
+- Refreshing the update lists in the background — the user's decision 5. Deferred; not yet
+  queued.
+- Getting OneUp into openSUSE:Factory, which would need a SUSE security review of the
+  D-Bus files — deferred; not yet queued.
+- The window's own `pkexec` actions (`security.md` §1.4) stay as they are.
+- `--grant-auth` keeps working for the AppImage and the sudo route.
+- `--check` is unchanged. It never needed root (`security.md` §9.5).
+- The firmware step is unchanged. `fwupdmgr` already asks fwupd's own polkit actions.
+
+## 11. Cold-eyes loop log
+
+| Loop | Date | Lanes | Q1 | Q2 | Q3 | Q4 | Outcome |
+|------|------|-------|----|----|----|----|---------|

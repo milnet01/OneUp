@@ -35,6 +35,7 @@ thing can replace what they run today.
 | **ONEUP-0004** | Dependency refresh — chiefly the CI Python version | no spec — see §6.3 |
 | **ONEUP-0063** | Add `pyproject.toml`, so a bare `ruff check` and the gate agree — not a one-line config drop, see §6.4 | no spec — `docs/standards/coding.md` §2.1 settles it |
 | **ONEUP-0059** | Honour `XDG_STATE_HOME` where it is set, instead of hard-coding `~/.local/state` | no spec — `docs/standards/files-and-naming.md` §5.2 and §7 Trap 3 settle it. It moves **both halves at once** — see §6.5 |
+| **ONEUP-0249** | A system service that runs the engine's root commands on a packaged install, so a user at the computer updates without a password box | `docs/specs/ONEUP-0249-system-service.md` |
 
 **This is the list of top-level items, each with its own slot in §5.2's order.** Work that a
 spec commissions inside one of them — ONEUP-0058, 0066 and 0070 are all deliverables of
@@ -62,6 +63,11 @@ each addition gets a roadmap bullet and, if it needs design, a spec, and is judg
 last-but-one item of §5.2 — because §7's G7 ("every item on the list is complete") cannot
 be satisfied against a list that can still grow. Anything raised after that point is 2.1
 unless it is a defect in something already on the list.
+
+**ONEUP-0249 is the one exception, by the user's decision of 2026-10-10.** It was filed
+after the list closed. The user moved it into 2.0 because "v2.0.0 is supposed to be a
+whole new way of running the app and the service falls within that." G7 therefore waits on
+it too.
 
 ## 2. Verified baseline — what 2.0 replaces
 
@@ -122,7 +128,10 @@ if the thing under test still presents the same face.
    behaviour.
 3. **The five step keys and their order** — `system, flatpak, firmware, orphans, cache`.
 4. **The privilege split** — the window never *becomes* root and calls no `sudo`; the work
-   of an update run goes through the engine, which authenticates once.
+   of an update run goes through the engine, which authenticates once. On a packaged
+   install the engine's root commands run in OneUp's system service, and the one
+   authentication is the service's polkit check (ONEUP-0249). The engine itself stays the
+   user's, on both routes.
    `docs/standards/security.md` §1.4 owns the exact boundary, including the window's three
    `pkexec` actions; stating it more absolutely than that is the error §9.1 of that standard
    warns about.
@@ -345,6 +354,10 @@ The double-password investigation (0044) runs alongside the rewrite; see §6.2.
 **0032 is last of the items above, not of 2.0.** The user pulled it forward on 2026-10-02:
 it lands straight after 0077, ahead of every 2.0 feature filed after this diagram, so the
 groundwork is in before more features add strings. The chain above is unchanged.
+
+**The system service (0249) comes after the engine rewrite.** It reroutes the root calls
+of the Python engine's `privilege` module, so it needs that engine to exist. Nothing else
+in the chain waits on it.
 
 **Why the redesign sits between the split and themes.** All three touch the same
 widgets. Doing the split first means the existing GUI assertions judge it with nothing
