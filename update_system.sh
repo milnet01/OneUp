@@ -422,6 +422,7 @@ SYS_CHANGED=false   # did the system step actually install/upgrade anything?
 SYS_COUNT=""        # best-effort count of system packages changed
 SYS_REBOOT_DETAIL=""  # plain-English "why a reboot matters" phrase (kernel/driver names)
 FW_CHANGED=false    # did firmware updates get applied?
+FLATPAK_UPDATED=0   # Flatpak apps updated; the summary and notification report it (ONEUP-0277)
 
 # True once the user has asked to stop. Checked at safe boundaries only (see STOP_FILE):
 # every remaining step is then skipped and the run still prints its summary, so the user
@@ -1546,6 +1547,13 @@ enabled_repo_aliases() {   # alias of each ENABLED repo (read-only; no root)
 # privileged refreshes — in a subshell, costing an extra password prompt (see
 # sudo_capture). Nothing here may sit inside a substitution.
 FAILING_REPOS=()
+# zypper's own wording for a signing-key or signature FAILURE. Never a bare token: a
+# transaction's plan lists package names, and gpg2, keyutils or anything with "signature" in
+# its name matched the old 'signature|GPG|key', so an unrelated failure offered "Import
+# signing key & retry" (measured 2026-10-14, ONEUP-0276). That remedy imports keys, a trust
+# decision, so it keys on an error message and nothing looser.
+KEY_FAILURE_RE='Signature verification failed|signed with an unknown key|is unsigned|is not signed|public key is not available|NOKEY|GPG check failed|gpg key .*expired|key [^ ]*(expired|rejected)|\(key (expired|rejected)\)'
+
 find_failing_repos() {
     local alias out rc reason
     local -a aliases=()
@@ -1555,7 +1563,7 @@ find_failing_repos() {
         [[ -z "$alias" ]] && continue
         sudo_capture -e out zypper --non-interactive refresh "$alias"; rc=$?
         (( rc == 0 )) && continue
-        if   grep -qiE 'signature|GPG|key' <<<"$out"; then reason=signature
+        if   grep -qiE "$KEY_FAILURE_RE" <<<"$out"; then reason=signature
         elif grep -qiE 'metadata|Valid metadata not found' <<<"$out"; then reason=metadata
         else reason=unreachable; fi
         FAILING_REPOS+=("$alias $reason")
@@ -1563,7 +1571,7 @@ find_failing_repos() {
 }
 
 repo_scoped_failure() {
-    grep -qiE 'signature|GPG|key|metadata|Valid metadata not found|Curl|could not resolve|Download.*failed|Skipping repository' "$SYS_LOG"
+    grep -qiE "$KEY_FAILURE_RE|metadata|Valid metadata not found|Curl|could not resolve|Download.*failed|Skipping repository" "$SYS_LOG"
 }
 
 # Refresh each enabled repository on its own, with its own time budget, instead of one
@@ -1725,6 +1733,15 @@ progress_filter() {      # step-key [phase]; passes every line through, adding @
     return 0        # our status is the pipeline's last, and a failed match must not
 }                   # make the transaction itself look like it failed
 
+# zypper CATCHES the wrapper's SIGTERM, prints "Trying to exit gracefully..." and exits
+# 105 (ZYPPER_EXIT_ON_SIGNAL, man zypper), so a stop rarely arrives as 143. Measured on
+# 2026-10-14: two real Stops were reported as a failed step (ONEUP-0275). Read 105 as the
+# stop it is when one was asked for. The wrapper is left alone: it is also the installed
+# guard's text, and changing that is a re-grant for every passwordless user.
+stop_rc_105() {
+    if (( SYS_DL_RC == 105 )) && stop_pending; then SYS_DL_RC=143; fi
+}
+
 # Pass 1 of 2. Downloads every package and installs NOTHING, so it is the one phase of a
 # run that can be interrupted for free — and the stop the user asked for lands DURING it
 # rather than after (ONEUP-0085). Sets `ok`; leaves rc 143 in SYS_DL_RC when the user
@@ -1750,6 +1767,7 @@ run_system_download() {
         sudo "$GUARD_FILE" "$STOP_FILE" "$RUN_STATE_FILE" "$STOP_POLL_SECONDS" \
              "${SYS_TXN[@]}" 2>&1 | tee "$SYS_LOG" | progress_filter system download
         SYS_DL_RC=${PIPESTATUS[0]}
+        stop_rc_105
         zypper_ok "$SYS_DL_RC" || (( SYS_DL_RC == 143 )) || ok=false
         return 0
     fi
@@ -1771,6 +1789,7 @@ run_system_download() {
     ' _ "$STOP_FILE" "$RUN_STATE_FILE" "$STOP_POLL_SECONDS" "${SYS_TXN[@]}" 2>&1 \
         | tee "$SYS_LOG" | progress_filter system download
     SYS_DL_RC=${PIPESTATUS[0]}
+    stop_rc_105
     # 143 is 128+SIGTERM: the user stopped it. Nothing is installed either way, so this is
     # not a failure — and it must not set ok=false, or the caller admits the step to the
     # repo-scoped-failure probe and re-runs the whole transaction the user just stopped.
@@ -1833,7 +1852,7 @@ _run_system_upgrade_inner() {
         # failure is the one case where doing so throws away a working source.
         if ! $DL_RECOVERY_TRIED && ! stop_pending \
            && grep -qiE 'bytes missing|returned error: 404|Download.*failed|Curl error|connection failed' "$SYS_LOG" \
-           && ! grep -qiE 'No space left|disk full|conflict|nothing provides|not installable|cannot be provided|^Problem: [0-9]|does not belong to a distupgrade repository|signature|GPG' "$SYS_LOG" \
+           && ! grep -qiE 'No space left|disk full|conflict|nothing provides|not installable|cannot be provided|^Problem: [0-9]|does not belong to a distupgrade repository|'"$KEY_FAILURE_RE" "$SYS_LOG" \
            && grep -qiE '^baseurl[[:space:]]*=[[:space:]]*https?://download\.opensuse\.org' \
                         "$REPOS_DIR"/*.repo 2>/dev/null
         then
@@ -2042,7 +2061,7 @@ if step_selected system && ! stop_pending; then
             fi
         elif grep -qiE 'No space left|disk full' "$SYS_LOG"; then
             hint="Ran out of disk space — free some room (clear the package cache, delete old snapshots) and retry."
-        elif grep -qiE 'signature|GPG|key.*(expired|reject)' "$SYS_LOG"; then
+        elif grep -qiE "$KEY_FAILURE_RE" "$SYS_LOG"; then
             if $IMPORT_KEYS; then
                 # We already imported keys this run and it STILL failed — importing
                 # won't help, so don't offer the one-click remedy again.
@@ -2095,6 +2114,7 @@ if step_selected flatpak && ! stop_pending; then
         sudo flatpak uninstall --system --unused -y || true
         if $ok; then
             if (( flat_count > 0 )); then
+                FLATPAK_UPDATED=$flat_count
                 end_step flatpak ok "$flat_count app(s) updated"
             else
                 end_step flatpak ok "up to date"
@@ -2382,6 +2402,7 @@ if step_selected system; then
     fi
 fi
 $FW_CHANGED && echo "  Firmware: updates applied."
+(( FLATPAK_UPDATED > 0 )) && echo "  Flatpak: $FLATPAK_UPDATED app(s) updated."
 echo "------------------------------------------"
 if ((ERRORS > 0)); then
     echo "  Finished with $ERRORS error(s) — see the log above."
@@ -2428,7 +2449,7 @@ if $NOTIFY; then
         notify_send "Update failed" "One or more steps failed — see the log: $LOG_FILE"
     elif [[ -n "$SYS_COUNT" && "$SYS_COUNT" != "0" ]]; then
         notify_send "Update complete" "$SYS_COUNT system package(s) installed.$skip_note"
-    elif $SYS_CHANGED || $FW_CHANGED; then
+    elif $SYS_CHANGED || $FW_CHANGED || (( FLATPAK_UPDATED > 0 )); then
         notify_send "Update complete" "Updates were installed.$skip_note"
     else
         notify_send "Already up to date" "No updates were needed.$skip_note"

@@ -2022,6 +2022,48 @@ else
 fi
 rm -rf "$d"
 
+echo "TEST: a stop that real zypper answers with exit 105 is still a stop (ONEUP-0275)"
+d=$(mktemp -d); setup_common "$d"
+# The scenario above lets the mock exit 0 after the stop request, which real zypper never
+# does. Measured on 2026-10-14: the wrapper's SIGTERM is CAUGHT, zypper prints "Trying to
+# exit gracefully..." and exits 105 (ZYPPER_EXIT_ON_SIGNAL, man zypper), never 143. Two
+# real Stops were then reported as a failed step. This mock behaves as zypper did.
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *refresh*)        exit 0 ;;
+  *download-only*)
+      trap 'echo "Trying to exit gracefully..."; exit 105' TERM
+      echo "Preloading: demo-1.0.x86_64.rpm [done]"
+      touch "$d/stop.request"          # user hits Stop while packages are downloading
+      for _ in \$(seq 100); do sleep 0.1; done   # until the wrapper's poll TERMs us
+      exit 0 ;;
+  *dup*|*update*)
+      touch "$d/COMMIT-RAN"
+      exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(ONEUP_STOP_POLL_SECONDS=0.2 ONEUP_STOP_FILE="$d/stop.request" \
+      run_engine "$d" --steps=system 2>&1)
+check        "zypper really was TERMed (the mock's own line)" "Trying to exit gracefully" "$out"
+check        "exit 105 after a stop: the step is skipped"     "@@STEP_END@@|system|skip" "$out"
+check_absent "exit 105 after a stop: no failed step"          "@@STEP_END@@|system|fail" "$out"
+check        "exit 105 after a stop: the run reports stopped" "@@DONE@@|stopped" "$out"
+if [[ ! -e "$d/COMMIT-RAN" ]]; then
+    echo "  ok   - exit 105 after a stop: the commit pass never ran"; PASS=$((PASS+1))
+else
+    echo "  FAIL - exit 105 after a stop: the commit pass ran"; FAIL=$((FAIL+1))
+fi
+rm -f "$d/COMMIT-RAN" "$d/stop.request"
+run_engine "$d" --emit-guard > "$d/oneup-download-guard"; chmod +x "$d/oneup-download-guard"
+out=$(ONEUP_STOP_POLL_SECONDS=0.2 ONEUP_STOP_FILE="$d/stop.request" \
+      run_engine "$d" --steps=system 2>&1)
+check        "via the guard: exit 105 after a stop is skipped" "@@STEP_END@@|system|skip" "$out"
+check_absent "via the guard: no failed step"                   "@@STEP_END@@|system|fail" "$out"
+rm -rf "$d"
+
 echo "TEST: a stop during the COMMIT is ignored until the step ends (ONEUP-0085 INV-2)"
 d=$(mktemp -d); setup_common "$d"
 # ONEUP-0047, restated as a test: the rpm transaction is NEVER interrupted. A stop that
@@ -2957,6 +2999,39 @@ check_absent "a system-only app is not"                 "@@PKG@@|flatpak|install
 check_absent "an app in both scopes is not"             "@@PKG@@|flatpak|installed|org.both.App" "$out"
 rm -rf "$d"
 
+echo "TEST: a run that updated only Flatpak apps does not say nothing was needed (ONEUP-0277)"
+d=$(mktemp -d); setup_common "$d"
+# Measured 2026-10-14: 4 Flatpak updates installed, no system ones, and the run told the
+# user it was "already up to date". The summary and notification looked only at system
+# packages and firmware.
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *dup*|*update*) echo "Nothing to do."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+cat > "$d/flatpak" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *remotes*)                      printf 'flathub\t\n'; exit 0 ;;
+  *remote-ls*--updates*--user*)   printf 'org.x.App\norg.y.App\n'; exit 0 ;;
+  *remote-ls*--updates*--system*) printf 'org.z.App\n'; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+cat > "$d/notify-send" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$d/notify.log"
+EOF
+chmod +x "$d/zypper" "$d/flatpak" "$d/notify-send"
+out=$(run_engine "$d" --steps=system,flatpak --notify)
+check        "the summary names the Flatpak updates"   "Flatpak: 3 app(s) updated." "$out"
+check        "the notification says updates landed"    "Update complete" "$(cat "$d/notify.log" 2>/dev/null)"
+check_absent "the notification does not say none were needed" "No updates were needed" \
+             "$(cat "$d/notify.log" 2>/dev/null)"
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 # The run counts the way the check does — remote by remote (ONEUP-0146). Asked with no
 # remote named, `remote-ls --updates` abandons the whole listing when any one remote
@@ -3285,6 +3360,32 @@ check_re     "the terminal hint carries a 'run:' command"     '  Hint: .*run: ' 
 # download, so there is nothing to keep for a retry (ONEUP-0228). It read cache|skip
 # while every system failure kept the cache.
 check        "the run continues to later steps after the key failure" "@@STEP_END@@|cache|ok" "$out"
+rm -rf "$d"
+
+echo "TEST: a package NAMED gpg2 or keyutils is not a key failure (ONEUP-0276)"
+d=$(mktemp -d); setup_common "$d"
+# Measured 2026-10-14: a transaction upgrading gpg2 failed for another reason, and the bare
+# GPG token matched the package NAME in zypper's own plan, so the run offered "Import
+# signing key & retry" on no evidence. The remedy imports keys, a trust decision, so it
+# must key on zypper's error wording, never on a word a package name can contain.
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)
+      echo "The following 3 packages are going to be upgraded:"
+      echo "  gpg2 keyutils libsignature-utils"
+      echo "Timeout exceeded when accessing 'http://x.example/repo/gpg2-2.5.24-1.1.x86_64.rpm'."
+      exit 8 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check        "the step still fails"                         "@@STEP_END@@|system|fail" "$out"
+check_absent "no key-import remedy for a package name"      "@@REMEDY@@|import-keys" "$out"
+check_absent "no signing-key hint for a package name"       "signing key" "$out"
+check        "the real cause is named instead"              "check your internet connection" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

@@ -342,6 +342,42 @@ All notable changes to OneUp are documented here. The format follows
   build also no longer keeps its access token lying around after it has finished
   checking out the code.
 
+## [1.4.10] - 2026-10-14
+
+### Changed
+
+- **The openSUSE repository has a new address** (ONEUP-0273)
+  OneUp's package now lives in its own project on the openSUSE
+  Build Service, home:milnet:oneup. The README gives the new
+  address. The old home:milnet repository keeps getting OneUp
+  updates until 2.0.0, so nobody is cut off; the README says how
+  to move.
+
+### Fixed
+
+- **Stopping during the download is reported as a stop, not a failure** (ONEUP-0275)
+  Pressing Stop while packages downloaded made OneUp say the
+  system update had failed, with a red Failed badge. Nothing had
+  gone wrong and nothing was installed. It now says it stopped.
+
+- **The signing-key hint appears only for a real signing-key problem** (ONEUP-0276)
+  When an update that included a package with "gpg" or "key"
+  in its name failed for another reason, OneUp blamed an
+  out-of-date signing key and offered to import keys. It now
+  offers that only when zypper reports a key or signature
+  error, and names the real cause otherwise.
+
+- **The download figure reaches the end when some packages were already downloaded** (ONEUP-0093)
+  After a stopped run, packages already downloaded were left out
+  of the running figure but not out of the total, so it lagged
+  and could never reach the end. They now count as downloaded.
+
+- **A run that updated only Flatpak apps no longer says nothing was needed** (ONEUP-0277)
+  After installing Flatpak updates and no system ones, OneUp
+  said everything was already up to date. The window, the
+  summary and the desktop notification now say updates were
+  installed.
+
 ## [1.4.9] - 2026-10-13
 
 ### Fixed
@@ -1033,7 +1069,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.9...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.10...HEAD
+[1.4.10]: https://github.com/milnet01/OneUp/releases/tag/v1.4.10
 [1.4.9]: https://github.com/milnet01/OneUp/releases/tag/v1.4.9
 [1.4.8]: https://github.com/milnet01/OneUp/releases/tag/v1.4.8
 [1.4.7]: https://github.com/milnet01/OneUp/releases/tag/v1.4.7

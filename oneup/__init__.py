@@ -8,7 +8,7 @@ GUI toolkit installed (`docs/standards/files-and-naming.md` §4.1 rule 2).
 
 APP_ID = "za.co.antsprojectshub.OneUp"
 APP_NAME = "OneUp"
-APP_VERSION = "1.4.9"
+APP_VERSION = "1.4.10"
 REPO_SLUG = "milnet01/OneUp"
 
 # What the window shows as the version. While APP_VERSION still carries a 1.x

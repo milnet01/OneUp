@@ -113,13 +113,14 @@ and alias-precise:
    non-zero are the failing set. (Per-repo refresh, not bulk-output parsing, so we
    always hold the exact alias — the token `modifyrepo` needs.) **Classify each
    failing alias's `reason`** for the marker by grepping its own refresh output:
-   `signature|GPG|key` → `signature`; `metadata|Valid metadata not found` →
+   zypper's key-error wording (`KEY_FAILURE_RE`, never a bare `GPG` or `key`: a package
+   name can hold either, ONEUP-0276) → `signature`; `metadata|Valid metadata not found` →
    `metadata`; `Curl|could not resolve|Download.*failed|Timeout` → `unreachable`;
    anything else → `unreachable` (generic default). The `--skip-repo` path, where
    the culprit is named by the user rather than probed, uses `reason=manual`.
 
 A "repo-scoped failure" worth probing = the `$SYS_LOG` matches
-`signature|GPG|key|metadata|Valid metadata not found|Curl|could not resolve|Download.*failed|Skipping repository`.
+`KEY_FAILURE_RE` or `metadata|Valid metadata not found|Curl|could not resolve|Download.*failed|Skipping repository`.
 Disk-full and package-conflict failures are **not** repo-scoped — they do not
 trigger probing (unchanged behaviour). All of this probing/classification reads
 `$SYS_LOG`, so it must run **before** the existing `rm -f "$SYS_LOG"` at the end of
