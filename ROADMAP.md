@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=278 -->
+<!-- ants-roadmap-id-high-water: ONEUP=279 -->
 
 # OneUp Roadmap
 
@@ -8695,3 +8695,18 @@ when complete (that document's §7).
   **Layman:** OneUp can set up the extra video codecs most people want on openSUSE, and tells you if an update ever quietly swaps them back.
   Kind: feature.
   Source: user-request-2026-10-13 (raised by the demoreel session).
+
+- 📋 [ONEUP-0279] **Let the OneUp system service refresh the update lists in the background, so Check is never stale.**
+  Split out of ONEUP-0249 by the user on 2026-10-14, who chose to keep
+  the service's first version small. ONEUP-0249's roadmap body had said
+  the service "may refresh the update lists in the background". Needs
+  ONEUP-0249 shipped first. Design questions left open: a systemd timer
+  or an in-service schedule, which polkit permission it runs under when
+  no user asked (Discover's refresh action is
+  org.freedesktop.packagekit.system-sources-refresh), and how it shares
+  zypp's lock with a run.
+  Dependencies: ONEUP-0249.
+  **Layman:** OneUp's background helper keeps the list of available updates fresh on its own, so pressing Check always shows current news.
+  Kind: feature.
+  Source: user-decision-2026-10-14.
+  Lanes: engine, packaging, security.

@@ -148,16 +148,19 @@ engine siblings.
 
 Both routes build their argv from it. The sudo route prefixes `sudo`. The service runs the
 argv itself. **So the two routes cannot drift**, the same property ONEUP-0092 INV-3 gives
-the drop-in.
+the drop-in. One operation differs by route: on the sudo route, `system-download`'s argv
+is wrapped in the download guard or the stop wrapper, as `steps._download_pass` does today,
+because there the engine cannot signal a root child.
 
 The table (the argv column is what the builder returns, before any `sudo`):
 
 | Operation | Arguments | argv |
 | --- | --- | --- |
 | `size-dry-run` | `cdn: b` | `env LC_ALL=C` + `steps.system_txn_argv()` + `--dry-run` |
-| `system-download` | `cdn: b` | the transaction argv + `--download-only`. Stoppable (§4.6) |
+| `system-download` | `cdn: b` | `env LC_ALL=C` + the transaction argv + `--download-only`. Stoppable (§4.6) |
 | `system-commit` | `cdn: b` | `env LC_ALL=C` + the transaction argv. Never stoppable |
-| `repo-refresh` | `alias: s` (empty = all), `import_keys: b`, `budget: u` | `timeout <budget> zypper --non-interactive [--gpg-auto-import-keys] refresh [<alias>]` |
+| `repo-refresh` | `alias: s`, `import_keys: b`, `budget: u` | `timeout <budget> zypper --non-interactive [--gpg-auto-import-keys] refresh <alias>` |
+| `repo-refresh-all` | `import_keys: b` | `zypper --non-interactive [--gpg-auto-import-keys] refresh`, with no `timeout`, as `repos.refresh_repos`'s fallback runs it |
 | `repo-disable` | `alias: s` | `zypper --non-interactive modifyrepo --disable <alias>` |
 | `repo-enable` | `alias: s` | `zypper --non-interactive modifyrepo --enable <alias>` |
 | `release-lock` | none | `systemctl stop packagekit` |
@@ -186,7 +189,7 @@ corrected (§8). The sudo route's calls that are about sudo itself stay outside 
   `/etc/zypp/repos.d` when the service reads it. `repo-enable` also requires that this
   session disabled that alias (§4.5). So the service can never enable a repository an
   administrator turned off.
-- `budget` is an integer from 1 to 600 seconds.
+- `budget` is a positive integer, the same digits-only shape the drop-in pins it to.
 - `algorithm` is `number` or `timeline`.
 - `names` is non-empty. Each name must be in the set the service itself just computed by
   running `orphans-unneeded`, read with the engine's own parser. So a client can only
@@ -207,7 +210,7 @@ the interface version. An incompatible change takes a new name.
 ```
 OpenSession(options a{sv}) -> ()
     options: interactive b (default true), import_keys b (default false)
-Run(op s, args a{sv}) -> (stdout h, stderr h, status h)
+Run(op s, args a{sv}, merge_stderr b) -> (output h, status h)
 Stop() -> ()
 CloseSession() -> ()
 CanUpdate() -> (answer s)          # "yes" | "no"; never prompts
@@ -220,9 +223,12 @@ Errors are `za.co.antsprojectshub.OneUp1.Error.NotAuthorized`, `.Busy`, `.Invali
 - **A session belongs to one caller's unique bus name.** A unique name is never reused,
   so the session dies with the caller's connection. The service watches
   `NameOwnerChanged` and ends the session when its owner leaves.
-- **`Run` returns three file descriptors.** `stdout` and `stderr` carry the child's
-  output, relayed by the service as raw bytes, as they arrive, with no line splitting.
-  `status` receives one line, the child's exit status, then closes. The relay is why
+- **`Run` returns two file descriptors.** `output` carries the child's stdout, and its
+  stderr too when `merge_stderr` is true, in one ordered stream, as `proc.run`'s
+  `merge_stderr` gives today. Unmerged stderr goes to the service's journal. The bytes are
+  relayed raw, as they arrive, with no line splitting. `status` receives one line, then
+  closes: the exit status, or `128+N` for a child killed by signal `N`, the shell's
+  convention the engine already reads (143 is a stopped download). The relay is why
   `proc.stream_filtered`'s stall clock still sees each raw chunk (`.claude/rules/
   engine-traps.md`, "A slow server").
 - **The service relays rather than handing the child's own pipe to the client.** If the
@@ -246,7 +252,10 @@ sender's unique name on every message, and passes file descriptors. It is packag
 3. With `interactive` true, the flag `AllowUserInteraction` is set, so polkit's agent may
    ask a remote or background user for the administrator password. That is one box, at
    the start of the run.
-4. With `interactive` false, no flag is set. If the bus-name check is not `yes`, the
+4. With `interactive` false, no flag is set. The engine sends `interactive` false exactly
+   when its environment carries `ONEUP_NONINTERACTIVE=1`, which
+   `oneup/gui/app.py::_headless_engine` sets for every headless check and update, the
+   automatic ones included. If the bus-name check is not `yes`, the
    service asks once more with a `unix-session` subject: the caller's uid's active local
    session, from logind. That is the session the user sits at, the one Discover's own
    automatic updates run in. If that check is `yes`, the session opens.
@@ -264,7 +273,7 @@ runs inside the session, already gets. It grants nothing when nobody is logged i
 computer, or when the user's session is not the active one.
 
 A session records what was authorised: `import_keys` and the caller's uid. `Run` refuses
-`repo-refresh` with `import_keys` true in a session not opened with it. Nothing a client
+either refresh operation with `import_keys` true in a session not opened with it. Nothing a client
 sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
 
 ### 4.5 Sessions, jobs and caps
@@ -279,8 +288,10 @@ sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
   today's route, where an engine killed with `SIGKILL` never runs `repos.restore_disabled`.
 - **A session's CDN directory is deleted when it ends.** The commit after a download
   recovery reuses it, so it lives for the session.
-- **A job outlives its session.** A running job is never stopped because its caller left
-  (§4.6).
+- **A job outlives its session, and so does the session's clean-up.** A running job is
+  never stopped because its caller left (§4.6). The two clean-ups above run when the
+  session's job, if any, has ended: a re-enable cannot take zypp's lock while the job holds
+  it, and a running commit may be reading the CDN directory.
 - **Argument limits.** `names` at most 5000 entries; each string at most 255 bytes.
   Anything larger is `Invalid`.
 
@@ -290,20 +301,24 @@ sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
   child, which zypper turns into exit 105, as the inline wrapper's own `kill -TERM` does
   today. The engine's 105-means-stopped rule in `steps._download_pass` is unchanged.
 - **`Stop` on any other job is `NotStoppable`.** `system-commit` is never signalled
-  (`security.md` §6.1).
+  (`security.md` §6.1). `Stop` from any session but the one that started the job is
+  `NoSession`.
 - **The engine forwards the user's Stop.** The service cannot read `stop.request`: it is
   in the user's home, and the unit hides home directories (§4.8). So on the service
   route, while `system-download` runs, the engine polls `proc.stop_pending` every
   `STOP_POLL_SECONDS` and calls `Stop` once. The stop wrapper and the download guard text
   are untouched; the service route simply does not use them.
 - **Bounded calls stay bounded the way they are today.** `repo-refresh` carries its own
-  `timeout`. The service adds no other deadline, because each of the rest is bounded by
+  `timeout`, and `repo-refresh-all` carries none, as today. The service adds no other
+  deadline, because each of the rest is bounded by
   zypper's or snapper's own behaviour today, and a new deadline on a root child would be
   a new way to kill one.
 
 ### 4.7 Which route the engine takes
 
-`privilege.py` chooses once per run, before the first root command:
+`privilege.py` chooses once per run, before the first root command, by calling
+`oneup/engine/route.py::engine_route(environ)`, a standard-library function returning
+`sudo` or `service` from this table:
 
 | Condition | Route |
 | --- | --- |
@@ -314,10 +329,11 @@ sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
 
 - **The AppImage always sets `ONEUP_BACKEND=sudo`.** `oneup/gui/paths.py`
   `_resolve_engine`'s frozen branch adds it to the env prefix it already builds.
-- **A session that cannot open for a transport reason falls back to sudo.** The service
-  missing from the bus, or a D-Bus error that is not `NotAuthorized`, means the engine
-  writes one line saying so and continues on the sudo route. That costs one password box,
-  never a failed run.
+- **A session that cannot open for a transport reason falls back to sudo, interactively
+  only.** The service missing from the bus, or a D-Bus error that is not `NotAuthorized`,
+  means the engine writes one line saying so and continues on the sudo route. That costs
+  one password box, never a failed run. Without interaction there is nobody to answer a
+  box, so the run stands down exactly as for `NotAuthorized`.
 - **`NotAuthorized` does not fall back.** Interactively it means the user cancelled
   polkit's box, so the engine ends exactly as a cancelled `sudo_init` does today. Without
   interaction it means "not allowed now", so an automatic update stands down.
@@ -330,10 +346,14 @@ sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
 
 ### 4.8 The service process and its unit
 
-`oneup/service/` is a new package. It is run as `python3 -I -m oneup.service` from the
-root-owned install directory. `-I` means the environment and the user's site-packages
-cannot change what it imports. It imports the engine's `rootops`, `repos` and `parsers`
-modules and nothing from `oneup/gui/`.
+`oneup/service/` is a new package. It is started by `/usr/libexec/oneup-service`, a
+script run with `python3 -I` that puts `/usr/share/oneup` first on `sys.path` and then
+imports `oneup.service`. `-I` means the environment and the user's site-packages cannot
+change what it imports. `-I` alone cannot find the package: measured, `python3 -I -m
+oneup` run from a directory holding `oneup/` prints `No module named oneup`, because
+`-I` leaves the current directory off `sys.path`. The service imports `oneup/engine/`
+modules, `steps` and `parsers` among them (`steps._package_column` is the orphans parser),
+and nothing from `oneup/gui/`.
 
 Files the RPM installs:
 
@@ -343,7 +363,10 @@ Files the RPM installs:
 /usr/share/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service
     [D-BUS Service] Name=… Exec=/bin/false User=root SystemdService=oneup-service.service
 /usr/lib/systemd/system/oneup-service.service
-    Type=dbus, BusName=za.co.antsprojectshub.OneUp1, no [Install] section
+    Type=dbus, BusName=za.co.antsprojectshub.OneUp1, ExecStart=/usr/libexec/oneup-service,
+    no [Install] section
+/usr/libexec/oneup-service
+    the launcher above
 ```
 
 The unit starts with this hardening. Each directive stays only if a real Tumbleweed
@@ -390,9 +413,11 @@ The service writes one line to its journal for each of these:
 
 - **The Passwordless switch** (`oneup/gui/auth.py`). When the service route is the one the
   engine would take, the switch is replaced by one line saying updates follow this
-  computer's software-update permission, the same as Discover's. Both sides answer that
-  with one shared function, `oneup/service/locate.py::service_installed`, a standard-library
-  check of the activation file. The engine and the window cannot disagree about it.
+  computer's software-update permission, the same as Discover's. The window answers that
+  with the engine's own `engine_route` (§4.7), called with the environment
+  `_resolve_engine` gives the engine. `oneup/engine/` is in both builds: the AppImage
+  carries it for its copied-out engine. So the frozen build, whose engine environment holds
+  `ONEUP_BACKEND=sudo`, keeps the switch even on a computer that also has the RPM.
 - **An old drop-in.** If the download guard file (`actions.GUARD_FILE`) exists on a
   service install, the window offers once to remove the old setting. That runs today's
   `--revoke-auth` with `ONEUP_BACKEND=sudo`: one administrator password box. The guard
@@ -403,7 +428,7 @@ The service writes one line to its journal for each of these:
 
 ### 4.11 Packaging
 
-- **RPM** (`packaging/rpm/oneup.spec`): installs §4.8's three files and `oneup/service/`.
+- **RPM** (`packaging/rpm/oneup.spec`): installs §4.8's four files and `oneup/service/`.
   It adds `Requires: python3-jeepney` and `Requires: dbus-1`. It ships no polkit file of
   any kind.
 - **OBS**: the home project builds as now. openSUSE's rpmlint reports the D-Bus files as
@@ -442,13 +467,15 @@ result that contradicts the design is a fold-back to this spec, not a workaround
   *Breaks when:* the check is skipped, cached past its session, or an error reads as
   success (CVE-2021-3560's shape).
 
-- **INV-3** A session opened without `import_keys` cannot run `repo-refresh` with
-  `import_keys` true, and opening with it requires the signing-key action too.
+- **INV-3** A session opened without `import_keys` cannot run either refresh operation
+  with `import_keys` true, and opening with it requires the signing-key action too.
   *Test:* `tests/service-test.py`, a fake polkit that allows system-update and refuses
   the signing-key action.
   *Breaks when:* a session's authorisation can be widened after `OpenSession`.
 
-- **INV-4** For every operation, the sudo route's argv equals `["sudo", *service_argv]`.
+- **INV-4** For every operation but `system-download`, built with `cdn` false, the sudo
+  route's argv equals `["sudo", *service_argv]`. `system-download`'s sudo route is the
+  table's argv inside the guard or the stop wrapper (§4.2).
   *Test:* `tests/run-tests.sh`, a structural scenario that builds each table entry with
   fixed arguments through both routes and compares.
   *Breaks when:* a call site builds its own argv instead of using the table, so the two
@@ -572,8 +599,8 @@ Each of these is amended in the commit that lands the matching code:
   is the AppImage's route), and a new section for the service's rules (§4.4 to §4.9 here).
 - **`docs/reference/marker-protocol.md`**: no marker changes. §8's state files are
   unchanged.
-- **`docs/standards/files-and-naming.md`**: `ONEUP_BACKEND`, and the service's test
-  overrides.
+- **`docs/standards/files-and-naming.md`**: `ONEUP_BACKEND`, `ONEUP_NONINTERACTIVE`, and
+  the service's test overrides.
 - **`docs/standards/dependencies.md`**: a row for `jeepney`.
 - **`CLAUDE.md`** §4 and `.claude/rules/engine-traps.md`: the second route. The trap
   about a privileged call without a drop-in entry now also reads "or without a
@@ -623,3 +650,4 @@ Each of these is amended in the commit that lands the matching code:
 
 | Loop | Date | Lanes | Q1 | Q2 | Q3 | Q4 | Outcome |
 |------|------|-------|----|----|----|----|---------|
+| 1 | 2026-10-14 | 2, cold, via `neutral-lane`; genre pinned `spec`; every lane held every question; each read all 625 lines; project's `tests/docs-check.py` ran at 1d (0 failed) | 4 | 6 | 3 | 0 | **Thirteen verified, thirteen fixed, none dismissed.** Eleven came from the lanes and two from settling their open questions. **Both lanes found the same three defects independently**: INV-4 demanded `sudo` plus the table's argv for the download, which on the sudo route is wrapped by the guard or the stop wrapper, so the test could never pass without breaking Stop for passwordless users; the `system-download` row dropped the `env LC_ALL=C` pin today's download carries, which would have starved the progress parser on a non-English system; and the shared `locate.py` lived in a package the AppImage does not ship, while checking only the activation file, so an AppImage window would have failed to import it or shown the service line beside a sudo engine (now `oneup/engine/route.py::engine_route`, which both builds carry). **Both also flagged `python3 -I -m oneup.service`, and the orchestrator measured it**: `-I` leaves the current directory off `sys.path`, so it prints `No module named oneup`; a launcher at `/usr/libexec/oneup-service` now sets the path. One lane alone found that two output descriptors cannot be merged back into the single ordered stream every parser reads, with no encoding for a signal death; that session clean-up would re-enable repositories under a still-running job's zypp lock; that `Stop` named no owner; and that a headless run falling back to sudo would raise a password box nobody can answer. The other found that nothing said what makes the engine non-interactive, so every automatic update would have stood down (now `ONEUP_NONINTERACTIVE=1`, set by `_headless_engine`, which the timer's `ExecStart` reaches), and that the bulk refresh's empty alias failed the alias validator. **The two from open questions**: the service must import `steps`, because `_package_column` lives there; and the 600-second budget cap would have failed a refresh budget only on the service route. Four open questions resolved clean: `_snapshot_count` runs the `snapshot-list` argv, `cache-clean` matches `run_cache`, and the remaining two became the findings above. Lanes arrived holding the global `CLAUDE.md`, the lane prompt and hook text; no project `CLAUDE.md`, memory or git snapshot. Spend: 0.89 and 0.87 USD, four turns each. |
