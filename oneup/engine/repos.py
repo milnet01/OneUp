@@ -36,9 +36,19 @@ DISABLED: list[str] = []
 # two engines must not disagree about what it lets through.
 _ALIAS = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
 
+# zypper's own wording for a signing-key or signature FAILURE. Never a bare token: a
+# transaction's plan lists package names, and gpg2, keyutils or anything with "signature"
+# in its name matched the old `signature|GPG|key`, so an unrelated failure offered "Import
+# signing key & retry" (measured 2026-10-14, ONEUP-0276). That remedy imports keys, a
+# trust decision, so it keys on an error message and nothing looser. Text, not a compiled
+# pattern, because three matchers embed it; each compiles it case-insensitively.
+KEY_FAILURE_RE = (r"Signature verification failed|signed with an unknown key|is unsigned"
+                  r"|is not signed|public key is not available|NOKEY|GPG check failed"
+                  r"|gpg key .*expired|key [^ ]*(expired|rejected)|\(key (expired|rejected)\)")
+
 # A failure that is one repository's fault rather than the transaction's.
 _REPO_SCOPED = re.compile(
-    r"signature|GPG|key|metadata|Valid metadata not found|Curl|could not resolve"
+    KEY_FAILURE_RE + r"|metadata|Valid metadata not found|Curl|could not resolve"
     r"|Download.*failed|Skipping repository",
     re.IGNORECASE,
 )
@@ -169,7 +179,7 @@ def _cdn_line(line: str) -> str:
 REFRESH_FAILED = False
 REPOS_REFRESHED = False
 
-_SIGNATURE = re.compile(r"signature|GPG|key", re.IGNORECASE)
+_SIGNATURE = re.compile(KEY_FAILURE_RE, re.IGNORECASE)
 _METADATA = re.compile(r"metadata|Valid metadata not found", re.IGNORECASE)
 
 # `timeout` runs AS ROOT so it can actually kill its zypper child, and its exit

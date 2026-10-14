@@ -57,6 +57,7 @@ SYS_CHANGED = False
 SYS_COUNT = ""
 SYS_REBOOT_PARTS: list[str] = []   # reboot-reason component codes
 FW_CHANGED = False
+FLATPAK_UPDATED = 0   # Flatpak apps updated; the summary and notification report it (ONEUP-0277)
 
 
 def begin_step(key: str) -> None:
@@ -209,6 +210,7 @@ def system_updates(sizes: bool) -> SystemListing:
 
 def run_flatpak() -> None:
     """Update Flatpak apps in both scopes, then drop unused runtimes."""
+    global FLATPAK_UPDATED
     begin_step("flatpak")
     if not _have("flatpak"):
         markers.out("Flatpak is not installed. Skipping.")
@@ -242,6 +244,7 @@ def run_flatpak() -> None:
     if not ok:
         end_step("flatpak", "fail", "failed", "a flatpak update failed")
     elif count > 0:
+        FLATPAK_UPDATED = count
         end_step("flatpak", "ok", "installed", f"{count} app(s) updated", count)
     else:
         end_step("flatpak", "ok", "up-to-date", "up to date")
@@ -568,9 +571,14 @@ def _download_pass() -> bool:
                                     stop_file, run_state, STOP_POLL_SECONDS, *txn])
     SYS_DL_RC = proc.stream_filtered(argv, step="system", phase="download",
                                      log=_SYS_LOG, append=False)
-    # 143 is the wrapper reporting a stop. Nothing is installed either way, so it
-    # is not a failure — and it must not read as one, or the caller admits the
-    # step to the repo-scoped probe and re-runs the transaction just stopped.
+    # zypper CATCHES the wrapper's SIGTERM, prints "Trying to exit gracefully..." and
+    # exits 105 (ZYPPER_EXIT_ON_SIGNAL, man zypper), so a stop rarely arrives as 143.
+    # Measured on 2026-10-14: two real Stops were reported as a failed step
+    # (ONEUP-0275). Read 105 as the stop it is when one was asked for. The wrapper is
+    # left alone: it is also the installed guard's text, and changing that is a
+    # re-grant for every passwordless user.
+    if SYS_DL_RC == 105 and proc.stop_pending():
+        SYS_DL_RC = 143
     # 143 is 128+SIGTERM: the user stopped it. Nothing is installed either way, so
     # it is not a failure — and it must not read as one, or the caller admits the
     # step to the repo-scoped probe and re-runs the transaction just stopped.
@@ -603,7 +611,7 @@ _TRANSFER_FAILURE = re.compile(
     re.IGNORECASE)
 _NOT_TRANSFER = re.compile(
     r"No space left|disk full|conflict|nothing provides|not installable|cannot be provided"
-    r"|^Problem: [0-9]|does not belong to a distupgrade repository|signature|GPG",
+    r"|^Problem: [0-9]|does not belong to a distupgrade repository|" + repos.KEY_FAILURE_RE,
     re.IGNORECASE | re.MULTILINE)
 
 
@@ -805,7 +813,7 @@ def _failure(systemic: bool, import_keys: bool) -> None:
         code = "disk-full"
         hint = ("Ran out of disk space — free some room (clear the package cache, delete "
                 "old snapshots) and retry.")
-    elif re.search(r"signature|GPG|key.*(expired|reject)", log, re.IGNORECASE):
+    elif re.search(repos.KEY_FAILURE_RE, log, re.IGNORECASE):
         if import_keys:
             # Keys were already imported this run and it STILL failed, so
             # importing will not help: do not offer the one-click remedy again.

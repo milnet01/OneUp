@@ -398,6 +398,7 @@ def _reset_for_run(win, steps: list[str], check: bool):
     win._reboot_reason = ""
     win._installed_count = ""
     win._sys_changed = False
+    win._other_changed = False  # Flatpak or firmware installed something (ONEUP-0277)
     win._step_caption = ""
     win._progress_phase = ""
     win._done_status = ""
@@ -576,9 +577,8 @@ def _reset_activity(win):
     win._activity_since = 0.0
     win._activity_stalled = False
     win._dl_at = win._dl_from = win._dl_bytes = win._dl_total = win._dl_grown = 0
-    # Weighed once, before anything is fetched, so later samples measure THIS run's
-    # download. Packages already cached are inside the baseline and rightly excluded —
-    # zypper won't re-fetch them, and counting them would flatter the rate.
+    # Weighed once, before anything is fetched, so later samples can tell what THIS
+    # run fetched from what an earlier, stopped run left behind (ONEUP-0093).
     win._dl_base = cache_bytes()
     _set_activity(win, "")
 
@@ -607,7 +607,16 @@ def _tick_activity(win, reweigh: bool = True):
     if win._progress_phase == "download":
         if reweigh:
             win._dl_grown = cache_bytes() - win._dl_base
-        got = max(got, win._dl_grown)
+        have = win._dl_grown
+        if win._dl_total:
+            # zypper's total still counts packages an earlier, stopped run left in the
+            # cache (measured 2026-10-14: 166 MiB cached, total 695.5 MiB), so they
+            # count as fetched here too, or the figure lags and never reaches the total
+            # (ONEUP-0093). Capped, because a cache holding leftovers this transaction
+            # does not need must not run past it. The rate is unchanged: it is measured
+            # from the first figure, which already holds the baseline.
+            have = min(win._dl_base + win._dl_grown, win._dl_total)
+        got = max(got, have)
     if got > 0:
         human = markers._format_size(got)
         bits.append(f"{human} of {markers._format_size(win._dl_total)}"
@@ -722,6 +731,8 @@ def handle_marker(win, line: str):
         if row:
             badge = markers._step_badge(status, code, args)
             row.set_badge(badge)
+            if key in ("flatpak", "firmware") and code in ("installed", "updated"):
+                win._other_changed = True
             # The outcome, spoken once. A later TIMING/FREED marker refines the
             # badge but is NOT re-announced — it stays reachable by Tab via the
             # switch's accessible description. Two utterances per step is the budget.
@@ -1085,7 +1096,7 @@ def on_finished(win, exit_code: int, _status):
     elif count:
         summary = QCoreApplication.translate("run", "All done — {installed}.").format(
             installed=i18n.counted("updates-installed", count))
-    elif win._sys_changed:
+    elif win._sys_changed or win._other_changed:
         summary = QCoreApplication.translate("run", "All done — updates installed.")
     elif "system" in win.selected_steps():
         summary = QCoreApplication.translate("run", "All done — already up to date.")

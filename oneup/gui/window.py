@@ -176,6 +176,7 @@ class Updater(QMainWindow):
         self._reboot_reason = ""     # optional "why a reboot matters" phrase from the engine
         self._installed_count = ""   # system packages changed, as reported by the engine
         self._sys_changed = False
+        self._other_changed = False  # Flatpak or firmware installed something (ONEUP-0277)
         self._step_caption = ""      # current step's bar caption, so @@PROGRESS@@ can extend it
         self._progress_phase = ""    # download/install; a change is what gets announced
         self._stop_asked = False     # Stop was pressed this run; never offer it again

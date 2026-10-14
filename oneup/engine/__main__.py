@@ -537,6 +537,8 @@ def _summary(opts: Options, run_keys: list[str], reboot: str, reason: str,
             markers.out("  Updates installed: yes (system packages updated).")
     if steps.FW_CHANGED:
         markers.out("  Firmware: updates applied.")
+    if steps.FLATPAK_UPDATED > 0:
+        markers.out(f"  Flatpak: {steps.FLATPAK_UPDATED} app(s) updated.")
     markers.out("------------------------------------------")
     if steps.ERRORS > 0:
         markers.out(f"  Finished with {steps.ERRORS} error(s) — see the log above.")
@@ -583,7 +585,7 @@ def _notify(opts: Options, log_file: str) -> None:
     elif steps.SYS_COUNT and steps.SYS_COUNT != "0":
         actions.notify_send("Update complete",
                             f"{steps.SYS_COUNT} system package(s) installed.{skip_note}")
-    elif steps.SYS_CHANGED or steps.FW_CHANGED:
+    elif steps.SYS_CHANGED or steps.FW_CHANGED or steps.FLATPAK_UPDATED > 0:
         actions.notify_send("Update complete", f"Updates were installed.{skip_note}")
     else:
         actions.notify_send("Already up to date", f"No updates were needed.{skip_note}")

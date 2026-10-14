@@ -698,8 +698,10 @@ def main() -> int:
         run._tick_activity(wC)
         check("the download is measured even though zypper reported no size",
               "20 MiB of 86 MiB" in wC.activity.text())
-        # Packages already cached sit inside the baseline: zypper won't re-fetch them, so
-        # counting them would overstate progress and flatter the rate.
+        # Packages an earlier, stopped run left in the cache are still inside zypper's
+        # total (measured 2026-10-14: 166 MiB cached, total 695.5 MiB), so they count as
+        # fetched, or the figure lags and never reaches the total (ONEUP-0093). This
+        # check asserted the opposite until then: it had written the defect down.
         wC2 = window.Updater()
         wC2._run_active = True
         # The liveness line has its own flag since it must also run on a
@@ -708,8 +710,20 @@ def main() -> int:
         run._reset_activity(wC2)       # baseline now includes the 20 MB above
         run.handle_line(wC2, "@@PROGRESS@@|system|1|0|download|0|90596966")
         run._tick_activity(wC2)
-        check("already-cached packages are excluded from this run's figure",
-              "20 MiB" not in wC2.activity.text())
+        check("already-cached packages count as fetched (ONEUP-0093)",
+              "20 MiB of 86 MiB" in wC2.activity.text())
+        check("the rate is anchored on that figure, so it counts only new bytes",
+              wC2._dl_from == 20 * 1024 * 1024)
+        (Path(cache_dir) / "pkg2.rpm").write_bytes(b"x" * (66 * 1024 * 1024))
+        run._tick_activity(wC2)
+        check("a warm-cache download reaches its total",
+              "86 MiB of 86 MiB" in wC2.activity.text())
+        (Path(cache_dir) / "pkg3.rpm").write_bytes(b"x" * (10 * 1024 * 1024))
+        run._tick_activity(wC2)
+        check("leftovers the transaction does not need never run past the total",
+              "86 MiB of 86 MiB" in wC2.activity.text())
+        (Path(cache_dir) / "pkg2.rpm").unlink()
+        (Path(cache_dir) / "pkg3.rpm").unlink()
         # The cache holds thousands of files by mid-download, and PROGRESS markers can
         # arrive several times a second; weighing it on each one stalled the window
         # (ONEUP-0155). Only the 5-second timer weighs; a marker reuses its figure.
@@ -3706,6 +3720,22 @@ def main() -> int:
     wB._check_mode = False
     run.on_finished(wB, 0, QProcess.ExitStatus.NormalExit)
     check("the final summary is announced", "All done" in wB._last_announcement)
+    # ONEUP-0277: a run that installed Flatpak updates and no system ones told the user it
+    # was "already up to date" (measured 2026-10-14: 4 Flatpak updates installed).
+    for key, end, label in (("flatpak", "installed|4", "Flatpak"),
+                            ("firmware", "updated", "firmware")):
+        wFp = window.Updater()
+        run.handle_line(wFp, "@@STEP_BEGIN@@|system|1|2")
+        run.handle_line(wFp, "@@STEP_END@@|system|ok|up-to-date")
+        run.handle_line(wFp, f"@@STEP_BEGIN@@|{key}|2|2")
+        run.handle_line(wFp, f"@@STEP_END@@|{key}|ok|{end}")
+        run.handle_line(wFp, "@@INSTALLED@@|0|no|no")
+        wFp.proc = QProcess(wFp)
+        wFp._check_mode = False
+        run.on_finished(wFp, 0, QProcess.ExitStatus.NormalExit)
+        check(f"a {label}-only run is not called already up to date (ONEUP-0277)",
+              "already up to date" not in wFp.status.text()
+              and "updates installed" in wFp.status.text())
     try:
         wB._announce("plain call must not throw when no reader is listening")
         check("_announce is safe with no screen reader attached", True)
