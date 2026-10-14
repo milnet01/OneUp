@@ -8381,7 +8381,7 @@ when complete (that document's §7).
   Source: in-session-2026-10-13, measured after ONEUP-0267.
   Lanes: tests.
 
-- 📋 [ONEUP-0272] **The v2 dev copy's version label should say "2.0 preview", not the last 1.4.x number.**
+- ✅ [ONEUP-0272] **The v2 dev copy's version label should say "2.0 preview", not the last 1.4.x number.**
   The app-menu OneUp (~/.local/bin/oneup) runs the v2 checkout, and
   its label is v2's oneup/__init__.py APP_VERSION, which each release
   merge sets to main's number (1.4.9 as of the 2026-10-13 merge).
@@ -8390,6 +8390,12 @@ when complete (that document's §7).
   "preview" text may need to be a display suffix rather than the
   version string itself. The release-merge memory note sets
   APP_VERSION by hand; it changes with this item.
+  Resolved (2026-10-14, c453770): APP_VERSION_LABEL in
+  oneup/__init__.py reads "2.0 preview" while APP_VERSION is 1.x and
+  equals it from 2.0.0 on, so no release step retires it. Title,
+  tagline and About show the label; diagnostics show both. APP_VERSION
+  stays main's number, so the release-merge note's hand-set of it is
+  unchanged. gui-smoke check proven red on the old code.
   **Layman:** The OneUp you start from the app menu is the unfinished 2.0, but it calls itself 1.4.9, so you can't tell which one you're running.
   Kind: ux.
   Source: user-request-2026-10-13.
