@@ -8315,6 +8315,15 @@ when complete (that document's §7).
   document owes an amendment adding this item and the new boundary,
   gated by review-contract, alongside this item's own spec. G7 then
   waits on this item too.
+  Progress (2026-10-14): spec docs/specs/ONEUP-0249-system-service.md
+  written and Reviewed (review-contract, 2 loops, 27 verified and fixed,
+  cap reached; the user waived a further review). User decisions that
+  day: Discover's polkit rule (org.freedesktop.packagekit.system-update)
+  for the whole run, replacing the earlier approved-group idea; the
+  AppImage keeps sudo; the service replaces the Passwordless setting on
+  packaged installs; background refresh split out as ONEUP-0279.
+  oneup-2.0.md amended (section 1, section 3 item 4, section 5.2). Next:
+  the spec's section 4.12 measurements, then building.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
