@@ -10,7 +10,7 @@ paths:
 
 # Engine traps
 
-Moved verbatim from `CLAUDE.md` §6, which keeps a one-line headline for each. Each of
+`CLAUDE.md` §6 keeps a one-line headline for each. Each of
 these cost a real bug. They are terse on purpose — the reasoning, the measurement and the
 exact shape of the rule are in the document named beside each.
 
