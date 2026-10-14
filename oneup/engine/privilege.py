@@ -108,7 +108,13 @@ def sudo_init() -> None:
     """
     # Deferred: `auth_current` is `actions.py`'s by §4.2, and `actions` imports
     # this module — a module-level import back would be a cycle.
-    from . import actions
+    from . import actions, route
+
+    # The route is chosen here, before the first root command (ONEUP-0249 §4.7).
+    if chosen_route() == route.SERVICE:
+        if _open_service():
+            return
+        _service_unreachable()
 
     # If the ONEUP-0023 drop-in is active AND grants what this engine needs,
     # every privileged command below is individually NOPASSWD, so no cached
@@ -132,6 +138,49 @@ def sudo_init() -> None:
         markers.err("Authentication failed or cancelled — aborting.")
         raise SystemExit(1)
     _start_keepalive()
+
+
+# The run's route to root, set once by `chosen_route` (ONEUP-0249 §4.7).
+_ROUTE: str | None = None
+
+
+def chosen_route() -> str:
+    """`route.SUDO` or `route.SERVICE`: chosen on the first call, then fixed for the run.
+
+    Fixed because §4.7 forbids a route switch mid-run. The one change it allows is
+    `_service_unreachable`'s fallback, which happens before any root command has run.
+    """
+    global _ROUTE
+    if _ROUTE is None:
+        from . import route
+        _ROUTE = route.engine_route(os.environ)
+    return _ROUTE
+
+
+def _open_service() -> bool:
+    """Open this run's session with the service. False when it cannot be reached.
+
+    The service and its client are later ONEUP-0249 slices. Until they land, nothing
+    answers on the bus, so the session never opens.
+    """
+    return False
+
+
+def _service_unreachable() -> None:
+    """The service route failed before its session opened: fall back, or end the run.
+
+    §4.7: only the `auto` route falls back, and only interactively, with one line saying
+    so. A forced `ONEUP_BACKEND=service` fails the run, and a run nobody started by hand
+    (`ONEUP_NONINTERACTIVE=1`) stands down rather than raise a box nobody can answer.
+    """
+    global _ROUTE
+    from . import route
+    if (os.environ.get("ONEUP_BACKEND") == route.SERVICE
+            or os.environ.get("ONEUP_NONINTERACTIVE") == "1"):
+        markers.err("OneUp's system service could not be reached — aborting.")
+        raise SystemExit(1)
+    markers.out("OneUp's system service could not be reached — asking for the password instead.")
+    _ROUTE = route.SUDO
 
 
 # How often the keep-alive re-validates. Overridable so a test can watch the loop

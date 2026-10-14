@@ -8334,6 +8334,15 @@ when complete (that document's §7).
   hand-building its argv again. Sudo route unchanged except one thing:
   a non-digit ONEUP_REFRESH_TIMEOUT is now refused by the table instead
   of by timeout(1); security.md §4.7 updated. Next: route.py (§4.7).
+  Progress (2026-10-14): build slice 2. oneup/engine/route.py's
+  engine_route(environ) answers spec §4.7's table, and privilege.sudo_init
+  now chooses the route once, before the first root command
+  (privilege.chosen_route). Until the service client lands, the service
+  route is unreachable: an interactive auto run says so in one line and
+  falls back to sudo; ONEUP_BACKEND=service or ONEUP_NONINTERACTIVE=1 ends
+  the run. run_engine pins ONEUP_BACKEND=sudo so the suite never reaches a
+  real installed service. Next: the service and its client (§4.3-§4.9),
+  tests/service-test.py, and §4.12's measurements.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.

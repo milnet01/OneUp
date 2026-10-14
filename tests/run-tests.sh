@@ -4599,6 +4599,89 @@ PYEOF
 )"
 fi
 
+echo "TEST: the engine's route to root follows ONEUP-0249 §4.7's table"
+# engine_route decides from the environment and the activation file alone, so the window
+# and the engine read the same answer. A fake jeepney stands in where the table needs one,
+# and sys.modules["jeepney"] = None makes the import fail, as an uninstalled one does.
+if [[ ! -f "$PYENGINE/route.py" ]]; then
+    echo "  SKIP - no oneup/engine/route.py in this checkout"
+else
+py_case "each row of the table picks its route" "$(cat <<'PYEOF'
+import os, sys, tempfile, types
+from oneup.engine import route
+fd, present = tempfile.mkstemp()
+os.close(fd)
+absent = present + ".gone"
+fake = types.ModuleType("jeepney")
+cases = [
+    ("sudo", present, fake, "sudo"), ("service", absent, None, "service"),
+    (None, present, fake, "service"), ("", present, fake, "service"),
+    ("auto", present, fake, "service"), ("auto", absent, fake, "sudo"),
+    ("auto", present, None, "sudo"), ("Service", present, fake, "sudo"),
+    ("bogus", present, fake, "sudo"),
+]
+bad = []
+for backend, path, module, want in cases:
+    route.ACTIVATION_FILE = path
+    sys.modules["jeepney"] = module
+    env = {} if backend is None else {"ONEUP_BACKEND": backend}
+    if (got := route.engine_route(env)) != want:
+        bad.append(f"{backend!r} with the file {'there' if path == present else 'absent'}"
+                   f" and jeepney {'there' if module else 'blocked'} took {got}")
+os.unlink(present)
+raise SystemExit("; ".join(bad) or 0)
+PYEOF
+)"
+py_case "the sudo route never imports jeepney (INV-12)" "$(cat <<'PYEOF'
+import sys
+from oneup.engine import route
+asked = []
+class Recorder:
+    def find_spec(self, name, path=None, target=None):
+        asked.append(name)
+sys.meta_path.insert(0, Recorder())
+sys.modules.pop("jeepney", None)
+route.engine_route({"ONEUP_BACKEND": "sudo"})
+route.ACTIVATION_FILE = "/nonexistent/oneup-activation"
+route.engine_route({})
+raise SystemExit(f"tried to import {asked}" if "jeepney" in asked else 0)
+PYEOF
+)"
+py_case "sudo_init falls back or ends the run when the service cannot be reached" "$(cat <<'PYEOF'
+import os
+from oneup.engine import actions, markers, privilege, proc, route
+ran, said = [], []
+proc.run = lambda argv, **kw: (ran.append(list(argv)), (0, ""))[1]
+markers.out = said.append
+markers.err = said.append
+actions.auth_current = lambda: False
+privilege._start_keepalive = lambda: None
+route.engine_route = lambda environ: route.SERVICE
+bad = []
+def init(backend, noninteractive=""):
+    ran.clear(); said.clear()
+    privilege._ROUTE = None
+    os.environ["ONEUP_BACKEND"] = backend
+    os.environ["ONEUP_NONINTERACTIVE"] = noninteractive
+    try:
+        privilege.sudo_init()
+    except SystemExit as exc:
+        return exc.code
+    return None
+if init("service") != 1 or ran or len(said) != 1:
+    bad.append(f"forced service: ran {ran}, said {said}")
+if init("auto", "1") != 1 or ran or len(said) != 1:
+    bad.append(f"headless auto: ran {ran}, said {said}")
+if init("auto") is not None or len(said) != 1 or [a[-1] for a in ran] != ["-v"]:
+    bad.append(f"interactive auto: ran {ran}, said {said}")
+os.environ["ONEUP_BACKEND"] = "service"
+if privilege.chosen_route() != route.SUDO:
+    bad.append("the route changed after it was chosen")
+raise SystemExit("; ".join(bad) or 0)
+PYEOF
+)"
+fi
+
 echo "TEST: every marker keeps its field layout (ONEUP-0044 INV-5a, ONEUP-0126)"
 # The marker census counts distinct NAMES, so it cannot see a field appended to a marker
 # that already exists, and gate G2 compares the two engines' streams, so a change made in

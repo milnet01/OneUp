@@ -155,6 +155,9 @@ run_engine() {
     #     scenario opts back IN by setting it to the empty string.
     #   * the size lookup reads zypper's cached repository data, so a check's sizes
     #     would be this machine's packages rather than the scenario's (ONEUP-0259 INV-3).
+    #   * the route to root takes the system service wherever its RPM is installed, so on
+    #     such a machine every scenario would ask the real service instead of the sudo mock
+    #     (ONEUP-0249 §4.7). Pinned to sudo, with `-` so a scenario can set its own.
     #
     # ONEUP-0126: link this run's log into the suite's $HARVEST_DIR, where one is set. A hard
     # link, not a copy: the engine appends to the log until it exits, so a copy taken here
@@ -172,6 +175,7 @@ run_engine() {
         ONEUP_GO_FILE="${ONEUP_GO_FILE:-$mockdir/go.request}" \
         ONEUP_GUARD_FILE="${ONEUP_GUARD_FILE:-$mockdir/oneup-download-guard}" \
         ONEUP_INHIBITED="${ONEUP_INHIBITED-1}" \
+        ONEUP_BACKEND="${ONEUP_BACKEND-sudo}" \
         ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}" \
         ONEUP_ZYPP_RAW="${ONEUP_ZYPP_RAW:-$mockdir/zypp-raw}" \
         "${ENGINE_CMD[@]}" "$@" --log="$mockdir/run.log" 2>&1
