@@ -28,6 +28,11 @@ fi
 
 PASS=0 FAIL=0
 
+# ONEUP-0126: every run_engine log gets a second name in here, so the field-layout check at
+# the end of the suite can read every marker the suite saw, after each scenario has deleted
+# its own directory.
+HARVEST_DIR=$(mktemp -d)
+
 # --- mock system tools common to every scenario ----------------------------
 setup_common() {
     local d="$1"
@@ -129,6 +134,13 @@ run_engine() {
     #     so running the suite during a real update deleted that run's record, and the
     #     window could no longer find the run it was following (ONEUP-0045).
     # A test must never depend on, or damage, the state of the box it runs on.
+    #
+    # ONEUP-0126: link this run's log into $HARVEST_DIR. A hard link, not a copy: the engine
+    # appends to the log until it exits, so a copy taken here would be empty, and one taken
+    # after it returns could catch the log's tee mid-line. A failed link only shrinks the
+    # harvest, and the layout check's coverage half reports that loudly.
+    [[ -e "$mockdir/run.log" ]] \
+        || ln "$(mktemp "$HARVEST_DIR/XXXXXX")" "$mockdir/run.log" 2>/dev/null || true
     #   * the shutdown inhibitor re-execs the engine under the REAL systemd-inhibit,
     #     so every scenario would take a genuine block-mode lock on the tester's own
     #     session (ONEUP-0086). Pre-set here, and note the `-` rather than `:-`: a
@@ -3207,6 +3219,54 @@ if [[ "${ONEUP_TEST_NETWORK:-0}" == "1" ]]; then
 else
     echo "  SKIP - T-1 needs the network; set ONEUP_TEST_NETWORK=1 to run it"
 fi
+
+# ---------------------------------------------------------------------------
+echo "TEST: every marker keeps its field layout (ONEUP-0044 INV-5a, ONEUP-0126)"
+# The marker census counts distinct NAMES, so it cannot see a field appended to a marker
+# that already exists, and gate G2 compares the two engines' streams, so a change made in
+# both compares equal. This reads every marker line every scenario above produced through
+# run_engine and checks its field count against docs/reference/marker-protocol.md §3.
+#
+# Each entry is a set: "4/6" means exactly 4 or exactly 6 (PROGRESS carries its two byte
+# fields only while downloading). "1+" is a floor, and only HINT and SERVICES take one: §1.1
+# lets their last field run to the end of the line, "|" and all. Every other payload may not
+# contain a "|" (§1.1), so its count is exact, and a stray "|" in free text fails here too.
+declare -A LAYOUT=(
+    [STEP_BEGIN]=4 [STEP_END]=3 [TIMING]=2 [PROGRESS]=4/6 [REFRESH]=3 [SNAPSHOT]=1
+    [SNAPSHOT_ITEM]=3 [SNAPSHOTS]=2 [CHECK]=3 [CHECK_ITEM]=4 [CHECK_UNKNOWN]=2
+    [SIZE]=2 [FREED]=2 [AUTH]=1 [DISK]=3 [REPO]=3 [REPO_SKIPPED]=2 [HINT]=1+
+    [REMEDY]=1/2 [SERVICES]=1+ [INSTALLED]=3 [REBOOT]=1/2 [DONE]=1
+)
+# Markers no scenario produces through run_engine, each with the reason. Shared with
+# tests/docs-check.py's KNOWN_UNTESTED_MARKERS: DISK needs a mount below the threshold.
+LAYOUT_UNSEEN_OK=" DISK "
+# "NAME fields" once per distinct pair. Only whole lines that open with a marker count.
+seen=$(cat "$HARVEST_DIR"/* 2>/dev/null \
+    | awk -F'|' '/^@@[A-Z_]+@@\|/ { name = substr($1, 3, length($1) - 4); print name, NF - 1 }' \
+    | sort -u)
+bad=""
+while read -r name n; do
+    [[ -z "$name" ]] && continue
+    spec="${LAYOUT[$name]:-}"
+    if [[ -z "$spec" ]]; then bad+=" $name(not in the table)"; continue; fi
+    ok=0
+    IFS='/' read -r -a allowed <<<"$spec"
+    for a in "${allowed[@]}"; do
+        if [[ "$a" == *+ ]]; then (( n >= ${a%+} )) && ok=1
+        else (( n == a )) && ok=1; fi
+    done
+    (( ok )) || bad+=" $name($n fields, table says $spec)"
+done <<<"$seen"
+check_eq "every harvested marker line has its pinned field count" "" "$bad"
+missing=""
+for name in "${!LAYOUT[@]}"; do
+    [[ "$LAYOUT_UNSEEN_OK" == *" $name "* ]] && continue
+    grep -q "^$name " <<<"$seen" || missing+=" $name"
+done
+# A table entry nothing exercised is a row with no evidence behind it — and an empty harvest
+# would otherwise pass the check above by having nothing to fail.
+check_eq "every marker in the table was seen at least once" "" "$(tr ' ' '\n' <<<"$missing" | sort | xargs)"
+rm -rf "$HARVEST_DIR"
 
 echo
 echo "======================================"
