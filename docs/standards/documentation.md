@@ -34,6 +34,8 @@ log
 | `docs/plans/` | the implementer | **one item's** build steps, in order, with verification | design decisions (they belong in the spec) |
 | `docs/standards/` | everyone | standing rules that outlive any one item | release *status* — what shipped, what is in progress |
 | `docs/reference/` | both halves of the app | frozen contracts — formats, protocols | rules or rationale |
+| `docs/history/` | whoever asks why a rule reads as it does | dated corrections, superseded wording and the argument that settled a rule, moved out of the document they explain | a rule — nothing there binds |
+| `docs/reviews/` | the next review of the same document | a review run's fix ledger, its run-state note while the run lasts, and a loop log kept outside its document (§7.1) | a rule |
 
 **The distinction that matters most:** a *standard* is a rule that applies to work not yet
 imagined; a *spec* is a contract for one piece of work. If a sentence would still be true
@@ -59,8 +61,9 @@ When two documents disagree, this order settles it — **highest first**:
 | 6 | `CLAUDE.md` | a map and a trap list; where it restates a rule, the standard is canonical |
 | 7 | `~/.claude/standards/` | the global default set. It governs only where this project states nothing — §1.2 lists what OneUp owns and what it inherits. **One exception outranks this whole table:** `roadmap-format.md`'s bullet grammar, which no project may override (§1.2) |
 
-`README.md`, `CHANGELOG.md` and `ROADMAP.md` are **descriptive, not authoritative** — they
-record what is, what shipped and what is intended. A disagreement between one of them and a
+`README.md`, `CHANGELOG.md`, `ROADMAP.md`, `docs/history/` and `docs/reviews/` are
+**descriptive, not authoritative** — they record what is, what shipped, what is intended,
+why a rule changed and what a review found. A disagreement between one of them and a
 rule above is a bug in the record, fixed by correcting the record.
 
 **The loser is fixed immediately**, in the same session, not noted for later.
@@ -202,7 +205,7 @@ read two ways:
 | Value | Means |
 | --- | --- |
 | `Draft` | written, not yet through `review-contract`. **Implementation may not start** (§7) |
-| `Reviewed` | a `review-contract` run converged, or reached its cap and filed what was left. Ready to implement |
+| `Reviewed` | a `review-contract` run converged, or reached its cap and filed what was left. Ready to implement, unless a later edit re-armed the gate (§7) |
 | `Implemented` | the work shipped; the document is now a record |
 | `Superseded by <id>` | replaced. Kept, not deleted (§9) |
 
@@ -378,6 +381,12 @@ code or concludes the whole document is stale.
 drift — it will point into a file that no longer exists. A symbol name mostly survives that
 move; where it does not, the rename is a real change worth noticing.
 
+**The same rule covers an address inside a document.** Point at a table row, a list item or
+a bullet by what it says, never by where it sits: *"§4.4's standalone row"*, not *"§4.4's
+second row"*. A row added above it moves every ordinal below, as an import moves a line
+number. Measured on ONEUP-0108: its render table was edited in each of its three review
+loops, and ordinal pointers into it broke each time.
+
 ### 6a.1 When there is no symbol to name
 
 Some things genuinely have no enclosing function — a QSS rule inside a template string, a
@@ -500,6 +509,19 @@ the loop-log headings keep the name. Where either appears, run `review-contract`
 **Every design document, spec, standard and reference goes through `review-contract`.**
 Implementation does not start before that. Whether a later edit to a reviewed document needs
 a new run is global `CLAUDE.md` rule 14's trigger; this section does not replace it.
+
+**A later edit can leave a `Reviewed` stamp standing over text no review read, and the
+file does not say so.** One item pinning a field into another item's spec changes what that
+spec's implementer builds, so rule 14's trigger re-arms the gate — and the stamp still reads
+`Reviewed`. The trigger asks: *"would someone conforming to this document now BUILD
+something different, or build, check or ship it a different way?"* For specs, the Ants MCP
+verb `spec_query mode:"gate_drift"` lists those edited since their last review loop, with
+the commits made since; it reads `docs/specs/` only. For any gated document, `git log` on it
+since its newest loop-log row's date gives the same list. **Check one of them before
+trusting a stamp**, ask the trigger of each listed commit, and re-run the gate before
+building wherever it says yes. `Reviewed` stands until that re-run starts; §3's mid-review
+rule then applies. A listed document is the normal state of a busy branch, not an incident.
+Recorded on ONEUP-0127.
 
 **When a run stops is `review-contract`'s rule, not this document's**: it converges on a
 loop with no verified finding, or ends at its cap and files what is left.
@@ -729,9 +751,11 @@ fact only to make a *different* point with it, and say where it came from.
 | §5 an invariant names its test | **nothing** automatic — a cold reader |
 | §6 a claim is checked against the tree | **nothing** automatic. The review gate is the only catcher, which is why §7 is a gate and not advice |
 | §6 no `TODO` / `TBD` / `FIXME` / `XXX` left in a document | `tests/docs-check.py` |
+| §6a a row or list item is cited by its content, not its position | **nothing** automatic — a cold reader |
 | §6a no `path:line` citation | `tests/docs-check.py`, over standards, reference and design — and **that is the whole of its reach**. `docs/specs/` is exempt until ONEUP-0065 converts the `path:line` citations the older specs carry, and `docs/plans/` with it, for the same reason; `CLAUDE.md` and `ROADMAP.md` are inside §6a.2's scope and are scanned by **nothing**, as is the prose form — *"around line 786"* |
 | §6b most counts taken from the code stay out of the document | `tests/docs-check.py`, over standards, reference and design: a number beside a counting unit, in a paragraph with no commit, date or past-tense verb. **An approximation** — a count written without a unit it knows, or in specs and plans, is left to a cold reader (ONEUP-0104) |
 | §7 a loop tally balances | `tests/docs-check.py` |
+| §7 a `Reviewed` stamp still holds | **nothing** automatic. `spec_query mode:"gate_drift"` lists a spec edited since its last review, but only when someone runs it, and whether an edit re-armed the gate is a reader's call |
 | §7 every verified finding is fixed, and a run stops only where `review-contract` says | **nothing** automatic — the loop log says what each pass verified, and only a reader can set it against the fixes that landed |
 | §7.1 a run-state note is deleted when its run ends | **nothing** automatic — whether a run has ended is not a fact on disk. The catcher is the closing commit itself; a later reader can only spot a breach by the `-run-state.md` name §7.1 pins |
 | §7.1 a file under `docs/reviews/` is named `-run-state.md`, `-fix-ledger.md` or `-loop-log.md` | **nothing** automatic — `tests/docs-check.py` reads that directory for loop-log rows only and checks no file's name, which is the same gap the row above rests on |

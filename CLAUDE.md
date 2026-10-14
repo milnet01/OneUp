@@ -181,15 +181,11 @@ The traps that bind every session stay here:
   (`~/.local/share/ants-terminal/roadmap.sqlite`), not in this repo, so a fresh clone has the
   markdown and not the history behind it. Recorded on `ONEUP-0057`.
 
-- **A spec's `Reviewed` stamp does not survive another item editing it, and nothing in the
-  file says so.** One item pinning a field into another item's spec changes what that spec's
-  implementer must build, and the stamp still reads `Reviewed` — with no diff and no error to
-  show the gate had lapsed. The next session builds from a contract nobody re-read.
-  `spec_query mode:"gate_drift"` reports which specs are stale and names the commit that did
-  it. Run it before trusting a stamp, and before starting any item whose spec was written
-  more than a few items ago. A stale stamp is the normal state of a busy branch rather than
-  an incident — `docs/standards/documentation.md` §7 owns the gate itself, and `CLAUDE.md`
-  rule 14 in the global set owns when it re-arms. Recorded on `ONEUP-0127`.
+- **A spec's `Reviewed` stamp can stand over text no review read, and nothing in the file
+  says so.** Another item's edit can re-arm the gate, and the next session then builds from a
+  contract nobody re-read. Check
+  `spec_query mode:"gate_drift"` before trusting a stamp — `docs/standards/documentation.md`
+  §7 owns the rule and when the gate re-arms. Recorded on `ONEUP-0127`.
 
 ## 7. Where this file's history went
 
