@@ -6084,6 +6084,9 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Done (2026-10-13): OBS token 11691 is gone. The hung `osc` delete went
   through server-side; the user's Tokens page and `osc token` both list only
   11768, which is not OneUp's (last triggered 14:49 UTC, before this work).
+  Published (2026-10-14): the .repo files for openSUSE_Leap_16.0 and
+  openSUSE_Tumbleweed under home:/milnet:/oneup both return HTTP 200.
+  `osc results` shows every target succeeded.
   **Layman:** OneUp's openSUSE repository moves to its own folder on the build service, like your other projects, without cutting off anyone using the old address.
   Kind: package.
   Source: user-request-2026-10-13.
