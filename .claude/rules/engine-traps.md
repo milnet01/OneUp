@@ -42,9 +42,10 @@ exact shape of the rule are in the document named beside each.
   inherits the child's end of our pipe, so killing only the child leaves the read blocked on
   a pipe nobody will close, and the "bounded" call never returns. Measured during ONEUP-0054
   stage 5 (`7a19ad0`): a mock `flatpak` shell's `sleep 300` held it open. `proc._run_bounded`
-  starts each bounded child in its own session and calls `kill_group` on expiry; a new call
-  that can time out or be killed does the same — `oneup/engine/proc.py`, `_run_bounded`'s
-  docstring.
+  starts each bounded unprivileged child in its own session and calls `kill_group` on expiry
+  — `oneup/engine/proc.py`, `_run_bounded`'s docstring. Not for a background helper, which
+  takes a new process group and never a session (`docs/standards/security.md` §2.4), and not
+  for a privileged call, which is bounded by `sudo timeout` (`kill_group`'s docstring).
 
 - **To ask "has my parent gone?", `kill -0` the pid you captured — never read `$PPID`
   again.** Bash sets `PPID` once at shell start and never refreshes it on reparenting, so
