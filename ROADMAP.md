@@ -5101,7 +5101,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc-fix.
   Source: review-contract loop 8 on ONEUP-0032, 2026-08-19.
 
-- 📋 [ONEUP-0126] **Give ONEUP-0044 INV-5a the per-marker field-count table it names.**
+- ✅ [ONEUP-0126] **Give ONEUP-0044 INV-5a the per-marker field-count table it names.**
   INV-5a's test surface is "harvest every `@@NAME@@|…` line a full mocked run emits, and
   assert each name's field count against a pinned table". That harness does not exist. The
   marker-name census (INV-5) counts distinct NAMES, so it is blind to a field appended to an
@@ -5120,6 +5120,15 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   ordering property `--hold` introduced; the field-layout half is still uncovered.
 
   The harvest must cover the held stream as well as an ordinary run's.
+  Resolved (2026-10-14): main 55e1493, merged to v2 83c0898.
+  run_engine hard-links each run's log into a suite-wide harvest; a last
+  scenario checks every harvested marker line's field count against a
+  pinned table, and fails if a table marker is never seen. Exact counts,
+  except a floor where a trailing field is a variable list. Each branch
+  carries its own table from its own marker-protocol.md §3. Red on both
+  engines: a third TIMING field failed it. Landed on main under the
+  user's grant, recorded in workflow.md §1.2. Found on v2: §4.12's
+  heading bracket does not show PKG's 5-field downloading form.
   **Layman:** A safety net that would notice if a future change quietly altered the messages the update engine sends to the window.
   Kind: test.
   Source: in-session-2026-08-23, deferred from ONEUP-0044's implementation.
@@ -5152,7 +5161,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: doc.
   Source: in-session-2026-08-24, consequence of ONEUP-0127.
 
-- 📋 [ONEUP-0129] **`tests/docs-check.py` never walks `docs/plans/`, so no plan has ever been checked.**
+- ✅ [ONEUP-0129] **`tests/docs-check.py` never walks `docs/plans/`, so no plan has ever been checked.**
   Found 2026-08-25 while gating the ONEUP-0054 build plan. Every `docs(...)`
   call in the checker names the same set — `docs/standards`, `docs/reference`,
   `docs/design`, `docs/specs`. `docs/plans` appears in none of them, so every
@@ -5174,6 +5183,13 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   on the older plans, which predate the current rules. Check what it reports
   before turning it on, and if the older four need work, that is a separate
   item from the one-word change to the checker.
+  Resolved (2026-10-14): main 150cae7, merged to v2 83c0898. docs-check
+  now runs its loop-tally and unfinished-marker checks over docs/plans/.
+  The header check does not apply (plans are not in documentation.md §3's
+  list) and §6a waits with specs on ONEUP-0065: the ONEUP-0057 plan holds
+  eight pre-rule path:line citations. Two marker hits were prose saying
+  "no TBD", now backticked. Landed on main under the user's grant,
+  recorded in workflow.md §1.2.
   **Layman:** The script that checks our documents for broken links and wrong file paths skips the build-plan folder entirely, so nothing has ever checked those files.
   Kind: test.
   Source: in-session-2026-08-25.
@@ -5302,6 +5318,8 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   with body_path: release-notes.md, so the trade-off above is gone.
   `gh release create --notes-file release-notes.md` plus `gh release
   upload` would do the same job without the action.
+  Decided (2026-10-14, user): stays on hold. The release step can only be
+  tested by a real release, and 1.4.9 proved the current one works.
   **Layman:** The release step uses a third-party action for something the built-in tooling can already do.
   Kind: chore.
   Source: check-code --tree 2026-08-31 (zizmor superfluous-actions, Informational).
