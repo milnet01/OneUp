@@ -181,11 +181,12 @@ The traps that bind every session stay here:
   (`~/.local/share/ants-terminal/roadmap.sqlite`), not in this repo, so a fresh clone has the
   markdown and not the history behind it. Recorded on `ONEUP-0057`.
 
-- **A spec's `Reviewed` stamp can stand over text no review read, and nothing in the file
-  says so.** Another item's edit can re-arm the gate, and the next session then builds from a
-  contract nobody re-read. Check
-  `spec_query mode:"gate_drift"` before trusting a stamp — `docs/standards/documentation.md`
-  §7 owns the rule and when the gate re-arms. Recorded on `ONEUP-0127`.
+- **A gated document's `Reviewed` stamp can stand over text no review read, and nothing in
+  the file says so.** Another item's edit can re-arm the gate, and the next session then
+  builds from a contract nobody re-read. Check before trusting a stamp —
+  `spec_query mode:"gate_drift"` for a spec, `git log` since the newest loop-log row for any
+  other gated document. `docs/standards/documentation.md` §7 owns the rule and when the gate
+  re-arms. Recorded on `ONEUP-0127`.
 
 ## 7. Where this file's history went
 
