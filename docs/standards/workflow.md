@@ -376,7 +376,7 @@ pushed commits for secrets** by handing its stdin to the machine-wide hook's
 
 Listed in the order `local-CI.sh` runs them, so the table can be read against the script.
 
-Two deliberate design points:
+Deliberate design points:
 
 - **A gate whose tool is not installed is reported as skipped, never silently passed.** A
   green run that quietly checked nothing is worse than a red one.
@@ -386,6 +386,9 @@ Two deliberate design points:
   not a gate. **Neither CI nor `--full`
   launches the result** — that check is a person, once, per `docs/design/oneup-2.0.md` §7's
   G8.
+- **A red suite keeps its evidence** (ONEUP-0263). It prints every `FAIL` line under its
+  `TEST:` heading, then its last lines and the machine's load average. The full logs are
+  kept under `~/.local/state/oneup-ci/`, not `/tmp`, which is emptied at boot.
 
 `githooks/pre-push` runs the fast gates automatically. Enable it once per clone:
 

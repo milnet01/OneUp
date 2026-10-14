@@ -47,12 +47,32 @@ fail=0
 # Every suite's log goes in a directory of this run's own (ONEUP-0203). The fixed
 # /tmp/local-ci-*.log names were shared by every gate run on the machine, so two runs
 # at once overwrote each other's logs and read each other's tallies. Removed when the
-# run passes; kept, and named in the verdict, when it fails.
-LOGS=$(mktemp -d "${TMPDIR:-/tmp}/local-ci.XXXXXX")
+# run passes; kept, and named in the verdict, when it fails. They live under the state
+# directory, not /tmp: /tmp is RAM here and is emptied at every boot, and that lost the
+# only full log of the engine suite's one unexplained red (ONEUP-0263). An absolute
+# XDG_STATE_HOME is honoured, as the app honours it; anything else falls back.
+case "${XDG_STATE_HOME:-}" in
+    /*) ci_state="$XDG_STATE_HOME/oneup-ci" ;;
+    *)  ci_state="$HOME/.local/state/oneup-ci" ;;
+esac
+mkdir -p "$ci_state"
+LOGS=$(mktemp -d "$ci_state/local-ci.$(date +%Y-%m-%d_%H%M%S).XXXXXX")
 step() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 ok()   { printf '  \033[32mok\033[0m   %s\n' "$1"; }
 bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=1; }
 skip() { printf '  --   skip %s (%s)\n' "$1" "$2"; }
+# What a failed suite prints (ONEUP-0263). The last lines alone lost the names of three
+# failures that had scrolled past them, so every FAIL line comes first, under the TEST:
+# heading it belongs to, then the tail for context, then how busy the machine was: a
+# red that does not come back when re-run alone is most likely a race lost under load.
+show_failure() {  # $1 = the suite's log
+    awk '/^TEST:/ { t = $0; shown = 0; next }
+         /^ *FAIL/ { if (!shown && t != "") { print t; shown = 1 } print }' "$1"
+    printf '  --- last lines of %s ---\n' "${1##*/}"
+    tail -25 "$1"
+    printf '  load average when it failed (1, 5, 15 min): %s\n' \
+        "$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null || echo unknown)"
+}
 
 # --- engine test suite (same script CI should gate on) ----------------------
 # ONEUP_TEST_NETWORK=1 opts in to the network-dependent checks (ONEUP-0094 T-1: the
@@ -68,7 +88,7 @@ step "Engine test suite"
 if ONEUP_TEST_NETWORK="${ONEUP_TEST_NETWORK:-1}" bash tests/run-tests.sh >"$LOGS/tests.log" 2>&1; then
     ok "tests/run-tests.sh — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/tests.log" | tail -1)"
 else
-    bad "tests/run-tests.sh"; tail -25 "$LOGS/tests.log"
+    bad "tests/run-tests.sh"; show_failure "$LOGS/tests.log"
 fi
 
 # --- engine parser unit tests -----------------------------------------------
@@ -80,7 +100,7 @@ step "Engine parser unit tests"
 if python3 tests/parsers-test.py >"$LOGS/parsers.log" 2>&1; then
     ok "tests/parsers-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/parsers.log" | tail -1)"
 else
-    bad "tests/parsers-test.py"; tail -25 "$LOGS/parsers.log"
+    bad "tests/parsers-test.py"; show_failure "$LOGS/parsers.log"
 fi
 
 # --- headless GUI smoke test ------------------------------------------------
@@ -112,7 +132,7 @@ gui_smoke_report() { # $1 = label, as given to gui_smoke_start
     elif [[ $rc == 77 ]]; then
         skip "$name" "PySide6 not installed"
     else
-        bad "$name${rc:+ (exit $rc)}"; tail -25 "$log"
+        bad "$name${rc:+ (exit $rc)}"; show_failure "$log"
     fi
 }
 
@@ -171,7 +191,7 @@ step "bump.py functional test"
 if python3 tests/bump-test.py >"$LOGS/bump.log" 2>&1; then
     ok "tests/bump-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/bump.log" | tail -1)"
 else
-    bad "tests/bump-test.py"; tail -25 "$LOGS/bump.log"
+    bad "tests/bump-test.py"; show_failure "$LOGS/bump.log"
 fi
 
 if ! $DOCS; then
