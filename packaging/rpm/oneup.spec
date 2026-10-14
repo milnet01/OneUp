@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.4.9
+Version:        1.4.10
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -74,6 +74,12 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Wed Oct 14 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.10-0
+- The openSUSE repository has a new address
+- Stopping during the download is reported as a stop, not a failure
+- The signing-key hint appears only for a real signing-key problem
+- The download figure reaches the end when some packages were already downloaded
+- A run that updated only Flatpak apps no longer says nothing was needed
 * Tue Oct 13 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.9-0
 - The GitHub release page lists what changed again
 - A stuck release build now fails within 30 minutes

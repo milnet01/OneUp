@@ -6,6 +6,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.10] - 2026-10-14
+
 ### Changed
 
 - **The openSUSE repository has a new address** (ONEUP-0273)
@@ -731,7 +733,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.9...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.10...HEAD
+[1.4.10]: https://github.com/milnet01/OneUp/releases/tag/v1.4.10
 [1.4.9]: https://github.com/milnet01/OneUp/releases/tag/v1.4.9
 [1.4.8]: https://github.com/milnet01/OneUp/releases/tag/v1.4.8
 [1.4.7]: https://github.com/milnet01/OneUp/releases/tag/v1.4.7

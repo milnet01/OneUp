@@ -48,6 +48,18 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.4.10" date="2026-10-14">
+      <description>
+        <p>Release 1.4.10.</p>
+        <ul>
+          <li>The openSUSE repository has a new address</li>
+          <li>Stopping during the download is reported as a stop, not a failure</li>
+          <li>The signing-key hint appears only for a real signing-key problem</li>
+          <li>The download figure reaches the end when some packages were already downloaded</li>
+          <li>A run that updated only Flatpak apps no longer says nothing was needed</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.4.9" date="2026-10-13">
       <description>
         <p>Release 1.4.9.</p>

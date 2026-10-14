@@ -108,7 +108,7 @@ TIMERS = {
 }
 
 APP_NAME = "OneUp"
-APP_VERSION = "1.4.9"
+APP_VERSION = "1.4.10"
 REPO_SLUG = "milnet01/OneUp"
 
 # Where our bundled files (update_system.sh, the icon) live. Normally next to
