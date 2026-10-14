@@ -1977,68 +1977,6 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   until they re-toggle — their live drop-in predates this.
   Resolved (2026-08-12): shipped in 1.4.3 (tag v1.4.3, commit 343e982). GitHub release published with the AppImage attached; OBS home:milnet/oneup committed at revision 19.
 
-- 📋 [ONEUP-0093] **The download progress bar compares new bytes against the whole transaction.**
-  _tick_activity computes what has arrived as `cache_bytes() - self._dl_base`
-  -- deliberately, so packages already cached sit inside the baseline and do
-  not flatter the rate (the comment says as much). But the total it divides
-  by is zypper's `Package download size`, which counts the ENTIRE
-  transaction, cached packages included. Measured 2026-08-07 on run
-  2026-08-07_093045.log: 21 packages `[already in cache]`, 60 freshly
-  `[done]`, screen reading "167 MB of 604 MB".
-  So numerator and denominator count different populations, and on a warm
-  cache the figure under-reports and can never reach 100%. That is a defect
-  in exactly the display ONEUP-0048 added to answer "is this progressing?",
-  and it misleads in the direction that matters -- it makes a healthy run
-  look stalled.
-  Fix: subtract the already-cached bytes from the total, or count arrivals
-  rather than bytes. The `[already in cache]` lines are already in the
-  stream, so the engine can report the two figures separately rather than the
-  GUI inferring one.
-  **Layman:** The progress bar showed 167 MB of 604 MB when much of it was already downloaded, so it can never reach the end.
-  Kind: fix.
-  Source: user-report-2026-08-07.
-  Research (2026-08-07): zypper already emits the exact figure the GUI is
-  currently inferring. `zypper --xmlout` produces a `<download-result>` node
-  for EVERY package zypper tried to download, so "was this one fetched or was
-  it already cached" becomes a field rather than something deduced by counting
-  `[already in cache]` strings in prose. That is the honest fix for the
-  mismatched numerator/denominator, and it removes the guess instead of
-  correcting it.
-  The schema is on disk here: /usr/share/zypper/xml/xmlout.rnc (9,308 bytes),
-  so the contract is inspectable rather than reverse-engineered from output.
-  Caveat that decides the scope: upstream says "not all (but most of) the
-  output is currently in XML", so this is a targeted use for the download
-  phase, NOT a migration of the whole parser -- which keeps it separable from
-  ONEUP-0091.
-  Sources: en.opensuse.org/openSUSE:Standards_Zypper_Xml ;
-  github.com/openSUSE/zypper/blob/master/src/output/xmlout.rnc
-  Checked 2026-10-01; the premise does not hold as written. zypper's
-  src/Summary.cc prints "Package download size" as _todownload plus
-  _incache only when _incache is 0, so the one-line figure is bytes
-  still to fetch, the same population the window measures. With
-  anything cached it prints a table whose first column is _todownload.
-  The cited run (2026-08-07_093045.log) FAILED: kernel-default and
-  others returned 404, and the system step ended fail. So "167 MB of
-  604 MB" was a stalled download, not a healthy one under-reported. One
-  thing is still unexplained: that run's preload printed 21
-  "[already in cache]" lines, yet zypper's summary counted nothing
-  cached. The parser defect this check exposed is ONEUP-0223. Re-measure
-  this item on a run that SUCCEEDS from a warm cache before changing the
-  window's arithmetic.
-  Progress (2026-10-11): the user agreed to run OneUp normally the next
-  time updates are waiting and then say so, so a session can read that
-  run's log. Until they report, keep skipping this item.
-  Re-measured (2026-10-14) on a run that SUCCEEDED from a warm cache
-  (2026-10-14_103652.log): 53 packages (165.7 MiB) were in the cache from
-  a stopped run, and the preload printed 53 "[already in cache]" lines,
-  yet zypper's download-only summary still said "Package download size:
-  695.5 MiB", the one-line form, counting nothing as cached. The machine
-  received about 555 MiB in that step. The liveness line (run.py
-  _tick_activity) showed "357 MiB of 696 MiB" with 113 of 115 packages
-  fetched: its numerator excludes the cached baseline, its total does
-  not. So the premise holds after all. The figures row ("Download: X of
-  693 MiB") tracked correctly. main's updater.py has the same arithmetic.
-
 - ✅ [ONEUP-0094] **Retry a truncated download with mirror striping disabled.**
   Observed twice THROUGH ONEUP on 2026-08-07 (four reproductions in total --
   ONEUP-0085 section 2.2), both times on kernel-default-7.1.6:
@@ -6152,6 +6090,12 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   boundary in _system_upgrade_inner is never reached. The suite's mock
   zypper dies of the signal (143), which is why no test saw it.
   main's update_system.sh has the same 143-only test (SYS_DL_RC).
+  Progress (2026-10-14): fixed on main in e384371, released in 1.4.10
+  (stop_rc_105 in update_system.sh reads 105 as a stop when one was
+  requested; the wrapper/guard text is untouched on purpose). v2 owes the
+  port: in oneup/engine/steps.py _download_pass, map SYS_DL_RC 105 to 143
+  when proc.stop_pending(). Test: run-tests.sh "a stop that real zypper
+  answers with exit 105" (arrives by merge).
   **Layman:** Pressing Stop while packages download makes OneUp say the update failed, though nothing went wrong and nothing was installed.
   Kind: fix.
   Source: user-real-run-2026-10-14.
@@ -6167,6 +6111,15 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   automatically, so a wrong offer is a trust decision made on bad
   evidence. main's update_system.sh matches signature|GPG|key, wider
   still, in its failure hint and in the repo-scoped-failure test.
+  Correction (2026-10-14): the body above names the wrong trigger. The hints
+  read only the transaction log (_SYS_LOG / $SYS_LOG), which never holds
+  the refresh's "Looking for gpg keys" lines. What matched was the
+  PACKAGE NAME gpg2 in zypper's "going to be upgraded" list. Fixed on
+  main in e384371 and released in 1.4.10: KEY_FAILURE_RE in
+  update_system.sh holds zypper's key-error wording, used at all four
+  sites. v2 still owes the port: oneup/engine/steps.py _NOT_TRANSFER and
+  _failure's key arm, oneup/engine/repos.py _REPO_SCOPED and _SIGNATURE.
+  Test: run-tests.sh "a package NAMED gpg2 or keyutils" (arrives by merge).
   **Layman:** OneUp blamed an out-of-date signing key and offered to import keys, when the real cause was something else entirely.
   Kind: fix.
   Source: user-real-run-2026-10-14.
@@ -6180,10 +6133,87 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   summary on SYS_COUNT, and the desktop notification on SYS_CHANGED or
   FW_CHANGED, so a Flatpak-only run is reported as having changed
   nothing. Check main's updater.py and update_system.sh for the same.
+  Progress (2026-10-14): fixed on main in e384371, released in 1.4.10
+  (engine FLATPAK_UPDATED + summary line + notify; window _other_changed
+  set from a flatpak/firmware STEP_END badge). v2 owes the port: engine
+  __main__.py summary and notify_send; window run.py STEP_END handler
+  (codes installed/updated on keys flatpak, firmware) and the summary at
+  "All done — already up to date"; reset in run.py and window.py beside
+  _sys_changed. Port main's gui-smoke check by hand; v2's gui-smoke
+  differs from main's.
   **Layman:** After installing four Flatpak updates, OneUp said everything was already up to date.
   Kind: fix.
   Source: user-real-run-2026-10-14.
   Lanes: gui, engine.
+
+- 📋 [ONEUP-0093] **The download progress bar compares new bytes against the whole transaction.**
+  _tick_activity computes what has arrived as `cache_bytes() - self._dl_base`
+  -- deliberately, so packages already cached sit inside the baseline and do
+  not flatter the rate (the comment says as much). But the total it divides
+  by is zypper's `Package download size`, which counts the ENTIRE
+  transaction, cached packages included. Measured 2026-08-07 on run
+  2026-08-07_093045.log: 21 packages `[already in cache]`, 60 freshly
+  `[done]`, screen reading "167 MB of 604 MB".
+  So numerator and denominator count different populations, and on a warm
+  cache the figure under-reports and can never reach 100%. That is a defect
+  in exactly the display ONEUP-0048 added to answer "is this progressing?",
+  and it misleads in the direction that matters -- it makes a healthy run
+  look stalled.
+  Fix: subtract the already-cached bytes from the total, or count arrivals
+  rather than bytes. The `[already in cache]` lines are already in the
+  stream, so the engine can report the two figures separately rather than the
+  GUI inferring one.
+  **Layman:** The progress bar showed 167 MB of 604 MB when much of it was already downloaded, so it can never reach the end.
+  Kind: fix.
+  Source: user-report-2026-08-07.
+  Research (2026-08-07): zypper already emits the exact figure the GUI is
+  currently inferring. `zypper --xmlout` produces a `<download-result>` node
+  for EVERY package zypper tried to download, so "was this one fetched or was
+  it already cached" becomes a field rather than something deduced by counting
+  `[already in cache]` strings in prose. That is the honest fix for the
+  mismatched numerator/denominator, and it removes the guess instead of
+  correcting it.
+  The schema is on disk here: /usr/share/zypper/xml/xmlout.rnc (9,308 bytes),
+  so the contract is inspectable rather than reverse-engineered from output.
+  Caveat that decides the scope: upstream says "not all (but most of) the
+  output is currently in XML", so this is a targeted use for the download
+  phase, NOT a migration of the whole parser -- which keeps it separable from
+  ONEUP-0091.
+  Sources: en.opensuse.org/openSUSE:Standards_Zypper_Xml ;
+  github.com/openSUSE/zypper/blob/master/src/output/xmlout.rnc
+  Checked 2026-10-01; the premise does not hold as written. zypper's
+  src/Summary.cc prints "Package download size" as _todownload plus
+  _incache only when _incache is 0, so the one-line figure is bytes
+  still to fetch, the same population the window measures. With
+  anything cached it prints a table whose first column is _todownload.
+  The cited run (2026-08-07_093045.log) FAILED: kernel-default and
+  others returned 404, and the system step ended fail. So "167 MB of
+  604 MB" was a stalled download, not a healthy one under-reported. One
+  thing is still unexplained: that run's preload printed 21
+  "[already in cache]" lines, yet zypper's summary counted nothing
+  cached. The parser defect this check exposed is ONEUP-0223. Re-measure
+  this item on a run that SUCCEEDS from a warm cache before changing the
+  window's arithmetic.
+  Progress (2026-10-11): the user agreed to run OneUp normally the next
+  time updates are waiting and then say so, so a session can read that
+  run's log. Until they report, keep skipping this item.
+  Re-measured (2026-10-14) on a run that SUCCEEDED from a warm cache
+  (2026-10-14_103652.log): 53 packages (165.7 MiB) were in the cache from
+  a stopped run, and the preload printed 53 "[already in cache]" lines,
+  yet zypper's download-only summary still said "Package download size:
+  695.5 MiB", the one-line form, counting nothing as cached. The machine
+  received about 555 MiB in that step. The liveness line (run.py
+  _tick_activity) showed "357 MiB of 696 MiB" with 113 of 115 packages
+  fetched: its numerator excludes the cached baseline, its total does
+  not. So the premise holds after all. The figures row ("Download: X of
+  693 MiB") tracked correctly. main's updater.py has the same arithmetic.
+  Progress (2026-10-14): fixed on main in e384371, released in 1.4.10:
+  while the total is known, the liveness numerator is
+  min(_dl_base + _dl_grown, _dl_total); the rate anchor already holds the
+  baseline. main's gui-smoke check "already-cached packages are excluded"
+  encoded the defect and was replaced. v2 owes the same edit in
+  oneup/gui/run.py _tick_activity and _reset_activity's comment, and the
+  same test change in v2's tests/gui-smoke.py.
 
 ## 1.4.7 — release-build fix
 
