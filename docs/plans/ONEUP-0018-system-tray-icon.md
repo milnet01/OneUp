@@ -884,6 +884,6 @@ git commit -m "ONEUP-0018: document the system-tray icon (CHANGELOG + README)"
 
 **Type consistency** — method names are stable across tasks: `_ensure_tray`, `_teardown_tray`, `_apply_tray_total`, `_tray_check`/`_tray_check_args`, `_parse_tray_line`, `_install_autostart`/`_remove_autostart`/`_startboot_enabled`/`_autostart_exec`, `on_tray_toggled`/`on_startboot_toggled`, `_set_tray_checked`/`_set_startboot_checked`, `_raise_existing_instance`. State fields (`_tray`, `_tray_timer`, `_tray_total`, `_tray_checked_at`, `_tray_hint_shown`, `_local_server`, `_traycheck_proc`, `_traycheck_buf`, `_tray_available`) are all declared once in `__init__` (Task 3, Step 1).
 
-**Placeholder scan** — no TBD/TODO; every code step carries complete code.
+**Placeholder scan** — no `TBD`/`TODO`; every code step carries complete code.
 
 **Ordering note for the executor:** Task 3 declares the `__init__` state fields that Tasks 4–6 rely on; keep Task order. `_ensure_tray` (Task 4) is stubbed in Task 5's coupling tests, so Task 5 does not depend on a working tray.

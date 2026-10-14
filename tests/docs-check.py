@@ -95,7 +95,8 @@ def check_sections() -> None:
 
 # --- §7: a loop-log tally must balance --------------------------------------
 def check_loop_tallies() -> None:
-    for path in docs("docs/standards", "docs/reference", "docs/design", "docs/specs"):
+    for path in docs("docs/standards", "docs/reference", "docs/design", "docs/specs",
+                     "docs/plans"):
         in_log = False
         for i, ln in enumerate(path.read_text().split("\n"), 1):
             if ln.startswith("#"):
@@ -130,7 +131,8 @@ def check_loop_tallies() -> None:
 def check_line_citations() -> None:
     # docs/specs/ is exempt until ONEUP-0065 converts the citations the four remaining
     # pre-2026-07-26 specs carry (62 of them; ONEUP-0054's 7 went when ONEUP-0057 Task 12
-    # revised it). Widen this to include specs when that item ships.
+    # revised it). Widen this to include specs when that item ships. docs/plans/ waits with
+    # them: the ONEUP-0057 plan carries the same pre-rule citations (ONEUP-0129).
     for path in docs("docs/standards", "docs/reference", "docs/design"):
         ignore = False
         for i, ln in enumerate(path.read_text().split("\n"), 1):
@@ -170,7 +172,8 @@ def check_pointers() -> None:
 
 # --- §6: no unfinished markers ----------------------------------------------
 def check_markers() -> None:
-    for path in docs("docs/standards", "docs/reference", "docs/design", "docs/specs"):
+    for path in docs("docs/standards", "docs/reference", "docs/design", "docs/specs",
+                     "docs/plans"):
         for i, ln in enumerate(path.read_text().split("\n"), 1):
             hit = MARKER_RE.search(ln)
             check(hit is None, path, i, "§6",

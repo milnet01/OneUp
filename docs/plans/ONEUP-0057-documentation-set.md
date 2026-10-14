@@ -633,7 +633,7 @@ Copied verbatim from the design doc and the user's decisions. Every task inherit
 - **`main` is frozen** for code (design §5.4) — documentation is not a release and lands
   on `main` normally. **No code changes in this plan** except Task 11's `CLAUDE.md` and
   Task 6's removal of `dialogs.md`.
-- **No placeholders.** No "TBD", no "to be decided later". A question that cannot be
+- **No placeholders.** No `TBD`, no "to be decided later". A question that cannot be
   answered from the tree is put to the user in the task that hits it.
 - **Plain English, with the jargon defined inline.** Every standard opens with one
   sentence a non-programmer could act on.

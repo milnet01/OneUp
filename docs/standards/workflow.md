@@ -159,6 +159,14 @@ These are not feature work and are unaffected:
   also removes the GitHub → OBS webhook and its OBS workflow file (ONEUP-0255). No 1.4.x
   is owed for it. A batch of changes, not a category.
 
+- **ONEUP-0129 and ONEUP-0126, two docs- and engine-suite checks** — the ninth and tenth
+  exceptions, granted 2026-10-14 at the user's decision. ONEUP-0129 makes
+  `tests/docs-check.py` walk `docs/plans/`, which `main` holds as well as `v2`. ONEUP-0126
+  pins each marker's field layout in the engine suite, so a field added to one marker
+  fails the suite. Both qualify for the ONEUP-0097 reason: `main`'s gate runs them on every
+  push of `main`. Nothing user-facing changes, so **no 1.4.x is owed**. Two named changes,
+  not a category.
+
 **Why the freeze is stated as a testable question rather than a preference:** the failure
 mode of any freeze is a slow slide back into 1.x work, one "small" fix at a time. *Is it a
 fix, a feature request, or neither?* has an answer; "is this important enough?" does not.
