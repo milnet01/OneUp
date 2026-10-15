@@ -8045,7 +8045,7 @@ when complete (that document's §7).
   Source: user-real-run-2026-10-08.
   Lanes: engine, gui.
 
-- 📋 [ONEUP-0244] **Run v2's full suites on Ubuntu 22.04 before the 2.0 release build.**
+- ✅ [ONEUP-0244] **Run v2's full suites on Ubuntu 22.04 before the 2.0 release build.**
   The release workflow builds and tests on ubuntu-22.04. 1.4.6's build
   hung there for six hours because a test drove a tool (util-linux
   `script`) whose older version behaves differently (ONEUP-0243). v2
@@ -8053,6 +8053,12 @@ when complete (that document's §7).
   run on 22.04. Run them in an ubuntu:22.04 container (the same way
   ONEUP-0243 was proved) before tagging 2.0.0, and fix anything that
   assumes a newer tool or Python.
+  Shipped 2026-10-15 (b5c8e7c). v2 at 3051e6b in
+  catthehacker/ubuntu:act-22.04 with Python 3.14.8: every suite green
+  (engine 510, gui-smoke 859 and 860 reversed, service 76, the rest
+  170), no fixes needed. release.yml gained the system service suite it
+  had been missing. Run again only if a later v2 change adds a tool
+  dependency.
   **Layman:** Check the new 2.0 app passes its tests on the older Linux that GitHub builds releases on, so the 2.0 release doesn't stall the way 1.4.6 did.
   Kind: test.
   Source: in-session-2026-10-10.
