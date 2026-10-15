@@ -8369,6 +8369,13 @@ when complete (that document's §7).
   waits on the running job, which could be the zypper removing OneUp.
   README and CHANGELOG updated. Still owed: §4.12's three measurements and
   the by-hand runs in §7, on a real install.
+  Measured (2026-10-15), spec §4.12 item 1: holds. RPM built from v2
+  582c909 and installed. Over SSH to localhost (logind session
+  Remote=yes Type=tty Active=yes, no polkit agent), the engine's
+  service_client.open_session(interactive=True) was refused
+  NotAuthorized with reason `challenge`, not `dismissed`; CanUpdate
+  answered `no` there and `yes` from the desktop session. §4.7's sudo
+  fallback can tell the two apart.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.

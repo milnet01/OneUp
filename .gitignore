@@ -28,3 +28,6 @@ build/
 #       | sort -n | tail -1 | sed 's/^0*//' > .roadmap-counter
 #
 .roadmap-counter
+# Local git worktrees (`git worktree move` / `add` them here), e.g. .worktrees/main for
+# 1.4.x fixes. A checkout of another branch, never part of this one.
+.worktrees/
