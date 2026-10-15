@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=279 -->
+<!-- ants-roadmap-id-high-water: ONEUP=280 -->
 
 # OneUp Roadmap
 
@@ -8592,6 +8592,20 @@ when complete (that document's §7).
   **Layman:** The OneUp you start from the app menu is the unfinished 2.0, but it calls itself 1.4.9, so you can't tell which one you're running.
   Kind: ux.
   Source: user-request-2026-10-13.
+
+- 📋 [ONEUP-0280] **Removing the old Passwordless rule on a service install says nothing when it succeeds.**
+  Found in ONEUP-0249's by-hand run (RPM installed from v2 582c909). The
+  user pressed Remove in auth.offer_old_dropin_removal and gave the
+  password: the guard was removed and `sudo -n -l zypper` now fails, but
+  the user saw "nothing happened". _on_auth_finished only resets the
+  status to "Ready." and re-probes; on the sudo route the switch flipping
+  is the feedback, and on the service route there is no switch. Fix: after
+  a --revoke-auth from the offer, re-check _old_dropin_present() and say
+  removed or not removed in a message. Add a gui-smoke check for each.
+  **Layman:** After you press Remove and type your password, OneUp should say the old setting is gone, or say it failed.
+  Kind: ux.
+  Source: user-report-2026-10-15.
+  Lanes: gui.
 
 ## 2.1.0 — after 2.0
 

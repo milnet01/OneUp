@@ -68,9 +68,8 @@ with `roadmap_log`, never by editing the file, which is generated output (§6).
 ONEUP-0034, the window is a package — `oneup/gui/`, a module per job, behind a shim still
 called `updater.py`; as of ONEUP-0054 stage 9 the engine is one too — `oneup/engine/`, run
 as `python3 -m oneup.engine`, with `update_system.sh` kept only as a terminal fallback,
-frozen at the switch — and the state paths in **both halves** honour `XDG_STATE_HOME`
-when it is set to an ABSOLUTE path, falling back to `~/.local/state/oneup/` when it is
-unset, empty or relative (ONEUP-0059).
+frozen at the switch. `main` is frozen at 1.4.0 and takes only qualifying bug fixes
+(`docs/standards/workflow.md` §1).
 The privilege split, the marker contract, the step keys and everything else in this
 section are unchanged by either; only the file boundaries and the engine's language moved.
 
@@ -115,13 +114,9 @@ Runtime state lives in `~/.local/state/oneup/`, and four files there are a contr
 the two halves rather than mere state: `docs/reference/marker-protocol.md` §8. `run.state`
 and `stop.request` are the original pair; `hold.state` and `go.request` were added by
 ONEUP-0044 so one engine can span the size preview and the run. (On `v2`
-that directory follows an absolute `XDG_STATE_HOME` — in **both** halves, in one commit,
+that directory follows `XDG_STATE_HOME` when it is set to an ABSOLUTE path, and falls back
+to `~/.local/state/oneup/` otherwise (ONEUP-0059) — in **both** halves, in one commit,
 because moving one side alone leaves Stop writing where the engine never looks.)
-
-**2.0 replaces both files** — on `v2` the window is a package (ONEUP-0034) and the engine is
-Python (ONEUP-0054, the window's only engine since stage 9).
-`docs/design/oneup-2.0.md` is the programme; `main` is frozen at 1.4.0 and takes only
-qualifying bug fixes (`docs/standards/workflow.md` §1).
 
 ## 5. Packaging & versioning
 
