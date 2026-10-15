@@ -8,6 +8,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Installed from the openSUSE repository or the RPM, OneUp asks for your password the way Discover does** (ONEUP-0249)
+  OneUp now comes with a small system service that runs its update
+  commands. It checks the same permission Discover checks when it
+  installs updates: if Discover would ask for a password, OneUp asks
+  too, once per update. These installs no longer have the
+  "Passwordless" setting, and OneUp offers once to remove an old one.
+  The AppImage keeps the "Passwordless" setting as before.
+
 - **Clicking a system package shows what it is and, once its new version has downloaded or installed, what changed in it.** (ONEUP-0260)
   A package OneUp can describe shows ⓘ after its name, in every
   layout; clicking it, or pressing Enter on it, opens the details. The

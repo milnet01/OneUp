@@ -8357,6 +8357,18 @@ when complete (that document's §7).
   On Leap 15.x %{_libexecdir} is /usr/lib, so the spec must install the launcher at the
   path the unit names, or rewrite the unit's ExecStart at build time (and the INV-13
   check with it). The launcher also hard-codes /usr/share/oneup.
+  Progress (2026-10-15): slice 4. The window (§4.10): the AppImage's
+  engine gets ONEUP_BACKEND=sudo (INV-10); timer runs pass
+  ONEUP_NONINTERACTIVE=1 (INV-16); on a service install Settings shows one
+  line instead of Passwordless, automatic updates follow CanUpdate, and the
+  window offers once to remove an old drop-in. Its sudo -n -l check is the
+  window's one sudo call; security.md §1.1 now names it. The RPM installs
+  §4.8's four files (launcher at the literal /usr/libexec path, owning that
+  directory only where %{_libexecdir} differs), Requires python3-jeepney and
+  dbus-1, and never stops or restarts the service: no %preun, because a stop
+  waits on the running job, which could be the zypper removing OneUp.
+  README and CHANGELOG updated. Still owed: §4.12's three measurements and
+  the by-hand runs in §7, on a real install.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.

@@ -12,13 +12,18 @@ BuildArch:      noarch
 # Installed at build time so the icon's /usr/share/icons/hicolor/... parent dirs
 # are owned during the file-list check (also required at runtime, below).
 BuildRequires:  hicolor-icon-theme
+# %%{_unitdir} and the %%service_* scriptlets for OneUp's system service.
+BuildRequires:  systemd-rpm-macros
+%{?systemd_ordering}
 
 # The GUI needs Qt for Python; the engine calls zypper. Everything else is
 # optional — OneUp skips steps for tools that are not installed.
 Requires:       python3-pyside6
 Requires:       zypper
-# The engine performs every privileged step via sudo; without it the app installs
-# but no update can run.
+# The engine reaches root through OneUp's system service (ONEUP-0249), which talks
+# D-Bus through jeepney. sudo stays: a run from an SSH session falls back to it.
+Requires:       python3-jeepney
+Requires:       dbus-1
 Requires:       sudo
 # Owns /usr/share/icons/hicolor/... so the installed SVG's parent dirs are packaged.
 Requires:       hicolor-icon-theme
@@ -35,8 +40,10 @@ optional toggle. It can check for updates read-only, follow the desktop
 light/dark theme, and optionally check weekly in the background and notify you.
 
 The GUI never runs as root; a separate engine (the oneup.engine Python package,
-also runnable as oneup-engine) does the privileged work behind a single password
-prompt. The previous shell engine, update_system.sh, ships as a fallback.
+also runnable as oneup-engine) decides every privileged step. OneUp's system
+service runs those steps as root when this computer's software-update permission
+allows it, the same permission Discover uses, so no OneUp password setting is
+needed. The previous shell engine, update_system.sh, ships as a fallback.
 
 %prep
 %autosetup -n oneup-%{version}
@@ -83,6 +90,31 @@ install -Dm0644 data/%{app_id}.svg \
 install -Dm0644 data/%{app_id}.metainfo.xml \
     %{buildroot}%{_datadir}/metainfo/%{app_id}.metainfo.xml
 
+# OneUp's system service (ONEUP-0249 §4.8): started by D-Bus on demand, never at boot.
+# The launcher goes to /usr/libexec on every release, Leap 15 included, where
+# %%{_libexecdir} is /usr/lib: the unit's ExecStart names that path.
+install -Dm0755 packaging/rpm/oneup-service %{buildroot}/usr/libexec/oneup-service
+install -Dm0644 data/oneup-service.service %{buildroot}%{_unitdir}/oneup-service.service
+install -Dm0644 data/za.co.antsprojectshub.OneUp1.conf \
+    %{buildroot}%{_datadir}/dbus-1/system.d/za.co.antsprojectshub.OneUp1.conf
+install -Dm0644 data/za.co.antsprojectshub.OneUp1.service \
+    %{buildroot}%{_datadir}/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service
+
+%pre
+%service_add_pre oneup-service.service
+
+%post
+%service_add_post oneup-service.service
+
+# No %%preun: %%service_del_preun stops the service on removal, and a stop waits for the
+# running job. If that job is the zypper removing OneUp, the two wait on each other
+# until TimeoutStopSec. Left running, the service exits on its own once idle (§4.8).
+
+%postun
+# Never restarted on upgrade: the service may be running the very zypper that is
+# upgrading OneUp. The next start after it exits idle loads the new code (§4.8).
+%service_del_postun_without_restart oneup-service.service
+
 %files
 %license LICENSE
 %doc README.md
@@ -92,6 +124,13 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/applications/%{app_id}.desktop
 %{_datadir}/icons/hicolor/scalable/apps/%{app_id}.svg
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
+%if "%{_libexecdir}" != "/usr/libexec"
+%dir /usr/libexec
+%endif
+/usr/libexec/oneup-service
+%{_unitdir}/oneup-service.service
+%{_datadir}/dbus-1/system.d/za.co.antsprojectshub.OneUp1.conf
+%{_datadir}/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service
 
 %changelog
 * Wed Oct 14 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.10-0

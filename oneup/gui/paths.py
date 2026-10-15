@@ -244,7 +244,9 @@ def _resolve_engine() -> tuple[list[str] | None, list[str]]:
         python, copy = _machine_python(), _engine_copy()
         tried = [f"the engine source in {HERE / 'engine-src'}",
                  f"a python3 of {PYTHON_FLOOR[0]}.{PYTHON_FLOOR[1]} or newer on PATH"]
-        prefix = (["env", *_library_path_env(), f"PYTHONPATH={copy}",
+        # ONEUP_BACKEND=sudo: the AppImage's engine never uses a system service, which
+        # may be a different version from it (ONEUP-0249 INV-10).
+        prefix = (["env", *_library_path_env(), f"PYTHONPATH={copy}", "ONEUP_BACKEND=sudo",
                    python, "-m", "oneup.engine"] if python and copy else None)
     else:
         main = HERE / "oneup" / "engine" / "__main__.py"
@@ -260,8 +262,11 @@ def _resolve_engine() -> tuple[list[str] | None, list[str]]:
     return prefix, tried
 
 
-def engine_argv(*args: str) -> list[str]:
+def engine_argv(*args: str, env: dict[str, str] | None = None) -> list[str]:
     """The full command that launches the engine, program first.
+
+    `env` adds variables for this one launch, ahead of the resolver's own `env`, so
+    a variable the resolver sets wins (the AppImage's `ONEUP_BACKEND=sudo`).
 
     A `QProcess` site takes `argv[0]` as the program and `argv[1:]` as its
     arguments; a `subprocess` site passes the list whole. Every launch in the
@@ -276,7 +281,29 @@ def engine_argv(*args: str) -> list[str]:
     prefix, tried = _resolve_engine()
     if prefix is None:
         raise FileNotFoundError(f"no update engine; tried {'; '.join(tried)}")
-    return [*prefix, *args]
+    extra = ["env", *(f"{k}={v}" for k, v in env.items())] if env else []
+    return [*extra, *prefix, *args]
+
+
+def engine_environ() -> dict[str, str]:
+    """The environment the engine is launched with: this process's, changed by the
+    `env` words heading the resolver's argv. The window asks the engine's own
+    `route.engine_route` with it, so both read the same route (ONEUP-0249 §4.10)."""
+    environ = dict(os.environ)
+    prefix = _resolve_engine()[0] or []
+    i = 1 if prefix[:1] == ["env"] else len(prefix)
+    while i < len(prefix):
+        word = prefix[i]
+        if word == "-u" and i + 1 < len(prefix):
+            environ.pop(prefix[i + 1], None)
+            i += 2
+        elif "=" in word:
+            name, _, value = word.partition("=")
+            environ[name] = value
+            i += 1
+        else:
+            break                                   # the program: env's words end here
+    return environ
 
 
 def engine_available() -> bool:

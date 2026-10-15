@@ -47,8 +47,8 @@ OneUp can:
   menu. Optional (off by default), and can also start at login.
 - **Update automatically every week** — optionally (off by default). An "Automatic
   updates" setting runs the whole update on a weekly schedule in the background,
-  keeping the snapshot/rollback safety net. It needs the "Passwordless" setting, so
-  an unattended run doesn't stop to ask for a password — and if that setting ever
+  keeping the snapshot/rollback safety net. It needs updates to run without a
+  password, so an unattended run doesn't stop to ask for one — and if that ever
   stops working, the weekly update switches itself off and tells you, rather than
   quietly doing nothing every week.
 - **Restart just the affected services** instead of rebooting, when a full reboot
@@ -60,11 +60,17 @@ OneUp can:
   on, turn one off, or remove it entirely, which is what you want when a
   third-party source is the thing causing trouble.
 - **Roll back** to the snapshot it took before the update, in one click.
-- **Skip the password prompt** — optionally (off by default). A "Passwordless"
-  toggle stops OneUp asking for your password on every update. It stores **no
-  password**: the system just remembers the decision for OneUp's update commands,
-  and switching it off revokes it instantly. The one exception is firmware, which
-  asks the system for permission its own way and may still show a prompt.
+- **Ask for your password the way Discover does.** Installed from the openSUSE
+  repository or the RPM, OneUp asks for the same permission Discover asks for when it
+  installs updates. If Discover would ask you for a password, OneUp asks too, once per
+  update; if this computer lets you update without one, so does OneUp. There is no
+  OneUp setting to change. If an older OneUp's "Passwordless" setting is still on the
+  computer, OneUp offers once to remove it.
+- **Skip the password prompt on the AppImage** — optionally (off by default). A
+  "Passwordless" toggle stops OneUp asking for your password on every update. It
+  stores **no password**: the system just remembers the decision for OneUp's update
+  commands, and switching it off revokes it instantly. The one exception is firmware,
+  which asks the system for permission its own way and may still show a prompt.
 - **Tell you when a newer OneUp is out.** It asks GitHub each time it starts; switch
   "New-version check" off in Settings if you would rather it did not.
 - **Explain failures** in plain English, warn about low disk space or duplicate
@@ -76,9 +82,12 @@ needed, and a run history.
 
 ## Design notes
 
-- **OneUp never runs as root.** The GUI is a thin front-end; all privileged work
-  happens in a separate engine, which authenticates **once** through your desktop's
-  standard password prompt and keeps the credential warm for the run.
+- **The window never runs as root.** It is a thin front-end; a separate engine
+  decides every privileged step and asks **once** per update. Installed from the
+  repository or the RPM, the engine hands each step to OneUp's small system service,
+  which runs it as root after checking the permission Discover uses. As an AppImage,
+  the engine asks through your desktop's standard password prompt and keeps the
+  credential warm for the run.
 - **It gets PackageKit out of the way.** The desktop's background updater grabs the
   package lock shortly after login; OneUp stops it first so `zypper` can work, and
   it restarts on its own afterwards.

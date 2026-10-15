@@ -272,8 +272,8 @@ OneUp's entire job is running other programs, so this section is load-bearing.
    names are the exception: a value is interpolated into them only after §4's shape
    check — the snapshot id reaching `snapper rollback` is checked to be a bare number
    before it is used.
-3. **The GUI never calls `sudo` and never becomes root** — measured: zero `sudo`
-   invocations in the window's code, `oneup/gui/`. Update work shells out to the engine, which is the only
+3. **The GUI never runs a command through `sudo` and never becomes root** — its one `sudo`
+   call only lists, and `docs/standards/security.md` §1.1 names it. Update work shells out to the engine, which is the only
    part that touches root during a run. It *may* ask `pkexec` to run a named program as
    root for a short user-initiated action outside a run, and **every argument is validated
    first, at every such site**. Corrected 2026-07-26: an earlier revision of this line said

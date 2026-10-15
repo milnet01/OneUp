@@ -78,9 +78,11 @@ answers OneUp's own supply chain. Physical access, and a hostile kernel or init.
 
 This is rule one. Everything else in this document exists to keep it true.
 
-**1.1 — The GUI process never becomes root, and never calls `sudo`.** Measured: the window
-package `oneup/gui/` and the `updater.py` shim contain **zero** `sudo` invocations.
-Root work is delegated, never assumed.
+**1.1 — The GUI process never becomes root, and never runs a command through `sudo`.**
+Root work is delegated, never assumed. The window package `oneup/gui/` and the `updater.py`
+shim call `sudo` in one place only, and it runs nothing: on a service install,
+`auth._old_dropin_present` asks `sudo -n -l` whether an old Passwordless rule still lets
+zypper run. `-l` only lists, and `-n` never prompts (ONEUP-0249 §4.10).
 
 **1.2 — The engine is the only thing that runs privileged commands during an update.**
 Measured at `58ea3bc`, `update_system.sh` made **34** privileged invocations: **14**

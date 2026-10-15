@@ -78,6 +78,10 @@ for _mock in ("zypper", "rpm"):
     os.chmod(os.path.join(_BIN, _mock), 0o755)  # noqa: S103 — a PATH mock must be executable.
 os.environ["ONEUP_ZYPP_PACKAGES"] = os.path.join(_DETAILS, "packages")
 os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
+# The sudo route, as tests/run-tests.sh's run_engine pins it. Once OneUp's RPM is
+# installed here the window would otherwise take the service route, and every
+# Passwordless scenario would test a switch it does not show (ONEUP-0249 §4.10).
+os.environ["ONEUP_BACKEND"] = "sudo"
 
 try:
     import shiboken6
@@ -130,7 +134,8 @@ def _load_updater():
 # module too, and a `from … import` on either side would leave the redirect
 # landing somewhere nobody reads — green suite, real file deleted
 # (docs/specs/ONEUP-0034-gui-modules.md §4.4, INV-2).
-from oneup.gui import (  # noqa: E402 — must follow the sandbox + sys.path block above.
+from oneup.engine import route as route_mod  # noqa: E402 — after the sandbox block.
+from oneup.gui import (  # noqa: E402 — same reason.
     app as gui_app,  # `app` is the QApplication in main(); the module needs its own name
 )
 from oneup.gui import (  # noqa: E402 — same reason.
@@ -159,6 +164,10 @@ from oneup.gui import (  # noqa: E402 — same reason.
     tray,
     window,
 )
+
+# The old Passwordless guard's two paths, in the sandbox: the window's offer to remove
+# one (ONEUP-0249 §4.10) must never read this machine's real guard.
+auth.OLD_GUARDS = (os.path.join(_SANDBOX, "guard-libexec"), os.path.join(_SANDBOX, "guard-lib"))
 
 PASS = 0
 FAIL = 0
@@ -2008,6 +2017,17 @@ def main() -> int:
               f"PYTHONPATH={_copies[0]}" in _a and _a[-3:] == ["-m", "oneup.engine", "--help"])
         check("and removes the bundle's LD_LIBRARY_PATH",
               _a[:3] == ["env", "-u", "LD_LIBRARY_PATH"])
+        check("INV-10 (ONEUP-0249) and forces the sudo route",
+              "ONEUP_BACKEND=sudo" in _a[:_a.index("-m")])
+        os.environ["ONEUP_BACKEND"] = "service"
+        _act = Path(tempfile.mkstemp(dir=_SANDBOX)[1])
+        _saved_act, route_mod.ACTIVATION_FILE = route_mod.ACTIVATION_FILE, str(_act)
+        try:
+            check("INV-10 so the window keeps the switch even where the service is installed",
+                  paths.engine_environ()["ONEUP_BACKEND"] == "sudo" and not auth.service_route())
+        finally:
+            route_mod.ACTIVATION_FILE = _saved_act
+            os.environ["ONEUP_BACKEND"] = "sudo"
         # Run from outside the repo: `-m` puts the working directory first on the
         # path, so from the repo root the checkout's own package would answer.
         _help = subprocess.run(_a, capture_output=True, text=True,  # noqa: S603
@@ -2139,6 +2159,8 @@ def main() -> int:
     with open(_mock_engine, "w") as _f:
         _f.write("import os, sys\n"
                  "open(os.environ['ONEUP_MOCK_ARGV'], 'w').write('\\n'.join(sys.argv[1:]))\n"
+                 "open(os.environ['ONEUP_MOCK_ARGV'] + '.env', 'w')"
+                 ".write(os.environ.get('ONEUP_NONINTERACTIVE', 'unset'))\n"
                  "sys.stdout.write(open(os.environ['ONEUP_MOCK_OUT']).read())\n"
                  "sys.exit(int(os.environ.get('ONEUP_MOCK_RC', '0')))\n")
     _mock_env = {"ONEUP_MOCK_ARGV": os.path.join(_SANDBOX, "mock-engine.argv"),
@@ -2185,6 +2207,8 @@ def main() -> int:
           and re.fullmatch(rf"--log={re.escape(str(paths.STATE_LOG_DIR))}/{_stamp}\.check\.log",
                            _argv[1]) is not None)
     _c, _argv, _, _ = _headless(gui_app._headless_update, ["@@DONE@@|ok"])
+    check("INV-16 (ONEUP-0249) a timer run tells the engine nobody is there to ask",
+          Path(_mock_env["ONEUP_MOCK_ARGV"] + ".env").read_text() == "1")
     check("INV-2 --update argv is --auto-skip-repos and a log under LOG_DIR, nothing else",
           len(_argv) == 2 and _argv[0] == "--auto-skip-repos"
           and re.fullmatch(rf"--log={re.escape(str(paths.STATE_LOG_DIR))}/{_stamp}\.log",
@@ -2533,6 +2557,71 @@ def main() -> int:
     auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|on\n"))    # the fresh answer
     check("ONEUP-0178: the fresh answer installs the update timer", bool(installed_h))
     _unpatch_all()
+
+    # (i) ONEUP-0249 §4.10: on a service install the switch gives way to one line, and
+    # automatic updates follow polkit's answer, which OneUp cannot grant. Each window is
+    # built with the route forced, since the suite pins ONEUP_BACKEND=sudo.
+    _infos = []
+    QMessageBox.information = staticmethod(lambda *a, **k: _infos.append(a[1:]) or 0)
+    _patch(auth, "service_route", lambda: True)
+    wS = window.Updater()
+    _unpatch_all()
+    _dlgS = settings_dialog.SettingsDialog(wS)
+    check("ONEUP-0249 a service install shows the permission line in Settings",
+          "software-update permission" in getattr(_dlgS, "service_note", QLabel()).text())
+    check("ONEUP-0249 and lays out no Passwordless switch",
+          wS.auth_btn.window() is not _dlgS and wS.auth_btn not in _dlgS.focus_chain())
+    check("ONEUP-0249 and its automatic-update row does not name Passwordless",
+          not any("passwordless" in lbl.text().lower() for lbl in _dlgS.findChildren(QLabel)))
+    wP = window.Updater()
+    _dlgP = settings_dialog.SettingsDialog(wP)
+    check("ONEUP-0249 the sudo route keeps the switch",
+          not hasattr(_dlgP, "service_note") and wP.auth_btn in _dlgP.focus_chain())
+
+    _asked, _consent, _installed_i = [], [], []
+    _patch(auth, "_query_auth_status", lambda win: _asked.append(1))
+    _patch(auth, "_confirm_passwordless", lambda win, lead="": _consent.append(1) or False)
+    _patch(autostart, "_install_user_timer", lambda *a, **k: (_installed_i.append(a) or True))
+    auth._set_auth_checked(wS, False)
+    autostart.on_autoupdate_toggled(wS, True)
+    check("ONEUP-0249 enabling automatic updates asks polkit, never offers a grant",
+          _asked == [1] and not _consent and wS._pending_autoupdate is True)
+    auth._on_auth_status_finished(wS, _StubProc("@@AUTH@@|off\n"))
+    check("ONEUP-0249 a no from polkit installs no timer and says why",
+          not _installed_i and not wS.autoupdate_btn.isChecked()
+          and any("password" in str(i) for i in _infos))
+    _unpatch_all()
+
+    # The old drop-in: offered once on a service install, never on the sudo route.
+    _offers, _revokes = [], []
+    _orig_exec = QMessageBox.exec
+    QMessageBox.exec = lambda self: _offers.append(self.text()) or QMessageBox.Ok
+    _patch(auth, "_run_auth", lambda win, action, text, env=None: _revokes.append((action, env)))
+    try:
+        Path(auth.OLD_GUARDS[1]).write_text("guard\n")
+        auth.offer_old_dropin_removal(wP)
+        check("ONEUP-0249 the sudo route never offers to remove its own rule", not _offers)
+        wS.settings.remove("old_dropin_offered")
+        auth.offer_old_dropin_removal(wS)
+        check("ONEUP-0249 a guard on a service install brings the offer",
+              len(_offers) == 1 and "Passwordless" in _offers[0])
+        check("ONEUP-0249 removing runs --revoke-auth on the sudo route",
+              _revokes == [("--revoke-auth", {"ONEUP_BACKEND": "sudo"})])
+        auth.offer_old_dropin_removal(wS)
+        check("ONEUP-0249 the offer comes once", len(_offers) == 1)
+        Path(auth.OLD_GUARDS[1]).unlink()
+        wS.settings.remove("old_dropin_offered")
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(_SUDO_LOG)
+        auth.offer_old_dropin_removal(wS)
+        _sudo_calls = Path(_SUDO_LOG).read_text() if os.path.exists(_SUDO_LOG) else ""
+        check("ONEUP-0249 with no guard, sudo is asked only to list (-n -l)",
+              _sudo_calls.startswith("-n -l ") and _sudo_calls.count("\n") == 1)
+        check("ONEUP-0249 and its refusal brings no offer", len(_offers) == 1)
+    finally:
+        QMessageBox.exec = _orig_exec
+        wS.settings.remove("old_dropin_offered")
+        _unpatch_all()
 
     QMessageBox.information = _orig_msg_info
     QMessageBox.warning = _orig_msg_warn

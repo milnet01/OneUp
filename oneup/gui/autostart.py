@@ -251,8 +251,10 @@ def on_autoupdate_toggled(win, on: bool):
         # mirror race where the user un-clicks mid-probe); re-enabled in the settle.
         win._pending_autoupdate = True
         win.autoupdate_btn.setEnabled(False)
-        if win.auth_btn.isChecked():
+        if win.auth_btn.isChecked() or win._service_route:
             # Looks on — verify with a fresh probe; the settle installs iff truly on.
+            # On the service route there is nothing OneUp can grant, so the probe is
+            # the whole answer and the settle says why when it is no (ONEUP-0249 §4.10).
             auth._query_auth_status(win)
         else:
             # Offer to enable BOTH at once, with the shared consent caveat.

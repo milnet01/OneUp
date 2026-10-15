@@ -59,18 +59,32 @@ class SettingsDialog(QDialog):
                 "Check weekly in the background and notify you when updates are "
                 "ready."),
             parent.auto_btn))
-        root.addWidget(self._row(
-            QCoreApplication.translate(
+        if parent._service_route:
+            # A service install has no switch to offer: who may update is this
+            # computer's permission, the one Discover uses (ONEUP-0249 §4.10).
+            self.service_note = QLabel(QCoreApplication.translate(
                 "settings_dialog",
-                "Skip the password prompt for OneUp's update commands (opt-in; "
-                "you can switch it off to revoke instantly)."), parent.auth_btn))
-        root.addWidget(self._row(
-            QCoreApplication.translate(
+                "Updates follow this computer's software-update permission, the same "
+                "one Discover uses, so OneUp has no password setting of its own."))
+            self.service_note.setWordWrap(True)
+            root.addWidget(self.service_note)
+            autoupdate_text = QCoreApplication.translate(
+                "settings_dialog",
+                "Install all updates automatically on a weekly schedule. Needs this "
+                "computer to allow updates without a password, and keeps the "
+                "snapshot/rollback safety net.")
+        else:
+            root.addWidget(self._row(
+                QCoreApplication.translate(
+                    "settings_dialog",
+                    "Skip the password prompt for OneUp's update commands (opt-in; "
+                    "you can switch it off to revoke instantly)."), parent.auth_btn))
+            autoupdate_text = QCoreApplication.translate(
                 "settings_dialog",
                 "Install all updates automatically on a weekly schedule. Needs "
                 "the passwordless setting, and keeps the snapshot/rollback safety "
-                "net."),
-            parent.autoupdate_btn))
+                "net.")
+        root.addWidget(self._row(autoupdate_text, parent.autoupdate_btn))
         root.addWidget(self._row(QCoreApplication.translate(
             "settings_dialog",
             "Show a small icon near the clock that turns amber when updates are "
@@ -159,7 +173,8 @@ class SettingsDialog(QDialog):
     def focus_chain(self) -> list[QWidget]:
         """This dialog's controls, in the order the headings lay them out."""
         p = self.parent()
-        return [p.auto_btn, p.auth_btn, p.autoupdate_btn, p.tray_btn, p.startboot_btn,
+        auth = [] if p._service_route else [p.auth_btn]    # not laid out on a service install
+        return [p.auto_btn, *auth, p.autoupdate_btn, p.tray_btn, p.startboot_btn,
                 p.appcheck_btn, p.theme_combo, p.layout_btn, p.textsize_btn, p.contrast_btn,
                 p.repos_btn, p.diag_btn, p.logkeep_btn, self.close_btn]
 

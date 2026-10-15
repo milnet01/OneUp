@@ -29,9 +29,13 @@ def _headless_engine(args: list[str], read) -> int:
     The output is read line by line and written straight back out, so a terminal user
     and the systemd journal still see the run go past (ONEUP-0077 INV-6) and nothing
     buffers a whole transcript. stderr is left inherited: it carries no markers, and
-    redirecting it would swallow the engine's own refusals."""
+    redirecting it would swallow the engine's own refusals.
+
+    `ONEUP_NONINTERACTIVE=1`: nobody is at the screen for a timer run, so the engine
+    must never let polkit ask (ONEUP-0249 INV-16)."""
     proc = subprocess.Popen(  # noqa: S603 — the resolver's argv, no shell.
-        paths.engine_argv(*args), stdout=subprocess.PIPE, text=True,
+        paths.engine_argv(*args, env={"ONEUP_NONINTERACTIVE": "1"}),
+        stdout=subprocess.PIPE, text=True,
         errors="replace", bufsize=1)
     for line in proc.stdout or ():
         sys.stdout.write(line)

@@ -3,18 +3,35 @@
 Reading, enabling and disabling the opt-in passwordless authorisation
 (ONEUP-0023), and the coupling that keeps an unattended weekly update from
 outliving the rule it needs (ONEUP-0099). The window never runs as root and
-never calls sudo: every one of these routes through the engine
-(`docs/standards/security.md` §1.4).
+never runs sudo as a command: every one of these routes through the engine
+(`docs/standards/security.md` §1.1, §1.4).
+
+On a packaged install the engine reaches root through OneUp's system service, and
+the setting is this computer's software-update permission instead (ONEUP-0249 §4.10).
 """
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 from datetime import datetime
 
 import shiboken6
 from PySide6.QtCore import QCoreApplication, QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox
 
+from ..engine import route
 from . import autostart, markers, paths
+
+# Where a Passwordless grant put its guard: the two paths the engine's `--revoke-auth`
+# sweeps (`actions.revoke_auth`). Module constants so a test can point them at scratch.
+OLD_GUARDS = ("/usr/libexec/oneup-download-guard", "/usr/lib/oneup-download-guard")
+
+
+def service_route() -> bool:
+    """Would the engine take OneUp's system service? Asked with the engine's own
+    environment, so the AppImage's `ONEUP_BACKEND=sudo` keeps its switch (§4.10)."""
+    return route.engine_route(paths.engine_environ()) == route.SERVICE
 
 
 def _refresh_auth_label(win):
@@ -84,6 +101,8 @@ def _on_auth_status_finished(win, proc: QProcess):
     # outside OneUp would answer the user's "on" click with "we switched it off".
     if "@@AUTH@@|off" in out and not win._pending_autoupdate:
         _stand_down_autoupdate(win, QCoreApplication.translate(
+            "auth", "This computer no longer allows updates without a password.\n\n")
+            if win._service_route else QCoreApplication.translate(
             "auth", "OneUp's passwordless rule is no longer active.\n\n"))
     # Re-enable the auto-update toggle if a pending enable had disabled it.
     win.autoupdate_btn.setEnabled(True)
@@ -101,8 +120,19 @@ def _on_auth_status_finished(win, proc: QProcess):
                         "The weekly update timer could not be enabled."))
         else:
             # Passwordless came back off (popup cancelled / visudo rejected / failed).
-            # The grant's @@HINT@@ was already surfaced in _on_auth_finished.
+            # The grant's @@HINT@@ was already surfaced in _on_auth_finished. On the
+            # service route there was no grant, so nothing has said why yet.
             autostart._set_autoupdate_checked(win, False)
+            if win._service_route:
+                QMessageBox.information(
+                    win, QCoreApplication.translate(
+                        "auth", "Automatic updates can't be turned on"),
+                    QCoreApplication.translate(
+                        "auth",
+                        "This computer asks for a password before it installs "
+                        "updates, and nobody is there to type it during an automatic "
+                        "update. Ask whoever looks after this computer to allow "
+                        "updates without a password, then try again."))
 
 
 def _confirm_passwordless(win, lead: str = "") -> bool:
@@ -149,12 +179,18 @@ def _stand_down_autoupdate(win, lead: str = ""):
         return
     autostart._remove_user_timer("oneup-update")
     autostart._set_autoupdate_checked(win, False)
-    QMessageBox.information(
-        win, QCoreApplication.translate("auth", "Automatic updates turned off"),
-        QCoreApplication.translate(
+    if win._service_route:
+        text = QCoreApplication.translate(
+            "auth",
+            "{lead}Automatic weekly updates were switched off because they need this "
+            "computer to allow updates without a password.").format(lead=lead)
+    else:
+        text = QCoreApplication.translate(
             "auth",
             "{lead}Automatic weekly updates were switched off because they need "
-            "the passwordless setting to run unattended.").format(lead=lead))
+            "the passwordless setting to run unattended.").format(lead=lead)
+    QMessageBox.information(
+        win, QCoreApplication.translate("auth", "Automatic updates turned off"), text)
 
 
 def on_auth_toggled(win, on: bool):
@@ -178,13 +214,15 @@ def on_auth_toggled(win, on: bool):
                   QCoreApplication.translate("auth", "Revoking authorization…"))
 
 
-def _run_auth(win, action: str, status_text: str):
+def _run_auth(win, action: str, status_text: str, env: dict[str, str] | None = None):
     p = getattr(win, "_authchg_proc", None)
     if p is not None and p.state() != QProcess.NotRunning:
         return
     if not paths.log_dir_ready(win):
-        # Nothing changed, so put both toggles back as they were (ONEUP-0184).
-        _set_auth_checked(win, action == "--revoke-auth")
+        # Nothing changed, so put both toggles back as they were (ONEUP-0184). On the
+        # service route the switch shows polkit's answer, which a revoke never moved.
+        if not win._service_route:
+            _set_auth_checked(win, action == "--revoke-auth")
         if win._pending_autoupdate:
             win._pending_autoupdate = False
             win.autoupdate_btn.setEnabled(True)
@@ -201,8 +239,60 @@ def _run_auth(win, action: str, status_text: str):
                             and _on_auth_not_started(win, pr))
     win._authchg_proc = p
     log = paths.STATE_LOG_DIR / f"{stamp}.auth.log"
-    argv = paths.engine_argv(action, f"--log={log}")
+    argv = paths.engine_argv(action, f"--log={log}", env=env)
     p.start(argv[0], argv[1:])
+
+
+def _old_dropin_present() -> bool:
+    """Is a Passwordless rule from before the service still here? A guard at either
+    path, or sudo saying it would run zypper without a password, which also finds a
+    rule older than the guard. `sudo -n -l` only lists: it never prompts and never
+    runs anything as root (`docs/standards/security.md` §1.1)."""
+    if any(os.path.exists(path) for path in OLD_GUARDS):
+        return True
+    zypper = shutil.which("zypper")
+    if not zypper:
+        return False
+    try:
+        return subprocess.run(  # noqa: S603 — fixed argv, no shell.
+            ["sudo", "-n", "-l", zypper], stdout=subprocess.DEVNULL,  # noqa: S607
+            stderr=subprocess.DEVNULL, timeout=10, check=False).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def offer_old_dropin_removal(win):
+    """On a service install, offer once to remove the old Passwordless rule (§4.10).
+
+    Once means once: the answer is remembered whichever it was. Removing runs the
+    sudo route's `--revoke-auth`, which asks for the administrator password once."""
+    if not win._service_route or win.settings.value("old_dropin_offered", False, type=bool):
+        return
+    if not _old_dropin_present():
+        return
+    win.settings.setValue("old_dropin_offered", True)
+    box = QMessageBox(win)
+    box.setIcon(QMessageBox.Question)
+    box.setWindowTitle(QCoreApplication.translate(
+        "auth", "Remove OneUp's old password setting?"))
+    box.setText(QCoreApplication.translate(
+        "auth",
+        "OneUp now follows this computer's software-update permission, the same one "
+        "Discover uses. The Passwordless rule from an earlier OneUp is still on this "
+        "computer, and OneUp no longer needs it."))
+    box.setInformativeText(QCoreApplication.translate(
+        "auth",
+        "Removing it asks for the administrator password once. If you keep it, "
+        "OneUp will not ask again."))
+    box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+    box.button(QMessageBox.Ok).setText(QCoreApplication.translate("auth", "Remove"))
+    box.button(QMessageBox.Cancel).setText(QCoreApplication.translate("auth", "Keep"))
+    box.setDefaultButton(QMessageBox.Ok)
+    QTimer.singleShot(0, lambda: win._center_child(box))
+    if box.exec() == QMessageBox.Ok:
+        _run_auth(win, "--revoke-auth", QCoreApplication.translate(
+            "auth", "Removing the old password setting… (approve the password popup)"),
+            env={"ONEUP_BACKEND": route.SUDO})
 
 
 def _on_auth_not_started(win, proc: QProcess):

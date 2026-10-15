@@ -283,7 +283,10 @@ class Updater(QMainWindow):
 
         # Opt-in "remember my authorization": stop prompting for the password on
         # every update. Off by default; the real state is probed from the engine
-        # after the window is built (_query_auth_status).
+        # after the window is built (_query_auth_status). On a service install the
+        # Settings dialog shows one line in its place, and the button stays as the
+        # probe's state for the automatic-update coupling (ONEUP-0249 §4.10).
+        self._service_route = auth.service_route()
         self.auth_btn = QPushButton()
         self.auth_btn.setObjectName("GhostBtn")
         self.auth_btn.setCheckable(True)
@@ -303,6 +306,10 @@ class Updater(QMainWindow):
         self.autoupdate_btn.setCheckable(True)
         self.autoupdate_btn.setCursor(Qt.PointingHandCursor)
         self.autoupdate_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Install all updates automatically every week (needs this computer to "
+            "allow updates without a password)") if self._service_route
+            else QCoreApplication.translate(
             "window",
             "Install all updates automatically every week (needs "
             "Passwordless)"))
@@ -734,6 +741,9 @@ class Updater(QMainWindow):
 
         # Non-blocking: reflect whether passwordless authorization is active.
         auth._query_auth_status(self)
+        # Once the window is up: on a service install, offer to remove an old
+        # Passwordless rule (ONEUP-0249 §4.10). It returns at once everywhere else.
+        QTimer.singleShot(0, partial(auth.offer_old_dropin_removal, self))
 
         # A run started by an earlier window may still be going — they outlive the
         # window on purpose (ONEUP-0042). Pick it up and follow it, rather than showing
