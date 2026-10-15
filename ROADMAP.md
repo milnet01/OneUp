@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=280 -->
+<!-- ants-roadmap-id-high-water: ONEUP=281 -->
 
 # OneUp Roadmap
 
@@ -8595,7 +8595,7 @@ when complete (that document's §7).
   Kind: ux.
   Source: user-request-2026-10-13.
 
-- 📋 [ONEUP-0280] **Removing the old Passwordless rule on a service install says nothing when it succeeds.**
+- ✅ [ONEUP-0280] **Removing the old Passwordless rule on a service install says nothing when it succeeds.**
   Found in ONEUP-0249's by-hand run (RPM installed from v2 582c909). The
   user pressed Remove in auth.offer_old_dropin_removal and gave the
   password: the guard was removed and `sudo -n -l zypper` now fails, but
@@ -8604,10 +8604,35 @@ when complete (that document's §7).
   is the feedback, and on the service route there is no switch. Fix: after
   a --revoke-auth from the offer, re-check _old_dropin_present() and say
   removed or not removed in a message. Add a gui-smoke check for each.
+  Shipped 2026-10-15 in 49a4ca2: the removal's finish re-checks
+  _old_dropin_present() and says removed or still there (unless an
+  @@HINT@@ already explained it). Four gui-smoke checks; two were seen
+  red first. Not yet seen by hand on the installed RPM.
   **Layman:** After you press Remove and type your password, OneUp should say the old setting is gone, or say it failed.
   Kind: ux.
   Source: user-report-2026-10-15.
   Lanes: gui.
+
+- ✅ [ONEUP-0281] **The engine suite fails 20 checks on a machine with OneUp's RPM installed, because not every scenario pins the sudo route.**
+  Found 2026-10-15 running ./local-CI.sh after the RPM from v2 582c909
+  was installed here: tests/run-tests.sh failed 20 checks, at load 45 and
+  again at load 12. Cause: run_engine (tests/mock-env.sh) pins
+  ONEUP_BACKEND=sudo, but start_held_engine, py_case and other direct
+  launches do not. With the D-Bus activation file present and jeepney
+  importable, route.engine_route answers service, so the mocked sudo
+  never runs (INV-4 "ran []", the hold scenarios "could not stage the
+  hold", restore_disabled). Breaks CLAUDE.md's first trap: a test must
+  never depend on the machine it runs on.
+  Fix: tests/run-tests.sh exports ONEUP_BACKEND=sudo for the whole suite;
+  a scenario wanting the service still sets it on its own command. New
+  check: an engine started outside run_engine still takes sudo with the
+  activation file present. Seen red unpinned (took service), green pinned.
+  Shipped 2026-10-15 in 27961d7. ./local-CI.sh green on this machine
+  with the RPM installed.
+  **Layman:** OneUp's own tests broke on a computer that has OneUp installed from the RPM; they now ignore what the computer has installed.
+  Kind: fix.
+  Source: in-session-2026-10-15.
+  Lanes: tests.
 
 ## 2.1.0 — after 2.0
 
