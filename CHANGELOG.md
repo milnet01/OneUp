@@ -122,6 +122,12 @@ All notable changes to OneUp are documented here. The format follows
   same wording, the same steps. Only where the code lives has moved, which
   makes future changes safer to make and easier to review.
 
+- **A documented design for 2.0** (ONEUP-0057)
+  Before 2.0's code was written, its design, its specs and the
+  project's standards were written down and reviewed, under
+  `docs/design/`, `docs/specs/` and `docs/standards/`. Nothing in the
+  app changes from this entry.
+
 ### Fixed
 
 - **Check for updates works straight after the download size is shown** (ONEUP-0266)
