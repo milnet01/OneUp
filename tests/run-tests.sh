@@ -18,6 +18,11 @@ set -uo pipefail
 # shellcheck source=tests/mock-env.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mock-env.sh"
 
+# Every scenario mocks sudo, so every engine the suite starts takes the sudo route, whatever
+# this machine has installed or the caller's shell has set (ONEUP-0281). A scenario that
+# wants the service sets ONEUP_BACKEND=service on its own command, which still wins.
+export ONEUP_BACKEND=sudo
+
 PASS=0 FAIL=0
 
 # ONEUP-0126: every run_engine log gets a second name in here, so the field-layout check at
@@ -4504,6 +4509,20 @@ shutil.rmtree(out, ignore_errors=True)
 ok = name.encode() in data and b"downloadcontentcdn.opensuse.org" in data
 raise SystemExit(0 if ok else f"copy held {data!r}")' \
     LC_ALL=C PYTHONUTF8=0 PYTHONCOERCECLOCALE=0
+
+echo "TEST: the suite takes the sudo route whatever this machine has installed (ONEUP-0281)"
+# On a machine with the RPM installed, an unpinned engine takes the service route, so the
+# mocked sudo never runs and scenarios fail for a reason unrelated to the code. Checked
+# here, outside run_engine, because run_engine pins the route by itself.
+py_case "an engine the suite starts outside run_engine still takes sudo" '
+import os, sys, tempfile, types
+from oneup.engine import route
+with tempfile.NamedTemporaryFile() as f:   # the activation file, as the RPM installs it
+    route.ACTIVATION_FILE = f.name
+    sys.modules["jeepney"] = types.ModuleType("jeepney")
+    got = route.engine_route(os.environ)
+raise SystemExit(0 if got == route.SUDO else f"took {got}")'
+
 echo "TEST: both routes to root run the same command (ONEUP-0249 INV-4)"
 # The sudo route and the service build every root argv from rootops.py. The expected
 # argvs below are the ones the call sites built before the table existed, so a row that
