@@ -13,8 +13,9 @@ All notable changes to OneUp are documented here. The format follows
   commands. It checks the same permission Discover checks when it
   installs updates: if Discover would ask for a password, OneUp asks
   too, once per update. These installs no longer have the
-  "Passwordless" setting, and OneUp offers once to remove an old one.
-  The AppImage keeps the "Passwordless" setting as before.
+  "Passwordless" setting. OneUp offers once to remove an old one, and
+  then says whether it went (ONEUP-0280). The AppImage keeps the
+  "Passwordless" setting as before.
 
 - **Clicking a system package shows what it is and, once its new version has downloaded or installed, what changed in it.** (ONEUP-0260)
   A package OneUp can describe shows ⓘ after its name, in every

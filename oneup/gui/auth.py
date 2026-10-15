@@ -214,10 +214,12 @@ def on_auth_toggled(win, on: bool):
                   QCoreApplication.translate("auth", "Revoking authorization…"))
 
 
-def _run_auth(win, action: str, status_text: str, env: dict[str, str] | None = None):
+def _run_auth(win, action: str, status_text: str,
+              env: dict[str, str] | None = None) -> QProcess | None:
+    """Start the engine on `action`; return its process, or None if none started."""
     p = getattr(win, "_authchg_proc", None)
     if p is not None and p.state() != QProcess.NotRunning:
-        return
+        return None
     if not paths.log_dir_ready(win):
         # Nothing changed, so put both toggles back as they were (ONEUP-0184). On the
         # service route the switch shows polkit's answer, which a revoke never moved.
@@ -227,7 +229,7 @@ def _run_auth(win, action: str, status_text: str, env: dict[str, str] | None = N
             win._pending_autoupdate = False
             win.autoupdate_btn.setEnabled(True)
             autostart._set_autoupdate_checked(win, False)
-        return
+        return None
     win.auth_btn.setEnabled(False)
     win.status.setText(status_text)
     win._settings_status(status_text)
@@ -241,6 +243,7 @@ def _run_auth(win, action: str, status_text: str, env: dict[str, str] | None = N
     log = paths.STATE_LOG_DIR / f"{stamp}.auth.log"
     argv = paths.engine_argv(action, f"--log={log}", env=env)
     p.start(argv[0], argv[1:])
+    return p
 
 
 def _old_dropin_present() -> bool:
@@ -290,7 +293,9 @@ def offer_old_dropin_removal(win):
     box.setDefaultButton(QMessageBox.Ok)
     QTimer.singleShot(0, lambda: win._center_child(box))
     if box.exec() == QMessageBox.Ok:
-        _run_auth(win, "--revoke-auth", QCoreApplication.translate(
+        # ONEUP-0280: remember which run is the removal, so its finish can say whether
+        # the rule went. The service route has no switch whose flip would say it.
+        win._old_dropin_proc = _run_auth(win, "--revoke-auth", QCoreApplication.translate(
             "auth", "Removing the old password setting… (approve the password popup)"),
             env={"ONEUP_BACKEND": route.SUDO})
 
@@ -317,12 +322,30 @@ def _on_auth_finished(win, proc: QProcess):
     win.auth_btn.setEnabled(True)
     win.status.setText(QCoreApplication.translate("auth", "Ready."))
     win._settings_status("")
+    hinted = False
     for line in out.splitlines():
         if line.startswith("@@HINT@@|"):
+            hinted = True
             QMessageBox.warning(win, QCoreApplication.translate(
                 "auth",
                 "Couldn't change the setting"),
                                 markers.render_hint(line.split("|")[1:]))
+    if proc is getattr(win, "_old_dropin_proc", None):
+        # ONEUP-0280: say whether the old rule went, asking the machine rather than the
+        # exit code. A failure the engine already explained is not said twice.
+        win._old_dropin_proc = None
+        if not _old_dropin_present():
+            QMessageBox.information(
+                win, QCoreApplication.translate("auth", "Old password setting removed"),
+                QCoreApplication.translate(
+                    "auth", "The Passwordless rule from an earlier OneUp is gone."))
+        elif not hinted:
+            QMessageBox.warning(
+                win, QCoreApplication.translate("auth", "Couldn't change the setting"),
+                QCoreApplication.translate(
+                    "auth",
+                    "The Passwordless rule from an earlier OneUp is still on this "
+                    "computer. Nothing was removed."))
     # Re-probe the real state rather than trusting the toggle: a cancelled
     # password prompt or a failure must leave the switch showing the truth.
     _query_auth_status(win)

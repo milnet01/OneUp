@@ -2618,6 +2618,36 @@ def main() -> int:
         check("ONEUP-0249 with no guard, sudo is asked only to list (-n -l)",
               _sudo_calls.startswith("-n -l ") and _sudo_calls.count("\n") == 1)
         check("ONEUP-0249 and its refusal brings no offer", len(_offers) == 1)
+
+        # ONEUP-0280: the removal's own finish says whether the rule went. Only that
+        # run's: another --revoke-auth finishing says nothing extra.
+        _warns = []
+        QMessageBox.warning = staticmethod(lambda *a, **k: _warns.append(a[1:]) or 0)
+        _patch(auth, "_query_auth_status", lambda win: None)
+        _removal = _StubProc("")
+        for _present, _name in ((False, "removed"), (True, "still there")):
+            _infos.clear()
+            _warns.clear()
+            _patch(auth, "_old_dropin_present", lambda p=_present: p)
+            wS._old_dropin_proc = _removal
+            auth._on_auth_finished(wS, _removal)
+            _said = [str(m) for m in _infos + _warns]
+            check(f"ONEUP-0280 a removal that left the rule {_name} says so",
+                  len(_said) == 1 and ("still" in _said[0]) == _present
+                  and (bool(_warns) == _present))
+        _infos.clear()
+        _warns.clear()
+        wS._old_dropin_proc = _removal
+        auth._on_auth_finished(wS, _StubProc(""))
+        check("ONEUP-0280 another auth run finishing says nothing about the old rule",
+              not _infos and not _warns)
+        _infos.clear()
+        _warns.clear()
+        _explained = _StubProc("@@HINT@@|auth-remove-failed|/etc/sudoers.d/oneup\n")
+        wS._old_dropin_proc = _explained
+        auth._on_auth_finished(wS, _explained)
+        check("ONEUP-0280 a failure the engine explained is not said twice",
+              len(_warns) == 1 and not _infos)
     finally:
         QMessageBox.exec = _orig_exec
         wS.settings.remove("old_dropin_offered")
