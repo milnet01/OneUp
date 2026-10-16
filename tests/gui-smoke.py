@@ -2073,6 +2073,34 @@ def main() -> int:
             os.environ["LD_LIBRARY_PATH_ORIG"] = _saved[4]
         paths._reset_engine_cache()
 
+    # INV-18 (ONEUP-0249, ONEUP-0286): the window follows the engine's PackageKit check,
+    # so a computer without PackageKit keeps the Passwordless switch. The suite pins
+    # ONEUP_BACKEND=sudo and may lack jeepney; either would answer before the check.
+    _saved_backend = os.environ.pop("ONEUP_BACKEND", None)
+    _saved_jeepney = sys.modules.get("jeepney")
+    sys.modules["jeepney"] = types.ModuleType("jeepney")
+    _act = Path(tempfile.mkstemp(dir=_SANDBOX)[1])
+    _saved_act, route_mod.ACTIVATION_FILE = route_mod.ACTIVATION_FILE, str(_act)
+    _saved_check = route_mod.__dict__.get("packagekit_registered")
+    try:
+        route_mod.packagekit_registered = lambda _environ: False
+        check("INV-18 (ONEUP-0249) without PackageKit's action the window keeps the switch",
+              not auth.service_route())
+        route_mod.packagekit_registered = lambda _environ: True
+        check("INV-18 and with it the window follows the service route", auth.service_route())
+    finally:
+        if _saved_check is None:
+            route_mod.__dict__.pop("packagekit_registered", None)
+        else:
+            route_mod.packagekit_registered = _saved_check
+        route_mod.ACTIVATION_FILE = _saved_act
+        if _saved_jeepney is None:
+            sys.modules.pop("jeepney", None)
+        else:
+            sys.modules["jeepney"] = _saved_jeepney
+        if _saved_backend is not None:
+            os.environ["ONEUP_BACKEND"] = _saved_backend
+
     # --- ONEUP-0059: both halves must resolve the state directory identically ---
     # run.state and stop.request are a contract between the window and the engine
     # (docs/design/oneup-2.0.md §6.5). Move one side alone and, on a machine with

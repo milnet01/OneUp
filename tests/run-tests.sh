@@ -2560,6 +2560,23 @@ ONEUP_TEST_SUDOLOG="$d/sudolog" run_engine "$d" --emit-guard > "$d/oneup-downloa
 : > "$d/sudolog"
 ONEUP_TEST_SUDOLOG="$d/sudolog" ONEUP_AUTH_FILE="$authfile" run_engine "$d" --steps=cache >/dev/null 2>&1
 check_absent "a current drop-in skips the bootstrap entirely" "BOOTSTRAP" "$(cat "$d/sudolog")"
+# ONEUP-0249 INV-19 (ONEUP-0286): a run nobody started by hand never asks. With no
+# drop-in, a timer run on the sudo route must stand down before `sudo -A`; the same run
+# started by hand is the control that shows the scenario reaches the prompt at all.
+rm -f "$authfile"
+: > "$d/sudolog"
+ONEUP_TEST_SUDOLOG="$d/sudolog" ONEUP_AUTH_FILE="$authfile" run_engine "$d" --steps=cache >/dev/null 2>&1
+check "INV-19 control: a run started by hand with no drop-in asks" "BOOTSTRAP" "$(cat "$d/sudolog")"
+: > "$d/sudolog"
+ONEUP_NONINTERACTIVE=1 ONEUP_TEST_SUDOLOG="$d/sudolog" ONEUP_AUTH_FILE="$authfile" \
+    run_engine "$d" --steps=cache >/dev/null 2>&1
+rc=$?
+check_absent "INV-19 a timer run with no drop-in never reaches sudo -A" "BOOTSTRAP" "$(cat "$d/sudolog")"
+if [[ $rc -ne 0 ]]; then
+    echo "  ok   - INV-19 and it ends the run (exit $rc)"; PASS=$((PASS+1))
+else
+    echo "  FAIL - INV-19 a timer run with no drop-in exited 0"; FAIL=$((FAIL+1))
+fi
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

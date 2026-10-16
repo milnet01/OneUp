@@ -4,7 +4,8 @@
 Starts a private `dbus-daemon`, a fake polkit authority on it, and the service with
 mock binaries first on its PATH, then talks to it as clients do. Nothing here needs
 root: the mocks only log their argv. It locks INV-1, INV-2, INV-3, INV-5, INV-6,
-INV-7, INV-9, INV-14, INV-15 and INV-17 of `docs/specs/ONEUP-0249-system-service.md`.
+INV-7, INV-9, INV-14, INV-15, INV-17 and INV-18's route half of
+`docs/specs/ONEUP-0249-system-service.md`.
 
 It cannot see SELinux: the private bus is an unconfined `dbus-daemon`, which is how a
 reply carrying descriptors once passed here and failed on the real system bus
@@ -14,7 +15,8 @@ Exits 0 on success, 1 on a failed check, and 77 (skipped) when `dbus-daemon` or
 `jeepney` is missing, like `tests/gui-smoke.py` without PySide6.
 
 Two helper modes, run as child processes of this file:
-  --fake-polkit DIR   the polkit authority; answers per DIR/polkit.answers
+  --fake-polkit DIR   the polkit authority; answers per DIR/polkit.answers, and lists
+                      actions per DIR/polkit.actions
   --client DIR        opens a session, starts a slow commit, then waits to be killed
 And one for `tests/run-tests.sh`, whose engine scenarios need a service to talk to:
   --serve DIR         bus + fake polkit + service over the mocks in DIR; writes the
@@ -121,6 +123,10 @@ def fake_polkit(d: Path) -> int:
 
     DIR/polkit.answers maps an action id to yes, no, challenge, dismissed or error
     (anything unlisted is yes). Each call is logged to DIR/polkit.log as JSON.
+
+    `EnumerateActions` answers per DIR/polkit.actions: `listed` (the default) lists
+    both PackageKit actions, `unlisted` lists another action only, as on a computer
+    without PackageKit, `error` fails, and `silent` never replies (ONEUP-0286).
     """
     conn = open_blocking(bus=os.environ["ONEUP_SERVICE_BUS"])
     conn.send_and_get_reply(new_method_call(
@@ -129,6 +135,20 @@ def fake_polkit(d: Path) -> int:
     while True:
         msg = conn.receive()
         if msg.header.message_type != MessageType.method_call:
+            continue
+        if msg.header.fields.get(HeaderFields.member) == "EnumerateActions":
+            try:
+                mode = (d / "polkit.actions").read_text().strip()
+            except OSError:
+                mode = "listed"
+            if mode == "error":
+                conn.send(new_error(msg, "org.freedesktop.PolicyKit1.Error.Failed", "s",
+                                    ("fake failure",)))
+            elif mode != "silent":
+                ids = ([SYSTEM_UPDATE, SIGNING_KEY] if mode == "listed" else []) \
+                    + ["org.freedesktop.udisks2.filesystem-mount"]
+                conn.send(new_method_return(msg, "a(ssssssuuua{ss})", (
+                    [(i, "", "", "", "", "", 0, 0, 0, {}) for i in ids],)))
             continue
         if msg.header.fields.get(HeaderFields.member) != "CheckAuthorization":
             conn.send(new_error(msg, "org.freedesktop.DBus.Error.UnknownMethod"))
@@ -647,6 +667,31 @@ def test_sigterm(rig: Rig) -> None:
     rig.start_service()
 
 
+def test_route(rig: Rig) -> None:
+    scenario("INV-18: the auto route takes sudo exactly when polkit lacks PackageKit's action")
+    sys.path.insert(0, str(REPO))
+    from oneup.engine import route
+    # The activation file present and the real jeepney, so only the polkit check can
+    # choose sudo; the environment points the check at this rig's bus.
+    saved = route.ACTIVATION_FILE
+    route.ACTIVATION_FILE = str(rig.d / "activation")
+    Path(route.ACTIVATION_FILE).touch()
+    env = {"ONEUP_SERVICE_BUS": rig.address}
+    try:
+        for mode, want in (("listed", route.SERVICE), ("unlisted", route.SUDO),
+                           ("error", route.SERVICE), ("silent", route.SERVICE)):
+            (rig.d / "polkit.actions").write_text(mode)
+            began = time.monotonic()
+            got = route.engine_route(env)
+            took = time.monotonic() - began
+            check(f"polkit '{mode}' → {want}", got == want, got)
+            if mode == "silent":
+                check("a silent polkit costs under 4 seconds", took < 4, round(took, 2))
+    finally:
+        route.ACTIVATION_FILE = saved
+        (rig.d / "polkit.actions").unlink(missing_ok=True)
+
+
 def test_idle(base: Path) -> None:
     scenario("INV-15: with no session and no job, the service exits")
     d = base / "idle"
@@ -700,7 +745,8 @@ def main() -> int:
         try:
             for test in (test_polkit, test_import_keys, test_validation, test_relay,
                          test_read, test_orphans, test_repo_restore, test_caps, test_stop_download,
-                         test_client_killed, test_service_killed, test_sigterm, test_audit):
+                         test_client_killed, test_service_killed, test_sigterm, test_audit,
+                         test_route):
                 test(rig)
         finally:
             rig.stop()
