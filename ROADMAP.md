@@ -8814,7 +8814,7 @@ when complete (that document's §7).
   Source: user-request-2026-10-16.
   Lanes: engine, gui.
 
-- 📋 [ONEUP-0286] **A packaged install on a machine without PackageKit refuses every update, with no password box and no way out a newcomer would find.**
+- 🚧 [ONEUP-0286] **A packaged install on a machine without PackageKit refuses every update, with no password box and no way out a newcomer would find.**
   User, 2026-10-16: someone installing OneUp for the first time must
   get a working service with no help. Checked that day:
   - A plain zypper install needs no extra step. systemd's own
@@ -8846,6 +8846,11 @@ when complete (that document's §7).
   fixed, calm cap. Adds: a failed or silent polkit call keeps the service
   route; a non-interactive sudo-route run without Passwordless stands
   down before any sudo -A (INV-19). Gate satisfied; build may start.
+  Built 2026-10-16 (tests e7142a9 red, code next commit): the auto
+  route takes sudo when polkit lacks PackageKit's action; a timer run with
+  no Passwordless stands down before sudo -A. ./local-CI.sh green. This
+  machine still takes the service route (PackageKit present). Owed: the
+  no-PackageKit run in ONEUP-0287's clean VM, then flip shipped.
   **Layman:** If your computer doesn't have PackageKit (some people remove it), the installed OneUp would refuse to update anything and wouldn't tell you how to fix it.
   Kind: fix.
   Source: user-request-2026-10-16.
