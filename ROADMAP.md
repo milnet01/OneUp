@@ -9002,6 +9002,8 @@ when complete (that document's §7).
   removed", finished line "All done — already up to date." ONEUP-0288's
   sentences cover the system, Flatpak and firmware sources only. Whether
   removals earn a sentence is the user's call.
+  User's decision, 2026-10-16: removals earn their own sentence, e.g.
+  "All done. 3 leftover package(s) removed."
   **Layman:** OneUp can say nothing changed right after it removed some packages.
   Kind: ux.
   Source: ONEUP-0287-vm-2026-10-16.
@@ -9043,6 +9045,9 @@ when complete (that document's §7).
   request_size). On the service route it needs no password, so it could
   run after Check for updates. The check's own --sizes already gives
   per-package sizes without root. Design is the user's.
+  User's decision, 2026-10-16: on the service route, hide the link and
+  show sizes automatically, as Discover does: the full total and each
+  package's size. On the sudo route the link stays.
   **Layman:** Hide the 'Show download size' link when OneUp can work the size out without asking for a password.
   Kind: ux.
   Source: user-request-2026-10-16.
