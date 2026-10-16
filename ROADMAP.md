@@ -8894,13 +8894,21 @@ when complete (that document's §7).
   Source: user-decision-2026-10-16.
   Lanes: packaging, service.
 
-- 📋 [ONEUP-0288] **The finished headline counts only upgraded system packages; it should say what was installed from each source.**
+- ✅ [ONEUP-0288] **The finished headline counts only upgraded system packages; it should say what was installed from each source.**
   Seen after run 2026-10-16_082648: the headline read "All done — 122
   update(s) installed". The run installed 129 items: 122 upgrades, 4
   new kernel packages and 3 Flatpaks. The user, 2026-10-16: show a
   clear split by source, e.g. system packages, Flathub, firmware.
   Touches the marker contract if the engine must report new counts
   (docs/reference/marker-protocol.md).
+  Shipped 2026-10-16. Two causes. The engine's new-package pattern
+  "N to install" never matched zypper's "4 new." / "4 new packages to
+  install." (no hit in 161 run logs; fixed in 16). And the window gave
+  one system-only number. v2 (0d38209): "All done. 126 system
+  package(s) installed. 3 Flatpak app(s) updated. Firmware updated." —
+  no marker change, the Flatpak count was already on STEP_END. main
+  (fa0eed4, 1.4.x): the count fix only, user-approved test change.
+  Not counted, still: downgrades and vendor changes ("7 to downgrade").
   **Layman:** When an update finishes, OneUp should say how many things it installed from each place, such as system packages, Flathub and firmware, instead of one number that leaves some out.
   Kind: fix.
   Source: user-request-2026-10-16.
