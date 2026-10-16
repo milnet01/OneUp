@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=300 -->
+<!-- ants-roadmap-id-high-water: ONEUP=301 -->
 
 # OneUp Roadmap
 
@@ -8961,13 +8961,18 @@ when complete (that document's §7).
   Source: user-request-2026-10-16 (via ants-projects-hub-website session).
   Lanes: gui, docs.
 
-- 📋 [ONEUP-0293] **The offer to remove the old Passwordless rule appears on any machine with a general password-free sudo rule.**
+- ✅ [ONEUP-0293] **The offer to remove the old Passwordless rule appears on any machine with a general password-free sudo rule.**
   Seen 2026-10-16 in the ONEUP-0287 VM, a first install: "The Passwordless
   rule from an earlier OneUp is still on this computer". Cause:
   oneup/gui/auth.py _old_dropin_present() also answers yes when
   `sudo -n -l zypper` succeeds, and the live CD's
   /etc/sudoers.d/50-livecd grants `NOPASSWD: ALL`. Any user with such a
   rule sees the same false offer, and Remove would run --revoke-auth.
+  Shipped 2026-10-16 on v2 (839c275, 491f51e): the check now reads
+  `sudo -n -l`'s listing and counts only a NOPASSWD entry naming zypper's
+  path, compared resolved. Re-checked in the VM with a v2 RPM: general rule
+  only → no offer; OneUp's rule (with or without the general one) → offer;
+  no rule → none. v2-only: main has no service route.
   **Layman:** OneUp tells some people it left an old password setting behind when it never did.
   Kind: fix.
   Source: ONEUP-0287-vm-2026-10-16.
@@ -9052,6 +9057,18 @@ when complete (that document's §7).
   Kind: ux.
   Source: user-request-2026-10-16.
   Lanes: gui, engine.
+
+- 📋 [ONEUP-0301] **The old-password-setting question box draws its message in dark grey on a dark background.**
+  Seen 2026-10-16 in the ONEUP-0287 VM (Breeze, Noto Sans), while
+  re-checking ONEUP-0293: auth.offer_old_dropin_removal's QMessageBox
+  shows its text and informative text in dark grey on the app's dark
+  dialog background. The title, icon and buttons read fine. Not yet
+  known whether other QMessageBoxes the window opens share it; check
+  them before fixing, against ui-and-accessibility.md's contrast rule.
+  **Layman:** The box asking whether to remove OneUp's old password setting is almost impossible to read.
+  Kind: accessibility.
+  Source: ONEUP-0287-vm-2026-10-16.
+  Lanes: gui.
 
 ## 2.1.0 — after 2.0
 
