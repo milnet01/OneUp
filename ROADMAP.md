@@ -8762,6 +8762,14 @@ when complete (that document's §7).
   science_GPU_ROCm); its refresh finished long before. The elapsed time
   and byte counts are the download's, so the label is stale, not the
   clock. Related: ONEUP-0048, ONEUP-0170, ONEUP-0232.
+  Located 2026-10-16 (locate-defect, not yet fixed): oneup/gui/run.py
+  handle_marker. The REFRESH branch sets win._activity_what ("Fetching
+  {alias}") and win._activity_since; the PROGRESS branch sets
+  _progress_phase but clears neither, so _tick_activity keeps drawing the
+  refresh label. Correction to the body above: the elapsed time is also
+  the refresh's, counted from the LAST @@REFRESH@@, not the download's.
+  STEP_BEGIN already clears both. Tests that pin activity text:
+  tests/gui-smoke.py ("Fetching games", "Fetching repo-oss").
   **Layman:** While packages download and install, OneUp shows a line saying it is still fetching one repository, which is no longer true.
   Kind: fix.
   Source: user-real-run-2026-10-16.
