@@ -83,7 +83,9 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     # --- 4.5:1, the foreground renders text ------------------------------
     ("header", ("win",), TEXT),
     ("tag", ("win",), TEXT),
-    ("tname", ("rowcard", "rowhov"), TEXT),
+    # `tname` is also every unnamed label's ink, on the dialog root as well as on
+    # the settings and repository rows (ONEUP-0301).
+    ("tname", ("rowcard", "rowhov", "win"), TEXT),
     ("tdesc", ("rowcard", "rowhov"), TEXT),
     ("badgefg", ("badgebg",), TEXT),
     ("logfg", ("logbg",), TEXT),

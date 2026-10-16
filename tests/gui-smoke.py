@@ -4368,6 +4368,53 @@ def main() -> int:
     for line in _bad[:8]:
         print(f"       {line}")
 
+    # ONEUP-0301: a label the sheet names no colour for takes the DESKTOP's text
+    # colour, while the sheet paints the dialog in the theme's. A dark theme on a light
+    # desktop drew every message box's text black on near-black (1.1:1, measured), and
+    # a light theme on a dark desktop the reverse. So under both desktop palettes,
+    # every theme's message box and a plain dialog label clear 4.5:1 on `win`.
+    def _label_inks(theme_id, desktop):
+        from PySide6.QtWidgets import QVBoxLayout
+        sheet = theme.build_theme(theme.BY_ID[theme_id])
+        box = QMessageBox()
+        box.setText("Main text")
+        box.setInformativeText("Informative text")
+        dlg = QDialog()
+        QVBoxLayout(dlg).addWidget(QLabel("A dialog's own intro"))
+        inks = []
+        # The desktop's palette goes on the app, as the platform puts it there: set on
+        # the probe, its own sheet discards it. The sheet stays on the probe, for the
+        # reason `_handle_pixel` gives.
+        _was = QApplication.palette()
+        QApplication.setPalette(desktop)
+        for w in (box, dlg):
+            w.setStyleSheet(sheet)
+            for lab in w.findChildren(QLabel):
+                if lab.text():
+                    lab.ensurePolished()
+                    inks.append((lab.text(), lab.palette().color(lab.foregroundRole()).name()))
+            w.deleteLater()
+        QApplication.setPalette(_was)
+        return inks
+
+    _light = QApplication.style().standardPalette()
+    _dark = QPalette(_light)
+    for _role, _c in ((QPalette.Window, "#202020"), (QPalette.WindowText, "#eeeeee"),
+                      (QPalette.Text, "#eeeeee"), (QPalette.Base, "#151515")):
+        _dark.setColor(_role, QColor(_c))
+    _bad = []
+    for _th in theme.THEMES:
+        for _name, _desktop in (("light", _light), ("dark", _dark)):
+            for _text, _ink in _label_inks(_th.id, _desktop):
+                _r = theme.contrast(_ink, _th.palette["win"])
+                if _r + 1e-9 < contrast.TEXT:
+                    _bad.append(f"{_th.id} on a {_name} desktop: {_text!r} "
+                                f"{_ink} = {_r:.2f}:1")
+    check(f"ONEUP-0301 dialog text clears 4.5:1 whatever the desktop's colours "
+          f"({len(_bad)} short)", not _bad)
+    for line in _bad[:8]:
+        print(f"       {line}")
+
     # INV-8: a theme change rebuilds the tray icon. The ATTENTION state is what to
     # capture — the idle icon is the app's own SVG, which no theme touches, so an
     # idle comparison would pass unchanged whether the invariant held or not.

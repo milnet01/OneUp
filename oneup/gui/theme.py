@@ -251,6 +251,11 @@ _QSS = Template(r"""
    right in dark mode, and it also puts every dialog control on a surface no
    palette controls — which is what the focus derivation blends from. */
 QMainWindow, QDialog { background: $win; }
+/* A label no rule below names — a message box's text, a dialog's intro — would
+   take the DESKTOP's text colour onto the theme's surface: black on near-black
+   with a dark theme on a light desktop (ONEUP-0301). Every named label's own
+   rule outranks this one. */
+QLabel { color: $tname; }
 
 /* The painted ToggleSwitch can't be reached by a stylesheet, so the sheet hands
    it the contrast state as a Qt property. The explicit `false` is MANDATORY: a
