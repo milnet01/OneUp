@@ -8889,6 +8889,13 @@ when complete (that document's §7).
   update on the service route. Run once with PackageKit and once
   without, after ONEUP-0286 lands. Walk the user through it one step
   at a time.
+  Checked 2026-10-16: this machine has qemu-system-x86_64 only (no
+  virt-manager, virsh, GNOME Boxes or VirtualBox) and no openSUSE ISO.
+  Proposed, not yet agreed by the user: boot the Tumbleweed KDE Live ISO
+  in QEMU instead of a full install; it is a clean desktop with
+  PackageKit. Run 1 as booted; run 2 after zypper remove PackageKit in
+  the same session. Download the ISO to /mnt/Games, not /tmp (RAM).
+  Waiting on the user's go: it needs them at the keyboard.
   **Layman:** Install OneUp on a brand-new test computer, the way a newcomer would, to prove it works without any expert help.
   Kind: test.
   Source: user-decision-2026-10-16.
