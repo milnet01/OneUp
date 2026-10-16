@@ -246,22 +246,55 @@ def _run_auth(win, action: str, status_text: str,
     return p
 
 
+def _lists_zypper_rule(listing: str, zypper: str) -> bool:
+    """Does `sudo -l`'s listing hold a password-free rule that names zypper itself?
+
+    A rule for `ALL` lets zypper run too, but it is not OneUp's: the Live CD's
+    `NOPASSWD: ALL` brought the offer on a first install (ONEUP-0293). An entry is
+    `(run-as) TAG: command, command`, with the aliases expanded; a tag holds until
+    another replaces it, and a long entry may wrap onto indented lines."""
+    entries: list[list[str]] = []
+    current = None
+    for line in listing.splitlines():
+        text = line.strip()
+        if text.startswith("("):
+            current = [text]
+            entries.append(current)
+        elif current is not None and text and line[:1].isspace():
+            current.append(text)
+        else:
+            current = None
+    for entry in entries:
+        body = " ".join(entry)
+        nopasswd = False
+        for item in body[body.find(")") + 1:].split(","):
+            words = item.split()
+            while words and words[0].endswith(":") and words[0][:-1].isupper():
+                tag = words.pop(0)[:-1]
+                if tag in ("NOPASSWD", "PASSWD"):
+                    nopasswd = tag == "NOPASSWD"
+            if nopasswd and words and words[0] == zypper:
+                return True
+    return False
+
+
 def _old_dropin_present() -> bool:
     """Is a Passwordless rule from before the service still here? A guard at either
-    path, or sudo saying it would run zypper without a password, which also finds a
-    rule older than the guard. `sudo -n -l` only lists: it never prompts and never
-    runs anything as root (`docs/standards/security.md` §1.1)."""
+    path, or a password-free sudo rule naming zypper, which also finds a rule older
+    than the guard. `sudo -n -l` only lists: it never prompts and never runs anything
+    as root (`docs/standards/security.md` §1.1)."""
     if any(os.path.exists(path) for path in OLD_GUARDS):
         return True
     zypper = shutil.which("zypper")
     if not zypper:
         return False
     try:
-        return subprocess.run(  # noqa: S603 — fixed argv, no shell.
-            ["sudo", "-n", "-l", zypper], stdout=subprocess.DEVNULL,  # noqa: S607
-            stderr=subprocess.DEVNULL, timeout=10, check=False).returncode == 0
+        listed = subprocess.run(
+            ["sudo", "-n", "-l"], capture_output=True, text=True,  # noqa: S607
+            timeout=10, check=False)
     except (OSError, subprocess.SubprocessError):
         return False
+    return listed.returncode == 0 and _lists_zypper_rule(listed.stdout, zypper)
 
 
 def offer_old_dropin_removal(win):

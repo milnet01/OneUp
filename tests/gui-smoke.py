@@ -53,9 +53,14 @@ os.chmod(_notify_mock, 0o755)  # noqa: S103 — a PATH mock must be executable.
 # otherwise reached the REAL sudo, which opened a real password dialog on the desktop on
 # every run of this suite, push gates included (ONEUP-0224).
 _SUDO_LOG = os.path.join(_SANDBOX, "sudo.log")
+# A scenario that writes this file makes `sudo -n -l …` succeed and print it, as a
+# real listing would (ONEUP-0293).
+_SUDO_LIST = os.path.join(_SANDBOX, "sudo-list.txt")
 _sudo_mock = os.path.join(_BIN, "sudo")
 with open(_sudo_mock, "w") as _f:
-    _f.write(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> {_SUDO_LOG}\nexit 1\n')
+    _f.write(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> {_SUDO_LOG}\n'
+             f'[[ $1 == -n && $2 == -l && -f {_SUDO_LIST} ]] && cat {_SUDO_LIST} && exit 0\n'
+             'exit 1\n')
 os.chmod(_sudo_mock, 0o755)  # noqa: S103 — a PATH mock must be executable.
 # A mock zypper and rpm beside them, for the package details (ONEUP-0260 INV-8): a
 # check's system packages start a details fetch, which otherwise read the REAL rpm
@@ -2652,8 +2657,26 @@ def main() -> int:
         auth.offer_old_dropin_removal(wS)
         _sudo_calls = Path(_SUDO_LOG).read_text() if os.path.exists(_SUDO_LOG) else ""
         check("ONEUP-0249 with no guard, sudo is asked only to list (-n -l)",
-              _sudo_calls.startswith("-n -l ") and _sudo_calls.count("\n") == 1)
+              _sudo_calls.startswith("-n -l") and _sudo_calls.count("\n") == 1)
         check("ONEUP-0249 and its refusal brings no offer", len(_offers) == 1)
+
+        # ONEUP-0293: a general password-free rule lets zypper run too, but it is not
+        # OneUp's. The listings are the shape sudo 1.9.17 printed in the clean VM.
+        _zypper = shutil.which("zypper")
+        _general = ("User linux may run the following commands on localhost:\n"
+                    "    (ALL) ALL\n    (ALL) NOPASSWD: ALL\n")
+        _oneup = (f"    (root) NOPASSWD: {_zypper}, /usr/bin/snapper, /usr/bin/env "
+                  "LC_ALL\\=C zypper *, /usr/libexec/oneup-download-guard\n")
+        for _listing, _want, _name in (
+                (_general, 0, "a general NOPASSWD: ALL rule brings no offer"),
+                (_general + _oneup, 1, "OneUp's own rule beside it brings the offer"),
+                (f"User linux may run:\n    (ALL) ALL\n    (root) {_zypper}\n", 0,
+                 "a zypper rule that asks for a password brings no offer")):
+            Path(_SUDO_LIST).write_text(_listing)
+            wS.settings.remove("old_dropin_offered")
+            _offers.clear()
+            auth.offer_old_dropin_removal(wS)
+            check(f"ONEUP-0293 {_name}", len(_offers) == _want)
 
         # ONEUP-0280: the removal's own finish says whether the rule went. Only that
         # run's: another --revoke-auth finishing says nothing extra.
@@ -2687,6 +2710,8 @@ def main() -> int:
     finally:
         QMessageBox.exec = _orig_exec
         wS.settings.remove("old_dropin_offered")
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(_SUDO_LIST)
         _unpatch_all()
 
     QMessageBox.information = _orig_msg_info
