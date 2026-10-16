@@ -8395,6 +8395,10 @@ when complete (that document's §7).
   fallback can tell the two apart.
   Blocked (2026-10-16) by ONEUP-0282: on SELinux the service route fails at its
   first Run. §4.12 items 2-3 and §7's by-hand runs wait for that fix.
+  Unblocked (2026-10-16): ONEUP-0282 shipped. §4.12 item 4 holds on
+  the real system bus with the RPM rebuilt from v2 a3c73cd: three Runs
+  in one session, all status 0, output pulled with Read. Next: one
+  combined by-hand run (§4.12 items 2-3, §7) from the installed app.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
@@ -8651,7 +8655,7 @@ when complete (that document's §7).
   Source: in-session-2026-10-15.
   Lanes: tests.
 
-- 📋 [ONEUP-0282] **The system service's Run hands the client pipe descriptors, which SELinux stops the system bus from passing, so every service-route run fails.**
+- ✅ [ONEUP-0282] **The system service's Run hands the client pipe descriptors, which SELinux stops the system bus from passing, so every service-route run fails.**
   Found 2026-10-16 from the user's failed run of 2026-10-15 15:31
   (log 2026-10-15_153120.log, RPM 1.4.10 from v2 582c909).
   Reproduced 2026-10-16 07:41 with read-only restart-list through
@@ -8700,6 +8704,16 @@ when complete (that document's §7).
   Still owed before flipping shipped: §4.12 item 4, restart-list through
   service_client on the real system bus with the RPM rebuilt from v2 and
   installed. The installed 1.4.10 (from 582c909) still has the broken Run.
+  Measured (2026-10-16 08:23), spec §4.12 item 4: holds. RPM rebuilt
+  from v2 a3c73cd (git archive, rpmbuild) and installed with rpm -Uvh
+  --replacepkgs; the service was inactive, so the new code started fresh.
+  From the desktop session, through the installed
+  /usr/share/oneup/oneup/engine/service_client.py on the real system bus:
+  CanUpdate yes; open_session(interactive=True, import_keys=False) with
+  no prompt; then in one session restart-list status 0 (0 bytes: zypper
+  ps -sss names nothing to restart), cache-size status 0 (26 bytes),
+  snapshot-list csv status 0 (520 bytes). Before the fix the first Run
+  answered NoReply "Remote peer disconnected".
   **Layman:** On a computer with SELinux switched on, OneUp's background helper is cut off the moment it starts its first job, so a packaged 2.0 update fails every time.
   Kind: fix.
   Source: in-session-2026-10-16.
