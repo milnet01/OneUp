@@ -283,8 +283,8 @@ connection, so a descriptor sent by mistake fails on the sender's side. It is pa
 4. With `interactive` false, no flag is set, so polkit never puts a box on the screen for
    a run nobody started by hand. The engine sends `interactive` false exactly when its
    environment carries `ONEUP_NONINTERACTIVE=1`. `oneup/gui/app.py::_headless_engine` sets
-   no environment today; it is changed to set that variable for every headless check and
-   update, which the timer's `ExecStart` reaches.
+   that variable for every headless check and update, which the timer's `ExecStart`
+   reaches.
 5. With `import_keys` true, the service also requires
    `org.freedesktop.packagekit.system-trust-signing-key`, under the same flag rule.
 6. **Any error is a refusal**: polkit unreachable, the action not registered, the
@@ -332,9 +332,7 @@ sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
 - **`Stop` on any other job is `NotStoppable`.** `system-commit` is never signalled
   (`security.md` §6.1). `Stop` from any session but the one that started the job is
   `NoSession`.
-- **The engine forwards the user's Stop.** The service cannot read `stop.request`: it is
-  in the user's home, and the unit hides home directories (§4.8). So on the service
-  route, while `system-download` runs, the engine polls `proc.stop_requested` every
+- **The engine forwards the user's Stop.** On the service route, while `system-download` runs, the engine polls `proc.stop_requested` every
   `STOP_POLL_SECONDS` and calls `Stop` once. The stop wrapper and the download guard text
   are untouched; the service route simply does not use them.
 - **Bounded calls stay bounded the way they are today.** `repo-refresh` carries its own
@@ -354,7 +352,7 @@ found (INV-12):
 | --- | --- |
 | `ONEUP_BACKEND=sudo` | sudo |
 | `ONEUP_BACKEND=service` | service, or the run fails if it is unreachable |
-| unset or `auto`, the activation file `/usr/share/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service` exists, `jeepney` imports, and polkit lists PackageKit's action | service |
+| unset or `auto`, the activation file `/usr/share/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service` exists, `jeepney` imports, and `route.packagekit_registered` is true | service |
 | otherwise | sudo |
 
 - **The service route needs PackageKit's action registered** (ONEUP-0286). §4.4 borrows
@@ -363,9 +361,12 @@ found (INV-12):
   user's decision, 2026-10-16.
 - **`engine_route` asks polkit, never the service**, through
   `route.packagekit_registered(environ)`, which returns a bool. It calls `EnumerateActions` with an
-  empty locale on the system bus, through `jeepney`, with a 2-second timeout. Only a reply
-  listing the action takes the service route. No reply, an error, or a list without it
-  takes sudo. `ONEUP_SERVICE_BUS` points the call at a test's private bus, as it does the
+  empty locale on the system bus, through `jeepney`, with a 2-second reply timeout;
+  `jeepney`'s connection set-up has its own 1-second `auth_timeout`. It is false only
+  when a reply comes and its list lacks the action. No reply, or an error of any kind,
+  is true: the route stays as it was before ONEUP-0286, and the fallbacks below apply,
+  so a run nobody started by hand never meets the sudo route's password box.
+  `ONEUP_SERVICE_BUS` points the call at a test's private bus, as it does the
   engine's client. Measured 2026-10-16 on the development machine (polkit 127,
   `python313-jeepney` 0.9.0): the call answers in 8 ms, as an ordinary user, and lists
   both PackageKit actions §4.4 names. polkit reads `.policy` files of any
@@ -377,7 +378,8 @@ found (INV-12):
   the switch.
 - **The AppImage always sets `ONEUP_BACKEND=sudo`.** `oneup/gui/paths.py`
   `_resolve_engine`'s frozen branch adds it to the env prefix it already builds.
-- **Falling back to sudo happens only on the `auto` route, and only interactively.** It
+- **Once the table has chosen the service, falling back to sudo happens only on the
+  `auto` route, and only interactively.** It
   happens when the session cannot open for a transport reason (the service missing from
   the bus, or a D-Bus error that is not `NotAuthorized`), or on `NotAuthorized` with
   reason `challenge` (a caller polkit had no agent to ask, §4.4). The engine writes one
@@ -647,16 +649,20 @@ result that contradicts the design is a fold-back to this spec, not a workaround
   SELinux accepts (§4.12 item 4); or `Read` holds a chunk back until a line ends;
   or another caller can read a job's output.
 
-- **INV-18** On the `auto` route, `engine_route` returns `service` only when polkit's
-  `EnumerateActions` lists `org.freedesktop.packagekit.system-update`, and the window's
-  `auth.service_route` follows it.
+- **INV-18** On the `auto` route, with the activation file present and `jeepney`
+  importable, `engine_route` returns `sudo` exactly when polkit's `EnumerateActions` reply
+  lacks `org.freedesktop.packagekit.system-update`, and the window's `auth.service_route`
+  follows it.
   *Test:* `tests/service-test.py`, with the activation file faked and the real `jeepney`,
   so only the polkit check can choose sudo. The fake polkit's `EnumerateActions` lists
   the action → `service`. It lists other actions only → `sudo`. It answers with an error →
-  `sudo`. `tests/gui-smoke.py`, with the activation file present and
-  `route.packagekit_registered` stubbed to false: `auth.service_route()` is false.
-  *Breaks when:* the check is skipped, or a failed call reads as registered, so a computer
-  without PackageKit refuses every update and hides the switch that would fix it.
+  `service`. `tests/gui-smoke.py`, with `ONEUP_BACKEND` removed from the environment, a
+  fake `jeepney` in `sys.modules` and the activation file present:
+  `route.packagekit_registered` stubbed to false → `auth.service_route()` is false, and
+  stubbed to true → true.
+  *Breaks when:* the check is skipped, so a computer without PackageKit refuses every
+  update and hides the switch that would fix it; or a failed call reads as unregistered,
+  so a slow polkit sends a timer run to the sudo route's password box.
 
 ## 6. Failure modes
 
@@ -667,7 +673,7 @@ result that contradicts the design is a fold-back to this spec, not a workaround
 | polkit refuses, interactively | `dismissed` or `denied`: the run ends as a cancelled `sudo_init` does today. `challenge`, a caller with no agent: the sudo route (§4.7) |
 | polkit refuses, non-interactively | an automatic update stands down, as it does today when Passwordless is off |
 | PackageKit's action is not registered | `auto` takes the sudo route and the window keeps the Passwordless switch, as the AppImage does (§4.7). Forced `ONEUP_BACKEND=service` reaches the service, whose polkit check refuses (§4.4 step 6) |
-| polkit does not answer `engine_route` | the sudo route, as for an unregistered action (§4.7) |
+| polkit does not answer `engine_route` | the service route, as before ONEUP-0286, with §4.7's fallbacks |
 | The service dies mid-job | `KillMode=process` and the job file (§4.3) leave zypper running. The engine's next `Read` fails, with no reply or with `NoSession` from a restarted service; the engine treats that as failure, and the step fails. The journal has the job-start line and no end line |
 | The window quits mid-run | unchanged: the engine survives it. If the engine also dies, the service finishes the job and re-enables the session's repositories |
 | Another program holds the zypp lock | unchanged: `release-lock`, then the engine's existing `repos.lock_holder` check |
@@ -685,11 +691,7 @@ result that contradicts the design is a fold-back to this spec, not a workaround
 - **`tests/run-tests.sh`**: new scenarios for INV-4, INV-8, INV-11, INV-12, INV-13 and
   INV-16's engine half.
   INV-8's service-route arm runs the engine against the same fake service.
-- **`tests/gui-smoke.py`**: INV-10, INV-16's window half and INV-18's window half.
-- **The route scenarios that fake `jeepney`** (`tests/run-tests.sh`, and INV-10's in
-  `tests/gui-smoke.py`) stub `route.packagekit_registered`, because a fake module has no
-  bus to ask.
-- **The existing ONEUP-0092 and ONEUP-0044 scenarios keep running on the sudo route.**
+- **`tests/gui-smoke.py`**: INV-10, INV-16's window half and INV-18's window half.- **The existing ONEUP-0092 and ONEUP-0044 scenarios keep running on the sudo route.**
   They are the AppImage's contract, and nothing in this item retires them.
 - **Each new test is seen to fail first**: against the tree before the feature for
   INV-4, INV-8, INV-10 and INV-18, and against a deliberately broken service for the rest.
@@ -799,3 +801,4 @@ Each of these is amended in the commit that lands the matching code:
 | 4 | 2026-10-16 | 2, cold, via `neutral-lane`; genre pinned `spec`; every lane held every question; each read all 742 lines; packet rebuilt from disk, adding windows on `proc.stop_requested`/`stop_pending`, `stream_filtered` and `steps._download_status` | 2 | 2 | 1 | 0 | **Five verified, five fixed, none dismissed. Cap reached (2 loops for a spec in this run); these five fixes are read by no lane, and implementation is the next reviewer.** **Both lanes found**: §4.6 named `proc.stop_pending` for the Stop forwarder, which announces the stop inside the download output; the code and the spec now say `proc.stop_requested` (loop 3 wrongly resolved this as clean). And loop 3's own `SIGTERM` text let a stop wait on an engine holding its session for a whole run: now `Run` gets `Busy`, a session ends once its job's final `status` is returned, and a stop waits for the running job only. **One lane alone**: the 105 rule lives in `steps._download_status`, not `_download_pass` (loop 3's dismissal named the wrong owner too); §4.5's clean-ups waited for the session's own job, where `server._clean_up` waits for no job at all, which zypp's lock requires; and §4.3 gave two tests for when `status` arrives (now: only on a reply at the end, which carries no bytes). G1, G2 and G4 are outside the armed span and fixed in the run as exempt records of existing code. One open question resolved clean: the service answers `Introspect`. **A calm cap**: 1 of 5 landed on text this run wrote (the `SIGTERM` bullet). Second share: 5 of the run's 10 verified findings inside the armed span, 2 more binding to it, 3 outside. Spend: 0.56 and 0.16 USD, two turns each, no denials. |
 | impl | 2026-10-16 | none: an implementation fold-back (write-spec Step 8), no reviewer dispatched | – | – | – | – | **§4.12 item 2 measured, and one directive failed it (ONEUP-0283).** In the user's first real kernel update on the service route (log `2026-10-16_082648`), systemd's `%transfiletriggerin` hit a read-only `/root` and `/run/user` under `ProtectHome=yes`, and `flatpak --system update` could not create `/root/.cache/dconf`. The kernel's boot entry was still written. Changed: §4.8 moves `ProtectHome=` to the left-out list, as item 2 directs; the unit drops it in the same commit, and INV-13's scenario now checks it stays out. **A detail, not a premise**: the item's own rule decided the outcome, so the gate does not re-arm. The log shows no other read-only, permission or failure line. |
 | amend | 2026-10-16 | none: an amendment for ONEUP-0286 (write-spec Step 1 item 4), no reviewer dispatched | – | – | – | – | **Origin: ONEUP-0286.** A computer without PackageKit has no `org.freedesktop.packagekit.system-update` action, so every `OpenSession` was refused and §6 offered only `ONEUP_BACKEND=sudo`. User's decision, 2026-10-16: fall back to the sudo route, as the AppImage does. **Settled where the route is chosen, not on the refusal**: §4.10's window decides the switch, the drop-in offer and automatic updates from `engine_route`, so a refusal-side fallback would have hidden the switch the user needs (§9). Measured that day: `EnumerateActions` answers an ordinary user in 8 ms; an unregistered action's `CheckAuthorization` error is the generic `Error.Failed`. Changed: §4.7 (table row, three bullets, the `jeepney` sentence), INV-18, §6 (two rows), §7, §8, §9 (three alternatives). §4.4 and the service are unchanged. **The gate re-arms**: `route.packagekit_registered` is still to be built. |
+| 5 | 2026-10-16 | 2, cold, via `neutral-lane`; genre pinned `spec`; every lane held every question; each read all 801 lines; re-gate of the ONEUP-0286 amendment (c45ae7c) | 1 | 0 | 1 | 1 | **Three verified, three fixed, none dismissed.** The run's first loop. **One lane found, and the other raised as an open question**, that the amendment sent a failed or slow polkit call to sudo: a timer run without Passwordless would then reach `sudo_init`'s `sudo -A -v` and a box nobody answers, which §4.7 forbids. Now `route.packagekit_registered` is false only on a reply whose list lacks the action; a failure keeps the old route and its fallbacks. **One lane alone**: INV-18's window test passed vacuously, because `tests/gui-smoke.py` pins `ONEUP_BACKEND=sudo` (now removed for the test, with a fake `jeepney` and a positive arm). **Both lanes, as open questions**: §7's stub bullet named INV-10's scenario, which forces the route; deleted, since a failed call now keeps the service route. Fixed outside the tally: §4.6's reason clause (false since ONEUP-0283), deleted; §4.4 step 4 now records that `_headless_engine` already sets `ONEUP_NONINTERACTIVE=1`. The fix pass deleted its own new absolute (the window and engine disagree "only" on an install change) after a refuting case. Open questions resolved clean: `cdn_dir` stays on the sudo route (`privilege.root_stream`). Cold-start timing request moot after the fix. Mechanical: `spec_lint` 18 invariants, 0 in-diff; `doc_lint` 0. Lanes arrived holding the global `CLAUDE.md`, the lane file and hook text; no project `CLAUDE.md`, memory or git snapshot. Spend: 0.67 and 0.70 USD, four turns each, no denials. |
