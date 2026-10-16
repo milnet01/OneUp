@@ -8842,6 +8842,10 @@ when complete (that document's §7).
   when polkit's EnumerateActions lists PackageKit's action), INV-18, §6,
   §7, §8, §9. The window follows through engine_route (§4.10), so the
   Passwordless switch stays. review-contract owed before the build.
+  review-contract 2026-10-16, loops 5-6 of ONEUP-0249: 7 verified, 7
+  fixed, calm cap. Adds: a failed or silent polkit call keeps the service
+  route; a non-interactive sudo-route run without Passwordless stands
+  down before any sudo -A (INV-19). Gate satisfied; build may start.
   **Layman:** If your computer doesn't have PackageKit (some people remove it), the installed OneUp would refuse to update anything and wouldn't tell you how to fix it.
   Kind: fix.
   Source: user-request-2026-10-16.
