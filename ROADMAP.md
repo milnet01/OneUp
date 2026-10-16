@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=285 -->
+<!-- ants-roadmap-id-high-water: ONEUP=286 -->
 
 # OneUp Roadmap
 
@@ -8790,6 +8790,29 @@ when complete (that document's §7).
   Kind: research.
   Source: user-request-2026-10-16.
   Lanes: engine, gui.
+
+- 📋 [ONEUP-0286] **A packaged install on a machine without PackageKit refuses every update, with no password box and no way out a newcomer would find.**
+  User, 2026-10-16: someone installing OneUp for the first time must
+  get a working service with no help. Checked that day:
+  - A plain zypper install needs no extra step. systemd's own
+    %transfiletriggerin reloads units, and dbus-broker-launch watches
+    its folders (its binary holds "Noticed file-system modification,
+    trigger reload."). The service is D-Bus activated: no enable step.
+  - The gap: the service's polkit check borrows PackageKit's action
+    (ONEUP-0249 §4.4). Measured: pkcheck on an unregistered action
+    prints "Action ... is not registered" and fails.
+    oneup/service/polkit.py check() maps any error reply to DENIED, and
+    spec §4.7 ends a DENIED run with no box. Spec §6's row says the user
+    "can still use ONEUP_BACKEND=sudo", which no newcomer would know.
+  - Neither suite can see it: tests/service-test.py fakes polkit, and
+    this machine has PackageKit installed.
+  - Not yet tested: a first install on a clean machine, end to end.
+  Fix direction is the user's; it changes §4.7, so the spec is gated
+  before building.
+  **Layman:** If your computer doesn't have PackageKit (some people remove it), the installed OneUp would refuse to update anything and wouldn't tell you how to fix it.
+  Kind: fix.
+  Source: user-request-2026-10-16.
+  Lanes: engine, service, packaging.
 
 ## 2.1.0 — after 2.0
 
