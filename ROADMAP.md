@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=286 -->
+<!-- ants-roadmap-id-high-water: ONEUP=288 -->
 
 # OneUp Roadmap
 
@@ -8809,10 +8809,41 @@ when complete (that document's §7).
   - Not yet tested: a first install on a clean machine, end to end.
   Fix direction is the user's; it changes §4.7, so the spec is gated
   before building.
+  User's decision, 2026-10-16: where PackageKit's action is not
+  registered, OneUp asks for the password once on the sudo route, as
+  the AppImage does. Not: requiring PackageKit, nor shipping OneUp's own
+  polkit action (spec §9 rejects it). Changes §4.7 and §6's row, so
+  review-contract runs on the spec before the build.
   **Layman:** If your computer doesn't have PackageKit (some people remove it), the installed OneUp would refuse to update anything and wouldn't tell you how to fix it.
   Kind: fix.
   Source: user-request-2026-10-16.
   Lanes: engine, service, packaging.
+
+- 📋 [ONEUP-0287] **Test a first install on a clean Tumbleweed virtual machine, from adding the repository to a finished update, before 2.0.0.**
+  User's decision, 2026-10-16: someone installing OneUp for the first
+  time must get a working service with no help, and a clean virtual
+  machine is how it is checked. This machine cannot show it: it has
+  PackageKit (ONEUP-0286) and earlier installs on it. Steps: add the
+  OBS repository, zypper install oneup, open the window, run one
+  update on the service route. Run once with PackageKit and once
+  without, after ONEUP-0286 lands. Walk the user through it one step
+  at a time.
+  **Layman:** Install OneUp on a brand-new test computer, the way a newcomer would, to prove it works without any expert help.
+  Kind: test.
+  Source: user-decision-2026-10-16.
+  Lanes: packaging, service.
+
+- 📋 [ONEUP-0288] **The finished headline counts only upgraded system packages; it should say what was installed from each source.**
+  Seen after run 2026-10-16_082648: the headline read "All done — 122
+  update(s) installed". The run installed 129 items: 122 upgrades, 4
+  new kernel packages and 3 Flatpaks. The user, 2026-10-16: show a
+  clear split by source, e.g. system packages, Flathub, firmware.
+  Touches the marker contract if the engine must report new counts
+  (docs/reference/marker-protocol.md).
+  **Layman:** When an update finishes, OneUp should say how many things it installed from each place, such as system packages, Flathub and firmware, instead of one number that leaves some out.
+  Kind: fix.
+  Source: user-request-2026-10-16.
+  Lanes: gui, engine.
 
 ## 2.1.0 — after 2.0
 
