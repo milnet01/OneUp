@@ -8682,6 +8682,16 @@ when complete (that document's §7).
   ONEUP-0054's hold adoption, ONEUP-0249 §4.12 items 2 and 3, and
   §7's no-password window run.
   Order: amend the spec, review-contract it, then build.
+  Progress (2026-10-16): spec amended (d6e83c8) and re-gated with
+  review-contract, loops 3-4 of the ONEUP-0249 spec (b33cada, ac58ff4):
+  10 verified, 10 fixed, 1 dismissed; calm cap. Beyond Read itself, the
+  gate settled: SIGTERM refuses Run and keeps a session only until its
+  job's final status is returned; the job file lives until its session
+  ends or runs again; a session with no job gets Invalid; the final status
+  comes on a reply with no bytes; clean-ups wait for no job in the service.
+  Next: build server.py, jobs.py, service_client.py and
+  tests/service-test.py (INV-17) against §4.3, then §4.12 item 4 on the
+  installed RPM.
   **Layman:** On a computer with SELinux switched on, OneUp's background helper is cut off the moment it starts its first job, so a packaged 2.0 update fails every time.
   Kind: fix.
   Source: in-session-2026-10-16.
