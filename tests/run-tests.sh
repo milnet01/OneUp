@@ -4739,6 +4739,10 @@ check "the unit sets KillMode=process" "KillMode=process" \
     "$(grep -vE '^[[:space:]]*#' "$unit" 2>/dev/null)"
 check "the unit starts the launcher the spec names" "ExecStart=/usr/libexec/oneup-service" \
     "$(cat "$unit" 2>/dev/null)"
+# Measured 2026-10-16 (ONEUP-0283): under ProtectHome=, systemd's own post-transaction
+# trigger failed on a read-only /root and /run/user during a real kernel update.
+check_absent "the unit sets no ProtectHome=" "ProtectHome=" \
+    "$(grep -vE '^[[:space:]]*#' "$unit" 2>/dev/null)"
 
 echo "TEST: the service route updates with no sudo and the same markers (ONEUP-0249 INV-8, INV-11, INV-16)"
 # The real service, on a private bus with a fake polkit, run by tests/service-test.py's
