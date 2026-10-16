@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=290 -->
+<!-- ants-roadmap-id-high-water: ONEUP=291 -->
 
 # OneUp Roadmap
 
@@ -8790,7 +8790,7 @@ when complete (that document's §7).
   Source: user-real-run-2026-10-16.
   Lanes: gui.
 
-- 📋 [ONEUP-0285] **Research, online as well as on this machine, whether a real Flatpak download size can be known before downloading.**
+- ✅ [ONEUP-0285] **Research, online as well as on this machine, whether a real Flatpak download size can be known before downloading.**
   User request, 2026-10-16, after the real run showed no Flatpak sizes
   again. ONEUP-0241 measured (2026-10-14) that remote-ls download-size
   and flatpak update's own table both give only an upper bound, about 25
@@ -8809,6 +8809,30 @@ when complete (that document's §7).
   Done when each answer has a source and the item says whether OneUp
   can show an exact size, a labelled estimate, or still none. Decision
   on what to show goes to the user.
+  Researched 2026-10-16 (agent; two claims re-checked here: `ostree pull
+  --help` lists --dry-run "requires static deltas"; the cached flathub.idx
+  carries ostree.summary.indexed-deltas).
+  1. Deltas: yes. Flathub publishes delta-indexes/<to>.index per commit;
+  each delta's superblock (a few KB) holds exact per-part compressed sizes
+  and fallback-object sizes (ostree-repo-static-delta-private.h). Brave,
+  measured: 2 parts 5,256,758 B + 1 fallback 132,699,713 B, against
+  xa.download-size 221,264,887 B. Pull skips parts/objects already local
+  (ostree-repo-pull.c), and /var/lib/flatpak/repo/objects is world-
+  readable, so presence can be checked without root.
+  2. libostree: `ostree pull --dry-run --require-static-deltas` prints the
+  delta size, but a pull opens the repo for writing (unverified: likely
+  root). ostree.sizes: absent on the 40 Flathub refs checked.
+  3. GNOME Software, Discover, Bazaar and `flatpak update` all show the
+  upper bound (flatpak_*_download_size, "maximum"; the CLI prints "<").
+  Discover MR !663 (2023) hid it. Warehouse: no size code found.
+  4. Upstream: flatpak#2095 (2018) and #2627 (2019) open; no delta-aware
+  size built. PR #6802 (2026-08) only adds extra-data to the bound.
+  Verdict: (a) exact where a delta from the installed commit exists, via
+  two small HTTPS GETs per app, no root, OneUp parsing the ostree-internal
+  superblock format; otherwise (b) "up to" xa.download-size, or none.
+  Decision on what to show goes to the user.
+  Done 2026-10-16: each question answered with a source (note above);
+  user decided exact-else-"up to" for 2.1, filed as ONEUP-0291.
   **Layman:** Look harder, including online, for a way to tell you how much the Flatpak app updates will download before they start.
   Kind: research.
   Source: user-request-2026-10-16.
@@ -9069,6 +9093,20 @@ when complete (that document's §7).
   (CLAUDE.md §4). A new step key changes the marker contract
   (docs/reference/marker-protocol.md).
   **Layman:** If you use Snap apps, OneUp could update them too; people without Snap would never see the step.
+  Kind: feature.
+  Source: user-decision-2026-10-16.
+  Lanes: engine, gui.
+
+- 📋 [ONEUP-0291] **Show each Flatpak update's exact download size from Flathub's static-delta superblock, else an "up to" figure.**
+  User's decision, 2026-10-16, from ONEUP-0285's research: exact
+  where a delta from the installed commit exists, else "up to"
+  xa.download-size, clearly labelled. For 2.1. Mechanism (ONEUP-0285's
+  note): fetch delta-indexes/<to>.index, then that delta's superblock;
+  sum parts and fallback objects not already under
+  /var/lib/flatpak/repo/objects. No root; two small HTTPS GETs per app.
+  Risk: the superblock format is ostree-internal, so a parse failure must
+  fall back to "up to", never to a wrong number. Builds on ONEUP-0241.
+  **Layman:** Before Flatpak apps update, OneUp shows how much each will really download, or an "up to" figure when the exact one isn't available.
   Kind: feature.
   Source: user-decision-2026-10-16.
   Lanes: engine, gui.
