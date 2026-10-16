@@ -215,7 +215,8 @@ the interface version. An incompatible change takes a new name.
 ```
 OpenSession(options a{sv}) -> ()
     options: interactive b (default true), import_keys b (default false)
-Run(op s, args a{sv}, merge_stderr b) -> (output h, status h)
+Run(op s, args a{sv}, merge_stderr b) -> ()
+Read(offset t) -> (data ay, status i)   # status -1 until the job has ended and been read
 Stop() -> ()
 CloseSession() -> ()
 CanUpdate() -> (answer s)          # "yes" | "no"; never prompts
@@ -228,25 +229,42 @@ Errors are `za.co.antsprojectshub.OneUp1.Error.NotAuthorized`, `.Busy`, `.Invali
 - **A session belongs to one caller's unique bus name.** A unique name is never reused,
   so the session dies with the caller's connection. The service watches
   `NameOwnerChanged` and ends the session when its owner leaves.
-- **`Run` returns two file descriptors.** `output` carries the child's stdout, and its
-  stderr too when `merge_stderr` is true, in one ordered stream, as `proc.run`'s
-  `merge_stderr` gives today. Unmerged stderr goes to the service's journal. The bytes are
-  relayed raw, as they arrive, with no line splitting. `status` receives one line, then
-  closes: the exit status, or `128+N` for a child killed by signal `N`, the shell's
-  convention the engine already reads (143 is a stopped download). The relay is why
+- **No message carries a file descriptor.** The client pulls the job's output with
+  `Read`. Measured 2026-10-16 on the development machine (§9): with SELinux enforcing,
+  a descriptor in the service's reply makes `dbus-broker` disconnect the service.
+- **`Read(offset)` returns the job's output from byte `offset` on.** That is the child's
+  stdout, and its stderr too when `merge_stderr` is true, in one ordered stream, as
+  `proc.run`'s `merge_stderr` gives today. Unmerged stderr goes to the service's journal.
+  The bytes are raw, with no line splitting, at most 64 KiB per reply. The client
+  advances `offset` by the length of each `data`, so a repeated `Read` is harmless.
+- **`Read` answers as soon as there is something to say**: bytes past `offset`, or the
+  job's end. With neither, it answers with empty `data` after at most 1 second. So a
+  chunk reaches the client about as soon as the child writes it, and
   `proc.stream_filtered`'s stall clock still sees each raw chunk (`.claude/rules/
   engine-traps.md`, "A slow server").
+- **`status` is -1 until the job has ended and `offset` is at the end of its output.**
+  Then it is the exit status, or `128+N` for a child killed by signal `N`, the shell's
+  convention the engine already reads (143 is a stopped download).
+- **Only the session that started the job may `Read` it.** Any other caller gets
+  `NoSession`. A session with no job to read gets `Invalid`, and so does an `offset` past
+  the end of the output.
+- **The client treats a failed `Read` as a failed job**, status 1, as it does a refused
+  `Run`. That covers a service that died mid-job (§6).
 - **The child writes to a file, never to a pipe.** Its output goes to a job file in the
-  service's runtime directory, `/run/oneup/`, and the service relays that file to the
-  client as it grows. A child writing to a pipe whose reader vanished dies of `SIGPIPE`
-  mid-`zypper dup`, the shape of the first engine trap. With a file, neither the client
-  leaving nor the service dying can reach the child. The job file is deleted when the job
-  ends and the relay has drained it.
+  service's runtime directory, `/run/oneup/`, and `Read` reads that file. A child writing
+  to a pipe whose reader vanished dies of `SIGPIPE` mid-`zypper dup`, the shape of the
+  first engine trap. With a file, neither the client leaving nor the service dying can
+  reach the child.
+- **The job file is deleted** when the job has ended and either its session has read
+  `status`, its session has ended, or its session starts another `Run`. A service that
+  starts deletes any job file an earlier instance left; a child still writing to it is
+  unaffected, because an unlinked file stays writable.
 - **`CanUpdate` answers the non-interactive question** (§4.4), so `--auth-status` reports
   what an automatic update would actually get.
 
 The D-Bus library is `jeepney`, on both sides (§9). It is pure Python, gives the
-sender's unique name on every message, and passes file descriptors. It is packaged as
+sender's unique name on every message. Neither side enables descriptor passing on its
+connection, so a descriptor sent by mistake fails on the sender's side. It is packaged as
 `python313-jeepney` on Tumbleweed and Leap 16.0. The development machine has 0.9.0
 (`python3 -c "import jeepney; print(jeepney.__version__)"` → `0.9.0`).
 
@@ -290,7 +308,8 @@ sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
 - **At most one session per caller**, and at most 8 sessions in total. A second
   `OpenSession` from the same caller, or a ninth overall, gets `Busy`.
 - **At most one running job in the whole service.** zypp's lock allows no more anyway.
-  `Run` while any job runs gets `Busy`.
+  `Run` while any job runs gets `Busy`. A job that has ended no longer counts, even while
+  its output waits to be read.
 - **A session's repository changes are undone when it ends.** The service records each
   alias a session disabled. On `CloseSession`, or when the caller leaves the bus, it
   re-enables each one this session disabled and has not re-enabled. That closes a gap in
@@ -456,7 +475,7 @@ The service writes one line to its journal for each of these:
 
 ### 4.12 Measured before the code relies on it
 
-Three facts the design leans on have not been measured. Each is measured first, and a
+Four facts the design leans on have not been measured. Each is measured first, and a
 result that contradicts the design is a fold-back to this spec, not a workaround in code:
 
 1. **polkit answers `challenge`, not `dismissed`, for a caller with no agent.** §4.7's
@@ -466,6 +485,11 @@ result that contradicts the design is a fold-back to this spec, not a workaround
    with each directive in, and drop any that fails.
 3. **PackageKit started by Discover mid-run waits on zypp's lock.** Measure by opening
    Discover during a real run's commit.
+4. **`Run` and `Read` work on the real system bus with SELinux enforcing.** No test
+   reaches it: `tests/service-test.py` runs a private bus with no SELinux, which is how
+   the descriptor design passed its tests and failed its first real run (§9). Measure
+   with a read-only operation, `restart-list`, through `oneup/engine/service_client.py`
+   on a packaged install.
 
 ## 5. Correctness invariants
 
@@ -583,6 +607,19 @@ result that contradicts the design is a fold-back to this spec, not a workaround
   *Breaks when:* the variable is not set, so polkit may put a box on screen for a timer
   run, or the engine ignores it.
 
+- **INV-17** A job's output and status reach the client only through `Read`, byte for
+  byte, and only the session that started the job may read it. No message the service
+  sends carries a file descriptor.
+  *Test:* `tests/service-test.py` runs a mock that writes a chunk with no line ending,
+  sleeps, writes more, then exits 3. The bytes `Read` returns, joined, equal what the
+  mock wrote, and the first chunk arrives before the mock exits. The final `status` is 3,
+  and 143 for a mock killed by `SIGTERM`. A `Read` from another session is `NoSession`.
+  The service's introspection shows no `h` in any signature, and its connection is
+  opened without descriptor passing.
+  *Breaks when:* the reply carries a descriptor again, which a private bus without
+  SELinux accepts (§4.12 item 4); or `Read` holds a chunk back until a line ends,
+  which starves the stall clock; or another caller can read a job's output.
+
 ## 6. Failure modes
 
 | What breaks | What happens |
@@ -592,7 +629,7 @@ result that contradicts the design is a fold-back to this spec, not a workaround
 | polkit refuses, interactively | `dismissed` or `denied`: the run ends as a cancelled `sudo_init` does today. `challenge`, a caller with no agent: the sudo route (§4.7) |
 | polkit refuses, non-interactively | an automatic update stands down, as it does today when Passwordless is off |
 | PackageKit's policy file is absent | polkit reports the action unregistered, which is a refusal. The window's line then reads not allowed, and the user can still use `ONEUP_BACKEND=sudo` |
-| The service dies mid-job | `KillMode=process` and the job file (§4.3) leave zypper running. The engine sees the status descriptor close with no line, treats it as failure, and the step fails. The journal has the job-start line and no end line |
+| The service dies mid-job | `KillMode=process` and the job file (§4.3) leave zypper running. The engine's next `Read` fails, with no reply or with `NoSession` from a restarted service; the engine treats that as failure, and the step fails. The journal has the job-start line and no end line |
 | The window quits mid-run | unchanged: the engine survives it. If the engine also dies, the service finishes the job and re-enables the session's repositories |
 | Another program holds the zypp lock | unchanged: `release-lock`, then the engine's existing `repos.lock_holder` check |
 | Discover starts PackageKit mid-run | PackageKit waits on zypp's lock, which zypper holds for the transaction. Measured as §4.12 item 3 |
@@ -603,7 +640,7 @@ result that contradicts the design is a fold-back to this spec, not a workaround
 - **`tests/service-test.py`** (new): starts a private `dbus-daemon`, a fake polkit
   authority on that bus, and the service with mock binaries on its `PATH`. It needs no
   root, because the mocks only log their argv. It locks INV-1, INV-2, INV-3, INV-5,
-  INV-6, INV-7, INV-9, INV-14 and INV-15. It joins `./local-CI.sh`. It exits 77
+  INV-6, INV-7, INV-9, INV-14, INV-15 and INV-17. It joins `./local-CI.sh`. It exits 77
   (skipped) when `dbus-daemon` or `jeepney` is missing, like `tests/gui-smoke.py`
   without PySide6.
 - **`tests/run-tests.sh`**: new scenarios for INV-4, INV-8, INV-11, INV-12, INV-13 and
@@ -614,7 +651,7 @@ result that contradicts the design is a fold-back to this spec, not a workaround
   They are the AppImage's contract, and nothing in this item retires them.
 - **Each new test is seen to fail first**: against the tree before the feature for
   INV-4, INV-8 and INV-10, and against a deliberately broken service for the rest.
-- **By hand**, before 2.0.0: §4.12's three measurements, then one real run from the window
+- **By hand**, before 2.0.0: §4.12's four measurements, then one real run from the window
   on a packaged install with no password box, and one from an SSH session, which takes
   the sudo route and its password request (§4.7).
 
@@ -665,6 +702,21 @@ Each of these is amended in the commit that lands the matching code:
   `security.md` §1.3. `dbus-next` is unmaintained since 2021. `dbus-fast` hides the
   sender in its high-level API. `sdbus` is not packaged for openSUSE. `jeepney` is small,
   pure Python, packaged for both distributions, and exposes the sender.
+- **`Run` returns two file descriptors, the output and the status.** The design until
+  2026-10-16, and its premise was false. It passed `tests/service-test.py` and failed
+  the user's first real run on 2026-10-15. Measured 2026-10-16 (ONEUP-0282): the unit
+  runs as `unconfined_service_t`; the policy has no rule letting `system_dbusd_t` read
+  that type's pipes, and a `dontaudit domain unconfined_service_t:fifo_file` rule
+  hides the denial (`sesearch` on selinux-policy 20261006). The kernel drops the
+  descriptors, `dbus-broker` disconnects the service, systemd stops it, and every later
+  call is `NoSession`. Reproduced with `restart-list`. Not reproduced on the session
+  bus, an unconfined `unconfined_dbusd_t` passing pipes made by `unconfined_t`.
+- **Keep the descriptors and ship an SELinux policy module allowing them.** Declined by
+  the user on 2026-10-16. OneUp would change the system's security policy, and the allow
+  would cover every `unconfined_service_t` pipe, not only OneUp's.
+- **Push the output to the client as D-Bus signals.** A slow or vanished client would
+  leave the service queueing messages for it, and a lost signal is lost bytes. A pull by
+  `offset` lets the client set the pace, and a repeated `Read` is harmless.
 
 ## 10. Out of scope
 
@@ -683,3 +735,4 @@ Each of these is amended in the commit that lands the matching code:
 |------|------|-------|----|----|----|----|---------|
 | 1 | 2026-10-14 | 2, cold, via `neutral-lane`; genre pinned `spec`; every lane held every question; each read all 625 lines; project's `tests/docs-check.py` ran at 1d (0 failed) | 4 | 6 | 3 | 0 | **Thirteen verified, thirteen fixed, none dismissed.** Eleven came from the lanes and two from settling their open questions. **Both lanes found the same three defects independently**: INV-4 demanded `sudo` plus the table's argv for the download, which on the sudo route is wrapped by the guard or the stop wrapper, so the test could never pass without breaking Stop for passwordless users; the `system-download` row dropped the `env LC_ALL=C` pin today's download carries, which would have starved the progress parser on a non-English system; and the shared `locate.py` lived in a package the AppImage does not ship, while checking only the activation file, so an AppImage window would have failed to import it or shown the service line beside a sudo engine (now `oneup/engine/route.py::engine_route`, which both builds carry). **Both also flagged `python3 -I -m oneup.service`, and the orchestrator measured it**: `-I` leaves the current directory off `sys.path`, so it prints `No module named oneup`; a launcher at `/usr/libexec/oneup-service` now sets the path. One lane alone found that two output descriptors cannot be merged back into the single ordered stream every parser reads, with no encoding for a signal death; that session clean-up would re-enable repositories under a still-running job's zypp lock; that `Stop` named no owner; and that a headless run falling back to sudo would raise a password box nobody can answer. The other found that nothing said what makes the engine non-interactive, so every automatic update would have stood down (now `ONEUP_NONINTERACTIVE=1`, set by `_headless_engine`, which the timer's `ExecStart` reaches), and that the bulk refresh's empty alias failed the alias validator. **The two from open questions**: the service must import `steps`, because `_package_column` lives there; and the 600-second budget cap would have failed a refresh budget only on the service route. Four open questions resolved clean: `_snapshot_count` runs the `snapshot-list` argv, `cache-clean` matches `run_cache`, and the remaining two became the findings above. Lanes arrived holding the global `CLAUDE.md`, the lane prompt and hook text; no project `CLAUDE.md`, memory or git snapshot. Spend: 0.89 and 0.87 USD, four turns each. |
 | 2 | 2026-10-14 | 2, cold, via `neutral-lane`; genre pinned `spec`; every lane held every question; each read the whole document; packet rebuilt from disk with windows for every symbol loop 1's fixes named; `tests/docs-check.py` 0 failed | 4 | 5 | 3 | 2 | **Fourteen verified, fourteen fixed, none dismissed. Cap reached (2 for a spec), and the user said on 2026-10-14 not to review these fixes, so they are read by no lane; implementation is the third reviewer.** **A calm cap**: 4 of the 14 landed on text loop 1 wrote (the `_headless_engine` claim, INV-4's download wording, the fallback bullet, INV-4's `sudo -n`); the rest were in the draft. **The most consequential finding was settled by measurement, not argument.** §4.4 step 4 asked polkit again with the user's `unix-session` when a timer's bus-name check failed; one lane showed any process of that user, an SSH shell included, could claim it by setting the variable, a widening Discover's rule does not grant, and that nothing could test it. Measured: `systemd-run --user` → `pkcheck --action-id org.freedesktop.packagekit.system-update --process` → `polkit\56result=yes`, because polkit 127 places a `user@.service` process in the user's display session. Step 4 was deleted: the service adds no rule of its own. **Both lanes found** that `_headless_engine` sets no environment today, so the spec now says it is changed (INV-16), and that nothing registers a polkit agent for an SSH caller; a `challenge` reason now sends an interactive `auto` run to the sudo route (§4.12 item 1 measures it). **One lane alone found** that `KillMode=process` did not save the transaction, because a child writing to the dead service's pipe still takes `SIGPIPE`: children now write to a job file under `/run/oneup/`. The same lane found INV-4 would have stripped `restore_disabled`'s `sudo -n`, the `orphans-remove` validator parsing zypper output as root against property 1, `sudo_init` re-entry hitting `Busy`, a pre-guard drop-in going undetected, and a §6 row citing a measurement §4.12 never listed. The other found the forced-service route and §6's row both contradicting the interactive-only fallback, and that the sudo route's download wraps `system_txn_argv()`, not the table's argv. **From open questions**: `timeout` and `du` are absolute paths today (`REFRESH_SUDO_ARGV`, `CACHE_DU_ARGV`), now stated. One open question corrected by narrowing outside the tally: the AppImage window imports `engine_route` because PyInstaller follows imports, not because `engine-src/` carries it. Spend: 0.93 and 0.87 USD, four turns each. Run total: 27 verified, 27 fixed, over two loops. |
+| impl | 2026-10-16 | none: an implementation fold-back (write-spec Step 8), no reviewer dispatched | – | – | – | – | **The user's first real run on a packaged install (2026-10-15) failed at its first root command, and the cause is §4.3's descriptor design (ONEUP-0282).** On SELinux the system bus cannot take pipes from `unconfined_service_t`; `dbus-broker` disconnected the service and every later call was `NoSession`. Reproduced 2026-10-16 with `restart-list`; the policy facts are in §9. `tests/service-test.py` could not see it: a private `dbus-daemon` with no SELinux. **A design premise moved, not a detail**, so §9 records the rejected design and why. User's decisions that day: the client pulls the output with `Read(offset)`, and no SELinux policy module ships. Changed: §4.3 (the interface, `Read`, deletion of the job file), §4.5 (an ended job frees the slot), §4.12 item 4 (the real bus is measured, because no test reaches it), INV-17, §6's dying-service row, §7, §9. **The gate re-arms**: the service, the client and the service suite are still to be built against the new interface. |
