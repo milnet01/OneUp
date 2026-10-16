@@ -2,9 +2,10 @@
 
 `docs/specs/ONEUP-0249-system-service.md` §4.3. The engine stays the user's; only its
 root commands travel. It names an operation from `rootops`' table and its arguments,
-never an argv, and the service builds the command itself. The output comes back as raw
-bytes on one file descriptor and the exit status as one line on another, so the
-engine's own readers see what they would see from a sudo child.
+never an argv, and the service builds the command itself. The engine pulls the output
+with `Read`, as raw bytes, then the exit status, so its own readers see what they
+would see from a sudo child. No descriptor is passed: SELinux stops the system bus
+taking one from the service (ONEUP-0282, INV-17).
 
 `jeepney` is imported inside functions only. The AppImage's copied-out engine runs
 on a machine without it, and its route is sudo, which never reaches this module
@@ -64,7 +65,7 @@ def _router():
     if _ROUTER is None:
         from jeepney.io.threading import DBusRouter, open_dbus_connection
         try:
-            _CONN = open_dbus_connection(bus=_bus(), enable_fds=True)
+            _CONN = open_dbus_connection(bus=_bus())
         except (OSError, ValueError, KeyError, TimeoutError) as exc:
             raise Unreachable(f"no bus: {exc}") from exc
         _ROUTER = DBusRouter(_CONN)
@@ -117,39 +118,67 @@ def open_session(*, interactive: bool, import_keys: bool) -> None:
     _SESSION = True
 
 
+class _Pull(io.RawIOBase):
+    """The job's output as a byte stream, pulled with `Read` (§4.3).
+
+    End of stream is the reply carrying the final status. A failed `Read` ends it too,
+    with status 1: the client treats it as a failed job (§4.3, §6).
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.offset = 0
+        self.status: int | None = None
+        self._pending = b""            # what the caller's buffer had no room for
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer) -> int:
+        while not self._pending and self.status is None:
+            try:
+                data, status = _call("Read", "t", (self.offset,))
+            except (Unreachable, Refused):
+                self.status = 1
+                break
+            self._pending = bytes(data)
+            self.offset += len(data)
+            if not data and status != -1:
+                self.status = status
+        count = min(len(buffer), len(self._pending))
+        buffer[:count] = self._pending[:count]
+        self._pending = self._pending[count:]
+        return count
+
+
 class Job:
     """One running operation: its output, then its status."""
 
-    def __init__(self, output: int, status: int) -> None:
-        self._output = os.fdopen(output, "rb")
-        self._status = os.fdopen(status, "rb")
+    def __init__(self) -> None:
+        self._pull = _Pull()
 
     def lines(self) -> Iterator[str]:
         """The output decoded as `proc` decodes a child's: UTF-8, replace, any newline."""
-        yield from io.TextIOWrapper(self._output, encoding="utf-8", errors="replace")
+        # The decoder reads with `read1`, one `Read` at a time, so a line goes on as
+        # soon as the reply bringing its end arrives.
+        yield from io.TextIOWrapper(io.BufferedReader(self._pull),
+                                    encoding="utf-8", errors="replace")
 
     def read(self) -> str:
         return "".join(self.lines())
 
     def wait(self) -> int:
-        """The job's status line. A descriptor closed with no line is a failure (§6)."""
-        with contextlib.suppress(OSError, ValueError):
-            self._output.close()
-        try:
-            text = self._status.read().decode("ascii", "replace").strip()
-        except OSError:
-            text = ""
-        finally:
-            self._status.close()
-        return int(text) if text.isdecimal() else 1
+        """The job's status, pulling any output nobody read. A failed `Read` is 1 (§6)."""
+        while self._pull.readinto(bytearray(65536)):
+            pass
+        return self._pull.status if self._pull.status is not None else 1
 
 
 def run(op: str, args: Mapping[str, object], *, merge_stderr: bool) -> Job:
-    """`Run`: start one operation and return its two descriptors."""
-    body = _call("Run", "sa{sv}b",
-                 (op, {name: _variant(value) for name, value in args.items()}, merge_stderr))
-    output, status = body
-    return Job(output.to_raw_fd(), status.to_raw_fd())
+    """`Run`: start one operation; its output and status are pulled from the `Job`."""
+    _call("Run", "sa{sv}b",
+          (op, {name: _variant(value) for name, value in args.items()}, merge_stderr))
+    return Job()
 
 
 def stop() -> None:

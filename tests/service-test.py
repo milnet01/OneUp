@@ -4,7 +4,11 @@
 Starts a private `dbus-daemon`, a fake polkit authority on it, and the service with
 mock binaries first on its PATH, then talks to it as clients do. Nothing here needs
 root: the mocks only log their argv. It locks INV-1, INV-2, INV-3, INV-5, INV-6,
-INV-7, INV-9, INV-14 and INV-15 of `docs/specs/ONEUP-0249-system-service.md`.
+INV-7, INV-9, INV-14, INV-15 and INV-17 of `docs/specs/ONEUP-0249-system-service.md`.
+
+It cannot see SELinux: the private bus is an unconfined `dbus-daemon`, which is how a
+reply carrying descriptors once passed here and failed on the real system bus
+(ONEUP-0282). INV-17 therefore checks that no descriptor is ever sent at all.
 
 Exits 0 on success, 1 on a failed check, and 77 (skipped) when `dbus-daemon` or
 `jeepney` is missing, like `tests/gui-smoke.py` without PySide6.
@@ -75,7 +79,8 @@ BUS_CONFIG = """<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Config
 # The mock zypper. Logs "LC_ALL|argv" per call. `packages --unneeded` lists two
 # packages; a transaction prints, sleeps for DIR/dup-sleep seconds, and then writes
 # DIR/done; it turns SIGTERM into 105, as zypper does. `clean` prints to both streams;
-# DIR/clean-dies makes it die of SIGKILL instead.
+# DIR/clean-dies makes it die of SIGKILL instead, DIR/clean-termed of SIGTERM, and
+# DIR/clean-chunks print a chunk with no line ending, pause, finish the line, exit 3.
 ZYPPER = r"""#!/usr/bin/env bash
 d="$ONEUP_MOCK_DIR"
 printf '%s|%s\n' "$LC_ALL" "$*" >> "$d/calls.log"
@@ -91,6 +96,8 @@ case " $* " in
     echo "done"; touch "$d/done" ;;
   *" clean "*)
     [[ -e "$d/clean-dies" ]] && kill -KILL $$
+    [[ -e "$d/clean-termed" ]] && kill -TERM $$
+    if [[ -e "$d/clean-chunks" ]]; then printf 'part-one'; sleep 2; printf ' part-two\n'; exit 3; fi
     echo "out-line"; echo "err-line" >&2 ;;
 esac
 exit 0
@@ -184,7 +191,8 @@ class Rig:
             close(probe)
 
     def client(self):
-        return DBusRouter(open_dbus_connection(bus=self.address, enable_fds=True))
+        # No descriptor passing, as the engine's own client opens it (INV-17).
+        return DBusRouter(open_dbus_connection(bus=self.address))
 
     def answers(self, **by_action: str) -> None:
         (self.d / "polkit.answers").write_text(json.dumps(by_action))
@@ -221,9 +229,12 @@ def wait_for(test, seconds: float) -> bool:
 
 def call(router, address, method: str, signature: str | None = None, body: tuple = (),
          timeout: float = 15):
-    """("ok", body), or (the error's last word, its text)."""
-    reply = router.send_and_get_reply(
-        new_method_call(address, method, signature, body), timeout=timeout)
+    """("ok", body), or (the error's last word, its text); "Unreachable" if no reply came."""
+    try:
+        reply = router.send_and_get_reply(
+            new_method_call(address, method, signature, body), timeout=timeout)
+    except (TimeoutError, OSError) as exc:
+        return "Unreachable", repr(exc)
     if reply.header.message_type == MessageType.error:
         name = reply.header.fields.get(HeaderFields.error_name, "")
         return name.rsplit(".", 1)[-1], (reply.body[0] if reply.body else "")
@@ -242,29 +253,44 @@ def open_session(router, **options: bool):
                 ({k: ("b", v) for k, v in options.items()},), timeout=30)
 
 
-def run(router, op: str, args: dict, merge: bool = False):
-    """Run `op`; returns (code, text) on refusal, or ("ok", output, status)."""
+def read(router, offset: int):
+    """One `Read`: ("ok", (data, status)), or (code, text) on a refusal."""
+    return call(router, SERVICE, "Read", "t", (offset,))
+
+
+def pull(router):
+    """`Read` from 0 to the job's end; ("ok", output, status), or (code, text)."""
+    output, offset = b"", 0
+    while True:
+        got = read(router, offset)
+        if got[0] != "ok":
+            return got
+        data, status = got[1]
+        output += data
+        offset += len(data)
+        if status != -1:
+            return "ok", output.decode(), str(status)
+
+
+def _run_call(router, op: str, args: dict, merge: bool):
     sigs = {bool: "b", int: "u", str: "s", list: "as"}
-    result = call(router, SERVICE, "Run", "sa{sv}b",
-                  (op, {k: (sigs[type(v)], v) for k, v in args.items()}, merge))
+    return call(router, SERVICE, "Run", "sa{sv}b",
+                (op, {k: (sigs[type(v)], v) for k, v in args.items()}, merge))
+
+
+def run(router, op: str, args: dict, merge: bool = False):
+    """Run `op` and read it to the end; (code, text) on refusal, or ("ok", output, status)."""
+    result = _run_call(router, op, args, merge)
     if result[0] != "ok":
         return result
-    out_fd, status_fd = result[1]
-    with os.fdopen(out_fd.to_raw_fd(), "rb") as out:
-        output = out.read().decode()
-    with os.fdopen(status_fd.to_raw_fd(), "rb") as st:
-        status = st.read().decode().strip()
-    return "ok", output, status
+    return pull(router)
 
 
-def start(router, op: str, args: dict):
-    """Run `op` and return its two descriptors without reading them."""
-    sigs = {bool: "b", int: "u", str: "s", list: "as"}
-    result = call(router, SERVICE, "Run", "sa{sv}b",
-                  (op, {k: (sigs[type(v)], v) for k, v in args.items()}, True))
+def start(router, op: str, args: dict) -> None:
+    """Run `op` and read none of it yet."""
+    result = _run_call(router, op, args, True)
     if result[0] != "ok":
         raise RuntimeError(f"Run {op} was refused: {result}")
-    return (os.fdopen(result[1][0].to_raw_fd(), "rb"), os.fdopen(result[1][1].to_raw_fd(), "rb"))
 
 
 # --- the checks ------------------------------------------------------------------
@@ -395,8 +421,63 @@ def test_relay(rig: Rig) -> None:
           got[0] == "ok" and rig.calls()[-1].startswith("C|") and " dup " in f" {rig.calls()[-1]} ",
           rig.calls()[-1:])
     close(c)
-    check("no job file is left behind", not list((rig.d / "run").glob("job-*")),
+    check("no job file is left once the session ends",
+          wait_for(lambda: not list((rig.d / "run").glob("job-*")), 5),
           list((rig.d / "run").glob("job-*")))
+
+
+def test_read(rig: Rig) -> None:
+    scenario("INV-17: output and status reach the client only through Read")
+    c = rig.client()
+    open_session(c)
+    (rig.d / "clean-chunks").touch()
+    began = time.monotonic()
+    got = _run_call(c, "cache-clean", {}, False)
+    check("Run answers with no descriptors", got == ("ok", ()), got)
+    replies, offset, status = [], 0, -1
+    while status == -1 and time.monotonic() - began < 15:
+        got = read(c, offset)
+        if got[0] != "ok":
+            replies.append(got)
+            break
+        data, status = got[1]
+        replies.append((data, status, round(time.monotonic() - began, 2)))
+        offset += len(data)
+    (rig.d / "clean-chunks").unlink()
+    chunks = [r for r in replies if len(r) == 3 and r[0]]
+    check("the first chunk arrives unsplit, before the child has finished its line",
+          bool(chunks) and chunks[0][0] == b"part-one" and chunks[0][2] < 1.5, replies)
+    check("the bytes, joined, are exactly what the child wrote",
+          b"".join(r[0] for r in chunks) == b"part-one part-two\n", replies)
+    check("a reply carrying bytes has status -1", all(r[1] == -1 for r in chunks), replies)
+    check("the final status is the child's exit, 3, on a reply with no bytes",
+          replies[-1:] and replies[-1][:2] == (b"", 3), replies[-1:])
+    check("a second Read at the end returns the same status",
+          read(c, offset) == ("ok", (b"", 3)), read(c, offset))
+    got = read(c, offset + 1)
+    check("an offset past the end is Invalid", got[0] == "Invalid", got)
+    (rig.d / "clean-termed").touch()
+    got = run(c, "cache-clean", {})
+    (rig.d / "clean-termed").unlink()
+    check("a child killed by SIGTERM reports 143", got[:1] == ("ok",) and got[2] == "143", got)
+    other = rig.client()
+    got = read(other, 0)
+    check("Read from a connection with no session is NoSession", got[0] == "NoSession", got)
+    open_session(other)
+    got = read(other, 0)
+    check("Read from a session with no job of its own is Invalid", got[0] == "Invalid", got)
+    xml = call(c, DBusAddress(OBJECT_PATH, bus_name=BUS_NAME,
+                              interface="org.freedesktop.DBus.Introspectable"), "Introspect")
+    check("introspection lists Read and no descriptor type",
+          xml[0] == "ok" and '<method name="Read">' in xml[1][0] and 'type="h"' not in xml[1][0],
+          xml)
+    sources = [*sorted((REPO / "oneup" / "service").glob("*.py")),
+               REPO / "oneup" / "engine" / "service_client.py"]
+    passing = [p.name for p in sources if "enable_fds=True" in p.read_text()]
+    check("no connection in the service or its client enables descriptor passing",
+          not passing, passing)
+    close(other)
+    close(c)
 
 
 def test_orphans(rig: Rig) -> None:
@@ -456,7 +537,7 @@ def test_caps(rig: Rig) -> None:
     check("seven more open, and the ninth is Busy", results == ["ok"] * 7 + ["Busy"], results)
     (rig.d / "dup-sleep").write_text("2")
     (rig.d / "done").unlink(missing_ok=True)
-    out, status = start(first, "system-commit", {"cdn": False})
+    start(first, "system-commit", {"cdn": False})
     got = run(first, "cache-clean", {})
     check("a second Run from the same session is Busy", got[0] == "Busy", got)
     got = run(others[0], "cache-clean", {})
@@ -465,10 +546,8 @@ def test_caps(rig: Rig) -> None:
     check("Stop from another session is NoSession", got[0] == "NoSession", got)
     got = call(first, SERVICE, "Stop")
     check("Stop on a commit is NotStoppable (INV-5)", got[0] == "NotStoppable", got)
-    out.read()
-    check("the commit finishes with status 0", status.read().decode().strip() == "0")
-    out.close()
-    status.close()
+    got = pull(first)
+    check("the commit finishes with status 0", got[:1] == ("ok",) and got[2] == "0", got)
     for c in [first, *others]:
         close(c)
     (rig.d / "dup-sleep").unlink()
@@ -479,17 +558,15 @@ def test_stop_download(rig: Rig) -> None:
     c = rig.client()
     open_session(c)
     (rig.d / "dup-sleep").write_text("30")
-    out, status = start(c, "system-download", {"cdn": False})
+    start(c, "system-download", {"cdn": False})
     time.sleep(0.5)
     began = time.monotonic()
     check("Stop is accepted", call(c, SERVICE, "Stop") == ("ok", ()))
-    text = out.read().decode()
-    code = status.read().decode().strip()
+    got = pull(c)
+    code, text = (got[2], got[1]) if got[0] == "ok" else (got[0], "")
     check("the download ends 105, promptly", code == "105" and time.monotonic() - began < 10,
           (code, round(time.monotonic() - began, 1)))
     check("with zypper's own words relayed", "Trying to exit gracefully" in text, text)
-    out.close()
-    status.close()
     close(c)
     (rig.d / "dup-sleep").unlink()
 
@@ -520,16 +597,14 @@ def test_service_killed(rig: Rig) -> None:
     (rig.d / "done").unlink(missing_ok=True)
     c = rig.client()
     open_session(c)
-    out, status = start(c, "system-commit", {"cdn": False})
+    start(c, "system-commit", {"cdn": False})
     time.sleep(0.3)
     rig.service.kill()
     rig.service.wait()
-    out.read()
-    check("the client sees the status close with no line", status.read() == b"")
+    got = pull(c)
+    check("the client's next Read fails, which it counts as a failed job", got[0] != "ok", got)
     check("the commit still finishes after the service is killed",
           wait_for(lambda: (rig.d / "done").exists(), 15))
-    out.close()
-    status.close()
     close(c)
     (rig.d / "dup-sleep").unlink()
     rig.start_service()
@@ -548,21 +623,25 @@ def test_sigterm(rig: Rig) -> None:
     scenario("§4.8: on SIGTERM the service refuses new sessions and waits for its job")
     c = rig.client()
     open_session(c)
+    bystander = rig.client()
+    open_session(bystander)
     (rig.d / "dup-sleep").write_text("2")
     (rig.d / "done").unlink(missing_ok=True)
-    out, status = start(c, "system-commit", {"cdn": False})
+    start(c, "system-commit", {"cdn": False})
     rig.service.send_signal(signal.SIGTERM)
     time.sleep(0.5)
     late = rig.client()
     got = open_session(late)
     check("a new session is Busy", got[0] == "Busy", got)
+    got = read(bystander, 0)
+    check("a session with no job ends at once", got[0] == "NoSession", got)
     check("the service is still running while the job runs", rig.service.poll() is None)
-    out.read()
-    check("the job finishes", status.read().decode().strip() == "0")
+    got = pull(c)
+    check("the job's output and status stay readable to the end",
+          got[:1] == ("ok",) and got[2] == "0", got)
     check("and then the service exits", wait_for(lambda: rig.service.poll() is not None, 10))
-    for f in (out, status):
-        f.close()
     close(c)
+    close(bystander)
     close(late)
     (rig.d / "dup-sleep").unlink()
     rig.start_service()
@@ -589,10 +668,9 @@ def test_idle(base: Path) -> None:
 
 def client_mode(d: Path) -> int:
     """The INV-5 caller: open a session, start a commit, then wait to be killed."""
-    router = DBusRouter(open_dbus_connection(bus=os.environ["ONEUP_SERVICE_BUS"],
-                                             enable_fds=True))
+    router = DBusRouter(open_dbus_connection(bus=os.environ["ONEUP_SERVICE_BUS"]))
     open_session(router)
-    _held = start(router, "system-commit", {"cdn": False})   # kept open until killed
+    start(router, "system-commit", {"cdn": False})
     print("started", flush=True)
     time.sleep(600)
     return 0
@@ -621,7 +699,7 @@ def main() -> int:
         rig = Rig(d)
         try:
             for test in (test_polkit, test_import_keys, test_validation, test_relay,
-                         test_orphans, test_repo_restore, test_caps, test_stop_download,
+                         test_read, test_orphans, test_repo_restore, test_caps, test_stop_download,
                          test_client_killed, test_service_killed, test_sigterm, test_audit):
                 test(rig)
         finally:

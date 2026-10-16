@@ -2,7 +2,7 @@
 
 §4.3 to §4.9. One thread owns every piece of state: the main loop below. The bus
 receiver thread only queues messages; polkit checks run on worker threads, because a
-check that asks the user can take minutes; the job's relay runs on its own. Each of
+check that asks the user can take minutes; the job's waiter runs on its own. Each of
 those posts its result back to the main loop's queue rather than touching state.
 """
 
@@ -43,6 +43,7 @@ VERSION = 1
 _ERR = BUS_NAME + ".Error."
 
 MAX_SESSIONS = 8                  # §4.5
+READ_WAIT_SECONDS = 1.0           # the longest a `Read` with nothing to say waits (§4.3)
 
 _DBUS = DBusAddress("/org/freedesktop/DBus", bus_name="org.freedesktop.DBus",
                     interface="org.freedesktop.DBus")
@@ -51,8 +52,9 @@ _INTROSPECTION = f"""<node>
  <interface name="{INTERFACE}">
   <method name="OpenSession"><arg direction="in" type="a{{sv}}"/></method>
   <method name="Run"><arg direction="in" type="s"/><arg direction="in" type="a{{sv}}"/>
-   <arg direction="in" type="b"/><arg direction="out" type="h"/>
-   <arg direction="out" type="h"/></method>
+   <arg direction="in" type="b"/></method>
+  <method name="Read"><arg direction="in" type="t"/><arg direction="out" type="ay"/>
+   <arg direction="out" type="i"/></method>
   <method name="Stop"/>
   <method name="CloseSession"/>
   <method name="CanUpdate"><arg direction="out" type="s"/></method>
@@ -80,6 +82,8 @@ class Session:
     disabled: list[str] = field(default_factory=list)   # aliases to re-enable at the end
     cdn_dir: str = ""
     why: str = ""                 # how it ended, for the audit line
+    job: jobs.Job | None = None   # its last job, running or ended, until read (§4.3)
+    told: bool = False            # that job's final status has been returned once
 
 
 def _env_seconds(name: str, default: float) -> float:
@@ -126,10 +130,12 @@ class Service:
         self.checking: set[str] = set()             # callers whose OpenSession is with polkit
         self.job: jobs.Job | None = None
         self.ending: list[Session] = []             # sessions whose clean-up is still owed
+        self.waiting: list[tuple[Message, Session, int, float]] = []   # parked Reads
         self.stopping = False
         self.idle_seconds = _env_seconds("ONEUP_SERVICE_IDLE_SECONDS", 60)
         self.runtime_dir = Path(os.environ.get("ONEUP_SERVICE_RUNTIME_DIR")
                                 or os.environ.get("RUNTIME_DIRECTORY") or "/run/oneup")
+        jobs.clear_stale(self.runtime_dir)
         self.last_busy = time.monotonic()
 
     # --- the loop ---------------------------------------------------------------
@@ -137,16 +143,22 @@ class Service:
     def serve(self) -> int:
         while True:
             try:
-                item = self.events.get(timeout=0.25)
+                # A parked Read is answered as soon as its job writes or ends, so the
+                # loop looks often while one waits.
+                item = self.events.get(timeout=0.02 if self.waiting else 0.25)
             except queue.Empty:
                 item = None
             if isinstance(item, Message):
                 self._message(item)
             elif item is not None:
                 item()                                 # a worker's result, run here
-            if self.stopping and self.sessions:
+            self._answer_waiting()
+            if self.stopping:
+                # §4.8: a session keeps its job readable until the final status has
+                # gone out once; every other session ends now.
                 for session in list(self.sessions.values()):
-                    self._end_session(session, "service stopping")
+                    if session.job is None or session.told:
+                        self._end_session(session, "service stopping")
             self._clean_up()
             if self.sessions or self.checking or self.job or self.ending:
                 self.last_busy = time.monotonic()
@@ -173,6 +185,7 @@ class Service:
         handler = {
             (INTERFACE, "OpenSession"): self._open_session,
             (INTERFACE, "Run"): self._run,
+            (INTERFACE, "Read"): self._read,
             (INTERFACE, "Stop"): self._stop,
             (INTERFACE, "CloseSession"): self._close_session,
             (INTERFACE, "CanUpdate"): self._can_update,
@@ -182,7 +195,7 @@ class Service:
         }.get((iface, member))
         if handler is None and not iface:
             handler = {"OpenSession": self._open_session, "Run": self._run,
-                       "Stop": self._stop, "CloseSession": self._close_session,
+                       "Read": self._read, "Stop": self._stop, "CloseSession": self._close_session,
                        "CanUpdate": self._can_update}.get(member)
         if handler is None:
             self._error(msg, "org.freedesktop.DBus.Error.UnknownMethod", f"no method {member}")
@@ -280,6 +293,8 @@ class Service:
 
     def _run(self, msg: Message) -> None:
         session = self._session(msg)
+        if self.stopping:
+            raise Refusal("Busy", "the service is stopping")
         if self.job is not None:
             raise Refusal("Busy", "a job is running")
         op, raw_args, merge_stderr = self._body(msg, "sa{sv}b")
@@ -299,6 +314,9 @@ class Service:
             if not session.cdn_dir:
                 raise Refusal("Invalid", "the CDN repository copy could not be staged")
         argv = rootops.build(op, args, cdn_dir=session.cdn_dir)
+        if session.job is not None:      # its last job has ended; its output goes now
+            session.job.discard()
+            session.job = None
         try:
             job = jobs.Job(op=op, args=args, argv=argv, merge_stderr=merge_stderr,
                            runtime_dir=self.runtime_dir, session=session,
@@ -306,13 +324,49 @@ class Service:
         except OSError as exc:
             raise Refusal("Invalid", f"could not start {op}: {exc.strerror}") from exc
         self.job = job
+        session.job = job
+        session.told = False
         audit(f"job started uid={session.uid} op={op} args={_args_text(args)}")
-        out_r, status_r = job.client_fds
-        try:
-            self._reply(msg, "hh", (out_r, status_r))
-        finally:
-            os.close(out_r)
-            os.close(status_r)
+        self._reply(msg)
+
+    # --- Read (§4.3) ----------------------------------------------------------------
+
+    def _read(self, msg: Message) -> None:
+        session = self._session(msg)
+        (offset,) = self._body(msg, "t")
+        job = session.job
+        if job is None:
+            raise Refusal("Invalid", "this session has no job to read")
+        if offset > job.size():
+            raise Refusal("Invalid", "offset is past the end of the output")
+        if not self._answer(msg, session, offset):
+            self.waiting.append((msg, session, offset, time.monotonic() + READ_WAIT_SECONDS))
+
+    def _answer(self, msg: Message, session: Session, offset: int) -> bool:
+        """Reply if there is something to say: bytes past `offset`, or the job's end."""
+        job = session.job
+        status = job.status          # first: once set, everything is in the file
+        data = job.read(offset)
+        if data:
+            self._reply(msg, "ayi", (data, -1))
+            return True
+        if status is not None:
+            self._reply(msg, "ayi", (b"", status))
+            session.told = True
+            return True
+        return False
+
+    def _answer_waiting(self) -> None:
+        now = time.monotonic()
+        parked, self.waiting = self.waiting, []
+        for msg, session, offset, deadline in parked:
+            if self.sessions.get(session.owner) is not session:
+                self._error(msg, _ERR + "NoSession", "this caller has no session")
+            elif not self._answer(msg, session, offset):
+                if now < deadline:
+                    self.waiting.append((msg, session, offset, deadline))
+                else:
+                    self._reply(msg, "ayi", (b"", -1))
 
     @staticmethod
     def _validate(op: str, args: dict) -> None:
@@ -407,6 +461,8 @@ class Service:
                     audit(f"re-enable failed uid={session.uid} alias={alias} status={rc}")
             if session.cdn_dir:
                 shutil.rmtree(session.cdn_dir, ignore_errors=True)
+            if session.job is not None:      # ended: no job runs here
+                session.job.discard()
             audit(f"session ended uid={session.uid} caller={session.owner} "
                   f"why={session.why} re-enabled={','.join(enabled) or '-'}")
 
@@ -461,7 +517,9 @@ def _args_text(args: dict) -> str:
 def main() -> int:
     bus = os.environ.get("ONEUP_SERVICE_BUS") or "SYSTEM"   # a test's private bus
     try:
-        conn = open_dbus_connection(bus=bus, enable_fds=True)
+        # No descriptor passing: SELinux stops the system bus taking one from this
+        # service, and the bus then drops the connection (ONEUP-0282, INV-17).
+        conn = open_dbus_connection(bus=bus)
     except OSError as exc:
         print(f"oneup-service: cannot reach the bus: {exc}", file=sys.stderr, flush=True)
         return 1
