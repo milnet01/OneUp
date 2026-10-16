@@ -3883,8 +3883,10 @@ def main() -> int:
     check("the final summary is announced", "All done" in wB._last_announcement)
     # ONEUP-0277: a run that installed Flatpak updates and no system ones told the user it
     # was "already up to date" (measured 2026-10-14: 4 Flatpak updates installed).
-    for key, end, label in (("flatpak", "installed|4", "Flatpak"),
-                            ("firmware", "updated", "firmware")):
+    for key, end, label, said in (("flatpak", "installed|4", "Flatpak",
+                                   "All done. 4 Flatpak app(s) updated."),
+                                  ("firmware", "updated", "firmware",
+                                   "All done. Firmware updated.")):
         wFp = window.Updater()
         run.handle_line(wFp, "@@STEP_BEGIN@@|system|1|2")
         run.handle_line(wFp, "@@STEP_END@@|system|ok|up-to-date")
@@ -3896,7 +3898,21 @@ def main() -> int:
         run.on_finished(wFp, 0, QProcess.ExitStatus.NormalExit)
         check(f"a {label}-only run is not called already up to date (ONEUP-0277)",
               "already up to date" not in wFp.status.text()
-              and "updates installed" in wFp.status.text())
+              and wFp.status.text() == said)
+    # ONEUP-0288: the headline counted only system packages (run 2026-10-16_082648
+    # said 122 for 126 system packages and 3 Flatpak apps). One sentence per source.
+    wSp = window.Updater()
+    for line in ("@@STEP_BEGIN@@|system|1|3", "@@STEP_END@@|system|ok|installed|126",
+                 "@@STEP_BEGIN@@|flatpak|2|3", "@@STEP_END@@|flatpak|ok|installed|3",
+                 "@@STEP_BEGIN@@|firmware|3|3", "@@STEP_END@@|firmware|ok|updated",
+                 "@@INSTALLED@@|126|yes|yes"):
+        run.handle_line(wSp, line)
+    wSp.proc = QProcess(wSp)
+    wSp._check_mode = False
+    run.on_finished(wSp, 0, QProcess.ExitStatus.NormalExit)
+    check("the summary counts each source on its own (ONEUP-0288)",
+          wSp.status.text() == "All done. 126 system package(s) installed. "
+                               "3 Flatpak app(s) updated. Firmware updated.")
     try:
         wB._announce("plain call must not throw when no reader is listening")
         check("_announce is safe with no screen reader attached", True)

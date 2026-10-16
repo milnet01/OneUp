@@ -699,7 +699,10 @@ def _system_upgrade_inner() -> bool:
 
 
 _UPGRADE_COUNT = re.compile(r"([0-9]+) packages? to upgrade", re.IGNORECASE)
-_INSTALL_COUNT = re.compile(r"([0-9]+) to install", re.IGNORECASE)
+# zypper's summary says "122 packages to upgrade, 4 new." or, with no upgrades,
+# "4 new packages to install." Case-sensitive, so the list header "The following
+# 4 NEW packages are going to be installed:" is not a second match (ONEUP-0288).
+_INSTALL_COUNT = re.compile(r"([0-9]+) new(?: packages? to install)?[,.]")
 _FAILED_PKG = re.compile(r"^(?:Preloading|Retrieving): (\S+) \[([^]]*)\]", re.MULTILINE)
 _CACHED = re.compile(r"^(done|already in cache)$", re.IGNORECASE)
 

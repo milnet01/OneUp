@@ -398,7 +398,7 @@ def _reset_for_run(win, steps: list[str], check: bool):
     win._reboot_reason = ""
     win._installed_count = ""
     win._sys_changed = False
-    win._other_changed = False  # Flatpak or firmware installed something (ONEUP-0277)
+    win._other_changed = {}     # Flatpak/firmware step → its count, if it changed anything
     win._step_caption = ""
     win._progress_phase = ""
     win._done_status = ""
@@ -732,7 +732,7 @@ def handle_marker(win, line: str):
             badge = markers._step_badge(status, code, args)
             row.set_badge(badge)
             if key in ("flatpak", "firmware") and code in ("installed", "updated"):
-                win._other_changed = True
+                win._other_changed[key] = args[0] if args else ""
             # The outcome, spoken once. A later TIMING/FREED marker refines the
             # badge but is NOT re-announced — it stays reachable by Tab via the
             # switch's accessible description. Two utterances per step is the budget.
@@ -1096,15 +1096,32 @@ def on_finished(win, exit_code: int, _status):
     if win._skipped_repos:
         aside = i18n.counted("sources-set-aside", len(win._skipped_repos)).format(
             names=i18n.join_names(win._skipped_repos))
+    # One whole sentence per source that installed something, so a run that also
+    # updated Flatpak apps or firmware says so, rather than one system-only number
+    # (ONEUP-0288).
+    installed = []
+    if count:
+        installed.append(i18n.counted("system-installed", count))
+    elif win._sys_changed:
+        installed.append(QCoreApplication.translate("run", "System packages updated."))
+    if "flatpak" in win._other_changed:
+        fp = win._other_changed["flatpak"]
+        installed.append(
+            i18n.counted("flatpak-updated", int(fp)) if fp.isdecimal() and int(fp)
+            else QCoreApplication.translate("run", "Flatpak apps updated."))
+    if "firmware" in win._other_changed:
+        installed.append(QCoreApplication.translate("run", "Firmware updated."))
     # Whole sentences, one per outcome — never a fragment dropped into a frame.
     if not ok:
         summary = QCoreApplication.translate(
             "run", "Finished — some steps had errors (see details).")
-    elif count:
-        summary = QCoreApplication.translate("run", "All done — {installed}.").format(
-            installed=i18n.counted("updates-installed", count))
-    elif win._sys_changed or win._other_changed:
-        summary = QCoreApplication.translate("run", "All done — updates installed.")
+    elif installed:
+        between = QCoreApplication.translate(
+            "run", " ", "separator between whole sentences in the run's summary")
+        summary = QCoreApplication.translate(
+            "run", "All done. {installed}",
+            "then one whole sentence per source that installed something").format(
+                installed=between.join(installed))
     elif "system" in win.selected_steps():
         summary = QCoreApplication.translate("run", "All done — already up to date.")
     else:

@@ -137,6 +137,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The finished line says what was installed from each source** (ONEUP-0288)
+  For example: "All done. 126 system package(s) installed. 3 Flatpak app(s)
+  updated. Firmware updated." It used to give one number for system packages
+  only. That number also left out packages new to the system, such as a new
+  kernel.
+
 - **Check for updates works straight after the download size is shown** (ONEUP-0266)
   It used to say the size was still being worked out, and refuse, for up
   to two minutes after the size appeared. Retry failed steps still waits
