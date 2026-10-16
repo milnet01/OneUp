@@ -8880,7 +8880,7 @@ when complete (that document's §7).
   Source: user-request-2026-10-16.
   Lanes: engine, service, packaging.
 
-- 📋 [ONEUP-0287] **Test a first install on a clean Tumbleweed virtual machine, from adding the repository to a finished update, before 2.0.0.**
+- 🚧 [ONEUP-0287] **Test a first install on a clean Tumbleweed virtual machine, from adding the repository to a finished update, before 2.0.0.**
   User's decision, 2026-10-16: someone installing OneUp for the first
   time must get a working service with no help, and a clean virtual
   machine is how it is checked. This machine cannot show it: it has
@@ -8896,6 +8896,15 @@ when complete (that document's §7).
   PackageKit. Run 1 as booted; run 2 after zypper remove PackageKit in
   the same session. Download the ISO to /mnt/Games, not /tmp (RAM).
   Waiting on the user's go: it needs them at the keyboard.
+  User's decision, 2026-10-16: the Live ISO plan, with one change.
+  The OBS repository serves oneup 1.4.10 (checked that day), which has
+  no service, so it cannot test 2.0. Instead an RPM built locally from
+  v2 HEAD b869199 with rpmbuild (it holds oneup-service and its D-Bus
+  files) is installed in the VM with zypper, which pulls the
+  dependencies from Tumbleweed's own repositories. The OBS repository
+  step waits for 2.0.0. ISO: KDE Live Snapshot20261014, sha256-checked,
+  in /mnt/Games/oneup-vmtest/. Same approach as Groundwork's VM runs
+  (GRND-0076): Live Tumbleweed in QEMU, UEFI.
   **Layman:** Install OneUp on a brand-new test computer, the way a newcomer would, to prove it works without any expert help.
   Kind: test.
   Source: user-decision-2026-10-16.
