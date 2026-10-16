@@ -9098,7 +9098,7 @@ when complete (that document's §7).
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: gui.
 
-- 📋 [ONEUP-0302] **Settings row descriptions that wrap to a third line show only two, cutting the sentence off.**
+- ✅ [ONEUP-0302] **Settings row descriptions that wrap to a third line show only two, cutting the sentence off.**
   Seen 2026-10-16 in the ONEUP-0287 VM (Breeze, Noto Sans, 1280x960),
   v2 at 60d09ae, while checking ONEUP-0301. Clipped: "Install all
   updates automatically ... Needs this computer to allow updates",
@@ -9107,6 +9107,11 @@ when complete (that document's §7).
   works", "Copy a bug report ... so filing an issue doesn't mean".
   Crop: /mnt/Games/oneup-vmtest/crop-settings-clipped.png. Not yet
   known whether the row's height or the label's is what is short.
+  Shipped 5e9bded (2026-10-16). Cause: the dialog needed 993 px, the
+  960-pixel screen gave 886, and the layout squeezed every row. Rows now
+  scroll; status and Close stay below. VM check passed: 12 of 12
+  descriptions whole, Shift-Tab scrolls the last row into view. Crops:
+  /mnt/Games/oneup-vmtest/crop-0302-top.png, crop-0302-bottom.png.
   **Layman:** Some explanations in Settings stop mid-sentence, so you can't read the whole thing.
   Kind: fix.
   Source: ONEUP-0287-vm-2026-10-16.
