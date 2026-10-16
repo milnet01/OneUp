@@ -9117,7 +9117,7 @@ when complete (that document's §7).
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: gui.
 
-- 🚧 [ONEUP-0303] **Split Settings into three tabs, one per group, each scrolling if it does not fit.**
+- ✅ [ONEUP-0303] **Split Settings into three tabs, one per group, each scrolling if it does not fit.**
   The user asked 2026-10-16, after ONEUP-0302 made the single column
   scroll. Tabs: Automatic behaviour, Appearance, This machine — the
   groups ONEUP-0064 §4.1 drew as headings. The grouping stays
@@ -9126,6 +9126,11 @@ when complete (that document's §7).
   Each tab keeps ONEUP-0302's scroll area as a backup for large text
   or a short screen. Tabs need a derived focus cue and measured
   colours in every theme (ui-and-accessibility.md §5).
+  Shipped 25e6787 (2026-10-16), VM check passed. Amends
+  docs/specs/ONEUP-0076-ringless-focus-cue.md §4.2 (tab row, impl-0303
+  log row) and docs/standards/ui-and-accessibility.md §3 (underline
+  pairing). Crops: /mnt/Games/oneup-vmtest/crop-0303-final.png,
+  crop-0303-tab2.png, crop-0303-tab3.png. Filed ONEUP-0304, ONEUP-0305.
   **Layman:** Settings shows one group at a time, so the window is shorter and rarely needs scrolling.
   Kind: ux.
   Source: user-request-2026-10-16.
