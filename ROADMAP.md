@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=282 -->
+<!-- ants-roadmap-id-high-water: ONEUP=284 -->
 
 # OneUp Roadmap
 
@@ -8399,6 +8399,17 @@ when complete (that document's §7).
   the real system bus with the RPM rebuilt from v2 a3c73cd: three Runs
   in one session, all status 0, output pulled with Read. Next: one
   combined by-hand run (§4.12 items 2-3, §7) from the installed app.
+  Measured (2026-10-16, run 2026-10-16_082648.log, installed RPM from
+  v2 a3c73cd, app menu, desktop session): §7 holds. No password box at
+  Show download size or at Run selected updates. ONEUP-0054's hold
+  adoption held: one engine (--size=system --hold, pid 991059) sized
+  at 08:27:09 and ran the update after the user pressed within two
+  minutes, one log. All five steps ok; 126 packages including
+  kernel-default 7.2.10; REBOOT yes (kernel-new graphics-driver-generic).
+  §4.12 item 2: the kernel update passed (ESP holds the 7.2.10 entry and
+  initrd) but ProtectHome=yes did not (filed separately). §4.12 item 3
+  (Discover mid-commit) not measured: the commit finished before the
+  user was asked to open Discover; owed on the next run with a commit.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
@@ -8718,6 +8729,37 @@ when complete (that document's §7).
   Kind: fix.
   Source: in-session-2026-10-16.
   Lanes: engine, security, packaging.
+
+- 📋 [ONEUP-0283] **The system service's ProtectHome=yes makes /root and /run/user read-only, so systemd's post-transaction trigger fails during a real update.**
+  Seen in run 2026-10-16_082648.log (service route, RPM from v2
+  a3c73cd): %transfiletriggerin(systemd-261.3-1.1) printed "Unable to
+  fix SELinux security context of /root: Read-only file system",
+  "Failed to create directory or subvolume /root/.ssh", "fchmod() of
+  /run/user failed", then "error: lua script failed". flatpak --system
+  update printed dconf-CRITICAL: unable to create /root/.cache/dconf.
+  The step still reported ok, and the kernel's boot entry and initrd
+  were written (checked on the ESP). Cause: ProtectHome=yes in
+  data/oneup-service.service. Spec ONEUP-0249 §4.8 and the unit's own
+  comment: a directive stays only if a real Tumbleweed update including
+  a kernel passes under it (§4.12 item 2). This one did not.
+  Fix: drop ProtectHome= from the unit and from §4.8's list.
+  **Layman:** OneUp's background helper is fenced off from a few system folders that installing updates needs to write to, so one of systemd's after-install scripts fails.
+  Kind: fix.
+  Source: user-real-run-2026-10-16.
+  Lanes: packaging, security.
+
+- 📋 [ONEUP-0284] **During download and install the liveness line keeps naming the last repository refreshed, as if it were still fetching it.**
+  Seen 2026-10-16 (screenshots in the session): through download and
+  install the line under the status read "Fetching science_GPU_ROCm —
+  2m 15s · 670 MiB of 670 MiB · still working". science_GPU_ROCm is
+  the last repository the refresh named (log line @@REFRESH@@|11|11|
+  science_GPU_ROCm); its refresh finished long before. The elapsed time
+  and byte counts are the download's, so the label is stale, not the
+  clock. Related: ONEUP-0048, ONEUP-0170, ONEUP-0232.
+  **Layman:** While packages download and install, OneUp shows a line saying it is still fetching one repository, which is no longer true.
+  Kind: fix.
+  Source: user-real-run-2026-10-16.
+  Lanes: gui.
 
 ## 2.1.0 — after 2.0
 
