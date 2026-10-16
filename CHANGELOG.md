@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The count of installed updates includes new packages** (ONEUP-0288)
+  A run that added packages new to the system, such as a new kernel, left
+  them out of the finished line's count. A run with 122 upgrades and 4 new
+  packages said 122; it now says 126.
+
 - **The progress line stops naming a repository once packages download** (ONEUP-0284)
   Through the whole download and install, the line under the status
   kept saying "Fetching" the last repository OneUp had checked, with

@@ -1759,7 +1759,10 @@ if step_selected system && ! stop_pending; then
                 echo "  Note: no progress lines recognised in zypper's output (see @@HINT@@ above)."
             fi
             up=$(grep -oiE '[0-9]+ packages? to upgrade' "$SYS_LOG" | tail -1 | grep -oE '[0-9]+' | head -1)
-            ins=$(grep -oiE '[0-9]+ to install' "$SYS_LOG" | tail -1 | grep -oE '[0-9]+' | head -1)
+            # zypper says "122 packages to upgrade, 4 new." or, with no upgrades,
+            # "4 new packages to install." Case-sensitive, so the list header "The
+            # following 4 NEW packages …" is not a second match (ONEUP-0288).
+            ins=$(grep -oE '[0-9]+ new( packages? to install)?[,.]' "$SYS_LOG" | tail -1 | grep -oE '[0-9]+' | head -1)
             SYS_COUNT=$(( ${up:-0} + ${ins:-0} ))
             # Read the reboot-reason names now, while the transaction log still exists
             # (it is rm'd at the end of this step, long before the reboot check below).

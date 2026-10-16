@@ -345,6 +345,44 @@ check        "stale-metadata note surfaced as a hint"        "@@HINT@@|Couldn't 
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# zypper names new packages "N new" after an upgrade count, and "N new packages to
+# install" when nothing is upgraded (both in /usr/bin/zypper's strings). A parse for
+# "N to install" matched neither, so a run that added 4 kernel packages to 122
+# upgrades reported 122 (run 2026-10-16_082648, ONEUP-0288).
+echo "TEST: the system count includes the new packages zypper installs"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *dup*|*update*)
+    echo "Received 2 new package signing keys from repository \"x\":"
+    echo "The following 4 NEW packages are going to be installed:"
+    echo "  kernel-default-6.1 kernel-devel-6.1 kernel-macros-6.1 kernel-source-6.1"
+    echo "122 packages to upgrade, 4 new."
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check        "upgrades plus new packages are counted"   "@@STEP_END@@|system|ok|126 package(s) updated" "$out"
+check        "the summary carries the same count"       "@@INSTALLED@@|126|yes" "$out"
+rm -rf "$d"
+
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *dup*|*update*) echo "3 new packages to install."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check        "only-new packages are counted"            "@@INSTALLED@@|3|yes" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 # zypper exits 103 when it has updated itself and must run again to install the rest
 # (zypper(8) EXIT CODES). Reading that as the end of the update left the rest of it
 # uninstalled (ONEUP-0234): the transaction runs once more and the second run decides.
