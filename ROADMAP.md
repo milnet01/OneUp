@@ -8837,6 +8837,11 @@ when complete (that document's §7).
   the AppImage does. Not: requiring PackageKit, nor shipping OneUp's own
   polkit action (spec §9 rejects it). Changes §4.7 and §6's row, so
   review-contract runs on the spec before the build.
+  Spec amended 2026-10-16: docs/specs/ONEUP-0249-system-service.md
+  §4.7 (route.packagekit_registered: the auto route takes the service only
+  when polkit's EnumerateActions lists PackageKit's action), INV-18, §6,
+  §7, §8, §9. The window follows through engine_route (§4.10), so the
+  Passwordless switch stays. review-contract owed before the build.
   **Layman:** If your computer doesn't have PackageKit (some people remove it), the installed OneUp would refuse to update anything and wouldn't tell you how to fix it.
   Kind: fix.
   Source: user-request-2026-10-16.
