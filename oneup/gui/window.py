@@ -494,6 +494,13 @@ class Updater(QMainWindow):
         header_row.addWidget(self.recenter_btn, 0, Qt.AlignTop)
         header_row.addWidget(self.about_btn, 0, Qt.AlignTop)
         self.header_row = header_row
+        # ONEUP-0294: the sheet's `min-width` replaces each button's text-measured
+        # minimum, so a narrow window squeezed these to "etti" and ".bou". Each is
+        # pinned to its label instead, re-measured on a style or font change (the
+        # filter is installed beside Check and Stop's), and the window's minimum grows
+        # to hold them.
+        self._header_btns = (self.settings_btn, self.recenter_btn, self.about_btn)
+        self._pin_header_widths()
         root.addLayout(header_row)
         root.addSpacing(2)
         self._card_root = root      # the current layout sits below the header
@@ -560,6 +567,8 @@ class Updater(QMainWindow):
         self._pin_check_stop_width()
         self.check_btn.installEventFilter(self)
         self.stop_btn.installEventFilter(self)
+        for btn in self._header_btns:
+            btn.installEventFilter(self)
 
         # Retry-failed (hidden until a run has failures). It lives INSIDE the
         # warning banner, appended below once that banner exists, so the remedy
@@ -937,6 +946,9 @@ class Updater(QMainWindow):
                 and obj in (self.check_btn, self.stop_btn)):
             QTimer.singleShot(0, self._pin_check_stop_width)
         if (event.type() in (QEvent.Type.StyleChange, QEvent.Type.FontChange)
+                and obj in self._header_btns):
+            QTimer.singleShot(0, self._refit_header)
+        if (event.type() in (QEvent.Type.StyleChange, QEvent.Type.FontChange)
                 and obj is self.log_toggle):
             # Every size a layout takes from the font is re-taken with it (§4.2).
             QTimer.singleShot(0, self._pin_log_toggle_width)
@@ -957,6 +969,15 @@ class Updater(QMainWindow):
         self.stop_btn.setText(shown)
         for btn in (self.check_btn, self.stop_btn):
             btn.setMinimumWidth(max(widths))
+
+    def _pin_header_widths(self):
+        """Hold each header button at its label's width (ONEUP-0294)."""
+        for btn in self._header_btns:
+            btn.setMinimumWidth(btn.sizeHint().width())
+
+    def _refit_header(self):
+        self._pin_header_widths()
+        self._fit_minimum()
 
     def _remeasure_layout(self):
         if self.host is not None and shiboken6.isValid(self.host):

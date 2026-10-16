@@ -4107,9 +4107,25 @@ def main() -> int:
     # INV-8: both settings persist and apply live, with no restart.
     app_inst = QApplication.instance()
     before = app_inst.styleSheet()
+    # ONEUP-0294: at the window's narrowest, no header button is narrower than its own
+    # label. The VM's 605-pixel window showed "etti", "cent" and ".bou".
+    def _clipped_header():
+        wA.show()
+        for _ in range(3):
+            app_inst.processEvents()
+        wA.resize(wA.minimumWidth(), wA.height())
+        for _ in range(3):
+            app_inst.processEvents()
+        return [b.text() for b in (wA.settings_btn, wA.recenter_btn, wA.about_btn)
+                if b.width() < b.sizeHint().width()]
+    _clipped = _clipped_header()
+    check(f"ONEUP-0294 no header button clips its label at the narrowest ({_clipped})",
+          not _clipped)
     wA.settings.setValue("text_scale", 1.45)
     theme.apply_app_theme(app_inst)
     check("a text-size change applies live", app_inst.styleSheet() != before)
+    _clipped = _clipped_header()
+    check(f"ONEUP-0294 nor at a larger text size ({_clipped})", not _clipped)
     wA.settings.setValue("high_contrast", True)
     theme.apply_app_theme(app_inst)
     check("a high-contrast change applies live",
