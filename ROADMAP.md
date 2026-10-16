@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=291 -->
+<!-- ants-roadmap-id-high-water: ONEUP=292 -->
 
 # OneUp Roadmap
 
@@ -8905,6 +8905,19 @@ when complete (that document's §7).
   Kind: fix.
   Source: user-request-2026-10-16.
   Lanes: gui, engine.
+
+- ✅ [ONEUP-0292] **The About window and the README say OneUp is an independent project, not an official openSUSE or SUSE product.**
+  Wording, unchanged from the site's house style: "OneUp is an
+  independent project, not an official openSUSE or SUSE product, and is
+  not endorsed by the openSUSE Project or SUSE." v2 42da633 (About window,
+  gui-smoke check, README, CHANGELOG); main bddfbf5 (README only; the
+  About window is new behaviour, so it ships in 2.0.0, not 1.4.x).
+  OWED at the 2.0.0 release: message the ants-projects-hub-website
+  session with the version; wording was not changed.
+  **Layman:** OneUp now says plainly, in its About window and README, that it is not made or endorsed by openSUSE or SUSE.
+  Kind: doc.
+  Source: user-request-2026-10-16 (via ants-projects-hub-website session).
+  Lanes: gui, docs.
 
 ## 2.1.0 — after 2.0
 
