@@ -92,6 +92,10 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     ("status", ("card",), TEXT),
     ("lastrun", ("card", "win"), TEXT),
     ("ghostfg", ("card",), TEXT),
+    # The dialog's Close and Settings' tabs (ONEUP-0303) put the ghost label on
+    # `win`, and the current tab its hover ink.
+    ("ghostfg", ("win",), TEXT),
+    ("ghosthov", ("win",), TEXT),
     # `amber` is also the ThemeNote colour, which sits on the dialog root (`win`),
     # not on a card — and that is the one place a theme failure is reported, so it
     # is the text that must not be the hardest to read. Measured on `card` alone it

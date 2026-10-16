@@ -315,6 +315,19 @@ QPushButton#GhostBtn {
 QPushButton#GhostBtn:hover { border-color: $ghosthov; color: $ghosthov; }
 QPushButton#GhostBtn:checked { border-color: $ghosthov; color: $ghosthov; }
 QPushButton#GhostBtn:disabled { color: $disfg; border-color: $disbg; }
+/* Settings' tabs (ONEUP-0303) wear the ghost button on `win`, as the dialog's
+   Close does, and the current tab its :checked look. */
+QTabBar#SettingsTabs::tab {
+    color: $ghostfg; font-weight: 600; background: transparent;
+    border: 1px solid $ghostbd; border-radius: 8px; padding: 8px 14px; margin: 0 3px 6px 3px;
+    min-width: 24px; min-height: 24px;
+}
+QTabBar#SettingsTabs::tab:hover, QTabBar#SettingsTabs::tab:selected {
+    border-color: $ghosthov; color: $ghosthov;
+}
+/* Colour is not the only cue (ui-and-accessibility.md §3): the current tab's
+   label is underlined too, which leaves the tab's size alone. */
+QTabBar#SettingsTabs::tab:selected { text-decoration: underline; }
 
 /* The theme picker (ONEUP-0027 §4.6). It takes the ghost button's shape so it
    sits in a SettingsDialog row beside the two controls that already look like
@@ -485,7 +498,8 @@ QPushButton#GhostBtn:focus, QPushButton#StopBtn:focus {
 #RowCard QPushButton#GhostBtn:focus {
     background: $rowfocusfill; color: $rowfocusink; border-color: $rowfocusink;
 }
-#DialogButtons QPushButton#GhostBtn:focus {
+#DialogButtons QPushButton#GhostBtn:focus,
+QTabBar#SettingsTabs::tab:selected:focus {
     background: $winfocusfill; color: $winfocusink; border-color: $winfocusink;
 }
 #WarnBanner QPushButton#GhostBtn:focus {
@@ -585,6 +599,9 @@ QPushButton#GhostBtn { background: $card; color: $text; border: 2px solid $borde
 QPushButton#GhostBtn:hover   { background: $btn; color: $btntext; border: 2px solid $focus; }
 QPushButton#GhostBtn:checked { background: $btn; color: $btntext; border: 2px solid $border; }
 QPushButton#GhostBtn:disabled { background: $card; color: $text; border: 2px dashed $border; }
+QTabBar#SettingsTabs::tab { background: $card; color: $text; border: 2px solid $border; }
+QTabBar#SettingsTabs::tab:hover { background: $btn; color: $btntext; border: 2px solid $focus; }
+QTabBar#SettingsTabs::tab:selected { background: $btn; color: $btntext; border: 2px solid $border; }
 QComboBox#ThemeCombo { background: $card; color: $text; border: 2px solid $border; }
 QComboBox#ThemeCombo:hover { background: $btn; color: $btntext; border: 2px solid $focus; }
 QListView#ThemeList {
@@ -627,7 +644,11 @@ QPushButton#LinkBtn:hover { color: $text; }
    is identical to $btnhov in both overlay palettes and so vanished into the fill.
    Every qualified selector the base sheet uses is restated, because a qualified
    base rule outranks a bare overlay one and would otherwise win. */
-QPushButton#RunBtn:focus, QPushButton#RestartBtn:focus, QPushButton#BannerBtn:focus {
+/* The current Settings tab rests on $btn, as the primary family does, so it
+   takes the pair derived against $btn: the ghost pair's $btnhov measures 1.43:1
+   dark and 1.87:1 light against it (ONEUP-0303). */
+QPushButton#RunBtn:focus, QPushButton#RestartBtn:focus, QPushButton#BannerBtn:focus,
+QTabBar#SettingsTabs::tab:selected:focus {
     background: $hcfocusfill; color: $hcfocusink; border: 2px solid $hcfocusink;
 }
 QPushButton#GhostBtn:focus, QPushButton#StopBtn:focus,
@@ -1071,9 +1092,10 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
     if high_contrast:
         hc = dict(_HC_DARK if theme.dark else _HC_LIGHT)
         hc.update(hc_focus_keys(hc))
-        add("primary family (HC)", "fill", hc["hcfocusfill"], hc["btn"], FOCUS_MIN)
-        add("primary family (HC)", "ink", hc["hcfocusink"], hc["hcfocusfill"], INK_MIN)
-        add("primary family (HC)", "border", hc["hcfocusink"], hc["hcfocusfill"], FOCUS_MIN)
+        primary = "primary family, Settings tabs (HC)"
+        add(primary, "fill", hc["hcfocusfill"], hc["btn"], FOCUS_MIN)
+        add(primary, "ink", hc["hcfocusink"], hc["hcfocusfill"], INK_MIN)
+        add(primary, "border", hc["hcfocusink"], hc["hcfocusfill"], FOCUS_MIN)
         # The overlay's ghost pair is KEPT, not derived — it already clears 3:1 by
         # a wide margin, and §4.1's floor supplies a cue rather than replacing one.
         add("ghost family (HC)", "fill", hc["btnhov"], hc["card"], FOCUS_MIN)
@@ -1099,7 +1121,7 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
         ("ghost / link / stop on the card", "focus", (palette["card"],)),
         ("row buttons", "rowfocus",
          (palette["rowcard"], palette["rowhov"])),
-        ("dialog Close / Cancel", "winfocus", (palette["win"],)),
+        ("dialog Close / Cancel, Settings tabs", "winfocus", (palette["win"],)),
         ("warning-banner buttons", "warnfocus", tint),
         ("current package", "logfocus", (palette["logbg"],)),
     ):

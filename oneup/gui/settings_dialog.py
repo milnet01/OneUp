@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
+    QStackedWidget,
+    QTabBar,
     QVBoxLayout,
     QWidget,
 )
@@ -49,28 +51,6 @@ class SettingsDialog(QDialog):
         self.setWindowTitle(QCoreApplication.translate("settings_dialog", "Settings"))
         self.setMinimumWidth(460)
         root = QVBoxLayout(self)
-        # The rows scroll; the status line and Close stay below them. A dialog
-        # taller than the screen is squeezed to fit it, and the layout took the
-        # difference out of every row: a 960-pixel screen cut three-line
-        # descriptions to two (ONEUP-0302).
-        scroll = _RowsScroll()
-        scroll.setObjectName("SettingsScroll")
-        # Not a stop of its own, its controls are — as MessageStrip.
-        scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        inner = QWidget()
-        inner.setObjectName("SettingsBody")
-        body = QVBoxLayout(inner)
-        body.setContentsMargins(0, 0, 0, 0)
-        scroll.setWidget(inner)
-        root.addWidget(scroll, 1)
-        # Not `self.scroll`, which would shadow QWidget.scroll(dx, dy) (as repos.py).
-        self.rows_scroll = scroll
-        # Qt does not scroll a control into view when Tab arrives from outside
-        # the area — from Close, wrapping round — so the dialog does.
-        QApplication.instance().focusChanged.connect(self._on_focus)
         # The old intro said "Each is off until you turn it on", which is true of
         # the first heading's five toggles and false of the other two headings'
         # rows — the same defect the original had once the groups existed.
@@ -79,16 +59,33 @@ class SettingsDialog(QDialog):
             "How OneUp behaves on its own, how it looks, and what it does on "
             "this machine."))
         intro.setWordWrap(True)
-        body.addWidget(intro)
+        root.addWidget(intro)
 
-        # Three headings rather than a flat column of ghost buttons. The grouping
-        # is exhaustive over every row: a row with no home here is a defect in
-        # this list rather than a judgement call (ONEUP-0064 §4.1).
+        # One tab per group, each a page of its own (ONEUP-0303). The grouping is
+        # exhaustive over every row: a row with no home here is a defect in this
+        # list rather than a judgement call (ONEUP-0064 §4.1, which drew the
+        # groups as headings). A plain tab bar over a stack rather than a
+        # QTabWidget, whose tab bar is its focus proxy: two widgets answering for
+        # one stop.
+        self.tabs = QTabBar()
+        self.tabs.setObjectName("SettingsTabs")
+        self.tabs.setAccessibleName(QCoreApplication.translate(
+            "settings_dialog", "Settings sections"))
+        self.tabs.setDrawBase(False)
+        self.tabs.setExpanding(False)
+        self.pages = QStackedWidget()
+        self._scrolls: list[_RowsScroll] = []
+        self.tabs.currentChanged.connect(self.pages.setCurrentIndex)
+        root.addWidget(self.tabs)
+        root.addWidget(self.pages, 1)
+        # Qt does not scroll a control into view when Tab arrives from outside
+        # its page — from the tabs or Close — so the dialog does.
+        QApplication.instance().focusChanged.connect(self._on_focus)
         _tray_note = ("" if parent._tray_available else QCoreApplication.translate(
             "settings_dialog", "  (your desktop has no system tray)"))
-        body.addWidget(self._heading(QCoreApplication.translate(
+        body = self._page(QCoreApplication.translate(
             "settings_dialog",
-            "Automatic behaviour")))
+            "Automatic behaviour"))
         body.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
@@ -134,7 +131,8 @@ class SettingsDialog(QDialog):
             "Ask GitHub whether a newer OneUp exists each time OneUp starts. "
             "Check for updates in About works either way."), parent.appcheck_btn))
 
-        body.addWidget(self._heading(QCoreApplication.translate("settings_dialog", "Appearance")))
+        body = self._page(QCoreApplication.translate("settings_dialog", "Appearance"))
+        self._appearance_tab = self.tabs.count() - 1
         body.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
@@ -163,9 +161,9 @@ class SettingsDialog(QDialog):
         # Repositories arrives here from the header. `_row` takes a description
         # per row and does not read a tooltip, so it needs one. Recenter is back
         # in the header for now (ONEUP-0245).
-        body.addWidget(self._heading(QCoreApplication.translate(
+        body = self._page(QCoreApplication.translate(
             "settings_dialog",
-            "This machine")))
+            "This machine"))
         body.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
@@ -183,6 +181,9 @@ class SettingsDialog(QDialog):
                 "Delete OneUp's update logs once they are this old. The log of "
                 "your latest update is always kept."),
             parent.logkeep_btn))
+        # A page taller than its rows keeps them at the top, at their own height.
+        for scroll in self._scrolls:
+            scroll.widget().layout().addStretch(1)
         self.status = QLabel("")
         self.status.setObjectName("Tagline")
         root.addWidget(self.status)
@@ -207,17 +208,37 @@ class SettingsDialog(QDialog):
             self.setTabOrder(a, b)
 
     def focus_chain(self) -> list[QWidget]:
-        """This dialog's controls, in the order the headings lay them out."""
+        """This dialog's controls, in the order the pages lay them out. Tab
+        passes over the controls of the pages not showing, as Qt skips any
+        hidden widget."""
         p = self.parent()
         auth = [] if p._service_route else [p.auth_btn]    # not laid out on a service install
-        return [p.auto_btn, *auth, p.autoupdate_btn, p.tray_btn, p.startboot_btn,
+        return [self.tabs, p.auto_btn, *auth, p.autoupdate_btn, p.tray_btn, p.startboot_btn,
                 p.appcheck_btn, p.theme_combo, p.layout_btn, p.textsize_btn, p.contrast_btn,
                 p.repos_btn, p.diag_btn, p.logkeep_btn, self.close_btn]
 
-    def _heading(self, text: str) -> QLabel:
-        lbl = QLabel(text)
-        lbl.setObjectName("GroupHeading")
-        return lbl
+    def _page(self, title: str) -> QVBoxLayout:
+        """Add a tab and its page, and return the layout its rows go into.
+
+        Each page scrolls (ONEUP-0302): a dialog taller than the screen is
+        squeezed to fit it, and the layout took the difference out of every row,
+        so a 960-pixel screen cut three-line descriptions to two."""
+        scroll = _RowsScroll()
+        scroll.setObjectName("SettingsScroll")
+        # Not a stop of its own, its controls are — as MessageStrip.
+        scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        inner = QWidget()
+        inner.setObjectName("SettingsBody")
+        body = QVBoxLayout(inner)
+        body.setContentsMargins(0, 0, 0, 0)
+        scroll.setWidget(inner)
+        self.pages.addWidget(scroll)
+        self.tabs.addTab(title)
+        self._scrolls.append(scroll)
+        return body
 
     def _row(self, description: str, control: QWidget) -> QFrame:
         fr = QFrame()
@@ -232,11 +253,18 @@ class SettingsDialog(QDialog):
         return fr
 
     def _on_focus(self, _old, new) -> None:
-        if (new is not None and shiboken6.isValid(self)
-                and self.rows_scroll.widget().isAncestorOf(new)):
-            self.rows_scroll.ensureWidgetVisible(new)
+        if new is None or not shiboken6.isValid(self):
+            return
+        for scroll in self._scrolls:
+            if scroll.widget().isAncestorOf(new):
+                scroll.ensureWidgetVisible(new)
 
     def showEvent(self, event):
         # Centre over the main window each time it opens (mirrors RepoManagerDialog).
         super().showEvent(event)
+        # The picker is where a theme that failed to apply is reported
+        # (ui-and-accessibility.md §7), so Settings opens on its tab rather than
+        # leaving the message out of sight.
+        if not self.parent().theme_note.isHidden():
+            self.tabs.setCurrentIndex(self._appearance_tab)
         center_on_parent(self)

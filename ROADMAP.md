@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=302 -->
+<!-- ants-roadmap-id-high-water: ONEUP=305 -->
 
 # OneUp Roadmap
 
@@ -9115,6 +9115,46 @@ when complete (that document's §7).
   **Layman:** Some explanations in Settings stop mid-sentence, so you can't read the whole thing.
   Kind: fix.
   Source: ONEUP-0287-vm-2026-10-16.
+  Lanes: gui.
+
+- 🚧 [ONEUP-0303] **Split Settings into three tabs, one per group, each scrolling if it does not fit.**
+  The user asked 2026-10-16, after ONEUP-0302 made the single column
+  scroll. Tabs: Automatic behaviour, Appearance, This machine — the
+  groups ONEUP-0064 §4.1 drew as headings. The grouping stays
+  exhaustive; only its presentation changes, from headings to tabs.
+  ONEUP-0064 is not edited: this item supersedes §4.1's headings.
+  Each tab keeps ONEUP-0302's scroll area as a backup for large text
+  or a short screen. Tabs need a derived focus cue and measured
+  colours in every theme (ui-and-accessibility.md §5).
+  **Layman:** Settings shows one group at a time, so the window is shorter and rarely needs scrolling.
+  Kind: ux.
+  Source: user-request-2026-10-16.
+  Lanes: gui.
+
+- 📋 [ONEUP-0304] **Under Breeze, a ghost button focused by keyboard draws a box around its label, the ring the focus design forbids.**
+  Seen 2026-10-16 in the ONEUP-0287 VM (Breeze, 1280x960): "Weekly
+  check: off" focused by Tab, and "Keep logs: 30 day(s)" focused by
+  Shift-Tab, each show a bluish rectangle round the label inside the
+  derived focus fill. ui-and-accessibility.md §5 forbids a focus ring.
+  The host suite runs Qt's own style offscreen, so it cannot see a
+  Breeze-drawn frame. Settings' tabs (ONEUP-0303) show no box.
+  Zooms: /mnt/Games/oneup-vmtest/zoom-weekly.png, zoom-keeplogs.png.
+  **Layman:** On a normal KDE desktop, buttons reached with the Tab key show an extra box around their text that OneUp's design says should not be there.
+  Kind: accessibility.
+  Source: ONEUP-0303-build-2026-10-16.
+  Lanes: gui.
+
+- 📋 [ONEUP-0305] **With high contrast on, a switched-on ghost toggle's focus fill measures 1.43:1 (dark) and 1.87:1 (light) against its own rest fill.**
+  Found 2026-10-16 building ONEUP-0303. The overlay's :checked ghost
+  button rests on $btn, and its :focus rule paints $btnhov, measured
+  against $card only by focus_report's ghost family (HC). btnhov vs btn:
+  1.43:1 in _HC_DARK, 1.87:1 in _HC_LIGHT, under the 3:1 floor. Live on
+  every checkable Settings toggle that is on (e.g. New-version check).
+  ONEUP-0303 solved the same case for the current tab with the primary
+  family's pair, derived against $btn.
+  **Layman:** In high-contrast mode, a setting that is switched on barely changes when you tab to it, so you can lose track of where you are.
+  Kind: accessibility.
+  Source: ONEUP-0303-build-2026-10-16.
   Lanes: gui.
 
 ## 2.1.0 — after 2.0

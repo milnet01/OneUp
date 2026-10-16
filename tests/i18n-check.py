@@ -116,7 +116,7 @@ _SETTERS = {name: (0,) for name in (
     "_announce",                        # the screen-reader announcement, a window method
     "setFormat",                        # the progress bar's caption
     "set_badge", "set_size_result",     # TaskRow helpers that set a label's text
-    "_heading", "_row", "_settings_status")}   # the Settings dialog's own helpers
+    "_page", "_row", "_settings_status")}   # the Settings dialog's own helpers
 _SETTERS.update({"showMessage": (0, 1),  # QSystemTrayIcon: title, message
                  "addButton": (0,)})
 _MESSAGE_BOX = {"warning", "critical", "information", "question"}   # (parent, title, text)

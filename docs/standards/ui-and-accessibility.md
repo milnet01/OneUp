@@ -63,7 +63,7 @@ absent.
 
 Roughly one man in twelve cannot reliably separate red from green — the exact two colours a
 "done / failed" badge reaches for first. **Every colour cue is paired with text or a
-shape.** The three live pairings:
+shape.** The live pairings:
 
 **The on/off switch form is a fixed design point, not a candidate for change.** The
 phone-style `ToggleSwitch` stays; checkboxes are not an alternative to propose. It was
@@ -77,6 +77,7 @@ on ONEUP-0076.)
 | Switch on / off | A shape drawn in the track opposite the knob — a **vertical bar** when on, an **open circle** when off. Drawn with `QPainter` primitives, not a font glyph: a painted widget has no font-fallback chain, so a missing character would vanish silently. |
 | Tray attention badge | A dark `!` (`traymark`) inside the amber disc, drawn by `tray.py`'s `_tray_icon` — the icon differs in *shape*, not only colour. (`trayrim` draws the disc's rim.) Every one of the four is a palette token since ONEUP-0027, so a theme recolours the badge; the shape is what carries the state regardless. |
 | Overdue last-run line | The text gains a `⚠` prefix and the word `overdue`. Text is safe here because it is an ordinary `QLabel` in the app's font stack. |
+| Settings' current tab | Its label is underlined (ONEUP-0303). A text decoration, so the tab keeps its size when it is chosen. |
 
 **The test for a new cue:** describe the two states out loud without using a colour word.
 If you cannot, the pairing is missing.

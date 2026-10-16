@@ -4139,17 +4139,27 @@ def main() -> int:
     # ONEUP-0302: Settings shorter than its content still shows every description
     # whole. A 960-pixel screen held the VM's dialog 107 px under its own minimum,
     # and the layout took that out of every row, so a three-line description
-    # showed two. The fixed height stands in for the screen's limit.
+    # showed two. The fixed height stands in for the screen's limit; it is short
+    # of every tab's page (ONEUP-0303), so no tab passes by fitting.
     wA.open_settings()
     s_dlg = wA._settings_dialog
-    s_dlg.setFixedHeight(600)
-    for _ in range(3):
-        app_inst.processEvents()
-    _cut = [lbl.text()[:30] for fr in s_dlg.findChildren(QFrame, "RowBorder")
-            for lbl in fr.findChildren(QLabel)
-            if lbl.wordWrap() and lbl.height() < lbl.heightForWidth(lbl.width())]
+    s_dlg.setFixedHeight(300)
+    _cut, _fits = [], []
+    for _i in range(s_dlg.tabs.count()):
+        s_dlg.tabs.setCurrentIndex(_i)
+        for _ in range(3):
+            app_inst.processEvents()
+        _page = s_dlg.pages.currentWidget()
+        if _page.widget().height() <= _page.viewport().height():
+            _fits.append(s_dlg.tabs.tabText(_i))
+        _cut += [lbl.text()[:30] for fr in _page.findChildren(QFrame, "RowBorder")
+                 for lbl in fr.findChildren(QLabel)
+                 if lbl.wordWrap() and lbl.height() < lbl.heightForWidth(lbl.width())]
+    check(f"ONEUP-0302 every tab's rows are taller than the shortened dialog "
+          f"(fit: {_fits})", not _fits)
     check(f"ONEUP-0302 a Settings dialog shorter than its content cuts no "
           f"description short ({_cut})", not _cut)
+    s_dlg.tabs.setCurrentIndex(0)
     s_dlg.setMinimumHeight(0)
     s_dlg.setMaximumHeight(16777215)
     s_dlg.reject()
@@ -4343,6 +4353,72 @@ def main() -> int:
     _qs.setValue("high_contrast", False)
     check(f"ONEUP-0262 the scrollbar handle wears its theme's token "
           f"({len(_bad)} wrong)", not _bad)
+    for line in _bad[:6]:
+        print(f"       {line}")
+
+    # ONEUP-0303: a focused Settings tab wears the derived focus fill, in every
+    # theme and with the overlay on, and at rest the colour it replaces. Real
+    # pixels, sampled through the dialog: a sub-control rule Qt does not apply
+    # would pass a text check, and a grab of the bar alone leaves out the `win`
+    # behind its transparent tabs. The sheet goes on the dialog, as above.
+    _tdlg = settings_dialog.SettingsDialog(wA)
+    _tdlg.show()
+
+    def _tab_pixel():
+        QApplication.processEvents()
+        r = _tdlg.tabs.tabRect(0)
+        p = _tdlg.tabs.mapTo(_tdlg, r.topLeft())
+        return _tdlg.grab().toImage().pixelColor(p.x() + 8, p.y() + r.height() // 2).name()
+
+    # §3: the current tab is told apart by a shape as well as by colour — its
+    # label is underlined. Only strong ink counts, so anti-aliasing cannot join
+    # glyphs into a line: a glyph row breaks at the gaps between letters, and an
+    # underline is one solid run as wide as most of the label (measured: 124 px
+    # on the current tab, 6 on the others).
+    def _underline(i):
+        img = _tdlg.grab().toImage()
+        r = _tdlg.tabs.tabRect(i)
+        p = _tdlg.tabs.mapTo(_tdlg, r.topLeft())
+        x0, x1 = p.x() + 10, p.x() + r.width() - 10
+        # Inside the drawn tab, clear of its border: the rect also holds the
+        # 6 px bottom margin, under the border line.
+        ys = range(p.y() + 4, p.y() + r.height() - 6 - 4)
+        bg = img.pixelColor(x0, p.y() + r.height() // 2).lightness()
+        dist = {(x, y): abs(img.pixelColor(x, y).lightness() - bg)
+                for x in range(x0, x1) for y in ys}
+        cut = 0.6 * max(dist.values())
+        best = 0
+        for y in ys:
+            run = 0
+            for x in range(x0, x1):
+                run = run + 1 if dist[x, y] > cut else 0
+                best = max(best, run)
+        return best > (x1 - x0) * 0.4
+
+    _bad = []
+    for _th in theme.THEMES:
+        _hcp = theme._HC_DARK if _th.dark else theme._HC_LIGHT
+        _derived = theme.derived_keys(dict(_th.palette))
+        # Tab 0 is the current tab: transparent on `win` at rest, `btn` with the
+        # overlay on, which takes the pair derived against `btn`.
+        for _on, _rest, _focus in ((False, _th.palette["win"], _derived["winfocusfill"]),
+                                   (True, _hcp["btn"],
+                                    theme.hc_focus_keys(_hcp)["hcfocusfill"])):
+            _tdlg.setStyleSheet(theme.build_theme(_th, high_contrast=_on))
+            _tdlg.close_btn.setFocus()
+            _got_rest = _tab_pixel()
+            _lines = [_underline(i) for i in range(_tdlg.tabs.count())]
+            if not (_lines[0] and not any(_lines[1:])):
+                _bad.append(f"{_th.id} overlay {'on' if _on else 'off'}: underlined "
+                            f"{_lines}, want only the current tab")
+            _tdlg.tabs.setFocus()
+            _got_focus = _tab_pixel()
+            if (_got_rest, _got_focus) != (_rest.lower(), _focus.lower()):
+                _bad.append(f"{_th.id} overlay {'on' if _on else 'off'}: rest "
+                            f"{_got_rest} want {_rest}, focused {_got_focus} want {_focus}")
+    _tdlg.reject()
+    check(f"ONEUP-0303 a focused Settings tab wears the derived fill, and only "
+          f"the current tab is underlined ({len(_bad)} wrong)", not _bad)
     for line in _bad[:6]:
         print(f"       {line}")
 
@@ -4542,20 +4618,46 @@ def main() -> int:
             print(f"       layout   {describe(laid_out)}")
             print(f"       chain    {describe(expect)}")
 
-    # INV-1, dialog half.
+    # INV-1, dialog half. Once per tab (ONEUP-0303): the chain holds every
+    # page's controls, and Tab passes over the pages not showing.
     wR.open_settings()
     set_dlg = wR._settings_dialog
     set_dlg.show()
+    for _i in range(set_dlg.tabs.count()):
+        set_dlg.tabs.setCurrentIndex(_i)
+        QApplication.processEvents()
+        _tab = set_dlg.tabs.tabText(_i)
+        dlg_expect = [x for x in set_dlg.focus_chain() if x.isVisible()]
+        dlg_actual = walk_chain(dlg_expect[0])
+        check(f"INV-1 SettingsDialog's own tab order follows its visual order ({_tab})",
+              dlg_actual == dlg_expect)
+        if dlg_actual != dlg_expect:
+            print(f"       expected {describe(dlg_expect)}")
+            print(f"       actual   {describe(dlg_actual)}")
+        check(f"INV-1 that dialog's order is the one its layout draws ({_tab})",
+              visual_order(set_dlg) == dlg_expect)
+    # ONEUP-0303: the three groups of ONEUP-0064 §4.1, a tab each, and every
+    # row on the tab of its group.
+    _groups = {
+        "Automatic behaviour": [wR.auto_btn, wR.autoupdate_btn, wR.tray_btn,
+                                wR.startboot_btn, wR.appcheck_btn]
+        + ([] if wR._service_route else [wR.auth_btn]),
+        "Appearance": [wR.theme_combo, wR.layout_btn, wR.textsize_btn, wR.contrast_btn],
+        "This machine": [wR.repos_btn, wR.diag_btn, wR.logkeep_btn],
+    }
+    check("ONEUP-0303 Settings has a tab per group, in order",
+          [set_dlg.tabs.tabText(i) for i in range(set_dlg.tabs.count())] == list(_groups))
+    _misplaced = [f"{c.objectName()}:{c.text() if hasattr(c, 'text') else ''}"
+                  for i, ctls in enumerate(_groups.values()) for c in ctls
+                  if not set_dlg.pages.widget(i).isAncestorOf(c)]
+    check(f"ONEUP-0303 every row is on its group's tab (misplaced: {_misplaced})",
+          not _misplaced)
+    set_dlg.tabs.setCurrentIndex(2)
     QApplication.processEvents()
-    dlg_expect = set_dlg.focus_chain()
-    dlg_actual = walk_chain(dlg_expect[0])
-    check("INV-1 SettingsDialog's own tab order follows its visual order",
-          dlg_actual == dlg_expect)
-    if dlg_actual != dlg_expect:
-        print(f"       expected {describe(dlg_expect)}")
-        print(f"       actual   {describe(dlg_actual)}")
-    check("INV-1 that dialog's order is the one its layout draws",
-          visual_order(set_dlg) == dlg_expect)
+    check("ONEUP-0303 choosing a tab shows its rows and hides the others'",
+          wR.repos_btn.isVisible() and not wR.auto_btn.isVisible())
+    set_dlg.tabs.setCurrentIndex(0)
+    QApplication.processEvents()
     # ONEUP-0245: Recenter is back in the header for now, so it sits in the
     # window's own chain, between Settings and About.
     win_chain = wR.focus_chain()
@@ -4891,6 +4993,8 @@ def main() -> int:
         # ONEUP-0027's picker and its popup. Both rules are unqualified,
         # because the picker only ever appears in one place.
         "ThemeCombo": None, "ThemeList": None,
+        # Settings' tabs (ONEUP-0303), unqualified for the same reason.
+        "SettingsTabs": None,
     }
     PAINTED = {"ToggleSwitch"}
 
