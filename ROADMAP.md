@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=284 -->
+<!-- ants-roadmap-id-high-water: ONEUP=285 -->
 
 # OneUp Roadmap
 
@@ -8760,6 +8760,30 @@ when complete (that document's §7).
   Kind: fix.
   Source: user-real-run-2026-10-16.
   Lanes: gui.
+
+- 📋 [ONEUP-0285] **Research, online as well as on this machine, whether a real Flatpak download size can be known before downloading.**
+  User request, 2026-10-16, after the real run showed no Flatpak sizes
+  again. ONEUP-0241 measured (2026-10-14) that remote-ls download-size
+  and flatpak update's own table both give only an upper bound, about 25
+  times the real download. This item goes further than that measurement.
+  Questions to answer, each with a source:
+  - Do static deltas (the summary's delta index, or a
+    /deltas/ superblock) carry a size that can be read without
+    downloading the delta itself?
+  - Can libostree (for example, a pull with dry-run or
+    --commit-metadata-only, or the commit's ostree.sizes metadata)
+    report the bytes of objects missing locally?
+  - How do GNOME Software, Discover's Flatpak backend and Bazaar or
+    Warehouse get the size they show, and is it a bound or exact?
+  - Is there upstream Flatpak work (issues, PRs, release notes) on
+    showing an exact update size?
+  Done when each answer has a source and the item says whether OneUp
+  can show an exact size, a labelled estimate, or still none. Decision
+  on what to show goes to the user.
+  **Layman:** Look harder, including online, for a way to tell you how much the Flatpak app updates will download before they start.
+  Kind: research.
+  Source: user-request-2026-10-16.
+  Lanes: engine, gui.
 
 ## 2.1.0 — after 2.0
 
