@@ -623,6 +623,10 @@ def main() -> int:
         # Bytes: the download phase is the only place in a run where a figure exists at all.
         run.handle_line(wL, "@@PROGRESS@@|system|12|141|download|41943040|397410304")
         check("the download says how much of how much", "40 MiB of 379 MiB" in wL.activity.text())
+        # ONEUP-0284: a real run read "Fetching science_GPU_ROCm — 2m 15s · 670 MiB of
+        # 670 MiB" through the whole download, long after that refresh had finished.
+        check("the download no longer names the source fetched before it",
+              "Fetching games" not in wL.activity.text())
         check("the byte total is remembered", wL._dl_total == 397410304)
         # A rate needs both movement and elapsed time to divide by.
         run.handle_line(wL, "@@PROGRESS@@|system|24|141|download|83886080|397410304")
@@ -667,6 +671,8 @@ def main() -> int:
         wL._activity_at = time.monotonic() - (run.STALL_SECONDS + 5)
         run._tick_activity(wL)
         check("a quiet install does not blame the server", "server" not in wL.activity.text())
+        check("the install no longer names the source fetched before it (ONEUP-0284)",
+              "Fetching games" not in wL.activity.text())
         wL._activity_at = time.monotonic()
         run._tick_activity(wL)
         # Same splice-safety contract as PROGRESS: merged stdout/stderr can cut a marker.
