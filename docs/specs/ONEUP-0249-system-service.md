@@ -104,8 +104,9 @@ needs the administrator password. Accepting a signing key always needs it.
    `system-trust-signing-key`, which always asks.
 3. **The AppImage keeps today's route.** Decided by the user on 2026-10-14. It never uses
    the service and keeps `sudo` and the Passwordless setting (§2.3, last bullet).
-4. **The service replaces the Passwordless setting where it is installed.** Decided by the
-   user on 2026-10-14. On a packaged install, the setting's switch is replaced by a line
+4. **The service replaces the Passwordless setting where it is installed and PackageKit's
+   action is registered.** Decided by the user on 2026-10-14; the PackageKit condition on
+   2026-10-16 (ONEUP-0286, §4.7). On a packaged install, the setting's switch is replaced by a line
    saying updates follow the computer's software-update permission. The window offers to
    remove an old drop-in once.
 5. **No background refresh of the update lists in this item.** Decided by the user on
@@ -352,7 +353,7 @@ found (INV-12):
 | --- | --- |
 | `ONEUP_BACKEND=sudo` | sudo |
 | `ONEUP_BACKEND=service` | service, or the run fails if it is unreachable |
-| unset or `auto`, the activation file `/usr/share/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service` exists, `jeepney` imports, and `route.packagekit_registered` is true | service |
+| unset, empty or `auto`, the activation file `/usr/share/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service` exists, `jeepney` imports, and `route.packagekit_registered` is true | service |
 | otherwise | sudo |
 
 - **The service route needs PackageKit's action registered** (ONEUP-0286). §4.4 borrows
@@ -376,6 +377,10 @@ found (INV-12):
   switch, the old drop-in offer and the automatic-update coupling with `engine_route`. So
   on such a computer the switch stays, the drop-in is kept, and automatic updates follow
   the switch.
+- **A run nobody started by hand never asks for a password on the sudo route.** With
+  `ONEUP_NONINTERACTIVE=1` and `actions.auth_current` false, `sudo_init` ends the run as
+  an automatic update standing down, before any `sudo -A`. Automatic updates switched on
+  while PackageKit was installed reach this once it is removed.
 - **The AppImage always sets `ONEUP_BACKEND=sudo`.** `oneup/gui/paths.py`
   `_resolve_engine`'s frozen branch adds it to the env prefix it already builds.
 - **Once the table has chosen the service, falling back to sudo happens only on the
@@ -656,13 +661,20 @@ result that contradicts the design is a fold-back to this spec, not a workaround
   *Test:* `tests/service-test.py`, with the activation file faked and the real `jeepney`,
   so only the polkit check can choose sudo. The fake polkit's `EnumerateActions` lists
   the action → `service`. It lists other actions only → `sudo`. It answers with an error →
-  `service`. `tests/gui-smoke.py`, with `ONEUP_BACKEND` removed from the environment, a
+  `service`. It never answers → `service`, within 4 seconds. `tests/gui-smoke.py`, with `ONEUP_BACKEND` removed from the environment, a
   fake `jeepney` in `sys.modules` and the activation file present:
   `route.packagekit_registered` stubbed to false → `auth.service_route()` is false, and
   stubbed to true → true.
   *Breaks when:* the check is skipped, so a computer without PackageKit refuses every
   update and hides the switch that would fix it; or a failed call reads as unregistered,
   so a slow polkit sends a timer run to the sudo route's password box.
+
+- **INV-19** On the sudo route, a run with `ONEUP_NONINTERACTIVE=1` and
+  `actions.auth_current` false ends before any `sudo -A`.
+  *Test:* `tests/run-tests.sh`, the engine on the sudo route with `ONEUP_NONINTERACTIVE=1`
+  and no drop-in: it exits non-zero, and the mock `sudo`'s call log holds no `-A` call.
+  *Breaks when:* `sudo_init` reaches its validate with nobody at the screen, so a timer
+  run puts up a password box.
 
 ## 6. Failure modes
 
@@ -688,13 +700,14 @@ result that contradicts the design is a fold-back to this spec, not a workaround
   INV-6, INV-7, INV-9, INV-14, INV-15, INV-17 and INV-18's route half. It joins `./local-CI.sh`. It exits 77
   (skipped) when `dbus-daemon` or `jeepney` is missing, like `tests/gui-smoke.py`
   without PySide6.
-- **`tests/run-tests.sh`**: new scenarios for INV-4, INV-8, INV-11, INV-12, INV-13 and
-  INV-16's engine half.
+- **`tests/run-tests.sh`**: new scenarios for INV-4, INV-8, INV-11, INV-12, INV-13,
+  INV-16's engine half and INV-19.
   INV-8's service-route arm runs the engine against the same fake service.
 - **`tests/gui-smoke.py`**: INV-10, INV-16's window half and INV-18's window half.- **The existing ONEUP-0092 and ONEUP-0044 scenarios keep running on the sudo route.**
   They are the AppImage's contract, and nothing in this item retires them.
 - **Each new test is seen to fail first**: against the tree before the feature for
-  INV-4, INV-8, INV-10 and INV-18, and against a deliberately broken service for the rest.
+  INV-4, INV-8, INV-10, INV-18 and INV-19, and against a deliberately broken service for
+  the rest.
 - **By hand**, before 2.0.0: §4.12's four measurements, then one real run from the window
   on a packaged install with no password box, and one from an SSH session, which takes
   the sudo route and its password request (§4.7).
@@ -802,3 +815,4 @@ Each of these is amended in the commit that lands the matching code:
 | impl | 2026-10-16 | none: an implementation fold-back (write-spec Step 8), no reviewer dispatched | – | – | – | – | **§4.12 item 2 measured, and one directive failed it (ONEUP-0283).** In the user's first real kernel update on the service route (log `2026-10-16_082648`), systemd's `%transfiletriggerin` hit a read-only `/root` and `/run/user` under `ProtectHome=yes`, and `flatpak --system update` could not create `/root/.cache/dconf`. The kernel's boot entry was still written. Changed: §4.8 moves `ProtectHome=` to the left-out list, as item 2 directs; the unit drops it in the same commit, and INV-13's scenario now checks it stays out. **A detail, not a premise**: the item's own rule decided the outcome, so the gate does not re-arm. The log shows no other read-only, permission or failure line. |
 | amend | 2026-10-16 | none: an amendment for ONEUP-0286 (write-spec Step 1 item 4), no reviewer dispatched | – | – | – | – | **Origin: ONEUP-0286.** A computer without PackageKit has no `org.freedesktop.packagekit.system-update` action, so every `OpenSession` was refused and §6 offered only `ONEUP_BACKEND=sudo`. User's decision, 2026-10-16: fall back to the sudo route, as the AppImage does. **Settled where the route is chosen, not on the refusal**: §4.10's window decides the switch, the drop-in offer and automatic updates from `engine_route`, so a refusal-side fallback would have hidden the switch the user needs (§9). Measured that day: `EnumerateActions` answers an ordinary user in 8 ms; an unregistered action's `CheckAuthorization` error is the generic `Error.Failed`. Changed: §4.7 (table row, three bullets, the `jeepney` sentence), INV-18, §6 (two rows), §7, §8, §9 (three alternatives). §4.4 and the service are unchanged. **The gate re-arms**: `route.packagekit_registered` is still to be built. |
 | 5 | 2026-10-16 | 2, cold, via `neutral-lane`; genre pinned `spec`; every lane held every question; each read all 801 lines; re-gate of the ONEUP-0286 amendment (c45ae7c) | 1 | 0 | 1 | 1 | **Three verified, three fixed, none dismissed.** The run's first loop. **One lane found, and the other raised as an open question**, that the amendment sent a failed or slow polkit call to sudo: a timer run without Passwordless would then reach `sudo_init`'s `sudo -A -v` and a box nobody answers, which §4.7 forbids. Now `route.packagekit_registered` is false only on a reply whose list lacks the action; a failure keeps the old route and its fallbacks. **One lane alone**: INV-18's window test passed vacuously, because `tests/gui-smoke.py` pins `ONEUP_BACKEND=sudo` (now removed for the test, with a fake `jeepney` and a positive arm). **Both lanes, as open questions**: §7's stub bullet named INV-10's scenario, which forces the route; deleted, since a failed call now keeps the service route. Fixed outside the tally: §4.6's reason clause (false since ONEUP-0283), deleted; §4.4 step 4 now records that `_headless_engine` already sets `ONEUP_NONINTERACTIVE=1`. The fix pass deleted its own new absolute (the window and engine disagree "only" on an install change) after a refuting case. Open questions resolved clean: `cdn_dir` stays on the sudo route (`privilege.root_stream`). Cold-start timing request moot after the fix. Mechanical: `spec_lint` 18 invariants, 0 in-diff; `doc_lint` 0. Lanes arrived holding the global `CLAUDE.md`, the lane file and hook text; no project `CLAUDE.md`, memory or git snapshot. Spend: 0.67 and 0.70 USD, four turns each, no denials. |
+| 6 | 2026-10-16 | 2, cold, via `neutral-lane`; genre pinned `spec`; every lane held every question; each read all 804 lines; packet rebuilt from disk, adding `privilege.root_stream`, the suite's `ONEUP_BACKEND` pin and the `jeepney` and polkit-unit facts | 1 | 2 | 0 | 1 | **Four verified, four fixed, none dismissed. Cap reached (2 loops for a spec in this run); these four fixes are read by no lane, and implementation is the next reviewer.** **One lane alone**: a run nobody started by hand that the table sends to sudo (PackageKit removed after automatic updates were switched on) reached `sudo_init`'s `sudo -A -v`; §4.7 now has it end before any `sudo -A`, as new INV-19. **Both lanes**: the table said "unset or `auto`" where `route.engine_route` and the suite's `("", present, fake, "service")` case also take an empty value. **One lane alone**: INV-18's test had no silent-polkit case (added: never answers → `service` within 4 s). **From an open question**: §3 item 4 still replaced the switch on every packaged install (now qualified by ONEUP-0286). Open questions resolved clean: `jeepney`'s `open_dbus_connection` passes `auth_timeout` to the socket, bounding connect and handshake, so a silent polkit costs the window at most about 3 s; `autostart.py`'s service-route branch re-probes `--auth-status` before installing, as §4.10 says. Cap sweep over the fixed terms: no collateral. **A calm cap**: 3 of 4 anchor on text loop 5 wrote, but two are amendment defects that text exposed and one an unpropagated consequence of loop 5's failure rule, none a repair of a repair. Second share: 6 of the run's 7 verified findings inside the armed span (c45ae7c), 1 binding to it. Mechanical: `spec_lint` 19 invariants, 0 in-diff; `doc_lint` 0. Lanes arrived holding the global `CLAUDE.md`, the lane file and hook text; no project `CLAUDE.md`, memory or git snapshot. Spend: 0.65 and 0.67 USD, four turns each, no denials. Run total: 7 verified, 7 fixed, over two loops. |
