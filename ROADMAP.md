@@ -8765,7 +8765,7 @@ when complete (that document's §7).
   Source: user-real-run-2026-10-16.
   Lanes: packaging, security.
 
-- 📋 [ONEUP-0284] **During download and install the liveness line keeps naming the last repository refreshed, as if it were still fetching it.**
+- ✅ [ONEUP-0284] **During download and install the liveness line keeps naming the last repository refreshed, as if it were still fetching it.**
   Seen 2026-10-16 (screenshots in the session): through download and
   install the line under the status read "Fetching science_GPU_ROCm —
   2m 15s · 670 MiB of 670 MiB · still working". science_GPU_ROCm is
@@ -8781,6 +8781,10 @@ when complete (that document's §7).
   the refresh's, counted from the LAST @@REFRESH@@, not the download's.
   STEP_BEGIN already clears both. Tests that pin activity text:
   tests/gui-smoke.py ("Fetching games", "Fetching repo-oss").
+  Fixed 2026-10-16 in 9ae628e (test e2c8bba, red 859/2 before the fix):
+  @@PROGRESS@@ clears the label and its clock as STEP_BEGIN does, and
+  redraws at once. Gate green. main's updater.py has the same code; a
+  port to 1.4.x waits on the user.
   **Layman:** While packages download and install, OneUp shows a line saying it is still fetching one repository, which is no longer true.
   Kind: fix.
   Source: user-real-run-2026-10-16.
