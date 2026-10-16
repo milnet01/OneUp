@@ -8730,7 +8730,7 @@ when complete (that document's §7).
   Source: in-session-2026-10-16.
   Lanes: engine, security, packaging.
 
-- 📋 [ONEUP-0283] **The system service's ProtectHome=yes makes /root and /run/user read-only, so systemd's post-transaction trigger fails during a real update.**
+- 🚧 [ONEUP-0283] **The system service's ProtectHome=yes makes /root and /run/user read-only, so systemd's post-transaction trigger fails during a real update.**
   Seen in run 2026-10-16_082648.log (service route, RPM from v2
   a3c73cd): %transfiletriggerin(systemd-261.3-1.1) printed "Unable to
   fix SELinux security context of /root: Read-only file system",
@@ -8743,6 +8743,12 @@ when complete (that document's §7).
   comment: a directive stays only if a real Tumbleweed update including
   a kernel passes under it (§4.12 item 2). This one did not.
   Fix: drop ProtectHome= from the unit and from §4.8's list.
+  Built 2026-10-16 in 6f7e0bf: the unit drops ProtectHome=, spec
+  §4.8 lists it as left out, and INV-13's scenario checks it stays out
+  (red 510/1 before the fix, green 512/0 after). RPM rebuilt from
+  6f7e0bf and installed; systemctl show reports ProtectHome=no. Owed:
+  the next real update on the service route shows no read-only error
+  from %transfiletriggerin or dconf.
   **Layman:** OneUp's background helper is fenced off from a few system folders that installing updates needs to write to, so one of systemd's after-install scripts fails.
   Kind: fix.
   Source: user-real-run-2026-10-16.
