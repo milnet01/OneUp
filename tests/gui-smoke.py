@@ -309,6 +309,10 @@ def main() -> int:
         # Bytes: the download phase is the only place in a run where a figure exists at all.
         wL.handle_line("@@PROGRESS@@|system|12|141|download|41943040|397410304")
         check("the download says how much of how much", "40 MiB of 379 MiB" in wL.activity.text())
+        # ONEUP-0284: a real run read "Fetching science_GPU_ROCm — 2m 15s · 670 MiB of
+        # 670 MiB" through the whole download, long after that refresh had finished.
+        check("the download no longer names the source fetched before it",
+              "Fetching games" not in wL.activity.text())
         check("the byte total is remembered", wL._dl_total == 397410304)
         # A rate needs both movement and elapsed time to divide by.
         wL.handle_line("@@PROGRESS@@|system|24|141|download|83886080|397410304")
@@ -350,9 +354,13 @@ def main() -> int:
         wL.handle_line("@@STEP_BEGIN@@|system|1|5|Updating system packages")
         wL.handle_line("@@REFRESH@@|9|9|games")
         wL.handle_line("@@PROGRESS@@|system|3|141|install")
+        check("the label goes at once, not on the next tick (ONEUP-0284)",
+              "Fetching games" not in wL.activity.text())
         wL._activity_at = time.monotonic() - (updater.STALL_SECONDS + 5)
         wL._tick_activity()
         check("a quiet install does not blame the server", "server" not in wL.activity.text())
+        check("the install no longer names the source fetched before it (ONEUP-0284)",
+              "Fetching games" not in wL.activity.text())
         wL._activity_at = time.monotonic()
         wL._tick_activity()
         # Same splice-safety contract as PROGRESS: merged stdout/stderr can cut a marker.
