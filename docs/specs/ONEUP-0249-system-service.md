@@ -216,7 +216,7 @@ the interface version. An incompatible change takes a new name.
 OpenSession(options a{sv}) -> ()
     options: interactive b (default true), import_keys b (default false)
 Run(op s, args a{sv}, merge_stderr b) -> ()
-Read(offset t) -> (data ay, status i)   # status -1 until the job has ended and been read
+Read(offset t) -> (data ay, status i)   # status -1 until offset is at the end of an ended job
 Stop() -> ()
 CloseSession() -> ()
 CanUpdate() -> (answer s)          # "yes" | "no"; never prompts
@@ -242,7 +242,8 @@ Errors are `za.co.antsprojectshub.OneUp1.Error.NotAuthorized`, `.Busy`, `.Invali
   chunk reaches the client about as soon as the child writes it, unsplit, as a pipe
   would deliver it (`.claude/rules/engine-traps.md`, "A slow server").
 - **`status` is -1 until the job has ended and `offset` is at the end of its output.**
-  Then it is the exit status, or `128+N` for a child killed by signal `N`, the shell's
+  So a reply carrying bytes always has `status` -1, and the reply with the final
+  `status` carries no bytes. That `status` is the exit status, or `128+N` for a child killed by signal `N`, the shell's
   convention the engine already reads (143 is a stopped download).
 - **`Read` reads the caller's own session's job**, so no session can read another's. A
   caller with no session gets `NoSession`. A session with no job of its own gets
@@ -317,9 +318,9 @@ sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
 - **A session's CDN directory is deleted when it ends.** The commit after a download
   recovery reuses it, so it lives for the session.
 - **A job outlives its session, and so does the session's clean-up.** A running job is
-  never stopped because its caller left (§4.6). The two clean-ups above run when the
-  session's job, if any, has ended: a re-enable cannot take zypp's lock while the job holds
-  it, and a running commit may be reading the CDN directory.
+  never stopped because its caller left (§4.6). The two clean-ups above run once no job
+  is running in the service: a re-enable cannot take zypp's lock while a job holds it,
+  and a running commit may be reading the CDN directory.
 - **Argument limits.** `names` at most 5000 entries; each string at most 255 bytes.
   Anything larger is `Invalid`.
 
@@ -327,13 +328,13 @@ sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
 
 - **`system-download` is the one stoppable operation.** `Stop` sends `SIGTERM` to that
   child, which zypper turns into exit 105, as the inline wrapper's own `kill -TERM` does
-  today. The engine's 105-means-stopped rule in `steps._download_pass` is unchanged.
+  today. The engine's 105-means-stopped rule in `steps._download_status` is unchanged.
 - **`Stop` on any other job is `NotStoppable`.** `system-commit` is never signalled
   (`security.md` §6.1). `Stop` from any session but the one that started the job is
   `NoSession`.
 - **The engine forwards the user's Stop.** The service cannot read `stop.request`: it is
   in the user's home, and the unit hides home directories (§4.8). So on the service
-  route, while `system-download` runs, the engine polls `proc.stop_pending` every
+  route, while `system-download` runs, the engine polls `proc.stop_requested` every
   `STOP_POLL_SECONDS` and calls `Stop` once. The stop wrapper and the download guard text
   are untouched; the service route simply does not use them.
 - **Bounded calls stay bounded the way they are today.** `repo-refresh` carries its own
@@ -424,8 +425,10 @@ updates" from `ProtectSystem`.
   transaction.
 - **Idle exit.** With no session and no job for 60 seconds, the service releases its bus
   name and exits. D-Bus starts it again on the next call.
-- **On `SIGTERM`** it refuses new sessions. Open sessions stay open, so a job's output
-  and status stay readable (§4.3). It exits once no job runs and no session is left.
+- **On `SIGTERM`** it refuses new sessions, and `Run` gets `Busy`. A session whose job's
+  final `status` has not yet been returned stays open until a `Read` returns it, so a
+  running job's output stays readable (§4.3). Every other session ends at once. It exits
+  when no session is left, so a stop waits for the running job, never for a whole run.
 - **The RPM never restarts it on upgrade.** The service may be the very thing running the
   zypper that upgrades OneUp. The `%postun` uses `%service_del_postun_without_restart`.
   The next start after idle exit loads the new code.
@@ -740,3 +743,4 @@ Each of these is amended in the commit that lands the matching code:
 | 2 | 2026-10-14 | 2, cold, via `neutral-lane`; genre pinned `spec`; every lane held every question; each read the whole document; packet rebuilt from disk with windows for every symbol loop 1's fixes named; `tests/docs-check.py` 0 failed | 4 | 5 | 3 | 2 | **Fourteen verified, fourteen fixed, none dismissed. Cap reached (2 for a spec), and the user said on 2026-10-14 not to review these fixes, so they are read by no lane; implementation is the third reviewer.** **A calm cap**: 4 of the 14 landed on text loop 1 wrote (the `_headless_engine` claim, INV-4's download wording, the fallback bullet, INV-4's `sudo -n`); the rest were in the draft. **The most consequential finding was settled by measurement, not argument.** §4.4 step 4 asked polkit again with the user's `unix-session` when a timer's bus-name check failed; one lane showed any process of that user, an SSH shell included, could claim it by setting the variable, a widening Discover's rule does not grant, and that nothing could test it. Measured: `systemd-run --user` → `pkcheck --action-id org.freedesktop.packagekit.system-update --process` → `polkit\56result=yes`, because polkit 127 places a `user@.service` process in the user's display session. Step 4 was deleted: the service adds no rule of its own. **Both lanes found** that `_headless_engine` sets no environment today, so the spec now says it is changed (INV-16), and that nothing registers a polkit agent for an SSH caller; a `challenge` reason now sends an interactive `auto` run to the sudo route (§4.12 item 1 measures it). **One lane alone found** that `KillMode=process` did not save the transaction, because a child writing to the dead service's pipe still takes `SIGPIPE`: children now write to a job file under `/run/oneup/`. The same lane found INV-4 would have stripped `restore_disabled`'s `sudo -n`, the `orphans-remove` validator parsing zypper output as root against property 1, `sudo_init` re-entry hitting `Busy`, a pre-guard drop-in going undetected, and a §6 row citing a measurement §4.12 never listed. The other found the forced-service route and §6's row both contradicting the interactive-only fallback, and that the sudo route's download wraps `system_txn_argv()`, not the table's argv. **From open questions**: `timeout` and `du` are absolute paths today (`REFRESH_SUDO_ARGV`, `CACHE_DU_ARGV`), now stated. One open question corrected by narrowing outside the tally: the AppImage window imports `engine_route` because PyInstaller follows imports, not because `engine-src/` carries it. Spend: 0.93 and 0.87 USD, four turns each. Run total: 27 verified, 27 fixed, over two loops. |
 | impl | 2026-10-16 | none: an implementation fold-back (write-spec Step 8), no reviewer dispatched | – | – | – | – | **The user's first real run on a packaged install (2026-10-15) failed at its first root command, and the cause is §4.3's descriptor design (ONEUP-0282).** On SELinux the system bus cannot take pipes from `unconfined_service_t`; `dbus-broker` disconnected the service and every later call was `NoSession`. Reproduced 2026-10-16 with `restart-list`; the policy facts are in §9. `tests/service-test.py` could not see it: a private `dbus-daemon` with no SELinux. **A design premise moved, not a detail**, so §9 records the rejected design and why. User's decisions that day: the client pulls the output with `Read(offset)`, and no SELinux policy module ships. Changed: §4.3 (the interface, `Read`, deletion of the job file), §4.5 (an ended job frees the slot), §4.12 item 4 (the real bus is measured, because no test reaches it), INV-17, §6's dying-service row, §7, §9. **The gate re-arms**: the service, the client and the service suite are still to be built against the new interface. |
 | 3 | 2026-10-16 | 2, cold, via `neutral-lane`; genre pinned `spec`; every lane held every question; each read all 737 lines; re-gate of the ONEUP-0282 fold-back (d6e83c8) | 1 | 4 | 0 | 1 | **Six findings: five verified and fixed, one dismissed.** The run's first loop. **From the packet build (Q1)**: the spec said `proc.stream_filtered` has a stall clock; the clock is the window's, `oneup/gui/run.py` `on_output`; the clause was deleted. **Both lanes found** that §4.8's `SIGTERM` bullet (and `server.py`'s loop, which ends every session on stop) would lose a running job's unread output under `Read`, so a commit under `systemctl stop` would report failure: open sessions now stay open and the service exits once no job runs and no session is left. **One lane alone**: a session with no job got `Invalid` in §4.3 but `NoSession` in INV-17's test (`Read` has no job handle; now `NoSession` only for a caller with no session); a lost final reply, retried, found the job file deleted and read as failure (the file now lives until the session ends or runs again, and a repeated end `Read` returns the same `status`); INV-17's test named no observable for descriptor passing being off (now a source check for `enable_fds=True`). **Dismissed**: 143 against §4.6's exit 105, because `steps._download_pass` already reads both as a stop. Two open questions resolved clean: `proc.stop_pending` and `stop_requested` both exist; both routes split lines in the engine, so `Read`'s unsplit delivery matches a pipe's. Second share: 6 of 6 anchors inside the armed span or binding to it (the `SIGTERM` bullet predates it but its harm is the amendment's). Mechanical: `spec_lint` (17 invariants), `doc_citations` 0 stale. Lanes arrived holding the global `CLAUDE.md`, the lane file and hook text; no project `CLAUDE.md`, memory or git snapshot. Spend: 0.53 and 0.13 USD, two turns each, no denials. |
+| 4 | 2026-10-16 | 2, cold, via `neutral-lane`; genre pinned `spec`; every lane held every question; each read all 742 lines; packet rebuilt from disk, adding windows on `proc.stop_requested`/`stop_pending`, `stream_filtered` and `steps._download_status` | 2 | 2 | 1 | 0 | **Five verified, five fixed, none dismissed. Cap reached (2 loops for a spec in this run); these five fixes are read by no lane, and implementation is the next reviewer.** **Both lanes found**: §4.6 named `proc.stop_pending` for the Stop forwarder, which announces the stop inside the download output; the code and the spec now say `proc.stop_requested` (loop 3 wrongly resolved this as clean). And loop 3's own `SIGTERM` text let a stop wait on an engine holding its session for a whole run: now `Run` gets `Busy`, a session ends once its job's final `status` is returned, and a stop waits for the running job only. **One lane alone**: the 105 rule lives in `steps._download_status`, not `_download_pass` (loop 3's dismissal named the wrong owner too); §4.5's clean-ups waited for the session's own job, where `server._clean_up` waits for no job at all, which zypp's lock requires; and §4.3 gave two tests for when `status` arrives (now: only on a reply at the end, which carries no bytes). G1, G2 and G4 are outside the armed span and fixed in the run as exempt records of existing code. One open question resolved clean: the service answers `Introspect`. **A calm cap**: 1 of 5 landed on text this run wrote (the `SIGTERM` bullet). Second share: 5 of the run's 10 verified findings inside the armed span, 2 more binding to it, 3 outside. Spend: 0.56 and 0.16 USD, two turns each, no denials. |
