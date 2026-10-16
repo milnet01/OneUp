@@ -171,6 +171,8 @@ def _sentence_args(call: ast.Call) -> tuple[int, ...]:
 # INV-12's closed exemption list, keyed by (file, enclosing function, call). Every
 # entry is data no user reads as wording.
 WORD_LOGIC_EXEMPT = {
+    ("oneup/gui/auth.py", "_lists_zypper_rule", "join ' '"):
+        "rejoins a `sudo -l` entry wrapped across lines, to parse it; never shown",
     ("oneup/gui/autostart.py", "_arg", "join ''"):
         "quotes one argument for a systemd unit's or .desktop file's command line",
     ("oneup/gui/contrast.py", "bad_exceptions", "lower"):
