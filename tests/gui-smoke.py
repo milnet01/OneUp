@@ -2696,9 +2696,11 @@ def main() -> int:
     w = window.Updater()
     check("About button exists in the header", hasattr(w, "about_btn"))
     # show_about() runs a modal exec(); schedule a close so the test doesn't block.
+    _about_text = []
     def _dismiss_about():
         for tl in app.topLevelWidgets():
             if isinstance(tl, QMessageBox) and tl.isVisible():
+                _about_text.append(tl.informativeText())
                 tl.done(0)
     QTimer.singleShot(50, _dismiss_about)
     try:
@@ -2706,6 +2708,10 @@ def main() -> int:
         check("About dialog opens and dismisses cleanly", True)
     except Exception as exc:  # noqa: BLE001
         check(f"About dialog opens and dismisses cleanly ({exc})", False)
+    # The project's house disclaimer, 2026-10-16: OneUp is not openSUSE's or SUSE's.
+    check("About says OneUp is not an official openSUSE or SUSE product",
+          bool(_about_text) and "not an official openSUSE or SUSE product" in _about_text[0]
+          and "not endorsed by the openSUSE Project or SUSE" in _about_text[0])
 
     # --- 7. the Repositories manager: parse, duplicate flag, apply command ------
     check("Repositories button exists in the header", hasattr(w, "repos_btn"))

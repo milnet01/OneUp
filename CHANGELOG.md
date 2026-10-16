@@ -61,6 +61,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The About window says OneUp is an independent project**
+  It now reads: "OneUp is an independent project, not an official
+  openSUSE or SUSE product, and is not endorsed by the openSUSE
+  Project or SUSE." The README says the same.
+
 - **The openSUSE repository has a new address** (ONEUP-0273)
   OneUp's package now lives in its own project on the openSUSE
   Build Service, home:milnet:oneup. The README gives the new

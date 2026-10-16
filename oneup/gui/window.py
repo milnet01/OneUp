@@ -1323,11 +1323,14 @@ class Updater(QMainWindow):
                 "window",
                 "One-click updates for openSUSE — system packages, Flatpaks, "
                 "firmware, leftover-package removal and cache "
-                "cleanup.<br><br>Released under the <b>MIT Licence</b>.<br><br><a "
+                "cleanup.<br><br>Released under the <b>MIT Licence</b>.<br><br>"
+                "{APP_NAME} is an independent project, not an official openSUSE or "
+                "SUSE product, and is not endorsed by the openSUSE Project or "
+                "SUSE.<br><br><a "
                 "href=\"https://github.com/{REPO_SLUG}\">GitHub repository</a> "
                 "&nbsp;·&nbsp; <a "
                 "href=\"https://software.opensuse.org/package/oneup\">openSUSE "
-                "package (OBS)</a>").format(REPO_SLUG=REPO_SLUG))
+                "package (OBS)</a>").format(REPO_SLUG=REPO_SLUG, APP_NAME=APP_NAME))
         for lbl in box.findChildren(QLabel):
             lbl.setOpenExternalLinks(True)  # let the links open in the browser.
             # setOpenExternalLinks only grants LinksAccessibleByMouse, so without
