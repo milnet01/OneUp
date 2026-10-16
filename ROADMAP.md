@@ -8978,13 +8978,23 @@ when complete (that document's §7).
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: gui.
 
-- 📋 [ONEUP-0294] **The header buttons clip their text to fragments such as "etti" and ".bou" on a fresh Tumbleweed.**
+- 🚧 [ONEUP-0294] **The header buttons clip their text to fragments such as "etti" and ".bou" on a fresh Tumbleweed.**
   Seen 2026-10-16 in the ONEUP-0287 VM (Noto Sans 10, Breeze), at the
   window's opening size and after a relaunch at 1280x960. The user saw
   it too. Likely cause, unconfirmed: theme.py's QPushButton#GhostBtn sets
   `min-width: 24px`, which replaces the text-based minimum, so the header
   row can shrink them. Check/Stop get a text-measured setMinimumWidth;
   these do not.
+  Built 2026-10-16 on v2 (4b65258), pushed. Cause confirmed: offscreen
+  with the app's sheet, at the 605 px minimum all three buttons were 54 px
+  against size hints of 98, 87 and 69. Each is now pinned to its size hint
+  and the window's minimum grows to hold them. tests/gui-smoke.py 872/0;
+  the new check failed before the fix only at text scale 1.45 (the suite's
+  window is wide enough at 1.0). VM check owed: the v2 RPM is installed in
+  the VM, but a QMP drag of the window's right edge did not resize it, and
+  an offscreen probe run inside the VM hung (timeout 90 s, no output). Next:
+  narrow the window in the VM (e.g. via KWin or a working drag) and confirm
+  the labels, then flip shipped.
   **Layman:** The Settings, Recenter and About buttons at the top show cut-off words.
   Kind: fix.
   Source: ONEUP-0287-vm-2026-10-16.
