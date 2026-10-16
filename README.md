@@ -6,6 +6,9 @@ the *right* way — from a single window.
 
 ![OneUp](screenshots/oneup.png)
 
+OneUp is an independent project, not an official openSUSE or SUSE product, and is not
+endorsed by the openSUSE Project or SUSE.
+
 ---
 
 ## Why not just use Discover?
