@@ -393,6 +393,7 @@ QTableView#PackageTable QHeaderView::section {
 #PackageFilter, #PackageSummary, #SpotlightPanel { background: transparent; }
 #SpotlightPanel QLabel#Status { font-size: $fs_spot; font-weight: 600; }
 QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border: none; }
+QScrollArea#SettingsScroll, QWidget#SettingsBody { background: transparent; border: none; }
 /* The size strip is painted, so its ink arrives as a property. */
 #SizeStrip { qproperty-ink: $tname; }
 /* The two dialog panels, on `win` rather than on the card. Same mechanism, same
@@ -558,6 +559,7 @@ QTableView#PackageTable QHeaderView::section {
 #PackageFilter, #PackageSummary, #SpotlightPanel { background: transparent; }
 #SpotlightPanel QLabel#Status { color: $text; }
 QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border: none; }
+QScrollArea#SettingsScroll, QWidget#SettingsBody { background: transparent; border: none; }
 #SizeStrip { qproperty-ink: $text; }
 QScrollArea#RepoScroll { background: transparent; border: 2px solid $border; }
 QListWidget#RollbackList { background: $card; color: $text; border: 2px solid $border; }

@@ -8,19 +8,33 @@ from __future__ import annotations
 
 import itertools
 
-from PySide6.QtCore import QCoreApplication, Qt
+import shiboken6
+from PySide6.QtCore import QCoreApplication, QSize, Qt
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
 from .placement import center_on_parent
 from .theme import card_inside
+
+
+class _RowsScroll(QScrollArea):
+    """Asks for its rows' whole height at its own width. QScrollArea caps its
+    hint at 24 lines of text, so the dialog opened scrolling on a screen with
+    room for every row. Qt still holds a new window to two thirds of the screen."""
+
+    def sizeHint(self) -> QSize:
+        rows = self.widget()
+        width = self.viewport().width() if self.isVisible() else rows.sizeHint().width()
+        return QSize(rows.sizeHint().width(), rows.heightForWidth(width))
 
 
 class SettingsDialog(QDialog):
@@ -35,6 +49,28 @@ class SettingsDialog(QDialog):
         self.setWindowTitle(QCoreApplication.translate("settings_dialog", "Settings"))
         self.setMinimumWidth(460)
         root = QVBoxLayout(self)
+        # The rows scroll; the status line and Close stay below them. A dialog
+        # taller than the screen is squeezed to fit it, and the layout took the
+        # difference out of every row: a 960-pixel screen cut three-line
+        # descriptions to two (ONEUP-0302).
+        scroll = _RowsScroll()
+        scroll.setObjectName("SettingsScroll")
+        # Not a stop of its own, its controls are — as MessageStrip.
+        scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        inner = QWidget()
+        inner.setObjectName("SettingsBody")
+        body = QVBoxLayout(inner)
+        body.setContentsMargins(0, 0, 0, 0)
+        scroll.setWidget(inner)
+        root.addWidget(scroll, 1)
+        # Not `self.scroll`, which would shadow QWidget.scroll(dx, dy) (as repos.py).
+        self.rows_scroll = scroll
+        # Qt does not scroll a control into view when Tab arrives from outside
+        # the area — from Close, wrapping round — so the dialog does.
+        QApplication.instance().focusChanged.connect(self._on_focus)
         # The old intro said "Each is off until you turn it on", which is true of
         # the first heading's five toggles and false of the other two headings'
         # rows — the same defect the original had once the groups existed.
@@ -43,17 +79,17 @@ class SettingsDialog(QDialog):
             "How OneUp behaves on its own, how it looks, and what it does on "
             "this machine."))
         intro.setWordWrap(True)
-        root.addWidget(intro)
+        body.addWidget(intro)
 
         # Three headings rather than a flat column of ghost buttons. The grouping
         # is exhaustive over every row: a row with no home here is a defect in
         # this list rather than a judgement call (ONEUP-0064 §4.1).
         _tray_note = ("" if parent._tray_available else QCoreApplication.translate(
             "settings_dialog", "  (your desktop has no system tray)"))
-        root.addWidget(self._heading(QCoreApplication.translate(
+        body.addWidget(self._heading(QCoreApplication.translate(
             "settings_dialog",
             "Automatic behaviour")))
-        root.addWidget(self._row(
+        body.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
                 "Check weekly in the background and notify you when updates are "
@@ -67,14 +103,14 @@ class SettingsDialog(QDialog):
                 "Updates follow this computer's software-update permission, the same "
                 "one Discover uses, so OneUp has no password setting of its own."))
             self.service_note.setWordWrap(True)
-            root.addWidget(self.service_note)
+            body.addWidget(self.service_note)
             autoupdate_text = QCoreApplication.translate(
                 "settings_dialog",
                 "Install all updates automatically on a weekly schedule. Needs this "
                 "computer to allow updates without a password, and keeps the "
                 "snapshot/rollback safety net.")
         else:
-            root.addWidget(self._row(
+            body.addWidget(self._row(
                 QCoreApplication.translate(
                     "settings_dialog",
                     "Skip the password prompt for OneUp's update commands (opt-in; "
@@ -84,22 +120,22 @@ class SettingsDialog(QDialog):
                 "Install all updates automatically on a weekly schedule. Needs "
                 "the passwordless setting, and keeps the snapshot/rollback safety "
                 "net.")
-        root.addWidget(self._row(autoupdate_text, parent.autoupdate_btn))
-        root.addWidget(self._row(QCoreApplication.translate(
+        body.addWidget(self._row(autoupdate_text, parent.autoupdate_btn))
+        body.addWidget(self._row(QCoreApplication.translate(
             "settings_dialog",
             "Show a small icon near the clock that turns amber when updates are "
             "waiting.{note}").format(note=_tray_note), parent.tray_btn))
-        root.addWidget(self._row(QCoreApplication.translate(
+        body.addWidget(self._row(QCoreApplication.translate(
             "settings_dialog",
             "Start OneUp automatically at login, hidden in the tray.{note}").format(
                 note=_tray_note), parent.startboot_btn))
-        root.addWidget(self._row(QCoreApplication.translate(
+        body.addWidget(self._row(QCoreApplication.translate(
             "settings_dialog",
             "Ask GitHub whether a newer OneUp exists each time OneUp starts. "
             "Check for updates in About works either way."), parent.appcheck_btn))
 
-        root.addWidget(self._heading(QCoreApplication.translate("settings_dialog", "Appearance")))
-        root.addWidget(self._row(
+        body.addWidget(self._heading(QCoreApplication.translate("settings_dialog", "Appearance")))
+        body.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
                 "Colour scheme for the whole app. Follow system uses your "
@@ -107,18 +143,18 @@ class SettingsDialog(QDialog):
         # Only shown when a theme could not be applied — a control that silently
         # does nothing is the one outcome ui-and-accessibility.md §7 forbids.
         parent._show_theme_error()
-        root.addWidget(parent.theme_note)
-        root.addWidget(self._row(
+        body.addWidget(parent.theme_note)
+        body.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
                 "How the main window is arranged. Changing it keeps whatever is "
                 "running."), parent.layout_btn))
-        root.addWidget(self._row(
+        body.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
                 "Make all text bigger. OneUp already follows your desktop's font "
                 "size — this enlarges it further."), parent.textsize_btn))
-        root.addWidget(self._row(
+        body.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
                 "Switch to high-contrast colours: plain black and white with "
@@ -127,21 +163,21 @@ class SettingsDialog(QDialog):
         # Repositories arrives here from the header. `_row` takes a description
         # per row and does not read a tooltip, so it needs one. Recenter is back
         # in the header for now (ONEUP-0245).
-        root.addWidget(self._heading(QCoreApplication.translate(
+        body.addWidget(self._heading(QCoreApplication.translate(
             "settings_dialog",
             "This machine")))
-        root.addWidget(self._row(
+        body.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
                 "Choose which software sources OneUp updates from."), parent.repos_btn))
-        root.addWidget(self._row(
+        body.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
                 "Copy a bug report — version info plus your latest update log — "
                 "to the clipboard, so filing an issue doesn't mean hunting "
                 "through hidden folders."),
             parent.diag_btn))
-        root.addWidget(self._row(
+        body.addWidget(self._row(
             QCoreApplication.translate(
                 "settings_dialog",
                 "Delete OneUp's update logs once they are this old. The log of "
@@ -194,6 +230,11 @@ class SettingsDialog(QDialog):
         lay.addWidget(lbl, 1)
         lay.addWidget(control, 0, Qt.AlignVCenter)
         return fr
+
+    def _on_focus(self, _old, new) -> None:
+        if (new is not None and shiboken6.isValid(self)
+                and self.rows_scroll.widget().isAncestorOf(new)):
+            self.rows_scroll.ensureWidgetVisible(new)
 
     def showEvent(self, event):
         # Centre over the main window each time it opens (mirrors RepoManagerDialog).

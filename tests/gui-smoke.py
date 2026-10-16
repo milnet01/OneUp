@@ -4136,6 +4136,23 @@ def main() -> int:
     del wFresh
     _clipped = _clipped_header()
     check(f"ONEUP-0294 nor at a larger text size ({_clipped})", not _clipped)
+    # ONEUP-0302: Settings shorter than its content still shows every description
+    # whole. A 960-pixel screen held the VM's dialog 107 px under its own minimum,
+    # and the layout took that out of every row, so a three-line description
+    # showed two. The fixed height stands in for the screen's limit.
+    wA.open_settings()
+    s_dlg = wA._settings_dialog
+    s_dlg.setFixedHeight(600)
+    for _ in range(3):
+        app_inst.processEvents()
+    _cut = [lbl.text()[:30] for fr in s_dlg.findChildren(QFrame, "RowBorder")
+            for lbl in fr.findChildren(QLabel)
+            if lbl.wordWrap() and lbl.height() < lbl.heightForWidth(lbl.width())]
+    check(f"ONEUP-0302 a Settings dialog shorter than its content cuts no "
+          f"description short ({_cut})", not _cut)
+    s_dlg.setMinimumHeight(0)
+    s_dlg.setMaximumHeight(16777215)
+    s_dlg.reject()
     wA.settings.setValue("high_contrast", True)
     theme.apply_app_theme(app_inst)
     check("a high-contrast change applies live",
