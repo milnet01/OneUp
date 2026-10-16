@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=281 -->
+<!-- ants-roadmap-id-high-water: ONEUP=282 -->
 
 # OneUp Roadmap
 
@@ -8393,6 +8393,8 @@ when complete (that document's §7).
   NotAuthorized with reason `challenge`, not `dismissed`; CanUpdate
   answered `no` there and `yes` from the desktop session. §4.7's sudo
   fallback can tell the two apart.
+  Blocked (2026-10-16) by ONEUP-0282: on SELinux the service route fails at its
+  first Run. §4.12 items 2-3 and §7's by-hand runs wait for that fix.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
@@ -8648,6 +8650,42 @@ when complete (that document's §7).
   Kind: fix.
   Source: in-session-2026-10-15.
   Lanes: tests.
+
+- 📋 [ONEUP-0282] **The system service's Run hands the client pipe descriptors, which SELinux stops the system bus from passing, so every service-route run fails.**
+  Found 2026-10-16 from the user's failed run of 2026-10-15 15:31
+  (log 2026-10-15_153120.log, RPM 1.4.10 from v2 582c909).
+  Reproduced 2026-10-16 07:41 with read-only restart-list through
+  oneup/engine/service_client.py: Run answers NoReply "Remote peer
+  disconnected", then every call is NoSession.
+  Chain, each link checked: the unit runs as unconfined_service_t
+  (sesearch: type_transition init_t bin_t:process
+  unconfined_service_t). Run's "hh" reply carries two pipe read ends
+  (server.py _run). The policy has no allow for system_dbusd_t on
+  unconfined_service_t:fifo_file, and has `dontaudit domain
+  unconfined_service_t:fifo_file {... read ...}`, so the audit log
+  is empty. The kernel drops the descriptors; dbus-broker treats the
+  truncated message as a protocol violation and disconnects the
+  service. The journal shows ConnectionResetError in jeepney's
+  receiver, then SIGTERM (Type=dbus lost its name) and a fresh
+  instance with no sessions. Not reproduced on the session bus
+  (dbus-broker without SELinux confinement), and tests/service-test.py
+  cannot see it: private dbus-daemon, no SELinux.
+  A fold-back to docs/specs/ONEUP-0249-system-service.md (§4.12's
+  rule): §4.3 "Run returns two file descriptors" is the contradicted
+  fact.
+  Decided (user, 2026-10-16): no descriptor passing; the client pulls
+  the job's output from the service over D-Bus. Declined: shipping an
+  SELinux policy module (OneUp would change system security policy,
+  and the allow reaches every unconfined_service_t pipe).
+  Decided (user, 2026-10-16): keep the 129 pending updates (kernel
+  7.2.9 to 7.2.10 among them) for one combined real run once fixed:
+  ONEUP-0054's hold adoption, ONEUP-0249 §4.12 items 2 and 3, and
+  §7's no-password window run.
+  Order: amend the spec, review-contract it, then build.
+  **Layman:** On a computer with SELinux switched on, OneUp's background helper is cut off the moment it starts its first job, so a packaged 2.0 update fails every time.
+  Kind: fix.
+  Source: in-session-2026-10-16.
+  Lanes: engine, security, packaging.
 
 ## 2.1.0 — after 2.0
 
