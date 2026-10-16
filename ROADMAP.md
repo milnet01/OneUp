@@ -8978,7 +8978,7 @@ when complete (that document's §7).
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: gui.
 
-- 🚧 [ONEUP-0294] **The header buttons clip their text to fragments such as "etti" and ".bou" on a fresh Tumbleweed.**
+- ✅ [ONEUP-0294] **The header buttons clip their text to fragments such as "etti" and ".bou" on a fresh Tumbleweed.**
   Seen 2026-10-16 in the ONEUP-0287 VM (Noto Sans 10, Breeze), at the
   window's opening size and after a relaunch at 1280x960. The user saw
   it too. Likely cause, unconfirmed: theme.py's QPushButton#GhostBtn sets
@@ -8995,6 +8995,13 @@ when complete (that document's §7).
   an offscreen probe run inside the VM hung (timeout 90 s, no output). Next:
   narrow the window in the VM (e.g. via KWin or a working drag) and confirm
   the labels, then flip shipped.
+  2026-10-16 VM check: 4b65258 still clipped ("etti", "cent", "bou") at
+  the narrowest. The pin ran before root.addLayout reparented the
+  buttons, which re-applies the sheet's 54 px min-width; the earlier
+  test ran with no app sheet. Fixed in 22e4743 (pin after addLayout; new
+  fresh-window check, red 872/1 then green 873/0). VM with the 22e4743
+  RPM: window minimum 573 → 653 px, all three labels whole at the
+  narrowest (crop /mnt/Games/oneup-vmtest/crop-0294.png).
   **Layman:** The Settings, Recenter and About buttons at the top show cut-off words.
   Kind: fix.
   Source: ONEUP-0287-vm-2026-10-16.
