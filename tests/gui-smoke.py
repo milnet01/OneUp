@@ -4109,14 +4109,14 @@ def main() -> int:
     before = app_inst.styleSheet()
     # ONEUP-0294: at the window's narrowest, no header button is narrower than its own
     # label. The VM's 605-pixel window showed "etti", "cent" and ".bou".
-    def _clipped_header():
-        wA.show()
+    def _clipped_header(w=wA):
+        w.show()
         for _ in range(3):
             app_inst.processEvents()
-        wA.resize(wA.minimumWidth(), wA.height())
+        w.resize(w.minimumWidth(), w.height())
         for _ in range(3):
             app_inst.processEvents()
-        return [b.text() for b in (wA.settings_btn, wA.recenter_btn, wA.about_btn)
+        return [b.text() for b in (w.settings_btn, w.recenter_btn, w.about_btn)
                 if b.width() < b.sizeHint().width()]
     _clipped = _clipped_header()
     check(f"ONEUP-0294 no header button clips its label at the narrowest ({_clipped})",
@@ -4124,6 +4124,16 @@ def main() -> int:
     wA.settings.setValue("text_scale", 1.45)
     theme.apply_app_theme(app_inst)
     check("a text-size change applies live", app_inst.styleSheet() != before)
+    # A window built under the sheet and never re-themed, as a real launch is. The
+    # checks above ran with no app sheet at all, so they never met the sheet's
+    # min-width, which the buttons' reparenting re-applies over a pin taken before
+    # it: the VM still showed "etti" after the first fix.
+    wFresh = window.Updater()
+    _clipped = _clipped_header(wFresh)
+    check(f"ONEUP-0294 a freshly built window clips no header label ({_clipped})",
+          not _clipped)
+    wFresh.close()
+    del wFresh
     _clipped = _clipped_header()
     check(f"ONEUP-0294 nor at a larger text size ({_clipped})", not _clipped)
     wA.settings.setValue("high_contrast", True)

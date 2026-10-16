@@ -498,10 +498,11 @@ class Updater(QMainWindow):
         # minimum, so a narrow window squeezed these to "etti" and ".bou". Each is
         # pinned to its label instead, re-measured on a style or font change (the
         # filter is installed beside Check and Stop's), and the window's minimum grows
-        # to hold them.
+        # to hold them. The pin follows addLayout: that reparents the buttons, which
+        # re-applies the sheet and would put its min-width back over an earlier pin.
         self._header_btns = (self.settings_btn, self.recenter_btn, self.about_btn)
-        self._pin_header_widths()
         root.addLayout(header_row)
+        self._pin_header_widths()
         root.addSpacing(2)
         self._card_root = root      # the current layout sits below the header
 
