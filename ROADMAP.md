@@ -8692,6 +8692,14 @@ when complete (that document's §7).
   Next: build server.py, jobs.py, service_client.py and
   tests/service-test.py (INV-17) against §4.3, then §4.12 item 4 on the
   installed RPM.
+  Built (2026-10-16, d09565f): Read(offset) in oneup/service/server.py and
+  jobs.py, the pull client in oneup/engine/service_client.py, INV-17 in
+  tests/service-test.py. Red first: INV-17 failed 11 of 12 against the
+  unfixed service. Green: service-test 89/0; local-CI passed (run-tests
+  511/0, parsers 129/0, gui-smoke 859/0 and 860/0 RTL, docs-check 31309/0).
+  Still owed before flipping shipped: §4.12 item 4, restart-list through
+  service_client on the real system bus with the RPM rebuilt from v2 and
+  installed. The installed 1.4.10 (from 582c909) still has the broken Run.
   **Layman:** On a computer with SELinux switched on, OneUp's background helper is cut off the moment it starts its first job, so a packaged 2.0 update fails every time.
   Kind: fix.
   Source: in-session-2026-10-16.
