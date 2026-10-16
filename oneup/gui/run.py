@@ -849,6 +849,11 @@ def handle_marker(win, line: str):
         # longest stretch is exactly what made it look hung.
         announce = phase != win._progress_phase
         win._progress_phase = phase
+        # Packages moving means the refresh is over: keeping its source and clock drew
+        # "Fetching <alias> — 2m 15s" over a whole real download (ONEUP-0284).
+        refreshed = bool(win._activity_what)
+        win._activity_what = ""
+        win._activity_since = 0.0
         sync_stop(win)
         # Optional trailing byte fields: how much zypper says has come down, and its
         # total for the transaction. Either may be 0 for "not known" — during the
@@ -860,6 +865,8 @@ def handle_marker(win, line: str):
             if len(parts) > 5 and parts[5].isdecimal() and int(parts[5]):
                 win._dl_total = int(parts[5])
             _tick_activity(win, reweigh=False)
+        elif refreshed:
+            _tick_activity(win, reweigh=False)   # redraw now, not on the next 5s tick
         if announce:
             win._announce(QCoreApplication.translate("run", "Downloading packages.")
                           if downloading else

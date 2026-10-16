@@ -668,6 +668,8 @@ def main() -> int:
         run.handle_line(wL, "@@STEP_BEGIN@@|system|1|5")
         run.handle_line(wL, "@@REFRESH@@|9|9|games")
         run.handle_line(wL, "@@PROGRESS@@|system|3|141|install")
+        check("the label goes at once, not on the next tick (ONEUP-0284)",
+              "Fetching games" not in wL.activity.text())
         wL._activity_at = time.monotonic() - (run.STALL_SECONDS + 5)
         run._tick_activity(wL)
         check("a quiet install does not blame the server", "server" not in wL.activity.text())
