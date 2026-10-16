@@ -65,7 +65,9 @@ OneUp can:
   installs updates. If Discover would ask you for a password, OneUp asks too, once per
   update; if this computer lets you update without one, so does OneUp. There is no
   OneUp setting to change. If an older OneUp's "Passwordless" setting is still on the
-  computer, OneUp offers once to remove it.
+  computer, OneUp offers once to remove it. PackageKit provides that permission, so on
+  a computer without PackageKit, OneUp works as the AppImage does: it asks for your
+  password once per update and keeps its "Passwordless" setting.
 - **Skip the password prompt on the AppImage** — optionally (off by default). A
   "Passwordless" toggle stops OneUp asking for your password on every update. It
   stores **no password**: the system just remembers the decision for OneUp's update

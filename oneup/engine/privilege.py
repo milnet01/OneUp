@@ -129,6 +129,12 @@ def sudo_init() -> None:
     # a surprise dialog in the middle of step 1 (ONEUP-0092).
     if actions.auth_current():
         return
+    # Nobody is at the screen to answer a box, so a timer run stands down here, as it
+    # does on the service route (ONEUP-0249 §4.7, INV-19). A computer without PackageKit
+    # reaches this route even where automatic updates were switched on under the service.
+    if os.environ.get("ONEUP_NONINTERACTIVE") == "1":
+        markers.err("Passwordless is off and nobody is here to type the password — aborting.")
+        raise SystemExit(1)
     install_environment()
     # STREAMED, not captured. The Bash redirects this call nowhere, so whatever
     # sudo says — a prompt, a refusal, "a terminal is required" — reaches the

@@ -235,7 +235,10 @@ opens a session with the service, which asks polkit once (§12.4), and starts no
 keep-alive. Discover's rule decides: under openSUSE's default policy a user at the desktop
 sees no box (ONEUP-0249 §2.4). When polkit answers `challenge`, because it had no way to ask
 the caller, the run falls back to the sudo route and its one prompt (§4.7). That an SSH
-shell gets `challenge` is not yet measured (§4.12 item 1).
+shell gets `challenge` is not yet measured (§4.12 item 1). Where polkit's list of actions
+lacks PackageKit's, the `auto` route takes sudo from the start, as the AppImage does
+(ONEUP-0286); no answer from polkit keeps the service. On the sudo route, a run nobody
+started by hand ends before any `sudo -A` unless Passwordless is current (INV-19).
 
 ---
 
@@ -715,6 +718,7 @@ journal line** (INV-14). With no session and no job for the idle period, the ser
 | §7.3 captured privileged output is not echoed to the log | nothing automatic — the §10 checklist is the only gate |
 | §8 supply chain | nothing automatic |
 | nothing the engine spawns outlives it | `tests/run-tests.sh` — the sudo keep-alive leaves no orphaned process when a run ends |
+| §2.5 the route follows polkit's PackageKit action, and a run nobody started never prompts | `tests/service-test.py` — the route against a fake polkit that lists the action, lacks it, errs or stays silent (INV-18); `tests/gui-smoke.py` — the window follows it; `tests/run-tests.sh` — a timer run with no drop-in never reaches `sudo -A`, beside a hand-started control (INV-19) |
 | §12.1–12.8 the system service's rules | `tests/service-test.py` — a private bus, a fake polkit and mock binaries; each invariant the section cites has its own scenario there. INV-13 is a structural check in `tests/run-tests.sh` |
 | §1.2 and §2.5 the service route runs no `sudo` and prints what the sudo route prints | `tests/run-tests.sh` — the same update on both routes against one set of mocks: zero `sudo` calls on the service route, and equal marker streams (INV-8) |
 | §2.4 a new process group, never a new session | `tests/run-tests.sh` — run under `script` for a real terminal, the keep-alive's refresh comes from the engine's session and terminal, and from a group that is not the engine's |
