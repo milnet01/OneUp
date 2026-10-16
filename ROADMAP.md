@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=292 -->
+<!-- ants-roadmap-id-high-water: ONEUP=300 -->
 
 # OneUp Roadmap
 
@@ -8838,7 +8838,7 @@ when complete (that document's §7).
   Source: user-request-2026-10-16.
   Lanes: engine, gui.
 
-- 🚧 [ONEUP-0286] **A packaged install on a machine without PackageKit refuses every update, with no password box and no way out a newcomer would find.**
+- ✅ [ONEUP-0286] **A packaged install on a machine without PackageKit refuses every update, with no password box and no way out a newcomer would find.**
   User, 2026-10-16: someone installing OneUp for the first time must
   get a working service with no help. Checked that day:
   - A plain zypper install needs no extra step. systemd's own
@@ -8875,6 +8875,12 @@ when complete (that document's §7).
   no Passwordless stands down before sudo -A. ./local-CI.sh green. This
   machine still takes the service route (PackageKit present). Owed: the
   no-PackageKit run in ONEUP-0287's clean VM, then flip shipped.
+  Clean-VM check passed 2026-10-16 (ONEUP-0287 run 2): Tumbleweed KDE
+  Live 20261014, v2 b869199 RPM, PackageKit removed, the live CD's
+  NOPASSWD rule moved out. pkaction listed no packagekit action. Run
+  selected updates showed one password box, then finished "All done";
+  the journal shows the run's root commands under sudo, and no
+  oneup-service job.
   **Layman:** If your computer doesn't have PackageKit (some people remove it), the installed OneUp would refuse to update anything and wouldn't tell you how to fix it.
   Kind: fix.
   Source: user-request-2026-10-16.
@@ -8905,6 +8911,18 @@ when complete (that document's §7).
   step waits for 2.0.0. ISO: KDE Live Snapshot20261014, sha256-checked,
   in /mnt/Games/oneup-vmtest/. Same approach as Groundwork's VM runs
   (GRND-0076): Live Tumbleweed in QEMU, UEFI.
+  Runs 2026-10-16, driven over QMP and ssh as in Groundwork's kit:
+  install: zypper took the v2 RPM and 46 dependencies with no extra
+  step; the service was D-Bus activatable at once.
+  Run 1, PackageKit present: route.engine_route answered service; Run
+  selected updates asked no password, installed 2 packages, finished
+  "All done"; the journal shows every root job in oneup-service.
+  Run 2, PackageKit removed: one password box, then "All done" via sudo.
+  Both pass. Still owed: the OBS-repository step, once 2.0.0 is on OBS.
+  Findings filed separately: a false "old Passwordless rule" offer, the
+  header buttons clipped, restart-list failing without lsof, the
+  finished line ignoring removed leftovers, a missing-glyph box in the
+  package list, and the askpass title "Enter SSH Credentials".
   **Layman:** Install OneUp on a brand-new test computer, the way a newcomer would, to prove it works without any expert help.
   Kind: test.
   Source: user-decision-2026-10-16.
@@ -8942,6 +8960,93 @@ when complete (that document's §7).
   Kind: doc.
   Source: user-request-2026-10-16 (via ants-projects-hub-website session).
   Lanes: gui, docs.
+
+- 📋 [ONEUP-0293] **The offer to remove the old Passwordless rule appears on any machine with a general password-free sudo rule.**
+  Seen 2026-10-16 in the ONEUP-0287 VM, a first install: "The Passwordless
+  rule from an earlier OneUp is still on this computer". Cause:
+  oneup/gui/auth.py _old_dropin_present() also answers yes when
+  `sudo -n -l zypper` succeeds, and the live CD's
+  /etc/sudoers.d/50-livecd grants `NOPASSWD: ALL`. Any user with such a
+  rule sees the same false offer, and Remove would run --revoke-auth.
+  **Layman:** OneUp tells some people it left an old password setting behind when it never did.
+  Kind: fix.
+  Source: ONEUP-0287-vm-2026-10-16.
+  Lanes: gui.
+
+- 📋 [ONEUP-0294] **The header buttons clip their text to fragments such as "etti" and ".bou" on a fresh Tumbleweed.**
+  Seen 2026-10-16 in the ONEUP-0287 VM (Noto Sans 10, Breeze), at the
+  window's opening size and after a relaunch at 1280x960. The user saw
+  it too. Likely cause, unconfirmed: theme.py's QPushButton#GhostBtn sets
+  `min-width: 24px`, which replaces the text-based minimum, so the header
+  row can shrink them. Check/Stop get a text-measured setMinimumWidth;
+  these do not.
+  **Layman:** The Settings, Recenter and About buttons at the top show cut-off words.
+  Kind: fix.
+  Source: ONEUP-0287-vm-2026-10-16.
+  Lanes: gui.
+
+- 📋 [ONEUP-0295] **The list of services to restart is skipped without a word when lsof is missing.**
+  Seen 2026-10-16 in the ONEUP-0287 VM: the restart-list root op
+  (`zypper ps -sss`) exited 4 with "Please install package 'lsof'
+  first." The KDE Live ISO has no lsof. oneup/engine/__main__.py
+  _reboot_and_services then emits no SERVICES marker. REBOOT is decided
+  separately and is unaffected. Options: Requires or Recommends lsof in
+  oneup.spec, or a log line.
+  **Layman:** After an update, OneUp may fail to say which programs need restarting, and not tell you it couldn't check.
+  Kind: fix.
+  Source: ONEUP-0287-vm-2026-10-16.
+  Lanes: engine, packaging.
+
+- 📋 [ONEUP-0296] **The finished line says "already up to date" when the leftover step has just removed packages.**
+  Seen 2026-10-16 in the ONEUP-0287 VM run 2: Leftover packages "3
+  removed", finished line "All done — already up to date." ONEUP-0288's
+  sentences cover the system, Flatpak and firmware sources only. Whether
+  removals earn a sentence is the user's call.
+  **Layman:** OneUp can say nothing changed right after it removed some packages.
+  Kind: ux.
+  Source: ONEUP-0287-vm-2026-10-16.
+  Lanes: engine, gui.
+
+- 📋 [ONEUP-0297] **The package list's details mark draws as an empty box on a fresh Tumbleweed.**
+  Seen 2026-10-16 in the ONEUP-0287 VM: "libopenh264-8 □". The mark is
+  U+24D8 ⓘ (oneup/gui/package_views.py MARK, ONEUP-0260 §4.4); Noto
+  Sans has no glyph for it. Check the header's ⚙ the same way.
+  **Layman:** A small symbol beside some package names shows as an empty square.
+  Kind: fix.
+  Source: ONEUP-0287-vm-2026-10-16.
+  Lanes: gui.
+
+- 📋 [ONEUP-0298] **The sudo route's password box is titled "Enter SSH Credentials".**
+  Seen 2026-10-16 in the ONEUP-0287 VM run 2: ksshaskpass6 titles the
+  box "Enter SSH Credentials"; OneUp's prompt reads "System Updater:
+  authenticate to update the system". Find whether ksshaskpass takes a
+  title, or whether the prompt should name the password asked for
+  (root's, under targetpw).
+  **Layman:** The password window has a confusing title that mentions SSH.
+  Kind: ux.
+  Source: ONEUP-0287-vm-2026-10-16.
+  Lanes: engine.
+
+- 📋 [ONEUP-0299] **Show the technical log and open the log file as small buttons, not links.**
+  User, 2026-10-16: smaller than the other buttons, in line at their
+  present size; it will look better.
+  **Layman:** Turn the two text links at the bottom of the window into small buttons.
+  Kind: ux.
+  Source: user-request-2026-10-16.
+  Lanes: gui.
+
+- 📋 [ONEUP-0300] **Show the download size only where it is needed.**
+  User, 2026-10-16: on the service route, is the link still needed?
+  Could it show only when there is no service? Facts: the link runs
+  --size=system --hold, a root `zypper dup --dry-run`, opt-in because it
+  authenticates and can take up to a minute (oneup/gui/run.py
+  request_size). On the service route it needs no password, so it could
+  run after Check for updates. The check's own --sizes already gives
+  per-package sizes without root. Design is the user's.
+  **Layman:** Hide the 'Show download size' link when OneUp can work the size out without asking for a password.
+  Kind: ux.
+  Source: user-request-2026-10-16.
+  Lanes: gui, engine.
 
 ## 2.1.0 — after 2.0
 
