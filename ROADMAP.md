@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=288 -->
+<!-- ants-roadmap-id-high-water: ONEUP=290 -->
 
 # OneUp Roadmap
 
@@ -4341,6 +4341,17 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: doc-fix.
   Source: review-contract-2026-10-11 documentation.md (main) loop 13, outside ONEUP-0257's radius.
   Lanes: docs.
+
+- 📋 [ONEUP-0290] **One command that builds the RPM from a commit in scratch space and lists or prints a file inside it.**
+  User's decision, 2026-10-16. The recipe today: git archive
+  --prefix=oneup-<version>/ into /mnt/Games/.oneup-rpm-scratch/SOURCES/,
+  rpmbuild -bb --define "_topdir <scratch>" packaging/rpm/oneup.spec,
+  then rpm -qlp / rpm2cpio to inspect, then delete the scratch (/tmp
+  is RAM here). The script should do all of it and clean up after.
+  **Layman:** A shortcut for developers to build the installable package and look inside it, instead of a five-step recipe.
+  Kind: chore.
+  Source: user-decision-2026-10-16.
+  Lanes: packaging.
 
 ## 1.4.6 — fixes to the released app
 
@@ -9031,3 +9042,15 @@ when complete (that document's §7).
   Kind: feature.
   Source: user-decision-2026-10-14.
   Lanes: engine, packaging, security.
+
+- 📋 [ONEUP-0289] **Add a Snap step that refreshes snaps, skipped cleanly when snap is not installed.**
+  User's decision, 2026-10-16: not for 2.0, filed for 2.1. Snap is
+  not in openSUSE's default repositories (unverified, from general
+  knowledge) and snaps refresh themselves, so the step mainly saves a
+  wait. A step whose tool is absent is skipped, never errored
+  (CLAUDE.md §4). A new step key changes the marker contract
+  (docs/reference/marker-protocol.md).
+  **Layman:** If you use Snap apps, OneUp could update them too; people without Snap would never see the step.
+  Kind: feature.
+  Source: user-decision-2026-10-16.
+  Lanes: engine, gui.
