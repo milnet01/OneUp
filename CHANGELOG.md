@@ -6,6 +6,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The progress line stops naming a repository once packages download** (ONEUP-0284)
+  Through the whole download and install, the line under the status
+  kept saying "Fetching" the last repository OneUp had checked, with
+  a clock still counting from it. That check had long finished. The
+  line now shows only the download's own progress.
+
 ## [1.4.10] - 2026-10-14
 
 ### Changed

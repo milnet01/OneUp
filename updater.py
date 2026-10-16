@@ -3786,6 +3786,11 @@ for (var i = 0; i < wins.length; i++) {{
             # longest stretch is exactly what made it look hung.
             announce = phase != self._progress_phase
             self._progress_phase = phase
+            # Packages moving means the refresh is over: keeping its source and clock drew
+            # "Fetching <alias> — 2m 15s" over a whole real download (ONEUP-0284).
+            refreshed = bool(self._activity_what)
+            self._activity_what = ""
+            self._activity_since = 0.0
             self._sync_stop()
             # Optional trailing byte fields: how much zypper says has come down, and its
             # total for the transaction. Either may be 0 for "not known" — during the
@@ -3797,6 +3802,8 @@ for (var i = 0; i < wins.length; i++) {{
                 if len(parts) > 5 and parts[5].isdecimal() and int(parts[5]):
                     self._dl_total = int(parts[5])
                 self._tick_activity(reweigh=False)
+            elif refreshed:
+                self._tick_activity(reweigh=False)   # redraw now, not on the next 5s tick
             if announce:
                 self._announce(f"{verb} packages.")
         elif tag == "REFRESH":
