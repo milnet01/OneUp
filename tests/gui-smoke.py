@@ -2667,9 +2667,16 @@ def main() -> int:
                     "    (ALL) ALL\n    (ALL) NOPASSWD: ALL\n")
         _oneup = (f"    (root) NOPASSWD: {_zypper}, /usr/bin/snapper, /usr/bin/env "
                   "LC_ALL\\=C zypper *, /usr/libexec/oneup-download-guard\n")
+        # In the VM, `which` found /bin/zypper while sudo listed /usr/bin/zypper, one
+        # file through Tumbleweed's /bin -> /usr/bin link.
+        _linked = os.path.join(_SANDBOX, "linked-bin")
+        with contextlib.suppress(FileExistsError):
+            os.symlink(os.path.dirname(_zypper), _linked)
         for _listing, _want, _name in (
                 (_general, 0, "a general NOPASSWD: ALL rule brings no offer"),
                 (_general + _oneup, 1, "OneUp's own rule beside it brings the offer"),
+                (f"    (ALL) ALL\n    (root) NOPASSWD: {_linked}/zypper\n", 1,
+                 "OneUp's rule naming zypper through a linked directory brings the offer"),
                 (f"User linux may run:\n    (ALL) ALL\n    (root) {_zypper}\n", 0,
                  "a zypper rule that asks for a password brings no offer")):
             Path(_SUDO_LIST).write_text(_listing)

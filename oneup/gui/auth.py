@@ -252,7 +252,10 @@ def _lists_zypper_rule(listing: str, zypper: str) -> bool:
     A rule for `ALL` lets zypper run too, but it is not OneUp's: the Live CD's
     `NOPASSWD: ALL` brought the offer on a first install (ONEUP-0293). An entry is
     `(run-as) TAG: command, command`, with the aliases expanded; a tag holds until
-    another replaces it, and a long entry may wrap onto indented lines."""
+    another replaces it, and a long entry may wrap onto indented lines. Paths are
+    compared resolved: `which` can find /bin/zypper where sudo lists /usr/bin/zypper,
+    one file through Tumbleweed's /bin link (measured in the ONEUP-0287 VM)."""
+    zypper = os.path.realpath(zypper)
     entries: list[list[str]] = []
     current = None
     for line in listing.splitlines():
@@ -273,7 +276,7 @@ def _lists_zypper_rule(listing: str, zypper: str) -> bool:
                 tag = words.pop(0)[:-1]
                 if tag in ("NOPASSWD", "PASSWD"):
                     nopasswd = tag == "NOPASSWD"
-            if nopasswd and words and words[0] == zypper:
+            if nopasswd and words and os.path.realpath(words[0]) == zypper:
                 return True
     return False
 
