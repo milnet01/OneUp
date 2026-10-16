@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=301 -->
+<!-- ants-roadmap-id-high-water: ONEUP=302 -->
 
 # OneUp Roadmap
 
@@ -9075,15 +9075,40 @@ when complete (that document's §7).
   Source: user-request-2026-10-16.
   Lanes: gui, engine.
 
-- 📋 [ONEUP-0301] **The old-password-setting question box draws its message in dark grey on a dark background.**
+- ✅ [ONEUP-0301] **The old-password-setting question box draws its message in dark grey on a dark background.**
   Seen 2026-10-16 in the ONEUP-0287 VM (Breeze, Noto Sans), while
   re-checking ONEUP-0293: auth.offer_old_dropin_removal's QMessageBox
   shows its text and informative text in dark grey on the app's dark
   dialog background. The title, icon and buttons read fine. Not yet
   known whether other QMessageBoxes the window opens share it; check
   them before fixing, against ui-and-accessibility.md's contrast rule.
+  2026-10-16: theme-wide, not one box. Any label with no object name
+  took the desktop's text colour onto the theme's dialog ground; every
+  QMessageBox and the Settings, Repositories and Rollback intros
+  measured 1.12:1 with a dark theme on a light desktop (and the
+  reverse). Fixed in 60d09ae: `QLabel { color: $tname; }` in the base
+  sheet, and `tname` on `win` in the contrast table. Test red 873/1 (24
+  short), green 874/0. VM with the 60d09ae RPM: the old-password
+  question and Settings read light on dark (crops
+  /mnt/Games/oneup-vmtest/crop-0301-question.png,
+  crop-0301-settings.png). v2 only: main's base sheet leaves dialogs to
+  the desktop.
   **Layman:** The box asking whether to remove OneUp's old password setting is almost impossible to read.
   Kind: accessibility.
+  Source: ONEUP-0287-vm-2026-10-16.
+  Lanes: gui.
+
+- 📋 [ONEUP-0302] **Settings row descriptions that wrap to a third line show only two, cutting the sentence off.**
+  Seen 2026-10-16 in the ONEUP-0287 VM (Breeze, Noto Sans, 1280x960),
+  v2 at 60d09ae, while checking ONEUP-0301. Clipped: "Install all
+  updates automatically ... Needs this computer to allow updates",
+  "Colour scheme ... Follow system uses your desktop's light or dark
+  setting; the rest", "Ask GitHub ... Check for updates in About
+  works", "Copy a bug report ... so filing an issue doesn't mean".
+  Crop: /mnt/Games/oneup-vmtest/crop-settings-clipped.png. Not yet
+  known whether the row's height or the label's is what is short.
+  **Layman:** Some explanations in Settings stop mid-sentence, so you can't read the whole thing.
+  Kind: fix.
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: gui.
 
