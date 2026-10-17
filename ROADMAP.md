@@ -9149,7 +9149,7 @@ when complete (that document's §7).
   Source: ONEUP-0303-build-2026-10-16.
   Lanes: gui.
 
-- 📋 [ONEUP-0305] **With high contrast on, a switched-on ghost toggle's focus fill measures 1.43:1 (dark) and 1.87:1 (light) against its own rest fill.**
+- ✅ [ONEUP-0305] **With high contrast on, a switched-on ghost toggle's focus fill measures 1.43:1 (dark) and 1.87:1 (light) against its own rest fill.**
   Found 2026-10-16 building ONEUP-0303. The overlay's :checked ghost
   button rests on $btn, and its :focus rule paints $btnhov, measured
   against $card only by focus_report's ghost family (HC). btnhov vs btn:
@@ -9157,6 +9157,11 @@ when complete (that document's §7).
   every checkable Settings toggle that is on (e.g. New-version check).
   ONEUP-0303 solved the same case for the current tab with the primary
   family's pair, derived against $btn.
+  Shipped 2026-10-17 in 6f798fa. A switched-on ghost button, overlay on,
+  takes the primary family's pair derived against $btn: 3.03:1 dark,
+  3.14:1 light. tests/gui-smoke.py measures a focused Settings toggle in
+  every theme, on and off. VM (Breeze, RPM of the tree): focused fill
+  #949494 midnight, #5c5c5c daylight.
   **Layman:** In high-contrast mode, a setting that is switched on barely changes when you tab to it, so you can lose track of where you are.
   Kind: accessibility.
   Source: ONEUP-0303-build-2026-10-16.
