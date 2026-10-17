@@ -4416,9 +4416,47 @@ def main() -> int:
             if (_got_rest, _got_focus) != (_rest.lower(), _focus.lower()):
                 _bad.append(f"{_th.id} overlay {'on' if _on else 'off'}: rest "
                             f"{_got_rest} want {_rest}, focused {_got_focus} want {_focus}")
-    _tdlg.reject()
     check(f"ONEUP-0303 a focused Settings tab wears the derived fill, and only "
           f"the current tab is underlined ({len(_bad)} wrong)", not _bad)
+    for line in _bad[:6]:
+        print(f"       {line}")
+
+    # ONEUP-0305: with the overlay on, a switched-on ghost toggle rests on `btn`,
+    # as the current tab does, so focused it takes the pair derived against
+    # `btn`; the ghost pair's `btnhov` measured 1.43:1 dark and 1.87:1 light
+    # there. Switched off it rests on `card` and keeps the ghost pair. Signals
+    # are blocked so the probe writes no autostart file.
+    _tog = wA.auto_btn
+    _was = _tog.isChecked()
+
+    def _tog_pixel():
+        QApplication.processEvents()
+        p = _tog.mapTo(_tdlg, _tog.rect().topLeft())
+        return _tdlg.grab().toImage().pixelColor(p.x() + 6, p.y() + _tog.height() // 2).name()
+
+    _bad = []
+    for _th in theme.THEMES:
+        _hcp = theme._HC_DARK if _th.dark else theme._HC_LIGHT
+        _tdlg.setStyleSheet(theme.build_theme(_th, high_contrast=True))
+        for _on, _rest, _focus in ((True, _hcp["btn"],
+                                    theme.hc_focus_keys(_hcp)["hcfocusfill"]),
+                                   (False, _hcp["card"], _hcp["btnhov"])):
+            _tog.blockSignals(True)
+            _tog.setChecked(_on)
+            _tog.blockSignals(False)
+            _tdlg.close_btn.setFocus()
+            _got_rest = _tog_pixel()
+            _tog.setFocus()
+            _got_focus = _tog_pixel()
+            if (_got_rest, _got_focus) != (_rest.lower(), _focus.lower()):
+                _bad.append(f"{_th.id} toggle {'on' if _on else 'off'}: rest "
+                            f"{_got_rest} want {_rest}, focused {_got_focus} want {_focus}")
+    _tog.blockSignals(True)
+    _tog.setChecked(_was)
+    _tog.blockSignals(False)
+    _tdlg.reject()
+    check(f"ONEUP-0305 with high contrast on, a focused switched-on ghost toggle "
+          f"wears the fill derived against its own rest ({len(_bad)} wrong)", not _bad)
     for line in _bad[:6]:
         print(f"       {line}")
 

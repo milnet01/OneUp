@@ -646,9 +646,15 @@ QPushButton#LinkBtn:hover { color: $text; }
    base rule outranks a bare overlay one and would otherwise win. */
 /* The current Settings tab rests on $btn, as the primary family does, so it
    takes the pair derived against $btn: the ghost pair's $btnhov measures 1.43:1
-   dark and 1.87:1 light against it (ONEUP-0303). */
+   dark and 1.87:1 light against it (ONEUP-0303). A switched-on ghost button
+   rests on $btn too, for the same measured reason (ONEUP-0305); its two states
+   outrank the ghost :focus rule below, so it wins from here. */
 QPushButton#RunBtn:focus, QPushButton#RestartBtn:focus, QPushButton#BannerBtn:focus,
-QTabBar#SettingsTabs::tab:selected:focus {
+QTabBar#SettingsTabs::tab:selected:focus,
+QPushButton#GhostBtn:checked:focus,
+#RowCard QPushButton#GhostBtn:checked:focus,
+#DialogButtons QPushButton#GhostBtn:checked:focus,
+#WarnBanner QPushButton#GhostBtn:checked:focus {
     background: $hcfocusfill; color: $hcfocusink; border: 2px solid $hcfocusink;
 }
 QPushButton#GhostBtn:focus, QPushButton#StopBtn:focus,
@@ -1092,7 +1098,7 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
     if high_contrast:
         hc = dict(_HC_DARK if theme.dark else _HC_LIGHT)
         hc.update(hc_focus_keys(hc))
-        primary = "primary family, Settings tabs (HC)"
+        primary = "primary family, Settings tabs, switched-on ghost (HC)"
         add(primary, "fill", hc["hcfocusfill"], hc["btn"], FOCUS_MIN)
         add(primary, "ink", hc["hcfocusink"], hc["hcfocusfill"], INK_MIN)
         add(primary, "border", hc["hcfocusink"], hc["hcfocusfill"], FOCUS_MIN)
