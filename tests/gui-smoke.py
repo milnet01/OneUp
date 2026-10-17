@@ -5813,6 +5813,42 @@ def main() -> int:
                   f"({_lid}: maximum {bar.maximum()}, {view.model().rowCount()} rows)",
                   view.isVisible() and view.model().rowCount() > 0 and bar.maximum() == 0)
 
+    # ONEUP-0313, §4.3 Rows item 2: the tabs read All, System and Flatpak, each with
+    # its count, and follow the model; the total sits at the strip's trailing end.
+    wT3 = _at_minimum("rows")
+    run._reset_for_run(wT3, ["system", "flatpak"], check=True)
+    for line in ("@@CHECK_ITEM@@|system|a|1|2|1048576|repo",
+                 "@@CHECK_ITEM@@|system|b|1|2|1048576|repo",
+                 "@@CHECK_ITEM@@|flatpak|c|1|2|0|flathub"):
+        run.handle_line(wT3, line)
+    QApplication.processEvents()
+    _tabs = [b.text() for b in wT3.host.filter_buttons]
+    check(f"ONEUP-0313 the tabs read All, System and Flatpak with counts ({_tabs})",
+          _tabs == ["All · 3", "System · 2", "Flatpak · 1"])
+    _strip = wT3.host.filter_buttons[0].parentWidget()
+    check("ONEUP-0313 the total and the size link sit in the tab strip",
+          wT3.host.total.parentWidget() is _strip and wT3.size_link.parentWidget() is _strip
+          and "some sizes not known" in wT3.host.total.text())
+    wT3.host.filter_buttons[1].click()
+    QApplication.processEvents()
+    _sys_total = package_views.total_phrase(wT3.packages.packages("system"))
+    check(f"ONEUP-0313 the total follows the tab ({wT3.host.total.text()})",
+          wT3.host.total.text() == _sys_total and "not known" not in _sys_total)
+    run.handle_line(wT3, "@@CHECK_ITEM@@|flatpak|d|1|2|0|flathub")
+    QApplication.processEvents()
+    _tabs = [b.text() for b in wT3.host.filter_buttons]
+    check(f"ONEUP-0313 a new package updates the counts ({_tabs})",
+          _tabs == ["All · 4", "System · 2", "Flatpak · 2"])
+    # §4.2 item 3: a control whose label changes keeps one width, so a growing count
+    # moves no tab.
+    _before = [b.geometry().getRect() for b in wT3.host.filter_buttons]
+    for i in range(2000):
+        run.handle_line(wT3, f"@@CHECK_ITEM@@|system|p{i}|1|2|1|repo")
+    QApplication.processEvents()
+    _after = [b.geometry().getRect() for b in wT3.host.filter_buttons]
+    check(f"ONEUP-0313 a growing count moves no tab ({_before} -> {_after})",
+          _before == _after and wT3.host.filter_buttons[0].text() == "All · 2004")
+
     # INV-14: during a run Stop alone holds the action slot, and the slot neither moves
     # nor resizes between idle, the run and its end.
     def _slot(wL):
