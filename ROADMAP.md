@@ -9301,6 +9301,15 @@ when complete (that document's §7).
   the amendment before this is built. Cause of the one-row list: the
   package page's floor is six lines of the log's font
   (LayoutHost.apply_metrics), below the table's header.
+  2026-10-17: review-contract gate on the amended ONEUP-0239 spec ran two
+  loops to the spec cap (4ec6143 and the commit after it); Status
+  Reviewed, so this item may now be built from it. Two fixes in the
+  amended text: INV-17 now also holds Rows' table viewport under four
+  row heights at the minimum size (a six-row floor no longer passes),
+  and §3 item 15's 1080-pixel promise is scoped to the Normal text size,
+  with the measured minimum heights (995 Normal, 1037 Large, 1105
+  Larger, Noto Sans 10). Five verified findings outside the amendment
+  are filed on ONEUP-0322, not fixed.
   **Layman:** In the Rows layout the list of updates is only one line tall, even though there is room.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.
@@ -9457,6 +9466,30 @@ when complete (that document's §7).
   Also noticed, not this spec's: ONEUP-0064 INV-6 and ONEUP-0076 §4.2
   place recenter_btn in SettingsDialog, while window.py adds it to
   header_row.
+  Three more from the same gate, 2026-10-17, also verified and outside
+  ONEUP-0310's text. Fold them in directly.
+  (3) [Q2] §1 "Every package shows its name, versions, size, source and
+  state" against §4.3 Spotlight item 3 ("each line a state symbol, the
+  name and the size") and §4.3's common paragraph (Spotlight's tooltip
+  and accessible text are "the state word, the name and the size").
+  layout_spotlight.py still puts versions and source on each line. A
+  builder following §4.3 drops them, so Spotlight alone hides them.
+  Fix: limit §1's sentence to Rows and Rail, or add versions and source
+  to Spotlight's line and its tooltip text.
+  (4) [Q2] §4.1.3: during a check or a refresh `status` keeps today's
+  text and only `activity`'s stall sentence joins it; `activity` is
+  hidden in no host. .claude/rules/engine-traps.md requires "a liveness
+  line in the GUI" (ONEUP-0048). The stall sentence fires on silence
+  (quiet >= STALL_SECONDS in run._tick_activity), and a mirror trickling
+  dots is not silent, so the moving "{what} — {waited}" clock is the
+  only signal left and §4.1.3 removes it. Fix: during a check or a
+  refresh the status line also carries activity's "{what} — {waited}".
+  (5) [Q2] §4.3.1 (*Packages* reads `done` of `total`; "A box whose
+  figure is not known reads not known") and §4.1.3 ("each part shown
+  only when known") against docs/reference/marker-protocol.md §4.3:
+  "total of 0 means unknown, and must be rendered as a running tally" —
+  "37 so far". The prefetch sends a known `done` with total 0. Fix: with
+  total 0, *Packages* and the status count show the running tally.
   **Layman:** Two small unclear spots in the layouts plan, found while checking the Rows list change, need a decision.
   Kind: doc-fix.
   Source: review-contract-ONEUP-0310-2026-10-17.
