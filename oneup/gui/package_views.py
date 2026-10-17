@@ -48,8 +48,9 @@ GROUP = {"queued": "togo", "downloading": "now", "downloaded": "now",
 # Layout between data; no language words it differently.
 _PARTS = "  ·  "
 # After the name of a package that has details: a shape, never only a colour
-# (ONEUP-0260 §4.4). The words a screen reader hears replace it.
-MARK = "ⓘ"
+# (ONEUP-0260 §4.4). The words a screen reader hears replace it. U+2139, INFORMATION
+# SOURCE, because Noto Sans draws it and no stock font draws U+24D8 (ONEUP-0297).
+MARK = "\u2139"
 
 
 def state_word(model: PackageModel, package: Package) -> str:
@@ -73,7 +74,7 @@ def name_text(win, package: Package) -> str:
     if not win.details.has_details(package):
         return package.name
     return QCoreApplication.translate(
-        "package_views", "{name} ⓘ", "a package name, marked as having details"
+        "package_views", "{name} \u2139", "a package name, marked as having details"
     ).format(name=package.name)
 
 

@@ -198,7 +198,7 @@ A package **has details** when it is a system package and `DetailsStore` holds a
 for its name (§3 item 8). Its What changed may still be empty; the dialog says why (§4.3).
 
 **A package with details shows a mark; one without shows nothing** (§3 item 2). The mark is
-`ⓘ` (U+24D8) after the package's name, in every layout: in Rows it goes in the package
+`ℹ` (U+2139) after the package's name, in every layout: in Rows it goes in the package
 column, never the state column; in Rail and Spotlight, on the name line. The callable that
 builds the name text adds it, not `PackageItems.data`, which is generic over its columns. Its `AccessibleTextRole` text gains the words *"details available"*, so a screen
 reader hears what the glyph shows, and the mark is a shape, never only a colour
@@ -269,7 +269,7 @@ questions — which view, and which package in it.
 - **INV-4** A system package has a details mark exactly when it has details (§4.4), and a
   Flatpak never has one.
   *Test:* `tests/gui-smoke.py` — a check whose mock `zypper info` answers one of two system
-  packages; after the fetch, the answered package's item text carries `ⓘ` and its
+  packages; after the fetch, the answered package's item text carries `ℹ` and its
   accessible text *"details available"*, the other's carries neither, and a Flatpak
   `CHECK_ITEM`'s item carries neither. In Rows, the mark is in the package column.
   *Breaks when:* the mark is added unconditionally, or before the fetch completes.
@@ -314,7 +314,7 @@ questions — which view, and which package in it.
 | Every system package in the list is known to zypper | A package from a repository removed since the check | No About and no mark, even once installed with change notes (§3 item 8) |
 | The package carries a changelog | Packman and some third-party packages (§2) | *"This package has no change notes."* |
 | The baseline was taken before the install | A window that attached to a run already past its commit | The newest 20 entries, with the sentence saying OneUp could not tell which are new |
-| The font has `ⓘ` | A font with no U+24D8 | Qt's fallback font draws it; the accessible text says the same either way |
+| The font has `ℹ` | A font with no U+2139 | Qt draws a fallback font's glyph or an empty box; the accessible text says the same either way. Noto Sans, openSUSE's interface font, has it; U+24D8, the first choice, was in no font a stock KDE Live install carries (ONEUP-0297) |
 | zypper's text layout stays `Key : value` | A zypper release that changes `info`'s output | The parse finds no About: no marks until installed, never a wrong description |
 
 ## 7. Tests
@@ -385,3 +385,4 @@ No marker, engine, sudoers or download-guard change.
 | --- | --- | --- | --- |
 | 1 | 2026-10-12 | Q1 5 · Q2 3 · Q3 3 · Q4 1 — 12 verified, 1 dismissed | all 12 fixed. Two lanes, each holding every question. Two Q1s came from building the packet and were fixed before dispatch: a wrong changelog count (122, from a command that miscounted; 27 measured) and the claim that rpm reads a `\x1e` escape. Both lanes found the high-contrast rest pixel and the untestable `LC_ALL`/shell half of INV-1. One lane each found the missing redraw path, the baseline going stale across runs, the baseline taken after an install, multiversion `rpm -q`, the epoch in a file glob, the Qt import breaking `tests/parsers-test.py`'s stdlib rule, raw versus shown state, and hide-to-tray killing the fetch. Dismissed: which Rows column carries the mark, an implementer's detail. Four open questions resolved clean: the second `#Log` object name, the `system` step key, the 27 count, and the two separator quotes |
 | 2 | 2026-10-12 | Q2 5 · Q3 3 · Q4 2 — 10 verified, 1 dismissed | all 10 fixed; the cap for a spec, so these fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found the same-author same-day walk, §6's lock row against the 60 s deadline, and the GUI redirects filed under the engine's §2.1. One lane each found the state half of the mark against §3 item 2 (resolved by marking only on About, recorded as §3 item 8), `downloading` against §3 item 3, the Rows column, the baseline queued behind `zypper info`, the dialog Close button's focus rule, INV-5 sequenced after INV-4's install, and INV-1's parent-name check, measured unable to see `sh -c` (a one-command shell replaces itself). Dismissed: `parse_baseline`'s argument shape, an implementer's detail. Own-fix share 2 of 10 (the baseline order and INV-1's test, both loop 1 text): a calm cap. No second share: the gated change is the whole document |
+| impl-0297 | 2026-10-17 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0297 changed the mark from U+24D8 to U+2139 (the user's decision, 2026-10-17), and §6's font row now says what a missing glyph draws. Both record built, verified code: tests/gui-smoke.py checks Noto Sans has the mark. Under the global rule 14's code-already-exists exception the amendment does not re-arm the gate. |

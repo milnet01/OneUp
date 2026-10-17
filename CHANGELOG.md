@@ -20,7 +20,7 @@ All notable changes to OneUp are documented here. The format follows
   AppImage's way (ONEUP-0286).
 
 - **Clicking a system package shows what it is and, once its new version has downloaded or installed, what changed in it.** (ONEUP-0260)
-  A package OneUp can describe shows ⓘ after its name, in every
+  A package OneUp can describe shows ℹ after its name, in every
   layout; clicking it, or pressing Enter on it, opens the details. The
   package the keyboard is on is now highlighted while the list has focus.
 

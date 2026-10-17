@@ -5750,6 +5750,21 @@ def main() -> int:
             check("ONEUP-0260 INV-4 in Rows the mark is in the package column",
                   _marked and _marked[0][2] == 1)
 
+    # ONEUP-0297: the mark is a character Noto Sans, openSUSE's interface font,
+    # draws itself. U+24D8 is in no font a stock KDE Live install carries, so it
+    # drew as an empty box there; this host may carry a fallback that hides that,
+    # so the check asks Noto Sans alone. Skipped where Noto Sans is absent.
+    # QRawFont, not QFontMetrics.inFontUcs4: the latter answers for the whole
+    # fallback chain, and passed U+24D8 here.
+    from PySide6.QtGui import QFontDatabase, QRawFont
+    if "Noto Sans" in QFontDatabase.families():
+        _noto = QRawFont.fromFont(QFont("Noto Sans"))
+        check("ONEUP-0297 the details mark is a character Noto Sans draws",
+              _noto.familyName() == "Noto Sans"
+              and all(_noto.supportsCharacter(ord(ch)) for ch in package_views.MARK))
+    else:
+        print("  skip - ONEUP-0297: Noto Sans is not installed on this machine")
+
     # INV-5: activating a package with details opens one dialog for it; one without
     # opens none. Closed by the scheduled-dismiss idiom of ui-and-accessibility §6.4.
     _opened = []
