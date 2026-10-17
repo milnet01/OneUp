@@ -9490,6 +9490,9 @@ when complete (that document's §7).
   "total of 0 means unknown, and must be rendered as a running tally" —
   "37 so far". The prefetch sends a known `done` with total 0. Fix: with
   total 0, *Packages* and the status count show the running tally.
+  Decided (2026-10-17, user): to keep review cost down, make these spec
+  fixes together with the next change that amends ONEUP-0239, so one
+  review-contract run covers both. Not a separate review.
   **Layman:** Two small unclear spots in the layouts plan, found while checking the Rows list change, need a decision.
   Kind: doc-fix.
   Source: review-contract-ONEUP-0310-2026-10-17.
