@@ -5760,6 +5760,44 @@ def main() -> int:
     _qs.setValue("text_scale", _scale0)
     theme.apply_app_theme(QApplication.instance())
 
+    # INV-17, its viewport half (ONEUP-0310): at the minimum size, with 200 packages,
+    # each view's viewport holds its floor of its own rows — three table rows in Rows
+    # and fewer than four, three card rows in Rail, six lines in each Spotlight list.
+    def _floors(wL):
+        """(name, viewport height, row height, floor, ceiling or None) per view."""
+        h = wL.host
+        if hasattr(h, "table"):
+            row = h.table.verticalHeader().defaultSectionSize()
+            return [("table", h.table, row, 3, 4)]
+        if hasattr(h, "board"):
+            return [("board", h.board, h.board.gridSize().height(), 3, None)]
+        row = h.next_list.sizeHintForRow(0)
+        return [("next", h.next_list, row, 6, None), ("done", h.done_list, row, 6, None)]
+
+    _scale0 = _qs.value("text_scale", 1.0, type=float)
+    for _label, _mult in theme.TEXT_SCALES:
+        _qs.setValue("text_scale", _mult)
+        theme.apply_app_theme(QApplication.instance())
+        for _lid in _ids:
+            w17 = _at_minimum(_lid)
+            run._reset_for_run(w17, ["system"], check=True)
+            for i in range(200):
+                run.handle_line(w17, f"@@CHECK_ITEM@@|system|package-{i}|1|2|{i + 1}|repo")
+            QApplication.processEvents()
+            w17.resize(w17.minimumSize())
+            QApplication.processEvents()
+            for name, view, row, floor, ceiling in _floors(w17):
+                tall = view.viewport().height()
+                check(f"ONEUP-0239 INV-17 the {name} view holds {floor} of its rows "
+                      f"({_lid}, {_label}: viewport {tall}, row {row})",
+                      view.isVisible() and row > 0 and tall >= floor * row)
+                if ceiling:
+                    check(f"ONEUP-0239 INV-17 the {name} view holds under {ceiling} rows "
+                          f"({_lid}, {_label}: viewport {tall}, row {row})",
+                          tall < ceiling * row)
+    _qs.setValue("text_scale", _scale0)
+    theme.apply_app_theme(QApplication.instance())
+
     # INV-14: during a run Stop alone holds the action slot, and the slot neither moves
     # nor resizes between idle, the run and its end.
     def _slot(wL):
