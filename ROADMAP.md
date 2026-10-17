@@ -9177,7 +9177,7 @@ when complete (that document's §7).
   Source: ONEUP-0303-build-2026-10-16.
   Lanes: gui.
 
-- 📋 [ONEUP-0306] **Amend ONEUP-0239 so the approved sketches are the target, and gate it before the look work starts.**
+- ✅ [ONEUP-0306] **Amend ONEUP-0239 so the approved sketches are the target, and gate it before the look work starts.**
   User's decision, 2026-10-17: bring all three layouts up to the
   sketches (docs/design/sketches/) before 2.0.0. ONEUP-0239 §2 and §3
   item 8 say a package description, a per-package percentage and a
@@ -9217,6 +9217,13 @@ when complete (that document's §7).
   change to _format_size); Rows keeps its package total at the tab
   strip's end, which the sketch lacks. Open, not fixed: a hovered
   row's accent ring may look like the running row's highlight.
+  Confirmed by the user 2026-10-17, after the gate: both review calls
+  stand — sizes below a GiB show one decimal ("6.2 of 17.5 MiB"), and
+  Rows keeps its total and "some sizes not known" at the tab strip's
+  trailing end.
+  Shipped 2026-10-17: amendment 20aa600; review-contract loops 1-2
+  (9904640, bd61f3f) reached the spec cap, 24 verified and fixed;
+  Status Reviewed. ONEUP-0307 to 0318 and 0320 may now be built.
   **Layman:** Update the layouts plan so it aims at the sketches you approved, and have it checked before building.
   Kind: doc.
   Source: sketch-comparison-2026-10-17.
