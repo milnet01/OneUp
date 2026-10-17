@@ -1020,9 +1020,13 @@ class Updater(QMainWindow):
             self._fit_minimum()
 
     def _pin_header_widths(self):
-        """Hold each header button at its label's width (ONEUP-0294)."""
+        """Hold each header button at its label's width (ONEUP-0294), and all of
+        them at the tallest one's height (ONEUP-0324): Noto Sans has no gear, so
+        "⚙ Settings" borrows it from a font with a taller line."""
+        height = max(btn.sizeHint().height() for btn in self._header_btns)
         for btn in self._header_btns:
             btn.setMinimumWidth(btn.sizeHint().width())
+            btn.setMinimumHeight(height)
 
     def _refit_header(self):
         self._pin_header_widths()

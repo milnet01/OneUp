@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=323 -->
+<!-- ants-roadmap-id-high-water: ONEUP=324 -->
 
 # OneUp Roadmap
 
@@ -9587,6 +9587,19 @@ when complete (that document's §7).
   **Layman:** Making the text larger in OneUp makes every label bigger except the list of updates, which stays small.
   Kind: accessibility.
   Source: ONEUP-0310-build-2026-10-17.
+  Lanes: gui.
+
+- 🚧 [ONEUP-0324] **The header's three buttons are one height, whatever their labels hold.**
+  Seen by the user on the installed 2.0 preview: Settings is taller
+  than Recenter and About. Measured: Noto Sans has no gear (U+2699), so
+  Qt draws "⚙" from DejaVu Sans, whose taller line grows that button's
+  sizeHint (43 px against 42 offscreen at Normal; about 3 px in the
+  user's screenshot). Fix: _pin_header_widths also pins each header
+  button's minimum height to the tallest one's sizeHint, re-run on every
+  style or font change as the width pin is.
+  **Layman:** Settings stood taller than Recenter and About; now all three line up.
+  Kind: fix.
+  Source: user-report-2026-10-17.
   Lanes: gui.
 
 ## 2.1.0 — after 2.0

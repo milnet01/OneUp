@@ -156,6 +156,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Settings, Recenter and About are the same height** (ONEUP-0324)
+  Settings stood a little taller than the other two header buttons, because its gear symbol comes from a different font. All three now line up.
+
 - **Spotlight's package lists no longer scroll sideways** (ONEUP-0312)
   A long line in the Up next or Done list is now shortened to fit, instead of making the list scroll sideways.
 
