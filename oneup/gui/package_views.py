@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QListView,
     QSizePolicy,
     QStackedWidget,
@@ -360,13 +361,13 @@ def hold_rows(view: QAbstractItemView, rows: int, row: int) -> None:
         node = node.parentWidget()
 
 
-def _invalidate(layout) -> None:
-    """A layout's cached sizes, and those of every layout nested in it."""
+def _invalidate(layout: QLayout) -> None:
+    """A layout's cached sizes, and those of every layout nested in it. Found as
+    the layout's QObject children: `itemAt(i).layout()` once handed back a
+    QWidgetItem mid-suite, a wrapper PySide had cached at that address."""
     layout.invalidate()
-    for i in range(layout.count()):
-        child = layout.itemAt(i).layout()
-        if child is not None:
-            _invalidate(child)
+    for child in layout.findChildren(QLayout):
+        child.invalidate()
 
 
 class _Sentence(QLabel):

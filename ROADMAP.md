@@ -5295,6 +5295,8 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   upload` would do the same job without the action.
   Decided (2026-10-14, user): stays on hold. The release step can only be
   tested by a real release, and 1.4.9 proved the current one works.
+  2026-10-17, user: revisit at the first 2.0.x patch release. Still on
+  hold until then.
   **Layman:** The release step uses a third-party action for something the built-in tooling can already do.
   Kind: chore.
   Source: check-code --tree 2026-08-31 (zizmor superfluous-actions, Informational).
@@ -9322,6 +9324,14 @@ when complete (that document's §7).
   its step column already makes the board taller than three cards, so
   removing it fails nothing today. Stays in progress for ONEUP-0239 §7's
   check by eye in the VM.
+  2026-10-17 follow-up: the pre-push gate for ONEUP-0312 aborted
+  gui-smoke (and right-to-left exited 139) inside hold_rows' cache walk:
+  `layout.itemAt(i).layout()` returned a QWidgetItem, so `.count()`
+  raised AttributeError while a window was built. Not reproduced in six
+  full suite runs or 180 stress builds. The walk now finds nested
+  layouts as the layout's QObject children (findChildren(QLayout)), so
+  that call is gone; minimum sizes are unchanged (Rows 960, Rail 791,
+  Spotlight 676) and ./local-CI.sh is green. Never released.
   **Layman:** In the Rows layout the list of updates is only one line tall, even though there is room.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.
