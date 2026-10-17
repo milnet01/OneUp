@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=319 -->
+<!-- ants-roadmap-id-high-water: ONEUP=320 -->
 
 # OneUp Roadmap
 
@@ -9190,6 +9190,25 @@ when complete (that document's §7).
   colours) and the header's Recenter button, which the sketches lack.
   Confirm both with the user while amending. Side-by-side captures:
   /mnt/Games/oneup-vmtest/compare-{rows,rail,spotlight}.png (scratch).
+  Confirmed by the user 2026-10-17: keep OneUp's colour themes; the
+  layouts take the sketches' shape in whichever theme is chosen. Keep
+  Recenter, but as a symbol, so the button is smaller (filed as
+  ONEUP-0320).
+  User's decisions, 2026-10-17, for the amendment: (1) Progress is per
+  step, in two halves: download, then install. The running step is
+  highlighted with its own bar; the footer bar follows the running
+  step the same way; a mark at the halfway point; the words always
+  say which phase ("Downloading · 35%", "Installing · 60%"). This
+  replaces a per-package percentage (ONEUP-0319 dropped). Steps with
+  no download/install split show movement plus a word. (2) Rows' tabs:
+  All, System, Flatpak, with counts; no Firmware tab (it would always
+  say 0). (3) Step descriptions: "Packages from your repositories",
+  "Flatpak apps and runtimes", "Device firmware (fwupd)",
+  "Dependencies nothing needs", "Free up disk space". (4) A step not
+  yet started says "Waiting" in every layout; Spotlight's list
+  heading stays "Up next". (5) Rows and Spotlight show a package's
+  state as a symbol only (tick, arrow, clock; distinct shapes), the
+  word in its tooltip and accessible text; Rail's cards keep words.
   **Layman:** Update the layouts plan so it aims at the sketches you approved, and have it checked before building.
   Kind: doc.
   Source: sketch-comparison-2026-10-17.
@@ -9217,6 +9236,11 @@ when complete (that document's §7).
   Seen 2026-10-17 in the VM, Rows: "Downloading 2 of 2 packages",
   "504 KiB of 504 KiB", and the bar under it empty. Find whether
   the download phase sets the bar at all.
+  Cause found 2026-10-17: win.bar counts finished steps (oneup/gui/run.py
+  sets its range to the step total and moves it at STEP_BEGIN and
+  STEP_END), so it sits at 0 through the first step. Direction per
+  ONEUP-0306's decisions: the bar follows the running step, half
+  download, half install.
   **Layman:** The progress bar at the bottom shows nothing while updates download.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.
@@ -9255,6 +9279,7 @@ when complete (that document's §7).
   label for the repository; old -> new versions in full; tabs "All ·
   24 / System · 24 / Flatpak · 0 / Firmware · 0" in place of the
   three filter buttons. A thin bar under the package downloading.
+  2026-10-17, user: tabs All, System, Flatpak only; no Firmware tab.
   **Layman:** The Rows update list gets the sketch's icons, source labels and counted tabs.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
@@ -9265,6 +9290,7 @@ when complete (that document's §7).
   update"; descriptions such as "openSUSE and Packman packages" and
   "Free up disk space". Today only the running step shows a pill
   ("2/2") and the descriptions are long and technical.
+  2026-10-17, user: wording and "Waiting" settled on ONEUP-0306.
   **Layman:** Each step says Waiting, Downloading or Up next, with a short description under its name.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
@@ -9310,13 +9336,41 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0319] **Find whether zypper reports per-package download progress, for the sketches' percentage.**
+- 🚫 [ONEUP-0319] **Find whether zypper reports per-package download progress, for the sketches' percentage.**
   The sketches show "Downloading · 62%" for one package. ONEUP-0239
   said zypper prints none. Check zypper's machine-readable output
   (--xmlout) for per-file download progress before promising it.
+  Investigated 2026-10-17: yes. zypper's XML schema
+  (/usr/share/zypper/xml/xmlout.rnc, download-progress-element) gives
+  each download's url, percent and rate in bytes per second. The
+  engine runs dup without --xmlout today (oneup/engine/steps.py), so
+  this needs an engine change and a new marker. User's decision,
+  2026-10-17: build it in 2.0.0 ("v2.0.0 is supposed to be the full
+  redesign"). That approves a third exception to the marker freeze
+  (docs/reference/marker-protocol.md §5.1). It touches the engine, the
+  marker contract and the privileged dup call, so it gets its own spec
+  at this id, gated by review-contract; ONEUP-0239's amendment
+  (ONEUP-0306) cites it.
+  Dropped 2026-10-17 by the user: per-step progress in two halves
+  (download, then install) replaces a per-package percentage. It
+  needs no engine change; reading zypper's XML would have meant
+  rebuilding every parser that reads dup's text output (progress,
+  PKG states, failures, reboot advice, "Nothing to do."). See
+  ONEUP-0306.
   **Layman:** Check whether OneUp can show how far along each package's download is.
-  Kind: investigate.
+  Kind: feature.
   Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0320] **The header's Recenter button shows a symbol instead of a word, so it is smaller.**
+  User's decision, 2026-10-17, while confirming ONEUP-0306's
+  defaults. The sketches have no Recenter; the user keeps it, smaller.
+  The button keeps "Recenter" as its accessible name and tooltip. The
+  symbol must be one the app's font draws (ONEUP-0297: test with
+  QRawFont, not inFontUcs4, which counts fallback fonts).
+  **Layman:** Recenter stays, but as a small symbol button beside Settings and About.
+  Kind: ux.
+  Source: user-request-2026-10-17.
   Lanes: gui.
 
 ## 2.1.0 — after 2.0
