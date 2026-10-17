@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=321 -->
+<!-- ants-roadmap-id-high-water: ONEUP=322 -->
 
 # OneUp Roadmap
 
@@ -9428,6 +9428,38 @@ when complete (that document's §7).
   **Layman:** Recenter stays, but as a small symbol button beside Settings and About.
   Kind: ux.
   Source: user-request-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0322] **ONEUP-0239 spec: settle the badge word past halfway, and Rail's summary wording.**
+  Found by the review-contract gate on ONEUP-0310's amendment,
+  2026-10-17. Both are verified and outside that amendment's text, so
+  they are filed here, not fixed. Fold them in directly; do not
+  re-review to rediscover them.
+  (1) [Q3] docs/specs/ONEUP-0239-fixed-layouts.md §4.1.1 item 3 and
+  §4.1.2 against §3 item 9 ("the words always say which half it is
+  in"): the spec does not say which phase word the badge shows once
+  the step's value has passed 500 and a later PROGRESS line still says
+  download. INV-12 feeds that case (PROGRESS|system|3|4|download|700|1000
+  leaves both bars at 750) but checks only the bars. Built code:
+  step_progress.download() passes "download" to _set, so the badge reads
+  "Downloading · 75%" on a bar in its install half. §4.1.2's "download
+  half" has the same two readings, so the time left may return. Proposed
+  fix: say the phase word and §4.1.2's download half follow the half the
+  value is in, and add a badge check to INV-12 after the 700|1000 line;
+  the code in step_progress follows.
+  (2) [Q2] §4.3 Rail item 1 has the step's title in large type, then
+  "24 updates · 17.5 MiB to download" with the size link, the counts
+  sentence at the trailing end; §4.3.1's Rail bullet still says the
+  summary reads the title, the package count and total size, then the
+  counts. A builder of Rail's look following §4.3.1 keeps one
+  summary_sentence. Proposed fix: point §4.3.1's Rail bullet at §4.3,
+  or strike it as the other ONEUP-0306 edits do.
+  Also noticed, not this spec's: ONEUP-0064 INV-6 and ONEUP-0076 §4.2
+  place recenter_btn in SettingsDialog, while window.py adds it to
+  header_row.
+  **Layman:** Two small unclear spots in the layouts plan, found while checking the Rows list change, need a decision.
+  Kind: doc-fix.
+  Source: review-contract-ONEUP-0310-2026-10-17.
   Lanes: gui.
 
 ## 2.1.0 — after 2.0

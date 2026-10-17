@@ -126,10 +126,11 @@ the test VM on 2026-10-17:
     (user, 2026-10-17) — a different shape per state, with the word in the tooltip and the
     accessible text. Rail's cards keep the word on the card.
 15. *(ONEUP-0310)* **Rows' package list holds at least three rows, not six** (user,
-    2026-10-17), so the smallest Rows window fits a screen 1080 pixels tall. Measured
-    2026-10-17, offscreen at Noto Sans 10: Rows' minimum height was already 912 pixels,
-    and six two-line table rows would add about 200. A taller window still gives the
-    list all its spare height (§4.2 item 2).
+    2026-10-17), so that at the *Normal* text size the smallest Rows window fits a screen
+    1080 pixels tall. Measured 2026-10-17, offscreen at Noto Sans 10: Rows' minimum height
+    was 912 pixels; three two-line table rows make it 995, where six would make it about
+    1127. At *Large* three rows make it 1037, and at *Larger* 1105. A taller window still
+    gives the list all its spare height (§4.2 item 2).
 
 The calls this spec makes by deduction, stated so they are not mistaken for preference:
 
@@ -697,11 +698,12 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
   *Test:* `tests/gui-smoke.py` — for each layout and each `TEXT_SCALES` entry, at the
   minimum size, with 200 packages: the view's viewport is at least its floor of its own
   row heights tall — *(ONEUP-0310)* three table rows in Rows, three card rows in Rail,
-  six list lines in each of Spotlight's lists — below its header; and every row's title label
+  six list lines in each of Spotlight's lists — below its header; in Rows it is also less
+  than four row heights tall; and every row's title label
   shows its whole text — its width is at least its text's advance, or it wraps within its
   height.
-  *Breaks when:* the floor is measured in the log's lines, or the rail's width ignores the
-  switch (ONEUP-0310, ONEUP-0311).
+  *Breaks when:* the floor is measured in the log's lines, Rows' floor holds more than
+  three rows, or the rail's width ignores the switch (ONEUP-0310, ONEUP-0311).
 
 - **INV-18** *(ONEUP-0306)* No package list scrolls sideways.
   *Test:* `tests/gui-smoke.py` — each view holding a package with a name of 200
@@ -849,3 +851,4 @@ No marker changes: the marker contract stays frozen (`docs/reference/marker-prot
 | 3 | 2026-10-17 | Q1 2 · Q2 2 · Q3 7 · Q4 2 — 13 verified, 0 dismissed | all 13 fixed; loop 1 of the gate on ONEUP-0306's amendment. Two lanes, each holding every question. Both found that the prefetch sends `bytes` of 0, so the bar, the *Downloaded* box and the time left now read `_tick_activity`'s byte figure; both found `bar_caption` and `activity` with no home, and Rail's footer line disagreeing with §4.1.3. One Q3 (install-phase `PROGRESS` with a total of 0 or byte fields) came from settling an open question both lanes raised; the Q1 on the `Status` line came from `tests/docs-check.py` before dispatch. Also fixed: the status line during a check, the badge word for a step with no phase, which package is highlighted, `_format_size` gaining a decimal as the sketches print, Spotlight's accessible text, the high-contrast Stop, the symbol table and its glyph test, and INV-12/INV-15 stubbing `cache_bytes`. Three open questions resolved clean (`About.summary`, the `btn_danger` key, no other step streams a transaction). One collateral line fixed in this loop: §6's preload row |
 | 4 | 2026-10-17 | Q1 1 · Q2 7 · Q3 1 · Q4 2 — 11 verified, 0 dismissed | all 11 fixed; the cap for a spec, so these fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found the stall sentence hidden during a check, INV-12's backwards step that could not fail, and no test for the Recenter glyph. Also fixed: INV-12's byte fixture (250 of 1000 equals 1 of 4), its *both busy*, *Waiting*'s scope, Rows' lost total, the checked tab's fill and focus pair, Noto Sans named for the glyph checks, the tick recomputing the download half, and Spotlight's first line as whole sentences. Own-fix share 5 of 11 (the stall clause, the glyph test, the font, the tick, Spotlight's line), read as a calm cap: the other six were in the amendment's own text. Second share: every verified finding of the run, 24 of 24, lies in the ONEUP-0306 text or this run's repairs of it. One open question filed, not fixed: a hovered row's accent ring may look like the running row's highlight |
 | amend | 2026-10-17 | no reviewer dispatched | ONEUP-0310's amendment, not a review loop: the user's decision that Rows' package list holds at least three rows at the minimum size (§3 item 15), written into §4.2 item 2 and INV-17. The gate on it is the loops that follow |
+| 5 | 2026-10-17 | Q1 1 · Q2 1 · Q3 1 · Q4 1 — 4 verified, 1 dismissed | 2 fixed, 2 filed on ONEUP-0322; loop 1 of the gate on ONEUP-0310's amendment. Two lanes, each holding every question; both found that INV-17 bounded Rows' floor from below only, so a six-row floor passed (Q4): INV-17 now also holds Rows' viewport under four row heights. The Q1 came from measuring what a lane asked: three rows make Rows' minimum 995 at *Normal*, 1037 at *Large* and 1105 at *Larger*, so §3 item 15's 1080 promise now names *Normal* and carries the figures. Outside the amended text, filed rather than fixed: the badge's phase word once the value has passed 500 and a later `PROGRESS` says `download` (Q3), and Rail's summary described differently in §4.3 and §4.3.1 (Q2). Dismissed: §2's dated sentence on `run._launch`, background nothing is built from. Five open questions resolved clean (`#RestartBtn`'s overlay fill, a check sends no `STEP_BEGIN`, a test's run set-up, `openlog_btn`'s slot, the high-contrast tab) |
