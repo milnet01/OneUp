@@ -1,6 +1,6 @@
 # ONEUP-0239 — three fixed layouts, and the Settings choice between them
 
-**Status:** Draft
+**Status:** Reviewed
 **Kind:** feature
 **Roadmap:** ONEUP-0239; amended by ONEUP-0306, which is built through ONEUP-0307 to
 ONEUP-0318 and ONEUP-0320.
@@ -161,7 +161,8 @@ Three pieces of run state are new, all on the window and all cleared by `_reset_
 **The header is not a layout's.** `header_row` stays in `#Card`, above the host, unchanged
 in all three. *(ONEUP-0306)* One change in it: `recenter_btn` shows a symbol instead of
 its word (§3 item 11). Its accessible name is *"Recenter"*, its tooltip stays, and the
-symbol is one the app's own font draws — tested on that font with `QRawFont`, because
+symbol is one Noto Sans, openSUSE's interface font, draws — tested on it with `QRawFont`
+(§7), because
 `QFontMetrics.inFontUcs4` also counts fallback fonts (ONEUP-0297).
 The shared controls a host lays out, all built in `Updater.__init__`:
 
@@ -228,8 +229,9 @@ accessible description.
 #### 4.1.1 Step progress, in two halves *(ONEUP-0306)*
 
 **A step's progress runs from 0 to 1000: the first half for downloading, the second for
-installing** (§3 item 9). `handle_marker` keeps it per step, on the window, beside
-`current_step`, and `_reset_for_run` clears it.
+installing** (§3 item 9). It is kept per step, on the window, beside `current_step`:
+`handle_marker` sets it, `_tick_activity` recomputes the download half whenever it
+reweighs the byte figure, and `_reset_for_run` clears it.
 
 - **Download half, 0 to 500.** While the phase is `download`, it is set from the byte
   figure over `bytes_total` when `bytes_total` is non-zero, otherwise from `done / total`
@@ -255,8 +257,9 @@ Three places show it, all from that one value:
 3. **The badge**: a phase word and the step's whole percentage — *"Downloading · 35%"*,
    *"Installing · 60%"* — or the phase word alone while the step is busy. A running step
    with no phase yet, or none at all, shows its `IN_PROGRESS` phrase from
-   `oneup/gui/steps.py` as its phase word. Before a selected
-   step starts it says *Waiting*; after `STEP_END` it says what `markers._step_badge` says,
+   `oneup/gui/steps.py` as its phase word. During a run, a selected
+   step not yet started says *Waiting*; at idle and during a check the badge says what it
+   says today; after `STEP_END` it says what `markers._step_badge` says,
    as today. One text in every form; a narrow form elides it.
 
 **The running step is highlighted.** The row whose key is `win.current_step` draws its
@@ -296,7 +299,8 @@ Installing 7 of 24"*. During a check, and while sources refresh before a step's 
 included. `status` carries the line, so `_announce` still reads it. `bar_caption` and
 `activity` stay on the window, hidden, in no host: `_shared_widgets` drops them, and
 `_set_activity` no longer shows `activity`. **A stall is never hidden by this**: while
-`activity` reports a stall, its sentence takes the time left's place in the line
+`activity` reports a stall, its sentence ends the line, in place of the time left when
+there is one, during a check and a refresh as during a run
 (`.claude/rules/engine-traps.md`, *a slow server must never be indistinguishable from a
 hang*).
 
@@ -360,7 +364,8 @@ its whole line — the state word, the name and the size.
    in an exclusive group, styled as tabs, labelled with a count: *All · 24*, *System · 24*,
    *Flatpak · 0*. *All* is the default. The checked tab is filled and the others are not,
    so the choice is shown by shape as well as colour; a screen reader hears *checked*.
-   The download-size link sits at the strip's trailing end. Then a table: state symbol,
+   At the strip's trailing end sit the package total, with *some sizes not known*
+   where §4.3.1 says, and the download-size link. Then a table: state symbol,
    package (name, then its source label on the same line), versions, size. The row of
    `win.latest_package`, while its state is `downloading`, is drawn highlighted. No
    package shows a bar of its own: there is no per-package figure (§2).
@@ -390,8 +395,8 @@ its whole line — the state word, the name and the size.
 1. The five rows in `tile` form, side by side: a short title and switch, then the badge.
    The short titles are *System*, *Flatpak*, *Firmware*, *Leftovers* and *Cache*; the
    full title is the switch's accessible name, as today.
-2. The spotlight panel: a small heading *"Now · {step title}"*; the phase word and the
-   latest package's name in large type (§4.3.3); under it the package's description,
+2. The spotlight panel: a small heading *"Now · {step title}"*; the latest
+   package's line in large type (§4.3.3); under it the package's description,
    source and versions; the step's whole percentage, large, at the trailing end; `win.bar`;
    `status`'s line (§4.1.3), which the sketch lacks but which must stay in view so a stall
    is never hidden; and three figure boxes — *Packages*, *Downloaded* and *Time left*
@@ -454,8 +459,10 @@ Beside the legend, one line: *"Each block is one package, sized by its download"
 #### 4.3.3 Spotlight's latest package
 
 ~~One line naming `win.latest_package` (§4.1), with its state word, versions and source.~~
-*(ONEUP-0306)* Two lines naming `win.latest_package` (§4.1). The first, in large type, is
-the phase word from the badge and the package's name: *"Downloading libavcodec62"*. The
+*(ONEUP-0306)* Two lines naming `win.latest_package` (§4.1). The first, in large type, is one
+whole sentence per phase — *"Downloading {name}"*, *"Installing {name}"* — and the name
+alone for a step with no phase (`docs/standards/wording-and-translation.md` §6.2):
+*"Downloading libavcodec62"*. The
 second joins, with *" · "*, the package's description — `DetailsStore.about(name).summary`,
 system packages only — then its source and its versions: *"Video codec library · Packman
 · 8.1.3-pm.2 → 8.1.3-pm.3"*. A part not known is left out. While `latest_package` is
@@ -515,7 +522,9 @@ New object names: `#MessageStrip`, the three package views (`#PackageTable`,
 name gets a rule in both `_QSS` and `_HC_QSS` (ONEUP-0064 INV-7). **The containers
 `#PackageFilter`, `#PackageSummary` and ~~`#SpotlightPanel`~~ paint no background** (see
 *(ONEUP-0306)* below for the panel), so every
-button on them rests on `card` — the surface the `#GhostBtn` and `#LinkBtn` rows of
+button on them rests on `card` — *(ONEUP-0306)* except the checked tab, whose fill is a
+new rule in both sheets and whose focus pair is derived from that fill, as `#RunBtn`'s
+is — the surface the `#GhostBtn` and `#LinkBtn` rows of
 ONEUP-0076 §4.2 already name, with their derived focus colours. The focusable package
 views are scrolling content, so they take focus mechanism B: a 2 px rest border in
 `$logbd`, `$border` under the overlay (ONEUP-0076 §4.2). Large type is a new `_FONT_SCALE`
@@ -564,8 +573,9 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
   *(ONEUP-0306 amends this invariant)*: in Rows and Spotlight the test reads
   `Qt.ToolTipRole` and `Qt.AccessibleTextRole` — of the symbol's cell in Rows, of the
   package's item in Spotlight (§4.3). It also checks that the symbol table holds six
-  different characters for the six states, and that `QRawFont` for the app's font
-  supports each, as ONEUP-0297's check does for `MARK`. *Breaks when* a state has no word
+  different characters for the six states, and that `QRawFont` for Noto Sans
+  supports each, skipped where Noto Sans is absent, as ONEUP-0297's check does for
+  `MARK`. *Breaks when* a state has no word
   in those roles, two states share a symbol, or the font lacks one.
 
 - **INV-4** No layout writes to the package model.
@@ -631,13 +641,13 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
 - **INV-12** *(ONEUP-0306)* A step's progress fills in two halves, never moves backwards,
   and `win.bar` shows the running step's value.
   *Test:* `tests/gui-smoke.py` — `STEP_BEGIN|system|1|5`, then
-  `PROGRESS|system|1|4|download|250|1000`: the system row's bar and `win.bar` both read
-  125 of 1000, and the badge starts with the translated *Downloading*. Then
-  `PROGRESS|system|1|4|download|100|1000`: both still read 125. Then
-  `PROGRESS|system|2|4|install`: both read 750, and the badge starts with *Installing*.
-  Then `STEP_END|system|ok`: both read 1000. `STEP_BEGIN|flatpak|2|5` makes both busy.
-  The fixture's byte figure differs from its package count (250 of 1000 bytes, 1 of 4
-  packages), so only the byte rule gives 125. `cache_bytes` in `oneup/gui/run.py` is
+  `PROGRESS|system|1|4|download|600|1000`: the system row's bar and `win.bar` both read
+  300 of 1000, and the badge starts with the translated *Downloading*. The package count
+  would give 125, so only the byte rule gives 300. Then `PROGRESS|system|2|4|install`:
+  both read 750, and the badge starts with *Installing*. Then
+  `PROGRESS|system|3|4|download|700|1000`, which alone would give 350: both still read
+  750. Then `STEP_END|system|ok`: both read 1000. `STEP_BEGIN|flatpak|2|5` makes the
+  flatpak row's bar and `win.bar` busy; the system row's stays at 1000. `cache_bytes` in `oneup/gui/run.py` is
   stubbed to weigh nothing, so the host's package cache cannot change the figure.
   *Breaks when:* the download half uses the package count while bytes are known, the
   install half starts from 0, a lower figure lowers the bar, or `win.bar` still counts
@@ -706,7 +716,7 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
 | *(ONEUP-0306)* Downloading takes about as long as installing | Every package already in the cache, or a fast mirror | The download half fills almost at once; the badge's word says which half is running, so the bar is still true |
 | *(ONEUP-0306)* The download rate is steady | A mirror that slows or stalls part-way | The estimate swings; it says *about*, and a stall replaces it with the stall sentence (§4.1.3) |
 | *(ONEUP-0306)* A system package has a description | `DetailsStore`'s fetch is pending, failed or past its deadline, or the package is a Flatpak | Spotlight's second line leaves the description out and shows source and versions |
-| *(ONEUP-0306)* The app's font draws every symbol | A theme or desktop font without the glyph | Each symbol is tested against the app's own font (INV-3, §4.1); a missing glyph fails the test rather than reaching the user |
+| *(ONEUP-0306)* The app's font draws every symbol | A theme or desktop font without the glyph | Each symbol is tested against Noto Sans (INV-3, §7); where Noto Sans is installed, a missing glyph fails the test rather than reaching the user |
 
 ## 7. Tests
 
@@ -729,6 +739,8 @@ each as its §5 clause says. Beside them:
   INV-3 here, which covers all three layouts' views.
 - **The whole suite already runs twice** — once mirrored by `-reverse` — so every test
   above runs right-to-left as well.
+- *(ONEUP-0306)* **`recenter_btn`'s symbol** is checked with `QRawFont` as INV-3's state
+  symbols are.
 - *(ONEUP-0306)* **ONEUP-0076 INV-1's sweep** gains the tab buttons' new look and the
   filled Stop, whose focus cue is now derived from its own fill (§4.1.3).
 - *(ONEUP-0306)* **A gap nothing checks**: whether each layout looks like its sketch. The
@@ -828,3 +840,4 @@ No marker changes: the marker contract stays frozen (`docs/reference/marker-prot
 | 2 | 2026-10-12 | Q1 1 · Q2 3 · Q3 6 — 10 verified, 0 dismissed | all 10 fixed; the cap for a spec, so this loop's fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found the missing `unsubscribe` for a deleted layout and the unclear edge of the package page. The Q1 is a measurement a lane asked for: Tab arriving from outside the message strip does not scroll it (value stayed `0` of `116`). The Q2 on a skipped step's bar came from settling an open question. Own-fix share 3 of 10 — the package page's edge, the empty sentence and the board during a step with no packages — read as a calm cap, but the armed change was the whole document, so the share says little; no second share for the same reason |
 | 0306-amend | 2026-10-17 | none — an authoring amendment; no reviewer was dispatched | ONEUP-0306 makes the approved sketches the target, with the user's decisions of 2026-10-17 (§3 items 9 to 14): per-step progress in two halves in place of a package percentage (ONEUP-0319 dropped), themes kept, Recenter as a symbol, three tabs, short step text, symbols for state. Adds §4.1.1 to §4.1.3 and INV-12 to INV-18; amends INV-1, INV-3 and INV-11. Changes direction, so review-contract runs before ONEUP-0307 to ONEUP-0318 or ONEUP-0320 is built |
 | 3 | 2026-10-17 | Q1 2 · Q2 2 · Q3 7 · Q4 2 — 13 verified, 0 dismissed | all 13 fixed; loop 1 of the gate on ONEUP-0306's amendment. Two lanes, each holding every question. Both found that the prefetch sends `bytes` of 0, so the bar, the *Downloaded* box and the time left now read `_tick_activity`'s byte figure; both found `bar_caption` and `activity` with no home, and Rail's footer line disagreeing with §4.1.3. One Q3 (install-phase `PROGRESS` with a total of 0 or byte fields) came from settling an open question both lanes raised; the Q1 on the `Status` line came from `tests/docs-check.py` before dispatch. Also fixed: the status line during a check, the badge word for a step with no phase, which package is highlighted, `_format_size` gaining a decimal as the sketches print, Spotlight's accessible text, the high-contrast Stop, the symbol table and its glyph test, and INV-12/INV-15 stubbing `cache_bytes`. Three open questions resolved clean (`About.summary`, the `btn_danger` key, no other step streams a transaction). One collateral line fixed in this loop: §6's preload row |
+| 4 | 2026-10-17 | Q1 1 · Q2 7 · Q3 1 · Q4 2 — 11 verified, 0 dismissed | all 11 fixed; the cap for a spec, so these fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found the stall sentence hidden during a check, INV-12's backwards step that could not fail, and no test for the Recenter glyph. Also fixed: INV-12's byte fixture (250 of 1000 equals 1 of 4), its *both busy*, *Waiting*'s scope, Rows' lost total, the checked tab's fill and focus pair, Noto Sans named for the glyph checks, the tick recomputing the download half, and Spotlight's first line as whole sentences. Own-fix share 5 of 11 (the stall clause, the glyph test, the font, the tick, Spotlight's line), read as a calm cap: the other six were in the amendment's own text. Second share: every verified finding of the run, 24 of 24, lies in the ONEUP-0306 text or this run's repairs of it. One open question filed, not fixed: a hovered row's accent ring may look like the running row's highlight |
