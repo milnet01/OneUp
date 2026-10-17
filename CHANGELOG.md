@@ -61,6 +61,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **Rows' package tabs show how many updates each holds** (ONEUP-0313)
+  The tabs above the update list now read "All · 24", "System · 24" and "Flatpak · 0", and the total download size sits at the end of the same line.
+
 - **The progress bars show the running step in two halves: downloading, then installing** (ONEUP-0309)
   The bar at the bottom of the window now follows the step that is
   running, instead of counting finished steps, so it moves while

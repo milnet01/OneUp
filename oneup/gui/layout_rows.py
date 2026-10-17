@@ -5,7 +5,7 @@ area, the message strip, the status with the action slot, and the footer.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -20,12 +20,22 @@ from . import steps
 from .elided_label import ElidedLabel
 from .layout_host import LayoutHost
 
-# The filter's three choices: the step key each shows, or None for all of them.
+# The three tabs: the step key each shows, or None for all of them, and its short word.
 _FILTERS = (
     (None, lambda: QCoreApplication.translate("layout_rows", "All")),
-    ("system", lambda: QCoreApplication.translate("steps", steps.TASKS[0][1])),
-    ("flatpak", lambda: QCoreApplication.translate("steps", steps.TASKS[1][1])),
+    ("system", lambda: QCoreApplication.translate("layout_rows", "System")),
+    ("flatpak", lambda: QCoreApplication.translate("layout_rows", "Flatpak")),
 )
+
+
+# A tab is as wide as its label with this count, so a count that grows moves no tab
+# (§4.2 item 3).
+_WIDEST_COUNT = 9999
+
+
+def _tab_text(word: str, count: int) -> str:
+    return QCoreApplication.translate("layout_rows", "{tab} · {count}").format(
+        tab=word, count=count)
 
 
 class RowsLayout(LayoutHost):
@@ -44,7 +54,8 @@ class RowsLayout(LayoutHost):
         v.addLayout(self.status_block())
         v.addLayout(self.footer())
 
-        # The package page: a filter strip, a summary with the size link, a table.
+        # The package page: the tab strip, with the total and the size link at its
+        # trailing end, then a table.
         bar = QFrame()
         bar.setObjectName("PackageFilter")
         bl = QHBoxLayout(bar)
@@ -61,17 +72,12 @@ class RowsLayout(LayoutHost):
             self.filter_group.addButton(btn, n)
             self.filter_buttons.append(btn)
             bl.addWidget(btn)
-        bl.addStretch(1)
+        self.total = ElidedLabel("")
+        self.total.setObjectName("Tagline")
+        self.total.setAlignment(Qt.AlignmentFlag.AlignTrailing)
+        bl.addWidget(self.total, 1)
+        bl.addWidget(win.size_link, 0)
         self.filter_group.idToggled.connect(lambda _i, on: on and self.refresh())
-
-        summary = QFrame()
-        summary.setObjectName("PackageSummary")
-        sl = QHBoxLayout(summary)
-        sl.setContentsMargins(0, 0, 0, 0)
-        self.summary = ElidedLabel("")
-        self.summary.setObjectName("Tagline")
-        sl.addWidget(self.summary, 1)
-        sl.addWidget(win.size_link, 0)
 
         model = win.packages
         self.items = pv.PackageItems(model, [
@@ -92,7 +98,6 @@ class RowsLayout(LayoutHost):
         pl.setContentsMargins(0, 0, 0, 0)
         pl.setSpacing(6)
         pl.addWidget(bar)
-        pl.addWidget(summary)
         pl.addWidget(self.body(self.table), 1)
         self.listen()
 
@@ -104,8 +109,9 @@ class RowsLayout(LayoutHost):
         key = self._filter_key()
         shown = model.packages(key)
         self.items.set_packages(shown)
-        label = _FILTERS[self.filter_group.checkedId()][1]()
-        self.summary.setText(pv.summary_sentence(label, shown))
+        for btn, (k, word) in zip(self.filter_buttons, _FILTERS, strict=True):
+            btn.setText(_tab_text(word(), len(model.packages(k))))
+        self.total.setText(pv.total_phrase(shown))
         self.show_bodies(bool(model.packages()))
 
     def focus_chain(self) -> list[QWidget]:
@@ -120,4 +126,9 @@ class RowsLayout(LayoutHost):
         header = self.table.verticalHeader()
         header.setDefaultSectionSize(fm.lineSpacing() * 2 + 8)
         header.setSectionResizeMode(header.ResizeMode.Fixed)
+        for btn, (_k, word) in zip(self.filter_buttons, _FILTERS, strict=True):
+            shown = btn.text()
+            btn.setText(_tab_text(word(), _WIDEST_COUNT))
+            btn.setMinimumWidth(btn.sizeHint().width())
+            btn.setText(shown)
         pv.hold_rows(self.table, self.PACKAGE_ROWS, header.defaultSectionSize())

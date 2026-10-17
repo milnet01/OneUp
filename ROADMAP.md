@@ -9370,13 +9370,36 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0313] **Rows' package table matches the sketch: a status icon, a source label, full versions and tabs with counts.**
+- 🚧 [ONEUP-0313] **Rows' package table matches the sketch: a status icon, a source label, full versions and tabs with counts.**
   Sketch: docs/design/sketches/rows.png. A tick, download arrow or
   clock per package instead of a State word column; a "Packman"-style
   label for the repository; old -> new versions in full; tabs "All ·
   24 / System · 24 / Flatpak · 0 / Firmware · 0" in place of the
   three filter buttons. A thin bar under the package downloading.
   2026-10-17, user: tabs All, System, Flatpak only; no Firmware tab.
+  2026-10-17, user's decision: the app draws the state symbols itself
+  (as it draws ToggleSwitch), not as font characters. Measured first:
+  Noto Sans (google-noto-sans-fonts 20261001) has no tick (U+2713/2714),
+  no down arrow (U+2193, 2B07, 21E9) and no clock (U+23F2, 25F7) by
+  QRawFont.supportsCharacter; only Noto Sans Symbols 2, DejaVu or
+  Adwaita do. This contradicts ONEUP-0239 §4.3 ("a character") and
+  INV-3's QRawFont check, so the symbol half waits for the next
+  amendment (ONEUP-0322's batch) and its review. The tabs, source label,
+  versions and the downloading row's highlight are already in the
+  Reviewed spec and are built first.
+  2026-10-17, piece 1 of 4 built: the tabs read "All · N", "System · N",
+  "Flatpak · N" (short words in layout_rows' _FILTERS), and follow the
+  model; the package total (trailing-aligned) and the size link sit at
+  the tab strip's trailing end; Rows' summary line is gone. Each tab's
+  minimum width is its label with a count of 9999, so a growing count
+  moves no tab (§4.2 item 3; setMinimumWidth, as INV-11 forbids
+  setFixedWidth). Tests in tests/gui-smoke.py (ONEUP-0313 checks), red
+  first. Left, in order: (2) the tab look in both sheets, the checked
+  tab filled with a focus pair derived from that fill as #RunBtn's
+  (§4.8, ONEUP-0076); (3) the table: name with a rounded source label on
+  the same line, versions old → new in the fixed-pitch font; (4) the
+  downloading row of win.latest_package highlighted. The state symbols
+  wait for ONEUP-0322's amendment and its review.
   **Layman:** The Rows update list gets the sketch's icons, source labels and counted tabs.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
@@ -9530,6 +9553,12 @@ when complete (that document's §7).
   Each layout now sets its own floor (package_views.hold_rows);
   LayoutHost.apply_metrics keeps six lines for the log alone. Delete the
   sentence.
+  2026-10-17, add to this amendment (user's decision on ONEUP-0313):
+  state symbols are drawn by the app, not font characters. Rewrite
+  §4.3's "state symbol is a character" and INV-3's symbol-table and
+  QRawFont checks for drawn shapes: six distinct shapes, the STATE_WORDS
+  word still the tooltip and accessible text. This sets direction, so
+  the amendment goes through review-contract.
   **Layman:** Two small unclear spots in the layouts plan, found while checking the Rows list change, need a decision.
   Kind: doc-fix.
   Source: review-contract-ONEUP-0310-2026-10-17.
