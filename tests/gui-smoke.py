@@ -5647,6 +5647,82 @@ def main() -> int:
     check("ONEUP-0239 INV-11 a total of 0 leaves the bar busy rather than at 1 of 0",
           fpbar.maximum() == 0 and sysbar.value() == sysbar.maximum())
 
+    def _start_run(wL):
+        """A real run, up to the first step's STEP_BEGIN, as the window starts one."""
+        run._reset_for_run(wL, ["system", "flatpak"], check=False)
+        wL._run_active = True
+        wL.set_controls_enabled(False)
+        run.handle_line(wL, "@@STEP_BEGIN@@|system|1|2")
+        QApplication.processEvents()
+
+    def _outside(wL):
+        """Every visible widget that is not wholly inside the window. A widget inside
+        a scroll area is that area's to clip, so only the area itself counts."""
+        frame, out = wL.rect(), []
+        for wd in wL.findChildren(QWidget):
+            if not wd.isVisible() or wd.isWindow():
+                continue
+            node, scrolled = wd.parentWidget(), False
+            while node is not None and node is not wL:
+                if isinstance(node, QAbstractScrollArea):
+                    scrolled = True
+                    break
+                node = node.parentWidget()
+            if not scrolled and not frame.contains(_geometry(wL, wd)):
+                out.append(f"{wd.objectName() or type(wd).__name__} "
+                           f"{_geometry(wL, wd).getRect()}")
+        return out
+
+    # INV-13: no visible control extends past the window during a run, in any layout
+    # at any text size. Twice each: the layout chosen before the run, and switched to
+    # after Stop is shown — the order that put Stop past the edge in the test VM
+    # (ONEUP-0307).
+    _scale0 = _qs.value("text_scale", 1.0, type=float)
+    for _label, _mult in theme.TEXT_SCALES:
+        _qs.setValue("text_scale", _mult)
+        theme.apply_app_theme(QApplication.instance())
+        for _lid in _ids:
+            w13 = _at_minimum(_lid)
+            _start_run(w13)
+            before = _outside(w13)
+            w13b = _at_minimum(_ids[(_ids.index(_lid) + 1) % len(_ids)])
+            _start_run(w13b)
+            w13b.apply_layout(_lid)
+            QApplication.processEvents()
+            switched = _outside(w13b)
+            check(f"ONEUP-0239 INV-13 nothing extends past the window during a run "
+                  f"({_lid}, {_label}: {before})", not before)
+            check(f"ONEUP-0239 INV-13 nor after a switch to it mid-run "
+                  f"({_lid}, {_label}: {switched})", not switched)
+            for wL in (w13, w13b):
+                wL._run_active = False
+    _qs.setValue("text_scale", _scale0)
+    theme.apply_app_theme(QApplication.instance())
+
+    # INV-14: during a run Stop alone holds the action slot, and the slot neither moves
+    # nor resizes between idle, the run and its end.
+    def _slot(wL):
+        return (_geometry(wL, wL.action_bar).getRect(),
+                tuple(b.isVisible() for b in (wL.run_btn, wL.check_btn, wL.stop_btn)))
+
+    for _lid in _ids:
+        w14 = _at_minimum(_lid)
+        idle = _slot(w14)
+        _start_run(w14)
+        running = _slot(w14)
+        run.on_finished(w14, 0, None)
+        QApplication.processEvents()
+        finished = _slot(w14)
+        check(f"ONEUP-0239 INV-14 idle shows Run and Check, and not Stop ({_lid}: {idle[1]})",
+              idle[1] == (True, True, False))
+        check(f"ONEUP-0239 INV-14 a run shows Stop alone ({_lid}: {running[1]})",
+              running[1] == (False, False, True))
+        check(f"ONEUP-0239 INV-14 the end of the run is as idle ({_lid}: {finished[1]})",
+              finished[1] == idle[1])
+        check(f"ONEUP-0239 INV-14 the action slot keeps its place and size "
+              f"({_lid}: {idle[0]}, {running[0]}, {finished[0]})",
+              idle[0] == running[0] == finished[0])
+
     # Rail's cards: a card is its grid cell's width whatever its text, so a long
     # line elides inside the card rather than running into the next one (§4.3 Rail).
     wB = _at_minimum("rail")

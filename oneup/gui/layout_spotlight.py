@@ -3,7 +3,7 @@
 Below the header: the five rows as tiles side by side, the spotlight panel — the
 status in large type, the bar, the latest package, three figures and the size
 link — then the package area as two lists, *Up next* and *Done*, the message
-strip, Run and Check/Stop, and the footer. The panel stays in view when the log
+strip, and the footer with the action slot at its trailing end. The panel stays in view when the log
 takes the package area's place.
 """
 from __future__ import annotations
@@ -70,8 +70,7 @@ class SpotlightLayout(LayoutHost):
         v.addWidget(self.panel)
         v.addWidget(win.package_area, 1)
         v.addWidget(win.message_strip)
-        v.addWidget(win.action_bar)
-        v.addLayout(self.footer())
+        v.addLayout(self.footer(with_actions=True))
 
         # The package page: two lists side by side, one line per package.
         model = win.packages
@@ -148,4 +147,4 @@ class SpotlightLayout(LayoutHost):
         win = self.win
         return [*(win.rows[k].switch for k, _t, _d in steps.TASKS),
                 win.size_link.size_btn, self.next_list, self.done_list, win.log,
-                *self.tail_chain()]
+                *self.tail_chain(actions_last=True)]

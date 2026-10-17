@@ -548,23 +548,24 @@ class Updater(QMainWindow):
         self.stop_btn.clicked.connect(partial(run.request_stop, self))
         self.stop_btn.setVisible(False)
 
-        # Primary first. Check and Stop do not share a layout position — a hidden
-        # widget still holds its own layout item — so the row has three items for
-        # the window's whole life and exactly one of indices 1 and 2 is ever
-        # visible. What reads as one slot is the visibility rule, not the geometry.
+        # Primary first. The row has three items for the window's whole life — a
+        # hidden widget still holds its own layout item — and a run swaps Run and
+        # Check out for Stop alone, at the trailing end (ONEUP-0239 §4.1.3). What
+        # reads as one slot is the visibility rule plus the bar's fixed width.
         # The row sits on a widget of its own so each layout can place it whole
-        # (ONEUP-0239 §4.1); the row itself is unchanged.
+        # (ONEUP-0239 §4.1).
         self.action_bar = QWidget()
         actions = QHBoxLayout(self.action_bar)
         actions.setContentsMargins(0, 0, 0, 0)
         actions.setSpacing(10)
         actions.addWidget(self.run_btn, 1)
         actions.addWidget(self.check_btn, 0)
-        actions.addWidget(self.stop_btn, 0)
+        actions.addWidget(self.stop_btn, 0, Qt.AlignmentFlag.AlignRight)
         self.action_row = actions
-        # ONEUP-0240: Check and Stop take turns in one slot, so they share one width —
-        # the widest any of their labels needs — or the swap resizes Run beside them.
-        # Re-measured when a style or font change reaches either button.
+        # ONEUP-0240: Check and Stop share one width — the widest any of their labels
+        # needs — and the bar holding all three is fixed at the widest it ever has to
+        # be, so the swap moves nothing beside it. Re-measured when a style or font
+        # change reaches either button.
         self._pin_check_stop_width()
         self.check_btn.installEventFilter(self)
         self.stop_btn.installEventFilter(self)
@@ -970,6 +971,20 @@ class Updater(QMainWindow):
         self.stop_btn.setText(shown)
         for btn in (self.check_btn, self.stop_btn):
             btn.setMinimumWidth(max(widths))
+        # The slot is fixed at its widest (ONEUP-0239 §4.1.3). A layout switch re-polishes
+        # the buttons, and the sheet's min-width replaces the pinned one until this runs
+        # again — by then the row had placed Stop at its narrow width, and nothing moved
+        # it: Stop grew from there past the window's edge (ONEUP-0307). So the row is
+        # re-arranged here.
+        self.action_bar.setFixedWidth(self.run_btn.sizeHint().width()
+                                      + self.action_row.spacing() + max(widths))
+        # And as tall as its tallest button, or Run's leaving shrinks the slot's line.
+        self.action_bar.setMinimumHeight(max(b.sizeHint().height() for b in (
+            self.run_btn, self.check_btn, self.stop_btn)))
+        self.action_row.invalidate()
+        self.action_row.activate()
+        if self.host is not None:
+            self._fit_minimum()
 
     def _pin_header_widths(self):
         """Hold each header button at its label's width (ONEUP-0294)."""
@@ -1311,16 +1326,18 @@ class Updater(QMainWindow):
             r.switch.setEnabled(enabled)
         # Stop is the mirror image: it only exists while a run does. Shown for a real run
         # only — a --check installs nothing, so there is nothing to stop. It REPLACES
-        # Check in the row rather than sitting beside it, so the two are never on
-        # screen at once; during a check the slot holds Check, disabled.
+        # Run and Check rather than sitting beside them, so during a run it stands
+        # alone (ONEUP-0239 §4.1.3); during a check the slot holds both, disabled.
         stoppable = (not enabled) and self._run_active and not self._check_mode
-        # The outgoing button is hidden first. Showing a widget lays its row out at
+        # The outgoing buttons are hidden first. Showing a widget lays its row out at
         # once, so showing first put both in the row for that pass and pushed the
         # status column aside (ONEUP-0239 INV-1).
-        shown, gone = ((self.stop_btn, self.check_btn) if stoppable
-                       else (self.check_btn, self.stop_btn))
-        gone.setVisible(False)
-        shown.setVisible(True)
+        shown, gone = (([self.stop_btn], [self.run_btn, self.check_btn]) if stoppable
+                       else ([self.run_btn, self.check_btn], [self.stop_btn]))
+        for btn in gone:
+            btn.setVisible(False)
+        for btn in shown:
+            btn.setVisible(True)
         if stoppable:
             self._stop_asked = False
             self.stop_btn.setText(QCoreApplication.translate("window", "Stop"))

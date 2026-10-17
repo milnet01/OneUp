@@ -9229,19 +9229,37 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0307] **During a run the Stop button is cut off at the window's right edge.**
+- 🚧 [ONEUP-0307] **During a run the Stop button is cut off at the window's right edge.**
   Seen 2026-10-17 in the VM (Breeze, window 980 px wide, all three
   layouts): Stop shows only its left edge beside "Run selected
   updates". Captures: /mnt/Games/oneup-vmtest/app/lay-t0-*.png.
+  Shipped 2026-10-17. Cause: a layout switch re-polishes the buttons, so
+  the sheet's min-width replaced Stop's pinned width; the row placed
+  Stop narrow, and when the pin came back nothing re-laid the row, so
+  Stop grew past the edge. Reproduced in the VM and on the host (Stop's
+  right edge 1038 in a 980 window). Fix: the pin re-arranges the row;
+  the slot is fixed-width (ONEUP-0239 §4.1.3). Test: ONEUP-0239 INV-13,
+  with a mid-run layout switch. Not yet re-seen in the VM: needs an RPM
+  rebuild.
+  Back to in progress the same day: ONEUP-0239 §7 marks an item shipped
+  only after the look is checked by eye in the test VM, in a light, a
+  dark and the high-contrast theme. Code and tests are in; the VM check
+  is owed.
   **Layman:** While an update runs, the Stop button is partly off the edge of the window.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0308] **"Run selected updates" stays on screen during a run; the sketches show only Stop there.**
+- 🚧 [ONEUP-0308] **"Run selected updates" stays on screen during a run; the sketches show only Stop there.**
   Seen 2026-10-17 in the VM: the disabled Run button keeps its
   place during a run in every layout. All three sketches show one
   filled red Stop in that place.
+  Shipped 2026-10-17: during a run Run and Check hide and Stop stands
+  alone at the slot's trailing end; the slot keeps one width and height;
+  Spotlight's slot is on its footer line. Test: ONEUP-0239 INV-14.
+  Stop's red fill is ONEUP-0317's.
+  Back to in progress the same day, for the same reason as ONEUP-0307:
+  the VM check by eye is owed.
   **Layman:** While updating, only the Stop button should show, as in the sketches.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.

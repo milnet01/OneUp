@@ -1,7 +1,7 @@
 """Rows: the five step rows above a table of packages (ONEUP-0239 §4.3).
 
 The default layout. Below the header: the rows in their full form, the package
-area, the message strip, the status with Run and Check/Stop, and the footer.
+area, the message strip, the status with the action slot, and the footer.
 """
 from __future__ import annotations
 

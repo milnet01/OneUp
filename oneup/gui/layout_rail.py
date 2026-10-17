@@ -1,7 +1,7 @@
 """Rail: the steps down one side, the packages as a board of cards (ONEUP-0239 §4.3).
 
 Below the header: two columns — the rail of five rows and the board, which is the
-package area — then the message strip, the status with Run and Check/Stop, and the
+package area — then the message strip, the status with the action slot, and the
 footer. The board follows the step running now, and shows every package between
 steps.
 """

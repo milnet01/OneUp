@@ -91,14 +91,16 @@ class LayoutHost(QWidget):
         return col
 
     def status_block(self) -> QHBoxLayout:
-        """Status, bar, caption and activity, with Run and Check/Stop beside them."""
+        """Status, bar, caption and activity, with the action slot beside them."""
         row = QHBoxLayout()
         row.setSpacing(16)
         row.addLayout(self.status_column(), 1)
         row.addWidget(self.win.action_bar, 0)
         return row
 
-    def footer(self) -> QHBoxLayout:
+    def footer(self, with_actions: bool = False) -> QHBoxLayout:
+        """The last run, Undo and the log links — and, where the layout puts it
+        there, the action slot at the trailing end."""
         win = self.win
         row = QHBoxLayout()
         row.setSpacing(10)
@@ -106,6 +108,8 @@ class LayoutHost(QWidget):
         row.addWidget(win.rollback_btn, 0)
         row.addWidget(win.log_toggle, 0)
         row.addWidget(win.openlog_btn, 0)
+        if with_actions:
+            row.addWidget(win.action_bar, 0)
         return row
 
     def body(self, content: QWidget) -> package_views.EmptyOr:
@@ -115,12 +119,14 @@ class LayoutHost(QWidget):
         self.bodies.append(b)
         return b
 
-    def tail_chain(self) -> list[QWidget]:
-        """The message strip, the action bar and the footer, in that order."""
+    def tail_chain(self, actions_last: bool = False) -> list[QWidget]:
+        """The message strip, the action bar and the footer, in that order — or the
+        footer before the action bar, where the bar ends the footer's line."""
         win = self.win
+        actions = [win.run_btn, win.check_btn, win.stop_btn]
+        footer = [win.rollback_btn, win.log_toggle, win.openlog_btn]
         return [*(getattr(win, n) for n in BANNER_BUTTONS),
-                win.run_btn, win.check_btn, win.stop_btn,
-                win.rollback_btn, win.log_toggle, win.openlog_btn]
+                *(footer + actions if actions_last else actions + footer)]
 
     def focus_chain(self) -> list[QWidget]:
         raise NotImplementedError

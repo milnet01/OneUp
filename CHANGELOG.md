@@ -61,6 +61,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **During an update, Stop stands alone where Run and Check were, as in the layout sketches** (ONEUP-0308)
+  The space for the buttons keeps one size, so nothing beside it moves
+  when an update starts or ends. In Spotlight the buttons sit at the end
+  of the bottom line. Changing layout during an update no longer pushes
+  Stop past the window's edge (ONEUP-0307).
+
 - **The About window says OneUp is an independent project**
   It now reads: "OneUp is an independent project, not an official
   openSUSE or SUSE product, and is not endorsed by the openSUSE
