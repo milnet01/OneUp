@@ -9409,6 +9409,18 @@ when complete (that document's §7).
   the card's pair. The overlay keeps its ghost look, restated under
   #PackageFilter. ONEUP-0076's §4.2 table was not amended: ONEUP-0239 §4.8
   states the rule. Left: (3) the table, (4) the downloading row.
+  2026-10-17, piece 3 of 4 built: the table. The package cell is one
+  line: the name, then the repository in a rounded label (SourceDelegate),
+  elided past 16 average character widths; the cell's text still holds
+  both, so tooltip and screen reader are unchanged. The label's colours
+  are PackageTable properties set by both sheets: the badge's fill and
+  ink, and under the overlay the card ringed in border. No new palette
+  key. Versions use the desktop's fixed-pitch font (QFontDatabase
+  FixedFont: Hack here) in a 28-character column. Rows are one line
+  tall. The name's width is asked of the style; a guessed margin elided
+  short names. Tests 5ca495f (red first), fix 27b1299; ./local-CI.sh
+  green. Left: (4) the downloading row of win.latest_package
+  highlighted. The state symbols wait for ONEUP-0322's amendment.
   **Layman:** The Rows update list gets the sketch's icons, source labels and counted tabs.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
