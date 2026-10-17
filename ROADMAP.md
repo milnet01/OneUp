@@ -9185,6 +9185,11 @@ when complete (that document's §7).
   already shows zypper's summary ("Open H.264 Codec") since ONEUP-0260.
   The amendment sets the direction for the items filed with it, so
   review-contract runs before they are built.
+  2026-10-17, proposed to the user and not objected to, but not
+  explicitly confirmed: keep OneUp's colour themes (not the sketches'
+  colours) and the header's Recenter button, which the sketches lack.
+  Confirm both with the user while amending. Side-by-side captures:
+  /mnt/Games/oneup-vmtest/compare-{rows,rail,spotlight}.png (scratch).
   **Layman:** Update the layouts plan so it aims at the sketches you approved, and have it checked before building.
   Kind: doc.
   Source: sketch-comparison-2026-10-17.
