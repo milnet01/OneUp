@@ -9400,6 +9400,15 @@ when complete (that document's §7).
   the same line, versions old → new in the fixed-pitch font; (4) the
   downloading row of win.latest_package highlighted. The state symbols
   wait for ONEUP-0322's amendment and its review.
+  2026-10-17, piece 2 of 4 built: the tab look. The user chose a solid
+  fill: the checked tab is filled with the theme's ghosthov blue, its
+  label black or white (derived key tabink, 4.5:1); the others are bare
+  text with a transparent rest border, so checking a tab resizes nothing.
+  A focused checked tab takes tabfocusfill/tabfocusink, derived from
+  ghosthov as #RunBtn's pair is from its own fill; an unchecked one keeps
+  the card's pair. The overlay keeps its ghost look, restated under
+  #PackageFilter. ONEUP-0076's §4.2 table was not amended: ONEUP-0239 §4.8
+  states the rule. Left: (3) the table, (4) the downloading row.
   **Layman:** The Rows update list gets the sketch's icons, source labels and counted tabs.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.

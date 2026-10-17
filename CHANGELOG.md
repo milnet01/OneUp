@@ -61,6 +61,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The chosen package tab is filled in blue, so you can see which list you are looking at** (ONEUP-0313)
+  In the Rows layout, the selected tab (All, System or Flatpak) is now a solid blue shape and the others are plain text. With keyboard focus it turns a darker shade; high contrast keeps its own look.
+
 - **Rows' package tabs show how many updates each holds** (ONEUP-0313)
   The tabs above the update list now read "All · 24", "System · 24" and "Flatpak · 0", and the total download size sits at the end of the same line.
 

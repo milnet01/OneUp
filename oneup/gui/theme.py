@@ -315,6 +315,15 @@ QPushButton#GhostBtn {
 QPushButton#GhostBtn:hover { border-color: $ghosthov; color: $ghosthov; }
 QPushButton#GhostBtn:checked { border-color: $ghosthov; color: $ghosthov; }
 QPushButton#GhostBtn:disabled { color: $disfg; border-color: $disbg; }
+/* The package filter's buttons are tabs (ONEUP-0239 §4.3, §4.8): the checked one
+   is filled and the others are bare text, so the choice shows by shape as well
+   as colour. The rest border stays, transparent, so checking a tab never
+   resizes it. */
+#PackageFilter QPushButton#GhostBtn { border-color: transparent; }
+#PackageFilter QPushButton#GhostBtn:hover { border-color: $ghosthov; }
+#PackageFilter QPushButton#GhostBtn:checked {
+    background: $ghosthov; color: $tabink; border-color: $ghosthov;
+}
 /* Settings' tabs (ONEUP-0303) wear the ghost button on `win`, as the dialog's
    Close does, and the current tab its :checked look. */
 QTabBar#SettingsTabs::tab {
@@ -494,6 +503,15 @@ QPushButton#RunBtn:focus, QPushButton#BannerBtn:focus {
 }
 QPushButton#RestartBtn:focus { background: $dangerfocus; color: $dangerfocusink; }
 
+/* The tabs' qualified rest rules outrank the bare ghost :focus rule, so their
+   focus is restated. The checked tab rests on its own fill and takes the pair
+   derived from it, as #RunBtn's is derived from its own. */
+#PackageFilter QPushButton#GhostBtn:checked:focus {
+    background: $tabfocusfill; color: $tabfocusink; border-color: $tabfocusink;
+}
+#PackageFilter QPushButton#GhostBtn:focus {
+    background: $focusfill; color: $focusink; border-color: $focusink;
+}
 QPushButton#GhostBtn:focus, QPushButton#StopBtn:focus {
     background: $focusfill; color: $focusink; border-color: $focusink;
 }
@@ -601,6 +619,15 @@ QPushButton#GhostBtn { background: $card; color: $text; border: 2px solid $borde
 QPushButton#GhostBtn:hover   { background: $btn; color: $btntext; border: 2px solid $focus; }
 QPushButton#GhostBtn:checked { background: $btn; color: $btntext; border: 2px solid $border; }
 QPushButton#GhostBtn:disabled { background: $card; color: $text; border: 2px dashed $border; }
+/* The base sheet's qualified tab rules outrank the bare ones above, so the
+   overlay restates them: its tabs keep the ghost look, checked on `btn`. */
+#PackageFilter QPushButton#GhostBtn { background: $card; color: $text; border: 2px solid $border; }
+#PackageFilter QPushButton#GhostBtn:hover {
+    background: $btn; color: $btntext; border: 2px solid $focus;
+}
+#PackageFilter QPushButton#GhostBtn:checked {
+    background: $btn; color: $btntext; border: 2px solid $border;
+}
 QTabBar#SettingsTabs::tab { background: $card; color: $text; border: 2px solid $border; }
 QTabBar#SettingsTabs::tab:hover { background: $btn; color: $btntext; border: 2px solid $focus; }
 QTabBar#SettingsTabs::tab:selected { background: $btn; color: $btntext; border: 2px solid $border; }
@@ -656,12 +683,14 @@ QPushButton#LinkBtn:hover { color: $text; }
 QPushButton#RunBtn:focus, QPushButton#RestartBtn:focus, QPushButton#BannerBtn:focus,
 QTabBar#SettingsTabs::tab:selected:focus,
 QPushButton#GhostBtn:checked:focus,
+#PackageFilter QPushButton#GhostBtn:checked:focus,
 #RowCard QPushButton#GhostBtn:checked:focus,
 #DialogButtons QPushButton#GhostBtn:checked:focus,
 #WarnBanner QPushButton#GhostBtn:checked:focus {
     background: $hcfocusfill; color: $hcfocusink; border: 2px solid $hcfocusink;
 }
 QPushButton#GhostBtn:focus, QPushButton#StopBtn:focus,
+#PackageFilter QPushButton#GhostBtn:focus,
 #RowCard QPushButton#GhostBtn:focus,
 #DialogButtons QPushButton#GhostBtn:focus,
 #WarnBanner QPushButton#GhostBtn:focus {
@@ -1030,6 +1059,9 @@ def focus_keys(palette: dict) -> dict:
         # Inside the warning banner: `warn_copy_btn` and, since ONEUP-0064,
         # `retry_btn`.
         ("warnfocus", tint[0], tint),
+        # The checked package tab, which rests on its own `ghosthov` fill
+        # (ONEUP-0239 §4.8).
+        ("tabfocus", palette["ghosthov"], (palette["ghosthov"],)),
     ):
         fill, ink = derive_focus(source, surfaces, label=name)
         keys[name + "fill"] = fill
@@ -1115,6 +1147,8 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
         # The theme list borrows the primary fill, which is derived against `btn`;
         # what the list rests on is `card`, so that is what it is held to.
         add("theme list (HC)", "fill", hc["hcfocusfill"], hc["card"], FOCUS_MIN)
+        # The checked package tab rests on `btn`, as the switched-on ghost does.
+        add("checked package tab (HC)", "fill", hc["hcfocusfill"], hc["btn"], FOCUS_MIN)
         add("current package (HC)", "fill", hc["hclogfocusfill"], hc["card"], FOCUS_MIN)
         add("current package (HC)", "ink", hc["hclogfocusink"], hc["hclogfocusfill"],
             INK_MIN)
@@ -1134,6 +1168,7 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
         ("dialog Close / Cancel, Settings tabs", "winfocus", (palette["win"],)),
         ("warning-banner buttons", "warnfocus", tint),
         ("current package", "logfocus", (palette["logbg"],)),
+        ("checked package tab", "tabfocus", (palette["ghosthov"],)),
     ):
         fill, ink = keys[prefix + "fill"], keys[prefix + "ink"]
         for s in surfaces:
@@ -1253,6 +1288,8 @@ def _derive_keys(palette: dict) -> dict:
         "rowringhov": ("qlineargradient(x1:0, y1:0, x2:1, y2:1, "
                        f"stop:0 {_rgba(palette['rowringhovtint'], '1.0')}, "
                        f"stop:1 {_rgba(palette['rowringhovtint2'], '0.85')})"),
+        # The checked package tab's label, black or white on its `ghosthov` fill.
+        "tabink": _ink_for([palette["ghosthov"]]),
     }
     # The focus pairs are computed rather than authored, so a palette gets its
     # cue with no further work — and fails loudly if it cannot have one, rather

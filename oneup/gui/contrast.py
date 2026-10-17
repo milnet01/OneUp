@@ -115,6 +115,8 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     # against the danger family's fill.
     ("stopfg", ("card",), TEXT),
     ("stophov", ("card",), TEXT),
+    # The checked package tab's label on its filled ground (ONEUP-0313).
+    ("tabink", ("ghosthov",), TEXT),
 
     # --- 3:1, the foreground carries meaning without being text ----------
     ("switchon", ("rowcard", "rowhov", "switchmark", "switchknob"), MARK),
@@ -213,7 +215,8 @@ MEASURED_ELSEWHERE: dict[str, str] = {
        for key in ("focusfill", "focusink", "rowfocusfill", "rowfocusink",
                    "winfocusfill", "winfocusink", "warnfocusfill", "warnfocusink",
                    "logbdfocus", "accentfocus", "accentfocusink", "dangerfocus",
-                   "dangerfocusink", "switchfocuson", "switchfocusoff")},
+                   "dangerfocusink", "switchfocuson", "switchfocusoff",
+                   "tabfocusfill", "tabfocusink")},
     **{key: "ONEUP-0260 INV-6, via theme.focus_report()"
        for key in ("logfocusfill", "logfocusink")},
 }
