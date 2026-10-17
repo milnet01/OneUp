@@ -4135,10 +4135,23 @@ def main() -> int:
     _clipped = _clipped_header(wFresh)
     check(f"ONEUP-0294 a freshly built window clips no header label ({_clipped})",
           not _clipped)
+
+    # ONEUP-0324: the three header buttons are one height. Noto Sans has no gear,
+    # so "⚙ Settings" borrows it from a font with a taller line, and that button
+    # alone stood taller than Recenter and About.
+    def _header_heights(w):
+        return {b.text(): b.height() for b in (w.settings_btn, w.recenter_btn, w.about_btn)}
+
+    _heights = _header_heights(wFresh)
+    check(f"ONEUP-0324 the header buttons are one height ({_heights})",
+          len(set(_heights.values())) == 1)
     wFresh.close()
     del wFresh
     _clipped = _clipped_header()
     check(f"ONEUP-0294 nor at a larger text size ({_clipped})", not _clipped)
+    _heights = _header_heights(wA)
+    check(f"ONEUP-0324 and at a larger text size ({_heights})",
+          len(set(_heights.values())) == 1)
     # ONEUP-0302: Settings shorter than its content still shows every description
     # whole. A 960-pixel screen held the VM's dialog 107 px under its own minimum,
     # and the layout took that out of every row, so a three-line description
