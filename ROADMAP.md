@@ -9031,10 +9031,16 @@ when complete (that document's §7).
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: engine, gui.
 
-- 📋 [ONEUP-0297] **The package list's details mark draws as an empty box on a fresh Tumbleweed.**
+- ✅ [ONEUP-0297] **The package list's details mark draws as an empty box on a fresh Tumbleweed.**
   Seen 2026-10-16 in the ONEUP-0287 VM: "libopenh264-8 □". The mark is
   U+24D8 ⓘ (oneup/gui/package_views.py MARK, ONEUP-0260 §4.4); Noto
   Sans has no glyph for it. Check the header's ⚙ the same way.
+  User's decision, 2026-10-17: replace U+24D8 with U+2139 (ℹ). In the
+  VM, fc-list finds U+2139 in Noto Sans and U+24D8 in no font; ⚙
+  (U+2699) is in DejaVu Sans, so the header's mark draws.
+  Shipped 2026-10-17 in 412d0b9: the mark is U+2139. tests/gui-smoke.py
+  checks Noto Sans itself has it (QRawFont, no fallback). Not checked
+  visually in the VM.
   **Layman:** A small symbol beside some package names shows as an empty square.
   Kind: fix.
   Source: ONEUP-0287-vm-2026-10-16.
@@ -9046,6 +9052,10 @@ when complete (that document's §7).
   authenticate to update the system". Find whether ksshaskpass takes a
   title, or whether the prompt should name the password asked for
   (root's, under targetpw).
+  User's decision, 2026-10-17: keep ksshaskpass and reword OneUp's
+  prompt to name the password asked for, e.g. "OneUp needs the
+  administrator (root) password to install updates." No own askpass
+  dialog.
   **Layman:** The password window has a confusing title that mentions SSH.
   Kind: ux.
   Source: ONEUP-0287-vm-2026-10-16.
