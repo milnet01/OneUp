@@ -9265,7 +9265,7 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0309] **The bottom progress bar stays empty while packages download.**
+- 🚧 [ONEUP-0309] **The bottom progress bar stays empty while packages download.**
   Seen 2026-10-17 in the VM, Rows: "Downloading 2 of 2 packages",
   "504 KiB of 504 KiB", and the bar under it empty. Find whether
   the download phase sets the bar at all.
@@ -9274,6 +9274,15 @@ when complete (that document's §7).
   STEP_END), so it sits at 0 through the first step. Direction per
   ONEUP-0306's decisions: the bar follows the running step, half
   download, half install.
+  Built 2026-10-17 to ONEUP-0239 §4.1.1: a step's value runs 0-1000
+  (download half from _tick_activity's byte figure, else the package
+  count; install half from install lines with a total and no byte
+  fields), never backwards; the row's bar, win.bar (with a notch at the
+  halfway point) and the badge ("Downloading · 18%") all show it. New
+  module oneup/gui/step_progress.py. Tests: ONEUP-0239 INV-12, INV-11's
+  amended figure. VM check by eye owed (§7) before shipped. Not done
+  here: "Waiting" for a step not yet started (ONEUP-0314) and the
+  running-step highlight (INV-16).
   **Layman:** The progress bar at the bottom shows nothing while updates download.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.

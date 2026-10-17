@@ -409,6 +409,8 @@ QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border
 QScrollArea#SettingsScroll, QWidget#SettingsBody { background: transparent; border: none; }
 /* The size strip is painted, so its ink arrives as a property. */
 #SizeStrip { qproperty-ink: $tname; }
+/* The window's bar marks where a step's install half starts, in the surface's colour. */
+QProgressBar#RunProgress { qproperty-mark: $card; }
 /* The two dialog panels, on `win` rather than on the card. Same mechanism, same
    2px rest border; both were unnamed until ONEUP-0076 named them, which is what
    let two OneUp-built focusable widgets sit outside the sweep entirely. */
@@ -626,6 +628,8 @@ QPushButton#StopBtn { background: $card; color: $text; border: 2px solid $errbd;
 QPushButton#StopBtn:hover   { background: $btn; color: $btntext; border: 2px solid $focus; }
 QPushButton#StopBtn:checked { background: $btn; color: $btntext; border: 2px solid $errbd; }
 QPushButton#StopBtn:disabled { background: $card; color: $text; border: 2px dashed $errbd; }
+/* The window's bar keeps its install-half mark in the overlay's surface colour. */
+QProgressBar#RunProgress { qproperty-mark: $card; }
 QPushButton#LinkBtn { color: $link; text-decoration: underline; }
 QPushButton#LinkBtn:hover { color: $text; }
 

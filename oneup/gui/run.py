@@ -26,7 +26,7 @@ from PySide6.QtCore import QCoreApplication, QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox
 
 from .. import APP_ID, APP_NAME
-from . import banners, i18n, markers, packages, paths, repos, steps, tray
+from . import banners, i18n, markers, packages, paths, repos, step_progress, steps, tray
 from .diagnostics import cache_bytes
 
 # How long the engine may produce NOTHING before the liveness line calls it stalled
@@ -150,7 +150,7 @@ def _adopt_held_engine(win) -> bool:
     # `_log_path` is assigned from what `request_size` already passed as `--log=`, NOT
     # recomputed from a fresh stamp — see `_reset_for_run`'s docstring.
     win._log_path = win._hold_log
-    win.bar.setRange(0, win._total)
+    win.bar.setRange(0, step_progress.FULL)
     win.bar.setValue(0)
     win.bar.setFormat(QCoreApplication.translate("run", "Starting…"))
     win.status.setText(QCoreApplication.translate("run", "Starting the update…"))
@@ -442,6 +442,7 @@ def _reset_for_run(win, steps: list[str], check: bool):
     win.current_step = ""
     win.latest_package = None
     win.engine_finished = False
+    step_progress.reset(win)
     for r in win.rows.values():
         r.clear_badge()
         r.clear_progress()
@@ -505,7 +506,7 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
         win.bar.setFormat(QCoreApplication.translate("run", "Checking…"))
         win.status.setText(QCoreApplication.translate("run", "Checking for available updates…"))
     else:
-        win.bar.setRange(0, win._total)
+        win.bar.setRange(0, step_progress.FULL)
         win.bar.setValue(0)
         win.bar.setFormat(QCoreApplication.translate("run", "Starting…"))
         win.status.setText(QCoreApplication.translate(
@@ -577,6 +578,7 @@ def _reset_activity(win):
     win._activity_since = 0.0
     win._activity_stalled = False
     win._dl_at = win._dl_from = win._dl_bytes = win._dl_total = win._dl_grown = 0
+    win._dl_got, win._progress_count = 0, (0, 0)
     # Weighed once, before anything is fetched, so later samples can tell what THIS
     # run fetched from what an earlier, stopped run left behind (ONEUP-0093).
     win._dl_base = cache_bytes()
@@ -617,6 +619,12 @@ def _tick_activity(win, reweigh: bool = True):
             # from the first figure, which already holds the baseline.
             have = min(win._dl_base + win._dl_grown, win._dl_total)
         got = max(got, have)
+        # The same figure moves the step's download half, so the bar agrees with
+        # this line through the prefetch, which sends no bytes (ONEUP-0239 §4.1.1).
+        win._dl_got = got
+        if win.current_step:
+            step_progress.download(win, win.current_step, got, win._dl_total,
+                                   *win._progress_count)
     if got > 0:
         human = markers._format_size(got)
         bits.append(f"{human} of {markers._format_size(win._dl_total)}"
@@ -702,14 +710,13 @@ def handle_marker(win, line: str):
         win._activity_what = ""
         win._activity_since = 0.0
         win._dl_at = win._dl_from = win._dl_bytes = win._dl_total = win._dl_grown = 0
+        win._dl_got, win._progress_count = 0, (0, 0)
         _tick_activity(win)   # redraw now; a 5s-stale line would name the old step
         win.bar.setFormat(win._step_caption)
-        win.bar.setValue(int(index) - 1)
-        # The step's own bar (ONEUP-0239 §4.1): busy until PROGRESS gives a total.
-        row = win.rows.get(key)
-        if row:
-            row.progress_busy()
+        # The step's own bar and the window's, busy until PROGRESS says how far
+        # (ONEUP-0239 §4.1.1).
         win.current_step = key
+        step_progress.begin(win, key)
         _refresh_layout(win)
         # Progress out loud: without this a blind user gets silence for the
         # whole run. Announced AFTER status.setText, so the fallback path's
@@ -718,9 +725,6 @@ def handle_marker(win, line: str):
             "run",
             "{label}, step {index} of {total}").format(label=label, index=index, total=total))
     elif tag == "STEP_END":
-        # Clamp: a duplicate/orphaned STEP_END (markers can be spliced) must not
-        # push the bar past the run's total step count.
-        win.bar.setValue(min(win.bar.value() + 1, win._total))
         key = parts[0]
         status = parts[1] if len(parts) >= 2 else ""
         # The code and its arguments (ONEUP-0072 §4.1); the window words the badge.
@@ -739,8 +743,8 @@ def handle_marker(win, line: str):
             win._announce(QCoreApplication.translate(
                 "run",
                 "{title}: {badge}").format(title=row.title, badge=badge), row.badge)
-        if row:
-            row.progress_done()
+        if key:
+            step_progress.end(win, key)
         if key and key == win.current_step:
             win.current_step = ""
             _refresh_layout(win)
@@ -838,12 +842,6 @@ def handle_marker(win, line: str):
                       QCoreApplication.translate("run", "Installing packages — {n} so far"))
         detail = detail.format(n=n, total=total)
         _show_detail(win, detail)
-        row = win.rows.get(key)
-        if row:
-            row.set_badge(QCoreApplication.translate(
-                "run",
-                "{n}/{total}").format(n=n, total=total) if total else str(n))
-            row.set_progress(n, total)
         # Spoken once per phase, not per package: a screen reader announcing all
         # 141 packages would bury everything else, but silence through the run's
         # longest stretch is exactly what made it look hung.
@@ -867,6 +865,13 @@ def handle_marker(win, line: str):
             _tick_activity(win, reweigh=False)
         elif refreshed:
             _tick_activity(win, reweigh=False)   # redraw now, not on the next 5s tick
+        # The step's two halves (ONEUP-0239 §4.1.1), after the byte figure is current.
+        win._progress_count = (n, total)
+        if downloading:
+            step_progress.download(win, key, win._dl_got, win._dl_total, n, total)
+        elif phase == "install":
+            step_progress.install(win, key, n, total,
+                                  has_bytes=len(parts) > 4 and parts[4].isdecimal())
         if announce:
             win._announce(QCoreApplication.translate("run", "Downloading packages.")
                           if downloading else
@@ -1067,7 +1072,8 @@ def on_finished(win, exit_code: int, _status):
     # A stopped run is neither: nothing went wrong, but it didn't do what was asked.
     # Claiming "All done" would be a success it never earned.
     stopped = win._done_status == "stopped"
-    win.bar.setValue(win._total)
+    win.bar.setRange(0, step_progress.FULL)
+    win.bar.setValue(step_progress.FULL)
     if stopped:
         win.bar.setFormat(QCoreApplication.translate("run", "Stopped"))
     elif ok:

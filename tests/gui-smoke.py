@@ -572,7 +572,10 @@ def main() -> int:
     run.handle_line(wP, "@@PROGRESS@@|system|12|141|download")
     check("a counted download reads as 'Downloading 12 of 141 packages'",
           wP.status.text() == "Downloading 12 of 141 packages…")
-    check("the row badge tracks progress", wP.rows["system"].badge.text() == "12/141")
+    # The badge names the half and the whole step's percentage (ONEUP-0239 §4.1.1).
+    _badge = wP.rows["system"].badge.text()
+    check(f"the row badge tracks progress ({_badge!r})",
+          _badge.startswith(app.translate("run", "Downloading") + " · ") and _badge.endswith("%"))
     run.handle_line(wP, "@@PROGRESS@@|system|7|141|install")
     check("the install phase says Installing", wP.status.text() == "Installing 7 of 141 packages…")
     # One announcement per phase, not per package: 141 spoken lines would bury
@@ -989,8 +992,8 @@ def main() -> int:
               "still running" in wA.status.text() or "141" in wA.status.text())
         check("the controls are locked while following", not wA.run_btn.isEnabled())
         check("the step count comes from the attached run's steps", wA._total == 2)
-        check("markers already in the log are replayed",
-              wA.rows["system"].badge.text() == "12/141")
+        check(f"markers already in the log are replayed ({wA.rows['system'].badge.text()!r})",
+              wA.rows["system"].badge.text().startswith(app.translate("run", "Downloading")))
         # New lines appended by the running engine must be picked up on the next poll.
         with open(attach_log, "a") as fh:
             fh.write("@@PROGRESS@@|system|99|141|install\n")
@@ -5637,8 +5640,9 @@ def main() -> int:
     check("ONEUP-0239 INV-11 STEP_BEGIN makes its own row's bar busy and no other",
           sysbar.maximum() == 0 and fpbar.maximum() == 1 and fpbar.value() == 0)
     run.handle_line(w11, "@@PROGRESS@@|system|3|10|download")
-    check("ONEUP-0239 INV-11 PROGRESS sets it to 3 of 10",
-          (sysbar.value(), sysbar.maximum()) == (3, 10))
+    check(f"ONEUP-0239 INV-11 PROGRESS sets its download half to 150 of 1000 "
+          f"({sysbar.value()} of {sysbar.maximum()})",
+          (sysbar.value(), sysbar.maximum()) == (150, 1000))
     run.handle_line(w11, "@@STEP_END@@|system|ok|installed|3")
     check("ONEUP-0239 INV-11 STEP_END fills it",
           sysbar.maximum() > 0 and sysbar.value() == sysbar.maximum())
@@ -5646,6 +5650,43 @@ def main() -> int:
     run.handle_line(w11, "@@PROGRESS@@|flatpak|1|0|download")
     check("ONEUP-0239 INV-11 a total of 0 leaves the bar busy rather than at 1 of 0",
           fpbar.maximum() == 0 and sysbar.value() == sysbar.maximum())
+
+    # INV-12: a step's progress fills in two halves, never moves backwards, and the
+    # window's bar shows the running step's value. The package cache weighs nothing,
+    # so this machine's own cache cannot change the byte figure. Restored by hand:
+    # _unpatch_all would also lift this section's stub of _notify_when_away.
+    _cache_bytes0, run.cache_bytes = run.cache_bytes, lambda: 0
+    w12 = window.Updater()
+    run._reset_for_run(w12, ["system", "flatpak"], check=False)
+    sys12, fp12 = w12.rows["system"], w12.rows["flatpak"]
+
+    def _bars12(row):
+        return ((row.progress.value(), row.progress.maximum()),
+                (w12.bar.value(), w12.bar.maximum()))
+
+    run.handle_line(w12, "@@STEP_BEGIN@@|system|1|5")
+    run.handle_line(w12, "@@PROGRESS@@|system|1|4|download|600|1000")
+    check(f"ONEUP-0239 INV-12 the download half follows the bytes, not the count "
+          f"({_bars12(sys12)})", _bars12(sys12) == ((300, 1000), (300, 1000)))
+    check(f"ONEUP-0239 INV-12 the badge says Downloading ({sys12.badge.text()!r})",
+          sys12.badge.text().startswith(app.translate("run", "Downloading")))
+    run.handle_line(w12, "@@PROGRESS@@|system|2|4|install")
+    check(f"ONEUP-0239 INV-12 the install half starts at 500 ({_bars12(sys12)})",
+          _bars12(sys12) == ((750, 1000), (750, 1000)))
+    check(f"ONEUP-0239 INV-12 the badge says Installing ({sys12.badge.text()!r})",
+          sys12.badge.text().startswith(app.translate("run", "Installing")))
+    run.handle_line(w12, "@@PROGRESS@@|system|3|4|download|700|1000")
+    check(f"ONEUP-0239 INV-12 a lower figure never lowers the bar ({_bars12(sys12)})",
+          _bars12(sys12) == ((750, 1000), (750, 1000)))
+    run.handle_line(w12, "@@STEP_END@@|system|ok")
+    check(f"ONEUP-0239 INV-12 STEP_END fills both ({_bars12(sys12)})",
+          _bars12(sys12) == ((1000, 1000), (1000, 1000)))
+    run.handle_line(w12, "@@STEP_BEGIN@@|flatpak|2|5")
+    check(f"ONEUP-0239 INV-12 the next step makes its bar and the window's busy "
+          f"({_bars12(fp12)}, system {sys12.progress.value()})",
+          fp12.progress.maximum() == 0 and w12.bar.maximum() == 0
+          and sys12.progress.value() == 1000)
+    run.cache_bytes = _cache_bytes0
 
     def _start_run(wL):
         """A real run, up to the first step's STEP_BEGIN, as the window starts one."""

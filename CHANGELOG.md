@@ -61,6 +61,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The progress bars show the running step in two halves: downloading, then installing** (ONEUP-0309)
+  The bar at the bottom of the window now follows the step that is
+  running, instead of counting finished steps, so it moves while
+  packages download. A notch marks where installing starts, and the
+  step's label says which half it is in, for example "Downloading ·
+  18%".
+
 - **During an update, Stop stands alone where Run and Check were, as in the layout sketches** (ONEUP-0308)
   The space for the buttons keeps one size, so nothing beside it moves
   when an update starts or ends. In Spotlight the buttons sit at the end

@@ -24,6 +24,7 @@ from pathlib import Path
 import shiboken6
 from PySide6.QtCore import (
     QT_TRANSLATE_NOOP,
+    Property,
     QByteArray,
     QCoreApplication,
     QDate,
@@ -41,7 +42,9 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QAccessible,
     QAccessibleEvent,
+    QColor,
     QDesktopServices,
+    QPainter,
 )
 
 try:  # Qt 6.8+: "speak this now" for a screen reader.
@@ -79,6 +82,7 @@ from . import (
     repos,
     rollback,
     run,
+    step_progress,
     steps,
     tray,
 )
@@ -128,10 +132,34 @@ class _ProgressBar(QProgressBar):
         super().__init__()
         self._caption = caption
         self.setTextVisible(False)
+        self.setObjectName("RunProgress")
+        # Set from the stylesheet; this default only shows before the sheet arrives.
+        self._mark = QColor(theme_mod.current_palette()["card"])
 
     def setFormat(self, fmt: str) -> None:
         super().setFormat(fmt)
         self._caption.setText(fmt)
+
+    def get_mark(self) -> QColor:
+        return self._mark
+
+    def set_mark(self, colour) -> None:
+        self._mark = QColor(colour)
+        self.update()
+
+    mark = Property(QColor, get_mark, set_mark)
+
+    def paintEvent(self, event) -> None:
+        """While the bar shows a step's two halves, a notch in the surface's colour
+        marks where installing starts, so the bar itself says which half it is in
+        (ONEUP-0239 §4.1.1). The middle is the middle in either direction."""
+        super().paintEvent(event)
+        if self.maximum() != step_progress.FULL:
+            return
+        notch = max(2, self.height() // 6)
+        painter = QPainter(self)
+        painter.fillRect((self.width() - notch) // 2, 0, notch, self.height(), self._mark)
+        painter.end()
 
 
 def _retain_space(widget: QWidget) -> None:
@@ -193,6 +221,8 @@ class Updater(QMainWindow):
         self._dl_total = 0           # transaction's total download size (0 = unknown)
         self._dl_base = 0            # package-cache weight before the run started
         self._dl_grown = 0           # its growth at the last weighing (ONEUP-0155)
+        self._dl_got = 0             # the byte figure the line and the bar both show
+        self._progress_count = (0, 0)  # the last PROGRESS line's done and total
         self._done_status = ""       # the run's own @@DONE@@ verdict; the only result
                                      # available for a run we attached to (no exit code)
         self._attached_pid = 0       # engine we're following that another window started
@@ -231,10 +261,11 @@ class Updater(QMainWindow):
         self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
         self._last_announcement = ""   # what _announce last spoke (see _announce)
         # Run state the layouts read and never own (ONEUP-0239 §4.1), so a layout
-        # change mid-run keeps it. All three are cleared by run._reset_for_run.
+        # change mid-run keeps it. All of it is cleared by run._reset_for_run.
         self.current_step = ""         # the step running now, or ""
         self.latest_package = None     # (key, name, edition) of the last PKG line
         self.engine_finished = False   # set by on_finished; the empty pages read it
+        self.step_progress = {}        # key -> 0..1000, or None while busy (§4.1.1)
         self.host = None               # the current layout (layout_host.LayoutHost)
         # Set here, not after construction: eventFilter reads it, and the controls it
         # filters receive events while the layout is being built.
@@ -560,10 +591,12 @@ class Updater(QMainWindow):
         actions.setSpacing(10)
         actions.addWidget(self.run_btn, 1)
         actions.addWidget(self.check_btn, 0)
-        actions.addWidget(self.stop_btn, 0, Qt.AlignmentFlag.AlignRight)
+        actions.addWidget(self.stop_btn, 0, Qt.AlignmentFlag.AlignTrailing)
         self.action_row = actions
+        # Its width is its minimum, never a cap: a longer translation widens it.
+        self.action_bar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
         # ONEUP-0240: Check and Stop share one width — the widest any of their labels
-        # needs — and the bar holding all three is fixed at the widest it ever has to
+        # needs — and the bar holding all three is held at the widest it ever has to
         # be, so the swap moves nothing beside it. Re-measured when a style or font
         # change reaches either button.
         self._pin_check_stop_width()
@@ -971,13 +1004,13 @@ class Updater(QMainWindow):
         self.stop_btn.setText(shown)
         for btn in (self.check_btn, self.stop_btn):
             btn.setMinimumWidth(max(widths))
-        # The slot is fixed at its widest (ONEUP-0239 §4.1.3). A layout switch re-polishes
+        # The slot is held at its widest (ONEUP-0239 §4.1.3). A layout switch re-polishes
         # the buttons, and the sheet's min-width replaces the pinned one until this runs
         # again — by then the row had placed Stop at its narrow width, and nothing moved
         # it: Stop grew from there past the window's edge (ONEUP-0307). So the row is
         # re-arranged here.
-        self.action_bar.setFixedWidth(self.run_btn.sizeHint().width()
-                                      + self.action_row.spacing() + max(widths))
+        self.action_bar.setMinimumWidth(self.run_btn.sizeHint().width()
+                                        + self.action_row.spacing() + max(widths))
         # And as tall as its tallest button, or Run's leaving shrinks the slot's line.
         self.action_bar.setMinimumHeight(max(b.sizeHint().height() for b in (
             self.run_btn, self.check_btn, self.stop_btn)))
