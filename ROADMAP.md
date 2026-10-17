@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=305 -->
+<!-- ants-roadmap-id-high-water: ONEUP=319 -->
 
 # OneUp Roadmap
 
@@ -9175,6 +9175,143 @@ when complete (that document's §7).
   **Layman:** In high-contrast mode, a setting that is switched on barely changes when you tab to it, so you can lose track of where you are.
   Kind: accessibility.
   Source: ONEUP-0303-build-2026-10-16.
+  Lanes: gui.
+
+- 📋 [ONEUP-0306] **Amend ONEUP-0239 so the approved sketches are the target, and gate it before the look work starts.**
+  User's decision, 2026-10-17: bring all three layouts up to the
+  sketches (docs/design/sketches/) before 2.0.0. ONEUP-0239 §2 and §3
+  item 8 say a package description, a per-package percentage and a
+  time left cannot be shown. The description is out of date: Rows
+  already shows zypper's summary ("Open H.264 Codec") since ONEUP-0260.
+  The amendment sets the direction for the items filed with it, so
+  review-contract runs before they are built.
+  **Layman:** Update the layouts plan so it aims at the sketches you approved, and have it checked before building.
+  Kind: doc.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0307] **During a run the Stop button is cut off at the window's right edge.**
+  Seen 2026-10-17 in the VM (Breeze, window 980 px wide, all three
+  layouts): Stop shows only its left edge beside "Run selected
+  updates". Captures: /mnt/Games/oneup-vmtest/app/lay-t0-*.png.
+  **Layman:** While an update runs, the Stop button is partly off the edge of the window.
+  Kind: fix.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0308] **"Run selected updates" stays on screen during a run; the sketches show only Stop there.**
+  Seen 2026-10-17 in the VM: the disabled Run button keeps its
+  place during a run in every layout. All three sketches show one
+  filled red Stop in that place.
+  **Layman:** While updating, only the Stop button should show, as in the sketches.
+  Kind: ux.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0309] **The bottom progress bar stays empty while packages download.**
+  Seen 2026-10-17 in the VM, Rows: "Downloading 2 of 2 packages",
+  "504 KiB of 504 KiB", and the bar under it empty. Find whether
+  the download phase sets the bar at all.
+  **Layman:** The progress bar at the bottom shows nothing while updates download.
+  Kind: fix.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0310] **In Rows the package list is squeezed to about one row, with empty space below it.**
+  Seen 2026-10-17 in the VM (window 980x886): the table shows its
+  header and one package; the space under it to the status lines is
+  empty. The sketch's list fills that space.
+  **Layman:** In the Rows layout the list of updates is only one line tall, even though there is room.
+  Kind: fix.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0311] **In Rail the step names are cut off ("System…", "Flatpak…").**
+  Seen 2026-10-17 in the VM at 980 px: the rail is too narrow for
+  the name beside the switch. The sketch's rail shows the full name
+  and a status line under it.
+  **Layman:** In the Rail layout the names of the steps on the left are cut short.
+  Kind: fix.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0312] **In Spotlight the Up next lines run off the side, with a sideways scroll bar.**
+  Seen 2026-10-17 in the VM: each line holds name, versions, size
+  and repository. The sketch shows a clock or tick, the name and the
+  size only.
+  **Layman:** In the Spotlight layout, the waiting list's lines are too long and need sideways scrolling.
+  Kind: fix.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0313] **Rows' package table matches the sketch: a status icon, a source label, full versions and tabs with counts.**
+  Sketch: docs/design/sketches/rows.png. A tick, download arrow or
+  clock per package instead of a State word column; a "Packman"-style
+  label for the repository; old -> new versions in full; tabs "All ·
+  24 / System · 24 / Flatpak · 0 / Firmware · 0" in place of the
+  three filter buttons. A thin bar under the package downloading.
+  **Layman:** The Rows update list gets the sketch's icons, source labels and counted tabs.
+  Kind: ux.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0314] **Every step shows a status label, and step descriptions are short, as in the sketches.**
+  Sketches: "Downloading · 35%", "Waiting", "Up next · nothing to
+  update"; descriptions such as "openSUSE and Packman packages" and
+  "Free up disk space". Today only the running step shows a pill
+  ("2/2") and the descriptions are long and technical.
+  **Layman:** Each step says Waiting, Downloading or Up next, with a short description under its name.
+  Kind: ux.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0315] **Rail matches the sketch: package cards in two columns, a coloured progress strip and a large heading with counts.**
+  Sketch: docs/design/sketches/rail.png. Cards with a dot, name and
+  size, versions, a source label and the state written on the card;
+  the strip green / blue / grey and still patterned (colour never
+  alone, ui-and-accessibility.md §3); "System packages" large, "24
+  updates · 17.5 MiB to download" and "3 done · 1 now · 20 to go".
+  **Layman:** The Rail layout shows each update as a card, with a coloured strip and a clear heading.
+  Kind: ux.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0316] **Spotlight matches the sketch: a large Now panel with three figure boxes, and clean Up next and Done lists.**
+  Sketch: docs/design/sketches/spotlight.png. "NOW · SYSTEM
+  PACKAGES", the package name in large type, its description and
+  versions, a bar, and boxes for Packages, Downloaded and Time left.
+  Step tiles with short names and a status word.
+  **Layman:** The Spotlight layout shows what is happening now in large type, with three clear figures.
+  Kind: ux.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0317] **The footer is one summary line and a filled red Stop, as in the sketches.**
+  Sketches: "Downloading 4 of 24 · 6.2 of 17.5 MiB · about 40 s
+  left" over one bar, and one "Show technical log" link. Today: three
+  lines of status, two log links.
+  **Layman:** The bottom of the window shows one clear line about progress, and a red Stop button.
+  Kind: ux.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0318] **Show an estimated time left while packages download.**
+  The engine already reports bytes done and total ("504 KiB of 504
+  KiB"), so a rate and an estimate can be worked out. Download only:
+  installing has no reliable size to time against. Wording stays an
+  estimate ("about 40 s left").
+  **Layman:** While updates download, OneUp estimates how long is left.
+  Kind: feature.
+  Source: sketch-comparison-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0319] **Find whether zypper reports per-package download progress, for the sketches' percentage.**
+  The sketches show "Downloading · 62%" for one package. ONEUP-0239
+  said zypper prints none. Check zypper's machine-readable output
+  (--xmlout) for per-file download progress before promising it.
+  **Layman:** Check whether OneUp can show how far along each package's download is.
+  Kind: investigate.
+  Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
 ## 2.1.0 — after 2.0

@@ -65,7 +65,7 @@ Today the window draws them into one bar, `win.bar`, and into the row's badge te
 ## 3. Scope decisions (agreed with the user)
 
 1. **Three layouts, the user's choice in Settings** (2026-10-10). The three are the
-   sketches at the roadmap item's link: `project/Main.dc.html`, `project/Rail.dc.html` and
+   sketches at the roadmap item's link, kept as pictures in `docs/design/sketches/`: `project/Main.dc.html`, `project/Rail.dc.html` and
    `project/Spotlight.dc.html`.
 2. **Show the updates the way Discover does, in OneUp's own layout** (2026-10-10): each
    package with its versions and size, and a total. The raw log stays, behind a link.

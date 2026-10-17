@@ -28,7 +28,7 @@ exist yet, and saying so is the point.
 | *(repo root)* | The window's entry point (`updater.py`), the retired Bash engine kept as a fallback through 2.0 (`update_system.sh`), the three developer scripts (`bump.py`, `local-CI.sh`, `release.sh`), and the four documents every reader starts from (`README.md`, `CLAUDE.md`, `ROADMAP.md`, `CHANGELOG.md`) plus `LICENSE`. |
 | `oneup/` | The application: `engine/` (the Python engine), `gui/` (the window) and `service/` (the system service, ONEUP-0249). §4 owns its shape. |
 | `data/` | Everything the desktop installs and the user never edits: the launcher entry, the icon, the app-store metadata, and the system service's D-Bus policy, D-Bus activation file and systemd unit. |
-| `docs/design/` | Programme-level decisions that several items share. |
+| `docs/design/` | Programme-level decisions that several items share. `sketches/` holds the three layout sketches the user approved for ONEUP-0239, as pictures. |
 | `docs/history/` | History moved out of a document so the document stays a rule. One file: `claude-md.md`. |
 | `docs/reviews/` | Review records kept outside the document they review: a run's `<ID>-fix-ledger.md`, and each standard's and reference's `<name>-loop-log.md`. `documentation.md` §7.1 names the kinds. |
 | `docs/specs/` | One item's contract. |
