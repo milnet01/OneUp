@@ -9597,6 +9597,13 @@ when complete (that document's §7).
   user's screenshot). Fix: _pin_header_widths also pins each header
   button's minimum height to the tallest one's sizeHint, re-run on every
   style or font change as the width pin is.
+  2026-10-17: built and pushed (6043699 test, red first; 28e3830 fix);
+  ./local-CI.sh green. Stays in progress until the user sees it on a
+  rebuilt install (the VM check owed for ONEUP-0313 is the moment).
+  Open, asked and unanswered: the action row's Run button is about 3 px
+  taller than Check for updates (more padding, larger bold text, on
+  purpose as the primary action). Recommended leaving it; match only if
+  the user says so.
   **Layman:** Settings stood taller than Recenter and About; now all three line up.
   Kind: fix.
   Source: user-report-2026-10-17.
