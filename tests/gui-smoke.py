@@ -5920,6 +5920,79 @@ def main() -> int:
     check("ONEUP-0313 the focus report measures the checked tab in every theme, both modes",
           len(_tab_rows) == 2 * len(theme.THEMES))
 
+    # §4.3 "Common to all three" and Rows item 2: a package's cell is one line — its
+    # name, then its source in a rounded label, styled in both sheets — and a long
+    # source elides to one fixed width. Versions read old → new in a fixed-pitch
+    # font, so two versions of one length draw one width. Real pixels, in every
+    # theme with the overlay off (the badge's fill) and on (the badge's rim).
+    wS3 = _at_minimum("rows")
+    wS3.resize(1200, wS3.height())
+    run._reset_for_run(wS3, ["system"], check=True)
+    for line in ("@@CHECK_ITEM@@|system|libavutil60|iiiiii|iiiiij|1048576|Packman",
+                 "@@CHECK_ITEM@@|system|vlc|MMMMMM|MMMMMW|1048576|" + "r" * 30,
+                 "@@CHECK_ITEM@@|system|vlc-b|1|2|1048576|" + "r" * 60):
+        run.handle_line(wS3, line)
+    _tbl = wS3.host.table
+    _rtl = QApplication.isRightToLeft()
+
+    def _cell(row, col):
+        """The cell's (x, colour) pixels along its middle line, and its ground."""
+        img = _tbl.viewport().grab().toImage()
+        r = _tbl.visualRect(_tbl.model().index(row, col))
+        ground = img.pixelColor(r.left() + 1, r.top() + 1).name()
+        y = r.center().y()
+        return [(x, img.pixelColor(x, y).name()) for x in range(r.left(), r.right())], ground
+
+    def _span(xs):
+        return (max(xs) - min(xs)) if xs else -1
+
+    _bad = []
+    for _th in theme.THEMES:
+        _p = dict(_th.palette)
+        _p.update(theme.derived_keys(_p))
+        _hcp = theme._HC_DARK if _th.dark else theme._HC_LIGHT
+        for _on, _mark in ((False, _p["badgebg"]), (True, _hcp["border"])):
+            wS3.setStyleSheet(theme.build_theme(_th, high_contrast=_on))
+            wS3.layout().activate()
+            QApplication.processEvents()
+            _tbl.clearFocus()
+            QApplication.processEvents()
+            _where = f"{_th.id} overlay {'on' if _on else 'off'}"
+            _labels = []
+            for row in range(3):
+                px, ground = _cell(row, 1)
+                ink = [x for x, c in px if c != ground]
+                lab = [x for x, c in px if c == _mark.lower()]
+                _labels.append(_span(lab))
+                if not lab:
+                    _bad.append(f"{_where} row {row}: no source label in the package cell")
+                    continue
+                # The name comes first in reading order, so its ink starts well
+                # before the label does.
+                lead = (max(ink) - max(lab)) if _rtl else (min(lab) - min(ink))
+                if lead < _tbl.fontMetrics().horizontalAdvance("vlc") // 2:
+                    _bad.append(f"{_where} row {row}: the label does not follow the name "
+                                f"(lead {lead})")
+            if not (0 < _labels[0] < _labels[1] == _labels[2]):
+                _bad.append(f"{_where}: label widths {_labels}, want a short one, then two "
+                            f"long ones elided to one width")
+            _vers = []
+            for row in range(2):
+                px, ground = _cell(row, 2)
+                _vers.append(_span([x for x, c in px if c != ground]))
+            if min(_vers) <= 0 or min(_vers) / max(_vers) < 0.85:
+                _bad.append(f"{_where}: versions iiiiii/MMMMMM draw {_vers} px wide, want "
+                            f"one width (a fixed-pitch font)")
+    wS3.setStyleSheet("")
+    _row_h = _tbl.rowHeight(0)
+    check(f"ONEUP-0313 a package row is one line tall (row {_row_h}, line "
+          f"{_tbl.fontMetrics().lineSpacing()})",
+          0 < _row_h < 2 * _tbl.fontMetrics().lineSpacing())
+    check(f"ONEUP-0313 the source label sits after the name, styled in both sheets and "
+          f"elided to one width; versions are fixed-pitch ({len(_bad)} wrong)", not _bad)
+    for line in _bad[:8]:
+        print(f"       {line}")
+
     # INV-14: during a run Stop alone holds the action slot, and the slot neither moves
     # nor resizes between idle, the run and its end.
     def _slot(wL):
