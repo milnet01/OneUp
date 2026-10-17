@@ -150,6 +150,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **In the Rail layout the step names are no longer cut short** (ONEUP-0311)
+  The rail measured the on/off switch beside each name as having no width, so it came out too narrow and the names were shortened with "…". It now makes room for the switch.
+
 - **The finished line says what was installed from each source** (ONEUP-0288)
   For example: "All done. 126 system package(s) installed. 3 Flatpak app(s)
   updated. Firmware updated." It used to give one number for system packages

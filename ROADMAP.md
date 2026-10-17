@@ -9306,10 +9306,16 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0311] **In Rail the step names are cut off ("System…", "Flatpak…").**
+- 🚧 [ONEUP-0311] **In Rail the step names are cut off ("System…", "Flatpak…").**
   Seen 2026-10-17 in the VM at 980 px: the rail is too narrow for
   the name beside the switch. The sketch's rail shows the full name
   and a status line under it.
+  2026-10-17: cause — RailLayout.apply_metrics added the switch's
+  sizeHint().width(), which is -1 (ToggleSwitch is fixed-size with no
+  size hint), so the rail was the switch's width short. Now uses the
+  switch's real width. gui-smoke INV-17 titles half green in Rail at
+  every text size. Stays in progress until the ONEUP-0239 §7 check by
+  eye in the test VM.
   **Layman:** In the Rail layout the names of the steps on the left are cut short.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.

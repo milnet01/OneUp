@@ -107,12 +107,13 @@ class RailLayout(LayoutHost):
     def apply_metrics(self) -> None:
         super().apply_metrics()
         win = self.win
-        # The widest step title, plus the switch and the row's own padding.
+        # The widest step title, plus the switch and the row's own padding. The
+        # switch is fixed-size with no size hint (-1), so take its real width.
         row = win.rows[steps.TASKS[0][0]]
         fm = row.name.fontMetrics()
         widest = max(fm.horizontalAdvance(r.title) for r in win.rows.values())
         card = row.card.layout().contentsMargins()
         frame = row.layout().contentsMargins()
-        self.rail.setMinimumWidth(widest + row.switch.sizeHint().width() + 10
+        self.rail.setMinimumWidth(widest + row.switch.minimumWidth() + 10
                                   + card.left() + card.right() + frame.left() + frame.right())
         pv.fit_board(self.board)
