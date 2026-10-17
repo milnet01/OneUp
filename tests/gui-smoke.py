@@ -5029,7 +5029,7 @@ def main() -> int:
         # ONEUP-0239's package views: mechanism B, the log's rest border.
         "PackageTable": None, "PackageBoard": None, "PackageLists": None,
         "StopBtn": {"Card"},
-        "GhostBtn": {"Card", "RowCard", "DialogButtons", "WarnBanner"},
+        "GhostBtn": {"PackageFilter", "Card", "RowCard", "DialogButtons", "WarnBanner"},
         "LinkBtn": {"Card", "RowCard", "WarnBanner"},
         # ONEUP-0027's picker and its popup. Both rules are unqualified,
         # because the picker only ever appears in one place.
@@ -5848,6 +5848,64 @@ def main() -> int:
     _after = [b.geometry().getRect() for b in wT3.host.filter_buttons]
     check(f"ONEUP-0313 a growing count moves no tab ({_before} -> {_after})",
           _before == _after and wT3.host.filter_buttons[0].text() == "All · 2004")
+
+    # §4.3 Rows item 2 and §4.8: the checked tab is filled and the others are not,
+    # and a focused tab wears the fill derived from what it rests on — the checked
+    # tab's own fill, as #RunBtn's is derived from its own. Real pixels, in every
+    # theme with the overlay off and on; the sheet goes on the window, as the
+    # Settings tabs' check puts it on the dialog. An unchecked tab shows no border
+    # at rest: its edge pixel is the card.
+    def _tab_pixels(btn):
+        QApplication.processEvents()
+        p = btn.mapTo(wT3, btn.rect().topLeft())
+        img = wT3.grab().toImage()
+        y = p.y() + btn.height() // 2
+        return img.pixelColor(p.x() + 6, y).name(), img.pixelColor(p.x(), y).name()
+
+    _checked, _plain = wT3.host.filter_buttons[1], wT3.host.filter_buttons[2]
+    _bad = []
+    for _th in theme.THEMES:
+        _p = dict(_th.palette)
+        _p.update(theme.derived_keys(_p))
+        _hcp = theme._HC_DARK if _th.dark else theme._HC_LIGHT
+        _tabfocus, _ = theme.derive_focus(_p["ghosthov"], (_p["ghosthov"],))
+        for _on, _want in (
+                (False, {"checked": (_p["ghosthov"], _tabfocus),
+                         "unchecked": (_p["card"], _p["focusfill"])}),
+                (True, {"checked": (_hcp["btn"], theme.hc_focus_keys(_hcp)["hcfocusfill"]),
+                        "unchecked": (_hcp["card"], _hcp["btnhov"])})):
+            wT3.setStyleSheet(theme.build_theme(_th, high_contrast=_on))
+            # The overlay's 2px border resizes the tabs, and mirrored they are
+            # anchored on the right, so their left edges move: let the layout
+            # settle before sampling, or the first sample reads the old place.
+            wT3.layout().activate()
+            QApplication.processEvents()
+            for _which, _btn in (("checked", _checked), ("unchecked", _plain)):
+                _btn.clearFocus()
+                _rest, _edge = _tab_pixels(_btn)
+                _btn.setFocus()
+                _focus, _ = _tab_pixels(_btn)
+                _btn.clearFocus()
+                _got = (_rest, _focus)
+                _exp = tuple(c.lower() for c in _want[_which])
+                if _got != _exp:
+                    _bad.append(f"{_th.id} overlay {'on' if _on else 'off'} {_which}: "
+                                f"rest/focused {_got} want {_exp}")
+                if not _on and _which == "unchecked" and _edge != _p["card"].lower():
+                    _bad.append(f"{_th.id} unchecked tab edge {_edge}, want the card "
+                                f"{_p['card']}")
+    wT3.setStyleSheet("")
+    check(f"ONEUP-0313 only the checked tab is filled, and each tab's focus fill is "
+          f"derived from its own rest ({len(_bad)} wrong)", not _bad)
+    for line in _bad[:6]:
+        print(f"       {line}")
+    # The checked tab's pair is measured with every other focus pair (ONEUP-0076
+    # INV-2/3 above), in every theme and both modes.
+    _tab_rows = {(t.id, hc) for t in theme.THEMES for hc in (False, True)
+                 for r in theme.focus_report(t, hc)
+                 if r["control"].startswith("checked package tab")}
+    check("ONEUP-0313 the focus report measures the checked tab in every theme, both modes",
+          len(_tab_rows) == 2 * len(theme.THEMES))
 
     # INV-14: during a run Stop alone holds the action slot, and the slot neither moves
     # nor resizes between idle, the run and its end.
