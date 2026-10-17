@@ -9209,6 +9209,14 @@ when complete (that document's §7).
   heading stays "Up next". (5) Rows and Spotlight show a package's
   state as a symbol only (tick, arrow, clock; distinct shapes), the
   word in its tooltip and accessible text; Rail's cards keep words.
+  2026-10-17: review-contract gate on the amended ONEUP-0239 spec ran
+  two loops to the spec cap (9904640, bd61f3f): 24 verified findings,
+  all fixed; Status Reviewed. ONEUP-0307 to 0318 and 0320 may now be
+  built from it. Deductions the run made that the user may overrule:
+  sizes below a GiB print with one decimal, as the sketches do (a
+  change to _format_size); Rows keeps its package total at the tab
+  strip's end, which the sketch lacks. Open, not fixed: a hovered
+  row's accent ring may look like the running row's highlight.
   **Layman:** Update the layouts plan so it aims at the sketches you approved, and have it checked before building.
   Kind: doc.
   Source: sketch-comparison-2026-10-17.
