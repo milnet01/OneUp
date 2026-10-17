@@ -5798,6 +5798,21 @@ def main() -> int:
     _qs.setValue("text_scale", _scale0)
     theme.apply_app_theme(QApplication.instance())
 
+    # INV-18 (ONEUP-0312): no package list scrolls sideways, even for a package whose
+    # name is 200 characters long. Spotlight's two lists each hold one.
+    for _lid in _ids:
+        w18 = _at_minimum(_lid)
+        run._reset_for_run(w18, ["system"], check=True)
+        run.handle_line(w18, f"@@CHECK_ITEM@@|system|{'n' * 200}|1.0|2.0|1000|repo")
+        run.handle_line(w18, f"@@CHECK_ITEM@@|system|{'q' * 200}|1.0|2.0|1000|repo")
+        run.handle_line(w18, f"@@PKG@@|system|installed|{'n' * 200}|2.0|1000|1.0|repo")
+        QApplication.processEvents()
+        for name, view, _row, _floor, _ceiling in _floors(w18):
+            bar = view.horizontalScrollBar()
+            check(f"ONEUP-0239 INV-18 the {name} view does not scroll sideways "
+                  f"({_lid}: maximum {bar.maximum()}, {view.model().rowCount()} rows)",
+                  view.isVisible() and view.model().rowCount() > 0 and bar.maximum() == 0)
+
     # INV-14: during a run Stop alone holds the action slot, and the slot neither moves
     # nor resizes between idle, the run and its end.
     def _slot(wL):
