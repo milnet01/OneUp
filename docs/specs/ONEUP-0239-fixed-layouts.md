@@ -1,6 +1,6 @@
 # ONEUP-0239 — three fixed layouts, and the Settings choice between them
 
-**Status:** Reviewed
+**Status:** Draft
 **Kind:** feature
 **Roadmap:** ONEUP-0239; amended by ONEUP-0306, which is built through ONEUP-0307 to
 ONEUP-0318 and ONEUP-0320.
@@ -125,6 +125,11 @@ the test VM on 2026-10-17:
 14. *(ONEUP-0306)* **Rows and Spotlight show a package's state as a symbol**, as sketched
     (user, 2026-10-17) — a different shape per state, with the word in the tooltip and the
     accessible text. Rail's cards keep the word on the card.
+15. *(ONEUP-0310)* **Rows' package list holds at least three rows, not six** (user,
+    2026-10-17), so the smallest Rows window fits a screen 1080 pixels tall. Measured
+    2026-10-17, offscreen at Noto Sans 10: Rows' minimum height was already 912 pixels,
+    and six two-line table rows would add about 200. A taller window still gives the
+    list all its spare height (§4.2 item 2).
 
 The calls this spec makes by deduction, stated so they are not mistaken for preference:
 
@@ -316,9 +321,10 @@ The rule every layout follows, and the one §5 tests:
    desktop font changes — the event `Updater.eventFilter` already listens for on
    `check_btn` and `stop_btn`. A step row in Rows is two lines: title and description.
 2. **Exactly one area per layout stretches**: the package area. It takes whatever height
-   the window gives and has a minimum of six package lines. *(ONEUP-0306)* **Six of the
-   layout's own package lines** — six table rows in Rows, three rows of cards in Rail, six
-   list lines in Spotlight — below any header the view draws. Today's floor is six lines
+   the window gives and has a floor of package lines. *(ONEUP-0306)* **The floor is in the
+   layout's own package lines** — *(ONEUP-0310)* three table rows in Rows (§3 item 15),
+   three rows of cards in Rail, six list lines in Spotlight — below any header the view
+   draws. Today's floor is six lines
    of the log's font (`LayoutHost.apply_metrics`), which holds one or two table rows.
    **No step title is elided**, in any form: the rail is as wide as its widest title
    beside the switch, and a tile wraps its title to two lines.
@@ -686,11 +692,12 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
   *Breaks when:* the highlight adds a border, or follows a key other than
   `win.current_step`.
 
-- **INV-17** *(ONEUP-0306)* At its minimum size each layout's package view shows six of its
-  own package lines, and no step title is elided.
+- **INV-17** *(ONEUP-0306)* At its minimum size each layout's package view shows its floor
+  of its own package lines (§4.2 item 2), and no step title is elided.
   *Test:* `tests/gui-smoke.py` — for each layout and each `TEXT_SCALES` entry, at the
-  minimum size, with 200 packages: the view's viewport is at least six of its own row
-  heights tall (three card rows in Rail), below its header; and every row's title label
+  minimum size, with 200 packages: the view's viewport is at least its floor of its own
+  row heights tall — *(ONEUP-0310)* three table rows in Rows, three card rows in Rail,
+  six list lines in each of Spotlight's lists — below its header; and every row's title label
   shows its whole text — its width is at least its text's advance, or it wraps within its
   height.
   *Breaks when:* the floor is measured in the log's lines, or the rail's width ignores the
@@ -841,3 +848,4 @@ No marker changes: the marker contract stays frozen (`docs/reference/marker-prot
 | 0306-amend | 2026-10-17 | none — an authoring amendment; no reviewer was dispatched | ONEUP-0306 makes the approved sketches the target, with the user's decisions of 2026-10-17 (§3 items 9 to 14): per-step progress in two halves in place of a package percentage (ONEUP-0319 dropped), themes kept, Recenter as a symbol, three tabs, short step text, symbols for state. Adds §4.1.1 to §4.1.3 and INV-12 to INV-18; amends INV-1, INV-3 and INV-11. Changes direction, so review-contract runs before ONEUP-0307 to ONEUP-0318 or ONEUP-0320 is built |
 | 3 | 2026-10-17 | Q1 2 · Q2 2 · Q3 7 · Q4 2 — 13 verified, 0 dismissed | all 13 fixed; loop 1 of the gate on ONEUP-0306's amendment. Two lanes, each holding every question. Both found that the prefetch sends `bytes` of 0, so the bar, the *Downloaded* box and the time left now read `_tick_activity`'s byte figure; both found `bar_caption` and `activity` with no home, and Rail's footer line disagreeing with §4.1.3. One Q3 (install-phase `PROGRESS` with a total of 0 or byte fields) came from settling an open question both lanes raised; the Q1 on the `Status` line came from `tests/docs-check.py` before dispatch. Also fixed: the status line during a check, the badge word for a step with no phase, which package is highlighted, `_format_size` gaining a decimal as the sketches print, Spotlight's accessible text, the high-contrast Stop, the symbol table and its glyph test, and INV-12/INV-15 stubbing `cache_bytes`. Three open questions resolved clean (`About.summary`, the `btn_danger` key, no other step streams a transaction). One collateral line fixed in this loop: §6's preload row |
 | 4 | 2026-10-17 | Q1 1 · Q2 7 · Q3 1 · Q4 2 — 11 verified, 0 dismissed | all 11 fixed; the cap for a spec, so these fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found the stall sentence hidden during a check, INV-12's backwards step that could not fail, and no test for the Recenter glyph. Also fixed: INV-12's byte fixture (250 of 1000 equals 1 of 4), its *both busy*, *Waiting*'s scope, Rows' lost total, the checked tab's fill and focus pair, Noto Sans named for the glyph checks, the tick recomputing the download half, and Spotlight's first line as whole sentences. Own-fix share 5 of 11 (the stall clause, the glyph test, the font, the tick, Spotlight's line), read as a calm cap: the other six were in the amendment's own text. Second share: every verified finding of the run, 24 of 24, lies in the ONEUP-0306 text or this run's repairs of it. One open question filed, not fixed: a hovered row's accent ring may look like the running row's highlight |
+| amend | 2026-10-17 | no reviewer dispatched | ONEUP-0310's amendment, not a review loop: the user's decision that Rows' package list holds at least three rows at the minimum size (§3 item 15), written into §4.2 item 2 and INV-17. The gate on it is the loops that follow |

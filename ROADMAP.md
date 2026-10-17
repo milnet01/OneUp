@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=320 -->
+<!-- ants-roadmap-id-high-water: ONEUP=321 -->
 
 # OneUp Roadmap
 
@@ -9292,6 +9292,15 @@ when complete (that document's §7).
   Seen 2026-10-17 in the VM (window 980x886): the table shows its
   header and one package; the space under it to the status lines is
   empty. The sketch's list fills that space.
+  User's decision, 2026-10-17: Rows' package list always shows at least
+  3 rows at the window's minimum size, not 6, so the smallest window
+  fits a 1080-pixel screen. Measured first: at Noto Sans 10 Rows'
+  minimum height is already 912; six two-line rows would add about 200.
+  A taller window still gives the list all the spare height. This amends
+  ONEUP-0239 §4.2 item 2 and INV-17 for Rows, so review-contract runs on
+  the amendment before this is built. Cause of the one-row list: the
+  package page's floor is six lines of the log's font
+  (LayoutHost.apply_metrics), below the table's header.
   **Layman:** In the Rows layout the list of updates is only one line tall, even though there is room.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.
@@ -9619,3 +9628,19 @@ when complete (that document's §7).
   Kind: feature.
   Source: user-decision-2026-10-16.
   Lanes: engine, gui.
+
+- 📋 [ONEUP-0321] **Measure how many packages zypper already downloads at once, before adding any download setting.**
+  The user suggested downloading up to 3 packages at once (2026-10-17).
+  OneUp already downloads in parallel: zypper's commit preload fetches
+  the set before installing (the engine parses its "Preloading:" lines,
+  oneup/engine/proc.py). OneUp sets no download option, so the number is
+  libzypp's download.max_concurrent_connections at its default; this
+  machine's /usr/etc/zypp/zypp.conf does not mention it. Its default is
+  believed to be 5 and is NOT verified. Fixing it at 3 could make
+  downloads slower. Measure on a real update in the test VM (zypper.log,
+  or connections to the mirror during the preload), then decide.
+  User's decision, 2026-10-17: investigate first.
+  **Layman:** Check how many updates OneUp already downloads at the same time, before deciding whether to change it.
+  Kind: investigate.
+  Source: user-request-2026-10-17.
+  Lanes: engine.
