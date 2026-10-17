@@ -120,3 +120,4 @@ class RowsLayout(LayoutHost):
         header = self.table.verticalHeader()
         header.setDefaultSectionSize(fm.lineSpacing() * 2 + 8)
         header.setSectionResizeMode(header.ResizeMode.Fixed)
+        pv.hold_rows(self.table, self.PACKAGE_ROWS, header.defaultSectionSize())

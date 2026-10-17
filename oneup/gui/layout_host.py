@@ -22,8 +22,8 @@ from . import details_dialog, package_views, steps
 BANNER_BUTTONS = ("restart_btn", "services_btn", "warn_copy_btn", "warn_btn", "warn_btn2",
                   "retry_btn", "appupdate_btn")
 
-# The package area holds at least this many lines of a package view (§4.2 item 2).
-PACKAGE_LINES = 6
+# The log holds at least this many of its own lines.
+LOG_LINES = 6
 
 
 class LayoutHost(QWidget):
@@ -32,6 +32,8 @@ class LayoutHost(QWidget):
 
     LAYOUT_ID = ""
     FORM = "full"
+    # The package view's floor, in the view's own rows (§4.2 item 2).
+    PACKAGE_ROWS = 3
 
     def __init__(self, win) -> None:
         super().__init__()
@@ -138,10 +140,7 @@ class LayoutHost(QWidget):
         for r in win.rows.values():
             r.apply_metrics()
         win.message_strip.apply_metrics()
-        lines = win.log.fontMetrics().lineSpacing() * PACKAGE_LINES
-        win.log.setMinimumHeight(lines)
-        for b in self.bodies:
-            b.setMinimumHeight(lines)
+        win.log.setMinimumHeight(win.log.fontMetrics().lineSpacing() * LOG_LINES)
 
     def show_bodies(self, any_packages: bool) -> None:
         sentence = package_views.empty_sentence(self.win)

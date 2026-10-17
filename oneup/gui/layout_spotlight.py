@@ -35,6 +35,7 @@ def _of(part: str, whole: str) -> str:
 class SpotlightLayout(LayoutHost):
     LAYOUT_ID = "spotlight"
     FORM = "tile"
+    PACKAGE_ROWS = 6
 
     def __init__(self, win) -> None:
         super().__init__(win)
@@ -142,6 +143,11 @@ class SpotlightLayout(LayoutHost):
             if (p.name, p.edition) == latest[1:]:
                 return pv.join_parts(p.name, pv.state_word(model, p), pv.versions(p), p.repo)
         return ""
+
+    def apply_metrics(self) -> None:
+        super().apply_metrics()
+        for view in (self.next_list, self.done_list):
+            pv.hold_rows(view, self.PACKAGE_ROWS, view.itemDelegate().height(view.fontMetrics()))
 
     def focus_chain(self) -> list[QWidget]:
         win = self.win

@@ -228,6 +228,10 @@ class LinesDelegate(QStyledItemDelegate):
     def _line_height(self, option) -> int:
         return option.fontMetrics.lineSpacing()
 
+    def height(self, fm) -> int:
+        """An item's height in the font `fm`."""
+        return self._lines * fm.lineSpacing() + 8
+
     def sizeHint(self, option, index) -> QSize:
         base = super().sizeHint(option, index)
         # On a board the grid sets a card's width, never its text: a card as wide
@@ -235,7 +239,7 @@ class LinesDelegate(QStyledItemDelegate):
         view = self.parent()
         grid = view.gridSize() if isinstance(view, QListView) else QSize()
         width = grid.width() - 8 if grid.isValid() else base.width()
-        return QSize(width, self._lines * self._line_height(option) + 8)
+        return QSize(width, self.height(option.fontMetrics))
 
     @staticmethod
     def _current(opt, index) -> bool:
@@ -331,6 +335,33 @@ def fit_board(view: QListView) -> None:
     characters wide. Called again when the text size changes."""
     fm = view.fontMetrics()
     view.setGridSize(QSize(fm.averageCharWidth() * 26, fm.lineSpacing() * 3 + 16))
+
+
+def hold_rows(view: QAbstractItemView, rows: int, row: int) -> None:
+    """Room for `rows` of the view's own rows, each `row` tall, below its header and
+    inside its frame: the layout's floor (ONEUP-0239 §4.2 item 2)."""
+    header = 0
+    if isinstance(view, QTableView) and not view.horizontalHeader().isHidden():
+        header = view.horizontalHeader().sizeHint().height()
+    view.setMinimumHeight(rows * row + header + 2 * view.frameWidth())
+    # Qt stops passing a size change up at a hidden widget — Spotlight's lists, while
+    # the page shows its sentence — so the window would measure its minimum without
+    # this floor. Drop every cached size from the view up to the window instead.
+    node = view
+    while node is not None:
+        node.updateGeometry()
+        if node.layout() is not None:
+            _invalidate(node.layout())
+        node = node.parentWidget()
+
+
+def _invalidate(layout) -> None:
+    """A layout's cached sizes, and those of every layout nested in it."""
+    layout.invalidate()
+    for i in range(layout.count()):
+        child = layout.itemAt(i).layout()
+        if child is not None:
+            _invalidate(child)
 
 
 class _Sentence(QLabel):

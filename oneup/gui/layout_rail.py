@@ -117,3 +117,4 @@ class RailLayout(LayoutHost):
         self.rail.setMinimumWidth(widest + row.switch.minimumWidth() + 10
                                   + card.left() + card.right() + frame.left() + frame.right())
         pv.fit_board(self.board)
+        pv.hold_rows(self.board, self.PACKAGE_ROWS, self.board.gridSize().height())

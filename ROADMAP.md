@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=322 -->
+<!-- ants-roadmap-id-high-water: ONEUP=323 -->
 
 # OneUp Roadmap
 
@@ -9288,7 +9288,7 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0310] **In Rows the package list is squeezed to about one row, with empty space below it.**
+- 🚧 [ONEUP-0310] **In Rows the package list is squeezed to about one row, with empty space below it.**
   Seen 2026-10-17 in the VM (window 980x886): the table shows its
   header and one package; the space under it to the status lines is
   empty. The sketch's list fills that space.
@@ -9310,6 +9310,18 @@ when complete (that document's §7).
   with the measured minimum heights (995 Normal, 1037 Large, 1105
   Larger, Noto Sans 10). Five verified findings outside the amendment
   are filed on ONEUP-0322, not fixed.
+  2026-10-17 built. Each layout sets its own floor in its own rows
+  (package_views.hold_rows): Rows 3 table rows, Rail 3 card rows,
+  Spotlight 6 lines in each list; LayoutHost.apply_metrics keeps six
+  lines for the log alone. hold_rows also drops cached sizes up to the
+  window, because Qt stops passing a size change up at a hidden widget,
+  and Spotlight's lists sit in one while the page shows its sentence.
+  Test: INV-17's viewport half in tests/gui-smoke.py, red first (Rows 1
+  row, Spotlight 2 lines), green after; window minimum at Normal,
+  offscreen: Rows 960, Rail 791, Spotlight 676. Rail's floor is latent:
+  its step column already makes the board taller than three cards, so
+  removing it fails nothing today. Stays in progress for ONEUP-0239 §7's
+  check by eye in the VM.
   **Layman:** In the Rows layout the list of updates is only one line tall, even though there is room.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.
@@ -9493,9 +9505,31 @@ when complete (that document's §7).
   Decided (2026-10-17, user): to keep review cost down, make these spec
   fixes together with the next change that amends ONEUP-0239, so one
   review-contract run covers both. Not a separate review.
+  2026-10-17, one more for the same amendment: ONEUP-0310's build makes
+  §4.2 item 2's sentence "Today's floor is six lines of the log's font
+  (LayoutHost.apply_metrics), which holds one or two table rows" false.
+  Each layout now sets its own floor (package_views.hold_rows);
+  LayoutHost.apply_metrics keeps six lines for the log alone. Delete the
+  sentence.
   **Layman:** Two small unclear spots in the layouts plan, found while checking the Rows list change, need a decision.
   Kind: doc-fix.
   Source: review-contract-ONEUP-0310-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0323] **The package lists keep the same text size whatever Text size is chosen.**
+  Found 2026-10-17 while building ONEUP-0310. INV-17's new test reads
+  each view's row height at every TEXT_SCALES entry, and it is the same
+  at all three: Rows' table 42 px, Rail's card 67 px, Spotlight's line
+  25 px (offscreen, Noto Sans 10). Cause: oneup/gui/theme.py gives labels
+  and buttons a scaled font-size, but its rules for #PackageTable,
+  #PackageBoard and #PackageLists set none, so the views keep the app's
+  default font. ONEUP-0239 §4.2 item 1 sizes every area from the current
+  font and recomputes on a text-size change, and ui-and-accessibility.md
+  §4 covers scaling. Once fixed, the floors (ONEUP-0310) follow on their
+  own: they read the views' own row heights.
+  **Layman:** Making the text larger in OneUp makes every label bigger except the list of updates, which stays small.
+  Kind: accessibility.
+  Source: ONEUP-0310-build-2026-10-17.
   Lanes: gui.
 
 ## 2.1.0 — after 2.0
