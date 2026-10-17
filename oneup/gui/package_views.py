@@ -236,9 +236,14 @@ class LinesDelegate(QStyledItemDelegate):
         base = super().sizeHint(option, index)
         # On a board the grid sets a card's width, never its text: a card as wide
         # as its longest line ran into the next card. Its lines elide instead.
+        # A plain list's line asks for no width: Qt makes it as wide as the list, so a
+        # long line elides rather than scrolling the list sideways (ONEUP-0312).
         view = self.parent()
         grid = view.gridSize() if isinstance(view, QListView) else QSize()
-        width = grid.width() - 8 if grid.isValid() else base.width()
+        if grid.isValid():
+            width = grid.width() - 8
+        else:
+            width = 0 if isinstance(view, QListView) else base.width()
         return QSize(width, self.height(option.fontMetrics))
 
     @staticmethod

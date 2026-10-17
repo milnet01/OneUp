@@ -9342,10 +9342,19 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0312] **In Spotlight the Up next lines run off the side, with a sideways scroll bar.**
+- 🚧 [ONEUP-0312] **In Spotlight the Up next lines run off the side, with a sideways scroll bar.**
   Seen 2026-10-17 in the VM: each line holds name, versions, size
   and repository. The sketch shows a clock or tick, the name and the
   size only.
+  2026-10-17 built. LinesDelegate.sizeHint gave a plain list's line its
+  text's width, so Spotlight's lists scrolled sideways. A plain list's
+  line now asks for no width; Qt makes it as wide as the list and the
+  line elides. Test: INV-18 in tests/gui-smoke.py, a 200-character name
+  in every view; red first (Spotlight's Up next 1307 and Done 1320 px of
+  sideways scroll), green after. Rows' table and Rail's board passed
+  already. Trimming the lines to symbol, name and size (§4.3) is
+  ONEUP-0316's. Stays in progress for ONEUP-0239 §7's check by eye in
+  the VM.
   **Layman:** In the Spotlight layout, the waiting list's lines are too long and need sideways scrolling.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.

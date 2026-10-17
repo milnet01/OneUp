@@ -150,6 +150,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Spotlight's package lists no longer scroll sideways** (ONEUP-0312)
+  A long line in the Up next or Done list is now shortened to fit, instead of making the list scroll sideways.
+
 - **The package list always shows a few packages, even in the smallest window** (ONEUP-0310)
   In Rows the list of updates could shrink to a single row. Now Rows always shows at least three packages, Rail three rows of cards, and Spotlight six lines in each of its lists.
 
