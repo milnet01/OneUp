@@ -6,6 +6,7 @@ area, the message strip, the status with the action slot, and the footer.
 from __future__ import annotations
 
 from PySide6.QtCore import QCoreApplication, Qt
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -31,6 +32,8 @@ _FILTERS = (
 # A tab is as wide as its label with this count, so a count that grows moves no tab
 # (§4.2 item 3).
 _WIDEST_COUNT = 9999
+# The versions column holds this many fixed-pitch characters: "1.23.5-pm.21 → 1.23.5-pm.22".
+_VERSION_CHARS = 28
 
 
 def _tab_text(word: str, count: int) -> str:
@@ -122,10 +125,14 @@ class RowsLayout(LayoutHost):
 
     def apply_metrics(self) -> None:
         super().apply_metrics()
-        fm = self.table.fontMetrics()
         header = self.table.verticalHeader()
-        header.setDefaultSectionSize(fm.lineSpacing() * 2 + 8)
+        header.setDefaultSectionSize(pv.row_height(self.table))
         header.setSectionResizeMode(header.ResizeMode.Fixed)
+        # Versions are as wide as _VERSION_CHARS of the fixed-pitch font, so a
+        # long version elides rather than moving the columns (§4.2).
+        fixed = QFontMetrics(pv.fixed_font(self.table.font()))
+        self.table.horizontalHeader().resizeSection(
+            2, fixed.horizontalAdvance("0" * _VERSION_CHARS) + 16)
         for btn, (_k, word) in zip(self.filter_buttons, _FILTERS, strict=True):
             shown = btn.text()
             btn.setText(_tab_text(word(), _WIDEST_COUNT))

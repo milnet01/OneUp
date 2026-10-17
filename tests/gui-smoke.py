@@ -5926,14 +5926,28 @@ def main() -> int:
     # font, so two versions of one length draw one width. Real pixels, in every
     # theme with the overlay off (the badge's fill) and on (the badge's rim).
     wS3 = _at_minimum("rows")
-    wS3.resize(1200, wS3.height())
-    run._reset_for_run(wS3, ["system"], check=True)
-    for line in ("@@CHECK_ITEM@@|system|libavutil60|iiiiii|iiiiij|1048576|Packman",
+    # Taller than the minimum, whose table holds three rows: this one compares four.
+    wS3.resize(1200, wS3.height() + 300)
+    run._reset_for_run(wS3, ["system", "flatpak"], check=True)
+    # The name carrying a label is a Flatpak and its twin with no label a system
+    # package, so the two differ only by the label: no Flatpak has details (ONEUP-0260).
+    for line in ("@@CHECK_ITEM@@|flatpak|kernel-default|iiiiii|iiiiij|1048576|Packman",
                  "@@CHECK_ITEM@@|system|vlc|MMMMMM|MMMMMW|1048576|" + "r" * 30,
-                 "@@CHECK_ITEM@@|system|vlc-b|1|2|1048576|" + "r" * 60):
+                 "@@CHECK_ITEM@@|system|vlc-b|1|2|1048576|" + "r" * 60,
+                 "@@CHECK_ITEM@@|system|kernel-default|1|2|1048576|"):
         run.handle_line(wS3, line)
     _tbl = wS3.host.table
     _rtl = QApplication.isRightToLeft()
+    _at = {(p.key, p.name): n for n, p in enumerate(wS3.host.items.packages())}
+    _short, _twin = _at["flatpak", "kernel-default"], _at["system", "kernel-default"]
+    _long, _longer = _at["system", "vlc"], _at["system", "vlc-b"]
+    QApplication.processEvents()
+    check("ONEUP-0313 all four rows are in view",
+          all(_tbl.viewport().rect().contains(_tbl.visualRect(_tbl.model().index(r, 1)))
+              for r in range(4)))
+    check("ONEUP-0313 neither kernel-default row carries the details mark",
+          not any(wS3.details.has_details(p) for p in wS3.host.items.packages()
+                  if p.name == "kernel-default"))
 
     def _cell(row, col):
         """The cell's (x, colour) pixels along its middle line, and its ground."""
@@ -5959,7 +5973,7 @@ def main() -> int:
             QApplication.processEvents()
             _where = f"{_th.id} overlay {'on' if _on else 'off'}"
             _labels = []
-            for row in range(3):
+            for row in (_short, _long, _longer):
                 px, ground = _cell(row, 1)
                 ink = [x for x, c in px if c != ground]
                 lab = [x for x, c in px if c == _mark.lower()]
@@ -5967,17 +5981,33 @@ def main() -> int:
                 if not lab:
                     _bad.append(f"{_where} row {row}: no source label in the package cell")
                     continue
-                # The name comes first in reading order, so its ink starts well
-                # before the label does.
+                # The name comes first in reading order, so its ink starts at least
+                # the name's width before the label does.
                 lead = (max(ink) - max(lab)) if _rtl else (min(lab) - min(ink))
-                if lead < _tbl.fontMetrics().horizontalAdvance("vlc") // 2:
-                    _bad.append(f"{_where} row {row}: the label does not follow the name "
+                _name = wS3.host.items.packages()[row].name
+                if lead < _tbl.fontMetrics().horizontalAdvance(_name):
+                    _bad.append(f"{_where} row {row}: the label does not follow the whole name "
                                 f"(lead {lead})")
+            # The name beside its label draws exactly as its twin with no label:
+            # whole, never elided while the cell has room.
+            px0, _g0 = _cell(_short, 1)
+            px1, _g1 = _cell(_twin, 1)
+            lab0 = [x for x, c in px0 if c == _mark.lower()]
+            if lab0:
+                edge = max(lab0) if _rtl else min(lab0)
+                beside = [c for x, c in px0 if (x > edge if _rtl else x < edge)]
+                alone = [c for x, c in px1 if (x > edge if _rtl else x < edge)]
+                if beside != alone:
+                    _diff = [n for n, (a, b)
+                             in enumerate(zip(beside, alone, strict=False)) if a != b]
+                    _bad.append(f"{_where}: the name beside its label is not drawn whole "
+                                f"(edge {edge}, {len(beside)}/{len(alone)} px, differ at "
+                                f"{_diff[:6]})")
             if not (0 < _labels[0] < _labels[1] == _labels[2]):
                 _bad.append(f"{_where}: label widths {_labels}, want a short one, then two "
                             f"long ones elided to one width")
             _vers = []
-            for row in range(2):
+            for row in (_short, _long):
                 px, ground = _cell(row, 2)
                 _vers.append(_span([x for x, c in px if c != ground]))
             if min(_vers) <= 0 or min(_vers) / max(_vers) < 0.85:

@@ -20,7 +20,16 @@ from PySide6.QtCore import (
     QSize,
     Qt,
 )
-from PySide6.QtGui import QBrush, QColor, QPainter, QPalette, QPen
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QFontDatabase,
+    QFontMetrics,
+    QPainter,
+    QPalette,
+    QPen,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -257,33 +266,175 @@ class LinesDelegate(QStyledItemDelegate):
         current = view.currentIndex()
         return current.isValid() and current.row() == index.row()
 
-    def paint(self, painter, option, index) -> None:
+    def _ground(self, painter, option, index) -> tuple[QStyleOptionViewItem, list[str]]:
+        """Paint the item's ground, and its focus fill when current; return the
+        option its text is drawn with, and that text's lines."""
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
         opt.state &= ~QStyle.StateFlag.State_HasFocus
-        current = self._current(opt, index)
         # initStyleOption has already turned each newline into U+2028.
         lines = (opt.text or "").replace("\u2028", "\n").split("\n")
-        style = opt.widget.style() if opt.widget else QApplication.style()
-        # The item's own ground once, then each line with no ground of its own.
         ground = QStyleOptionViewItem(opt)
         ground.text = ""
-        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, ground, painter, opt.widget)
-        if current:
+        _style(opt).drawControl(QStyle.ControlElement.CE_ItemViewItem, ground, painter,
+                                opt.widget)
+        if self._current(opt, index):
             # The derived focus fill and ink, which the sheet hands the view as its
             # selection colours (ONEUP-0260 §4.5). A fill, never a ring.
             painter.fillRect(opt.rect, opt.palette.color(QPalette.ColorRole.Highlight))
             opt.palette.setColor(QPalette.ColorRole.Text,
                                  opt.palette.color(QPalette.ColorRole.HighlightedText))
+        return opt, lines
+
+    @staticmethod
+    def _line(painter, opt, text: str, rect: QRect) -> None:
+        """One line of text in `rect`, through the style, with no ground of its own."""
+        one = QStyleOptionViewItem(opt)
+        one.text = text
+        one.backgroundBrush = QBrush()
+        one.state &= ~QStyle.StateFlag.State_Selected
+        one.rect = rect
+        _style(opt).drawControl(QStyle.ControlElement.CE_ItemViewItem, one, painter, opt.widget)
+
+    def paint(self, painter, option, index) -> None:
+        opt, lines = self._ground(painter, option, index)
         h = self._line_height(opt)
         top = opt.rect.top() + (opt.rect.height() - h * len(lines)) // 2
         for n, line in enumerate(lines):
-            one = QStyleOptionViewItem(opt)
-            one.text = line
-            one.backgroundBrush = QBrush()
-            one.state &= ~QStyle.StateFlag.State_Selected
-            one.rect = QRect(opt.rect.left(), top + n * h, opt.rect.width(), h)
-            style.drawControl(QStyle.ControlElement.CE_ItemViewItem, one, painter, opt.widget)
+            self._line(painter, opt, line,
+                       QRect(opt.rect.left(), top + n * h, opt.rect.width(), h))
+
+
+def _style(opt) -> QStyle:
+    return opt.widget.style() if opt.widget else QApplication.style()
+
+
+def fixed_font(font: QFont) -> QFont:
+    """The desktop's fixed-pitch font at `font`'s size, so it follows the text size."""
+    fixed = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+    if font.pointSizeF() > 0:
+        fixed.setPointSizeF(font.pointSizeF())
+    else:
+        fixed.setPixelSize(font.pixelSize())
+    return fixed
+
+
+class FixedPitchDelegate(LinesDelegate):
+    """Rows' versions: one line, old → new, in the fixed-pitch font (§4.3)."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(1, parent)
+
+    def height(self, fm) -> int:
+        view = self.parent()
+        fixed = QFontMetrics(fixed_font(view.font())) if view else fm
+        return max(fm.lineSpacing(), fixed.lineSpacing()) + 8
+
+    def initStyleOption(self, option, index) -> None:
+        super().initStyleOption(option, index)
+        option.font = fixed_font(option.font)
+        option.fontMetrics = QFontMetrics(option.font)
+
+
+class SourceDelegate(LinesDelegate):
+    """Rows' package cell: the name, then its source in a small rounded label on
+    the same line (§4.3). The item's text is the name, then the source on a second
+    line, so its tooltip and the words a screen reader hears carry both."""
+
+    # The label elides past this many average character widths.
+    SOURCE_CHARS = 16
+    GAP = 8          # pixels between the name and its label
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(1, parent)
+
+    def paint(self, painter, option, index) -> None:
+        opt, lines = self._ground(painter, option, index)
+        name, source = lines[0], (lines[1] if len(lines) > 1 else "")
+        rect = opt.rect
+        if not source:
+            self._line(painter, opt, name, rect)
+            return
+        font = QFont(opt.font)
+        font.setWeight(QFont.Weight.DemiBold)
+        lfm = QFontMetrics(font)
+        text = lfm.elidedText(source, Qt.TextElideMode.ElideRight,
+                              lfm.averageCharWidth() * self.SOURCE_CHARS)
+        pad = lfm.averageCharWidth()
+        label_w = min(lfm.horizontalAdvance(text) + 2 * pad, rect.width() // 2)
+        label_h = lfm.height() + 4
+        # The name's natural width, asked of the style that draws it: its margins
+        # around item text are its own, and a guess at them elided short names.
+        alone = QStyleOptionViewItem(opt)
+        alone.text = name
+        natural = _style(opt).sizeFromContents(QStyle.ContentsType.CT_ItemViewItem, alone,
+                                               QSize(), opt.widget).width()
+        name_w = min(natural, rect.width() - label_w - self.GAP)
+        # Laid out in reading order, then mirrored when the view runs right to left.
+        name_rect = QStyle.visualRect(opt.direction, rect,
+                                      QRect(rect.left(), rect.top(), name_w, rect.height()))
+        label = QStyle.visualRect(opt.direction, rect, QRect(
+            rect.left() + name_w + self.GAP, rect.top() + (rect.height() - label_h) // 2,
+            label_w, label_h))
+        self._line(painter, opt, name, name_rect)
+        view = self.parent()
+        fill, ink, rim = view.get_label_fill(), view.get_label_ink(), view.get_label_rim()
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(rim, 1))
+        painter.setBrush(fill)
+        radius = label_h / 3
+        painter.drawRoundedRect(QRectF(label).adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+        painter.setFont(font)
+        painter.setPen(ink)
+        painter.drawText(label, Qt.AlignmentFlag.AlignCenter, text)
+        painter.restore()
+
+
+class PackageTable(QTableView):
+    """Rows' table. Its source labels are painted, so their colours arrive from
+    the stylesheet as properties, as the size strip's ink does."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        # Set from the stylesheet; these defaults only show before the sheet arrives.
+        p = theme.current_palette()
+        self._label = {"fill": QColor(p["badgebg"]), "ink": QColor(p["badgefg"]),
+                       "rim": QColor(p["badgebg"])}
+
+    def _set(self, part: str, colour) -> None:
+        self._label[part] = QColor(colour)
+        self.viewport().update()
+
+    def get_label_fill(self) -> QColor:
+        return self._label["fill"]
+
+    def set_label_fill(self, colour) -> None:
+        self._set("fill", colour)
+
+    def get_label_ink(self) -> QColor:
+        return self._label["ink"]
+
+    def set_label_ink(self, colour) -> None:
+        self._set("ink", colour)
+
+    def get_label_rim(self) -> QColor:
+        return self._label["rim"]
+
+    def set_label_rim(self, colour) -> None:
+        self._set("rim", colour)
+
+    labelFill = Property(QColor, get_label_fill, set_label_fill)
+    labelInk = Property(QColor, get_label_ink, set_label_ink)
+    labelRim = Property(QColor, get_label_rim, set_label_rim)
+
+
+def row_height(view: QTableView) -> int:
+    """A table row's height from the font: the tallest of its columns' lines."""
+    fm = view.fontMetrics()
+    delegates = [view.itemDelegateForColumn(c) or view.itemDelegate()
+                 for c in range(view.model().columnCount())]
+    return max(d.height(fm) for d in delegates)
 
 
 def _quiet(view: QAbstractItemView, lines: int) -> None:
@@ -295,13 +446,16 @@ def _quiet(view: QAbstractItemView, lines: int) -> None:
     view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
 
-def package_table(items: PackageItems, name: str) -> QTableView:
-    """Rows' table: state, package with its source under the name, versions, size."""
-    view = QTableView()
+def package_table(items: PackageItems, name: str) -> PackageTable:
+    """Rows' table: state, package with its source label beside the name, versions
+    in the fixed-pitch font, size. One line per package."""
+    view = PackageTable()
     view.setObjectName("PackageTable")
     view.setAccessibleName(name)
     view.setModel(items)
-    _quiet(view, 2)
+    _quiet(view, 1)
+    view.setItemDelegateForColumn(1, SourceDelegate(view))
+    view.setItemDelegateForColumn(2, FixedPitchDelegate(view))
     view.setShowGrid(False)
     view.setWordWrap(False)
     view.verticalHeader().setVisible(False)

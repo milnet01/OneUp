@@ -418,6 +418,10 @@ QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border
 QScrollArea#SettingsScroll, QWidget#SettingsBody { background: transparent; border: none; }
 /* The size strip is painted, so its ink arrives as a property. */
 #SizeStrip { qproperty-ink: $tname; }
+/* Rows' source labels are painted too, in the badge's colours (ONEUP-0313). */
+QTableView#PackageTable {
+    qproperty-labelFill: $badgebg; qproperty-labelInk: $badgefg; qproperty-labelRim: $badgebg;
+}
 /* The window's bar marks where a step's install half starts, in the surface's colour. */
 QProgressBar#RunProgress { qproperty-mark: $card; }
 /* The two dialog panels, on `win` rather than on the card. Same mechanism, same
@@ -595,6 +599,10 @@ QTableView#PackageTable QHeaderView::section {
 QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border: none; }
 QScrollArea#SettingsScroll, QWidget#SettingsBody { background: transparent; border: none; }
 #SizeStrip { qproperty-ink: $text; }
+/* The source label takes the overlay badge's look: the card, ringed. */
+QTableView#PackageTable {
+    qproperty-labelFill: $card; qproperty-labelInk: $text; qproperty-labelRim: $border;
+}
 QScrollArea#RepoScroll { background: transparent; border: 2px solid $border; }
 QListWidget#RollbackList { background: $card; color: $text; border: 2px solid $border; }
 /* The overlay's surfaces are all `card` or `win`, which it makes one colour, so
