@@ -5740,6 +5740,26 @@ def main() -> int:
     _qs.setValue("text_scale", _scale0)
     theme.apply_app_theme(QApplication.instance())
 
+    # INV-17, its titles half: at the minimum size no step title is cut short, in any
+    # layout or text size. The package views' floor is ONEUP-0310's.
+    def _whole_title(lbl):
+        if lbl.wordWrap():
+            return lbl.heightForWidth(lbl.width()) <= lbl.height()
+        return lbl.width() >= lbl.fontMetrics().horizontalAdvance(lbl.text())
+
+    _scale0 = _qs.value("text_scale", 1.0, type=float)
+    for _label, _mult in theme.TEXT_SCALES:
+        _qs.setValue("text_scale", _mult)
+        theme.apply_app_theme(QApplication.instance())
+        for _lid in _ids:
+            w17 = _at_minimum(_lid)
+            cut = [f"{r.name.text()} {r.name.width()}" for r in w17.rows.values()
+                   if not _whole_title(r.name)]
+            check(f"ONEUP-0239 INV-17 no step title is cut short ({_lid}, {_label}: {cut})",
+                  not cut)
+    _qs.setValue("text_scale", _scale0)
+    theme.apply_app_theme(QApplication.instance())
+
     # INV-14: during a run Stop alone holds the action slot, and the slot neither moves
     # nor resizes between idle, the run and its end.
     def _slot(wL):
