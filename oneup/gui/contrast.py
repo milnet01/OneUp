@@ -81,22 +81,27 @@ LINK_SURFACES = ("card", "rowcard", "rowhov", WARN_GROUND)
 
 PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     # --- 4.5:1, the foreground renders text ------------------------------
-    # Rail's board heading puts `header` on the card (ONEUP-0315).
-    ("header", ("win", "card"), TEXT),
-    ("tag", ("win",), TEXT),
+    # Rail's board heading puts `header` on the card (ONEUP-0315); Spotlight's panel
+    # puts it on `rowcard` and its figure boxes on `logbg`, with their labels in
+    # `tag` (ONEUP-0316).
+    ("header", ("win", "card", "rowcard", "logbg"), TEXT),
+    ("tag", ("win", "logbg"), TEXT),
     # `tname` is also every unnamed label's ink, on the dialog root as well as on
     # the settings and repository rows (ONEUP-0301).
     ("tname", ("rowcard", "rowhov", "win"), TEXT),
     ("tdesc", ("rowcard", "rowhov"), TEXT),
     ("badgefg", ("badgebg",), TEXT),
     ("logfg", ("logbg",), TEXT),
-    ("status", ("card",), TEXT),
+    # The status line and the bar's caption also sit in Spotlight's panel (ONEUP-0316).
+    ("status", ("card", "rowcard"), TEXT),
     ("lastrun", ("card", "win"), TEXT),
     ("ghostfg", ("card",), TEXT),
     # The dialog's Close and Settings' tabs (ONEUP-0303) put the ghost label on
     # `win`, and the current tab its hover ink.
     ("ghostfg", ("win",), TEXT),
     ("ghosthov", ("win",), TEXT),
+    # Spotlight's "Now" heading and its percentage, on the panel (ONEUP-0316).
+    ("ghosthov", ("rowcard",), TEXT),
     # `amber` is also the ThemeNote colour, which sits on the dialog root (`win`),
     # not on a card — and that is the one place a theme failure is reported, so it
     # is the text that must not be the hardest to read. Measured on `card` alone it

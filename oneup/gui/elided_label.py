@@ -42,26 +42,16 @@ class ElidedLabel(QLabel):
             self.style().unpolish(self)
             self.style().polish(self)
 
-    # With word wrap on — a Spotlight tile's title — it is an ordinary wrapping
-    # label: its height follows its width, and its area allows for that.
-
     def sizeHint(self) -> QSize:
-        if self.wordWrap():
-            return super().sizeHint()
         m = self.contentsMargins()
         fm = self.fontMetrics()
         return QSize(fm.averageCharWidth() * _HINT_CHARS + m.left() + m.right(),
                      fm.height() + m.top() + m.bottom())
 
     def minimumSizeHint(self) -> QSize:
-        if self.wordWrap():
-            return super().minimumSizeHint()
         return self.sizeHint()
 
     def paintEvent(self, event) -> None:
-        if self.wordWrap():
-            super().paintEvent(event)
-            return
         if not self.text():
             return
         p = QPainter(self)

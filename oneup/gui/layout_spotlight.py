@@ -1,35 +1,34 @@
 """Spotlight: large type about what is happening now (ONEUP-0239 §4.3).
 
-Below the header: the five rows as tiles side by side, the spotlight panel — the
-status in large type, the bar, the latest package, three figures and the size
-link — then the package area as two lists, *Up next* and *Done*, the message
-strip, and the footer with the action slot at its trailing end. The panel stays in view when the log
-takes the package area's place.
+Below the header: the five rows as tiles side by side, the spotlight panel — a
+small "Now · {step}" heading, the latest package as a sentence in large type with
+its description, source and versions under it, the step's percentage at the
+trailing end, the bar, the status line, and three figure boxes — then the package
+area as two lists, *Up next* and *Done*, the size link at the trailing end of the
+first's heading, the message strip, and the footer with the action slot at its
+trailing end. The panel stays in view when the log takes the package area's place.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtCore import QCoreApplication, Qt
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from . import package_views as pv
 from . import steps
 from .elided_label import ElidedLabel
 from .layout_host import LayoutHost
 from .markers import _format_size
-
-# The states a package has reached once its download is behind it.
-_FETCHED = ("downloaded", "installed", "removed")
-_CHANGED = ("installed", "removed")
-
-
-def _figure(label: str, value: str) -> str:
-    return QCoreApplication.translate("layout_spotlight", "{label}: {value}").format(
-        label=label, value=value)
+from .step_progress import FULL
 
 
 def _of(part: str, whole: str) -> str:
     return QCoreApplication.translate("layout_spotlight", "{part} of {whole}").format(
         part=part, whole=whole)
+
+
+def _heading(word: str, count: int) -> str:
+    return QCoreApplication.translate("layout_spotlight", "{list} · {count}").format(
+        list=word, count=count)
 
 
 class SpotlightLayout(LayoutHost):
@@ -48,59 +47,101 @@ class SpotlightLayout(LayoutHost):
             tiles.addWidget(win.rows[key], 1)
         v.addLayout(tiles)
 
-        # The panel: the status in large type (a selector on #SpotlightPanel), the
-        # bar, its caption and the activity line, then the latest package, three
-        # figures and the size link.
+        # The panel. It paints a raised surface of its own (§4.8), so it holds no
+        # button: the size link sits on the Up next heading instead (§4.6).
         self.panel = QFrame()
         self.panel.setObjectName("SpotlightPanel")
         pl = QVBoxLayout(self.panel)
-        pl.setContentsMargins(0, 0, 0, 0)
+        pl.setContentsMargins(20, 16, 20, 16)
         pl.setSpacing(6)
-        pl.addLayout(self.status_column())
-        self.latest = ElidedLabel("")
-        self.latest.setObjectName("Tagline")
-        pl.addWidget(self.latest)
+        self.now_heading = ElidedLabel("")
+        self.now_heading.setObjectName("SpotlightNow")
+        pl.addWidget(self.now_heading)
+        top = QHBoxLayout()
+        top.setSpacing(16)
+        lines = QVBoxLayout()
+        lines.setSpacing(2)
+        self.headline = ElidedLabel("")
+        self.headline.setObjectName("SpotlightHeadline")
+        self.about = ElidedLabel("")
+        self.about.setObjectName("SpotlightAbout")
+        lines.addWidget(self.headline)
+        lines.addWidget(self.about)
+        top.addLayout(lines, 1)
+        # As wide as "100%" at its font (apply_metrics), so a new figure moves
+        # nothing beside it.
+        self.percent = ElidedLabel("")
+        self.percent.setObjectName("SpotlightPercent")
+        self.percent.setAlignment(Qt.AlignmentFlag.AlignTrailing)
+        top.addWidget(self.percent, 0)
+        pl.addLayout(top)
+        # The bar, then the status line under it, which the sketch lacks but which
+        # stays in view so a stall is never hidden (§4.3 Spotlight item 2).
+        for w in (win.bar, win.status, win.bar_caption, win.activity):
+            pl.addWidget(w)
         figures = QHBoxLayout()
-        figures.setSpacing(16)
-        self.figures = [ElidedLabel("") for _ in range(3)]
-        for f in self.figures:
-            f.setObjectName("Tagline")
-            figures.addWidget(f, 1)
-        figures.addWidget(win.size_link, 0)
+        figures.setSpacing(12)
+        self.figures: list[ElidedLabel] = []
+        for label in (QCoreApplication.translate("layout_spotlight", "Packages"),
+                      QCoreApplication.translate("layout_spotlight", "Downloaded"),
+                      QCoreApplication.translate("layout_spotlight", "Time left")):
+            box = QFrame()
+            box.setObjectName("FigureBox")
+            bl = QVBoxLayout(box)
+            bl.setContentsMargins(14, 10, 14, 10)
+            bl.setSpacing(2)
+            name = ElidedLabel(label)
+            name.setObjectName("FigureLabel")
+            value = ElidedLabel("")
+            value.setObjectName("FigureValue")
+            bl.addWidget(name)
+            bl.addWidget(value)
+            figures.addWidget(box, 1)
+            self.figures.append(value)
         pl.addLayout(figures)
         v.addWidget(self.panel)
         v.addWidget(win.package_area, 1)
         v.addWidget(win.message_strip)
         v.addLayout(self.footer(with_actions=True))
 
-        # The package page: two lists side by side, one line per package.
+        # The package page: two lists side by side, one line per package, each
+        # headed with its count.
         model = win.packages
 
         def line(p):
-            return pv.join_parts(pv.name_text(win, p), pv.versions(p), pv.size_text(p),
-                                 p.repo, pv.state_word(model, p))
+            return pv.join_parts(pv.state_word(model, p), pv.name_text(win, p), pv.size_text(p))
+
+        def parts(p):
+            return pv.state_word(model, p), pv.name_text(win, p), pv.size_text(p)
 
         self.next_items = pv.PackageItems(model, [line], has_details=win.details.has_details)
         self.done_items = pv.PackageItems(model, [line], has_details=win.details.has_details)
         self.next_list = pv.package_list(self.next_items, QCoreApplication.translate(
-            "layout_spotlight", "Up next"))
+            "layout_spotlight", "Up next"), parts)
         self.done_list = pv.package_list(self.done_items, QCoreApplication.translate(
-            "layout_spotlight", "Done"))
+            "layout_spotlight", "Done"), parts)
         self.opens_details(self.next_list, self.next_items)
         self.opens_details(self.done_list, self.done_items)
+        self.next_heading = ElidedLabel("")
+        self.done_heading = ElidedLabel("")
+        self.heads: list[QWidget] = []
         lists = QWidget()
         ll = QHBoxLayout(lists)
         ll.setContentsMargins(0, 0, 0, 0)
         ll.setSpacing(12)
-        for title, view in ((QCoreApplication.translate("layout_spotlight", "Up next"),
-                             self.next_list),
-                            (QCoreApplication.translate("layout_spotlight", "Done"),
-                             self.done_list)):
+        for heading, view, link in ((self.next_heading, self.next_list, win.size_link),
+                                    (self.done_heading, self.done_list, None)):
+            heading.setObjectName("GroupHeading")
             col = QVBoxLayout()
             col.setSpacing(4)
-            heading = QLabel(title)
-            heading.setObjectName("GroupHeading")
-            col.addWidget(heading)
+            head = QWidget()
+            self.heads.append(head)
+            hl = QHBoxLayout(head)
+            hl.setContentsMargins(0, 0, 0, 0)
+            hl.addWidget(heading, 1)
+            if link is not None:
+                hl.addWidget(link, 0)
+            col.addWidget(head)
             col.addWidget(view, 1)
             ll.addLayout(col, 1)
         pg = QVBoxLayout(self.page)
@@ -109,43 +150,78 @@ class SpotlightLayout(LayoutHost):
         self.listen()
 
     def refresh(self) -> None:
-        win = self.win
-        model = win.packages
+        model = self.win.packages
         every = model.packages()
         state = {id(p): model.shown_state(p) for p in every}
-        self.next_items.set_packages([p for p in every if pv.GROUP[state[id(p)]] != "done"])
-        self.done_items.set_packages([p for p in every if pv.GROUP[state[id(p)]] == "done"])
-        total = len(every)
-        fetched = [p for p in every if state[id(p)] in _FETCHED]
-        changed = sum(1 for p in every if state[id(p)] in _CHANGED)
-        all_bytes = sum(p.size for p in every)
-        self.figures[0].setText(_figure(
-            QCoreApplication.translate("layout_spotlight", "Downloaded"),
-            _of(str(len(fetched)), str(total))))
-        self.figures[1].setText(_figure(
-            QCoreApplication.translate("layout_spotlight", "Installed"),
-            _of(str(changed), str(total))))
-        self.figures[2].setText(_figure(
-            QCoreApplication.translate("layout_spotlight", "Download"),
-            _of(_format_size(sum(p.size for p in fetched)), _format_size(all_bytes))
-            if all_bytes else QCoreApplication.translate("layout_spotlight", "not known")))
-        self.latest.setText(self._latest_line())
+        upcoming = [p for p in every if pv.GROUP[state[id(p)]] != "done"]
+        done = [p for p in every if pv.GROUP[state[id(p)]] == "done"]
+        self.next_items.set_packages(upcoming)
+        self.done_items.set_packages(done)
+        self.next_heading.setText(_heading(
+            QCoreApplication.translate("layout_spotlight", "Up next"), len(upcoming)))
+        self.done_heading.setText(_heading(
+            QCoreApplication.translate("layout_spotlight", "Done"), len(done)))
+        self.show_progress()
         self.show_bodies(bool(every))
 
-    def _latest_line(self) -> str:
-        """The package the last PKG line named: its state, versions and source.
-        Blank while there is none; the line keeps its height (§4.3.3)."""
+    def show_progress(self) -> None:
+        """The panel: the running step, the latest package, the step's percentage
+        and the three figures, from the running step's last PROGRESS (§4.3.1)."""
+        win = self.win
+        key = win.current_step
+        title = {k: t for k, t, _d in steps.TASKS}.get(key, key)
+        self.now_heading.setText(QCoreApplication.translate(
+            "layout_spotlight", "Now · {step}").format(
+            step=QCoreApplication.translate("steps", title)) if key else "")
+        self.headline.setText("")
+        self.about.setText("")
+        package = self._latest()
+        if package is not None:
+            self.headline.setText(self._sentence(package))
+            about = win.details.about(package.name) if package.key == "system" else None
+            self.about.setText(pv.join_parts(about.summary if about else "", package.repo,
+                                             pv.versions(package)))
+        value = win.step_progress.get(key) if key else None
+        self.percent.setText("" if value is None else QCoreApplication.translate(
+            "layout_spotlight", "{percent}%").format(percent=round(value * 100 / FULL)))
+        unknown = QCoreApplication.translate("layout_spotlight", "not known")
+        done, total = win._progress_count
+        self.figures[0].setText(_of(str(done), str(total)) if total else unknown)
+        self.figures[1].setText(_of(_format_size(win._dl_got), _format_size(win._dl_total))
+                                if win._dl_total else unknown)
+        # The time left is ONEUP-0318's (§4.1.2); until it lands, it is not known.
+        self.figures[2].setText(unknown)
+
+    def _latest(self):
+        """The package the last PKG line named, or None while there is none."""
         latest = self.win.latest_package
         if latest is None:
-            return ""
-        model = self.win.packages
-        for p in model.packages(latest[0]):
+            return None
+        for p in self.win.packages.packages(latest[0]):
             if (p.name, p.edition) == latest[1:]:
-                return pv.join_parts(p.name, pv.state_word(model, p), pv.versions(p), p.repo)
-        return ""
+                return p
+        return None
+
+    def _sentence(self, package) -> str:
+        """One whole sentence per phase, or the name alone outside one (§4.3.3)."""
+        win = self.win
+        phase = win._progress_phase if package.key == win.current_step else ""
+        if phase == "download":
+            return QCoreApplication.translate("layout_spotlight", "Downloading {name}").format(
+                name=package.name)
+        if phase == "install":
+            return QCoreApplication.translate("layout_spotlight", "Installing {name}").format(
+                name=package.name)
+        return package.name
 
     def apply_metrics(self) -> None:
         super().apply_metrics()
+        self.percent.setMinimumWidth(self.percent.fontMetrics().horizontalAdvance(
+            QCoreApplication.translate("layout_spotlight", "{percent}%").format(percent=100)))
+        # Both headings stand as tall as the one holding the size link, so the two
+        # lists start level.
+        for head in self.heads:
+            head.setMinimumHeight(self.win.size_link.sizeHint().height())
         for view in (self.next_list, self.done_list):
             pv.hold_rows(view, self.PACKAGE_ROWS, view.itemDelegate().height(view.fontMetrics()))
 

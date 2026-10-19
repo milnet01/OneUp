@@ -240,8 +240,10 @@ TEXT_SCALES = [("Normal", 1.0), ("Large", 1.2), ("Larger", 1.45)]
 # Font sizes as multiples of the desktop's default point size. The ratios are the
 # app's original pixel sizes over a 10 pt (~13.3 px at 96 dpi) default, so
 # "Normal" reproduces the pre-ONEUP-0028 look to within a fraction of a point.
+# Large type (ONEUP-0239): fs_spot for Spotlight's package line and Rail's heading,
+# fs_figure for Spotlight's figures, fs_percent for its step percentage.
 _FONT_SCALE = dict(fs_header=1.58, fs_med=1.05, fs_body=0.90, fs_small=0.83,
-                   fs_spot=1.45)   # large type: Spotlight's status, Rail's heading (ONEUP-0239)
+                   fs_spot=1.45, fs_figure=1.2, fs_percent=2.3)
 
 _QSS = Template(r"""
 * { font-family: "Inter", "Noto Sans", "Segoe UI", "Cantarell", sans-serif; }
@@ -413,8 +415,17 @@ QTableView#PackageTable QHeaderView::section {
 }
 /* These paint nothing, so every button on them rests on the card and takes the
    card's focus pair. */
-#PackageFilter, #PackageSummary, #SpotlightPanel { background: transparent; }
-#SpotlightPanel QLabel#Status { font-size: $fs_spot; font-weight: 600; }
+#PackageFilter, #PackageSummary { background: transparent; }
+/* Spotlight's panel is raised, as the steps' rows are, and its figure boxes sunk,
+   as the log is; it holds no button, so no focus pair rests on it (ONEUP-0239 §4.8). */
+#SpotlightPanel { background: $rowcard; border: 1px solid $logbd; border-radius: 14px; }
+#FigureBox { background: $logbg; border-radius: 10px; }
+QLabel#SpotlightNow { font-size: $fs_small; font-weight: 700; color: $ghosthov; }
+QLabel#SpotlightHeadline { font-size: $fs_spot; font-weight: 700; color: $header; }
+QLabel#SpotlightAbout { font-size: $fs_body; color: $tdesc; }
+QLabel#SpotlightPercent { font-size: $fs_percent; font-weight: 700; color: $ghosthov; }
+QLabel#FigureLabel { font-size: $fs_small; color: $tag; }
+QLabel#FigureValue { font-size: $fs_figure; font-weight: 700; color: $header; }
 QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border: none; }
 QScrollArea#SettingsScroll, QWidget#SettingsBody { background: transparent; border: none; }
 /* The size strip is painted, so its ink arrives as a property, and its groups'
@@ -605,8 +616,12 @@ QTableView#PackageTable, QListView#PackageBoard, QListView#PackageLists {
 QTableView#PackageTable QHeaderView::section {
     background: $card; color: $text; border: none; border-bottom: 1px solid $border;
 }
-#PackageFilter, #PackageSummary, #SpotlightPanel { background: transparent; }
-#SpotlightPanel QLabel#Status { color: $text; }
+#PackageFilter, #PackageSummary { background: transparent; }
+#SpotlightPanel { background: $card; border: 2px solid $border; border-radius: 14px; }
+#FigureBox { background: $card; border: 1px solid $border; border-radius: 10px; }
+QLabel#SpotlightHeadline, QLabel#SpotlightAbout, QLabel#FigureLabel,
+QLabel#FigureValue { color: $text; }
+QLabel#SpotlightNow, QLabel#SpotlightPercent { color: $link; }
 QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border: none; }
 QScrollArea#SettingsScroll, QWidget#SettingsBody { background: transparent; border: none; }
 #SizeStrip { qproperty-ink: $text; qproperty-doneFill: $text; qproperty-nowFill: $link; }

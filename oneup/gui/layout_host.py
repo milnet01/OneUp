@@ -82,6 +82,10 @@ class LayoutHost(QWidget):
         """Redraw every view from the model and the window's run state."""
         raise NotImplementedError
 
+    def show_progress(self) -> None:
+        """A step's progress moved (`step_progress`). Only a layout that shows more
+        than the bars, which follow it themselves, has anything to redraw."""
+
     # --- the pieces every layout lays out the same way ---------------------------
 
     def status_column(self) -> QVBoxLayout:

@@ -14,6 +14,7 @@ Nothing here imports the window module (`docs/specs/ONEUP-0034-gui-modules.md`
 """
 from __future__ import annotations
 
+import shiboken6
 from PySide6.QtCore import QCoreApplication
 
 from . import steps
@@ -107,6 +108,10 @@ def _show(win, key: str, phase: str) -> None:
         else:
             win.bar.setRange(0, FULL)
             win.bar.setValue(value)
+    # Spotlight's panel reads the same value, and the figures set beside it.
+    host = getattr(win, "host", None)
+    if host is not None and shiboken6.isValid(host):
+        host.show_progress()
 
 
 def badge(key: str, phase: str, value: int | None) -> str:

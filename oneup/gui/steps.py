@@ -24,6 +24,16 @@ TASKS = [
      QT_TRANSLATE_NOOP("steps", "Free up disk space")),
 ]
 
+# What a Spotlight tile calls its step (ONEUP-0239 §4.3 Spotlight item 1). The full
+# title stays the switch's accessible name.
+SHORT_TITLES = {
+    "system": QT_TRANSLATE_NOOP("steps", "System"),
+    "flatpak": QT_TRANSLATE_NOOP("steps", "Flatpak"),
+    "firmware": QT_TRANSLATE_NOOP("steps", "Firmware"),
+    "orphans": QT_TRANSLATE_NOOP("steps", "Leftovers"),
+    "cache": QT_TRANSLATE_NOOP("steps", "Cache"),
+}
+
 # The two screen-reader names of a row's package list, written out per step. They
 # were built from the title with a case change, which a language without case
 # cannot do (ONEUP-0032 §4.5).

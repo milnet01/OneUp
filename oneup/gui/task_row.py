@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from . import steps
 from .elided_label import ElidedLabel
 from .toggle_switch import ToggleSwitch
 
@@ -123,8 +124,10 @@ class TaskRow(QFrame):
         lay.addWidget(self.progress)
         self.badge.setSizePolicy(badge_policy, QSizePolicy.Policy.Fixed)
         self.desc.setVisible(form == "full")
-        # A tile's title wraps to two lines rather than elide (§4.3).
-        self.name.setWordWrap(form == "tile")
+        # A tile names its step in a word (§4.3 Spotlight item 1).
+        short = steps.SHORT_TITLES.get(self.key)
+        self.name.setText(QCoreApplication.translate("steps", short)
+                          if form == "tile" and short else self.title)
         self.form = form
         self.apply_metrics()
 
@@ -136,15 +139,9 @@ class TaskRow(QFrame):
         self.badge.setMinimumWidth(
             fm.averageCharWidth() * _BADGE_CHARS + m.left() + m.right()
             if self.form == "full" else 0)
-        if self.form == "tile":
-            nfm = self.name.fontMetrics()
-            self.name.setMinimumHeight(nfm.lineSpacing() * 2)
-            # The longest word fits on a line, so a title of two words takes two.
-            self.name.setMinimumWidth(max(nfm.horizontalAdvance(w) for w in self.title.split())
-                                      if self.title.split() else 0)
-        else:
-            self.name.setMinimumHeight(0)
-            self.name.setMinimumWidth(0)
+        # A tile's short title is never cut short (INV-17).
+        self.name.setMinimumWidth(self.name.fontMetrics().horizontalAdvance(self.name.text())
+                                  if self.form == "tile" else 0)
 
     # --- the row itself is the click target (ONEUP-0064) ---------------------
     # The switch is 56x30 in a row as wide as the window, so the wider the user
