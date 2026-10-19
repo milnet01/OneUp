@@ -6023,6 +6023,78 @@ def main() -> int:
     for line in _bad[:8]:
         print(f"       {line}")
 
+    # ONEUP-0313, §4.3 Rows item 2: the row of win.latest_package is drawn highlighted
+    # while its state is `downloading` — every cell of it, and no other row, not even
+    # an earlier package still downloading. Once it is downloaded, no row is. Real
+    # pixels, in every theme with the overlay off (the checked tab's pair) and on.
+    wH = _at_minimum("rows")
+    wH.resize(1200, wH.height() + 300)
+    run._reset_for_run(wH, ["system"], check=False)
+    for line in ("@@CHECK_ITEM@@|system|alpha|1|2|1048576|repo",
+                 "@@CHECK_ITEM@@|system|beta|1|2|1048576|repo",
+                 "@@CHECK_ITEM@@|system|gamma|1|2|1048576|repo",
+                 "@@STEP_BEGIN@@|system|1|1",
+                 "@@PKG@@|system|downloading|alpha|2",
+                 "@@PKG@@|system|downloading|beta|2"):
+        run.handle_line(wH, line)
+    _htbl = wH.host.table
+    _hrow = {p.name: n for n, p in enumerate(wH.host.items.packages())}
+
+    def _grounds(row):
+        """Each cell's ground in `row`, read just inside its top-left corner."""
+        img = _htbl.viewport().grab().toImage()
+        out = []
+        for col in range(_htbl.model().columnCount()):
+            r = _htbl.visualRect(_htbl.model().index(row, col))
+            x = r.right() - 1 if QApplication.isRightToLeft() else r.left() + 1
+            out.append(img.pixelColor(x, r.top() + 1).name())
+        return out
+
+    def _inks(row, col):
+        img = _htbl.viewport().grab().toImage()
+        r = _htbl.visualRect(_htbl.model().index(row, col))
+        return {img.pixelColor(x, y).name()
+                for x in range(r.left(), r.right()) for y in range(r.top(), r.bottom())}
+
+    _hbad = []
+    for _th in theme.THEMES:
+        _p = dict(_th.palette)
+        _p.update(theme.derived_keys(_p))
+        _hcp = theme._HC_DARK if _th.dark else theme._HC_LIGHT
+        for _on, _fill, _ink in ((False, _p["ghosthov"], _p["tabink"]),
+                                 (True, _hcp["btn"], _hcp["btntext"])):
+            _fill, _ink = _fill.lower(), _ink.lower()
+            wH.setStyleSheet(theme.build_theme(_th, high_contrast=_on))
+            wH.layout().activate()
+            QApplication.processEvents()
+            _htbl.clearFocus()
+            QApplication.processEvents()
+            _where = f"{_th.id} overlay {'on' if _on else 'off'}"
+            if _grounds(_hrow["beta"]) != [_fill] * 4:
+                _hbad.append(f"{_where}: the downloading latest row's cells are "
+                             f"{_grounds(_hrow['beta'])}, want {_fill} in each")
+            if _ink not in _inks(_hrow["beta"], 0):
+                _hbad.append(f"{_where}: the highlighted row's state word is not in {_ink}")
+            for _other in ("alpha", "gamma"):
+                if _fill in _grounds(_hrow[_other]):
+                    _hbad.append(f"{_where}: {_other}'s row is highlighted too")
+    run.handle_line(wH, "@@PKG@@|system|downloaded|beta|2")
+    for _th in theme.THEMES:
+        _p = dict(_th.palette)
+        _p.update(theme.derived_keys(_p))
+        wH.setStyleSheet(theme.build_theme(_th, high_contrast=False))
+        wH.layout().activate()
+        QApplication.processEvents()
+        _htbl.clearFocus()
+        QApplication.processEvents()
+        if any(_p["ghosthov"].lower() in _grounds(_hrow[n]) for n in ("alpha", "beta", "gamma")):
+            _hbad.append(f"{_th.id}: a row stays highlighted once the latest is downloaded")
+    wH.setStyleSheet("")
+    check(f"ONEUP-0313 the downloading latest package's row, and only it, is highlighted "
+          f"in both sheets ({len(_hbad)} wrong)", not _hbad)
+    for line in _hbad[:8]:
+        print(f"       {line}")
+
     # INV-14: during a run Stop alone holds the action slot, and the slot neither moves
     # nor resizes between idle, the run and its end.
     def _slot(wL):
