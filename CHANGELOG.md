@@ -61,6 +61,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **Spotlight matches the sketch: a large Now panel with three figure boxes, and clean Up next and Done lists.** (ONEUP-0316)
+  The Spotlight layout now shows what is happening in large type ("Downloading libavcodec62"), with the package's description, the step's percentage, and three boxes for packages, download and time left. The step tiles use short names, and the two lists show their counts.
+
 - **Rail matches the sketch: package cards in two columns, a coloured progress strip and a large heading with counts.** (ONEUP-0315)
   Rail now shows the running step's name as a large heading, how many updates there are and how much to download, and the done / now / to go counts on one line. The size strip's blocks are green when done and blue-hatched while downloading, and the legend says what a block is. Packages sit in two columns of cards: a state dot, the name and size, the versions, the source and the state, with a blue rim on the one downloading now.
 

@@ -9484,11 +9484,22 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0316] **Spotlight matches the sketch: a large Now panel with three figure boxes, and clean Up next and Done lists.**
+- 🚧 [ONEUP-0316] **Spotlight matches the sketch: a large Now panel with three figure boxes, and clean Up next and Done lists.**
   Sketch: docs/design/sketches/spotlight.png. "NOW · SYSTEM
   PACKAGES", the package name in large type, its description and
   versions, a bar, and boxes for Packages, Downloaded and Time left.
   Step tiles with short names and a status word.
+  2026-10-19, built (test c320a55, code 4c42a20): tiles with short
+  titles on one line; a raised panel with "Now · {step}", the latest
+  package as "Downloading {name}" in large type, its description, source
+  and versions, the step's percentage large at the trailing end, the bar,
+  the status line and three sunk boxes (Packages, Downloaded, Time left);
+  the size link at the trailing end of "Up next · N"; "Done · N"; each
+  list line the state word, name and size trailing. Time left reads "not
+  known" until ONEUP-0318. The state word stands where the drawn symbol
+  goes once ONEUP-0322 lands. The footer's three status lines and Run /
+  Check showing are ONEUP-0317's and ONEUP-0308's. Stays in progress for
+  ONEUP-0239 §7's by-eye VM check.
   **Layman:** The Spotlight layout shows what is happening now in large type, with three clear figures.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
@@ -9616,6 +9627,10 @@ when complete (that document's §7).
   QRawFont checks for drawn shapes: six distinct shapes, the STATE_WORDS
   word still the tooltip and accessible text. This sets direction, so
   the amendment goes through review-contract.
+  2026-10-19, found building ONEUP-0316: (3) [Q2] §4.2 item 2 says
+  "a tile wraps its title to two lines"; §4.3 Spotlight item 1 (ONEUP-0306)
+  gives tiles short titles, built on one line in 4c42a20, never cut short
+  (INV-17). Fix: say a tile's short title fits on its line.
   **Layman:** Two small unclear spots in the layouts plan, found while checking the Rows list change, need a decision.
   Kind: doc-fix.
   Source: review-contract-ONEUP-0310-2026-10-17.
