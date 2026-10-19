@@ -5701,6 +5701,42 @@ def main() -> int:
           and sys12.progress.value() == 1000)
     run.cache_bytes = _cache_bytes0
 
+    # ONEUP-0314 (§3 item 13, §4.1.1): each step's description is the short one, and
+    # during a run a selected step not yet started says Waiting. An unselected step
+    # says nothing, a check keeps today's badges, and Waiting never outlives the run.
+    _short = {"system": "Packages from your repositories",
+              "flatpak": "Flatpak apps and runtimes",
+              "firmware": "Device firmware (fwupd)",
+              "orphans": "Dependencies nothing needs",
+              "cache": "Free up disk space"}
+    w14 = window.Updater()
+    _descs14 = {k: r.desc.text() for k, r in w14.rows.items()}
+    check(f"ONEUP-0314 every step's description is the short one ({_descs14})",
+          _descs14 == {k: app.translate("steps", t) for k, t in _short.items()})
+    _waiting = app.translate("run", "Waiting")
+    run._reset_for_run(w14, ["system", "flatpak", "cache"], check=False)
+    _badges14 = {k: r.badge.text() for k, r in w14.rows.items()}
+    check(f"ONEUP-0314 a run's selected steps say Waiting, the others nothing ({_badges14})",
+          _badges14 == {"system": _waiting, "flatpak": _waiting, "firmware": "",
+                        "orphans": "", "cache": _waiting})
+    check("ONEUP-0314 and the switch's accessible description says so",
+          w14.rows["flatpak"].switch.accessibleDescription().endswith(_waiting))
+    run.handle_line(w14, "@@STEP_BEGIN@@|system|1|3")
+    check(f"ONEUP-0314 a started step stops saying Waiting "
+          f"({w14.rows['system'].badge.text()!r})",
+          w14.rows["system"].badge.text() not in ("", _waiting)
+          and w14.rows["flatpak"].badge.text() == _waiting)
+    run.handle_line(w14, "@@STEP_END@@|system|ok|uptodate")
+    run.on_finished(w14, 1, None)       # stopped before flatpak and cache began
+    _after14 = {k: w14.rows[k].badge.text() for k in ("system", "flatpak", "cache")}
+    check(f"ONEUP-0314 Waiting is gone once the run ends ({_after14})",
+          _after14["system"] not in ("", _waiting)
+          and _after14["flatpak"] == "" and _after14["cache"] == "")
+    run._reset_for_run(w14, ["system", "flatpak"], check=True)
+    check(f"ONEUP-0314 a check never says Waiting "
+          f"({[r.badge.text() for r in w14.rows.values()]})",
+          all(r.badge.text() == "" for r in w14.rows.values()))
+
     def _start_run(wL):
         """A real run, up to the first step's STEP_BEGIN, as the window starts one."""
         run._reset_for_run(wL, ["system", "flatpak"], check=False)
