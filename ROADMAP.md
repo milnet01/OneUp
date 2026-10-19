@@ -9452,6 +9452,13 @@ when complete (that document's §7).
   the strip green / blue / grey and still patterned (colour never
   alone, ui-and-accessibility.md §3); "System packages" large, "24
   updates · 17.5 MiB to download" and "3 done · 1 now · 20 to go".
+  2026-10-19, user's screenshot of Rail at idle after a check, beside
+  rail.png: still lacking the step title in large type, two card columns
+  (three shown), and the sketch's card shape (state dot, name with size
+  trailing, fixed-pitch versions, source label, state word trailing).
+  Asked the user, unanswered: the empty band between the board and the
+  status line is the message strip's fixed height (ONEUP-0239 §3 item 4,
+  user 2026-10-12); recommended leaving it unless it looks too tall.
   **Layman:** The Rail layout shows each update as a card, with a coloured strip and a clear heading.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
