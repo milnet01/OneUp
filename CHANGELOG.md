@@ -61,6 +61,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **Rows highlights the package being downloaded now** (ONEUP-0313)
+  Its row in the update list is filled in the selected tab's blue, in every theme, with its own look under high contrast, until that package has finished downloading.
+
 - **Rows' update list shows each package on one line, with where it comes from in a small label** (ONEUP-0313)
   Each package's name is followed by its repository, such as "Packman", in a small rounded label, and the old and new versions line up in a fixed-width font. A long repository name is shortened; point at it to read it whole.
 

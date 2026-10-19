@@ -9421,6 +9421,15 @@ when complete (that document's §7).
   short names. Tests 5ca495f (red first), fix 27b1299; ./local-CI.sh
   green. Left: (4) the downloading row of win.latest_package
   highlighted. The state symbols wait for ONEUP-0322's amendment.
+  2026-10-19, piece 4 of 4 built: the row of win.latest_package,
+  while its shown state is downloading, is filled in the checked tab's
+  pair (ghosthov/tabink; btn/btntext under the overlay), every cell of
+  it; the focus fill still wins on a focused current package. No new
+  palette key. PackageItems' NOW_ROLE from package_views.downloading_now;
+  colours as PackageTable nowFill/nowInk. Test a6dc680 (red first), fix
+  02b4430; ./local-CI.sh green; three mutations killed. All four built
+  pieces are done. Left: the state symbols, which wait for ONEUP-0322's
+  amendment and its review; then the by-eye VM check.
   **Layman:** The Rows update list gets the sketch's icons, source labels and counted tabs.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
