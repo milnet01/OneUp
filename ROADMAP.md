@@ -9467,6 +9467,8 @@ when complete (that document's §7).
   Asked the user, unanswered: the empty band between the board and the
   status line is the message strip's fixed height (ONEUP-0239 §3 item 4,
   user 2026-10-12); recommended leaving it unless it looks too tall.
+  2026-10-19, user: leave the band between Rail's board and the status
+  line at the message strip's fixed height. Question closed.
   **Layman:** The Rail layout shows each update as a card, with a coloured strip and a clear heading.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
@@ -9640,6 +9642,8 @@ when complete (that document's §7).
   taller than Check for updates (more padding, larger bold text, on
   purpose as the primary action). Recommended leaving it; match only if
   the user says so.
+  2026-10-19, user: leave Run about 3 px taller than Check for updates,
+  as the primary action. Question closed.
   **Layman:** Settings stood taller than Recenter and About; now all three line up.
   Kind: fix.
   Source: user-report-2026-10-17.
