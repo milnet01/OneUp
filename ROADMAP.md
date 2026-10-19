@@ -9435,12 +9435,20 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0314] **Every step shows a status label, and step descriptions are short, as in the sketches.**
+- 🚧 [ONEUP-0314] **Every step shows a status label, and step descriptions are short, as in the sketches.**
   Sketches: "Downloading · 35%", "Waiting", "Up next · nothing to
   update"; descriptions such as "openSUSE and Packman packages" and
   "Free up disk space". Today only the running step shows a pill
   ("2/2") and the descriptions are long and technical.
   2026-10-17, user: wording and "Waiting" settled on ONEUP-0306.
+  2026-10-19: built — ade4082 (test, red first), 70489b1 (code).
+  The rows carry §3 item 13's short descriptions; on a run each
+  selected step says Waiting until it starts, and a step the run
+  never reached drops it at the end. The badge's Downloading ·
+  35% / Installing · 60% words were already built (ONEUP-0306).
+  No "Up next" step badge: the spec has none (that phrase names
+  Spotlight's list). Stays in progress for ONEUP-0239 §7's check
+  by eye in the VM.
   **Layman:** Each step says Waiting, Downloading or Up next, with a short description under its name.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.

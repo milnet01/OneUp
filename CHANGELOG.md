@@ -61,6 +61,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **Each step has a short description, and says Waiting until its turn comes** (ONEUP-0314)
+  The five steps now read "Packages from your repositories", "Flatpak apps and runtimes", "Device firmware (fwupd)", "Dependencies nothing needs" and "Free up disk space". During an update, a step that has not started yet says "Waiting".
+
 - **Rows highlights the package being downloaded now** (ONEUP-0313)
   Its row in the update list is filled in the selected tab's blue, in every theme, with its own look under high contrast, until that package has finished downloading.
 
