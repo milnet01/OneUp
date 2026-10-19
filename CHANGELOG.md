@@ -61,6 +61,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **Rail matches the sketch: package cards in two columns, a coloured progress strip and a large heading with counts.** (ONEUP-0315)
+  Rail now shows the running step's name as a large heading, how many updates there are and how much to download, and the done / now / to go counts on one line. The size strip's blocks are green when done and blue-hatched while downloading, and the legend says what a block is. Packages sit in two columns of cards: a state dot, the name and size, the versions, the source and the state, with a blue rim on the one downloading now.
+
 - **Each step has a short description, and says Waiting until its turn comes** (ONEUP-0314)
   The five steps now read "Packages from your repositories", "Flatpak apps and runtimes", "Device firmware (fwupd)", "Dependencies nothing needs" and "Free up disk space". During an update, a step that has not started yet says "Waiting".
 

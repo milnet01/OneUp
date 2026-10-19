@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=324 -->
+<!-- ants-roadmap-id-high-water: ONEUP=325 -->
 
 # OneUp Roadmap
 
@@ -9454,7 +9454,7 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0315] **Rail matches the sketch: package cards in two columns, a coloured progress strip and a large heading with counts.**
+- 🚧 [ONEUP-0315] **Rail matches the sketch: package cards in two columns, a coloured progress strip and a large heading with counts.**
   Sketch: docs/design/sketches/rail.png. Cards with a dot, name and
   size, versions, a source label and the state written on the card;
   the strip green / blue / grey and still patterned (colour never
@@ -9469,6 +9469,16 @@ when complete (that document's §7).
   user 2026-10-12); recommended leaving it unless it looks too tall.
   2026-10-19, user: leave the band between Rail's board and the status
   line at the message strip's fixed height. Question closed.
+  2026-10-19, built (test 8093428, code dba0450): large step heading;
+  "N updates · S to download" with the size link and the counts at the
+  line's trailing end; strip done blocks green (switchon), now hatching
+  blue (ghosthov), fills kept, legend line added; cards in two columns
+  (PackageBoard, scroll bar always shown), each a dot, name and size,
+  fixed-pitch versions, source label and state word, the downloading
+  card ringed in blue. Built to §4.3, the newer text; §4.3.1's stale Rail
+  bullet is ONEUP-0322 item (2). Sizes still print with no decimal place
+  (§4.3.1 asks for one): filed separately. Stays in progress for
+  ONEUP-0239 §7's by-eye VM check.
   **Layman:** The Rail layout shows each update as a card, with a coloured strip and a clear heading.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
@@ -9647,6 +9657,17 @@ when complete (that document's §7).
   **Layman:** Settings stood taller than Recenter and About; now all three line up.
   Kind: fix.
   Source: user-report-2026-10-17.
+  Lanes: gui.
+
+- 📋 [ONEUP-0325] **Package sizes print with one decimal place for KiB and MiB, as every sketch does.**
+  docs/specs/ONEUP-0239-fixed-layouts.md §4.3.1 (ONEUP-0306): _format_size
+  in oneup/gui/markers.py "gains one decimal place for KiB and MiB, as
+  every sketch prints them". Not built: it prints "15 MiB". No item owned
+  it; found while building ONEUP-0315. Shared by every view and the
+  size link, so tests quoting sizes need checking.
+  **Layman:** Sizes like "15 MiB" will read "14.8 MiB", matching the approved pictures.
+  Kind: ux.
+  Source: ONEUP-0315-build-2026-10-19.
   Lanes: gui.
 
 ## 2.1.0 — after 2.0
