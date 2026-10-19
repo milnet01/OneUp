@@ -6056,6 +6056,11 @@ def main() -> int:
         return {img.pixelColor(x, y).name()
                 for x in range(r.left(), r.right()) for y in range(r.top(), r.bottom())}
 
+    def _dist(a, b):
+        ca, cb = QColor(a), QColor(b)
+        return (abs(ca.red() - cb.red()) + abs(ca.green() - cb.green())
+                + abs(ca.blue() - cb.blue()))
+
     _hbad = []
     for _th in theme.THEMES:
         _p = dict(_th.palette)
@@ -6073,8 +6078,13 @@ def main() -> int:
             if _grounds(_hrow["beta"]) != [_fill] * 4:
                 _hbad.append(f"{_where}: the downloading latest row's cells are "
                              f"{_grounds(_hrow['beta'])}, want {_fill} in each")
-            if _ink not in _inks(_hrow["beta"], 0):
-                _hbad.append(f"{_where}: the highlighted row's state word is not in {_ink}")
+            # Glyph edges are smoothed, and mirroring moves them, so the word's
+            # nearest pixel is close to its ink rather than on it: within a quarter
+            # of the way to the fill. The table's own ink lands far off.
+            _near = min(_dist(c, _ink) for c in _inks(_hrow["beta"], 0))
+            if _near > _dist(_fill, _ink) // 4:
+                _hbad.append(f"{_where}: the highlighted row's state word is not in {_ink} "
+                             f"(nearest pixel {_near} away)")
             for _other in ("alpha", "gamma"):
                 if _fill in _grounds(_hrow[_other]):
                     _hbad.append(f"{_where}: {_other}'s row is highlighted too")

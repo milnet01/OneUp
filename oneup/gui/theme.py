@@ -418,9 +418,11 @@ QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border
 QScrollArea#SettingsScroll, QWidget#SettingsBody { background: transparent; border: none; }
 /* The size strip is painted, so its ink arrives as a property. */
 #SizeStrip { qproperty-ink: $tname; }
-/* Rows' source labels are painted too, in the badge's colours (ONEUP-0313). */
+/* Rows' source labels are painted too, in the badge's colours, and the row of the
+   package downloading now in the checked tab's pair (ONEUP-0313). */
 QTableView#PackageTable {
     qproperty-labelFill: $badgebg; qproperty-labelInk: $badgefg; qproperty-labelRim: $badgebg;
+    qproperty-nowFill: $ghosthov; qproperty-nowInk: $tabink;
 }
 /* The window's bar marks where a step's install half starts, in the surface's colour. */
 QProgressBar#RunProgress { qproperty-mark: $card; }
@@ -599,9 +601,11 @@ QTableView#PackageTable QHeaderView::section {
 QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border: none; }
 QScrollArea#SettingsScroll, QWidget#SettingsBody { background: transparent; border: none; }
 #SizeStrip { qproperty-ink: $text; }
-/* The source label takes the overlay badge's look: the card, ringed. */
+/* The source label takes the overlay badge's look: the card, ringed. The row of the
+   package downloading now takes the overlay's checked tab pair. */
 QTableView#PackageTable {
     qproperty-labelFill: $card; qproperty-labelInk: $text; qproperty-labelRim: $border;
+    qproperty-nowFill: $btn; qproperty-nowInk: $btntext;
 }
 QScrollArea#RepoScroll { background: transparent; border: 2px solid $border; }
 QListWidget#RollbackList { background: $card; color: $text; border: 2px solid $border; }

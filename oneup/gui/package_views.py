@@ -88,6 +88,12 @@ def name_text(win, package: Package) -> str:
     ).format(name=package.name)
 
 
+def downloading_now(win, package: Package) -> bool:
+    """The package the last PKG line named, while its state is `downloading` (§4.3)."""
+    return (win.latest_package == (package.key, package.name, package.edition)
+            and win.packages.shown_state(package) == "downloading")
+
+
 def size_text(package: Package) -> str:
     return _format_size(package.size) if package.size else ""
 
@@ -138,13 +144,18 @@ def empty_sentence(win) -> str:
         "package_views", "Press Check for updates to see what will change.")
 
 
+# True on every cell of a package whose row is drawn highlighted.
+NOW_ROLE = Qt.ItemDataRole.UserRole + 1
+
+
 class PackageItems(QAbstractTableModel):
     """A list of packages for one view, one column per `columns` entry."""
 
     def __init__(self, model: PackageModel, columns: list[Callable[[Package], str]],
                  headers: list[str] | None = None, *,
                  has_details: Callable[[Package], bool] | None = None,
-                 mark_column: int = 0) -> None:
+                 mark_column: int = 0,
+                 now: Callable[[Package], bool] | None = None) -> None:
         super().__init__()
         self._model = model
         self._columns = columns
@@ -153,6 +164,8 @@ class PackageItems(QAbstractTableModel):
         # The column carrying the details mark, and what says a package has one.
         self._has_details = has_details
         self._mark_column = mark_column
+        # What says a package's row is drawn highlighted (NOW_ROLE).
+        self._now = now
 
     def rowCount(self, parent=QModelIndex()):   # noqa: B008 — Qt's signature
         return 0 if parent.isValid() else len(self._rows)
@@ -172,6 +185,8 @@ class PackageItems(QAbstractTableModel):
             return QCoreApplication.translate(
                 "package_views", "{text}, details available").format(
                 text=text.replace(MARK, "").strip())
+        if role == NOW_ROLE:
+            return self._now is not None and self._now(self._rows[index.row()])
         return None
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
@@ -278,6 +293,12 @@ class LinesDelegate(QStyledItemDelegate):
         ground.text = ""
         _style(opt).drawControl(QStyle.ControlElement.CE_ItemViewItem, ground, painter,
                                 opt.widget)
+        view = self.parent()
+        if index.data(NOW_ROLE) and isinstance(view, PackageTable):
+            # The package downloading now: a fill and its ink from the sheet. The
+            # focus fill below still wins on the current package.
+            painter.fillRect(opt.rect, view.get_now_fill())
+            opt.palette.setColor(QPalette.ColorRole.Text, view.get_now_ink())
         if self._current(opt, index):
             # The derived focus fill and ink, which the sheet hands the view as its
             # selection colours (ONEUP-0260 §4.5). A fill, never a ring.
@@ -392,15 +413,17 @@ class SourceDelegate(LinesDelegate):
 
 
 class PackageTable(QTableView):
-    """Rows' table. Its source labels are painted, so their colours arrive from
-    the stylesheet as properties, as the size strip's ink does."""
+    """Rows' table. Its source labels and the downloading package's row are
+    painted, so their colours arrive from the stylesheet as properties, as the
+    size strip's ink does."""
 
     def __init__(self) -> None:
         super().__init__()
         # Set from the stylesheet; these defaults only show before the sheet arrives.
         p = theme.current_palette()
         self._label = {"fill": QColor(p["badgebg"]), "ink": QColor(p["badgefg"]),
-                       "rim": QColor(p["badgebg"])}
+                       "rim": QColor(p["badgebg"]), "nowfill": QColor(p["ghosthov"]),
+                       "nowink": QColor(p["tabink"])}
 
     def _set(self, part: str, colour) -> None:
         self._label[part] = QColor(colour)
@@ -427,6 +450,21 @@ class PackageTable(QTableView):
     labelFill = Property(QColor, get_label_fill, set_label_fill)
     labelInk = Property(QColor, get_label_ink, set_label_ink)
     labelRim = Property(QColor, get_label_rim, set_label_rim)
+
+    def get_now_fill(self) -> QColor:
+        return self._label["nowfill"]
+
+    def set_now_fill(self, colour) -> None:
+        self._set("nowfill", colour)
+
+    def get_now_ink(self) -> QColor:
+        return self._label["nowink"]
+
+    def set_now_ink(self, colour) -> None:
+        self._set("nowink", colour)
+
+    nowFill = Property(QColor, get_now_fill, set_now_fill)
+    nowInk = Property(QColor, get_now_ink, set_now_ink)
 
 
 def row_height(view: QTableView) -> int:

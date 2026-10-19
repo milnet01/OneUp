@@ -92,7 +92,8 @@ class RowsLayout(LayoutHost):
             QCoreApplication.translate("layout_rows", "Package"),
             QCoreApplication.translate("layout_rows", "Versions"),
             QCoreApplication.translate("layout_rows", "Size")],
-            has_details=win.details.has_details, mark_column=1)
+            has_details=win.details.has_details, mark_column=1,
+            now=lambda p: pv.downloading_now(win, p))
         self.table = pv.package_table(self.items, QCoreApplication.translate(
             "layout_rows", "Packages this update changes"))
         self.opens_details(self.table, self.items)
