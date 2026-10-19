@@ -6308,6 +6308,135 @@ def main() -> int:
           f"({len(_cbad)} wrong)", not _cbad)
     for line in _cbad[:8]:
         print(f"       {line}")
+
+    # ONEUP-0316, §4.3 Spotlight and §4.3.1, §4.3.3: Spotlight as sketched. Tiles
+    # with short titles; a raised panel with "Now · {step}", the latest package as a
+    # sentence in large type, its description, source and versions, the step's
+    # percentage large at the trailing end, and three figure boxes; under it, the two
+    # lists headed with their counts, the size link at the trailing end of Up next,
+    # each line the state, the name and the size at the trailing end. The package
+    # cache weighs nothing, so this machine's own cannot change the byte figure.
+    _cache_bytes0, run.cache_bytes = run.cache_bytes, lambda: 0
+    wS = _at_minimum("spotlight")
+    rtlS = QApplication.isRightToLeft()
+    _patch(wS.details, "about", lambda name: package_details.About(
+        "Video codec library", "", "") if name == "beta" else None)
+    run._reset_for_run(wS, ["system"], check=False)
+    for line in ("@@CHECK_ITEM@@|system|alpha|1.0|2.0|1048576|Packman",
+                 "@@CHECK_ITEM@@|system|beta|1.0|2.0|1048576|Packman",
+                 "@@CHECK_ITEM@@|system|gamma|1.0|2.0|0|Main",
+                 "@@CHECK_ITEM@@|system|delta|1.0|2.0|1048576|Main",
+                 "@@STEP_BEGIN@@|system|1|1",
+                 "@@PROGRESS@@|system|1|4|download|1048576|3145728",
+                 "@@PKG@@|system|installed|alpha|2.0",
+                 "@@PKG@@|system|downloading|beta|2.0"):
+        run.handle_line(wS, line)
+    QApplication.processEvents()
+    hS = wS.host
+
+    def _txt(name):
+        w = getattr(hS, name, None)
+        return w.text() if w is not None else None
+
+    _shorts = [r.name.text() for r in wS.rows.values()]
+    check(f"ONEUP-0316 the tiles carry the short titles ({_shorts})",
+          _shorts == ["System", "Flatpak", "Firmware", "Leftovers", "Cache"]
+          and wS.rows["orphans"].switch.accessibleName().startswith("Leftover packages"))
+    check(f"ONEUP-0316 the panel's heading names the step ({_txt('now_heading')!r})",
+          _txt("now_heading") == "Now · System packages")
+    check(f"ONEUP-0316 the latest package is a sentence of its phase "
+          f"({_txt('headline')!r})", _txt("headline") == "Downloading beta")
+    _about = [p.strip() for p in (_txt("about") or "").split("·")]
+    check(f"ONEUP-0316 under it, the description, source and versions ({_about})",
+          _about == ["Video codec library", "Packman", "1.0 → 2.0"])
+    _pct = round(wS.step_progress.get("system", 0) * 100 / 1000)
+    _head, _per = getattr(hS, "headline", None), getattr(hS, "percent", None)
+    check(f"ONEUP-0316 the step's percentage, large, trails the headline "
+          f"({_txt('percent')!r}, want {_pct}%)",
+          _head is not None and _per is not None and _per.text() == f"{_pct}%"
+          and _head.font().pointSizeF() > 1.3 * hS.about.font().pointSizeF()
+          and _per.font().pointSizeF() > _head.font().pointSizeF()
+          and (_per.mapTo(wS, _per.rect().center()).x()
+               > _head.mapTo(wS, _head.rect().center()).x()) != rtlS)
+    _boxes = hS.panel.findChildren(QFrame, "FigureBox")
+    _fig = [[lb.text() for lb in b.findChildren(QLabel)] for b in _boxes]
+    _one, _three = markers._format_size(1048576), markers._format_size(3145728)
+    check(f"ONEUP-0316 three figure boxes: packages, downloaded, time left ({_fig})",
+          _fig == [["Packages", "1 of 4"], ["Downloaded", f"{_one} of {_three}"],
+                   ["Time left", "not known"]])
+    run.handle_line(wS, "@@PROGRESS@@|system|2|4|install")
+    QApplication.processEvents()
+    _fig2 = [b.findChildren(QLabel)[1].text() for b in _boxes]
+    check(f"ONEUP-0316 a progress line redraws the panel ({_txt('headline')!r}, "
+          f"{_txt('percent')!r}, {_fig2[:1]})",
+          _txt("headline") == "Installing beta" and _txt("percent") == "75%"
+          and _fig2[:1] == ["2 of 4"])
+    check("ONEUP-0316 the size link has left the panel",
+          not hS.panel.isAncestorOf(wS.size_link))
+    _nh, _dh = getattr(hS, "next_heading", None), getattr(hS, "done_heading", None)
+    check(f"ONEUP-0316 the lists are headed with their counts "
+          f"({_nh.text() if _nh else None!r}, {_dh.text() if _dh else None!r})",
+          _nh is not None and _dh is not None
+          and _nh.text() == "Up next · 3" and _dh.text() == "Done · 1")
+    check("ONEUP-0316 the size link trails the Up next heading",
+          _nh is not None and wS.size_link.parentWidget() is _nh.parentWidget()
+          and (wS.size_link.x() > _nh.x()) != rtlS)
+
+    # A list line: the state, the name, then the size at the trailing end; its
+    # tooltip, which a screen reader hears too, is the whole line.
+    _ld = hS.next_list.itemDelegate()
+    _lbad = []
+    if not hasattr(_ld, "line_rects"):
+        _lbad.append(f"the list's delegate is {type(_ld).__name__}")
+    else:
+        _cell = hS.next_list.visualRect(hS.next_items.index(0, 0))
+        _r = _ld.line_rects(hS.next_list, _cell)
+
+        def _after(a, b):
+            return a.left() >= b.right() if not rtlS else a.right() <= b.left()
+
+        if not (_after(_r["name"], _r["state"]) and _after(_r["size"], _r["name"])):
+            _lbad.append("not state, name, then size")
+        _gap = (_cell.right() - _r["size"].right() if not rtlS
+                else _r["size"].left() - _cell.left())
+        if _gap > 12:
+            _lbad.append(f"the size stops {_gap} px short of the line's trailing end")
+    _tip = hS.next_items.data(hS.next_items.index(0, 0), Qt.ItemDataRole.ToolTipRole)
+    if [p.strip() for p in (_tip or "").split("·")] != ["downloading", "beta", _one]:
+        _lbad.append(f"the tooltip is {_tip!r}")
+    check(f"ONEUP-0316 a list line is the state, the name and the size ({_lbad})",
+          not _lbad)
+
+    # The panel's raised surface and its boxes, read back as pixels in every theme,
+    # overlay off and on: inside the panel's margin, and inside a box's.
+    _pbad = []
+    for _th in theme.THEMES:
+        _p = dict(_th.palette)
+        _p.update(theme.derived_keys(_p))
+        _hcp = theme._HC_DARK if _th.dark else theme._HC_LIGHT
+        for _on, _raised, _box in ((False, _p["rowcard"], _p["logbg"]),
+                                   (True, _hcp["card"], _hcp["card"])):
+            _where = f"{_th.id} overlay {'on' if _on else 'off'}"
+            wS.setStyleSheet(theme.build_theme(_th, high_contrast=_on))
+            wS.layout().activate()
+            QApplication.processEvents()
+            _pimg = hS.panel.grab().toImage()
+            _got = _pimg.pixelColor(8, _pimg.height() // 2).name()
+            if _got != _raised:
+                _pbad.append(f"{_where}: panel {_got}, want {_raised}")
+            if _boxes:
+                _bimg = _boxes[0].grab().toImage()
+                _bgot = _bimg.pixelColor(5, _bimg.height() // 2).name()
+                if _bgot != _box:
+                    _pbad.append(f"{_where}: box {_bgot}, want {_box}")
+            else:
+                _pbad.append(f"{_where}: no figure box")
+    wS.setStyleSheet("")
+    check(f"ONEUP-0316 the panel is raised and its boxes sunk, in every theme "
+          f"({len(_pbad)} wrong)", not _pbad)
+    for line in _pbad[:8]:
+        print(f"       {line}")
+    run.cache_bytes = _cache_bytes0
     _unpatch_all()
 
     # --- ONEUP-0260: the package details dialog --------------------------------
