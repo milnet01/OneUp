@@ -6176,6 +6176,137 @@ def main() -> int:
     _wide = [wB.host.board.visualRect(wB.host.items.index(i, 0)).width() for i in range(3)]
     check(f"ONEUP-0239 a Rail card stays inside its grid cell (cell {_cell}: {_wide})",
           all(0 < wd <= _cell for wd in _wide))
+
+    # ONEUP-0315, §4.3 Rail item 1 and §4.3.2: the board's page as sketched. The
+    # step's title in large type; under it the count and size with the size link,
+    # the counts at the trailing end; the strip's groups in the theme's green and
+    # blue as well as their patterns, and the legend's line; cards in two columns,
+    # each a dot, the name with its size trailing, the versions in the fixed-pitch
+    # font, and the source label with the state word trailing; and the downloading
+    # latest package's card ringed in the accent, at the width every card's rim has.
+    wR = _at_minimum("rail")
+    rtlR = QApplication.isRightToLeft()
+    run._reset_for_run(wR, ["system"], check=False)
+    for line in ("@@CHECK_ITEM@@|system|alpha|1.0|2.0|1048576|Packman",
+                 "@@CHECK_ITEM@@|system|beta|1.0|2.0|1048576|Packman",
+                 "@@CHECK_ITEM@@|system|gamma|1.0|2.0|0|Main",
+                 "@@CHECK_ITEM@@|system|delta|1.0|2.0|1048576|Main",
+                 "@@STEP_BEGIN@@|system|1|1",
+                 "@@PKG@@|system|installed|alpha|2.0",
+                 "@@PKG@@|system|downloading|beta|2.0"):
+        run.handle_line(wR, line)
+    QApplication.processEvents()
+    hR = wR.host
+    _title = getattr(hR, "title", None)
+    check(f"ONEUP-0315 the board's heading is the step's title "
+          f"({_title.text() if _title else None!r})",
+          _title is not None and _title.objectName() == "BoardTitle"
+          and _title.text() == "System packages")
+    check("ONEUP-0315 the heading is in large type",
+          _title is not None
+          and _title.font().pointSizeF() > 1.3 * hR.summary.font().pointSizeF())
+    check(f"ONEUP-0315 the summary is the count and what there is to download "
+          f"({hR.summary.text()!r})",
+          hR.summary.text().startswith(
+              f"{i18n.counted('package-count', 4)} · 3 MiB to download")
+          and "some sizes not known" in hR.summary.text()
+          and "System packages" not in hR.summary.text())
+    _line = hR.summary.parentWidget()
+    check("ONEUP-0315 the counts share the summary's line, at its trailing end",
+          hR.counts.parentWidget() is _line and wR.size_link.parentWidget() is _line
+          and hR.counts.text() == "1 done · 1 now · 2 to go"
+          and (hR.counts.x() > wR.size_link.x()) != rtlR)
+    check("ONEUP-0315 the legend says what a block is",
+          "Each block is one package, sized by its download"
+          in [lb.text() for lb in hR.legend.findChildren(QLabel)])
+
+    # Two columns, at the minimum size and wider.
+    def _columns(board):
+        return len({board.visualRect(board.model().index(i, 0)).x()
+                    for i in range(board.model().rowCount())})
+
+    _cols = [_columns(hR.board)]
+    wR.resize(wR.width() + 700, wR.height())
+    QApplication.processEvents()
+    _cols.append(_columns(hR.board))
+    _grid, _port = hR.board.gridSize().width(), hR.board.viewport().width()
+    check(f"ONEUP-0315 the cards stand in two columns that fill the board "
+          f"(columns {_cols}, cell {_grid} of {_port})",
+          _cols == [2, 2] and 2 * _grid <= _port <= 2 * _grid + 2)
+
+    # The card's parts, in reading order and mirrored.
+    _cd = hR.board.itemDelegate()
+    _shape = []
+    if not isinstance(_cd, getattr(package_views, "CardDelegate", ())):
+        _shape.append(f"the board's delegate is {type(_cd).__name__}")
+    else:
+        _r = _cd.card_rects(hR.board, hR.board.visualRect(hR.items.index(1, 0)))
+
+        def _after(a, b):
+            """`a` stands after `b` in the reading direction."""
+            return a.left() >= b.right() if not rtlR else a.right() <= b.left()
+
+        if not (_after(_r["name"], _r["dot"]) and _after(_r["size"], _r["name"])):
+            _shape.append("line 1 is not dot, name, then size")
+        if not (_r["name"].bottom() < _r["versions"].top()
+                and _r["versions"].bottom() < _r["label"].top()):
+            _shape.append("the lines are not name, versions, then source")
+        if not (_after(_r["state"], _r["label"])
+                and abs(_r["state"].center().y() - _r["label"].center().y()) <= 2):
+            _shape.append("the state word does not trail the source label")
+        _fonts = _cd.fonts(hR.board)
+        if _fonts["versions"].family() != package_views.fixed_font(hR.board.font()).family():
+            _shape.append(f"the versions are in {_fonts['versions'].family()}")
+        if _fonts["name"].weight() < QFont.Weight.DemiBold:
+            _shape.append("the name is not bold")
+    check(f"ONEUP-0315 a card is the sketch's shape ({_shape})", not _shape)
+
+    # The theme's colours, read back as painted pixels in every theme, overlay off
+    # and on. Glyph and curve edges are smoothed, so a colour counts as present when
+    # a pixel lies within a quarter of the way from it to the board's own ground.
+    def _dist(a, b):
+        ca, cb = QColor(a), QColor(b)
+        return (abs(ca.red() - cb.red()) + abs(ca.green() - cb.green())
+                + abs(ca.blue() - cb.blue()))
+
+    def _near(img, rect, colour, ground):
+        best = min(_dist(img.pixelColor(x, y).name(), colour)
+                   for x in range(max(rect.left(), 0), min(rect.right(), img.width() - 1))
+                   for y in range(max(rect.top(), 0), min(rect.bottom(), img.height() - 1)))
+        return best <= _dist(colour, ground) // 4
+
+    _row = {p.name: n for n, p in enumerate(hR.items.packages())}
+    _cbad = []
+    for _th in theme.THEMES:
+        _p = dict(_th.palette)
+        _p.update(theme.derived_keys(_p))
+        _hcp = theme._HC_DARK if _th.dark else theme._HC_LIGHT
+        for _on, _done, _now, _ground in (
+                (False, _p["switchon"], _p["ghosthov"], _p["logbg"]),
+                (True, _hcp["text"], _hcp["link"], _hcp["card"])):
+            _where = f"{_th.id} overlay {'on' if _on else 'off'}"
+            wR.setStyleSheet(theme.build_theme(_th, high_contrast=_on))
+            wR.layout().activate()
+            QApplication.processEvents()
+            hR.board.clearFocus()
+            QApplication.processEvents()
+            _strip = hR.strip.grab().toImage()
+            _whole = QRect(0, 0, _strip.width(), _strip.height())
+            for _c, _what in ((_done, "done"), (_now, "now")):
+                if not _near(_strip, _whole, _c, _ground):
+                    _cbad.append(f"{_where}: no {_what} block in {_c}")
+            _img = hR.board.viewport().grab().toImage()
+            for _name, _want in (("beta", True), ("alpha", False), ("delta", False)):
+                _cell = hR.board.visualRect(hR.items.index(_row[_name], 0))
+                _rim = QRect(_cell.center().x() - 10, _cell.top(), 20, 8)
+                if _near(_img, _rim, _now, _ground) != _want:
+                    _cbad.append(f"{_where}: {_name}'s card is "
+                                 f"{'not ' if _want else ''}ringed in {_now}")
+    wR.setStyleSheet("")
+    check(f"ONEUP-0315 the strip and the downloading card wear the theme's colours "
+          f"({len(_cbad)} wrong)", not _cbad)
+    for line in _cbad[:8]:
+        print(f"       {line}")
     _unpatch_all()
 
     # --- ONEUP-0260: the package details dialog --------------------------------
