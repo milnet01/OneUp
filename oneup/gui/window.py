@@ -266,6 +266,7 @@ class Updater(QMainWindow):
         self.latest_package = None     # (key, name, edition) of the last PKG line
         self.engine_finished = False   # set by on_finished; the empty pages read it
         self.step_progress = {}        # key -> 0..1000, or None while busy (§4.1.1)
+        self.waiting = set()           # selected steps of this run not yet started
         self.host = None               # the current layout (layout_host.LayoutHost)
         # Set here, not after construction: eventFilter reads it, and the controls it
         # filters receive events while the layout is being built.

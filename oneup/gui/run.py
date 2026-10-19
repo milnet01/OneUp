@@ -446,6 +446,8 @@ def _reset_for_run(win, steps: list[str], check: bool):
     for r in win.rows.values():
         r.clear_badge()
         r.clear_progress()
+    if not check:
+        step_progress.wait(win, steps)
     win.size_link.reset()
     win.packages.reset()
     win.log.clear()
@@ -1021,6 +1023,7 @@ def on_finished(win, exit_code: int, _status):
     win._liveness_active = False
     win.engine_finished = True     # the package pages' empty sentence reads it
     win.current_step = ""
+    step_progress.stop_waiting(win)
     win._activity_timer.stop()
     _set_activity(win, "")
     _refresh_layout(win)

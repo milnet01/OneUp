@@ -24,15 +24,38 @@ HALF = FULL // 2
 
 def reset(win) -> None:
     win.step_progress = {}
+    win.waiting = set()
+
+
+def wait(win, keys: list[str]) -> None:
+    """A run's selected steps say Waiting until they start. Only a run's: a check
+    keeps the badges it has always had."""
+    word = QCoreApplication.translate("run", "Waiting")
+    win.waiting = set(keys)
+    for key in keys:
+        row = win.rows.get(key)
+        if row:
+            row.set_badge(word)
+
+
+def stop_waiting(win) -> None:
+    """The run is over: a step it never reached is not waiting for anything."""
+    for key in win.waiting:
+        row = win.rows.get(key)
+        if row:
+            row.clear_badge()
+    win.waiting = set()
 
 
 def begin(win, key: str) -> None:
     """A step has started: busy until a PROGRESS line says how far."""
+    win.waiting.discard(key)
     win.step_progress[key] = None
     _show(win, key, "")
 
 
 def end(win, key: str) -> None:
+    win.waiting.discard(key)
     win.step_progress[key] = FULL
     _show(win, key, "")
 

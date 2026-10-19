@@ -8,20 +8,20 @@ from __future__ import annotations
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP
 
-# key, title, one-line description. Order = run order. Marked here and translated
-# where shown, so the language can change without the table being rebuilt
-# (ONEUP-0032 §4.3).
+# key, title, short description (ONEUP-0239 §3 item 13). Order = run order. Marked
+# here and translated where shown, so the language can change without the table
+# being rebuilt (ONEUP-0032 §4.3).
 TASKS = [
     ("system", QT_TRANSLATE_NOOP("steps", "System packages"),
-     QT_TRANSLATE_NOOP("steps", "Refresh repositories and upgrade openSUSE (zypper dup).")),
+     QT_TRANSLATE_NOOP("steps", "Packages from your repositories")),
     ("flatpak", QT_TRANSLATE_NOOP("steps", "Flatpak apps"),
-     QT_TRANSLATE_NOOP("steps", "Update Flatpak apps and remove unused runtimes.")),
+     QT_TRANSLATE_NOOP("steps", "Flatpak apps and runtimes")),
     ("firmware", QT_TRANSLATE_NOOP("steps", "Firmware"),
-     QT_TRANSLATE_NOOP("steps", "Check for and apply device firmware updates (fwupd).")),
+     QT_TRANSLATE_NOOP("steps", "Device firmware (fwupd)")),
     ("orphans", QT_TRANSLATE_NOOP("steps", "Leftover packages"),
-     QT_TRANSLATE_NOOP("steps", "Remove leftover dependency packages nothing needs.")),
+     QT_TRANSLATE_NOOP("steps", "Dependencies nothing needs")),
     ("cache", QT_TRANSLATE_NOOP("steps", "Package cache"),
-     QT_TRANSLATE_NOOP("steps", "Clear the downloaded-package cache to free disk space.")),
+     QT_TRANSLATE_NOOP("steps", "Free up disk space")),
 ]
 
 # The two screen-reader names of a row's package list, written out per step. They
