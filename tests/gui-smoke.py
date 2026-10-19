@@ -5639,7 +5639,8 @@ def main() -> int:
     strip.resize(200, 12)
     strip.set_blocks([("done", 100)] + [("togo", 10)] * 10)
     image = strip.grab().toImage()
-    ink = strip.get_ink().rgb()
+    # The done fill is solid, in its own colour since ONEUP-0315 (§4.3.2).
+    ink = strip.get_done_fill().rgb()
     near_start = image.pixelColor(*((194, 6) if app.isRightToLeft() else (5, 6))).rgb()
     near_end = image.pixelColor(*((5, 6) if app.isRightToLeft() else (194, 6))).rgb()
     check(f"ONEUP-0239 INV-10 the first package's block starts the reading direction "

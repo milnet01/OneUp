@@ -241,7 +241,7 @@ TEXT_SCALES = [("Normal", 1.0), ("Large", 1.2), ("Larger", 1.45)]
 # app's original pixel sizes over a 10 pt (~13.3 px at 96 dpi) default, so
 # "Normal" reproduces the pre-ONEUP-0028 look to within a fraction of a point.
 _FONT_SCALE = dict(fs_header=1.58, fs_med=1.05, fs_body=0.90, fs_small=0.83,
-                   fs_spot=1.45)   # Spotlight's status, in large type (ONEUP-0239)
+                   fs_spot=1.45)   # large type: Spotlight's status, Rail's heading (ONEUP-0239)
 
 _QSS = Template(r"""
 * { font-family: "Inter", "Noto Sans", "Segoe UI", "Cantarell", sans-serif; }
@@ -275,6 +275,7 @@ ToggleSwitch {
 
 QLabel#Header  { font-size: $fs_header; font-weight: 700; color: $header; }
 QLabel#GroupHeading { font-size: $fs_med; font-weight: 700; color: $header; }
+QLabel#BoardTitle { font-size: $fs_spot; font-weight: 700; color: $header; }
 QLabel#Tagline { font-size: $fs_body; color: $tag; }
 
 #RowBorder { border-radius: 12px; background: $rowring; }
@@ -416,8 +417,16 @@ QTableView#PackageTable QHeaderView::section {
 #SpotlightPanel QLabel#Status { font-size: $fs_spot; font-weight: 600; }
 QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border: none; }
 QScrollArea#SettingsScroll, QWidget#SettingsBody { background: transparent; border: none; }
-/* The size strip is painted, so its ink arrives as a property. */
-#SizeStrip { qproperty-ink: $tname; }
+/* The size strip is painted, so its ink arrives as a property, and its groups'
+   colours with it: done in the switch's green, now in the checked tab's blue. */
+#SizeStrip { qproperty-ink: $tname; qproperty-doneFill: $switchon; qproperty-nowFill: $ghosthov; }
+/* Rail's cards are painted too: the strip's two colours for their dots and the
+   downloading card's rim, the panel's border for every other rim, and the source
+   label in the badge's colours (ONEUP-0315). */
+QListView#PackageBoard {
+    qproperty-doneFill: $switchon; qproperty-nowFill: $ghosthov; qproperty-rim: $logbd;
+    qproperty-labelFill: $badgebg; qproperty-labelInk: $badgefg; qproperty-labelRim: $badgebg;
+}
 /* Rows' source labels are painted too, in the badge's colours, and the row of the
    package downloading now in the checked tab's pair (ONEUP-0313). */
 QTableView#PackageTable {
@@ -573,7 +582,7 @@ QMainWindow, QDialog { background: $win; }
    named rules below still win: an ID selector outranks a bare type selector. */
 QLabel { color: $text; }
 QLabel#Header, QLabel#GroupHeading, QLabel#TaskName, QLabel#SizeResult,
-QLabel#BannerText { color: $text; }
+QLabel#BannerText, QLabel#BoardTitle { color: $text; }
 QLabel#Tagline, QLabel#TaskDesc, QLabel#Status, QLabel#LastRun,
 QLabel#ProgressCaption { color: $text; }
 QLabel#LastRun[stale="true"] { color: $text; font-weight: 700; }
@@ -600,7 +609,13 @@ QTableView#PackageTable QHeaderView::section {
 #SpotlightPanel QLabel#Status { color: $text; }
 QScrollArea#MessageStrip, QWidget#MessageStack { background: transparent; border: none; }
 QScrollArea#SettingsScroll, QWidget#SettingsBody { background: transparent; border: none; }
-#SizeStrip { qproperty-ink: $text; }
+#SizeStrip { qproperty-ink: $text; qproperty-doneFill: $text; qproperty-nowFill: $link; }
+/* The cards take the overlay's border for their rims and its link for the
+   downloading one's, and the overlay badge's look for the source label. */
+QListView#PackageBoard {
+    qproperty-doneFill: $text; qproperty-nowFill: $link; qproperty-rim: $border;
+    qproperty-labelFill: $card; qproperty-labelInk: $text; qproperty-labelRim: $border;
+}
 /* The source label takes the overlay badge's look: the card, ringed. The row of the
    package downloading now takes the overlay's checked tab pair. */
 QTableView#PackageTable {

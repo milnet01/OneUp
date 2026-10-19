@@ -117,16 +117,24 @@ def total_phrase(packages: list[Package]) -> str:
     return _format_size(total)
 
 
-def summary_sentence(what: str, packages: list[Package]) -> str:
-    """What is shown, how many, and their size: "System packages · 24 updates ·
-    17.5 MiB". It names the filter or the step in words, never by a look alone."""
+def download_sentence(packages: list[Package]) -> str:
+    """How many, and what there is to download: "24 updates · 17.5 MiB to
+    download" (§4.3 Rail). A total counts only known sizes, and says so."""
     count = i18n.counted("package-count", len(packages))
-    size = total_phrase(packages)
-    if size:
-        return QCoreApplication.translate("package_views", "{what} · {count} · {size}").format(
-            what=what, count=count, size=size)
-    return QCoreApplication.translate("package_views", "{what} · {count}").format(
-        what=what, count=count)
+    total = sum(p.size for p in packages)
+    unknown = any(not p.size for p in packages)
+    if total and unknown:
+        return QCoreApplication.translate(
+            "package_views", "{count} · {size} to download, some sizes not known").format(
+            count=count, size=_format_size(total))
+    if total:
+        return QCoreApplication.translate(
+            "package_views", "{count} · {size} to download").format(
+            count=count, size=_format_size(total))
+    if unknown:
+        return QCoreApplication.translate("package_views", "{count} · size not known").format(
+            count=count)
+    return count
 
 
 def counts_sentence(c: dict[str, int]) -> str:
@@ -146,6 +154,8 @@ def empty_sentence(win) -> str:
 
 # True on every cell of a package whose row is drawn highlighted.
 NOW_ROLE = Qt.ItemDataRole.UserRole + 1
+# The package itself, for a delegate that lays out its parts (CardDelegate).
+PACKAGE_ROLE = Qt.ItemDataRole.UserRole + 2
 
 
 class PackageItems(QAbstractTableModel):
@@ -187,6 +197,8 @@ class PackageItems(QAbstractTableModel):
                 text=text.replace(MARK, "").strip())
         if role == NOW_ROLE:
             return self._now is not None and self._now(self._rows[index.row()])
+        if role == PACKAGE_ROLE:
+            return self._rows[index.row()]
         return None
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
@@ -326,6 +338,13 @@ class LinesDelegate(QStyledItemDelegate):
                        QRect(opt.rect.left(), top + n * h, opt.rect.width(), h))
 
 
+def _direction() -> Qt.LayoutDirection:
+    """The application's reading direction, read as `ToggleSwitch` reads it
+    (`ui-and-accessibility.md` §8.3), never a widget's own."""
+    return (Qt.LayoutDirection.RightToLeft if QApplication.isRightToLeft()
+            else Qt.LayoutDirection.LeftToRight)
+
+
 def _style(opt) -> QStyle:
     return opt.widget.style() if opt.widget else QApplication.style()
 
@@ -412,6 +431,147 @@ class SourceDelegate(LinesDelegate):
         painter.restore()
 
 
+class CardDelegate(LinesDelegate):
+    """Rail's card (§4.3 Rail): a state dot, then the name with its size at the
+    trailing end; the versions in the fixed-pitch font; the source label with the
+    state word at the trailing end. The item's text — its tooltip and the words a
+    screen reader hears — stays the lines the model gives; the parts are read from
+    the package, through `parts`."""
+
+    GAP = 8     # pixels between neighbouring cards
+    PAD = 10    # inside the card's rim
+    RIM = 2     # every card's rim, so the accent one moves nothing
+    SPACE = 4   # between the card's lines
+    SIZE_TEXT = "999.9 MiB"    # the widest size, which sets the size's place
+
+    def __init__(self, parts: Callable[[Package], tuple[str, str, str, str, str, str]],
+                 parent=None) -> None:
+        super().__init__(3, parent)
+        # The name, size, versions, source and state word, and the state's GROUP.
+        self._parts = parts
+
+    @staticmethod
+    def fonts(view) -> dict[str, QFont]:
+        base = view.font()
+        bold = QFont(base)
+        bold.setWeight(QFont.Weight.DemiBold)
+        return {"name": bold, "body": QFont(base), "versions": fixed_font(base), "label": bold}
+
+    def _line_heights(self, view) -> tuple[int, int, int]:
+        """The height of each of the card's three lines."""
+        f = self.fonts(view)
+        return (QFontMetrics(f["name"]).lineSpacing(),
+                QFontMetrics(f["versions"]).lineSpacing(),
+                max(QFontMetrics(f["label"]).height() + 4,
+                    QFontMetrics(f["body"]).lineSpacing()))
+
+    def card_height(self, view) -> int:
+        return self.GAP + 2 * self.PAD + 2 * self.SPACE + sum(self._line_heights(view))
+
+    def height(self, fm) -> int:
+        return self.card_height(self.parent())
+
+    def card_rects(self, view, cell: QRect) -> dict[str, QRect]:
+        """Where each part of the card in `cell` goes, mirrored for a right-to-left
+        view. The source label's is the most it may take."""
+        f = self.fonts(view)
+        body, label = QFontMetrics(f["body"]), QFontMetrics(f["label"])
+        half = self.GAP // 2
+        card = cell.adjusted(half, half, half - self.GAP, half - self.GAP)
+        inner = card.adjusted(self.PAD, self.PAD, -self.PAD, -self.PAD)
+        left, right, width = inner.left(), inner.right(), inner.width()
+        one, two, three = self._line_heights(view)
+        dot = QFontMetrics(f["name"]).height() // 2
+        size_w = body.horizontalAdvance(self.SIZE_TEXT)
+        state_w = max(body.horizontalAdvance(QCoreApplication.translate("steps", w))
+                      for w in steps.STATE_WORDS.values())
+        y1 = inner.top()
+        y2 = y1 + one + self.SPACE
+        y3 = y2 + two + self.SPACE
+        label_w = min(label.averageCharWidth() * (SourceDelegate.SOURCE_CHARS + 2),
+                      width - state_w - self.SPACE)
+        rects = {
+            "card": card,
+            "dot": QRect(left, y1 + (one - dot) // 2, dot, dot),
+            "name": QRect(left + dot + 6, y1, width - dot - 6 - size_w - 8, one),
+            "size": QRect(right - size_w + 1, y1, size_w, one),
+            "versions": QRect(left, y2, width, two),
+            "label": QRect(left, y3, max(label_w, 0), three),
+            "state": QRect(right - state_w + 1, y3, state_w, three),
+        }
+        return {k: QStyle.visualRect(_direction(), cell, r) for k, r in rects.items()}
+
+    def sizeHint(self, option, index) -> QSize:
+        view = self.parent()
+        return QSize(view.gridSize().width(), self.card_height(view))
+
+    def paint(self, painter, option, index) -> None:
+        view = self.parent()
+        package = index.data(PACKAGE_ROLE)
+        if package is None:
+            return
+        name, size, versions_, source, state, group = self._parts(package)
+        r = self.card_rects(view, option.rect)
+        f = self.fonts(view)
+        ink = option.palette.color(QPalette.ColorRole.Text)
+        current = self._current(option, index)
+        # Leading and trailing, which the painter mirrors with the window.
+        lead, trail = Qt.AlignmentFlag.AlignLeading, Qt.AlignmentFlag.AlignTrailing
+        middle = Qt.AlignmentFlag.AlignVCenter
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # The rim, in the accent while this is the package downloading now. When the
+        # card is current, the derived focus fill and its ink (ONEUP-0260 §4.5) —
+        # a fill, never a ring.
+        rim = view.get_now_fill() if index.data(NOW_ROLE) else view.get_rim()
+        fill = QBrush()
+        if current:
+            fill = QBrush(option.palette.color(QPalette.ColorRole.Highlight))
+            ink = option.palette.color(QPalette.ColorRole.HighlightedText)
+        painter.setPen(QPen(rim, self.RIM))
+        painter.setBrush(fill)
+        edge = self.RIM / 2
+        painter.drawRoundedRect(QRectF(r["card"]).adjusted(edge, edge, -edge, -edge), 8, 8)
+        # The dot, filled as the size strip fills the package's group: a shape, as
+        # well as a colour, and the state word says it again.
+        painter.setPen(QPen(ink, 1))
+        painter.setBrush({"done": view.get_done_fill(), "now": view.get_now_fill()}
+                         .get(group, QBrush()))
+        painter.drawEllipse(QRectF(r["dot"]).adjusted(0.5, 0.5, -0.5, -0.5))
+
+        def text(rect, font, words, align):
+            fm = QFontMetrics(font)
+            painter.setFont(font)
+            painter.drawText(rect, int(align | middle),
+                             fm.elidedText(words, Qt.TextElideMode.ElideRight, rect.width()))
+
+        painter.setPen(ink)
+        text(r["name"], f["name"], name, lead)
+        text(r["size"], f["body"], size, trail)
+        text(r["versions"], f["versions"], versions_, lead)
+        text(r["state"], f["body"], state, trail)
+        if source:
+            lfm = QFontMetrics(f["label"])
+            pad = lfm.averageCharWidth()
+            shown = lfm.elidedText(source, Qt.TextElideMode.ElideRight,
+                                   max(r["label"].width() - 2 * pad, 0))
+            tag = QRect(r["label"])
+            tag.setWidth(min(lfm.horizontalAdvance(shown) + 2 * pad, r["label"].width()))
+            tag.setHeight(lfm.height() + 4)
+            tag.moveTop(r["label"].top() + (r["label"].height() - tag.height()) // 2)
+            if QApplication.isRightToLeft():
+                tag.moveRight(r["label"].right())
+            # On the focus fill the label is ringed in its ink, as the overlay's is.
+            painter.setPen(QPen(ink if current else view.get_label_rim(), 1))
+            painter.setBrush(QBrush() if current else QBrush(view.get_label_fill()))
+            radius = tag.height() / 3
+            painter.drawRoundedRect(QRectF(tag).adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+            painter.setPen(ink if current else view.get_label_ink())
+            painter.setFont(f["label"])
+            painter.drawText(tag, Qt.AlignmentFlag.AlignCenter, shown)
+        painter.restore()
+
+
 class PackageTable(QTableView):
     """Rows' table. Its source labels and the downloading package's row are
     painted, so their colours arrive from the stylesheet as properties, as the
@@ -467,6 +627,84 @@ class PackageTable(QTableView):
     nowInk = Property(QColor, get_now_ink, set_now_ink)
 
 
+class PackageBoard(QListView):
+    """Rail's board: cards in two columns that share its width (§4.3 Rail). Its
+    cards are painted, so their colours arrive from the stylesheet as properties,
+    as the size strip's do."""
+
+    MIN_CARD_CHARS = 22    # the narrowest card, in average character widths
+
+    def __init__(self) -> None:
+        super().__init__()
+        # Set from the stylesheet; these defaults only show before the sheet arrives.
+        p = theme.current_palette()
+        self._colour = {"done": QColor(p["switchon"]), "now": QColor(p["ghosthov"]),
+                        "rim": QColor(p["logbd"]), "fill": QColor(p["badgebg"]),
+                        "ink": QColor(p["badgefg"]), "labelrim": QColor(p["badgebg"])}
+
+    def _set(self, part: str, colour) -> None:
+        self._colour[part] = QColor(colour)
+        self.viewport().update()
+
+    def get_done_fill(self) -> QColor:
+        return self._colour["done"]
+
+    def set_done_fill(self, colour) -> None:
+        self._set("done", colour)
+
+    def get_now_fill(self) -> QColor:
+        return self._colour["now"]
+
+    def set_now_fill(self, colour) -> None:
+        self._set("now", colour)
+
+    def get_rim(self) -> QColor:
+        return self._colour["rim"]
+
+    def set_rim(self, colour) -> None:
+        self._set("rim", colour)
+
+    def get_label_fill(self) -> QColor:
+        return self._colour["fill"]
+
+    def set_label_fill(self, colour) -> None:
+        self._set("fill", colour)
+
+    def get_label_ink(self) -> QColor:
+        return self._colour["ink"]
+
+    def set_label_ink(self, colour) -> None:
+        self._set("ink", colour)
+
+    def get_label_rim(self) -> QColor:
+        return self._colour["labelrim"]
+
+    def set_label_rim(self, colour) -> None:
+        self._set("labelrim", colour)
+
+    doneFill = Property(QColor, get_done_fill, set_done_fill)
+    nowFill = Property(QColor, get_now_fill, set_now_fill)
+    rim = Property(QColor, get_rim, set_rim)
+    labelFill = Property(QColor, get_label_fill, set_label_fill)
+    labelInk = Property(QColor, get_label_ink, set_label_ink)
+    labelRim = Property(QColor, get_label_rim, set_label_rim)
+
+    def fit(self) -> None:
+        """Two cards to a row, each half the viewport wide; as tall as the font."""
+        delegate = self.itemDelegate()
+        if not isinstance(delegate, CardDelegate):
+            return
+        # Qt wraps a row whose cells reach the viewport's last pixel, so two cells
+        # share one pixel less than the width.
+        grid = QSize(max(1, (self.viewport().width() - 1) // 2), delegate.card_height(self))
+        if grid != self.gridSize():
+            self.setGridSize(grid)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self.fit()
+
+
 def row_height(view: QTableView) -> int:
     """A table row's height from the font: the tallest of its columns' lines."""
     fm = view.fontMetrics()
@@ -502,18 +740,25 @@ def package_table(items: PackageItems, name: str) -> PackageTable:
     return view
 
 
-def package_board(items: PackageItems, name: str) -> QListView:
-    """Rail's board: one card per package, three lines each, wrapping in rows."""
-    view = QListView()
+def package_board(items: PackageItems, name: str,
+                  parts: Callable[[Package], tuple[str, str, str, str, str, str]]
+                  ) -> PackageBoard:
+    """Rail's board: one card per package, two to a row (§4.3 Rail)."""
+    view = PackageBoard()
     view.setObjectName("PackageBoard")
     view.setAccessibleName(name)
     view.setModel(items)
     _quiet(view, 3)
+    view.setItemDelegate(CardDelegate(parts, view))
     view.setFlow(QListView.Flow.LeftToRight)
     view.setWrapping(True)
     view.setResizeMode(QListView.ResizeMode.Adjust)
     view.setMovement(QListView.Movement.Static)
     view.setUniformItemSizes(True)
+    # Qt lays a wrapping list out as if a scroll bar might appear, which pushed the
+    # second card to a row of its own; with the bar always shown, two fit. It also
+    # shows that the board scrolls, which the sketch writes as "+ 14 more".
+    view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
     return view
 
 
@@ -528,11 +773,13 @@ def package_list(items: PackageItems, name: str) -> QListView:
     return view
 
 
-def fit_board(view: QListView) -> None:
-    """A card's size, from the font: three lines tall, a fixed number of
-    characters wide. Called again when the text size changes."""
-    fm = view.fontMetrics()
-    view.setGridSize(QSize(fm.averageCharWidth() * 26, fm.lineSpacing() * 3 + 16))
+def fit_board(view: PackageBoard) -> None:
+    """Room for two of the narrowest cards side by side, and each card's size, from
+    the font. Called again when the text size changes."""
+    card = view.fontMetrics().averageCharWidth() * view.MIN_CARD_CHARS
+    bar = view.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent, None, view)
+    view.setMinimumWidth(2 * card + bar + 2 * view.frameWidth())
+    view.fit()
 
 
 def hold_rows(view: QAbstractItemView, rows: int, row: int) -> None:
@@ -611,7 +858,8 @@ class SizeStrip(QWidget):
     its share of the download (§4.3.2).
 
     State is never colour alone: each group has its own fill, and every block is
-    drawn in one ink. Blocks run in the reading direction, which the strip reads
+    outlined in one ink. The fills also take the theme's colours (§4.3.2) — done
+    solid, now hatched, to go left empty. Blocks run in the reading direction, which the strip reads
     from the application as `ToggleSwitch` does (`ui-and-accessibility.md` §8.3).
     """
 
@@ -626,8 +874,10 @@ class SizeStrip(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._blocks: list[tuple[str, int]] = []
-        # Set from the stylesheet; this default only shows before the sheet arrives.
-        self._ink = QColor(theme.current_palette()["tname"])
+        # Set from the stylesheet; these defaults only show before the sheet arrives.
+        p = theme.current_palette()
+        self._ink = QColor(p["tname"])
+        self._fill = {"done": QColor(p["switchon"]), "now": QColor(p["ghosthov"])}
 
     def get_ink(self) -> QColor:
         return self._ink
@@ -637,6 +887,27 @@ class SizeStrip(QWidget):
         self.update()
 
     ink = Property(QColor, get_ink, set_ink)
+
+    def get_done_fill(self) -> QColor:
+        return self._fill["done"]
+
+    def set_done_fill(self, colour) -> None:
+        self._fill["done"] = QColor(colour)
+        self.update()
+
+    def get_now_fill(self) -> QColor:
+        return self._fill["now"]
+
+    def set_now_fill(self, colour) -> None:
+        self._fill["now"] = QColor(colour)
+        self.update()
+
+    doneFill = Property(QColor, get_done_fill, set_done_fill)
+    nowFill = Property(QColor, get_now_fill, set_now_fill)
+
+    def brush(self, group: str) -> QBrush:
+        """A group's fill: its pattern, in its colour. To go has none."""
+        return QBrush(self._fill.get(group, self._ink), self.FILLS[group])
 
     def sizeHint(self) -> QSize:
         return QSize(self.fontMetrics().averageCharWidth() * 10, self.fontMetrics().height())
@@ -678,7 +949,7 @@ class SizeStrip(QWidget):
             left = width - x - w if rtl else x
             rect = QRectF(left, 0, w, height).adjusted(0.5, 0.5, -0.5, -0.5)
             p.setPen(QPen(self._ink, 1))
-            p.setBrush(QBrush(self._ink, self.FILLS[group]))
+            p.setBrush(self.brush(group))
             p.drawRect(rect)
             x += w
 
@@ -699,9 +970,8 @@ class _Swatch(QWidget):
     def paintEvent(self, _event) -> None:
         # Symmetric, so it needs no direction of its own.
         p = QPainter(self)
-        ink = self._strip.get_ink()
-        p.setPen(QPen(ink, 1))
-        p.setBrush(QBrush(ink, SizeStrip.FILLS[self._group]))
+        p.setPen(QPen(self._strip.get_ink(), 1))
+        p.setBrush(self._strip.brush(self._group))
         p.drawRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5))
 
 
@@ -719,4 +989,8 @@ def strip_legend(strip: SizeStrip) -> QWidget:
         lay.addWidget(label)
         lay.addSpacing(8)
     lay.addStretch(1)
+    what = QLabel(QCoreApplication.translate(
+        "package_views", "Each block is one package, sized by its download"))
+    what.setObjectName("Tagline")
+    lay.addWidget(what)
     return box

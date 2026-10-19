@@ -81,7 +81,8 @@ LINK_SURFACES = ("card", "rowcard", "rowhov", WARN_GROUND)
 
 PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     # --- 4.5:1, the foreground renders text ------------------------------
-    ("header", ("win",), TEXT),
+    # Rail's board heading puts `header` on the card (ONEUP-0315).
+    ("header", ("win", "card"), TEXT),
     ("tag", ("win",), TEXT),
     # `tname` is also every unnamed label's ink, on the dialog root as well as on
     # the settings and repository rows (ONEUP-0301).
@@ -121,6 +122,9 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     # --- 3:1, the foreground carries meaning without being text ----------
     ("switchon", ("rowcard", "rowhov", "switchmark", "switchknob"), MARK),
     ("switchoff", ("rowcard", "rowhov", "switchmark", "switchknob"), MARK),
+    # The size strip's done blocks on the card, and a Rail card's done dot on the
+    # board (ONEUP-0315). The now colour, `ghosthov`, is measured on both below.
+    ("switchon", ("card", "logbg"), MARK),
     ("switchtrackrim", ("switchon", "switchoff"), MARK),
     ("switchknobrim", ("switchknob",), MARK),
     ("trayattn", ("win", "card"), MARK),

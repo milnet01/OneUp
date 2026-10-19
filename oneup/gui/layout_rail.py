@@ -7,7 +7,7 @@ steps.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from . import package_views as pv
@@ -44,18 +44,25 @@ class RailLayout(LayoutHost):
         v.addLayout(self.status_block())
         v.addLayout(self.footer())
 
-        # The board's page: a summary with the size link, the counts, the size
-        # strip and its legend, then the cards.
+        # The board's page: the step's title in large type; a line of what there
+        # is to download, the size link and, at its trailing end, the counts; the
+        # size strip and its legend; then the cards. The two labels on the line
+        # share it in fixed parts, two to the longer summary, so neither text
+        # moves the link.
+        self.title = ElidedLabel("")
+        self.title.setObjectName("BoardTitle")
         summary = QFrame()
         summary.setObjectName("PackageSummary")
         sl = QHBoxLayout(summary)
         sl.setContentsMargins(0, 0, 0, 0)
         self.summary = ElidedLabel("")
         self.summary.setObjectName("Tagline")
-        sl.addWidget(self.summary, 1)
-        sl.addWidget(win.size_link, 0)
         self.counts = ElidedLabel("")
         self.counts.setObjectName("Tagline")
+        self.counts.setAlignment(Qt.AlignmentFlag.AlignTrailing)
+        sl.addWidget(self.summary, 2)
+        sl.addWidget(win.size_link, 0)
+        sl.addWidget(self.counts, 1)
         self.strip = pv.SizeStrip()
         self.legend = pv.strip_legend(self.strip)
 
@@ -63,16 +70,20 @@ class RailLayout(LayoutHost):
         self.items = pv.PackageItems(model, [lambda p: "\n".join((
             pv.name_text(win, p), pv.versions(p),
             pv.join_parts(pv.size_text(p), p.repo, pv.state_word(model, p))))],
-            has_details=win.details.has_details)
-        self.board = pv.package_board(self.items, QCoreApplication.translate(
-            "layout_rail", "Packages of the step running now"))
+            has_details=win.details.has_details,
+            now=lambda p: pv.downloading_now(win, p))
+        self.board = pv.package_board(
+            self.items,
+            QCoreApplication.translate("layout_rail", "Packages of the step running now"),
+            lambda p: (pv.name_text(win, p), pv.size_text(p), pv.versions(p), p.repo,
+                       pv.state_word(model, p), pv.GROUP[model.shown_state(p)]))
         self.opens_details(self.board, self.items)
 
         pl = QVBoxLayout(self.page)
         pl.setContentsMargins(0, 0, 0, 0)
         pl.setSpacing(6)
+        pl.addWidget(self.title)
         pl.addWidget(summary)
-        pl.addWidget(self.counts)
         pl.addWidget(self.strip)
         pl.addWidget(self.legend)
         pl.addWidget(self.body(self.board), 1)
@@ -92,7 +103,8 @@ class RailLayout(LayoutHost):
         model = self.win.packages
         title, shown = self._shown()
         self.items.set_packages(shown)
-        self.summary.setText(pv.summary_sentence(title, shown))
+        self.title.setText(title)
+        self.summary.setText(pv.download_sentence(shown))
         sentence = pv.counts_sentence(pv.counts(model, shown))
         self.counts.setText(sentence)
         self.strip.setAccessibleName(sentence)
