@@ -64,6 +64,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The password box says whose password OneUp needs** (ONEUP-0298)
+  It now reads, for example, "OneUp needs the password for root to install updates." On openSUSE that is usually the administrator (root) password, not your own.
+
 - **The finished line says how many leftover packages were removed** (ONEUP-0296)
   A run that only removed leftover packages used to end "already up to date". It now ends, for example, "All done. 3 leftover package(s) removed."
 

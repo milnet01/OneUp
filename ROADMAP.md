@@ -9059,7 +9059,7 @@ when complete (that document's §7).
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: gui.
 
-- 📋 [ONEUP-0298] **The sudo route's password box is titled "Enter SSH Credentials".**
+- 🚧 [ONEUP-0298] **The sudo route's password box is titled "Enter SSH Credentials".**
   Seen 2026-10-16 in the ONEUP-0287 VM run 2: ksshaskpass6 titles the
   box "Enter SSH Credentials"; OneUp's prompt reads "System Updater:
   authenticate to update the system". Find whether ksshaskpass takes a
@@ -9069,6 +9069,12 @@ when complete (that document's §7).
   prompt to name the password asked for, e.g. "OneUp needs the
   administrator (root) password to install updates." No own askpass
   dialog.
+  Built 2026-10-20, v2 only (a wording choice, like ONEUP-0296). Both
+  prompts read "OneUp needs the password for %p ..."; sudo expands %p
+  to whose password it wants (root under targetpw), so the prompt never
+  guesses. Reaper matches the new text and still the old prompts, which
+  the Bash fallback passes. v2 test and fix commits "ONEUP-0298". Waits
+  on the by-eye VM check of the ksshaskpass box.
   **Layman:** The password window has a confusing title that mentions SSH.
   Kind: ux.
   Source: ONEUP-0287-vm-2026-10-16.
