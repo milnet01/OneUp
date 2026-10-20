@@ -2071,6 +2071,13 @@ marker REBOOT "$REBOOT${REBOOT_REASON:+|$REBOOT_REASON}"
 SERVICES=""
 if $SYS_CHANGED && [[ "$REBOOT" == "no" ]] && command -v zypper &>/dev/null; then
     sudo_capture SERVICES_RAW zypper ps -sss
+    ps_rc=$?
+    # zypper's reason goes to stderr, which sudo_capture discards, so a failed check
+    # would otherwise leave no trace at all (ONEUP-0295).
+    if (( ps_rc != 0 )); then
+        echo "  Could not check which services need restarting (zypper ps exited $ps_rc)." \
+             "zypper ps needs the lsof package; if it is missing: sudo zypper install lsof"
+    fi
     SERVICES=$(tr '\n' ' ' <<<"$SERVICES_RAW" | sed 's/[[:space:]]*$//')
     [[ -n "$SERVICES" ]] && marker SERVICES "$SERVICES"
 

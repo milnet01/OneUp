@@ -27,6 +27,8 @@ Recommends:     fwupd
 Recommends:     libnotify-tools
 Recommends:     ksshaskpass
 Recommends:     snapper
+# `zypper ps`, which lists the services to restart after an update, needs lsof (ONEUP-0295).
+Recommends:     lsof
 
 %description
 OneUp is a small Qt dashboard that updates openSUSE system packages, Flatpaks
