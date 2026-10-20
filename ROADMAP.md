@@ -9528,11 +9528,18 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0318] **Show an estimated time left while packages download.**
+- 🚧 [ONEUP-0318] **Show an estimated time left while packages download.**
   The engine already reports bytes done and total ("504 KiB of 504
   KiB"), so a rate and an estimate can be worked out. Download only:
   installing has no reliable size to time against. Wording stays an
   estimate ("about 40 s left").
+  2026-10-20, built (test 45f72ba, code 27728b2): while the system step
+  downloads with a known total, the status line ends with an estimate
+  from the whole-download rate, "about 40 s left", "about 3 min left",
+  "about 1 h left", and Spotlight's Time left box shows the same. A
+  stall's sentence takes its place; the install half and an unknown
+  total show none. The wording is three plural sentences in _Counted.
+  Stays in progress for ONEUP-0239 §7's by-eye VM check.
   **Layman:** While updates download, OneUp estimates how long is left.
   Kind: feature.
   Source: sketch-comparison-2026-10-17.

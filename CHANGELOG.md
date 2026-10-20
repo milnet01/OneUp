@@ -8,6 +8,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Show an estimated time left while packages download.** (ONEUP-0318)
+  While updates download, OneUp estimates how long is left.
+
 - **Installed from the openSUSE repository or the RPM, OneUp asks for your password the way Discover does** (ONEUP-0249)
   OneUp now comes with a small system service that runs its update
   commands. It checks the same permission Discover checks when it
