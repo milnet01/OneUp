@@ -64,6 +64,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **Package sizes print with one decimal place for KiB and MiB, as every sketch does.** (ONEUP-0325)
+  Sizes like "15 MiB" will read "14.8 MiB", matching the approved pictures.
+
 - **The footer is one summary line and a filled red Stop, as in the sketches.** (ONEUP-0317)
   The status under the bar is now one line, such as "System packages · Downloading 4 of 24 · 6 MiB of 18 MiB". If the server goes quiet, the warning ends that same line. While sources refresh, the line keeps its clock, so a slow mirror still looks alive. The separate liveness and caption lines are gone. "Open log file" appears only while the log is shown. Stop is a filled red button.
 

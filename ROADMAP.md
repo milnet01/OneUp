@@ -9711,12 +9711,18 @@ when complete (that document's §7).
   Source: user-report-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0325] **Package sizes print with one decimal place for KiB and MiB, as every sketch does.**
+- 🚧 [ONEUP-0325] **Package sizes print with one decimal place for KiB and MiB, as every sketch does.**
   docs/specs/ONEUP-0239-fixed-layouts.md §4.3.1 (ONEUP-0306): _format_size
   in oneup/gui/markers.py "gains one decimal place for KiB and MiB, as
   every sketch prints them". Not built: it prints "15 MiB". No item owned
   it; found while building ONEUP-0315. Shared by every view and the
   size link, so tests quoting sizes need checking.
+  2026-10-20, built (test 3324ef1, code 7c0881c): KiB and MiB print
+  with one decimal place, a whole number included ("57.6 KiB", "1.0
+  MiB"); bytes and GiB unchanged. The extra digit showed that the
+  warm-cache test never reached its total (86.0 of 86.4 MiB, both shown
+  as "86 MiB"); its fixture now does. Stays in progress for ONEUP-0239
+  §7's by-eye VM check.
   **Layman:** Sizes like "15 MiB" will read "14.8 MiB", matching the approved pictures.
   Kind: ux.
   Source: ONEUP-0315-build-2026-10-19.
