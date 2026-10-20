@@ -38,7 +38,10 @@ ASKPASS = os.environ.get("ONEUP_ASKPASS") or "/usr/libexec/ssh/ksshaskpass"
 # unlabelled request for the ROOT password looks like something nefarious to a user who
 # only asked for a download size. A prompt nobody can attribute is one they should refuse
 # (ONEUP-0037).
-SUDO_PROMPT = "OneUp needs administrator rights to update this system. Password: "
+# ksshaskpass titles its box "Enter SSH Credentials", so the prompt is the only thing
+# saying whose password is wanted. sudo expands %p to that user, honouring targetpw,
+# rootpw and runaspw, so the prompt names the right password on any setup (ONEUP-0298).
+SUDO_PROMPT = "OneUp needs the password for %p to continue updating. Password: "
 
 # ---------------------------------------------------------------------------
 # The privileged argvs this engine issues in more than one place.
@@ -90,7 +93,16 @@ def install_environment() -> None:
 # other prompt; `reap_orphaned_askpass` matches an orphaned dialog against
 # EITHER string, so collapsing them into one leaves that reaper with a target
 # that never appears.
-VALIDATE_PROMPT = "System Updater: authenticate to update the system"
+VALIDATE_PROMPT = "OneUp needs the password for %p to install updates."
+# What the reaper matches a dialog on: the text before %p, which sudo has expanded by
+# the time the dialog runs, plus the prompts before ONEUP-0298, which the Bash fallback
+# still passes.
+_PROMPT_MARKS = (
+    VALIDATE_PROMPT.split("%p")[0],
+    SUDO_PROMPT.split("%p")[0],
+    "System Updater: authenticate to update the system",
+    "OneUp needs administrator rights to update this system.",
+)
 
 
 def sudo_init() -> None:
@@ -442,7 +454,7 @@ def reap_orphaned_askpass() -> None:
         pid, ppid, args = parts
         if ASKPASS not in args:
             continue
-        if SUDO_PROMPT not in args and VALIDATE_PROMPT not in args:
+        if not any(mark in args for mark in _PROMPT_MARKS):
             continue
         try:
             parent = pathlib.Path(f"/proc/{ppid}/cmdline").read_bytes().replace(b"\0", b" ")
