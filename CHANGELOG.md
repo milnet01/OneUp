@@ -64,6 +64,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The finished line says how many leftover packages were removed** (ONEUP-0296)
+  A run that only removed leftover packages used to end "already up to date". It now ends, for example, "All done. 3 leftover package(s) removed."
+
 - **Package sizes print with one decimal place for KiB and MiB, as every sketch does.** (ONEUP-0325)
   Sizes like "15 MiB" will read "14.8 MiB", matching the approved pictures.
 

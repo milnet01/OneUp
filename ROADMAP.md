@@ -9027,13 +9027,18 @@ when complete (that document's §7).
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: engine, packaging.
 
-- 📋 [ONEUP-0296] **The finished line says "already up to date" when the leftover step has just removed packages.**
+- 🚧 [ONEUP-0296] **The finished line says "already up to date" when the leftover step has just removed packages.**
   Seen 2026-10-16 in the ONEUP-0287 VM run 2: Leftover packages "3
   removed", finished line "All done — already up to date." ONEUP-0288's
   sentences cover the system, Flatpak and firmware sources only. Whether
   removals earn a sentence is the user's call.
   User's decision, 2026-10-16: removals earn their own sentence, e.g.
   "All done. 3 leftover package(s) removed."
+  Built 2026-10-20, v2 only (ONEUP-0288's per-source sentences are
+  v2's): the finished line adds "N leftover package(s) removed." and
+  the engine summary a "Leftover packages: N removed." line. The
+  notification is unchanged. v2 029d1e7 (test), bac6c8f (fix). Waits on
+  the by-eye VM check.
   **Layman:** OneUp can say nothing changed right after it removed some packages.
   Kind: ux.
   Source: ONEUP-0287-vm-2026-10-16.
