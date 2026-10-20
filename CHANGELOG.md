@@ -61,6 +61,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The footer is one summary line and a filled red Stop, as in the sketches.** (ONEUP-0317)
+  The status under the bar is now one line, such as "System packages · Downloading 4 of 24 · 6 MiB of 18 MiB". If the server goes quiet, the warning ends that same line. While sources refresh, the line keeps its clock, so a slow mirror still looks alive. The separate liveness and caption lines are gone. "Open log file" appears only while the log is shown. Stop is a filled red button.
+
 - **Spotlight matches the sketch: a large Now panel with three figure boxes, and clean Up next and Done lists.** (ONEUP-0316)
   The Spotlight layout now shows what is happening in large type ("Downloading libavcodec62"), with the package's description, the step's percentage, and three boxes for packages, download and time left. The step tiles use short names, and the two lists show their counts.
 

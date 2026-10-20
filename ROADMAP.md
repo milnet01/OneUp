@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=325 -->
+<!-- ants-roadmap-id-high-water: ONEUP=326 -->
 
 # OneUp Roadmap
 
@@ -9505,10 +9505,24 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0317] **The footer is one summary line and a filled red Stop, as in the sketches.**
+- 🚧 [ONEUP-0317] **The footer is one summary line and a filled red Stop, as in the sketches.**
   Sketches: "Downloading 4 of 24 · 6.2 of 17.5 MiB · about 40 s
   left" over one bar, and one "Show technical log" link. Today: three
   lines of status, two log links.
+  2026-10-20, built (test 1567906, code in the commit after it): the
+  status is one line, "System packages · Downloading 4 of 24 · 6 MiB of
+  18 MiB", then "System packages · Installing 7 of 24"; a stall's
+  sentence ends it. A refresh, a check and a stop request keep their own
+  text, the refresh with its "Fetching {source} — {time}" clock, and a
+  total of 0 shows the running tally: ONEUP-0322 items (4) and (5),
+  built ahead of their spec wording because the liveness trap and
+  marker-protocol.md §4.3 require them. The rate and "still working" are
+  off the line. bar_caption and activity are in no layout and never
+  shown. "Open log file" shows only while the log is shown, in a slot
+  that keeps its size. Stop is filled with btn_danger, its focus cue
+  derived from that fill as Restart's is; with the overlay on it takes
+  btn. stopfg and stophov now colour nothing: ONEUP-0326. The time left
+  is ONEUP-0318's. Stays in progress for ONEUP-0239 §7's by-eye VM check.
   **Layman:** The bottom of the window shows one clear line about progress, and a red Stop button.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
@@ -9631,6 +9645,9 @@ when complete (that document's §7).
   "a tile wraps its title to two lines"; §4.3 Spotlight item 1 (ONEUP-0306)
   gives tiles short titles, built on one line in 4c42a20, never cut short
   (INV-17). Fix: say a tile's short title fits on its line.
+  2026-10-20: items (4) and (5) are built, in ONEUP-0317: a refresh's
+  status keeps its clock, and a total of 0 shows the running tally. The
+  spec wording still owes both; amend it to match the code.
   **Layman:** Two small unclear spots in the layouts plan, found while checking the Rows list change, need a decision.
   Kind: doc-fix.
   Source: review-contract-ONEUP-0310-2026-10-17.
@@ -9683,6 +9700,17 @@ when complete (that document's §7).
   **Layman:** Sizes like "15 MiB" will read "14.8 MiB", matching the approved pictures.
   Kind: ux.
   Source: ONEUP-0315-build-2026-10-19.
+  Lanes: gui.
+
+- 📋 [ONEUP-0326] **Retire the stopfg and stophov palette keys, which no stylesheet uses since Stop is filled.**
+  ONEUP-0317 fills Stop with btn_danger (its label is measured by
+  contrast.py's btnfg row), so stopfg and stophov colour nothing. They
+  stay in every palette, and contrast.py still measures them on card,
+  because docs/specs/ONEUP-0027-themes.md names them as Stop's keys.
+  Remove the keys, their contrast rows and ONEUP-0027's lines together.
+  **Layman:** Tidy away two colour settings the Stop button no longer uses.
+  Kind: chore.
+  Source: ONEUP-0317-build-2026-10-20.
   Lanes: gui.
 
 ## 2.1.0 — after 2.0
