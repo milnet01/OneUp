@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=326 -->
+<!-- ants-roadmap-id-high-water: ONEUP=327 -->
 
 # OneUp Roadmap
 
@@ -9577,6 +9577,13 @@ when complete (that document's §7).
   The button keeps "Recenter" as its accessible name and tooltip. The
   symbol must be one the app's font draws (ONEUP-0297: test with
   QRawFont, not inFontUcs4, which counts fallback fonts).
+  2026-10-20, user's decision: a crosshair drawn by the app (a circle with
+  four ticks), in the theme's text colour, not a font character. Noto
+  Sans draws no arrow or geometric symbol (QRawFont, U+2000 to U+2BFF:
+  punctuation, letterlike marks and U+25CC only), so no font symbol
+  reads as "centre". The spec's QRawFont clause for recenter_btn (§4.1,
+  §7) changes with ONEUP-0322's amendment; build after its
+  review-contract run. Accessible name "Recenter" and the tooltip stay.
   **Layman:** Recenter stays, but as a small symbol button beside Settings and About.
   Kind: ux.
   Source: user-request-2026-10-17.
@@ -9655,6 +9662,12 @@ when complete (that document's §7).
   2026-10-20: items (4) and (5) are built, in ONEUP-0317: a refresh's
   status keeps its clock, and a total of 0 shows the running tally. The
   spec wording still owes both; amend it to match the code.
+  2026-10-20, add to this amendment (user's decision on ONEUP-0320):
+  recenter_btn's symbol is a crosshair drawn by the app, like the state
+  symbols, not a Noto Sans character. Rewrite §4.1's "the symbol is one
+  Noto Sans ... draws — tested on it with QRawFont" and §7's
+  recenter_btn QRawFont bullet: a drawn shape in the theme's text
+  colour, the accessible name "Recenter" and the tooltip unchanged.
   **Layman:** Two small unclear spots in the layouts plan, found while checking the Rows list change, need a decision.
   Kind: doc-fix.
   Source: review-contract-ONEUP-0310-2026-10-17.
@@ -9718,6 +9731,17 @@ when complete (that document's §7).
   **Layman:** Tidy away two colour settings the Stop button no longer uses.
   Kind: chore.
   Source: ONEUP-0317-build-2026-10-20.
+  Lanes: gui.
+
+- 📋 [ONEUP-0327] **Settings' gear symbol is not in Noto Sans, so it may draw as an empty box.**
+  Found while choosing ONEUP-0320's symbol: QRawFont for Noto Sans,
+  openSUSE's interface font, reports U+2699 (the gear in "⚙ Settings",
+  oneup/gui/window.py) unsupported, as ONEUP-0297 found for U+24D8. It
+  draws here only through a fallback font. Measured 2026-10-20 on this
+  host; not yet seen on the clean VM.
+  **Layman:** The little gear on the Settings button may show as a blank square on a fresh openSUSE install.
+  Kind: fix.
+  Source: ONEUP-0320-build-2026-10-20.
   Lanes: gui.
 
 ## 2.1.0 — after 2.0
