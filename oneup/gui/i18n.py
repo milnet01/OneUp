@@ -114,6 +114,10 @@ class _Counted(QObject):
             "snapshots-thinned": lambda: self.tr("Thinned %n old snapshot(s).", "", n),
             "days-ago": lambda: self.tr("%n days ago", "", n),
             "keep-logs": lambda: self.tr("Keep logs: %n day(s)", "", n),
+            # The download's time left, an estimate (ONEUP-0239 §4.1.2).
+            "left-seconds": lambda: self.tr("about %n s left", "", n),
+            "left-minutes": lambda: self.tr("about %n min left", "", n),
+            "left-hours": lambda: self.tr("about %n h left", "", n),
             # No %n: the count picks the verb, not a number shown. Qt selects the
             # plural form from n all the same (ONEUP-0108 §4.2).
             "reboot-installed": lambda: self.tr("{items} were installed", "", n),

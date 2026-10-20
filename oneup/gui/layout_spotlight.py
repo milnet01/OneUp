@@ -14,7 +14,7 @@ from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from . import package_views as pv
-from . import steps
+from . import step_progress, steps
 from .elided_label import ElidedLabel
 from .layout_host import LayoutHost
 from .markers import _format_size
@@ -189,8 +189,7 @@ class SpotlightLayout(LayoutHost):
         self.figures[0].setText(_of(str(done), str(total)) if total else unknown)
         self.figures[1].setText(_of(_format_size(win._dl_got), _format_size(win._dl_total))
                                 if win._dl_total else unknown)
-        # The time left is ONEUP-0318's (§4.1.2); until it lands, it is not known.
-        self.figures[2].setText(unknown)
+        self.figures[2].setText(step_progress.time_left(win) or unknown)
 
     def _latest(self):
         """The package the last PKG line named, or None while there is none."""

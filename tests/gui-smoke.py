@@ -6536,6 +6536,11 @@ def main() -> int:
           wT.status.text().endswith(" · " + _est))
     check(f"ONEUP-0318 and fills Spotlight's Time left box ({_left.text()!r})",
           _left.text() == _est)
+    _clock[0] += 30                      # the 5s tick alone: 100 bytes in 40 s now
+    run._tick_activity(wT)
+    check(f"ONEUP-0318 a tick with no new line redraws both from its own rate "
+          f"({wT.status.text()!r}, {_left.text()!r})", _left.text() == "about 5 min left"
+          and wT.status.text().endswith(" · about 5 min left"))
     _clock[0] += 50
     run.handle_line(wT, "@@PROGRESS@@|system|3|4|download|900|1000")
     check(f"ONEUP-0318 under a minute, it counts in seconds ({_left.text()!r})",

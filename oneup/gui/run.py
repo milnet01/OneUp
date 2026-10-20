@@ -574,7 +574,8 @@ def _set_activity(win, text: str):
 
 def _show_status(win):
     """The one status line (ONEUP-0239 §4.1.3). Inside a step's PROGRESS: the step's
-    title, the phase and its count, and the byte figure, each only when known.
+    title, the phase and its count, the byte figure and the time left, each only
+    when known; a stall's sentence takes the time left's place.
     Otherwise the text it was last given — a refresh's, a check's, a stop request's —
     with the clock of what is being fetched, so a mirror trickling dots still reads as
     moving (ONEUP-0322 item 4). A stall's sentence ends the line either way.
@@ -590,7 +591,7 @@ def _show_status(win):
         parts = (QCoreApplication.translate("steps", title) if title else win.current_step,
                  _phase_count(win), _byte_figure(win))
         win._status_base = separator.join(p for p in parts if p)
-        tail = (win._status_stall,)
+        tail = (win._status_stall or step_progress.time_left(win),)
     else:
         tail = (win._status_clock, win._status_stall)
     win._status_shown = separator.join(p for p in (win._status_base, *tail) if p)
@@ -632,7 +633,7 @@ def _reset_activity(win):
     win._activity_since = 0.0
     win._activity_stalled = False
     win._dl_at = win._dl_from = win._dl_bytes = win._dl_total = win._dl_grown = 0
-    win._dl_got, win._progress_count = 0, (0, 0)
+    win._dl_got, win._progress_count, win._dl_rate = 0, (0, 0), 0.0
     # Weighed once, before anything is fetched, so later samples can tell what THIS
     # run fetched from what an earlier, stopped run left behind (ONEUP-0093).
     win._dl_base = cache_bytes()
@@ -676,12 +677,8 @@ def _tick_activity(win, reweigh: bool = True):
             # from the first figure, which already holds the baseline.
             have = min(win._dl_base + win._dl_grown, win._dl_total)
         got = max(got, have)
-        # The same figure moves the step's download half, so the bar agrees with
-        # this line through the prefetch, which sends no bytes (ONEUP-0239 §4.1.1).
         win._dl_got = got
-        if win.current_step:
-            step_progress.download(win, win.current_step, got, win._dl_total,
-                                   *win._progress_count)
+    win._dl_rate = 0.0
     if got > 0:
         human = markers._format_size(got)
         bits.append(f"{human} of {markers._format_size(win._dl_total)}"
@@ -692,7 +689,14 @@ def _tick_activity(win, reweigh: bool = True):
         # to read, and the question being asked is "will this ever finish?".
         secs, moved = now - win._dl_at, got - win._dl_from
         if secs >= 1 and moved > 0:
-            bits.append(f"{markers._format_size(int(moved / secs))}/s")
+            win._dl_rate = moved / secs
+            bits.append(f"{markers._format_size(int(win._dl_rate))}/s")
+    if win._progress_phase == "download" and win.current_step:
+        # The same figure moves the step's download half, so the bar agrees with
+        # this line through the prefetch, which sends no bytes (ONEUP-0239 §4.1.1).
+        # After the rate, so Spotlight's Time left box redraws from this tick's.
+        step_progress.download(win, win.current_step, got, win._dl_total,
+                               *win._progress_count)
     quiet = int(now - win._activity_at) if win._activity_at else 0
     stalled = quiet >= STALL_SECONDS
     # The server is blamed only while something is known to be downloading: a source
@@ -770,7 +774,7 @@ def handle_marker(win, line: str):
         win._activity_what = ""
         win._activity_since = 0.0
         win._dl_at = win._dl_from = win._dl_bytes = win._dl_total = win._dl_grown = 0
-        win._dl_got, win._progress_count = 0, (0, 0)
+        win._dl_got, win._progress_count, win._dl_rate = 0, (0, 0), 0.0
         _tick_activity(win)   # redraw now; a 5s-stale line would name the old step
         win.bar.setFormat(win._step_caption)
         # The step's own bar and the window's, busy until PROGRESS says how far

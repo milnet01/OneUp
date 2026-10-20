@@ -17,7 +17,7 @@ from __future__ import annotations
 import shiboken6
 from PySide6.QtCore import QCoreApplication
 
-from . import steps
+from . import i18n, steps
 
 FULL = 1000
 HALF = FULL // 2
@@ -129,3 +129,27 @@ def badge(key: str, phase: str, value: int | None) -> str:
         return word
     return QCoreApplication.translate("run", "{phase} · {percent}%").format(
         phase=word, percent=round(value * 100 / FULL))
+
+
+def time_left(win) -> str:
+    """The system step's time left while it downloads (ONEUP-0239 §4.1.2): what the
+    byte figure still lacks of `bytes_total`, over `run._tick_activity`'s rate — or ""
+    while any of the three is missing, and in the install half, which has no size to
+    time against."""
+    if (win.current_step != "system" or win._progress_phase != "download"
+            or not win._dl_total or not win._dl_rate):
+        return ""
+    left = win._dl_total - min(win._dl_got, win._dl_total)
+    return estimate(left / win._dl_rate) if left > 0 else ""
+
+
+def estimate(secs: float) -> str:
+    """Seconds worded as the estimate they are: to ten seconds under a minute, to the
+    minute under an hour, then to the hour — "about 40 s left", "about 3 min left"."""
+    tens = max(10, round(secs / 10) * 10)
+    if tens < 60:
+        return i18n.counted("left-seconds", tens)
+    minutes = round(secs / 60)
+    if minutes < 60:
+        return i18n.counted("left-minutes", minutes)
+    return i18n.counted("left-hours", round(secs / 3600))

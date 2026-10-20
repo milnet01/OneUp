@@ -222,6 +222,7 @@ class Updater(QMainWindow):
         self._dl_base = 0            # package-cache weight before the run started
         self._dl_grown = 0           # its growth at the last weighing (ONEUP-0155)
         self._dl_got = 0             # the byte figure the line and the bar both show
+        self._dl_rate = 0.0          # bytes a second over the whole download, 0 = none yet
         self._progress_count = (0, 0)  # the last PROGRESS line's done and total
         # The one status line (ONEUP-0239 §4.1.3, run._show_status): the text it was
         # last given, what it last showed, and the clock and stall sentence it ends with.
