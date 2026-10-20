@@ -2228,6 +2228,49 @@ def main() -> int:
     check(f"every focusable widget in Rollback is named (unnamed: {miss_roll})", not miss_roll)
     roll_dlg.reject()
 
+    # ONEUP-0304: no focusable widget asks its style for a focus rectangle. A rule
+    # that sets no `outline` hands the rectangle back to the desktop style, and
+    # Fusion draws it as a box round the label once focus has moved by keyboard.
+    # Asserted on the REQUEST, not on pixels: whether a style paints anything for
+    # it varies by style, and a request any style may answer with a box is the defect.
+    from PySide6.QtWidgets import QProxyStyle, QStyle
+
+    class _FocusRectRecorder(QProxyStyle):
+        def __init__(self):
+            super().__init__()
+            self.asked = []
+
+        def drawPrimitive(self, element, option, painter, widget=None):
+            if element == QStyle.PE_FrameFocusRect and widget is not None:
+                self.asked.append(f"{type(widget).__name__}#{widget.objectName()}")
+            super().drawPrimitive(element, option, painter, widget)
+
+    def focus_rect_requests(root):
+        root.setStyleSheet(updater.build_theme(True))
+        root.show()
+        QApplication.processEvents()
+        rec = _FocusRectRecorder()
+        for wid in root.findChildren(QWidget):
+            if wid.focusPolicy() == Qt.NoFocus or not wid.isVisible():
+                continue
+            wid.setStyle(rec)
+            wid.setFocus(Qt.TabFocusReason)
+            QApplication.processEvents()
+            wid.grab()
+            wid.setStyle(None)
+        root.setStyleSheet("")
+        return rec.asked
+
+    asked = focus_rect_requests(wA)
+    for _dlg in (updater.RepoManagerDialog(wA, [
+                     {"alias": "oss", "name": "Main", "enabled": True, "url": "http://a/x"}]),
+                 updater.SettingsDialog(wA),
+                 updater.RollbackDialog(wA, [("41", "2026-07-24 09:00", "pre-update")], "41")):
+        asked += focus_rect_requests(_dlg)
+        _dlg.reject()
+    check(f"ONEUP-0304 no focused widget asks its style for a focus rectangle "
+          f"({sorted(set(asked))})", not asked)
+
     # A checkable QAbstractButton maps to an accessible CheckBox WITH a checked
     # state, which is how on/off reaches a screen reader. Locking that in: if the
     # switch ever stopped being checkable, the state would silently disappear.
@@ -2339,7 +2382,9 @@ def main() -> int:
     # INV-4 (revised 2026-07-25 by explicit design decision): focus must NOT draw
     # a border or an outline ring — Qt ignores outline-radius, so a ring renders as
     # a square around our rounded buttons. Focus reuses the hover look instead.
-    check("focus draws no outline ring", "outline:" not in qss_norm)
+    # `outline: none` is allowed: it switches the desktop style's ring OFF (ONEUP-0304).
+    outlines = set(re.findall(r"outline:\s*([^;}]+)", qss_norm))
+    check(f"focus draws no outline ring (outlines: {outlines})", outlines <= {"none"})
     check("focus still gives a cue by reusing the hover look",
           "QPushButton#GhostBtn:focus" in qss_norm)
     check("the focus rules come after the hover/checked rules they tie with",
