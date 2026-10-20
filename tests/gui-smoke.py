@@ -518,10 +518,13 @@ def main() -> int:
     check("_format_duration formats seconds", markers._format_duration(42) == "42s")
     check("_format_duration formats minutes", markers._format_duration(65) == "1m 5s")
     check("_format_duration handles sub-second", markers._format_duration(0) == "<1s")
-    # ONEUP-0190: sizes are binary, so they carry binary unit names.
-    check("_format_size labels binary units",
-          (markers._format_size(512 << 10), markers._format_size(41 << 20),
-           markers._format_size(3 << 29)) == ("512 KiB", "41 MiB", "1.5 GiB"))
+    # ONEUP-0190: sizes are binary, so they carry binary unit names. ONEUP-0325: KiB
+    # and MiB carry one decimal place, a whole number included, as every sketch
+    # prints them ("57.6 KiB", "1.0 MiB"); bytes stay whole.
+    _sizes = tuple(markers._format_size(n) for n in
+                   (900, 512 << 10, 59000, 41 << 20, 15518924, 3 << 29))
+    check(f"_format_size labels binary units, with one decimal for KiB and MiB ({_sizes})",
+          _sizes == ("900 B", "512.0 KiB", "57.6 KiB", "41.0 MiB", "14.8 MiB", "1.5 GiB"))
     # ONEUP-0190: a status outside ok / skip / fail earned no "Done".
     check("an unrecognised step status badges as unknown, not a success",
           markers._step_badge("spliced", "installed", ["3"]) == "Result unknown")
@@ -633,7 +636,7 @@ def main() -> int:
               "Fetching games" in wL.status.text())
         # Bytes: the download phase is the only place in a run where a figure exists at all.
         run.handle_line(wL, "@@PROGRESS@@|system|12|141|download|41943040|397410304")
-        check("the download says how much of how much", "40 MiB of 379 MiB" in wL.activity.text())
+        check("the download says how much of how much", "40.0 MiB of 379.0 MiB" in wL.activity.text())
         # ONEUP-0284: a real run read "Fetching science_GPU_ROCm — 2m 15s · 670 MiB of
         # 670 MiB" through the whole download, long after that refresh had finished.
         check("the download no longer names the source fetched before it",
@@ -725,7 +728,7 @@ def main() -> int:
         (Path(cache_dir) / "pkg.rpm").write_bytes(b"x" * (20 * 1024 * 1024))
         run._tick_activity(wC)
         check("the download is measured even though zypper reported no size",
-              "20 MiB of 86 MiB" in wC.activity.text())
+              "20.0 MiB of 86.4 MiB" in wC.activity.text())
         # Packages an earlier, stopped run left in the cache are still inside zypper's
         # total (measured 2026-10-14: 166 MiB cached, total 695.5 MiB), so they count as
         # fetched, or the figure lags and never reaches the total (ONEUP-0093). This
@@ -739,17 +742,17 @@ def main() -> int:
         run.handle_line(wC2, "@@PROGRESS@@|system|1|0|download|0|90596966")
         run._tick_activity(wC2)
         check("already-cached packages count as fetched (ONEUP-0093)",
-              "20 MiB of 86 MiB" in wC2.activity.text())
+              "20.0 MiB of 86.4 MiB" in wC2.activity.text())
         check("the rate is anchored on that figure, so it counts only new bytes",
               wC2._dl_from == 20 * 1024 * 1024)
         (Path(cache_dir) / "pkg2.rpm").write_bytes(b"x" * (66 * 1024 * 1024))
         run._tick_activity(wC2)
         check("a warm-cache download reaches its total",
-              "86 MiB of 86 MiB" in wC2.activity.text())
+              "86.4 MiB of 86.4 MiB" in wC2.activity.text())
         (Path(cache_dir) / "pkg3.rpm").write_bytes(b"x" * (10 * 1024 * 1024))
         run._tick_activity(wC2)
         check("leftovers the transaction does not need never run past the total",
-              "86 MiB of 86 MiB" in wC2.activity.text())
+              "86.4 MiB of 86.4 MiB" in wC2.activity.text())
         (Path(cache_dir) / "pkg2.rpm").unlink()
         (Path(cache_dir) / "pkg3.rpm").unlink()
         # The cache holds thousands of files by mid-download, and PROGRESS markers can
@@ -765,7 +768,7 @@ def main() -> int:
             check("a burst of progress markers does not re-weigh the package cache",
                   not weighed)
             check("a marker-driven redraw keeps the last weighed figure",
-                  "20 MiB of 86 MiB" in wC.activity.text())
+                  "20.0 MiB of 86.4 MiB" in wC.activity.text())
             run._tick_activity(wC)
             check("the timer's tick does re-weigh it", len(weighed) == 1)
         finally:
@@ -6211,7 +6214,7 @@ def main() -> int:
     check(f"ONEUP-0315 the summary is the count and what there is to download "
           f"({hR.summary.text()!r})",
           hR.summary.text().startswith(
-              f"{i18n.counted('package-count', 4)} · 3 MiB to download")
+              f"{i18n.counted('package-count', 4)} · 3.0 MiB to download")
           and "some sizes not known" in hR.summary.text()
           and "System packages" not in hR.summary.text())
     _line = hR.summary.parentWidget()
