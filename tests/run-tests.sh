@@ -1693,6 +1693,11 @@ chmod +x "$d/zypper" "$d/mock-askpass"
 setsid "$d/mock-askpass" "System Updater: authenticate to update the system" \
     >/dev/null 2>&1 &
 orphan_pid=$!
+# ONEUP-0298's prompt as sudo hands it to the dialog, with %p already expanded. The old
+# prompt above stays reapable too: the Bash fallback still uses it.
+setsid "$d/mock-askpass" "OneUp needs the password for root to install updates." \
+    >/dev/null 2>&1 &
+orphan2_pid=$!
 # Live: a dialog whose parent IS a waiting sudo must survive — killing one would break a
 # concurrent OneUp process mid-authentication. fake-sudo stands in for that parent (the
 # reap matches on the parent's command line, and "fake-sudo" contains "sudo").
@@ -1712,7 +1717,8 @@ for _ in $(seq 1 50); do          # poll, up to 5s: the dialog is fake-sudo's ch
 done
 # A fixture that cannot be staged proves nothing, so it is a failure, never a quiet skip
 # that leaves the pass count looking complete (ONEUP-0068).
-if ! kill -0 "$orphan_pid" 2>/dev/null || [[ -z "$live_pid" ]]; then
+if ! kill -0 "$orphan_pid" 2>/dev/null || ! kill -0 "$orphan2_pid" 2>/dev/null \
+        || [[ -z "$live_pid" ]]; then
     echo "  FAIL - could not stage the dialogs (orphan=$orphan_pid live=${live_pid:-none})"
     FAIL=$((FAIL+1))
 else
@@ -1727,14 +1733,49 @@ else
     else
         echo "  FAIL - an orphaned password dialog was left on screen"; FAIL=$((FAIL+1))
     fi
+    reaped=no
+    for _ in $(seq 1 20); do
+        kill -0 "$orphan2_pid" 2>/dev/null || { reaped=yes; break; }
+        sleep 0.1
+    done
+    if [[ "$reaped" == yes ]]; then
+        echo "  ok   - an orphan carrying the ONEUP-0298 prompt is closed too"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - an orphan carrying the ONEUP-0298 prompt was left on screen"
+        FAIL=$((FAIL+1))
+    fi
     if kill -0 "$live_pid" 2>/dev/null; then
         echo "  ok   - a dialog someone is still waiting on is left alone"; PASS=$((PASS+1))
     else
         echo "  FAIL - killed a live dialog another process was waiting on"; FAIL=$((FAIL+1))
     fi
 fi
-kill -9 "$orphan_pid" "$live_parent" ${live_pid:+"$live_pid"} 2>/dev/null
+kill -9 "$orphan_pid" "$orphan2_pid" "$live_parent" ${live_pid:+"$live_pid"} 2>/dev/null
 wait "$live_parent" 2>/dev/null
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0298: ksshaskpass titles its box "Enter SSH Credentials", so the prompt is the
+# only thing saying whose password is wanted — under openSUSE's targetpw it is root's,
+# not the user's. sudo expands %p to that user (rootpw, targetpw and runaspw honoured),
+# so a prompt carrying %p names the right password on every sudoers setup.
+echo "TEST: the password prompts name whose password sudo wants"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"
+mv "$d/sudo" "$d/sudo.real"
+cat > "$d/sudo" <<EOF
+#!/usr/bin/env bash
+printf 'ARGS=%s\nENV=%s\n' "\$*" "\${SUDO_PROMPT:-}" >> "$d/sudo.seen"
+exec "$d/sudo.real" "\$@"
+EOF
+chmod +x "$d/zypper" "$d/sudo"
+run_engine "$d" --steps=cache >/dev/null 2>&1
+seen=$(cat "$d/sudo.seen" 2>/dev/null)
+check        "the up-front prompt names whose password (ONEUP-0298)" \
+             "-p OneUp needs the password for %p" "$seen"
+check        "every later prompt names whose password too" \
+             "ENV=OneUp needs the password for %p" "$seen"
+check_absent "the old unnamed prompt is gone" "authenticate to update the system" "$seen"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
