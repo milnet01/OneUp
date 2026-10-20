@@ -359,20 +359,16 @@ QListView#ThemeList {
 QListView#ThemeList:focus { background: $focusfill; color: $focusink; }
 QLabel#ThemeNote { color: $amber; font-size: $fs_body; }
 
-/* Stop leaves the ghost outline and the transparent fill alone and takes the
-   danger family's colour for its BORDER and its LABEL — the construction
-   #RebootBanner uses, a red edge over an all-but-transparent ground, not
-   #RestartBtn's solid red fill. A filled Stop would break the `card` derivation
-   the focus cue rests on. It has an object name of its own because a restyled
-   control still called #GhostBtn would be invisible to that derivation, which
-   matches by name. */
+/* Stop is filled with the danger family's gradient, as every sketch draws it and
+   as #RestartBtn is, so its focus cue is derived from its own fill, as
+   #RestartBtn's is (ONEUP-0239 §4.1.3). Greyed out while packages install, it
+   takes the disabled Run button's pair. */
 QPushButton#StopBtn {
-    color: $stopfg; font-weight: 600; background: transparent;
-    border: 1px solid $stopfg; border-radius: 8px; padding: 8px 14px;
-    min-width: 24px; min-height: 24px;
+    color: $btnfg; font-weight: 700; border: none; border-radius: 8px; padding: 8px 14px;
+    min-width: 24px; min-height: 24px; background: $btn_danger;
 }
-QPushButton#StopBtn:hover { border-color: $stophov; color: $stophov; }
-QPushButton#StopBtn:disabled { color: $disfg; border-color: $disbg; }
+QPushButton#StopBtn:hover { background: $btn_danger_hov; }
+QPushButton#StopBtn:disabled { color: $disfg; background: $disbg; }
 
 QPushButton#LinkBtn {
     color: $linkfg; font-weight: 600;
@@ -527,7 +523,9 @@ QToolTip {
 QPushButton#RunBtn:focus, QPushButton#BannerBtn:focus {
     background: $accentfocus; color: $accentfocusink;
 }
-QPushButton#RestartBtn:focus { background: $dangerfocus; color: $dangerfocusink; }
+QPushButton#RestartBtn:focus, QPushButton#StopBtn:focus {
+    background: $dangerfocus; color: $dangerfocusink;
+}
 
 /* The tabs' qualified rest rules outrank the bare ghost :focus rule, so their
    focus is restated. The checked tab rests on its own fill and takes the pair
@@ -538,7 +536,7 @@ QPushButton#RestartBtn:focus { background: $dangerfocus; color: $dangerfocusink;
 #PackageFilter QPushButton#GhostBtn:focus {
     background: $focusfill; color: $focusink; border-color: $focusink;
 }
-QPushButton#GhostBtn:focus, QPushButton#StopBtn:focus {
+QPushButton#GhostBtn:focus {
     background: $focusfill; color: $focusink; border-color: $focusink;
 }
 #RowCard QPushButton#GhostBtn:focus {
@@ -688,14 +686,12 @@ QLabel#ThemeNote { color: $text; }
 QComboBox#ThemeCombo:focus {
     background: $btnhov; color: $btntext; border: 2px solid $btntext;
 }
-/* Stop takes the shape the overlay gives every ghost button, with the danger
-   token in place of the ordinary border — the overlay never carries a literal
-   red. Without this set the rename would leave the one control that interrupts a
-   running update unstyled in the one appearance mode that exists for low-vision
-   users. */
-QPushButton#StopBtn { background: $card; color: $text; border: 2px solid $errbd; }
-QPushButton#StopBtn:hover   { background: $btn; color: $btntext; border: 2px solid $focus; }
-QPushButton#StopBtn:checked { background: $btn; color: $btntext; border: 2px solid $errbd; }
+/* Stop takes #RestartBtn's fill here, `btn` — the overlay never carries a literal
+   red — keeping the danger token as its border (ONEUP-0239 §4.1.3). Without this
+   set the one control that interrupts a running update would be unstyled in the
+   one appearance mode that exists for low-vision users. */
+QPushButton#StopBtn { background: $btn; color: $btntext; border: 2px solid $errbd; }
+QPushButton#StopBtn:hover { background: $btnhov; color: $btntext; border: 2px solid $focus; }
 QPushButton#StopBtn:disabled { background: $card; color: $text; border: 2px dashed $errbd; }
 /* The window's bar keeps its install-half mark in the overlay's surface colour. */
 QProgressBar#RunProgress { qproperty-mark: $card; }
@@ -723,6 +719,7 @@ QPushButton#LinkBtn:hover { color: $text; }
    rests on $btn too, for the same measured reason (ONEUP-0305); its two states
    outrank the ghost :focus rule below, so it wins from here. */
 QPushButton#RunBtn:focus, QPushButton#RestartBtn:focus, QPushButton#BannerBtn:focus,
+QPushButton#StopBtn:focus,
 QTabBar#SettingsTabs::tab:selected:focus,
 QPushButton#GhostBtn:checked:focus,
 #PackageFilter QPushButton#GhostBtn:checked:focus,
@@ -731,7 +728,7 @@ QPushButton#GhostBtn:checked:focus,
 #WarnBanner QPushButton#GhostBtn:checked:focus {
     background: $hcfocusfill; color: $hcfocusink; border: 2px solid $hcfocusink;
 }
-QPushButton#GhostBtn:focus, QPushButton#StopBtn:focus,
+QPushButton#GhostBtn:focus,
 #PackageFilter QPushButton#GhostBtn:focus,
 #RowCard QPushButton#GhostBtn:focus,
 #DialogButtons QPushButton#GhostBtn:focus,
@@ -755,9 +752,8 @@ QListView#PackageLists:focus, QScrollArea#RepoScroll:focus, QListWidget#Rollback
 # `ghostbd`, `linkfg`, `linkhov` and `ghosthov` carry values ONEUP-0076 §4.3
 # MOVED. The old ones were measured and failed: the light link's #4aa3ff read
 # 2.63:1 on its own card against a 4.5:1 bar, and the ghost button's rest border
-# 1.62:1 against a 3:1 one. `stopfg` / `stophov` are new keys rather than sheet
-# literals because _QSS is one template substituted with either palette, so a
-# value that differs between them cannot be written into the sheet (ONEUP-0064).
+# 1.62:1 against a 3:1 one. `stopfg` / `stophov` colour nothing since ONEUP-0317
+# filled Stop, and stay until ONEUP-0326 retires them.
 _DARK = dict(
     win="#0f1216", card="#12161c", header="#f4f7fb", tag="#8b95a5",
     rowcard="#1a1f27", rowhov="#1e242e", tname="#eef2f8", tdesc="#a7b0be",
@@ -1223,7 +1219,7 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
         add(control, "border", ink, fill, FOCUS_MIN)
     for control, prefix, stops in (
             ("Run / banner button", "accentfocus", palette["btn_accent_stops"]),
-            ("Restart button", "dangerfocus", palette["btn_danger_stops"])):
+            ("Restart / Stop button", "dangerfocus", palette["btn_danger_stops"])):
         fills, _ = derive_focus_gradient(stops)
         rest, focused = _samples(*stops), _samples(*fills)
         for r, f in zip(rest, focused, strict=True):
@@ -1253,11 +1249,6 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
             add(control, "text", colour, s, floor)
     add("ghost button, rest border", "border", palette["ghostbd"], palette["card"], FOCUS_MIN)
     add("ghost button, hover border", "border", palette["ghosthov"],
-        palette["card"], FOCUS_MIN)
-    add("stop button, rest label", "text", palette["stopfg"], palette["card"], INK_MIN)
-    add("stop button, hover label", "text", palette["stophov"], palette["card"], INK_MIN)
-    add("stop button, rest border", "border", palette["stopfg"], palette["card"], FOCUS_MIN)
-    add("stop button, hover border", "border", palette["stophov"],
         palette["card"], FOCUS_MIN)
     return rows
 

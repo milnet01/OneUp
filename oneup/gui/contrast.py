@@ -117,8 +117,8 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     ("linkfg", LINK_SURFACES, TEXT),
     ("linkhov", LINK_SURFACES, TEXT),
     ("ghosthov", LINK_SURFACES, TEXT),
-    # Stop's fill is transparent, so its label is read against the card and NOT
-    # against the danger family's fill.
+    # Stop's label is the btnfg row's since ONEUP-0317 filled it; these two keys
+    # colour nothing and stay measured until ONEUP-0326 retires them.
     ("stopfg", ("card",), TEXT),
     ("stophov", ("card",), TEXT),
     # The checked package tab's label on its filled ground (ONEUP-0313).

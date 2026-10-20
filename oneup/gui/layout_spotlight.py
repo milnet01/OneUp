@@ -77,7 +77,7 @@ class SpotlightLayout(LayoutHost):
         pl.addLayout(top)
         # The bar, then the status line under it, which the sketch lacks but which
         # stays in view so a stall is never hidden (§4.3 Spotlight item 2).
-        for w in (win.bar, win.status, win.bar_caption, win.activity):
+        for w in (win.bar, win.status):
             pl.addWidget(w)
         figures = QHBoxLayout()
         figures.setSpacing(12)

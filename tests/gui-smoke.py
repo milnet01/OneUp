@@ -6474,6 +6474,8 @@ def main() -> int:
     _stalled = wF.status.text()
     check(f"ONEUP-0317 a stall's sentence ends the line ({_stalled!r})",
           _stalled.startswith(_line + " · ") and _stalled.endswith("Stopping now is safe."))
+    check("ONEUP-0317 the activity line is never shown, though it has text",
+          bool(wF.activity.text()) and not wF.activity.isVisible())
     wF._activity_at = time.monotonic()
     run.handle_line(wF, "@@PROGRESS@@|system|7|24|install")
     check(f"ONEUP-0317 the install half says so, with no byte figure "
@@ -6487,8 +6489,6 @@ def main() -> int:
     run._tick_activity(wF)
     check(f"ONEUP-0317 a tick does not overwrite the stop request ({wF.status.text()!r})",
           wF.status.text().startswith("Stopping after the current step"))
-    check("ONEUP-0317 the activity line is never shown, though it has text",
-          bool(wF.activity.text()) and not wF.activity.isVisible())
     run.on_finished(wF, 0, None)
     run.cache_bytes = _cache_bytes0
     _unpatch_all()

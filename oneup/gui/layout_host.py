@@ -92,12 +92,12 @@ class LayoutHost(QWidget):
         win = self.win
         col = QVBoxLayout()
         col.setSpacing(6)
-        for w in (win.status, win.bar, win.bar_caption, win.activity):
+        for w in (win.status, win.bar):
             col.addWidget(w)
         return col
 
     def status_block(self) -> QHBoxLayout:
-        """Status, bar, caption and activity, with the action slot beside them."""
+        """The status line and the bar, with the action slot beside them."""
         row = QHBoxLayout()
         row.setSpacing(16)
         row.addLayout(self.status_column(), 1)
@@ -105,8 +105,9 @@ class LayoutHost(QWidget):
         return row
 
     def footer(self, with_actions: bool = False) -> QHBoxLayout:
-        """The last run, Undo and the log links — and, where the layout puts it
-        there, the action slot at the trailing end."""
+        """The last run, Undo and the log link — Open log file beside it only while
+        the log is shown — and, where the layout puts it there, the action slot at
+        the trailing end."""
         win = self.win
         row = QHBoxLayout()
         row.setSpacing(10)

@@ -568,8 +568,60 @@ def _refresh_layout(win):
 
 
 def _set_activity(win, text: str):
+    # Never shown: the status line carries what a user must see (ONEUP-0239 §4.1.3).
     win.activity.setText(text)
-    win.activity.setVisible(bool(text))   # it keeps its line hidden (ONEUP-0239 §4.2)
+
+
+def _show_status(win):
+    """The one status line (ONEUP-0239 §4.1.3). Inside a step's PROGRESS: the step's
+    title, the phase and its count, and the byte figure, each only when known.
+    Otherwise the text it was last given — a refresh's, a check's, a stop request's —
+    with the clock of what is being fetched, so a mirror trickling dots still reads as
+    moving (ONEUP-0322 item 4). A stall's sentence ends the line either way.
+
+    Text set on `status` by anyone else becomes the line's base, which is how every
+    other status message keeps working without knowing about this one."""
+    if win.status.text() != win._status_shown:
+        win._status_base = win.status.text()
+    separator = QCoreApplication.translate(
+        "run", " · ", "separator between the parts of the status line")
+    if win.current_step and win._progress_phase and not win._stop_asked:
+        title = {k: t for k, t, _d in steps.TASKS}.get(win.current_step)
+        parts = (QCoreApplication.translate("steps", title) if title else win.current_step,
+                 _phase_count(win), _byte_figure(win))
+        win._status_base = separator.join(p for p in parts if p)
+        tail = (win._status_stall,)
+    else:
+        tail = (win._status_clock, win._status_stall)
+    win._status_shown = separator.join(p for p in (win._status_base, *tail) if p)
+    win.status.setText(win._status_shown)
+
+
+def _phase_count(win) -> str:
+    """The phase and its count — "Downloading 4 of 24" — or a running tally where the
+    total is not known, as zypper's preload phase reports none (marker-protocol.md
+    §4.3)."""
+    n, total = win._progress_count
+    downloading = win._progress_phase == "download"
+    if total:
+        text = (QCoreApplication.translate("run", "Downloading {n} of {total}") if downloading
+                else QCoreApplication.translate("run", "Installing {n} of {total}"))
+    else:
+        text = (QCoreApplication.translate("run", "Downloading packages — {n} so far")
+                if downloading else
+                QCoreApplication.translate("run", "Installing packages — {n} so far"))
+    return text.format(n=n, total=total)
+
+
+def _byte_figure(win) -> str:
+    """How much has come down, of how much — download half only (ONEUP-0239 §4.1.1)."""
+    if win._progress_phase != "download" or not win._dl_got:
+        return ""
+    got = markers._format_size(win._dl_got)
+    if not win._dl_total:
+        return got
+    return QCoreApplication.translate("run", "{got} of {total}").format(
+        got=got, total=markers._format_size(win._dl_total))
 
 
 def _reset_activity(win):
@@ -584,6 +636,7 @@ def _reset_activity(win):
     # Weighed once, before anything is fetched, so later samples can tell what THIS
     # run fetched from what an earlier, stopped run left behind (ONEUP-0093).
     win._dl_base = cache_bytes()
+    win._status_clock = win._status_stall = ""
     _set_activity(win, "")
 
 
@@ -599,10 +652,12 @@ def _tick_activity(win, reweigh: bool = True):
         return
     now = time.monotonic()
     bits = []
+    win._status_clock = win._status_stall = ""
     if win._activity_what and win._activity_since:
         waited = markers._format_duration(int(now - win._activity_since))
-        bits.append(QCoreApplication.translate("run", "{what} — {waited}").format(
-            what=win._activity_what, waited=waited))
+        win._status_clock = QCoreApplication.translate("run", "{what} — {waited}").format(
+            what=win._activity_what, waited=waited)
+        bits.append(win._status_clock)
     # Two byte sources, whichever is further along: what zypper printed (per-package
     # sizes, when it prints them at all) and what its package cache actually weighs.
     # The cache is the only one that covers the prefetch phase — the phase a big
@@ -648,18 +703,21 @@ def _tick_activity(win, reweigh: bool = True):
     fetching = (win._progress_phase == "download"
                 or (not win._progress_phase and bool(win._activity_what)))
     if stalled and fetching:
-        bits.append(QCoreApplication.translate(
+        win._status_stall = QCoreApplication.translate(
             "run", "nothing received for {duration} — the server may have stalled. "
-            "Stopping now is safe.").format(duration=markers._format_duration(quiet)))
+            "Stopping now is safe.").format(duration=markers._format_duration(quiet))
     elif stalled:
-        bits.append(QCoreApplication.translate(
+        win._status_stall = QCoreApplication.translate(
             "run", "nothing new for {duration} — still working").format(
-                duration=markers._format_duration(quiet)))
+                duration=markers._format_duration(quiet))
+    if win._status_stall:
+        bits.append(win._status_stall)
     elif bits:
         bits.append(QCoreApplication.translate("run", "still working"))
     separator = QCoreApplication.translate(
         "run", " · ", "separator between the parts of the activity line")
     _set_activity(win, separator.join(bits))
+    _show_status(win)
     # Announced on the transition only — a live region that speaks every tick would
     # bury the rest of the run, but going quiet for minutes is genuinely news.
     if stalled != win._activity_stalled:
@@ -851,7 +909,6 @@ def handle_marker(win, line: str):
         win._progress_phase = phase
         # Packages moving means the refresh is over: keeping its source and clock drew
         # "Fetching <alias> — 2m 15s" over a whole real download (ONEUP-0284).
-        refreshed = bool(win._activity_what)
         win._activity_what = ""
         win._activity_since = 0.0
         sync_stop(win)
@@ -864,11 +921,13 @@ def handle_marker(win, line: str):
             win._dl_bytes = max(win._dl_bytes, int(parts[4]))
             if len(parts) > 5 and parts[5].isdecimal() and int(parts[5]):
                 win._dl_total = int(parts[5])
-            _tick_activity(win, reweigh=False)
-        elif refreshed:
-            _tick_activity(win, reweigh=False)   # redraw now, not on the next 5s tick
-        # The step's two halves (ONEUP-0239 §4.1.1), after the byte figure is current.
         win._progress_count = (n, total)
+        # Redraw now, not on the next 5s tick: the status line is built from the count
+        # and the byte figure, and a finished refresh's label must go (ONEUP-0284).
+        # Shown again after, for a window that follows a run with no liveness clock.
+        _tick_activity(win, reweigh=False)
+        _show_status(win)
+        # The step's two halves (ONEUP-0239 §4.1.1), after the byte figure is current.
         if downloading:
             step_progress.download(win, key, win._dl_got, win._dl_total, n, total)
         elif phase == "install":

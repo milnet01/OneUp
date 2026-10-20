@@ -223,6 +223,10 @@ class Updater(QMainWindow):
         self._dl_grown = 0           # its growth at the last weighing (ONEUP-0155)
         self._dl_got = 0             # the byte figure the line and the bar both show
         self._progress_count = (0, 0)  # the last PROGRESS line's done and total
+        # The one status line (ONEUP-0239 §4.1.3, run._show_status): the text it was
+        # last given, what it last showed, and the clock and stall sentence it ends with.
+        self._status_base = self._status_shown = ""
+        self._status_clock = self._status_stall = ""
         self._done_status = ""       # the run's own @@DONE@@ verdict; the only result
                                      # available for a run we attached to (no exit code)
         self._attached_pid = 0       # engine we're following that another window started
@@ -568,10 +572,10 @@ class Updater(QMainWindow):
         # Stop (only while a run is going). Deliberately not a "cancel" — it takes effect
         # at the next safe point, because interrupting an install can leave programs
         # broken. The label and tooltip say so rather than implying an instant abort.
-        # Its own object name, not GhostBtn: it keeps the ghost outline and the
-        # transparent fill but takes the danger colour for its border and label,
-        # and the focus derivation matches a styled control BY NAME — a restyled
-        # control still called GhostBtn would be invisible to it (ONEUP-0064).
+        # Its own object name, not GhostBtn: it is filled with the danger colour
+        # (ONEUP-0239 §4.1.3), and the focus derivation matches a styled control BY
+        # NAME — a restyled control still called GhostBtn would be invisible to it
+        # (ONEUP-0064).
         self.stop_btn = QPushButton(QCoreApplication.translate("window", "Stop"))
         self.stop_btn.setObjectName("StopBtn")
         self.stop_btn.setCursor(Qt.PointingHandCursor)
@@ -641,18 +645,21 @@ class Updater(QMainWindow):
         self.bar.setRange(0, 1)
         self.bar.setValue(0)
         self.bar.setAccessibleName(QCoreApplication.translate("window", "Update progress"))
-        # Liveness, on its own line under the bar (ONEUP-0048): how long the current
-        # phase has been going, the download rate, and — when the engine has gone quiet —
-        # how long for. A slow mirror and a hung one look identical without this: zypper
-        # reports a metadata fetch as undelimited dots with no line ending, so there is
-        # nothing for the log pane to draw, and a working run reads as frozen.
+        # Liveness (ONEUP-0048): how long the current phase has been going, the download
+        # rate, and — when the engine has gone quiet — how long for. A slow mirror and a
+        # hung one look identical without it: zypper reports a metadata fetch as
+        # undelimited dots with no line ending, so there is nothing for the log pane to
+        # draw, and a working run reads as frozen.
         self.activity = ElidedLabel("")
         self.activity.setObjectName("Activity")
         self.activity.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
         self.activity.setAccessibleName(QCoreApplication.translate("window", "Activity"))
-        self.activity.setVisible(False)
-        # Hidden, it keeps its line, so the line appearing moves nothing (ONEUP-0239 §4.2).
-        _retain_space(self.activity)
+        # The caption and the activity line are in no layout: the status line carries
+        # the clock and the stall (ONEUP-0239 §4.1.3). They stay the window's, hidden,
+        # so no host deletes them and neither ever shows as a window of its own.
+        for label in (self.bar_caption, self.activity):
+            label.setParent(self)
+            label.hide()
         # Five seconds, not one: the label is a live region, and a screen reader reading a
         # ticking counter aloud would bury everything else. _tick_activity only re-announces
         # when the WORDING changes, so the elapsed figure updates silently.
@@ -737,6 +744,9 @@ class Updater(QMainWindow):
         self.openlog_btn.setObjectName("LinkBtn")
         self.openlog_btn.setCursor(Qt.PointingHandCursor)
         self.openlog_btn.clicked.connect(self.open_log)
+        # Shown only with the log, in a slot that keeps its size (ONEUP-0239 §4.1.3).
+        self.openlog_btn.setVisible(False)
+        _retain_space(self.openlog_btn)
         # Its label changes, so it is pinned to the wider one (ONEUP-0239 §4.2).
         self._pin_log_toggle_width()
         self.log_toggle.installEventFilter(self)
@@ -1251,6 +1261,7 @@ class Updater(QMainWindow):
         place (ONEUP-0239 §4.5). Nothing is stored: the window opens on the packages."""
         self.package_area.setCurrentWidget(self.log if show else self.host.page)
         self.log_toggle.setText(_log_toggle_text(show))
+        self.openlog_btn.setVisible(show)
 
     def _pin_log_toggle_width(self):
         """Give the log toggle the width of the wider of its two labels."""
@@ -1285,8 +1296,8 @@ class Updater(QMainWindow):
     def _shared_widgets(self) -> list[QWidget]:
         """The window's controls a layout places directly. Their own children move
         with them."""
-        return [*self.rows.values(), self.action_bar, self.status, self.bar, self.bar_caption,
-                self.activity, self.message_strip, self.package_area, self.size_link,
+        return [*self.rows.values(), self.action_bar, self.status, self.bar,
+                self.message_strip, self.package_area, self.size_link,
                 self.last_run, self.rollback_btn, self.log_toggle, self.openlog_btn]
 
     def apply_layout(self, layout_id: str):
