@@ -270,8 +270,8 @@ RED = QColor("#e74c3c")
 # pixels — so OneUp follows the system font and can be enlarged from Settings.
 # A high-contrast overlay (_HC_QSS) is appended after the base sheet when the
 # user asks for it; Qt resolves equal-specificity conflicts the CSS way, so the
-# later rule wins. Focus rings use `outline`, not `border`: a border changes the
-# widget's box and makes buttons visibly resize when focused.
+# later rule wins. Focus draws no ring at all; the focus section of the sheet
+# says why.
 # ---------------------------------------------------------------------------
 ACCENT = "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)"
 BTN_ACCENT = "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4aa3ff, stop:1 #2f6fe0)"
@@ -418,7 +418,11 @@ QToolTip {
    our rounded buttons, because Qt ignores `outline-radius`, and a border resizes
    the widget). So a keyboard user gets exactly the cue a mouse user gets.
    Emitted LAST because :focus ties with :hover / :checked on specificity —
-   placed earlier, a focused *checked* toggle would show no cue at all. */
+   placed earlier, a focused *checked* toggle would show no cue at all.
+   A rule that sets no `outline` hands the focus rectangle back to the desktop
+   style, and Fusion draws it as a box round the label (ONEUP-0304), so these
+   two switch it off. */
+QPushButton, QAbstractItemView { outline: none; }
 QPushButton#RunBtn:focus {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5cb0ff, stop:1 #3a7cf0);
 }

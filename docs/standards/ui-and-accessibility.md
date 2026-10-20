@@ -27,7 +27,7 @@ each invariant is tested; this file is the rule a new widget must obey.
 | Everything focusable has a name a screen reader can read | `tests/gui-smoke.py` INV-1, the `unnamed()` sweep — walks every widget, keeps `focusPolicy() != Qt.NoFocus`, fails on a nameless one |
 | No state is signalled by colour alone | `gui-smoke.py` INV-2 checks |
 | No hard-coded pixel font size | `gui-smoke.py` INV-3 — a regex over the built stylesheet |
-| Focus never draws a ring or adds a border | `gui-smoke.py` INV-4 — asserts no ring, and that the `:focus` rules are emitted after `:hover`/`:checked` (§5) |
+| Focus never draws a ring or adds a border | `gui-smoke.py` INV-4 — asserts no ring, and that the `:focus` rules are emitted after `:hover`/`:checked`; ONEUP-0304 fails any focused widget that asks its style for a focus rectangle (§5) |
 | Dialogs inherit the app theme and open centred on the window | `gui-smoke.py`'s X11 and Wayland `center_on_parent` assertions, and its ONEUP-0247 static-helper check (§6) |
 | Every theme passes the same contrast checks | **not enforced yet** — the check is ONEUP-0027's to write (§7) |
 | The window mirrors for Hebrew and Arabic | §8, gate G10 |
