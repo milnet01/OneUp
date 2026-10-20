@@ -478,15 +478,16 @@ def _format_duration(secs: int) -> str:
     return f"{secs // 60}m {secs % 60}s"
 
 def _format_size(n: int) -> str:
-    """A compact human size: '900 B', '512 KiB', '41 MiB', '1.4 GiB'.
+    """A compact human size: '900 B', '57.6 KiB', '1.0 MiB', '1.4 GiB'.
 
     Binary units, labelled as such (ONEUP-0190) — the same MiB zypper prints in
-    the log pane, so the two figures agree.
+    the log pane, so the two figures agree. One decimal place above bytes, a whole
+    number included, as every sketch prints them (ONEUP-0239 §4.3.1).
     """
     if n >= 1 << 30:
         return f"{n / (1 << 30):.1f} GiB"
     if n >= 1 << 20:
-        return f"{n / (1 << 20):.0f} MiB"
+        return f"{n / (1 << 20):.1f} MiB"
     if n >= 1 << 10:
-        return f"{n / (1 << 10):.0f} KiB"
+        return f"{n / (1 << 10):.1f} KiB"
     return f"{n} B"

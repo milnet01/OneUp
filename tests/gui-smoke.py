@@ -636,7 +636,8 @@ def main() -> int:
               "Fetching games" in wL.status.text())
         # Bytes: the download phase is the only place in a run where a figure exists at all.
         run.handle_line(wL, "@@PROGRESS@@|system|12|141|download|41943040|397410304")
-        check("the download says how much of how much", "40.0 MiB of 379.0 MiB" in wL.activity.text())
+        check("the download says how much of how much",
+              "40.0 MiB of 379.0 MiB" in wL.activity.text())
         # ONEUP-0284: a real run read "Fetching science_GPU_ROCm — 2m 15s · 670 MiB of
         # 670 MiB" through the whole download, long after that refresh had finished.
         check("the download no longer names the source fetched before it",
@@ -745,7 +746,8 @@ def main() -> int:
               "20.0 MiB of 86.4 MiB" in wC2.activity.text())
         check("the rate is anchored on that figure, so it counts only new bytes",
               wC2._dl_from == 20 * 1024 * 1024)
-        (Path(cache_dir) / "pkg2.rpm").write_bytes(b"x" * (66 * 1024 * 1024))
+        # Exactly the rest of the total: whole-MiB sizes once hid a 0.4 MiB gap here.
+        (Path(cache_dir) / "pkg2.rpm").write_bytes(b"x" * (90596966 - 20 * 1024 * 1024))
         run._tick_activity(wC2)
         check("a warm-cache download reaches its total",
               "86.4 MiB of 86.4 MiB" in wC2.activity.text())
