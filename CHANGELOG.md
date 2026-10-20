@@ -180,6 +180,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **No blue box round a button's label when it is reached with the Tab key** (ONEUP-0304)
+  On desktops where OneUp runs Qt's Fusion style, a button, tab or list focused from the keyboard drew a translucent box round its text. Focus is shown by the control's colour alone, as designed.
+
 - **Settings, Recenter and About are the same height** (ONEUP-0324)
   Settings stood a little taller than the other two header buttons, because its gear symbol comes from a different font. All three now line up.
 

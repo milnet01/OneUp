@@ -9148,7 +9148,7 @@ when complete (that document's §7).
   Source: user-request-2026-10-16.
   Lanes: gui.
 
-- 📋 [ONEUP-0304] **Under Breeze, a ghost button focused by keyboard draws a box around its label, the ring the focus design forbids.**
+- ✅ [ONEUP-0304] **Under Breeze, a ghost button focused by keyboard draws a box around its label, the ring the focus design forbids.**
   Seen 2026-10-16 in the ONEUP-0287 VM (Breeze, 1280x960): "Weekly
   check: off" focused by Tab, and "Keep logs: 30 day(s)" focused by
   Shift-Tab, each show a bluish rectangle round the label inside the
@@ -9156,6 +9156,16 @@ when complete (that document's §7).
   The host suite runs Qt's own style offscreen, so it cannot see a
   Breeze-drawn frame. Settings' tabs (ONEUP-0303) show no box.
   Zooms: /mnt/Games/oneup-vmtest/zoom-weekly.png, zoom-keeplogs.png.
+  Shipped 2026-10-20. Cause: a sheet rule with no `outline` hands
+  the focus rectangle back to the desktop style. The Live VM's PySide6
+  runs Fusion, not Breeze, and Fusion draws that rectangle as the
+  translucent box. Breeze 6.7.5 is asked too but paints nothing. Fix:
+  `outline: none` on QPushButton, QTabBar and QAbstractItemView. The
+  tab bar and rollback list asked too. Test: gui-smoke ONEUP-0304 check
+  records any PE_FrameFocusRect request. v2 d9308a8 (test), 2697734
+  (fix); main 48e3e5d (test), 920bdd5 (fix), 2514922 (changelog).
+  Checked in the VM 2026-10-20: Recenter, About and Weekly check
+  focused by Tab show no box.
   **Layman:** On a normal KDE desktop, buttons reached with the Tab key show an extra box around their text that OneUp's design says should not be there.
   Kind: accessibility.
   Source: ONEUP-0303-build-2026-10-16.
