@@ -570,14 +570,15 @@ def main() -> int:
     check("the caption label carries what the bar reports",
           wP.bar_caption.text() == wP.bar.format() and "34 so far" in wP.bar_caption.text())
     run.handle_line(wP, "@@PROGRESS@@|system|12|141|download")
-    check("a counted download reads as 'Downloading 12 of 141 packages'",
-          wP.status.text() == "Downloading 12 of 141 packages…")
+    check("a counted download reads as 'Downloading 12 of 141' on the step's line "
+          "(ONEUP-0317)", wP.status.text() == "System packages · Downloading 12 of 141")
     # The badge names the half and the whole step's percentage (ONEUP-0239 §4.1.1).
     _badge = wP.rows["system"].badge.text()
     check(f"the row badge tracks progress ({_badge!r})",
           _badge.startswith(app.translate("run", "Downloading") + " · ") and _badge.endswith("%"))
     run.handle_line(wP, "@@PROGRESS@@|system|7|141|install")
-    check("the install phase says Installing", wP.status.text() == "Installing 7 of 141 packages…")
+    check("the install phase says Installing",
+          wP.status.text() == "System packages · Installing 7 of 141")
     # One announcement per phase, not per package: 141 spoken lines would bury
     # everything else, but silence through the longest phase is what looked hung.
     check("a phase change is announced once", wP._last_announcement == "Installing packages.")
@@ -622,12 +623,14 @@ def main() -> int:
         run.handle_line(wL, "@@STEP_BEGIN@@|system|1|5")
         run.handle_line(wL, "@@REFRESH@@|6|9|games")
         check("the source being fetched is named, with its position",
-              wL.status.text() == "Checking for updates from games (6 of 9 sources)…")
+              wL.status.text().startswith("Checking for updates from games (6 of 9 sources)…"))
         check("the bar keeps the step caption and adds the source",
               "Updating system packages" in wL.bar.format() and "games" in wL.bar.format())
         check("the liveness line names what is being waited on",
               "Fetching games" in wL.activity.text())
-        check("the liveness line is visible during a run", wL.activity.isVisibleTo(wL))
+        # ONEUP-0317: the line itself is never shown; the status carries what it must.
+        check("the status carries the liveness clock during a run",
+              "Fetching games" in wL.status.text())
         # Bytes: the download phase is the only place in a run where a figure exists at all.
         run.handle_line(wL, "@@PROGRESS@@|system|12|141|download|41943040|397410304")
         check("the download says how much of how much", "40 MiB of 379 MiB" in wL.activity.text())
@@ -999,7 +1002,7 @@ def main() -> int:
             fh.write("@@PROGRESS@@|system|99|141|install\n")
         wA._poll_attached_run()
         check("newly appended log lines are followed live",
-              wA.status.text() == "Installing 99 of 141 packages…")
+              wA.status.text() == "System packages · Installing 99 of 141")
         # When the followed run ends there is no QProcess and no exit code to read — only
         # its @@DONE@@ line. This must not throw (it did: on_finished assumed self.proc).
         with open(attach_log, "a") as fh:
@@ -5037,11 +5040,10 @@ def main() -> int:
     # no ancestor decides them; a set of container names means the walk must
     # reach one of them.
     FOCUS_TABLE = {
-        "RunBtn": None, "BannerBtn": None, "RestartBtn": None,
+        "RunBtn": None, "BannerBtn": None, "RestartBtn": None, "StopBtn": None,
         "Log": None, "RepoScroll": None, "RollbackList": None,
         # ONEUP-0239's package views: mechanism B, the log's rest border.
         "PackageTable": None, "PackageBoard": None, "PackageLists": None,
-        "StopBtn": {"Card"},
         "GhostBtn": {"PackageFilter", "Card", "RowCard", "DialogButtons", "WarnBanner"},
         "LinkBtn": {"Card", "RowCard", "WarnBanner"},
         # ONEUP-0027's picker and its popup. Both rules are unqualified,
@@ -5587,8 +5589,8 @@ def main() -> int:
         w7 = window.Updater()
         w7.apply_layout(_lid)
         reached = _layout_tree(w7.host.layout(), [])
-        shared = [*w7.rows.values(), w7.action_bar, w7.status, w7.bar, w7.bar_caption,
-                  w7.activity, w7.message_strip, w7.package_area, w7.log, w7.last_run,
+        shared = [*w7.rows.values(), w7.action_bar, w7.status, w7.bar,
+                  w7.message_strip, w7.package_area, w7.log, w7.last_run,
                   w7.rollback_btn, w7.log_toggle, w7.openlog_btn, w7.size_link]
         counts = {wd.objectName() or type(wd).__name__: sum(x is wd for x in reached)
                   for wd in shared}
@@ -6438,6 +6440,109 @@ def main() -> int:
         print(f"       {line}")
     run.cache_bytes = _cache_bytes0
     _unpatch_all()
+
+    # ONEUP-0317, §4.1.3 and §4.8: one status line, one log link, a filled Stop.
+    # The status carries the step, the phase and its count and the byte figure, each
+    # only when known; a stall's sentence ends it. During a refresh it keeps the
+    # refresh's own text and adds the moving clock, so a mirror trickling dots is not
+    # a hang (ONEUP-0322 item 4); a total of 0 is a running tally (item 5). The
+    # caption and the activity line are in no host, and never shown. The cache weighs
+    # nothing, so this machine's own cannot change the byte figure.
+    _cache_bytes0, run.cache_bytes = run.cache_bytes, lambda: 0
+    _patch(paths, "STOP_REQUEST", Path(tempfile.mkdtemp()) / "stop.request")
+    wF = _at_minimum("rows")
+    _start_run(wF)
+    wF._liveness_active = True
+    run._reset_activity(wF)
+    run.handle_line(wF, "@@REFRESH@@|6|9|games")
+    _refresh = wF.status.text()
+    check(f"ONEUP-0317 a refresh keeps its text and adds the clock ({_refresh!r})",
+          _refresh.startswith("Checking for updates from games (6 of 9 sources)…")
+          and "Fetching games" in _refresh)
+    _got, _total = 6501171, 18350080
+    run.handle_line(wF, f"@@PROGRESS@@|system|4|24|download|{_got}|{_total}")
+    _line = (f"System packages · Downloading 4 of 24 · {markers._format_size(_got)} of "
+             f"{markers._format_size(_total)}")
+    check(f"ONEUP-0317 the status is one line: step, phase and count, bytes "
+          f"({wF.status.text()!r})", wF.status.text() == _line)
+    wF._dl_at -= 10
+    run._tick_activity(wF)
+    check(f"ONEUP-0317 the rate and 'still working' stay off the line "
+          f"({wF.status.text()!r})", wF.status.text() == _line)
+    wF._activity_at = time.monotonic() - (run.STALL_SECONDS + 5)
+    run._tick_activity(wF)
+    _stalled = wF.status.text()
+    check(f"ONEUP-0317 a stall's sentence ends the line ({_stalled!r})",
+          _stalled.startswith(_line + " · ") and _stalled.endswith("Stopping now is safe."))
+    wF._activity_at = time.monotonic()
+    run.handle_line(wF, "@@PROGRESS@@|system|7|24|install")
+    check(f"ONEUP-0317 the install half says so, with no byte figure "
+          f"({wF.status.text()!r})", wF.status.text() == "System packages · Installing 7 of 24")
+    run.handle_line(wF, "@@STEP_BEGIN@@|system|1|2")
+    run.handle_line(wF, "@@PROGRESS@@|system|34|0|download")
+    check(f"ONEUP-0317 a total of 0 is a running tally ({wF.status.text()!r})",
+          wF.status.text().startswith("System packages · ") and "34 so far" in wF.status.text()
+          and "of 0" not in wF.status.text())
+    run.request_stop(wF)
+    run._tick_activity(wF)
+    check(f"ONEUP-0317 a tick does not overwrite the stop request ({wF.status.text()!r})",
+          wF.status.text().startswith("Stopping after the current step"))
+    check("ONEUP-0317 the activity line is never shown, though it has text",
+          bool(wF.activity.text()) and not wF.activity.isVisible())
+    run.on_finished(wF, 0, None)
+    run.cache_bytes = _cache_bytes0
+    _unpatch_all()
+
+    _hidden_bad, _log_bad = [], []
+    for _lid in _ids:
+        wF = _at_minimum(_lid)
+        for _name in ("bar_caption", "activity"):
+            _wd = getattr(wF, _name)
+            if wF.host.isAncestorOf(_wd) or _wd.window() is not wF or _wd.isVisible():
+                _hidden_bad.append(f"{_lid}: {_name}")
+        # One log link: Open log file only while the log is shown, in a slot that
+        # keeps its size, so nothing beside it moves.
+        _before = (wF.openlog_btn.isVisible(), _geometry(wF, wF.log_toggle))
+        wF.toggle_log()
+        QApplication.processEvents()
+        _after = (wF.openlog_btn.isVisible(), _geometry(wF, wF.log_toggle))
+        if _before[0] or not _after[0] or _before[1] != _after[1]:
+            _log_bad.append(f"{_lid}: {_before}, {_after}")
+    check(f"ONEUP-0317 the caption and the activity line are in no host and hidden "
+          f"({_hidden_bad})", not _hidden_bad)
+    check(f"ONEUP-0317 Open log file shows only with the log, and moves nothing "
+          f"({_log_bad})", not _log_bad)
+
+    # The filled Stop, read back as pixels in every theme: `btn_danger`'s gradient
+    # with the overlay off, the overlay's `btn` with it on.
+    wF = _at_minimum("rows")
+    _start_run(wF)
+    _sbad = []
+    for _th in theme.THEMES:
+        _p = dict(_th.palette)
+        _hcp = theme._HC_DARK if _th.dark else theme._HC_LIGHT
+        for _on in (False, True):
+            wF.setStyleSheet(theme.build_theme(_th, high_contrast=_on))
+            wF.layout().activate()
+            QApplication.processEvents()
+            # The window's pixels, not the button's own grab: a transparent fill
+            # grabbed alone reads black, which would pass the overlay's black `btn`.
+            _at = wF.stop_btn.mapTo(wF, QPoint(6, wF.stop_btn.height() // 2))
+            _px = wF.grab().toImage().pixelColor(_at)
+            if _on:
+                _ok = _px.name() == _hcp["btn"]
+            else:
+                _a, _b = (QColor(s) for s in _p["btn_danger_stops"])
+                _ok = all(min(x, y) - 3 <= z <= max(x, y) + 3 for x, y, z in (
+                    (_a.red(), _b.red(), _px.red()), (_a.green(), _b.green(), _px.green()),
+                    (_a.blue(), _b.blue(), _px.blue())))
+            if not _ok:
+                _sbad.append(f"{_th.id} overlay {'on' if _on else 'off'}: {_px.name()}")
+    wF.setStyleSheet("")
+    check(f"ONEUP-0317 Stop is filled, in every theme ({len(_sbad)} wrong)", not _sbad)
+    for line in _sbad[:8]:
+        print(f"       {line}")
+    run.on_finished(wF, 0, None)
 
     # --- ONEUP-0260: the package details dialog --------------------------------
     # The mock zypper and rpm on _BIN answer from fixtures written here; the patches
