@@ -2932,6 +2932,9 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=orphans)
 check "orphan autoremove reports count" "@@STEP_END@@|orphans|ok|removed|2" "$out"
+# ONEUP-0296: the closing summary names the removals beside Flatpak and firmware.
+check "the summary says how many leftovers were removed" \
+      "Leftover packages: 2 removed." "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

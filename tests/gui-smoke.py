@@ -3958,6 +3958,23 @@ def main() -> int:
     check("the summary counts each source on its own (ONEUP-0288)",
           wSp.status.text() == "All done. 126 system package(s) installed. "
                                "3 Flatpak app(s) updated. Firmware updated.")
+    # ONEUP-0296: a run that removed leftover packages and installed nothing said
+    # "already up to date" (VM run 2, 2026-10-16). Removals earn their own sentence.
+    for lines, said in (
+            (("@@STEP_END@@|system|ok|up-to-date", "@@STEP_END@@|orphans|ok|removed|3",
+              "@@INSTALLED@@|0|no|no"),
+             "All done. 3 leftover package(s) removed."),
+            (("@@STEP_END@@|system|ok|installed|2", "@@STEP_END@@|orphans|ok|removed|1",
+              "@@INSTALLED@@|2|yes|no"),
+             "All done. 2 system package(s) installed. 1 leftover package(s) removed.")):
+        wOr = window.Updater()
+        for line in lines:
+            run.handle_line(wOr, line)
+        wOr.proc = QProcess(wOr)
+        wOr._check_mode = False
+        run.on_finished(wOr, 0, QProcess.ExitStatus.NormalExit)
+        check(f"removed leftovers earn their own sentence (ONEUP-0296: "
+              f"{wOr.status.text()!r})", wOr.status.text() == said)
     try:
         wB._announce("plain call must not throw when no reader is listening")
         check("_announce is safe with no screen reader attached", True)
