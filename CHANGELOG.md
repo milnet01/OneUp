@@ -8,6 +8,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **No blue box round a button's label when it is reached with the Tab key** (ONEUP-0304)
+  On desktops where OneUp runs Qt's Fusion style, a button focused from the keyboard drew a translucent box round its text. Focus is shown by the button's colour alone, as designed.
+
 - **The count of installed updates includes new packages** (ONEUP-0288)
   A run that added packages new to the system, such as a new kernel, left
   them out of the finished line's count. A run with 122 upgrades and 4 new
