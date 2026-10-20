@@ -199,8 +199,8 @@ def derive_focus_gradient(stops, *, label: str = "",
 # pixels — so OneUp follows the system font and can be enlarged from Settings.
 # A high-contrast overlay (_HC_QSS) is appended after the base sheet when the
 # user asks for it; Qt resolves equal-specificity conflicts the CSS way, so the
-# later rule wins. Focus rings use `outline`, not `border`: a border changes the
-# widget's box and makes buttons visibly resize when focused.
+# later rule wins. Focus draws no ring at all; the focus section of the sheet
+# says why.
 # ---------------------------------------------------------------------------
 # The two BUTTON gradient fills a focus cue is derived from are authored in each
 # palette as stop PAIRS rather than as sheet strings, so the derivation and the
@@ -519,7 +519,11 @@ QToolTip {
    selector QUALIFIED by the nearest container unique to it, never a rename:
    #Card contains every on-card case and is useless as a qualifier, while
    #RowCard, #WarnBanner and #DialogButtons each contain exactly
-   one surface. Qt resolves them by specificity, so the qualified rule wins. */
+   one surface. Qt resolves them by specificity, so the qualified rule wins.
+   A rule that sets no `outline` hands the focus rectangle back to the desktop
+   style, and Fusion draws it as a box round the label (ONEUP-0304), so these
+   three switch it off. */
+QPushButton, QTabBar, QAbstractItemView { outline: none; }
 QPushButton#RunBtn:focus, QPushButton#BannerBtn:focus {
     background: $accentfocus; color: $accentfocusink;
 }
