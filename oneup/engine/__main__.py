@@ -541,6 +541,8 @@ def _summary(opts: Options, run_keys: list[str], reboot: str, reason: str,
         markers.out("  Firmware: updates applied.")
     if steps.FLATPAK_UPDATED > 0:
         markers.out(f"  Flatpak: {steps.FLATPAK_UPDATED} app(s) updated.")
+    if steps.ORPHANS_REMOVED > 0:
+        markers.out(f"  Leftover packages: {steps.ORPHANS_REMOVED} removed.")
     markers.out("------------------------------------------")
     if steps.ERRORS > 0:
         markers.out(f"  Finished with {steps.ERRORS} error(s) — see the log above.")

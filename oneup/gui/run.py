@@ -398,7 +398,7 @@ def _reset_for_run(win, steps: list[str], check: bool):
     win._reboot_reason = ""
     win._installed_count = ""
     win._sys_changed = False
-    win._other_changed = {}     # Flatpak/firmware step → its count, if it changed anything
+    win._other_changed = {}     # Flatpak/firmware/leftover step → its count, if it acted
     win._step_caption = ""
     win._progress_phase = ""
     win._done_status = ""
@@ -799,7 +799,8 @@ def handle_marker(win, line: str):
         if row:
             badge = markers._step_badge(status, code, args)
             row.set_badge(badge)
-            if key in ("flatpak", "firmware") and code in ("installed", "updated"):
+            if key in ("flatpak", "firmware", "orphans") and code in (
+                    "installed", "updated", "removed"):
                 win._other_changed[key] = args[0] if args else ""
             # The outcome, spoken once. A later TIMING/FREED marker refines the
             # badge but is NOT re-announced — it stays reachable by Tab via the
@@ -1168,7 +1169,7 @@ def on_finished(win, exit_code: int, _status):
     if win._skipped_repos:
         aside = i18n.counted("sources-set-aside", len(win._skipped_repos)).format(
             names=i18n.join_names(win._skipped_repos))
-    # One whole sentence per source that installed something, so a run that also
+    # One whole sentence per source that changed something, so a run that also
     # updated Flatpak apps or firmware says so, rather than one system-only number
     # (ONEUP-0288).
     installed = []
@@ -1183,6 +1184,11 @@ def on_finished(win, exit_code: int, _status):
             else QCoreApplication.translate("run", "Flatpak apps updated."))
     if "firmware" in win._other_changed:
         installed.append(QCoreApplication.translate("run", "Firmware updated."))
+    # Removals are not installs, but a run that removed packages has changed the
+    # system, so it is never "already up to date" (ONEUP-0296).
+    left = win._other_changed.get("orphans", "")
+    if left.isdecimal() and int(left):
+        installed.append(i18n.counted("leftovers-removed", int(left)))
     # Whole sentences, one per outcome — never a fragment dropped into a frame.
     if not ok:
         summary = QCoreApplication.translate(
@@ -1192,7 +1198,7 @@ def on_finished(win, exit_code: int, _status):
             "run", " ", "separator between whole sentences in the run's summary")
         summary = QCoreApplication.translate(
             "run", "All done. {installed}",
-            "then one whole sentence per source that installed something").format(
+            "then one whole sentence per source that changed something").format(
                 installed=between.join(installed))
     elif "system" in win.selected_steps():
         summary = QCoreApplication.translate("run", "All done — already up to date.")

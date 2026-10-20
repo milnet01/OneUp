@@ -95,6 +95,7 @@ class _Counted(QObject):
             "updates-available": lambda: self.tr("%n update(s) available.", "", n),
             "system-installed": lambda: self.tr("%n system package(s) installed.", "", n),
             "flatpak-updated": lambda: self.tr("%n Flatpak app(s) updated.", "", n),
+            "leftovers-removed": lambda: self.tr("%n leftover package(s) removed.", "", n),
             "package-count": lambda: self.tr("%n update(s)", "", n),
             "sources-set-aside": lambda: self.tr(" %n source(s) set aside: {names}.", "", n),
             "reboot-updates-installed": lambda: self.tr(

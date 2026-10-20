@@ -58,6 +58,7 @@ SYS_COUNT = ""
 SYS_REBOOT_PARTS: list[str] = []   # reboot-reason component codes
 FW_CHANGED = False
 FLATPAK_UPDATED = 0   # Flatpak apps updated; the summary and notification report it (ONEUP-0277)
+ORPHANS_REMOVED = 0   # leftover packages removed; the summary reports it (ONEUP-0296)
 
 
 def begin_step(key: str) -> None:
@@ -346,6 +347,7 @@ def run_orphans(opts) -> None:
     Orphaned packages — installed but provided by no active repository — are
     often software the user installed by hand, so they are never auto-removed.
     """
+    global ORPHANS_REMOVED
     begin_step("orphans")
     # zypper auto-refreshes stale metadata before it will answer a `packages`
     # query. With the system step deselected that fetch would happen inside the
@@ -379,6 +381,7 @@ def run_orphans(opts) -> None:
             markers.out(f"  - {name}")
         rc, _ = privilege.root("orphans-remove", {"names": unneeded}, stream=True)
         if rc == 0:
+            ORPHANS_REMOVED = len(unneeded)
             end_step("orphans", "ok", "removed", f"removed {len(unneeded)} package(s)",
                      len(unneeded))
         else:
