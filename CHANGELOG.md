@@ -180,6 +180,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The log says when the list of services to restart could not be checked** (ONEUP-0295)
+  Without the lsof package, that check failed in silence. The log now says so and names the package; the RPM recommends lsof so it is installed by default.
+
 - **No blue box round a button's label when it is reached with the Tab key** (ONEUP-0304)
   On desktops where OneUp runs Qt's Fusion style, a button, tab or list focused from the keyboard drew a translucent box round its text. Focus is shown by the control's colour alone, as designed.
 

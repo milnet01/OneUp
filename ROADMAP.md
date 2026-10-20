@@ -9009,13 +9009,19 @@ when complete (that document's §7).
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: gui.
 
-- 📋 [ONEUP-0295] **The list of services to restart is skipped without a word when lsof is missing.**
+- ✅ [ONEUP-0295] **The list of services to restart is skipped without a word when lsof is missing.**
   Seen 2026-10-16 in the ONEUP-0287 VM: the restart-list root op
   (`zypper ps -sss`) exited 4 with "Please install package 'lsof'
   first." The KDE Live ISO has no lsof. oneup/engine/__main__.py
   _reboot_and_services then emits no SERVICES marker. REBOOT is decided
   separately and is unaffected. Options: Requires or Recommends lsof in
   oneup.spec, or a log line.
+  Shipped 2026-10-20, both options. The engine logs one line when
+  `zypper ps -sss` fails, naming its exit status and lsof; the
+  oneup.spec Recommends lsof. Measured in the VM the same day: exit 4,
+  "Please install package 'lsof' first." on stderr, stdout empty. The
+  suite scenario mocks exactly that and reads the run's log file.
+  v2 61e9067 (test), b4acc87 (fix); main 2682246 (test), 3cfc510 (fix).
   **Layman:** After an update, OneUp may fail to say which programs need restarting, and not tell you it couldn't check.
   Kind: fix.
   Source: ONEUP-0287-vm-2026-10-16.
