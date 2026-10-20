@@ -6513,6 +6513,59 @@ def main() -> int:
     check(f"ONEUP-0317 Open log file shows only with the log, and moves nothing "
           f"({_log_bad})", not _log_bad)
 
+    # ONEUP-0318, INV-15: the time left, only in the system step's download half, with a
+    # known total and rate, worded as an estimate — on the status line and in Spotlight's
+    # Time left box. The clock is run.py's alone, and the cache weighs nothing.
+    _clock = [1000.0]
+    _patch(run, "time", types.SimpleNamespace(monotonic=lambda: _clock[0]))
+    _patch(run, "cache_bytes", lambda: 0)
+    _patch(paths, "STOP_REQUEST", Path(tempfile.mkdtemp()) / "stop.request")
+    wT = _at_minimum("spotlight")
+    _start_run(wT)
+    wT._liveness_active = True
+    run._reset_activity(wT)
+    _left = wT.host.figures[2]
+    run.handle_line(wT, "@@STEP_BEGIN@@|system|1|5")
+    run.handle_line(wT, "@@PROGRESS@@|system|1|4|download|100|1000")
+    check(f"ONEUP-0318 no time left before there is a rate ({wT.status.text()!r}, "
+          f"{_left.text()!r})", "left" not in wT.status.text() and _left.text() == "not known")
+    _clock[0] += 10
+    run.handle_line(wT, "@@PROGRESS@@|system|2|4|download|200|1000")
+    _est = "about 1 min left"            # 800 bytes to go at 10 bytes a second
+    check(f"ONEUP-0318 the time left ends the status line ({wT.status.text()!r})",
+          wT.status.text().endswith(" · " + _est))
+    check(f"ONEUP-0318 and fills Spotlight's Time left box ({_left.text()!r})",
+          _left.text() == _est)
+    _clock[0] += 50
+    run.handle_line(wT, "@@PROGRESS@@|system|3|4|download|900|1000")
+    check(f"ONEUP-0318 under a minute, it counts in seconds ({_left.text()!r})",
+          _left.text() == "about 10 s left")
+    wT._activity_at = _clock[0] - (run.STALL_SECONDS + 5)
+    run._tick_activity(wT)
+    check(f"ONEUP-0318 a stall's sentence takes the time left's place "
+          f"({wT.status.text()!r})", "left" not in wT.status.text()
+          and wT.status.text().endswith("Stopping now is safe."))
+    wT._activity_at = _clock[0]
+    run.handle_line(wT, "@@PROGRESS@@|system|3|4|install")
+    check(f"ONEUP-0318 the first install figure removes it ({wT.status.text()!r}, "
+          f"{_left.text()!r})", "left" not in wT.status.text() and _left.text() == "not known")
+    run.handle_line(wT, "@@STEP_BEGIN@@|system|1|5")
+    run.handle_line(wT, "@@PROGRESS@@|system|1|4|download|100|0")
+    _clock[0] += 10
+    run.handle_line(wT, "@@PROGRESS@@|system|2|4|download|200|0")
+    check(f"ONEUP-0318 no total, no time left ({wT.status.text()!r}, {_left.text()!r})",
+          "left" not in wT.status.text() and _left.text() == "not known")
+    run.on_finished(wT, 0, None)
+    _unpatch_all()
+    _words = []
+    for _secs, _want in ((4, "about 10 s left"), (44, "about 40 s left"),
+                         (58, "about 1 min left"), (200, "about 3 min left"),
+                         (3599, "about 1 h left"), (9500, "about 3 h left")):
+        _said = getattr(run.step_progress, "estimate", lambda _s: None)(_secs)
+        if _said != _want:
+            _words.append(f"{_secs}s: {_said!r}, want {_want!r}")
+    check(f"ONEUP-0318 the estimate is rounded and worded as one ({_words})", not _words)
+
     # The filled Stop, read back as pixels in every theme: `btn_danger`'s gradient
     # with the overlay off, the overlay's `btn` with it on.
     wF = _at_minimum("rows")
