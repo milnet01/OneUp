@@ -564,6 +564,32 @@ check_absent "no reboot marker was earned"   "@@REBOOT@@|yes" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: a failed restart-list check is said in the log, not skipped in silence"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)    echo "3 packages to upgrade."; exit 0 ;;
+  *needs-rebooting*) exit 0 ;;
+  # What a Live ISO without lsof really does (ONEUP-0295): exit 4, the reason on stderr.
+  *ps\ -sss*|*"ps -sss"*) printf "Check failed:\nPlease install package 'lsof' first.\n" >&2; exit 4 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+# Read from the run's LOG, not $out: run_engine folds stderr into $out, so zypper's own
+# words would pass these checks, and the log is where they never arrived.
+log=$(cat "$d/run.log")
+check        "a failed restart-list check is said in the log (ONEUP-0295)" \
+             "Could not check which services need restarting" "$log"
+check        "and the log names lsof, the usual cause" "lsof" "$log"
+check_absent "no SERVICES marker from a failed check" "@@SERVICES@@" "$out"
+check        "the reboot verdict is unaffected" "@@REBOOT@@|no" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: --check reports counts read-only and never installs"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'
