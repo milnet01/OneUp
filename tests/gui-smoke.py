@@ -3858,7 +3858,9 @@ def main() -> int:
     # a square around our rounded buttons. What it moves is the control's own fill,
     # to a DERIVED colour (ONEUP-0076); "reuses the hover look" was the rule until
     # that item measured it and found lightening cannot reach 3:1 on these palettes.
-    check("focus draws no outline ring", "outline:" not in qss_norm)
+    # `outline: none` is allowed: it switches the desktop style's ring OFF (ONEUP-0304).
+    outlines = set(re.findall(r"outline:\s*([^;}]+)", qss_norm))
+    check(f"focus draws no outline ring (outlines: {outlines})", outlines <= {"none"})
     check("focus still gives a cue", "QPushButton#GhostBtn:focus" in qss_norm)
     check("the focus rules come after the hover/checked rules they tie with",
           qss_norm.index("QPushButton#GhostBtn:focus")
@@ -5135,6 +5137,64 @@ def main() -> int:
     about.close()
     check(f"INV-1 every focusable widget has a focus treatment (uncovered: {gaps})",
           not gaps)
+
+    # ONEUP-0304: no focusable widget asks its style for a focus rectangle. The
+    # sheet's own cue is the fill; a rule that sets no `outline` hands the
+    # rectangle back to the desktop style, and Fusion draws it as a translucent
+    # box round the label once focus has moved by keyboard. Seen in the Live VM,
+    # whose PySide6 runs Fusion. Asserted on the REQUEST, not on pixels: whether a
+    # style paints anything for it varies by style (Breeze 6.7 paints nothing),
+    # and a request any style may answer with a box is the defect.
+    from PySide6.QtWidgets import QProxyStyle, QStyle
+
+    class _FocusRectRecorder(QProxyStyle):
+        def __init__(self):
+            super().__init__()
+            self.asked = []
+
+        def drawPrimitive(self, element, option, painter, widget=None):
+            if element == QStyle.PrimitiveElement.PE_FrameFocusRect and widget is not None:
+                self.asked.append(f"{type(widget).__name__}#{widget.objectName()}")
+            super().drawPrimitive(element, option, painter, widget)
+
+    def focus_rect_requests(root):
+        rec = _FocusRectRecorder()
+        for wid in root.findChildren(QWidget):
+            if wid.focusPolicy() == Qt.FocusPolicy.NoFocus or not wid.isVisible():
+                continue
+            if isinstance(wid.window(), QMessageBox):
+                continue   # Qt's own About chrome, INV-1's one exclusion
+            wid.setStyle(rec)
+            wid.setFocus(Qt.FocusReason.TabFocusReason)
+            QApplication.processEvents()
+            wid.grab()
+            wid.setStyle(None)
+        return rec.asked
+
+    asked = []
+    for _lid in ("rail", "spotlight", "rows"):
+        wU.apply_layout(_lid)
+        reveal(wU)
+        asked += focus_rect_requests(wU)
+    wU.open_settings()
+    su = wU._settings_dialog
+    su.show()
+    QApplication.processEvents()
+    asked += focus_rect_requests(su)
+    su.reject()
+    ru = repos.RepoManagerDialog(wU, [
+        {"alias": "oss", "name": "Main", "enabled": True, "url": "http://a/x"}])
+    ru.show()
+    QApplication.processEvents()
+    asked += focus_rect_requests(ru)
+    ru.reject()
+    ko = rollback.RollbackDialog(wU, [("41", "2026-07-24 09:00", "pre-update")], "41")
+    ko.show()
+    QApplication.processEvents()
+    asked += focus_rect_requests(ko)
+    ko.reject()
+    check(f"ONEUP-0304 no focused widget asks its style for a focus rectangle "
+          f"({sorted(set(asked))})", not asked)
 
     # INV-4: focus moves colour and nothing else. Two halves, because the window
     # has two rendering paths.
