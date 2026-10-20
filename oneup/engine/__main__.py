@@ -489,8 +489,14 @@ def _reboot_and_services(opts: Options) -> tuple[str, str, str, str]:
 
     services = safe = risky = ""
     if steps.SYS_CHANGED and reboot == "no" and shutil.which("zypper"):
-        _, raw = privilege.root("restart-list")
+        rc, raw = privilege.root("restart-list")
         services = " ".join(raw.split())
+        if rc != 0:
+            # zypper's reason goes to stderr, which the log does not carry, so a failed
+            # check would otherwise leave no trace at all (ONEUP-0295).
+            markers.out(f"  Could not check which services need restarting "
+                        f"(zypper ps exited {rc}). zypper ps needs the lsof package; "
+                        f"if it is missing: sudo zypper install lsof")
         if services:
             markers.marker("SERVICES", services)
         # The marker above is deliberately UNCHANGED and still carries every
