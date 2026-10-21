@@ -1747,6 +1747,55 @@ def main() -> int:
     check("a failed size probe never claims a size it didn't earn",
           not wS1.size_link.has_size())
 
+    # ONEUP-0300: on the service route the size costs no password, so the link is
+    # hidden and a check that found system updates fetches it unasked — asking
+    # polkit with no box (ONEUP_NONINTERACTIVE=1), so a policy wanting a password
+    # fails quietly and the link comes back. The sudo route keeps today's link.
+    _launched = []
+    _orig_argv, _orig_route = paths.engine_argv, auth.service_route
+
+    def _after_check(service, system_n):
+        auth.service_route = lambda: service
+        try:
+            wA = window.Updater()
+        finally:
+            auth.service_route = _orig_route
+        hidden = not wA.size_link.size_btn.isVisibleTo(wA.size_link)
+        _launched.clear()
+        wA._check_mode = True
+        for line in (f"@@CHECK@@|system|{system_n}", f"@@CHECK@@|TOTAL|{system_n}"):
+            run.handle_line(wA, line)
+        wA.proc = QProcess(wA)
+        run.on_finished(wA, 0, QProcess.ExitStatus.NormalExit)
+        sized = [env for argv, env in _launched if "--size=system" in argv]
+        proc = getattr(wA, "_size_proc", None)
+        if proc is not None:
+            proc.waitForFinished(5000)
+            QApplication.processEvents()
+        return wA, hidden, sized
+
+    paths.engine_argv = lambda *a, env=None: (
+        _launched.append((a, env or {})) or ["sh", "-c", "echo aborting-noise; exit 1"])
+    try:
+        wA, hidden, sized = _after_check(True, 3)
+        check("ONEUP-0300 the service route hides the 'Show download size' link", hidden)
+        check(f"ONEUP-0300 a check with system updates fetches the size unasked, with no "
+              f"password box ({sized})",
+              len(sized) == 1 and sized[0].get("ONEUP_NONINTERACTIVE") == "1")
+        check("ONEUP-0300 a failed unasked fetch brings the link back",
+              wA.size_link.size_btn.isVisibleTo(wA.size_link)
+              and wA.size_link.size_btn.isEnabled() and not wA.size_link.has_size())
+        check("ONEUP-0300 a failed unasked fetch writes nothing to the log",
+              "aborting-noise" not in wA.log.toPlainText())
+        _w, _h, sized = _after_check(True, 0)
+        check(f"ONEUP-0300 nothing is fetched when the system is up to date ({sized})",
+              not sized)
+        _w, hidden, sized = _after_check(False, 3)
+        check("ONEUP-0300 the sudo route keeps the link", not hidden)
+        check(f"ONEUP-0300 the sudo route fetches nothing unasked ({sized})", not sized)
+    finally:
+        paths.engine_argv, auth.service_route = _orig_argv, _orig_route
+
     # --- 5d-i. ONEUP-0044: the held engine, and what Update does with it --------
     # The engine half is covered in tests/run-tests.sh; this is the window half of
     # §4.5's three-state table. Nothing here starts a real engine: what is being
