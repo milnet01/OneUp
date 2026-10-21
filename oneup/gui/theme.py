@@ -762,15 +762,14 @@ QListView#PackageLists:focus, QScrollArea#RepoScroll:focus, QListWidget#Rollback
 # `ghostbd`, `linkfg`, `linkhov` and `ghosthov` carry values ONEUP-0076 §4.3
 # MOVED. The old ones were measured and failed: the light link's #4aa3ff read
 # 2.63:1 on its own card against a 4.5:1 bar, and the ghost button's rest border
-# 1.62:1 against a 3:1 one. `stopfg` / `stophov` colour nothing since ONEUP-0317
-# filled Stop, and stay until ONEUP-0326 retires them.
+# 1.62:1 against a 3:1 one.
 _DARK = dict(
     win="#0f1216", card="#12161c", header="#f4f7fb", tag="#8b95a5",
     rowcard="#1a1f27", rowhov="#1e242e", tname="#eef2f8", tdesc="#a7b0be",
     badgebg="#20304a", badgefg="#cfe0ff", logbg="#0b0e12", logfg="#cdd6e2",
     logbd="#262d38", status="#c3ccd9", lastrun="#828d9d", amber="#f5a623", progbg="#0c0f13",
     ghostbd="#686e79", ghostfg="#c7d0dd", ghosthov="#4aa3ff",
-    linkfg="#4aa3ff", linkhov="#6fb6ff", stopfg="#e0553f", stophov="#ef6a55",
+    linkfg="#4aa3ff", linkhov="#6fb6ff",
     disbg="#262b34", disfg="#aeb7c4",
     tip="#1a1f27", tipfg="#e9edf3", focus="#66b8ff",
     # The painted controls (ONEUP-0027 §4.3). A stylesheet cannot reach these:
@@ -831,7 +830,7 @@ _LIGHT = dict(
     # be discovered by the check and quietly ignored.
     lastrun="#666e78", amber="#996208", progbg="#dfe4ea",
     ghostbd="#848990", ghostfg="#3a424d", ghosthov="#326dab",
-    linkfg="#326dab", linkhov="#446f9c", stopfg="#d6412a", stophov="#b5321d",
+    linkfg="#326dab", linkhov="#446f9c",
     disbg="#d5dbe2", disfg="#9aa3ad",
     tip="#ffffff", tipfg="#1b2027", focus="#0b5fd0",
     switchon="#239b56", switchoff="#e74c3c",
@@ -879,7 +878,7 @@ _CARBON = dict(
     badgefg='#cfe0ff', logbg='#0e0e0e', logfg='#cdd6e2', logbd='#262d38', status='#c3ccd9',
     lastrun='#828d9d', amber='#f5a623', progbg='#101010', ghostbd='#69707a',
     ghostfg='#c7d0dd', ghosthov='#4ca4ff', linkfg='#4ca4ff', linkhov='#6fb6ff',
-    stopfg='#e0553f', stophov='#ef6a55', disbg='#2d2d2d', disfg='#aeb7c4', tip='#202020',
+    disbg='#2d2d2d', disfg='#aeb7c4', tip='#202020',
     tipfg='#e9edf3', focus='#66b8ff', switchon='#26a95e', switchoff='#e74c3c',
     switchmark='#ffffff', switchknob='#ffffff', switchtrackrim='#ffffff',
     switchknobrim='#000000', trayidle='#888888', trayattn='#d5901f', trayrim='#000000',
@@ -900,7 +899,7 @@ _FOREST = dict(
     badgefg='#cfe0ff', logbg='#0a130a', logfg='#cdd6e2', logbd='#262d38', status='#c3ccd9',
     lastrun='#828d9d', amber='#f5a623', progbg='#0b140b', ghostbd='#6e757e',
     ghostfg='#c7d0dd', ghosthov='#51a7ff', linkfg='#51a7ff', linkhov='#6fb6ff',
-    stopfg='#e0553f', stophov='#ef6a55', disbg='#243624', disfg='#aeb7c4', tip='#182918',
+    disbg='#243624', disfg='#aeb7c4', tip='#182918',
     tipfg='#e9edf3', focus='#66b8ff', switchon='#26a95e', switchoff='#e74c3c',
     switchmark='#ffffff', switchknob='#ffffff', switchtrackrim='#ffffff',
     switchknobrim='#000000', trayidle='#888888', trayattn='#c3981c', trayrim='#000000',
@@ -921,7 +920,7 @@ _PLUM = dict(
     badgefg='#cfe0ff', logbg='#110a13', logfg='#cdd6e2', logbd='#262d38', status='#c3ccd9',
     lastrun='#828d9d', amber='#f5a623', progbg='#120b14', ghostbd='#666d77',
     ghostfg='#c7d0dd', ghosthov='#4aa3ff', linkfg='#4aa3ff', linkhov='#6fb6ff',
-    stopfg='#e0553f', stophov='#ef6a55', disbg='#322436', disfg='#aeb7c4', tip='#251829',
+    disbg='#322436', disfg='#aeb7c4', tip='#251829',
     tipfg='#e9edf3', focus='#66b8ff', switchon='#26a95e', switchoff='#e74c3c',
     switchmark='#ffffff', switchknob='#ffffff', switchtrackrim='#ffffff',
     switchknobrim='#000000', trayidle='#888888', trayattn='#de6920', trayrim='#000000',
@@ -942,7 +941,7 @@ _PAPER = dict(
     badgefg='#1f4e9c', logbg='#fbf9f5', logfg='#2a2f36', logbd='#d5dbe2', status='#3a424d',
     lastrun='#666e78', amber='#9b6308', progbg='#ece7dd', ghostbd='#858b91',
     ghostfg='#3a424d', ghosthov='#326dab', linkfg='#326dab', linkhov='#446f9c',
-    stopfg='#d6412a', stophov='#b5321d', disbg='#e4ded3', disfg='#9aa3ad', tip='#ffffff',
+    disbg='#e4ded3', disfg='#9aa3ad', tip='#ffffff',
     tipfg='#1b2027', focus='#0b5fd0', switchon='#239b56', switchoff='#e74c3c',
     switchmark='#ffffff', switchknob='#ffffff', switchtrackrim='#ffffff',
     switchknobrim='#000000', trayidle='#888888', trayattn='#a86918', trayrim='#000000',
@@ -963,7 +962,7 @@ _SKY = dict(
     badgefg='#1f4e9c', logbg='#f5f9fb', logfg='#2a2f36', logbd='#d5dbe2', status='#3a424d',
     lastrun='#666e78', amber='#996208', progbg='#dde7ec', ghostbd='#848990',
     ghostfg='#3a424d', ghosthov='#326dab', linkfg='#326dab', linkhov='#446f9c',
-    stopfg='#d6412a', stophov='#b5321d', disbg='#d3dee4', disfg='#9aa3ad', tip='#ffffff',
+    disbg='#d3dee4', disfg='#9aa3ad', tip='#ffffff',
     tipfg='#1b2027', focus='#0b5fd0', switchon='#239b56', switchoff='#e74c3c',
     switchmark='#ffffff', switchknob='#ffffff', switchtrackrim='#ffffff',
     switchknobrim='#000000', trayidle='#888888', trayattn='#a48818', trayrim='#000000',
@@ -984,7 +983,7 @@ _SAND = dict(
     badgefg='#1f4e9c', logbg='#fcf8f4', logfg='#2a2f36', logbd='#d5dbe2', status='#3a424d',
     lastrun='#666e78', amber='#9b6308', progbg='#eee5db', ghostbd='#858b91',
     ghostfg='#3a424d', ghosthov='#326dab', linkfg='#326dab', linkhov='#446f9c',
-    stopfg='#d6412a', stophov='#b5321d', disbg='#e7dcd0', disfg='#9aa3ad', tip='#ffffff',
+    disbg='#e7dcd0', disfg='#9aa3ad', tip='#ffffff',
     tipfg='#1b2027', focus='#0b5fd0', switchon='#239b56', switchoff='#e74c3c',
     switchmark='#ffffff', switchknob='#ffffff', switchtrackrim='#ffffff',
     switchknobrim='#000000', trayidle='#888888', trayattn='#c7681d', trayrim='#000000',

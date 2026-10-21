@@ -117,10 +117,6 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     ("linkfg", LINK_SURFACES, TEXT),
     ("linkhov", LINK_SURFACES, TEXT),
     ("ghosthov", LINK_SURFACES, TEXT),
-    # Stop's label is the btnfg row's since ONEUP-0317 filled it; these two keys
-    # colour nothing and stay measured until ONEUP-0326 retires them.
-    ("stopfg", ("card",), TEXT),
-    ("stophov", ("card",), TEXT),
     # The checked package tab's label on its filled ground (ONEUP-0313).
     ("tabink", ("ghosthov",), TEXT),
 
@@ -148,13 +144,11 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     # holds a scrolling view (ONEUP-0262).
     ("ghostbd", ("logbg", "win"), MARK),
     ("ghosthov", ("logbg", "win"), MARK),
-    # The danger family's banner border, and the two boundaries ONEUP-0076 left
-    # as borders: the ghost button's hover border shares one token with its ink
-    # above, so moving one moves both.
+    # The danger family's banner border, and the ghost button's hover border,
+    # which ONEUP-0076 left as a border: it shares one token with its ink above,
+    # so moving one moves both.
     ("dangerbd", ("win", "card"), MARK),
     ("ghosthov", ("card",), MARK),
-    ("stopfg", ("card",), MARK),
-    ("stophov", ("card",), MARK),
     # The progress bar's fill IS the progress, so it is a meaningful boundary
     # against its own trough. The caption moved off the bar (ONEUP-0163), so
     # nothing renders text on `progbg` any more; this row is what covers it.
