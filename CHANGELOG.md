@@ -190,6 +190,11 @@ All notable changes to OneUp are documented here. The format follows
   `docs/design/`, `docs/specs/` and `docs/standards/`. Nothing in the
   app changes from this entry.
 
+### Removed
+
+- **Retire the stopfg and stophov palette keys, which no stylesheet uses since Stop is filled.** (ONEUP-0326)
+  Tidy away two colour settings the Stop button no longer uses.
+
 ### Fixed
 
 - **The lists of updates now grow with Text size, like the rest of the window** (ONEUP-0323)

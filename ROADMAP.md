@@ -9771,12 +9771,17 @@ when complete (that document's §7).
   Source: ONEUP-0315-build-2026-10-19.
   Lanes: gui.
 
-- 📋 [ONEUP-0326] **Retire the stopfg and stophov palette keys, which no stylesheet uses since Stop is filled.**
+- ✅ [ONEUP-0326] **Retire the stopfg and stophov palette keys, which no stylesheet uses since Stop is filled.**
   ONEUP-0317 fills Stop with btn_danger (its label is measured by
   contrast.py's btnfg row), so stopfg and stophov colour nothing. They
   stay in every palette, and contrast.py still measures them on card,
   because docs/specs/ONEUP-0027-themes.md names them as Stop's keys.
   Remove the keys, their contrast rows and ONEUP-0027's lines together.
+  Shipped 2026-10-21. Both keys left all eight palettes and their four
+  rows left contrast.py; ONEUP-0027 §2 and §4.7 drop them and name Stop's
+  label as part of the danger family's. gui-smoke now checks every palette
+  key is used by the stylesheet or read by name, outside contrast.py — red
+  on stopfg/stophov before the fix. No visible change, so no VM check.
   **Layman:** Tidy away two colour settings the Stop button no longer uses.
   Kind: chore.
   Source: ONEUP-0317-build-2026-10-20.
