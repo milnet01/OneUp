@@ -5981,6 +5981,26 @@ def main() -> int:
     _qs.setValue("text_scale", _scale0)
     theme.apply_app_theme(QApplication.instance())
 
+    # ONEUP-0323: each package view's rows grow with the text size (§4.2 item 1). The
+    # views once set no font size, so every row kept the app's default at all three.
+    _scale0 = _qs.value("text_scale", 1.0, type=float)
+    _rows_at = {}
+    for _label, _mult in theme.TEXT_SCALES:
+        _qs.setValue("text_scale", _mult)
+        theme.apply_app_theme(QApplication.instance())
+        for _lid in _ids:
+            w23 = _at_minimum(_lid)
+            run._reset_for_run(w23, ["system"], check=True)
+            run.handle_line(w23, "@@CHECK_ITEM@@|system|package|1|2|1|repo")
+            QApplication.processEvents()
+            for name, _view, row, _floor, _ceiling in _floors(w23):
+                _rows_at.setdefault((_lid, name), []).append(row)
+    for (_lid, name), rows in _rows_at.items():
+        check(f"ONEUP-0323 the {name} view's rows grow with the text size ({_lid}: {rows})",
+              all(a < b for a, b in zip(rows, rows[1:])))
+    _qs.setValue("text_scale", _scale0)
+    theme.apply_app_theme(QApplication.instance())
+
     # INV-18 (ONEUP-0312): no package list scrolls sideways, even for a package whose
     # name is 200 characters long. Spotlight's two lists each hold one.
     for _lid in _ids:
