@@ -6595,6 +6595,27 @@ def main() -> int:
     check(f"ONEUP-0317 Open log file shows only with the log, and moves nothing "
           f"({_log_bad})", not _log_bad)
 
+    # ONEUP-0299: the two log controls are small buttons, not links — the ghost
+    # button's look, shorter than Check for updates, on one line with each other.
+    _small_bad = []
+    for _lid in _ids:
+        wF = _at_minimum(_lid)
+        wF.toggle_log()
+        QApplication.processEvents()
+        _tog, _open = wF.log_toggle, wF.openlog_btn
+        for _b in (_tog, _open):
+            if _b.objectName() != "GhostBtn" or _b.property("small") is not True:
+                _small_bad.append(f"{_lid}: {_b.text()!r} is {_b.objectName()}")
+            elif _b.height() >= wF.check_btn.height():
+                _small_bad.append(f"{_lid}: {_b.text()!r} {_b.height()} high, "
+                                  f"Check {wF.check_btn.height()}")
+        if _geometry(wF, _tog).center().y() != _geometry(wF, _open).center().y():
+            _small_bad.append(f"{_lid}: the two are not on one line")
+    check(f"ONEUP-0299 the log controls are small ghost buttons on one line "
+          f"({_small_bad})", not _small_bad)
+    check("ONEUP-0299 the sheet has a rule for the small ghost button",
+          'QPushButton#GhostBtn[small="true"]' in theme.build_theme(True))
+
     # ONEUP-0318, INV-15: the time left, only in the system step's download half, with a
     # known total and rate, worded as an estimate — on the status line and in Spotlight's
     # Time left box. The clock is run.py's alone, and the cache weighs nothing.
