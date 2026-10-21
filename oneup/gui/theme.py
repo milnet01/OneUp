@@ -318,6 +318,10 @@ QPushButton#GhostBtn {
 QPushButton#GhostBtn:hover { border-color: $ghosthov; color: $ghosthov; }
 QPushButton#GhostBtn:checked { border-color: $ghosthov; color: $ghosthov; }
 QPushButton#GhostBtn:disabled { color: $disfg; border-color: $disbg; }
+/* The log's two buttons (ONEUP-0299) are the ghost button made smaller, so they
+   keep its colours and focus cue. Only the box shrinks, never below the 24 px
+   target. */
+QPushButton#GhostBtn[small="true"] { padding: 3px 10px; border-radius: 6px; }
 /* The package filter's buttons are tabs (ONEUP-0239 §4.3, §4.8): the checked one
    is filled and the others are bare text, so the choice shows by shape as well
    as colour. The rest border stays, transparent, so checking a tab never

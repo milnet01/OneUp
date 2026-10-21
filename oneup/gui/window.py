@@ -737,12 +737,15 @@ class Updater(QMainWindow):
         _retain_space(self.rollback_btn)
 
         # Log controls: the swap between the packages and the log, and open-file.
+        # Small ghost buttons rather than links (ONEUP-0299).
         self.log_toggle = QPushButton(_log_toggle_text(False))
-        self.log_toggle.setObjectName("LinkBtn")
+        self.log_toggle.setObjectName("GhostBtn")
+        self.log_toggle.setProperty("small", True)
         self.log_toggle.setCursor(Qt.PointingHandCursor)
         self.log_toggle.clicked.connect(self.toggle_log)
         self.openlog_btn = QPushButton(QCoreApplication.translate("window", "Open log file"))
-        self.openlog_btn.setObjectName("LinkBtn")
+        self.openlog_btn.setObjectName("GhostBtn")
+        self.openlog_btn.setProperty("small", True)
         self.openlog_btn.setCursor(Qt.PointingHandCursor)
         self.openlog_btn.clicked.connect(self.open_log)
         # Shown only with the log, in a slot that keeps its size (ONEUP-0239 §4.1.3).

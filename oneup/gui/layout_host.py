@@ -105,7 +105,7 @@ class LayoutHost(QWidget):
         return row
 
     def footer(self, with_actions: bool = False) -> QHBoxLayout:
-        """The last run, Undo and the log link — Open log file beside it only while
+        """The last run, Undo and the log button — Open log file beside it only while
         the log is shown — and, where the layout puts it there, the action slot at
         the trailing end."""
         win = self.win
