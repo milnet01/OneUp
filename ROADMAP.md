@@ -9080,9 +9080,13 @@ when complete (that document's §7).
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: engine.
 
-- 📋 [ONEUP-0299] **Show the technical log and open the log file as small buttons, not links.**
+- 🚧 [ONEUP-0299] **Show the technical log and open the log file as small buttons, not links.**
   User, 2026-10-16: smaller than the other buttons, in line at their
   present size; it will look better.
+  Built 2026-10-21 (db4cfc3 test, ec4ff63 fix): both are GhostBtn with
+  small=true; one rule, QPushButton#GhostBtn[small="true"], cuts the
+  padding. 32 px high against Check for updates' 42, checked by eye
+  offscreen. Waits on the by-eye VM check.
   **Layman:** Turn the two text links at the bottom of the window into small buttons.
   Kind: ux.
   Source: user-request-2026-10-16.

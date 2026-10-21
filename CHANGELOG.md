@@ -64,6 +64,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **Show technical log and Open log file are small buttons, not links** (ONEUP-0299)
+  Turn the two text links at the bottom of the window into small buttons.
+
 - **The password box says whose password OneUp needs** (ONEUP-0298)
   It now reads, for example, "OneUp needs the password for root to install updates." On openSUSE that is usually the administrator (root) password, not your own.
 
