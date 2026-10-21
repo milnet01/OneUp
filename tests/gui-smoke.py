@@ -18,6 +18,7 @@ import functools
 import importlib.util
 import inspect
 import io
+import itertools
 import os
 import pkgutil
 import re
@@ -5997,7 +5998,7 @@ def main() -> int:
                 _rows_at.setdefault((_lid, name), []).append(row)
     for (_lid, name), rows in _rows_at.items():
         check(f"ONEUP-0323 the {name} view's rows grow with the text size ({_lid}: {rows})",
-              all(a < b for a, b in zip(rows, rows[1:])))
+              all(a < b for a, b in itertools.pairwise(rows)))
     _qs.setValue("text_scale", _scale0)
     theme.apply_app_theme(QApplication.instance())
 
