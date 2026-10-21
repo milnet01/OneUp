@@ -241,9 +241,11 @@ TEXT_SCALES = [("Normal", 1.0), ("Large", 1.2), ("Larger", 1.45)]
 # app's original pixel sizes over a 10 pt (~13.3 px at 96 dpi) default, so
 # "Normal" reproduces the pre-ONEUP-0028 look to within a fraction of a point.
 # Large type (ONEUP-0239): fs_spot for Spotlight's package line and Rail's heading,
-# fs_figure for Spotlight's figures, fs_percent for its step percentage.
+# fs_figure for Spotlight's figures, fs_percent for its step percentage. fs_list is
+# the package views' size: the desktop's own at Normal, which they had before they
+# followed the text size at all (ONEUP-0323).
 _FONT_SCALE = dict(fs_header=1.58, fs_med=1.05, fs_body=0.90, fs_small=0.83,
-                   fs_spot=1.45, fs_figure=1.2, fs_percent=2.3)
+                   fs_spot=1.45, fs_figure=1.2, fs_percent=2.3, fs_list=1.0)
 
 _QSS = Template(r"""
 * { font-family: "Inter", "Noto Sans", "Segoe UI", "Cantarell", sans-serif; }
@@ -403,14 +405,14 @@ QPlainTextEdit#Log {
    focused or not, whose COLOUR alone moves on focus — recolouring the fill of a
    panel that holds its own content would recolour the content (ONEUP-0239 §4.8). */
 QTableView#PackageTable, QListView#PackageBoard, QListView#PackageLists {
-    background: $logbg; color: $logfg;
+    background: $logbg; color: $logfg; font-size: $fs_list;
     border: 2px solid $logbd; border-radius: 10px;
     /* The current package's focus pair, which LinesDelegate paints while the
        view has focus. The views select nothing, so nothing else reads these. */
     selection-background-color: $logfocusfill; selection-color: $logfocusink;
 }
 QTableView#PackageTable QHeaderView::section {
-    background: $logbg; color: $logfg; font-weight: 600;
+    background: $logbg; color: $logfg; font-size: $fs_list; font-weight: 600;
     border: none; border-bottom: 1px solid $logbd; padding: 4px 6px;
 }
 /* These paint nothing, so every button on them rests on the card and takes the
