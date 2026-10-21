@@ -64,6 +64,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The download size appears by itself where OneUp's system service needs no password** (ONEUP-0300)
+  After Check for updates finds system updates, the total shows without a click. Where a password would be needed, the "Show download size" link stays.
+
 - **Show technical log and Open log file are small buttons, not links** (ONEUP-0299)
   Turn the two text links at the bottom of the window into small buttons.
 

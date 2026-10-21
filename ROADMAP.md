@@ -9092,7 +9092,7 @@ when complete (that document's §7).
   Source: user-request-2026-10-16.
   Lanes: gui.
 
-- 📋 [ONEUP-0300] **Show the download size only where it is needed.**
+- 🚧 [ONEUP-0300] **Show the download size only where it is needed.**
   User, 2026-10-16: on the service route, is the link still needed?
   Could it show only when there is no service? Facts: the link runs
   --size=system --hold, a root `zypper dup --dry-run`, opt-in because it
@@ -9103,6 +9103,12 @@ when complete (that document's §7).
   User's decision, 2026-10-16: on the service route, hide the link and
   show sizes automatically, as Discover does: the full total and each
   package's size. On the sudo route the link stays.
+  Built 2026-10-21 (c4ba286 test, 015822e fix). Service route: the link
+  starts hidden; a check with system updates starts the held size
+  preview with ONEUP_NONINTERACTIVE=1. polkit's restrictive profile wants
+  a password, so there the fetch fails quietly and the link returns. Sudo
+  route unchanged. Waits on the by-eye VM check (Live ISO has the
+  service?).
   **Layman:** Hide the 'Show download size' link when OneUp can work the size out without asking for a password.
   Kind: ux.
   Source: user-request-2026-10-16.
