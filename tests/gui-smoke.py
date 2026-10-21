@@ -5023,6 +5023,19 @@ def main() -> int:
             print(f"       {_th.id}: {type(exc).__name__}: {exc}")
         check(f"INV-1 {_th.id} builds, overlay off and on", _built)
 
+    # Every reference key colours something: the stylesheet substitutes it, or a
+    # module reads it by name. contrast.py does not count — measuring a key is not
+    # using it. ONEUP-0326: Stop's stopfg and stophov outlived ONEUP-0317's fill,
+    # every palette carrying them and contrast.py measuring two colours nothing drew.
+    _sheet_keys = {m.group("named") or m.group("braced")
+                   for m in theme._QSS.pattern.finditer(theme._QSS.template)}
+    _gui_src = "\n".join(p.read_text(encoding="utf-8")
+                         for p in (REPO / "oneup" / "gui").rglob("*.py")
+                         if p.name != "contrast.py")
+    _named = set(re.findall(r"""["']([a-z0-9_]+)["']""", _gui_src))
+    _unused = sorted(theme.REFERENCE_KEYS - _sheet_keys - _named)
+    check(f"every palette key colours something (unused {_unused})", not _unused)
+
     for _th in theme.THEMES:
         _name = _th.id
         _pal = dict(_th.palette)
