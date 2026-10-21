@@ -5,6 +5,9 @@ each layout places in its own package summary or panel. The link and its result
 take turns in one slot, so the slot is pinned to the widest text either can show,
 the way Check and Stop are — neither keeps its space while hidden, or each would
 hold a slot of its own.
+
+On the service route the window fetches the size itself after a check, asking for
+no password, and the link stays hidden unless that fetch fails (ONEUP-0300).
 """
 from __future__ import annotations
 
@@ -29,8 +32,9 @@ def _pending_text() -> str:
 class SizeLink(QWidget):
     """The link, or the figure it fetched — one slot, one width."""
 
-    def __init__(self, on_click) -> None:
+    def __init__(self, on_click, automatic: bool = False) -> None:
         super().__init__()
+        self.automatic = automatic
         self.size_btn = QPushButton(_link_text())
         self.size_btn.setObjectName("LinkBtn")
         self.size_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -43,6 +47,7 @@ class SizeLink(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self.size_btn)
         lay.addWidget(self.size_result, 1)
+        self.size_btn.setVisible(not automatic)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self._pin_width()
         self.size_btn.installEventFilter(self)
@@ -81,7 +86,9 @@ class SizeLink(QWidget):
         self.size_btn.setText(_pending_text())
 
     def size_failed(self) -> None:
-        """Re-arm the link so the user can retry after a failed size fetch."""
+        """Re-arm the link so the user can retry after a failed size fetch — shown
+        even where the window fetches by itself, since asking is then the only way."""
+        self.size_btn.setVisible(True)
         self.size_btn.setEnabled(True)
         self.size_btn.setText(_link_text())
 
@@ -89,10 +96,10 @@ class SizeLink(QWidget):
         return self._has_size
 
     def reset(self) -> None:
-        """Back to the link, between runs."""
+        """Back to the link, between runs — or to nothing, where the window fetches."""
         self.size_result.setVisible(False)
         self.size_result.setText("")
         self._has_size = False
-        self.size_btn.setVisible(True)
+        self.size_btn.setVisible(not self.automatic)
         self.size_btn.setEnabled(True)
         self.size_btn.setText(_link_text())

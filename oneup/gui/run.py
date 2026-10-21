@@ -259,10 +259,15 @@ def retry_failed(win):
         _launch(win, list(win._failed_steps), check=False)
 
 
-def request_size(win, key: str):
+def request_size(win, key: str, unasked: bool = False):
     """Fetch the exact download size for a step on demand (system only). Runs
     the engine's --size mode, which authenticates and does a `zypper dup
-    --dry-run`, so it stays out of the password-free --check path."""
+    --dry-run`, so it stays out of the password-free --check path.
+
+    `unasked` is the service route's fetch after a check (ONEUP-0300). Nobody
+    clicked, so it may not raise a box: the engine asks polkit non-interactively,
+    a policy that wants a password fails it, and the link comes back. Its lines
+    stay out of the log, where they would read as a fault in a run nobody started."""
     if key != "system" or not paths.engine_available():
         return
     link = win.size_link
@@ -272,12 +277,14 @@ def request_size(win, key: str):
     if not paths.log_dir_ready(win):
         return
     link.size_pending()
-    # The button's "up to a minute" label is invisible to a screen reader, so
-    # say it out loud too — otherwise a blind user gets silence for the wait.
-    win._announce(QCoreApplication.translate(
-        "run",
-        "Working out the download size — this can take up to a minute."),
-                   link.size_btn)
+    win._size_unasked = unasked
+    if not unasked:
+        # The button's "up to a minute" label is invisible to a screen reader, so
+        # say it out loud too — otherwise a blind user gets silence for the wait.
+        win._announce(QCoreApplication.translate(
+            "run",
+            "Working out the download size — this can take up to a minute."),
+                       link.size_btn)
     win._size_buf = ""
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     # Named as a RUN log, not `<stamp>.size.log`, because --hold means this preview may
@@ -298,7 +305,8 @@ def request_size(win, key: str):
     # follows reuses the credential it has already cached. Two engines are two sudo
     # timestamp records and therefore two password dialogs, because with no terminal sudo
     # keys its cache to the PARENT process id (ONEUP-0044).
-    argv = paths.engine_argv(f"--size={key}", "--hold", f"--log={size_log}")
+    argv = paths.engine_argv(f"--size={key}", "--hold", f"--log={size_log}",
+                             env={"ONEUP_NONINTERACTIVE": "1"} if unasked else None)
     p.start(argv[0], argv[1:])
 
 
@@ -315,6 +323,8 @@ def _on_size_output(win, final: bool = False):
             if len(parts) >= 2 and parts[0] == "system":
                 win.size_link.set_size_result(QCoreApplication.translate(
                     "run", "↓ {size} to download").format(size=parts[1]))
+        elif getattr(win, "_size_unasked", False):
+            continue
         elif line.startswith("@@HINT@@|"):
             # The size probe failed (busy package manager, cancelled password
             # prompt). Say why in the log — the link re-arms itself for a retry
@@ -397,6 +407,7 @@ def _reset_for_run(win, steps: list[str], check: bool):
     win._reboot = False
     win._reboot_reason = ""
     win._installed_count = ""
+    win._system_pending = 0
     win._sys_changed = False
     win._other_changed = {}     # Flatpak/firmware/leftover step → its count, if it acted
     win._step_caption = ""
@@ -842,9 +853,11 @@ def handle_marker(win, line: str):
         if key == "TOTAL":
             win._installed_count = count
         else:
+            n = int(count) if count.isdecimal() else 0
+            if key == "system":
+                win._system_pending = n
             row = win.rows.get(key)
             if row:
-                n = int(count) if count.isdecimal() else 0
                 row.set_badge(QCoreApplication.translate("run", "{count} available").format(
                     count=n) if n > 0 else QCoreApplication.translate("run", "up to date"))
     elif tag == "CHECK_UNKNOWN":
@@ -1134,6 +1147,8 @@ def on_finished(win, exit_code: int, _status):
         _notify_when_away(win, away)
         tray._apply_tray_total(win, total, uncertain=bool(win._unchecked))
         win._check_mode = False
+        if win.size_link.automatic and ok and win._system_pending:
+            request_size(win, "system", unasked=True)
         return
 
     # A stopped run is neither: nothing went wrong, but it didn't do what was asked.

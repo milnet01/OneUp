@@ -263,7 +263,7 @@ that has none:
 | Stop-request poll interval, download pass | `2` seconds | engine | `ONEUP_STOP_POLL_SECONDS` |
 | Single-instance socket name | `OneUp-<uid>` | GUI | `ONEUP_INSTANCE_NAME` |
 | Route to root | the service where it is installed, else sudo | engine | `ONEUP_BACKEND` — `sudo`, `service` or `auto` (ONEUP-0249 §4.7) |
-| Whether polkit may ask the user | it may | engine | `ONEUP_NONINTERACTIVE=1` — no box; a headless run sets it (§4.4) |
+| Whether polkit may ask the user | it may | engine | `ONEUP_NONINTERACTIVE=1` — no box; a headless run sets it (§4.4), and so does the window's unasked size fetch (ONEUP-0300) |
 | The bus the service is on | the system bus | engine and service | `ONEUP_SERVICE_BUS` — **tests only**: `tests/service-test.py`'s private bus |
 | The service's job files | `/run/oneup` (systemd's `RUNTIME_DIRECTORY`) | service | `ONEUP_SERVICE_RUNTIME_DIR` — **tests only** |
 | The service's idle exit | `60` seconds | service | `ONEUP_SERVICE_IDLE_SECONDS` — **tests only** |

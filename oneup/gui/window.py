@@ -203,6 +203,7 @@ class Updater(QMainWindow):
         self._reboot = False
         self._reboot_reason = ""     # optional "why a reboot matters" phrase from the engine
         self._installed_count = ""   # system packages changed, as reported by the engine
+        self._system_pending = 0     # system updates a check found (ONEUP-0300)
         self._sys_changed = False
         self._other_changed = {}     # Flatpak/firmware/leftover step → its count, if it acted
         self._step_caption = ""      # current step's bar caption, so @@PROGRESS@@ can extend it
@@ -774,8 +775,10 @@ class Updater(QMainWindow):
         self.package_area.addWidget(self.log)
 
         # The download-size link and its result, moved out of the system row
-        # (ONEUP-0239 §4.6). Each layout places it.
-        self.size_link = SizeLink(partial(run.request_size, self, "system"))
+        # (ONEUP-0239 §4.6). Each layout places it. On the service route the window
+        # fetches the size itself after a check, so the link starts hidden (ONEUP-0300).
+        self.size_link = SizeLink(partial(run.request_size, self, "system"),
+                                  automatic=self._service_route)
 
         # Last-run line.
         self.last_run = ElidedLabel()

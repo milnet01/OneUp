@@ -43,7 +43,9 @@ OneUp can:
 - **Check for updates** read-only (see the count per task before installing).
 - **See how big the download is** before you start. **Show download size** on the
   system task works out the exact figure, so you know whether you're in for 40 MB
-  or 2 GB before you commit to it — useful on a slow or metered connection.
+  or 2 GB before you commit to it — useful on a slow or metered connection. Where
+  OneUp's system service is installed and needs no password, the figure appears by
+  itself after **Check for updates**.
 - **Check weekly in the background** and notify you when updates are ready.
 - **Sit quietly in the system tray** and turn amber when updates are waiting, so you
   notice without catching a popup — with a right-click Check / Update / Open / Quit
