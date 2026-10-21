@@ -9710,7 +9710,7 @@ when complete (that document's §7).
   Source: review-contract-ONEUP-0310-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0323] **The package lists keep the same text size whatever Text size is chosen.**
+- 🚧 [ONEUP-0323] **The package lists keep the same text size whatever Text size is chosen.**
   Found 2026-10-17 while building ONEUP-0310. INV-17's new test reads
   each view's row height at every TEXT_SCALES entry, and it is the same
   at all three: Rows' table 42 px, Rail's card 67 px, Spotlight's line
@@ -9721,6 +9721,12 @@ when complete (that document's §7).
   font and recomputes on a text-size change, and ui-and-accessibility.md
   §4 covers scaling. Once fixed, the floors (ONEUP-0310) follow on their
   own: they read the views' own row heights.
+  Built 2026-10-21 (aa9cb7d). theme.py's three package views and the
+  table's headings take fs_list, a new _FONT_SCALE entry at 1.0, so
+  Normal is unchanged. gui-smoke reads each view's row height at every
+  TEXT_SCALES entry: offscreen, Rows 25/27/31 px, Rail 89/96/108 px,
+  Spotlight 25/27/31 px. Red before the fix (6ecdabf); removing the
+  font-size again turns it red. Waits on the by-eye VM check.
   **Layman:** Making the text larger in OneUp makes every label bigger except the list of updates, which stays small.
   Kind: accessibility.
   Source: ONEUP-0310-build-2026-10-17.

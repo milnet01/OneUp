@@ -192,6 +192,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The lists of updates now grow with Text size, like the rest of the window** (ONEUP-0323)
+  Choosing Large or Larger used to enlarge every label except the package lists in all three layouts. They now follow it; at Normal they look as before.
+
 - **The log says when the list of services to restart could not be checked** (ONEUP-0295)
   Without the lsof package, that check failed in silence. The log now says so and names the package; the RPM recommends lsof so it is installed by default.
 
