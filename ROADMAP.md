@@ -2893,7 +2893,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: in-session-2026-08-20 (implementing ONEUP-0034).
   Lanes: gui.
 
-- 📋 [ONEUP-0123] **The ghost button's rest border does not clear 3:1 on the warning banner's tint.**
+- ✅ [ONEUP-0123] **The ghost button's rest border does not clear 3:1 on the warning banner's tint.**
   Found while implementing ONEUP-0064/0076 and deliberately NOT fixed there,
   because fixing it would have meant authoring a palette key neither spec
   names — which ONEUP-0027 §4.7 would then fail as uncovered.
@@ -2924,6 +2924,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   qualified selector — the same shape ONEUP-0076 §4.2 uses for the focus
   rows. That belongs with ONEUP-0027, which authors six more palettes and
   owns §4.7's key coverage, rather than bolted onto a shipped item.
+  Shipped 2026-10-22 (9a19baa test, 503fa77 fix), on v2 alone: on
+  main Retry sits on the card. Measured first: only the four dark
+  themes still failed (2.36-2.44:1); the light ones cleared 3:1 since
+  ONEUP-0027 moved ghostbd. Fixed with a derived key rather than an
+  authored one: warnghostbd keeps ghostbd where it clears 3:1 on both
+  wash stops, else the smallest blend that does. A banner-qualified
+  rule applies it, restating :hover and :disabled, and the overlay
+  restates its own colours. contrast.py measures it on the warning
+  ground. The gui-smoke check probes real pixels in a fresh process,
+  because inside the suite QTest.mouseMove sends the button no Enter.
   **Layman:** The thin outline around the "Retry failed steps" button is fainter than it should be, because that button now sits on the amber warning strip rather than on the plain card behind it.
   Kind: accessibility.
   Source: in-session-2026-08-21.
