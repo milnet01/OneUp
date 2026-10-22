@@ -1,5 +1,7 @@
 # Security Standard
 
+<!-- OWNED-HERE security.md — OneUp's own standard, read instead of the global one, not a copy of it; decided 2026-10-22 (ONEUP-0236) -->
+
 **In one sentence:** this file says which half of OneUp is allowed to become root, how it
 asks the user for permission, what it must check before passing a value to a root command,
 and what may be written to a log — because OneUp's whole job is running privileged

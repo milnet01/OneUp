@@ -1,5 +1,7 @@
 # Dependency Policy & Known-Incompatibility Ledger
 
+<!-- OWNED-HERE dependencies.md — OneUp's own standard, read instead of the global one, not a copy of it; decided 2026-10-22 (ONEUP-0236) -->
+
 **In one sentence:** everything OneUp depends on runs at its latest stable version unless a
 newer one demonstrably breaks us, and when that happens the breakage is written down with a
 cue to re-test — so nobody has to remember why a version is old.

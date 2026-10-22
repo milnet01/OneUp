@@ -1,5 +1,7 @@
 # Workflow Standard
 
+<!-- OWNED-HERE workflow.md — OneUp's own standard, read instead of the global one, not a copy of it; decided 2026-10-22 (ONEUP-0236) -->
+
 **In one sentence:** this is how a change gets from an idea to somebody's computer — which
 branch it belongs on, what the commit says, how it earns a version number, and the one
 gate it must pass green before it leaves this machine.

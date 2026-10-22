@@ -1,5 +1,7 @@
 # Documentation Standard
 
+<!-- OWNED-HERE documentation.md — OneUp's own standard, read instead of the global one, not a copy of it; decided 2026-10-22 (ONEUP-0236) -->
+
 **In one sentence:** every document here has one job, and this file says which job, so
 nobody has to guess where a decision belongs or whether it has been reviewed.
 
