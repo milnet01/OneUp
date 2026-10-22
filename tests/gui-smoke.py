@@ -4449,6 +4449,78 @@ def main() -> int:
     for line in _bad[:6]:
         print(f"       {line}")
 
+    # ONEUP-0123: Retry's rest border sits on the warning banner's amber wash, not
+    # on the card, so it is measured against both of the wash's composited stops,
+    # in every theme. Real pixels, from a banner built as the window builds it: a
+    # qualified rule the sheet carries but Qt does not apply would pass a text
+    # check. The banner rule must not swallow hover or disabled either, and with
+    # the overlay on the button keeps the overlay's own border.
+    # In a fresh process: by this point in the suite QTest.mouseMove reaches the
+    # button and Qt still sends it no Enter, so :hover never paints (measured
+    # 2026-10-22; no grab, popup, modal or override cursor was set). The same
+    # probe hovers on every window of a fresh application.
+    _probe = r"""
+import sys
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QPushButton
+app = QApplication([])
+from oneup.gui import theme
+for th in theme.THEMES:
+    for hc, state in ((False, "rest"), (False, "hover"), (False, "disabled"), (True, "rest")):
+        banner = QFrame(objectName="WarnBanner")
+        banner.setStyleSheet(theme.build_theme(th, high_contrast=hc))
+        btn = QPushButton("Retry failed steps", objectName="GhostBtn")
+        btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        btn.setEnabled(state != "disabled")
+        QHBoxLayout(banner).addWidget(btn)
+        banner.resize(700, 200)
+        banner.show()
+        QTest.qWaitForWindowExposed(banner)
+        # Off the button first: a window opening under a resting cursor gets no Enter.
+        QTest.mouseMove(banner, banner.rect().bottomRight())
+        app.processEvents()
+        if state == "hover":
+            QTest.mouseMove(btn, btn.rect().center())
+            app.processEvents()
+        # The middle of the top edge, clear of the rounded corners.
+        c = btn.grab().toImage().pixelColor(btn.width() // 2, 0).name()
+        print(th.id, int(hc), state, c, int(btn.underMouse() == (state == "hover")))
+        # Leave the cursor off the button, or the next window opens under it hovered.
+        QTest.mouseMove(banner, banner.rect().bottomRight())
+        banner.close()
+        banner.deleteLater()
+"""
+    _res = subprocess.run(  # noqa: S603 — our own interpreter and probe text.
+        [sys.executable, "-c", _probe], cwd=REPO, capture_output=True,
+        text=True, timeout=120,
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
+    _seen = {}
+    for _line in _res.stdout.splitlines():
+        _id, _hc, _state, _c, _ok = _line.split()
+        _seen[(_id, _hc == "1", _state)] = _c if _ok == "1" else f"{_c} (state not set)"
+    _bad = [] if _res.returncode == 0 else [f"probe exited {_res.returncode}: "
+                                            f"{_res.stderr.strip()[-300:]}"]
+    for _th in theme.THEMES:
+        _got = _seen.get((_th.id, False, "rest"), "missing")
+        for _ground in theme.warn_tint(_th.palette):
+            if _got == "missing" or theme.contrast(_got, _ground) < theme.FOCUS_MIN:
+                _bad.append(f"{_th.id}: {_got} on {_ground}"
+                            + ("" if _got == "missing"
+                               else f" = {theme.contrast(_got, _ground):.2f}:1"))
+        _hc_want = (theme._HC_DARK if _th.dark else theme._HC_LIGHT)["border"]
+        for _hc, _state, _want in ((False, "hover", _th.palette["ghosthov"]),
+                                   (False, "disabled", _th.palette["disbg"]),
+                                   (True, "rest", _hc_want)):
+            _got = _seen.get((_th.id, _hc, _state), "missing")
+            if _got != _want.lower():
+                _bad.append(f"{_th.id} {_state}{' overlay on' if _hc else ''}: "
+                            f"{_got} != {_want}")
+    check(f"ONEUP-0123 Retry's border clears 3:1 on the warning banner "
+          f"({len(_bad)} wrong)", not _bad)
+    for line in _bad[:8]:
+        print(f"       {line}")
+
     # ONEUP-0303: a focused Settings tab wears the derived focus fill, in every
     # theme and with the overlay on, and at rest the colour it replaces. Real
     # pixels, sampled through the dialog: a sub-control rule Qt does not apply
