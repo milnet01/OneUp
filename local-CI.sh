@@ -220,7 +220,8 @@ if command -v shellcheck >/dev/null 2>&1; then
     # -x so it follows tests/run-tests.sh's `source tests/mock-env.sh`; without it
     # every symbol the sandbox defines reads as unassigned (ONEUP-0054 stage 6).
     if shellcheck -x -e SC2001 update_system.sh tests/run-tests.sh tests/mock-env.sh \
-            packaging/appimage/build-appimage.sh local-CI.sh release.sh githooks/pre-push; then
+            packaging/appimage/build-appimage.sh packaging/rpm/inspect-rpm.sh local-CI.sh \
+            release.sh githooks/pre-push; then
         ok "shellcheck"; else bad "shellcheck"; fi
 else skip "shellcheck" "not installed"; fi
 if command -v ruff >/dev/null 2>&1; then
