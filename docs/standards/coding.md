@@ -1,5 +1,7 @@
 # Coding Standard
 
+<!-- OWNED-HERE coding.md — OneUp's own standard, read instead of the global one, not a copy of it; decided 2026-10-22 (ONEUP-0236) -->
+
 **In one sentence:** this file says which Python you may assume, how big a file is allowed
 to get, how to run another program safely, and what to do when something fails — so that
 2.0 code looks like it was written by one person who was paying attention.

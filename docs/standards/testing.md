@@ -1,5 +1,7 @@
 # Testing Standard
 
+<!-- OWNED-HERE testing.md — OneUp's own standard, read instead of the global one, not a copy of it; decided 2026-10-22 (ONEUP-0236) -->
+
 **In one sentence:** a OneUp test must prove something a user would notice, must not care
 what state the machine it runs on happens to be in, and must not damage that machine —
 because the suite runs on the same computer OneUp updates, sometimes while a real update
