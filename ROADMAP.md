@@ -4352,12 +4352,19 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: review-contract-2026-10-11 documentation.md (main) loop 13, outside ONEUP-0257's radius.
   Lanes: docs.
 
-- 📋 [ONEUP-0290] **One command that builds the RPM from a commit in scratch space and lists or prints a file inside it.**
+- ✅ [ONEUP-0290] **One command that builds the RPM from a commit in scratch space and lists or prints a file inside it.**
   User's decision, 2026-10-16. The recipe today: git archive
   --prefix=oneup-<version>/ into /mnt/Games/.oneup-rpm-scratch/SOURCES/,
   rpmbuild -bb --define "_topdir <scratch>" packaging/rpm/oneup.spec,
   then rpm -qlp / rpm2cpio to inspect, then delete the scratch (/tmp
   is RAM here). The script should do all of it and clean up after.
+  Shipped 2026-10-22 as packaging/rpm/inspect-rpm.sh: `[--ref REF] list` or
+  `cat PATH`. Builds from the commit (spec included) in a scratch directory
+  under .git, removed on every exit, an interrupt included. Checked by hand:
+  list, cat (matches git), a missing path, a bad ref, bad usage, --ref main,
+  and SIGTERM mid-build leaving no scratch. shellcheck covers it in
+  local-CI.sh; no suite runs it, since a build needs rpmbuild and the
+  spec's BuildRequires.
   **Layman:** A shortcut for developers to build the installable package and look inside it, instead of a five-step recipe.
   Kind: chore.
   Source: user-decision-2026-10-16.

@@ -8,6 +8,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Added
 
+- **Developers can build the RPM from a commit and look inside it with one command** (ONEUP-0290)
+  `packaging/rpm/inspect-rpm.sh list` prints every path the package installs; `cat PATH` prints one file. `--ref` picks the commit. The build runs in scratch space that is always removed.
+
 - **Show an estimated time left while packages download.** (ONEUP-0318)
   While updates download, OneUp estimates how long is left.
 
