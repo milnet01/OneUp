@@ -144,6 +144,9 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     # holds a scrolling view (ONEUP-0262).
     ("ghostbd", ("logbg", "win"), MARK),
     ("ghosthov", ("logbg", "win"), MARK),
+    # Retry's rest border, derived from `ghostbd` for the warning banner's wash,
+    # where `ghostbd` itself fell short of 3:1 in the four dark themes (ONEUP-0123).
+    ("warnghostbd", (WARN_GROUND,), MARK),
     # The danger family's banner border, and the ghost button's hover border,
     # which ONEUP-0076 left as a border: it shares one token with its ink above,
     # so moving one moves both.

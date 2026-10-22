@@ -146,6 +146,15 @@ def derive_focus(source: str, surfaces, *, label: str = "",
     return fill, _ink_for([fill])
 
 
+def _border_on(colour: str, grounds, *, label: str) -> str:
+    """`colour` where it already clears 3:1 on every one of `grounds`, else the
+    smallest blend of it that does — a rest border moved only as far as a ground
+    it was not authored for needs."""
+    if all(contrast(colour, g) >= FOCUS_MIN for g in grounds):
+        return colour
+    return derive_focus(colour, grounds, label=label)[0]
+
+
 def _samples(a, b, n: int = 101):
     """`n` points down a two-stop gradient, endpoints included."""
     ra, rb = _rgb(a), _rgb(b)
@@ -328,6 +337,12 @@ QPushButton#GhostBtn[small="true"] { padding: 3px 10px; border-radius: 6px; }
    is filled and the others are bare text, so the choice shows by shape as well
    as colour. The rest border stays, transparent, so checking a tab never
    resizes it. */
+/* Retry rests on the warning banner's wash, so its border is the one derived to
+   clear 3:1 there (ONEUP-0123). The qualified rule outranks the bare :hover and
+   :disabled ones, so both are restated. */
+#WarnBanner QPushButton#GhostBtn { border-color: $warnghostbd; }
+#WarnBanner QPushButton#GhostBtn:hover { border-color: $ghosthov; }
+#WarnBanner QPushButton#GhostBtn:disabled { border-color: $disbg; }
 #PackageFilter QPushButton#GhostBtn { border-color: transparent; }
 #PackageFilter QPushButton#GhostBtn:hover { border-color: $ghosthov; }
 #PackageFilter QPushButton#GhostBtn:checked {
@@ -678,6 +693,11 @@ QPushButton#GhostBtn:disabled { background: $card; color: $text; border: 2px das
 #PackageFilter QPushButton#GhostBtn:checked {
     background: $btn; color: $btntext; border: 2px solid $border;
 }
+/* The banner's own ghost border rules outrank the bare ones too. The overlay's
+   banner is plain `card`, so Retry keeps the overlay's ghost colours. */
+#WarnBanner QPushButton#GhostBtn { border-color: $border; }
+#WarnBanner QPushButton#GhostBtn:hover { border-color: $focus; }
+#WarnBanner QPushButton#GhostBtn:disabled { border-color: $border; }
 QTabBar#SettingsTabs::tab { background: $card; color: $text; border: 2px solid $border; }
 QTabBar#SettingsTabs::tab:hover { background: $btn; color: $btntext; border: 2px solid $focus; }
 QTabBar#SettingsTabs::tab:selected { background: $btn; color: $btntext; border: 2px solid $border; }
@@ -1332,6 +1352,11 @@ def _derive_keys(palette: dict) -> dict:
                        f"stop:1 {_rgba(palette['rowringhovtint2'], '0.85')})"),
         # The checked package tab's label, black or white on its `ghosthov` fill.
         "tabink": _ink_for([palette["ghosthov"]]),
+        # Retry's rest border. It rests on the warning banner's wash, not on the
+        # card `ghostbd` is authored for, and in the dark themes measured about
+        # 2.4:1 there (ONEUP-0123).
+        "warnghostbd": _border_on(palette["ghostbd"], warn_tint(palette),
+                                  label="warnghostbd"),
     }
     # The focus pairs are computed rather than authored, so a palette gets its
     # cue with no further work — and fails loudly if it cannot have one, rather
