@@ -67,6 +67,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **The six project standards say they are OneUp's own, so the copied-standards check stops reporting them as copies** (ONEUP-0236)
+  Each now carries an `OWNED-HERE` marker under its title. Nothing in the app changes.
+
 - **The download size appears by itself where OneUp's system service needs no password** (ONEUP-0300)
   After Check for updates finds system updates, the total shows without a click. Where a password would be needed, the "Show download size" link stays.
 

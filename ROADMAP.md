@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=327 -->
+<!-- ants-roadmap-id-high-water: ONEUP=328 -->
 
 # OneUp Roadmap
 
@@ -4221,7 +4221,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: fix.
   Source: in-session-2026-10-02 ONEUP-0032 build.
 
-- 📋 [ONEUP-0236] **The six project standards carry no marker saying they are this project's own, so the copied-standards check reports each as an undeclared copy.**
+- ✅ [ONEUP-0236] **The six project standards carry no marker saying they are this project's own, so the copied-standards check reports each as an undeclared copy.**
   ~/.claude/.githooks/check-copied-standards over the main worktree
   (2026-10-07) reported docs/standards/workflow.md, security.md,
   dependencies.md, coding.md, documentation.md and testing.md as
@@ -4230,6 +4230,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   forks, so the likely fix is an OWNED-HERE marker in each, per
   ~/.claude/standards/README.md. Seen while adding ONEUP-0203's
   exception; not fixed there.
+  Shipped 2026-10-22 on main and v2: each of the six standards carries
+  an OWNED-HERE marker under its title. check-copied-standards over both
+  trees reported all six UNDECLARED before and "clean" after.
   **Layman:** A checking tool mistakes OneUp's own rule documents for out-of-date copies, because they don't say they belong to OneUp.
   Kind: chore.
   Source: in-session-2026-10-07 ONEUP-0203 write-doc.
@@ -4369,6 +4372,24 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: chore.
   Source: user-decision-2026-10-16.
   Lanes: packaging.
+
+- 📋 [ONEUP-0328] **main's window suite hung twice under heavy load on 2026-10-22, after the Rollback naming check.**
+  Two of three runs of main's tests/gui-smoke.py (main d1a7ebe, load
+  average 18-25) sat in poll (wchan poll_schedule_timeout) at 0% CPU;
+  gdb could not attach (ptrace not permitted). One was inside local-CI
+  (buffered log, location unknown); the other ran with python3 -u and
+  stopped right after "every focusable widget in Rollback is named",
+  before ONEUP-0304's focus-rectangle check, whose loop calls
+  processEvents per widget. Nine runs since, at load 8-12, passed.
+  Hypothesis, unconfirmed: the ONEUP-0225 class — a late probe's
+  finished slot opening a real modal box inside that loop. Next: rerun
+  under load with faulthandler.dump_traceback_later via runpy (as
+  ONEUP-0225 did) and read the stack. Hung log kept at
+  .git/oneup-scratch/gui-smoke-hang-2026-10-22-main.log.
+  **Layman:** The window tests froze twice tonight while the computer was very busy, then passed nine times in a row once it calmed down.
+  Kind: investigate.
+  Source: in-session-2026-10-22, ONEUP-0236's local-CI on main.
+  Lanes: tests.
 
 ## 1.4.6 — fixes to the released app
 
