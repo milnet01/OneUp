@@ -203,6 +203,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The package details dialog crashes on rpm output that is not UTF-8.** (ONEUP-0334)
+
 - **The outline around "Retry failed steps" is easier to see on the amber warning strip** (ONEUP-0123)
   In the four dark themes the button's thin border was too faint against the strip's amber tint. It now stands out from it at 3:1 or better, the level WCAG asks of a control's edge. The light themes already did and are unchanged.
 

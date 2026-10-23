@@ -9864,6 +9864,17 @@ when complete (that document's §7).
   SERVICES and DONE|errors, and a window-suite scenario with an earlier
   repo-slow hint. Open for the user: what INSTALLED's sys_changed says
   after a part-updated run (it decides the rollback button).
+  State 2026-10-23: contract gate done (testing.md converged; ONEUP-0054
+  calm cap). Red tests committed (c71de9a, 384c681). Decisions taken
+  2026-10-23 on the gate's three questions: no rollback button after a
+  part-updated run (sys_changed stays no); the WINDOW leads with the
+  part-updated hint (insert it first in run.py's HINT handler); no
+  service restart either. Fix plan: steps.py SYS_PARTIAL set in _failure
+  when the commit log holds a completed '(n/m)
+  Installing|Removing|Upgrading: … done]' line; skip the repo-scoped
+  probe when partial; __main__ loop breaks on SYS_PARTIAL;
+  _reboot_and_services skips needs-rebooting and restart-list when
+  partial; _summary prints 'only partly updated'.
   **Layman:** After the system update broke half-way, OneUp went on to Flatpak and would have removed leftover packages.
   Kind: fix.
   Source: real-update-test-2026-10-23.
@@ -9872,6 +9883,11 @@ when complete (that document's §7).
   Same run. REBOOT said no and the hint blamed a package conflict.
   Needs a warning that the system is part-updated, not to restart yet,
   and the next step (run the update again, or zypper dup in a terminal).
+  State 2026-10-23: red window test committed (384c681). New HINT codes
+  system-incomplete (Tumbleweed, command sudo zypper dup) and
+  system-incomplete-leap (sudo zypper update) via HINT_COMMANDS; the
+  sentence says the system is partly updated, not to restart, run the
+  update again, else finish in a terminal with {command}.
   **Layman:** The window said only 'Finished with 1 error'; it must warn not to restart and say what to do next.
   Kind: fix.
   Source: real-update-test-2026-10-23.
@@ -9882,6 +9898,11 @@ when complete (that document's §7).
   failure not caught earlier reads as package-conflict. Needs an
   install-failed case naming the package ('Installation of X failed')
   and a tighter conflict match.
+  State 2026-10-23: red engine test committed. Cause measured: 'Checking
+  for file conflicts: […done]' matches the conflict regex in
+  steps._failure. Fix: strip that line before the conflict match; new
+  code install-failed for 'Installation of X failed' when no package
+  changed.
   **Layman:** The hint blamed a third-party repo when rpm itself failed to install a package.
   Kind: fix.
   Source: real-update-test-2026-10-23.
@@ -9891,13 +9912,20 @@ when complete (that document's §7).
   popup)' at every run start. On the service route polkit can answer
   yes without asking, and the snapshot and refresh then take a minute
   under that text.
+  State 2026-10-23: red window test committed (384c681). Fix in
+  run._launch: the popup sentence only when not win._service_route and
+  not win.auth_btn.isChecked(); otherwise 'Starting the update…'.
   **Layman:** For about a minute OneUp asked you to approve a password popup that never appeared.
   Kind: fix.
   Source: real-update-test-2026-10-23.
 
-- 📋 [ONEUP-0334] **The package details dialog crashes on rpm output that is not UTF-8.**
+- ✅ [ONEUP-0334] **The package details dialog crashes on rpm output that is not UTF-8.**
   2026-10-23_window-stderr.txt: details_dialog._fetch runs rpm with
   text=True and no errors='replace'; UnicodeDecodeError, twice.
+  Fixed 2026-10-23: test 18ea290, fix 4e7f283 (errors="replace" in
+  details_dialog._fetch and package_details._rpm). Window suite: both
+  ONEUP-0334 checks ok. Not pushed yet: v2 carries red tests for
+  0330-0333.
   **Layman:** Opening some packages' details threw an error because their text was not plain UTF-8.
   Kind: fix.
   Source: real-update-test-2026-10-23.
@@ -9912,6 +9940,11 @@ when complete (that document's §7).
   User decision 2026-10-23: done = installed/removed/unchanged; now =
   only the one package being downloaded or installed;
   downloaded-but-not-installed stays in to go.
+  Not started. Causes measured on the 2026-10-23 log: preload then
+  Retrieving re-emits PKG downloading (parsers.PackageLines); to_bytes
+  keeps one decimal (1.75 GiB -> 1.7); GROUP puts downloaded in now
+  (user decision recorded above). Header count (d) depends on
+  ONEUP-0329.
   **Layman:** The window showed 642, then 927, then 931 updates, '1.8 GiB of 1.7 GiB', and '0 done · 927 now' after everything had downloaded.
   Kind: fix.
   Source: real-update-test-2026-10-23.
