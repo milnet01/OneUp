@@ -1,6 +1,6 @@
 # ONEUP-0239 — three fixed layouts, and the Settings choice between them
 
-**Status:** Draft
+**Status:** Reviewed
 **Kind:** feature
 **Roadmap:** ONEUP-0239; amended by ONEUP-0306, which is built through ONEUP-0307 to
 ONEUP-0318 and ONEUP-0320; amended by ONEUP-0335 and ONEUP-0336 (§3 items 16 and 17).
@@ -337,8 +337,8 @@ each, with a `phase` of its own:
 - **Each pass sends one `PROGRESS` as it starts**, with `done` and `total` of 0, before
   Flatpak prints anything. A `total` of 0 drops the count: *Updating your apps*,
   *Updating system apps*. The `unused` pass sends only this one.
-- **Then one per new count.** Flatpak prints a line of the form `Updating 3/12…` as each
-  update starts, and repeats it at each percentage step. The engine sends `PROGRESS` when
+- **Then, in the `user` and `system` passes only, one per new count.** Flatpak prints a
+  line of the form `Updating 3/12…` as each update starts, and repeats it at each percentage step. The engine sends `PROGRESS` when
   the first number changes. It reads the two numbers and the `…`, never the word before
   them. Measured in the run log of 2026-10-23: a user pass of 12 updates, then a system
   pass of 20.
@@ -468,7 +468,8 @@ installed is never seen in that state: `parsers.PackageLines` reports an install
 once its line ends in `done]`, so it moves from `downloaded` to `installed` in one step.
 A package fetched by `Retrieving:` lines, as zypper fetches without its parallel preload,
 is reported `downloading` and today is never moved on. `parsers.PackageLines` reports it
-`downloaded` once its fetch ends, so it leaves *now* while it waits to install.
+`downloaded` once its fetch ends: at the next package's `Retrieving:` line, at the pass's
+first action line, or at the pass's end. So it leaves *now* while it waits to install.
 
 - **Rows' table** shows the filter's packages, all steps under *All*.
 - **Rail's board** shows the packages of `win.current_step`, and all packages when it is
@@ -758,12 +759,13 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
 
 - **INV-19** *(ONEUP-0336)* The engine names each Flatpak pass, once per count.
   *Test:* `tests/run-tests.sh` — a mock `flatpak` whose user update prints
-  `Updating 1/2…` twice, then `Updating 2/2…`, and whose system update prints
-  `Updating 1/1…`. The output holds, in this order, `PROGRESS|flatpak|0|0|user`,
-  `|1|2|user` exactly once, `|2|2|user`, `|0|0|system`, `|1|1|system` and
-  `|0|0|unused`.
-  *Breaks when:* a repeated line sends a second marker, a pass sends no start marker, or
-  the system pass's lines are not read.
+  `Updating 1/2…` twice, then `Updating 2/2…`, whose system update prints
+  `Updating 1/1…`, and whose unused uninstall prints `Uninstalling 1/1…`. The output
+  holds, in this order, `PROGRESS|flatpak|0|0|user`, `|1|2|user` exactly once,
+  `|2|2|user`, `|0|0|system`, `|1|1|system` and `|0|0|unused`, and no other `unused`
+  marker.
+  *Breaks when:* a repeated line sends a second marker, a pass sends no start marker,
+  the system pass's lines are not read, or the unused pass sends a count.
 
 - **INV-20** *(ONEUP-0336)* The window words each Flatpak phase as its own, never as
   installing.
@@ -778,9 +780,9 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
 - **INV-21** *(ONEUP-0335)* *Now* counts only what is downloading.
   *Test:* `tests/gui-smoke.py` — `package_views.counts` over one package in each of
   `queued`, `downloading`, `downloaded` and `installed` gives 2 to go, 1 now and 1 done.
-  And `tests/parsers-test.py` — one `PackageLines` fed a package's `Retrieving:` line,
-  then the next package's, reports the first `downloaded` before the second
-  `downloading`.
+  And `tests/parsers-test.py` — one `PackageLines` fed package A's `Retrieving:` line,
+  then B's, then an action line, reports A `downloaded` by B's line and B `downloaded`
+  by the action line.
   *Breaks when:* `downloaded` counts as now, or a fetched package stays `downloading`.
 
 ## 6. Failure modes
@@ -877,7 +879,8 @@ lines to it on both routes to root. The new strings follow
 `docs/standards/wording-and-translation.md`, and the translation catalogue is refreshed.
 `CHANGELOG.md` `[Unreleased]` gains a line saying the Flatpak step names its pass and its
 count. *(ONEUP-0335)* No marker change; the engine changes in `parsers.PackageLines`
-(§4.3.1). `CHANGELOG.md` gains a line saying a downloaded package now counts as to go.
+(§4.3.1), and in `proc._filter_lines`, which today takes one result per line from it.
+`CHANGELOG.md` gains a line saying a downloaded package now counts as to go.
 
 ## 9. Alternatives considered (and rejected)
 
@@ -944,3 +947,4 @@ count. *(ONEUP-0335)* No marker change; the engine changes in `parsers.PackageLi
 | 6 | 2026-10-17 | Q2 3 — 3 verified, 1 dismissed | 0 fixed, 3 filed on ONEUP-0322; the cap for a spec, and the run ends. Two lanes, each holding every question; no finding landed on ONEUP-0310's text or on row 5's fixes, and a lane checked §3 item 15's new figures against the measurements. All three Q2s lie outside the amended text: §1 promises every package's versions and source, while Spotlight's lines carry neither (both lanes); §4.1.3 drops `activity`'s moving clock during a check or refresh, which the liveness trap in `.claude/rules/engine-traps.md` needs; and *Packages* and the status count read *not known* where `docs/reference/marker-protocol.md` §4.3 requires a running tally. Dismissed: INV-12's and INV-15's `cache_bytes` "in `oneup/gui/run.py`", the name `run.py` imports, so the stub's target is right. A check was confirmed to send no step markers. Own-fix share 0 of 3, a calm cap. Second share: 2 of the run's 7 verified findings lie in ONEUP-0310's text |
 | 0335-0336-amend | 2026-10-23 | none — an authoring amendment; no reviewer was dispatched | The user's two decisions of 2026-10-23 (§3 items 16 and 17): *now* holds only what is downloading, with `downloaded` moved to *to go* (§4.3.1, INV-21, from ONEUP-0335); and the Flatpak step sends `PROGRESS` with phases `user`, `system` and `unused`, opening the marker contract a third time (§4.1.4, INV-19, INV-20, §8, from ONEUP-0336). Status back to Draft. The gate on it is the next loop. |
 | 7 | 2026-10-23 | Q1 1 — 1 verified, 2 dismissed | 1 fixed; loop 1 of the gate on the ONEUP-0335/0336 amendment. Two lanes, each holding every question. The Q1: a package fetched by `Retrieving:` lines stays `downloading` in `parsers.PackageLines` until installed, so moving `downloaded` to *to go* alone left it in *now*; §4.3.1 now has the parser report it `downloaded` when its fetch ends, §8 names that engine change, and INV-21 gains a `tests/parsers-test.py` half. Unrunnable here: every zypper run on this machine preloads, so the no-preload fetch was read from the parser and the suite's mocks, not run. Dismissed, both measured: Spotlight's first line and *Packages* box under a Flatpak phase (`layout_spotlight._sentence` gives the name alone and the box no phase word, so nothing built changes); and Flatpak progress ended by a carriage return (both routes read with universal newlines — `_pump` with `text=True`, `service_client.Job.lines` through a default `TextIOWrapper`). Two open questions resolved clean: `STEP_BEGIN` clears the phase before Flatpak's first `PROGRESS`; Flatpak 1.18.4 under `LC_ALL=C` still prints `…`, newline-ended. Before dispatch every citation in the amendment was opened, none defective |
+| 8 | 2026-10-23 | Q2 1 · Q3 1 — 2 verified, 0 dismissed | both fixed; the cap for a spec, so these fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found both. The Q2: §4.1.4 read counts word-blind while the `unused` pass sent no count, and the `flatpak` binary carries `Uninstalling %d/%d…`; counts are now read in the `user` and `system` passes only, and INV-19's mock prints `Uninstalling 1/1…` and expects no other `unused` marker. The Q3, on row 7's own text: what ends a fetch; §4.3.1 names the next package's `Retrieving:` line, the pass's first action line or its end, §8 adds `proc._filter_lines`, which takes one result per line today, and INV-21's parser half covers the action line. Unrunnable here: whether `flatpak uninstall --unused` prints that count piped (running it uninstalls). Filed on ONEUP-0335, outside the amendment: `Retrieving: x.rpm [done]` (the suite's download-only mock) parses as a second package, edition `…x86_64`, left `downloading`. Resolved clean: §4.12 does not tie `downloaded` to `Preloading:`; *the detail line* is `run._show_detail`'s text; Spotlight's *Packages* box shows `3 of 12` with no phase word. Own-fix share 1 of 2, a calm cap. Second share: 2 of the run's 3 verified findings lie in 1713f13's text; the third lies on row 7's fix |
