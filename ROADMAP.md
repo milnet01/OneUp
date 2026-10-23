@@ -9857,6 +9857,13 @@ when complete (that document's §7).
   SELinux lsetfilecon). The driver loop in oneup/engine/__main__.py runs
   every selected step regardless, so orphans would have run on a
   half-updated rpm database.
+  Contract gate run 2026-10-23 (review-contract): testing.md §5 item 2
+  converged in 2 loops (a348156, a42a5a5); ONEUP-0054 INV-2 reached the
+  spec cap of 2, calm (c26fb74, da49809). The fix may be built. INV-2 names
+  the test legs it owes: a needs-rebooting 102 leg asserting REBOOT|no, no
+  SERVICES and DONE|errors, and a window-suite scenario with an earlier
+  repo-slow hint. Open for the user: what INSTALLED's sys_changed says
+  after a part-updated run (it decides the rollback button).
   **Layman:** After the system update broke half-way, OneUp went on to Flatpak and would have removed leftover packages.
   Kind: fix.
   Source: real-update-test-2026-10-23.
