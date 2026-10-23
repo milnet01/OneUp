@@ -590,6 +590,30 @@ def main() -> int:
     run.handle_line(wP, "@@PROGRESS@@|system|8|141|install")
     check("further packages in the same phase are not re-announced",
           wP._last_announcement == "")
+
+    # ONEUP-0239 INV-20 (ONEUP-0336): each Flatpak pass is worded as its own, never as
+    # installing; one announcement per pass; the bars stay busy and Stop stays usable.
+    wF = window.Updater()
+    run._reset_for_run(wF, ["flatpak"], check=False)
+    _spoken = []
+    _orig_announce = wF._announce
+    wF._announce = lambda text, *a, **kw: (_spoken.append(text), _orig_announce(text, *a, **kw))
+    run.handle_line(wF, "@@STEP_BEGIN@@|flatpak|1|1")
+    _spoken.clear()   # the step's own start is announced already, by STEP_BEGIN
+    for _marker, _part in (("0|0|user", "Updating your apps"),
+                           ("3|12|user", "Updating your apps: 3 of 12"),
+                           ("4|12|user", "Updating your apps: 4 of 12"),
+                           ("3|20|system", "Updating system apps: 3 of 20"),
+                           ("0|0|unused", "Removing unused runtimes")):
+        run.handle_line(wF, f"@@PROGRESS@@|flatpak|{_marker}")
+        check(f"INV-20 PROGRESS|flatpak|{_marker} reads {_part!r} ({wF.status.text()!r})",
+              wF.status.text() == f"Flatpak apps · {_part}")
+        check(f"INV-20 after {_marker} both bars are busy and Stop is usable",
+              wF.rows["flatpak"].progress.maximum() == 0 and wF.bar.maximum() == 0
+              and wF.stop_btn.isEnabled())
+    check(f"INV-20 one announcement per pass ({_spoken})",
+          _spoken == ["Updating your Flatpak apps.", "Updating system Flatpak apps.",
+                           "Removing unused Flatpak runtimes."])
     # Same splice-safety contract as STEP_BEGIN: merged stdout/stderr can cut a marker.
     for bad in ("@@PROGRESS@@|system",
                 "@@PROGRESS@@|system|x|141|download",

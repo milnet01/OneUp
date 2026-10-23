@@ -37,6 +37,7 @@ def run(
     stream: bool = False,
     deadline: float | None = None,
     no_input: bool = False,
+    on_line: Callable[[str], None] | None = None,
 ) -> tuple[int, str]:
     """Run `argv`; return its exit status and its captured stdout.
 
@@ -66,14 +67,19 @@ def run(
     which is the ONEUP-0042 failure `tee -a -p` exists to prevent, reappearing on
     the streaming path. Pumping keeps the console pipe in this process, where
     `_Mirror` already survives it breaking.
+
+    `on_line` is handed each streamed line after it is relayed, so a caller can turn
+    a tool's own progress into markers (ONEUP-0336). Unbounded streaming only.
     """
+    if on_line is not None and (not stream or deadline is not None):
+        raise ValueError("on_line needs stream and no deadline")
     overlay = {**os.environ, **env} if env else None
     stdin = subprocess.DEVNULL if no_input else None
     if deadline is not None:
         return _run_bounded(argv, deadline, merge_stderr=merge_stderr,
                             env=overlay, stream=stream, stdin=stdin)
     if stream:
-        return _pump(argv, env=overlay, stdin=stdin), ""
+        return _pump(argv, env=overlay, stdin=stdin, on_line=on_line), ""
 
     completed = subprocess.run(  # noqa: S603 — fixed argv list, no shell; the caller
         # builds every element, and nothing here is interpolated from engine or user text.
@@ -116,7 +122,8 @@ def run_apart(argv: Sequence[str], *,
 
 
 def _pump(argv: Sequence[str], *, env: Mapping[str, str] | None,
-          stdin: int | None = None) -> int:
+          stdin: int | None = None,
+          on_line: Callable[[str], None] | None = None) -> int:
     """Run `argv`, relaying each line through `sys.stdout` as it arrives.
 
     `print` here is the point: `sys.stdout` is the log mirror, so the line reaches
@@ -135,7 +142,10 @@ def _pump(argv: Sequence[str], *, env: Mapping[str, str] | None,
     )
     if child.stdout is not None:
         for raw in child.stdout:
-            print(raw.rstrip("\n"), flush=True)
+            line = raw.rstrip("\n")
+            print(line, flush=True)
+            if on_line is not None:
+                on_line(line)
     return child.wait()
 
 

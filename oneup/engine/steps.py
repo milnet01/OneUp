@@ -22,6 +22,7 @@ import re
 import shutil
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
@@ -209,6 +210,25 @@ def system_updates(sizes: bool) -> SystemListing:
     return SystemListing(rc, True, len(updates), rows, skipped)
 
 
+def _flatpak_pass(phase: str) -> Callable[[str], None]:
+    """Name a Flatpak pass now, and return the reader that sends its count.
+
+    `phase` is `user` or `system` (ONEUP-0239 §4.1.4). The pass opens with a count
+    of 0 of 0, before Flatpak prints anything; then each new count Flatpak prints is
+    sent once, though Flatpak repeats it at every percentage step.
+    """
+    markers.marker("PROGRESS", "flatpak", 0, 0, phase)
+    last: tuple[int, int] | None = None
+
+    def read(line: str) -> None:
+        nonlocal last
+        count = parsers.flatpak_count(line)
+        if count is not None and count != last:
+            last = count
+            markers.marker("PROGRESS", "flatpak", count[0], count[1], phase)
+    return read
+
+
 def run_flatpak() -> None:
     """Update Flatpak apps in both scopes, then drop unused runtimes."""
     global FLATPAK_UPDATED
@@ -226,11 +246,13 @@ def run_flatpak() -> None:
     for row in rows:
         markers.marker("PKG", "flatpak", "queued", row.app, row.version, 0, "", row.remote)
     succeeded = set()
-    if proc.run(["flatpak", "update", "--user", "-y"], stream=True)[0] == 0:
+    if proc.run(["flatpak", "update", "--user", "-y"], stream=True,
+                on_line=_flatpak_pass("user"))[0] == 0:
         succeeded.add("--user")
     else:
         ok = False
-    if privilege.root("flatpak-system-update", stream=True)[0] == 0:
+    if privilege.root("flatpak-system-update", stream=True,
+                      on_line=_flatpak_pass("system"))[0] == 0:
         succeeded.add("--system")
     else:
         ok = False
@@ -240,6 +262,8 @@ def run_flatpak() -> None:
         if row.scopes <= succeeded:
             markers.marker("PKG", "flatpak", "installed", row.app, row.version)
     markers.out("Cleaning up unused Flatpak runtimes...")
+    # Named, but never counted: the window says only that runtimes are being removed.
+    markers.marker("PROGRESS", "flatpak", 0, 0, "unused")
     proc.run(["flatpak", "uninstall", "--user", "--unused", "-y"], stream=True)
     privilege.root("flatpak-system-unused", stream=True)
     if not ok:

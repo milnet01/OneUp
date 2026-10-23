@@ -3236,6 +3236,30 @@ out=$(run_engine "$d" --steps=flatpak)
 check "flatpak reports updated count" "@@STEP_END@@|flatpak|ok|installed|3" "$out"
 rm -rf "$d"
 
+# ONEUP-0239 INV-19 (ONEUP-0336): each Flatpak pass is named, with one marker per count.
+# Flatpak repeats "Updating n/m…" at each percentage step (measured in the 2026-10-23
+# run log); a repeat sends nothing, and the unused pass sends no count at all.
+echo "TEST: the Flatpak step names each pass and its count (ONEUP-0336)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/flatpak" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *remotes*)                      printf 'flathub\t\n'; exit 0 ;;
+  *remote-ls*--updates*--user*)   printf 'org.x.App\n'; exit 0 ;;
+  *remote-ls*--updates*--system*) printf 'org.z.App\n'; exit 0 ;;
+  *update*--user*)   printf 'Updating 1/2…\nUpdating 1/2… ▍   2%%  322 bytes/s\nUpdating 2/2…\n'; exit 0 ;;
+  *update*--system*) printf 'Updating 1/1…\n'; exit 0 ;;
+  *uninstall*)       printf 'Uninstalling 1/1…\n'; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/flatpak"
+out=$(run_engine "$d" --steps=flatpak)
+check_eq "the passes and counts arrive in order, once each" \
+         "0|0|user 1|2|user 2|2|user 0|0|system 1|1|system 0|0|unused" \
+         "$(grep -F '@@PROGRESS@@|flatpak|' <<<"$out" | sed 's/^@@PROGRESS@@|flatpak|//' | xargs)"
+rm -rf "$d"
+
 # ONEUP-0259 INV-12: an app is installed only when the update of EVERY scope that
 # listed it succeeded. One app in each scope, one in both; the system update fails.
 echo "TEST: a flatpak app is installed only when every scope that listed it updated"

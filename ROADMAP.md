@@ -10008,7 +10008,7 @@ when complete (that document's §7).
   Kind: fix.
   Source: real-update-test-2026-10-23.
 
-- 📋 [ONEUP-0336] **The Flatpak step does not say which pass it is on, or whether it is downloading or installing.**
+- ✅ [ONEUP-0336] **The Flatpak step does not say which pass it is on, or whether it is downloading or installing.**
   steps.run_flatpak runs `flatpak update --user` then the system pass
   as root; nothing tells the window which, or the phase.
   User decision 2026-10-23: open the frozen marker contract for this (a
@@ -10024,6 +10024,12 @@ when complete (that document's §7).
   marker. Measured: both routes split a carriage return as a line end;
   flatpak under LC_ALL=C still prints the UTF-8 ellipsis. Ready to
   build.
+  Shipped 2026-10-23 on v2, built to ONEUP-0239 §4.1.4 (Reviewed at
+  ca886f7). The engine sends PROGRESS|flatpak|n|m|user/system and
+  0|0|unused (steps._flatpak_pass, parsers.flatpak_count; proc.run,
+  privilege.sudo/root/_service_root gain on_line); the window words each
+  pass (run._flatpak_part, run._phase_announcement). v2 only: main's 1.4
+  engine and window are frozen, and this is not a 1.4.x bug fix.
   **Layman:** Flatpak updates run twice (your apps, then system apps) but the window only says 'Updating Flatpak apps'.
   Kind: ux.
   Source: real-update-test-2026-10-23.

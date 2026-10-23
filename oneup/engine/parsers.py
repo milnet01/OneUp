@@ -154,6 +154,21 @@ def install_fraction(line: str) -> str:
     return line.partition("(")[2].partition(")")[0]
 
 
+# Flatpak's own count, `Updating 3/12…`: one word, then the count and an ellipsis.
+# The word is not read, so a translated Flatpak still counts (ONEUP-0239 §4.1.4).
+_FLATPAK_COUNT = re.compile(r"^\S+ ([0-9]+)/([0-9]+)\u2026")
+
+
+def flatpak_count(line: str) -> tuple[int, int] | None:
+    """The update Flatpak has started and how many there are, or None.
+
+    Flatpak prints the line as each update starts and again at each percentage
+    step, so the same count arrives many times; the caller sends each once.
+    """
+    found = _FLATPAK_COUNT.match(line)
+    return (int(found.group(1)), int(found.group(2))) if found else None
+
+
 # --- `zypper lr -u` output ---------------------------------------------------
 
 

@@ -26,7 +26,7 @@ import signal
 import subprocess
 import sys
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from . import markers, proc
 
@@ -320,20 +320,23 @@ def _start_keepalive() -> None:
 
 
 def sudo(argv: Sequence[str], *, flags: Sequence[str] = (), merge_stderr: bool = False,
-         stream: bool = False) -> tuple[int, str]:
+         stream: bool = False,
+         on_line: Callable[[str], None] | None = None) -> tuple[int, str]:
     """Run `argv` as root and return its status and output.
 
     The single sudo parent for the whole run. `flags` carries sudo's own options
     (`-k`, `-n`, `-A`); everything after them is the command. With `stream` the
     child writes to our own stdout and stderr rather than being captured — see
-    `proc.run`.
+    `proc.run`, which also says what `on_line` is.
     """
     install_environment()
-    return proc.run(["sudo", *flags, *argv], merge_stderr=merge_stderr, stream=stream)
+    return proc.run(["sudo", *flags, *argv], merge_stderr=merge_stderr, stream=stream,
+                    on_line=on_line)
 
 
 def root(op: str, args: dict[str, object] | None = None, *, flags: Sequence[str] = (),
-         merge_stderr: bool = False, stream: bool = False) -> tuple[int, str]:
+         merge_stderr: bool = False, stream: bool = False,
+         on_line: Callable[[str], None] | None = None) -> tuple[int, str]:
     """Run one operation from `rootops`' table as root, and return what `sudo()` does.
 
     Both routes' entry to the table (ONEUP-0249 §4.2): the argv is built there,
@@ -344,13 +347,15 @@ def root(op: str, args: dict[str, object] | None = None, *, flags: Sequence[str]
     """
     from . import rootops, route  # deferred: rootops reads this module's argvs
     if chosen_route() == route.SERVICE:
-        return _service_root(op, args, merge_stderr=merge_stderr, stream=stream)
+        return _service_root(op, args, merge_stderr=merge_stderr, stream=stream,
+                             on_line=on_line)
     try:
         argv = rootops.build(op, args)
     except rootops.Invalid as exc:
         markers.err(f"  Refusing root operation {op}: {exc}")
         return 1, ""
-    return sudo(argv, flags=flags, merge_stderr=merge_stderr, stream=stream)
+    return sudo(argv, flags=flags, merge_stderr=merge_stderr, stream=stream,
+                on_line=on_line)
 
 
 def _service_session() -> bool:
@@ -377,19 +382,23 @@ def _service_job(op: str, args: dict[str, object] | None, *, merge_stderr: bool)
 
 
 def _service_root(op: str, args: dict[str, object] | None, *, merge_stderr: bool,
-                  stream: bool) -> tuple[int, str]:
+                  stream: bool,
+                  on_line: Callable[[str], None] | None = None) -> tuple[int, str]:
     """`root()` on the service route: the same status and output, from the service's job.
 
     A streamed call merges stderr, as `proc.run`'s pump does on the sudo route.
     """
     if not _service_session():
-        return root(op, args, merge_stderr=merge_stderr, stream=stream)
+        return root(op, args, merge_stderr=merge_stderr, stream=stream, on_line=on_line)
     job = _service_job(op, args, merge_stderr=merge_stderr or stream)
     if job is None:
         return 1, ""
     if stream:
-        for line in job.lines():
-            print(line.rstrip("\n"), flush=True)   # through the log mirror, as `_pump`
+        for raw in job.lines():
+            line = raw.rstrip("\n")
+            print(line, flush=True)   # through the log mirror, as `_pump`
+            if on_line is not None:
+                on_line(line)
         return job.wait(), ""
     text = job.read()
     return job.wait(), text

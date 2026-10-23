@@ -203,6 +203,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The Flatpak step does not say which pass it is on, or whether it is downloading or installing.** (ONEUP-0336)
+  The status line now names the pass and how far through it is: "Updating your apps: 3 of 12", then "Updating system apps: 3 of 20", then "Removing unused runtimes". Flatpak reports downloading and installing as one, so the window says "updating".
+
 - **The window's package counts and sizes disagree with zypper during a parallel download.** (ONEUP-0335)
   A total like 1.75 GiB no longer reads as 1.7 GiB. A package that has finished downloading and waits to install now counts as "to go", so "now" holds only what is downloading.
 

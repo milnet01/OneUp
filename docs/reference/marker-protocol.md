@@ -95,7 +95,7 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@STEP_BEGIN@@` | `key\|index\|total` | `begin_step` | `handle_marker` |
 | `@@STEP_END@@` | `key\|status\|code[\|count]` | `end_step` | `handle_marker` |
 | `@@TIMING@@` | `key\|seconds` | `end_step` | `handle_marker` |
-| `@@PROGRESS@@` | `key\|done\|total\|phase[\|bytes\|bytes_total]` | `emit_progress`, fed by `stream_filtered` (`progress_filter` in the Bash fallback) | `handle_marker` |
+| `@@PROGRESS@@` | `key\|done\|total\|phase[\|bytes\|bytes_total]` | `emit_progress`, fed by `stream_filtered` (`progress_filter` in the Bash fallback); `run_flatpak` and its `_flatpak_pass` | `handle_marker` |
 | `@@REFRESH@@` | `done\|total\|alias` | `refresh_repos` | `handle_marker` |
 | `@@SNAPSHOT@@` | `id` | the pre-update snapshot block | `handle_marker` |
 | `@@SNAPSHOT_ITEM@@` | `id\|date\|description` | the same block, once per restore point | `handle_marker` |
@@ -166,8 +166,14 @@ step-end layout never had to grow a timing field.
 
 The marker that stops a working download looking like a hang (ONEUP-0040/0048).
 
-- **`phase` is `download` or `install`.** The window announces a *change* of phase to a
+- **`phase` is `download` or `install`**, except for the `flatpak` key below. The window announces a *change* of phase to a
   screen reader, never each package — announcing all 141 would bury everything else.
+- **For the `flatpak` key, `phase` is `user`, `system` or `unused`** (ONEUP-0336): which
+  of the Flatpak step's three passes is running. Each pass opens with `done` and `total`
+  of 0. In the `user` and `system` passes, `done` is then the update Flatpak has started,
+  read from its `Updating 3/12…` line; the `unused` pass sends only its opening marker.
+  These phases carry no byte fields. `docs/specs/ONEUP-0239-fixed-layouts.md` §4.1.4 holds
+  the design.
 - **`total` of 0 means "unknown", and must be rendered as a running tally** —
   "Downloading packages — 37 so far" — never as an invented denominator. Zypper's parallel
   prefetch (`Preloading:`) reports no counter at all.
@@ -402,6 +408,11 @@ for the rest of 2.0.**
 and two trailing fields on `CHECK_ITEM` (§4.6), so the window can show each package's size
 and source, and its progress during a run. It landed as one change touching every file §5
 lists, plus this document. Nothing else was opened: the contract is frozen again.
+
+**The third exception, approved by the user on 2026-10-23:** ONEUP-0336 added three
+`PROGRESS` phases for the `flatpak` key (§4.3), so the window can say which Flatpak pass is
+running. It landed as one change touching every file §5 lists, plus this document. Nothing
+else was opened: the contract is frozen again.
 
 Never a rewrite and a contract change at once. In the same step, a failing test cannot tell
 you which one broke it.

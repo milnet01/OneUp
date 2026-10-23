@@ -619,6 +619,9 @@ def _phase_count(win) -> str:
     total is not known, as zypper's preload phase reports none (marker-protocol.md
     §4.3)."""
     n, total = win._progress_count
+    flatpak = _flatpak_part(win._progress_phase, n, total)
+    if flatpak:
+        return flatpak
     downloading = win._progress_phase == "download"
     if total:
         text = (QCoreApplication.translate("run", "Downloading {n} of {total}") if downloading
@@ -628,6 +631,36 @@ def _phase_count(win) -> str:
                 if downloading else
                 QCoreApplication.translate("run", "Installing packages — {n} so far"))
     return text.format(n=n, total=total)
+
+
+def _flatpak_part(phase: str, n: int, total: int) -> str:
+    """The Flatpak step's pass and its count — "Updating your apps: 3 of 12" — or ""
+    for a phase that is not one of its passes (ONEUP-0239 §4.1.4). Flatpak prints no
+    download/install split, so these never say either."""
+    if phase == "user":
+        text = (QCoreApplication.translate("run", "Updating your apps: {n} of {total}")
+                if total else QCoreApplication.translate("run", "Updating your apps"))
+    elif phase == "system":
+        text = (QCoreApplication.translate("run", "Updating system apps: {n} of {total}")
+                if total else QCoreApplication.translate("run", "Updating system apps"))
+    elif phase == "unused":
+        text = QCoreApplication.translate("run", "Removing unused runtimes")
+    else:
+        return ""
+    return text.format(n=n, total=total)
+
+
+def _phase_announcement(phase: str) -> str:
+    """What a screen reader hears when the phase changes, once per phase."""
+    if phase == "user":
+        return QCoreApplication.translate("run", "Updating your Flatpak apps.")
+    if phase == "system":
+        return QCoreApplication.translate("run", "Updating system Flatpak apps.")
+    if phase == "unused":
+        return QCoreApplication.translate("run", "Removing unused Flatpak runtimes.")
+    if phase == "download":
+        return QCoreApplication.translate("run", "Downloading packages.")
+    return QCoreApplication.translate("run", "Installing packages.")
 
 
 def _byte_figure(win) -> str:
@@ -915,7 +948,10 @@ def handle_marker(win, line: str):
         # total 0 = zypper's preload phase, which reports no denominator. Show the
         # honest running tally rather than inventing one. Whole sentences per phase,
         # never a verb dropped into a frame (wording-and-translation.md §6.2).
-        if total:
+        flatpak = _flatpak_part(phase, n, total)
+        if flatpak:
+            detail = flatpak
+        elif total:
             detail = (QCoreApplication.translate("run", "Downloading {n} of {total} packages")
                       if downloading else
                       QCoreApplication.translate("run", "Installing {n} of {total} packages"))
@@ -923,7 +959,8 @@ def handle_marker(win, line: str):
             detail = (QCoreApplication.translate("run", "Downloading packages — {n} so far")
                       if downloading else
                       QCoreApplication.translate("run", "Installing packages — {n} so far"))
-        detail = detail.format(n=n, total=total)
+        if not flatpak:
+            detail = detail.format(n=n, total=total)
         _show_detail(win, detail)
         # Spoken once per phase, not per package: a screen reader announcing all
         # 141 packages would bury everything else, but silence through the run's
@@ -951,15 +988,14 @@ def handle_marker(win, line: str):
         _tick_activity(win, reweigh=False)
         _show_status(win)
         # The step's two halves (ONEUP-0239 §4.1.1), after the byte figure is current.
+        # A Flatpak pass is neither half, so it leaves the bars busy (§4.1.4).
         if downloading:
             step_progress.download(win, key, win._dl_got, win._dl_total, n, total)
         elif phase == "install":
             step_progress.install(win, key, n, total,
                                   has_bytes=len(parts) > 4 and parts[4].isdecimal())
         if announce:
-            win._announce(QCoreApplication.translate("run", "Downloading packages.")
-                          if downloading else
-                          QCoreApplication.translate("run", "Installing packages."))
+            win._announce(_phase_announcement(phase))
     elif tag == "REFRESH":
         # Which source is being fetched, and how far through the list (ONEUP-0048).
         # This phase used to be a blank several minutes: zypper reports it as dots
