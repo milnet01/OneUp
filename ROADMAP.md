@@ -9859,6 +9859,13 @@ when complete (that document's §7).
   the engine's --check reads run.state and, while a live run holds it,
   takes the at-least fallback without asking the service. Do not
   re-review to rediscover this; fold it in directly.
+  2026-10-23: review-contract loop 3 (continued run, one loop, on baa6d7e) — af8254a. Fixed: INV-12's test now reads the service's own
+  `session opened` / `session refused` audit lines; §8 points ONEUP-0249 §4.4 item 4 at the check's flags. Surfaced to the user, not fixed: (1) a run
+  started during a check's dry run meets `repos.lock_holder` before any root operation unless PackageKit is active, so it stops as "busy" instead of
+  §4.7's wait — against §4.2 step 0's last sentence and §6; (2) zypper 1.14.101's binary carries a `<to-change-vendor>` element §4.3's table lacks,
+  so a vendor-changing snapshot (the 23 October one had 3) takes the fallback. Filed here, out of the gated change's radius: INV-4's "count 8, rows 7"
+  half sits in tests/parsers-test.py, but §4.3 has `system_changes`, which needs a service session, build the count and rows — the test needs a pure
+  helper or a run-tests.sh scenario.
   **Layman:** Check said 524 updates; the real update changed 927 packages.
   Kind: fix.
   Source: real-update-test-2026-10-23.
