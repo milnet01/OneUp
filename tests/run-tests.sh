@@ -497,6 +497,84 @@ check "the conflict hint is given" "@@HINT@@|A package conflict" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: a commit that fails after rpm changed packages stops the run and says so (ONEUP-0330/0331/0332)"
+# A real run's shape (2026-10-23): rpm installed 318 packages, then failed on one
+# with an SELinux label error and zypper aborted. The run went on to Flatpak and would
+# have removed leftover packages from a half-updated system; the hint blamed a package
+# conflict because every commit prints "Checking for file conflicts".
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)        exit 0 ;;
+  *download-only*)  echo "Preloading: alpha-2.0-1.1.x86_64.rpm [done]"; exit 0 ;;
+  *dup*|*update*)
+    echo "Checking for file conflicts: [....................done]"
+    echo "(1/3) Installing: alpha-2.0-1.1.x86_64 [...done]"
+    echo "(2/3) Installing: systemd-experimental-261.4-1.1.x86_64 [.."
+    echo "error: unpacking of archive failed on file /usr/lib/systemd/systemd-report: cpio: (error 0x2)"
+    echo "error: systemd-experimental-261.4-1.1.x86_64: install failed"
+    echo "error]"
+    echo "Installation of systemd-experimental-261.4-1.1.x86_64 failed:"
+    echo "Error: Subprocess failed. Error: RPM failed: Command exited with status 1."
+    echo "Abort, retry, ignore? [a/r/i] (a): a"
+    echo "Installation has been aborted as directed."
+    exit 8 ;;
+  # zypper would advise a reboot and name a service; neither may be passed on
+  # (docs/standards/testing.md §5 item 2).
+  *needs-rebooting*) exit 102 ;;
+  *ps\ -sss*|*"ps -sss"*) printf 'sshd\n'; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+printf '#!/usr/bin/env bash\necho "BUG: flatpak ran after a half-finished system update"\nexit 0\n' > "$d/flatpak"
+chmod +x "$d/flatpak"
+out=$(run_engine "$d" --steps=system,flatpak,orphans,cache)
+check        "system step marked fail"                 "@@STEP_END@@|system|fail" "$out"
+check        "the part-updated hint is given"          "@@HINT@@|The update stopped part-way" "$out"
+check        "it names the command to finish with"     "finish it in a terminal with: sudo zypper" "$out"
+check_absent "an rpm failure is not a package conflict" "@@HINT@@|A package conflict" "$out"
+check_absent "no step runs after it (flatpak)"         "@@STEP_BEGIN@@|flatpak" "$out"
+check_absent "no step runs after it (orphans)"         "@@STEP_BEGIN@@|orphans" "$out"
+check_absent "no step runs after it (cache)"           "@@STEP_BEGIN@@|cache" "$out"
+check_absent "flatpak was never called"                "BUG: flatpak ran" "$out"
+check        "no reboot, whatever needs-rebooting says" "@@REBOOT@@|no" "$out"
+check_absent "no service restart is offered"           "@@SERVICES@@" "$out"
+check        "the run ends in errors"                  "@@DONE@@|errors" "$out"
+check        "the terminal summary says so"            "only partly updated" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+echo "TEST: a commit that fails before rpm changed anything gets the install hint, and the run goes on (ONEUP-0332)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)        exit 0 ;;
+  *download-only*)  echo "Preloading: alpha-2.0-1.1.x86_64.rpm [done]"; exit 0 ;;
+  *dup*|*update*)
+    echo "Checking for file conflicts: [....................done]"
+    echo "(1/1) Installing: alpha-2.0-1.1.x86_64 [.."
+    echo "error: alpha-2.0-1.1.x86_64: install failed"
+    echo "error]"
+    echo "Installation of alpha-2.0-1.1.x86_64 failed:"
+    echo "Error: Subprocess failed. Error: RPM failed: Command exited with status 1."
+    echo "Installation has been aborted as directed."
+    exit 8 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system,flatpak)
+check        "system step marked fail"                 "@@STEP_END@@|system|fail" "$out"
+check        "the install hint names the package"      "@@HINT@@|The package alpha-2.0-1.1.x86_64 could not be installed" "$out"
+check_absent "it is not a package conflict"            "@@HINT@@|A package conflict" "$out"
+check_absent "nothing changed, so not part-updated"    "@@HINT@@|The update stopped part-way" "$out"
+check        "the next step still runs"                "@@STEP_BEGIN@@|flatpak" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: package-only change offers a SERVICE restart, not a reboot"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'

@@ -88,6 +88,9 @@ STOP_POLL_SECONDS="${ONEUP_STOP_POLL_SECONDS:-2}"  # how often the download pass
 SYS_STOPPED=false     # set when the user stopped during/after the download pass, which is
                       # a SKIP rather than a failure — nothing was installed.
 SYS_DL_RC=0           # the download pass's exit status; 143 (128+SIGTERM) means stopped.
+SYS_PARTIAL=false     # the commit failed AFTER rpm changed a package: the system is
+                      # part-updated, so no later step runs and no reboot or service
+                      # restart is advised (docs/standards/testing.md §5 item 2, ONEUP-0330).
 declare -a SYS_TXN=() # the transaction argv, built once by system_txn_argv (INV-5).
 REPOS_DIR="${ONEUP_REPOS_DIR:-/etc/zypp/repos.d}"  # where repository definitions are read
                       # from. Overridable so the suite never reads — or depends on — the
@@ -1572,6 +1575,22 @@ run_system_commit() {
         echo "  zypper updated itself — running the update again for the rest."
     done
     (( rc == 0 )) || ok=false
+    if ! $ok && rpm_changed "$SYS_LOG"; then SYS_PARTIAL=true; fi
+}
+
+# Did rpm finish installing, upgrading or removing at least one package in this log?
+# A package's own script can split its action line before the "done]", so a cut action
+# is held until the next line ending in "done]"; the next action drops it, because one
+# rpm abandoned never completed (ONEUP-0330).
+rpm_changed() {   # transaction-log path
+    awk '
+        /^\( *[0-9]+\/[0-9]+\) (Installing|Upgrading|Removing): / {
+            if ($0 ~ /done\][[:space:]]*$/) { found = 1; exit }
+            held = (index($0, "]") == 0); next
+        }
+        held && /done\][[:space:]]*$/ { found = 1; exit }
+        END { exit !found }
+    ' "$1"
 }
 
 # Build a copy of REPOS_DIR whose openSUSE baseurls point at the content CDN, and echo its
@@ -1710,7 +1729,9 @@ if step_selected system && ! stop_pending; then
     # probing again would be pointless and would mask a genuinely different error)
     # and the failure actually looks repo-scoped (disk-full/conflict are not).
     systemic_repo_fail=false
-    if ! $ok && (( ${#SKIP_REPOS[@]} == 0 )) && repo_scoped_failure; then
+    # Never on a part-updated system: the probe's remedy is to run the transaction again,
+    # on top of one rpm abandoned half-way (ONEUP-0330).
+    if ! $ok && ! $SYS_PARTIAL && (( ${#SKIP_REPOS[@]} == 0 )) && repo_scoped_failure; then
         find_failing_repos                    # fills FAILING_REPOS[] in THIS shell
         failing=("${FAILING_REPOS[@]}")
         if (( ${#failing[@]} > MAX_SKIP_REPOS )); then
@@ -1826,10 +1847,27 @@ if step_selected system && ! stop_pending; then
             fi
         elif grep -qiE 'Timeout|could not resolve|connection failed|Curl error|Download.*failed|Temporary failure' "$SYS_LOG"; then
             hint="A download failed — check your internet connection, then retry."
+        elif ! $SYS_PARTIAL \
+             && failed_pkg=$(grep -oE '^Installation of [^ ]+ failed' "$SYS_LOG" | head -1 | awk '{print $3}') \
+             && [[ -n "$failed_pkg" ]]; then
+            # rpm refused one package before it had changed any: nothing is installed, so
+            # this is not the part-updated case below and the run goes on (ONEUP-0332).
+            hint="The package $failed_pkg could not be installed, so nothing was changed. The log has the reason; run the update again, and if it fails the same way, check the log before trying anything else."
         # zypper's solver words a conflict several ways; a real run (2026-09-22) said only
-        # "Problem: 1: … cannot be provided" and got no hint at all (ONEUP-0227).
-        elif grep -qiE 'conflict|nothing provides|not installable|cannot be provided|^Problem: [0-9]|does not belong to a distupgrade repository' "$SYS_LOG"; then
+        # "Problem: 1: … cannot be provided" and got no hint at all (ONEUP-0227). Every
+        # commit prints "Checking for file conflicts", which says nothing (ONEUP-0332).
+        elif grep -v '^Checking for file conflicts:' "$SYS_LOG" \
+             | grep -qiE 'conflict|nothing provides|not installable|cannot be provided|^Problem: [0-9]|does not belong to a distupgrade repository'; then
             hint="A package conflict — often a third-party repo. Check the log; you may need to disable a conflicting repository."
+        fi
+        if $SYS_PARTIAL; then
+            # Sent before the cause's hint, and the window puts it ahead of every hint: it
+            # is what the user must act on first, whatever the cause (ONEUP-0331).
+            finish_cmd="sudo zypper dup"
+            [[ " ${SYS_TXN[*]} " == *" update "* ]] && finish_cmd="sudo zypper update"
+            partial_hint="The update stopped part-way, so your system is only partly updated. Do not restart yet. Run the update again; if it fails again, finish it in a terminal with: $finish_cmd"
+            echo "  Hint: $partial_hint"
+            marker HINT "$partial_hint"
         fi
         if [[ -n "$hint" ]]; then
             echo "  Hint: $hint"
@@ -1851,7 +1889,7 @@ fi
 # ---------------------------------------------------------------------------
 # Step: Flatpak (user scope needs no root; system scope reuses cached sudo)
 # ---------------------------------------------------------------------------
-if step_selected flatpak && ! stop_pending; then
+if step_selected flatpak && ! stop_pending && ! $SYS_PARTIAL; then
     begin_step flatpak
     if command -v flatpak &>/dev/null; then
         ok=true
@@ -1883,7 +1921,7 @@ fi
 # ---------------------------------------------------------------------------
 # Step: firmware (fwupd elevates via polkit on its own)
 # ---------------------------------------------------------------------------
-if step_selected firmware && ! stop_pending; then
+if step_selected firmware && ! stop_pending && ! $SYS_PARTIAL; then
     begin_step firmware
     if command -v fwupdmgr &>/dev/null; then
         # Every fwupdmgr call gets </dev/null: with a keyboard it may stop to ask a
@@ -1930,7 +1968,7 @@ fi
 #     REPORTED, never auto-removed: they are often software you installed by hand.
 #   * The pre-update snapshot makes even the autoremove reversible.
 # ---------------------------------------------------------------------------
-if step_selected orphans && ! stop_pending; then
+if step_selected orphans && ! stop_pending && ! $SYS_PARTIAL; then
     begin_step orphans
     # zypper auto-refreshes any stale repository before it will answer a `packages`
     # query, so with the system step deselected that fetch happens inside the
@@ -1983,7 +2021,7 @@ fi
 # ---------------------------------------------------------------------------
 # Step: clean the zypper package cache
 # ---------------------------------------------------------------------------
-if step_selected cache && ! stop_pending; then
+if step_selected cache && ! stop_pending && ! $SYS_PARTIAL; then
     begin_step cache
     # A system step that failed almost always failed PART-WAY THROUGH THE DOWNLOAD,
     # which means the cache now holds most of what the retry needs. Clearing it turns
@@ -2037,7 +2075,9 @@ fi
 # ---------------------------------------------------------------------------
 REBOOT="no"
 REBOOT_REASON=""
-if command -v zypper &>/dev/null; then
+# A part-updated system advises neither a reboot nor a service restart, whatever
+# needs-rebooting says: both are what the part-updated hint warns against (ONEUP-0330).
+if command -v zypper &>/dev/null && ! $SYS_PARTIAL; then
     # Read-only check; runs without root. zypper exits EXACTLY 102 when a reboot
     # is advised (core libraries or the kernel changed), 0 when it is not. Any
     # OTHER non-zero code means the check itself failed (e.g. the lock was held) —
@@ -2069,7 +2109,7 @@ marker REBOOT "$REBOOT${REBOOT_REASON:+|$REBOOT_REASON}"
 # these lets the user pick up the new libraries without rebooting.
 # ---------------------------------------------------------------------------
 SERVICES=""
-if $SYS_CHANGED && [[ "$REBOOT" == "no" ]] && command -v zypper &>/dev/null; then
+if $SYS_CHANGED && [[ "$REBOOT" == "no" ]] && ! $SYS_PARTIAL && command -v zypper &>/dev/null; then
     sudo_capture SERVICES_RAW zypper ps -sss
     ps_rc=$?
     # zypper's reason goes to stderr, which sudo_capture discards, so a failed check
@@ -2122,7 +2162,9 @@ for key in "${RUN_KEYS[@]}"; do
 done
 echo "------------------------------------------"
 # Whether anything was actually installed (drives the reboot advice).
-if step_selected system; then
+if $SYS_PARTIAL; then
+    echo "  Updates installed: the system is only partly updated — do not restart yet; run the update again."
+elif step_selected system; then
     if [[ "$SYS_COUNT" == "0" ]]; then
         echo "  Updates installed: none — system was already up to date."
     elif [[ -n "$SYS_COUNT" && "$SYS_COUNT" != "0" ]]; then

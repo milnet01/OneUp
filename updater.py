@@ -131,6 +131,9 @@ def _find_engine() -> Path:
 
 
 ENGINE = _find_engine()
+
+# The opening of the engine's hint after a system update failed part-way (ONEUP-0331).
+_PART_UPDATED_HINT = "The update stopped part-way, so your system is only partly updated."
 STATE_DIR = Path.home() / ".local" / "state" / "oneup"
 HISTORY = STATE_DIR / "history.json"
 LOG_DIR = STATE_DIR / "logs"
@@ -3481,7 +3484,9 @@ for (var i = 0; i < wins.length; i++) {{
             self.bar.setRange(0, self._total)
             self.bar.setValue(0)
             self.bar.setFormat("Starting…")
-            self.status.setText("Authenticating… (approve the password popup)")
+            # With Passwordless on, sudo never prompts, so no popup comes (ONEUP-0333).
+            self.status.setText("Starting the update…" if self.auth_btn.isChecked()
+                                else "Authenticating… (approve the password popup)")
         self.set_controls_enabled(False)
 
         args = self._engine_args(steps, check, import_keys, skip_repos)
@@ -3828,7 +3833,12 @@ for (var i = 0; i < wins.length; i++) {{
         elif tag == "SERVICES":
             self._services = rest.strip()
         elif tag == "HINT":
-            self._hints.append(rest.strip())
+            # A part-updated system's warning goes first, ahead of any hint sent earlier
+            # in the run: the banner shows only the first (testing.md §5 item 2). On 1.x a
+            # hint is its sentence, so the sentence's opening is what identifies it.
+            hint = rest.strip()
+            at = 0 if hint.startswith(_PART_UPDATED_HINT) else len(self._hints)
+            self._hints.insert(at, hint)
         elif tag == "REPO_SKIPPED":
             # A source was set aside for this run (disabled, upgrade ran, will be
             # re-enabled by the engine on exit — see --skip-repo/--auto-skip-repos).

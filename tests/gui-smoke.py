@@ -2002,6 +2002,44 @@ def main() -> int:
     finally:
         updater.QProcess.start = _orig_qp_start
 
+    # ONEUP-0333: with Passwordless on no popup ever comes, so the status line must not
+    # ask the user to approve one. Signals blocked: toggling auth_btn for real opens the
+    # passwordless confirmation box.
+    updater.QProcess.start = lambda self, *a, **kw: None   # swallow the real engine launch
+    try:
+        for _passwordless in (True, False):
+            wA = updater.Updater()
+            wA.auth_btn.blockSignals(True)
+            wA.auth_btn.setChecked(_passwordless)
+            wA.auth_btn.blockSignals(False)
+            wA._launch(["system"], check=False)
+            _said = wA.status.text()
+            check(f"ONEUP-0333 passwordless {'on does not ask' if _passwordless else 'off asks'}"
+                  f" for a password popup ({_said!r})",
+                  ("password popup" in _said) != _passwordless)
+    finally:
+        updater.QProcess.start = _orig_qp_start
+
+    # ONEUP-0331: after a half-finished system update the warning that the system is
+    # part-updated leads the summary, even where a hint arrived earlier in the run —
+    # the banner shows only the first (docs/standards/testing.md §5 item 2).
+    wP = updater.Updater()
+    wP.handle_line("@@HINT@@|The 'packman' source is serving updates too slowly to wait "
+                   "for, so OneUp moved on.")
+    wP.handle_line("@@HINT@@|The update stopped part-way, so your system is only partly "
+                   "updated. Do not restart yet.")
+    wP.handle_line("@@DONE@@|errors")
+    wP._failed_steps = ["system"]
+    wP.proc = QProcess(wP)
+    wP.show()
+    wP.on_finished(1, QProcess.ExitStatus.NormalExit)
+    check(f"ONEUP-0331 the part-updated warning leads, ahead of an earlier hint "
+          f"({wP.warn_label.text()!r})", "partly updated" in wP.warn_label.text())
+    wP.hide()
+    # The window finds that hint by its opening, so the engine must send exactly it.
+    check("ONEUP-0331 the engine's part-updated hint opens with the sentence the window "
+          "looks for", updater._PART_UPDATED_HINT in updater.ENGINE.read_text())
+
     # --- Diagnostics bundle for a bug report (ONEUP-0031) ------------------
     _latest, _build = updater._latest_run_log, updater.build_diagnostics
     with tempfile.TemporaryDirectory() as _ld:

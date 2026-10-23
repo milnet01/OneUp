@@ -8,6 +8,15 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A system update that fails part-way ends the run, and says so** (ONEUP-0330, ONEUP-0331)
+  When rpm had already updated some packages and then failed, OneUp went on to Flatpak and would have removed leftover packages from a half-updated system. It now stops there, advises no restart, and its warning says the system is only partly updated: run the update again, or finish it in a terminal with the command it names.
+
+- **An rpm install failure is no longer called a package conflict** (ONEUP-0332)
+  Every update prints "Checking for file conflicts", which made any late failure read as a conflict with a third-party source. When rpm fails before changing anything, the hint now names the package that could not be installed.
+
+- **No "approve the password popup" when Passwordless is on** (ONEUP-0333)
+  With Passwordless on no popup comes, so the status line now says the update is starting.
+
 - **The log says when the list of services to restart could not be checked** (ONEUP-0295)
   Without the lsof package, that check failed in silence. The log now says so and names the package; the RPM recommends lsof so it is installed by default.
 

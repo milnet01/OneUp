@@ -225,7 +225,14 @@ engine logic without re-checking them is how the original bug returns:
 1. **Reboot advice (`@@REBOOT@@|yes`) fires only when something was actually installed, or
    `zypper needs-rebooting` explicitly says so** — never merely because a step errored.
 2. **A failed step is recorded, emits a plain-English `@@HINT@@`, and the run continues**
-   to the next step, so cache cleanup still happens and the summary is still useful.
+   to the next step, so later steps still run and the summary is still useful.
+   **One exception: a system transaction that fails after rpm has changed a package ends
+   the run.** The system is then part-updated, and removing "leftover" packages or flashing
+   firmware on it can do harm the run cannot undo. No later step starts; the summary and
+   `@@DONE@@|errors` still follow. The run advises no reboot and offers no service restart
+   (`@@REBOOT@@|no`, no `@@SERVICES@@`), whatever `zypper needs-rebooting` says and despite
+   item 3. The window leads its summary with the part-updated hint, ahead of any hint sent
+   earlier in the run (ONEUP-0330, ONEUP-0331).
 3. **A package-only change offers a service restart (`@@SERVICES@@`), not a reboot.**
 4. **`--check` is strictly read-only and runs without root** — no `zypper dup`, no
    `zypper update`; the mock exits 99 if either is called.
