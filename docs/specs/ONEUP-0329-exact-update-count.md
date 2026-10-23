@@ -208,8 +208,13 @@ class Change(NamedTuple):
 
 - `count` is the number of changes, every `type="package"` one, whatever its name.
 - `rows` are the changes whose name passes `steps.valid_package`, as today's rows.
-- `skipped` is `SKIPPED_REPO` searched over the messages. Exit 106 keeps the rows and the
-  count, and the caller emits `CHECK_UNKNOWN|system|sources-unreadable|…` as it does today.
+- `skipped` is `SKIPPED_REPO` searched over the messages alone. With `merge_stderr` false
+  the job's stderr goes to the service's journal (`oneup/service/jobs.py`), and merging it
+  would break the XML. Exit 106 keeps the rows and the count. The caller emits
+  `CHECK_UNKNOWN|system|sources-unreadable|…` when a message names the repository, and
+  `sources-unknown-error|106` when none does, `_check_system`'s existing branch.
+- `rc` is 106 when the dry run exited 106, and 0 for every other exit §4.2 accepts.
+  `readable` is true.
 - `exact` is true.
 
 ### 4.4 Sizes and repositories
@@ -274,7 +279,7 @@ up to `CHECK_DRY_RUN_SECONDS`, and a run started meanwhile would fail its first 
 operation with `Busy`.
 
 So `privilege._service_job`, on `Refused` with code `Busy` and reason `a job is running`,
-prints one line — *"Waiting for OneUp's update check to finish…"* — and retries every 2 s
+prints one line — *"Waiting for another OneUp task to finish…"* — and retries every 2 s
 for up to `BUSY_WAIT_SECONDS`:
 
 ```python
@@ -283,9 +288,8 @@ BUSY_WAIT_SECONDS = float(os.environ.get("ONEUP_BUSY_WAIT_SECONDS") or "210")
 
 Its default is `CHECK_DRY_RUN_SECONDS`' plus a margin for the dry run's start-up; a change
 to one changes the other. Past it, the operation fails as
-`Busy` fails today. Any other refusal is unchanged. `run`'s `Busy` while the reason names a
-session cap (`this caller already has a session`, `too many sessions`) is not this case and
-does not wait.
+`Busy` fails today. Any other refusal, `Busy` with reason `the service is stopping`
+included, fails as today.
 
 ### 4.8 Measured before the code relies on it
 
@@ -306,14 +310,16 @@ tests pin.
 ## 5. Correctness invariants
 
 - **INV-1** `--check` invokes `sudo` zero times on either route.
-  *Test:* `tests/run-tests.sh`'s existing sentinel scenario, plus the same assertion on a
-  new service-route `--check` scenario against the fake service.
+  *Test:* `tests/run-tests.sh`'s existing sentinel scenario, plus an in-process scenario
+  that replaces `privilege.sudo_init`, `privilege.root` and `privilege.sudo` with
+  functions that fail it, then runs `steps.system_changes` on the service route against
+  the `tests/service-test.py --serve` fake service.
   *Breaks when:* `system_changes` reaches root through `privilege.root` or `sudo_init`,
   whose `auto` route falls back to sudo on `challenge`.
 
 - **INV-2** The check opens its session with `interactive` false and `import_keys` false,
   even with `ONEUP_NONINTERACTIVE` unset.
-  *Test:* `tests/service-test.py` — the fake polkit records the flags of each
+  *Test:* `tests/run-tests.sh`, against `--serve` — the fake polkit records the flags of each
   `CheckAuthorization`; a `--check` run with `ONEUP_NONINTERACTIVE` unset records flags 0.
   The unset environment is what isolates the rule: with it set, today's run path would
   pass the same flags.
@@ -322,8 +328,8 @@ tests pin.
 - **INV-3** `check-dry-run`'s argv is `system-commit`'s with `cdn` false, plus a leading
   `<timeout> <CHECK_DRY_RUN_SECONDS>`, `--xmlout` after `zypper`, and a trailing
   `--dry-run`, on Tumbleweed and on Leap.
-  *Test:* `tests/run-tests.sh` — builds both with `rootops.build` under a mock
-  `/etc/os-release` of each kind and compares them.
+  *Test:* `tests/run-tests.sh` — builds both with `rootops.build`, with `steps._is_leap`
+  replaced to answer each way, and compares them.
   *Breaks when:* the row builds its own transaction argv instead of deriving it from
   `steps.system_txn_argv`.
 
@@ -332,9 +338,10 @@ tests pin.
   carry each one's change word; `CHECK|system` carries no basis.
   *Test:* `tests/parsers-test.py` — a fixture with one distinct package in each of the
   eight elements, one of them named so it fails `valid_package`; a product; and a second
-  listing of one of the eight under another element. `change_list` returns eight changes
-  with the table's words; the count is 8 and the rows are 7. The product and the repeat
-  isolate the rule: a parser counting `<solvable>` tags returns ten.
+  listing of one of the eight under another element; its `packages-to-change` reads 99.
+  `change_list` returns eight changes with the table's words; the count is 8 and the rows
+  are 7. The product, the repeat and the 99 isolate the rule: a parser counting
+  `<solvable>` tags returns ten.
   *Breaks when:* the count reads `packages-to-change`, or only `to-upgrade`, or counts a
   product.
 
@@ -348,7 +355,7 @@ tests pin.
 - **INV-6** Every §4.2 fallback cause still emits today's `CHECK_ITEM` rows, a
   `CHECK|system` count, and the `at-least` basis on it and on `CHECK|TOTAL`, and the check
   exits 0.
-  *Test:* `tests/service-test.py` — one scenario per cause: service absent from the bus,
+  *Test:* `tests/run-tests.sh`, against `--serve` — one scenario per cause: service absent from the bus,
   polkit answering no, a second session holding a job (`Busy`), mock `zypper` exiting 4,
   mock `zypper` printing malformed XML, and well-formed XML with no `install-summary`.
   Each emits the mock `list-updates` count with `at-least`.
@@ -356,23 +363,23 @@ tests pin.
 
 - **INV-7** The dry run ends by `CHECK_DRY_RUN_SECONDS`, and the check then takes the
   fallback.
-  *Test:* `tests/service-test.py` — the service started with
+  *Test:* `tests/run-tests.sh` — the `--serve` service started with
   `ONEUP_CHECK_DRY_RUN_SECONDS=1` and a mock `zypper` that sleeps 30 s; the job ends with
   status 124 within 5 s, and the check emits `at-least`.
   *Breaks when:* the argv carries no `timeout`.
 
 - **INV-8** On the sudo route the check never opens the system bus.
-  *Test:* `tests/run-tests.sh` — `--check` with `ONEUP_BACKEND=sudo` and `jeepney`
-  unimportable, as ONEUP-0249 INV-12's scenario arranges; it completes with `at-least`.
-  *Breaks when:* `system_changes` imports `service_client` before asking the route.
+  *Test:* `tests/run-tests.sh` — the check on the sudo route under an import blocker that
+  fails the scenario on any import of `jeepney`, as ONEUP-0249 INV-12's scenario does; it
+  completes with `at-least`.
+  *Breaks when:* `system_changes` calls `service_client` before asking the route.
 
 - **INV-9** A run's root operation that meets `Busy` with reason `a job is running` waits
   for that job and then runs, up to `BUSY_WAIT_SECONDS`; past it, it fails as before.
-  *Test:* `tests/service-test.py` — a second session starts a mock job sleeping 3 s, then
-  the engine's `release-lock` runs: with `ONEUP_BUSY_WAIT_SECONDS=10` it succeeds after
-  the job ends and prints the waiting line once; with `=1` it fails.
-  *Breaks when:* `_service_job` treats `Busy` as an immediate failure, or waits on a
-  session-cap `Busy`.
+  *Test:* `tests/run-tests.sh`, against `--serve` — a second session starts a mock job
+  sleeping 3 s, then the engine's `release-lock` runs: with `ONEUP_BUSY_WAIT_SECONDS=10`
+  it succeeds after the job ends and prints the waiting line once; with `=1` it fails.
+  *Breaks when:* `_service_job` treats `Busy` as an immediate failure.
 
 - **INV-10** The window, the tray and the weekly notification say "at least" for a count
   carrying `at-least`, and "up to date" for a zero, with or without it.
@@ -395,7 +402,7 @@ tests pin.
 | --- | --- |
 | The restrictive polkit profile | `NotAuthorized` `challenge` on every check: the fallback, "at least N". The run still asks, as today |
 | Another program holds zypp's lock | zypper exits 7: the fallback. The check never waits for the lock |
-| A repository's refresh fails or needs a new key | non-interactive zypper skips it and exits 106: the dry run's rows, plus `CHECK_UNKNOWN` naming it, as today |
+| A repository's refresh fails or needs a new key | non-interactive zypper skips it and exits 106: the dry run's rows, plus `CHECK_UNKNOWN`, naming it where a `<message>` does (§4.3) |
 | A crawling mirror | `timeout` ends the dry run at `CHECK_DRY_RUN_SECONDS`: the fallback. A run started meanwhile waits up to `BUSY_WAIT_SECONDS` |
 | The solver cannot settle without a choice | zypper exits 4 in non-interactive mode: the fallback, and the terminal line names the status. The update will meet the same problem |
 | The user starts an update during a check | the run's first root operation waits, with one line saying why (§4.7) |
@@ -407,10 +414,10 @@ tests pin.
 ## 7. Tests
 
 - **`tests/parsers-test.py`**: INV-4.
-- **`tests/run-tests.sh`**: INV-1, INV-3, INV-8 and INV-11.
-- **`tests/service-test.py`**: INV-1's service half, INV-2, INV-6, INV-7 and INV-9. Its
-  mock `zypper` gains a `--xmlout … dup … --dry-run` mode printing a fixture install
-  summary.
+- **`tests/run-tests.sh`**: INV-1, INV-2, INV-3, INV-6, INV-7, INV-8, INV-9 and INV-11.
+  The service-route scenarios run against `tests/service-test.py --serve` with
+  `ONEUP_BACKEND=service` on their own command, and their mock `zypper` gains a
+  `--xmlout … dup … --dry-run` mode printing a fixture install summary.
 - **`tests/gui-smoke.py`**: INV-5 and INV-10.
 - **Each new test is seen to fail first**, against the tree before this item.
 - **By hand**: §4.8's three measurements before the parser is written; then, on a packaged
@@ -462,3 +469,4 @@ the wording this spec's gate reviewed.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 1 | 2026-10-23 | Q1 3 · Q3 1 · Q4 5 — 9 verified, 0 dismissed | all 9 fixed. Two lanes, each holding every question. One Q1 came from building the packet: the check's job runs with stderr apart, so a skipped repository is named only where a `<message>` names it. Both lanes found the engine tests placed in `tests/service-test.py`, which never starts the engine; the unfalsifiable INV-1 and INV-8 breaks-when clauses; the unpinned `rc` of an answered dry run; and the session-cap `Busy` reasons, which `Run` never sends. One lane found the waiting line naming a check for any job, and the unpinned `packages-to-change` in INV-4's fixture. One Q4 came from settling a lane's open question: no test mocks `/etc/os-release`. Four other open questions resolved clean. Root-only measurements are an unrunnable region here |
