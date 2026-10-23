@@ -70,6 +70,14 @@ def state_word(model: PackageModel, package: Package) -> str:
 
 
 def versions(package: Package) -> str:
+    if package.change == "new":
+        return QCoreApplication.translate(
+            "package_views", "new {new}", "a package the update adds").format(
+                new=package.edition)
+    if package.change == "remove":
+        return QCoreApplication.translate(
+            "package_views", "{old}, to be removed", "a package the update removes").format(
+                old=package.old or package.edition)
     if package.old and package.edition:
         return QCoreApplication.translate("package_views", "{old} → {new}").format(
             old=package.old, new=package.edition)

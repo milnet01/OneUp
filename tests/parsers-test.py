@@ -257,6 +257,59 @@ UPDATE_XML = """<?xml version='1.0'?>
 </stream>
 """
 
+# ONEUP-0329 INV-4: a dry run's install summary, in the shape zypper 1.14.101 printed
+# it on 2026-10-23 (`type`, not the schema's `kind`). One distinct package in each of
+# the eight mapped elements, `-bad` failing `valid_package`; a product; `a` listed a
+# second time under `to-install`; `to-change-vendor` BEFORE `to-downgrade`, holding
+# `e` again and `v` of its own; `packages-to-change` reading 99. A parser counting
+# `<solvable>` tags returns twelve; one taking the first listing's word calls `e` an
+# upgrade. tests/run-tests.sh carries the same fixture for the count half.
+CHANGE_XML = """<?xml version='1.0'?>
+<stream>
+<message type="info">Computing distribution upgrade...</message>
+<install-summary download-size="1" space-usage-diff="0"
+    packages-to-change="99" need-restart="0" need-reboot="0">
+<to-upgrade>
+<solvable type="package" name="a" edition="2-1" arch="x86_64" repository="oss" edition-old="1-1"/>
+<solvable type="product" name="openSUSE" edition="20261023-0" arch="x86_64"
+    repository="oss" edition-old="20261020-0"/>
+</to-upgrade>
+<to-upgrade-change-arch>
+<solvable type="package" name="b" edition="2-1" arch="noarch"
+    repository="oss" edition-old="1-1" arch-old="x86_64"/>
+</to-upgrade-change-arch>
+<to-reinstall>
+<solvable type="package" name="c" edition="1-1" arch="x86_64" repository="oss" edition-old="1-1"/>
+</to-reinstall>
+<to-change-arch>
+<solvable type="package" name="-bad" edition="1-1" arch="noarch"
+    repository="oss" edition-old="1-1"/>
+</to-change-arch>
+<to-change-vendor>
+<solvable type="package" name="e" edition="0.9-1" arch="x86_64"
+    repository="oss" edition-old="1.0-1"/>
+<solvable type="package" name="v" edition="2-1" arch="x86_64" repository="oss" edition-old="1-1"/>
+</to-change-vendor>
+<to-downgrade>
+<solvable type="package" name="e" edition="0.9-1" arch="x86_64"
+    repository="oss" edition-old="1.0-1"/>
+</to-downgrade>
+<to-downgrade-change-arch>
+<solvable type="package" name="f" edition="0.9-1" arch="noarch"
+    repository="oss" edition-old="1.0-1" arch-old="x86_64"/>
+</to-downgrade-change-arch>
+<to-install>
+<solvable type="package" name="g" edition="1-1" arch="x86_64" repository="oss"/>
+<solvable type="package" name="a" edition="2-1" arch="x86_64" repository="oss"/>
+</to-install>
+<to-remove>
+<solvable type="package" name="h" edition="3-1" arch="x86_64" repository="@System"/>
+</to-remove>
+</install-summary>
+<message type="warning">Skipping repository &apos;Packman&apos; because of an error.</message>
+</stream>
+"""
+
 
 # --- the window's package details (oneup/gui/package_details.py) -----------
 # ONEUP-0260 §4.1 and §4.3. Qt-free on purpose, so these run here. The rpm
@@ -457,6 +510,38 @@ def main() -> int:
           parsers.repo_names("zypper: command not found"), {})
     check("update_list: output that is not well-formed is None, never a partial list",
           parsers.update_list(UPDATE_XML[:300]), None)
+
+    # ONEUP-0329 §4.3, INV-4's parser half.
+    changed = parsers.change_list(CHANGE_XML)
+    check("change_list: one change per (name, edition), each with its word",
+          [(c.name, c.change) for c in changed[0]] if changed else None,
+          [("a", "upgrade"), ("b", "upgrade"), ("c", "upgrade"), ("-bad", "upgrade"),
+           ("e", "downgrade"), ("v", "upgrade"), ("f", "downgrade"), ("g", "new"),
+           ("h", "remove")])
+    check("change_list: a downgrade keeps its old edition, a new package has none",
+          [(c.edition, c.old) for c in changed[0] if c.name in ("e", "g")] if changed else None,
+          [("0.9-1", "1.0-1"), ("1-1", "")])
+    check("change_list: a removal's old edition is its own",
+          [c for c in changed[0] if c.name == "h"] if changed else None,
+          [parsers.Change("h", "3-1", "3-1", "x86_64", "@System", "remove")])
+    check("change_list: a message comes back unescaped",
+          any("Skipping repository 'Packman'" in m for m in changed[1]) if changed else None,
+          True)
+    check("change_list: nothing to do is an empty summary and zero changes",
+          parsers.change_list('<stream><install-summary packages-to-change="0">'
+                              '</install-summary><message>Nothing to do.</message></stream>'),
+          ([], ["Nothing to do."]))
+    for why, text in (
+            ("not well-formed", CHANGE_XML[:400]),
+            ("no install-summary", "<stream><message>Nothing</message></stream>"),
+            ("an element the table lacks",
+             CHANGE_XML.replace("to-downgrade-change-arch", "to-sidegrade")),
+            ("a solvable with neither type nor kind",
+             CHANGE_XML.replace('type="package" name="g"', 'name="g"'))):
+        check(f"change_list: {why} is None, never a count", parsers.change_list(text), None)
+    check("change_list: the schema's kind attribute is read where type is absent",
+          len(parsers.change_list(CHANGE_XML.replace('type="package"', 'kind="package"'))[0]),
+          9)
 
     # --- the emitter (oneup/engine/markers.py) ------------------------------
     # `emit_progress` returns False when there was no counter to parse, and that

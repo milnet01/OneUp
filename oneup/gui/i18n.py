@@ -93,6 +93,13 @@ class _Counted(QObject):
             "updates-available-run": lambda: self.tr(
                 "%n update(s) available — turn on what you want and hit Run.", "", n),
             "updates-available": lambda: self.tr("%n update(s) available.", "", n),
+            # A count that is a floor: the rootless list misses new and removed
+            # packages (ONEUP-0329 §4.6).
+            "updates-available-run-at-least": lambda: self.tr(
+                "At least %n update(s) available — turn on what you want and hit Run.",
+                "", n),
+            "updates-available-at-least": lambda: self.tr(
+                "At least %n update(s) available.", "", n),
             "system-installed": lambda: self.tr("%n system package(s) installed.", "", n),
             "flatpak-updated": lambda: self.tr("%n Flatpak app(s) updated.", "", n),
             "leftovers-removed": lambda: self.tr("%n leftover package(s) removed.", "", n),
@@ -110,6 +117,8 @@ class _Counted(QObject):
                 "⚠  %n service(s) still using the old libraries are part of your "
                 "desktop session — restart the computer to finish.", "", n),
             "tray-waiting": lambda: self.tr("{app} — %n update(s) waiting", "", n),
+            "tray-waiting-at-least": lambda: self.tr(
+                "{app} — at least %n update(s) waiting", "", n),
             "tray-waiting-partial": lambda: self.tr(
                 "{app} — %n update(s) waiting (some sources couldn't be checked)", "", n),
             "snapshots-thinned": lambda: self.tr("Thinned %n old snapshot(s).", "", n),
@@ -126,6 +135,8 @@ class _Counted(QObject):
                 "%n system package(s) installed.{skipped}", "", n),
             "notify-available": lambda: self.tr(
                 "%n update(s) ready to install. Open OneUp to update.", "", n),
+            "notify-available-at-least": lambda: self.tr(
+                "At least %n update(s) ready to install. Open OneUp to update.", "", n),
             "notify-partial-count": lambda: self.tr(
                 "%n update(s) ready to install, and there may be more. {reasons} "
                 "Open OneUp to update.", "", n),

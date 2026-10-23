@@ -160,7 +160,8 @@ def _parse_tray_line(win, line: str):
         parts = line[len("@@CHECK@@|"):].split("|")
         if len(parts) >= 2 and parts[0] == "TOTAL":
             _apply_tray_total(win, int(parts[1]) if parts[1].isdecimal() else 0,
-                                   uncertain=win._traycheck_unknown)
+                                   uncertain=win._traycheck_unknown,
+                                   at_least=len(parts) > 3 and parts[3] == "at-least")
 
 
 def _on_traycheck_finished(win, *args):
@@ -171,23 +172,30 @@ def _on_traycheck_finished(win, *args):
         win._traycheck_proc = None
 
 
-def _tooltip(n: int, uncertain: bool = False) -> str:
-    """What the tray icon says on hover once a check has answered."""
+def _tooltip(n: int, uncertain: bool = False, at_least: bool = False) -> str:
+    """What the tray icon says on hover once a check has answered.
+
+    `at_least`: the total is the rootless floor (ONEUP-0329 §4.6). A zero still
+    reads "up to date".
+    """
     if uncertain:
         return (i18n.counted("tray-waiting-partial", n).format(app=APP_NAME) if n > 0
                 else QCoreApplication.translate(
                     "tray", "{app} — couldn't check for updates").format(app=APP_NAME))
-    return (i18n.counted("tray-waiting", n).format(app=APP_NAME) if n > 0
-            else QCoreApplication.translate("tray", "{app} — up to date").format(app=APP_NAME))
+    if n > 0:
+        key = "tray-waiting-at-least" if at_least else "tray-waiting"
+        return i18n.counted(key, n).format(app=APP_NAME)
+    return QCoreApplication.translate("tray", "{app} — up to date").format(app=APP_NAME)
 
 
-def _apply_tray_total(win, n: int, uncertain: bool = False):
+def _apply_tray_total(win, n: int, uncertain: bool = False, at_least: bool = False):
     win._tray_total = n
+    win._tray_at_least = at_least
     win._tray_checked_at = datetime.now()
     if win._tray is None:
         return
     win._tray.setIcon(_tray_icon(n > 0))
-    win._tray.setToolTip(_tooltip(n, uncertain))
+    win._tray.setToolTip(_tooltip(n, uncertain, at_least))
 
 
 def _arm_single_instance(win):
@@ -295,7 +303,8 @@ def _ensure_tray(win):
     win._tray.setIcon(_tray_icon(win._tray_total > 0))
     win._tray.setToolTip(
         QCoreApplication.translate("tray", "{app} — not checked yet").format(app=APP_NAME)
-        if win._tray_checked_at is None else _tooltip(win._tray_total))
+        if win._tray_checked_at is None else _tooltip(win._tray_total,
+                                                      at_least=win._tray_at_least))
     win._tray.show()
     _arm_single_instance(win)
     win._tray_timer = QTimer(win)

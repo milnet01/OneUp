@@ -203,6 +203,7 @@ class Updater(QMainWindow):
         self._reboot = False
         self._reboot_reason = ""     # optional "why a reboot matters" phrase from the engine
         self._installed_count = ""   # system packages changed, as reported by the engine
+        self._installed_basis = ""   # a check's TOTAL basis: "at-least" or "" (ONEUP-0329)
         self._system_pending = 0     # system updates a check found (ONEUP-0300)
         self._sys_changed = False
         self._other_changed = {}     # Flatpak/firmware/leftover step → its count, if it acted
@@ -258,6 +259,7 @@ class Updater(QMainWindow):
         self._tray = None
         self._tray_timer = None
         self._tray_total = 0
+        self._tray_at_least = False  # the last total was the rootless floor (ONEUP-0329)
         self._tray_checked_at = None
         self._tray_hint_shown = False
         self._local_server = None

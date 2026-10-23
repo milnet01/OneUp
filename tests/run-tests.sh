@@ -4818,6 +4818,8 @@ txn = ["env", "LC_ALL=C", *steps.system_txn_argv("")]
 Z = ["zypper", "--non-interactive"]
 cases = {
     "size-dry-run": ({"cdn": False}, [*txn, "--dry-run"]),
+    "check-dry-run": ({}, [timeout, str(rootops.CHECK_DRY_RUN_SECONDS), *txn[:3], "--xmlout",
+                           *txn[3:], "--dry-run"]),
     "system-download": ({"cdn": False}, [*txn, "--download-only"]),
     "system-commit": ({"cdn": False}, txn),
     "repo-refresh": ({"alias": "repo-oss", "import_keys": True, "budget": 120},
@@ -5126,6 +5128,282 @@ kill "$serve" 2>/dev/null; wait "$serve" 2>/dev/null
 rm -rf "$d"
 fi
 
+echo "TEST: the check counts the update's own dry run (ONEUP-0329)"
+py_case "check-dry-run is system-commit's argv, bounded and as XML, on Tumbleweed and Leap (INV-3)" "$(cat <<'PYEOF'
+from oneup.engine import privilege, rootops, steps
+timeout = (privilege.REFRESH_SUDO_ARGV or ["timeout"])[0]
+bad, seen = [], set()
+for leap in (False, True):
+    steps._is_leap = lambda leap=leap: leap
+    env, locale, zypper, *rest = rootops.build("system-commit", {"cdn": False})
+    want = [timeout, str(rootops.CHECK_DRY_RUN_SECONDS), env, locale, zypper, "--xmlout",
+            *rest, "--dry-run"]
+    got = rootops.build("check-dry-run")
+    seen.add(tuple(got))
+    if got != want:
+        bad.append(f"leap={leap}: {got}")
+if len(seen) != 2:
+    bad.append("Tumbleweed and Leap built the same argv")
+raise SystemExit("; ".join(bad) or 0)
+PYEOF
+)"
+py_case "on the sudo route the check never imports jeepney, and says at least (INV-8)" "$(cat <<'PYEOF'
+import contextlib, io, sys
+from oneup.engine import actions, steps
+asked = []
+class Recorder:
+    def find_spec(self, name, path=None, target=None):
+        asked.append(name)
+sys.meta_path.insert(0, Recorder())
+sys.modules.pop("jeepney", None)
+steps.system_updates = lambda sizes: steps.SystemListing(0, True, 4, [], [])
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf):
+    actions._check_system(False)
+if any(name.startswith("jeepney") for name in asked):
+    raise SystemExit("imported jeepney")
+want = "@@CHECK@@|system|4|system package(s)|at-least"
+raise SystemExit(0 if want in buf.getvalue().splitlines() else buf.getvalue())
+PYEOF
+)" ONEUP_BACKEND=sudo
+
+if ! command -v dbus-daemon >/dev/null || ! python3 -c 'import jeepney' 2>/dev/null; then
+    echo "  SKIP - the service-route scenarios need dbus-daemon and jeepney"
+else
+d=$(mktemp -d); setup_common "$d"; pkg_raw_tree "$d"
+cat > "$d/zstdcat" <<'EOF'
+#!/usr/bin/env bash
+cat "$2"
+EOF
+chmod +x "$d/zstdcat"
+# The rootless list the fallback reads: two updates.
+cat > "$d/list.xml" <<'XML'
+<?xml version='1.0'?>
+<stream><update-status version="0.6"><update-list>
+<update name="vlc" edition="3.0-2.1" arch="x86_64" kind="package" edition-old="3.0-1.1"><source url="http://p" alias="oss"/></update>
+<update name="bash" edition="5.3-2.1" arch="x86_64" kind="package" edition-old="5.3-1.1"><source url="http://p" alias="oss"/></update>
+</update-list></update-status></stream>
+XML
+cat > "$d/repos.xml" <<'XML'
+<stream><repo-list><repo alias="oss" name="Main Repository (OSS)"/></repo-list></stream>
+XML
+# INV-4's fixture, the twin of tests/parsers-test.py's CHANGE_XML: nine distinct packages,
+# one of them `-bad`, twelve <solvable> tags, packages-to-change 99.
+cat > "$d/dry.xml" <<'XML'
+<?xml version='1.0'?>
+<stream>
+<install-summary download-size="1" space-usage-diff="0" packages-to-change="99" need-restart="0" need-reboot="0">
+<to-upgrade>
+<solvable type="package" name="a" edition="2-1" arch="x86_64" repository="oss" edition-old="1-1"/>
+<solvable type="product" name="openSUSE" edition="20261023-0" arch="x86_64" repository="oss" edition-old="20261020-0"/>
+</to-upgrade>
+<to-upgrade-change-arch>
+<solvable type="package" name="b" edition="2-1" arch="noarch" repository="oss" edition-old="1-1" arch-old="x86_64"/>
+</to-upgrade-change-arch>
+<to-reinstall>
+<solvable type="package" name="c" edition="1-1" arch="x86_64" repository="oss" edition-old="1-1"/>
+</to-reinstall>
+<to-change-arch>
+<solvable type="package" name="-bad" edition="1-1" arch="noarch" repository="oss" edition-old="1-1"/>
+</to-change-arch>
+<to-change-vendor>
+<solvable type="package" name="e" edition="0.9-1" arch="x86_64" repository="oss" edition-old="1.0-1"/>
+<solvable type="package" name="v" edition="2-1" arch="x86_64" repository="oss" edition-old="1-1"/>
+</to-change-vendor>
+<to-downgrade>
+<solvable type="package" name="e" edition="0.9-1" arch="x86_64" repository="oss" edition-old="1.0-1"/>
+</to-downgrade>
+<to-downgrade-change-arch>
+<solvable type="package" name="f" edition="0.9-1" arch="noarch" repository="oss" edition-old="1.0-1" arch-old="x86_64"/>
+</to-downgrade-change-arch>
+<to-install>
+<solvable type="package" name="g" edition="1-1" arch="x86_64" repository="oss"/>
+<solvable type="package" name="a" edition="2-1" arch="x86_64" repository="oss"/>
+</to-install>
+<to-remove>
+<solvable type="package" name="h" edition="3-1" arch="x86_64" repository="@System"/>
+</to-remove>
+</install-summary>
+</stream>
+XML
+# INV-11: one change names the repository by alias, one by display name. pkg_raw_tree's
+# primary file lists both vlc editions, so each finds its own size.
+mv "$d/zypp-raw/packman" "$d/zypp-raw/oss"
+cat > "$d/dry-sizes.xml" <<'XML'
+<stream><install-summary packages-to-change="2">
+<to-upgrade><solvable type="package" name="vlc" edition="3.0-2.1" arch="x86_64" repository="oss" edition-old="3.0-1.1"/></to-upgrade>
+<to-downgrade><solvable type="package" name="vlc" edition="3.0-1.1" arch="x86_64" repository="Main Repository (OSS)" edition-old="3.0-2.1"/></to-downgrade>
+</install-summary></stream>
+XML
+# The service runs this zypper as root; `dry.mode` picks what its dry run does.
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *list-updates*) cat "$d/list.xml"; exit 0 ;;
+  *--xmlout*--dry-run*)
+    case "\$(cat "$d/dry.mode" 2>/dev/null)" in
+      exit4)     echo '<stream><message type="error">Problem: a choice</message></stream>'; exit 4 ;;
+      malformed) echo '<stream><install-summary packages-to-change="3"'; exit 0 ;;
+      nosummary) echo '<stream><message type="info">Loading</message></stream>'; exit 0 ;;
+      unknown)   sed 's/to-downgrade-change-arch/to-sidegrade/g' "$d/dry.xml"; exit 0 ;;
+      sleep)     exec sleep 30 ;;
+      sizes)     cat "$d/dry-sizes.xml"; exit 0 ;;
+      *)         cat "$d/dry.xml"; exit 0 ;;
+    esac ;;
+  *--xmlout*repos*) cat "$d/repos.xml"; exit 0 ;;
+  *" clean"*) sleep "\$(cat "$d/clean.sleep" 2>/dev/null || echo 0)"; exit 0 ;;
+esac
+exit 0
+EOF
+chmod +x "$d/zypper"
+# A 2-second ceiling for every dry run here: the fixtures answer at once, and INV-7's
+# sleeping mock must end at the ceiling.
+ONEUP_CHECK_DRY_RUN_SECONDS=2 python3 "$(dirname "$ENGINE")/tests/service-test.py" --serve "$d" &
+serve=$!
+for _ in $(seq 100); do [[ -e "$d/serve.ready" ]] && break; sleep 0.1; done
+bus=$(cat "$d/bus.address" 2>/dev/null)
+# A --check on the service route, ONEUP_NONINTERACTIVE unset. Arguments holding `=` are
+# environment for this one run; any others go to the engine.
+service_check() {
+    (
+        unset ONEUP_NONINTERACTIVE
+        export ONEUP_BACKEND=service ONEUP_SERVICE_BUS="$bus"
+        local extra=() a
+        for a in "$@"; do if [[ "$a" == *=* ]]; then export "${a?}"; else extra+=("$a"); fi; done
+        run_engine "$d" --check --steps=system "${extra[@]}"
+    )
+}
+# A second session whose cache-clean job holds the service for $1 seconds.
+hold_job() {
+    echo "$1" > "$d/clean.sleep"; rm -f "$d/held"
+    ONEUP_SERVICE_BUS="$bus" PYTHONPATH="$(dirname "$ENGINE")" python3 -c '
+import sys
+from oneup.engine import service_client as s
+s.open_session(interactive=False, import_keys=False)
+job = s.run("cache-clean", {}, merge_stderr=True)
+open(sys.argv[1], "w").close()
+job.wait()
+s.close()' "$d/held" &
+    holder=$!
+    for _ in $(seq 50); do [[ -e "$d/held" ]] && break; sleep 0.1; done
+}
+fallback_ok() {  # cause, output
+    check "$1: the rootless count, marked at least (INV-6)" \
+        "@@CHECK@@|system|2|system package(s)|at-least" "$2"
+    check "$1: the total is marked too" "@@CHECK@@|TOTAL|2|updates available|at-least" "$2"
+    check "$1: today's rows, byte for byte" "@@CHECK_ITEM@@|system|vlc|3.0-1.1|3.0-2.1|0|Main Repository (OSS)" "$2"
+    check "$1: the check finishes" "@@DONE@@|ok" "$2"
+}
+
+rm -f "$d/polkit.log"
+out=$(service_check)
+check_eq "INV-4 the count is every distinct package, with no basis" \
+    "@@CHECK@@|system|9|system package(s)" "$(grep '^@@CHECK@@|system|' <<<"$out")"
+check_eq "INV-4 the total carries no basis either" \
+    "@@CHECK@@|TOTAL|9|updates available" "$(grep '^@@CHECK@@|TOTAL|' <<<"$out")"
+check_eq "INV-4 one row per valid package name" "8" "$(grep -c '^@@CHECK_ITEM@@|system|' <<<"$out")"
+check "INV-4 a vendor change takes its other listing's word" \
+    "@@CHECK_ITEM@@|system|e|1.0-1|0.9-1|0|Main Repository (OSS)|downgrade" "$out"
+check "INV-4 a new package has no old edition" "@@CHECK_ITEM@@|system|g||1-1|0|Main Repository (OSS)|new" "$out"
+check "INV-4 a removal keys on its own edition, with no repository" \
+    "@@CHECK_ITEM@@|system|h|3-1|3-1|0||remove" "$out"
+check "INV-2 the check asks polkit with flags 0" '"flags": 0' "$(cat "$d/polkit.log" 2>/dev/null)"
+check_absent "INV-2 and never with flags 1" '"flags": 1' "$(cat "$d/polkit.log" 2>/dev/null)"
+
+py_case "INV-1 the service-route check reaches root without privilege's sudo paths" "$(cat <<'PYEOF'
+from oneup.engine import privilege, steps
+def refuse(*args, **kwargs):
+    raise SystemExit("the check called privilege")
+privilege.sudo_init = privilege.root = privilege.sudo = refuse
+got = steps.system_changes(False)
+raise SystemExit(0 if got.exact and got.count == 9 else f"got {got}")
+PYEOF
+)" ONEUP_BACKEND=service ONEUP_SERVICE_BUS="$bus" PATH="$d:$PATH"
+
+echo sizes > "$d/dry.mode"
+out=$(service_check --sizes)
+check "INV-11 a repository named by alias finds its size and shows its name" \
+    "@@CHECK_ITEM@@|system|vlc|3.0-1.1|3.0-2.1|222|Main Repository (OSS)|upgrade" "$out"
+check "INV-11 a repository named by display name does too" \
+    "@@CHECK_ITEM@@|system|vlc|3.0-2.1|3.0-1.1|111|Main Repository (OSS)|downgrade" "$out"
+
+for mode in exit4 malformed nosummary unknown; do
+    echo "$mode" > "$d/dry.mode"
+    fallback_ok "dry run $mode" "$(service_check)"
+done
+echo fixture > "$d/dry.mode"
+fallback_ok "service unreachable" "$(service_check ONEUP_SERVICE_BUS="unix:path=$d/no-bus")"
+echo '{"org.freedesktop.packagekit.system-update": "no"}' > "$d/polkit.answers"
+fallback_ok "polkit says no" "$(service_check)"
+rm -f "$d/polkit.answers"
+hold_job 4
+fallback_ok "another session's job (Busy)" "$(service_check)"
+wait "$holder" 2>/dev/null
+
+echo sleep > "$d/dry.mode"
+started=$SECONDS
+out=$(service_check)
+check "INV-7 the dry run ends at its ceiling (124)" "dry run exited 124" "$out"
+check "INV-7 and the check falls back" "@@CHECK@@|system|2|system package(s)|at-least" "$out"
+check "INV-7 within 5 s of a 2 s ceiling" "yes" "$( (( SECONDS - started <= 7 )) && echo yes)"
+echo fixture > "$d/dry.mode"
+
+# INV-12: a live engine holding run.state stands the check down; a stale record does not.
+bash -c 'exec -a oneup.engine sleep 30' & live=$!
+sleep 0.2
+printf '%s\n%s\n%s\n%s\n' "$live" "$d/other.log" "system" "$(date +%s)" > "$d/live.state"
+before=$(grep -cE 'session (opened|refused)' "$d/service.log")
+opened=$(grep -c 'session opened' "$d/service.log")
+out=$(service_check ONEUP_RUN_STATE="$d/live.state")
+check "INV-12 a check during a run falls back" "@@CHECK@@|system|2|system package(s)|at-least" "$out"
+check_eq "INV-12 and opens no service session" "$before" "$(grep -cE 'session (opened|refused)' "$d/service.log")"
+kill "$live"; wait "$live" 2>/dev/null
+out=$(service_check ONEUP_RUN_STATE="$d/live.state")
+check "INV-12 a dead holder's record does not stand it down" "@@CHECK@@|system|9|" "$out"
+check_eq "INV-12 so it opens a session" "$((opened + 1))" "$(grep -c 'session opened' "$d/service.log")"
+
+# INV-9: a run's root operation waits out another session's job, up to the ceiling.
+inv9='
+import contextlib, io
+from oneup.engine import privilege
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf):
+    privilege.sudo_init()
+    rc, _ = privilege.root("release-lock")
+said = buf.getvalue().count("Waiting for another OneUp task to finish")
+print(rc, said)'
+hold_job 3
+got=$(ONEUP_BACKEND=service ONEUP_SERVICE_BUS="$bus" ONEUP_NONINTERACTIVE=1 ONEUP_BUSY_WAIT_SECONDS=10 \
+      PYTHONPATH="$(dirname "$ENGINE")" XDG_STATE_HOME="$d/xdg" python3 -c "$inv9" 2>/dev/null)
+check_eq "INV-9 a root operation waits for the other job, saying so once, then runs" "0 1" "$got"
+wait "$holder" 2>/dev/null
+hold_job 3
+got=$(ONEUP_BACKEND=service ONEUP_SERVICE_BUS="$bus" ONEUP_NONINTERACTIVE=1 ONEUP_BUSY_WAIT_SECONDS=1 \
+      PYTHONPATH="$(dirname "$ENGINE")" XDG_STATE_HOME="$d/xdg" python3 -c "$inv9" 2>/dev/null)
+check_eq "INV-9 past the ceiling it fails as before" "1 1" "$got"
+wait "$holder" 2>/dev/null
+
+# INV-13: on the service route a run waits for zypp's lock; on the sudo route it stops.
+lock_run() {  # backend, wait seconds
+    sleep 3 & lockpid=$!
+    echo "$lockpid" > "$d/held-zypp.pid"
+    ONEUP_ZYPP_PID_FILE="$d/held-zypp.pid" ONEUP_BUSY_WAIT_SECONDS="$2" ONEUP_BACKEND="$1" \
+        ONEUP_SERVICE_BUS="$bus" run_engine "$d" --steps=system
+    kill "$lockpid" 2>/dev/null; wait "$lockpid" 2>/dev/null
+}
+out=$(lock_run service 10)
+check_eq "INV-13 the service route waits, naming the holder once" "1" \
+    "$(grep -c '^Waiting for sleep (process [0-9]*) to finish…$' <<<"$out")"
+check "INV-13 and then reaches its system step" "@@STEP_BEGIN@@|system" "$out"
+out=$(lock_run service 1)
+check "INV-13 still held past the ceiling, it stops as busy" "@@HINT@@|package-manager-busy|" "$out"
+out=$(lock_run sudo 10)
+check "INV-13 the sudo route stops at once" "@@HINT@@|package-manager-busy|" "$out"
+check_absent "INV-13 without waiting" "Waiting for sleep" "$out"
+kill "$serve" 2>/dev/null; wait "$serve" 2>/dev/null
+rm -rf "$d"
+fi
+
 echo "TEST: every marker keeps its field layout (ONEUP-0044 INV-5a, ONEUP-0126)"
 # The marker census counts distinct NAMES, so it cannot see a field appended to a marker
 # that already exists, and gate G2 compares the two engines' streams, so a change made in
@@ -5133,15 +5411,15 @@ echo "TEST: every marker keeps its field layout (ONEUP-0044 INV-5a, ONEUP-0126)"
 # run_engine and checks its field count against docs/reference/marker-protocol.md §3.
 #
 # Each entry is a set: "4/6" means exactly 4 or exactly 6 — PROGRESS carries its two byte
-# fields only while downloading, and STEP_END, CHECK_ITEM, PKG, REMEDY and REBOOT each have
-# an optional tail. PKG takes three counts: §4.12's prose has `downloading` add `bytes`
+# fields only while downloading, and STEP_END, CHECK, CHECK_ITEM, PKG, REMEDY and REBOOT each
+# have an optional tail. PKG takes three counts: §4.12's prose has `downloading` add `bytes`
 # alone, which its heading's bracket does not show. "1+" is a floor, and only HINT and
 # CHECK_UNKNOWN take one: their trailing fields are a list of arguments whose length varies
 # with the code (§3). §1.1 has the Python emitter rewrite "|" in every field, so every other
 # count is exact.
 declare -A LAYOUT=(
     [STEP_BEGIN]=3 [STEP_END]=3/4 [TIMING]=2 [PROGRESS]=4/6 [REFRESH]=3 [SNAPSHOT]=1
-    [SNAPSHOT_ITEM]=3 [SNAPSHOTS]=2 [CHECK]=3 [CHECK_ITEM]=4/6 [PKG]=4/5/7 [CHECK_UNKNOWN]=2+
+    [SNAPSHOT_ITEM]=3 [SNAPSHOTS]=2 [CHECK]=3/4 [CHECK_ITEM]=4/6/7 [PKG]=4/5/7 [CHECK_UNKNOWN]=2+
     [SIZE]=2 [FREED]=2 [AUTH]=1 [DISK]=3 [REPO]=3 [REPO_SKIPPED]=2 [HINT]=1+
     [REMEDY]=1/2 [SERVICES]=1 [INSTALLED]=3 [REBOOT]=1/2 [DONE]=1
 )

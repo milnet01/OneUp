@@ -85,16 +85,17 @@ def _headless_check() -> int:
     log = _headless_log(".check.log")
     if log is None:
         return 1
-    seen = {"total": 0, "reasons": []}
+    seen = {"total": 0, "reasons": [], "at_least": False}
 
     def read(tag: str, parts: list[str]) -> None:
         if tag == "CHECK" and len(parts) > 1 and parts[0] == "TOTAL":
             seen["total"] = int(parts[1]) if parts[1].isdecimal() else 0
+            seen["at_least"] = len(parts) > 3 and parts[3] == "at-least"
         elif tag == "CHECK_UNKNOWN":
             seen["reasons"].append(markers.render_check_unknown(parts[1:]))
 
     rc = _headless_engine(["--check", f"--log={log}"], read)
-    note = markers.check_notification(seen["total"], seen["reasons"])
+    note = markers.check_notification(seen["total"], seen["reasons"], seen["at_least"])
     if note:
         _notify(*note)
     return rc

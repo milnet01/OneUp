@@ -143,6 +143,8 @@ PKG|key|state|name|edition[|bytes|from|repo]       a run only
 
 **The system check** (`_check_system`):
 
+On the service route the check counts the update's own dry run instead: `docs/specs/ONEUP-0329-exact-update-count.md` §4.2.
+
 1. The listing becomes `zypper --xmlout --no-refresh --non-interactive list-updates`,
    still `LC_ALL=C`, with stderr **kept apart from stdout**: the XML parser reads stdout
    alone, so a warning on stderr cannot make it ill-formed. `proc.run` returns stdout
@@ -320,6 +322,7 @@ ONEUP-0239 replaces this list, so nothing here is designed to outlive it.
   on `dup` or `update`, plus a new scenario whose `sudo` mock fails the test if called
   during `--check`.
   *Breaks when:* any of the three is routed through `privilege.sudo`.
+  On the service route, `docs/specs/ONEUP-0329-exact-update-count.md` §4.2 governs.
 
 - **INV-2** A `CHECK_ITEM` or `queued` size is the `<size package>` of the entry with the
   same name, architecture and edition in that repository's `primary.xml`, or `0`. It is

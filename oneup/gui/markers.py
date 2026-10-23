@@ -379,10 +379,12 @@ NOTIFICATIONS: dict[str, tuple[str, str | None]] = {
     "run.uptodate": (QT_TRANSLATE_NOOP("markers", "Already up to date"),
                      QT_TRANSLATE_NOOP("markers", "No updates were needed.{skipped}")),
     "check.available": (QT_TRANSLATE_NOOP("markers", "Updates available"), None),
+    "check.available_at_least": (QT_TRANSLATE_NOOP("markers", "Updates available"), None),
     "check.partial": (QT_TRANSLATE_NOOP("markers", "Couldn't check for updates"), "{reasons}"),
     "check.partial_count": (QT_TRANSLATE_NOOP("markers", "Updates available"), None),
 }
 _COUNTED = {"run.installed": "notify-installed", "check.available": "notify-available",
+            "check.available_at_least": "notify-available-at-least",
             "check.partial_count": "notify-partial-count"}
 
 
@@ -426,14 +428,16 @@ def run_notification(done: str | None, count: str, changed: bool,
                          log=log, skipped=note)
 
 
-def check_notification(total: int, reasons: list[str]) -> tuple[str, str] | None:
+def check_notification(total: int, reasons: list[str],
+                       at_least: bool = False) -> tuple[str, str] | None:
     """The `--check` notification, or None for silence. Silent only when nothing is
     waiting AND every source was read: an unreadable source makes the total a floor,
-    so it fires whatever the total (ONEUP-0077 INV-3, ONEUP-0056)."""
+    so it fires whatever the total (ONEUP-0077 INV-3, ONEUP-0056). `at_least` is the
+    TOTAL's `at-least` basis: the count is the rootless floor (ONEUP-0329 §4.6)."""
     if reasons:
         key = "check.partial_count" if total > 0 else "check.partial"
     elif total > 0:
-        key = "check.available"
+        key = "check.available_at_least" if at_least else "check.available"
     else:
         return None
     between = QCoreApplication.translate(

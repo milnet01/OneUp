@@ -315,6 +315,76 @@ def update_list(xml_text: str) -> tuple[list[Update], list[str]] | None:
     return updates, messages
 
 
+class Change(NamedTuple):
+    """One package the update will change, from a dry run's install summary."""
+
+    name: str
+    edition: str      # the model's key edition: the new one, or a removal's own
+    old: str          # edition-old; for a removal its own edition; "" for a new package
+    arch: str
+    repo: str         # the `repository` attribute as printed: an alias (ONEUP-0329 §4.8)
+    change: str       # upgrade | downgrade | new | remove
+
+
+# Each `install-summary` child zypper writes, and the word its packages count as
+# (ONEUP-0329 §4.3). `to-change-vendor` is in no schema but zypper 1.14.101 prints
+# it; it takes the word of the package's other listing, so it maps to None here.
+_CHANGE_WORD = {
+    "to-upgrade": "upgrade", "to-upgrade-change-arch": "upgrade",
+    "to-reinstall": "upgrade", "to-change-arch": "upgrade",
+    "to-downgrade": "downgrade", "to-downgrade-change-arch": "downgrade",
+    "to-install": "new",
+    "to-remove": "remove",
+    "to-change-vendor": None,
+}
+
+
+def change_list(xml_text: str) -> tuple[list[Change], list[str]] | None:
+    """A `zypper --xmlout … --dry-run`'s stdout: every package it would change, in
+    zypper's order, and the text of every `<message>`, unescaped.
+
+    None when the text is not well-formed, holds no `install-summary`, holds a
+    summary child the table does not know, or a `solvable` with neither `type` nor
+    `kind`: a summary this cannot fully read must never count as zero. With nothing
+    to do, zypper prints an empty summary, which is an exact zero (§4.8, measured).
+
+    One change per `(name, edition)`: a package listed twice is counted once, with
+    the word of its first listing outside `to-change-vendor`, or `upgrade` if it
+    has none.
+    """
+    try:
+        root = ET.fromstring(xml_text)  # noqa: S314 — zypper's own stdout, see update_list
+    except ET.ParseError:
+        return None
+    summaries = list(root.iter("install-summary"))
+    if not summaries:
+        return None
+    found: dict[tuple[str, str], list] = {}     # (name, edition) -> [Change, word or None]
+    for summary in summaries:
+        for group in summary:
+            if group.tag not in _CHANGE_WORD:
+                return None
+            word = _CHANGE_WORD[group.tag]
+            for node in group.iter("solvable"):
+                # The schema says `kind`; zypper 1.14.101 writes `type` (§2).
+                kind = node.get("type", node.get("kind"))
+                if kind is None:
+                    return None
+                if kind != "package":
+                    continue
+                name, edition = node.get("name", ""), node.get("edition", "")
+                old = edition if word == "remove" else node.get("edition-old", "")
+                entry = found.setdefault((name, edition), [
+                    Change(name, edition, old, node.get("arch", ""),
+                           node.get("repository", ""), ""), None])
+                if entry[1] is None and word is not None:
+                    entry[1] = word
+                    entry[0] = entry[0]._replace(old=old)
+    changes = [change._replace(change=word or "upgrade") for change, word in found.values()]
+    messages = [m.text or "" for m in root.iter("message")]
+    return changes, messages
+
+
 def repo_names(xml_text: str) -> dict[str, str]:
     """`zypper --xmlout repos`: each alias's display name. Empty when unreadable."""
     try:

@@ -26,7 +26,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
-from . import markers, parsers, pkgsizes, privilege, proc, repos, runstate
+from . import markers, parsers, pkgsizes, privilege, proc, repos, route, runstate
 
 # Set by the download-recovery path (ONEUP-0094) to a throwaway repos.d built by
 # `repos.make_cdn_reposd`. Empty means "use the system's own".
@@ -170,7 +170,8 @@ class Pending(NamedTuple):
     old: str
     edition: str
     size: int        # download bytes; 0 = unknown
-    repo: str        # the repository's display name, or its alias
+    repo: str        # the repository's display name, or its alias; "" for a removal
+    change: str = "upgrade"   # upgrade | downgrade | new | remove (ONEUP-0329 §4.3)
 
 
 class SystemListing(NamedTuple):
@@ -179,6 +180,8 @@ class SystemListing(NamedTuple):
     count: int               # every package update zypper listed
     rows: list[Pending]      # those whose name passes `valid_package`, in zypper's order
     skipped: list[str]       # repositories zypper said it set aside
+    exact: bool = False      # the update's own dry run answered (ONEUP-0329 §4.2)
+    why: str = ""            # when it did not, why, for the terminal line
 
 
 def system_updates(sizes: bool) -> SystemListing:
@@ -477,6 +480,73 @@ def human_bytes(count: int) -> str:
     if rc == 0 and out.strip():
         return out.strip()
     return f"{count}B"
+
+
+# The dry run's exits that still carry a summary: success, zypper's informational
+# 100-103, and 106, a repository set aside (ONEUP-0329 §4.2).
+_DRY_RUN_OK = (0, 100, 101, 102, 103, 106)
+
+
+def system_changes(sizes: bool) -> SystemListing:
+    """What the update will really change, for `--check` (ONEUP-0329 §4.2).
+
+    On the service route the service runs the update's own transaction as a dry
+    run, so the count holds new and removed packages too. Anywhere that cannot
+    happen, the rootless `system_updates` answers, `exact` false and `why` saying
+    why. Never through `privilege`: its `auto` route falls back to sudo, and a
+    check must never ask for a password.
+    """
+    if runstate.run_state_holder() is not None:
+        # A run's root operations must not meet a refresh as root between them.
+        return system_updates(sizes)._replace(why="an update is running")
+    if route.engine_route(os.environ) != route.SERVICE:
+        return system_updates(sizes)._replace(why="needs the system service")
+    from . import service_client
+    try:
+        try:
+            # Never a password box, whatever ONEUP_NONINTERACTIVE says (§4.2 step 2).
+            service_client.open_session(interactive=False, import_keys=False)
+            job = service_client.run("check-dry-run", {}, merge_stderr=False)
+            out = job.read()
+            rc = job.wait()
+        finally:
+            service_client.close()
+    except service_client.Unreachable:
+        return system_updates(sizes)._replace(why="the system service did not answer")
+    except service_client.Refused as exc:
+        return system_updates(sizes)._replace(
+            why=f"the system service refused the check ({exc.code} {exc.reason})".strip())
+    if rc not in _DRY_RUN_OK:
+        return system_updates(sizes)._replace(why=f"the dry run exited {rc}")
+    listed = parsers.change_list(out)
+    if listed is None:
+        return system_updates(sizes)._replace(why="the dry run's summary could not be read")
+    changes, messages = listed
+    names = parsers.repo_names(proc.run(["zypper", "--xmlout", "repos"])[1]) if changes else {}
+    where = {c: ("", "") if c.change == "remove" else _repo_of(c.repo, names)
+             for c in changes}
+    found = (pkgsizes.download_sizes(
+        [(where[c][0], c.name, c.edition, c.arch) for c in changes if where[c][0]],
+        pkgsizes.SIZE_LOOKUP_SECONDS) if sizes else {})
+    rows = [Pending(c.name, c.old, c.edition,
+                    found.get((where[c][0], c.name, c.edition, c.arch), 0),
+                    where[c][1], c.change)
+            for c in changes if valid_package(c.name)]
+    skipped = sorted(set(SKIPPED_REPO.findall("\n".join(messages))))
+    return SystemListing(106 if rc == 106 else 0, True, len(changes), rows, skipped,
+                         exact=True)
+
+
+def _repo_of(value: str, names: dict[str, str]) -> tuple[str, str]:
+    """(alias, shown name) for a dry run's `repository` value (ONEUP-0329 §4.4).
+
+    Measured on zypper 1.14.101 it is the alias; a display name naming exactly one
+    repository resolves too. Otherwise no alias, so no size, and the value as shown.
+    """
+    if value in names:
+        return value, names[value] or value
+    aliases = [alias for alias, name in names.items() if name == value]
+    return (aliases[0], value) if len(aliases) == 1 else ("", value)
 
 
 def _have(binary: str) -> bool:

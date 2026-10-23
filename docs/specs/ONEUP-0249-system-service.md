@@ -182,6 +182,8 @@ The table (the argv column is what the builder returns, before any `sudo`):
 | `cache-clean` | none | `zypper --non-interactive clean` |
 | `cache-size` | none | `du -sB1 /var/cache/zypp` |
 
+`check-dry-run`, the check's own dry run, is `docs/specs/ONEUP-0329-exact-update-count.md` §4.1.
+
 The argv column restates the argvs the engine runs today, which
 `steps`, `repos`, `actions` and `__main__` build at their call sites. Where a row and the
 call site disagree when this is built, the call site is the truth and the row is
@@ -285,7 +287,8 @@ connection, so a descriptor sent by mistake fails on the sender's side. It is pa
    a run nobody started by hand. The engine sends `interactive` false exactly when its
    environment carries `ONEUP_NONINTERACTIVE=1`. `oneup/gui/app.py::_headless_engine` sets
    that variable for every headless check and update, which the timer's `ExecStart`
-   reaches.
+   reaches. A check sends `interactive` false whatever `ONEUP_NONINTERACTIVE` says:
+   `docs/specs/ONEUP-0329-exact-update-count.md` §4.2 step 2.
 5. With `import_keys` true, the service also requires
    `org.freedesktop.packagekit.system-trust-signing-key`, under the same flag rule.
 6. **Any error is a refusal**: polkit unreachable, the action not registered, the

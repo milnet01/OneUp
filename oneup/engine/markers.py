@@ -67,11 +67,13 @@ def err(text: str) -> None:
     print(text, file=sys.stderr, flush=True)
 
 
-def emit_check(key: str, count: int, label: str, unreadable: tuple[str, ...] = ()) -> None:
+def emit_check(key: str, count: int, label: str, unreadable: tuple[str, ...] = (),
+               basis: str | None = None) -> None:
     """One step's check result — the reason first, never a confident zero.
 
     `unreadable` is the reason's code and its arguments (ONEUP-0072 §4.1), empty
-    when every source answered; the window owns the sentence.
+    when every source answered; the window owns the sentence. `basis` is
+    `at-least` when the count is a floor, not the update's own (ONEUP-0329 §4.5).
 
     A bare `CHECK|key|0` when a source could not be read is the ONEUP-0056 bug:
     "I couldn't look" rendered as "you're up to date". A non-zero count still
@@ -81,7 +83,7 @@ def emit_check(key: str, count: int, label: str, unreadable: tuple[str, ...] = (
     if unreadable:
         marker("CHECK_UNKNOWN", key, *unreadable)
     if not unreadable or count > 0:
-        marker("CHECK", key, count, label)
+        marker("CHECK", key, count, label, basis)
 
 
 # `\Z`, not `$`: `$` also matches just before a trailing newline, so `$` would

@@ -26,6 +26,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 from collections.abc import Callable, Sequence
 
 from . import markers, proc
@@ -366,11 +367,35 @@ def _service_session() -> bool:
     return chosen_route() == route.SERVICE
 
 
+# How long a root operation, or the run's lock check, waits for another OneUp job:
+# a check's dry run, at most `rootops.CHECK_DRY_RUN_SECONDS`, plus a margin for its
+# start-up. Change the two together (ONEUP-0329 §4.7).
+BUSY_WAIT_SECONDS = float(os.environ.get("ONEUP_BUSY_WAIT_SECONDS") or "210")
+BUSY_POLL_SECONDS = 2.0
+_JOB_RUNNING = "a job is running"    # the service's own `Busy` reason, verbatim
+
+
 def _service_job(op: str, args: dict[str, object] | None, *, merge_stderr: bool):
-    """Start `op` on the service, or say why not and return None (§4.7: no switch mid-run)."""
+    """Start `op` on the service, or say why not and return None (§4.7: no switch mid-run).
+
+    The service runs one job at a time, and a check's dry run may hold it, so `Busy`
+    for a running job is waited out, up to `BUSY_WAIT_SECONDS` (ONEUP-0329 §4.7).
+    """
     from . import service_client
+    give_up = time.monotonic() + BUSY_WAIT_SECONDS
+    said = False
     try:
-        return service_client.run(op, dict(args or {}), merge_stderr=merge_stderr)
+        while True:
+            try:
+                return service_client.run(op, dict(args or {}), merge_stderr=merge_stderr)
+            except service_client.Refused as exc:
+                if (exc.code != "Busy" or exc.reason != _JOB_RUNNING
+                        or time.monotonic() >= give_up):
+                    raise
+                if not said:
+                    markers.out("Waiting for another OneUp task to finish…")
+                    said = True
+                time.sleep(BUSY_POLL_SECONDS)
     except service_client.Refused as exc:
         if exc.code == "Invalid":
             markers.err(f"  Refusing root operation {op}: {exc.reason}")

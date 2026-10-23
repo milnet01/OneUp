@@ -1474,6 +1474,30 @@ def main() -> int:
     run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("check: no reboot banner", not w.reboot_banner.isVisibleTo(w))
 
+    # ONEUP-0329 INV-10: a count carrying `at-least` is a floor, and says so; a zero
+    # says "up to date" with or without it.
+    w = window.Updater()
+    w._check_mode = True
+    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False, **kw: _tray_calls.append(kw))
+    _tray_calls = []
+    for line in ("@@CHECK@@|system|7|system package(s)|at-least",
+                 "@@CHECK@@|flatpak|0|Flatpak app(s)",
+                 "@@CHECK@@|TOTAL|7|updates available|at-least"):
+        run.handle_line(w, line)
+    check("INV-10 an at-least count's badge says at least",
+          w.rows["system"].badge.text() == "at least 7 available")
+    w.proc = QProcess(w)
+    run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
+    check("INV-10 the check's summary says at least",
+          w.status.text().startswith("At least 7 update(s) available"))
+    check("INV-10 the tray hears the basis", _tray_calls == [{"at_least": True}])
+    _unpatch_all()
+    w = window.Updater()
+    w._check_mode = True
+    run.handle_line(w, "@@CHECK@@|system|0|system package(s)|at-least")
+    check("INV-10 an at-least zero still reads up to date",
+          w.rows["system"].badge.text() == "up to date")
+
     # --- 5b. CHECK_ITEM: each package reaches the package page -----------------
     # CHECK_ITEM was the one marker in handle_marker's dispatch that no GUI scenario fed,
     # so nothing proved the window still shows the packages --check emits it for.
@@ -1508,6 +1532,24 @@ def main() -> int:
     # malformed line changes nothing (INV-8).
     def _word(state):     # the word the row shows: translated where shown
         return app.translate("steps", steps.STATE_WORDS[state])
+
+    # ONEUP-0329 INV-5: a package the check lists as `remove` keys on its own edition,
+    # so the run's `removed` line lands on the same row rather than adding a second.
+    wR = window.Updater()
+    run.handle_line(wR, "@@CHECK_ITEM@@|system|foo|1.0-1.1|1.0-1.1|0||remove")
+    run.handle_line(wR, "@@PKG@@|system|removed|foo|1.0-1.1")
+    _foo = wR.packages.packages("system")
+    check("INV-5 a listed removal and the run's removed line are one row",
+          [(f.name, f.state, f.change) for f in _foo] == [("foo", "removed", "remove")])
+    check("INV-5 a removal reads as one",
+          package_views.versions(_foo[0]) == "1.0-1.1, to be removed")
+    run.handle_line(wR, "@@CHECK_ITEM@@|system|bar||2-1|0|Main|new")
+    run.handle_line(wR, "@@CHECK_ITEM@@|system|baz|2-1|1-1|0|Main|downgrade")
+    run.handle_line(wR, "@@CHECK_ITEM@@|system|qux|1-1|2-1|0|Main|sideways")
+    _by = {f.name: f for f in wR.packages.packages("system")}
+    check("a new package reads as new", package_views.versions(_by["bar"]) == "new 2-1")
+    check("a downgrade keeps the arrow", package_views.versions(_by["baz"]) == "2-1 → 1-1")
+    check("a change word outside the four drops the row", "qux" not in _by)
 
     wP = window.Updater()
     run.handle_line(wP, "@@CHECK_ITEM@@|system|vlc|3.0-1.1|3.0-2.1|222|Packman")
@@ -2444,6 +2486,15 @@ def main() -> int:
     check("INV-3 an unreadable source beside a count gives both",
           _is_note(_notes, "check.partial_count") and "packman" in _notes[0]
           and "4 update(s)" in _notes[0])
+    # ONEUP-0329 INV-10: the weekly notification says at least for a floor.
+    _c, _, _, _notes = _headless(gui_app._headless_check,
+                                 ["@@CHECK@@|TOTAL|7|updates available|at-least"])
+    check("INV-10 an at-least total notifies with at least",
+          _is_note(_notes, "check.available_at_least")
+          and _notes[0].endswith("At least 7 update(s) ready to install. Open OneUp to update."))
+    _c, _, _, _notes = _headless(gui_app._headless_check,
+                                 ["@@CHECK@@|TOTAL|0|updates available|at-least"])
+    check("INV-10 an at-least zero is silent", _notes == [])
 
     # INV-6: every line the engine prints reaches this path's stdout, in order.
     _plain = ["Refreshing repository 'oss'…", "  Hint: kept as the engine wrote it"]
@@ -3178,6 +3229,13 @@ def main() -> int:
     check("tray parses zero updates as neutral", w._tray_total == 0)
     tray._parse_tray_line(w, "@@STEP_BEGIN@@|system|1|3|x")   # non-CHECK line ignored
     check("tray parser ignores non-TOTAL lines", w._tray_total == 0)
+    # ONEUP-0329 INV-10: the tray reads the TOTAL's basis, and words it.
+    tray._parse_tray_line(w, "@@CHECK@@|TOTAL|7|updates available|at-least")
+    check("INV-10 tray keeps an at-least total's basis", w._tray_at_least is True)
+    check("INV-10 tray tooltip says at least",
+          tray._tooltip(7, at_least=True).endswith("at least 7 update(s) waiting"))
+    check("INV-10 tray tooltip at zero says up to date",
+          tray._tooltip(0, at_least=True).endswith("up to date"))
     # (4b) The tray check reuses ONE rolling log, overwritten each run, so a resident
     # session doesn't accumulate a new file ~4x/day (ONEUP-0024).
     p1 = tray._traycheck_log()
@@ -3364,14 +3422,14 @@ def main() -> int:
     # (12) on_finished refreshes the tray: a successful run -> neutral; a check -> the count.
     w = window.Updater()
     applied = []
-    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False: applied.append(n))
+    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False, **_: applied.append(n))
     w.proc = QProcess(w)
     w._installed_count = "2"
     run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)     # a run
     check("successful run sets the tray neutral", applied and applied[-1] == 0)
     w = window.Updater()
     applied2 = []
-    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False: applied2.append(n))
+    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False, **_: applied2.append(n))
     w._check_mode = True
     w._installed_count = "5"
     w.proc = QProcess(w)
@@ -3384,7 +3442,7 @@ def main() -> int:
     # That exact false all-clear shipped: the window said it while 8 updates waited,
     # because the sources holding them had been silently skipped.
     w = window.Updater()
-    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False: None)
+    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False, **_: None)
     w._check_mode = True
     w._installed_count = "0"
     w._unchecked = ["OneUp couldn't read these software sources: packman"]
@@ -3397,7 +3455,7 @@ def main() -> int:
           w.warn_banner.isVisibleTo(w) and "packman" in w.warn_label.text())
     # A clean check still gets its cheerful summary — the fix must not cry wolf.
     w = window.Updater()
-    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False: None)
+    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False, **_: None)
     w._check_mode = True
     w._installed_count = "0"
     w.proc = QProcess(w)

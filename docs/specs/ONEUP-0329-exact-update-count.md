@@ -1,6 +1,6 @@
 # ONEUP-0329 — the check counts what the update will really change
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** fix
 **Roadmap:** ONEUP-0329
 **Branch:** v2
@@ -338,6 +338,21 @@ tests pin.
 4. **Whether a `to-change-vendor` package is also listed under `to-upgrade` or
    `to-downgrade`**, on the next snapshot that changes a package's vendor. Either way §4.3
    counts it once; the measurement decides whether a vendor-only listing occurs at all.
+
+**Results, 2026-10-23**, each a root dry run on this machine with `--xmlout --no-refresh
+--non-interactive` under `LC_ALL=C` (zypper 1.14.101):
+
+1. `install --dry-run --force tree` printed `repository="download.opensuse.org-oss"`, the
+   alias, where the display name is `Main Repository (OSS)`. §4.4's first branch is the
+   live one; the display-name branch stays for safety.
+2. `remove --dry-run tree` listed `tree` under `to-remove` with `edition="2.3.2-1.3"`, the
+   edition `rpm -q tree` printed, no `edition-old`, and `repository="@System"`.
+3. Taken on this machine, not the VM: `install --dry-run tree` with `tree` installed
+   printed an empty `<install-summary packages-to-change="0">`, then a `<message>` reading
+   `Nothing to do.` So nothing to do parses as an exact zero, and no extra branch was
+   built. A `dup` against an empty `--reposd-dir` was tried as a closer stand-in and is
+   not one: with no repositories, `dup` planned removals.
+4. Not yet measured: no snapshot since has changed a package's vendor.
 
 ## 5. Correctness invariants
 

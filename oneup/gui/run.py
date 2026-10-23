@@ -407,6 +407,7 @@ def _reset_for_run(win, steps: list[str], check: bool):
     win._reboot = False
     win._reboot_reason = ""
     win._installed_count = ""
+    win._installed_basis = ""
     win._system_pending = 0
     win._sys_changed = False
     win._other_changed = {}     # Flatpak/firmware/leftover step → its count, if it acted
@@ -888,16 +889,25 @@ def handle_marker(win, line: str):
                 "Reclaimed {human}").format(human=human))
     elif tag == "CHECK":
         key, count = parts[0], (parts[1] if len(parts) > 1 else "0")
+        # `at-least`: the count is the rootless floor, not the update's own (ONEUP-0329).
+        at_least = len(parts) > 3 and parts[3] == "at-least"
         if key == "TOTAL":
             win._installed_count = count
+            win._installed_basis = "at-least" if at_least else ""
         else:
             n = int(count) if count.isdecimal() else 0
             if key == "system":
                 win._system_pending = n
             row = win.rows.get(key)
             if row:
-                row.set_badge(QCoreApplication.translate("run", "{count} available").format(
-                    count=n) if n > 0 else QCoreApplication.translate("run", "up to date"))
+                if n == 0:
+                    row.set_badge(QCoreApplication.translate("run", "up to date"))
+                elif at_least:
+                    row.set_badge(QCoreApplication.translate(
+                        "run", "at least {count} available").format(count=n))
+                else:
+                    row.set_badge(QCoreApplication.translate(
+                        "run", "{count} available").format(count=n))
     elif tag == "CHECK_UNKNOWN":
         # This step couldn't read one of its sources, so its count is a floor,
         # not an answer. Recorded so on_finished can refuse the "up to date"
@@ -1165,6 +1175,7 @@ def on_finished(win, exit_code: int, _status):
         win.bar.setFormat(QCoreApplication.translate("run", "Check complete"))
         n = win._installed_count
         total = int(n) if n.isdecimal() else 0
+        least = "-at-least" if win._installed_basis == "at-least" else ""
         # A count built on sources we couldn't read is a floor, not an answer, so
         # it must never be dressed up as an all-clear — that is the bug this whole
         # marker exists to prevent: the app said "up to date 🎉" while 8 updates
@@ -1180,17 +1191,18 @@ def on_finished(win, exit_code: int, _status):
             banners._show_warning(win, between.join(win._unchecked))
         else:
             win.status.setText(
-                i18n.counted("updates-available-run", total) if total
+                i18n.counted("updates-available-run" + least, total) if total
                 else QCoreApplication.translate("run", "Everything is up to date. 🎉"))
         win._announce(win.status.text())
         if total:
-            away = i18n.counted("updates-available", total)
+            away = i18n.counted("updates-available" + least, total)
         elif win._unchecked:
             away = QCoreApplication.translate("run", "Couldn't check for updates.")
         else:
             away = QCoreApplication.translate("run", "Everything is up to date.")
         _notify_when_away(win, away)
-        tray._apply_tray_total(win, total, uncertain=bool(win._unchecked))
+        tray._apply_tray_total(win, total, uncertain=bool(win._unchecked),
+                               at_least=bool(least))
         win._check_mode = False
         if win.size_link.automatic and ok and win._system_pending:
             request_size(win, "system", unasked=True)

@@ -21,6 +21,7 @@ imports it on a machine without the service (INV-12).
 
 from __future__ import annotations
 
+import os
 import time
 from collections.abc import Callable, Mapping
 from typing import NamedTuple
@@ -37,6 +38,11 @@ MAX_NAMES = 5000
 MAX_STRING_BYTES = 255
 
 _ALGORITHMS = ("number", "timeline")
+
+# How long the check's dry run may take, refresh included, before `timeout` ends it
+# (ONEUP-0329 §4.1). Read where the argv is built: on the service route, the service.
+# `privilege.BUSY_WAIT_SECONDS` is this plus a margin; change the two together.
+CHECK_DRY_RUN_SECONDS = int(os.environ.get("ONEUP_CHECK_DRY_RUN_SECONDS") or "180")
 
 
 def _now() -> str:
@@ -59,13 +65,28 @@ def _gpg(args: Mapping[str, object]) -> list[str]:
     return ["--gpg-auto-import-keys"] if args["import_keys"] else []
 
 
-def _refresh(args: Mapping[str, object], _cdn_dir: str) -> list[str]:
-    # The same `timeout` path the drop-in grants (ONEUP-0092 §4.2), and the bare
-    # name only where none was found, as the call site did before this table.
+def _timeout() -> str:
+    """The same `timeout` path the drop-in grants (ONEUP-0092 §4.2), and the bare
+    name only where none was found, as the refresh call site did before this table."""
     granted = privilege.REFRESH_SUDO_ARGV
-    timeout = granted[0] if granted else "timeout"
-    return [timeout, str(args["budget"]), "zypper", "--non-interactive", *_gpg(args),
+    return granted[0] if granted else "timeout"
+
+
+def _refresh(args: Mapping[str, object], _cdn_dir: str) -> list[str]:
+    return [_timeout(), str(args["budget"]), "zypper", "--non-interactive", *_gpg(args),
             "refresh", str(args["alias"])]
+
+
+def _check_dry_run(_args: Mapping[str, object], _cdn_dir: str) -> list[str]:
+    """The update's own transaction, solved but not run, as XML (ONEUP-0329 §4.1).
+
+    `--xmlout` is a global option, so it goes straight after `zypper`. No
+    `--no-refresh`: the check refreshes first, as the update does. Bounded by
+    `timeout` rather than by the service, which never stops a job its caller left.
+    """
+    zypper, *rest = steps.system_txn_argv("")
+    return [_timeout(), str(CHECK_DRY_RUN_SECONDS), "env", "LC_ALL=C", zypper, "--xmlout",
+            *rest, "--dry-run"]
 
 
 def _cache_size(_args: Mapping[str, object], _cdn_dir: str) -> list[str]:
@@ -92,6 +113,7 @@ class Op(NamedTuple):
 
 OPS: dict[str, Op] = {
     "size-dry-run": Op({"cdn": "b"}, lambda a, d: [*_txn(a, d), "--dry-run"]),
+    "check-dry-run": Op({}, _check_dry_run),
     "system-download": Op({"cdn": "b"}, lambda a, d: [*_txn(a, d), "--download-only"]),
     "system-commit": Op({"cdn": "b"}, _txn),
     "repo-refresh": Op({"alias": "s", "import_keys": "b", "budget": "u"}, _refresh),

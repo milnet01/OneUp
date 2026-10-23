@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=338 -->
+<!-- ants-roadmap-id-high-water: ONEUP=339 -->
 
 # OneUp Roadmap
 
@@ -9836,7 +9836,7 @@ when complete (that document's §7).
   Source: ONEUP-0320-build-2026-10-20.
   Lanes: gui.
 
-- 📋 [ONEUP-0329] **On Tumbleweed, Check counts updates with list-updates, which misses what dup will change.**
+- ✅ [ONEUP-0329] **On Tumbleweed, Check counts updates with list-updates, which misses what dup will change.**
   Run log 2026-10-23_074231: --check said 524; zypper dup planned 883 up,
   3 down, 41 new, 26 removed (927 to fetch). steps.system_updates reads
   `zypper list-updates`, whose solver will not remove or add packages, so
@@ -9871,6 +9871,22 @@ when complete (that document's §7).
   fixed, 2 dismissed. §4.7's lock wait now names lock_holder's holder
   instead of "another OneUp task". Nothing surfaced or filed. Status
   stays Reviewed; the spec is ready to build.
+  Shipped 2026-10-23 on v2, built to
+  docs/specs/ONEUP-0329-exact-update-count.md (Status Implemented). The
+  engine's --check asks the service for check-dry-run (rootops), reads
+  it with parsers.change_list and builds the count in
+  steps.system_changes; anywhere that cannot answer, the rootless count
+  carries basis at-least on CHECK|system and CHECK|TOTAL. CHECK_ITEM
+  gains change. A run waits on Busy (privilege._service_job) and on
+  zypp's lock on the service route (__main__._wait_for_lock). The window
+  words at-least in the badge, summary, tray and weekly notification,
+  and reads new / to be removed in the package list. §4.8 measured:
+  repository holds the alias; a removal's edition is the installed one;
+  nothing to do prints an empty install-summary (taken on this machine,
+  not the VM). Item 4 (vendor-only listing) not yet measurable. By hand
+  still owed: one check from the window and one from the tray on a
+  packaged install, beside a root dry run; the installed service here
+  predates check-dry-run, so it needs a v2 RPM first.
   **Layman:** Check said 524 updates; the real update changed 927 packages.
   Kind: fix.
   Source: real-update-test-2026-10-23.
@@ -10098,6 +10114,19 @@ when complete (that document's §7).
   **Layman:** A review of the half-finished-update rule found older sentences in the testing rules that no longer match the code.
   Kind: doc-fix.
   Source: review-contract-2026-10-23.
+
+- 📋 [ONEUP-0339] **OneUp has no list of the changes that count as breaking, which the global standards expect.**
+  align-report (2026-10-23) flags no docs/standards/versioning-overrides.md.
+  OneUp's version policy lives in docs/standards/workflow.md §5, which
+  names no breaking surfaces; its What-checks-this table says a breaking
+  change called a patch is caught by a person or not at all. The user
+  chose (2026-10-23) to add the short file: name the breaking surfaces
+  (the marker contract, the step keys, the four state files, the six
+  version sites, the service's D-Bus interface) and point workflow.md §5
+  at it. A new standard goes through review-contract --genre standard.
+  **Layman:** Write down, in one short file, which changes would break things for users and so need a major version number.
+  Kind: doc.
+  Source: user-decision-2026-10-23.
 
 ## 2.1.0 — after 2.0
 

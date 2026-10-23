@@ -198,16 +198,20 @@ def notify_send(title: str, body: str) -> None:
         proc.run(["notify-send", "-a", "OneUp", "-i", APP_ID, title, body])
 
 
-def _check_system(sizes: bool) -> tuple[int, bool]:
-    """Count pending system updates. Returns (count, whether a source was unreadable).
+def _check_system(sizes: bool) -> tuple[int, bool, bool]:
+    """Count pending system updates.
 
-    One read serves the count and the per-package detail (`steps.system_updates`).
-    zypper reports a repository it had to set aside as a warning (exit 106), and
-    that warning is the only difference between "nothing to update" and "I
-    couldn't read the repository that had the updates".
+    Returns (count, whether a source was unreadable, whether the count is a floor).
+    One read serves the count and the per-package detail (`steps.system_changes`):
+    the update's own dry run where the system service can run it, else the rootless
+    list, which misses new and removed packages and is worded "at least"
+    (ONEUP-0329). zypper reports a repository it had to set aside as a warning
+    (exit 106), and that warning is the only difference between "nothing to
+    update" and "I couldn't read the repository that had the updates".
     """
-    listing = steps.system_updates(sizes)
+    listing = steps.system_changes(sizes)
     n = listing.count
+    basis = None if listing.exact else "at-least"
     unreadable: tuple[str, ...] = ()
     if listing.rc != 0 or not listing.readable:
         # Name the repositories if zypper did; otherwise report the failure without
@@ -221,13 +225,16 @@ def _check_system(sizes: bool) -> tuple[int, bool]:
             why = f"OneUp couldn't read the software sources (zypper exited {listing.rc})"
         why += " — this list may be incomplete. Running an update refreshes them."
         markers.out(f"  System packages: couldn't check — {why}")
-    else:
+    elif listing.exact:
         markers.out(f"  System packages: {n} update(s)")
-    markers.emit_check("system", n, "system package(s)", unreadable)
+    else:
+        markers.out(f"  System packages: at least {n} update(s) "
+                    f"(no exact count: {listing.why})")
+    markers.emit_check("system", n, "system package(s)", unreadable, basis)
     for row in listing.rows:
         markers.marker("CHECK_ITEM", "system", row.name, row.old, row.edition,
-                       row.size, row.repo)
-    return n, bool(unreadable)
+                       row.size, row.repo, row.change if listing.exact else None)
+    return n, bool(unreadable), not listing.exact
 
 
 def _check_flatpak() -> tuple[int, bool]:
@@ -278,8 +285,9 @@ def check(opts: Options) -> int:
     markers.out("Checking for available updates (read-only)…")
     total = 0
     incomplete = False
+    at_least = False
     if opts.selected("system"):
-        n, bad = _check_system(opts.sizes)
+        n, bad, at_least = _check_system(opts.sizes)
         total += n
         incomplete = incomplete or bad
     if opts.selected("flatpak") and shutil.which("flatpak"):
@@ -292,16 +300,21 @@ def check(opts: Options) -> int:
         incomplete = incomplete or bad
     # A step whose read FAILED still contributes its partial count: incompleteness is
     # carried by CHECK_UNKNOWN and by the wording below, never by a lowered total.
-    markers.marker("CHECK", "TOTAL", total, "updates available")
+    # Flatpak and firmware counts are exact, so only the system count makes the
+    # total a floor (ONEUP-0329 §4.5).
+    markers.marker("CHECK", "TOTAL", total, "updates available",
+                   "at-least" if at_least else None)
+    least = "at least " if at_least and total else ""
     if incomplete:
-        markers.out(f"  Total: {total} update(s) found, "
+        markers.out(f"  Total: {least}{total} update(s) found, "
                     "but at least one source couldn't be read")
         markers.out("         — treat this as a floor, not an all-clear.")
     else:
-        markers.out(f"  Total: {total} update(s) available.")
+        markers.out(f"  Total: {least}{total} update(s) available.")
     if opts.notify and total > 0:
         notify_send("Updates available",
-                    f"{total} update(s) ready to install. Open OneUp to update.")
+                    f"{least.capitalize()}{total} update(s) ready to install. "
+                    "Open OneUp to update.")
     markers.marker("DONE", "ok")
     return 0
 

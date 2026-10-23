@@ -100,8 +100,8 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@SNAPSHOT@@` | `id` | the pre-update snapshot block | `handle_marker` |
 | `@@SNAPSHOT_ITEM@@` | `id\|date\|description` | the same block, once per restore point | `handle_marker` |
 | `@@SNAPSHOTS@@` | `warn\|count` *or* `thinned\|removed` | pre-flight; `--thin-snapshots` | `handle_marker`; `_on_thin_finished` |
-| `@@CHECK@@` | `key\|count\|label` | `emit_check` | `handle_marker`; `_parse_tray_line` |
-| `@@CHECK_ITEM@@` | `key\|name\|from\|to[\|bytes\|repo]` | the `--check` pass | `handle_marker` |
+| `@@CHECK@@` | `key\|count\|label[\|basis]` | `emit_check` | `handle_marker`; `_parse_tray_line` |
+| `@@CHECK_ITEM@@` | `key\|name\|from\|to[\|bytes\|repo[\|change]]` | the `--check` pass | `handle_marker` |
 | `@@PKG@@` | `key\|state\|name\|edition[\|bytes\|from\|repo]` | `run_system`, `stream_filtered` and `run_flatpak`, during a run | `handle_marker` |
 | `@@CHECK_UNKNOWN@@` | `key\|code[\|name…]` | `emit_check` | `handle_marker`; `_parse_tray_line` |
 | `@@SIZE@@` | `key\|download` | the `--size` pass | `_on_size_output` |
@@ -229,7 +229,7 @@ A documented trap, because the names differ by one letter and mean unrelated thi
 it can reach a root `snapper rollback`; `date` and `description` are display-only, and the
 description has had any `|` rewritten to `/` (§1.1).
 
-### 4.6 `CHECK|key|count|label` and `CHECK_UNKNOWN|key|code[|name…]`
+### 4.6 `CHECK|key|count|label[|basis]` and `CHECK_UNKNOWN|key|code[|name…]`
 
 The pair that exists because of ONEUP-0056 — OneUp once reported "Everything is up to date"
 while eight updates waited.
@@ -247,12 +247,23 @@ while eight updates waited.
   emitted, zero included; a `CHECK_UNKNOWN` before it is what makes it a floor.
 - `label` is a human phrase (`"firmware update(s)"`). The window **does not use it** — it
   builds its own badge text. It is there for the terminal reader.
+- **`basis` is the code `at-least`, or absent.** `at-least` means the count is the rootless
+  list, which misses new and removed packages, because the update's own dry run did not
+  answer (`docs/specs/ONEUP-0329-exact-update-count.md` §4.2). Only `CHECK|system` and
+  `CHECK|TOTAL` carry it. It is not `CHECK_UNKNOWN`: an `at-least` zero still reads "up to
+  date".
 
-`CHECK_ITEM|key|name|from|to[|bytes|repo]` carries one changed package for the package
-model (ONEUP-0259). **`from` is empty for Flatpaks** — the Flatpak path knows the new
+`CHECK_ITEM|key|name|from|to[|bytes|repo[|change]]` carries one changed package for the
+package model (ONEUP-0259). **`from` is empty for Flatpaks** — the Flatpak path knows the new
 version only. `bytes` is the download size, `0` when unknown: always `0` for a Flatpak,
 and for a system package unless the check was given `--sizes`. `repo` is the repository's
 display name, or a Flatpak remote. A line carrying only `key` and `name` is still valid.
+
+`change` is `upgrade`, `downgrade`, `new` or `remove`; absent means `upgrade`. Only a
+system row from the update's own dry run carries it (ONEUP-0329 §4.5). For `new`, `from` is
+empty. **For `remove`, `from` and `to` are both the removed edition** and `bytes` is `0`,
+so the run's `PKG|system|removed|name|edition` lands on the same row. The window drops a
+row whose `change` is any other word.
 
 ### 4.7 `INSTALLED|count|sys_changed|fw_changed`
 
@@ -413,6 +424,12 @@ lists, plus this document. Nothing else was opened: the contract is frozen again
 `PROGRESS` phases for the `flatpak` key (§4.3), so the window can say which Flatpak pass is
 running. It landed as one change touching every file §5 lists, plus this document. Nothing
 else was opened: the contract is frozen again.
+
+**The fourth exception, approved by the user on 2026-10-23:** ONEUP-0329 added `basis` on
+`CHECK` and `change` on `CHECK_ITEM` (§4.6), so the check can count and list what the
+update will really change, and say "at least" where it cannot. It landed as one change
+touching every file §5 lists, plus this document. Nothing else was opened: the contract is
+frozen again.
 
 Never a rewrite and a contract change at once. In the same step, a failing test cannot tell
 you which one broke it.

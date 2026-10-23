@@ -620,10 +620,12 @@ implicitly. That is what kept `_split_session_critical` with `restart_services`,
 guard with the repository apply command, and the snapshot-id check with the rollback call:
 each pair moved into one module together.
 
-**9.5 — `--check` must never authenticate.** It is strictly read-only, runs **without
-root**, and must never call `zypper dup`/`update`. The mock in the test suite exits 99 if it
-does, and a separate sentinel test asserts `--check` invokes `sudo` **zero** times. This is
-what makes the background timer and the tray check safe to run unattended.
+**9.5 — `--check` never authenticates and never calls `sudo`.** On the service route it
+asks the service, non-interactively, for the one operation `check-dry-run`, and on any
+refusal it counts as the user (`docs/specs/ONEUP-0329-exact-update-count.md` §4.2). It
+never runs a transaction: the engine never calls `zypper dup`/`update` itself, and the
+service's `check-dry-run` carries `--dry-run`. This is what makes the background timer and
+the tray check safe to run unattended.
 
 **9.6 — A test must not damage the machine it runs on.** Scenarios that invoke the engine —
 or any code extracted from it — outside `run_engine` must redirect **every** `ONEUP_*` state
@@ -714,7 +716,7 @@ journal line** (INV-14). With no session and no job for the idle period, the ser
 | §5.5 revocation removes the guard too | `tests/run-tests.sh` — revoke deletes both files |
 | §5.6 "on" means passwordless works | `tests/run-tests.sh` — `--auth-status` across live-and-current, live-but-stale, and absent |
 | §5.7 the guard runs zypper and nothing else | `tests/run-tests.sh` — it refuses a non-zypper argv with exit 2, appends `--download-only`, TERMs its child on a stop request and reaps it. The stop scenario also runs over **both** wrappers, so the guard cannot silently drop the stop poll for the users who enabled passwordless |
-| §9.5 `--check` invokes `sudo` zero times | `tests/run-tests.sh` — *"`--check` performs NO privileged auth"*, backed by a mock that exits 99 if a transaction is attempted, plus the sentinel that counts `sudo` invocations. **Invoking and authenticating are not the same test** — §5.6's `auth_current` probe (`sudo -k -n … --version`) is a `sudo` invocation that authenticates nothing |
+| §9.5 `--check` invokes `sudo` zero times | `tests/run-tests.sh` — *"`--check` performs NO privileged auth"*, backed by a mock that exits 99 if a transaction is attempted, plus the sentinel that counts `sudo` invocations. On the service route, *"INV-1 the service-route check reaches root without privilege's sudo paths"* (ONEUP-0329) fails if the check reaches `sudo_init`, `root` or `sudo`. **Invoking and authenticating are not the same test** — §5.6's `auth_current` probe (`sudo -k -n … --version`) is a `sudo` invocation that authenticates nothing |
 | §6 stopping is cooperative | `tests/run-tests.sh` |
 | §7.4 the diagnostics bundle carries no identifiers | `tests/gui-smoke.py` — the bundle has its hostname scrubbed |
 | §7.3 captured privileged output is not echoed to the log | nothing automatic — the §10 checklist is the only gate |

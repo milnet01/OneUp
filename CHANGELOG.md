@@ -203,6 +203,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Check counts fewer updates than the update then installs.** (ONEUP-0329)
+  On a packaged install, Check now asks OneUp's system service to try the update without installing anything, so its count and package list include new and removed packages. One check on 23 October said 524; the update changed 953. Where that cannot run, such as the AppImage, the count says "at least".
+
 - **The Flatpak step does not say which pass it is on, or whether it is downloading or installing.** (ONEUP-0336)
   The status line now names the pass and how far through it is: "Updating your apps: 3 of 12", then "Updating system apps: 3 of 20", then "Removing unused runtimes". Flatpak reports downloading and installing as one, so the window says "updating".
 

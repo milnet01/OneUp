@@ -14,6 +14,8 @@ from dataclasses import dataclass
 # pass reprints `Preloading: … [already in cache]` for packages already installed.
 _ORDER = {"queued": 0, "downloading": 1, "downloaded": 2, "installed": 3, "removed": 3}
 STATES = tuple(_ORDER)
+# What a check's dry run says the update will do to a package (ONEUP-0329 §4.5).
+CHANGES = ("upgrade", "downgrade", "new", "remove")
 
 
 @dataclass
@@ -25,6 +27,7 @@ class Package:
     size: int = 0
     repo: str = ""
     state: str = "queued"
+    change: str = "upgrade"
 
 
 class PackageModel:
@@ -41,17 +44,19 @@ class PackageModel:
         self._notify(None)
 
     def add_check_item(self, parts: list[str]) -> None:
-        """`key|name|from|to[|bytes|repo]`. Only key and name are required."""
+        """`key|name|from|to[|bytes|repo[|change]]`. Only key and name are required;
+        an absent change is an upgrade, and one not in `CHANGES` drops the row."""
         if len(parts) < 2 or not parts[0] or not parts[1]:
             return
         size = parts[4] if len(parts) > 4 else "0"
-        if not size.isdecimal():
+        change = parts[6] if len(parts) > 6 else "upgrade"
+        if not size.isdecimal() or change not in CHANGES:
             return
         key, name = parts[0], parts[1]
         edition = parts[3] if len(parts) > 3 else ""
         self._packages[(key, name, edition)] = Package(
             key, name, edition, old=parts[2] if len(parts) > 2 else "", size=int(size),
-            repo=parts[5] if len(parts) > 5 else "")
+            repo=parts[5] if len(parts) > 5 else "", change=change)
         self._notify(key)
 
     def apply(self, parts: list[str]) -> None:

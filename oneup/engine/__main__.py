@@ -15,10 +15,11 @@ import os
 import re
 import shutil
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import actions, markers, parsers, privilege, proc, repos, runstate, steps
+from . import actions, markers, parsers, privilege, proc, repos, route, runstate, steps
 
 ALL_STEPS = "system,flatpak,firmware,orphans,cache"
 
@@ -601,6 +602,26 @@ def _notify(opts: Options, log_file: str) -> None:
         actions.notify_send("Already up to date", f"No updates were needed.{skip_note}")
 
 
+def _wait_for_lock() -> str | None:
+    """`repos.lock_holder`, waited on for up to `BUSY_WAIT_SECONDS` on the service route.
+
+    There a check's dry run may hold zypp's lock for a while, so an update started
+    meanwhile waits rather than stopping as busy — and so it waits for YaST or a
+    hand-run zypper too, by the user's choice (ONEUP-0329 §4.7, §3 item 9). The sudo
+    route runs no check's dry run, and still stops at once (ONEUP-0039).
+    """
+    holder = repos.lock_holder()
+    if not holder or privilege.chosen_route() != route.SERVICE:
+        return holder
+    give_up = time.monotonic() + privilege.BUSY_WAIT_SECONDS
+    pid, _, name = holder.partition(" ")
+    markers.out(f"Waiting for {name or 'another program'} (process {pid}) to finish…")
+    while holder and time.monotonic() < give_up:
+        time.sleep(privilege.BUSY_POLL_SECONDS)
+        holder = repos.lock_holder()
+    return holder
+
+
 def run(opts: Options, run_keys: list[str], log_file: str, held_auth: bool = False) -> int:
     """One full run, in the Bash's order — which is itself the deliverable.
 
@@ -634,7 +655,7 @@ def run(opts: Options, run_keys: list[str], log_file: str, held_auth: bool = Fal
     # failures (ONEUP-0039). A Flatpak- or firmware-only run is unaffected.
     needs_zypper = any(opts.selected(k) for k in ("system", "orphans", "cache"))
     if needs_zypper:
-        holder = repos.lock_holder()
+        holder = _wait_for_lock()
         if holder:
             holder_pid, _, holder_name = holder.partition(" ")
             named = holder_name
