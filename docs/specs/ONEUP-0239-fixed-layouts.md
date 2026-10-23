@@ -466,7 +466,9 @@ All counts are over `win.packages.packages(key)`, using `shown_state`:
 ~~now = `downloading`, `downloaded`~~ *(ONEUP-0335, §3 item 16)*. A package being
 installed is never seen in that state: `parsers.PackageLines` reports an install only
 once its line ends in `done]`, so it moves from `downloaded` to `installed` in one step.
-So *now* holds only what is downloading.
+A package fetched by `Retrieving:` lines, as zypper fetches without its parallel preload,
+is reported `downloading` and today is never moved on. `parsers.PackageLines` reports it
+`downloaded` once its fetch ends, so it leaves *now* while it waits to install.
 
 - **Rows' table** shows the filter's packages, all steps under *All*.
 - **Rail's board** shows the packages of `win.current_step`, and all packages when it is
@@ -776,7 +778,10 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
 - **INV-21** *(ONEUP-0335)* *Now* counts only what is downloading.
   *Test:* `tests/gui-smoke.py` — `package_views.counts` over one package in each of
   `queued`, `downloading`, `downloaded` and `installed` gives 2 to go, 1 now and 1 done.
-  *Breaks when:* `downloaded` counts as now.
+  And `tests/parsers-test.py` — one `PackageLines` fed a package's `Retrieving:` line,
+  then the next package's, reports the first `downloaded` before the second
+  `downloading`.
+  *Breaks when:* `downloaded` counts as now, or a fetched package stays `downloading`.
 
 ## 6. Failure modes
 
@@ -800,8 +805,9 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
 
 INV-1, INV-2, INV-3, INV-4, INV-5, INV-6, INV-7, INV-8, INV-9, INV-10, INV-11, INV-12,
 INV-13, INV-14, INV-15, INV-16, INV-17 and INV-18 are all tested in `tests/gui-smoke.py`,
-each as its §5 clause says. *(ONEUP-0335, ONEUP-0336)* So are INV-20 and INV-21; INV-19
-is tested in `tests/run-tests.sh`. Beside them:
+each as its §5 clause says. *(ONEUP-0335, ONEUP-0336)* So are INV-20 and INV-21's
+window half; INV-19 is tested in `tests/run-tests.sh`, and INV-21's parser half in
+`tests/parsers-test.py`. Beside them:
 
 - **ONEUP-0076 INV-1's sweep** fails any focusable widget missing from its `FOCUS_TABLE`, so
   the three package views and the filter buttons get rows there, as ONEUP-0027 added
@@ -870,8 +876,8 @@ one commit. The engine changes in `steps.run_flatpak`, and in whatever carries F
 lines to it on both routes to root. The new strings follow
 `docs/standards/wording-and-translation.md`, and the translation catalogue is refreshed.
 `CHANGELOG.md` `[Unreleased]` gains a line saying the Flatpak step names its pass and its
-count. *(ONEUP-0335)* No engine or marker change; `CHANGELOG.md` gains a line saying a
-downloaded package now counts as to go.
+count. *(ONEUP-0335)* No marker change; the engine changes in `parsers.PackageLines`
+(§4.3.1). `CHANGELOG.md` gains a line saying a downloaded package now counts as to go.
 
 ## 9. Alternatives considered (and rejected)
 
@@ -937,3 +943,4 @@ downloaded package now counts as to go.
 | 5 | 2026-10-17 | Q1 1 · Q2 1 · Q3 1 · Q4 1 — 4 verified, 1 dismissed | 2 fixed, 2 filed on ONEUP-0322; loop 1 of the gate on ONEUP-0310's amendment. Two lanes, each holding every question; both found that INV-17 bounded Rows' floor from below only, so a six-row floor passed (Q4): INV-17 now also holds Rows' viewport under four row heights. The Q1 came from measuring what a lane asked: three rows make Rows' minimum 995 at *Normal*, 1037 at *Large* and 1105 at *Larger*, so §3 item 15's 1080 promise now names *Normal* and carries the figures. Outside the amended text, filed rather than fixed: the badge's phase word once the value has passed 500 and a later `PROGRESS` says `download` (Q3), and Rail's summary described differently in §4.3 and §4.3.1 (Q2). Dismissed: §2's dated sentence on `run._launch`, background nothing is built from. Five open questions resolved clean (`#RestartBtn`'s overlay fill, a check sends no `STEP_BEGIN`, a test's run set-up, `openlog_btn`'s slot, the high-contrast tab) |
 | 6 | 2026-10-17 | Q2 3 — 3 verified, 1 dismissed | 0 fixed, 3 filed on ONEUP-0322; the cap for a spec, and the run ends. Two lanes, each holding every question; no finding landed on ONEUP-0310's text or on row 5's fixes, and a lane checked §3 item 15's new figures against the measurements. All three Q2s lie outside the amended text: §1 promises every package's versions and source, while Spotlight's lines carry neither (both lanes); §4.1.3 drops `activity`'s moving clock during a check or refresh, which the liveness trap in `.claude/rules/engine-traps.md` needs; and *Packages* and the status count read *not known* where `docs/reference/marker-protocol.md` §4.3 requires a running tally. Dismissed: INV-12's and INV-15's `cache_bytes` "in `oneup/gui/run.py`", the name `run.py` imports, so the stub's target is right. A check was confirmed to send no step markers. Own-fix share 0 of 3, a calm cap. Second share: 2 of the run's 7 verified findings lie in ONEUP-0310's text |
 | 0335-0336-amend | 2026-10-23 | none — an authoring amendment; no reviewer was dispatched | The user's two decisions of 2026-10-23 (§3 items 16 and 17): *now* holds only what is downloading, with `downloaded` moved to *to go* (§4.3.1, INV-21, from ONEUP-0335); and the Flatpak step sends `PROGRESS` with phases `user`, `system` and `unused`, opening the marker contract a third time (§4.1.4, INV-19, INV-20, §8, from ONEUP-0336). Status back to Draft. The gate on it is the next loop. |
+| 7 | 2026-10-23 | Q1 1 — 1 verified, 2 dismissed | 1 fixed; loop 1 of the gate on the ONEUP-0335/0336 amendment. Two lanes, each holding every question. The Q1: a package fetched by `Retrieving:` lines stays `downloading` in `parsers.PackageLines` until installed, so moving `downloaded` to *to go* alone left it in *now*; §4.3.1 now has the parser report it `downloaded` when its fetch ends, §8 names that engine change, and INV-21 gains a `tests/parsers-test.py` half. Unrunnable here: every zypper run on this machine preloads, so the no-preload fetch was read from the parser and the suite's mocks, not run. Dismissed, both measured: Spotlight's first line and *Packages* box under a Flatpak phase (`layout_spotlight._sentence` gives the name alone and the box no phase word, so nothing built changes); and Flatpak progress ended by a carriage return (both routes read with universal newlines — `_pump` with `text=True`, `service_client.Job.lines` through a default `TextIOWrapper`). Two open questions resolved clean: `STEP_BEGIN` clears the phase before Flatpak's first `PROGRESS`; Flatpak 1.18.4 under `LC_ALL=C` still prints `…`, newline-ended. Before dispatch every citation in the amendment was opened, none defective |
