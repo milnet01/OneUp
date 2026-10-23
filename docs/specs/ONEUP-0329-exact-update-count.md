@@ -94,6 +94,10 @@ fields this needs are §4.5's.
    "up to date".
 7. **The dry run bounds itself with `timeout`, as `repo-refresh` does**, instead of being
    stopped by the service (§9). Not the user's call.
+8. **A check stands down while an update is running**: it takes the fallback without asking
+   the service (§4.2 step 0). The user, 2026-10-23, over two alternatives: the window not
+   starting a check during a run, and the service refusing `check-dry-run` while another
+   session exists.
 
 ## 4. Design
 
@@ -147,6 +151,11 @@ class SystemListing(NamedTuple):
 
 `system_changes`:
 
+0. **A live run.** If `runstate.run_state_holder()` names a live engine, it returns
+   `system_updates(sizes)` with `exact` false and `why` `"an update is running"`, and
+   opens no session. So a tray or weekly check never refreshes repositories as root
+   between a run's root operations. A run not yet holding `run.state` — before
+   `claim_run_state` — is not seen here; §4.7's wait covers that window.
 1. **Route.** If `route.engine_route(os.environ)` is not `route.SERVICE`, it returns
    `system_updates(sizes)` with `exact` false and `why` `"needs the system service"`.
    The AppImage always lands here (ONEUP-0249 INV-10), and never touches the system bus.
@@ -401,6 +410,17 @@ tests pin.
   get the fixture `primary.xml` size and the display name.
   *Breaks when:* the lookup assumes either form alone.
 
+- **INV-12** While another live engine holds `run.state`, the check opens no service
+  session and emits the fallback with `at-least`.
+  *Test:* `tests/run-tests.sh`, against `--serve` — the scenario's `ONEUP_RUN_STATE`
+  names the pid of a process started as `bash -c 'exec -a oneup.engine sleep 30'`, whose
+  command line `run_state_holder` accepts; the check emits the mock `list-updates` count
+  with `at-least`, and the fake service logs no `OpenSession`. A second run with that
+  process killed opens a session. The live-versus-dead pair isolates the rule: a stale
+  record alone must not stand the check down.
+  *Breaks when:* the check asks the service without reading `run.state`, or stands down on
+  a record whose pid is dead.
+
 ## 6. Failure modes
 
 | What breaks | What happens |
@@ -411,6 +431,7 @@ tests pin.
 | A crawling mirror | `timeout` ends the dry run at `CHECK_DRY_RUN_SECONDS`: the fallback. A run started meanwhile waits up to `BUSY_WAIT_SECONDS` |
 | The solver cannot settle without a choice | zypper exits 4 in non-interactive mode: the fallback, and the terminal line names the status. The update will meet the same problem |
 | The user starts an update during a check | the run's first root operation waits, with one line saying why (§4.7) |
+| A tray or weekly check starts during an update | it stands down: the fallback, "at least N", and no service session (§4.2 step 0) |
 | The service dies mid-dry-run | `Read` fails: the fallback |
 | The check's process is killed | the dry run finishes or times out in the service, as any job does (ONEUP-0249 INV-5) |
 | A future zypper renames an element or the kind attribute | the fallback (§4.3). Never reads as zero |
@@ -419,7 +440,8 @@ tests pin.
 ## 7. Tests
 
 - **`tests/parsers-test.py`**: INV-4.
-- **`tests/run-tests.sh`**: INV-1, INV-2, INV-3, INV-6, INV-7, INV-8, INV-9 and INV-11.
+- **`tests/run-tests.sh`**: INV-1, INV-2, INV-3, INV-6, INV-7, INV-8, INV-9, INV-11 and
+  INV-12.
   The service-route scenarios run against `tests/service-test.py --serve` with
   `ONEUP_BACKEND=service` on their own command, and their mock `zypper` gains a
   `--xmlout … dup … --dry-run` mode printing a fixture install summary.
