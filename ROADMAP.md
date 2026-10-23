@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=337 -->
+<!-- ants-roadmap-id-high-water: ONEUP=338 -->
 
 # OneUp Roadmap
 
@@ -9926,6 +9926,18 @@ when complete (that document's §7).
   **Layman:** After a half-finished update, the password popup could not start, so OneUp could not finish the job.
   Kind: fix.
   Source: real-update-test-2026-10-23.
+
+- 📋 [ONEUP-0338] **Review findings outside ONEUP-0330's change, filed from its contract gate.**
+  testing.md §5 item 2 says "A failed step is recorded, emits a
+  @@HINT@@ the window words in plain English". False for three paths:
+  run_cache's "clean failed" exit, both of run_orphans' fail exits, and
+  steps._failure when no pattern matches (hint stays empty, the step
+  still fails). Decide which side is right: narrow the rule to "where
+  the engine can name the cause", or add the hints. The What-checks-this
+  §5 row presents the whole item as guarded by tests/run-tests.sh.
+  **Layman:** A review of the half-finished-update rule found older sentences in the testing rules that no longer match the code.
+  Kind: doc-fix.
+  Source: review-contract-2026-10-23.
 
 ## 2.1.0 — after 2.0
 
