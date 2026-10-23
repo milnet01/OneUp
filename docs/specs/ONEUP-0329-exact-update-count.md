@@ -415,8 +415,9 @@ tests pin.
   *Test:* `tests/run-tests.sh`, against `--serve` — the scenario's `ONEUP_RUN_STATE`
   names the pid of a process started as `bash -c 'exec -a oneup.engine sleep 30'`, whose
   command line `run_state_holder` accepts; the check emits the mock `list-updates` count
-  with `at-least`, and the fake service logs no `OpenSession`. A second run with that
-  process killed opens a session. The live-versus-dead pair isolates the rule: a stale
+  with `at-least`, and the serve directory's `service.log` gains no `session opened` or
+  `session refused` line. A second run with that process killed adds `session opened`.
+  The live-versus-dead pair isolates the rule: a stale
   record alone must not stand the check down.
   *Breaks when:* the check asks the service without reading `run.state`, or stands down on
   a record whose pid is dead.
@@ -462,11 +463,12 @@ tests pin.
 - **`docs/specs/ONEUP-0259-package-model.md`**: a pointer under §4.3's system check and
   under INV-1, naming this spec's §4.2 for the service route.
 - **`docs/specs/ONEUP-0249-system-service.md`**: a pointer under §4.2's table naming this
-  spec's §4.1 for `check-dry-run`.
+  spec's §4.1 for `check-dry-run`, and one under §4.4 item 4 naming this spec's §4.2 step 2,
+  where a check sends `interactive` false whatever `ONEUP_NONINTERACTIVE` says.
 - **`CHANGELOG.md`** `[Unreleased]`: one Fixed line, in the user's words.
 - **The translation catalogues**: the new strings of §4.6.
 
-The two spec edits are pointers, so they ride this spec's gate. The two non-spec edits apply
+The spec edits are pointers, so they ride this spec's gate. The two non-spec edits apply
 the wording this spec's gate reviewed.
 
 ## 9. Alternatives considered (and rejected)
@@ -498,3 +500,4 @@ the wording this spec's gate reviewed.
 | --- | --- | --- | --- |
 | 1 | 2026-10-23 | Q1 3 · Q3 1 · Q4 5 — 9 verified, 0 dismissed | all 9 fixed. Two lanes, each holding every question. One Q1 came from building the packet: the check's job runs with stderr apart, so a skipped repository is named only where a `<message>` names it. Both lanes found the engine tests placed in `tests/service-test.py`, which never starts the engine; the unfalsifiable INV-1 and INV-8 breaks-when clauses; the unpinned `rc` of an answered dry run; and the session-cap `Busy` reasons, which `Run` never sends. One lane found the waiting line naming a check for any job, and the unpinned `packages-to-change` in INV-4's fixture. One Q4 came from settling a lane's open question: no test mocks `/etc/os-release`. Four other open questions resolved clean. Root-only measurements are an unrunnable region here |
 | 2 | 2026-10-23 | Q2 2 · Q3 2 · Q4 1 — 5 verified, 0 dismissed | 4 fixed, 1 surfaced to the user; the cap for a spec, so this loop's fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found that a renamed element or a `kind`/`type` drift gave an exact zero against §6's promise. One lane each found INV-8 overclaiming on the `auto` route, §8 cataloguing the engine's English waiting line, and the log quote cut before its arch change. Surfaced, not fixed: a tray or timer check can land between a run's root operations and refresh repositories as root mid-run; settled from a lane's open question by reading `_tray_check`, which has no run guard. Own-fix share 0 of 5, read as a calm cap. No second share: the gated change was the whole document |
+| 3 | 2026-10-23 | Q1 2 · Q2 1 · Q4 2 — 5 verified, 0 dismissed | 2 fixed, 2 surfaced to the user, 1 filed on ONEUP-0329; a continued run of one loop on `baa6d7e`, so its fixes are read by no lane. Two lanes, each holding every question; both found INV-12's test looking for an `OpenSession` line the service never logs (fixed). One lane found the check's flags unpointed from ONEUP-0249 §4.4 item 4 (fixed in §8, out of radius, no loop left). Surfaced: a run started during a check's dry run meets `repos.lock_holder` before any root operation unless PackageKit is active, so it stops as "busy" instead of §4.7's wait, against step 0's last sentence and §6; and zypper 1.14.101's binary carries a `<to-change-vendor>` element §4.3's table lacks, so a vendor-changing snapshot takes the fallback (`strings /usr/bin/zypper`). Filed: INV-4's count and rows are built by `system_changes`, which `tests/parsers-test.py` cannot reach. Own-fix share 0 of 5, a calm cap. Second share: 2 of 5 inside `baa6d7e` |
