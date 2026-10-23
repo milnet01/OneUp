@@ -647,6 +647,10 @@ rewrite; this list is the index, not the mechanism. Scenario names are the ones 
 - **INV-2** A failed step is recorded, emits a plain-English hint, and the run continues to
   the next step — so cache cleanup still happens after a failed upgrade.
   *Test:* *"a failed early step still lets a later step run; the run ends in errors"*.
+  *(ONEUP-0330, 2026-10-23)* **Except** a system transaction that fails after rpm has
+  changed a package: the system is part-updated, so no later step starts.
+  `docs/standards/testing.md` §5 item 2 holds the rule.
+  *Test:* *"a commit that fails after rpm changed packages stops the run and says so"*.
 
 - **INV-3** `--check` is read-only: it needs no root, and never calls `dup` or `update`.
   *Test:* *"--check reports counts read-only and never installs"* — the mock exits 99 if
