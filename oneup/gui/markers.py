@@ -100,6 +100,16 @@ HINTS: dict[str, tuple[tuple[str, ...], str]] = {
         "The update stopped part-way, so your system is only partly "
         "updated. Do not restart yet. Run the update again; if it fails "
         "again, finish it in a terminal with: {command}")),
+    "askpass-unavailable": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "The password box could not start, so OneUp cannot get "
+        "administrator rights. This can happen after an update stopped "
+        "part-way; finish the update in a terminal with: {command}")),
+    "askpass-unavailable-leap": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "The password box could not start, so OneUp cannot get "
+        "administrator rights. This can happen after an update stopped "
+        "part-way; finish the update in a terminal with: {command}")),
     "install-failed": (('package',), QT_TRANSLATE_NOOP(
         "markers",
         "The package {package} could not be installed, so nothing was "
@@ -205,6 +215,8 @@ HINT_COMMANDS: dict[str, str] = {
     "repo-key-expired": "sudo zypper --gpg-auto-import-keys refresh",
     "system-incomplete": "sudo zypper dup",
     "system-incomplete-leap": "sudo zypper update",
+    "askpass-unavailable": "sudo zypper dup",
+    "askpass-unavailable-leap": "sudo zypper update",
 }
 
 

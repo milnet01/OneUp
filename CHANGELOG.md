@@ -203,6 +203,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The sudo route has no way in when a half-finished Qt update breaks the password popup.** (ONEUP-0337)
+
 - **A system update that fails part-way still runs the steps after it.** (ONEUP-0330)
 
 - **The summary after a half-finished system update does not say the system is half-updated.** (ONEUP-0331)

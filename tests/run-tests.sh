@@ -512,6 +512,54 @@ check        "the next step still runs"                "@@STEP_BEGIN@@|flatpak" 
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: a password box that cannot start says so and gives the terminal command (ONEUP-0337)"
+# A real run's aftermath (2026-10-23): rpm stopped half-way through the Qt stack, and
+# ksshaskpass then died on "version `Qt_6.11.2_PRIVATE_API' not found" before drawing
+# anything. sudo said only that no password was given, so OneUp could not finish.
+d=$(mktemp -d); setup_common "$d"
+# sudo -A runs the askpass helper and fails the validate when it does.
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do [[ "$a" == "-n" ]] && exit 1; done
+for a in "$@"; do
+    if [[ "$a" == "-v" ]]; then
+        "$SUDO_ASKPASS" "prompt" >/dev/null || { echo "sudo: no password was provided" >&2; exit 1; }
+        exit 0
+    fi
+done
+exit 0
+EOF
+cat > "$d/mock-askpass" <<'EOF'
+#!/usr/bin/env bash
+echo "mock-askpass: /usr/lib64/libQt6Core.so.6: version \`Qt_6.11.2_PRIVATE_API' not found" >&2
+exit 127
+EOF
+cat > "$d/ldd" <<'EOF'
+#!/usr/bin/env bash
+echo "	linux-vdso.so.1 (0x00007ffc)"
+echo "	$1: /usr/lib64/libQt6Core.so.6: version \`Qt_6.11.2_PRIVATE_API' not found (required by $1)"
+exit 1
+EOF
+chmod +x "$d/sudo" "$d/mock-askpass" "$d/ldd"
+out=$(ONEUP_ASKPASS="$d/mock-askpass" run_engine "$d" --steps=system 2>&1)
+check        "the box that could not start is named"     "@@HINT@@|askpass-unavailable" "$out"
+check        "the terminal says what to type"            "finish the update in a terminal with: sudo zypper" "$out"
+check_absent "nothing was updated"                       "@@STEP_END@@|system|ok" "$out"
+check_codes  "INV-1 HINT carries a code"                 HINT "$out"
+# A cancelled box is not a broken one: ldd finds every library, so no such hint.
+cat > "$d/ldd" <<'EOF'
+#!/usr/bin/env bash
+echo "	linux-vdso.so.1 (0x00007ffc)"
+echo "	libQt6Core.so.6 => /usr/lib64/libQt6Core.so.6 (0x00007f00)"
+exit 0
+EOF
+printf '#!/usr/bin/env bash\nexit 1\n' > "$d/mock-askpass"
+out=$(ONEUP_ASKPASS="$d/mock-askpass" run_engine "$d" --steps=system 2>&1)
+check        "a cancel still says it failed or was cancelled" "Authentication failed or cancelled" "$out"
+check_absent "a cancel is not a box that could not start"     "@@HINT@@|askpass-unavailable" "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: package-only change offers a SERVICE restart, not a reboot"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'

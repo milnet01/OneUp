@@ -1568,6 +1568,21 @@ def main() -> int:
     check(f"ONEUP-0331 the part-updated warning leads, ahead of an earlier hint "
           f"({wP.warn_label.text()!r})", "partly updated" in wP.warn_label.text())
     wP.hide()
+    # ONEUP-0337: the password box could not start, so the engine stops before DONE.
+    # The banner still says why and offers the command to finish in a terminal.
+    wQ = window.Updater()
+    run.handle_line(wQ, "@@HINT@@|askpass-unavailable")
+    wQ._failed_steps = ["system"]
+    wQ.proc = QProcess(wQ)
+    wQ.show()
+    run.on_finished(wQ, 1, QProcess.ExitStatus.NormalExit)
+    check(f"ONEUP-0337 a box that could not start is said in the banner "
+          f"({wQ.warn_label.text()!r})",
+          "could not start" in wQ.warn_label.text()
+          and "sudo zypper dup" in wQ.warn_label.text())
+    check("ONEUP-0337 and its command is the one Copy command copies",
+          run._first_hint_command(wQ) == "sudo zypper dup")
+    wQ.hide()
     # ONEUP-0256: the rest of 0218's class — the package-conflict hint and all three
     # texts of the key-import confirmation. "repo" is matched as a word, as well as
     # "repositor", because the conflict hint said "a third-party repo".

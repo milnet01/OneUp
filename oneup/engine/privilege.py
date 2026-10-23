@@ -32,6 +32,8 @@ from . import markers, proc
 
 # Overridable so the suite points it at a mock instead of raising a real KDE dialog.
 ASKPASS = os.environ.get("ONEUP_ASKPASS") or "/usr/libexec/ssh/ksshaskpass"
+# How long `ldd` may take to read the password box's libraries (ONEUP-0337).
+_LDD_SECONDS = 10
 
 # Label EVERY prompt sudo may raise, including ones we did not pass -p to. sudo's own
 # default reads "[sudo] password for root" under this distro's `targetpw` setting — an
@@ -121,7 +123,7 @@ def sudo_init() -> None:
     """
     # Deferred: `auth_current` is `actions.py`'s by §4.2, and `actions` imports
     # this module — a module-level import back would be a cycle.
-    from . import actions, route
+    from . import actions, route, steps
 
     # The route is chosen here, before the first root command (ONEUP-0249 §4.7).
     if chosen_route() == route.SERVICE:
@@ -154,9 +156,36 @@ def sudo_init() -> None:
     # message a user who cancelled the dialog has to go on.
     rc, _ = proc.run(["sudo", "-A", "-p", VALIDATE_PROMPT, "-v"], stream=True)
     if rc != 0:
+        if _askpass_cannot_start():
+            # Not a cancel: the box never appeared, so pressing Update again cannot help.
+            # A half-finished update can leave its toolkit mismatched, and the box is a Qt
+            # program; the terminal still works (ONEUP-0337).
+            suffix, command = steps.finish_in_terminal()
+            markers.hint(
+                "askpass-unavailable" + suffix,
+                say="The password box could not start, so OneUp cannot get administrator "
+                    "rights. This can happen after an update stopped part-way; finish the "
+                    f"update in a terminal with: {command}")
         markers.err("Authentication failed or cancelled — aborting.")
         raise SystemExit(1)
     _start_keepalive()
+
+
+def _askpass_cannot_start() -> bool:
+    """Is the password box missing, or unable to load its libraries?
+
+    Asked only after the validate failed, to tell a box that never appeared from one
+    the user cancelled; sudo words both the same. `ldd` reads the libraries without
+    running the program, so no box opens. Where `ldd` is missing or its answer is not
+    a missing library, this says no, and the run reports a cancel as before.
+    """
+    if not os.access(ASKPASS, os.X_OK):
+        return True
+    ldd = shutil.which("ldd")
+    if not ldd:
+        return False
+    _, out = proc.run([ldd, ASKPASS], merge_stderr=True, deadline=_LDD_SECONDS)
+    return "not found" in out
 
 
 # The run's route to root, set once by `chosen_route` (ONEUP-0249 §4.7).

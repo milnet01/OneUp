@@ -486,6 +486,12 @@ def _is_leap() -> bool:
         return False
 
 
+def finish_in_terminal() -> tuple[str, str]:
+    """The hint-code suffix and the command a user types to finish the update by hand:
+    `update` on Leap, `dup` on Tumbleweed, as `system_txn_argv` runs them."""
+    return ("-leap", "sudo zypper update") if _is_leap() else ("", "sudo zypper dup")
+
+
 # How often the download pass's root-side wrapper looks for a stop request.
 STOP_POLL_SECONDS = os.environ.get("ONEUP_STOP_POLL_SECONDS") or "2"
 # More than this failing at once is systemic — a network or system problem, not
@@ -885,11 +891,9 @@ def _failure(systemic: bool, import_keys: bool) -> None:
     if SYS_PARTIAL:
         # Sent before the cause's hint, and the window puts it ahead of every hint:
         # it is what the user must act on first, whatever the cause (ONEUP-0331).
-        leap = _is_leap()
-        partial_code = "system-incomplete-leap" if leap else "system-incomplete"
-        command = "sudo zypper update" if leap else "sudo zypper dup"
+        suffix, command = finish_in_terminal()
         markers.hint(
-            partial_code,
+            "system-incomplete" + suffix,
             say="The update stopped part-way, so your system is only partly updated. "
                 "Do not restart yet. Run the update again; if it fails again, finish it "
                 f"in a terminal with: {command}")

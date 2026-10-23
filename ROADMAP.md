@@ -9992,13 +9992,21 @@ when complete (that document's §7).
   Kind: ux.
   Source: real-update-test-2026-10-23.
 
-- 📋 [ONEUP-0337] **The sudo route has no way in when a half-finished Qt update breaks the password popup.**
+- ✅ [ONEUP-0337] **The sudo route has no way in when a half-finished Qt update breaks the password popup.**
   ksshaskpass failed: Qt_6.11.2_PRIVATE_API missing, after rpm stopped
   half-way through the Qt 6.12 stack. The polkit agent is Qt too.
   Needs a decision: a terminal fallback message, or another route.
   User decision 2026-10-23: terminal fallback — when the popup cannot
   start, say so and give the exact command to finish the update in a
   terminal. No pkexec route.
+  Shipped 2026-10-23 on v2: when sudo's validate fails,
+  privilege._askpass_cannot_start asks whether the password box is
+  missing or ldd reports a library 'not found'; if so the engine sends
+  HINT askpass-unavailable (or -leap) with the terminal command from
+  steps.finish_in_terminal, and the window shows it with Copy command. A
+  cancel keeps 'Authentication failed or cancelled'. Sudo route only;
+  the service route's polkit agent is not covered. main's Bash engine
+  has the same gap, not ported.
   **Layman:** After a half-finished update, the password popup could not start, so OneUp could not finish the job.
   Kind: fix.
   Source: real-update-test-2026-10-23.
