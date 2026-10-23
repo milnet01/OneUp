@@ -457,6 +457,10 @@ case "$*" in
     echo "Abort, retry, ignore? [a/r/i] (a): a"
     echo "Installation has been aborted as directed."
     exit 8 ;;
+  # zypper would advise a reboot and name a service; neither may be passed on
+  # (docs/standards/testing.md §5 item 2).
+  *needs-rebooting*) exit 102 ;;
+  *ps\ -sss*|*"ps -sss"*) printf 'sshd\n'; exit 0 ;;
   *) exit 0 ;;
 esac
 EOF
@@ -465,14 +469,15 @@ printf '#!/usr/bin/env bash\necho "BUG: flatpak ran after a half-finished system
 chmod +x "$d/flatpak"
 out=$(run_engine "$d" --steps=system,flatpak,orphans,cache)
 check        "system step marked fail"                 "@@STEP_END@@|system|fail" "$out"
-check_re     "the part-updated hint is the FIRST hint" '^@@HINT@@\|system-incomplete' \
-             "$(grep -m1 '^@@HINT@@' <<<"$out")"
+check        "the part-updated hint is given"          "@@HINT@@|system-incomplete" "$out"
 check_absent "an rpm failure is not a package conflict" "@@HINT@@|package-conflict" "$out"
 check_absent "no step runs after it (flatpak)"         "@@STEP_BEGIN@@|flatpak" "$out"
 check_absent "no step runs after it (orphans)"         "@@STEP_BEGIN@@|orphans" "$out"
 check_absent "no step runs after it (cache)"           "@@STEP_BEGIN@@|cache" "$out"
 check_absent "flatpak was never called"                "BUG: flatpak ran" "$out"
-check        "no reboot is advised"                    "@@REBOOT@@|no" "$out"
+check        "no reboot, whatever needs-rebooting says" "@@REBOOT@@|no" "$out"
+check_absent "no service restart is offered"           "@@SERVICES@@" "$out"
+check        "the run ends in errors"                  "@@DONE@@|errors" "$out"
 check        "the terminal summary says so"            "only partly updated" "$out"
 check_codes  "INV-1 HINT carries a code"               HINT "$out"
 rm -rf "$d"

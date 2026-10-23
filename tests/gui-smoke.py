@@ -1554,6 +1554,20 @@ def main() -> int:
           "A source's signing key is out of date." in wK.warn_label.text()
           and "repositor" not in wK.warn_label.text().lower())
     wK.hide()
+    # ONEUP-0331: after a half-finished system update the warning that the system is
+    # part-updated leads the summary, even where a hint arrived earlier in the run —
+    # the banner shows only the first (docs/standards/testing.md §5 item 2).
+    wP = window.Updater()
+    run.handle_line(wP, "@@HINT@@|repo-slow|packman")
+    run.handle_line(wP, "@@HINT@@|system-incomplete")
+    run.handle_line(wP, "@@DONE@@|errors")
+    wP._failed_steps = ["system"]
+    wP.proc = QProcess(wP)
+    wP.show()
+    run.on_finished(wP, 1, QProcess.ExitStatus.NormalExit)
+    check(f"ONEUP-0331 the part-updated warning leads, ahead of an earlier hint "
+          f"({wP.warn_label.text()!r})", "partly updated" in wP.warn_label.text())
+    wP.hide()
     # ONEUP-0256: the rest of 0218's class — the package-conflict hint and all three
     # texts of the key-import confirmation. "repo" is matched as a word, as well as
     # "repositor", because the conflict hint said "a third-party repo".
@@ -1833,6 +1847,29 @@ def main() -> int:
               len(_launched) == 1 and _launched[0][1] is False)
     finally:
         run._launch = _real_launch
+
+    # ONEUP-0333: a real run (2026-10-23) on the service route said "approve the password
+    # popup" for a minute while polkit allowed it silently and no popup ever came. Only
+    # a run that will really prompt may ask for one. `true` stands in for the engine:
+    # the status line is set before the process starts.
+    _real_argv = paths.engine_argv
+    paths.engine_argv = lambda *_a: ["true"]
+    for _label, _service, _passwordless, _prompts in (
+            ("the service route", True, False, False),
+            ("the sudo route with passwordless on", False, True, False),
+            ("the sudo route with passwordless off", False, False, True)):
+        wA = window.Updater()
+        wA._service_route = _service
+        # Signals blocked: toggling it for real opens the passwordless confirmation box.
+        wA.auth_btn.blockSignals(True)
+        wA.auth_btn.setChecked(_passwordless)
+        wA.auth_btn.blockSignals(False)
+        run._launch(wA, ["system"], check=False)
+        _said = wA.status.text()
+        check(f"ONEUP-0333 {_label} {'asks' if _prompts else 'does not ask'} for a "
+              f"password popup ({_said!r})", ("password popup" in _said) == _prompts)
+        wA.proc.waitForFinished(5000)
+    paths.engine_argv = _real_argv
 
     # §6, two rows at once: a hold.state a SIGKILLed engine left behind, and a second
     # window's hold. One test refuses both — line 1 must be OUR OWN _size_proc's pid.
@@ -6938,7 +6975,7 @@ for th in theme.THEMES:
     # read raised UnicodeDecodeError out of _fetch. Both rpm readers must decode
     # leniently. printf stands in for rpm, so the bytes are exactly these.
     def _latin1_rpm(_argv, **kw):
-        return subprocess.run(["printf", r"alpha\037\341\370\n"], **kw)  # noqa: S603,S607
+        return subprocess.run(["printf", r"alpha\037\341\370\n"], **kw)  # noqa: S607
 
     def _raises(call):
         """What `call` raised on undecodable bytes, or "" (UnicodeDecodeError is a ValueError)."""
