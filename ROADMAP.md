@@ -9880,6 +9880,10 @@ when complete (that document's §7).
   line; the driver loop stops after it, no reboot or service restart is
   advised, the repo-scoped probe is skipped, and the summary says 'only
   partly updated'. Engine suite 544/0.
+  Ported to main 2026-10-23 (05344f2, user-approved): the Bash engine's
+  rpm_changed and SYS_PARTIAL, and testing.md §5 item 2's exception
+  ported verbatim. Owes a 1.4.x. main's other unmerged commits wait for
+  the next release merge.
   **Layman:** After the system update broke half-way, OneUp went on to Flatpak and would have removed leftover packages.
   Kind: fix.
   Source: real-update-test-2026-10-23.
@@ -9897,6 +9901,9 @@ when complete (that document's §7).
   system-incomplete-leap, with sudo zypper dup / sudo zypper update in
   HINT_COMMANDS; run.py's HINT handler puts them first. Window suite
   1035/0.
+  Ported to main 2026-10-23 (05344f2): main's window puts the
+  part-updated hint first, found by its opening sentence; a check pins
+  that sentence to the engine's.
   **Layman:** The window said only 'Finished with 1 error'; it must warn not to restart and say what to do next.
   Kind: fix.
   Source: real-update-test-2026-10-23.
@@ -9915,6 +9922,7 @@ when complete (that document's §7).
   Shipped 2026-10-23: the 'Checking for file conflicts' line no longer
   matches the conflict arm; new HINT code install-failed names the
   package when rpm failed before changing anything, and the run goes on.
+  Ported to main 2026-10-23 (05344f2).
   **Layman:** The hint blamed a third-party repo when rpm itself failed to install a package.
   Kind: fix.
   Source: real-update-test-2026-10-23.
@@ -9930,6 +9938,8 @@ when complete (that document's §7).
   Shipped 2026-10-23: run._launch says 'Starting the update…' on the
   service route or with passwordless on; the popup sentence only on the
   sudo route with passwordless off.
+  Ported to main 2026-10-23 (05344f2): main has no service route, so the
+  popup sentence is dropped when Passwordless is on.
   **Layman:** For about a minute OneUp asked you to approve a password popup that never appeared.
   Kind: fix.
   Source: real-update-test-2026-10-23.
