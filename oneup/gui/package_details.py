@@ -194,7 +194,9 @@ def find_download(name: str, edition: str, root: str | None = None) -> str | Non
 
 def _rpm(argv: list[str], run: Callable) -> str | None:
     try:
-        out = run(argv, capture_output=True, text=True, timeout=RPM_TIMEOUT, env=ENV)
+        # Lenient: a packager's changelog need not be UTF-8 (ONEUP-0334).
+        out = run(argv, capture_output=True, text=True, errors="replace",
+                  timeout=RPM_TIMEOUT, env=ENV)
     except (OSError, subprocess.SubprocessError):
         return None
     return out.stdout

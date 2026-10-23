@@ -134,7 +134,9 @@ class DetailsStore(QObject):
             argv = package_details.build_baseline_argv(sorted(olds))
             if argv is not None:
                 try:
-                    out = _run(argv, capture_output=True, text=True,
+                    # A changelog is in whatever encoding its packager used, and a
+                    # real one was not UTF-8 (ONEUP-0334): never let it raise here.
+                    out = _run(argv, capture_output=True, text=True, errors="replace",
                                timeout=package_details.RPM_TIMEOUT, env=_c_locale_env())
                     self._baselines.update(package_details.parse_baseline(out.stdout, olds))
                 except (OSError, subprocess.SubprocessError):
