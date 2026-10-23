@@ -313,12 +313,12 @@ to one changes the other. Past it, the operation fails as
 `Busy` fails today. Any other refusal, `Busy` with reason `the service is stopping`
 included, fails as today.
 
-**The dry run also holds zypp's lock**, and `__main__.run` asks `repos.lock_holder` before
-any root operation that could meet `Busy`. So on the service route that check waits too:
-while `lock_holder` names a holder, `run` prints the same waiting line once and asks again
-every 2 s, for up to `BUSY_WAIT_SECONDS`. Still held after that, it stops with today's
-`package-manager-busy` message and hint (ONEUP-0039). The sudo route stops at once, as
-today: no check's dry run runs there.
+**The dry run also holds zypp's lock**, and `__main__.run` asks `repos.lock_holder`. So
+on the service route that check waits too: while `lock_holder` names a holder, `run`
+prints once *"Waiting for {holder} (process {pid}) to finish…"*, naming the holder as
+today's busy message does, and asks again every 2 s, for up to `BUSY_WAIT_SECONDS`.
+Still held after that, it stops with today's `package-manager-busy` message and hint
+(ONEUP-0039). The sudo route stops at once, as today: no check's dry run runs there.
 
 ### 4.8 Measured before the code relies on it
 
@@ -452,8 +452,8 @@ tests pin.
   `package-manager-busy`. On the sudo route it stops at once.
   *Test:* `tests/run-tests.sh` — `ONEUP_ZYPP_PID_FILE` names the pid of a `sleep 3`
   started by the scenario. On the service route with `ONEUP_BUSY_WAIT_SECONDS=10` the run
-  prints the waiting line once and reaches its system step; with `=1` it emits
-  `package-manager-busy`. On the sudo route with `=10` it emits `package-manager-busy`
+  prints the waiting line naming `sleep` once and reaches its system step; with `=1` it
+  emits `package-manager-busy`. On the sudo route with `=10` it emits `package-manager-busy`
   without the waiting line. The route pair isolates the rule: the wait must follow the
   route, not the setting alone.
   *Breaks when:* `run` stops on the first `lock_holder` answer on the service route, or
@@ -539,3 +539,4 @@ the wording this spec's gate reviewed.
 | 1 | 2026-10-23 | Q1 3 · Q3 1 · Q4 5 — 9 verified, 0 dismissed | all 9 fixed. Two lanes, each holding every question. One Q1 came from building the packet: the check's job runs with stderr apart, so a skipped repository is named only where a `<message>` names it. Both lanes found the engine tests placed in `tests/service-test.py`, which never starts the engine; the unfalsifiable INV-1 and INV-8 breaks-when clauses; the unpinned `rc` of an answered dry run; and the session-cap `Busy` reasons, which `Run` never sends. One lane found the waiting line naming a check for any job, and the unpinned `packages-to-change` in INV-4's fixture. One Q4 came from settling a lane's open question: no test mocks `/etc/os-release`. Four other open questions resolved clean. Root-only measurements are an unrunnable region here |
 | 2 | 2026-10-23 | Q2 2 · Q3 2 · Q4 1 — 5 verified, 0 dismissed | 4 fixed, 1 surfaced to the user; the cap for a spec, so this loop's fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found that a renamed element or a `kind`/`type` drift gave an exact zero against §6's promise. One lane each found INV-8 overclaiming on the `auto` route, §8 cataloguing the engine's English waiting line, and the log quote cut before its arch change. Surfaced, not fixed: a tray or timer check can land between a run's root operations and refresh repositories as root mid-run; settled from a lane's open question by reading `_tray_check`, which has no run guard. Own-fix share 0 of 5, read as a calm cap. No second share: the gated change was the whole document |
 | 3 | 2026-10-23 | Q1 2 · Q2 1 · Q4 2 — 5 verified, 0 dismissed | 2 fixed, 2 surfaced to the user, 1 filed on ONEUP-0329; a continued run of one loop on `baa6d7e`, so its fixes are read by no lane. Two lanes, each holding every question; both found INV-12's test looking for an `OpenSession` line the service never logs (fixed). One lane found the check's flags unpointed from ONEUP-0249 §4.4 item 4 (fixed in §8, out of radius, no loop left). Surfaced: a run started during a check's dry run meets `repos.lock_holder` before any root operation unless PackageKit is active, so it stops as "busy" instead of §4.7's wait, against step 0's last sentence and §6; and zypper 1.14.101's binary carries a `<to-change-vendor>` element §4.3's table lacks, so a vendor-changing snapshot takes the fallback (`strings /usr/bin/zypper`). Filed: INV-4's count and rows are built by `system_changes`, which `tests/parsers-test.py` cannot reach. Own-fix share 0 of 5, a calm cap. Second share: 2 of 5 inside `baa6d7e` |
+| 4 | 2026-10-23 | Q2 1 — 1 verified, 2 dismissed | 1 fixed; a continued run of one loop on `b8173a5`, so its fix is read by no lane. Two lanes, each holding every question; neither filed a finding the run kept. The orchestrator found, while settling the lanes' open questions, that §4.7's lock wait printed "another OneUp task" while YaST or a hand-run zypper held the lock (§3 item 9); the line now names `lock_holder`'s holder, and INV-13 checks it. Dismissed: the `Busy` reasons as unbound free text (`oneup/service/server.py` raises both strings verbatim); §4.3's no-summary `None` against §4.8 item 3's nothing-to-do branch (§4.8 item 3 states the branch and its exact count, so one build follows both). Both lanes noted `release-lock` runs before `lock_holder`; that false clause was deleted, outside the tally. Eight open questions resolved clean, among them `_ENGINE_MARKS` accepting INV-12's process, the service's `session opened` audit line, and ONEUP-0249 INV-4's table test needing a `check-dry-run` case. Root-only measurements remain an unrunnable region. Own-fix share 0 of 1, a calm cap. Second share: 1 of 1 inside `b8173a5` |
