@@ -9935,6 +9935,12 @@ when complete (that document's §7).
   still fails). Decide which side is right: narrow the rule to "where
   the engine can name the cause", or add the hints. The What-checks-this
   §5 row presents the whole item as guarded by tests/run-tests.sh.
+  From the ONEUP-0054 half of the same gate: §4.1 ("the differential
+  harness asserts it (§4.5)", about exit codes) and §6's failure-mode
+  table still lean on the harness ONEUP-0072 deleted at 156c8cc, so
+  nothing may now pin the engine's exit codes. INV-2's base wording
+  "emits a plain-English hint" predates ONEUP-0072's codes; testing.md
+  §5 item 2 says the window words the hint.
   **Layman:** A review of the half-finished-update rule found older sentences in the testing rules that no longer match the code.
   Kind: doc-fix.
   Source: review-contract-2026-10-23.
