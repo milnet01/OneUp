@@ -522,9 +522,14 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
         win.bar.setRange(0, step_progress.FULL)
         win.bar.setValue(0)
         win.bar.setFormat(QCoreApplication.translate("run", "Starting…"))
-        win.status.setText(QCoreApplication.translate(
-            "run",
-            "Authenticating… (approve the password popup)"))
+        # Only a run that will really prompt asks for the popup: polkit on the service
+        # route, and a passwordless grant, can both allow it silently (ONEUP-0333).
+        if win._service_route or win.auth_btn.isChecked():
+            win.status.setText(QCoreApplication.translate("run", "Starting the update…"))
+        else:
+            win.status.setText(QCoreApplication.translate(
+                "run",
+                "Authenticating… (approve the password popup)"))
     win.set_controls_enabled(False)
 
     args = _engine_args(steps, check, import_keys, skip_repos)
@@ -975,8 +980,12 @@ def handle_marker(win, line: str):
     elif tag == "HINT":
         # A code and its arguments; the window holds the sentence (ONEUP-0108), and
         # the command it names beside it, for Copy command (ONEUP-0235).
-        win._hints.append(markers.render_hint(parts))
-        win._hint_commands.append(markers.hint_command(parts))
+        # A part-updated system's warning goes first, ahead of any hint sent earlier
+        # in the run: the banner shows only the first (testing.md §5 item 2).
+        at = (0 if parts and parts[0] in ("system-incomplete", "system-incomplete-leap")
+              else len(win._hints))
+        win._hints.insert(at, markers.render_hint(parts))
+        win._hint_commands.insert(at, markers.hint_command(parts))
     elif tag == "REPO_SKIPPED":
         # A source was set aside for this run (disabled, upgrade ran, will be
         # re-enabled by the engine on exit — see --skip-repo/--auto-skip-repos).

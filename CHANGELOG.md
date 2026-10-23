@@ -203,6 +203,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A system update that fails part-way still runs the steps after it.** (ONEUP-0330)
+
+- **The summary after a half-finished system update does not say the system is half-updated.** (ONEUP-0331)
+
+- **An rpm install failure is hinted as a package conflict.** (ONEUP-0332)
+
+- **On the service route the window says to approve a password popup that never comes.** (ONEUP-0333)
+
 - **The package details dialog crashes on rpm output that is not UTF-8.** (ONEUP-0334)
 
 - **The outline around "Retry failed steps" is easier to see on the amber warning strip** (ONEUP-0123)

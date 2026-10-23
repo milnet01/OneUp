@@ -90,6 +90,22 @@ HINTS: dict[str, tuple[tuple[str, ...], str]] = {
         "Couldn't download the latest firmware list, so the firmware "
         "check used the last one downloaded. Check your internet "
         "connection, then retry.")),
+    "system-incomplete": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "The update stopped part-way, so your system is only partly "
+        "updated. Do not restart yet. Run the update again; if it fails "
+        "again, finish it in a terminal with: {command}")),
+    "system-incomplete-leap": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "The update stopped part-way, so your system is only partly "
+        "updated. Do not restart yet. Run the update again; if it fails "
+        "again, finish it in a terminal with: {command}")),
+    "install-failed": (('package',), QT_TRANSLATE_NOOP(
+        "markers",
+        "The package {package} could not be installed, so nothing was "
+        "changed. The log has the reason; run the update again, and if "
+        "it fails the same way, check the log before trying anything "
+        "else.")),
     "package-conflict": ((), QT_TRANSLATE_NOOP(
         "markers",
         "A package conflict — often a third-party source. Check the log; "
@@ -187,6 +203,8 @@ HINTS: dict[str, tuple[tuple[str, ...], str]] = {
 HINT_COMMANDS: dict[str, str] = {
     "repo-key-still-rejected": "sudo zypper --gpg-auto-import-keys refresh",
     "repo-key-expired": "sudo zypper --gpg-auto-import-keys refresh",
+    "system-incomplete": "sudo zypper dup",
+    "system-incomplete-leap": "sudo zypper update",
 }
 
 

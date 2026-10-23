@@ -335,6 +335,17 @@ _ACTION_STATE = {"Installing": "installed", "Upgrading": "installed",
                  "Removing": "removed"}
 
 
+def rpm_changed(text: str) -> bool:
+    """Did rpm finish installing or removing at least one package in this log?
+
+    Read through `PackageLines`, so a package cut by its own script's output still
+    counts once its `done]` arrives, and one rpm abandoned never counts (ONEUP-0330).
+    """
+    lines = PackageLines()
+    return any(row is not None and row[0] in ("installed", "removed")
+               for row in map(lines.feed, text.splitlines()))
+
+
 class PackageLines:
     """Turns zypper's transaction lines into `(state, name, edition, bytes)`.
 

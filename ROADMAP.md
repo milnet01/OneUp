@@ -9852,7 +9852,7 @@ when complete (that document's §7).
   Kind: fix.
   Source: real-update-test-2026-10-23.
 
-- 📋 [ONEUP-0330] **A system update that fails part-way still runs the steps after it.**
+- ✅ [ONEUP-0330] **A system update that fails part-way still runs the steps after it.**
   Run log 2026-10-23_074231: rpm aborted at 319/953 (systemd-experimental,
   SELinux lsetfilecon). The driver loop in oneup/engine/__main__.py runs
   every selected step regardless, so orphans would have run on a
@@ -9875,11 +9875,16 @@ when complete (that document's §7).
   probe when partial; __main__ loop breaks on SYS_PARTIAL;
   _reboot_and_services skips needs-rebooting and restart-list when
   partial; _summary prints 'only partly updated'.
+  Shipped 2026-10-23: steps.SYS_PARTIAL, set when the commit fails after
+  parsers.rpm_changed sees a completed Installing/Upgrading/Removing
+  line; the driver loop stops after it, no reboot or service restart is
+  advised, the repo-scoped probe is skipped, and the summary says 'only
+  partly updated'. Engine suite 544/0.
   **Layman:** After the system update broke half-way, OneUp went on to Flatpak and would have removed leftover packages.
   Kind: fix.
   Source: real-update-test-2026-10-23.
 
-- 📋 [ONEUP-0331] **The summary after a half-finished system update does not say the system is half-updated.**
+- ✅ [ONEUP-0331] **The summary after a half-finished system update does not say the system is half-updated.**
   Same run. REBOOT said no and the hint blamed a package conflict.
   Needs a warning that the system is part-updated, not to restart yet,
   and the next step (run the update again, or zypper dup in a terminal).
@@ -9888,11 +9893,15 @@ when complete (that document's §7).
   system-incomplete-leap (sudo zypper update) via HINT_COMMANDS; the
   sentence says the system is partly updated, not to restart, run the
   update again, else finish in a terminal with {command}.
+  Shipped 2026-10-23: HINT codes system-incomplete and
+  system-incomplete-leap, with sudo zypper dup / sudo zypper update in
+  HINT_COMMANDS; run.py's HINT handler puts them first. Window suite
+  1035/0.
   **Layman:** The window said only 'Finished with 1 error'; it must warn not to restart and say what to do next.
   Kind: fix.
   Source: real-update-test-2026-10-23.
 
-- 📋 [ONEUP-0332] **An rpm install failure is hinted as a package conflict.**
+- ✅ [ONEUP-0332] **An rpm install failure is hinted as a package conflict.**
   steps._failure's conflict regex matches 'conflict' anywhere, and every
   commit prints 'Checking for file conflicts: [...done]'. So any commit
   failure not caught earlier reads as package-conflict. Needs an
@@ -9903,11 +9912,14 @@ when complete (that document's §7).
   steps._failure. Fix: strip that line before the conflict match; new
   code install-failed for 'Installation of X failed' when no package
   changed.
+  Shipped 2026-10-23: the 'Checking for file conflicts' line no longer
+  matches the conflict arm; new HINT code install-failed names the
+  package when rpm failed before changing anything, and the run goes on.
   **Layman:** The hint blamed a third-party repo when rpm itself failed to install a package.
   Kind: fix.
   Source: real-update-test-2026-10-23.
 
-- 📋 [ONEUP-0333] **On the service route the window says to approve a password popup that never comes.**
+- ✅ [ONEUP-0333] **On the service route the window says to approve a password popup that never comes.**
   oneup/gui/run.py start_run sets 'Authenticating… (approve the password
   popup)' at every run start. On the service route polkit can answer
   yes without asking, and the snapshot and refresh then take a minute
@@ -9915,6 +9927,9 @@ when complete (that document's §7).
   State 2026-10-23: red window test committed (384c681). Fix in
   run._launch: the popup sentence only when not win._service_route and
   not win.auth_btn.isChecked(); otherwise 'Starting the update…'.
+  Shipped 2026-10-23: run._launch says 'Starting the update…' on the
+  service route or with passwordless on; the popup sentence only on the
+  sudo route with passwordless off.
   **Layman:** For about a minute OneUp asked you to approve a password popup that never appeared.
   Kind: fix.
   Source: real-update-test-2026-10-23.

@@ -467,7 +467,9 @@ def _reboot_and_services(opts: Options) -> tuple[str, str, str, str]:
     # `reason` is the marker's: component codes space-separated, or one standalone
     # code (ONEUP-0072 §4.1). `why` is the same thing in English for the summary.
     reboot, reason, why = "no", "", ""
-    if shutil.which("zypper"):
+    # A part-updated system advises neither, whatever needs-rebooting says: restarting
+    # it, or a service on it, is what the part-updated hint warns against (ONEUP-0330).
+    if shutil.which("zypper") and not steps.SYS_PARTIAL:
         # zypper exits EXACTLY 102 when a reboot is advised. Any OTHER non-zero
         # code means the check itself failed (the lock was held, say) — reading
         # that as "reboot needed" would make a blocked run nag forever.
@@ -488,7 +490,8 @@ def _reboot_and_services(opts: Options) -> tuple[str, str, str, str]:
     markers.marker("REBOOT", reboot, reason or None)
 
     services = safe = risky = ""
-    if steps.SYS_CHANGED and reboot == "no" and shutil.which("zypper"):
+    if (steps.SYS_CHANGED and reboot == "no" and not steps.SYS_PARTIAL
+            and shutil.which("zypper")):
         rc, raw = privilege.root("restart-list")
         services = " ".join(raw.split())
         if rc != 0:
@@ -530,7 +533,10 @@ def _summary(opts: Options, run_keys: list[str], reboot: str, reason: str,
         tail = f"   ({detail})" if detail else ""
         markers.out(f"  [{icon}] {steps.LABEL[key]:<26} {secs:3d}s{tail}")
     markers.out("------------------------------------------")
-    if opts.selected("system"):
+    if steps.SYS_PARTIAL:
+        markers.out("  Updates installed: the system is only partly updated — do not "
+                    "restart yet; run the update again.")
+    elif opts.selected("system"):
         if steps.SYS_COUNT == "0":
             markers.out("  Updates installed: none — system was already up to date.")
         elif steps.SYS_COUNT:
@@ -679,6 +685,11 @@ def run(opts: Options, run_keys: list[str], log_file: str, held_auth: bool = Fal
         if proc.stop_pending():
             break
         _DISPATCH[key](opts)
+        if steps.SYS_PARTIAL:
+            # rpm changed some packages and then failed: removing "leftovers" or
+            # flashing firmware on a part-updated system can do harm the run cannot
+            # undo, so no later step starts (`docs/standards/testing.md` §5 item 2).
+            break
 
     reboot, reason, safe, risky = _reboot_and_services(opts)
     _summary(opts, run_keys, reboot, reason, safe, risky)

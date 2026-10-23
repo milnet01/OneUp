@@ -494,6 +494,10 @@ MAX_SKIP_REPOS = 2
 
 # The user stopped during or just after the download: the third safe boundary.
 SYS_STOPPED = False
+# The commit failed AFTER rpm had changed a package, so the system is part-updated:
+# the run ends after this step, advising no reboot and no service restart
+# (`docs/standards/testing.md` §5 item 2, ONEUP-0330).
+SYS_PARTIAL = False
 # The download pass's status. 143 (128+SIGTERM) is the wrapper reporting a stop,
 # which is what tells "stopped" from "failed".
 SYS_DL_RC = 0
@@ -658,7 +662,7 @@ def _system_upgrade() -> bool:
 
 
 def _system_upgrade_inner() -> bool:
-    global SYS_STOPPED, SYS_DL_RC, DL_RECOVERY_TRIED, DL_RETRY_FAILED
+    global SYS_STOPPED, SYS_PARTIAL, SYS_DL_RC, DL_RECOVERY_TRIED, DL_RETRY_FAILED
     global REPOSD_OVERRIDE, _SYS_LOG_FIRST, _CDN_REPOSD_DIR
     SYS_DL_RC = 0
     ok = _download_pass()
@@ -698,7 +702,10 @@ def _system_upgrade_inner() -> bool:
     if SYS_DL_RC == 143 or proc.stop_pending():
         SYS_STOPPED = True               # the third safe boundary (ONEUP-0085 §4.2)
         return True
-    return _commit_pass()
+    if _commit_pass():
+        return True
+    SYS_PARTIAL = parsers.rpm_changed(_log_text())
+    return False
 
 
 _UPGRADE_COUNT = re.compile(r"([0-9]+) packages? to upgrade", re.IGNORECASE)
@@ -812,6 +819,12 @@ def _success(refresh_ok: bool) -> None:
               "download-recovered")
 
 
+# zypper prints this before every commit, so it says nothing about a conflict (ONEUP-0332).
+_FILE_CONFLICT_CHECK = re.compile(r"^Checking for file conflicts:.*$", re.MULTILINE)
+# "Installation of alpha-2.0-1.1.x86_64 failed:", zypper's line once rpm gives up.
+_INSTALL_FAILED = re.compile(r"^Installation of (\S+) failed", re.MULTILINE)
+
+
 def _failure(systemic: bool, import_keys: bool) -> None:
     """Turn the most common zypper failures into one plain-English line."""
     log = _log_text()
@@ -854,14 +867,32 @@ def _failure(systemic: bool, import_keys: bool) -> None:
                    r"|Download.*failed|Temporary failure", log, re.IGNORECASE):
         code = "network-failed"
         hint = "A download failed — check your internet connection, then retry."
+    elif not SYS_PARTIAL and (failed := _INSTALL_FAILED.search(log)):
+        # rpm refused one package before it had changed any: nothing is installed, so
+        # this is not the part-updated case below and the run goes on (ONEUP-0332).
+        code, args = "install-failed", [failed.group(1)]
+        hint = (f"The package {failed.group(1)} could not be installed, so nothing was "
+                "changed. The log has the reason; run the update again, and if it fails "
+                "the same way, check the log before trying anything else.")
     # zypper's solver words a conflict several ways; a real run (2026-09-22) said only
     # "Problem: 1: … cannot be provided" and got no hint at all (ONEUP-0227).
     elif re.search(r"conflict|nothing provides|not installable|cannot be provided"
                    r"|^Problem: [0-9]|does not belong to a distupgrade repository",
-                   log, re.IGNORECASE | re.MULTILINE):
+                   _FILE_CONFLICT_CHECK.sub("", log), re.IGNORECASE | re.MULTILINE):
         code = "package-conflict"
         hint = ("A package conflict — often a third-party repo. Check the log; you may "
                 "need to disable a conflicting repository.")
+    if SYS_PARTIAL:
+        # Sent before the cause's hint, and the window puts it ahead of every hint:
+        # it is what the user must act on first, whatever the cause (ONEUP-0331).
+        leap = _is_leap()
+        partial_code = "system-incomplete-leap" if leap else "system-incomplete"
+        command = "sudo zypper update" if leap else "sudo zypper dup"
+        markers.hint(
+            partial_code,
+            say="The update stopped part-way, so your system is only partly updated. "
+                "Do not restart yet. Run the update again; if it fails again, finish it "
+                f"in a terminal with: {command}")
     if hint:
         markers.out(f"  Hint: {hint}")
         markers.hint(code, *args)
@@ -914,7 +945,10 @@ def run_system(opts) -> None:
         # --skip-repo run already named them, so probing again would mask a
         # genuinely different error — and when the failure really looks
         # repo-scoped (disk-full and conflicts are not).
-        if not ok and not opts.skip_repos and repos.repo_scoped_failure(_SYS_LOG):
+        # Never on a part-updated system: the probe's remedy is to run the
+        # transaction again, on top of one rpm abandoned half-way (ONEUP-0330).
+        if (not ok and not SYS_PARTIAL and not opts.skip_repos
+                and repos.repo_scoped_failure(_SYS_LOG)):
             failing = repos.find_failing_repos()
             if len(failing) > MAX_SKIP_REPOS:
                 systemic = True                    # too many at once: not one bad source
