@@ -6932,6 +6932,31 @@ for th in theme.THEMES:
     check("ONEUP-0260 INV-4 no package is marked before the fetch completes",
           not any(package_views.MARK in d for _p, d, _a, _c in _early))
     check("ONEUP-0260 the fetch ends", _fetch_done(wD))
+
+    # ONEUP-0334: rpm prints a package's changelog in whatever encoding its packager
+    # used, and a real run (2026-10-23) met bytes that are not UTF-8: the baseline
+    # read raised UnicodeDecodeError out of _fetch. Both rpm readers must decode
+    # leniently. printf stands in for rpm, so the bytes are exactly these.
+    def _latin1_rpm(_argv, **kw):
+        return subprocess.run(["printf", r"alpha\037\341\370\n"], **kw)  # noqa: S603,S607
+
+    def _raises(call):
+        """What `call` raised on undecodable bytes, or "" (UnicodeDecodeError is a ValueError)."""
+        try:
+            call()
+        except ValueError as exc:
+            return repr(exc)
+        return ""
+
+    _raised = _raises(lambda: package_details._rpm(["rpm"], _latin1_rpm))
+    check(f"ONEUP-0334 a changelog that is not UTF-8 is read, not raised {_raised}",
+          not _raised)
+    _patch(details_dialog, "_run", _latin1_rpm)
+    wD.details._based.clear()
+    _raised = _raises(wD.details._fetch)
+    check(f"ONEUP-0334 the baseline read survives rpm output that is not UTF-8 {_raised}",
+          not _raised)
+    _patch(details_dialog, "_run", _rec_run)
     _said = app.translate("package_views", "{text}, details available").format(text="")
     for _lid in ("rows", "rail", "spotlight"):
         wD.apply_layout(_lid)
