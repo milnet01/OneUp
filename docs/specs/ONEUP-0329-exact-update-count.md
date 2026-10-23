@@ -1,6 +1,6 @@
 # ONEUP-0329 — the check counts what the update will really change
 
-**Status:** Draft
+**Status:** Reviewed
 **Kind:** fix
 **Roadmap:** ONEUP-0329
 **Branch:** v2
@@ -35,7 +35,8 @@ will take without removing or adding anything. The update itself runs `zypper du
 
 Measured in the run log `~/.local/state/oneup/logs/2026-10-23_074231.log`
 (`grep -n 'to upgrade,' <log>`): the check before that run said 524. The dry run inside
-the run said `883 packages to upgrade, 3 to downgrade, 41 new, 26 to remove`. So the
+the run said `883 packages to upgrade, 3 to downgrade, 41 new, 26 to remove, 3  to change
+vendor, 1 to change arch.` So the
 check missed 359 upgrades and every new and removed package.
 
 **An exact count needs root.** `zypper dup --dry-run` refuses an ordinary user. A run in a
@@ -158,8 +159,8 @@ class SystemListing(NamedTuple):
 5. **Fallback.** Any of these returns `system_updates(sizes)` with `exact` false and a
    `why` naming the cause: `service_client.Unreachable`; `service_client.Refused` of any
    code (`NotAuthorized`, `Busy`, `Invalid`, `NoSession`); an exit status outside
-   `{0, 100, 101, 102, 103, 106}`, `124` (the timeout) included; stdout that is not
-   well-formed XML; or well-formed XML with no `install-summary` element.
+   `{0, 100, 101, 102, 103, 106}`, `124` (the timeout) included; or stdout
+   `parsers.change_list` returns None for (§4.3).
 
 **`system_changes` never calls `privilege.sudo_init`, `privilege.root` or
 `privilege.sudo`.** Those fall back to sudo on the `auto` route (ONEUP-0249 §4.7); the
@@ -171,9 +172,11 @@ check must never.
 ### 4.3 Reading the dry run
 
 A new `parsers.change_list(xml_text) -> tuple[list[Change], list[str]] | None` reads the
-job's stdout, in the shape of `parsers.update_list`: None when it is not well-formed **or
-holds no `install-summary` element**, else the changes and the text of every `<message>`,
-unescaped. So a missing summary takes §4.2's fallback and never reads as zero.
+job's stdout, in the shape of `parsers.update_list`: None when it is not well-formed,
+**holds no `install-summary` element, holds a child of `install-summary` not in the table
+below, or holds a `solvable` with neither a `type` nor a `kind` attribute**; else the
+changes and the text of every `<message>`, unescaped. So a summary it cannot fully read
+takes §4.2's fallback and never reads as zero.
 
 ```python
 class Change(NamedTuple):
@@ -185,7 +188,8 @@ class Change(NamedTuple):
     change: str         # upgrade | downgrade | new | remove
 ```
 
-- Only `solvable` elements with `type="package"` count. A product, pattern or patch is
+- Only `solvable` elements with `type="package"` count, or `kind="package"` where `type`
+  is absent, as the schema spells it. A product, pattern or patch is
   skipped: the 23 October run upgraded the `openSUSE Tumbleweed` product, which is not a
   package.
 - Each element maps to one change word:
@@ -202,11 +206,10 @@ class Change(NamedTuple):
   table), so its `PKG|system|removed|name|edition` lands on the check's row.
 - **One change per `(name, edition)`**, the first in document order. A package listed under
   two elements is one change.
-- An element name not in the table is skipped, and its solvables are not counted.
 
 `system_changes` then builds `SystemListing`:
 
-- `count` is the number of changes, every `type="package"` one, whatever its name.
+- `count` is the number of changes, every package one, whatever its name.
 - `rows` are the changes whose name passes `steps.valid_package`, as today's rows.
 - `skipped` is `SKIPPED_REPO` searched over the messages alone. With `merge_stderr` false
   the job's stderr goes to the service's journal (`oneup/service/jobs.py`), and merging it
@@ -357,7 +360,8 @@ tests pin.
   exits 0.
   *Test:* `tests/run-tests.sh`, against `--serve` — one scenario per cause: service absent from the bus,
   polkit answering no, a second session holding a job (`Busy`), mock `zypper` exiting 4,
-  mock `zypper` printing malformed XML, and well-formed XML with no `install-summary`.
+  mock `zypper` printing malformed XML, well-formed XML with no `install-summary`, and a
+  summary holding an element not in §4.3's table.
   Each emits the mock `list-updates` count with `at-least`.
   *Breaks when:* a cause emits a zero, emits no `CHECK`, or omits the basis.
 
@@ -368,7 +372,8 @@ tests pin.
   status 124 within 5 s, and the check emits `at-least`.
   *Breaks when:* the argv carries no `timeout`.
 
-- **INV-8** On the sudo route the check never opens the system bus.
+- **INV-8** With `ONEUP_BACKEND=sudo`, as on the AppImage, the check never opens the
+  system bus.
   *Test:* `tests/run-tests.sh` — the check on the sudo route under an import blocker that
   fails the scenario on any import of `jeepney`, as ONEUP-0249 INV-12's scenario does; it
   completes with `at-least`.
@@ -408,7 +413,7 @@ tests pin.
 | The user starts an update during a check | the run's first root operation waits, with one line saying why (§4.7) |
 | The service dies mid-dry-run | `Read` fails: the fallback |
 | The check's process is killed | the dry run finishes or times out in the service, as any job does (ONEUP-0249 INV-5) |
-| A future zypper renames an element | its solvables are skipped and uncounted; a renamed `install-summary` takes the fallback. Neither reads as zero |
+| A future zypper renames an element or the kind attribute | the fallback (§4.3). Never reads as zero |
 | While the dry run holds zypp's lock | a `zypper` the user runs by hand reports the lock, for up to `CHECK_DRY_RUN_SECONDS` |
 
 ## 7. Tests
@@ -421,8 +426,8 @@ tests pin.
 - **`tests/gui-smoke.py`**: INV-5 and INV-10.
 - **Each new test is seen to fail first**, against the tree before this item.
 - **By hand**: §4.8's three measurements before the parser is written; then, on a packaged
-  install, one check from the window and one from the tray, each reading the same count
-  as the dry run's summary line.
+  install, one check from the window and one from the tray, each reading the count of
+  distinct packages in the XML of a root dry run of the same transaction, run beside it.
 
 ## 8. Docs & release
 
@@ -437,7 +442,7 @@ tests pin.
 - **`docs/specs/ONEUP-0249-system-service.md`**: a pointer under §4.2's table naming this
   spec's §4.1 for `check-dry-run`.
 - **`CHANGELOG.md`** `[Unreleased]`: one Fixed line, in the user's words.
-- **The translation catalogues**: the new strings of §4.6 and §4.7.
+- **The translation catalogues**: the new strings of §4.6.
 
 The two spec edits are pointers, so they ride this spec's gate. The two non-spec edits apply
 the wording this spec's gate reviewed.
@@ -470,3 +475,4 @@ the wording this spec's gate reviewed.
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-10-23 | Q1 3 · Q3 1 · Q4 5 — 9 verified, 0 dismissed | all 9 fixed. Two lanes, each holding every question. One Q1 came from building the packet: the check's job runs with stderr apart, so a skipped repository is named only where a `<message>` names it. Both lanes found the engine tests placed in `tests/service-test.py`, which never starts the engine; the unfalsifiable INV-1 and INV-8 breaks-when clauses; the unpinned `rc` of an answered dry run; and the session-cap `Busy` reasons, which `Run` never sends. One lane found the waiting line naming a check for any job, and the unpinned `packages-to-change` in INV-4's fixture. One Q4 came from settling a lane's open question: no test mocks `/etc/os-release`. Four other open questions resolved clean. Root-only measurements are an unrunnable region here |
+| 2 | 2026-10-23 | Q2 2 · Q3 2 · Q4 1 — 5 verified, 0 dismissed | 4 fixed, 1 surfaced to the user; the cap for a spec, so this loop's fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found that a renamed element or a `kind`/`type` drift gave an exact zero against §6's promise. One lane each found INV-8 overclaiming on the `auto` route, §8 cataloguing the engine's English waiting line, and the log quote cut before its arch change. Surfaced, not fixed: a tray or timer check can land between a run's root operations and refresh repositories as root mid-run; settled from a lane's open question by reading `_tray_check`, which has no run guard. Own-fix share 0 of 5, read as a calm cap. No second share: the gated change was the whole document |
