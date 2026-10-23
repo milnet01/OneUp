@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=328 -->
+<!-- ants-roadmap-id-high-water: ONEUP=337 -->
 
 # OneUp Roadmap
 
@@ -9835,6 +9835,97 @@ when complete (that document's §7).
   Kind: fix.
   Source: ONEUP-0320-build-2026-10-20.
   Lanes: gui.
+
+- 📋 [ONEUP-0329] **On Tumbleweed, Check counts updates with list-updates, which misses what dup will change.**
+  Run log 2026-10-23_074231: --check said 524; zypper dup planned 883 up,
+  3 down, 41 new, 26 removed (927 to fetch). steps.system_updates reads
+  `zypper list-updates`, whose solver will not remove or add packages, so
+  a stack transition (Plasma 6.8) is held back from its count. An exact
+  count needs `zypper dup --dry-run`, which needs root; a user-namespace
+  run was tried and fails (/run/zypp.pid, key import). Needs a user
+  decision on the route.
+  User decision 2026-10-23: on the service route, the system service
+  runs the real `zypper dup --dry-run`; the AppImage keeps the rootless
+  count, worded "at least N". Changes security.md §12, so it needs a
+  spec and review-contract first.
+  **Layman:** Check said 524 updates; the real update changed 927 packages.
+  Kind: fix.
+  Source: real-update-test-2026-10-23.
+
+- 📋 [ONEUP-0330] **A system update that fails part-way still runs the steps after it.**
+  Run log 2026-10-23_074231: rpm aborted at 319/953 (systemd-experimental,
+  SELinux lsetfilecon). The driver loop in oneup/engine/__main__.py runs
+  every selected step regardless, so orphans would have run on a
+  half-updated rpm database.
+  **Layman:** After the system update broke half-way, OneUp went on to Flatpak and would have removed leftover packages.
+  Kind: fix.
+  Source: real-update-test-2026-10-23.
+
+- 📋 [ONEUP-0331] **The summary after a half-finished system update does not say the system is half-updated.**
+  Same run. REBOOT said no and the hint blamed a package conflict.
+  Needs a warning that the system is part-updated, not to restart yet,
+  and the next step (run the update again, or zypper dup in a terminal).
+  **Layman:** The window said only 'Finished with 1 error'; it must warn not to restart and say what to do next.
+  Kind: fix.
+  Source: real-update-test-2026-10-23.
+
+- 📋 [ONEUP-0332] **An rpm install failure is hinted as a package conflict.**
+  steps._failure's conflict regex matches 'conflict' anywhere, and every
+  commit prints 'Checking for file conflicts: [...done]'. So any commit
+  failure not caught earlier reads as package-conflict. Needs an
+  install-failed case naming the package ('Installation of X failed')
+  and a tighter conflict match.
+  **Layman:** The hint blamed a third-party repo when rpm itself failed to install a package.
+  Kind: fix.
+  Source: real-update-test-2026-10-23.
+
+- 📋 [ONEUP-0333] **On the service route the window says to approve a password popup that never comes.**
+  oneup/gui/run.py start_run sets 'Authenticating… (approve the password
+  popup)' at every run start. On the service route polkit can answer
+  yes without asking, and the snapshot and refresh then take a minute
+  under that text.
+  **Layman:** For about a minute OneUp asked you to approve a password popup that never appeared.
+  Kind: fix.
+  Source: real-update-test-2026-10-23.
+
+- 📋 [ONEUP-0334] **The package details dialog crashes on rpm output that is not UTF-8.**
+  2026-10-23_window-stderr.txt: details_dialog._fetch runs rpm with
+  text=True and no errors='replace'; UnicodeDecodeError, twice.
+  **Layman:** Opening some packages' details threw an error because their text was not plain UTF-8.
+  Kind: fix.
+  Source: real-update-test-2026-10-23.
+
+- 📋 [ONEUP-0335] **The window's package counts and sizes disagree with zypper during a parallel download.**
+  Same run. (a) zypper's parallel preload prints 'Preloading: X [done]'
+  then 'Retrieving: X (n/927)' for the same package with no [done], so
+  the engine emits PKG downloading after downloaded. (b) parsers.to_bytes
+  keeps one decimal: 1.75 GiB becomes 1.7 GiB. (c) package_views.GROUP
+  counts downloaded as 'now', so 927 waiting packages read as now.
+  (d) the header counts rows as they arrive, removals included.
+  User decision 2026-10-23: done = installed/removed/unchanged; now =
+  only the one package being downloaded or installed;
+  downloaded-but-not-installed stays in to go.
+  **Layman:** The window showed 642, then 927, then 931 updates, '1.8 GiB of 1.7 GiB', and '0 done · 927 now' after everything had downloaded.
+  Kind: fix.
+  Source: real-update-test-2026-10-23.
+
+- 📋 [ONEUP-0336] **The Flatpak step does not say which pass it is on, or whether it is downloading or installing.**
+  steps.run_flatpak runs `flatpak update --user` then the system pass
+  as root; nothing tells the window which, or the phase.
+  **Layman:** Flatpak updates run twice (your apps, then system apps) but the window only says 'Updating Flatpak apps'.
+  Kind: ux.
+  Source: real-update-test-2026-10-23.
+
+- 📋 [ONEUP-0337] **The sudo route has no way in when a half-finished Qt update breaks the password popup.**
+  ksshaskpass failed: Qt_6.11.2_PRIVATE_API missing, after rpm stopped
+  half-way through the Qt 6.12 stack. The polkit agent is Qt too.
+  Needs a decision: a terminal fallback message, or another route.
+  User decision 2026-10-23: terminal fallback — when the popup cannot
+  start, say so and give the exact command to finish the update in a
+  terminal. No pkexec route.
+  **Layman:** After a half-finished update, the password popup could not start, so OneUp could not finish the job.
+  Kind: fix.
+  Source: real-update-test-2026-10-23.
 
 ## 2.1.0 — after 2.0
 
