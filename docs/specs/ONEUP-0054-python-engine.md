@@ -645,12 +645,16 @@ rewrite; this list is the index, not the mechanism. Scenario names are the ones 
   firmware update is reported as fail, not success, and does NOT reboot"*.
 
 - **INV-2** A failed step is recorded, emits a plain-English hint, and the run continues to
-  the next step — so cache cleanup still happens after a failed upgrade.
+  the next step — so a failed upgrade still leaves the later steps to run.
   *Test:* *"a failed early step still lets a later step run; the run ends in errors"*.
   *(ONEUP-0330, 2026-10-23)* **Except** a system transaction that fails after rpm has
   changed a package: the system is part-updated, so no later step starts.
   `docs/standards/testing.md` §5 item 2 holds the rule.
   *Test:* *"a commit that fails after rpm changed packages stops the run and says so"*.
+  It does not prove the withheld reboot, since its mock answers `zypper needs-rebooting`
+  with 0, nor the window's lead. The ONEUP-0330 fix owes an engine leg whose mock answers
+  102 and asserts `@@REBOOT@@|no`, and a window-suite scenario that sends `repo-slow`
+  before the part-updated hint.
 
 - **INV-3** `--check` is read-only: it needs no root, and never calls `dup` or `update`.
   *Test:* *"--check reports counts read-only and never installs"* — the mock exits 99 if
@@ -690,7 +694,9 @@ rewrite; this list is the index, not the mechanism. Scenario names are the ones 
 
 - **INV-10** v2 emits the same marker stream and the same exit code as v1, under identical
   mocks.
-  *Test:* `tests/differential-test.sh` (§4.5) — gate G2. New with this work.
+  *Test:* the differential harness (§4.5) — gate G2. **Withdrawn**: ONEUP-0072 made the
+  two engines' payloads differ by design and deleted the harness
+  (`docs/reference/marker-protocol.md` §5.1), so v2 may now diverge from the frozen v1.
 
 - **INV-11** The engine imports no Qt and runs with PySide6 absent. This is the privilege
   split made testable: the half that becomes root cannot depend on the half that draws
@@ -819,3 +825,4 @@ When the switch lands in stage 9:
 | 11 | 2026-10-02 | 2 verified in this document, as the companion of an admitted pair whose subject was the build plan (the plan's loop log, row 15, carries the run) | §4.7 was amended for stage 9 (the AppImage runs a copy of the engine outside its bundle; the switch variable goes). Both lanes read it cold. Two §8 bullets were fixed: ONEUP-0066's obligation to carry a marker list into the Python engine, which that item closed the other way, and a 2.0.0 bump at stage 9 that §4.6 puts at the release |
 | 12 | 2026-10-08 | 2 lanes, cold, every lane held every question; genre pinned `spec`. Q1 1 · Q2 1 · Q3 0 · Q4 0 — 2 verified, 1 dismissed, 2 fixed | Loop 1 of a new run (ONEUP-0238): §4.1.1 amended so `hold.state` line 1 is the pid the window started and the window's pid crosses the inhibitor re-exec. **[Q2]**: the amendment said the new suite scenario covers the fix and that the Bash fallback is unchanged, but named no engine for the scenario; run under the fallback through `ONEUP_ENGINE_CMD`, it fails for a known reason. It now pins the Python engine, as INV-11's does. **[Q1]**, pre-existing in the amended paragraph: a hold ended by its window going "emits no marker", where `main` emits the same `@@DONE@@\|ok` a Cancel or the ceiling does. Dismissed: §4.4's sentences naming Bash as the suite's default, which are stage-1 and stage-5 records. Two open questions resolved clean: how the pids cross the re-exec (only the engine reads them) and `run.state`'s pid (the window reads it from the file, never compares it to its own process) |
 | 13 | 2026-10-08 | 2 lanes, cold, briefed exactly as loop 12 with the packet rebuilt from disk; every lane held every question. Q1 0 · Q2 0 · Q3 0 · Q4 0 — 0 verified, 1 dismissed | **Converged**; `Reviewed` stands. Dismissed after measurement: a [Q1] that an engine could outlive a killed `systemd-inhibit` wrapper once the hold watches the window rather than the wrapper. Killing the wrapper with `TERM` and with `KILL` (`systemd-inhibit … sh -c 'sleep 30'`, 2026-10-08) left no child either time, the engine exits on `SIGTERM` and `SIGHUP` (`privilege.install_exit_handlers`), and nothing in `oneup/gui/` kills `_size_proc`. One open question resolved clean: with `ONEUP_INHIBITED` set and no pids passed on, the engine uses its own pid and its start-up parent, which every pre-set scenario exercises |
+| 14 | 2026-10-23 | 2 lanes, cold, dispatched from outside the project; genre pinned `spec`; every lane held every question. Q1 1 · Q2 1 · Q3 0 · Q4 1 — 3 verified, 1 dismissed, 3 fixed | Loop 1 of a new run (ONEUP-0330), armed by `688ec77`'s exception to INV-2; `docs/standards/testing.md` §5 item 2 was gated first, in the same run. **[Q4], both lanes**: the exception's named scenario cannot fail on two clauses the rule it points at holds — its mock answers `zypper needs-rebooting` with 0, and it sends no hint before the part-updated one. INV-2 now names the two legs the ONEUP-0330 fix owes. **[Q2], both lanes**: INV-10 still promised v2 emits v1's marker stream, which the exception breaks; ONEUP-0072 deleted that harness at `156c8cc`, so INV-10 is marked withdrawn, a record of existing state. [Q1], found while building the packet: INV-2's "so cache cleanup still happens after a failed upgrade" has been false since ONEUP-0087. Dismissed: that §10's *"Any change to the five steps or their order"* forbids the exception — it keeps the five keys and their order (`docs/design/oneup-2.0.md` §3 item 3). Open questions resolved clean: how the engine detects that rpm changed a package is the implementer's |
