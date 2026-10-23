@@ -9981,6 +9981,29 @@ when complete (that document's §7).
   (d) waits on ONEUP-0329. docs/plans/ONEUP-0054-python-engine.md stage
   1 still describes the one-digit to_bytes; left as the done stage's
   record.
+  2026-10-23 review-contract on ONEUP-0239's amendment (rows 7-8,
+  capped, Status Reviewed; 99811f6, ca886f7): (c) now also needs an
+  engine change. parsers.PackageLines reports a Retrieving:-fetched
+  package `downloading` and never moves it on, so on a run without
+  zypper's parallel preload every fetched package stayed in now. Spec
+  §4.3.1: report it `downloaded` at the next package's Retrieving: line,
+  the pass's first action line, or the pass's end; proc._filter_lines
+  changes with it (one result per line today); INV-21 gains a
+  tests/parsers-test.py half. Filed, outside the amendment: the
+  download-only mock's line `Retrieving: alpha-2.0-1.1.x86_64.rpm
+  [done]` (tests/run-tests.sh) parses as a second package, edition
+  `2.0-1.1.x86_64`, left downloading — a phantom package on a no-preload
+  run (measured with PackageLines.feed). Every log on this machine
+  preloads, so the real no-preload text is unverified. Note for the
+  user: with the parallel preload, a package goes queued -> downloaded
+  with no downloading state, so now reads 0 through the whole download.
+  State 2026-10-23: (c) built to ONEUP-0239 §4.3.1 (Reviewed at
+  ca886f7): package_views.GROUP puts downloaded in "to go";
+  parsers.PackageLines ends a Retrieving: fetch at the next package's
+  Retrieving: line, the first action line or finish, and feed returns a
+  list; proc._filter_lines marks finish's rows. Still open: (d), waiting
+  on ONEUP-0329, and the filed phantom "Retrieving: x.rpm [done]"
+  package.
   **Layman:** The window showed 642, then 927, then 931 updates, '1.8 GiB of 1.7 GiB', and '0 done · 927 now' after everything had downloaded.
   Kind: fix.
   Source: real-update-test-2026-10-23.
@@ -9994,6 +10017,13 @@ when complete (that document's §7).
   deploy together, so the window shows the pass (your apps / system apps
   / cleanup) and its count, never a download/install split. Measured on
   the 2026-10-23_074231 log: 12 user refs, then 20 system refs.
+  2026-10-23 review-contract on ONEUP-0239's amendment (rows 7-8,
+  capped, Status Reviewed): §4.1.4 now reads counts in the user and
+  system passes only (flatpak 1.18.4 carries 'Uninstalling %d/%d…'), and
+  INV-19's mock prints Uninstalling 1/1… and expects no counted unused
+  marker. Measured: both routes split a carriage return as a line end;
+  flatpak under LC_ALL=C still prints the UTF-8 ellipsis. Ready to
+  build.
   **Layman:** Flatpak updates run twice (your apps, then system apps) but the window only says 'Updating Flatpak apps'.
   Kind: ux.
   Source: real-update-test-2026-10-23.
@@ -10015,6 +10045,9 @@ when complete (that document's §7).
   has the same gap, not ported.
   User decision 2026-10-23: port to main's Bash engine for the owed
   1.4.x.
+  Ported to main 2026-10-23 (8edb4cf), owed in the next 1.4.x. Main's
+  hint reads "To finish the update, open a terminal and run: <command>"
+  so main's _extract_command offers Copy command.
   **Layman:** After a half-finished update, the password popup could not start, so OneUp could not finish the job.
   Kind: fix.
   Source: real-update-test-2026-10-23.

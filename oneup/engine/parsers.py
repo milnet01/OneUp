@@ -343,8 +343,8 @@ def rpm_changed(text: str) -> bool:
     counts once its `done]` arrives, and one rpm abandoned never counts (ONEUP-0330).
     """
     lines = PackageLines()
-    return any(row is not None and row[0] in ("installed", "removed")
-               for row in map(lines.feed, text.splitlines()))
+    return any(row[0] in ("installed", "removed")
+               for line in text.splitlines() for row in lines.feed(line))
 
 
 class PackageLines:
@@ -361,13 +361,45 @@ class PackageLines:
     so a cut action is held, and the next line ending in `done]` that is not
     itself an action completes it. The next action, or `finish`, drops it: an
     action never seen to complete is never reported as done (ONEUP-0259 INV-6).
+
+    A package fetched by `Retrieving:` lines is `downloading` until its fetch ends:
+    at the next package's `Retrieving:` line, the first action line, or `finish`.
+    It is then `downloaded`, so it leaves "now" while it waits to install
+    (ONEUP-0239 §4.3.1). So one line can settle two packages, and `feed` returns
+    a list.
     """
 
     def __init__(self) -> None:
         self._held: tuple[str, str, str] | None = None
+        self._fetching: tuple[str, str] | None = None
 
-    def feed(self, line: str) -> tuple[str, str, str, int] | None:
+    def feed(self, line: str) -> list[tuple[str, str, str, int]]:
         text = line.rstrip()
+        row = self._read(text)
+        ends_fetch = (_ACTION.match(text) is not None
+                      or (row is not None and row[0] == "downloading"
+                          and row[1:3] != self._fetching))
+        rows = self._end_fetch() if ends_fetch else []
+        if row is not None:
+            rows.append(row)
+            if row[0] == "downloading":
+                self._fetching = (row[1], row[2])
+        return rows
+
+    def finish(self) -> list[tuple[str, str, str, int]]:
+        """The stream ended: anything still held never completed, and a fetch did."""
+        self._held = None
+        return self._end_fetch()
+
+    def _end_fetch(self) -> list[tuple[str, str, str, int]]:
+        if self._fetching is None:
+            return []
+        name, edition = self._fetching
+        self._fetching = None
+        return [("downloaded", name, edition, 0)]
+
+    def _read(self, text: str) -> tuple[str, str, str, int] | None:
+        """What this one line says of one package, if anything."""
         action = _ACTION.match(text)
         if action:
             self._held = None
@@ -395,7 +427,3 @@ class PackageLines:
             self._held = None
             return state, name, edition, 0
         return None
-
-    def finish(self) -> None:
-        """The stream ended: anything still held never completed."""
-        self._held = None

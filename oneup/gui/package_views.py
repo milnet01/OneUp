@@ -51,7 +51,9 @@ from .markers import _format_size
 from .packages import Package, PackageModel
 
 # The three groups every count and the size strip use, by the state a view shows.
-GROUP = {"queued": "togo", "downloading": "now", "downloaded": "now",
+# "Now" is only what is downloading: a downloaded package waiting to install is still
+# to go (ONEUP-0239 §4.3.1, the user's decision of 2026-10-23).
+GROUP = {"queued": "togo", "downloading": "now", "downloaded": "togo",
          "installed": "done", "removed": "done", "unchanged": "done"}
 
 # Between the parts of one line of a package's text — name, versions, size, state.

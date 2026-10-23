@@ -5902,6 +5902,19 @@ for th in theme.THEMES:
     check("ONEUP-0239 INV-9 the Layout button follows the theme picker in Settings",
           _chain[_chain.index(w9.theme_combo) + 1] is w9.layout_btn)
 
+    # INV-21 (ONEUP-0335): "now" is only what is downloading; a downloaded package waiting
+    # to install is still to go (the user's decision, 2026-10-23).
+    w21 = window.Updater()
+    run._reset_for_run(w21, ["system"], check=False)
+    for _name in ("q", "dl-ing", "dl-ed", "inst"):
+        run.handle_line(w21, f"@@CHECK_ITEM@@|system|{_name}|1|2|10|repo")
+    for _name, _state in (("dl-ing", "downloading"), ("dl-ed", "downloaded"),
+                          ("inst", "installed")):
+        run.handle_line(w21, f"@@PKG@@|system|{_state}|{_name}|2")
+    _c21 = package_views.counts(w21.packages, w21.packages.packages("system"))
+    check(f"ONEUP-0239 INV-21 downloaded is to go, downloading is now ({_c21})",
+          _c21 == {"togo": 2, "now": 1, "done": 1})
+
     # INV-10: each state group has its own fill, and blocks run in the reading direction.
     fills = package_views.SizeStrip.FILLS
     check("ONEUP-0239 INV-10 the three state groups have three different fills",

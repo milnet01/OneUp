@@ -203,6 +203,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The window's package counts and sizes disagree with zypper during a parallel download.** (ONEUP-0335)
+  A total like 1.75 GiB no longer reads as 1.7 GiB. A package that has finished downloading and waits to install now counts as "to go", so "now" holds only what is downloading.
+
 - **The sudo route has no way in when a half-finished Qt update breaks the password popup.** (ONEUP-0337)
 
 - **A system update that fails part-way still runs the steps after it.** (ONEUP-0330)

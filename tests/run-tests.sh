@@ -855,6 +855,10 @@ out=$(run_engine "$d" --steps=system)
 check        "the run's list carries size, old edition and source" \
              "@@PKG@@|system|queued|vlc|3.0-2.1|222|3.0-1.1|Packman" "$out"
 check        "a retrieved package is downloading, with its size" "@@PKG@@|system|downloading|vlc|3.0-2.1|222" "$out"
+# ONEUP-0239 INV-21: the first action line ends the fetch, so it leaves "now" first.
+check        "a fetched package is downloaded before it installs" \
+             "$(printf '@@PKG@@|system|downloaded|vlc|3.0-2.1\n@@PKG@@|system|installed|vlc|3.0-2.1')" \
+             "$(grep -F '@@PKG@@|system|' <<<"$out" | grep -v -e '|queued|' -e '|downloading|')"
 check        "an install that completed is installed" "@@PKG@@|system|installed|vlc|3.0-2.1" "$out"
 rm -rf "$d"
 

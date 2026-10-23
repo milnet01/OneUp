@@ -215,9 +215,21 @@ PACKAGE_LINES = [
     (["Preloading: libglfw3-3.4-67.34.x86_64.rpm [already in cache]"],
      [("downloaded", "libglfw3", "3.4-67.34", 0)]),
     (["Preloading: libglfw3-3.4-67.34.x86_64.rpm [error]"], []),
+    # A fetch ends at the pass's end (ONEUP-0335, ONEUP-0239 §4.3.1).
     (["Retrieving: akonadi-calendar-26.08.2-1.1.x86_64 (Main Repository (OSS)) "
       "(2/320),  36.3 KiB    "],
-     [("downloading", "akonadi-calendar", "26.08.2-1.1", 37171)]),
+     [("downloading", "akonadi-calendar", "26.08.2-1.1", 37171),
+      ("downloaded", "akonadi-calendar", "26.08.2-1.1", 0)]),
+    # ONEUP-0239 INV-21: a fetch also ends at the next package's `Retrieving:` line, and
+    # at the pass's first action line, so a fetched package leaves "now".
+    (["Retrieving: cpupower-lang-7.1.4-17.noarch (devel-tools) (1/2),  31.0 KiB",
+      "Retrieving: libcapstone5-5.0.6-18.x86_64 (devel-tools) (2/2), 1.0 MiB",
+      "(1/2) Installing: cpupower-lang-7.1.4-17.noarch [..done]"],
+     [("downloading", "cpupower-lang", "7.1.4-17", 31744),
+      ("downloaded", "cpupower-lang", "7.1.4-17", 0),
+      ("downloading", "libcapstone5", "5.0.6-18", 1048576),
+      ("downloaded", "libcapstone5", "5.0.6-18", 0),
+      ("installed", "cpupower-lang", "7.1.4-17", 0)]),
 ]
 
 # `zypper --xmlout list-updates`, shaped by /usr/share/zypper/xml/xmlout.rnc's
@@ -421,8 +433,7 @@ def main() -> int:
 
     for lines, want in PACKAGE_LINES:
         reader = parsers.PackageLines()
-        got = [r for r in (reader.feed(line) for line in lines) if r is not None]
-        reader.finish()
+        got = [r for line in lines for r in reader.feed(line)] + reader.finish()
         check(f"PackageLines({lines[0][:44]!r}… x{len(lines)})", got, want)
 
     listed = parsers.update_list(UPDATE_XML)

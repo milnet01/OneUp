@@ -326,15 +326,21 @@ def _filter_lines(lines: Iterable[str], *, step: str, phase: str, log: Path,
                     "Installing:" in line or "Removing:" in line or "Upgrading:" in line):
                 if markers.emit_progress(step, parsers.install_fraction(line), "install"):
                     seen += 1
-            package = packages.feed(line)
-            if package is not None:
-                state, name, edition, size = package
-                if state == "downloading":
-                    markers.marker("PKG", step, state, name, edition, size)
-                else:
-                    markers.marker("PKG", step, state, name, edition)
-        packages.finish()
+            for package in packages.feed(line):
+                _mark_package(step, package)
+        # The pass's end also ends the last package's fetch (ONEUP-0239 §4.3.1).
+        for package in packages.finish():
+            _mark_package(step, package)
     return seen
+
+
+def _mark_package(step: str, package: tuple[str, str, str, int]) -> None:
+    """One package's `PKG` marker; only `downloading` carries a size (marker-protocol §4.12)."""
+    state, name, edition, size = package
+    if state == "downloading":
+        markers.marker("PKG", step, state, name, edition, size)
+    else:
+        markers.marker("PKG", step, state, name, edition)
 
 
 def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
