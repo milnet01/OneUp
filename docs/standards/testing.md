@@ -73,6 +73,7 @@ ONEUP_HOLD_STATE="${ONEUP_HOLD_STATE:-$mockdir/hold.state}"
 ONEUP_GO_FILE="${ONEUP_GO_FILE:-$mockdir/go.request}"
 ONEUP_GUARD_FILE="${ONEUP_GUARD_FILE:-$mockdir/oneup-download-guard}"
 ONEUP_INHIBITED="${ONEUP_INHIBITED-1}"
+ONEUP_BACKEND="${ONEUP_BACKEND-sudo}"
 ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}"
 ONEUP_ZYPP_RAW="${ONEUP_ZYPP_RAW:-$mockdir/zypp-raw}"
 ```
@@ -93,9 +94,12 @@ have OneUp's passwordless setting granted.
 `ONEUP_ZYPP_RAW` is ONEUP-0259's: the size lookup reads zypper's cached repository data
 there, so without it a scenario's sizes would be the developer's own packages.
 
-`ONEUP_INHIBITED` is the one that is not a path. Without it the engine re-runs itself under
-`systemd-inhibit` and takes a real shutdown lock on the developer's own session
-(ONEUP-0086). It uses `-`, not `:-`, so a scenario opts back in by setting it empty.
+`ONEUP_INHIBITED` and `ONEUP_BACKEND` are the two that are not paths, and both use `-`, not
+`:-`, so a scenario can set its own. Without `ONEUP_INHIBITED` the engine re-runs itself
+under `systemd-inhibit` and takes a real shutdown lock on the developer's own session
+(ONEUP-0086); a scenario opts back in by setting it empty. `ONEUP_BACKEND` pins the route
+to root to the sudo mock: on a machine with OneUp's system service installed, every
+scenario would otherwise ask the real service (ONEUP-0249).
 
 Both defaults bit for real, which is why the rule is not theoretical:
 
@@ -256,11 +260,14 @@ engine logic without re-checking them is how the original bug returns:
 1. **Reboot advice (`@@REBOOT@@|yes`) fires only when something was actually installed, or
    `zypper needs-rebooting` explicitly says so** — never merely because a step errored.
 2. **A failed step is recorded, emits a `@@HINT@@` the window words in plain English, and
-   the run continues** to the next step, so cache cleanup still happens and the summary is still useful.
+   the run continues** to the next step, so later steps still run and the summary is still useful.
    **One exception: a system transaction that fails after rpm has changed a package ends
    the run.** The system is then part-updated, and removing "leftover" packages or flashing
-   firmware on it can do harm the run cannot undo. No later step starts, and the first
-   `@@HINT@@` says the system is part-updated (ONEUP-0330).
+   firmware on it can do harm the run cannot undo. No later step starts; the summary and
+   `@@DONE@@|errors` still follow. The run advises no reboot and offers no service restart
+   (`@@REBOOT@@|no`, no `@@SERVICES@@`), whatever `zypper needs-rebooting` says and despite
+   item 3. The window leads its summary with the part-updated hint, ahead of any hint sent
+   earlier in the run (ONEUP-0330, ONEUP-0331).
 3. **A package-only change offers a service restart (`@@SERVICES@@`), not a reboot.**
 4. **`--check` is strictly read-only and runs without root** — no `zypper dup`, no
    `zypper update`; the mock exits 99 if either is called.
@@ -418,7 +425,7 @@ with the layout direction forced right-to-left.
 | §2.3 no network | **GUI suite: its closing check. Engine suite: nothing automated.** Verified 2026-08-07 by running each suite inside an empty network namespace (`unshare -rn`): engine **246 passed / 0 failed** with T-1 SKIPping loudly, GUI **307 / 0** — identical to their networked results but for T-1. For the GUI suite there is now a gate as well: its last check fails if any window made a `QNetworkAccessManager` request (ONEUP-0098). The engine suite has no such gate |
 | §3 a mock fails loudly rather than quietly | several scenarios carry an `exit 99` trap. Nothing checks that a *new* mock has one |
 | §4 one invariant, one test | nothing automatic |
-| §5 the four correctness invariants | `tests/run-tests.sh` — this is what the suite is for, and the reason it exists |
+| §5 the four correctness invariants | `tests/run-tests.sh` — this is what the suite is for, and the reason it exists. **Two halves of item 2's exception are not caught yet**: the part-updated scenario's mock answers `zypper needs-rebooting` with 0, so nothing shows the run withholds a reboot `needs-rebooting` asks for; and nothing checks the window leads with the part-updated hint |
 | §6 poll for the condition, never sleep | **nothing** automatic |
 | §7 a passing suite is silent | **nothing** — the GUI suite prints dozens of teardown tracebacks while passing (ONEUP-0062). §7 says how to count them and why the number is not stated |
 
