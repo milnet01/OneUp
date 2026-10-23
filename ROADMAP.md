@@ -9866,6 +9866,11 @@ when complete (that document's §7).
   so a vendor-changing snapshot (the 23 October one had 3) takes the fallback. Filed here, out of the gated change's radius: INV-4's "count 8, rows 7"
   half sits in tests/parsers-test.py, but §4.3 has `system_changes`, which needs a service session, build the count and rows — the test needs a pure
   helper or a run-tests.sh scenario.
+  2026-10-23: review-contract loop 4 (a continued run of one loop on
+  b8173a5) on docs/specs/ONEUP-0329-exact-update-count.md: 1 verified, 1
+  fixed, 2 dismissed. §4.7's lock wait now names lock_holder's holder
+  instead of "another OneUp task". Nothing surfaced or filed. Status
+  stays Reviewed; the spec is ready to build.
   **Layman:** Check said 524 updates; the real update changed 927 packages.
   Kind: fix.
   Source: real-update-test-2026-10-23.
