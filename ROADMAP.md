@@ -9848,6 +9848,17 @@ when complete (that document's §7).
   runs the real `zypper dup --dry-run`; the AppImage keeps the rootless
   count, worded "at least N". Changes security.md §12, so it needs a
   spec and review-contract first.
+  Spec docs/specs/ONEUP-0329-exact-update-count.md gated by review-contract
+  2026-10-23: 2 loops (the spec cap), 14 verified, 13 fixed, 1 surfaced;
+  Status Reviewed (commits b16636c, 7f1e1e2). Deferred, verified and
+  unfixed, needing a user decision before build: a tray (_tray_check has
+  no run guard) or weekly timer check can start while a run is between
+  root operations, e.g. after system-download and before system-commit.
+  Its dry run then refreshes repositories as root mid-run and holds the
+  service's one job slot for up to CHECK_DRY_RUN_SECONDS. Proposed fix:
+  the engine's --check reads run.state and, while a live run holds it,
+  takes the at-least fallback without asking the service. Do not
+  re-review to rediscover this; fold it in directly.
   **Layman:** Check said 524 updates; the real update changed 927 packages.
   Kind: fix.
   Source: real-update-test-2026-10-23.
