@@ -21,25 +21,26 @@ from typing import NamedTuple
 _UNITS = {"B": 1, "KiB": 1024, "MiB": 1048576, "GiB": 1073741824}
 
 _WHOLE = re.compile(r"[0-9]+")
-_DIGIT = re.compile(r"[0-9]")
 
 
 def to_bytes(number: str, unit: str) -> int:
     """`to_bytes`: "31.0", "KiB" -> 31744. Unparsable or unknown unit -> 0.
 
-    Integer arithmetic, because the Bash has no floats. It keeps ONE fractional
-    digit and computes `(whole * 10 + frac) * mult / 10` with truncating
-    division; `float(number) * mult` rounds differently on some inputs, and this
-    number reaches the window inside `@@PROGRESS@@`.
+    Integer arithmetic over EVERY fractional digit, truncating only the final
+    byte: `float(number) * mult` rounds differently on some inputs, and this number
+    reaches the window inside `@@PROGRESS@@`. The Bash engine keeps one digit, which
+    read zypper's "1.75 GiB" as 1.7 GiB (ONEUP-0335).
     """
-    whole, _, rest = number.partition(".")
-    frac = rest[:1] if "." in number else "0"
-    if not _WHOLE.fullmatch(whole) or not _DIGIT.fullmatch(frac):
+    whole, dot, frac = number.partition(".")
+    if not dot:
+        frac = "0"
+    if not _WHOLE.fullmatch(whole) or not _WHOLE.fullmatch(frac):
         return 0
     mult = _UNITS.get(unit)
     if mult is None:
         return 0
-    return (int(whole) * 10 + int(frac)) * mult // 10
+    scale = 10 ** len(frac)
+    return (int(whole) * scale + int(frac)) * mult // scale
 
 
 # --- the two download-size wordings, which are TWO parsers on purpose ---------

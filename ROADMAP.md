@@ -9970,6 +9970,17 @@ when complete (that document's §7).
   keeps one decimal (1.75 GiB -> 1.7); GROUP puts downloaded in now
   (user decision recorded above). Header count (d) depends on
   ONEUP-0329.
+  State 2026-10-23: (b) fixed — to_bytes keeps every fractional digit
+  (the run's total read 1825361100 for 1.75 GiB; the per-package sum was
+  1879799939). (a) needs no change: every package got Preloading [done]
+  then Retrieving, and packages.PackageModel.apply already never moves a
+  state backwards (ONEUP-0259 §4.4), so the window keeps it downloaded.
+  (c) is pinned by docs/specs/ONEUP-0239-fixed-layouts.md's group table
+  (now = downloading, downloaded): the user's decision changes a gated
+  spec, so it needs the amendment and review-contract before the code.
+  (d) waits on ONEUP-0329. docs/plans/ONEUP-0054-python-engine.md stage
+  1 still describes the one-digit to_bytes; left as the done stage's
+  record.
   **Layman:** The window showed 642, then 927, then 931 updates, '1.8 GiB of 1.7 GiB', and '0 done · 927 now' after everything had downloaded.
   Kind: fix.
   Source: real-update-test-2026-10-23.

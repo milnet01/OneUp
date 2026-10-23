@@ -46,9 +46,9 @@ def check(name: str, got, want):
 
 
 # --- to_bytes ----------------------------------------------------------------
-# Integer arithmetic with ONE fractional digit and truncating division. Every
-# expected value below was read back from the Bash `to_bytes` itself, not
-# computed here: `1.3 GiB` is 1395864371 and not 1395864371.2 rounded up.
+# Integer arithmetic over every fractional digit, truncating only the final byte:
+# `1.3 GiB` is 1395864371 and not 1395864371.2 rounded up. The Bash engine keeps one
+# digit; the Python engine no longer matches it there (ONEUP-0335).
 TO_BYTES = [
     # (number, unit, bytes, why this row is here)
     ("31.0", "KiB", 31744, "the worked example in progress_filter's comment"),
@@ -58,7 +58,8 @@ TO_BYTES = [
     ("0", "B", 0, "a definite zero is a real answer"),
     ("31", "MiB", 32505856, "no decimal point at all"),
     ("08.0", "MiB", 8388608, "zero-padded: decimal, never an invalid octal literal"),
-    ("1.25", "GiB", 1288490188, "a second fractional digit is dropped, not rounded"),
+    ("1.25", "GiB", 1342177280, "a second fractional digit counts (ONEUP-0335)"),
+    ("1.75", "GiB", 1879048192, "the 2026-10-23 run's total, which read as 1.7 GiB (ONEUP-0335)"),
     ("12.5", "KB", 0, "KB passes progress_filter's regex and is NOT a unit we know"),
     ("1.9", "TiB", 0, "an unknown unit is 0, never a guess"),
     ("31.", "KiB", 0, "a trailing dot leaves no fractional digit"),
