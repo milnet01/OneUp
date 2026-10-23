@@ -98,6 +98,12 @@ fields this needs are §4.5's.
    the service (§4.2 step 0). The user, 2026-10-23, over two alternatives: the window not
    starting a check during a run, and the service refusing `check-dry-run` while another
    session exists.
+9. **An update started during a check waits for zypp's lock rather than stopping as busy**,
+   on the service route (§4.7). The user, 2026-10-23, knowing it also waits for YaST or a
+   hand-run zypper there, where ONEUP-0039 stops at once today.
+10. **A package zypper lists under `to-change-vendor` counts once**, with the word of its
+    other listing (§4.3). The user, 2026-10-23, over mapping every vendor change to
+    `upgrade`.
 
 ## 4. Design
 
@@ -209,12 +215,16 @@ class Change(NamedTuple):
   | `to-downgrade`, `to-downgrade-change-arch` | `downgrade` |
   | `to-install` | `new` |
   | `to-remove` | `remove` |
+  | `to-change-vendor` | the word of the package's other listing; `upgrade` where it has none |
 
+  `to-change-vendor` is in no schema. Measured 2026-10-23: `strings -n 6 /usr/bin/zypper`
+  (zypper 1.14.101) prints `<to-change-vendor>`, and the 23 October run's summary line
+  counted `3  to change vendor`.
 - **A removal's key edition is the removed package's own edition**, and `old` is that same
   edition. The run's `Removing:` line names the installed package (ONEUP-0259 §4.3's
   table), so its `PKG|system|removed|name|edition` lands on the check's row.
-- **One change per `(name, edition)`**, the first in document order. A package listed under
-  two elements is one change.
+- **One change per `(name, edition)`.** A package listed under two elements is one change.
+  Its word comes from its first listing in document order outside `to-change-vendor`.
 
 `system_changes` then builds `SystemListing`:
 
@@ -303,6 +313,13 @@ to one changes the other. Past it, the operation fails as
 `Busy` fails today. Any other refusal, `Busy` with reason `the service is stopping`
 included, fails as today.
 
+**The dry run also holds zypp's lock**, and `__main__.run` asks `repos.lock_holder` before
+any root operation that could meet `Busy`. So on the service route that check waits too:
+while `lock_holder` names a holder, `run` prints the same waiting line once and asks again
+every 2 s, for up to `BUSY_WAIT_SECONDS`. Still held after that, it stops with today's
+`package-manager-busy` message and hint (ONEUP-0039). The sudo route stops at once, as
+today: no check's dry run runs there.
+
 ### 4.8 Measured before the code relies on it
 
 Each is one root dry run on the development machine, by hand, at the start of the build.
@@ -318,6 +335,9 @@ tests pin.
    update. If it prints no `install-summary`, a fully updated machine takes the fallback
    on every check, and "at least 0" reads "up to date" — correct, but the build then adds
    a branch for zypper's own nothing-to-do message so the count stays exact.
+4. **Whether a `to-change-vendor` package is also listed under `to-upgrade` or
+   `to-downgrade`**, on the next snapshot that changes a package's vendor. Either way §4.3
+   counts it once; the measurement decides whether a vendor-only listing occurs at all.
 
 ## 5. Correctness invariants
 
@@ -348,14 +368,19 @@ tests pin.
 - **INV-4** On a dry run that answered, the system count is the number of distinct
   `(name, edition)` package solvables across every element in §4.3's table, and the rows
   carry each one's change word; `CHECK|system` carries no basis.
-  *Test:* `tests/parsers-test.py` — a fixture with one distinct package in each of the
-  eight elements, one of them named so it fails `valid_package`; a product; and a second
-  listing of one of the eight under another element; its `packages-to-change` reads 99.
-  `change_list` returns eight changes with the table's words; the count is 8 and the rows
-  are 7. The product, the repeat and the 99 isolate the rule: a parser counting
-  `<solvable>` tags returns ten.
+  *Test:* one fixture: one distinct package in each of the eight elements of the table's
+  first four rows, one of them named so it fails `valid_package`; a product; a second
+  listing of one of the eight under another element; a `to-change-vendor` element, placed
+  before `to-downgrade`, holding the `to-downgrade` package again and one package of its
+  own; and `packages-to-change` reading 99. `tests/parsers-test.py` — `change_list`
+  returns nine changes: the eight with the table's words, the repeated one `downgrade`,
+  the vendor-only one `upgrade`. `tests/run-tests.sh`, against `--serve` with the fixture
+  as the mock dry run's output — `CHECK|system|9` with no basis, and eight `CHECK_ITEM`
+  lines. The product, the repeats, the vendor element's place and the 99 isolate the rule:
+  a parser counting `<solvable>` tags returns twelve, and one taking the first listing's
+  word calls the downgrade an upgrade.
   *Breaks when:* the count reads `packages-to-change`, or only `to-upgrade`, or counts a
-  product.
+  product, or a vendor listing sets the word.
 
 - **INV-5** A package the check lists as `remove` and the run then removes is one row in
   the window's model, in state `removed`.
@@ -422,6 +447,18 @@ tests pin.
   *Breaks when:* the check asks the service without reading `run.state`, or stands down on
   a record whose pid is dead.
 
+- **INV-13** On the service route, a run that finds zypp's lock held waits up to
+  `BUSY_WAIT_SECONDS` for it, then goes ahead; still held, it stops with
+  `package-manager-busy`. On the sudo route it stops at once.
+  *Test:* `tests/run-tests.sh` — `ONEUP_ZYPP_PID_FILE` names the pid of a `sleep 3`
+  started by the scenario. On the service route with `ONEUP_BUSY_WAIT_SECONDS=10` the run
+  prints the waiting line once and reaches its system step; with `=1` it emits
+  `package-manager-busy`. On the sudo route with `=10` it emits `package-manager-busy`
+  without the waiting line. The route pair isolates the rule: the wait must follow the
+  route, not the setting alone.
+  *Breaks when:* `run` stops on the first `lock_holder` answer on the service route, or
+  waits on the sudo route.
+
 ## 6. Failure modes
 
 | What breaks | What happens |
@@ -431,7 +468,8 @@ tests pin.
 | A repository's refresh fails or needs a new key | non-interactive zypper skips it and exits 106: the dry run's rows, plus `CHECK_UNKNOWN`, naming it where a `<message>` does (§4.3) |
 | A crawling mirror | `timeout` ends the dry run at `CHECK_DRY_RUN_SECONDS`: the fallback. A run started meanwhile waits up to `BUSY_WAIT_SECONDS` |
 | The solver cannot settle without a choice | zypper exits 4 in non-interactive mode: the fallback, and the terminal line names the status. The update will meet the same problem |
-| The user starts an update during a check | the run's first root operation waits, with one line saying why (§4.7) |
+| The user starts an update during a check | the run waits for zypp's lock or the service's job, with one line saying why (§4.7) |
+| YaST or a hand-run zypper holds the lock when an update starts | on the service route the run waits up to `BUSY_WAIT_SECONDS`, then stops as busy (§3 item 9); on the sudo route it stops at once |
 | A tray or weekly check starts during an update | it stands down: the fallback, "at least N", and no service session (§4.2 step 0) |
 | The service dies mid-dry-run | `Read` fails: the fallback |
 | The check's process is killed | the dry run finishes or times out in the service, as any job does (ONEUP-0249 INV-5) |
@@ -440,9 +478,9 @@ tests pin.
 
 ## 7. Tests
 
-- **`tests/parsers-test.py`**: INV-4.
-- **`tests/run-tests.sh`**: INV-1, INV-2, INV-3, INV-6, INV-7, INV-8, INV-9, INV-11 and
-  INV-12.
+- **`tests/parsers-test.py`**: INV-4's parser half.
+- **`tests/run-tests.sh`**: INV-1, INV-2, INV-3, INV-4's count half, INV-6, INV-7, INV-8,
+  INV-9, INV-11, INV-12 and INV-13.
   The service-route scenarios run against `tests/service-test.py --serve` with
   `ONEUP_BACKEND=service` on their own command, and their mock `zypper` gains a
   `--xmlout … dup … --dry-run` mode printing a fixture install summary.
