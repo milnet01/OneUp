@@ -1,9 +1,9 @@
 # ONEUP-0239 — three fixed layouts, and the Settings choice between them
 
-**Status:** Reviewed
+**Status:** Draft
 **Kind:** feature
 **Roadmap:** ONEUP-0239; amended by ONEUP-0306, which is built through ONEUP-0307 to
-ONEUP-0318 and ONEUP-0320.
+ONEUP-0318 and ONEUP-0320; amended by ONEUP-0335 and ONEUP-0336 (§3 items 16 and 17).
 **Branch:** v2
 **Verified at:** `24f69d1` — every symbol below was opened on 2026-10-12. Text marked
 *(ONEUP-0306)* is not built; it was checked against `1320958` on 2026-10-17.
@@ -74,7 +74,8 @@ the test VM on 2026-10-17:
 - **Only the system step reports progress.** `PROGRESS` comes only from
   `proc._filter_lines`, which reads the system transaction's output; its `phase` is
   `download` or `install`. Flatpak sends `PKG` lines but no `PROGRESS`; the other three
-  steps send neither.
+  steps send neither. *(ONEUP-0336)* The Flatpak step gains `PROGRESS` with phases of its
+  own (§4.1.4).
 - **A package's one-line description now exists**, for system packages only:
   `details_dialog.DetailsStore` fetches zypper's `Summary` for each system package as it
   arrives (ONEUP-0260), and `DetailsStore.about` returns it. No layout shows it.
@@ -131,6 +132,14 @@ the test VM on 2026-10-17:
     was 912 pixels; three two-line table rows make it 995, where six would make it about
     1127. At *Large* three rows make it 1037, and at *Larger* 1105. A taller window still
     gives the list all its spare height (§4.2 item 2).
+16. *(ONEUP-0335)* **"Now" is only what is being downloaded or installed** (user,
+    2026-10-23). A package downloaded but not yet installed counts as *to go*; done is
+    installed, removed or not changed (§4.3.1).
+17. *(ONEUP-0336)* **The Flatpak step says which pass it is on** (user, 2026-10-23), which
+    opens the frozen marker contract a third time (`docs/reference/marker-protocol.md`
+    §5.1). It names the pass — your apps, system apps, or removing unused runtimes — and
+    how far through it is. It never says downloading or installing: Flatpak prints one
+    line per update whose percentage covers both (§4.1.4).
 
 The calls this spec makes by deduction, stated so they are not mistaken for preference:
 
@@ -251,7 +260,8 @@ reweighs the byte figure, and `_reset_for_run` clears it.
   for `Retrieving:` lines, with byte fields; neither moves it past 500.
 - **It never moves backwards** within a step. `STEP_END` sets it to 1000.
 - **A step that sends no `PROGRESS`** — every step but `system` (§2) — is busy from
-  `STEP_BEGIN` to `STEP_END`.
+  `STEP_BEGIN` to `STEP_END`. *(ONEUP-0336)* So is the Flatpak step: its phases (§4.1.4)
+  are neither `download` nor `install`, so they move neither half.
 
 Three places show it, all from that one value:
 
@@ -312,6 +322,35 @@ hang*).
 
 **One log link.** The footer holds `last_run`, `rollback_btn` and `log_toggle`.
 `openlog_btn` is shown only while the log page is current, in a slot that keeps its size.
+
+#### 4.1.4 The Flatpak step's passes *(ONEUP-0336)*
+
+`steps.run_flatpak` runs three passes, and sends `PROGRESS|flatpak|done|total|phase` for
+each, with a `phase` of its own:
+
+| Phase | Pass | The status line's part |
+| --- | --- | --- |
+| `user` | `flatpak update --user -y` | *Updating your apps: 3 of 12* |
+| `system` | the `flatpak-system-update` row of `rootops.OPS` | *Updating system apps: 3 of 20* |
+| `unused` | the user and system `flatpak uninstall --unused` | *Removing unused runtimes* |
+
+- **Each pass sends one `PROGRESS` as it starts**, with `done` and `total` of 0, before
+  Flatpak prints anything. A `total` of 0 drops the count: *Updating your apps*,
+  *Updating system apps*. The `unused` pass sends only this one.
+- **Then one per new count.** Flatpak prints a line of the form `Updating 3/12…` as each
+  update starts, and repeats it at each percentage step. The engine sends `PROGRESS` when
+  the first number changes. It reads the two numbers and the `…`, never the word before
+  them. Measured in the run log of 2026-10-23: a user pass of 12 updates, then a system
+  pass of 20.
+- **`done` is the update in progress**, not the number finished: Flatpak prints
+  `Updating 3/12…` as the third starts.
+- **The window**: the status line is the step's title and the part above — *"Flatpak
+  apps · Updating your apps: 3 of 12"* — and the detail line says the same. A change of
+  phase is announced once: *"Updating your Flatpak apps."*, *"Updating system Flatpak
+  apps."*, *"Removing unused Flatpak runtimes."* The step's bar and `win.bar` stay busy,
+  and its badge keeps its `IN_PROGRESS` phrase (§4.1.1). Stop stays clickable:
+  `run.sync_stop` greys it only in the `install` phase. There is no byte figure and no
+  time left (§4.1.2).
 
 ### 4.2 Sizes come from the font, never from the content
 
@@ -420,9 +459,14 @@ All counts are over `win.packages.packages(key)`, using `shown_state`:
 
 | Group | States |
 | --- | --- |
-| to go | `queued` |
-| now | `downloading`, `downloaded` |
+| to go | `queued`, *(ONEUP-0335)* `downloaded` |
+| now | `downloading` |
 | done | `installed`, `removed`, `unchanged` |
+
+~~now = `downloading`, `downloaded`~~ *(ONEUP-0335, §3 item 16)*. A package being
+installed is never seen in that state: `parsers.PackageLines` reports an install only
+once its line ends in `done]`, so it moves from `downloaded` to `installed` in one step.
+So *now* holds only what is downloading.
 
 - **Rows' table** shows the filter's packages, all steps under *All*.
 - **Rail's board** shows the packages of `win.current_step`, and all packages when it is
@@ -710,6 +754,30 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
   characters: its horizontal scroll bar's maximum is 0.
   *Breaks when:* a line's size follows its text's width (ONEUP-0312).
 
+- **INV-19** *(ONEUP-0336)* The engine names each Flatpak pass, once per count.
+  *Test:* `tests/run-tests.sh` — a mock `flatpak` whose user update prints
+  `Updating 1/2…` twice, then `Updating 2/2…`, and whose system update prints
+  `Updating 1/1…`. The output holds, in this order, `PROGRESS|flatpak|0|0|user`,
+  `|1|2|user` exactly once, `|2|2|user`, `|0|0|system`, `|1|1|system` and
+  `|0|0|unused`.
+  *Breaks when:* a repeated line sends a second marker, a pass sends no start marker, or
+  the system pass's lines are not read.
+
+- **INV-20** *(ONEUP-0336)* The window words each Flatpak phase as its own, never as
+  installing.
+  *Test:* `tests/gui-smoke.py` — `STEP_BEGIN|flatpak|1|1`, then
+  `PROGRESS|flatpak|0|0|user`, `|3|12|user`, `|4|12|user`, `|3|20|system` and
+  `|0|0|unused`, with `_announce` recording its text. After each, `status` holds the
+  translated part from §4.1.4. Three announcements were made, one per phase. The
+  flatpak row's bar and `win.bar` are busy throughout, and Stop is enabled.
+  *Breaks when:* a Flatpak phase reads *Installing*, which the window says today for any
+  phase that is not `download`; a count is announced; or a Flatpak phase moves a bar.
+
+- **INV-21** *(ONEUP-0335)* *Now* counts only what is downloading.
+  *Test:* `tests/gui-smoke.py` — `package_views.counts` over one package in each of
+  `queued`, `downloading`, `downloaded` and `installed` gives 2 to go, 1 now and 1 done.
+  *Breaks when:* `downloaded` counts as now.
+
 ## 6. Failure modes
 
 | Assumption | When it breaks | What the user sees |
@@ -726,12 +794,14 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
 | *(ONEUP-0306)* The download rate is steady | A mirror that slows or stalls part-way | The estimate swings; it says *about*, and a stall replaces it with the stall sentence (§4.1.3) |
 | *(ONEUP-0306)* A system package has a description | `DetailsStore`'s fetch is pending, failed or past its deadline, or the package is a Flatpak | Spotlight's second line leaves the description out and shows source and versions |
 | *(ONEUP-0306)* The app's font draws every symbol | A theme or desktop font without the glyph | Each symbol is tested against Noto Sans (INV-3, §7); where Noto Sans is installed, a missing glyph fails the test rather than reaching the user |
+| *(ONEUP-0336)* Flatpak prints its count as `n/m…` | A Flatpak version or language that prints it another way | No count arrives; the status line names the pass without one — *Updating your apps* — for the whole pass, which is still true |
 
 ## 7. Tests
 
 INV-1, INV-2, INV-3, INV-4, INV-5, INV-6, INV-7, INV-8, INV-9, INV-10, INV-11, INV-12,
 INV-13, INV-14, INV-15, INV-16, INV-17 and INV-18 are all tested in `tests/gui-smoke.py`,
-each as its §5 clause says. Beside them:
+each as its §5 clause says. *(ONEUP-0335, ONEUP-0336)* So are INV-20 and INV-21; INV-19
+is tested in `tests/run-tests.sh`. Beside them:
 
 - **ONEUP-0076 INV-1's sweep** fails any focusable widget missing from its `FOCUS_TABLE`, so
   the three package views and the filter buttons get rows there, as ONEUP-0027 added
@@ -793,6 +863,16 @@ No marker changes: the marker contract stays frozen (`docs/reference/marker-prot
 §5.1). No engine change. No new file outside `oneup/`, so no packaging change
 (`docs/standards/files-and-naming.md` §6).
 
+*(ONEUP-0336)* **Overturns the paragraph above for one marker.** `PROGRESS` gains the
+phases `user`, `system` and `unused` for the `flatpak` key, which changes every file
+`docs/reference/marker-protocol.md` §5 lists, and that document's §3, §4.3 and §5.1, in
+one commit. The engine changes in `steps.run_flatpak`, and in whatever carries Flatpak's
+lines to it on both routes to root. The new strings follow
+`docs/standards/wording-and-translation.md`, and the translation catalogue is refreshed.
+`CHANGELOG.md` `[Unreleased]` gains a line saying the Flatpak step names its pass and its
+count. *(ONEUP-0335)* No engine or marker change; `CHANGELOG.md` gains a line saying a
+downloaded package now counts as to go.
+
 ## 9. Alternatives considered (and rejected)
 
 - **Steps side by side, each with its own log** — the user's first idea, 2026-10-08.
@@ -825,6 +905,9 @@ No marker changes: the marker contract stays frozen (`docs/reference/marker-prot
   not ask for. Spotlight's latest-package line and Rail's board both say what is happening
   without moving anything.
 - **Honouring `log_shown`.** §3, the deductions.
+- *(ONEUP-0336)* **Filling the Flatpak step's bar from its count.** §4.1.1's halves mean
+  downloading then installing, and Flatpak's count is neither. A bar per pass would also
+  empty and refill between the passes, which reads as a fault.
 
 ## 10. Out of scope
 
@@ -853,3 +936,4 @@ No marker changes: the marker contract stays frozen (`docs/reference/marker-prot
 | amend | 2026-10-17 | no reviewer dispatched | ONEUP-0310's amendment, not a review loop: the user's decision that Rows' package list holds at least three rows at the minimum size (§3 item 15), written into §4.2 item 2 and INV-17. The gate on it is the loops that follow |
 | 5 | 2026-10-17 | Q1 1 · Q2 1 · Q3 1 · Q4 1 — 4 verified, 1 dismissed | 2 fixed, 2 filed on ONEUP-0322; loop 1 of the gate on ONEUP-0310's amendment. Two lanes, each holding every question; both found that INV-17 bounded Rows' floor from below only, so a six-row floor passed (Q4): INV-17 now also holds Rows' viewport under four row heights. The Q1 came from measuring what a lane asked: three rows make Rows' minimum 995 at *Normal*, 1037 at *Large* and 1105 at *Larger*, so §3 item 15's 1080 promise now names *Normal* and carries the figures. Outside the amended text, filed rather than fixed: the badge's phase word once the value has passed 500 and a later `PROGRESS` says `download` (Q3), and Rail's summary described differently in §4.3 and §4.3.1 (Q2). Dismissed: §2's dated sentence on `run._launch`, background nothing is built from. Five open questions resolved clean (`#RestartBtn`'s overlay fill, a check sends no `STEP_BEGIN`, a test's run set-up, `openlog_btn`'s slot, the high-contrast tab) |
 | 6 | 2026-10-17 | Q2 3 — 3 verified, 1 dismissed | 0 fixed, 3 filed on ONEUP-0322; the cap for a spec, and the run ends. Two lanes, each holding every question; no finding landed on ONEUP-0310's text or on row 5's fixes, and a lane checked §3 item 15's new figures against the measurements. All three Q2s lie outside the amended text: §1 promises every package's versions and source, while Spotlight's lines carry neither (both lanes); §4.1.3 drops `activity`'s moving clock during a check or refresh, which the liveness trap in `.claude/rules/engine-traps.md` needs; and *Packages* and the status count read *not known* where `docs/reference/marker-protocol.md` §4.3 requires a running tally. Dismissed: INV-12's and INV-15's `cache_bytes` "in `oneup/gui/run.py`", the name `run.py` imports, so the stub's target is right. A check was confirmed to send no step markers. Own-fix share 0 of 3, a calm cap. Second share: 2 of the run's 7 verified findings lie in ONEUP-0310's text |
+| 0335-0336-amend | 2026-10-23 | none — an authoring amendment; no reviewer was dispatched | The user's two decisions of 2026-10-23 (§3 items 16 and 17): *now* holds only what is downloading, with `downloaded` moved to *to go* (§4.3.1, INV-21, from ONEUP-0335); and the Flatpak step sends `PROGRESS` with phases `user`, `system` and `unused`, opening the marker contract a third time (§4.1.4, INV-19, INV-20, §8, from ONEUP-0336). Status back to Draft. The gate on it is the next loop. |

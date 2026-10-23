@@ -9988,6 +9988,12 @@ when complete (that document's §7).
 - 📋 [ONEUP-0336] **The Flatpak step does not say which pass it is on, or whether it is downloading or installing.**
   steps.run_flatpak runs `flatpak update --user` then the system pass
   as root; nothing tells the window which, or the phase.
+  User decision 2026-10-23: open the frozen marker contract for this (a
+  third exception, marker-protocol.md §5.1). Flatpak prints one
+  'Updating n/m…' line per ref whose percentage covers download and
+  deploy together, so the window shows the pass (your apps / system apps
+  / cleanup) and its count, never a download/install split. Measured on
+  the 2026-10-23_074231 log: 12 user refs, then 20 system refs.
   **Layman:** Flatpak updates run twice (your apps, then system apps) but the window only says 'Updating Flatpak apps'.
   Kind: ux.
   Source: real-update-test-2026-10-23.
@@ -10007,6 +10013,8 @@ when complete (that document's §7).
   cancel keeps 'Authentication failed or cancelled'. Sudo route only;
   the service route's polkit agent is not covered. main's Bash engine
   has the same gap, not ported.
+  User decision 2026-10-23: port to main's Bash engine for the owed
+  1.4.x.
   **Layman:** After a half-finished update, the password popup could not start, so OneUp could not finish the job.
   Kind: fix.
   Source: real-update-test-2026-10-23.
