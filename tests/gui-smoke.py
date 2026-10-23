@@ -2040,6 +2040,26 @@ def main() -> int:
     check("ONEUP-0331 the engine's part-updated hint opens with the sentence the window "
           "looks for", updater._PART_UPDATED_HINT in updater.ENGINE.read_text())
 
+    # ONEUP-0337: the password box could not start, so the engine stops before DONE.
+    # The banner still says why and offers the command to finish in a terminal.
+    _askpass_hint = ("The password box could not start, so OneUp cannot get administrator "
+                     "rights. This can happen after an update stopped part-way. To finish "
+                     "the update, open a terminal and run: $finish_cmd")
+    check("ONEUP-0337 the engine sends the hint this test feeds the window",
+          _askpass_hint in updater.ENGINE.read_text())
+    wQ = updater.Updater()
+    wQ.handle_line("@@HINT@@|" + _askpass_hint.replace("$finish_cmd", "sudo zypper dup"))
+    wQ._failed_steps = ["system"]
+    wQ.proc = QProcess(wQ)
+    wQ.show()
+    wQ.on_finished(1, QProcess.ExitStatus.NormalExit)
+    check(f"ONEUP-0337 a box that could not start is said in the banner "
+          f"({wQ.warn_label.text()!r})", "could not start" in wQ.warn_label.text())
+    check(f"ONEUP-0337 and Copy command copies the terminal command "
+          f"({wQ._hint_command!r})",
+          wQ._hint_command == "sudo zypper dup" and wQ.warn_copy_btn.isVisibleTo(wQ))
+    wQ.hide()
+
     # --- Diagnostics bundle for a bug report (ONEUP-0031) ------------------
     _latest, _build = updater._latest_run_log, updater.build_diagnostics
     with tempfile.TemporaryDirectory() as _ld:

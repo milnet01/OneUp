@@ -650,6 +650,22 @@ fi
 # background keep-alive so later sudo calls reuse the cached credential.
 # ---------------------------------------------------------------------------
 SUDO_KEEPALIVE=""
+
+# Is the password box missing, or unable to load its libraries (ONEUP-0337)? Asked only
+# after the validate failed, to tell a box that never appeared from one the user
+# cancelled; sudo words both the same. `ldd` reads the libraries without running the
+# program, so no box opens. Where `ldd` is missing or finds every library, this says no,
+# and the run reports a cancel as before.
+askpass_cannot_start() {
+    [[ -x "$ASKPASS" ]] || return 0
+    command -v ldd &>/dev/null || return 1
+    # Captured, not piped: under pipefail, ldd's own non-zero exit on a missing library
+    # would fail the pipe even when grep matched.
+    local libs
+    libs=$(timeout 10 ldd "$ASKPASS" 2>&1)
+    [[ "$libs" == *"not found"* ]]
+}
+
 sudo_init() {
     # If the ONEUP-0023 passwordless drop-in is active AND grants what this engine needs,
     # every privileged command below is individually NOPASSWD, so no cached credential is
@@ -667,6 +683,16 @@ sudo_init() {
     fi
     if ! SUDO_ASKPASS="$ASKPASS" sudo -A \
             -p "System Updater: authenticate to update the system" -v; then
+        if askpass_cannot_start; then
+            # Not a cancel: the box never appeared, so pressing Update again cannot help.
+            # A half-finished update can leave its toolkit mismatched, and the box is a Qt
+            # program; the terminal still works (ONEUP-0337).
+            local finish_cmd="sudo zypper dup" askpass_hint
+            grep -qs "Leap" /etc/os-release && finish_cmd="sudo zypper update"
+            askpass_hint="The password box could not start, so OneUp cannot get administrator rights. This can happen after an update stopped part-way. To finish the update, open a terminal and run: $finish_cmd"
+            echo "  Hint: $askpass_hint"
+            marker HINT "$askpass_hint"
+        fi
         echo "Authentication failed or cancelled — aborting." >&2
         exit 1
     fi

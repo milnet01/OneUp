@@ -8,6 +8,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **When the password box cannot start, OneUp says so and names the command** (ONEUP-0337)
+  An update that stopped part-way through the Qt libraries can leave the password box unable to start, and OneUp then said only "Authentication failed or cancelled". It now says the box could not start and gives the command to finish the update in a terminal, with a Copy command button.
+
 - **A system update that fails part-way ends the run, and says so** (ONEUP-0330, ONEUP-0331)
   When rpm had already updated some packages and then failed, OneUp went on to Flatpak and would have removed leftover packages from a half-updated system. It now stops there, advises no restart, and its warning says the system is only partly updated: run the update again, or finish it in a terminal with the command it names.
 
