@@ -922,11 +922,12 @@ def handle_marker(win, line: str):
         # model every view reads (ONEUP-0259). The model guards its own fields.
         win.packages.add_check_item(parts)
     elif tag == "PKG":
-        # One package's place in a run, key|state|name|edition[|bytes|from|repo].
+        # One package's place in a run, key|state|name|edition[|bytes|from|repo[|change]].
         # The latest package is set BEFORE the model notifies the layouts, and on
         # apply's own guard, so Spotlight never names a line the model refused.
         if (len(parts) >= 4 and parts[0] and parts[2] and parts[1] in packages.STATES
-                and (len(parts) < 5 or not parts[4] or parts[4].isdecimal())):
+                and (len(parts) < 5 or not parts[4] or parts[4].isdecimal())
+                and (len(parts) < 8 or not parts[7] or parts[7] in packages.CHANGES)):
             win.latest_package = (parts[0], parts[2], parts[3])
         win.packages.apply(parts)
     elif tag == "INSTALLED":

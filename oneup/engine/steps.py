@@ -516,11 +516,34 @@ def system_changes(sizes: bool) -> SystemListing:
     except service_client.Refused as exc:
         return system_updates(sizes)._replace(
             why=f"the system service refused the check ({exc.code} {exc.reason})".strip())
+    listing = _dry_run_listing(rc, out, sizes)
+    return system_updates(sizes)._replace(why=listing) if isinstance(listing, str) else listing
+
+
+def run_changes() -> SystemListing:
+    """The run's own list, sizes included: its transaction's dry run, as root.
+
+    Asked after the refresh, so the header counts what the run will change from the
+    first line, removals and new packages too (ONEUP-0335 (d)). Where the dry run
+    cannot answer, the rootless list, as before; the transaction's own lines then
+    add what it lacks.
+    """
+    rc, out = privilege.root("plan-dry-run", {}, merge_stderr=False)
+    listing = _dry_run_listing(rc, out, sizes=True)
+    if isinstance(listing, str):
+        markers.out(f"  Package list: zypper's update list, which may grow during the run "
+                    f"({listing})")
+        return system_updates(sizes=True)
+    return listing
+
+
+def _dry_run_listing(rc: int, out: str, sizes: bool) -> SystemListing | str:
+    """A dry run's exit and XML as the listing, or why they could not be read."""
     if rc not in _DRY_RUN_OK:
-        return system_updates(sizes)._replace(why=f"the dry run exited {rc}")
+        return f"the dry run exited {rc}"
     listed = parsers.change_list(out)
     if listed is None:
-        return system_updates(sizes)._replace(why="the dry run's summary could not be read")
+        return "the dry run's summary could not be read"
     changes, messages = listed
     names = parsers.repo_names(proc.run(["zypper", "--xmlout", "repos"])[1]) if changes else {}
     where = {c: ("", "") if c.change == "remove" else _repo_of(c.repo, names)
@@ -1022,12 +1045,13 @@ def run_system(opts) -> None:
     if proc.stop_pending():
         end_step("system", "skip", "skipped", "stopped before installing anything")
         return
-    # The package model's list for this run, read as `--check` reads it: as the
-    # user, sizes included (ONEUP-0259 §4.3). The transaction's own lines then
-    # move each package on, and add any `dup` brings that this list lacks.
-    for row in system_updates(sizes=True).rows:
+    # The package model's list for this run, from its own dry run (ONEUP-0335 (d)).
+    # The transaction's own lines then move each package on. `change` is sent only
+    # when the dry run answered, so the rootless list's lines are as before.
+    listing = run_changes()
+    for row in listing.rows:
         markers.marker("PKG", "system", "queued", row.name, row.edition, row.size,
-                       row.old, row.repo)
+                       row.old, row.repo, row.change if listing.exact else None)
     handle, path = tempfile.mkstemp(prefix="oneup-sys-")
     os.close(handle)
     _SYS_LOG = Path(path)

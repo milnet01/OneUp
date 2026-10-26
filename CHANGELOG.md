@@ -210,7 +210,7 @@ All notable changes to OneUp are documented here. The format follows
   The status line now names the pass and how far through it is: "Updating your apps: 3 of 12", then "Updating system apps: 3 of 20", then "Removing unused runtimes". Flatpak reports downloading and installing as one, so the window says "updating".
 
 - **The window's package counts and sizes disagree with zypper during a parallel download.** (ONEUP-0335)
-  A total like 1.75 GiB no longer reads as 1.7 GiB. A package that has finished downloading and waits to install now counts as "to go", so "now" holds only what is downloading.
+  A total like 1.75 GiB no longer reads as 1.7 GiB. A package that has finished downloading and waits to install now counts as "to go", so "now" holds only what is downloading. During an update, the package count no longer climbs as zypper names more packages (642, then 927, then 931 on 23 October): the update first tries itself without installing anything, so the list starts with every package it will change, and shows removed and new packages as what they are.
 
 - **The sudo route has no way in when a half-finished Qt update breaks the password popup.** (ONEUP-0337)
 

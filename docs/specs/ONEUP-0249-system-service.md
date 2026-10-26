@@ -183,6 +183,8 @@ The table (the argv column is what the builder returns, before any `sudo`):
 | `cache-size` | none | `du -sB1 /var/cache/zypp` |
 
 `check-dry-run`, the check's own dry run, is `docs/specs/ONEUP-0329-exact-update-count.md` §4.1.
+`plan-dry-run`, the run's own dry run (ONEUP-0335), is `env LC_ALL=C zypper --xmlout
+--no-refresh`, the rest of `steps.system_txn_argv()`, then `--dry-run`.
 
 The argv column restates the argvs the engine runs today, which
 `steps`, `repos`, `actions` and `__main__` build at their call sites. Where a row and the

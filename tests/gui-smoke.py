@@ -1551,6 +1551,26 @@ def main() -> int:
     check("a downgrade keeps the arrow", package_views.versions(_by["baz"]) == "2-1 → 1-1")
     check("a change word outside the four drops the row", "qux" not in _by)
 
+    # ONEUP-0335 (d): the run's own list carries the change too, so a removal and a
+    # new package read as one from the run's first line; a word outside the four
+    # drops the line, and a line with no change keeps an upgrade.
+    wQ = window.Updater()
+    run.handle_line(wQ, "@@PKG@@|system|queued|old|2-1|0|2-1||remove")
+    run.handle_line(wQ, "@@PKG@@|system|queued|fresh|1-1|0||Main|new")
+    run.handle_line(wQ, "@@PKG@@|system|queued|odd|1-1|0||Main|sideways")
+    run.handle_line(wQ, "@@PKG@@|system|queued|plain|2-1|0|1-1|Main")
+    _by = {f.name: f for f in wQ.packages.packages("system")}
+    check("a run's queued removal reads as one",
+          "old" in _by and package_views.versions(_by["old"]) == "2-1, to be removed")
+    check("a run's queued new package reads as new",
+          "fresh" in _by and package_views.versions(_by["fresh"]) == "new 1-1")
+    check("a run's change word outside the four drops the line", "odd" not in _by)
+    run.handle_line(wQ, "@@PKG@@|system|queued|odd|1-1|0||Main|sideways")
+    check("and Spotlight does not name the dropped line",
+          wQ.latest_package == ("system", "plain", "2-1"))
+    check("a run's line with no change stays an upgrade",
+          "plain" in _by and _by["plain"].change == "upgrade")
+
     wP = window.Updater()
     run.handle_line(wP, "@@CHECK_ITEM@@|system|vlc|3.0-1.1|3.0-2.1|222|Packman")
     _vlc = wP.packages.packages("system")

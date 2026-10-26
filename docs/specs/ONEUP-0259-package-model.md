@@ -178,8 +178,9 @@ The marker becomes `CHECK_ITEM|flatpak|app||version|0|remote`. `bytes` stays `0`
 item 4).
 
 **A run, system step**: after the repository refresh and before `_download_pass`, the step
-lists its updates exactly as the check does — the same function, unprivileged, with the
-size lookup — and emits one `PKG|system|queued|…` per update. Then `stream_filtered` emits,
+emits one `PKG|system|queued|…` per package, sizes included. The list comes from the
+run's own dry run as root, and from this section's rootless list where that cannot
+answer: `docs/reference/marker-protocol.md` §4.12 (ONEUP-0335). Then `stream_filtered` emits,
 in addition to its `PROGRESS` markers and never instead of them:
 
 | zypper line | `PKG` state |
@@ -214,7 +215,8 @@ them. It emits `PKG|flatpak|queued|app|version|0||remote` for each row. It then 
 alone. It emits `PKG|flatpak|installed|app|version` for a row only when the update of
 every scope in that row's set returned 0.
 
-**No new privileged call.** Every command above runs as the user. So no sudoers drop-in
+**No new privileged call.** Every command above runs as the user; the run's dry run is
+ONEUP-0335's. So no sudoers drop-in
 line changes, and `.claude/rules/engine-traps.md`'s drop-in trap does not fire.
 
 ### 4.4 States, and how they move

@@ -89,6 +89,16 @@ def _check_dry_run(_args: Mapping[str, object], _cdn_dir: str) -> list[str]:
             *rest, "--dry-run"]
 
 
+def _plan_dry_run(_args: Mapping[str, object], _cdn_dir: str) -> list[str]:
+    """The run's own transaction, solved but not run, as XML (ONEUP-0335 (d)).
+
+    The run has just refreshed, so `--no-refresh`: nothing here touches the network,
+    so it needs no `timeout`. The `env LC_ALL=C zypper` prefix is the drop-in's grant.
+    """
+    zypper, *rest = steps.system_txn_argv("")
+    return ["env", "LC_ALL=C", zypper, "--xmlout", "--no-refresh", *rest, "--dry-run"]
+
+
 def _cache_size(_args: Mapping[str, object], _cdn_dir: str) -> list[str]:
     if privilege.CACHE_DU_ARGV is None:
         raise Invalid("du is not installed")
@@ -114,6 +124,7 @@ class Op(NamedTuple):
 OPS: dict[str, Op] = {
     "size-dry-run": Op({"cdn": "b"}, lambda a, d: [*_txn(a, d), "--dry-run"]),
     "check-dry-run": Op({}, _check_dry_run),
+    "plan-dry-run": Op({}, _plan_dry_run),
     "system-download": Op({"cdn": "b"}, lambda a, d: [*_txn(a, d), "--download-only"]),
     "system-commit": Op({"cdn": "b"}, _txn),
     "repo-refresh": Op({"alias": "s", "import_keys": "b", "budget": "u"}, _refresh),

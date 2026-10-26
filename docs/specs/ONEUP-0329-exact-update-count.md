@@ -181,8 +181,8 @@ class SystemListing(NamedTuple):
 `privilege.sudo`.** Those fall back to sudo on the `auto` route (ONEUP-0249 §4.7); the
 check must never.
 
-**The run is unchanged by this item.** Its `queued` list still comes from
-`system_updates` (ONEUP-0259 §4.3). Seeding it from the dry run is ONEUP-0335 (d) (§10).
+**The run is unchanged by this item.** ONEUP-0335 (d) later seeded the run's `queued` list
+from a dry run of its own, `plan-dry-run`, read by the same code as §4.3 (§10).
 
 ### 4.3 Reading the dry run
 
@@ -542,8 +542,8 @@ the wording this spec's gate reviewed.
 
 ## 10. Out of scope
 
-- **The run's header count and `queued` list from the dry run** — ONEUP-0335 (d), which
-  waits on this item.
+- **The run's header count and `queued` list from the dry run** — ONEUP-0335 (d), built
+  after this item.
 - **The phantom package from `Retrieving: x.rpm [done]`** — filed on ONEUP-0335.
 - **An exact count on the AppImage** — §3 item 1.
 

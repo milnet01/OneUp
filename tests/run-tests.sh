@@ -325,6 +325,8 @@ cat > "$d/zypper" <<EOF
 #!/usr/bin/env bash
 case "\$*" in
   *--download-only*) exit 0 ;;
+  # Neither is the transaction, and the update pattern below would match list-updates too.
+  *--dry-run*|*list-updates*) exit 0 ;;
   *dup*|*update*)
     echo run >> "$d/commits"
     if [[ \$(wc -l < "$d/commits") -eq 1 ]]; then echo "1 package to upgrade."; exit 103; fi
@@ -860,6 +862,47 @@ check        "a fetched package is downloaded before it installs" \
              "$(printf '@@PKG@@|system|downloaded|vlc|3.0-2.1\n@@PKG@@|system|installed|vlc|3.0-2.1')" \
              "$(grep -F '@@PKG@@|system|' <<<"$out" | grep -v -e '|queued|' -e '|downloading|')"
 check        "an install that completed is installed" "@@PKG@@|system|installed|vlc|3.0-2.1" "$out"
+# This mock's dry run prints text, not XML, so the run kept list-updates' rows.
+check_absent "a list from list-updates carries no change" "|Packman|upgrade" "$out"
+rm -rf "$d"
+
+echo "TEST: a run lists what its own dry run will change, removals and new packages too (ONEUP-0335)"
+d=$(mktemp -d); setup_common "$d"; pkg_raw_tree "$d"; pkg_zypper_mock "$d"
+cat > "$d/zstdcat" <<'EOF'
+#!/usr/bin/env bash
+cat "$2"
+EOF
+chmod +x "$d/zstdcat"
+# Before the old mock: the run's dry run, as XML, names three changes list-updates
+# does not all list. Its argv is kept, to show it reads no network.
+mv "$d/zypper" "$d/zypper.list"
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+if [[ "\$*" == *--xmlout*--dry-run* ]]; then
+  echo "\$*" > "$d/dry.argv"
+  cat <<'XML'
+<stream><install-summary packages-to-change="3">
+<to-upgrade><solvable type="package" name="vlc" edition="3.0-2.1" arch="x86_64" repository="packman" edition-old="3.0-1.1"/></to-upgrade>
+<to-install><solvable type="package" name="newpkg" edition="1-1" arch="x86_64" repository="packman"/></to-install>
+<to-remove><solvable type="package" name="oldpkg" edition="2-1" arch="x86_64" repository="@System"/></to-remove>
+</install-summary></stream>
+XML
+  exit 0
+fi
+exec "$d/zypper.list" "\$@"
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check        "an upgrade, with its size, source and change" \
+             "@@PKG@@|system|queued|vlc|3.0-2.1|222|3.0-1.1|Packman|upgrade" "$out"
+check        "a new package, with no old edition" \
+             "@@PKG@@|system|queued|newpkg|1-1|0||Packman|new" "$out"
+check        "a removal, keyed on the removed edition" \
+             "@@PKG@@|system|queued|oldpkg|2-1|0|2-1||remove" "$out"
+check_absent "list-updates' rows are not added" "|queued|nosize|" "$out"
+check        "the dry run reads no network" "yes" \
+             "$([[ "$(cat "$d/dry.argv" 2>/dev/null)" == --xmlout\ --no-refresh\ * ]] && echo yes)"
+check        "the run still finishes" "@@DONE@@|ok" "$out"
 rm -rf "$d"
 
 # ONEUP-0072 step 5: the reason is a code with one name per field, so two names
@@ -4413,12 +4456,14 @@ else
     # 3). It went 34 -> 35: the commit's `root_argv` site became a `root_stream` site, and
     # the service route's download is a second. That one never runs on the sudo route,
     # whose download keeps its guard or wrapper, so it adds no shape `auth_cmnds` must grant.
+    # It went 35 -> 36 for the run's own dry run (ONEUP-0335 (d)), whose argv opens with
+    # `env LC_ALL=C zypper`, a shape `auth_cmnds` already grants.
     pn=$(( $(grep -c '\["sudo"' <<<"$py_stripped") \
          + $(grep -cE 'privilege\.(sudo|root)(_argv|_stream)?\(' <<<"$py_stripped") ))
-    if [[ "$pn" == "35" ]]; then
-        echo "  ok   - the Python engine has its known 35 privileged call sites"; PASS=$((PASS+1))
+    if [[ "$pn" == "36" ]]; then
+        echo "  ok   - the Python engine has its known 36 privileged call sites"; PASS=$((PASS+1))
     else
-        echo "  FAIL - privileged call sites moved: $pn, expected 35. A NEW one needs a matching"; FAIL=$((FAIL+1))
+        echo "  FAIL - privileged call sites moved: $pn, expected 36. A NEW one needs a matching"; FAIL=$((FAIL+1))
         echo "         entry in auth_cmnds, or passwordless silently starts prompting again."
     fi
     # ONEUP-0249 INV-4: only the calls the spec keeps off the table build their own argv —
@@ -4820,6 +4865,7 @@ cases = {
     "size-dry-run": ({"cdn": False}, [*txn, "--dry-run"]),
     "check-dry-run": ({}, [timeout, str(rootops.CHECK_DRY_RUN_SECONDS), *txn[:3], "--xmlout",
                            *txn[3:], "--dry-run"]),
+    "plan-dry-run": ({}, [*txn[:3], "--xmlout", "--no-refresh", *txn[3:], "--dry-run"]),
     "system-download": ({"cdn": False}, [*txn, "--download-only"]),
     "system-commit": ({"cdn": False}, txn),
     "repo-refresh": ({"alias": "repo-oss", "import_keys": True, "budget": 120},
@@ -5419,7 +5465,7 @@ echo "TEST: every marker keeps its field layout (ONEUP-0044 INV-5a, ONEUP-0126)"
 # count is exact.
 declare -A LAYOUT=(
     [STEP_BEGIN]=3 [STEP_END]=3/4 [TIMING]=2 [PROGRESS]=4/6 [REFRESH]=3 [SNAPSHOT]=1
-    [SNAPSHOT_ITEM]=3 [SNAPSHOTS]=2 [CHECK]=3/4 [CHECK_ITEM]=4/6/7 [PKG]=4/5/7 [CHECK_UNKNOWN]=2+
+    [SNAPSHOT_ITEM]=3 [SNAPSHOTS]=2 [CHECK]=3/4 [CHECK_ITEM]=4/6/7 [PKG]=4/5/7/8 [CHECK_UNKNOWN]=2+
     [SIZE]=2 [FREED]=2 [AUTH]=1 [DISK]=3 [REPO]=3 [REPO_SKIPPED]=2 [HINT]=1+
     [REMEDY]=1/2 [SERVICES]=1 [INSTALLED]=3 [REBOOT]=1/2 [DONE]=1
 )

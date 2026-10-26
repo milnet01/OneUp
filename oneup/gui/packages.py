@@ -60,12 +60,14 @@ class PackageModel:
         self._notify(key)
 
     def apply(self, parts: list[str]) -> None:
-        """`key|state|name|edition[|bytes|from|repo]`. A package not yet seen is
-        added, whatever its state: `dup` can change more than the list named."""
+        """`key|state|name|edition[|bytes|from|repo[|change]]`. A package not yet seen
+        is added, whatever its state: `dup` can change more than the list named. A
+        change not in `CHANGES` drops the line, as on `CHECK_ITEM`."""
         if len(parts) < 4 or not parts[0] or not parts[2] or parts[1] not in _ORDER:
             return
         size = parts[4] if len(parts) > 4 and parts[4] else "0"
-        if not size.isdecimal():
+        change = parts[7] if len(parts) > 7 else ""
+        if not size.isdecimal() or (change and change not in CHANGES):
             return
         key, state, name, edition = parts[0], parts[1], parts[2], parts[3]
         package = self._packages.get((key, name, edition))
@@ -77,6 +79,8 @@ class PackageModel:
             package.old = parts[5]
         if len(parts) > 6 and parts[6]:
             package.repo = parts[6]
+        if change:
+            package.change = change
         if _ORDER[state] >= _ORDER[package.state]:
             package.state = state
         self._notify(key)

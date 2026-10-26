@@ -10043,6 +10043,11 @@ when complete (that document's §7).
   list; proc._filter_lines marks finish's rows. Still open: (d), waiting
   on ONEUP-0329, and the filed phantom "Retrieving: x.rpm [done]"
   package.
+  User decisions 2026-10-26: (d) the run seeds its list from a root
+  dry run of its own transaction, and PKG gains a trailing `change`
+  field (the fifth marker-contract exception), so a removal and a new
+  package read correctly during the run. Accepted as it is: during
+  zypper's parallel preload "now" reads 0 for the whole download.
   **Layman:** The window showed 642, then 927, then 931 updates, '1.8 GiB of 1.7 GiB', and '0 done · 927 now' after everything had downloaded.
   Kind: fix.
   Source: real-update-test-2026-10-23.

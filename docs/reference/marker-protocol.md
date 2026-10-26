@@ -102,7 +102,7 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@SNAPSHOTS@@` | `warn\|count` *or* `thinned\|removed` | pre-flight; `--thin-snapshots` | `handle_marker`; `_on_thin_finished` |
 | `@@CHECK@@` | `key\|count\|label[\|basis]` | `emit_check` | `handle_marker`; `_parse_tray_line` |
 | `@@CHECK_ITEM@@` | `key\|name\|from\|to[\|bytes\|repo[\|change]]` | the `--check` pass | `handle_marker` |
-| `@@PKG@@` | `key\|state\|name\|edition[\|bytes\|from\|repo]` | `run_system`, `stream_filtered` and `run_flatpak`, during a run | `handle_marker` |
+| `@@PKG@@` | `key\|state\|name\|edition[\|bytes\|from\|repo[\|change]]` | `run_system`, `stream_filtered` and `run_flatpak`, during a run | `handle_marker` |
 | `@@CHECK_UNKNOWN@@` | `key\|code[\|name…]` | `emit_check` | `handle_marker`; `_parse_tray_line` |
 | `@@SIZE@@` | `key\|download` | the `--size` pass | `_on_size_output` |
 | `@@FREED@@` | `cache\|human` | the cache step | `handle_marker` |
@@ -362,14 +362,19 @@ banner, and the engine prints *"A REBOOT is recommended"*. `@@REBOOT@@` is untou
 path: `zypper needs-rebooting` did not ask for one, the presentation did, and §5.1 freezes
 this contract during 2.0.
 
-### 4.12 `PKG|key|state|name|edition[|bytes|from|repo]`
+### 4.12 `PKG|key|state|name|edition[|bytes|from|repo[|change]]`
 
 One package's place in a run, for the package model (ONEUP-0259). `state` is one of
 `queued`, `downloading`, `downloaded`, `installed` and `removed`.
 
 - **`queued` opens the list, and carries every field.** The system step sends one per
-  pending update after its refresh; the Flatpak step one per app before updating. The
-  later states need only the first four fields; `downloading` adds `bytes`.
+  package its own dry run will change, after its refresh; the Flatpak step one per app
+  before updating. The later states need only the first four fields; `downloading` adds
+  `bytes`.
+- **`change` is `CHECK_ITEM`'s field (§4.6), with the same words and the same
+  removal layout.** Only a system `queued` line carries it, and only when the run's dry
+  run answered (ONEUP-0335). Where it did not, the list comes from `list-updates` and no
+  line carries it. The window drops a line whose `change` is any other word.
 - **A state never moves backwards.** The commit pass reprints `Preloading: … [already in
   cache]` for packages already `installed`; the window keeps the later state.
 - **`installed` and `removed` are sent only for an action that completed** — a zypper
@@ -377,8 +382,9 @@ One package's place in a run, for the package model (ONEUP-0259). `state` is one
   split it; for a Flatpak, only when the update of every scope that listed it exited 0.
 - **The window never infers them.** After a step's `STEP_END`, a package that reached
   neither reads "not changed", whatever the step's status.
-- **A package can arrive with no `queued` line.** `dup` changes more than `list-updates`
-  lists; the window adds it on its first line.
+- **A package can arrive with no `queued` line.** Where the list came from
+  `list-updates`, `dup` changes more than it lists; the window adds such a package on its
+  first line.
 
 ## 5. Changing the contract
 
@@ -430,6 +436,11 @@ else was opened: the contract is frozen again.
 update will really change, and say "at least" where it cannot. It landed as one change
 touching every file §5 lists, plus this document. Nothing else was opened: the contract is
 frozen again.
+
+**The fifth exception, approved by the user on 2026-10-26:** ONEUP-0335 added `change` on
+`PKG` (§4.12), so a run's list shows a removal and a new package as what they are from its
+first line. It landed as one change touching every file §5 lists, plus this document.
+Nothing else was opened: the contract is frozen again.
 
 Never a rewrite and a contract change at once. In the same step, a failing test cannot tell
 you which one broke it.
