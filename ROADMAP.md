@@ -10068,6 +10068,14 @@ when complete (that document's §7).
   install whose header starts at the dry run's count (needs a v2 RPM with
   plan-dry-run). Still open: the phantom "Retrieving: x.rpm [done]"
   package.
+  State 2026-10-26: the phantom package fixed (bb5d6e7).
+  parsers.PackageLines drops a Retrieving: name's trailing `.rpm`, as
+  Preloading:'s already does, and a line naming the package being
+  fetched adds no row; tests/parsers-test.py carries the mock's two
+  lines, red before the fix. Still unmeasured: whether real zypper
+  prints that line without the parallel preload; the fix holds either
+  way. Still owed by hand: one run on a packaged install whose header
+  starts at the dry run's count.
   **Layman:** The window showed 642, then 927, then 931 updates, '1.8 GiB of 1.7 GiB', and '0 done · 927 now' after everything had downloaded.
   Kind: fix.
   Source: real-update-test-2026-10-23.
