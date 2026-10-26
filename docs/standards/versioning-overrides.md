@@ -27,7 +27,9 @@ after it.** It is then a MAJOR release (`versioning.md` §2).
 - **Removing, renaming or changing the meaning of a surface breaks it.**
 - **A change that keeps the old form working does not.** A new option is compatible, and so
   is a renamed setting that the new version carries over.
-- **Editing the download guard's text is a setting reset, not a break.** It switches
+- **Editing the download guard's text is a setting reset, not a break.** The text is what
+  `download_guard_src` in `oneup/engine/actions.py` returns. It embeds the granted scope
+  that `auth_cmnds` builds, so changing that scope edits the guard too. The edit switches
   *Passwordless* off for every user who had it on, and nothing can carry the grant over:
   the engine refuses a guard it did not write (`docs/standards/security.md` §5.7). The user
   can switch it on again. Such a release is MINOR unless something else in it breaks a
