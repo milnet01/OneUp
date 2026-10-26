@@ -5458,8 +5458,8 @@ echo "TEST: every marker keeps its field layout (ONEUP-0044 INV-5a, ONEUP-0126)"
 #
 # Each entry is a set: "4/6" means exactly 4 or exactly 6 — PROGRESS carries its two byte
 # fields only while downloading, and STEP_END, CHECK, CHECK_ITEM, PKG, REMEDY and REBOOT each
-# have an optional tail. PKG takes three counts: §4.12's prose has `downloading` add `bytes`
-# alone, which its heading's bracket does not show. "1+" is a floor, and only HINT and
+# have an optional tail. PKG takes four counts, its heading's nested brackets: `downloading`
+# adds `bytes` alone, and `change` comes only after the seventh. "1+" is a floor, and only HINT and
 # CHECK_UNKNOWN take one: their trailing fields are a list of arguments whose length varies
 # with the code (§3). §1.1 has the Python emitter rewrite "|" in every field, so every other
 # count is exact.
