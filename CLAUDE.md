@@ -49,6 +49,7 @@ catches a breach of each of its rules — and, honestly, which rules nothing cat
 | --- | --- |
 | Which document owns which decision; how a document is verified and reviewed | `docs/standards/documentation.md` |
 | Branches, commits, roadmap IDs, versions, the push gate, releasing | `docs/standards/workflow.md` |
+| What counts as a breaking change, so a release must be MAJOR | `docs/standards/versioning-overrides.md` |
 | The privilege boundary, authentication, validation, stopping, logs | `docs/standards/security.md` |
 | Python floor, lint, module size, subprocess discipline, Qt idioms | `docs/standards/coding.md` |
 | What a test may depend on, the mock sandbox, the invariants that must never regress | `docs/standards/testing.md` |

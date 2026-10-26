@@ -282,7 +282,8 @@ filed in the task that surfaced it, not in a tidy-up pass afterwards.
 
 ## 5. Versions
 
-**Semantic versioning**, as `CHANGELOG.md` states. For this project concretely:
+**Semantic versioning**, as `CHANGELOG.md` states. What counts as breaking here is
+`docs/standards/versioning-overrides.md`. For this project concretely:
 
 - **Major** — 2.0.0, because the engine is replaced. A user's mental model of the app does
   not change, but everything underneath it does.

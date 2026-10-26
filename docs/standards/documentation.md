@@ -110,7 +110,9 @@ reads both.
 
 **Owned under a different filename.** The global set splits into `commits.md`,
 `releases.md` and `changelog-format.md`; OneUp states those subjects in `workflow.md` — §3
-commits, §5.2 the changelog, §8 releasing. This file's §4 is the spec template and §5 the
+commits, §5.2 the changelog, §8 releasing. Global `versioning.md` is not displaced:
+`workflow.md` §5 applies its levels, and `versioning-overrides.md` is the file its §3 asks a
+project to write. This file's §4 is the spec template and §5 the
 invariant format, which is what OneUp keeps of global `spec-format.md`. **OneUp pins no
 plan shape**, and by the rule above that silence is not a displacement: global
 `~/.claude/standards/spec-format.md` §8 does pin one — every step verified, no design
