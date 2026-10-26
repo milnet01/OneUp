@@ -375,8 +375,8 @@ One package's place in a run, for the package model (ONEUP-0259). `state` is one
   removal layout.** Only a system `queued` line carries it, and only when the run's dry
   run answered (ONEUP-0335). Where it did not, the list comes from `list-updates` and no
   line carries it. The window drops a line whose `change` is any other word. A line
-  with no `change`, or an empty one, leaves the package's change as it was; a package
-  first seen on such a line is an upgrade.
+  with no `change` leaves the package's change as it was; a package first seen on such a
+  line is an upgrade.
 - **A state never moves backwards.** The commit pass reprints `Preloading: … [already in
   cache]` for packages already `installed`; the window keeps the later state.
 - **`installed` and `removed` are sent only for an action that completed** — a zypper
