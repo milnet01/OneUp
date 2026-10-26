@@ -10185,6 +10185,11 @@ when complete (that document's §7).
   says how to compare it across releases (e6664db, 3da20ec, 48ad212).
   Open for the user: whether a guard edit shipped under the v1 freeze
   stays 1.4.x, since the bullet sets MINOR.
+  2026-10-26, later: all six review lanes read "a guard edit is
+  MINOR" as departing from versioning.md §2's ladder. The user chose the
+  normal ladder instead: a guard edit adds no level of its own, so a
+  guard-only release is a PATCH (a 1.4.x under the v1 freeze, as 1.4.3
+  was). The CHANGELOG warning stays. This replaces ruling (1)'s MINOR.
   **Layman:** Write down, in one short file, which changes would break things for users and so need a major version number.
   Kind: doc.
   Source: user-decision-2026-10-23.

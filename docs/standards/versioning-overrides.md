@@ -34,8 +34,10 @@ after it.** It is then a MAJOR release (`versioning.md` §2).
   carries an entry only for each program the engine finds. An edit switches *Passwordless*
   off for every user who had it on, and nothing can carry the grant over:
   the engine refuses a guard it did not write (`docs/standards/security.md` §5.7). The user
-  can switch it on again. Such a release is MINOR unless something else in it breaks a
-  surface. Its `CHANGELOG.md` entry's bold summary says *Passwordless* must be switched on
+  can switch it on again. So the edit adds no level of its own: `versioning.md` §2 sets the
+  release's level from its other changes, and a release that only edits the guard is a
+  PATCH, a 1.4.x under the v1 freeze included. Its `CHANGELOG.md` entry's bold summary
+  says *Passwordless* must be switched on
   again, because `bump.py` builds the release notes from those summaries
   (`docs/standards/workflow.md` §5).
 - **A break waits for a planned MAJOR release.** A change that would break a surface either
