@@ -4,11 +4,11 @@
 across an update, so that a change which breaks one of them is released as a new major
 version and not slipped out as a fix.
 
-**Status:** Draft
+**Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0339
 **Branch:** v2
-**Verified at:** `7f8519c` — every path, symbol and name below was read in this tree on
+**Verified at:** `a2fe97b` — every path, symbol and name below was read in this tree on
 2026-10-26, not recalled.
 
 ## 1. What this file is
@@ -49,7 +49,7 @@ after it.** It is then a MAJOR release (`versioning.md` §2).
 | Rule | What catches a breach |
 | --- | --- |
 | §2 — a breaking change to a surface is released as MAJOR | **nothing.** `release.sh` takes the version as an argument and never questions it (`workflow.md`'s *What checks this*, its §5 row). A person reading the `[Unreleased]` entries decides it |
-| §3 — a surface's change is noticed at all | **partly, and for some surfaces only.** The engine suite fails when a marker's name or field count leaves its pinned table (`LAYOUT` in `tests/run-tests.sh`), so a reorder passes. `local-CI.sh`'s version-lockstep gate fails when the six sites disagree, so a change made alike at all six passes. Neither says the release must be MAJOR |
+| §3 — a surface's change is noticed at all | **partly, and for some surfaces only.** The engine suite fails when a marker's name or field count leaves its pinned table (`LAYOUT` in `tests/run-tests.sh`), so a reorder passes. `local-CI.sh`'s version-lockstep gate fails when the six sites disagree. Neither says the release must be MAJOR |
 | §3 — the list is complete | **nothing.** A missing surface is found when an update breaks it |
 
 ## Cold-eyes loop log
