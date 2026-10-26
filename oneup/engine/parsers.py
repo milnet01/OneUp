@@ -498,9 +498,14 @@ class PackageLines:
                 self._held = (state, split[0], split[1])
             return None
         if text.startswith("Retrieving:"):
+            # A fetch can print a second line for the file itself, `<nvra>.rpm`.
+            # It names the package already being fetched, so it says nothing new
+            # (ONEUP-0335); read with `.rpm` as the architecture it was a phantom.
             token = text[len("Retrieving:"):].split(maxsplit=1)
-            split = split_nvra(token[0]) if token else None
-            return ("downloading", split[0], split[1], retrieving_bytes(text)) if split else None
+            split = split_nvra(token[0].removesuffix(".rpm")) if token else None
+            if split is None or (split[0], split[1]) == self._fetching:
+                return None
+            return "downloading", split[0], split[1], retrieving_bytes(text)
         if text.startswith("Preloading:"):
             if not (text.endswith("[done]") or text.endswith("[already in cache]")):
                 return None

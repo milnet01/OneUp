@@ -230,6 +230,13 @@ PACKAGE_LINES = [
       ("downloading", "libcapstone5", "5.0.6-18", 1048576),
       ("downloaded", "libcapstone5", "5.0.6-18", 0),
       ("installed", "cpupower-lang", "7.1.4-17", 0)]),
+    # Built to break it: the file's own `Retrieving: <nvra>.rpm` line, as the suite's
+    # download-only mock prints it, is the same package. Read with `.rpm` as its
+    # architecture it was a second one, edition `2.0-1.1.x86_64` (ONEUP-0335).
+    (["Retrieving: alpha-2.0-1.1.x86_64 (Main Repository) (1/1),  10.0 KiB",
+      "Retrieving: alpha-2.0-1.1.x86_64.rpm [done]"],
+     [("downloading", "alpha", "2.0-1.1", 10240),
+      ("downloaded", "alpha", "2.0-1.1", 0)]),
 ]
 
 # `zypper --xmlout list-updates`, shaped by /usr/share/zypper/xml/xmlout.rnc's
