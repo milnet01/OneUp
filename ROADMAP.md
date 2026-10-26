@@ -10179,6 +10179,12 @@ when complete (that document's §7).
   (3) MAJOR is kept for a large planned release such as 2.0: a break
   either keeps the old form working or waits for the next MAJOR. §2 now
   says both; the gate is re-armed.
+  2026-10-26: review-contract gate on 70f2f62 ran three loops
+  (loop-log rows 4-6, capped; Status stays Reviewed). The guard bullet
+  now defines the guard's text as the engine's --emit-guard output and
+  says how to compare it across releases (e6664db, 3da20ec, 48ad212).
+  Open for the user: whether a guard edit shipped under the v1 freeze
+  stays 1.4.x, since the bullet sets MINOR.
   **Layman:** Write down, in one short file, which changes would break things for users and so need a major version number.
   Kind: doc.
   Source: user-decision-2026-10-23.
