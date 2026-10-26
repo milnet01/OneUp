@@ -27,6 +27,16 @@ after it.** It is then a MAJOR release (`versioning.md` §2).
 - **Removing, renaming or changing the meaning of a surface breaks it.**
 - **A change that keeps the old form working does not.** A new option is compatible, and so
   is a renamed setting that the new version carries over.
+- **Editing the download guard's text is a setting reset, not a break.** It switches
+  *Passwordless* off for every user who had it on, and nothing can carry the grant over:
+  the engine refuses a guard it did not write (`docs/standards/security.md` §5.7). The user
+  can switch it on again. Such a release is MINOR unless something else in it breaks a
+  surface. Its `CHANGELOG.md` entry's bold summary says *Passwordless* must be switched on
+  again, because `bump.py` builds the release notes from those summaries
+  (`docs/standards/workflow.md` §5).
+- **A break waits for a planned MAJOR release.** A change that would break a surface either
+  keeps the old form working or is held back, its roadmap item saying it waits for the next
+  MAJOR. So the first number moves only with a large planned release, such as 2.0.
 - **A surface missing from this list is still a surface** (`versioning.md` §3). Add it here
   when you find it.
 
@@ -39,7 +49,7 @@ after it.** It is then a MAJOR release (`versioning.md` §2).
 | The command-line options | the engine's `parse` in `oneup/engine/__main__.py`; the window's `--check`, `--update` and `--tray` in `main` in `oneup/gui/app.py` | A user's own command or script, and the timer units an older copy wrote, which run the window with `--check` or `--update` (`TIMERS` in `oneup/gui/autostart.py`) |
 | The four state files `run.state`, `stop.request`, `hold.state`, `go.request` | `docs/reference/marker-protocol.md` §8 | A window following a run that another copy started |
 | The saved settings — every key in `~/.config/OneUp/OneUp.conf` | each `QSettings("OneUp", "OneUp")` read in `oneup/gui/`; `git grep -n 'setValue("' -- oneup/gui` lists the keys | The user. A key renamed with no carry-over resets their choice to its default |
-| The installed helper files | `~/.config/autostart/za.co.antsprojectshub.OneUp-tray.desktop` and the `oneup-check` and `oneup-update` user timers (`oneup/gui/autostart.py`); `/etc/sudoers.d/oneup` and the download guard (`AUTH_FILE` and `GUARD_FILE` in `oneup/engine/actions.py`) | The user's start-at-boot, weekly check, weekly update and *Passwordless* settings. A renamed file leaves the old one behind. A renamed autostart entry or timer reads off; an old sudoers rule stays live, and revoking no longer removes it. Changing the guard's text also ends every existing grant (`docs/standards/security.md` §5.7) |
+| The installed helper files | `~/.config/autostart/za.co.antsprojectshub.OneUp-tray.desktop` and the `oneup-check` and `oneup-update` user timers (`oneup/gui/autostart.py`); `/etc/sudoers.d/oneup` and the download guard (`AUTH_FILE` and `GUARD_FILE` in `oneup/engine/actions.py`) | The user's start-at-boot, weekly check, weekly update and *Passwordless* settings. A renamed file leaves the old one behind. A renamed autostart entry or timer reads off; an old sudoers rule stays live, and revoking no longer removes it. Changing the guard's text is §2's setting reset, not a break |
 | The system service's interface — its bus name, object path and methods, and the polkit actions it checks | `BUS_NAME`, `OBJECT_PATH` and the method table in `oneup/service/server.py`; `SYSTEM_UPDATE` and `TRUST_SIGNING_KEY` in `oneup/service/polkit.py` | The engine, which is a separate process from the service. An administrator's polkit rule written for those actions |
 | The version's spelling at its six sites, and the release tag | `docs/standards/workflow.md` §5.1 | Every installed copy's update check, which compares the newest release tag's digits with `APP_VERSION` (`_version_tuple` in `oneup/gui/app_update.py`) |
 | The app ID `za.co.antsprojectshub.OneUp` | `APP_ID` in `oneup/__init__.py` and `oneup/engine/actions.py`; the desktop file, icon and AppStream metainfo under `data/` | The desktop's menu entry, a pinned launcher and a software-centre listing, which treat a new ID as a different program |
@@ -49,6 +59,8 @@ after it.** It is then a MAJOR release (`versioning.md` §2).
 | Rule | What catches a breach |
 | --- | --- |
 | §2 — a breaking change to a surface is released as MAJOR | **nothing.** `release.sh` takes the version as an argument and never questions it (`workflow.md`'s *What checks this*, its §5 row). A person reading the `[Unreleased]` entries decides it |
+| §2 — a break waits for a planned MAJOR | **nothing.** No check reads a roadmap item for a held break |
+| §2 — a release that edits the guard's text warns in its `CHANGELOG.md` summary | **nothing.** No check compares `download_guard_src` across releases |
 | §3 — a surface's change is noticed at all | **partly, and for some surfaces only.** The engine suite fails when a marker's name or field count leaves its pinned table (`LAYOUT` in `tests/run-tests.sh`), so a reorder passes. `local-CI.sh`'s version-lockstep gate fails when the six sites disagree. Neither says the release must be MAJOR |
 | §3 — the list is complete | **nothing.** A missing surface is found when an update breaks it |
 

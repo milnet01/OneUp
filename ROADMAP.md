@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=339 -->
+<!-- ants-roadmap-id-high-water: ONEUP=340 -->
 
 # OneUp Roadmap
 
@@ -10172,6 +10172,13 @@ when complete (that document's §7).
   Log: docs/reviews/versioning-overrides-loop-log.md. Commits
   90fe647, 68448cd, a2fe97b, ac9c5c1. Open for the user: whether
   any edit to the download guard's text forces a MAJOR release.
+  2026-10-26, the user settled the open questions. (1) A
+  download-guard text edit is a setting reset, not MAJOR; it is MINOR,
+  and the release must warn (CHANGELOG summary now, in-app later).
+  (2) The five extra surfaces the lanes noticed stay off the list.
+  (3) MAJOR is kept for a large planned release such as 2.0: a break
+  either keeps the old form working or waits for the next MAJOR. §2 now
+  says both; the gate is re-armed.
   **Layman:** Write down, in one short file, which changes would break things for users and so need a major version number.
   Kind: doc.
   Source: user-decision-2026-10-23.
@@ -10396,3 +10403,20 @@ when complete (that document's §7).
   Kind: investigate.
   Source: user-request-2026-10-17.
   Lanes: engine.
+
+- 📋 [ONEUP-0340] **When an update ends a Passwordless grant, the window does not say why.**
+  A guard whose text differs from what this engine emits makes
+  `--auth-status` answer `off`, the same as no grant at all. The toggle
+  flips off with no message, and only a user with weekly updates on is
+  told anything ("OneUp's passwordless rule is no longer active").
+  Wanted: tell an outdated guard apart from a missing one, and say so in
+  the window. Needs a distinct auth state, so it is a marker change
+  (`docs/reference/marker-protocol.md`).
+
+  Not needed for 2.0: on 2026-10-26 `--emit-guard` printed the same text
+  from 1.4's Bash engine and v2's Python engine. Needed before the first
+  release that edits `download_guard_src`
+  (`docs/standards/versioning-overrides.md` §2).
+  **Layman:** After an update that changes OneUp's download guard, the app should say: OneUp was updated, so switch Passwordless on again.
+  Kind: ux.
+  Source: user-request-2026-10-26.
