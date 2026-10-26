@@ -10048,6 +10048,15 @@ when complete (that document's §7).
   field (the fifth marker-contract exception), so a removal and a new
   package read correctly during the run. Accepted as it is: during
   zypper's parallel preload "now" reads 0 for the whole download.
+  2026-10-26 review-contract on docs/reference/marker-protocol.md (the
+  fifth exception, 9664a4f): converged in two loops (loop-log rows 9-10;
+  725a60a, 0882b1b). Fixed: PKG's bracket now
+  edition[|bytes[|from|repo[|change]]]; queued carries the first seven
+  fields; a PKG line with no change keeps the package's change; What
+  checks this floors CHECK_UNKNOWN, not SERVICES, and exempts no marker.
+  Left for the user: tests/run-tests.sh's LAYOUT comment still says the
+  heading's bracket does not show `downloading`'s bytes alone (now
+  stale); packages.py and run.py comments keep the old bracket.
   **Layman:** The window showed 642, then 927, then 931 updates, '1.8 GiB of 1.7 GiB', and '0 done · 927 now' after everything had downloaded.
   Kind: fix.
   Source: real-update-test-2026-10-23.
