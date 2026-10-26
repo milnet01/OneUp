@@ -1473,6 +1473,14 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   path is broken the way Tumbleweed's was, or a confinement technology that
   can grant host package-manager access without pretending to be a sandbox.
   The three shipping paths stay the AppImage, the RPM and the OBS repo.
+  User remark 2026-10-26 (answering ONEUP-0339's app-ID question):
+  Flathub's stance on AI-made apps rules it out for now; publish on the
+  Snap Store instead if it has no such issue. Not acted on: workflow.md
+  §8.1's first reason is a property of OneUp, not of Flathub (every step
+  acts on the host, outside any sandbox), so it holds for a strictly
+  confined snap too. Whether Snap's classic confinement could carry
+  OneUp, and whether the Snap Store accepts AI-made apps, is unverified.
+  Reopening this item is the user's call.
   **Layman:** OneUp stays an openSUSE app, installed the three ways it already is. It won't be put on Flathub, because the app needs to change the whole machine and a Flathub app is deliberately walled off from doing that — and the other Linux systems already update themselves fine.
   Kind: package.
   Source: user-request-2026-07-27.
