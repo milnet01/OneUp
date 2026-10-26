@@ -25,8 +25,8 @@ OneUp is past `1.0`, so `versioning.md` §4's exit condition does not apply.
 after it.** It is then a MAJOR release (`versioning.md` §2).
 
 - **Removing, renaming or changing the meaning of a surface breaks it.**
-- **A change that keeps the old form working does not.** A new trailing marker field, a new
-  option, or a renamed setting that the new version carries over are all compatible.
+- **A change that keeps the old form working does not.** A new option is compatible, and so
+  is a renamed setting that the new version carries over.
 - **A surface missing from this list is still a surface** (`versioning.md` §3). Add it here
   when you find it.
 
@@ -34,7 +34,7 @@ after it.** It is then a MAJOR release (`versioning.md` §2).
 
 | Surface | Defined in | Who relies on it across an update |
 | --- | --- | --- |
-| The marker contract — every marker, its fields and their order | `docs/reference/marker-protocol.md` | Anything reading the engine's output. A trailing optional field is the compatible change; §5 of that reference says why |
+| The marker contract — every marker, its fields and their order | `docs/reference/marker-protocol.md` | Anything reading the engine's output. That reference's §5 says which added field breaks a reader |
 | The step keys `system`, `flatpak`, `firmware`, `orphans`, `cache` | `ALL_STEPS` in `oneup/engine/__main__.py` | A user's own command or script; `--steps=` and `--size=` take them |
 | The command-line options | the engine's `parse` in `oneup/engine/__main__.py`; the window's `--check`, `--update` and `--tray` in `main` in `oneup/gui/app.py` | A user's own command or script, and the timer units an older copy wrote, which run the window with `--check` or `--update` (`TIMERS` in `oneup/gui/autostart.py`) |
 | The four state files `run.state`, `stop.request`, `hold.state`, `go.request` | `docs/reference/marker-protocol.md` §8 | A window following a run that another copy started |
@@ -49,7 +49,7 @@ after it.** It is then a MAJOR release (`versioning.md` §2).
 | Rule | What catches a breach |
 | --- | --- |
 | §2 — a breaking change to a surface is released as MAJOR | **nothing.** `release.sh` takes the version as an argument and never questions it (`workflow.md`'s *What checks this*, its §5 row). A person reading the `[Unreleased]` entries decides it |
-| §3 — a surface's change is noticed at all | **partly, and for some surfaces only.** The engine suite pins each marker's field counts (`LAYOUT` in `tests/run-tests.sh`), and `local-CI.sh`'s version-lockstep gate reads the six sites. Both fail on a change; neither says the release must be MAJOR. Nothing notices a change to the other surfaces |
+| §3 — a surface's change is noticed at all | **partly, and for some surfaces only.** The engine suite fails when a marker's field count leaves its pinned set (`LAYOUT` in `tests/run-tests.sh`), so a reorder passes. `local-CI.sh`'s version-lockstep gate fails when the six sites disagree, so a change made alike at all six passes. Neither says the release must be MAJOR. Nothing notices a change to the other surfaces |
 | §3 — the list is complete | **nothing.** A missing surface is found when an update breaks it |
 
 ## Cold-eyes loop log
