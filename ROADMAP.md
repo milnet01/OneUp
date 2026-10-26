@@ -10157,6 +10157,13 @@ when complete (that document's §7).
   (the marker contract, the step keys, the four state files, the six
   version sites, the service's D-Bus interface) and point workflow.md §5
   at it. A new standard goes through review-contract --genre standard.
+  2026-10-26: review-contract --genre standard ran on
+  docs/standards/versioning-overrides.md: three loops, two cold
+  lanes each, capped at a standard's cap (calm by substance).
+  6 findings verified and fixed, 4 dismissed. Status is Reviewed.
+  Log: docs/reviews/versioning-overrides-loop-log.md. Commits
+  90fe647, 68448cd, a2fe97b, ac9c5c1. Open for the user: whether
+  any edit to the download guard's text forces a MAJOR release.
   **Layman:** Write down, in one short file, which changes would break things for users and so need a major version number.
   Kind: doc.
   Source: user-decision-2026-10-23.
