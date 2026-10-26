@@ -29,9 +29,10 @@ after it.** It is then a MAJOR release (`versioning.md` §2).
   is a renamed setting that the new version carries over.
 - **Editing the download guard's text is a setting reset, not a break.** The text is what
   the engine prints for `--emit-guard`. To tell whether a release edits it, run that option
-  from the previous release's engine and from this one, on one machine, and compare. An
-  edit switches
-  *Passwordless* off for every user who had it on, and nothing can carry the grant over:
+  from the previous release's engine and from this one, in one shell, and compare. Both runs
+  must exit 0, on a machine with `snapper`, `flatpak` and `systemctl` installed: the text
+  carries an entry only for each program the engine finds. An edit switches *Passwordless*
+  off for every user who had it on, and nothing can carry the grant over:
   the engine refuses a guard it did not write (`docs/standards/security.md` §5.7). The user
   can switch it on again. Such a release is MINOR unless something else in it breaks a
   surface. Its `CHANGELOG.md` entry's bold summary says *Passwordless* must be switched on
