@@ -10057,6 +10057,17 @@ when complete (that document's §7).
   Left for the user: tests/run-tests.sh's LAYOUT comment still says the
   heading's bracket does not show `downloading`'s bytes alone (now
   stale); packages.py and run.py comments keep the old bracket.
+  State 2026-10-26: (d) built and pushed (9664a4f, 1e4848e). After the
+  refresh the run asks rootops' new plan-dry-run (`zypper --xmlout
+  --no-refresh … --dry-run`), read by steps._dry_run_listing, and seeds
+  PKG queued from it with a trailing `change`; on any failure it falls
+  back to list-updates, lines as before. Marker reference gated
+  (review-contract rows 9-10, converged). The exit-103 scenario's mock had
+  matched list-updates as the transaction, so its 103 never reached the
+  commit; fixed in the same commit. Owed by hand: a run on a packaged
+  install whose header starts at the dry run's count (needs a v2 RPM with
+  plan-dry-run). Still open: the phantom "Retrieving: x.rpm [done]"
+  package.
   **Layman:** The window showed 642, then 927, then 931 updates, '1.8 GiB of 1.7 GiB', and '0 done · 927 now' after everything had downloaded.
   Kind: fix.
   Source: real-update-test-2026-10-23.
