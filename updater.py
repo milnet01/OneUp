@@ -3394,9 +3394,10 @@ for (var i = 0; i < wins.length; i++) {{
 
     def _on_size_output(self, final: bool = False):
         chunk = self._size_dec.decode(bytes(self._size_proc.readAllStandardOutput()), final)
-        if final:
-            chunk += "\n"           # the last line had no line ending; it is still a line
         lines, self._size_buf = _split_lines(self._size_buf, chunk)
+        if final and self._size_buf.rstrip("\r"):
+            lines.append(self._size_buf.rstrip("\r"))   # no line ending; still a line
+            self._size_buf = ""
         for line in lines:
             if line.startswith("@@SIZE@@|"):
                 parts = line[len("@@SIZE@@|"):].split("|")
