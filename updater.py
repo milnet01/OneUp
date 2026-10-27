@@ -3922,7 +3922,13 @@ for (var i = 0; i < wins.length; i++) {{
             # (_attach_to_running_engine).
             self._done_status = parts[0] if parts else ""
 
-    def on_error(self, _err):
+    def on_error(self, err):
+        # Only a failed START is ours to handle. Every other error (Crashed, ReadError,
+        # Timedout…) arrives while the engine is running or just ending: `finished`
+        # reports the outcome, and deleting a QProcess that is still running KILLS the
+        # engine mid-transaction (security.md §6.3).
+        if err != QProcess.ProcessError.FailedToStart:
+            return
         self.status.setText("Could not start the update script.")
         self.bar.setRange(0, 1)
         self.set_controls_enabled(True)
