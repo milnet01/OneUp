@@ -1781,7 +1781,12 @@ if step_selected system && ! stop_pending; then
     # blocked/failed run has no "Nothing to do." line, so treating the else-branch
     # as "packages changed" would falsely trip the reboot advice — the step failed,
     # nothing was installed.
-    if $ok; then
+    if $SYS_STOPPED; then
+        # Only reachable through the auto-skip retry above: a stop during ITS download
+        # pass leaves ok=true with nothing installed, so it must not fall into the
+        # success arm and claim "packages updated" (testing.md §5).
+        end_step system skip "stopped before installing anything"
+    elif $ok; then
         if ! $refresh_ok; then
             # The upgrade worked, but off possibly-stale metadata — tell the user so
             # a genuinely-newer package isn't silently missed until the next run.
