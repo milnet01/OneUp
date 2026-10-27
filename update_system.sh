@@ -2019,13 +2019,19 @@ if step_selected orphans && ! stop_pending && ! $SYS_PARTIAL; then
     # --no-refresh on both queries: the refresh above is the only one allowed to happen,
     # because it is the only one the user can see and the run can escape from.
     sudo_capture UNNEEDED_RAW zypper --non-interactive --no-refresh packages --unneeded
+    unneeded_rc=$?
     # Rows start after the `---+---` line under the heading. zypper prints progress
     # lines on stdout before the table, so a fixed line count lands on the heading
     # and reads its "Name" as a package (ONEUP-0226).
     mapfile -t UNNEEDED < <(awk -F'|' \
         '/^-+\+/ {rows=1; next} rows && $3 !~ /^[[:space:]]*$/ {gsub(/ /,"",$3); print $3}' \
         <<<"$UNNEEDED_RAW")
-    if ((${#UNNEEDED[@]})); then
+    if (( unneeded_rc != 0 )); then
+        # An empty list from a query that failed (the lock, a broken source) is not
+        # "nothing to remove" — say we couldn't tell, as the firmware step does.
+        echo "Couldn't list leftover packages (zypper exited $unneeded_rc)."
+        end_step orphans fail "couldn't list leftover packages"
+    elif ((${#UNNEEDED[@]})); then
         echo "Removing ${#UNNEEDED[@]} leftover dependency package(s):"
         printf '  - %s\n' "${UNNEEDED[@]}"
         if sudo zypper --non-interactive remove --clean-deps "${UNNEEDED[@]}"; then

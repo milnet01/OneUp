@@ -2353,6 +2353,24 @@ out=$(run_engine "$d" --steps=orphans)
 check "failed orphan removal marked fail" "@@STEP_END@@|orphans|fail" "$out"
 rm -rf "$d"
 
+echo "TEST: a leftover-package list zypper could not produce is not 'nothing to remove'"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *packages*--unneeded*) echo "System management is locked by the application with pid 4242 (zypper)."; exit 7 ;;
+  *packages*--orphaned*) exit 0 ;;
+  *remove*)              echo "REMOVE-RAN"; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=orphans)
+check        "an unreadable leftover list fails the step"     "@@STEP_END@@|orphans|fail" "$out"
+check_absent "and never claims there was nothing to remove"   "nothing to remove" "$out"
+check_absent "and removes nothing"                            "REMOVE-RAN" "$out"
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 # ONEUP-0078. zypper refreshes any stale repository before it will answer a
 # `packages` query, and this step captures those queries — so with the system
