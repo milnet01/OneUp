@@ -1034,6 +1034,26 @@ def main() -> int:
     check("a @@HINT@@ line is parsed into _hints",
           wH._hints == ["A repository signing key is out of date."])
 
+    # A read can end part-way through a multi-byte character, and the engine's hints are
+    # full of em dashes. Each half decoded on its own became two U+FFFD; the stream
+    # decoder must carry the half character into the next read. A CRLF split across two
+    # reads must not add a blank line either.
+    class _ChunkProc:  # one canned read per call, like a QProcess draining its pipe
+        def __init__(self, *chunks): self._c = list(chunks)
+        def readAllStandardOutput(self): return self._c.pop(0)
+    wU = updater.Updater()
+    dash = "@@HINT@@|Stopped — safely.\r\n".encode()
+    cut = dash.index("—".encode()) + 1          # inside the three-byte em dash
+    wU._dec = updater._utf8_decoder()
+    wU.proc = _ChunkProc(dash[:cut], dash[cut:-1], dash[-1:])
+    wU._hints = []
+    for _ in range(3):
+        wU.on_output()
+    check("an em dash split across two reads survives decoding",
+          wU._hints == ["Stopped — safely."])
+    check("a CRLF split across two reads leaves no blank line in the log",
+          wU.log.toPlainText().strip() == "" and wU._buf == "")
+
     # --- 5d. the download-size side channel ------------------------------------
     # A separate QProcess from the main run, with its own parser. The engine half is
     # covered in tests/run-tests.sh; this is the window half.
