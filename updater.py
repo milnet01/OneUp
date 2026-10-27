@@ -15,6 +15,7 @@ what the optional weekly systemd-user timer calls.
 
 from __future__ import annotations
 
+import codecs
 import json
 import os
 import re
@@ -627,6 +628,27 @@ def _atomic_write_text(path: Path, text: str) -> None:
         except OSError:
             pass
         raise
+
+
+def _utf8_decoder():
+    """A decoder for one process's output stream. Incremental, because a read can end
+    part-way through a multi-byte character — the engine's hints are full of em dashes —
+    and decoding each chunk on its own turns both halves into replacement characters."""
+    return codecs.getincrementaldecoder("utf-8")(errors="replace")
+
+
+def _split_lines(buf: str, chunk: str) -> tuple[list[str], str]:
+    """Append `chunk` to the partial line `buf`; return the complete lines and the new
+    partial line. Carriage returns become line breaks, so a tool's \\r progress output
+    cannot prepend text to a marker and hide it. A trailing \\r is held back: it may be
+    the first half of a CRLF split across two reads, which would otherwise add a
+    spurious blank line."""
+    text = (buf + chunk).replace("\r\n", "\n")
+    held = "\r" if text.endswith("\r") else ""
+    if held:
+        text = text[:-1]
+    *lines, rest = text.replace("\r", "\n").split("\n")
+    return lines, rest + held
 
 
 def _alive(*objs) -> bool:
@@ -1659,6 +1681,7 @@ class Updater(QMainWindow):
         self.settings = QSettings("OneUp", "OneUp")
         self.proc: QProcess | None = None
         self._buf = ""
+        self._dec = _utf8_decoder()
         self._total = 0
         self._check_mode = False
         self._unchecked = []         # reasons a --check couldn't read a source (ONEUP-0056)
@@ -1714,7 +1737,10 @@ class Updater(QMainWindow):
         self._local_server = None
         self._traycheck_proc = None
         self._traycheck_buf = ""
+        self._traycheck_dec = _utf8_decoder()
         self._traycheck_unknown = False
+        self._size_buf = ""
+        self._size_dec = _utf8_decoder()
         self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
         self._last_announcement = ""   # what _announce last spoke (see _announce)
 
@@ -2528,6 +2554,7 @@ for (var i = 0; i < wins.length; i++) {{
             print(f"OneUp: tray check skipped, cannot write {LOG_DIR}: {exc}", file=sys.stderr)
             return
         self._traycheck_buf = ""
+        self._traycheck_dec = _utf8_decoder()
         self._traycheck_unknown = False
         p = QProcess(self)
         p.setProcessChannelMode(QProcess.MergedChannels)
@@ -2547,10 +2574,9 @@ for (var i = 0; i < wins.length; i++) {{
         return path
 
     def _on_traycheck_output(self):
-        chunk = bytes(self._traycheck_proc.readAllStandardOutput()).decode(errors="replace")
-        self._traycheck_buf = (self._traycheck_buf + chunk).replace("\r\n", "\n").replace("\r", "\n")
-        while "\n" in self._traycheck_buf:
-            line, self._traycheck_buf = self._traycheck_buf.split("\n", 1)
+        chunk = self._traycheck_dec.decode(bytes(self._traycheck_proc.readAllStandardOutput()))
+        lines, self._traycheck_buf = _split_lines(self._traycheck_buf, chunk)
+        for line in lines:
             self._parse_tray_line(line)
 
     def _parse_tray_line(self, line: str):
@@ -3351,6 +3377,7 @@ for (var i = 0; i < wins.length; i++) {{
         self._announce("Working out the download size — this can take up to a minute.",
                        row.size_btn)
         self._size_buf = ""
+        self._size_dec = _utf8_decoder()
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         size_log = LOG_DIR / f"{stamp}.size.log"
         p = QProcess(self)
@@ -3361,12 +3388,11 @@ for (var i = 0; i < wins.length; i++) {{
         p.start("bash", [str(ENGINE), f"--size={key}", f"--log={size_log}"])
 
     def _on_size_output(self, final: bool = False):
-        chunk = bytes(self._size_proc.readAllStandardOutput()).decode(errors="replace")
-        self._size_buf = (self._size_buf + chunk).replace("\r\n", "\n").replace("\r", "\n")
-        if final and self._size_buf:
-            self._size_buf += "\n"   # the last line had no line ending; it is still a line
-        while "\n" in self._size_buf:
-            line, self._size_buf = self._size_buf.split("\n", 1)
+        chunk = self._size_dec.decode(bytes(self._size_proc.readAllStandardOutput()), final)
+        if final:
+            chunk += "\n"           # the last line had no line ending; it is still a line
+        lines, self._size_buf = _split_lines(self._size_buf, chunk)
+        for line in lines:
             if line.startswith("@@SIZE@@|"):
                 parts = line[len("@@SIZE@@|"):].split("|")
                 if len(parts) >= 2:
@@ -3450,6 +3476,7 @@ for (var i = 0; i < wins.length; i++) {{
         self._skipped_repos = []
         self._unchecked = []
         self._buf = ""
+        self._dec = _utf8_decoder()
         self._total = len(steps)
         for b in (self.reboot_banner, self.services_banner, self.warn_banner):
             b.setVisible(False)
@@ -3499,19 +3526,15 @@ for (var i = 0; i < wins.length; i++) {{
         self.proc.start("bash", args)
 
     def on_output(self):
-        chunk = bytes(self.proc.readAllStandardOutput()).decode(errors="replace")
+        chunk = self._dec.decode(bytes(self.proc.readAllStandardOutput()))
         # Stamped on the raw chunk, before any line splitting: zypper's progress is a
         # stream of dots with no line ending, so a partial line is the only proof of life
         # during a metadata fetch. Waiting for a complete line would call a working
         # download stalled (ONEUP-0048).
         if chunk:
             self._activity_at = time.monotonic()
-        # Normalise carriage returns to newlines on the ACCUMULATED buffer (so a CRLF
-        # straddling two read chunks doesn't become a spurious blank line) — this keeps
-        # a tool's \r progress output from prepending text to a marker and hiding it.
-        self._buf = (self._buf + chunk).replace("\r\n", "\n").replace("\r", "\n")
-        while "\n" in self._buf:
-            line, self._buf = self._buf.split("\n", 1)
+        lines, self._buf = _split_lines(self._buf, chunk)
+        for line in lines:
             self.handle_line(line)
 
     def handle_line(self, line: str):
@@ -3922,8 +3945,9 @@ for (var i = 0; i < wins.length; i++) {{
     def on_finished(self, exit_code: int, _status):
         # Flush any final line the engine emitted without a trailing newline before
         # computing the summary, so a last marker can't be silently dropped.
+        self._buf += self._dec.decode(b"", True)   # a truncated last character
         if self._buf.strip():
-            self.handle_line(self._buf)
+            self.handle_line(self._buf.rstrip("\r"))
         self._buf = ""
         self._run_active = False
         self._activity_timer.stop()
