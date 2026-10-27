@@ -1286,6 +1286,19 @@ def main() -> int:
     check("a failed engine start stops the indeterminate progress bar",
           (wE.bar.minimum(), wE.bar.maximum()) == (0, 1))
 
+    # Any other error arrives while the engine is still running (or just ending, when
+    # `finished` follows). Treating it as a failed start deleted the QProcess, and
+    # deleting a running QProcess kills the engine mid-transaction.
+    wE2 = updater.Updater()
+    wE2.proc = QProcess(wE2)
+    wE2.set_controls_enabled(False)
+    wE2.status.setText("Updating system packages…")
+    wE2.on_error(QProcess.ProcessError.ReadError)
+    check("a read error mid-run is not reported as a failed start",
+          "Could not start" not in wE2.status.text())
+    check("a read error mid-run leaves the run controls locked",
+          not wE2.run_btn.isEnabled())
+
     # --- headless command builder shared by both timers ------------------------
     check("headless --check command ends in --check",
           updater.Updater._headless_command("--check").endswith("--check"))
