@@ -657,6 +657,18 @@ def main() -> int:
         wA._poll_attached_run()
         check("newly appended log lines are followed live",
               wA.status.text() == "Installing 99 of 141 packages…")
+        # A line the engine is still writing must wait for its newline: read in two
+        # halves, the marker was parsed short and its tail logged as junk.
+        with open(attach_log, "a") as fh:
+            fh.write("@@PROGRESS@@|system|100|1")
+        wA._poll_attached_run()
+        check("a half-written line is not parsed yet",
+              wA.status.text() == "Installing 99 of 141 packages…")
+        with open(attach_log, "a") as fh:
+            fh.write("41|install\n")
+        wA._poll_attached_run()
+        check("the line is parsed whole once its newline arrives",
+              wA.status.text() == "Installing 100 of 141 packages…")
         # When the followed run ends there is no QProcess and no exit code to read — only
         # its @@DONE@@ line. This must not throw (it did: on_finished assumed self.proc).
         with open(attach_log, "a") as fh:

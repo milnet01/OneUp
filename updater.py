@@ -2254,12 +2254,17 @@ class Updater(QMainWindow):
         except ProcessLookupError:
             alive = False
         try:
-            with self._attached_log.open("r", errors="replace") as fh:
+            with self._attached_log.open("rb") as fh:
                 fh.seek(self._attached_pos)
-                new = fh.read()
-                self._attached_pos = fh.tell()
+                data = fh.read()
         except OSError:
-            new = ""
+            data = b""
+        if alive:
+            # Only whole lines: the engine may be part-way through writing one, and a
+            # marker read in two halves would be parsed short and then logged as junk.
+            data = data[:data.rfind(b"\n") + 1]
+        self._attached_pos += len(data)
+        new = data.decode(errors="replace")
         if new:
             self._activity_at = time.monotonic()   # the log grew: the run is alive
         for line in new.splitlines():
