@@ -1845,6 +1845,20 @@ def main() -> int:
     w.on_finished(0, QProcess.ExitStatus.NormalExit)     # a check
     check("finished check pushes the count to the tray", applied2 and applied2[-1] == 5)
 
+    # A run or check that left out a step the tray counts knows nothing about that
+    # step's updates, so it must not reset the tray to "up to date".
+    for _mode in (False, True):
+        w = updater.Updater()
+        applied3 = []
+        w._apply_tray_total = lambda n, uncertain=False, a=applied3: a.append(n)
+        w.rows["flatpak"].switch.setChecked(False)
+        w._check_mode = _mode
+        w._installed_count = "0"
+        w.proc = QProcess(w)
+        w.on_finished(0, QProcess.ExitStatus.NormalExit)
+        check(f"a {'check' if _mode else 'run'} without flatpak leaves the tray count alone",
+              applied3 == [])
+
     # (12b) ONEUP-0056: a check that couldn't read a source knows nothing about it,
     # and "I don't know" must never reach the user as "Everything is up to date. 🎉".
     # That exact false all-clear shipped: the window said it while 8 updates waited,

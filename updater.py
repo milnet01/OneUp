@@ -3994,7 +3994,8 @@ for (var i = 0; i < wins.length; i++) {{
                 f"{total} update(s) available." if total
                 else ("Couldn't check for updates." if self._unchecked
                       else "Everything is up to date."))
-            self._apply_tray_total(total, uncertain=bool(self._unchecked))
+            if self._covers_tray_check():
+                self._apply_tray_total(total, uncertain=bool(self._unchecked))
             self._check_mode = False
             return
 
@@ -4132,8 +4133,16 @@ for (var i = 0; i < wins.length; i++) {{
             urgency="normal" if ok else "critical")
 
         # Keep the ambient tray icon honest: a clean run just installed updates.
-        if ok:
+        if ok and self._covers_tray_check():
             self._apply_tray_total(0)
+
+    def _covers_tray_check(self) -> bool:
+        """True when this run covered every step the tray's own check counts. A run of
+        only some of them knows nothing about the rest, so it must leave the tray's
+        count alone rather than turn "3 updates waiting" into "up to date" (ONEUP-0056's
+        false all-clear, in the tray)."""
+        steps = self.selected_steps()
+        return all(key in steps for key in ("system", "flatpak", "firmware"))
 
     # ---- actions ----------------------------------------------------------
     def _service_units(self) -> list[str]:
