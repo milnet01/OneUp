@@ -3500,7 +3500,8 @@ echo "TEST: the recovery host openSUSE serves is still there (ONEUP-0094 T-1)"
 # skip would let recovery go quietly inert the day openSUSE retires the host.
 if [[ "${ONEUP_TEST_NETWORK:-0}" == "1" ]]; then
     code=$(curl -s -o /dev/null -m 20 -w '%{http_code}' \
-        https://downloadcontentcdn.opensuse.org/tumbleweed/repo/oss/repodata/repomd.xml 2>/dev/null || echo 000)
+        https://downloadcontentcdn.opensuse.org/tumbleweed/repo/oss/repodata/repomd.xml 2>/dev/null) \
+        || code=000   # curl already printed 000 on a failed connect; echoing another doubled it
     if [[ "$code" == "200" ]]; then
         echo "  ok   - downloadcontentcdn.opensuse.org still serves repository metadata"; PASS=$((PASS+1))
     else
