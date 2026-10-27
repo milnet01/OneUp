@@ -2935,6 +2935,40 @@ unset MOCK_ZLOG MOCK_NLOG
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+echo "TEST: a stop during the auto-skip RETRY download is a skip, never 'packages updated'"
+d=$(mktemp -d); setup_common "$d"
+setup_cached_sudo "$d"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+echo "zypper \$*" >> "\$MOCK_ZLOG"
+case "\$*" in
+  *"lr -u"*)               printf '# | Alias | Name | Enabled | GPG | Refresh | URI\n1 | oss | O | Yes | Yes | Yes | http://o/\n2 | chrome | C | Yes | Yes | Yes | http://c/\n'; exit 0 ;;
+  *"refresh chrome"*)      echo "Signature verification failed for repository 'chrome'"; exit 1 ;;
+  *refresh*|*modifyrepo*)  exit 0 ;;
+  *download-only*)
+      if grep -q "modifyrepo --disable chrome" "\$MOCK_ZLOG"; then
+          touch "$d/stop.request"          # user hits Stop during the retry's download
+          echo "Preloading: demo-1.0.x86_64.rpm [done]"; exit 0
+      fi
+      echo "Signature verification failed for repository 'chrome'"; exit 1 ;;
+  *dup*|*update*)          touch "$d/COMMIT-RAN"; echo "2 packages to upgrade."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(ONEUP_STOP_FILE="$d/stop.request" run_engine "$d" --steps=system --auto-skip-repos 2>&1)
+check        "auto-skip retry stop: the step is skipped"   "@@STEP_END@@|system|skip" "$out"
+check_absent "auto-skip retry stop: no success claimed"    "@@STEP_END@@|system|ok" "$out"
+check        "auto-skip retry stop: nothing claimed"       "@@INSTALLED@@||no|no" "$out"
+if [[ ! -e "$d/COMMIT-RAN" ]]; then
+    echo "  ok   - auto-skip retry stop: the commit pass never ran"; PASS=$((PASS+1))
+else
+    echo "  FAIL - auto-skip retry stop: the commit pass ran after the user stopped"; FAIL=$((FAIL+1))
+fi
+unset MOCK_ZLOG
+rm -rf "$d"
+
 echo "TEST: --auto-skip-repos classifies a corrupt-metadata refresh failure as 'metadata' (M1)"
 d=$(mktemp -d); setup_common "$d"
 setup_cached_sudo "$d"
