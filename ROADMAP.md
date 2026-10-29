@@ -10292,6 +10292,16 @@ when complete (that document's §7).
   startup probe around those constructions, as v2's suite already
   does. v2's _patch/_unpatch_all scoping already prevents this; no
   v2 change.
+  State 2026-10-29 (session end): nothing on main changed yet.
+  Owed, in order:
+  1. workflow.md §1.2 on main: the thirteenth exception (grant
+     2026-10-29, ONEUP-0349's test fix only), modelled on the twelfth.
+  2. tests/gui-smoke.py on main: before "(d) revoking passwordless",
+     save updater.Updater._query_auth_status and set it to a no-op;
+     restore it just before "(h) ONEUP-0178" ((h) needs the real one).
+  3. Red: the unfixed suite under the faulthandler helper hangs in
+     focus_rect_requests (seen twice). Green: it finishes, 0 failed.
+  4. main ./local-CI.sh green, then push main.
   **Layman:** On main, the window tests froze on a message box nobody could click, because one test listened to this computer's real passwordless setting.
   Kind: test.
   Source: local-ci-hang-2026-10-29.
