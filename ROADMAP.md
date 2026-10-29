@@ -10198,6 +10198,8 @@ when complete (that document's §7).
   From PR #1 (ea62a72). main: update_system.sh ended the step ok after
   a stop in the --auto-skip-repos retry. v2's engine already guards it
   (steps.py, after the retry). Owes a 1.4.x.
+  State 2026-10-29: on main locally (0682409), not pushed, suites not
+  run. v2 already fixed. PR #1 to be closed once main is pushed.
   **Layman:** Pressing Stop during a retried download could still claim the system was updated.
   Kind: review-fix.
   Source: pr-1-cloud-review-2026-10-27.
@@ -10206,6 +10208,8 @@ when complete (that document's §7).
   From PR #1 (eb36b14). main: update_system.sh ignored the exit status
   of zypper packages --unneeded. v2's engine already checks it
   (steps.py orphans). Owes a 1.4.x.
+  State 2026-10-29: on main locally (7c728c8), not pushed, suites not
+  run. v2 already fixed.
   **Layman:** If OneUp could not list leftover packages, it said there were none.
   Kind: review-fix.
   Source: pr-1-cloud-review-2026-10-27.
@@ -10215,6 +10219,8 @@ when complete (that document's §7).
   incremental UTF-8 decoder and one shared line splitter. main:
   updater.py; v2: oneup/gui run.py and tray.py still decode per chunk.
   Owes a 1.4.x.
+  State 2026-10-29: main 25612b1 + b025175; v2 7f7d55f. Neither pushed;
+  window suite and red run not done (machine at load 26).
   **Layman:** Dashes and accented letters in OneUp's messages could show up garbled.
   Kind: review-fix.
   Source: pr-1-cloud-review-2026-10-27.
@@ -10224,6 +10230,8 @@ when complete (that document's §7).
   Timedout and Crashed too; deleting a running QProcess kills the
   engine (security.md §6.3). main: updater.py; v2: run.py on_error.
   Owes a 1.4.x.
+  State 2026-10-29: main 8220dd9; v2 7f7d55f. Not pushed; suites not
+  run.
   **Layman:** A minor read error could make OneUp abandon an update that was still running.
   Kind: review-fix.
   Source: pr-1-cloud-review-2026-10-27.
@@ -10232,6 +10240,8 @@ when complete (that document's §7).
   From PR #1 (86433e4). The tray now changes only when system,
   flatpak and firmware were all covered. main: updater.py; v2:
   run.py. Owes a 1.4.x.
+  State 2026-10-29: main 0c225dc; v2 7f7d55f. Not pushed; suites not
+  run.
   **Layman:** Updating only some things could make the tray icon say everything was up to date.
   Kind: review-fix.
   Source: pr-1-cloud-review-2026-10-27.
@@ -10240,6 +10250,8 @@ when complete (that document's §7).
   From PR #1 (8b53db7). While the run is alive, a poll reads only up
   to the last newline. main: updater.py _poll_attached_run; v2:
   window.py. Owes a 1.4.x.
+  State 2026-10-29: main f31f2fd; v2 7f7d55f. Not pushed; suites not
+  run.
   **Layman:** Reopening OneUp during a running update could misread its progress.
   Kind: review-fix.
   Source: pr-1-cloud-review-2026-10-27.
@@ -10248,6 +10260,8 @@ when complete (that document's §7).
   From PR #1 (9b767ab). cache_bytes walks with os.scandir: measured
   25.9 ms to 9.1 ms on 4,800 files. main: updater.py; v2:
   diagnostics.py. Owes a 1.4.x.
+  State 2026-10-29: main a7cc911; v2 7f7d55f. Not pushed; suites not
+  run.
   **Layman:** The download-size check every few seconds did twice the disk work it needed.
   Kind: perf.
   Source: pr-1-cloud-review-2026-10-27.
@@ -10255,6 +10269,8 @@ when complete (that document's §7).
 - 🚧 [ONEUP-0348] **The recovery-host test prints 'HTTP 000000' when the host is unreachable.**
   From PR #1 (9ffd174). tests/run-tests.sh T-1 only; reaches main by
   the user's grant of 2026-10-29 (workflow.md §1.2). No 1.4.x owed.
+  State 2026-10-29: main d34b430; grant and CHANGELOG lines in main
+  28eacd8 (workflow.md §1.2, twelfth exception). Not pushed.
   **Layman:** A test's failure message showed a doubled error code.
   Kind: fix.
   Source: pr-1-cloud-review-2026-10-27.
