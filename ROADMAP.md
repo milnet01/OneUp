@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=340 -->
+<!-- ants-roadmap-id-high-water: ONEUP=348 -->
 
 # OneUp Roadmap
 
@@ -10193,6 +10193,71 @@ when complete (that document's §7).
   **Layman:** Write down, in one short file, which changes would break things for users and so need a major version number.
   Kind: doc.
   Source: user-decision-2026-10-23.
+
+- 🚧 [ONEUP-0341] **A stop during the auto-skip retry download reports 'packages updated'.**
+  From PR #1 (ea62a72). main: update_system.sh ended the step ok after
+  a stop in the --auto-skip-repos retry. v2's engine already guards it
+  (steps.py, after the retry). Owes a 1.4.x.
+  **Layman:** Pressing Stop during a retried download could still claim the system was updated.
+  Kind: review-fix.
+  Source: pr-1-cloud-review-2026-10-27.
+
+- 🚧 [ONEUP-0342] **A failed leftover-package query reports 'nothing to remove'.**
+  From PR #1 (eb36b14). main: update_system.sh ignored the exit status
+  of zypper packages --unneeded. v2's engine already checks it
+  (steps.py orphans). Owes a 1.4.x.
+  **Layman:** If OneUp could not list leftover packages, it said there were none.
+  Kind: review-fix.
+  Source: pr-1-cloud-review-2026-10-27.
+
+- 🚧 [ONEUP-0343] **A multi-byte character split across two reads shows as replacement characters.**
+  From PR #1 (febd859, 7d99185). Each output stream now uses an
+  incremental UTF-8 decoder and one shared line splitter. main:
+  updater.py; v2: oneup/gui run.py and tray.py still decode per chunk.
+  Owes a 1.4.x.
+  **Layman:** Dashes and accented letters in OneUp's messages could show up garbled.
+  Kind: review-fix.
+  Source: pr-1-cloud-review-2026-10-27.
+
+- 🚧 [ONEUP-0344] **Any QProcess error is handled as a failed start, which can kill a running engine.**
+  From PR #1 (21b3994). on_error deleted the QProcess for ReadError,
+  Timedout and Crashed too; deleting a running QProcess kills the
+  engine (security.md §6.3). main: updater.py; v2: run.py on_error.
+  Owes a 1.4.x.
+  **Layman:** A minor read error could make OneUp abandon an update that was still running.
+  Kind: review-fix.
+  Source: pr-1-cloud-review-2026-10-27.
+
+- 🚧 [ONEUP-0345] **A run or check of only some steps resets the tray to 'up to date'.**
+  From PR #1 (86433e4). The tray now changes only when system,
+  flatpak and firmware were all covered. main: updater.py; v2:
+  run.py. Owes a 1.4.x.
+  **Layman:** Updating only some things could make the tray icon say everything was up to date.
+  Kind: review-fix.
+  Source: pr-1-cloud-review-2026-10-27.
+
+- 🚧 [ONEUP-0346] **Following an earlier run's log can parse a half-written marker.**
+  From PR #1 (8b53db7). While the run is alive, a poll reads only up
+  to the last newline. main: updater.py _poll_attached_run; v2:
+  window.py. Owes a 1.4.x.
+  **Layman:** Reopening OneUp during a running update could misread its progress.
+  Kind: review-fix.
+  Source: pr-1-cloud-review-2026-10-27.
+
+- 🚧 [ONEUP-0347] **Weighing the package cache stats every file twice on the GUI thread.**
+  From PR #1 (9b767ab). cache_bytes walks with os.scandir: measured
+  25.9 ms to 9.1 ms on 4,800 files. main: updater.py; v2:
+  diagnostics.py. Owes a 1.4.x.
+  **Layman:** The download-size check every few seconds did twice the disk work it needed.
+  Kind: perf.
+  Source: pr-1-cloud-review-2026-10-27.
+
+- 🚧 [ONEUP-0348] **The recovery-host test prints 'HTTP 000000' when the host is unreachable.**
+  From PR #1 (9ffd174). tests/run-tests.sh T-1 only; reaches main by
+  the user's grant of 2026-10-29 (workflow.md §1.2). No 1.4.x owed.
+  **Layman:** A test's failure message showed a doubled error code.
+  Kind: fix.
+  Source: pr-1-cloud-review-2026-10-27.
 
 ## 2.1.0 — after 2.0
 
