@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=348 -->
+<!-- ants-roadmap-id-high-water: ONEUP=349 -->
 
 # OneUp Roadmap
 
@@ -10274,6 +10274,27 @@ when complete (that document's §7).
   **Layman:** A test's failure message showed a doubled error code.
   Kind: fix.
   Source: pr-1-cloud-review-2026-10-27.
+
+- 🚧 [ONEUP-0349] **main's window suite hangs when this machine's passwordless rule reads off.**
+  Measured 2026-10-29: main's local-CI hung in tests/gui-smoke.py
+  for 53 minutes at 0% CPU. A faulthandler trace put it in
+  focus_rect_requests, nested _on_auth_status_finished →
+  _stand_down_autoupdate → QMessageBox.information.
+
+  Cause: the coupling block's windows (d) to (g) restore the real
+  _stand_down_autoupdate and fake an enabled weekly timer. Each also
+  starts the REAL startup probe (_query_auth_status). Here main's
+  engine answers @@AUTH@@|off (sudo -n zypper fails), and the answer
+  arrives after the block restores the real message box. A test that
+  depends on the machine — testing.md §2.
+
+  Fix on main (user grant, 2026-10-29, workflow.md §1.2): stub the
+  startup probe around those constructions, as v2's suite already
+  does. v2's _patch/_unpatch_all scoping already prevents this; no
+  v2 change.
+  **Layman:** On main, the window tests froze on a message box nobody could click, because one test listened to this computer's real passwordless setting.
+  Kind: test.
+  Source: local-ci-hang-2026-10-29.
 
 ## 2.1.0 — after 2.0
 
