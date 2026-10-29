@@ -1033,6 +1033,18 @@ def main() -> int:
         wA._poll_attached_run()
         check("newly appended log lines are followed live",
               wA.status.text() == "System packages · Installing 99 of 141")
+        # A line the engine is still writing must wait for its newline: read in two
+        # halves, the marker was parsed short and its tail logged as junk (ONEUP-0346).
+        with open(attach_log, "a") as fh:
+            fh.write("@@PROGRESS@@|system|100|1")
+        wA._poll_attached_run()
+        check("ONEUP-0346 a half-written line is not parsed yet",
+              wA.status.text() == "System packages · Installing 99 of 141")
+        with open(attach_log, "a") as fh:
+            fh.write("41|install\n")
+        wA._poll_attached_run()
+        check("ONEUP-0346 the line is parsed whole once its newline arrives",
+              wA.status.text() == "System packages · Installing 100 of 141")
         # When the followed run ends there is no QProcess and no exit code to read — only
         # its @@DONE@@ line. This must not throw (it did: on_finished assumed self.proc).
         with open(attach_log, "a") as fh:
@@ -1621,6 +1633,26 @@ def main() -> int:
     check("a @@HINT@@ code is parsed into _hints as the window's own sentence",
           wH._hints == [markers.render_hint(["repo-key-expired"])]
           and wH._hints[0].startswith("A source's signing key is out of date."))
+
+    # ONEUP-0343: a read can end part-way through a multi-byte character. Each half
+    # decoded on its own became two U+FFFD; the stream decoder must carry the half
+    # character into the next read. A CRLF split across two reads must not add a
+    # blank line either.
+    class _ChunkProc:  # one canned read per call, like a QProcess draining its pipe
+        def __init__(self, *chunks): self._c = list(chunks)
+        def readAllStandardOutput(self): return self._c.pop(0)
+    wU = window.Updater()
+    run._reset_for_run(wU, ["system"], check=False)
+    raw = "Stopped — safely.\r\n".encode()
+    cut = raw.index("—".encode()) + 1          # inside the three-byte em dash
+    wU.proc = _ChunkProc(raw[:cut], raw[cut:-1], raw[-1:])
+    for _ in range(3):
+        run.on_output(wU)
+    _logged = wU.log.toPlainText().splitlines()
+    check(f"ONEUP-0343 an em dash split across two reads survives decoding ({_logged[-2:]!r})",
+          "Stopped — safely." in _logged)
+    check("ONEUP-0343 a CRLF split across two reads leaves no blank line",
+          _logged and _logged[-1] == "Stopped — safely." and wU._buf == "")
     # ONEUP-0218: a repository is a "source" to the user (wording-and-translation.md
     # §2.1). Both signing-key hints, and the banner the window builds itself when only
     # the key-import remedy is armed, must say so.
@@ -2165,6 +2197,19 @@ def main() -> int:
           "Could not start" in wE.status.text())
     check("a failed engine start stops the indeterminate progress bar",
           (wE.bar.minimum(), wE.bar.maximum()) == (0, 1))
+
+    # ONEUP-0344: any other error arrives while the engine is still running (or just
+    # ending, when `finished` follows). Treating it as a failed start deleted the
+    # QProcess, and deleting a running QProcess kills the engine mid-transaction.
+    wE2 = window.Updater()
+    wE2.proc = QProcess(wE2)
+    wE2.set_controls_enabled(False)
+    wE2.status.setText("Updating system packages…")
+    run.on_error(wE2, QProcess.ProcessError.ReadError)
+    check("ONEUP-0344 a read error mid-run is not reported as a failed start",
+          "Could not start" not in wE2.status.text())
+    check("ONEUP-0344 a read error mid-run leaves the run controls locked",
+          not wE2.run_btn.isEnabled())
 
     # --- headless command builder shared by both timers ------------------------
     check("headless --check command ends in --check",
@@ -3456,6 +3501,23 @@ def main() -> int:
     run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)     # a check
     check("finished check pushes the count to the tray", applied2 and applied2[-1] == 5)
     _unpatch_all()
+
+    # ONEUP-0345: a run or check that left out a step the tray counts knows nothing
+    # about that step's updates, so it must not reset the tray to "up to date".
+    for _mode in (False, True):
+        w = window.Updater()
+        applied3 = []
+        _patch(tray, "_apply_tray_total",
+               lambda win, n, uncertain=False, a=applied3, **_: a.append(n))
+        w.rows["flatpak"].switch.setChecked(False)
+        w._check_mode = _mode
+        w._installed_count = "0"
+        w.proc = QProcess(w)
+        run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
+        check(f"ONEUP-0345 a {'check' if _mode else 'run'} without flatpak leaves the "
+              "tray count alone", applied3 == [])
+        w.rows["flatpak"].switch.setChecked(True)
+        _unpatch_all()
 
     # (12b) ONEUP-0056: a check that couldn't read a source knows nothing about it,
     # and "I don't know" must never reach the user as "Everything is up to date. 🎉".

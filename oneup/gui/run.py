@@ -286,6 +286,7 @@ def request_size(win, key: str, unasked: bool = False):
             "Working out the download size — this can take up to a minute."),
                        link.size_btn)
     win._size_buf = ""
+    win._size_dec = markers.utf8_decoder()
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     # Named as a RUN log, not `<stamp>.size.log`, because --hold means this preview may
     # become the run. The engine writes its --log= value verbatim into `run.state` for
@@ -311,12 +312,12 @@ def request_size(win, key: str, unasked: bool = False):
 
 
 def _on_size_output(win, final: bool = False):
-    chunk = bytes(win._size_proc.readAllStandardOutput()).decode(errors="replace")
-    win._size_buf = (win._size_buf + chunk).replace("\r\n", "\n").replace("\r", "\n")
-    if final and win._size_buf:
-        win._size_buf += "\n"   # the last line had no line ending; it is still a line
-    while "\n" in win._size_buf:
-        line, win._size_buf = win._size_buf.split("\n", 1)
+    chunk = win._size_dec.decode(bytes(win._size_proc.readAllStandardOutput()), final)
+    lines, win._size_buf = markers.split_lines(win._size_buf, chunk)
+    if final and win._size_buf.rstrip("\r"):
+        lines.append(win._size_buf.rstrip("\r"))   # no line ending; still a line
+        win._size_buf = ""
+    for line in lines:
         if line.startswith("@@SIZE@@|"):
             parts = line[len("@@SIZE@@|"):].split("|")
             # Only the system step has a size to fetch (`request_size`).
@@ -424,6 +425,7 @@ def _reset_for_run(win, steps: list[str], check: bool):
     win._skipped_repos = []
     win._unchecked = []
     win._buf = ""
+    win._dec = markers.utf8_decoder()
     win._total = len(steps)
     for b in (win.reboot_banner, win.services_banner, win.warn_banner):
         b.setVisible(False)
@@ -545,19 +547,15 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
 
 
 def on_output(win):
-    chunk = bytes(win.proc.readAllStandardOutput()).decode(errors="replace")
+    chunk = win._dec.decode(bytes(win.proc.readAllStandardOutput()))
     # Stamped on the raw chunk, before any line splitting: zypper's progress is a
     # stream of dots with no line ending, so a partial line is the only proof of life
     # during a metadata fetch. Waiting for a complete line would call a working
     # download stalled (ONEUP-0048).
     if chunk:
         win._activity_at = time.monotonic()
-    # Normalise carriage returns to newlines on the ACCUMULATED buffer (so a CRLF
-    # straddling two read chunks doesn't become a spurious blank line) — this keeps
-    # a tool's \r progress output from prepending text to a marker and hiding it.
-    win._buf = (win._buf + chunk).replace("\r\n", "\n").replace("\r", "\n")
-    while "\n" in win._buf:
-        line, win._buf = win._buf.split("\n", 1)
+    lines, win._buf = markers.split_lines(win._buf, chunk)
+    for line in lines:
         handle_line(win, line)
 
 
@@ -1112,7 +1110,13 @@ def handle_marker(win, line: str):
         win._done_status = parts[0] if parts else ""
 
 
-def on_error(win, _err):
+def on_error(win, err):
+    # Only a failed START is ours to handle. Every other error (Crashed, ReadError,
+    # Timedout…) arrives while the engine is running or just ending: `finished`
+    # reports the outcome, and deleting a QProcess that is still running KILLS the
+    # engine mid-transaction (security.md §6.3; ONEUP-0344).
+    if err != QProcess.ProcessError.FailedToStart:
+        return
     win.status.setText(QCoreApplication.translate("run", "Could not start the update script."))
     win.bar.setRange(0, 1)
     win.set_controls_enabled(True)
@@ -1149,8 +1153,9 @@ def _first_hint_command(win) -> str:
 def on_finished(win, exit_code: int, _status):
     # Flush any final line the engine emitted without a trailing newline before
     # computing the summary, so a last marker can't be silently dropped.
+    win._buf += win._dec.decode(b"", True)   # a truncated last character
     if win._buf.strip():
-        handle_line(win, win._buf)
+        handle_line(win, win._buf.rstrip("\r"))
     win._buf = ""
     win._run_active = False
     win._liveness_active = False
@@ -1202,8 +1207,9 @@ def on_finished(win, exit_code: int, _status):
         else:
             away = QCoreApplication.translate("run", "Everything is up to date.")
         _notify_when_away(win, away)
-        tray._apply_tray_total(win, total, uncertain=bool(win._unchecked),
-                               at_least=bool(least))
+        if _covers_tray_check(win):
+            tray._apply_tray_total(win, total, uncertain=bool(win._unchecked),
+                                   at_least=bool(least))
         win._check_mode = False
         if win.size_link.automatic and ok and win._system_pending:
             request_size(win, "system", unasked=True)
@@ -1420,7 +1426,15 @@ def on_finished(win, exit_code: int, _status):
         urgency="normal" if ok else "critical")
 
     # Keep the ambient tray icon honest: a clean run just installed updates.
-    if ok:
+    if ok and _covers_tray_check(win):
         tray._apply_tray_total(win, 0)
+
+
+def _covers_tray_check(win) -> bool:
+    """True when this run covered every step the tray's own check counts. A run of
+    only some of them knows nothing about the rest, so it must leave the tray's count
+    alone rather than turn "3 updates waiting" into "up to date" (ONEUP-0345)."""
+    steps = win.selected_steps()
+    return all(key in steps for key in ("system", "flatpak", "firmware"))
 
 

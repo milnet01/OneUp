@@ -5,6 +5,7 @@ run log, and what zypper's package cache weighs.
 """
 from __future__ import annotations
 
+import os
 import re
 import socket
 from datetime import datetime
@@ -94,16 +95,24 @@ def cache_bytes() -> int:
     """Weigh zypper's package cache. Sampled against a baseline taken as the run starts,
     the growth is how much has been downloaded — the only figure available while zypper is
     prefetching, because that phase prints no sizes and no progress of any kind."""
+    # os.scandir rather than Path.rglob: this runs on the GUI thread every 5s across
+    # thousands of files, and a DirEntry answers is_dir/is_file from the directory read
+    # itself — one stat per file instead of two, and no Path object (ONEUP-0347).
     total = 0
-    try:
-        for p in paths.ZYPP_PACKAGE_CACHE.rglob("*"):
-            try:
-                if p.is_file():
-                    total += p.stat().st_size
-            except OSError:
-                continue        # a file zypper moved or removed mid-walk
-    except OSError:
-        return 0                # no cache directory, or not readable — figure unavailable
+    pending = [paths.ZYPP_PACKAGE_CACHE]
+    while pending:
+        try:
+            with os.scandir(pending.pop()) as entries:
+                for entry in entries:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            pending.append(entry.path)
+                        elif entry.is_file():
+                            total += entry.stat().st_size
+                    except OSError:
+                        continue    # a file zypper moved or removed mid-walk
+        except OSError:
+            continue                # no cache directory, or not readable — counts as 0
     return total
 
 

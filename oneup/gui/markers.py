@@ -6,11 +6,33 @@ that turn a payload into the words the window shows.
 """
 from __future__ import annotations
 
+import codecs
 from collections.abc import Callable
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
 
 from . import i18n
+
+
+def utf8_decoder():
+    """A decoder for one process's output stream. Incremental, because a read can end
+    part-way through a multi-byte character, and decoding each chunk on its own turns
+    both halves into replacement characters (ONEUP-0343)."""
+    return codecs.getincrementaldecoder("utf-8")(errors="replace")
+
+
+def split_lines(buf: str, chunk: str) -> tuple[list[str], str]:
+    """Append `chunk` to the partial line `buf`; return the complete lines and the new
+    partial line. Carriage returns become line breaks, so a tool's \\r progress output
+    cannot prepend text to a marker and hide it. A trailing \\r is held back: it may be
+    the first half of a CRLF split across two reads, which would otherwise add a
+    spurious blank line."""
+    text = (buf + chunk).replace("\r\n", "\n")
+    held = "\r" if text.endswith("\r") else ""
+    if held:
+        text = text[:-1]
+    *lines, rest = text.replace("\r", "\n").split("\n")
+    return lines, rest + held
 
 
 def fallback_long(*codes: str) -> str:

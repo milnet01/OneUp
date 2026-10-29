@@ -21,7 +21,7 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .. import APP_ID, APP_NAME
-from . import autostart, i18n, paths, run, theme
+from . import autostart, i18n, markers, paths, run, theme
 from .theme import _app_icon
 
 # Single-instance handshake budget (ONEUP-0084). Both ends are local sockets on the
@@ -118,6 +118,7 @@ def _tray_check(win):
               file=sys.stderr)
         return
     win._traycheck_buf = ""
+    win._traycheck_dec = markers.utf8_decoder()
     win._traycheck_unknown = False
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
@@ -140,11 +141,9 @@ def _traycheck_log():
 
 
 def _on_traycheck_output(win):
-    chunk = bytes(win._traycheck_proc.readAllStandardOutput()).decode(errors="replace")
-    win._traycheck_buf = ((win._traycheck_buf + chunk)
-                           .replace("\r\n", "\n").replace("\r", "\n"))
-    while "\n" in win._traycheck_buf:
-        line, win._traycheck_buf = win._traycheck_buf.split("\n", 1)
+    chunk = win._traycheck_dec.decode(bytes(win._traycheck_proc.readAllStandardOutput()))
+    lines, win._traycheck_buf = markers.split_lines(win._traycheck_buf, chunk)
+    for line in lines:
         _parse_tray_line(win, line)
 
 

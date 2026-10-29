@@ -77,6 +77,7 @@ from . import (
     banners,
     diagnostics,
     i18n,
+    markers,
     paths,
     placement,
     repos,
@@ -197,6 +198,7 @@ class Updater(QMainWindow):
         self.settings = QSettings("OneUp", "OneUp")
         self.proc: QProcess | None = None
         self._buf = ""
+        self._dec = markers.utf8_decoder()
         self._total = 0
         self._check_mode = False
         self._unchecked = []         # reasons a --check couldn't read a source (ONEUP-0056)
@@ -265,7 +267,10 @@ class Updater(QMainWindow):
         self._local_server = None
         self._traycheck_proc = None
         self._traycheck_buf = ""
+        self._traycheck_dec = markers.utf8_decoder()
         self._traycheck_unknown = False
+        self._size_buf = ""
+        self._size_dec = markers.utf8_decoder()
         self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
         self._last_announcement = ""   # what _announce last spoke (see _announce)
         # Run state the layouts read and never own (ONEUP-0239 §4.1), so a layout
@@ -906,12 +911,18 @@ class Updater(QMainWindow):
         except ProcessLookupError:
             alive = False
         try:
-            with self._attached_log.open("r", errors="replace") as fh:
+            with self._attached_log.open("rb") as fh:
                 fh.seek(self._attached_pos)
-                new = fh.read()
-                self._attached_pos = fh.tell()
+                data = fh.read()
         except OSError:
-            new = ""
+            data = b""
+        if alive:
+            # Only whole lines: the engine may be part-way through writing one, and a
+            # marker read in two halves would be parsed short and then logged as junk
+            # (ONEUP-0346).
+            data = data[:data.rfind(b"\n") + 1]
+        self._attached_pos += len(data)
+        new = data.decode(errors="replace")
         if new:
             self._activity_at = time.monotonic()   # the log grew: the run is alive
         for line in new.splitlines():
