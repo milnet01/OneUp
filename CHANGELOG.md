@@ -8,6 +8,27 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Pressing Stop during a retried download no longer says the system was updated** (ONEUP-0341)
+  With "skip a broken source" on, a Stop during the second download attempt ended the step as "packages updated", though nothing was installed. It now says the update was stopped before installing anything.
+
+- **OneUp says when it could not list leftover packages** (ONEUP-0342)
+  When the package manager was busy or a source was broken, the leftover-package step said "nothing to remove". It now says it could not list them.
+
+- **No garbled characters in OneUp's messages** (ONEUP-0343)
+  A dash or accented letter that arrived in two pieces showed as "��". It now shows correctly.
+
+- **A read error no longer stops a running update** (ONEUP-0344)
+  OneUp treated any error from the update process as a failed start, which could end an update that was still running.
+
+- **Updating only some things no longer makes the tray say "up to date"** (ONEUP-0345)
+  The tray icon now changes only after a run or check that covered system packages, Flatpaks and firmware.
+
+- **Reopening OneUp during an update no longer misreads its progress** (ONEUP-0346)
+  A window following an update started earlier could read a line the update was still writing. It now waits for each line to be complete.
+
+- **Less work on each download-size check** (ONEUP-0347)
+  The check that runs every few seconds during a download now reads each file once instead of twice.
+
 - **When the password box cannot start, OneUp says so and names the command** (ONEUP-0337)
   An update that stopped part-way through the Qt libraries can leave the password box unable to start, and OneUp then said only "Authentication failed or cancelled". It now says the box could not start and gives the command to finish the update in a terminal, with a Copy command button.
 
