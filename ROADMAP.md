@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=349 -->
+<!-- ants-roadmap-id-high-water: ONEUP=350 -->
 
 # OneUp Roadmap
 
@@ -9513,6 +9513,10 @@ when complete (that document's §7).
   02b4430; ./local-CI.sh green; three mutations killed. All four built
   pieces are done. Left: the state symbols, which wait for ONEUP-0322's
   amendment and its review; then the by-eye VM check.
+  The symbols, built 2026-10-30: symbols.STATE_SHAPES, a clock, down
+  arrow, down arrow onto a line, tick, cross and dash, in the text's
+  ink, in Rows' State cell and Spotlight's lines. All of this item's
+  pieces are now built; waits on the by-eye VM check.
   **Layman:** The Rows update list gets the sketch's icons, source labels and counted tabs.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
@@ -9654,7 +9658,7 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0320] **The header's Recenter button shows a symbol instead of a word, so it is smaller.**
+- 🚧 [ONEUP-0320] **The header's Recenter button shows a symbol instead of a word, so it is smaller.**
   User's decision, 2026-10-17, while confirming ONEUP-0306's
   defaults. The sketches have no Recenter; the user keeps it, smaller.
   The button keeps "Recenter" as its accessible name and tooltip. The
@@ -9667,12 +9671,17 @@ when complete (that document's §7).
   reads as "centre". The spec's QRawFont clause for recenter_btn (§4.1,
   §7) changes with ONEUP-0322's amendment; build after its
   review-contract run. Accessible name "Recenter" and the tooltip stay.
+  Built 2026-10-30: symbols.SymbolButton draws the crosshair in the
+  label's colour at rest, on hover and on focus, in every theme and the
+  overlay. Accessible name Recenter and the tooltip kept. Rows' window
+  minimum went from 654 to 630 pixels wide (offscreen, one measurement).
+  Waits on the by-eye VM check.
   **Layman:** Recenter stays, but as a small symbol button beside Settings and About.
   Kind: ux.
   Source: user-request-2026-10-17.
   Lanes: gui.
 
-- 📋 [ONEUP-0322] **ONEUP-0239 spec: settle the badge word past halfway, and Rail's summary wording.**
+- ✅ [ONEUP-0322] **ONEUP-0239 spec: settle the badge word past halfway, and Rail's summary wording.**
   Found by the review-contract gate on ONEUP-0310's amendment,
   2026-10-17. Both are verified and outside that amendment's text, so
   they are filed here, not fixed. Fold them in directly; do not
@@ -9751,6 +9760,17 @@ when complete (that document's §7).
   Noto Sans ... draws — tested on it with QRawFont" and §7's
   recenter_btn QRawFont bullet: a drawn shape in the theme's text
   colour, the accessible name "Recenter" and the tooltip unchanged.
+  Shipped 2026-10-30. Spec amended (loop-log row 0322-amend). No gate:
+  the spec is past the two review loops a spec gets (global
+  rules/14-contract-gate.md, settled by the user 2026-10-30), so the
+  2026-10-17 note asking for a review-contract run no longer applies;
+  the build read it. Items (1) to (5), the floor sentence, the tile
+  sentence, the drawn state symbols and the drawn crosshair are all
+  written. The build also found that Spotlight's Packages box said not
+  known with a total of 0, and that INV-17's title check passed on
+  labels the paint elided; both fixed, the check now asks elidedText.
+  Left as noticed, not this spec's: ONEUP-0064 INV-6 and ONEUP-0076 §4.2
+  still place recenter_btn in SettingsDialog.
   **Layman:** Two small unclear spots in the layouts plan, found while checking the Rows list change, need a decision.
   Kind: doc-fix.
   Source: review-contract-ONEUP-0310-2026-10-17.
@@ -9833,12 +9853,15 @@ when complete (that document's §7).
   Source: ONEUP-0317-build-2026-10-20.
   Lanes: gui.
 
-- 📋 [ONEUP-0327] **Settings' gear symbol is not in Noto Sans, so it may draw as an empty box.**
+- 🚧 [ONEUP-0327] **Settings' gear symbol is not in Noto Sans, so it may draw as an empty box.**
   Found while choosing ONEUP-0320's symbol: QRawFont for Noto Sans,
   openSUSE's interface font, reports U+2699 (the gear in "⚙ Settings",
   oneup/gui/window.py) unsupported, as ONEUP-0297 found for U+24D8. It
   draws here only through a fallback font. Measured 2026-10-20 on this
   host; not yet seen on the clean VM.
+  Built 2026-10-30: my call, not a user decision: the gear is drawn by
+  symbols.gear, as Recenter's symbol is, rather than dropped; the label
+  is now the word Settings. Waits on the by-eye VM check.
   **Layman:** The little gear on the Settings button may show as a blank square on a fresh openSUSE install.
   Kind: fix.
   Source: ONEUP-0320-build-2026-10-20.
@@ -10329,6 +10352,19 @@ when complete (that document's §7).
   **Layman:** On main, the window tests froze on a message box nobody could click, because one test listened to this computer's real passwordless setting.
   Kind: test.
   Source: local-ci-hang-2026-10-29.
+
+- 📋 [ONEUP-0350] **Spotlight's footer cuts "Last run" short while space sits empty beside it.**
+  Seen 2026-10-30 in offscreen renders at Spotlight's minimum size, in the
+  standard and high-contrast sheets, on v2 and on the commit before ONEUP-0322:
+  the footer's last_run reads "Last ru…" or "Last r…" for "Last run: never",
+  with empty space between it and Show technical log. Rows shows it whole.
+  Cause not looked into; the footer's stretch is the first place to read.
+  No check catches it: INV-2 lets an elided label pass when its tooltip holds
+  the text.
+  **Layman:** In the Spotlight layout the last-run line can read "Last r…" even though there is room for all of it.
+  Kind: fix.
+  Source: ONEUP-0322-build-2026-10-30.
+  Lanes: gui.
 
 ## 2.1.0 — after 2.0
 
