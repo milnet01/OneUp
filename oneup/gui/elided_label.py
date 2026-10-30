@@ -7,8 +7,10 @@ reader the ellipsis hides it from.
 """
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QFontMetricsF, QPainter
 from PySide6.QtWidgets import QLabel, QSizePolicy
 
 # The width the label asks for, in average characters. Small on purpose: the
@@ -41,6 +43,15 @@ class ElidedLabel(QLabel):
             self.setProperty("empty", empty)
             self.style().unpolish(self)
             self.style().polish(self)
+
+    def whole_width(self, text: str | None = None) -> int:
+        """The width that paints `text`, by default its own, with no ellipsis. Measured
+        in fractions and rounded up: `QFontMetrics.horizontalAdvance` rounds, and a label
+        exactly that wide still elided "Firmware" to "Firmwa…" (ONEUP-0322)."""
+        m = self.contentsMargins()
+        fm = QFontMetricsF(self.font())
+        return (math.ceil(fm.horizontalAdvance(self.text() if text is None else text))
+                + m.left() + m.right())
 
     def sizeHint(self) -> QSize:
         m = self.contentsMargins()

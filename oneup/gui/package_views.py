@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import i18n, steps, theme
+from . import i18n, steps, symbols, theme
 from .markers import _format_size
 from .packages import Package, PackageModel
 
@@ -205,6 +205,9 @@ class PackageItems(QAbstractTableModel):
             return QCoreApplication.translate(
                 "package_views", "{text}, details available").format(
                 text=text.replace(MARK, "").strip())
+        if role == Qt.ItemDataRole.AccessibleTextRole:
+            # A drawn symbol has no text of its own, so the words are said here.
+            return self._columns[index.column()](self._rows[index.row()])
         if role == NOW_ROLE:
             return self._now is not None and self._now(self._rows[index.row()])
         if role == PACKAGE_ROLE:
@@ -582,29 +585,45 @@ class CardDelegate(LinesDelegate):
         painter.restore()
 
 
+class SymbolDelegate(LinesDelegate):
+    """Rows' state cell: the state's drawn symbol, centred (§4.3). The item's text,
+    never painted, is its word: the tooltip and what a screen reader hears."""
+
+    def __init__(self, state: Callable[[Package], str], parent=None) -> None:
+        super().__init__(1, parent)
+        self._state = state
+
+    def paint(self, painter, option, index) -> None:
+        package = index.data(PACKAGE_ROLE)
+        if package is None:
+            return
+        opt, _lines = self._ground(painter, option, index)
+        symbols.draw(painter, symbols.STATE_SHAPES[self._state(package)],
+                     QRectF(opt.rect).adjusted(0, 4, 0, -4),
+                     opt.palette.color(QPalette.ColorRole.Text))
+
+
 class ListLineDelegate(LinesDelegate):
-    """Spotlight's list line (§4.3 Spotlight item 3): the state, the name, and the
-    size at the trailing end. Until the drawn state symbols land (ONEUP-0322), the
-    state word stands where the symbol goes, as it does in Rows. The item's text —
-    its tooltip and the words a screen reader hears — stays the whole line."""
+    """Spotlight's list line (§4.3 Spotlight item 3): the state's drawn symbol, the
+    name, and the size at the trailing end. The item's text — its tooltip and the
+    words a screen reader hears — stays the whole line."""
 
     GAP = 8     # pixels between the parts, and inside the line's ends
 
     def __init__(self, parts: Callable[[Package], tuple[str, str, str]], parent=None) -> None:
         super().__init__(1, parent)
-        # The state word, the name and the size.
+        # The state, the name and the size.
         self._parts = parts
 
     def line_rects(self, view, cell: QRect) -> dict[str, QRect]:
         """Where each part of the line in `cell` goes, mirrored for a right-to-left
-        view. The state and the size take their widest text, so neither moves."""
+        view. The symbol and the size have widths of their own, so neither moves."""
         fm = view.fontMetrics()
         inner = cell.adjusted(self.GAP, 0, -self.GAP, 0)
         # The style draws each part inside its own text margin, one per side.
         pad = 2 * (view.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin, None,
                                             view) + 1)
-        state_w = pad + max(fm.horizontalAdvance(QCoreApplication.translate("steps", w))
-                            for w in steps.STATE_WORDS.values())
+        state_w = fm.height()
         size_w = pad + fm.horizontalAdvance(CardDelegate.SIZE_TEXT)
         left, top, h = inner.left(), inner.top(), inner.height()
         rects = {
@@ -623,8 +642,9 @@ class ListLineDelegate(LinesDelegate):
         state, name, size = self._parts(package)
         r = self.line_rects(self.parent(), opt.rect)
         lead, trail = Qt.AlignmentFlag.AlignLeading, Qt.AlignmentFlag.AlignTrailing
-        for text, rect, align in ((state, r["state"], lead), (name, r["name"], lead),
-                                  (size, r["size"], trail)):
+        symbols.draw(painter, symbols.STATE_SHAPES[state], QRectF(r["state"]).adjusted(0, 4, 0, -4),
+                     opt.palette.color(QPalette.ColorRole.Text))
+        for text, rect, align in ((name, r["name"], lead), (size, r["size"], trail)):
             one = QStyleOptionViewItem(opt)
             one.displayAlignment = align | Qt.AlignmentFlag.AlignVCenter
             self._line(painter, one, text, rect)
@@ -780,14 +800,16 @@ def _quiet(view: QAbstractItemView, lines: int) -> None:
     view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
 
-def package_table(items: PackageItems, name: str) -> PackageTable:
-    """Rows' table: state, package with its source label beside the name, versions
-    in the fixed-pitch font, size. One line per package."""
+def package_table(items: PackageItems, name: str,
+                  state: Callable[[Package], str]) -> PackageTable:
+    """Rows' table: state's symbol, package with its source label beside the name,
+    versions in the fixed-pitch font, size. One line per package."""
     view = PackageTable()
     view.setObjectName("PackageTable")
     view.setAccessibleName(name)
     view.setModel(items)
     _quiet(view, 1)
+    view.setItemDelegateForColumn(0, SymbolDelegate(state, view))
     view.setItemDelegateForColumn(1, SourceDelegate(view))
     view.setItemDelegateForColumn(2, FixedPitchDelegate(view))
     view.setShowGrid(False)

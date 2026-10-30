@@ -95,7 +95,7 @@ class RowsLayout(LayoutHost):
             has_details=win.details.has_details, mark_column=1,
             now=lambda p: pv.downloading_now(win, p))
         self.table = pv.package_table(self.items, QCoreApplication.translate(
-            "layout_rows", "Packages this update changes"))
+            "layout_rows", "Packages this update changes"), model.shown_state)
         self.opens_details(self.table, self.items)
 
         pl = QVBoxLayout(self.page)
@@ -134,6 +134,10 @@ class RowsLayout(LayoutHost):
         fixed = QFontMetrics(pv.fixed_font(self.table.font()))
         self.table.horizontalHeader().resizeSection(
             2, fixed.horizontalAdvance("0" * _VERSION_CHARS) + 16)
+        # The state column holds a symbol, so its heading sets its width.
+        heading = self.items.headerData(0, Qt.Orientation.Horizontal)
+        self.table.horizontalHeader().resizeSection(
+            0, self.table.horizontalHeader().fontMetrics().horizontalAdvance(heading) + 24)
         for btn, (_k, word) in zip(self.filter_buttons, _FILTERS, strict=True):
             shown = btn.text()
             btn.setText(_tab_text(word(), _WIDEST_COUNT))

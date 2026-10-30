@@ -116,6 +116,12 @@ All notable changes to OneUp are documented here. The format follows
   step's label says which half it is in, for example "Downloading ·
   18%".
 
+- **Each package's state is a symbol OneUp draws: a clock, a down arrow, a tick and so on** (ONEUP-0322)
+  Rows and Spotlight show the symbol, as in the sketches. The word is still in its tooltip and read out by a screen reader. OneUp draws these itself because openSUSE's interface font has none of them.
+
+- **Recenter is a small crosshair, and OneUp draws the Settings gear itself** (ONEUP-0320, ONEUP-0327)
+  Recenter takes less room. The gear can no longer show as an empty box on a machine without a font that has one. A screen reader still hears "Recenter", and the tooltip is unchanged.
+
 - **During an update, Stop stands alone where Run and Check were, as in the layout sketches** (ONEUP-0308)
   The space for the buttons keeps one size, so nothing beside it moves
   when an update starts or ends. In Spotlight the buttons sit at the end
@@ -235,6 +241,15 @@ All notable changes to OneUp are documented here. The format follows
 
 - **No blue box round a button's label when it is reached with the Tab key** (ONEUP-0304)
   On desktops where OneUp runs Qt's Fusion style, a button, tab or list focused from the keyboard drew a translucent box round its text. Focus is shown by the control's colour alone, as designed.
+
+- **The words stay on "Installing" once the bar is in its install half** (ONEUP-0322)
+  A late download line made the badge read "Downloading · 75%" on a bar past halfway. It could also bring back the time left.
+
+- **Spotlight's and Rail's step names are shown whole** (ONEUP-0322)
+  A rounding error cut them short by an ellipsis: "Firmwa…" and "Leftove…" at any text size in Spotlight, and "Leftover packages" at Larger in Rail.
+
+- **Spotlight's Packages box counts up when the total is not known** (ONEUP-0322)
+  During zypper's preload it said "not known". It now says "37 so far".
 
 - **Settings, Recenter and About are the same height** (ONEUP-0324)
   Settings stood a little taller than the other two header buttons, because its gear symbol comes from a different font. All three now line up.

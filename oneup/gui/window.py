@@ -85,6 +85,7 @@ from . import (
     run,
     step_progress,
     steps,
+    symbols,
     tray,
 )
 from . import theme as theme_mod
@@ -495,7 +496,8 @@ class Updater(QMainWindow):
         self.theme_note.setWordWrap(True)
         self.theme_note.setVisible(False)
 
-        self.settings_btn = QPushButton(QCoreApplication.translate("window", "⚙ Settings"))
+        self.settings_btn = symbols.SymbolButton(
+            symbols.gear, QCoreApplication.translate("window", "Settings"))
         self.settings_btn.setObjectName("GhostBtn")
         self.settings_btn.setCursor(Qt.PointingHandCursor)
         self.settings_btn.setToolTip(QCoreApplication.translate(
@@ -504,7 +506,8 @@ class Updater(QMainWindow):
             "updates"))
         self.settings_btn.clicked.connect(self.open_settings)
 
-        self.recenter_btn = QPushButton(QCoreApplication.translate("window", "Recenter"))
+        self.recenter_btn = symbols.SymbolButton(symbols.crosshair)
+        self.recenter_btn.setAccessibleName(QCoreApplication.translate("window", "Recenter"))
         self.recenter_btn.setObjectName("GhostBtn")
         self.recenter_btn.setCursor(Qt.PointingHandCursor)
         self.recenter_btn.setToolTip(QCoreApplication.translate(
@@ -1052,8 +1055,8 @@ class Updater(QMainWindow):
 
     def _pin_header_widths(self):
         """Hold each header button at its label's width (ONEUP-0294), and all of
-        them at the tallest one's height (ONEUP-0324): Noto Sans has no gear, so
-        "⚙ Settings" borrows it from a font with a taller line."""
+        them at the tallest one's height (ONEUP-0324): a label's line and a drawn
+        symbol need not come out the same height."""
         height = max(btn.sizeHint().height() for btn in self._header_btns)
         for btn in self._header_btns:
             btn.setMinimumWidth(btn.sizeHint().width())

@@ -165,6 +165,7 @@ from oneup.gui import (  # noqa: E402 — same reason.
     run,
     settings_dialog,
     steps,
+    symbols,
     theme,
     toggle_switch,
     tray,
@@ -4429,9 +4430,8 @@ def main() -> int:
     check(f"ONEUP-0294 a freshly built window clips no header label ({_clipped})",
           not _clipped)
 
-    # ONEUP-0324: the three header buttons are one height. Noto Sans has no gear,
-    # so "⚙ Settings" borrows it from a font with a taller line, and that button
-    # alone stood taller than Recenter and About.
+    # ONEUP-0324: the three header buttons are one height. A borrowed gear once made
+    # Settings stand taller than the other two; a drawn symbol must not do the same.
     def _header_heights(w):
         return {b.text(): b.height() for b in (w.settings_btn, w.recenter_btn, w.about_btn)}
 
@@ -5925,6 +5925,119 @@ for th in theme.THEMES:
         check(f"ONEUP-0239 INV-3 every view shows each package's state as a word "
               f"({_lid}: wrong {wrong})", not wrong)
 
+    # ONEUP-0322 INV-3: six states, six drawn shapes, each leaving ink. Rows and Spotlight
+    # give the state's word to the tooltip and the screen reader, and paint the symbol.
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QIcon, QImage, QPainter
+    def _shape_pixels(shape, side=32):
+        img = QImage(side, side, QImage.Format.Format_ARGB32_Premultiplied)
+        img.fill(0)
+        p = QPainter(img)
+        symbols.draw(p, shape, QRectF(0, 0, side, side), "#000000")
+        p.end()
+        return bytes(img.constBits())
+
+    _shapes = {state: _shape_pixels(symbols.STATE_SHAPES[state]) for state in steps.STATE_WORDS}
+    check(f"ONEUP-0322 INV-3 every state has a shape that leaves ink ({sorted(_shapes)})",
+          all(any(px) for px in _shapes.values()))
+    check("ONEUP-0322 INV-3 no two states share a shape",
+          len(set(_shapes.values())) == len(steps.STATE_WORDS))
+
+    def _symbol_ink(view, rect, ink):
+        """How many pixels of `rect` in the view's viewport carry the text's colour."""
+        img = view.viewport().grab(rect).toImage()
+        want = QColor(ink)
+        return sum(
+            abs(QColor(img.pixel(x, y)).red() - want.red()) < 24
+            and abs(QColor(img.pixel(x, y)).green() - want.green()) < 24
+            and abs(QColor(img.pixel(x, y)).blue() - want.blue()) < 24
+            for x in range(img.width()) for y in range(img.height()))
+
+    for _lid, _view_of, _column in (("rows", lambda h: (h.table, h.items), 0),
+                                    ("spotlight", lambda h: (h.next_list, h.next_items), 0)):
+        wS3 = _at_minimum(_lid)
+        _states = _six_states(wS3)
+        QApplication.processEvents()
+        _v3, _i3 = _view_of(wS3.host)
+        _bad3 = []
+        for _r in range(_i3.rowCount()):
+            _pkg = _i3.packages()[_r]
+            _ix = _i3.index(_r, _column)
+            _word = app.translate("steps", steps.STATE_WORDS[_states[_pkg.name]])
+            for _role in (Qt.ItemDataRole.ToolTipRole, Qt.ItemDataRole.AccessibleTextRole):
+                if _word not in (_i3.data(_ix, _role) or ""):
+                    _bad3.append(f"{_pkg.name} {_role}")
+        check(f"ONEUP-0322 INV-3 the state's word is the tooltip and the accessible text "
+              f"({_lid}: {_bad3})", _i3.rowCount() > 0 and not _bad3)
+        _cell = _v3.visualRect(_i3.index(0, _column))
+        if _lid == "spotlight":
+            _cell = _v3.itemDelegate().line_rects(_v3, _cell)["state"]
+        _ink3 = _symbol_ink(_v3, _cell, _v3.palette().color(QPalette.ColorRole.Text))
+        check(f"ONEUP-0322 INV-3 {_lid} paints the symbol, in the text's colour ({_ink3} px)",
+              _ink3 > 0)
+        wS3.hide()     # never close(): mid-run that opens the quit box
+
+    # ONEUP-0320, ONEUP-0327: Recenter's and Settings' symbols are drawn, in the colour
+    # the label has at rest, on hover and on focus.
+    wSym = _at_minimum("rows")
+    _rc, _set_btn = wSym.recenter_btn, wSym.settings_btn
+    check(f"ONEUP-0320 Recenter has no text and keeps its name and tooltip "
+          f"({_rc.text()!r}, {_rc.accessibleName()!r})",
+          _rc.text() == "" and _rc.accessibleName() == app.translate("window", "Recenter")
+          and bool(_rc.toolTip()))
+    check(f"ONEUP-0327 Settings is the word alone, its gear drawn ({_set_btn.text()!r})",
+          _set_btn.text() == app.translate("window", "Settings") and not _set_btn.icon().isNull())
+    check("ONEUP-0320 Recenter is narrower than About, the button beside it",
+          _rc.width() < wSym.about_btn.width())
+
+    def _icon_ink(btn):
+        img = btn.icon().pixmap(btn.iconSize(), QIcon.Mode.Normal).toImage()
+        return {QColor(img.pixel(x, y)).name() for x in range(img.width())
+                for y in range(img.height()) if QColor.fromRgba(img.pixel(x, y)).alpha() == 255}
+
+    _qsS = _qs
+    _themeS, _hcS = _qsS.value("theme", theme.SYSTEM), _qsS.value("high_contrast", False)
+    _inkbad = []
+    for _th in theme.THEMES:
+        for _hc in (False, True):
+            _qsS.setValue("theme", _th.id)
+            _qsS.setValue("high_contrast", _hc)
+            theme.apply_app_theme(QApplication.instance())
+            QApplication.processEvents()
+            _p = theme.current_palette()
+            _ov = (theme._HC_DARK if _th.dark else theme._HC_LIGHT)
+            _want = ((_ov["text"], _ov["btntext"], _ov["btntext"]) if _hc
+                     else (_p["ghostfg"], _p["ghosthov"], _p["focusink"]))
+            for _b in (_rc, _set_btn):
+                _got = (_b.get_rest_ink().name(), _b.get_hover_ink().name(),
+                        _b.get_focus_ink().name())
+                if _got != tuple(QColor(c).name() for c in _want):
+                    _inkbad.append(f"{_th.id} hc={_hc}: {_got} != {_want}")
+            if _rc.ink().name() not in _icon_ink(_rc):
+                _inkbad.append(f"{_th.id} hc={_hc}: the icon is not drawn in {_rc.ink().name()}")
+    check(f"ONEUP-0320 the symbol takes the label's colours in every theme ({_inkbad[:3]})",
+          not _inkbad)
+    _qsS.setValue("theme", _themeS)
+    _qsS.setValue("high_contrast", _hcS)
+    theme.apply_app_theme(QApplication.instance())
+    QApplication.processEvents()
+    _rc.setFocus()
+    QApplication.processEvents()
+    check(f"ONEUP-0320 focus redraws the symbol in the focus ink ({_icon_ink(_rc)})",
+          not _rc.hasFocus() or _rc.get_focus_ink().name() in _icon_ink(_rc))
+    _rc.clearFocus()
+    # Deep in this suite a real mouse move brings no Enter, so the state is set by hand:
+    # what is under test is the redraw, and the sheet's :hover has its own checks.
+    _rc.setAttribute(Qt.WidgetAttribute.WA_UnderMouse, True)
+    QApplication.sendEvent(_rc, QEvent(QEvent.Type.Enter))
+    check(f"ONEUP-0320 hover redraws the symbol in the hover ink ({_icon_ink(_rc)})",
+          _rc.get_hover_ink().name() in _icon_ink(_rc))
+    _rc.setAttribute(Qt.WidgetAttribute.WA_UnderMouse, False)
+    QApplication.sendEvent(_rc, QEvent(QEvent.Type.Leave))
+    check(f"ONEUP-0320 and leaving puts the rest ink back ({_icon_ink(_rc)})",
+          _rc.get_rest_ink().name() in _icon_ink(_rc))
+    wSym.hide()
+
     # INV-4: no layout writes to the package model.
     for _lid in _ids:
         w4 = window.Updater()
@@ -6140,6 +6253,11 @@ for th in theme.THEMES:
     run.handle_line(w12, "@@PROGRESS@@|system|3|4|download|700|1000")
     check(f"ONEUP-0239 INV-12 a lower figure never lowers the bar ({_bars12(sys12)})",
           _bars12(sys12) == ((750, 1000), (750, 1000)))
+    # ONEUP-0322: the words follow the half the value is in, not the line that arrived.
+    _late12 = (sys12.badge.text(), w12.status.text())
+    check(f"ONEUP-0322 INV-12 a late download line leaves the words on Installing ({_late12})",
+          all(app.translate("run", "Installing") in t
+              and app.translate("run", "Downloading") not in t for t in _late12))
     run.handle_line(w12, "@@STEP_END@@|system|ok")
     check(f"ONEUP-0239 INV-12 STEP_END fills both ({_bars12(sys12)})",
           _bars12(sys12) == ((1000, 1000), (1000, 1000)))
@@ -6243,7 +6361,10 @@ for th in theme.THEMES:
     def _whole_title(lbl):
         if lbl.wordWrap():
             return lbl.heightForWidth(lbl.width()) <= lbl.height()
-        return lbl.width() >= lbl.fontMetrics().horizontalAdvance(lbl.text())
+        # What the paint does, not a sum beside it: a width equal to the rounded advance
+        # still elided "Firmware" to "Firmwa…" in a real window (ONEUP-0322).
+        return lbl.fontMetrics().elidedText(lbl.text(), Qt.TextElideMode.ElideRight,
+                                            lbl.contentsRect().width()) == lbl.text()
 
     _scale0 = _qs.value("text_scale", 1.0, type=float)
     for _label, _mult in theme.TEXT_SCALES:
@@ -7041,6 +7162,29 @@ for th in theme.THEMES:
     run.handle_line(wT, "@@PROGRESS@@|system|3|4|install")
     check(f"ONEUP-0318 the first install figure removes it ({wT.status.text()!r}, "
           f"{_left.text()!r})", "left" not in wT.status.text() and _left.text() == "not known")
+    # ONEUP-0322: a download line once the bar is in its install half brings none of the
+    # download half's words back: no estimate, no byte figure, no sentence, no announcement.
+    run.handle_line(wT, "@@CHECK_ITEM@@|system|pkg-late|1|2|10|repo")
+    run.handle_line(wT, "@@PKG@@|system|downloading|pkg-late|2")
+    _spoken = []
+    wT._announce = _spoken.append
+    _clock[0] += 10
+    run.handle_line(wT, "@@PROGRESS@@|system|4|4|download|950|1000")
+    check(f"ONEUP-0322 INV-15 a late download line brings no time left back "
+          f"({wT.status.text()!r}, {_left.text()!r})",
+          "left" not in wT.status.text() and _left.text() == "not known")
+    check(f"ONEUP-0322 nor a byte figure, nor Downloading on the line ({wT.status.text()!r})",
+          " of 1" not in wT.status.text().replace("4 of 4", "")
+          and "Downloading" not in wT.status.text())
+    check(f"ONEUP-0322 Spotlight's sentence stays on Installing ({wT.host.headline.text()!r})",
+          wT.host.headline.text() == "Installing pkg-late")
+    check(f"ONEUP-0322 and nothing announces Downloading ({_spoken})",
+          not any("Downloading" in said for said in _spoken))
+    del wT._announce
+    run.handle_line(wT, "@@STEP_BEGIN@@|system|1|5")
+    run.handle_line(wT, "@@PROGRESS@@|system|37|0|download")
+    check(f"ONEUP-0322 Spotlight's Packages box shows the running tally with no total "
+          f"({wT.host.figures[0].text()!r})", wT.host.figures[0].text() == "37 so far")
     run.handle_line(wT, "@@STEP_BEGIN@@|system|1|5")
     run.handle_line(wT, "@@PROGRESS@@|system|1|4|download|100|0")
     _clock[0] += 10

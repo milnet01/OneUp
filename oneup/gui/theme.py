@@ -282,6 +282,12 @@ ToggleSwitch {
     qproperty-focusTrackOn: $switchfocuson;
     qproperty-focusTrackOff: $switchfocusoff;
 }
+/* A drawn symbol takes its button's label colour by the same route (ONEUP-0322). */
+SymbolButton {
+    qproperty-restInk: $ghostfg;
+    qproperty-hoverInk: $ghosthov;
+    qproperty-focusInk: $focusink;
+}
 
 #Frame { border-radius: 16px; background: $accent; }
 #Card  { border-radius: 14px; background: $card; }
@@ -601,6 +607,11 @@ QListView#PackageLists:focus, QScrollArea#RepoScroll:focus, QListWidget#Rollback
 # low-vision user performs.
 _HC_QSS = Template(r"""
 ToggleSwitch { qproperty-highContrast: true; }
+SymbolButton {
+    qproperty-restInk: $text;
+    qproperty-hoverInk: $btntext;
+    qproperty-focusInk: $btntext;
+}
 
 QMainWindow, QDialog { background: $win; }
 #Frame { background: $border; }

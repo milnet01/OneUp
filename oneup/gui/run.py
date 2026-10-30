@@ -621,7 +621,7 @@ def _phase_count(win) -> str:
     flatpak = _flatpak_part(win._progress_phase, n, total)
     if flatpak:
         return flatpak
-    downloading = win._progress_phase == "download"
+    downloading = step_progress.shown_phase(win) == "download"
     if total:
         text = (QCoreApplication.translate("run", "Downloading {n} of {total}") if downloading
                 else QCoreApplication.translate("run", "Installing {n} of {total}"))
@@ -664,7 +664,7 @@ def _phase_announcement(phase: str) -> str:
 
 def _byte_figure(win) -> str:
     """How much has come down, of how much — download half only (ONEUP-0239 §4.1.1)."""
-    if win._progress_phase != "download" or not win._dl_got:
+    if step_progress.shown_phase(win) != "download" or not win._dl_got:
         return ""
     got = markers._format_size(win._dl_got)
     if not win._dl_total:
@@ -954,6 +954,9 @@ def handle_marker(win, line: str):
         key, phase = parts[0], parts[3]
         n, total = int(parts[1]), int(parts[2])
         downloading = phase == "download"
+        # What the words say: past the halfway mark a late download line reads as
+        # installing (§4.1.1). `downloading` stays the line's own, for the bar.
+        said = step_progress.half_of(win, key, phase)
         # total 0 = zypper's preload phase, which reports no denominator. Show the
         # honest running tally rather than inventing one. Whole sentences per phase,
         # never a verb dropped into a frame (wording-and-translation.md §6.2).
@@ -962,11 +965,11 @@ def handle_marker(win, line: str):
             detail = flatpak
         elif total:
             detail = (QCoreApplication.translate("run", "Downloading {n} of {total} packages")
-                      if downloading else
+                      if said == "download" else
                       QCoreApplication.translate("run", "Installing {n} of {total} packages"))
         else:
             detail = (QCoreApplication.translate("run", "Downloading packages — {n} so far")
-                      if downloading else
+                      if said == "download" else
                       QCoreApplication.translate("run", "Installing packages — {n} so far"))
         if not flatpak:
             detail = detail.format(n=n, total=total)
@@ -974,7 +977,7 @@ def handle_marker(win, line: str):
         # Spoken once per phase, not per package: a screen reader announcing all
         # 141 packages would bury everything else, but silence through the run's
         # longest stretch is exactly what made it look hung.
-        announce = phase != win._progress_phase
+        announce = said != step_progress.shown_phase(win)
         win._progress_phase = phase
         # Packages moving means the refresh is over: keeping its source and clock drew
         # "Fetching <alias> — 2m 15s" over a whole real download (ONEUP-0284).
@@ -1004,7 +1007,7 @@ def handle_marker(win, line: str):
             step_progress.install(win, key, n, total,
                                   has_bytes=len(parts) > 4 and parts[4].isdecimal())
         if announce:
-            win._announce(_phase_announcement(phase))
+            win._announce(_phase_announcement(said))
     elif tag == "REFRESH":
         # Which source is being fetched, and how far through the list (ONEUP-0048).
         # This phase used to be a blank several minutes: zypper reports it as dots

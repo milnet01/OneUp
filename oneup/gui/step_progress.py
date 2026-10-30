@@ -91,7 +91,21 @@ def _set(win, key: str, value: int | None, phase: str) -> None:
     _show(win, key, phase)
 
 
+def half_of(win, key: str, phase: str) -> str:
+    """The phase the window's words name: a download line once the value has passed
+    the halfway mark still reads as installing, because the bar cannot go back and a
+    word that disagreed with it would read as a fault (§4.1.1)."""
+    value = win.step_progress.get(key)
+    return "install" if phase == "download" and value is not None and value > HALF else phase
+
+
+def shown_phase(win) -> str:
+    """The running step's phase, as `half_of` words it."""
+    return half_of(win, win.current_step, win._progress_phase)
+
+
 def _show(win, key: str, phase: str) -> None:
+    phase = half_of(win, key, phase)
     value = win.step_progress.get(key)
     row = win.rows.get(key)
     if row:
@@ -136,7 +150,7 @@ def time_left(win) -> str:
     byte figure still lacks of `bytes_total`, over `run._tick_activity`'s rate — or ""
     while any of the three is missing, and in the install half, which has no size to
     time against."""
-    if (win.current_step != "system" or win._progress_phase != "download"
+    if (win.current_step != "system" or shown_phase(win) != "download"
             or not win._dl_total or not win._dl_rate):
         return ""
     left = win._dl_total - min(win._dl_got, win._dl_total)

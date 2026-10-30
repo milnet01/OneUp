@@ -140,8 +140,7 @@ class TaskRow(QFrame):
             fm.averageCharWidth() * _BADGE_CHARS + m.left() + m.right()
             if self.form == "full" else 0)
         # A tile's short title is never cut short (INV-17).
-        self.name.setMinimumWidth(self.name.fontMetrics().horizontalAdvance(self.name.text())
-                                  if self.form == "tile" else 0)
+        self.name.setMinimumWidth(self.name.whole_width() if self.form == "tile" else 0)
 
     # --- the row itself is the click target (ONEUP-0064) ---------------------
     # The switch is 56x30 in a row as wide as the window, so the wider the user

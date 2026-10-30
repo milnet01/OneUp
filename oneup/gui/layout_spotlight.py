@@ -112,7 +112,7 @@ class SpotlightLayout(LayoutHost):
             return pv.join_parts(pv.state_word(model, p), pv.name_text(win, p), pv.size_text(p))
 
         def parts(p):
-            return pv.state_word(model, p), pv.name_text(win, p), pv.size_text(p)
+            return model.shown_state(p), pv.name_text(win, p), pv.size_text(p)
 
         self.next_items = pv.PackageItems(model, [line], has_details=win.details.has_details)
         self.done_items = pv.PackageItems(model, [line], has_details=win.details.has_details)
@@ -186,7 +186,15 @@ class SpotlightLayout(LayoutHost):
             "layout_spotlight", "{percent}%").format(percent=round(value * 100 / FULL)))
         unknown = QCoreApplication.translate("layout_spotlight", "not known")
         done, total = win._progress_count
-        self.figures[0].setText(_of(str(done), str(total)) if total else unknown)
+        if total:
+            self.figures[0].setText(_of(str(done), str(total)))
+        elif done:
+            # A total of 0 means not known, and renders as a running tally
+            # (marker-protocol.md §4.3).
+            self.figures[0].setText(QCoreApplication.translate(
+                "layout_spotlight", "{n} so far").format(n=done))
+        else:
+            self.figures[0].setText(unknown)
         self.figures[1].setText(_of(_format_size(win._dl_got), _format_size(win._dl_total))
                                 if win._dl_total else unknown)
         self.figures[2].setText(step_progress.time_left(win) or unknown)
@@ -204,7 +212,7 @@ class SpotlightLayout(LayoutHost):
     def _sentence(self, package) -> str:
         """One whole sentence per phase, or the name alone outside one (§4.3.3)."""
         win = self.win
-        phase = win._progress_phase if package.key == win.current_step else ""
+        phase = step_progress.shown_phase(win) if package.key == win.current_step else ""
         if phase == "download":
             return QCoreApplication.translate("layout_spotlight", "Downloading {name}").format(
                 name=package.name)
