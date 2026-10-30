@@ -183,6 +183,12 @@ These are not feature work and are unaffected:
   `tests/run-tests.sh` failure message. The fixes owe a 1.4.x; the tests add nothing to it.
   Named changes, not a category.
 
+- **The ONEUP-0349 test fix** — the thirteenth exception, granted 2026-10-29 at the user's
+  decision. `tests/gui-smoke.py` hung when the machine's passwordless rule read off, because
+  the real startup probe answered during its passwordless block. The fix stubs that probe
+  there. It changes no shipped code and adds nothing to a 1.4.x. One named change, not a
+  category.
+
 **Why the freeze is stated as a testable question rather than a preference:** the failure
 mode of any freeze is a slow slide back into 1.x work, one "small" fix at a time. *Is it a
 fix, a feature request, or neither?* has an answer; "is this important enough?" does not.
