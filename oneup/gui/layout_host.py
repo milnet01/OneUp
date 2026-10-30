@@ -12,7 +12,7 @@ Nothing here imports the window module (`docs/specs/ONEUP-0034-gui-modules.md`
 """
 from __future__ import annotations
 
-from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QBoxLayout, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from . import details_dialog, package_views, steps
 
@@ -104,20 +104,31 @@ class LayoutHost(QWidget):
         row.addWidget(self.win.action_bar, 0)
         return row
 
-    def footer(self, with_actions: bool = False) -> QHBoxLayout:
+    def footer(self, with_actions: bool = False) -> QBoxLayout:
         """The last run, Undo and the log button — Open log file beside it only while
-        the log is shown — and, where the layout puts it there, the action slot at
-        the trailing end."""
+        the log is shown. Where the layout puts the action slot here, the slot ends a
+        second line with the log buttons, because one line leaves the last run no
+        room (ONEUP-0350)."""
         win = self.win
         row = QHBoxLayout()
         row.setSpacing(10)
         row.addWidget(win.last_run, 1)
         row.addWidget(win.rollback_btn, 0)
-        row.addWidget(win.log_toggle, 0)
-        row.addWidget(win.openlog_btn, 0)
-        if with_actions:
-            row.addWidget(win.action_bar, 0)
-        return row
+        if not with_actions:
+            row.addWidget(win.log_toggle, 0)
+            row.addWidget(win.openlog_btn, 0)
+            return row
+        second = QHBoxLayout()
+        second.setSpacing(10)
+        second.addWidget(win.log_toggle, 0)
+        second.addWidget(win.openlog_btn, 0)
+        second.addStretch(1)
+        second.addWidget(win.action_bar, 0)
+        lines = QVBoxLayout()
+        lines.setSpacing(6)
+        lines.addLayout(row)
+        lines.addLayout(second)
+        return lines
 
     def body(self, content: QWidget) -> package_views.EmptyOr:
         """A view, or the sentence a page shows when it has no packages."""

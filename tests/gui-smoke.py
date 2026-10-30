@@ -5895,6 +5895,14 @@ for th in theme.THEMES:
                     cut.append(f"{lbl.objectName() or type(lbl).__name__} "
                                f"{lbl.height()} < {need}")
             check(f"ONEUP-0239 INV-2 no text is cut off ({_lid}, {_label}: {cut})", not cut)
+            # ONEUP-0350: Spotlight's footer left the line 48 pixels, with the hidden
+            # Roll back's slot empty beside it. The longest line a run can leave.
+            if _lid == "spotlight":
+                wC2.last_run.setText("Last run: 15 Sept 2026, 19:00  ·  45 days ago  —  "
+                                     "errors  ·  ⚠ overdue")
+                check(f"ONEUP-0350 Spotlight shows the whole last-run line ({_label}: "
+                      f"{wC2.last_run.width()} for {wC2.last_run.whole_width()})",
+                      wC2.last_run.width() >= wC2.last_run.whole_width())
     _qs.setValue("text_scale", _scale0)
     theme.apply_app_theme(QApplication.instance())
 

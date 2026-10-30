@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=350 -->
+<!-- ants-roadmap-id-high-water: ONEUP=351 -->
 
 # OneUp Roadmap
 
@@ -6442,7 +6442,7 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: review-code 2026-08-31, lane engine-protocol (spec half of ONEUP-0152).
 
-- 🚧 [ONEUP-0054] **OneUp 2.0 — replace the Bash engine with a Python one, on the `v2` branch.**
+- ✅ [ONEUP-0054] **OneUp 2.0 — replace the Bash engine with a Python one, on the `v2` branch.**
   Decided in ONEUP-0052. Design: docs/specs/ONEUP-0054-python-engine.md
   (draft — must go through /cold-eyes before any code, global rule 14).
 
@@ -6781,6 +6781,13 @@ when complete (that document's §7).
   hold was never adopted. Still owed: Update pressed within two minutes
   of the size result; an adopted run continues in the size check's log
   file. Stays open until then.
+  Shipped 2026-10-30 on v2: the owed run had already happened and was
+  recorded only on ONEUP-0249. Run log 2026-10-16_082648.log (installed
+  RPM from v2 a3c73cd): one engine, one log file, with
+  @@SIZE@@|system|669.8 MiB ahead of the snapshot and all five steps,
+  Update pressed within two minutes. That meets the user's 2026-10-08
+  condition (ONEUP-0238 fixed, a run through the hold). Re-read in the
+  log 2026-10-30.
 
 - ✅ [ONEUP-0057] **Write the OneUp 2.0 documentation set before any 2.0 code is written.**
   Agreed with the user 2026-07-26. Deliverables, in order: nine standards
@@ -10353,7 +10360,7 @@ when complete (that document's §7).
   Kind: test.
   Source: local-ci-hang-2026-10-29.
 
-- 📋 [ONEUP-0350] **Spotlight's footer cuts "Last run" short while space sits empty beside it.**
+- 🚧 [ONEUP-0350] **Spotlight's footer cuts "Last run" short while space sits empty beside it.**
   Seen 2026-10-30 in offscreen renders at Spotlight's minimum size, in the
   standard and high-contrast sheets, on v2 and on the commit before ONEUP-0322:
   the footer's last_run reads "Last ru…" or "Last r…" for "Last run: never",
@@ -10361,9 +10368,32 @@ when complete (that document's §7).
   Cause not looked into; the footer's stretch is the first place to read.
   No check catches it: INV-2 lets an elided label pass when its tooltip holds
   the text.
+  2026-10-30 built. Cause measured offscreen: on one line the buttons,
+  the hidden Roll back's kept slot (137 px) and the action slot left
+  last_run 48 px at Normal; the empty space was Roll back's slot.
+  Spotlight's footer now has two lines: last_run and rollback_btn, then
+  the log buttons and the action slot (LayoutHost.footer). Longest line
+  a run leaves, in px given/needed: Normal 628/348, Large 668/411,
+  Larger 724/506. Spotlight's minimum height at Normal went from 720 to
+  758. Test in tests/gui-smoke.py, red at all three text sizes before
+  the fix. Spec ONEUP-0239 §4.3 Spotlight item 5 amended. Waits on the
+  by-eye VM check.
   **Layman:** In the Spotlight layout the last-run line can read "Last r…" even though there is room for all of it.
   Kind: fix.
   Source: ONEUP-0322-build-2026-10-30.
+  Lanes: gui.
+
+- 📋 [ONEUP-0351] **Rows and Rail cut the real last-run line short at their smallest window size.**
+  Measured offscreen 2026-10-30, window at its minimum, the longest line a run
+  leaves ("Last run: 15 Sept 2026, 19:00 · 45 days ago — errors · ⚠ overdue"),
+  px given/needed. Rows: Normal 191/348, Large 253/411, Larger 342/506.
+  Rail: Normal 319/348, Large 398/411, Larger 513/506 (fits). The hidden Roll
+  back's kept slot (137 px) sits beside it, as it did in Spotlight (ONEUP-0350).
+  The tooltip holds the whole line. Not fixed with 0350: a second footer line
+  makes Rows' minimum height, already the tallest, taller.
+  **Layman:** In the Rows and Rail layouts, at the smallest window size, the last-run line can stop before saying how the run ended.
+  Kind: fix.
+  Source: ONEUP-0350-build-2026-10-30.
   Lanes: gui.
 
 ## 2.1.0 — after 2.0
