@@ -434,7 +434,9 @@ window points away from the text it labels.
 Qt mirrors layouts, not `paintEvent`. The custom-painted *widgets* in a layout that are
 handed are `ToggleSwitch` and `SizeStrip`, Rail's size strip (ONEUP-0239 §4.3.2); they are
 what would mirror wrongly. `SizeStrip` lays its blocks out from the edge the reading
-direction starts at. (The tray icon is painted too, but it is an icon in a system tray, not
+direction starts at. The symbols in `oneup/gui/symbols.py` are drawn too, and none points
+along the reading direction, so none mirrors; the delegate that places one takes its
+rectangle from the direction (ONEUP-0322). (The tray icon is painted too, but it is an icon in a system tray, not
 a widget in a mirrored layout, so it is unaffected.)
 
 **Two places inside `ToggleSwitch` are handed, not one, and they are handed differently.**
