@@ -209,6 +209,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Text size now reaches every button** (ONEUP-0352)
+  Stop, Settings, About, the tabs and the log buttons stayed small at Large and Larger while the labels grew.
+
+- **Spotlight shows the whole last-run line** (ONEUP-0350)
+  It could read "Last r…" with empty space beside it. The line now has a row of its own, with Roll back.
+
 - **Check counts fewer updates than the update then installs.** (ONEUP-0329)
   On a packaged install, Check now asks OneUp's system service to try the update without installing anything, so its count and package list include new and removed packages. One check on 23 October said 524; the update changed 953. Where that cannot run, such as the AppImage, the count says "at least".
 

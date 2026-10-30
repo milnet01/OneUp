@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=351 -->
+<!-- ants-roadmap-id-high-water: ONEUP=353 -->
 
 # OneUp Roadmap
 
@@ -8476,6 +8476,13 @@ when complete (that document's §7).
   initrd) but ProtectHome=yes did not (filed separately). §4.12 item 3
   (Discover mid-commit) not measured: the commit finished before the
   user was asked to open Discover; owed on the next run with a commit.
+  §4.12 item 3 attempt 2026-10-30 in the VM, inconclusive: Discover
+  opened 13:30 during the commit and showed its own box "Update Issue:
+  There was an issue during the update or installation process". The
+  OneUp run kept installing afterwards (356, then 541 of 826), but the
+  VM froze before the run ended and PackageKit's journal was never read,
+  so whether PackageKit waits on zypp's lock is still not measured. See
+  ONEUP-0283's note for the freeze.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
@@ -8815,6 +8822,15 @@ when complete (that document's §7).
   6f7e0bf and installed; systemctl show reports ProtectHome=no. Owed:
   the next real update on the service route shows no read-only error
   from %transfiletriggerin or dconf.
+  Attempt 2026-10-30 in the VM (RPM from 8f01a14): inconclusive. A real
+  update of 826 on the service route reached at least 561 installed,
+  then the VM froze before the post-transaction scripts could be read,
+  and its log died with it. Suspected cause, not measured: the test
+  setup, which grew the Live overlay (held in RAM) to 6 GB of 8 GB with
+  Discover open. Host logs since 6f7e0bf show no read-only error, but no
+  oneup-service journal lines either, so they do not count as the
+  service route. Next attempt: boot the VM with more memory, no overlay
+  growth by hand, and copy the log out over ssh while the run goes.
   **Layman:** OneUp's background helper is fenced off from a few system folders that installing updates needs to write to, so one of systemd's after-install scripts fails.
   Kind: fix.
   Source: user-real-run-2026-10-16.
@@ -9524,6 +9540,21 @@ when complete (that document's §7).
   arrow, down arrow onto a line, tick, cross and dash, in the text's
   ink, in Rows' State cell and Spotlight's lines. All of this item's
   pieces are now built; waits on the by-eye VM check.
+  By-eye pass 2026-10-30, first half only (VM, Fusion style, fed
+  markers, midnight run screens for all three layouts, daylight Rows
+  checked screen, high-contrast Spotlight run screen, Larger Rows run
+  screen; the other captures in /mnt/Games/oneup-vmtest/look/ were not
+  read). Read against docs/design/sketches/. Nothing here is signed off:
+  it must be redone on a rebuilt RPM. Failed: ONEUP-0352, ONEUP-0353.
+  Differences noted and left alone as the spec's own: the three-line
+  message strip's empty band (§4.4), Rail's done/now/to go legend, no
+  Firmware tab, Rows' highlighted row (black on blue, measured 7.97:1).
+  Not judged yet: "Show technical log" sits one hidden slot short of the
+  right edge in Rows and Rail, where the sketch has it flush
+  (openlog_btn's kept slot); Rows' versions are all bold where the
+  sketch dims the old one; Spotlight's headline is smaller than the
+  sketch's; Downloaded and Time left read "not known" with fed markers,
+  so they need a real run's screen.
   **Layman:** The Rows update list gets the sketch's icons, source labels and counted tabs.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
@@ -9925,6 +9956,12 @@ when complete (that document's §7).
   still owed: one check from the window and one from the tray on a
   packaged install, beside a root dry run; the installed service here
   predates check-dry-run, so it needs a v2 RPM first.
+  Hand check 2026-10-30 in the VM (Live ISO, RPM from v2 8f01a14,
+  desktop session, service route): the window's check said 826; `sudo
+  zypper -n dup --dry-run` said 387 to upgrade, 425 new, 14 to remove,
+  also 826. The tray half of the owed check was not run. Also seen, not
+  yet judged: during that run's download the status read "Downloading
+  812 of 812 · 1017.7 MiB of 1017.4 MiB" (ONEUP-0335 (d) territory).
   **Layman:** Check said 524 updates; the real update changed 927 packages.
   Kind: fix.
   Source: real-update-test-2026-10-23.
@@ -10394,6 +10431,34 @@ when complete (that document's §7).
   **Layman:** In the Rows and Rail layouts, at the smallest window size, the last-run line can stop before saying how the run ended.
   Kind: fix.
   Source: ONEUP-0350-build-2026-10-30.
+  Lanes: gui.
+
+- 🚧 [ONEUP-0352] **Buttons do not grow with Text size: Stop, Settings, About, the tabs and the log buttons stay small.**
+  Seen 2026-10-30 in the VM at Larger (look/midnight-big-rows-3run.png in
+  /mnt/Games/oneup-vmtest): Stop, Settings, About, the tabs and Show technical log
+  keep Normal's size. Cause read in oneup/gui/theme.py: #GhostBtn, #StopBtn, #LinkBtn
+  and #RestartBtn set no font-size, so they keep the desktop's; only #RunBtn has one.
+  Built 2026-10-30: `font-size: $fs_list` on the `*` rule at the top of _QSS (fs_list
+  is 1.0 x base x scale, so Normal does not change), which also reaches dialogs. Test:
+  tests/gui-smoke.py, in ONEUP-0323's block, "ONEUP-0352 every button's text grows";
+  red first (every button 9.0 pt at all three sizes), green 1099/0 after. Waits on the
+  by-eye VM check: Larger's window widths and header buttons have not been looked at.
+  **Layman:** Choosing a larger text size enlarges the labels but not the words on most buttons.
+  Kind: accessibility.
+  Source: ONEUP-0239-vm-check-2026-10-30.
+  Lanes: gui.
+
+- 📋 [ONEUP-0353] **English users read "24 update(s)" where the sketches say "24 updates".**
+  Seen 2026-10-30 in the VM: Rail's heading, the status line and the tray wording.
+  Cause: oneup/gui/i18n.py's _Counted strings go through self.tr(..., n), and no
+  English catalogue exists, so the source text shows. wording-and-translation.md §6.3
+  calls "(s)" the English fallback. Planned fix: in i18n.counted, replace "(s)" with
+  "" when n is 1 and "s" otherwise; a translation holds no "(s)", so it is untouched.
+  The tests/gui-smoke.py lines pinning "update(s)" and "package(s)" change with it,
+  and §6.3's sentence. Engine terminal text and the @@CHECK@@ field are not touched.
+  **Layman:** The window writes counts as "24 update(s)" and "3 package(s)" instead of proper English.
+  Kind: ux.
+  Source: ONEUP-0239-vm-check-2026-10-30.
   Lanes: gui.
 
 ## 2.1.0 — after 2.0

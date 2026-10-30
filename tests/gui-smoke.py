@@ -4115,7 +4115,7 @@ def main() -> int:
           len(pts(qss_big)) == len(pts(qss_norm))
           and all(b > n for b, n in zip(pts(qss_big), pts(qss_norm), strict=True)))
     check("font sizes derive from the desktop's own default point size",
-          abs(pts(qss_norm)[0]
+          abs(float(re.search(r"QLabel#Header\s*\{\s*font-size:\s*([\d.]+)pt", qss_norm)[1])
               - QFontInfo(QApplication.instance().font()).pointSizeF() * 1.58) < 0.2)
     check("the badge padding scales with the text too",
           "padding: 3px 13px" in qss_big)
@@ -6428,7 +6428,7 @@ for th in theme.THEMES:
     # ONEUP-0323: each package view's rows grow with the text size (§4.2 item 1). The
     # views once set no font size, so every row kept the app's default at all three.
     _scale0 = _qs.value("text_scale", 1.0, type=float)
-    _rows_at = {}
+    _rows_at, _points_at = {}, {}
     for _label, _mult in theme.TEXT_SCALES:
         _qs.setValue("text_scale", _mult)
         theme.apply_app_theme(QApplication.instance())
@@ -6439,9 +6439,19 @@ for th in theme.THEMES:
             QApplication.processEvents()
             for name, _view, row, _floor, _ceiling in _floors(w23):
                 _rows_at.setdefault((_lid, name), []).append(row)
+            # ONEUP-0352: a button with no size of its own stayed at the desktop's, so
+            # Stop, Settings and the tabs ignored Text size. Hidden ones are polished by hand.
+            for _btn in w23.findChildren(QPushButton):
+                if _btn.text():
+                    _btn.ensurePolished()
+                    _points_at.setdefault((_lid, _btn.text()), []).append(_btn.font().pointSizeF())
     for (_lid, name), rows in _rows_at.items():
         check(f"ONEUP-0323 the {name} view's rows grow with the text size ({_lid}: {rows})",
               all(a < b for a, b in itertools.pairwise(rows)))
+    _flat = {f"{_lid} {name}": pts for (_lid, name), pts in _points_at.items()
+             if len(pts) == len(theme.TEXT_SCALES)
+             and not all(a < b for a, b in itertools.pairwise(pts))}
+    check(f"ONEUP-0352 every button's text grows with the text size ({_flat})", not _flat)
     _qs.setValue("text_scale", _scale0)
     theme.apply_app_theme(QApplication.instance())
 

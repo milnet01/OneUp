@@ -257,7 +257,7 @@ _FONT_SCALE = dict(fs_header=1.58, fs_med=1.05, fs_body=0.90, fs_small=0.83,
                    fs_spot=1.45, fs_figure=1.2, fs_percent=2.3, fs_list=1.0)
 
 _QSS = Template(r"""
-* { font-family: "Inter", "Noto Sans", "Segoe UI", "Cantarell", sans-serif; }
+* { font-family: "Inter", "Noto Sans", "Segoe UI", "Cantarell", sans-serif; font-size: $fs_list; }
 /* QDialog is named alongside QMainWindow because a dialog does NOT inherit a
    background written for another selector: without this rule it paints Qt's own
    platform grey (#efefef) in BOTH themes, measured. That is a defect in its own
