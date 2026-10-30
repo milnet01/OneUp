@@ -10194,88 +10194,103 @@ when complete (that document's §7).
   Kind: doc.
   Source: user-decision-2026-10-23.
 
-- 🚧 [ONEUP-0341] **A stop during the auto-skip retry download reports 'packages updated'.**
+- ✅ [ONEUP-0341] **A stop during the auto-skip retry download reports 'packages updated'.**
   From PR #1 (ea62a72). main: update_system.sh ended the step ok after
   a stop in the --auto-skip-repos retry. v2's engine already guards it
   (steps.py, after the retry). Owes a 1.4.x.
   State 2026-10-29: on main locally (0682409), not pushed, suites not
   run. v2 already fixed. PR #1 to be closed once main is pushed.
+  Shipped 2026-10-30 on main (0682409), pushed; v2 already had it. Owes
+  a 1.4.x. PR #1 closed unmerged, its commits re-landed on main.
   **Layman:** Pressing Stop during a retried download could still claim the system was updated.
   Kind: review-fix.
   Source: pr-1-cloud-review-2026-10-27.
 
-- 🚧 [ONEUP-0342] **A failed leftover-package query reports 'nothing to remove'.**
+- ✅ [ONEUP-0342] **A failed leftover-package query reports 'nothing to remove'.**
   From PR #1 (eb36b14). main: update_system.sh ignored the exit status
   of zypper packages --unneeded. v2's engine already checks it
   (steps.py orphans). Owes a 1.4.x.
   State 2026-10-29: on main locally (7c728c8), not pushed, suites not
   run. v2 already fixed.
+  Shipped 2026-10-30 on main (7c728c8), pushed; v2 already had it. Owes
+  a 1.4.x.
   **Layman:** If OneUp could not list leftover packages, it said there were none.
   Kind: review-fix.
   Source: pr-1-cloud-review-2026-10-27.
 
-- 🚧 [ONEUP-0343] **A multi-byte character split across two reads shows as replacement characters.**
+- ✅ [ONEUP-0343] **A multi-byte character split across two reads shows as replacement characters.**
   From PR #1 (febd859, 7d99185). Each output stream now uses an
   incremental UTF-8 decoder and one shared line splitter. main:
   updater.py; v2: oneup/gui run.py and tray.py still decode per chunk.
   Owes a 1.4.x.
   State 2026-10-29: main 25612b1 + b025175; v2 7f7d55f. Neither pushed;
   window suite and red run not done (machine at load 26).
+  Shipped 2026-10-30: main 25612b1 + b025175, v2 7f7d55f, both pushed.
+  Owes a 1.4.x.
   **Layman:** Dashes and accented letters in OneUp's messages could show up garbled.
   Kind: review-fix.
   Source: pr-1-cloud-review-2026-10-27.
 
-- 🚧 [ONEUP-0344] **Any QProcess error is handled as a failed start, which can kill a running engine.**
+- ✅ [ONEUP-0344] **Any QProcess error is handled as a failed start, which can kill a running engine.**
   From PR #1 (21b3994). on_error deleted the QProcess for ReadError,
   Timedout and Crashed too; deleting a running QProcess kills the
   engine (security.md §6.3). main: updater.py; v2: run.py on_error.
   Owes a 1.4.x.
   State 2026-10-29: main 8220dd9; v2 7f7d55f. Not pushed; suites not
   run.
+  Shipped 2026-10-30: main 8220dd9, v2 7f7d55f, both pushed. Owes a
+  1.4.x.
   **Layman:** A minor read error could make OneUp abandon an update that was still running.
   Kind: review-fix.
   Source: pr-1-cloud-review-2026-10-27.
 
-- 🚧 [ONEUP-0345] **A run or check of only some steps resets the tray to 'up to date'.**
+- ✅ [ONEUP-0345] **A run or check of only some steps resets the tray to 'up to date'.**
   From PR #1 (86433e4). The tray now changes only when system,
   flatpak and firmware were all covered. main: updater.py; v2:
   run.py. Owes a 1.4.x.
   State 2026-10-29: main 0c225dc; v2 7f7d55f. Not pushed; suites not
   run.
+  Shipped 2026-10-30: main 0c225dc, v2 7f7d55f, both pushed. Owes a
+  1.4.x.
   **Layman:** Updating only some things could make the tray icon say everything was up to date.
   Kind: review-fix.
   Source: pr-1-cloud-review-2026-10-27.
 
-- 🚧 [ONEUP-0346] **Following an earlier run's log can parse a half-written marker.**
+- ✅ [ONEUP-0346] **Following an earlier run's log can parse a half-written marker.**
   From PR #1 (8b53db7). While the run is alive, a poll reads only up
   to the last newline. main: updater.py _poll_attached_run; v2:
   window.py. Owes a 1.4.x.
   State 2026-10-29: main f31f2fd; v2 7f7d55f. Not pushed; suites not
   run.
+  Shipped 2026-10-30: main f31f2fd, v2 7f7d55f, both pushed. Owes a
+  1.4.x.
   **Layman:** Reopening OneUp during a running update could misread its progress.
   Kind: review-fix.
   Source: pr-1-cloud-review-2026-10-27.
 
-- 🚧 [ONEUP-0347] **Weighing the package cache stats every file twice on the GUI thread.**
+- ✅ [ONEUP-0347] **Weighing the package cache stats every file twice on the GUI thread.**
   From PR #1 (9b767ab). cache_bytes walks with os.scandir: measured
   25.9 ms to 9.1 ms on 4,800 files. main: updater.py; v2:
   diagnostics.py. Owes a 1.4.x.
   State 2026-10-29: main a7cc911; v2 7f7d55f. Not pushed; suites not
   run.
+  Shipped 2026-10-30: main a7cc911, v2 7f7d55f, both pushed. Owes a
+  1.4.x.
   **Layman:** The download-size check every few seconds did twice the disk work it needed.
   Kind: perf.
   Source: pr-1-cloud-review-2026-10-27.
 
-- 🚧 [ONEUP-0348] **The recovery-host test prints 'HTTP 000000' when the host is unreachable.**
+- ✅ [ONEUP-0348] **The recovery-host test prints 'HTTP 000000' when the host is unreachable.**
   From PR #1 (9ffd174). tests/run-tests.sh T-1 only; reaches main by
   the user's grant of 2026-10-29 (workflow.md §1.2). No 1.4.x owed.
   State 2026-10-29: main d34b430; grant and CHANGELOG lines in main
   28eacd8 (workflow.md §1.2, twelfth exception). Not pushed.
+  Shipped 2026-10-30: main d34b430 and 28eacd8, pushed. No 1.4.x owed.
   **Layman:** A test's failure message showed a doubled error code.
   Kind: fix.
   Source: pr-1-cloud-review-2026-10-27.
 
-- 🚧 [ONEUP-0349] **main's window suite hangs when this machine's passwordless rule reads off.**
+- ✅ [ONEUP-0349] **main's window suite hangs when this machine's passwordless rule reads off.**
   Measured 2026-10-29: main's local-CI hung in tests/gui-smoke.py
   for 53 minutes at 0% CPU. A faulthandler trace put it in
   focus_rect_requests, nested _on_auth_status_finished →
@@ -10302,6 +10317,15 @@ when complete (that document's §7).
   3. Red: the unfixed suite under the faulthandler helper hangs in
      focus_rect_requests (seen twice). Green: it finishes, 0 failed.
   4. main ./local-CI.sh green, then push main.
+  Shipped 2026-10-30: main 7d55b7c, pushed. The hang did NOT reproduce
+  on 2026-10-30 at load 4: the unfixed suite passed, also with gc off
+  and with the probe delayed 8 to 20 s by a PATH shim. Measured instead:
+  a wrapper logging the real QMessageBox.information saw 4 calls from
+  _stand_down_autoupdate on every unfixed run, landing in show_about's
+  modal loop, whose dismiss timer closes them; 0 after the fix. Why the
+  answers landed in focus_rect_requests on 2026-10-29 is unmeasured;
+  load is the suspect. No suite check asserts this, so a regression
+  shows only as a possible hang.
   **Layman:** On main, the window tests froze on a message box nobody could click, because one test listened to this computer's real passwordless setting.
   Kind: test.
   Source: local-ci-hang-2026-10-29.
