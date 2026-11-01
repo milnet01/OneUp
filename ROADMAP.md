@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=358 -->
+<!-- ants-roadmap-id-high-water: ONEUP=359 -->
 
 # OneUp Roadmap
 
@@ -10581,6 +10581,13 @@ when complete (that document's §7).
   Kind: ux.
   Source: ONEUP-0239-vm-check-2026-11-01.
   Lanes: gui.
+
+- 📋 [ONEUP-0359] **Merge main's 1.4.11 into v2, with the Python half of any fix it lacks.**
+  Tried 2026-11-01 and aborted cleanly: `git merge --no-commit main` brings 25 commits and conflicts in CHANGELOG.md, docs/standards/testing.md, ui-and-accessibility.md, tests/gui-smoke.py, update_system.sh and updater.py; tests/run-tests.sh auto-merges with about 200 new lines. Those scenarios may fail against v2's Python engine where a fix (ONEUP-0341 to 0347 and others) has only its main half: fix v2's half then. Keep v2's shim in updater.py, and set oneup/__init__.py APP_VERSION by hand. Until it lands, the user's app-menu OneUp still labels itself 1.4.10.
+  **Layman:** Bring the fixes just released in 1.4.11 across to the 2.0 code.
+  Kind: chore.
+  Source: release-1.4.11-2026-11-01.
+  Lanes: engine, gui.
 
 ## 2.1.0 — after 2.0
 
