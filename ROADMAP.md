@@ -10013,6 +10013,10 @@ when complete (that document's §7).
   also 826. The tray half of the owed check was not run. Also seen, not
   yet judged: during that run's download the status read "Downloading
   812 of 812 · 1017.7 MiB of 1017.4 MiB" (ONEUP-0335 (d) territory).
+  Tray half checked 2026-11-01 in the VM, RPM from v2's tip, desktop
+  session: tray._tray_check's total said 881; a root `zypper -n dup
+  --dry-run` said 439 to upgrade, 428 new, 14 to remove, also 881. The
+  hand check is complete.
   **Layman:** Check said 524 updates; the real update changed 927 packages.
   Kind: fix.
   Source: real-update-test-2026-10-23.
@@ -10120,7 +10124,7 @@ when complete (that document's §7).
   Kind: fix.
   Source: real-update-test-2026-10-23.
 
-- 📋 [ONEUP-0335] **The window's package counts and sizes disagree with zypper during a parallel download.**
+- ✅ [ONEUP-0335] **The window's package counts and sizes disagree with zypper during a parallel download.**
   Same run. (a) zypper's parallel preload prints 'Preloading: X [done]'
   then 'Retrieving: X (n/927)' for the same package with no [done], so
   the engine emits PKG downloading after downloaded. (b) parsers.to_bytes
@@ -10202,6 +10206,9 @@ when complete (that document's §7).
   prints that line without the parallel preload; the fix holds either
   way. Still owed by hand: one run on a packaged install whose header
   starts at the dry run's count.
+  Owed run done 2026-11-01 on a packaged install in the VM: the check
+  said 881, the run's list opened at 881 from plan-dry-run, and the
+  download read "867 of 867 · 1.0 GiB of 1.0 GiB" with no overshoot.
   **Layman:** The window showed 642, then 927, then 931 updates, '1.8 GiB of 1.7 GiB', and '0 done · 927 now' after everything had downloaded.
   Kind: fix.
   Source: real-update-test-2026-10-23.
@@ -10528,22 +10535,33 @@ when complete (that document's §7).
   Source: ONEUP-0239-vm-check-2026-10-30.
   Lanes: gui.
 
-- 🚧 [ONEUP-0354] **At Larger, Rail cuts off "downloading" on a card and the counts sentence ("3 done · 1 now · …").**
+- ✅ [ONEUP-0354] **At Larger, Rail cuts off "downloading" on a card and the counts sentence ("3 done · 1 now · …").**
   Seen 2026-11-01 in the VM at Rail's minimum size on a 1080p screen. Cause of the word: card_rects sizes the state slot with horizontalAdvance, a rounded width, and elidedText measures unrounded. Cause of the counts: the summary line's kept size-link slot leaves its third of the line too narrow.
+  Passed by eye 2026-11-01 in the VM at Larger on 1080p: "downloading"
+  whole. Tests red, then green. The summary and counts both keep room
+  for three-figure totals; only "some sizes not known" may elide.
   **Layman:** At the largest text size the Rail layout cuts off a word on the downloading card and the done/now/to go counts.
   Kind: ux.
   Source: ONEUP-0239-vm-check-2026-11-01.
   Lanes: gui.
 
-- 🚧 [ONEUP-0355] **Show technical log sits flush at the right as in the sketches, and Spotlight's headline is as large as the sketch's.**
+- ✅ [ONEUP-0355] **Show technical log sits flush at the right as in the sketches, and Spotlight's headline is as large as the sketch's.**
   Judged 2026-11-01 from ONEUP-0313's list, my call as the sketches are the target (ONEUP-0306). The hidden Open log file slot moves to the toggle's leading side in Rows and Rail. Spotlight's headline measured less than half the sketch's width at the same window width, so it takes fs_percent's size.
+  Passed by eye 2026-11-01 in the VM at Larger. Spotlight's minimum
+  height there went from 904 to 925 px.
   **Layman:** Two small differences from the approved pictures: a button sits slightly off the edge, and Spotlight's main line is too small.
   Kind: ux.
   Source: ONEUP-0239-vm-check-2026-11-01.
   Lanes: gui.
 
-- 🚧 [ONEUP-0356] **Spotlight's list cut sizes on a real run: "196.7 K…".**
+- ✅ [ONEUP-0356] **Spotlight's list cut sizes on a real run: "196.7 K…".**
   Seen 2026-11-01 in the VM, real run, Normal: every three-digit KiB size in Up next. Not reproduced offscreen on this host, with Fusion and Noto Sans 10, nor by fed markers in the VM. The slot is set by view.fontMetrics() while the text is drawn in the item's own font, so the two can differ; that is the suspected cause, not measured.
+  Passed 2026-11-01 on a real run in the VM: "196.7 KiB" whole, now
+  drawn with no eliding. The view-font guess was wrong: the first fix
+  did not cure it, and a measurement in the VM showed view and item
+  fonts equal and a slot of 66 px for 56 px of text. Why the style still
+  elided there is not known. A wide size may overhang the column by a
+  pixel or two.
   **Layman:** In the Spotlight layout some package sizes are cut short during a real update.
   Kind: ux.
   Source: ONEUP-0239-vm-check-2026-11-01.
