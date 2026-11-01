@@ -10586,8 +10586,20 @@ when complete (that document's §7).
   Source: ONEUP-0239-vm-check-2026-11-01.
   Lanes: gui.
 
-- 📋 [ONEUP-0358] **At Larger on a screen under about 1000 px tall, Rows and Spotlight squash below their minimum.**
+- 🚧 [ONEUP-0358] **At Larger on a screen under about 1000 px tall, Rows and Spotlight squash below their minimum.**
   Seen 2026-11-01 in the VM at 1280x960, Larger: Rows' minimum is 974 and Spotlight's 904, the desktop offers about 886. The table showed no rows and Spotlight's figures were clipped. At 1080p both fit. ONEUP-0239 §4.2 promises no window too small for its layout at its text size; it says nothing of a screen too small for the window.
+  Decided 2026-11-01: fix. Measured wider than the headline: offscreen
+  minimum heights at Normal are Rows 828, Rail 748, Spotlight 773, so a
+  1366x768 laptop squashes every layout at every text size. Built:
+  placement.ScreenFit holds the whole window and scrolls it only where
+  the screen cannot show it; the content keeps its full size and Tab
+  scrolls to what it reaches. With room, minimums are unchanged at all
+  three text sizes and no pixel changes (old and new compared in two
+  themes at Normal and Larger, /mnt/Games/oneup-vmtest/cmp/0358/). Red
+  on the old code: at a fake 600 px screen the window stays 828. Spec
+  ONEUP-0239 §4.2 item 6. Stays in progress for a look on a real short
+  screen in the VM, whose title bar the code estimates until it can read
+  it.
   **Layman:** With the largest text on a small screen, the window cannot fit and parts of it get squeezed.
   Kind: ux.
   Source: ONEUP-0239-vm-check-2026-11-01.

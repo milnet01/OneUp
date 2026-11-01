@@ -14,8 +14,58 @@ import tempfile
 import time
 import uuid
 
-from PySide6.QtCore import QEvent, QObject, QTimer
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer
+from PySide6.QtWidgets import QApplication, QFrame, QMessageBox, QScrollArea, QStyle
+
+
+def screen_room(widget) -> QSize:
+    """What `widget`'s window may take up of its screen, leaving room for its frame.
+    Before the window is on screen its frame is not known, and on Wayland it may never
+    be, so the title bar is estimated from the text size."""
+    win = widget.window()
+    screen = win.screen() or QApplication.primaryScreen()
+    frame = win.frameGeometry().size() - win.size()
+    if frame.height() <= 0:
+        frame.setHeight(2 * win.fontMetrics().height())
+    return screen.availableGeometry().size() - frame
+
+
+class ScreenFit(QScrollArea):
+    """Holds all of a window, and scrolls it only where its screen cannot show it
+    (ONEUP-0358). On a screen with room, the window's minimum is its content's and this
+    draws nothing of its own. A window's height is never squeezed out of its package
+    list: the content keeps its full size and the window scrolls over it."""
+
+    def __init__(self, content) -> None:
+        super().__init__()
+        self.setObjectName("ScreenFit")
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        # Not a stop on the Tab order, nor anything a screen reader need name. The
+        # controls inside it stay reachable: Qt scrolls to whichever takes focus.
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setWidgetResizable(True)
+        self.setWidget(content)
+        # setWidget turns the fill on, which paints the corners a rounded frame leaves.
+        content.setAutoFillBackground(False)
+        self.viewport().setAutoFillBackground(False)
+
+    def _fit(self, want: QSize) -> QSize:
+        room = screen_room(self)
+        fit = want.boundedTo(room)
+        # The bar one direction needs takes room from the other, which must not then
+        # need a bar of its own.
+        bar = self.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent)
+        if want.height() > fit.height():
+            fit.setWidth(min(want.width() + bar, room.width()))
+        if want.width() > fit.width():
+            fit.setHeight(min(want.height() + bar, room.height()))
+        return fit
+
+    def minimumSizeHint(self) -> QSize:
+        return self._fit(self.widget().minimumSizeHint())
+
+    def sizeHint(self) -> QSize:
+        return self._fit(self.widget().sizeHint())
 
 
 def _platform_name() -> str:

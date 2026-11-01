@@ -285,11 +285,12 @@ class Updater(QMainWindow):
         # Set here, not after construction: eventFilter reads it, and the controls it
         # filters receive events while the layout is being built.
         self._placement_pending = False
+        self._follows_screen = False
 
         # Gradient ring: a 2px accent border (outer #Frame) around the card.
         outer_frame = QFrame()
         outer_frame.setObjectName("Frame")
-        self.setCentralWidget(outer_frame)
+        self.setCentralWidget(placement.ScreenFit(outer_frame))
         frame_lay = QVBoxLayout(outer_frame)
         frame_lay.setContentsMargins(2, 2, 2, 2)
         card = QFrame()
@@ -1003,6 +1004,11 @@ class Updater(QMainWindow):
 
     def showEvent(self, event):
         super().showEvent(event)
+        handle = self.windowHandle()
+        if handle is not None and not self._follows_screen:
+            # Dragged to a smaller or larger screen, the minimum fits that one.
+            self._follows_screen = True
+            handle.screenChanged.connect(lambda _screen: self._fit_minimum())
         if placement._on_wayland() and self._saved_frame_pos() is not None:
             self._placement_pending = True
             handle = self.windowHandle()
@@ -1075,7 +1081,13 @@ class Updater(QMainWindow):
         """The window's minimum is the layout's at the current text size, never
         below MIN_WIDTH (ONEUP-0239 §4.2 item 5). An explicit minimum stops Qt
         taking the layout's for itself, so it is set here; a window smaller than
-        the new minimum is grown by Qt."""
+        the new minimum is grown by Qt. A screen too small for that takes all it can,
+        and the window scrolls (ONEUP-0358). The scroll area ends the chain that would
+        tell the window its content's minimum changed, so that is said here, once the
+        layouts waiting on the event queue have settled what it is."""
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
+        self.centralWidget().updateGeometry()
+        self.layout().invalidate()
         self.setMinimumSize(self.minimumSizeHint().expandedTo(QSize(MIN_WIDTH, 0)))
 
     def _restore_position(self):

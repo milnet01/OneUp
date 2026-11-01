@@ -395,6 +395,10 @@ The rule every layout follows, and the one §5 tests:
    tooltip.
 5. **The window's minimum size is the layout's**, computed from the same metrics, so no
    window can be made too small to hold a layout at its current text size.
+6. *(ONEUP-0358)* **A screen too small for that minimum makes the window scroll.** The
+   window takes the room the screen has and `placement.ScreenFit` scrolls its whole
+   content, which keeps its full size, so nothing is squeezed. Tab scrolls to the control
+   it reaches. With room, the scroll area draws nothing and changes no pixel.
 
 **Nothing below names a pixel figure for any of this**, because every one is a product of
 the font (`docs/standards/ui-and-accessibility.md` §4).
@@ -633,7 +637,7 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
 
 - **INV-2** No text outside a scroll area is cut off, at every text size.
   *Test:* `tests/gui-smoke.py` — for each layout and each `TEXT_SCALES` entry, at the
-  layout's minimum size, every visible `QLabel` with no scroll area among its ancestors is
+  layout's minimum size, every visible `QLabel` with no scroll area but `ScreenFit` among its ancestors is
   at least as tall as `heightForWidth(width())` for a wrapping label, or `sizeHint()` for
   one that does not wrap, unless it is elided with its full text in its tooltip.
   *Breaks when:* an area's height is a constant, or is measured once at one text size.

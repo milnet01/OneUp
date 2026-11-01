@@ -30,6 +30,9 @@ All notable changes to OneUp are documented here. The format follows
   layout; clicking it, or pressing Enter on it, opens the details. The
   package the keyboard is on is now highlighted while the list has focus.
 
+- **On a screen too small for the window, OneUp scrolls instead of squeezing** (ONEUP-0358)
+  The package list used to be squeezed away on a small laptop screen or at the largest text. Now every part of the window keeps its size, and the window scrolls.
+
 - **Three window layouts — Rows, Rail and Spotlight — to choose from in Settings, none of which moves or resizes while an update runs** (ONEUP-0239)
 
 - **Each package in the list shows its download size, its source and, during an update, its progress** (ONEUP-0259)

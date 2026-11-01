@@ -91,7 +91,7 @@ os.environ["ONEUP_BACKEND"] = "sudo"
 
 try:
     import shiboken6
-    from PySide6.QtCore import QEvent, QObject, QPoint, QProcess, Qt, QTimer
+    from PySide6.QtCore import QEvent, QObject, QPoint, QProcess, QSize, Qt, QTimer
     from PySide6.QtGui import QAccessible, QCloseEvent, QColor, QFont, QFontInfo, QPalette
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import (
@@ -171,6 +171,11 @@ from oneup.gui import (  # noqa: E402 — same reason.
     tray,
     window,
 )
+
+# This platform's one screen is smaller than most windows here, and every scenario but
+# ONEUP-0358's is about a window whose screen has room for it.
+_real_screen_room = getattr(placement, "screen_room", None)
+placement.screen_room = lambda _widget: QSize(100000, 100000)
 
 # The old Passwordless guard's two paths, in the sandbox: the window's offer to remove
 # one (ONEUP-0249 §4.10) must never read this machine's real guard.
@@ -5897,7 +5902,8 @@ for th in theme.THEMES:
                     continue
                 node, scrolled = lbl.parentWidget(), False
                 while node is not None:
-                    if isinstance(node, QAbstractScrollArea):
+                    if (isinstance(node, QAbstractScrollArea)
+                            and node.objectName() != "ScreenFit"):
                         scrolled = True
                         break
                     node = node.parentWidget()
@@ -6347,7 +6353,8 @@ for th in theme.THEMES:
                 continue
             node, scrolled = wd.parentWidget(), False
             while node is not None and node is not wL:
-                if isinstance(node, QAbstractScrollArea):
+                if (isinstance(node, QAbstractScrollArea)
+                        and node.objectName() != "ScreenFit"):
                     scrolled = True
                     break
                 node = node.parentWidget()
@@ -7439,7 +7446,7 @@ for th in theme.THEMES:
 
     # ONEUP-0357: the mark is drawn, never asked of a font. Noto Sans's U+2139 reads as a
     # plain letter, "7zip i"; U+24D8 was an empty box (ONEUP-0297). Each cell is painted
-    # on its own, so this needs no window on screen, in both reading directions and with
+    # on its own, so this needs no window on screen, and with
     # a name too long for its cell, which must not cost the package its mark.
     from PySide6.QtCore import QRect
     from PySide6.QtWidgets import QAbstractItemView, QStyleOptionViewItem
@@ -7501,15 +7508,10 @@ for th in theme.THEMES:
               not any(m for p, m, _t in _cells if not _alpha(p)))
         check(f"ONEUP-0357 the character is never drawn as text ({_lid})",
               not any(package_views.MARK in t for _p, _m, ts in _cells for t in ts))
+        # The gate runs this whole suite right to left too, where the mark mirrors.
         check(f"ONEUP-0357 the mark follows the name, in the cell ({_lid})",
-              _on and all(0 <= m[0].left() < 250 for m in _on))
-        QApplication.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-        try:
-            _on = [m for p, m, _t in _painted_marks(wD, 500) if _alpha(p) and m]
-            check(f"ONEUP-0357 right to left the mark mirrors, still in the cell ({_lid})",
-                  _on and all(250 < m[0].right() <= 500 for m in _on))
-        finally:
-            QApplication.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+              _on and all(250 < m[0].right() <= 500 if QApplication.isRightToLeft()
+                          else 0 <= m[0].left() < 250 for m in _on))
         _real_name_text = package_views.name_text
         package_views.name_text = (
             lambda win, p: "a-very-long-package-name-" * 12 + " " + package_views.MARK)
@@ -7523,6 +7525,74 @@ for th in theme.THEMES:
                   for it in vars(wD.host).values()
                   if isinstance(it, package_views.PackageItems)
                   for r in range(it.rowCount()) for c in range(it.columnCount())))
+
+    # ONEUP-0358: a screen too small for the window. The window takes what the screen
+    # has and scrolls; the content keeps its full size, so the package list is never
+    # squeezed away, and Tab still reaches what starts below the fold. With room, it is
+    # as if none of this were there. The room is faked because this suite's platform
+    # has one small screen, which the suite-wide stub at the top of this file hides.
+    def _bars(win):
+        c = win.centralWidget()
+        return (c.verticalScrollBar(), c.horizontalScrollBar()) if hasattr(c, "widget") else None
+
+    def _settle(n=6):
+        for _ in range(n):
+            QApplication.processEvents()
+
+    _room_stub = placement.screen_room
+    for _lid in ("rows", "rail", "spotlight"):
+        wS = window.Updater()
+        wS.apply_layout(_lid)
+        wS.show()
+        wS.resize(wS.minimumSize())
+        _settle()
+        _b = _bars(wS)
+        check(f"ONEUP-0358 with room there is no scroll bar ({_lid})",
+              _b is not None and not _b[0].isVisible() and not _b[1].isVisible())
+        # A run brings Stop and the status; the strip's room is kept, so no bar comes.
+        run.handle_line(wS, "@@STEP_BEGIN@@|system|1|5")
+        _settle()
+        check(f"ONEUP-0358 a run brings no scroll bar ({_lid})",
+              _b is not None and not _b[0].isVisible() and not _b[1].isVisible())
+        placement.screen_room = lambda _w: QSize(4000, 600)
+        try:
+            wS._fit_minimum()
+            wS.resize(wS.minimumSize())
+            _settle()
+            _b = _bars(wS)
+            _body = wS.findChild(QFrame, "Frame")
+            check(f"ONEUP-0358 on a short screen the window fits it ({_lid}: {wS.height()})",
+                  wS.minimumHeight() <= 600 and wS.height() <= 600)
+            check(f"ONEUP-0358 the content keeps its full height ({_lid})",
+                  _body.height() >= _body.minimumSizeHint().height() > 600)
+            check(f"ONEUP-0358 the window scrolls up and down only ({_lid})",
+                  _b is not None and _b[0].isVisible() and not _b[1].isVisible()
+                  and _b[0].maximum() > 0)
+            wS.activateWindow()
+            wS.check_btn.setFocus(Qt.FocusReason.TabFocusReason)
+            _b[0].setValue(0)
+            for _ in range(80):
+                # A real key: asking the window to move focus would skip the scroll area.
+                QTest.keyClick(wS.focusWidget(), Qt.Key.Key_Tab)
+                _settle(1)
+                if wS.focusWidget() is wS.run_btn:
+                    break
+            _top = wS.run_btn.mapTo(wS, QPoint(0, 0)).y()
+            check(f"ONEUP-0358 Tab scrolls to the control it reaches ({_lid}: {_top})",
+                  wS.focusWidget() is wS.run_btn
+                  and 0 <= _top and _top + wS.run_btn.height() <= wS.height())
+        finally:
+            placement.screen_room = _room_stub
+        wS._run_active = False
+        wS.close()
+    # The real answer leaves room for the title bar, on the screen the window is on.
+    wS = window.Updater()
+    _screen = wS.screen().availableGeometry().size()
+    _real_room = _real_screen_room(wS) if _real_screen_room else None
+    check(f"ONEUP-0358 the room left is the screen's, less a frame ({_real_room}, {_screen})",
+          _real_room is not None and _real_room.width() == _screen.width()
+          and 0 < _real_room.height() < _screen.height())
+    wS.close()
 
     # INV-5: activating a package with details opens one dialog for it; one without
     # opens none. Closed by the scheduled-dismiss idiom of ui-and-accessibility §6.4.
