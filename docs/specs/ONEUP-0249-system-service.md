@@ -521,8 +521,10 @@ result that contradicts the design is a fold-back to this spec, not a workaround
    service's own call from an SSH session.
 2. **A real Tumbleweed `dup` with a kernel update succeeds under the §4.8 unit.** Measure
    with each directive in, and drop any that fails.
-3. **PackageKit started by Discover mid-run waits on zypp's lock.** Measure by opening
-   Discover during a real run's commit.
+3. **PackageKit started by Discover mid-run does not disturb the commit.** Measured
+   2026-11-01 in the test VM by opening Discover during a real commit: it does not wait on
+   zypp's lock. Its transactions failed within 4 ms each and it quit, while the run
+   finished clean. Discover shows its own *Update Issue* box.
 4. **`Run` and `Read` work on the real system bus with SELinux enforcing.** No test
    reaches it: `tests/service-test.py` runs a private bus with no SELinux, which is how
    the descriptor design passed its tests and failed its first real run (§9). Measure
@@ -695,7 +697,7 @@ result that contradicts the design is a fold-back to this spec, not a workaround
 | The service dies mid-job | `KillMode=process` and the job file (§4.3) leave zypper running. The engine's next `Read` fails, with no reply or with `NoSession` from a restarted service; the engine treats that as failure, and the step fails. The journal has the job-start line and no end line |
 | The window quits mid-run | unchanged: the engine survives it. If the engine also dies, the service finishes the job and re-enables the session's repositories |
 | Another program holds the zypp lock | unchanged: `release-lock`, then the engine's existing `repos.lock_holder` check |
-| Discover starts PackageKit mid-run | PackageKit waits on zypp's lock, which zypper holds for the transaction. Measured as §4.12 item 3 |
+| Discover starts PackageKit mid-run | PackageKit's transactions fail at once on zypp's lock, which zypper holds for the transaction, and the run goes on. Measured as §4.12 item 3 |
 | OneUp upgrades itself mid-run | the running service and engine keep the code they loaded. The RPM does not restart the service (§4.8) |
 
 ## 7. Tests

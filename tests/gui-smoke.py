@@ -7148,6 +7148,51 @@ for th in theme.THEMES:
     check("ONEUP-0299 the sheet has a rule for the small ghost button",
           'QPushButton#GhostBtn[small="true"]' in theme.build_theme(True))
 
+    # ONEUP-0355: Show technical log ends the line flush with the action slot in Rows and
+    # Rail, as the sketches have it; Spotlight's headline is as large as the sketch's.
+    _flush_bad = []
+    for _lid in ("rows", "rail"):
+        wF = _at_minimum(_lid)
+        _tog, _bar = _geometry(wF, wF.log_toggle), _geometry(wF, wF.action_bar)
+        if (_tog.left() != _bar.left() if QApplication.isRightToLeft()
+                else _tog.right() != _bar.right()):
+            _flush_bad.append(f"{_lid}: {_tog} against {_bar}")
+    check(f"ONEUP-0355 Show technical log sits flush with the action slot ({_flush_bad})",
+          not _flush_bad)
+    wF = _at_minimum("spotlight")
+    check("ONEUP-0355 Spotlight's headline is over twice the size of the line under it",
+          wF.host.headline.font().pointSizeF() > 2 * wF.host.about.font().pointSizeF())
+
+    # ONEUP-0354: at every text size, at Rail's minimum, nothing cuts a card's state word
+    # or the counts sentence. horizontalAdvance rounds and elidedText does not, so the
+    # state slot once came out a fraction too narrow at Larger.
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtGui import QFontMetrics
+    _cut_0354 = []
+    _scale0354 = _qs.value("text_scale", 1.0, type=float)
+    for _label, _mult in theme.TEXT_SCALES:
+        _qs.setValue("text_scale", _mult)
+        theme.apply_app_theme(QApplication.instance())
+        wF = _at_minimum("rail")
+        _h = wF.host
+        _sentence = package_views.counts_sentence({"done": 120, "now": 1, "togo": 760})
+        _h.counts.setText(_sentence)
+        QApplication.processEvents()
+        if _h.counts.fontMetrics().elidedText(_sentence, Qt.TextElideMode.ElideRight,
+                                              _h.counts.width()) != _sentence:
+            _cut_0354.append(f"{_label}: counts in {_h.counts.width()} px")
+        _d = _h.board.itemDelegate()
+        _state = _d.card_rects(_h.board, QRect(0, 0, _h.board.gridSize().width(),
+                                               _h.board.gridSize().height()))["state"]
+        _fm = QFontMetrics(_d.fonts(_h.board)["body"])
+        for _word in steps.STATE_WORDS.values():
+            _shown = QCoreApplication.translate("steps", _word)
+            if _fm.elidedText(_shown, Qt.TextElideMode.ElideRight, _state.width()) != _shown:
+                _cut_0354.append(f"{_label}: {_shown!r} in {_state.width()} px")
+    _qs.setValue("text_scale", _scale0354)
+    theme.apply_app_theme(QApplication.instance())
+    check(f"ONEUP-0354 Rail cuts no state word or counts sentence ({_cut_0354})", not _cut_0354)
+
     # ONEUP-0318, INV-15: the time left, only in the system step's download half, with a
     # known total and rate, worded as an estimate — on the status line and in Spotlight's
     # Time left box. The clock is run.py's alone, and the cache weighs nothing.

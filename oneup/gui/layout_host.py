@@ -106,17 +106,18 @@ class LayoutHost(QWidget):
 
     def footer(self, with_actions: bool = False) -> QBoxLayout:
         """The last run, Undo and the log button — Open log file beside it only while
-        the log is shown. Where the layout puts the action slot here, the slot ends a
-        second line with the log buttons, because one line leaves the last run no
-        room (ONEUP-0350)."""
+        the log is shown, on its leading side, so its kept slot leaves the log button
+        flush with the slot above (ONEUP-0355). Where the layout puts the action slot
+        here, the slot ends a second line with the log buttons, because one line leaves
+        the last run no room (ONEUP-0350)."""
         win = self.win
         row = QHBoxLayout()
         row.setSpacing(10)
         row.addWidget(win.last_run, 1)
         row.addWidget(win.rollback_btn, 0)
         if not with_actions:
-            row.addWidget(win.log_toggle, 0)
             row.addWidget(win.openlog_btn, 0)
+            row.addWidget(win.log_toggle, 0)
             return row
         second = QHBoxLayout()
         second.setSpacing(10)
@@ -142,7 +143,8 @@ class LayoutHost(QWidget):
         footer before the action bar, where the bar ends the footer's line."""
         win = self.win
         actions = [win.run_btn, win.check_btn, win.stop_btn]
-        footer = [win.rollback_btn, win.log_toggle, win.openlog_btn]
+        logs = [win.log_toggle, win.openlog_btn]
+        footer = [win.rollback_btn, *(logs if actions_last else reversed(logs))]
         return [*(getattr(win, n) for n in BANNER_BUTTONS),
                 *(footer + actions if actions_last else actions + footer)]
 

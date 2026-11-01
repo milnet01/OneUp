@@ -249,12 +249,13 @@ TEXT_SCALES = [("Normal", 1.0), ("Large", 1.2), ("Larger", 1.45)]
 # Font sizes as multiples of the desktop's default point size. The ratios are the
 # app's original pixel sizes over a 10 pt (~13.3 px at 96 dpi) default, so
 # "Normal" reproduces the pre-ONEUP-0028 look to within a fraction of a point.
-# Large type (ONEUP-0239): fs_spot for Spotlight's package line and Rail's heading,
-# fs_figure for Spotlight's figures, fs_percent for its step percentage. fs_list is
+# Large type (ONEUP-0239): fs_spot for Rail's heading, fs_headline for Spotlight's package
+# line (ONEUP-0355), fs_figure for its figures, fs_percent for its step percentage. fs_list is
 # the package views' size: the desktop's own at Normal, which they had before they
 # followed the text size at all (ONEUP-0323).
 _FONT_SCALE = dict(fs_header=1.58, fs_med=1.05, fs_body=0.90, fs_small=0.83,
-                   fs_spot=1.45, fs_figure=1.2, fs_percent=2.3, fs_list=1.0)
+                   fs_spot=1.45, fs_headline=2.3, fs_figure=1.2, fs_percent=3.0,
+                   fs_list=1.0)
 
 _QSS = Template(r"""
 * { font-family: "Inter", "Noto Sans", "Segoe UI", "Cantarell", sans-serif; font-size: $fs_list; }
@@ -444,7 +445,7 @@ QTableView#PackageTable QHeaderView::section {
 #SpotlightPanel { background: $rowcard; border: 1px solid $logbd; border-radius: 14px; }
 #FigureBox { background: $logbg; border-radius: 10px; }
 QLabel#SpotlightNow { font-size: $fs_small; font-weight: 700; color: $ghosthov; }
-QLabel#SpotlightHeadline { font-size: $fs_spot; font-weight: 700; color: $header; }
+QLabel#SpotlightHeadline { font-size: $fs_headline; font-weight: 700; color: $header; }
 QLabel#SpotlightAbout { font-size: $fs_body; color: $tdesc; }
 QLabel#SpotlightPercent { font-size: $fs_percent; font-weight: 700; color: $ghosthov; }
 QLabel#FigureLabel { font-size: $fs_small; color: $tag; }

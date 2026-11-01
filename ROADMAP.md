@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=353 -->
+<!-- ants-roadmap-id-high-water: ONEUP=358 -->
 
 # OneUp Roadmap
 
@@ -8483,6 +8483,12 @@ when complete (that document's §7).
   VM froze before the run ended and PackageKit's journal was never read,
   so whether PackageKit waits on zypp's lock is still not measured. See
   ONEUP-0283's note for the freeze.
+  §4.12 item 3 measured 2026-11-01 in the VM: Discover opened at
+  10:50:13 during a real commit (669 of 881). packagekitd started, its
+  get-updates and resolve transactions failed within 4 ms each, and it
+  quit at 10:50:38. It does not wait on zypp's lock, and it did not
+  disturb the run, which finished clean. Journal:
+  /mnt/Games/oneup-vmtest/real-new/j.log.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
@@ -8803,7 +8809,7 @@ when complete (that document's §7).
   Source: in-session-2026-10-16.
   Lanes: engine, security, packaging.
 
-- 🚧 [ONEUP-0283] **The system service's ProtectHome=yes makes /root and /run/user read-only, so systemd's post-transaction trigger fails during a real update.**
+- ✅ [ONEUP-0283] **The system service's ProtectHome=yes makes /root and /run/user read-only, so systemd's post-transaction trigger fails during a real update.**
   Seen in run 2026-10-16_082648.log (service route, RPM from v2
   a3c73cd): %transfiletriggerin(systemd-261.3-1.1) printed "Unable to
   fix SELinux security context of /root: Read-only file system",
@@ -8831,6 +8837,12 @@ when complete (that document's §7).
   oneup-service journal lines either, so they do not count as the
   service route. Next attempt: boot the VM with more memory, no overlay
   growth by hand, and copy the log out over ssh while the run goes.
+  Passed 2026-11-01 in the VM, RPM from 692dca3, 14 GB RAM, no overlay
+  growth: a real update of 881 on the service route (service journal:
+  system-commit, flatpak-system-update, repo-refresh and more) finished
+  clean. No read-only error, dconf-CRITICAL or lua failure in the run
+  log or the service's journal. Kernel 7.3.0 installed; dracut ran. The
+  freeze of 2026-10-30 did not recur.
   **Layman:** OneUp's background helper is fenced off from a few system folders that installing updates needs to write to, so one of systemd's after-install scripts fails.
   Kind: fix.
   Source: user-real-run-2026-10-16.
@@ -9096,7 +9108,7 @@ when complete (that document's §7).
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: engine, packaging.
 
-- 🚧 [ONEUP-0296] **The finished line says "already up to date" when the leftover step has just removed packages.**
+- ✅ [ONEUP-0296] **The finished line says "already up to date" when the leftover step has just removed packages.**
   Seen 2026-10-16 in the ONEUP-0287 VM run 2: Leftover packages "3
   removed", finished line "All done — already up to date." ONEUP-0288's
   sentences cover the system, Flatpak and firmware sources only. Whether
@@ -9108,6 +9120,8 @@ when complete (that document's §7).
   the engine summary a "Leftover packages: N removed." line. The
   notification is unchanged. v2 029d1e7 (test), bac6c8f (fix). Waits on
   the by-eye VM check.
+  Passed 2026-11-01 on a real run in the VM: "All done. 867 system
+  packages installed. 12 leftover packages removed."
   **Layman:** OneUp can say nothing changed right after it removed some packages.
   Kind: ux.
   Source: ONEUP-0287-vm-2026-10-16.
@@ -9128,7 +9142,7 @@ when complete (that document's §7).
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: gui.
 
-- 🚧 [ONEUP-0298] **The sudo route's password box is titled "Enter SSH Credentials".**
+- ✅ [ONEUP-0298] **The sudo route's password box is titled "Enter SSH Credentials".**
   Seen 2026-10-16 in the ONEUP-0287 VM run 2: ksshaskpass6 titles the
   box "Enter SSH Credentials"; OneUp's prompt reads "System Updater:
   authenticate to update the system". Find whether ksshaskpass takes a
@@ -9144,24 +9158,29 @@ when complete (that document's §7).
   guesses. Reaper matches the new text and still the old prompts, which
   the Bash fallback passes. v2 test and fix commits "ONEUP-0298". Waits
   on the by-eye VM check of the ksshaskpass box.
+  Passed 2026-11-01 in the VM, sudo route: the box reads "OneUp needs
+  the password for root to install updates." Its title is still
+  ksshaskpass's own "SSH Credentials", as the user's 2026-10-17 decision
+  to keep ksshaskpass accepts.
   **Layman:** The password window has a confusing title that mentions SSH.
   Kind: ux.
   Source: ONEUP-0287-vm-2026-10-16.
   Lanes: engine.
 
-- 🚧 [ONEUP-0299] **Show the technical log and open the log file as small buttons, not links.**
+- ✅ [ONEUP-0299] **Show the technical log and open the log file as small buttons, not links.**
   User, 2026-10-16: smaller than the other buttons, in line at their
   present size; it will look better.
   Built 2026-10-21 (db4cfc3 test, ec4ff63 fix): both are GhostBtn with
   small=true; one rule, QPushButton#GhostBtn[small="true"], cuts the
   padding. 32 px high against Check for updates' 42, checked by eye
   offscreen. Waits on the by-eye VM check.
+  Passed by eye 2026-11-01 in the VM, all themes, Normal and Larger.
   **Layman:** Turn the two text links at the bottom of the window into small buttons.
   Kind: ux.
   Source: user-request-2026-10-16.
   Lanes: gui.
 
-- 🚧 [ONEUP-0300] **Show the download size only where it is needed.**
+- ✅ [ONEUP-0300] **Show the download size only where it is needed.**
   User, 2026-10-16: on the service route, is the link still needed?
   Could it show only when there is no service? Facts: the link runs
   --size=system --hold, a root `zypper dup --dry-run`, opt-in because it
@@ -9178,6 +9197,8 @@ when complete (that document's §7).
   a password, so there the fetch fails quietly and the link returns. Sudo
   route unchanged. Waits on the by-eye VM check (Live ISO has the
   service?).
+  Passed 2026-11-01 on a real run in the VM: the service ran
+  size-dry-run with no password, and the total shows with no link.
   **Layman:** Hide the 'Show download size' link when OneUp can work the size out without asking for a password.
   Kind: ux.
   Source: user-request-2026-10-16.
@@ -9337,7 +9358,7 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0307] **During a run the Stop button is cut off at the window's right edge.**
+- ✅ [ONEUP-0307] **During a run the Stop button is cut off at the window's right edge.**
   Seen 2026-10-17 in the VM (Breeze, window 980 px wide, all three
   layouts): Stop shows only its left edge beside "Run selected
   updates". Captures: /mnt/Games/oneup-vmtest/app/lay-t0-*.png.
@@ -9353,12 +9374,13 @@ when complete (that document's §7).
   only after the look is checked by eye in the test VM, in a light, a
   dark and the high-contrast theme. Code and tests are in; the VM check
   is owed.
+  Passed by eye 2026-11-01 in the VM, all themes, Normal and Larger.
   **Layman:** While an update runs, the Stop button is partly off the edge of the window.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0308] **"Run selected updates" stays on screen during a run; the sketches show only Stop there.**
+- ✅ [ONEUP-0308] **"Run selected updates" stays on screen during a run; the sketches show only Stop there.**
   Seen 2026-10-17 in the VM: the disabled Run button keeps its
   place during a run in every layout. All three sketches show one
   filled red Stop in that place.
@@ -9368,12 +9390,13 @@ when complete (that document's §7).
   Stop's red fill is ONEUP-0317's.
   Back to in progress the same day, for the same reason as ONEUP-0307:
   the VM check by eye is owed.
+  Passed by eye 2026-11-01 in the VM, all themes, Normal and Larger.
   **Layman:** While updating, only the Stop button should show, as in the sketches.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0309] **The bottom progress bar stays empty while packages download.**
+- ✅ [ONEUP-0309] **The bottom progress bar stays empty while packages download.**
   Seen 2026-10-17 in the VM, Rows: "Downloading 2 of 2 packages",
   "504 KiB of 504 KiB", and the bar under it empty. Find whether
   the download phase sets the bar at all.
@@ -9391,12 +9414,14 @@ when complete (that document's §7).
   amended figure. VM check by eye owed (§7) before shipped. Not done
   here: "Waiting" for a step not yet started (ONEUP-0314) and the
   running-step highlight (INV-16).
+  Passed 2026-11-01 on a real run in the VM: the bar moves through both
+  halves.
   **Layman:** The progress bar at the bottom shows nothing while updates download.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0310] **In Rows the package list is squeezed to about one row, with empty space below it.**
+- ✅ [ONEUP-0310] **In Rows the package list is squeezed to about one row, with empty space below it.**
   Seen 2026-10-17 in the VM (window 980x886): the table shows its
   header and one package; the space under it to the status lines is
   empty. The sketch's list fills that space.
@@ -9438,12 +9463,14 @@ when complete (that document's §7).
   layouts as the layout's QObject children (findChildren(QLayout)), so
   that call is gone; minimum sizes are unchanged (Rows 960, Rail 791,
   Spotlight 676) and ./local-CI.sh is green. Never released.
+  Passed by eye 2026-11-01 in the VM: at Normal and 980x860 the table
+  shows four rows; at Larger's minimum on 1080p, three.
   **Layman:** In the Rows layout the list of updates is only one line tall, even though there is room.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0311] **In Rail the step names are cut off ("System…", "Flatpak…").**
+- ✅ [ONEUP-0311] **In Rail the step names are cut off ("System…", "Flatpak…").**
   Seen 2026-10-17 in the VM at 980 px: the rail is too narrow for
   the name beside the switch. The sketch's rail shows the full name
   and a status line under it.
@@ -9453,12 +9480,13 @@ when complete (that document's §7).
   switch's real width. gui-smoke INV-17 titles half green in Rail at
   every text size. Stays in progress until the ONEUP-0239 §7 check by
   eye in the test VM.
+  Passed by eye 2026-11-01 in the VM, all themes, Normal and Larger.
   **Layman:** In the Rail layout the names of the steps on the left are cut short.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0312] **In Spotlight the Up next lines run off the side, with a sideways scroll bar.**
+- ✅ [ONEUP-0312] **In Spotlight the Up next lines run off the side, with a sideways scroll bar.**
   Seen 2026-10-17 in the VM: each line holds name, versions, size
   and repository. The sketch shows a clock or tick, the name and the
   size only.
@@ -9471,12 +9499,13 @@ when complete (that document's §7).
   already. Trimming the lines to symbol, name and size (§4.3) is
   ONEUP-0316's. Stays in progress for ONEUP-0239 §7's check by eye in
   the VM.
+  Passed by eye 2026-11-01 in the VM, all themes, Normal and Larger.
   **Layman:** In the Spotlight layout, the waiting list's lines are too long and need sideways scrolling.
   Kind: fix.
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0313] **Rows' package table matches the sketch: a status icon, a source label, full versions and tabs with counts.**
+- ✅ [ONEUP-0313] **Rows' package table matches the sketch: a status icon, a source label, full versions and tabs with counts.**
   Sketch: docs/design/sketches/rows.png. A tick, download arrow or
   clock per package instead of a State word column; a "Packman"-style
   label for the repository; old -> new versions in full; tabs "All ·
@@ -9555,12 +9584,16 @@ when complete (that document's §7).
   sketch dims the old one; Spotlight's headline is smaller than the
   sketch's; Downloaded and Time left read "not known" with fed markers,
   so they need a real run's screen.
+  Passed by eye 2026-11-01 in the VM. The list of differences judged:
+  versions are not bold, it is one font, and light on dark draws
+  heavier; dimming the old version is in no spec, left. The log button's
+  slot and Spotlight's headline went to ONEUP-0355.
   **Layman:** The Rows update list gets the sketch's icons, source labels and counted tabs.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0314] **Every step shows a status label, and step descriptions are short, as in the sketches.**
+- ✅ [ONEUP-0314] **Every step shows a status label, and step descriptions are short, as in the sketches.**
   Sketches: "Downloading · 35%", "Waiting", "Up next · nothing to
   update"; descriptions such as "openSUSE and Packman packages" and
   "Free up disk space". Today only the running step shows a pill
@@ -9574,12 +9607,13 @@ when complete (that document's §7).
   No "Up next" step badge: the spec has none (that phrase names
   Spotlight's list). Stays in progress for ONEUP-0239 §7's check
   by eye in the VM.
+  Passed by eye 2026-11-01 in the VM, all themes, Normal and Larger.
   **Layman:** Each step says Waiting, Downloading or Up next, with a short description under its name.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0315] **Rail matches the sketch: package cards in two columns, a coloured progress strip and a large heading with counts.**
+- ✅ [ONEUP-0315] **Rail matches the sketch: package cards in two columns, a coloured progress strip and a large heading with counts.**
   Sketch: docs/design/sketches/rail.png. Cards with a dot, name and
   size, versions, a source label and the state written on the card;
   the strip green / blue / grey and still patterned (colour never
@@ -9604,12 +9638,14 @@ when complete (that document's §7).
   bullet is ONEUP-0322 item (2). Sizes still print with no decimal place
   (§4.3.1 asks for one): filed separately. Stays in progress for
   ONEUP-0239 §7's by-eye VM check.
+  Passed by eye 2026-11-01 in the VM; a cut word at Larger went to
+  ONEUP-0354.
   **Layman:** The Rail layout shows each update as a card, with a coloured strip and a clear heading.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0316] **Spotlight matches the sketch: a large Now panel with three figure boxes, and clean Up next and Done lists.**
+- ✅ [ONEUP-0316] **Spotlight matches the sketch: a large Now panel with three figure boxes, and clean Up next and Done lists.**
   Sketch: docs/design/sketches/spotlight.png. "NOW · SYSTEM
   PACKAGES", the package name in large type, its description and
   versions, a bar, and boxes for Packages, Downloaded and Time left.
@@ -9625,12 +9661,14 @@ when complete (that document's §7).
   goes once ONEUP-0322 lands. The footer's three status lines and Run /
   Check showing are ONEUP-0317's and ONEUP-0308's. Stays in progress for
   ONEUP-0239 §7's by-eye VM check.
+  Passed by eye 2026-11-01 in the VM; figures read real values on a real
+  run; the headline's size went to ONEUP-0355.
   **Layman:** The Spotlight layout shows what is happening now in large type, with three clear figures.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0317] **The footer is one summary line and a filled red Stop, as in the sketches.**
+- ✅ [ONEUP-0317] **The footer is one summary line and a filled red Stop, as in the sketches.**
   Sketches: "Downloading 4 of 24 · 6.2 of 17.5 MiB · about 40 s
   left" over one bar, and one "Show technical log" link. Today: three
   lines of status, two log links.
@@ -9648,12 +9686,13 @@ when complete (that document's §7).
   derived from that fill as Restart's is; with the overlay on it takes
   btn. stopfg and stophov now colour nothing: ONEUP-0326. The time left
   is ONEUP-0318's. Stays in progress for ONEUP-0239 §7's by-eye VM check.
+  Passed by eye 2026-11-01 in the VM, all themes, Normal and Larger.
   **Layman:** The bottom of the window shows one clear line about progress, and a red Stop button.
   Kind: ux.
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0318] **Show an estimated time left while packages download.**
+- ✅ [ONEUP-0318] **Show an estimated time left while packages download.**
   The engine already reports bytes done and total ("504 KiB of 504
   KiB"), so a rate and an estimate can be worked out. Download only:
   installing has no reliable size to time against. Wording stays an
@@ -9665,6 +9704,8 @@ when complete (that document's §7).
   stall's sentence takes its place; the install half and an unknown
   total show none. The wording is three plural sentences in _Counted.
   Stays in progress for ONEUP-0239 §7's by-eye VM check.
+  Passed 2026-11-01 on a real run in the VM: "about 50 s left" in the
+  line and the Time left box.
   **Layman:** While updates download, OneUp estimates how long is left.
   Kind: feature.
   Source: sketch-comparison-2026-10-17.
@@ -9696,7 +9737,7 @@ when complete (that document's §7).
   Source: sketch-comparison-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0320] **The header's Recenter button shows a symbol instead of a word, so it is smaller.**
+- ✅ [ONEUP-0320] **The header's Recenter button shows a symbol instead of a word, so it is smaller.**
   User's decision, 2026-10-17, while confirming ONEUP-0306's
   defaults. The sketches have no Recenter; the user keeps it, smaller.
   The button keeps "Recenter" as its accessible name and tooltip. The
@@ -9714,6 +9755,7 @@ when complete (that document's §7).
   overlay. Accessible name Recenter and the tooltip kept. Rows' window
   minimum went from 654 to 630 pixels wide (offscreen, one measurement).
   Waits on the by-eye VM check.
+  Passed by eye 2026-11-01 in the VM.
   **Layman:** Recenter stays, but as a small symbol button beside Settings and About.
   Kind: ux.
   Source: user-request-2026-10-17.
@@ -9814,7 +9856,7 @@ when complete (that document's §7).
   Source: review-contract-ONEUP-0310-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0323] **The package lists keep the same text size whatever Text size is chosen.**
+- ✅ [ONEUP-0323] **The package lists keep the same text size whatever Text size is chosen.**
   Found 2026-10-17 while building ONEUP-0310. INV-17's new test reads
   each view's row height at every TEXT_SCALES entry, and it is the same
   at all three: Rows' table 42 px, Rail's card 67 px, Spotlight's line
@@ -9831,6 +9873,7 @@ when complete (that document's §7).
   TEXT_SCALES entry: offscreen, Rows 25/27/31 px, Rail 89/96/108 px,
   Spotlight 25/27/31 px. Red before the fix (6ecdabf); removing the
   font-size again turns it red. Waits on the by-eye VM check.
+  Passed by eye 2026-11-01 in the VM, Normal and Larger.
   **Layman:** Making the text larger in OneUp makes every label bigger except the list of updates, which stays small.
   Kind: accessibility.
   Source: ONEUP-0310-build-2026-10-17.
@@ -9853,12 +9896,17 @@ when complete (that document's §7).
   the user says so.
   2026-10-19, user: leave Run about 3 px taller than Check for updates,
   as the primary action. Question closed.
+  Measured by eye 2026-11-01 in the VM: the three buttons are one height
+  in every theme. Waiting-on: user (do Settings, Recenter and About now
+  line up for you? Crops:
+  /mnt/Games/oneup-vmtest/crops/0324-header-dark.png and -light.png. I
+  recommend closing it, 2026-11-01).
   **Layman:** Settings stood taller than Recenter and About; now all three line up.
   Kind: fix.
   Source: user-report-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0325] **Package sizes print with one decimal place for KiB and MiB, as every sketch does.**
+- ✅ [ONEUP-0325] **Package sizes print with one decimal place for KiB and MiB, as every sketch does.**
   docs/specs/ONEUP-0239-fixed-layouts.md §4.3.1 (ONEUP-0306): _format_size
   in oneup/gui/markers.py "gains one decimal place for KiB and MiB, as
   every sketch prints them". Not built: it prints "15 MiB". No item owned
@@ -9870,6 +9918,7 @@ when complete (that document's §7).
   warm-cache test never reached its total (86.0 of 86.4 MiB, both shown
   as "86 MiB"); its fixture now does. Stays in progress for ONEUP-0239
   §7's by-eye VM check.
+  Passed by eye 2026-11-01 in the VM.
   **Layman:** Sizes like "15 MiB" will read "14.8 MiB", matching the approved pictures.
   Kind: ux.
   Source: ONEUP-0315-build-2026-10-19.
@@ -9891,7 +9940,7 @@ when complete (that document's §7).
   Source: ONEUP-0317-build-2026-10-20.
   Lanes: gui.
 
-- 🚧 [ONEUP-0327] **Settings' gear symbol is not in Noto Sans, so it may draw as an empty box.**
+- ✅ [ONEUP-0327] **Settings' gear symbol is not in Noto Sans, so it may draw as an empty box.**
   Found while choosing ONEUP-0320's symbol: QRawFont for Noto Sans,
   openSUSE's interface font, reports U+2699 (the gear in "⚙ Settings",
   oneup/gui/window.py) unsupported, as ONEUP-0297 found for U+24D8. It
@@ -9900,6 +9949,8 @@ when complete (that document's §7).
   Built 2026-10-30: my call, not a user decision: the gear is drawn by
   symbols.gear, as Recenter's symbol is, rather than dropped; the label
   is now the word Settings. Waits on the by-eye VM check.
+  Passed by eye 2026-11-01 in the VM: the gear is drawn on the clean
+  install.
   **Layman:** The little gear on the Settings button may show as a blank square on a fresh openSUSE install.
   Kind: fix.
   Source: ONEUP-0320-build-2026-10-20.
@@ -10397,7 +10448,7 @@ when complete (that document's §7).
   Kind: test.
   Source: local-ci-hang-2026-10-29.
 
-- 🚧 [ONEUP-0350] **Spotlight's footer cuts "Last run" short while space sits empty beside it.**
+- ✅ [ONEUP-0350] **Spotlight's footer cuts "Last run" short while space sits empty beside it.**
   Seen 2026-10-30 in offscreen renders at Spotlight's minimum size, in the
   standard and high-contrast sheets, on v2 and on the commit before ONEUP-0322:
   the footer's last_run reads "Last ru…" or "Last r…" for "Last run: never",
@@ -10415,6 +10466,10 @@ when complete (that document's §7).
   758. Test in tests/gui-smoke.py, red at all three text sizes before
   the fix. Spec ONEUP-0239 §4.3 Spotlight item 5 amended. Waits on the
   by-eye VM check.
+  Passed by eye 2026-11-01 in the VM. Kept, as decided: the sketch has
+  the last-run line on Stop's row; its own row costs 38 px of minimum
+  height at Normal. The user can ask to change it; crop at
+  /mnt/Games/oneup-vmtest/crops/0350-spotlight-footer.png.
   **Layman:** In the Spotlight layout the last-run line can read "Last r…" even though there is room for all of it.
   Kind: fix.
   Source: ONEUP-0322-build-2026-10-30.
@@ -10433,7 +10488,7 @@ when complete (that document's §7).
   Source: ONEUP-0350-build-2026-10-30.
   Lanes: gui.
 
-- 🚧 [ONEUP-0352] **Buttons do not grow with Text size: Stop, Settings, About, the tabs and the log buttons stay small.**
+- ✅ [ONEUP-0352] **Buttons do not grow with Text size: Stop, Settings, About, the tabs and the log buttons stay small.**
   Seen 2026-10-30 in the VM at Larger (look/midnight-big-rows-3run.png in
   /mnt/Games/oneup-vmtest): Stop, Settings, About, the tabs and Show technical log
   keep Normal's size. Cause read in oneup/gui/theme.py: #GhostBtn, #StopBtn, #LinkBtn
@@ -10443,12 +10498,15 @@ when complete (that document's §7).
   tests/gui-smoke.py, in ONEUP-0323's block, "ONEUP-0352 every button's text grows";
   red first (every button 9.0 pt at all three sizes), green 1099/0 after. Waits on the
   by-eye VM check: Larger's window widths and header buttons have not been looked at.
+  Passed by eye 2026-11-01 in the VM at Larger, on a 1080p screen. On a
+  1280x960 screen the Rows and Spotlight minimums at Larger exceed the
+  screen and the window squashes; recorded on ONEUP-0357.
   **Layman:** Choosing a larger text size enlarges the labels but not the words on most buttons.
   Kind: accessibility.
   Source: ONEUP-0239-vm-check-2026-10-30.
   Lanes: gui.
 
-- 📋 [ONEUP-0353] **English users read "24 update(s)" where the sketches say "24 updates".**
+- ✅ [ONEUP-0353] **English users read "24 update(s)" where the sketches say "24 updates".**
   Seen 2026-10-30 in the VM: Rail's heading, the status line and the tray wording.
   Cause: oneup/gui/i18n.py's _Counted strings go through self.tr(..., n), and no
   English catalogue exists, so the source text shows. wording-and-translation.md §6.3
@@ -10456,9 +10514,49 @@ when complete (that document's §7).
   "" when n is 1 and "s" otherwise; a translation holds no "(s)", so it is untouched.
   The tests/gui-smoke.py lines pinning "update(s)" and "package(s)" change with it,
   and §6.3's sentence. Engine terminal text and the @@CHECK@@ field are not touched.
+  Built 2026-11-01 on v2: i18n.counted replaces "(s)". Red 1088/17,
+  green 1105/0 in tests/gui-smoke.py. Left on main, whose strings are
+  separate f-strings: this item measures against the 2.0 sketches.
+  Engine terminal text and @@CHECK@@ unchanged.
   **Layman:** The window writes counts as "24 update(s)" and "3 package(s)" instead of proper English.
   Kind: ux.
   Source: ONEUP-0239-vm-check-2026-10-30.
+  Lanes: gui.
+
+- 🚧 [ONEUP-0354] **At Larger, Rail cuts off "downloading" on a card and the counts sentence ("3 done · 1 now · …").**
+  Seen 2026-11-01 in the VM at Rail's minimum size on a 1080p screen. Cause of the word: card_rects sizes the state slot with horizontalAdvance, a rounded width, and elidedText measures unrounded. Cause of the counts: the summary line's kept size-link slot leaves its third of the line too narrow.
+  **Layman:** At the largest text size the Rail layout cuts off a word on the downloading card and the done/now/to go counts.
+  Kind: ux.
+  Source: ONEUP-0239-vm-check-2026-11-01.
+  Lanes: gui.
+
+- 🚧 [ONEUP-0355] **Show technical log sits flush at the right as in the sketches, and Spotlight's headline is as large as the sketch's.**
+  Judged 2026-11-01 from ONEUP-0313's list, my call as the sketches are the target (ONEUP-0306). The hidden Open log file slot moves to the toggle's leading side in Rows and Rail. Spotlight's headline measured less than half the sketch's width at the same window width, so it takes fs_percent's size.
+  **Layman:** Two small differences from the approved pictures: a button sits slightly off the edge, and Spotlight's main line is too small.
+  Kind: ux.
+  Source: ONEUP-0239-vm-check-2026-11-01.
+  Lanes: gui.
+
+- 🚧 [ONEUP-0356] **Spotlight's list cut sizes on a real run: "196.7 K…".**
+  Seen 2026-11-01 in the VM, real run, Normal: every three-digit KiB size in Up next. Not reproduced offscreen on this host, with Fusion and Noto Sans 10, nor by fed markers in the VM. The slot is set by view.fontMetrics() while the text is drawn in the item's own font, so the two can differ; that is the suspected cause, not measured.
+  **Layman:** In the Spotlight layout some package sizes are cut short during a real update.
+  Kind: ux.
+  Source: ONEUP-0239-vm-check-2026-11-01.
+  Lanes: gui.
+
+- 📋 [ONEUP-0357] **The "has details" mark reads as a stray letter: "7zip i", "Mesa i".**
+  Seen 2026-11-01 in the VM on a real run. U+2139 in Noto Sans looks like a plain i, on every package once details arrive. The sketches have no mark; ONEUP-0297 chose U+2139 (user, 2026-10-17). Crop: /mnt/Games/oneup-vmtest/cmp/i.png.
+  Waiting-on: user (keep the i, or draw a small circled i as the app draws its other symbols? I recommend drawing it: it reads as a symbol, as the gear and Recenter now do, 2026-11-01).
+  **Layman:** The small mark saying a package has more details looks like a stray letter i after its name.
+  Kind: ux.
+  Source: ONEUP-0239-vm-check-2026-11-01.
+  Lanes: gui.
+
+- 📋 [ONEUP-0358] **At Larger on a screen under about 1000 px tall, Rows and Spotlight squash below their minimum.**
+  Seen 2026-11-01 in the VM at 1280x960, Larger: Rows' minimum is 974 and Spotlight's 904, the desktop offers about 886. The table showed no rows and Spotlight's figures were clipped. At 1080p both fit. ONEUP-0239 §4.2 promises no window too small for its layout at its text size; it says nothing of a screen too small for the window.
+  **Layman:** With the largest text on a small screen, the window cannot fit and parts of it get squeezed.
+  Kind: ux.
+  Source: ONEUP-0239-vm-check-2026-11-01.
   Lanes: gui.
 
 ## 2.1.0 — after 2.0

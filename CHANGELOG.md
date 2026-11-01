@@ -209,6 +209,15 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Rail keeps its words at Larger** (ONEUP-0354)
+  "downloading" on a card and the done, now and to go counts are no longer cut off.
+
+- **Closer to the approved pictures** (ONEUP-0355)
+  Show technical log sits flush at the right, and Spotlight's main line is as large as its sketch.
+
+- **Spotlight keeps whole sizes** (ONEUP-0356)
+  A size such as "196.7 KiB" could read "196.7 K…" during a real update.
+
 - **Counts read as English** (ONEUP-0353)
   The window, tray and notifications said "24 update(s)". They now say "24 updates" and "1 update".
 

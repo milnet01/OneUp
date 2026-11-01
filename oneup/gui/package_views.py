@@ -496,8 +496,9 @@ class CardDelegate(LinesDelegate):
         one, two, three = self._line_heights(view)
         dot = QFontMetrics(f["name"]).height() // 2
         size_w = body.horizontalAdvance(self.SIZE_TEXT)
-        state_w = max(body.horizontalAdvance(QCoreApplication.translate("steps", w))
-                      for w in steps.STATE_WORDS.values())
+        # horizontalAdvance rounds and elidedText does not, so leave a pixel over.
+        state_w = 1 + max(body.horizontalAdvance(QCoreApplication.translate("steps", w))
+                          for w in steps.STATE_WORDS.values())
         y1 = inner.top()
         y2 = y1 + one + self.SPACE
         y3 = y2 + two + self.SPACE
@@ -615,10 +616,11 @@ class ListLineDelegate(LinesDelegate):
         # The state, the name and the size.
         self._parts = parts
 
-    def line_rects(self, view, cell: QRect) -> dict[str, QRect]:
+    def line_rects(self, view, cell: QRect, fm: QFontMetrics | None = None) -> dict[str, QRect]:
         """Where each part of the line in `cell` goes, mirrored for a right-to-left
-        view. The symbol and the size have widths of their own, so neither moves."""
-        fm = view.fontMetrics()
+        view. The symbol and the size have widths of their own, so neither moves. `fm`
+        is the font the line is drawn in, which sizes the slots (ONEUP-0356)."""
+        fm = fm or view.fontMetrics()
         inner = cell.adjusted(self.GAP, 0, -self.GAP, 0)
         # The style draws each part inside its own text margin, one per side.
         pad = 2 * (view.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin, None,
@@ -640,7 +642,7 @@ class ListLineDelegate(LinesDelegate):
             return
         opt, _lines = self._ground(painter, option, index)
         state, name, size = self._parts(package)
-        r = self.line_rects(self.parent(), opt.rect)
+        r = self.line_rects(self.parent(), opt.rect, opt.fontMetrics)
         lead, trail = Qt.AlignmentFlag.AlignLeading, Qt.AlignmentFlag.AlignTrailing
         symbols.draw(painter, symbols.STATE_SHAPES[state], QRectF(r["state"]).adjusted(0, 4, 0, -4),
                      opt.palette.color(QPalette.ColorRole.Text))

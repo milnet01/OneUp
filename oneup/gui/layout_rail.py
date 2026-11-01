@@ -127,5 +127,9 @@ class RailLayout(LayoutHost):
         frame = row.layout().contentsMargins()
         self.rail.setMinimumWidth(widest + row.switch.minimumWidth() + 10
                                   + card.left() + card.right() + frame.left() + frame.right())
+        # The counts keep room for three-figure totals; the summary beside them elides
+        # first (ONEUP-0354).
+        self.counts.setMinimumWidth(self.counts.whole_width(
+            pv.counts_sentence({"done": 999, "now": 9, "togo": 999})))
         pv.fit_board(self.board)
         pv.hold_rows(self.board, self.PACKAGE_ROWS, self.board.gridSize().height())
