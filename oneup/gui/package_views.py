@@ -59,10 +59,12 @@ GROUP = {"queued": "togo", "downloading": "now", "downloaded": "togo",
 # Between the parts of one line of a package's text — name, versions, size, state.
 # Layout between data; no language words it differently.
 _PARTS = "  ·  "
-# After the name of a package that has details: a shape, never only a colour
-# (ONEUP-0260 §4.4). The words a screen reader hears replace it. U+2139, INFORMATION
-# SOURCE, because Noto Sans draws it and no stock font draws U+24D8 (ONEUP-0297).
+# In a name's text, says the package has details: a shape, never only a colour
+# (ONEUP-0260 §4.4). The delegates take it out and draw `symbols.info` instead, because
+# Noto Sans's U+2139 reads as a stray letter (ONEUP-0357). The words a screen reader
+# hears replace it, and a tooltip drops it.
 MARK = "\u2139"
+MARK_GAP = 4     # pixels between a name and its mark
 
 
 def state_word(model: PackageModel, package: Package) -> str:
@@ -96,6 +98,22 @@ def name_text(win, package: Package) -> str:
     return QCoreApplication.translate(
         "package_views", "{name} \u2139", "a package name, marked as having details"
     ).format(name=package.name)
+
+
+def drop_mark(text: str) -> str:
+    return text.replace(f" {MARK}", "").replace(MARK, "")
+
+
+def mark_slots(rect: QRect, text_width: int, fm: QFontMetrics,
+               direction: Qt.LayoutDirection) -> tuple[QRect, QRect]:
+    """Share a name's `rect`: where its text goes and where its mark goes, straight
+    after it. The mark's room is kept first, so a long name elides and keeps it."""
+    side = fm.ascent()
+    width = max(min(text_width, rect.width() - side - MARK_GAP), 0)
+    text = QRect(rect.left(), rect.top(), width, rect.height())
+    mark = QRect(rect.left() + width + MARK_GAP, rect.top() + (rect.height() - side) // 2,
+                 side, side)
+    return (QStyle.visualRect(direction, rect, text), QStyle.visualRect(direction, rect, mark))
 
 
 def downloading_now(win, package: Package) -> bool:
@@ -196,15 +214,17 @@ class PackageItems(QAbstractTableModel):
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         if not index.isValid():
             return None
-        if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.ToolTipRole):
+        if role == Qt.ItemDataRole.DisplayRole:
             return self._columns[index.column()](self._rows[index.row()])
+        if role == Qt.ItemDataRole.ToolTipRole:
+            return drop_mark(self._columns[index.column()](self._rows[index.row()]))
         if (role == Qt.ItemDataRole.AccessibleTextRole and self._has_details is not None
                 and index.column() == self._mark_column
                 and self._has_details(self._rows[index.row()])):
             text = self._columns[index.column()](self._rows[index.row()])
             return QCoreApplication.translate(
                 "package_views", "{text}, details available").format(
-                text=text.replace(MARK, "").strip())
+                text=drop_mark(text).strip())
         if role == Qt.ItemDataRole.AccessibleTextRole:
             # A drawn symbol has no text of its own, so the words are said here.
             return self._columns[index.column()](self._rows[index.row()])
@@ -342,6 +362,27 @@ class LinesDelegate(QStyledItemDelegate):
         one.rect = rect
         _style(opt).drawControl(QStyle.ControlElement.CE_ItemViewItem, one, painter, opt.widget)
 
+    @staticmethod
+    def _natural_width(opt, text: str) -> int:
+        """`text`'s natural width, asked of the style that draws it: its margins around
+        item text are its own, and a guess at them elided short names."""
+        alone = QStyleOptionViewItem(opt)
+        alone.text = text
+        return _style(opt).sizeFromContents(QStyle.ContentsType.CT_ItemViewItem, alone,
+                                            QSize(), opt.widget).width()
+
+    def _name(self, painter, opt, text: str, rect: QRect) -> None:
+        """A package's name in `rect`, with its drawn mark if `text` carries one."""
+        if MARK not in text:
+            self._line(painter, opt, text, rect)
+            return
+        name = drop_mark(text)
+        name_rect, mark = mark_slots(rect, self._natural_width(opt, name), opt.fontMetrics,
+                                     opt.direction)
+        self._line(painter, opt, name, name_rect)
+        symbols.draw(painter, symbols.info, QRectF(mark),
+                     opt.palette.color(QPalette.ColorRole.Text))
+
     def paint(self, painter, option, index) -> None:
         opt, lines = self._ground(painter, option, index)
         h = self._line_height(opt)
@@ -406,7 +447,7 @@ class SourceDelegate(LinesDelegate):
         name, source = lines[0], (lines[1] if len(lines) > 1 else "")
         rect = opt.rect
         if not source:
-            self._line(painter, opt, name, rect)
+            self._name(painter, opt, name, rect)
             return
         font = QFont(opt.font)
         font.setWeight(QFont.Weight.DemiBold)
@@ -416,12 +457,9 @@ class SourceDelegate(LinesDelegate):
         pad = lfm.averageCharWidth()
         label_w = min(lfm.horizontalAdvance(text) + 2 * pad, rect.width() // 2)
         label_h = lfm.height() + 4
-        # The name's natural width, asked of the style that draws it: its margins
-        # around item text are its own, and a guess at them elided short names.
-        alone = QStyleOptionViewItem(opt)
-        alone.text = name
-        natural = _style(opt).sizeFromContents(QStyle.ContentsType.CT_ItemViewItem, alone,
-                                               QSize(), opt.widget).width()
+        natural = self._natural_width(opt, drop_mark(name))
+        if MARK in name:
+            natural += opt.fontMetrics.ascent() + MARK_GAP
         name_w = min(natural, rect.width() - label_w - self.GAP)
         # Laid out in reading order, then mirrored when the view runs right to left.
         name_rect = QStyle.visualRect(opt.direction, rect,
@@ -429,7 +467,7 @@ class SourceDelegate(LinesDelegate):
         label = QStyle.visualRect(opt.direction, rect, QRect(
             rect.left() + name_w + self.GAP, rect.top() + (rect.height() - label_h) // 2,
             label_w, label_h))
-        self._line(painter, opt, name, name_rect)
+        self._name(painter, opt, name, name_rect)
         view = self.parent()
         fill, ink, rim = view.get_label_fill(), view.get_label_ink(), view.get_label_rim()
         painter.save()
@@ -560,7 +598,16 @@ class CardDelegate(LinesDelegate):
                              fm.elidedText(words, Qt.TextElideMode.ElideRight, rect.width()))
 
         painter.setPen(ink)
-        text(r["name"], f["name"], name, lead)
+        name_rect = r["name"]
+        if MARK in name:
+            fm = QFontMetrics(f["name"])
+            shown = drop_mark(name)
+            # horizontalAdvance rounds and elidedText does not, so leave a pixel over.
+            name_rect, mark = mark_slots(name_rect, fm.horizontalAdvance(shown) + 1, fm,
+                                         _direction())
+            name = shown
+            symbols.draw(painter, symbols.info, QRectF(mark), ink)
+        text(name_rect, f["name"], name, lead)
         text(r["size"], f["body"], size, trail)
         text(r["versions"], f["versions"], versions_, lead)
         text(r["state"], f["body"], state, trail)
@@ -652,7 +699,7 @@ class ListLineDelegate(LinesDelegate):
             if rect == r["size"]:
                 # A size is short and fixed in form: a cut one is misread (ONEUP-0356).
                 one.textElideMode = Qt.TextElideMode.ElideNone
-            self._line(painter, one, text, rect)
+            self._name(painter, one, text, rect)
 
 
 class PackageTable(QTableView):

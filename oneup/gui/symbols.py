@@ -2,9 +2,10 @@
 
 Noto Sans, openSUSE's interface font, has no tick, down arrow, clock, crosshair or
 gear (`QRawFont`, ONEUP-0313, ONEUP-0320, ONEUP-0327), so a character would come from
-whatever fallback the machine happens to carry, or be an empty box. Each shape is
-drawn on a square of side 1 and scaled, so it follows the text size. None of them
-points along the reading direction, so none mirrors (`ui-and-accessibility.md` §8.3).
+whatever fallback the machine happens to carry, or be an empty box. Its information
+sign is there, and reads as a plain letter i (ONEUP-0357). Each shape is drawn on a
+square of side 1 and scaled, so it follows the text size. None of them points along
+the reading direction, so none mirrors (`ui-and-accessibility.md` §8.3).
 """
 from __future__ import annotations
 
@@ -64,6 +65,13 @@ def gear(p: QPainter) -> None:
         a = tooth * math.pi / 4
         p.drawLine(QPointF(0.5 + 0.28 * math.cos(a), 0.5 + 0.28 * math.sin(a)),
                    QPointF(0.5 + 0.44 * math.cos(a), 0.5 + 0.44 * math.sin(a)))
+
+
+def info(p: QPainter) -> None:
+    """The mark on a package with details: a circled i (the user's choice, ONEUP-0357)."""
+    p.drawEllipse(QPointF(0.5, 0.5), 0.44, 0.44)
+    p.drawLine(QPointF(0.5, 0.46), QPointF(0.5, 0.74))
+    p.drawPoint(QPointF(0.5, 0.27))
 
 
 # One shape per state a view shows, keyed as `steps.STATE_WORDS` is.

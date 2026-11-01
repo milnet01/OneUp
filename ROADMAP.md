@@ -8489,6 +8489,11 @@ when complete (that document's §7).
   quit at 10:50:38. It does not wait on zypp's lock, and it did not
   disturb the run, which finished clean. Journal:
   /mnt/Games/oneup-vmtest/real-new/j.log.
+  2026-11-01: all four §4.12 measurements now hold, and the window run
+  without a password box is recorded. One thing stays owed from spec §7:
+  a real run from an SSH session on a packaged install, taking the sudo
+  route and its password request. Item 1 measured only polkit's refusal,
+  not that run. Do it in the VM, then flip.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
@@ -10283,7 +10288,7 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: review-contract-2026-10-23.
 
-- 📋 [ONEUP-0339] **OneUp has no list of the changes that count as breaking, which the global standards expect.**
+- ✅ [ONEUP-0339] **OneUp has no list of the changes that count as breaking, which the global standards expect.**
   align-report (2026-10-23) flags no docs/standards/versioning-overrides.md.
   OneUp's version policy lives in docs/standards/workflow.md §5, which
   names no breaking surfaces; its What-checks-this table says a breaking
@@ -10317,6 +10322,9 @@ when complete (that document's §7).
   normal ladder instead: a guard edit adds no level of its own, so a
   guard-only release is a PATCH (a 1.4.x under the v1 freeze, as 1.4.3
   was). The CHANGELOG warning stays. This replaces ruling (1)'s MINOR.
+  2026-11-01: nothing left owed. docs/standards/versioning-overrides.md
+  exists at Status Reviewed, workflow.md §5 points at it, CLAUDE.md §3
+  lists it, and the user's rulings are in it (d7ffa37).
   **Layman:** Write down, in one short file, which changes would break things for users and so need a major version number.
   Kind: doc.
   Source: user-decision-2026-10-23.
@@ -10564,9 +10572,15 @@ when complete (that document's §7).
   Source: ONEUP-0239-vm-check-2026-11-01.
   Lanes: gui.
 
-- 📋 [ONEUP-0357] **The "has details" mark reads as a stray letter: "7zip i", "Mesa i".**
+- ✅ [ONEUP-0357] **The "has details" mark reads as a stray letter: "7zip i", "Mesa i".**
   Seen 2026-11-01 in the VM on a real run. U+2139 in Noto Sans looks like a plain i, on every package once details arrive. The sketches have no mark; ONEUP-0297 chose U+2139 (user, 2026-10-17). Crop: /mnt/Games/oneup-vmtest/cmp/i.png.
   2026-11-01, user: draw a small circled i, as the app draws its other symbols. This replaces the U+2139 choice of ONEUP-0297.
+  Built 2026-11-01: symbols.info draws a circled i, and the three
+  package delegates draw it after the name, keeping its room first so a
+  long name elides and keeps the mark. A tooltip drops the character;
+  the screen reader's words are unchanged. gui-smoke red 1111/15 on the
+  old code, green 1126/0. Offscreen renders of all three layouts, old
+  and new: /mnt/Games/oneup-vmtest/cmp/0357/. Not yet seen in the VM.
   **Layman:** The small mark saying a package has more details looks like a stray letter i after its name.
   Kind: ux.
   Source: ONEUP-0239-vm-check-2026-11-01.

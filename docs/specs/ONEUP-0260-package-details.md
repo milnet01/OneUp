@@ -198,9 +198,9 @@ A package **has details** when it is a system package and `DetailsStore` holds a
 for its name (§3 item 8). Its What changed may still be empty; the dialog says why (§4.3).
 
 **A package with details shows a mark; one without shows nothing** (§3 item 2). The mark is
-`ℹ` (U+2139) after the package's name, in every layout: in Rows it goes in the package
+a circled i the app draws, `symbols.info`, after the package's name, in every layout: in Rows it goes in the package
 column, never the state column; in Rail and Spotlight, on the name line. The callable that
-builds the name text adds it, not `PackageItems.data`, which is generic over its columns. Its `AccessibleTextRole` text gains the words *"details available"*, so a screen
+builds the name text adds U+2139 to say so, not `PackageItems.data`, which is generic over its columns; the delegates draw the shape in its place, and a tooltip drops it. Its `AccessibleTextRole` text gains the words *"details available"*, so a screen
 reader hears what the glyph shows, and the mark is a shape, never only a colour
 (`docs/standards/ui-and-accessibility.md` §3). When About arrives the views redraw (§4.2).
 
@@ -269,7 +269,7 @@ questions — which view, and which package in it.
 - **INV-4** A system package has a details mark exactly when it has details (§4.4), and a
   Flatpak never has one.
   *Test:* `tests/gui-smoke.py` — a check whose mock `zypper info` answers one of two system
-  packages; after the fetch, the answered package's item text carries `ℹ` and its
+  packages; after the fetch, the answered package's item text carries U+2139 and its
   accessible text *"details available"*, the other's carries neither, and a Flatpak
   `CHECK_ITEM`'s item carries neither. In Rows, the mark is in the package column.
   *Breaks when:* the mark is added unconditionally, or before the fetch completes.
@@ -314,7 +314,7 @@ questions — which view, and which package in it.
 | Every system package in the list is known to zypper | A package from a repository removed since the check | No About and no mark, even once installed with change notes (§3 item 8) |
 | The package carries a changelog | Packman and some third-party packages (§2) | *"This package has no change notes."* |
 | The baseline was taken before the install | A window that attached to a run already past its commit | The newest 20 entries, with the sentence saying OneUp could not tell which are new |
-| The font has `ℹ` | A font with no U+2139 | Qt draws a fallback font's glyph or an empty box; the accessible text says the same either way. Noto Sans, openSUSE's interface font, has it; U+24D8, the first choice, was in no font a stock KDE Live install carries (ONEUP-0297) |
+| A font can draw the mark | None needs to: the app draws it (ONEUP-0357) | U+24D8, the first choice, was in no font a stock KDE Live install carries (ONEUP-0297); U+2139 in Noto Sans reads as a plain letter i |
 | zypper's text layout stays `Key : value` | A zypper release that changes `info`'s output | The parse finds no About: no marks until installed, never a wrong description |
 
 ## 7. Tests

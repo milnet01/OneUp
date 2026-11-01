@@ -7437,20 +7437,92 @@ for th in theme.THEMES:
             check("ONEUP-0260 INV-4 in Rows the mark is in the package column",
                   _marked and _marked[0][2] == 1)
 
-    # ONEUP-0297: the mark is a character Noto Sans, openSUSE's interface font,
-    # draws itself. U+24D8 is in no font a stock KDE Live install carries, so it
-    # drew as an empty box there; this host may carry a fallback that hides that,
-    # so the check asks Noto Sans alone. Skipped where Noto Sans is absent.
-    # QRawFont, not QFontMetrics.inFontUcs4: the latter answers for the whole
-    # fallback chain, and passed U+24D8 here.
-    from PySide6.QtGui import QFontDatabase, QRawFont
-    if "Noto Sans" in QFontDatabase.families():
-        _noto = QRawFont.fromFont(QFont("Noto Sans"))
-        check("ONEUP-0297 the details mark is a character Noto Sans draws",
-              _noto.familyName() == "Noto Sans"
-              and all(_noto.supportsCharacter(ord(ch)) for ch in package_views.MARK))
-    else:
-        print("  skip - ONEUP-0297: Noto Sans is not installed on this machine")
+    # ONEUP-0357: the mark is drawn, never asked of a font. Noto Sans's U+2139 reads as a
+    # plain letter, "7zip i"; U+24D8 was an empty box (ONEUP-0297). Each cell is painted
+    # on its own, so this needs no window on screen, in both reading directions and with
+    # a name too long for its cell, which must not cost the package its mark.
+    from PySide6.QtCore import QRect
+    from PySide6.QtWidgets import QAbstractItemView, QStyleOptionViewItem
+
+    def _painted_marks(wD, width):
+        """(package, the mark's rects, the texts drawn) per cell, cells `width` wide."""
+        out = []
+        _real_draw, _real_line = symbols.draw, package_views.LinesDelegate.__dict__["_line"]
+        _marks, _texts = [], []
+
+        def _draw(p, shape, rect, ink):
+            if shape is getattr(symbols, "info", None):
+                _marks.append(rect)
+            _real_draw(p, shape, rect, ink)
+
+        def _line(p, opt, text, rect):
+            _texts.append(text)
+            _real_line.__func__(p, opt, text, rect)
+
+        symbols.draw = _draw
+        package_views.LinesDelegate._line = staticmethod(_line)
+        try:
+            for view in wD.host.findChildren(QAbstractItemView):
+                items = view.model()
+                # A table's headers share its model, and draw no package.
+                if not isinstance(items, package_views.PackageItems) or not view.itemDelegate():
+                    continue
+                for r, pkg in enumerate(items.packages()):
+                    for c in range(items.columnCount()):
+                        _marks.clear()
+                        _texts.clear()
+                        ix = items.index(r, c)
+                        opt = QStyleOptionViewItem()
+                        opt.initFrom(view)
+                        opt.widget = view
+                        opt.rect = QRect(0, 0, width, 90)
+                        img = QImage(width, 90, QImage.Format.Format_ARGB32)
+                        painter = QPainter(img)
+                        (view.itemDelegateForColumn(c) or view.itemDelegate()).paint(
+                            painter, opt, ix)
+                        painter.end()
+                        out.append((pkg, list(_marks), list(_texts)))
+        finally:
+            symbols.draw = _real_draw
+            package_views.LinesDelegate._line = _real_line
+        return out
+
+    def _alpha(pkg):
+        return pkg.key == "system" and pkg.name == "alpha"
+
+    for _lid in ("rows", "rail", "spotlight"):
+        wD.apply_layout(_lid)
+        QApplication.processEvents()
+        _cells = _painted_marks(wD, 500)
+        _on = [m for p, m, _t in _cells if _alpha(p) and m]
+        check(f"ONEUP-0357 the described package's mark is drawn once, per view ({_lid})",
+              _on and all(len(m) == 1 for m in _on))
+        check(f"ONEUP-0357 nothing else is marked ({_lid})",
+              not any(m for p, m, _t in _cells if not _alpha(p)))
+        check(f"ONEUP-0357 the character is never drawn as text ({_lid})",
+              not any(package_views.MARK in t for _p, _m, ts in _cells for t in ts))
+        check(f"ONEUP-0357 the mark follows the name, in the cell ({_lid})",
+              _on and all(0 <= m[0].left() < 250 for m in _on))
+        QApplication.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        try:
+            _on = [m for p, m, _t in _painted_marks(wD, 500) if _alpha(p) and m]
+            check(f"ONEUP-0357 right to left the mark mirrors, still in the cell ({_lid})",
+                  _on and all(250 < m[0].right() <= 500 for m in _on))
+        finally:
+            QApplication.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        _real_name_text = package_views.name_text
+        package_views.name_text = (
+            lambda win, p: "a-very-long-package-name-" * 12 + " " + package_views.MARK)
+        _on = [m for p, m, _t in _painted_marks(wD, 500) if _alpha(p) and m]
+        package_views.name_text = _real_name_text
+        check(f"ONEUP-0357 a long name keeps its mark, in the cell ({_lid})",
+              _on and all(0 <= m[0].left() and m[0].right() <= 500 for m in _on))
+    check("ONEUP-0357 a tooltip does not carry the character",
+          not any(package_views.MARK in (it.data(it.index(r, c),
+                                                 Qt.ItemDataRole.ToolTipRole) or "")
+                  for it in vars(wD.host).values()
+                  if isinstance(it, package_views.PackageItems)
+                  for r in range(it.rowCount()) for c in range(it.columnCount())))
 
     # INV-5: activating a package with details opens one dialog for it; one without
     # opens none. Closed by the scheduled-dismiss idiom of ui-and-accessibility §6.4.
