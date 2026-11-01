@@ -2774,6 +2774,13 @@ def main() -> int:
     check("settle passwordless-on turns the auto-update toggle on", w.autoupdate_btn.isChecked())
     _unpatch_all()
 
+    # (d) to (g) restore the real _stand_down_autoupdate and fake an enabled timer, so the
+    # real startup probe must not run for them: where this machine's rule reads off, its
+    # answer arrives after the dialog stubs below are restored and opens a real modal that
+    # nothing closes (ONEUP-0349, testing.md §2). (h) needs the real probe back.
+    _real_query_auth_status = auth._query_auth_status
+    auth._query_auth_status = lambda win: None
+
     # (d) revoking passwordless while auto-update is on clears the schedule
     w = window.Updater()
     removed_d = []
@@ -2835,6 +2842,8 @@ def main() -> int:
     check("a probe that emitted nothing still reflects passwordless as off",
           not w.auth_btn.isChecked())
     _unpatch_all()
+
+    auth._query_auth_status = _real_query_auth_status
 
     # (h) ONEUP-0178: a probe asked for while another is still running must not be
     # dropped. The window's startup probe is in flight when the user enables automatic

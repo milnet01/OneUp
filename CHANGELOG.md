@@ -257,9 +257,6 @@ All notable changes to OneUp are documented here. The format follows
 - **The lists of updates now grow with Text size, like the rest of the window** (ONEUP-0323)
   Choosing Large or Larger used to enlarge every label except the package lists in all three layouts. They now follow it; at Normal they look as before.
 
-- **The log says when the list of services to restart could not be checked** (ONEUP-0295)
-  Without the lsof package, that check failed in silence. The log now says so and names the package; the RPM recommends lsof so it is installed by default.
-
 - **No blue box round a button's label when it is reached with the Tab key** (ONEUP-0304)
   On desktops where OneUp runs Qt's Fusion style, a button, tab or list focused from the keyboard drew a translucent box round its text. Focus is shown by the control's colour alone, as designed.
 
@@ -516,6 +513,60 @@ All notable changes to OneUp are documented here. The format follows
   time without the build noticing. Each is now named by its exact contents. The
   build also no longer keeps its access token lying around after it has finished
   checking out the code.
+
+## [1.4.11] - 2026-11-01
+
+### Fixed
+
+- **Pressing Stop during a retried download no longer says the system was updated** (ONEUP-0341)
+  With "skip a broken source" on, a Stop during the second download attempt ended the step as "packages updated", though nothing was installed. It now says the update was stopped before installing anything.
+
+- **OneUp says when it could not list leftover packages** (ONEUP-0342)
+  When the package manager was busy or a source was broken, the leftover-package step said "nothing to remove". It now says it could not list them.
+
+- **No garbled characters in OneUp's messages** (ONEUP-0343)
+  A dash or accented letter that arrived in two pieces showed as "��". It now shows correctly.
+
+- **A read error no longer stops a running update** (ONEUP-0344)
+  OneUp treated any error from the update process as a failed start, which could end an update that was still running.
+
+- **Updating only some things no longer makes the tray say "up to date"** (ONEUP-0345)
+  The tray icon now changes only after a run or check that covered system packages, Flatpaks and firmware.
+
+- **Reopening OneUp during an update no longer misreads its progress** (ONEUP-0346)
+  A window following an update started earlier could read a line the update was still writing. It now waits for each line to be complete.
+
+- **Less work on each download-size check** (ONEUP-0347)
+  The check that runs every few seconds during a download now reads each file once instead of twice.
+
+- **When the password box cannot start, OneUp says so and names the command** (ONEUP-0337)
+  An update that stopped part-way through the Qt libraries can leave the password box unable to start, and OneUp then said only "Authentication failed or cancelled". It now says the box could not start and gives the command to finish the update in a terminal, with a Copy command button.
+
+- **A system update that fails part-way ends the run, and says so** (ONEUP-0330, ONEUP-0331)
+  When rpm had already updated some packages and then failed, OneUp went on to Flatpak and would have removed leftover packages from a half-updated system. It now stops there, advises no restart, and its warning says the system is only partly updated: run the update again, or finish it in a terminal with the command it names.
+
+- **An rpm install failure is no longer called a package conflict** (ONEUP-0332)
+  Every update prints "Checking for file conflicts", which made any late failure read as a conflict with a third-party source. When rpm fails before changing anything, the hint now names the package that could not be installed.
+
+- **No "approve the password popup" when Passwordless is on** (ONEUP-0333)
+  With Passwordless on no popup comes, so the status line now says the update is starting.
+
+- **The log says when the list of services to restart could not be checked** (ONEUP-0295)
+  Without the lsof package, that check failed in silence. The log now says so and names the package; the RPM recommends lsof so it is installed by default.
+
+- **No blue box round a button's label when it is reached with the Tab key** (ONEUP-0304)
+  On desktops where OneUp runs Qt's Fusion style, a button focused from the keyboard drew a translucent box round its text. Focus is shown by the button's colour alone, as designed.
+
+- **The count of installed updates includes new packages** (ONEUP-0288)
+  A run that added packages new to the system, such as a new kernel, left
+  them out of the finished line's count. A run with 122 upgrades and 4 new
+  packages said 122; it now says 126.
+
+- **The progress line stops naming a repository once packages download** (ONEUP-0284)
+  Through the whole download and install, the line under the status
+  kept saying "Fetching" the last repository OneUp had checked, with
+  a clock still counting from it. That check had long finished. The
+  line now shows only the download's own progress.
 
 ## [1.4.10] - 2026-10-14
 
@@ -1244,7 +1295,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.10...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.11...HEAD
+[1.4.11]: https://github.com/milnet01/OneUp/releases/tag/v1.4.11
 [1.4.10]: https://github.com/milnet01/OneUp/releases/tag/v1.4.10
 [1.4.9]: https://github.com/milnet01/OneUp/releases/tag/v1.4.9
 [1.4.8]: https://github.com/milnet01/OneUp/releases/tag/v1.4.8

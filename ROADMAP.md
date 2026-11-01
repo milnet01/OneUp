@@ -9879,7 +9879,7 @@ when complete (that document's §7).
   Source: ONEUP-0310-build-2026-10-17.
   Lanes: gui.
 
-- 🚧 [ONEUP-0324] **The header's three buttons are one height, whatever their labels hold.**
+- ✅ [ONEUP-0324] **The header's three buttons are one height, whatever their labels hold.**
   Seen by the user on the installed 2.0 preview: Settings is taller
   than Recenter and About. Measured: Noto Sans has no gear (U+2699), so
   Qt draws "⚙" from DejaVu Sans, whose taller line grows that button's
@@ -9897,10 +9897,7 @@ when complete (that document's §7).
   2026-10-19, user: leave Run about 3 px taller than Check for updates,
   as the primary action. Question closed.
   Measured by eye 2026-11-01 in the VM: the three buttons are one height
-  in every theme. Waiting-on: user (do Settings, Recenter and About now
-  line up for you? Crops:
-  /mnt/Games/oneup-vmtest/crops/0324-header-dark.png and -light.png. I
-  recommend closing it, 2026-11-01).
+  in every theme. 2026-11-01, user: they line up. Closed.
   **Layman:** Settings stood taller than Recenter and About; now all three line up.
   Kind: fix.
   Source: user-report-2026-10-17.
@@ -10569,7 +10566,7 @@ when complete (that document's §7).
 
 - 📋 [ONEUP-0357] **The "has details" mark reads as a stray letter: "7zip i", "Mesa i".**
   Seen 2026-11-01 in the VM on a real run. U+2139 in Noto Sans looks like a plain i, on every package once details arrive. The sketches have no mark; ONEUP-0297 chose U+2139 (user, 2026-10-17). Crop: /mnt/Games/oneup-vmtest/cmp/i.png.
-  Waiting-on: user (keep the i, or draw a small circled i as the app draws its other symbols? I recommend drawing it: it reads as a symbol, as the gear and Recenter now do, 2026-11-01).
+  2026-11-01, user: draw a small circled i, as the app draws its other symbols. This replaces the U+2139 choice of ONEUP-0297.
   **Layman:** The small mark saying a package has more details looks like a stray letter i after its name.
   Kind: ux.
   Source: ONEUP-0239-vm-check-2026-11-01.
@@ -10582,8 +10579,17 @@ when complete (that document's §7).
   Source: ONEUP-0239-vm-check-2026-11-01.
   Lanes: gui.
 
-- 📋 [ONEUP-0359] **Merge main's 1.4.11 into v2, with the Python half of any fix it lacks.**
+- ✅ [ONEUP-0359] **Merge main's 1.4.11 into v2, with the Python half of any fix it lacks.**
   Tried 2026-11-01 and aborted cleanly: `git merge --no-commit main` brings 25 commits and conflicts in CHANGELOG.md, docs/standards/testing.md, ui-and-accessibility.md, tests/gui-smoke.py, update_system.sh and updater.py; tests/run-tests.sh auto-merges with about 200 new lines. Those scenarios may fail against v2's Python engine where a fix (ONEUP-0341 to 0347 and others) has only its main half: fix v2's half then. Keep v2's shim in updater.py, and set oneup/__init__.py APP_VERSION by hand. Until it lands, the user's app-menu OneUp still labels itself 1.4.10.
+  2026-11-01: merged. v2 already held every 1.4.11 fix in its Python
+  halves, so no engine or window code changed. Kept main's new scenarios
+  for ONEUP-0341 and 0342 and the T-1 fix (ONEUP-0348); dropped main's
+  duplicates of scenarios v2 already words its own way (0288, 0330-0332,
+  0337) and of the window checks; ported ONEUP-0349's guard to
+  auth._query_auth_status. run-tests 629/0, gui-smoke 1108/0, docs-check
+  32817/0. While the merge sat in the checkout, conflict marks in
+  updater.py stopped the user's app-menu OneUp launching for about two
+  minutes.
   **Layman:** Bring the fixes just released in 1.4.11 across to the 2.0 code.
   Kind: chore.
   Source: release-1.4.11-2026-11-01.
