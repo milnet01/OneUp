@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.4.10
+Version:        1.4.11
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -76,6 +76,22 @@ install -Dm0644 data/%{app_id}.metainfo.xml \
 %{_datadir}/metainfo/%{app_id}.metainfo.xml
 
 %changelog
+* Sun Nov 01 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.11-0
+- Pressing Stop during a retried download no longer says the system was updated
+- OneUp says when it could not list leftover packages
+- No garbled characters in OneUp's messages
+- A read error no longer stops a running update
+- Updating only some things no longer makes the tray say "up to date"
+- Reopening OneUp during an update no longer misreads its progress
+- Less work on each download-size check
+- When the password box cannot start, OneUp says so and names the command
+- A system update that fails part-way ends the run, and says so
+- An rpm install failure is no longer called a package conflict
+- No "approve the password popup" when Passwordless is on
+- The log says when the list of services to restart could not be checked
+- No blue box round a button's label when it is reached with the Tab key
+- The count of installed updates includes new packages
+- The progress line stops naming a repository once packages download
 * Wed Oct 14 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.10-0
 - The openSUSE repository has a new address
 - Stopping during the download is reported as a stop, not a failure

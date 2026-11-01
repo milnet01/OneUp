@@ -48,6 +48,28 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.4.11" date="2026-11-01">
+      <description>
+        <p>Release 1.4.11.</p>
+        <ul>
+          <li>Pressing Stop during a retried download no longer says the system was updated</li>
+          <li>OneUp says when it could not list leftover packages</li>
+          <li>No garbled characters in OneUp's messages</li>
+          <li>A read error no longer stops a running update</li>
+          <li>Updating only some things no longer makes the tray say "up to date"</li>
+          <li>Reopening OneUp during an update no longer misreads its progress</li>
+          <li>Less work on each download-size check</li>
+          <li>When the password box cannot start, OneUp says so and names the command</li>
+          <li>A system update that fails part-way ends the run, and says so</li>
+          <li>An rpm install failure is no longer called a package conflict</li>
+          <li>No "approve the password popup" when Passwordless is on</li>
+          <li>The log says when the list of services to restart could not be checked</li>
+          <li>No blue box round a button's label when it is reached with the Tab key</li>
+          <li>The count of installed updates includes new packages</li>
+          <li>The progress line stops naming a repository once packages download</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.4.10" date="2026-10-14">
       <description>
         <p>Release 1.4.10.</p>
