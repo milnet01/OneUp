@@ -20,13 +20,16 @@ from PySide6.QtWidgets import QApplication, QFrame, QMessageBox, QScrollArea, QS
 
 def screen_room(widget) -> QSize:
     """What `widget`'s window may take up of its screen, leaving room for its frame.
-    Before the window is on screen its frame is not known, and on Wayland it may never
-    be, so the title bar is estimated from the text size."""
+    Before the window is on screen its frame is not known. On Wayland it may never be,
+    and the screen's "available" size still counts the desktop's panel (seen in the VM:
+    800 reported, about 726 given), so title bar and panel are estimated from the text
+    size. Too little here brings a sideways scroll bar; too much only a little scrolling
+    the user can resize away."""
     win = widget.window()
     screen = win.screen() or QApplication.primaryScreen()
     frame = win.frameGeometry().size() - win.size()
     if frame.height() <= 0:
-        frame.setHeight(2 * win.fontMetrics().height())
+        frame.setHeight(4 * win.fontMetrics().height())
     return screen.availableGeometry().size() - frame
 
 

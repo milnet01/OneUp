@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=359 -->
+<!-- ants-roadmap-id-high-water: ONEUP=361 -->
 
 # OneUp Roadmap
 
@@ -8494,6 +8494,11 @@ when complete (that document's §7).
   a real run from an SSH session on a packaged install, taking the sudo
   route and its password request. Item 1 measured only polkit's refusal,
   not that run. Do it in the VM, then flip.
+  2026-11-01: the owed SSH run was made in the VM. The route falls back
+  to sudo as §4.7 says, then the password request fails because no box
+  can open there: filed as a new item on the 2.0.0 list, headed "From an
+  SSH login with no desktop". Flip this once that item's real run over
+  SSH passes.
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
@@ -10581,6 +10586,8 @@ when complete (that document's §7).
   the screen reader's words are unchanged. gui-smoke red 1111/15 on the
   old code, green 1126/0. Offscreen renders of all three layouts, old
   and new: /mnt/Games/oneup-vmtest/cmp/0357/. Not yet seen in the VM.
+  2026-11-01: seen in the VM on Rows and Rail, Normal and Larger: reads
+  as a circled i.
   **Layman:** The small mark saying a package has more details looks like a stray letter i after its name.
   Kind: ux.
   Source: ONEUP-0239-vm-check-2026-11-01.
@@ -10600,6 +10607,14 @@ when complete (that document's §7).
   ONEUP-0239 §4.2 item 6. Stays in progress for a look on a real short
   screen in the VM, whose title bar the code estimates until it can read
   it.
+  2026-11-01, VM at its real 1280x800 screen: all three layouts scroll
+  and nothing is squeezed. Found there: Wayland's available size counts
+  the panel (800 reported, about 726 given), which brought a small
+  sideways bar in Rail. A resizeEvent fix came too late on the VM, so it
+  was dropped; screen_room now allows four text lines for title bar and
+  panel when the frame is unknown. That last change is NOT yet seen in
+  the VM: flip after one look at Rail at Normal shows no sideways bar.
+  Captures: /mnt/Games/oneup-vmtest/cmp/0358-vm/.
   **Layman:** With the largest text on a small screen, the window cannot fit and parts of it get squeezed.
   Kind: ux.
   Source: ONEUP-0239-vm-check-2026-11-01.
@@ -10620,6 +10635,22 @@ when complete (that document's §7).
   Kind: chore.
   Source: release-1.4.11-2026-11-01.
   Lanes: engine, gui.
+
+- 📋 [ONEUP-0360] **From an SSH login with no desktop, the engine cannot ask for the password, so the run always fails.**
+  Measured 2026-11-01 in the VM, RPM from v2 at 932ad3d, 50-livecd moved out, `ssh -tt`, `python3 -m oneup.engine --steps=cache`, no DISPLAY or WAYLAND_DISPLAY: the auto route falls back as spec ONEUP-0249 §4.7 says, printing "system service could not be reached" (untrue here: polkit answered `challenge`), then `sudo -A` starts ksshaskpass, Qt cannot load a platform plugin, and the run ends "Authentication failed or cancelled". main's `sudo_init` in update_system.sh has the same `sudo -A`; not run on main.
+  Decided by the user 2026-11-01: ask for the password in the terminal when there is no desktop. The desktop keeps its box.
+  Plan, unbuilt: where neither display variable is set and /dev/tty opens, validate with `sudo -p <label> -v`, without -A. Check first: oneup/engine/proc.py starts some children with start_new_session, and sudo keys its cached credential to the terminal (the keep-alive's docstring in privilege.py says a new group, never a new session), so later root calls may ask again. Amend docs/standards/security.md §3, which names `sudo -A` as the call that prompts; §3.4 binds development, not this. Reword the fallback line for `challenge`. Route by docs/standards/workflow.md §9: main first, then merge, then v2's oneup/engine/privilege.py. Test first in tests/run-tests.sh; `script` gives a terminal. Then a real run over SSH in the VM, which also settles ONEUP-0249's last owed check.
+  **Layman:** Starting an update over SSH fails because OneUp can only ask for the password in a window, and there is no screen to show one on.
+  Kind: fix.
+  Source: ONEUP-0249-vm-check-2026-11-01.
+  Lanes: engine, security.
+
+- 📋 [ONEUP-0361] **On Wayland a window restored from saved settings can stay narrower than its minimum.**
+  Seen 2026-11-01 in the VM at 1280x800, Rail at Larger, with settings left by earlier windows: the window stayed 1002 wide with a minimum of 1079, cutting About, and ScreenFit showed a sideways scroll bar. With settings cleared it opened at 1079. A resize() after showing took effect, so the compositor's first size stands until the next one. Not checked on code before ONEUP-0358, and the cause is not measured.
+  **Layman:** After switching layouts or text sizes, the reopened window can come up too narrow, so part of it needs scrolling sideways until it is resized.
+  Kind: ux.
+  Source: ONEUP-0249-vm-check-2026-11-01.
+  Lanes: gui.
 
 ## 2.1.0 — after 2.0
 
