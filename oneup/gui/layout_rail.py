@@ -10,8 +10,8 @@ from __future__ import annotations
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
+from . import i18n, steps
 from . import package_views as pv
-from . import steps
 from .elided_label import ElidedLabel
 from .layout_host import LayoutHost
 
@@ -127,9 +127,12 @@ class RailLayout(LayoutHost):
         frame = row.layout().contentsMargins()
         self.rail.setMinimumWidth(widest + row.switch.minimumWidth() + 10
                                   + card.left() + card.right() + frame.left() + frame.right())
-        # The counts keep room for three-figure totals; the summary beside them elides
-        # first (ONEUP-0354).
+        # Both keep room for three-figure totals, and the window grows to hold them;
+        # only the summary's "some sizes not known" may elide (ONEUP-0354).
         self.counts.setMinimumWidth(self.counts.whole_width(
             pv.counts_sentence({"done": 999, "now": 9, "togo": 999})))
+        self.summary.setMinimumWidth(self.summary.whole_width(QCoreApplication.translate(
+            "package_views", "{count} · {size} to download").format(
+            count=i18n.counted("package-count", 999), size="999.9 MiB")))
         pv.fit_board(self.board)
         pv.hold_rows(self.board, self.PACKAGE_ROWS, self.board.gridSize().height())

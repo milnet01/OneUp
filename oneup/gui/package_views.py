@@ -649,6 +649,9 @@ class ListLineDelegate(LinesDelegate):
         for text, rect, align in ((name, r["name"], lead), (size, r["size"], trail)):
             one = QStyleOptionViewItem(opt)
             one.displayAlignment = align | Qt.AlignmentFlag.AlignVCenter
+            if rect == r["size"]:
+                # A size is short and fixed in form: a cut one is misread (ONEUP-0356).
+                one.textElideMode = Qt.TextElideMode.ElideNone
             self._line(painter, one, text, rect)
 
 

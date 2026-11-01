@@ -10256,7 +10256,7 @@ when complete (that document's §7).
   Kind: fix.
   Source: real-update-test-2026-10-23.
 
-- 📋 [ONEUP-0338] **Review findings outside ONEUP-0330's change, filed from its contract gate.**
+- ✅ [ONEUP-0338] **Review findings outside ONEUP-0330's change, filed from its contract gate.**
   testing.md §5 item 2 says "A failed step is recorded, emits a
   @@HINT@@ the window words in plain English". False for three paths:
   run_cache's "clean failed" exit, both of run_orphans' fail exits, and
@@ -10270,6 +10270,11 @@ when complete (that document's §7).
   nothing may now pin the engine's exit codes. INV-2's base wording
   "emits a plain-English hint" predates ONEUP-0072's codes; testing.md
   §5 item 2 says the window words the hint.
+  Built 2026-11-01. Decided: add the hints, so testing.md §5 item 2
+  stays true as written with no gate. Seven step paths plus _failure's
+  no-pattern case; none when SYS_PARTIAL spoke. Engine suite red 615/7,
+  green 622/0. ONEUP-0054 §4.1's harness line corrected; §6's table and
+  INV-2's wording not touched.
   **Layman:** A review of the half-finished-update rule found older sentences in the testing rules that no longer match the code.
   Kind: doc-fix.
   Source: review-contract-2026-10-23.

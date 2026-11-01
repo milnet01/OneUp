@@ -7181,6 +7181,14 @@ for th in theme.THEMES:
         if _h.counts.fontMetrics().elidedText(_sentence, Qt.TextElideMode.ElideRight,
                                               _h.counts.width()) != _sentence:
             _cut_0354.append(f"{_label}: counts in {_h.counts.width()} px")
+        _about = QCoreApplication.translate(
+            "package_views", "{count} · {size} to download").format(
+            count=i18n.counted("package-count", 881), size="123.4 MiB")
+        _h.summary.setText(_about)
+        QApplication.processEvents()
+        if _h.summary.fontMetrics().elidedText(_about, Qt.TextElideMode.ElideRight,
+                                               _h.summary.width()) != _about:
+            _cut_0354.append(f"{_label}: summary in {_h.summary.width()} px")
         _d = _h.board.itemDelegate()
         _state = _d.card_rects(_h.board, QRect(0, 0, _h.board.gridSize().width(),
                                                _h.board.gridSize().height()))["state"]
