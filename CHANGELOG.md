@@ -209,6 +209,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Every failed step now says something** (ONEUP-0338)
+  A failed Flatpak, firmware, leftover or cache step, and a system failure with no known cause, now gets a plain sentence.
+
 - **Rail keeps its words at Larger** (ONEUP-0354)
   "downloading" on a card and the done, now and to go counts are no longer cut off.
 

@@ -52,6 +52,33 @@ def fallback_long(*codes: str) -> str:
 # commented out here, not deleted — this table is the register. A hint that tells
 # the user to run a command names it as {command}, filled from HINT_COMMANDS.
 HINTS: dict[str, tuple[tuple[str, ...], str]] = {
+    "flatpak-failed": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "One or more Flatpak apps could not be updated. "
+        "The log has the reason; run the update again.")),
+    "firmware-check-failed": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "OneUp could not ask the firmware service about updates. "
+        "The log has the reason; run the update again later.")),
+    "firmware-failed": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "A firmware update failed. The log has the reason.")),
+    "orphans-list-failed": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "OneUp could not list the leftover packages, so it removed none. The log has the reason.")),
+    "orphans-unreadable": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "OneUp could not read the list of leftover packages, so it removed none. "
+        "The log has the reason.")),
+    "orphans-remove-failed": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "The leftover packages could not be removed. The log has the reason.")),
+    "cache-clean-failed": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "The package cache could not be cleaned. The log has the reason.")),
+    "system-failed": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "The system update failed. The log has the reason; run the update again.")),
     "downloads-kept": ((), QT_TRANSLATE_NOOP(
         "markers",
         "Kept the already-downloaded packages, so retrying the update "

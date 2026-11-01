@@ -270,6 +270,9 @@ def run_flatpak() -> None:
     proc.run(["flatpak", "uninstall", "--user", "--unused", "-y"], stream=True)
     privilege.root("flatpak-system-unused", stream=True)
     if not ok:
+        markers.hint("flatpak-failed",
+                     say="One or more Flatpak apps could not be updated. "
+                         "The log has the reason; run the update again.")
         end_step("flatpak", "fail", "failed", "a flatpak update failed")
     elif count > 0:
         FLATPAK_UPDATED = count
@@ -313,6 +316,9 @@ def run_firmware() -> None:
         return
     if fw_rc != 0:
         markers.out(f"Couldn't ask fwupd about firmware updates (exit {fw_rc}).")
+        markers.hint("firmware-check-failed",
+                     say="OneUp could not ask the firmware service about updates. "
+                         "The log has the reason; run the update again later.")
         end_step("firmware", "fail", "failed", "couldn't check for firmware updates")
         return
     # Claim success only if the flash itself succeeded: a failed update must not
@@ -321,6 +327,7 @@ def run_firmware() -> None:
         FW_CHANGED = True
         end_step("firmware", "ok", "updated", "updates applied")
     else:
+        markers.hint("firmware-failed", say="A firmware update failed. The log has the reason.")
         end_step("firmware", "fail", "failed", "firmware update failed")
 
 
@@ -396,10 +403,16 @@ def run_orphans(opts) -> None:
     rc, raw = privilege.root("orphans-unneeded")
     if rc != 0:
         markers.out(f"Couldn't list leftover dependency packages (zypper exit {rc}).")
+        markers.hint("orphans-list-failed",
+                     say="OneUp could not list the leftover packages, so it removed none. "
+                         "The log has the reason.")
         end_step("orphans", "fail", "failed", "couldn't list leftover packages")
         return
     unneeded = _package_column(raw)
     if unneeded is None:
+        markers.hint("orphans-unreadable",
+                     say="OneUp could not read the list of leftover packages, so it removed none. "
+                         "The log has the reason.")
         end_step("orphans", "fail", "failed", "unreadable package name in zypper's output")
         return
     if unneeded:
@@ -412,6 +425,9 @@ def run_orphans(opts) -> None:
             end_step("orphans", "ok", "removed", f"removed {len(unneeded)} package(s)",
                      len(unneeded))
         else:
+            markers.hint("orphans-remove-failed",
+                         say="The leftover packages could not be removed. "
+                             "The log has the reason.")
             end_step("orphans", "fail", "failed", "removal failed")
     else:
         markers.out("No leftover dependency packages to remove.")
@@ -451,6 +467,9 @@ def run_cache() -> None:
         return
     before = _cache_bytes()
     if privilege.root("cache-clean", stream=True)[0] != 0:
+        markers.hint("cache-clean-failed",
+                     say="The package cache could not be cleaned. "
+                         "The log has the reason.")
         end_step("cache", "fail", "failed", "clean failed")
         return
     end_step("cache", "ok", "done")
@@ -1017,6 +1036,11 @@ def _failure(systemic: bool, import_keys: bool) -> None:
     if hint:
         markers.out(f"  Hint: {hint}")
         markers.hint(code, *args)
+    elif not SYS_PARTIAL:
+        # No pattern named the cause. The window still owes a sentence (testing.md §5).
+        markers.hint("system-failed",
+                     say="The system update failed. The log has the reason; "
+                         "run the update again.")
     end_step("system", "fail", "failed", "zypper reported an error")
 
 

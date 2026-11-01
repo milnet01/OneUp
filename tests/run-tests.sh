@@ -471,6 +471,7 @@ printf '#!/usr/bin/env bash\necho "BUG: flatpak ran after a half-finished system
 chmod +x "$d/flatpak"
 out=$(run_engine "$d" --steps=system,flatpak,orphans,cache)
 check        "system step marked fail"                 "@@STEP_END@@|system|fail" "$out"
+check_absent "part-way, no generic system hint (ONEUP-0338)" "@@HINT@@|system-failed" "$out"
 check        "the part-updated hint is given"          "@@HINT@@|system-incomplete" "$out"
 check_absent "an rpm failure is not a package conflict" "@@HINT@@|package-conflict" "$out"
 check_absent "no step runs after it (flatpak)"         "@@STEP_BEGIN@@|flatpak" "$out"
@@ -958,6 +959,7 @@ EOF
   check_absent "check: fwupd exit $rc is no bare zero"    "@@CHECK@@|firmware|0"       "$out"
   out=$(run_engine "$d" --steps=firmware)
   check        "run: fwupd exit $rc fails the step"       "@@STEP_END@@|firmware|fail" "$out"
+  check        "run: a failed fwupd query gives a hint (ONEUP-0338)" "@@HINT@@|firmware-check-failed" "$out"
   check_absent "run: fwupd exit $rc flashes nothing"      "BUG: flashed"               "$out"
   rm -rf "$d"
 done
@@ -2994,6 +2996,7 @@ EOF
 chmod +x "$d/zypper" "$d/fwupdmgr"
 out=$(run_engine "$d" --steps=firmware)
 check        "firmware failure marked fail"     "@@STEP_END@@|firmware|fail" "$out"
+check        "a failed flash gives a hint (ONEUP-0338)" "@@HINT@@|firmware-failed" "$out"
 check        "no reboot after firmware failure" "@@REBOOT@@|no"  "$out"
 check_absent "no false reboot on fw failure"    "@@REBOOT@@|yes" "$out"
 rm -rf "$d"
@@ -3200,6 +3203,30 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=orphans)
 check "failed orphan removal marked fail" "@@STEP_END@@|orphans|fail" "$out"
+check "a failed removal gives a hint (ONEUP-0338)" "@@HINT@@|orphans-remove-failed" "$out"
+
+# ONEUP-0338: testing.md §5 item 2 says a failed step emits a hint. Every "fail" end_step in
+# the engine's steps follows one within three lines, or the window has no sentence for it.
+out=$(python3 - <<'PY'
+import re
+lines = open("oneup/engine/steps.py", encoding="utf-8").read().split("\n")
+for i, line in enumerate(lines):
+    if re.search(r'end_step\("\w+", "fail"', line) and "hint(" not in "".join(lines[max(i - 3, 0):i]):
+        print("no hint before line", i + 1, line.strip())
+PY
+)
+check_absent "every failed step is preceded by a hint (ONEUP-0338)" "no hint before" "$out"
+out=$(python3 - <<'PY'
+import ast
+src = open("oneup/engine/steps.py", encoding="utf-8").read()
+codes = [n.args[0].value for n in ast.walk(ast.parse(src))
+         if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+         and n.func.attr == "hint" and n.args and isinstance(n.args[0], ast.Constant)]
+text = open("oneup/gui/markers.py", encoding="utf-8").read()
+print("missing:", [c for c in codes if f'"{c}"' not in text])
+PY
+)
+check "the window has a sentence for each of those hints (ONEUP-0338)" "missing: []" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -3321,6 +3348,7 @@ chmod +x "$d/flatpak"
 out=$(run_engine "$d" --steps=flatpak)
 check        "each app is listed once, with its remote" "@@PKG@@|flatpak|queued|org.both.App|2|0||flathub" "$out"
 check        "the failed system update fails the step"  "@@STEP_END@@|flatpak|fail" "$out"
+check        "a failed flatpak update gives a hint (ONEUP-0338)" "@@HINT@@|flatpak-failed" "$out"
 check        "a user-only app is installed"             "@@PKG@@|flatpak|installed|org.user.Only|1" "$out"
 check_absent "a system-only app is not"                 "@@PKG@@|flatpak|installed|org.system.Only" "$out"
 check_absent "an app in both scopes is not"             "@@PKG@@|flatpak|installed|org.both.App" "$out"
@@ -4337,6 +4365,7 @@ d=$(mktemp -d); setup_common "$d"
 mk_recovery_zypper "$d" "Installation aborted by user" 1 "unused" 0
 out=$(run_engine "$d" --steps=system)
 check        "a non-transfer failure fails the step"   "@@STEP_END@@|system|fail" "$out"
+check        "an unrecognised failure gets the generic hint (ONEUP-0338)" "@@HINT@@|system-failed" "$out"
 if [[ "$(dl_calls "$d")" == "1" ]]; then
     echo "  ok   - no retry for a failure recovery cannot help"; PASS=$((PASS+1))
 else

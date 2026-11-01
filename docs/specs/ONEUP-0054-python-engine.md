@@ -125,8 +125,8 @@ read as one item. It does share the package. It is not one item.
   repeated here, so the two lists cannot diverge.
 - **The exit codes.** The window takes its verdict from the engine's exit code —
   `Updater.on_finished` sets `ok = exit_code == 0`, with `@@DONE@@` as belt and braces. The
-  codes stay identical, and the differential harness asserts it (§4.5) — **for the codes a
-  scenario reaches**. Nothing pins the full set anywhere, and `exit 2` (unknown flag) and the
+  codes stay identical, and the differential harness asserted it (§4.5) until ONEUP-0072
+  deleted the harness at `156c8cc`. Nothing pins the full set anywhere, and `exit 2` (unknown flag) and the
   trap codes 130/143/141 are in no scenario, so v2 could change those four with every gate
   green. Stage 2 writes them down beside §4.1.1, the same way and for the same reason.
 - **The four state files.** `run.state`, `stop.request`, `hold.state` and `go.request` keep their **layout** (§4.1.1) and
