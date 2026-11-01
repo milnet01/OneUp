@@ -147,8 +147,12 @@ _counted: _Counted | None = None
 
 
 def counted(key: str, n: int) -> str:
-    """The sentence `key` for a count of `n`, in the plural form the language needs."""
+    """The sentence `key` for a count of `n`, in the plural form the language needs.
+
+    No catalogue exists for English, so its reader gets the source text: "(s)" becomes
+    the ending `n` asks for. A translation holds no "(s)" and passes through untouched.
+    """
     global _counted
     if _counted is None:
         _counted = _Counted()
-    return _counted.phrase(key, n)
+    return _counted.phrase(key, n).replace("(s)", "" if n == 1 else "s")

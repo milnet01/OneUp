@@ -209,6 +209,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Counts read as English** (ONEUP-0353)
+  The window, tray and notifications said "24 update(s)". They now say "24 updates" and "1 update".
+
 - **Text size now reaches every button** (ONEUP-0352)
   Stop, Settings, About, the tabs and the log buttons stayed small at Large and Larger while the labels grew.
 

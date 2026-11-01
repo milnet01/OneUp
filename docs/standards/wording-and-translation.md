@@ -213,8 +213,8 @@ exception: `tr()` substitutes it itself from the count argument.
 
 `self.tr("Found %n update(s)", "", n)` — not `"1 update" if n == 1 else f"{n} updates"`.
 Several languages have three or more plural forms and no amount of English branching
-produces them. The `(s)` is only the English fallback; the `.ts` file holds a separate,
-properly inflected form per language.
+produces them. The `(s)` is only the source text: `i18n.counted` turns it into the English
+ending, and the `.ts` file holds a separate, properly inflected form per language.
 
 **Only `self.tr(…, "", n)` inside a class extracts as a plural.** Measured 2026-10-02 on
 PySide6 6.11: `QCoreApplication.translate(ctx, text, "", n)` is extracted as an ordinary
@@ -311,7 +311,7 @@ Rules:
 | §4 never claim what was not earned | `tests/run-tests.sh` — the reboot and success invariants. A failed step is recorded, gives a hint, and claims nothing; a package-only change offers a service restart rather than a reboot |
 | §6.1 every user-facing string is wrapped for translation | **partly**: `tests/i18n-check.py` (ONEUP-0032 INV-7) fails an unwrapped literal or f-string at every call on its closed list of text-setting calls and helpers. A sentence assembled into a variable before the call is invisible to it, so review stays beside it |
 | §6.2 no sentence assembled by concatenation | **partly**: the same INV-7 fails a `+`, a `%`, a `.format` on anything not translated, and a `.join` on a literal separator at those calls; INV-12 fails a literal-separator join or case change anywhere under `oneup/gui/` that is not on its list of data sites. Concatenation into a variable is review's |
-| §6.3 plurals go through the plural form | **partly**: INV-8 asserts the `_Counted` sentences extract as plurals. Nothing catches a count written into an ordinary `translate` call |
+| §6.3 plurals go through the plural form | **partly**: INV-8 asserts the `_Counted` sentences extract as plurals, and `tests/gui-smoke.py`'s ONEUP-0353 checks pin the English endings. Nothing catches a count written into an ordinary `translate` call |
 | §7 the catalogue workflow | `tests/i18n-check.py` (ONEUP-0032 INV-8): extraction from the file list reaches the window and its tables, and a finished translation survives compile and load |
 
 **§4 is the one rule here with real teeth, and it is not a wording rule by accident.** "Never

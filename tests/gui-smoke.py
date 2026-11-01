@@ -1369,7 +1369,7 @@ def main() -> int:
     check("a mixed list ALSO offers the reboot for the rest",
           _w4.reboot_banner.isVisibleTo(_w4))
     check("a mixed list counts only the safe services in the services banner",
-          "2 service(s)" in _w4.services_label.text())
+          "2 services" in _w4.services_label.text())
 
     _w5, _ = _run_restart("sshd cups", click=False)
     check("an all-safe list offers no reboot", not _w5.reboot_banner.isVisibleTo(_w5))
@@ -1502,7 +1502,7 @@ def main() -> int:
     w.proc = QProcess(w)
     run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("INV-10 the check's summary says at least",
-          w.status.text().startswith("At least 7 update(s) available"))
+          w.status.text().startswith("At least 7 updates available"))
     check("INV-10 the tray hears the basis", _tray_calls == [{"at_least": True}])
     _unpatch_all()
     w = window.Updater()
@@ -2523,7 +2523,7 @@ def main() -> int:
                                   "@@INSTALLED@@|7|yes|no", "@@DONE@@|ok"])
     check("an installed count reads as the engine wrote it, with the set-aside source",
           _is_note(_notes, "run.installed")
-          and _notes[0].endswith("7 system package(s) installed. "
+          and _notes[0].endswith("7 system packages installed. "
                                  "(skipped: games — will retry next time)"))
     _c, _, _, _notes = _headless(gui_app._headless_update,
                                  ["@@INSTALLED@@|0|no|yes", "@@DONE@@|ok"])
@@ -2540,7 +2540,7 @@ def main() -> int:
     _c, _, _, _notes = _headless(gui_app._headless_check, ["@@CHECK@@|TOTAL|3|updates available"])
     check("INV-3 a non-zero total notifies, as the engine worded it",
           _is_note(_notes, "check.available")
-          and _notes[0].endswith("3 update(s) ready to install. Open OneUp to update."))
+          and _notes[0].endswith("3 updates ready to install. Open OneUp to update."))
     _c, _, _, _notes = _headless(gui_app._headless_check,
                                  ["@@CHECK_UNKNOWN@@|system|sources-unreadable|packman",
                                   "@@CHECK@@|TOTAL|0|updates available"])
@@ -2551,13 +2551,13 @@ def main() -> int:
                                   "@@CHECK@@|TOTAL|4|updates available"])
     check("INV-3 an unreadable source beside a count gives both",
           _is_note(_notes, "check.partial_count") and "packman" in _notes[0]
-          and "4 update(s)" in _notes[0])
+          and "4 updates" in _notes[0])
     # ONEUP-0329 INV-10: the weekly notification says at least for a floor.
     _c, _, _, _notes = _headless(gui_app._headless_check,
                                  ["@@CHECK@@|TOTAL|7|updates available|at-least"])
     check("INV-10 an at-least total notifies with at least",
           _is_note(_notes, "check.available_at_least")
-          and _notes[0].endswith("At least 7 update(s) ready to install. Open OneUp to update."))
+          and _notes[0].endswith("At least 7 updates ready to install. Open OneUp to update."))
     _c, _, _, _notes = _headless(gui_app._headless_check,
                                  ["@@CHECK@@|TOTAL|0|updates available|at-least"])
     check("INV-10 an at-least zero is silent", _notes == [])
@@ -2627,6 +2627,15 @@ def main() -> int:
         check(f"INV-9 {_name} has an application object and loaded the catalogues "
               "before its sentence", _r.returncode == 0 and _r.stdout.rstrip().endswith("READY"))
         check(f"INV-9 and still raised its notification ({_name})", _wait_for_notify())
+
+    # --- ONEUP-0353: with no catalogue, English reads as English --------------------
+    for _key, _n, _said in (("package-count", 1, "1 update"),
+                            ("package-count", 24, "24 updates"),
+                            ("package-count", 0, "0 updates"),
+                            ("updates-available", 1, "1 update available."),
+                            ("system-installed", 2, "2 system packages installed."),
+                            ("sources-set-aside", 1, " 1 source set aside: {names}.")):
+        check(f"ONEUP-0353 {_key} with {_n} reads {_said!r}", i18n.counted(_key, _n) == _said)
 
     # --- ONEUP-0032 INV-2 and INV-4: the catalogue pair, and the translators' life ---
     # A hand-written catalogue compiled with pyside6-lrelease — a freshly extracted one
@@ -3299,7 +3308,7 @@ def main() -> int:
     tray._parse_tray_line(w, "@@CHECK@@|TOTAL|7|updates available|at-least")
     check("INV-10 tray keeps an at-least total's basis", w._tray_at_least is True)
     check("INV-10 tray tooltip says at least",
-          tray._tooltip(7, at_least=True).endswith("at least 7 update(s) waiting"))
+          tray._tooltip(7, at_least=True).endswith("at least 7 updates waiting"))
     check("INV-10 tray tooltip at zero says up to date",
           tray._tooltip(0, at_least=True).endswith("up to date"))
     # (4b) The tray check reuses ONE rolling log, overwritten each run, so a resident
@@ -4196,7 +4205,7 @@ def main() -> int:
     # ONEUP-0277: a run that installed Flatpak updates and no system ones told the user it
     # was "already up to date" (measured 2026-10-14: 4 Flatpak updates installed).
     for key, end, label, said in (("flatpak", "installed|4", "Flatpak",
-                                   "All done. 4 Flatpak app(s) updated."),
+                                   "All done. 4 Flatpak apps updated."),
                                   ("firmware", "updated", "firmware",
                                    "All done. Firmware updated.")):
         wFp = window.Updater()
@@ -4223,17 +4232,17 @@ def main() -> int:
     wSp._check_mode = False
     run.on_finished(wSp, 0, QProcess.ExitStatus.NormalExit)
     check("the summary counts each source on its own (ONEUP-0288)",
-          wSp.status.text() == "All done. 126 system package(s) installed. "
-                               "3 Flatpak app(s) updated. Firmware updated.")
+          wSp.status.text() == "All done. 126 system packages installed. "
+                               "3 Flatpak apps updated. Firmware updated.")
     # ONEUP-0296: a run that removed leftover packages and installed nothing said
     # "already up to date" (VM run 2, 2026-10-16). Removals earn their own sentence.
     for lines, said in (
             (("@@STEP_END@@|system|ok|up-to-date", "@@STEP_END@@|orphans|ok|removed|3",
               "@@INSTALLED@@|0|no|no"),
-             "All done. 3 leftover package(s) removed."),
+             "All done. 3 leftover packages removed."),
             (("@@STEP_END@@|system|ok|installed|2", "@@STEP_END@@|orphans|ok|removed|1",
               "@@INSTALLED@@|2|yes|no"),
-             "All done. 2 system package(s) installed. 1 leftover package(s) removed.")):
+             "All done. 2 system packages installed. 1 leftover package removed.")):
         wOr = window.Updater()
         for line in lines:
             run.handle_line(wOr, line)
