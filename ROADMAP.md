@@ -8360,7 +8360,7 @@ when complete (that document's §7).
   Source: user-request-2026-10-10.
   Lanes: engine, gui.
 
-- 🚧 [ONEUP-0249] **A OneUp system service, installed with OneUp, that checks, sizes and installs updates for authorised users without a password prompt.**
+- ✅ [ONEUP-0249] **A OneUp system service, installed with OneUp, that checks, sizes and installs updates for authorised users without a password prompt.**
   Decided (user, 2026-10-10): build our own root service rather than
   use the existing Passwordless setting (ONEUP-0023) or PackageKit,
   after both were offered. PackageKit stays installed for Discover.
@@ -8499,6 +8499,10 @@ when complete (that document's §7).
   can open there: filed as a new item on the 2.0.0 list, headed "From an
   SSH login with no desktop". Flip this once that item's real run over
   SSH passes.
+  2026-11-03: the last owed check from spec §7 passed: a real run from
+  an SSH session on a packaged install took the sudo route and its
+  password request (ONEUP-0360's VM run,
+  /mnt/Games/oneup-vmtest/ssh-0360.log).
   **Layman:** OneUp gets its own background helper, set up once when you install it, so authorised people can check for and install updates without typing a password each time.
   Kind: feature.
   Source: user-decision-2026-10-10.
@@ -10636,7 +10640,7 @@ when complete (that document's §7).
   Source: release-1.4.11-2026-11-01.
   Lanes: engine, gui.
 
-- 🚧 [ONEUP-0360] **From an SSH login with no desktop, the engine cannot ask for the password, so the run always fails.**
+- ✅ [ONEUP-0360] **From an SSH login with no desktop, the engine cannot ask for the password, so the run always fails.**
   Measured 2026-11-01 in the VM, RPM from v2 at 932ad3d, 50-livecd moved out, `ssh -tt`, `python3 -m oneup.engine --steps=cache`, no DISPLAY or WAYLAND_DISPLAY: the auto route falls back as spec ONEUP-0249 §4.7 says, printing "system service could not be reached" (untrue here: polkit answered `challenge`), then `sudo -A` starts ksshaskpass, Qt cannot load a platform plugin, and the run ends "Authentication failed or cancelled". main's `sudo_init` in update_system.sh has the same `sudo -A`; not run on main.
   Decided by the user 2026-11-01: ask for the password in the terminal when there is no desktop. The desktop keeps its box.
   Plan, unbuilt: where neither display variable is set and /dev/tty opens, validate with `sudo -p <label> -v`, without -A. Check first: oneup/engine/proc.py starts some children with start_new_session, and sudo keys its cached credential to the terminal (the keep-alive's docstring in privilege.py says a new group, never a new session), so later root calls may ask again. Amend docs/standards/security.md §3, which names `sudo -A` as the call that prompts; §3.4 binds development, not this. Reword the fallback line for `challenge`. Route by docs/standards/workflow.md §9: main first, then merge, then v2's oneup/engine/privilege.py. Test first in tests/run-tests.sh; `script` gives a terminal. Then a real run over SSH in the VM, which also settles ONEUP-0249's last owed check.
@@ -10655,6 +10659,14 @@ when complete (that document's §7).
   run over SSH with no desktop, four existing scenarios failed (measured
   on main). Left: the real SSH run in the VM, then flip this and
   ONEUP-0249.
+  2026-11-03, VM: RPM from v2 at 7f575e2, 50-livecd moved out, root
+  password set, `ssh -tt`, no DISPLAY or WAYLAND_DISPLAY, `python3 -m
+  oneup.engine --steps=cache` from /usr/share/oneup. Printed "OneUp's
+  system service cannot ask for the password here — asking for the
+  password directly instead.", then sudo asked in the terminal ("OneUp
+  needs the password for root to install updates."); the password typed
+  there; cache step OK, engine exit 0. No ksshaskpass started. Log:
+  /mnt/Games/oneup-vmtest/ssh-0360.log.
   **Layman:** Starting an update over SSH fails because OneUp can only ask for the password in a window, and there is no screen to show one on.
   Kind: fix.
   Source: ONEUP-0249-vm-check-2026-11-01.
