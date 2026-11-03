@@ -158,6 +158,11 @@ run_engine() {
     #   * the route to root takes the system service wherever its RPM is installed, so on
     #     such a machine every scenario would ask the real service instead of the sudo mock
     #     (ONEUP-0249 §4.7). Pinned to sudo, with `-` so a scenario can set its own.
+    #   * sudo_init asks in the terminal, not the box, when there is a terminal and no
+    #     display (ONEUP-0360). Run from an SSH login with no desktop, every scenario
+    #     counting the box's prompts failed (four, measured on main). A placeholder
+    #     display keeps the box; the engine reads it nowhere else, and the ONEUP-0360
+    #     scenario removes it again inside ENGINE_CMD.
     #
     # ONEUP-0126: link this run's log into the suite's $HARVEST_DIR, where one is set. A hard
     # link, not a copy: the engine appends to the log until it exits, so a copy taken here
@@ -167,7 +172,10 @@ run_engine() {
     if [[ -n "${HARVEST_DIR:-}" && ! -e "$mockdir/run.log" ]]; then
         ln "$(mktemp "$HARVEST_DIR/XXXXXX")" "$mockdir/run.log" 2>/dev/null || true
     fi
-    PATH="$mockdir:$PATH" \
+    local display="${DISPLAY:-}"
+    [[ -z "$display" && -z "${WAYLAND_DISPLAY:-}" ]] && display=":oneup-test"
+    DISPLAY="$display" \
+        PATH="$mockdir:$PATH" \
         ONEUP_ZYPP_PID_FILE="${ONEUP_ZYPP_PID_FILE:-$mockdir/no-zypp.pid}" \
         ONEUP_RUN_STATE="${ONEUP_RUN_STATE:-$mockdir/run.state}" \
         ONEUP_STOP_FILE="${ONEUP_STOP_FILE:-$mockdir/stop.request}" \
