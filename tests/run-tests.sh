@@ -145,7 +145,15 @@ run_engine() {
     #     so every scenario would take a genuine block-mode lock on the tester's own
     #     session (ONEUP-0086). Pre-set here, and note the `-` rather than `:-`: a
     #     scenario opts back IN by setting it to the empty string.
-    PATH="$mockdir:$PATH" \
+    #   * sudo_init asks in the terminal, not the box, when there is a terminal and no
+    #     display (ONEUP-0360). Run from an SSH login with no desktop, every scenario
+    #     counting the box's prompts failed (four, measured). A placeholder display
+    #     keeps the box; the engine reads it nowhere else, and the ONEUP-0360 scenario
+    #     removes it again inside ENGINE_CMD.
+    local display="${DISPLAY:-}"
+    [[ -z "$display" && -z "${WAYLAND_DISPLAY:-}" ]] && display=":oneup-test"
+    DISPLAY="$display" \
+        PATH="$mockdir:$PATH" \
         ONEUP_ZYPP_PID_FILE="${ONEUP_ZYPP_PID_FILE:-$mockdir/no-zypp.pid}" \
         ONEUP_RUN_STATE="${ONEUP_RUN_STATE:-$mockdir/run.state}" \
         ONEUP_STOP_FILE="${ONEUP_STOP_FILE:-$mockdir/stop.request}" \
