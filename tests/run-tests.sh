@@ -3618,6 +3618,63 @@ fi
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0360: from an SSH login with no desktop, `sudo -A` starts the password box, the box
+# cannot open, and the run always fails. Measured in a VM over `ssh -tt`. With a terminal
+# and no display, the validate must ask in the terminal: no -A, the label kept. With a
+# display, or with no terminal (the window's QProcess, a timer), it keeps the box.
+echo "TEST: with a terminal and no desktop, the password is asked in the terminal"
+validate_call() {  # $1 = "tty" or "notty"; the rest are env(1) arguments
+    local mode="$1"; shift
+    local d; d=$(mktemp -d); setup_common "$d"
+    mv "$d/sudo" "$d/sudo-inner"
+    cat > "$d/sudo" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$d/sudo-calls.log"
+exec "$d/sudo-inner" "\$@"
+EOF
+    cat > "$d/in-tty" <<'EOF'
+#!/usr/bin/env bash
+exec timeout 60 script -qec "$(printf '%q ' "$@")" /dev/null
+EOF
+    chmod +x "$d/sudo" "$d/in-tty"
+    local saved=("${ENGINE_CMD[@]}")
+    if [[ "$mode" == tty ]]; then
+        ENGINE_CMD=("$d/in-tty" env "$@" "${saved[@]}")
+    else
+        ENGINE_CMD=(setsid -w env "$@" "${saved[@]}")
+    fi
+    run_engine "$d" --steps=cache >/dev/null 2>&1 </dev/null
+    ENGINE_CMD=("${saved[@]}")
+    grep -- '-v$' "$d/sudo-calls.log" 2>/dev/null | grep -v '^-n ' | head -n1
+    rm -rf "$d"
+}
+v=$(validate_call tty -u DISPLAY -u WAYLAND_DISPLAY)
+if [[ -n "$v" && "$v" != *"-A"* && "$v" == *"System Updater: authenticate"* ]]; then
+    echo "  ok   - no desktop: the validate asks in the terminal, labelled"; PASS=$((PASS+1))
+else
+    echo "  FAIL - no desktop: the validate was '$v'"; FAIL=$((FAIL+1))
+fi
+v=$(validate_call tty -u WAYLAND_DISPLAY DISPLAY=:99)
+if [[ "$v" == *"-A"* ]]; then
+    echo "  ok   - a desktop seen from the terminal keeps the password box"; PASS=$((PASS+1))
+else
+    echo "  FAIL - with DISPLAY set, the validate was '$v'"; FAIL=$((FAIL+1))
+fi
+v=$(validate_call tty -u DISPLAY WAYLAND_DISPLAY=wayland-9)
+if [[ "$v" == *"-A"* ]]; then
+    echo "  ok   - a Wayland desktop with no DISPLAY keeps the password box"; PASS=$((PASS+1))
+else
+    echo "  FAIL - with only WAYLAND_DISPLAY set, the validate was '$v'"; FAIL=$((FAIL+1))
+fi
+v=$(validate_call notty -u DISPLAY -u WAYLAND_DISPLAY)
+if [[ "$v" == *"-A"* ]]; then
+    echo "  ok   - no terminal keeps the password box"; PASS=$((PASS+1))
+else
+    echo "  FAIL - with no terminal, the validate was '$v'"; FAIL=$((FAIL+1))
+fi
+unset -f validate_call
+
+# ---------------------------------------------------------------------------
 # ONEUP-0041: cleanup's trap cannot run when the engine is SIGKILLed, and the
 # keep-alive used to loop forever in that case. Two were found on the reporter's
 # machine still validating sudo every 50 seconds, 40 minutes after the runs that

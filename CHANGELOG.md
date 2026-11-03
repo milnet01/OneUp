@@ -212,6 +212,9 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Updating over SSH with no desktop asks for the password in the terminal** (ONEUP-0360)
+  OneUp could ask for the password only in a window. Over an SSH login with no desktop that window cannot open, so every update failed. It now asks in the terminal there. With a desktop, OneUp still shows its password box.
+
 - **Every failed step now says something** (ONEUP-0338)
   A failed Flatpak, firmware, leftover or cache step, and a system failure with no known cause, now gets a plain sentence.
 
