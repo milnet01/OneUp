@@ -164,7 +164,10 @@ dialog, and the correct response to one is to refuse it. So:
 
 **3.1 — Attribution comes from the exported environment, and the *authenticating* call
 carries it explicitly.** Exactly one `sudo` in the engine passes `-A` and `-p`:
-`sudo_init`'s `sudo -A -v`, which is the call that actually prompts. The other 20 are
+`sudo_init`'s `sudo -A -v`, which is the call that actually prompts. One exception drops
+`-A` and keeps `-p`: where neither `DISPLAY` nor `WAYLAND_DISPLAY` is set and `/dev/tty`
+opens, as on an SSH login with no desktop, the box cannot appear. There sudo asks in
+the terminal, under the same label (ONEUP-0360). The other 20 are
 plain `sudo` **on purpose** — they inherit the exported `SUDO_ASKPASS` and `SUDO_PROMPT`
 (3.2, 3.3), so if any of them ever has to ask, the prompt is graphical and labelled
 anyway. That is why the export is mandatory rather than a convenience: it is what makes
@@ -537,7 +540,7 @@ incidents and the rule are `docs/standards/testing.md` §2, which is canonical.
 | §1 the GUI never runs as root | nothing automatic |
 | §2 one authentication per run | `tests/run-tests.sh` — *"a full run asks for the password exactly once"*, against a mock that models sudo's per-parent-pid credential cache |
 | §2 no `sudo` inside a subshell | the same scenario, because a subshell **is** a second prompt. The rule and its symptom are the same thing, which is what makes this the strongest gate in the set |
-| §3 every prompt says who is asking | nothing automatic |
+| §3 every prompt says who is asking | nothing automatic, except §3.1's terminal case: the ONEUP-0360 scenario in `tests/run-tests.sh` checks the validate keeps its label and drops `-A` only there |
 | §4 validate at the boundary, by shape — the alias guard | `tests/run-tests.sh` — an unsafe repo alias is refused and never reaches a privileged command, whether it arrives as `--skip-repo=` or in zypper's own repository list; `tests/gui-smoke.py` — an unsafe alias in a skip-repo remedy is not armed, so the window never forwards it. The list half was added 2026-09-18 (ONEUP-0144); until then only `disable_repo` checked, and the refresh took the list unchecked |
 | §4.6 no session-critical service is ever restarted | `tests/gui-smoke.py` — a mixed list restarts the safe units and **no** critical one, and an all-critical list restarts nothing; `tests/run-tests.sh` asserts the engine's printed advice splits them the same way |
 | §4.6 where the advice is a reboot, the reboot is offered | `tests/gui-smoke.py` — an all-critical list draws the reboot banner and not the services banner, a mixed list draws both, and the handler's all-critical path launches `systemctl reboot` rather than an information dialog; `tests/run-tests.sh` asserts the engine prints the same recommendation |

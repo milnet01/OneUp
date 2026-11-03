@@ -681,9 +681,17 @@ sudo_init() {
     if auth_current; then
         return 0
     fi
-    if ! SUDO_ASKPASS="$ASKPASS" sudo -A \
+    # From an SSH login with no desktop the box cannot open, so every run failed there
+    # (ONEUP-0360, measured in a VM over `ssh -tt`). With no display and a terminal we can
+    # open, drop -A and sudo asks in the terminal, under the same label. The window's
+    # QProcess and a timer have no terminal, so they keep the box.
+    local use_box=(-A)
+    if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]] && { : </dev/tty; } 2>/dev/null; then
+        use_box=()
+    fi
+    if ! SUDO_ASKPASS="$ASKPASS" sudo "${use_box[@]}" \
             -p "System Updater: authenticate to update the system" -v; then
-        if askpass_cannot_start; then
+        if [[ ${#use_box[@]} -gt 0 ]] && askpass_cannot_start; then
             # Not a cancel: the box never appeared, so pressing Update again cannot help.
             # A half-finished update can leave its toolkit mismatched, and the box is a Qt
             # program; the terminal still works (ONEUP-0337).

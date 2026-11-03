@@ -6,6 +6,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Updating over SSH with no desktop asks for the password in the terminal** (ONEUP-0360)
+  OneUp could ask for the password only in a window. Over an SSH login with no desktop that window cannot open, so every update failed. It now asks in the terminal there. With a desktop, OneUp still shows its password box.
+
 ## [1.4.11] - 2026-11-01
 
 ### Fixed
