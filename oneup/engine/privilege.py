@@ -128,9 +128,10 @@ def sudo_init() -> None:
 
     # The route is chosen here, before the first root command (ONEUP-0249 §4.7).
     if chosen_route() == route.SERVICE:
-        if _open_service():
+        why = _open_service()
+        if why is None:
             return
-        _service_unreachable()
+        _service_unreachable(why)
 
     # If the ONEUP-0023 drop-in is active AND grants what this engine needs,
     # every privileged command below is individually NOPASSWD, so no cached
@@ -151,13 +152,18 @@ def sudo_init() -> None:
         markers.err("Passwordless is off and nobody is here to type the password — aborting.")
         raise SystemExit(1)
     install_environment()
+    # From an SSH login with no desktop the box cannot open, so every run failed there
+    # (ONEUP-0360, measured in a VM over `ssh -tt`). There sudo asks in the terminal,
+    # under the same label. The window's QProcess and a timer have no terminal.
+    use_box = not _terminal_without_desktop()
     # STREAMED, not captured. The Bash redirects this call nowhere, so whatever
     # sudo says — a prompt, a refusal, "a terminal is required" — reaches the
     # run's own stderr and its log. Capturing it silently swallows the one
     # message a user who cancelled the dialog has to go on.
-    rc, _ = proc.run(["sudo", "-A", "-p", VALIDATE_PROMPT, "-v"], stream=True)
+    rc, _ = proc.run(["sudo", *(["-A"] if use_box else []), "-p", VALIDATE_PROMPT, "-v"],
+                     stream=True)
     if rc != 0:
-        if _askpass_cannot_start():
+        if use_box and _askpass_cannot_start():
             # Not a cancel: the box never appeared, so pressing Update again cannot help.
             # A half-finished update can leave its toolkit mismatched, and the box is a Qt
             # program; the terminal still works (ONEUP-0337).
@@ -189,6 +195,22 @@ def _askpass_cannot_start() -> bool:
     return "not found" in out
 
 
+def _terminal_without_desktop() -> bool:
+    """Is there a terminal to ask in, and no desktop to show the box on (ONEUP-0360)?
+
+    Both display variables empty, and `/dev/tty` opens: it opens only for a process
+    with a controlling terminal, which the window's QProcess and a timer lack.
+    """
+    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        return False
+    try:
+        fd = os.open("/dev/tty", os.O_RDONLY)
+    except OSError:
+        return False
+    os.close(fd)
+    return True
+
+
 # The run's route to root, set once by `chosen_route` (ONEUP-0249 §4.7).
 _ROUTE: str | None = None
 
@@ -212,16 +234,17 @@ def chosen_route() -> str:
 IMPORT_KEYS = False
 
 
-def _open_service() -> bool:
+def _open_service() -> str | None:
     """Open this run's session with the service, or reuse the one already open.
 
-    False when §4.7 allows falling back: the service unreachable, a D-Bus error that
-    is not `NotAuthorized`, or polkit's `challenge` for a caller it had no agent to
-    ask. A `dismissed` or `denied` answer ends the run as a cancelled validate does.
+    None once it is open. Otherwise why §4.7 allows falling back: `"challenge"` when
+    polkit had no agent to ask this caller, `"unreachable"` for the service missing or
+    a D-Bus error that is not `NotAuthorized`. A `dismissed` or `denied` answer ends
+    the run as a cancelled validate does.
     """
     from . import service_client
     if service_client.has_session():
-        return True
+        return None
     try:
         service_client.open_session(
             interactive=os.environ.get("ONEUP_NONINTERACTIVE") != "1",
@@ -230,26 +253,30 @@ def _open_service() -> bool:
         if exc.code == "NotAuthorized" and exc.reason != "challenge":
             markers.err("Authentication failed or cancelled — aborting.")
             raise SystemExit(1) from None
-        return False
+        return "challenge" if exc.code == "NotAuthorized" else "unreachable"
     except service_client.Unreachable:
-        return False
-    return True
+        return "unreachable"
+    return None
 
 
-def _service_unreachable() -> None:
+def _service_unreachable(why: str) -> None:
     """The service route failed before its session opened: fall back, or end the run.
 
     §4.7: only the `auto` route falls back, and only interactively, with one line saying
     so. A forced `ONEUP_BACKEND=service` fails the run, and a run nobody started by hand
     (`ONEUP_NONINTERACTIVE=1`) stands down rather than raise a box nobody can answer.
+    `why` is `_open_service`'s answer. On `"challenge"` the service answered, so the
+    line must not say it could not be reached (ONEUP-0360, seen over SSH).
     """
     global _ROUTE
     from . import route
+    reason = ("cannot ask for the password here" if why == "challenge"
+              else "could not be reached")
     if (os.environ.get("ONEUP_BACKEND") == route.SERVICE
             or os.environ.get("ONEUP_NONINTERACTIVE") == "1"):
-        markers.err("OneUp's system service could not be reached — aborting.")
+        markers.err(f"OneUp's system service {reason} — aborting.")
         raise SystemExit(1)
-    markers.out("OneUp's system service could not be reached — asking for the password instead.")
+    markers.out(f"OneUp's system service {reason} — asking for the password directly instead.")
     _ROUTE = route.SUDO
 
 

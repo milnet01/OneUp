@@ -3649,7 +3649,9 @@ EOF
     rm -rf "$d"
 }
 v=$(validate_call tty -u DISPLAY -u WAYLAND_DISPLAY)
-if [[ -n "$v" && "$v" != *"-A"* && "$v" == *"System Updater: authenticate"* ]]; then
+# Either engine's label: the Python engine's VALIDATE_PROMPT, or the Bash fallback's.
+if [[ -n "$v" && "$v" != *"-A"* && ( "$v" == *"-p OneUp needs the password"*
+        || "$v" == *"-p System Updater: authenticate"* ) ]]; then
     echo "  ok   - no desktop: the validate asks in the terminal, labelled"; PASS=$((PASS+1))
 else
     echo "  FAIL - no desktop: the validate was '$v'"; FAIL=$((FAIL+1))
@@ -5184,6 +5186,35 @@ if init("auto") is not None or len(said) != 1 or [a[-1] for a in ran] != ["-v"]:
 os.environ["ONEUP_BACKEND"] = "service"
 if privilege.chosen_route() != route.SUDO:
     bad.append("the route changed after it was chosen")
+raise SystemExit("; ".join(bad) or 0)
+PYEOF
+)"
+# ONEUP-0360: over SSH polkit answered `challenge`, and the line said the service "could
+# not be reached", which was untrue: it answered. Unreachable keeps its wording.
+py_case "a challenge says the service cannot ask here, not that it is unreachable" "$(cat <<'PYEOF'
+import os
+from oneup.engine import actions, markers, privilege, proc, route, service_client
+said = []
+proc.run = lambda argv, **kw: (0, "")
+markers.out = said.append
+markers.err = said.append
+actions.auth_current = lambda: False
+privilege._start_keepalive = lambda: None
+route.engine_route = lambda environ: route.SERVICE
+service_client.has_session = lambda: False
+os.environ["ONEUP_BACKEND"] = "auto"
+os.environ["ONEUP_NONINTERACTIVE"] = ""
+bad = []
+for error, want in ((service_client.Refused("NotAuthorized", "challenge"), "cannot ask"),
+                    (service_client.Unreachable("no bus"), "could not be reached")):
+    def refuse(**kw):
+        raise error
+    service_client.open_session = refuse
+    said.clear()
+    privilege._ROUTE = None
+    privilege.sudo_init()
+    if len(said) != 1 or want not in said[0]:
+        bad.append(f"{error!r}: said {said}")
 raise SystemExit("; ".join(bad) or 0)
 PYEOF
 )"
