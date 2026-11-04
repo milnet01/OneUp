@@ -10597,7 +10597,7 @@ when complete (that document's §7).
   Source: ONEUP-0239-vm-check-2026-11-01.
   Lanes: gui.
 
-- 🚧 [ONEUP-0358] **At Larger on a screen under about 1000 px tall, Rows and Spotlight squash below their minimum.**
+- ✅ [ONEUP-0358] **At Larger on a screen under about 1000 px tall, Rows and Spotlight squash below their minimum.**
   Seen 2026-11-01 in the VM at 1280x960, Larger: Rows' minimum is 974 and Spotlight's 904, the desktop offers about 886. The table showed no rows and Spotlight's figures were clipped. At 1080p both fit. ONEUP-0239 §4.2 promises no window too small for its layout at its text size; it says nothing of a screen too small for the window.
   Decided 2026-11-01: fix. Measured wider than the headline: offscreen
   minimum heights at Normal are Rows 828, Rail 748, Spotlight 773, so a
@@ -10619,6 +10619,10 @@ when complete (that document's §7).
   panel when the frame is unknown. That last change is NOT yet seen in
   the VM: flip after one look at Rail at Normal shows no sideways bar.
   Captures: /mnt/Games/oneup-vmtest/cmp/0358-vm/.
+  2026-11-04, VM at 1280x800, Rail at Normal with settings cleared: no
+  sideways bar (hbar hidden, maximum 0). Window 809x726 against a
+  minimum of 809x732; the vertical bar scrolls the 22 px the panel
+  takes. Capture and probe output: /mnt/Games/oneup-vmtest/cmp/0358-vm2/.
   **Layman:** With the largest text on a small screen, the window cannot fit and parts of it get squeezed.
   Kind: ux.
   Source: ONEUP-0239-vm-check-2026-11-01.
@@ -10672,8 +10676,17 @@ when complete (that document's §7).
   Source: ONEUP-0249-vm-check-2026-11-01.
   Lanes: engine, security.
 
-- 📋 [ONEUP-0361] **On Wayland a window restored from saved settings can stay narrower than its minimum.**
+- ✅ [ONEUP-0361] **On Wayland a window restored from saved settings can stay narrower than its minimum.**
   Seen 2026-11-01 in the VM at 1280x800, Rail at Larger, with settings left by earlier windows: the window stayed 1002 wide with a minimum of 1079, cutting About, and ScreenFit showed a sideways scroll bar. With settings cleared it opened at 1079. A resize() after showing took effect, so the compositor's first size stands until the next one. Not checked on code before ONEUP-0358, and the cause is not measured.
+  2026-11-04: new with ONEUP-0358; code from before it opened at its
+  minimum. Cause: before the first show Qt passes a size change up one
+  layout only, so Rail and Spotlight were built too narrow at every text
+  size (Rail at Larger 1002, 1079 once shown). A restored window took
+  that width, and KWin sometimes kept it. Fixed in _fit_minimum, which
+  clears every cached size first (53124b9). Regression check in
+  gui-smoke, red on the old code. VM, Rail at Larger restored from a
+  900 px save: unfixed 2 of 5 narrow, fixed 0 of 5.
+  Logs: /mnt/Games/oneup-vmtest/cmp/0358-vm2/.
   **Layman:** After switching layouts or text sizes, the reopened window can come up too narrow, so part of it needs scrolling sideways until it is resized.
   Kind: ux.
   Source: ONEUP-0249-vm-check-2026-11-01.
