@@ -437,6 +437,15 @@ def main() -> int:
                        ("Retrieving: libfoo-1-1.x86_64 (528/760), 1.0 MiB", None)):
         check(f"transaction_count({line[:24]!r}…)", parsers.transaction_count(line), want)
 
+    # ONEUP-0364: a row of Flatpak's table, as the host printed it on 2026-11-04.
+    for line, want in ((" 1.\t   \tcom.discordapp.Discord\tstable\tu\tflathub\t< 252.2 MB",
+                        (1, "com.discordapp.Discord")),
+                       ("12.\t   \torg.kde.Sdk.Locale\t6.11\tu\tflathub\t< 418.2 MB",
+                        (12, "org.kde.Sdk.Locale")),
+                       ("Updating 1/8…", None),
+                       ("   org.freedesktop.Platform 24.08 is no longer receiving fixes.", None)):
+        check(f"flatpak_table_row({line[:20]!r}…)", parsers.flatpak_table_row(line), want)
+
     # The caller passes whole captured output, not one line: the first MATCHING
     # line wins, and lines before it must not stop the search.
     check("download_size skips non-matching lines and takes the first hit",

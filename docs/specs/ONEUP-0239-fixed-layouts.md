@@ -262,9 +262,15 @@ reweighs the byte figure, and `_reset_for_run` clears it.
   can also send `install`-phase `PROGRESS` for `Preloading:` lines, with a `total` of 0, and
   for `Retrieving:` lines, with byte fields; neither moves it past 500.
 - **It never moves backwards** within a step. `STEP_END` sets it to 1000.
-- **A step that sends no `PROGRESS`** — every step but `system` (§2) — is busy from
-  `STEP_BEGIN` to `STEP_END`. *(ONEUP-0336)* So is the Flatpak step: its phases (§4.1.4)
-  are neither `download` nor `install`, so they move neither half.
+- **A step that sends no `PROGRESS`** — every step but `system` and `orphans` (§2) — is
+  busy from `STEP_BEGIN` to `STEP_END`. *(ONEUP-0336)* So is the Flatpak step: its phases
+  (§4.1.4) are neither `download` nor `install`, so they move neither half.
+- *(ONEUP-0366)* **A removal fills the whole bar.** The leftover step's `remove` phase
+  has no download, so `done / total` runs from 0 to 1000; a `total` of 0 keeps it busy.
+  Its badge word is *Removing*.
+- *(ONEUP-0363)* **The `finish` phase leaves the value where it is.** It is zypper's
+  post-transaction scripts, after the last install; only the words change, to
+  *Finishing up*.
 
 Three places show it, all from that one value:
 
@@ -357,13 +363,19 @@ each, with a `phase` of its own:
   pass of 20.
 - **`done` is the update in progress**, not the number finished: Flatpak prints
   `Updating 3/12…` as the third starts.
+- *(ONEUP-0364)* **Where the run listed apps, the window counts those instead.** Flatpak's
+  refs include runtimes and `.Locale` extensions nobody listed: on the host on 2026-11-04,
+  9 listed apps came as a user pass of 8 refs and a system pass of 5. So once a pass sends
+  a non-zero `total`, the shown count is the listed apps that have left `queued`, of all
+  listed apps, across both passes. The engine names each app with `PKG` before the
+  `PROGRESS` that starts it (marker-protocol §4.12), so the count is current when drawn.
 - **The window**: the status line is the step's title and the part above — *"Flatpak
   apps · Updating your apps: 3 of 12"* — and the detail line says the same. A change of
   phase is announced once: *"Updating your Flatpak apps."*, *"Updating system Flatpak
   apps."*, *"Removing unused Flatpak runtimes."* The step's bar and `win.bar` stay busy,
   and its badge keeps its `IN_PROGRESS` phrase (§4.1.1). Stop stays clickable:
-  `run.sync_stop` greys it only in the `install` phase. There is no byte figure and no
-  time left (§4.1.2).
+  `run.sync_stop` greys it only in the `install`, `remove` and `finish` phases
+  (ONEUP-0363, ONEUP-0366). There is no byte figure and no time left (§4.1.2).
 
 ### 4.2 Sizes come from the font, never from the content
 
@@ -984,3 +996,4 @@ count. *(ONEUP-0335)* No marker change; the engine changes in `parsers.PackageLi
 | 0322-amend | 2026-10-30 | none — an authoring amendment; no reviewer was dispatched, and none is owed | ONEUP-0322's batch, written with the code that follows it. No gate: this log's rows 1 to 8 are review loops, past the two a spec gets in its life (global `rules/14-contract-gate.md` § The instance, settled by the user 2026-10-30), so the build is its next reader. The words follow the half the value is in (§4.1.1, §4.1.2, INV-12, INV-15); state symbols and Recenter's symbol are drawn, not font characters (§4.1, §4.3, INV-3, §6, §7); §1 limits versions and source to what Spotlight shows; Rail's summary points at §4.3; a tile's short title; the floor's stale sentence goes; a refresh keeps its clock and a `total` of 0 shows the tally, which ONEUP-0317 had built ahead of this wording; INV-17's test asks what the paint does. |
 | 0350-amend | 2026-10-30 | none — an authoring amendment; no reviewer was dispatched, and none is owed | ONEUP-0350: §4.3 Spotlight item 5 gives `last_run` and `rollback_btn` a line of their own. It records code verified in the same change, and this spec is past its two review loops. |
 | 0362-amend | 2026-11-04 | none — an authoring amendment; no reviewer was dispatched, and none is owed | ONEUP-0362: §4.3.2 drops a narrow block's own outline, draws one round the strip, and narrows overflowing blocks to half the strip. The user chose this of three options on 2026-11-04. It records code verified in the same change, and this spec is past its two review loops. |
+| 0363-0364-0366-amend | 2026-11-04 | none — an authoring amendment; no reviewer was dispatched, and none is owed | §4.1.1 adds the leftover step's `remove` phase and the system step's `finish` phase; §4.1.4 counts the listed Flatpak apps where there are any, and greys Stop in all three transaction phases. No invariant changed: INV-20's test lists no apps, so it still reads Flatpak's own count. It records code verified in the same change, and the user approved the marker change on 2026-11-04. |

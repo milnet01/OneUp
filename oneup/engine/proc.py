@@ -336,6 +336,9 @@ def _filter_lines(lines: Iterable[str], *, step: str, phase: str, log: Path,
                     "Installing:" in line or "Removing:" in line or "Upgrading:" in line):
                 if markers.emit_progress(step, parsers.install_fraction(line), "install"):
                     seen += 1
+            elif line.startswith("Running post-transaction scripts"):
+                # Every package is in; their scripts can still take minutes (ONEUP-0363).
+                markers.marker("PROGRESS", step, 0, 0, "finish")
             for package in packages.feed(line):
                 _mark_package(step, package)
         # The pass's end also ends the last package's fetch (ONEUP-0239 §4.3.1).

@@ -620,6 +620,48 @@ def main() -> int:
     check(f"INV-20 one announcement per pass ({_spoken})",
           _spoken == ["Updating your Flatpak apps.", "Updating system Flatpak apps.",
                            "Removing unused Flatpak runtimes."])
+
+    # ONEUP-0364: where the run listed its apps, the count is of those apps, not of
+    # Flatpak's refs, which include runtimes and .Locale extensions nobody listed.
+    wFa = window.Updater()
+    run._reset_for_run(wFa, ["flatpak"], check=False)
+    run.handle_line(wFa, "@@STEP_BEGIN@@|flatpak|1|1")
+    for _app in ("a", "b", "c"):
+        run.handle_line(wFa, f"@@PKG@@|flatpak|queued|org.{_app}|1|0||flathub")
+    for _pkg, _count, _part in (("downloading|org.a|1|0", "1|8", "Updating your apps: 1 of 3"),
+                                ("downloaded|org.a|1", "2|8", "Updating your apps: 1 of 3"),
+                                ("downloading|org.b|1|0", "3|8", "Updating your apps: 2 of 3")):
+        run.handle_line(wFa, f"@@PKG@@|flatpak|{_pkg}")
+        run.handle_line(wFa, f"@@PROGRESS@@|flatpak|{_count}|user")
+        check(f"ONEUP-0364 the Flatpak count is of the listed apps ({wFa.status.text()!r})",
+              wFa.status.text() == f"Flatpak apps · {_part}")
+
+    # ONEUP-0366 and ONEUP-0363: a removal is counted, and the post-transaction scripts
+    # have their own words. Both are rpm mid-transaction, so Stop is greyed as in install.
+    wO = window.Updater()
+    run._reset_for_run(wO, ["system", "orphans"], check=False)
+    wO._run_active, wO._check_mode = True, False
+    wO.set_controls_enabled(False)
+    run.handle_line(wO, "@@STEP_BEGIN@@|system|1|2")
+    run.handle_line(wO, "@@PROGRESS@@|system|1|1|install")
+    run.handle_line(wO, "@@PROGRESS@@|system|0|0|finish")
+    check(f"ONEUP-0363 the scripts phase says so ({wO.status.text()!r})",
+          wO.status.text() == "System packages · Finishing up"
+          and wO.rows["system"].badge.text().startswith("Finishing up"))
+    check("ONEUP-0363 Stop is greyed while the scripts run, and says why",
+          not wO.stop_btn.isEnabled() and "cannot be stopped safely" in wO.stop_btn.toolTip())
+    run.handle_line(wO, "@@STEP_END@@|system|ok|installed|1")
+    run.handle_line(wO, "@@STEP_BEGIN@@|orphans|2|2")
+    run.handle_line(wO, "@@PROGRESS@@|orphans|0|0|remove")
+    check(f"ONEUP-0366 a removal opens busy, in its own words ({wO.status.text()!r})",
+          wO.status.text() == "Leftover packages · Removing packages"
+          and wO.rows["orphans"].progress.maximum() == 0)
+    run.handle_line(wO, "@@PROGRESS@@|orphans|12|48|remove")
+    check(f"ONEUP-0366 a removal fills the step's bar by count ({wO.status.text()!r})",
+          wO.status.text() == "Leftover packages · Removing 12 of 48 packages"
+          and wO.rows["orphans"].progress.value() == 250
+          and wO.rows["orphans"].badge.text() == "Removing · 25%"
+          and not wO.stop_btn.isEnabled())
     # Same splice-safety contract as STEP_BEGIN: merged stdout/stderr can cut a marker.
     for bad in ("@@PROGRESS@@|system",
                 "@@PROGRESS@@|system|x|141|download",

@@ -95,7 +95,7 @@ by `handle_marker`**, and one emitted during a run is not seen by the side-chann
 | `@@STEP_BEGIN@@` | `key\|index\|total` | `begin_step` | `handle_marker` |
 | `@@STEP_END@@` | `key\|status\|code[\|count]` | `end_step` | `handle_marker` |
 | `@@TIMING@@` | `key\|seconds` | `end_step` | `handle_marker` |
-| `@@PROGRESS@@` | `key\|done\|total\|phase[\|bytes\|bytes_total]` | `emit_progress`, fed by `stream_filtered` (`progress_filter` in the Bash fallback); `run_flatpak` and its `_flatpak_pass` | `handle_marker` |
+| `@@PROGRESS@@` | `key\|done\|total\|phase[\|bytes\|bytes_total]` | `emit_progress`, fed by `stream_filtered` (`progress_filter` in the Bash fallback); `run_flatpak` and its `_flatpak_pass`; `run_orphans` | `handle_marker` |
 | `@@REFRESH@@` | `done\|total\|alias` | `refresh_repos` | `handle_marker` |
 | `@@SNAPSHOT@@` | `id` | the pre-update snapshot block | `handle_marker` |
 | `@@SNAPSHOT_ITEM@@` | `id\|date\|description` | the same block, once per restore point | `handle_marker` |
@@ -166,8 +166,17 @@ step-end layout never had to grow a timing field.
 
 The marker that stops a working download looking like a hang (ONEUP-0040/0048).
 
-- **`phase` is `download` or `install`**, except for the `flatpak` key below. The window announces a *change* of phase to a
-  screen reader, never each package — announcing all 141 would bury everything else.
+- **`phase` is `download` or `install`**, except for the `flatpak` key and the two phases
+  below. The window announces a *change* of phase to a screen reader, never each package —
+  announcing all 141 would bury everything else.
+- **`finish` is zypper's post-transaction scripts** (ONEUP-0363): the system step sends
+  `0|0|finish` at zypper's `Running post-transaction scripts` line, after the last install.
+- **`remove` is the `orphans` key's only phase** (ONEUP-0366). It opens with `0|0|remove`
+  before zypper prints anything, then sends `done|total` from each `( N/M)` counter of
+  zypper's removal. Only the counter is read, because the removal runs in the user's
+  locale.
+- **`install`, `remove` and `finish` are rpm mid-transaction**, so the window greys Stop in
+  all three.
 - **For the `flatpak` key, `phase` is `user`, `system` or `unused`** (ONEUP-0336): which
   of the Flatpak step's three passes is running. Each pass opens with `done` and `total`
   of 0. In the `user` and `system` passes, `done` is then the update Flatpak has started,
@@ -382,6 +391,10 @@ One package's place in a run, for the package model (ONEUP-0259). `state` is one
 - **`installed` and `removed` are sent only for an action that completed** — a zypper
   action line ending in `done]`, on its own line or a later one when a package's script
   split it; for a Flatpak, only when the update of every scope that listed it exited 0.
+- **A Flatpak is `downloading` while Flatpak updates it** (ONEUP-0364), named from the
+  numbered table Flatpak prints before a pass, and `downloaded` once the next ref starts
+  or the pass ends. Its `downloading` line carries `bytes` of 0, and comes before the
+  `PROGRESS` that starts it, because the window counts started apps when it redraws.
 - **The window never infers them.** After a step's `STEP_END`, a package that reached
   neither reads "not changed", whatever the step's status.
 - **A package can arrive with no `queued` line.** Where the list came from
@@ -443,6 +456,12 @@ frozen again.
 `PKG` (§4.12), so a run's list shows a removal and a new package as what they are from its
 first line. It landed as one change touching every file §5 lists, plus this document.
 Nothing else was opened: the contract is frozen again.
+
+**The sixth exception, approved by the user on 2026-11-04:** ONEUP-0363 and ONEUP-0366
+added the `finish` and `remove` phases to `PROGRESS` (§4.3), and ONEUP-0364 added
+`downloading` and `downloaded` lines for Flatpak apps (§4.12). All three came from the
+user's host update of 2026-11-04. It landed as one change touching every file §5 lists,
+plus this document. Nothing else was opened: the contract is frozen again.
 
 Never a rewrite and a contract change at once. In the same step, a failing test cannot tell
 you which one broke it.

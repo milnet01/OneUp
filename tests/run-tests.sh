@@ -2028,6 +2028,31 @@ check "a retrieved package is downloading"  "@@PKG@@|system|downloading|cpupower
 check "a [..done] install is installed"     "@@PKG@@|system|installed|libcapstone5|5.0.6-18.d_t.5" "$out"
 rm -rf "$d"
 
+# ONEUP-0363: after the last package, zypper runs every package's post-transaction
+# script, which took minutes on the host on 2026-11-04 while the window still read
+# "Installing 767 of 767". zypper's line, verbatim from that run's log.
+echo "TEST: zypper's post-transaction scripts are their own phase (ONEUP-0363)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*) exit 0 ;;
+  *dup*|*update*)
+    echo "1 package to upgrade."
+    echo "( 1/1) Installing: vlc-3.0-2.1.x86_64 [...done]"
+    echo "Running post-transaction scripts [..."
+    echo "%posttrans(vlc-3.0-2.1.x86_64) script output:"
+    echo "done]"
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+check_eq "the scripts phase is sent after the last install" "1|1|install 0|0|finish" \
+         "$(grep -F '@@PROGRESS@@|system|' <<<"$out" | tail -2 | sed 's/^@@PROGRESS@@|system|//' | xargs)"
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 # ONEUP-0048: a slow mirror must be visible, bounded and interruptible. A real run sat 26
 # minutes on one repository whose server was delivering an 18 MB index at 930 B/s, with
@@ -3214,6 +3239,10 @@ out=$(run_engine "$d" --steps=orphans)
 check "the badge counts the dependencies zypper took too" \
       "@@STEP_END@@|orphans|ok|removed|3" "$out"
 check "and so does the summary" "Leftover packages: 3 removed." "$out"
+# ONEUP-0366: the same counter drives the step's progress, opened before zypper prints.
+check_eq "the removal reports each package as it goes" \
+         "0|0|remove 1|3|remove 2|3|remove 3|3|remove" \
+         "$(grep -F '@@PROGRESS@@|orphans|' <<<"$out" | sed 's/^@@PROGRESS@@|orphans|//' | xargs)"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -3374,6 +3403,35 @@ out=$(run_engine "$d" --steps=flatpak)
 check_eq "the passes and counts arrive in order, once each" \
          "0|0|user 1|2|user 2|2|user 0|0|system 1|1|system 0|0|unused" \
          "$(grep -F '@@PROGRESS@@|flatpak|' <<<"$out" | sed 's/^@@PROGRESS@@|flatpak|//' | xargs)"
+rm -rf "$d"
+
+# ONEUP-0364: Flatpak numbers its refs in a table before updating, then prints
+# "Updating N/M…" as ref N starts — so each listed app can be named as it goes.
+# The table's layout is the host's, 2026-11-04: tab-separated, the second column
+# blank. A ref nobody listed (a .Locale) names no app; installed still waits for the
+# pass's exit status (ONEUP-0259 INV-12), so the failed system pass installs nothing.
+echo "TEST: each Flatpak app moves through the update as Flatpak reaches it (ONEUP-0364)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/flatpak" <<'EOF'
+#!/usr/bin/env bash
+row() { printf ' %s.\t   \t%s\tstable\tu\tflathub\t< 1.0 MB\n' "$1" "$2"; }
+case "$*" in
+  *remotes*)                      printf 'flathub\t\n'; exit 0 ;;
+  *remote-ls*--updates*--user*)   printf 'org.x.App 1\norg.y.App 2\n'; exit 0 ;;
+  *remote-ls*--updates*--system*) printf 'org.z.App 3\n'; exit 0 ;;
+  *update*--user*)
+    printf '\n\n'; row 1 org.x.App; row 2 org.x.App.Locale; row 3 org.y.App; printf '\n\n'
+    printf 'Updating 1/3…\nUpdating 1/3… ▍   2%%\nUpdating 2/3…\nUpdating 3/3…\n'; exit 0 ;;
+  *update*--system*)
+    printf '\n\n'; row 1 org.z.App; printf '\n\nUpdating 1/1…\n'; exit 1 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/flatpak"
+out=$(run_engine "$d" --steps=flatpak)
+check_eq "each listed app is named as it starts, and installed when its pass succeeds" \
+         "downloading|org.x.App|1|0 downloaded|org.x.App|1 downloading|org.y.App|2|0 downloaded|org.y.App|2 installed|org.x.App|1 installed|org.y.App|2 downloading|org.z.App|3|0 downloaded|org.z.App|3" \
+         "$(grep -F '@@PKG@@|flatpak|' <<<"$out" | grep -v '|queued|' | sed 's/^@@PKG@@|flatpak|//' | xargs)"
 rm -rf "$d"
 
 # ONEUP-0259 INV-12: an app is installed only when the update of EVERY scope that

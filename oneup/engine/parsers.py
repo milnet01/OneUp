@@ -169,6 +169,20 @@ def flatpak_count(line: str) -> tuple[int, int] | None:
     return (int(found.group(1)), int(found.group(2))) if found else None
 
 
+# A row of the table Flatpak prints before updating: ` 3.\t   \torg.kde.Sdk\t6.11\tu\t…`.
+# Tab-separated with the second column blank, measured on the host on 2026-11-04.
+_FLATPAK_ROW = re.compile(r"^ *([0-9]+)\.\t[^\t]*\t([^\t]+)\t")
+
+
+def flatpak_table_row(line: str) -> tuple[int, str] | None:
+    """The row number and ref of one row of Flatpak's table, or None.
+
+    The row number is the N of the `Updating N/M…` line printed as that ref starts.
+    """
+    found = _FLATPAK_ROW.match(line)
+    return (int(found.group(1)), found.group(2)) if found else None
+
+
 # zypper's per-package counter, `( 7/48) Removing: …`. Only the counter is read: a
 # removal runs in the user's locale, where the verb is translated (ONEUP-0367).
 _TXN_COUNT = re.compile(r"^\( *([0-9]+)/([0-9]+)\) ")

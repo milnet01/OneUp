@@ -213,23 +213,47 @@ def system_updates(sizes: bool) -> SystemListing:
     return SystemListing(rc, True, len(updates), rows, skipped)
 
 
-def _flatpak_pass(phase: str) -> Callable[[str], None]:
-    """Name a Flatpak pass now, and return the reader that sends its count.
+def _flatpak_pass(phase: str, rows: list[FlatpakRow]
+                  ) -> tuple[Callable[[str], None], Callable[[], None]]:
+    """Name a Flatpak pass now; return the reader that sends its progress, and its end.
 
     `phase` is `user` or `system` (ONEUP-0239 §4.1.4). The pass opens with a count
     of 0 of 0, before Flatpak prints anything; then each new count Flatpak prints is
     sent once, though Flatpak repeats it at every percentage step.
+
+    Flatpak numbers its refs in a table first, and `Updating N/M…` starts ref N, so
+    a listed app is `downloading` from its start and `downloaded` once the next ref
+    starts or the pass ends (ONEUP-0364). A ref nobody listed names no app.
     """
     markers.marker("PROGRESS", "flatpak", 0, 0, phase)
+    listed = {row.app: row for row in rows}
+    refs: dict[int, str] = {}
     last: tuple[int, int] | None = None
+    current: FlatpakRow | None = None
+
+    def end() -> None:
+        nonlocal current
+        if current is not None:
+            markers.marker("PKG", "flatpak", "downloaded", current.app, current.version)
+            current = None
 
     def read(line: str) -> None:
-        nonlocal last
+        nonlocal last, current
+        row = parsers.flatpak_table_row(line)
+        if row is not None:
+            refs[row[0]] = row[1]
+            return
         count = parsers.flatpak_count(line)
         if count is not None and count != last:
             last = count
+            end()
+            current = listed.get(refs.get(count[0], ""))
+            # The app before the count: the window counts started apps when it
+            # redraws on PROGRESS.
+            if current is not None:
+                markers.marker("PKG", "flatpak", "downloading", current.app, current.version, 0)
             markers.marker("PROGRESS", "flatpak", count[0], count[1], phase)
-    return read
+    return read, end
 
 
 def run_flatpak() -> None:
@@ -248,22 +272,33 @@ def run_flatpak() -> None:
     count = len(rows)
     for row in rows:
         markers.marker("PKG", "flatpak", "queued", row.app, row.version, 0, "", row.remote)
-    succeeded = set()
-    if proc.run(["flatpak", "update", "--user", "-y"], stream=True,
-                on_line=_flatpak_pass("user"))[0] == 0:
+    succeeded: set[str] = set()
+    confirmed: set[str] = set()
+
+    def confirm() -> None:
+        # The exit status is the only per-scope evidence there is, so an app is
+        # installed only when EVERY scope that listed it succeeded (ONEUP-0259
+        # INV-12) — said after each pass, so a user-only app need not wait for the
+        # system pass (ONEUP-0364).
+        for row in rows:
+            if row.app not in confirmed and row.scopes <= succeeded:
+                confirmed.add(row.app)
+                markers.marker("PKG", "flatpak", "installed", row.app, row.version)
+
+    read, end = _flatpak_pass("user", rows)
+    if proc.run(["flatpak", "update", "--user", "-y"], stream=True, on_line=read)[0] == 0:
         succeeded.add("--user")
     else:
         ok = False
-    if privilege.root("flatpak-system-update", stream=True,
-                      on_line=_flatpak_pass("system"))[0] == 0:
+    end()
+    confirm()
+    read, end = _flatpak_pass("system", rows)
+    if privilege.root("flatpak-system-update", stream=True, on_line=read)[0] == 0:
         succeeded.add("--system")
     else:
         ok = False
-    # The exit status is the only per-scope evidence there is, so an app is
-    # installed only when EVERY scope that listed it succeeded (ONEUP-0259 INV-12).
-    for row in rows:
-        if row.scopes <= succeeded:
-            markers.marker("PKG", "flatpak", "installed", row.app, row.version)
+    end()
+    confirm()
     markers.out("Cleaning up unused Flatpak runtimes...")
     # Named, but never counted: the window says only that runtimes are being removed.
     markers.marker("PROGRESS", "flatpak", 0, 0, "unused")
@@ -420,13 +455,17 @@ def run_orphans(opts) -> None:
         for name in unneeded:
             markers.out(f"  - {name}")
         # `--clean-deps` also takes what only these needed, so zypper's own counter is
-        # the real total (ONEUP-0367); the list stands in where it printed none.
+        # the real total (ONEUP-0367); the list stands in where it printed none. The
+        # same counter is the step's progress (ONEUP-0366), opened before zypper
+        # prints, because it resolves the dependencies first.
         total = [len(unneeded)]
+        markers.marker("PROGRESS", "orphans", 0, 0, "remove")
 
         def read(line: str) -> None:
             count = parsers.transaction_count(line)
             if count is not None:
                 total[0] = count[1]
+                markers.marker("PROGRESS", "orphans", count[0], count[1], "remove")
         rc, _ = privilege.root("orphans-remove", {"names": unneeded}, stream=True,
                                on_line=read)
         if rc == 0:

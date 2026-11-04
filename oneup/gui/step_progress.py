@@ -83,6 +83,17 @@ def install(win, key: str, done: int, total: int, has_bytes: bool) -> None:
     _set(win, key, value, "install")
 
 
+def remove(win, key: str, done: int, total: int) -> None:
+    """A removal has no download, so its count fills the whole bar (ONEUP-0366)."""
+    _set(win, key, FULL * min(done, total) // total if total else None, "remove")
+
+
+def finish(win, key: str) -> None:
+    """The packages' own scripts after the last install: the bar stays where it is
+    and only the words change (ONEUP-0363)."""
+    _set(win, key, None, "finish")
+
+
 def _set(win, key: str, value: int | None, phase: str) -> None:
     old = win.step_progress.get(key)
     if old is not None:
@@ -136,6 +147,10 @@ def badge(key: str, phase: str, value: int | None) -> str:
         word = QCoreApplication.translate("run", "Downloading")
     elif phase == "install":
         word = QCoreApplication.translate("run", "Installing")
+    elif phase == "remove":
+        word = QCoreApplication.translate("run", "Removing")
+    elif phase == "finish":
+        word = QCoreApplication.translate("run", "Finishing up")
     else:
         phrasing = steps.IN_PROGRESS.get(key)
         word = QCoreApplication.translate("steps", phrasing) if phrasing else key

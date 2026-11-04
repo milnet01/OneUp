@@ -10718,19 +10718,23 @@ when complete (that document's §7).
   Lanes: gui.
   Evidence: /home/ants/Pictures/Screenshots/Screenshot_20261104_134537.png
 
-- 📋 [ONEUP-0363] **After the last package installs, the window stays on "Installing 767 of 767" through zypper's post-transaction scripts.**
+- ✅ [ONEUP-0363] **After the last package installs, the window stays on "Installing 767 of 767" through zypper's post-transaction scripts.**
   Seen 2026-11-04 on the host, 767 system updates. zypper prints
   "Running post-transaction scripts" after the last "(767/767)" line,
   then each %posttrans and file trigger's output (java cacerts, systemd,
   sdbootutil). The engine emits no marker for that phase, so the status
   line and the row's badge hold the last install count. Log:
   ~/.local/state/oneup/logs/2026-11-04_134222.log.
+  Shipped 2026-11-04. At zypper's "Running post-transaction scripts"
+  line the system step sends PROGRESS|system|0|0|finish. The status and
+  badge say "Finishing up", the bar stays where it is, and Stop stays
+  greyed. Sixth marker exception, approved by the user 2026-11-04.
   **Layman:** When the updates are in but the system is still finishing off, OneUp looks stuck instead of saying it is finishing.
   Kind: ux.
   Source: user-report-2026-11-04-host-update.
   Lanes: engine, gui.
 
-- 📋 [ONEUP-0364] **During the Flatpak step every app's card stays "waiting", and the status counts flatpak's refs per pass, not the listed apps.**
+- ✅ [ONEUP-0364] **During the Flatpak step every app's card stays "waiting", and the status counts flatpak's refs per pass, not the listed apps.**
   Seen 2026-11-04 on the host: 9 apps listed by the check. The run made
   two passes, user (8 refs) and system (5 refs); the refs include
   runtimes and .Locale extensions. Status said "Updating your apps: 8 of
@@ -10739,6 +10743,13 @@ when complete (that document's §7).
   until the step ended. flatpak prints a numbered table of refs before
   updating and "Updating N/M" per ref, so a ref can be named as it
   starts. Log: ~/.local/state/oneup/logs/2026-11-04_134222.log.
+  Shipped 2026-11-04. The engine reads Flatpak's numbered table, so each
+  listed app is PKG downloading ("now") as Flatpak starts it, and
+  downloaded once the next ref starts. It reads installed after each
+  pass that leaves every scope listing it succeeded (INV-12 unchanged),
+  not only at step end. The status counts listed apps that have started
+  ("2 of 9"), not Flatpak's refs. Sixth marker exception, approved by
+  the user 2026-11-04.
   **Layman:** While Flatpaks update, the list never shows which app is updating or done, and the counter says 8 of 8 when 9 apps are listed.
   Kind: ux.
   Source: user-report-2026-11-04-host-update.
@@ -10756,11 +10767,17 @@ when complete (that document's §7).
   Source: user-report-2026-11-04-host-update.
   Lanes: gui.
 
-- 📋 [ONEUP-0366] **The leftover-packages step shows a moving bar, though zypper prints a count for each package it removes.**
+- ✅ [ONEUP-0366] **The leftover-packages step shows a moving bar, though zypper prints a count for each package it removes.**
   Seen 2026-11-04 on the host: zypper printed "( 1/48) Removing: …" for
   each of 48 packages, but the step's bar stayed busy. The system step
   already turns zypper's "(N/M)" lines into PROGRESS markers. Log:
   ~/.local/state/oneup/logs/2026-11-04_134222.log.
+  Shipped 2026-11-04. The leftover step sends PROGRESS with a new
+  `remove` phase: 0|0 before zypper prints, then each "( N/M)" counter.
+  The step's bar fills by count, the badge says "Removing · 25%", the
+  status "Removing 12 of 48 packages", and Stop is greyed, since rpm is
+  mid-transaction. Sixth marker exception, approved by the user
+  2026-11-04.
   **Layman:** Removing leftover packages shows a bar sliding back and forth instead of how far it has got.
   Kind: ux.
   Source: user-report-2026-11-04-host-update.

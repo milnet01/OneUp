@@ -46,7 +46,7 @@ def stop_tooltip(installing: bool) -> str:
     if installing:
         return QCoreApplication.translate(
             "run",
-            "Packages are being installed, and that cannot be stopped safely "
+            "Packages are being changed, and that cannot be stopped safely "
             "part-way. Stop comes back as soon as this step finishes.")
     return QCoreApplication.translate(
         "run",
@@ -56,13 +56,14 @@ def stop_tooltip(installing: bool) -> str:
 
 
 def sync_stop(win):
-    """Stop is clickable only while a click can take effect soon (ONEUP-0095). In the
-    install phase rpm is mid-transaction, which is never interrupted (security.md
+    """Stop is clickable only while a click can take effect soon (ONEUP-0095). While
+    packages install or are removed, and through their scripts after (ONEUP-0363,
+    ONEUP-0366), rpm is mid-transaction, which is never interrupted (security.md
     §6.1), so a click there would sit on "Stopping…" until the step ends — grey it
     out and say why instead. Re-run whenever _progress_phase changes."""
     if win._stop_asked:
         return
-    installing = win._progress_phase == "install"
+    installing = win._progress_phase in ("install", "remove", "finish")
     win.stop_btn.setEnabled(not installing)
     tip = stop_tooltip(installing)
     win.stop_btn.setToolTip(tip)
@@ -618,9 +619,9 @@ def _phase_count(win) -> str:
     total is not known, as zypper's preload phase reports none (marker-protocol.md
     §4.3)."""
     n, total = win._progress_count
-    flatpak = _flatpak_part(win._progress_phase, n, total)
-    if flatpak:
-        return flatpak
+    named = _named_part(win, win._progress_phase, n, total)
+    if named:
+        return named
     downloading = step_progress.shown_phase(win) == "download"
     if total:
         text = (QCoreApplication.translate("run", "Downloading {n} of {total}") if downloading
@@ -632,11 +633,31 @@ def _phase_count(win) -> str:
     return text.format(n=n, total=total)
 
 
-def _flatpak_part(phase: str, n: int, total: int) -> str:
-    """The Flatpak step's pass and its count — "Updating your apps: 3 of 12" — or ""
-    for a phase that is not one of its passes (ONEUP-0239 §4.1.4). Flatpak prints no
-    download/install split, so these never say either."""
-    if phase == "user":
+def _flatpak_apps(win) -> tuple[int, int] | None:
+    """How many of the run's listed Flatpak apps have started, of how many — or None
+    where no app was listed, and only Flatpak's own count of refs is left (ONEUP-0364)."""
+    apps = win.packages.packages("flatpak")
+    if not apps:
+        return None
+    return sum(p.state != "queued" for p in apps), len(apps)
+
+
+def _named_part(win, phase: str, n: int, total: int) -> str:
+    """The words of a phase that is not zypper's download or install, with its count,
+    or "" for those two.
+
+    The Flatpak step's passes — "Updating your apps: 3 of 12" (ONEUP-0239 §4.1.4) —
+    never say downloading or installing, as Flatpak prints no such split. Their count
+    is of the listed apps where there are any (ONEUP-0364). A removal is counted
+    (ONEUP-0366); the post-transaction scripts are not (ONEUP-0363)."""
+    if phase in ("user", "system") and total:
+        n, total = _flatpak_apps(win) or (n, total)
+    if phase == "remove":
+        text = (QCoreApplication.translate("run", "Removing {n} of {total} packages")
+                if total else QCoreApplication.translate("run", "Removing packages"))
+    elif phase == "finish":
+        text = QCoreApplication.translate("run", "Finishing up")
+    elif phase == "user":
         text = (QCoreApplication.translate("run", "Updating your apps: {n} of {total}")
                 if total else QCoreApplication.translate("run", "Updating your apps"))
     elif phase == "system":
@@ -657,6 +678,10 @@ def _phase_announcement(phase: str) -> str:
         return QCoreApplication.translate("run", "Updating system Flatpak apps.")
     if phase == "unused":
         return QCoreApplication.translate("run", "Removing unused Flatpak runtimes.")
+    if phase == "remove":
+        return QCoreApplication.translate("run", "Removing packages.")
+    if phase == "finish":
+        return QCoreApplication.translate("run", "Finishing up.")
     if phase == "download":
         return QCoreApplication.translate("run", "Downloading packages.")
     return QCoreApplication.translate("run", "Installing packages.")
@@ -960,9 +985,9 @@ def handle_marker(win, line: str):
         # total 0 = zypper's preload phase, which reports no denominator. Show the
         # honest running tally rather than inventing one. Whole sentences per phase,
         # never a verb dropped into a frame (wording-and-translation.md §6.2).
-        flatpak = _flatpak_part(phase, n, total)
-        if flatpak:
-            detail = flatpak
+        named = _named_part(win, phase, n, total)
+        if named:
+            detail = named
         elif total:
             detail = (QCoreApplication.translate("run", "Downloading {n} of {total} packages")
                       if said == "download" else
@@ -971,7 +996,7 @@ def handle_marker(win, line: str):
             detail = (QCoreApplication.translate("run", "Downloading packages — {n} so far")
                       if said == "download" else
                       QCoreApplication.translate("run", "Installing packages — {n} so far"))
-        if not flatpak:
+        if not named:
             detail = detail.format(n=n, total=total)
         _show_detail(win, detail)
         # Spoken once per phase, not per package: a screen reader announcing all
@@ -1006,6 +1031,10 @@ def handle_marker(win, line: str):
         elif phase == "install":
             step_progress.install(win, key, n, total,
                                   has_bytes=len(parts) > 4 and parts[4].isdecimal())
+        elif phase == "remove":
+            step_progress.remove(win, key, n, total)
+        elif phase == "finish":
+            step_progress.finish(win, key)
         if announce:
             win._announce(_phase_announcement(said))
     elif tag == "REFRESH":

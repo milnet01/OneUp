@@ -213,7 +213,10 @@ that log, every `Removing:` line belonged to a separate removal counter (`(1/6)`
 them. It emits `PKG|flatpak|queued|app|version|0||remote` for each row. It then runs
 `flatpak update --user -y` and `flatpak update --system -y` separately, and either can fail
 alone. It emits `PKG|flatpak|installed|app|version` for a row only when the update of
-every scope in that row's set returned 0.
+every scope in that row's set returned 0, as soon as the last such pass ends.
+*(ONEUP-0364)* Within a pass, Flatpak prints a numbered table of refs, then
+`Updating N/M…` as ref N starts. A listed app is `downloading` from its start and
+`downloaded` once the next ref starts or the pass ends. A ref nobody listed names no app.
 
 **No new privileged call.** Every command above runs as the user; the run's dry run is
 ONEUP-0335's. So no sudoers drop-in
@@ -489,8 +492,9 @@ neither marker (reference §5 item 1).
   installed sizes for the same reason).
 - **Inferring "installed" for a system step's leftovers from a successful `STEP_END`.**
   Rejected: a step must never claim what it did not earn (`docs/standards/testing.md` §5).
-  Flatpak differs (INV-12) because no per-app line is parsed, so the update's exit status
-  is the only evidence there is (§6).
+  Flatpak differs (INV-12) because it prints no per-app result: `Updating N/M…` says only
+  that an app started (ONEUP-0364), so the update's exit status is the only evidence there
+  is (§6).
 
 ## 10. Out of scope
 
@@ -499,8 +503,6 @@ neither marker (reference §5 item 1).
 - What a Flatpak size means — ONEUP-0241.
 - A per-package download percentage. zypper prints no progress within one package; the
   `downloading` state has no percentage. Deferred; not yet queued.
-- Live per-app Flatpak states during the update. Apps move from `queued` to `installed`
-  together, when the update succeeds. Deferred; not yet queued.
 - Package lists for firmware, leftover packages and the cache. Those steps keep their
   step-level badges. Deferred; not yet queued.
 
@@ -510,3 +512,4 @@ neither marker (reference §5 item 1).
 | --- | --- | --- | --- |
 | 1 | 2026-10-12 | Q1 4 · Q2 1 · Q3 4 — 9 verified, 0 dismissed | all 9 fixed. Two lanes, each holding every question; both found the `Retrieving:` contradiction, the empty-edition gap, the merged-stderr parse risk and the Flatpak two-scope identity. Three Q1s came from settling the lanes' open questions: the tray check passes no `--notify`, the G1 citation, and the `i18n-check.py` test wording. Two measurements stay open and are written as such: zypper's XML-mode warning stream, and whether `flatpak update -y` can exit 0 after one app fails |
 | 2 | 2026-10-12 | Q1 4 · Q2 2 · Q3 1 · Q4 1 — 8 verified, 0 dismissed | all 8 fixed; the cap for a spec, so this loop's fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found the run-versus-`--sizes` contradiction and the untestable state words. One Q1 came from a measurement a lane asked for: a OneUp run log of 2026-10-12 shows a package script splitting an `Installing:` line before its `done]`. Own-fix share 5 of 8, read as a calm cap: unpropagated consequences of loop 1's decisions, not repairs of repairs. No second share: the gated change was the whole document |
+| 0364-amend | 2026-11-04 | none — an authoring amendment; no reviewer was dispatched, and none is owed | ONEUP-0364: the Flatpak step names each listed app `downloading`, then `downloaded`, as Flatpak reaches it, and says `installed` after each pass rather than after both. §10's deferred bullet for live Flatpak states is delivered and removed. INV-12 and its test are unchanged. The user approved the marker change on 2026-11-04. |
