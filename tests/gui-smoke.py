@@ -1614,6 +1614,16 @@ def main() -> int:
     _state = {p.name: wP.packages.shown_state(p) for p in wP.packages.packages("system")}
     check("ONEUP-0259 INV-9 a package's state never moves backwards",
           _state["a"] == "installed")
+    # ONEUP-0368: zypper's preloader marks a package downloaded, then its install step
+    # prints `Retrieving:` for it again. The card must not return to "now".
+    for line in ("@@PKG@@|system|downloaded|b|1-1",
+                 "@@PKG@@|system|downloading|b|1-1|100"):
+        run.handle_line(wP, line)
+    _b = next(p for p in wP.packages.packages("system") if p.name == "b")
+    check("ONEUP-0368 a second Retrieving line leaves a downloaded package out of 'now'",
+          wP.packages.shown_state(_b) == "downloaded"
+          and wP.latest_package == ("system", "b", "1-1")
+          and not package_views.downloading_now(wP, _b))
     run.handle_line(wP, "@@STEP_END@@|system|ok|installed|1")
     _state = {p.name: wP.packages.shown_state(p) for p in wP.packages.packages("system")}
     check("ONEUP-0259 INV-7 after STEP_END, only a package said to be installed reads so",

@@ -10783,13 +10783,23 @@ when complete (that document's §7).
   Source: user-report-2026-11-04-host-update.
   Lanes: engine, gui.
 
-- 📋 [ONEUP-0368] **Every system package is reported "downloaded" twice, once by the download pass and again by the install pass's Retrieving line.**
+- ✅ [ONEUP-0368] **Every system package is reported "downloaded" twice, once by the download pass and again by the install pass's Retrieving line.**
   Seen 2026-11-04 on the host: 1520 "downloaded" markers for 760
   packages. Example libqaccessibilityclient-qt6-0: "Preloading … [already
   in cache]" gives downloaded; later "Retrieving: … (528/760)" gives
   downloading then downloaded; then "In cache …" at install. Open: does
   zypper fetch twice, or only print twice? Either way a card returns to
   "now" between passes. Log: ~/.local/state/oneup/logs/2026-11-04_134222.log.
+  Answered 2026-11-04: zypper prints twice and fetches once, inferred
+  from the log (zypper's own log is root-only). The download pass is one
+  transaction. Its preloader printed "[done]" for 164 packages and
+  "[already in cache]" for 597, and then its commit printed "Retrieving:
+  … (N/760)" for all 760, including packages already on disk before the
+  run began. That second line provides from the cache. The window never
+  moved a card back: its model keeps the higher state (marker-protocol
+  §4.12, ONEUP-0259 INV-9), and "now" needs the shown state to be
+  downloading. A gui-smoke check now pins this exact case; with the
+  guard removed it fails.
   **Layman:** During a big update, packages can flick back from downloaded to downloading for a moment.
   Kind: investigate.
   Source: user-report-2026-11-04-host-update.
