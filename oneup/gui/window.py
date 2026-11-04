@@ -57,6 +57,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -1084,10 +1085,17 @@ class Updater(QMainWindow):
         the new minimum is grown by Qt. A screen too small for that takes all it can,
         and the window scrolls (ONEUP-0358). The scroll area ends the chain that would
         tell the window its content's minimum changed, so that is said here, once the
-        layouts waiting on the event queue have settled what it is."""
+        layouts waiting on the event queue have settled what it is.
+
+        Every size Qt has cached is cleared first. Before the first show, Qt passes a
+        change up one layout only, so the window was built too narrow for Rail and
+        Spotlight; restored from a saved size it opened that narrow, and KWin can keep
+        that size when the minimum grows after show (ONEUP-0361)."""
         QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
-        self.centralWidget().updateGeometry()
-        self.layout().invalidate()
+        for widget in self.findChildren(QWidget):
+            widget.updateGeometry()
+        for layout in self.findChildren(QLayout):
+            layout.invalidate()
         self.setMinimumSize(self.minimumSizeHint().expandedTo(QSize(MIN_WIDTH, 0)))
 
     def _restore_position(self):

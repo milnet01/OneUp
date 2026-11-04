@@ -7594,6 +7594,25 @@ for th in theme.THEMES:
           and 0 < _real_room.height() < _screen.height())
     wS.close()
 
+    # ONEUP-0361: a window is built at its true minimum, before it is first shown. A
+    # restored window takes its size from the minimum it was built with, and on Wayland
+    # KWin can keep that size when the minimum grows after show: Rail and Spotlight then
+    # opened narrower than their content and scrolled sideways.
+    _layout0 = _qs.value("layout")
+    for _lid in ("rows", "rail", "spotlight"):
+        _qs.setValue("layout", _lid)
+        wR = window.Updater()
+        _built = wR.minimumWidth()
+        wR.show()
+        _settle()
+        check(f"ONEUP-0361 the window is built at its minimum width ({_lid}: {_built}, "
+              f"{wR.minimumWidth()} once shown)", _built == wR.minimumWidth())
+        wR.close()
+    if _layout0 is None:
+        _qs.remove("layout")
+    else:
+        _qs.setValue("layout", _layout0)
+
     # INV-5: activating a package with details opens one dialog for it; one without
     # opens none. Closed by the scheduled-dismiss idiom of ui-and-accessibility §6.4.
     _opened = []
