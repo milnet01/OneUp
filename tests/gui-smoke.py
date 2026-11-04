@@ -6240,6 +6240,21 @@ for th in theme.THEMES:
           f"({'right' if app.isRightToLeft() else 'left'} edge done, the other to go)",
           near_start == ink and near_end != ink)
 
+    # ONEUP-0362: mid-install, zypper's order makes done and to go alternate, so few
+    # blocks merge. A block too narrow to show a fill has no outline of its own, or the
+    # strip was all outline and read as solid white; and the last package still shows.
+    strip.resize(664, 12)
+    strip.set_blocks([("done" if i % 3 == 0 else "togo", 30_000) for i in range(766)]
+                     + [("done", 30_000)])
+    image = strip.grab().toImage()
+    _outline = strip.get_ink().rgb()
+    _end = (0, 6) if app.isRightToLeft() else (663, 6)
+    _inked = sum(image.pixelColor(x, 6).rgb() == _outline for x in range(1, 663))
+    check(f"ONEUP-0362 a strip of narrow blocks is not all outline ({_inked} of 662 inked)",
+          _inked < 662 // 10)
+    check("ONEUP-0362 the last package's block reaches the strip's end",
+          image.pixelColor(*_end).rgb() == ink)
+
     # INV-11: a row's progress bar follows its own step only.
     w11 = window.Updater()
     sysbar, fpbar = w11.rows["system"].progress, w11.rows["flatpak"].progress

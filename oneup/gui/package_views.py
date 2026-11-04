@@ -991,9 +991,10 @@ class SizeStrip(QWidget):
     """Rail's size strip: one block per package, in engine order, each as wide as
     its share of the download (§4.3.2).
 
-    State is never colour alone: each group has its own fill, and every block is
-    outlined in one ink. The fills also take the theme's colours (§4.3.2) — done
-    solid, now hatched, to go left empty. Blocks run in the reading direction, which the strip reads
+    State is never colour alone: each group has its own fill, and every block wide
+    enough to show one is outlined in one ink, as is the whole strip. The fills also
+    take the theme's colours (§4.3.2) — done solid, now hatched, to go left empty.
+    Blocks run in the reading direction, which the strip reads
     from the application as `ToggleSwitch` does (`ui-and-accessibility.md` §8.3).
     """
 
@@ -1001,6 +1002,9 @@ class SizeStrip(QWidget):
         "done": Qt.BrushStyle.SolidPattern, "now": Qt.BrushStyle.BDiagPattern,
         "togo": Qt.BrushStyle.NoBrush}
     MIN_BLOCK = 2     # pixels: the narrowest block, which a package of unknown size gets
+    # Pixels: a narrower block gets no outline of its own. Its two edges would cover it,
+    # and hundreds of them read as a solid fill the legend does not show (ONEUP-0362).
+    OUTLINED = 4
 
     def __init__(self) -> None:
         super().__init__()
@@ -1073,16 +1077,30 @@ class SizeStrip(QWidget):
             return
         p = QPainter(self)
         width, height = self.width(), self.height()
-        spare = max(0, width - len(blocks) * self.MIN_BLOCK)
+        # Packages install in zypper's order, so done and to go alternate and few
+        # blocks merge: there can still be more than the strip holds at MIN_BLOCK.
+        # Every block then narrows alike, so the last packages stay on the strip, and
+        # to no more than half of it, so the other half still goes by size.
+        narrowest = min(self.MIN_BLOCK, width / (2 * len(blocks)))
+        spare = max(0, width - len(blocks) * narrowest)
         total = sum(size for _g, size in blocks)
         rtl = QApplication.isRightToLeft()
+        # One outline round the whole strip, so a narrow to go reads as empty. Drawn
+        # first: a narrow block at either end covers it there, and so still shows.
+        p.setPen(QPen(self._ink, 1))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRect(QRectF(0, 0, width, height).adjusted(0.5, 0.5, -0.5, -0.5))
         x = 0.0
         for group, size in blocks:
             share = (size / total) if total else (1 / len(blocks))
-            w = self.MIN_BLOCK + spare * share
+            w = narrowest + spare * share
             left = width - x - w if rtl else x
-            rect = QRectF(left, 0, w, height).adjusted(0.5, 0.5, -0.5, -0.5)
-            p.setPen(QPen(self._ink, 1))
+            if w >= self.OUTLINED:
+                p.setPen(QPen(self._ink, 1))
+                rect = QRectF(left, 0, w, height).adjusted(0.5, 0.5, -0.5, -0.5)
+            else:
+                p.setPen(Qt.PenStyle.NoPen)
+                rect = QRectF(left, 1, w, height - 2)    # inside the strip's outline
             p.setBrush(self.brush(group))
             p.drawRect(rect)
             x += w

@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=361 -->
+<!-- ants-roadmap-id-high-water: ONEUP=368 -->
 
 # OneUp Roadmap
 
@@ -10692,6 +10692,104 @@ when complete (that document's §7).
   Source: ONEUP-0249-vm-check-2026-11-01.
   Lanes: gui.
 
+- ✅ [ONEUP-0362] **Mid-install, Rail's size strip turns mostly solid white, a fill its legend does not show.**
+  Seen 2026-11-04 on the host, 767 updates, 249 installed. zypper installs
+  in its own order, so done and to-go blocks alternate and §4.3.2's merge
+  (neighbours of one group) barely helps: 345 blocks in a 664 px strip
+  (offscreen, same mix). Each block is outlined in ink on both sides, so a
+  1-2 px block is all outline and reads as solid white.
+  Fix options, a spec change (ONEUP-0239 §4.3.2) either way:
+  A. Outline only a block wide enough to show a fill (about 4 px or more),
+     and draw one outline round the whole strip. Order and legend stay.
+  B. Each pixel column shows its packages' majority group.
+  C. Draw done, now and to go as three runs, like a progress bar. Simplest
+     to read; drops engine order.
+  Recommended: A, the smallest change that keeps every promise in §4.3.2.
+  Decided by the user 2026-11-04: option A.
+  2026-11-04: option A built. A block under four pixels has no outline;
+  one outline runs round the strip. Overflowing blocks narrow alike, to
+  half the strip, so the last package shows and the rest goes by size
+  (the old strip ran 26 px past its end at 345 blocks). Spec ONEUP-0239
+  §4.3.2 amended. gui-smoke red on the old code (662 of 662 pixels
+  outline), green 1147/0. Not yet seen in a live run.
+  **Layman:** During a big update the package bar fills with plain white stripes that match nothing in its key.
+  Kind: ux.
+  Source: user-report-2026-11-04-host-update.
+  Lanes: gui.
+  Evidence: /home/ants/Pictures/Screenshots/Screenshot_20261104_134537.png
+
+- 📋 [ONEUP-0363] **After the last package installs, the window stays on "Installing 767 of 767" through zypper's post-transaction scripts.**
+  Seen 2026-11-04 on the host, 767 system updates. zypper prints
+  "Running post-transaction scripts" after the last "(767/767)" line,
+  then each %posttrans and file trigger's output (java cacerts, systemd,
+  sdbootutil). The engine emits no marker for that phase, so the status
+  line and the row's badge hold the last install count. Log:
+  ~/.local/state/oneup/logs/2026-11-04_134222.log.
+  **Layman:** When the updates are in but the system is still finishing off, OneUp looks stuck instead of saying it is finishing.
+  Kind: ux.
+  Source: user-report-2026-11-04-host-update.
+  Lanes: engine, gui.
+
+- 📋 [ONEUP-0364] **During the Flatpak step every app's card stays "waiting", and the status counts flatpak's refs per pass, not the listed apps.**
+  Seen 2026-11-04 on the host: 9 apps listed by the check. The run made
+  two passes, user (8 refs) and system (5 refs); the refs include
+  runtimes and .Locale extensions. Status said "Updating your apps: 8 of
+  8", then "Updating system apps: 5 of 5". No @@PKG@@ flatpak state came
+  between queued and installed, so the cards and strip sat at 0 done
+  until the step ended. flatpak prints a numbered table of refs before
+  updating and "Updating N/M" per ref, so a ref can be named as it
+  starts. Log: ~/.local/state/oneup/logs/2026-11-04_134222.log.
+  **Layman:** While Flatpaks update, the list never shows which app is updating or done, and the counter says 8 of 8 when 9 apps are listed.
+  Kind: ux.
+  Source: user-report-2026-11-04-host-update.
+  Lanes: engine, gui.
+
+- 📋 [ONEUP-0365] **Flatpak apps have no details dialog; Flathub's app data has a summary and release notes to show.**
+  Asked by the user 2026-11-04. ONEUP-0260 §5 left Flatpak out because
+  zypper knows nothing of it, and passed the question to ONEUP-0241,
+  which answered only sizes. Candidate sources, not yet tried here: the
+  remote's AppStream data (summary, description, <releases>), and
+  `flatpak remote-info` (commit subject, date). Needs a check of what a
+  runtime or extension (org.kde.Platform) can show.
+  **Layman:** Double-clicking a system package shows what changed; a Flatpak app shows nothing, though Flathub has that information.
+  Kind: feature.
+  Source: user-report-2026-11-04-host-update.
+  Lanes: gui.
+
+- 📋 [ONEUP-0366] **The leftover-packages step shows a moving bar, though zypper prints a count for each package it removes.**
+  Seen 2026-11-04 on the host: zypper printed "( 1/48) Removing: …" for
+  each of 48 packages, but the step's bar stayed busy. The system step
+  already turns zypper's "(N/M)" lines into PROGRESS markers. Log:
+  ~/.local/state/oneup/logs/2026-11-04_134222.log.
+  **Layman:** Removing leftover packages shows a bar sliding back and forth instead of how far it has got.
+  Kind: ux.
+  Source: user-report-2026-11-04-host-update.
+  Lanes: engine, gui.
+
+- 📋 [ONEUP-0367] **The leftover step says "17 removed" when zypper removed 48 packages.**
+  Seen 2026-11-04 on the host. The step listed 17 unneeded packages;
+  zypper's removal took 31 more that depended on them (evince's plugin,
+  libgjs0, libgtksourceview-4-0 and others), 176.1 MiB in all. The
+  finished line and badge said 17. Whether the 31 should be named before
+  the user agrees is a separate question for the confirmation step. Log:
+  ~/.local/state/oneup/logs/2026-11-04_134222.log.
+  **Layman:** OneUp under-reports how many leftover packages it took off: it names 17, but their own dependencies brought the total to 48.
+  Kind: ux.
+  Source: user-report-2026-11-04-host-update.
+  Lanes: engine, gui.
+
+- 📋 [ONEUP-0368] **Every system package is reported "downloaded" twice, once by the download pass and again by the install pass's Retrieving line.**
+  Seen 2026-11-04 on the host: 1520 "downloaded" markers for 760
+  packages. Example libqaccessibilityclient-qt6-0: "Preloading … [already
+  in cache]" gives downloaded; later "Retrieving: … (528/760)" gives
+  downloading then downloaded; then "In cache …" at install. Open: does
+  zypper fetch twice, or only print twice? Either way a card returns to
+  "now" between passes. Log: ~/.local/state/oneup/logs/2026-11-04_134222.log.
+  **Layman:** During a big update, packages can flick back from downloaded to downloading for a moment.
+  Kind: investigate.
+  Source: user-report-2026-11-04-host-update.
+  Lanes: engine.
+
 ## 2.1.0 — after 2.0
 
 **Theme:** features raised after 2.0's list closed. They wait for 2.0.0 to ship
@@ -10892,6 +10990,12 @@ when complete (that document's §7).
   /var/lib/flatpak/repo/objects. No root; two small HTTPS GETs per app.
   Risk: the superblock format is ostree-internal, so a parse failure must
   fall back to "up to", never to a wrong number. Builds on ONEUP-0241.
+  2026-11-04, the user: even if a size cannot be known beforehand, show it
+  as the download goes. Seen on the host run: before updating, flatpak
+  printed a table with an upper bound per ref (Discord "< 252.2 MB",
+  org.kde.Sdk "< 1.2 GB", one "(partial)"), so the "up to" figure is
+  on hand the moment a pass starts, without the superblock work. Log:
+  ~/.local/state/oneup/logs/2026-11-04_134222.log.
   **Layman:** Before Flatpak apps update, OneUp shows how much each will really download, or an "up to" figure when the exact one isn't available.
   Kind: feature.
   Source: user-decision-2026-10-16.
