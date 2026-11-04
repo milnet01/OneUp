@@ -419,11 +419,20 @@ def run_orphans(opts) -> None:
         markers.out(f"Removing {len(unneeded)} leftover dependency package(s):")
         for name in unneeded:
             markers.out(f"  - {name}")
-        rc, _ = privilege.root("orphans-remove", {"names": unneeded}, stream=True)
+        # `--clean-deps` also takes what only these needed, so zypper's own counter is
+        # the real total (ONEUP-0367); the list stands in where it printed none.
+        total = [len(unneeded)]
+
+        def read(line: str) -> None:
+            count = parsers.transaction_count(line)
+            if count is not None:
+                total[0] = count[1]
+        rc, _ = privilege.root("orphans-remove", {"names": unneeded}, stream=True,
+                               on_line=read)
         if rc == 0:
-            ORPHANS_REMOVED = len(unneeded)
-            end_step("orphans", "ok", "removed", f"removed {len(unneeded)} package(s)",
-                     len(unneeded))
+            ORPHANS_REMOVED = total[0]
+            end_step("orphans", "ok", "removed", f"removed {total[0]} package(s)",
+                     total[0])
         else:
             markers.hint("orphans-remove-failed",
                          say="The leftover packages could not be removed. "

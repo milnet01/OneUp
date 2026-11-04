@@ -3189,6 +3189,34 @@ check "the no-repository count leaves out the heading" \
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0367. `remove --clean-deps` takes the listed packages' own dependencies too:
+# on the host on 2026-11-04 the step listed 17 and zypper removed 48, but the badge
+# said 17. The count is read from zypper's "( N/M)" counter, never its verb, because
+# the removal runs in the user's locale — so the last line here is not English.
+echo "TEST: the orphans step counts every package zypper removed (ONEUP-0367)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *packages*--unneeded*) printf 'S|Repo|Name|Ver|Arch\n-+-+-+-+-\ni|r|foo|1|x\ni|r|bar|1|x\n'; exit 0 ;;
+  *packages*--orphaned*) exit 0 ;;
+  *remove*)
+    printf '3 packages to remove.\n'
+    printf '(1/3) Removing: foo-1-1.x86_64 [...done]\n'
+    printf '(2/3) Removing: bar-1-1.x86_64 [...done]\n'
+    printf '(3/3) Entfernen: libbar1-1-1.x86_64 [...fertig]\n'
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=orphans)
+check "the badge counts the dependencies zypper took too" \
+      "@@STEP_END@@|orphans|ok|removed|3" "$out"
+check "and so does the summary" "Leftover packages: 3 removed." "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: a FAILED orphan removal is marked fail, not success (it deletes packages)"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'

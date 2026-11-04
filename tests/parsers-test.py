@@ -430,6 +430,13 @@ def main() -> int:
     for line, want in SIZE_TEXT:
         check(f"download_size({line[:38]!r}…)", parsers.download_size(line), want)
 
+    # ONEUP-0367: the counter alone, so a translated verb still counts.
+    for line, want in (("( 7/48) Removing: libfoo-1-1.x86_64 [...done]", (7, 48)),
+                       ("(48/48) Entfernen: libfoo-1-1.x86_64 [...fertig]", (48, 48)),
+                       ("48 packages to remove.", None),
+                       ("Retrieving: libfoo-1-1.x86_64 (528/760), 1.0 MiB", None)):
+        check(f"transaction_count({line[:24]!r}…)", parsers.transaction_count(line), want)
+
     # The caller passes whole captured output, not one line: the first MATCHING
     # line wins, and lines before it must not stop the search.
     check("download_size skips non-matching lines and takes the first hit",

@@ -10766,13 +10766,18 @@ when complete (that document's §7).
   Source: user-report-2026-11-04-host-update.
   Lanes: engine, gui.
 
-- 📋 [ONEUP-0367] **The leftover step says "17 removed" when zypper removed 48 packages.**
+- ✅ [ONEUP-0367] **The leftover step says "17 removed" when zypper removed 48 packages.**
   Seen 2026-11-04 on the host. The step listed 17 unneeded packages;
   zypper's removal took 31 more that depended on them (evince's plugin,
   libgjs0, libgtksourceview-4-0 and others), 176.1 MiB in all. The
   finished line and badge said 17. Whether the 31 should be named before
   the user agrees is a separate question for the confirmation step. Log:
   ~/.local/state/oneup/logs/2026-11-04_134222.log.
+  Shipped 2026-11-04. The step now reports zypper's own total, read from
+  the "( N/M)" counter of each removal line; the word beside it is
+  ignored, because the removal runs in the user's language. Where zypper
+  printed no counter, the listed count stands. Whether to name the extra
+  packages before the user agrees stays open (the confirmation step).
   **Layman:** OneUp under-reports how many leftover packages it took off: it names 17, but their own dependencies brought the total to 48.
   Kind: ux.
   Source: user-report-2026-11-04-host-update.

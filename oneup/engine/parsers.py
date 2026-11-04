@@ -169,6 +169,17 @@ def flatpak_count(line: str) -> tuple[int, int] | None:
     return (int(found.group(1)), int(found.group(2))) if found else None
 
 
+# zypper's per-package counter, `( 7/48) Removing: …`. Only the counter is read: a
+# removal runs in the user's locale, where the verb is translated (ONEUP-0367).
+_TXN_COUNT = re.compile(r"^\( *([0-9]+)/([0-9]+)\) ")
+
+
+def transaction_count(line: str) -> tuple[int, int] | None:
+    """The package zypper's transaction has reached and how many it holds, or None."""
+    found = _TXN_COUNT.match(line)
+    return (int(found.group(1)), int(found.group(2))) if found else None
+
+
 # --- `zypper lr -u` output ---------------------------------------------------
 
 
