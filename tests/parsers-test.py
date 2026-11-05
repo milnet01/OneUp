@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Table-driven tests for the pure half of the Python engine — oneup/engine/parsers.py
 and the emitter predicates in oneup/engine/markers.py — and for the window's
-Qt-free package-details parsers, oneup/gui/package_details.py (ONEUP-0260).
+Qt-free package-details parsers, oneup/gui/package_details.py (ONEUP-0260) and
+oneup/gui/flatpak_details.py (ONEUP-0365).
 
 `docs/specs/ONEUP-0054-python-engine.md` §4.3.4: `to_bytes`, the zypper progress
 wordings, the two download-size wordings, `lr` output and `lock_holder`'s text
@@ -29,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from oneup.engine import markers, parsers
+from oneup.gui import flatpak_details as fd
 from oneup.gui import package_details as pd
 
 PASS = 0
@@ -422,6 +424,153 @@ def details_checks() -> None:
     check("new_entries: the fallback stops at 20", len(pd.new_entries(many, None)[0]), 20)
 
 
+# --- a Flatpak's details (oneup/gui/flatpak_details.py) ---------------------------
+# ONEUP-0260 §4.7 (ONEUP-0365). Each component copies a shape read from Flathub's
+# catalogue on this machine, 2026-11-05: a translated summary beside the plain one,
+# a <p>/<ul> description over indented lines, releases with and without notes, a
+# runtime with no releases (org.kde.Platform), one ID listed once per branch, and
+# an older ".desktop" ID.
+APPSTREAM = """<?xml version="1.0" encoding="UTF-8"?>
+<components version="0.8" origin="flatpak">
+  <component type="desktop-application">
+    <id>com.example.Chat</id>
+    <name>Chat</name>
+    <summary>Talk, play, hang out</summary>
+    <summary xml:lang="ru">Общайся</summary>
+    <description>
+      <p>Chat is a place
+      to talk.</p>
+      <ul><li>Voice <em>and</em> video</li><li>Servers</li></ul>
+    </description>
+    <description xml:lang="ru"><p>Нет</p></description>
+    <url type="bugtracker">https://example.com/bugs</url>
+    <url type="homepage">https://example.com</url>
+    <releases>
+      <release timestamp="1792972800" version="1.0.167" />
+      <release timestamp="1793318400" version="1.0.168">
+        <description><p>Fixes the call button.</p></description>
+      </release>
+      <release timestamp="1792540800" version="1.0.166" />
+    </releases>
+    <bundle type="flatpak">app/com.example.Chat/x86_64/stable</bundle>
+  </component>
+  <component type="runtime">
+    <id>org.example.Platform</id>
+    <name>Example Platform</name>
+    <summary>Shared libraries</summary>
+    <bundle type="flatpak">runtime/org.example.Platform/x86_64/6.10</bundle>
+  </component>
+  <component type="runtime">
+    <id>org.example.Base</id>
+    <name>Base</name>
+    <releases><release timestamp="1" version="base-25.08.19" /></releases>
+  </component>
+  <component type="runtime">
+    <id>org.example.Base</id>
+    <name>Base</name>
+    <releases><release timestamp="2" version="base-26.08.4" /></releases>
+  </component>
+  <component type="desktop">
+    <id>org.example.Old.desktop</id>
+    <name>Old</name>
+  </component>
+  <component type="desktop-application">
+    <id>org.example.Unwanted</id>
+    <name>Unwanted</name>
+  </component>
+</components>
+"""
+
+
+def flatpak_checks() -> None:
+    import gzip
+    import os
+
+    for name, want in (("com.discordapp.Discord", True), ("org.kde.Platform", True),
+                       ("-x", False), (".hidden", False), ("a/b", False), ("", False),
+                       ("../etc", False)):
+        check(f"flatpak valid_id({name!r})", fd.valid_id(name), want)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        user, system = Path(tmp, "user"), Path(tmp, "system")
+        plain = user / "appstream" / "flathub" / fd._ARCH.get(
+            os.uname().machine.lower(), os.uname().machine) / "active"
+        plain.mkdir(parents=True)
+        (plain / "appstream.xml").write_text(APPSTREAM)
+        (plain / "appstream.xml.gz").write_bytes(b"not read: the plain file wins")
+        zipped = system / plain.relative_to(user)
+        zipped.mkdir(parents=True)
+        (zipped / "appstream.xml.gz").write_bytes(gzip.compress(APPSTREAM.encode()))
+        saved = {k: os.environ.get(k) for k in ("FLATPAK_USER_DIR", "FLATPAK_SYSTEM_DIR")}
+        os.environ["FLATPAK_USER_DIR"], os.environ["FLATPAK_SYSTEM_DIR"] = str(user), str(system)
+        try:
+            files = fd.appstream_files({"flathub", "missing", "../flathub"})
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        check("appstream_files: the plain file in the user installation, the gzip in "
+              "the system one, nothing for a missing or invalid remote",
+              files, [str(plain / "appstream.xml"), str(zipped / "appstream.xml.gz")])
+        wanted = {"com.example.Chat", "org.example.Platform", "org.example.Base",
+                  "org.example.Old", "org.example.Absent"}
+        got = fd.read(files, wanted)
+        check("read: a gzip catalogue reads as the plain one does",
+              fd.read(files[1:], wanted), fd.read(files[:1], wanted))
+        broken = Path(tmp, "broken.xml")
+        broken.write_text(APPSTREAM[:APPSTREAM.index("<component type=\"runtime\">")])
+        check("read: a truncated catalogue keeps what it gave before failing",
+              list(fd.read([str(broken), str(Path(tmp, "absent.xml"))], wanted)),
+              ["com.example.Chat"])
+
+    check("read: only the wanted IDs, a .desktop suffix dropped, an absent one absent",
+          sorted(got), ["com.example.Chat", "org.example.Base", "org.example.Old",
+                        "org.example.Platform"])
+    chat = got["com.example.Chat"][0]
+    check("read: the untranslated name and summary",
+          (chat.name, chat.summary), ("Chat", "Talk, play, hang out"))
+    check("read: the description as paragraphs and bullets, inline markup kept as text",
+          chat.description, "Chat is a place to talk.\n\n• Voice and video\n• Servers")
+    check("read: the homepage, not the first url", chat.url, "https://example.com")
+    check("read: releases newest first, by timestamp, whatever the file's order",
+          [r.version for r in chat.releases], ["1.0.168", "1.0.167", "1.0.166"])
+    check("read: a release's notes, and none where it has none",
+          [r.text for r in chat.releases], ["Fixes the call button.", "", ""])
+    check("read: one component per branch the catalogue lists",
+          len(got["org.example.Base"]), 2)
+
+    base = got["org.example.Base"]
+    check("choose: the branch that lists the new version",
+          fd.choose(base, "base-26.08.4"), base[1])
+    check("choose: no branch lists it, so the first",
+          fd.choose(base, "base-27"), base[0])
+    check("choose: no edition, so the first", fd.choose(base, ""), base[0])
+    check("choose: nothing to choose from", fd.choose([], "1"), None)
+
+    check("parse_installed: a version per ref, branches merged, a blank version left out",
+          fd.parse_installed("com.example.Chat\t1.0.166\norg.example.Base\tbase-25.08.19\n"
+                             "org.example.Base\tbase-26.08.4\nio.example.NoVersion\t\n\n"),
+          {"com.example.Chat": {"1.0.166"},
+           "org.example.Base": {"base-25.08.19", "base-26.08.4"}})
+
+    WC = fd.WhatChanged
+    rel = list(chat.releases)
+    for why, comp, installed, want in (
+        ("two versions behind: both newer releases", chat, {"1.0.166"},
+         WC("entries", rel[:2])),
+        ("already on the newest: nothing new, and known", chat, {"1.0.168"},
+         WC("entries", [])),
+        ("the installed version is not listed: the newest few, unknown", chat, {"0.9"},
+         WC("entries", rel, known=False)),
+        ("installed versions never read: unknown", chat, None, WC("entries", rel, known=False)),
+        ("a runtime with no releases", got["org.example.Platform"][0], {"1"}, WC("no-notes")),
+        ("no component", None, {"1"}, WC("no-notes")),
+    ):
+        check(f"what_changed: {why}", fd.what_changed(comp, installed), want)
+
+
 def main() -> int:
     for number, unit, want, why in TO_BYTES:
         check(f"to_bytes({number!r}, {unit!r}) — {why}",
@@ -607,6 +756,7 @@ def main() -> int:
               not any(c in body for c in "\n\r\x0b\x0c"), True)
 
     details_checks()
+    flatpak_checks()
 
     print(f"\n  Passed: {PASS}   Failed: {FAIL}")
     return 1 if FAIL else 0

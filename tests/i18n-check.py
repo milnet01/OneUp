@@ -181,10 +181,20 @@ WORD_LOGIC_EXEMPT = {
         "a developer's contrast report, printed for a palette author",
     ("oneup/gui/details_dialog.py", "details_text", "join '\\n'"):
         "layout, not wording: the details box's lines, each translated or zypper's own",
+    ("oneup/gui/details_dialog.py", "flatpak_text", "join '\\n'"):
+        "layout, not wording: a Flatpak's details lines, each translated or the catalogue's own",
     ("oneup/gui/diagnostics.py", "build_diagnostics", "join '  '"):
         "the bug-report payload, read by a developer (ONEUP-0032 §10)",
     ("oneup/gui/diagnostics.py", "build_diagnostics", "join '\\n'"):
         "the bug-report payload's lines, read by a developer",
+    ("oneup/gui/flatpak_details.py", "_flat", "join ' '"):
+        "the catalogue's own words, whitespace collapsed (ONEUP-0260 §4.7)",
+    ("oneup/gui/flatpak_details.py", "_flat", "join ''"):
+        "the catalogue's own text runs, inline markup dropped",
+    ("oneup/gui/flatpak_details.py", "_text", "join '\\n'"):
+        "the catalogue's own paragraphs and bullets, one per line",
+    ("oneup/gui/flatpak_details.py", "appstream_files", "lower"):
+        "a machine architecture name mapped to Flatpak's, never shown",
     ("oneup/gui/layout_rail.py", "__init__", "join '\\n'"):
         "layout, not wording: a card's three lines, each one its own field",
     ("oneup/gui/layout_rows.py", "__init__", "join '\\n'"):

@@ -10755,13 +10755,21 @@ when complete (that document's §7).
   Source: user-report-2026-11-04-host-update.
   Lanes: engine, gui.
 
-- 📋 [ONEUP-0365] **Flatpak apps have no details dialog; Flathub's app data has a summary and release notes to show.**
+- ✅ [ONEUP-0365] **Flatpak apps have no details dialog; Flathub's app data has a summary and release notes to show.**
   Asked by the user 2026-11-04. ONEUP-0260 §5 left Flatpak out because
   zypper knows nothing of it, and passed the question to ONEUP-0241,
   which answered only sizes. Candidate sources, not yet tried here: the
   remote's AppStream data (summary, description, <releases>), and
   `flatpak remote-info` (commit subject, date). Needs a check of what a
   runtime or extension (org.kde.Platform) can show.
+  Shipped 2026-11-05. Spec: docs/specs/ONEUP-0260-package-details.md §4.7,
+  INV-9 and INV-10 (an amendment, no gate). The details come from the
+  remote's AppStream catalogue on disk (no root, no network), parsed on a
+  worker thread; What changed is the releases newer than the version
+  `flatpak list` gave before the run. A runtime such as org.kde.Platform
+  has a summary and no releases, so its dialog says so. Code:
+  oneup/gui/flatpak_details.py, details_dialog.py. Tests: parsers-test.py,
+  gui-smoke.py.
   **Layman:** Double-clicking a system package shows what changed; a Flatpak app shows nothing, though Flathub has that information.
   Kind: feature.
   Source: user-report-2026-11-04-host-update.

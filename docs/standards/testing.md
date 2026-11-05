@@ -27,7 +27,7 @@ also runs on a `v*` tag is `docs/standards/workflow.md` §6's to state.
 | Suite | File | Asserts on |
 | --- | --- | --- |
 | Engine | `tests/run-tests.sh` | the `@@MARKER@@` lines the engine prints — the `oneup.engine` package by default since ONEUP-0054 stage 9, any other command through `ONEUP_ENGINE_CMD` |
-| Engine parsers | `tests/parsers-test.py` | the pure half of the engine, `oneup/engine/parsers.py`, table-driven against real captured zypper output and the lock file's text; and the window's Qt-free package-details parsers, `oneup/gui/package_details.py` (ONEUP-0260) |
+| Engine parsers | `tests/parsers-test.py` | the pure half of the engine, `oneup/engine/parsers.py`, table-driven against real captured zypper output and the lock file's text; and the window's Qt-free package-details parsers, `oneup/gui/package_details.py` (ONEUP-0260) and `oneup/gui/flatpak_details.py` (ONEUP-0365) |
 | GUI | `tests/gui-smoke.py` | the window's state after being fed those same marker lines — and one scenario that launches the Python engine through the window's own code path and asserts the window acted on what the engine actually sent (gate G3 of ONEUP-0054). Run twice by both gates: the second time as `tests/gui-smoke.py -reverse`, mirrored right-to-left, whose first assertion is that it really is (ONEUP-0032 INV-5) |
 | Version bump | `tests/bump-test.py` | that a real bump still parses the five real version sites, and rewrites the CHANGELOG heading and both links correctly (`docs/standards/workflow.md` §5.1's row owns the exact split) |
 | Package structure | `tests/imports-test.py` | the `oneup/` package's structural rules — how path constants are imported, which way the engine and window may depend on each other, and how the engine is launched (`docs/standards/workflow.md` §6's row names each) |
@@ -132,7 +132,9 @@ It also puts a mock `zypper` and `rpm` there, and points `ONEUP_ZYPP_PACKAGES` a
 directory inside the sandbox (ONEUP-0260 INV-8). A check's system packages start a
 details fetch, which otherwise reads the real rpm database, the real repositories and
 the real package cache. Each mock records its `$LC_ALL` and argv, and prints a fixture
-file a scenario writes.
+file a scenario writes. A mock `flatpak` answers `list` alone, and `FLATPAK_USER_DIR` and
+`FLATPAK_SYSTEM_DIR` point into the sandbox, so a check's Flatpaks read no real
+installation (ONEUP-0365).
 
 ### 2.3 No root, no network, ever
 

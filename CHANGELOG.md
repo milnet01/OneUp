@@ -30,6 +30,11 @@ All notable changes to OneUp are documented here. The format follows
   layout; clicking it, or pressing Enter on it, opens the details. The
   package the keyboard is on is now highlighted while the list has focus.
 
+- **Clicking a Flatpak app shows what it is and which versions are new** (ONEUP-0365)
+  The details come from the app information Flathub (or the app's other source) keeps on your computer.
+  Where the source lists notes for a version, they are shown too. Shared parts such as the KDE
+  platform show only a short description, because their source lists no versions.
+
 - **On a screen too small for the window, OneUp scrolls instead of squeezing** (ONEUP-0358)
   The package list used to be squeezed away on a small laptop screen or at the largest text. Now every part of the window keeps its size, and the window scrolls.
 

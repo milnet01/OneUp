@@ -11,9 +11,10 @@ is a measurement taken on this machine that day.
 invariants · 6 failure modes · 7 tests · 8 docs & release · 9 alternatives · 10 out of
 scope · 11 cold-eyes loop log
 
-**In one sentence:** clicking a system package in any of the three layouts opens a dialog
-that says what the package is and, once its new version has downloaded or installed, what
-changed in that version — and a package OneUp knows nothing about shows no way to open one.
+**In one sentence:** clicking a system package or a Flatpak in any of the three layouts
+opens a dialog that says what it is and, where its source can tell, what changed in its new
+version — and a package
+OneUp knows nothing about shows no way to open one.
 
 **Part 3 of 3**, split from ONEUP-0239 by the user on 2026-10-12. ONEUP-0259 (the package
 model) and ONEUP-0239 (the layouts) are both `Implemented`; this part reads the first and
@@ -26,6 +27,9 @@ lists. It has two sections. **About** is the package's summary, description and 
 address, from `zypper --no-refresh info`. **What changed** is the changelog entries the new
 version adds over the old one, from the downloaded package file or, once installed, from
 the rpm database. Neither needs root, and neither changes the engine or the marker contract.
+
+A Flatpak's dialog has the same two sections, read from its remote's AppStream catalogue,
+which Flatpak keeps on disk (§4.7, ONEUP-0365).
 
 ## 2. Background
 
@@ -83,8 +87,9 @@ item adds nothing to it.
 
 Decided here, each for the reason given in §4 or §9:
 
-5. **System packages only.** Flatpak apps show no details mark; zypper knows nothing about
-   them. What a Flatpak can report is ONEUP-0241's question.
+5. **System packages and Flatpaks.** A Flatpak's details come from its remote's AppStream
+   catalogue (§4.7). Asked for by the user on 2026-11-04 (ONEUP-0365); ONEUP-0241 had
+   answered sizes only. Firmware and leftover packages have no details.
 6. **No engine change.** The window runs `zypper info` and `rpm` itself, as `read_repos`
    does. §9 records the engine route and why it lost.
 7. **The upstream address is shown as text, not a link.** It comes from a repository, and
@@ -195,7 +200,8 @@ changed. Time alone is not enough, nor time and author: two entries on one day s
 ### 4.4 Which packages can be opened
 
 A package **has details** when it is a system package and `DetailsStore` holds an About
-for its name (§3 item 8). Its What changed may still be empty; the dialog says why (§4.3).
+for its name (§3 item 8), or a Flatpak its remote's catalogue lists (§4.7). Its What
+changed may still be empty; the dialog says why (§4.3, §4.7).
 
 **A package with details shows a mark; one without shows nothing** (§3 item 2). The mark is
 a circled i the app draws, `symbols.info`, after the package's name, in every layout: in Rows it goes in the package
@@ -236,16 +242,61 @@ questions — which view, and which package in it.
 - Every sentence goes through `QCoreApplication.translate`, per
   `docs/standards/wording-and-translation.md`.
 
+### 4.7 A Flatpak's details — `oneup/gui/flatpak_details.py` (ONEUP-0365)
+
+**The source is the remote's AppStream catalogue.** Flatpak stores it as
+`<installation>/appstream/<remote>/<arch>/active/appstream.xml`, beside a gzip copy, and
+refreshes it as it updates. The installations are the user one, then the system one,
+moved by `FLATPAK_USER_DIR` and `FLATPAK_SYSTEM_DIR` as Flatpak itself is. The remote is
+the package's `repo`. No root, no network, no `flatpak` call. `flatpak remote-info` was not
+used: it fetches from the network, once per ref.
+
+**What the catalogue holds**, read from Flathub's on 2026-11-05:
+
+- An app (Discord): name, summary, description, homepage and a `<releases>` list of
+  version and date. Some releases carry notes; Discord's carry none.
+- A runtime such as `org.kde.Platform`: name, summary and homepage, and no releases.
+- `org.freedesktop.Platform`: releases with notes.
+- One component per branch, so an ID can appear several times.
+
+**Reading it.** `read` keeps only the wanted IDs, one component per distinct branch.
+It drops a `.desktop` suffix from an ID and takes the untranslated element where
+translations sit beside it. A `<p>` becomes a paragraph and an `<li>` a bullet.
+Releases are sorted newest first. The catalogue is tens of megabytes. A bare `ET.iterparse`
+pass over the system one took 0.8 s on 2026-11-05, on this machine at light load. So the
+store parses it on a daemon thread and hands the result back by a queued signal. The
+thread holds no lock and waits on no network, and quitting never waits for it. A child
+process was not used: the AppImage would need the machine's Python for it, as its engine
+does.
+
+**Which branch.** `choose` takes the component whose releases list the package's new
+version, else the first.
+
+**What changed** is the releases newer than the version installed before the run.
+The store reads `flatpak list --columns=application,version` once per batch. Like the
+system baseline (§4.3), it reads it only for a package not yet installed or removed, and
+forgets it when the model resets. The dialog says which case holds:
+
+- Releases newer than the installed one: those, with their notes.
+- The installed version is the newest listed: *"The Flatpak source lists no version newer
+  than the one installed; this update changes its files only."*
+- No installed version found among them: the newest five, under *"OneUp could not tell
+  which of these are new."*
+- No releases: *"The Flatpak source lists no versions for this item."*
+
+**IDs** pass `_ID_RE` before they reach a path or a comparison; a remote name passes it
+before it becomes a directory. Its first character excludes `-` and `.`.
+
 ## 5. Correctness invariants
 
-- **INV-1** No details query runs as root or through a shell: every `zypper` and `rpm` call
-  the window makes for this item is a fixed list argv with `LC_ALL=C`, and none starts with
-  `sudo` or `pkexec`.
+- **INV-1** No details query runs as root or through a shell: every `zypper`, `rpm` and
+  `flatpak` call the window makes for this item is a fixed list argv with `LC_ALL=C`, and
+  none starts with `sudo` or `pkexec`. *(ONEUP-0365 added `flatpak`, 2026-11-05.)*
   *Test:* `tests/gui-smoke.py` — the check is driven by feeding `CHECK_ITEM` markers, with no
   engine launched. The mock `zypper` and `rpm` on `_BIN` record their argv and their
   `$LC_ALL`, and the scenario patches `details_dialog`'s process launches (`_patch`) to
   record each program and its argument list. After the check and a dialog open, every
-  recorded program is `zypper` or `rpm` with a list of arguments, every mock call has
+  recorded program is `zypper`, `rpm` or `flatpak` with a list of arguments, every mock call has
   `LC_ALL` of `C`, and the mock `sudo` records no call during the scenario. The patch is what
   catches a shell string: `sh -c` hands the mock the same argv, and its parent is still
   `python3`, because a shell running one command replaces itself with it.
@@ -267,7 +318,8 @@ questions — which view, and which package in it.
   early).
 
 - **INV-4** A system package has a details mark exactly when it has details (§4.4), and a
-  Flatpak never has one.
+  Flatpak no catalogue lists has none. *(Until ONEUP-0365, 2026-11-05: "a Flatpak never
+  has one". INV-9 covers a listed Flatpak.)*
   *Test:* `tests/gui-smoke.py` — a check whose mock `zypper info` answers one of two system
   packages; after the fetch, the answered package's item text carries U+2139 and its
   accessible text *"details available"*, the other's carries neither, and a Flatpak
@@ -298,12 +350,31 @@ questions — which view, and which package in it.
   leaves none either; a third, in a window with a tray, survives the window hiding.
   *Breaks when:* the `QProcess` has no deadline, quitting does not kill it, or hiding does.
 
-- **INV-8** No test reads the real machine's rpm database or package cache.
-  *Test:* `tests/gui-smoke.py` sets `ONEUP_ZYPP_PACKAGES` to a scenario directory and puts
-  mock `zypper` and `rpm` on `_BIN` before the window is built; a mock that is not reached
-  fails the scenario that expected it.
+- **INV-8** No test reads the real machine's rpm database, package cache or Flatpak
+  installations.
+  *Test:* `tests/gui-smoke.py` sets `ONEUP_ZYPP_PACKAGES` to a scenario directory, sets
+  `FLATPAK_USER_DIR` and `FLATPAK_SYSTEM_DIR` to sandbox directories, and puts mock
+  `zypper`, `rpm` and `flatpak` on `_BIN` before the window is built; a mock that is not
+  reached fails the scenario that expected it.
   *Breaks when:* a path under `/var/cache/zypp` is hard-coded, or a scenario runs before the
   mocks are in place (`docs/standards/testing.md` §2).
+
+- **INV-9** A Flatpak has a details mark exactly when its remote's catalogue lists its ID,
+  and its dialog shows that entry's About.
+  *Test:* `tests/gui-smoke.py`, the ONEUP-0365 scenario — a sandbox catalogue lists one of
+  two Flatpaks; after the read, only the listed one is marked, activating it opens a
+  dialog titled with its ID showing the catalogue's name, summary, description and
+  homepage, and activating the other opens none. `tests/parsers-test.py` covers `read`.
+  *Breaks when:* the mark ignores the catalogue, or `read` matches a component it was not
+  asked for.
+
+- **INV-10** A Flatpak's What changed lists exactly the releases newer than the version
+  installed before the run, or says it could not tell.
+  *Test:* `tests/parsers-test.py` — `what_changed` against three releases, installed two
+  behind, on the newest, unlisted and unread. `tests/gui-smoke.py` — the same dialog text
+  before and after `PKG|flatpak|installed`, with the mock `flatpak list` changed between.
+  *Breaks when:* the walk includes the installed release, or the installed versions are
+  read again after the install.
 
 ## 6. Failure modes
 
@@ -316,6 +387,8 @@ questions — which view, and which package in it.
 | The baseline was taken before the install | A window that attached to a run already past its commit | The newest 20 entries, with the sentence saying OneUp could not tell which are new |
 | A font can draw the mark | None needs to: the app draws it (ONEUP-0357) | U+24D8, the first choice, was in no font a stock KDE Live install carries (ONEUP-0297); U+2139 in Noto Sans reads as a plain letter i |
 | zypper's text layout stays `Key : value` | A zypper release that changes `info`'s output | The parse finds no About: no marks until installed, never a wrong description |
+| A Flatpak's remote keeps an AppStream catalogue | A remote with none, such as the `-origin` remote a local `.flatpak` file leaves | No mark for its Flatpaks |
+| The catalogue lists the installed version | An app whose catalogue skips releases | The newest five, with the sentence saying OneUp could not tell which are new |
 
 ## 7. Tests
 
@@ -324,8 +397,9 @@ Each invariant's test is named in §5. Where they live:
 - `tests/parsers-test.py` — `parse_info`, `parse_baseline` (with a two-version
   multiversion fixture), the name and edition patterns, the epoch removal and the
   new-entries walk (INV-2, INV-3), imported from the Qt-free `package_details.py` and called
-  directly, with no process.
-- `tests/gui-smoke.py` — INV-1, INV-4, INV-5, INV-6, INV-7 and INV-8. The suite gains mock
+  directly, with no process. And `flatpak_details.py`: the ID pattern, the catalogue
+  paths, `read`, `choose`, `parse_installed` and `what_changed` (INV-9, INV-10).
+- `tests/gui-smoke.py` — INV-1, INV-4, INV-5, INV-6, INV-7, INV-8, INV-9 and INV-10. The suite gains mock
   `zypper` and `rpm` scripts on `_BIN` beside its mock `notify-send` and `sudo`, each
   printing a fixture and recording its argv, and sets `ONEUP_ZYPP_PACKAGES` to a scenario
   directory holding one fixture `.rpm` name.
@@ -373,7 +447,6 @@ No marker, engine, sudoers or download-guard change.
 
 ## 10. Out of scope
 
-- Details for Flatpak apps — ONEUP-0241 decides what Flatpak can report.
 - Following a package's state while its dialog is open.
 - Translating package descriptions or change notes; they are shown as zypper and rpm give
   them.
@@ -386,3 +459,4 @@ No marker, engine, sudoers or download-guard change.
 | 1 | 2026-10-12 | Q1 5 · Q2 3 · Q3 3 · Q4 1 — 12 verified, 1 dismissed | all 12 fixed. Two lanes, each holding every question. Two Q1s came from building the packet and were fixed before dispatch: a wrong changelog count (122, from a command that miscounted; 27 measured) and the claim that rpm reads a `\x1e` escape. Both lanes found the high-contrast rest pixel and the untestable `LC_ALL`/shell half of INV-1. One lane each found the missing redraw path, the baseline going stale across runs, the baseline taken after an install, multiversion `rpm -q`, the epoch in a file glob, the Qt import breaking `tests/parsers-test.py`'s stdlib rule, raw versus shown state, and hide-to-tray killing the fetch. Dismissed: which Rows column carries the mark, an implementer's detail. Four open questions resolved clean: the second `#Log` object name, the `system` step key, the 27 count, and the two separator quotes |
 | 2 | 2026-10-12 | Q2 5 · Q3 3 · Q4 2 — 10 verified, 1 dismissed | all 10 fixed; the cap for a spec, so these fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found the same-author same-day walk, §6's lock row against the 60 s deadline, and the GUI redirects filed under the engine's §2.1. One lane each found the state half of the mark against §3 item 2 (resolved by marking only on About, recorded as §3 item 8), `downloading` against §3 item 3, the Rows column, the baseline queued behind `zypper info`, the dialog Close button's focus rule, INV-5 sequenced after INV-4's install, and INV-1's parent-name check, measured unable to see `sh -c` (a one-command shell replaces itself). Dismissed: `parse_baseline`'s argument shape, an implementer's detail. Own-fix share 2 of 10 (the baseline order and INV-1's test, both loop 1 text): a calm cap. No second share: the gated change is the whole document |
 | impl-0297 | 2026-10-17 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0297 changed the mark from U+24D8 to U+2139 (the user's decision, 2026-10-17), and §6's font row now says what a missing glyph draws. Both record built, verified code: tests/gui-smoke.py checks Noto Sans has the mark. Under the global rule 14's code-already-exists exception the amendment does not re-arm the gate. |
+| impl-0365 | 2026-11-05 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0365 (asked for by the user, 2026-11-04) gave Flatpaks details: the one-sentence summary, §1, §3 item 5 and §4.4 widened, §4.7 added, INV-1, INV-4 and INV-8 annotated, INV-9 and INV-10 added, two §6 rows, §7, and §10's Flatpak line removed. An amendment, so no gate (`CLAUDE.md` rule 14). |

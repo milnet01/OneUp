@@ -104,7 +104,9 @@ The GUI launches the engine with `QProcess` and reads its output; it never launc
 **privileged** `zypper`. It does make direct, unprivileged calls, none of which needs
 root: `read_repos` runs `zypper --non-interactive lr -u` to list repositories, and the
 package details (ONEUP-0260) run `zypper --no-refresh --non-interactive info` and
-`rpm -q` / `rpm -qp` queries, each a fixed list argv with `LC_ALL=C` (§4.5).
+`rpm -q` / `rpm -qp` queries, and a Flatpak's details (ONEUP-0365) run
+`flatpak list --columns=application,version`. Each is a fixed list argv with `LC_ALL=C`
+(§4.5).
 
 **On a packaged install the engine asks rather than runs** (ONEUP-0249). Where OneUp's
 system service is installed, the engine sends it an operation's name and arguments, and
@@ -355,6 +357,11 @@ _EDITION_RE = re.compile(r"[A-Za-z0-9._+~^-]+")
 A name that fails `_NAME_RE` is left out of the batched argv; an edition that fails
 `_EDITION_RE` gets no What changed and runs nothing. `tests/parsers-test.py` covers
 both (ONEUP-0260 INV-2).
+
+A Flatpak's ID and remote name reach a catalogue path, not an argv, in
+`oneup/gui/flatpak_details.py`. Its `_ID_RE` excludes a leading `-` and `.`, and holds no
+`/`, so neither can climb out of the catalogue directory. `tests/parsers-test.py` covers
+it (ONEUP-0260 §4.7).
 
 **4.5 — Resolved 2026-08-18 (ONEUP-0110).** The unit-name pattern in 4.1 permitted a
 literal **backslash** — a typo for `\-`, never exploitable, since that site is argv-form and

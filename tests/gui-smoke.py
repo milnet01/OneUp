@@ -80,7 +80,16 @@ with open(os.path.join(_BIN, "rpm"), "w") as _f:
     _f.write(f'#!/usr/bin/env bash\nprintf "%s|%s\\n" "$LC_ALL" "$*" >> {_RPM_LOG}\n'
              f'case "$3" in *%{{NAME}}*) f=baseline ;; *) f=changelog ;; esac\n'
              f'cat {_DETAILS}/rpm-$f.txt 2>/dev/null\nexit 0\n')
-for _mock in ("zypper", "rpm"):
+# ONEUP-0365: a Flatpak's details read `flatpak list` and the remotes' catalogues.
+# The mock answers `list` alone, and both installations are the sandbox's, so no
+# window here reads the machine's Flatpaks.
+_FLATPAK_LOG = os.path.join(_SANDBOX, "flatpak.log")
+with open(os.path.join(_BIN, "flatpak"), "w") as _f:
+    _f.write(f'#!/usr/bin/env bash\nprintf "%s|%s\\n" "$LC_ALL" "$*" >> {_FLATPAK_LOG}\n'
+             f'[[ $1 == list ]] && cat {_DETAILS}/flatpak-list.txt 2>/dev/null\nexit 0\n')
+os.environ["FLATPAK_USER_DIR"] = os.path.join(_SANDBOX, "flatpak-user")
+os.environ["FLATPAK_SYSTEM_DIR"] = os.path.join(_SANDBOX, "flatpak-system")
+for _mock in ("zypper", "rpm", "flatpak"):
     os.chmod(os.path.join(_BIN, _mock), 0o755)  # noqa: S103 — a PATH mock must be executable.
 os.environ["ONEUP_ZYPP_PACKAGES"] = os.path.join(_DETAILS, "packages")
 os.environ["PATH"] = _BIN + os.pathsep + os.environ.get("PATH", "")
@@ -153,6 +162,7 @@ from oneup.gui import (  # noqa: E402 — same reason.
     details_dialog,
     diagnostics,
     elided_label,
+    flatpak_details,
     i18n,
     markers,
     package_details,
@@ -7416,7 +7426,7 @@ for th in theme.THEMES:
     _cache = Path(_DETAILS, "packages", "main", "x86_64")
     _cache.mkdir(parents=True, exist_ok=True)
     (_cache / "alpha-2.x86_64.rpm").write_text("")
-    for _log in (_ZYPPER_LOG, _RPM_LOG):
+    for _log in (_ZYPPER_LOG, _RPM_LOG, _FLATPAK_LOG):
         Path(_log).write_text("")
     _sudo_before = Path(_SUDO_LOG).read_text() if os.path.exists(_SUDO_LOG) else ""
     _launched = []
@@ -7737,10 +7747,11 @@ for th in theme.THEMES:
     # call ran under LC_ALL=C, and nothing went through the mock sudo.
     # Split on newlines alone: str.splitlines also splits on rpm's U+001E and U+001F.
     _calls = [c for c in (Path(_ZYPPER_LOG).read_text().split("\n")
-                          + Path(_RPM_LOG).read_text().split("\n")) if c]
-    check(f"ONEUP-0260 INV-1 every details launch is zypper or rpm with a list argv "
+                          + Path(_RPM_LOG).read_text().split("\n")
+                          + Path(_FLATPAK_LOG).read_text().split("\n")) if c]
+    check(f"ONEUP-0260 INV-1 every details launch is zypper, rpm or flatpak with a list argv "
           f"({len(_launched)} launches)",
-          _launched and all(isinstance(a, list) and a[0] in ("zypper", "rpm")
+          _launched and all(isinstance(a, list) and a[0] in ("zypper", "rpm", "flatpak")
                             for a in _launched))
     check(f"ONEUP-0260 INV-1 every details call ran with LC_ALL=C ({len(_calls)} calls)",
           _calls and all(c.startswith("C|") for c in _calls))
@@ -7759,6 +7770,65 @@ for th in theme.THEMES:
           Path(_ZYPPER_LOG).read_text() and Path(_RPM_LOG).read_text()
           and package_details.packages_dir() == os.path.join(_DETAILS, "packages"))
     wD.details.stop()
+
+    # ONEUP-0365 (§4.7): a Flatpak's details come from its remote's catalogue, here
+    # the sandbox's system installation. The catalogue lists Chat and not Bare.
+    _arch = flatpak_details._ARCH.get(os.uname().machine.lower(), os.uname().machine)
+    _active = Path(os.environ["FLATPAK_SYSTEM_DIR"], "appstream", "flathub", _arch, "active")
+    _active.mkdir(parents=True, exist_ok=True)
+    (_active / "appstream.xml").write_text(
+        '<components version="0.8" origin="flatpak"><component type="desktop-application">'
+        "<id>org.example.Chat</id><name>Chat</name><summary>Talk, play, hang out</summary>"
+        "<description><p>A place to talk.</p></description>"
+        '<url type="homepage">https://example.com/chat</url><releases>'
+        '<release timestamp="1793318400" version="1.0.168"><description>'
+        "<p>Fixes the call button.</p></description></release>"
+        '<release timestamp="1792972800" version="1.0.167"/>'
+        '<release timestamp="1792540800" version="1.0.166"/>'
+        "</releases></component></components>")
+    Path(_DETAILS, "flatpak-list.txt").write_text("org.example.Chat\t1.0.166\n")
+    _launched.clear()
+    Path(_FLATPAK_LOG).write_text("")      # wD's Flatpak read the list too
+    wP = window.Updater()
+    wP._check_mode = True
+    for line in ("@@CHECK_ITEM@@|flatpak|org.example.Chat||1.0.168|0|flathub",
+                 "@@CHECK_ITEM@@|flatpak|org.example.Bare||2|0|flathub"):
+        run.handle_line(wP, line)
+    QTest.qWait(details_dialog.BATCH_MS + 100)
+    _deadline = time.monotonic() + 20.0
+    while ((wP.details._reading or wP.details._timer.isActive())
+           and time.monotonic() < _deadline):
+        QTest.qWait(50)
+    _marked = {p.name for p, d, _a, _c in _rows_of(wP) if package_views.MARK in d}
+    check(f"ONEUP-0365 a Flatpak the catalogue lists is marked, one it lacks is not {_marked}",
+          _marked == {"org.example.Chat"})
+    _fp_launched = [a for a in _launched if a[:1] == ["flatpak"]]
+    _fp_calls = [c for c in Path(_FLATPAK_LOG).read_text().split("\n") if c]
+    check(f"ONEUP-0365 the installed versions are read once, by a list argv under LC_ALL=C "
+          f"{_fp_launched} {_fp_calls}",
+          _fp_launched == [flatpak_details.build_installed_argv()]
+          and _fp_calls == ["C|list --columns=application,version"])
+    wP.apply_layout("rows")
+    QApplication.processEvents()
+    _got = _activate(wP.host.table, wP.host.items, "org.example.Chat", "flatpak")
+    _text = _got[0][1] if _got else ""
+    check("ONEUP-0365 activating it opens its dialog, titled with its ID",
+          len(_got) == 1 and _got[0][0] == "org.example.Chat")
+    check("ONEUP-0365 About is the catalogue's name, summary, description and homepage",
+          all(t in _text for t in ("Chat", "Talk, play, hang out", "A place to talk.",
+                                   "https://example.com/chat")))
+    check("ONEUP-0365 What changed lists the releases after the installed one, with notes",
+          "1.0.168" in _text and "Fixes the call button." in _text and "1.0.167" in _text
+          and "1.0.166" not in _text)
+    check("ONEUP-0365 activating the Flatpak the catalogue lacks opens none",
+          _activate(wP.host.table, wP.host.items, "org.example.Bare", "flatpak") == [])
+    Path(_DETAILS, "flatpak-list.txt").write_text("org.example.Chat\t1.0.168\n")
+    run.handle_line(wP, "@@PKG@@|flatpak|installed|org.example.Chat|1.0.168")
+    QTest.qWait(details_dialog.BATCH_MS + 100)
+    _after = _activate(wP.host.table, wP.host.items, "org.example.Chat", "flatpak")
+    check("ONEUP-0365 once installed, What changed still reads against the version "
+          "installed before the run", _after and _after[0][1] == _text)
+    wP.details.stop()
 
     # INV-6: the current package of a focused view is drawn in the derived fill. An
     # item is not a widget, so the focus report's row is what reaches it, in every
