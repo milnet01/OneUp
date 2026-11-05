@@ -204,6 +204,10 @@ All notable changes to OneUp are documented here. The format follows
   same wording, the same steps. Only where the code lives has moved, which
   makes future changes safer to make and easier to review.
 
+- **Switching theme or text size does less work.** (ONEUP-0371)
+  The window used to recalculate its whole layout dozens of times for one
+  change; it now does it a few times. It looks the same afterwards.
+
 - **A documented design for 2.0** (ONEUP-0057)
   Before 2.0's code was written, its design, its specs and the
   project's standards were written down and reviewed, under

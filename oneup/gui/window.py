@@ -619,6 +619,8 @@ class Updater(QMainWindow):
         # be, so the swap moves nothing beside it. Re-measured when a style or font
         # change reaches either button.
         self._pin_check_stop_width()
+        self._refit_queue = []          # see _defer_refit
+        self._refit_armed = False
         self.check_btn.installEventFilter(self)
         self.stop_btn.installEventFilter(self)
         for btn in self._header_btns:
@@ -1020,19 +1022,41 @@ class Updater(QMainWindow):
     def eventFilter(self, obj, event):
         if (event.type() in (QEvent.Type.StyleChange, QEvent.Type.FontChange)
                 and obj in (self.check_btn, self.stop_btn)):
-            QTimer.singleShot(0, self._pin_check_stop_width)
+            self._defer_refit(self._pin_check_stop_width)
         if (event.type() in (QEvent.Type.StyleChange, QEvent.Type.FontChange)
                 and obj in self._header_btns):
-            QTimer.singleShot(0, self._refit_header)
+            self._defer_refit(self._refit_header)
         if (event.type() in (QEvent.Type.StyleChange, QEvent.Type.FontChange)
                 and obj is self.log_toggle):
             # Every size a layout takes from the font is re-taken with it (§4.2).
-            QTimer.singleShot(0, self._pin_log_toggle_width)
-            QTimer.singleShot(0, self._remeasure_layout)
+            self._defer_refit(self._pin_log_toggle_width)
+            self._defer_refit(self._remeasure_layout)
         if (self._placement_pending and event.type() == QEvent.Type.Expose
                 and obj is self.windowHandle()):
             QTimer.singleShot(0, self._restore_position)
         return super().eventFilter(obj, event)
+
+    def _defer_refit(self, slot):
+        """Run `slot` once, after the burst of style and font changes now arriving.
+
+        A theme or text-size change reaches every filtered button at once, and most of
+        these slots re-measure the whole window, so one timer per event ran the same
+        work several times over (measured 2026-11-05: the window suite's largest cost).
+        A slot asked for again moves to the end of the queue, so the slots run in the
+        order of their LAST request — the order the separate timers' last runs took."""
+        if slot in self._refit_queue:
+            self._refit_queue.remove(slot)
+        self._refit_queue.append(slot)
+        if not self._refit_armed:
+            self._refit_armed = True
+            QTimer.singleShot(0, self._run_deferred_refits)
+
+    def _run_deferred_refits(self):
+        # Taken before running, so a request a slot causes queues a fresh pass.
+        self._refit_armed = False
+        queue, self._refit_queue = self._refit_queue, []
+        for slot in queue:
+            slot()
 
     def _pin_check_stop_width(self):
         """Give Check and Stop the width of the widest label either can show."""

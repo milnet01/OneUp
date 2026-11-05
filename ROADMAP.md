@@ -10894,7 +10894,7 @@ when complete (that document's §7).
   Source: user-report-2026-11-04-host-update.
   Lanes: engine.
 
-- 🚧 [ONEUP-0370] **The engine suite sleeps out a 2-second stop poll in every scenario that runs the system step.**
+- ✅ [ONEUP-0370] **The engine suite sleeps out a 2-second stop poll in every scenario that runs the system step.**
   Measured 2026-11-05 (load 3-7, nice 10): tests/run-tests.sh took 265 s of
   wall time for 33 s of CPU. A per-TEST timing put 55 scenarios at about
   2.2 s each. One traced run showed a 2.0 s gap between the dry run and the
@@ -10905,12 +10905,13 @@ when complete (that document's §7).
   tests/mock-env.sh defaults ONEUP_STOP_POLL_SECONDS to 0.2, `:-` so a
   scenario's own value wins. After: 121 s, 124 s, 128 s on three
   consecutive runs, each 639/0.
+  Shipped on v2 in 3114ef7.
   **Layman:** The engine tests spent half their time waiting for nothing; they now finish in about half the time.
   Kind: perf.
   Source: user-request-2026-11-05.
   Lanes: tests.
 
-- 🚧 [ONEUP-0371] **A theme change re-measures each window about 74 times; batch the style-change refits into one pass.**
+- ✅ [ONEUP-0371] **A theme change re-measures each window about 74 times; batch the style-change refits into one pass.**
   Measured 2026-11-05: cProfile of tests/gui-smoke.py (668 s wall, all
   CPU) put _fit_minimum at 434k calls. Its callers are the three refits
   the window's eventFilter scheduled with one QTimer per StyleChange or
@@ -10919,6 +10920,9 @@ when complete (that document's §7).
   through _defer_refit, with the same minimum size (644x796). A slot asked
   for again moves to the end of the queue, so they run in the order of
   their last request, as before.
+  Shipped on v2. After: both window suites, run side by side as local-CI
+  runs them, took 361 s and 300 s (load 7.7 and 2.6), against 668 s and
+  653 s for each pass alone before; 1162/0 and 1163/0 both times.
   **Layman:** Switching theme or text size made the window recalculate its layout dozens of times; it now does it three times.
   Kind: perf.
   Source: user-request-2026-11-05.
