@@ -4445,10 +4445,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   By the fix-by-kind rule a defect in both codebases lands on main
   first, but main is frozen to qualifying fixes (workflow.md §1), and
   0198 needs colours chosen for main's palette.
-  Waiting-on: user (port both to a 1.4.12? Recommended: yes for 0182, a
-  mechanical port of v2's locale-aware date; for 0198, yes with the
-  nearest colour in main's palette that clears 3:1, shown to you before
-  release. Or leave both for 2.0, which already fixes them. 2026-11-05)
+  User's decision, 2026-11-05: port both to a 1.4.12. 0182 is a
+  mechanical port of v2's locale-aware date; 0198 takes the nearest
+  colour in main's palette that clears 3:1, shown to the user before
+  release.
   **Layman:** The released 1.4 app still shows the last-run date in English and draws a hard-to-see progress bar in the light theme; 2.0 already fixes both.
   Kind: fix.
   Source: ONEUP-0210-audit-2026-11-05.
@@ -11091,13 +11091,11 @@ when complete (that document's §7).
   org.kde.Sdk "< 1.2 GB", one "(partial)"), so the "up to" figure is
   on hand the moment a pass starts, without the superblock work. Log:
   ~/.local/state/oneup/logs/2026-11-04_134222.log.
-  Waiting-on: user (open the marker contract a seventh time so the
-  engine can send each Flatpak's "< N MB" upper bound from the table
-  flatpak prints before a pass? parsers.flatpak_table_row already reads
-  that column. Recommended: yes, as one optional trailing field on the
-  Flatpak PKG line, shown as "up to N MB", leaving the static-delta
-  exact size for later. It is a 2.1 item, so it waits for your go-ahead
-  either way. 2026-11-05)
+  User's decision, 2026-11-05: open the marker contract a seventh time
+  for one optional trailing field on the Flatpak PKG line, the "< N MB"
+  upper bound from flatpak's pre-pass table, shown as "up to N MB". The
+  static-delta exact size stays for later. Same day, the user: no 2.1
+  work before 2.0 ships, so this starts after 2.0's release.
   **Layman:** Before Flatpak apps update, OneUp shows how much each will really download, or an "up to" figure when the exact one isn't available.
   Kind: feature.
   Source: user-decision-2026-10-16.
