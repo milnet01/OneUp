@@ -4432,7 +4432,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Source: in-session-2026-10-22, ONEUP-0236's local-CI on main.
   Lanes: tests.
 
-- 📋 [ONEUP-0369] **main still has two defects v2 fixed: the Last run date's English month, and the light theme's faint progress fill.**
+- ✅ [ONEUP-0369] **main still has two defects v2 fixed: the Last run date's English month, and the light theme's faint progress fill.**
   Found by the ONEUP-0210 audit, 2026-11-05. Both fixes landed on v2
   only, but the defect is still in main:updater.py.
   - ONEUP-0182: refresh_last_run formats {when:%d %b %Y, %H:%M}; main
@@ -4454,6 +4454,10 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   the bar, so the light chunk ink turns white (5.36-5.54:1; near-black
   was 3.5:1). Red 469/2, green 471/0, local-CI green. Preview shown to
   the user; release waits on their approval of the colours.
+  Shipped in 1.4.12, 2026-11-05 (main 9702976, tag v1.4.12). User
+  approved the colour preview. GitHub release has OneUp-x86_64.AppImage;
+  OBS home:milnet:oneup and home:milnet built oneup-1.4.12-1.1 on all
+  targets. Merged into v2 at 5e07ca9 (local-CI green).
   **Layman:** The released 1.4 app still shows the last-run date in English and draws a hard-to-see progress bar in the light theme; 2.0 already fixes both.
   Kind: fix.
   Source: ONEUP-0210-audit-2026-11-05.
