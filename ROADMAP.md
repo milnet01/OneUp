@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=368 -->
+<!-- ants-roadmap-id-high-water: ONEUP=369 -->
 
 # OneUp Roadmap
 
@@ -4048,7 +4048,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: security.
   Source: review-code 2026-08-31, lane gui-services.
 
-- 📋 [ONEUP-0195] **The differential harness is a local-only gate, against workflow.md §6.1 step 3.**
+- ✅ [ONEUP-0195] **The differential harness is a local-only gate, against workflow.md §6.1 step 3.**
   workflow.md §6.1 step 3 says a test gate must also go into
   .github/workflows/release.yml, because "a test gate that runs only locally
   catches its first regression after the tag is pushed". tests/differential-test.sh
@@ -4067,6 +4067,9 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Cited in tests/differential-test.sh's header comment and beside workflow.md
   §6's table row, so a reader of either finds the reason rather than inferring
   an omission.
+  Closed 2026-11-05: moot. ONEUP-0072 removed tests/differential-test.sh
+  (156c8cc), as this item expected, so there is no local-only gate left
+  to explain. Only past plans, specs and review records still name it.
   **Layman:** One new automated check runs on this machine only, not on GitHub — on purpose, and this records why.
   Kind: chore.
   Source: ONEUP-0054 stage 6 step 6.
@@ -4127,7 +4130,7 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: test.
   Source: close-findings 2026-09-18, sweep of ONEUP-0175.
 
-- 📋 [ONEUP-0210] **Twenty-six Backlog items have no version because the branch test needs a read, not a grep.**
+- ✅ [ONEUP-0210] **Twenty-six Backlog items have no version because the branch test needs a read, not a grep.**
   An item's version is the earliest release that carries the fix, so a
   both-codebase defect belongs to `1.4.6` and merges forward. Applying that
   needs to know whether the defect exists in `main`'s single-file window or
@@ -4152,6 +4155,16 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   before ONEUP-0032, which it names as not covering the locale assumption;
   0032 is unplaced and 0182 is unplaced, so nothing currently records the
   order.
+  Closed 2026-11-05. Read again item by item (each fix commit tested
+  with git merge-base --is-ancestor and git tag --contains): 25 of the
+  26 had already shipped, and the last, ONEUP-0195, is closed as moot.
+  So no open item waits on a version. 0124 and 0131 are duplicates of
+  ONEUP-0204 (one fix, b6469fb). Two fixes landed on v2 only while the
+  defect is still in main's updater.py: ONEUP-0182 (the Last run date's
+  fixed English month, refresh_last_run) and ONEUP-0198 (the light
+  theme's progress fill, the accent gradient on the #dfe4ea track).
+  Filed as ONEUP-0369. Not done: moving the shipped items out of Backlog
+  into release sections; v1.4.9 to v1.4.11 have no section.
   **Layman:** Some open jobs could belong to either the old released app or the rewrite. Telling which needs someone to read the code, not just search it.
   Kind: chore.
   Source: in-session-2026-09-21.
@@ -4398,6 +4411,28 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   Kind: investigate.
   Source: in-session-2026-10-22, ONEUP-0236's local-CI on main.
   Lanes: tests.
+
+- 📋 [ONEUP-0369] **main still has two defects v2 fixed: the Last run date's English month, and the light theme's faint progress fill.**
+  Found by the ONEUP-0210 audit, 2026-11-05. Both fixes landed on v2
+  only, but the defect is still in main:updater.py.
+  - ONEUP-0182: refresh_last_run formats {when:%d %b %Y, %H:%M}; main
+    never calls setlocale or QLocale, so the month is always English.
+    v2 fix: 5d70ccf.
+  - ONEUP-0198: QProgressBar::chunk is $accent (#4aa3ff to #22d3ee) on
+    the light theme's progbg #dfe4ea, about 2.1:1 and 1.4:1, under 3:1.
+    The dark theme passes. v2's fix (3010821) used colours the user
+    chose for v2's eight themes; main has two themes.
+  By the fix-by-kind rule a defect in both codebases lands on main
+  first, but main is frozen to qualifying fixes (workflow.md §1), and
+  0198 needs colours chosen for main's palette.
+  Waiting-on: user (port both to a 1.4.12? Recommended: yes for 0182, a
+  mechanical port of v2's locale-aware date; for 0198, yes with the
+  nearest colour in main's palette that clears 3:1, shown to you before
+  release. Or leave both for 2.0, which already fixes them. 2026-11-05)
+  **Layman:** The released 1.4 app still shows the last-run date in English and draws a hard-to-see progress bar in the light theme; 2.0 already fixes both.
+  Kind: fix.
+  Source: ONEUP-0210-audit-2026-11-05.
+  Lanes: gui.
 
 ## 1.4.6 — fixes to the released app
 
@@ -11036,6 +11071,13 @@ when complete (that document's §7).
   org.kde.Sdk "< 1.2 GB", one "(partial)"), so the "up to" figure is
   on hand the moment a pass starts, without the superblock work. Log:
   ~/.local/state/oneup/logs/2026-11-04_134222.log.
+  Waiting-on: user (open the marker contract a seventh time so the
+  engine can send each Flatpak's "< N MB" upper bound from the table
+  flatpak prints before a pass? parsers.flatpak_table_row already reads
+  that column. Recommended: yes, as one optional trailing field on the
+  Flatpak PKG line, shown as "up to N MB", leaving the static-delta
+  exact size for later. It is a 2.1 item, so it waits for your go-ahead
+  either way. 2026-11-05)
   **Layman:** Before Flatpak apps update, OneUp shows how much each will really download, or an "up to" figure when the exact one isn't available.
   Kind: feature.
   Source: user-decision-2026-10-16.
