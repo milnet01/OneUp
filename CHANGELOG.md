@@ -11,6 +11,12 @@ All notable changes to OneUp are documented here. The format follows
 - **Updating over SSH with no desktop asks for the password in the terminal** (ONEUP-0360)
   OneUp could ask for the password only in a window. Over an SSH login with no desktop that window cannot open, so every update failed. It now asks in the terminal there. With a desktop, OneUp still shows its password box.
 
+- **The "Last run" date uses your language's name for the month** (ONEUP-0182)
+  The date on the last-run line always showed the English month name, whatever language your computer uses. It now uses your language's, in the same day, month, year order as before.
+
+- **The progress bar's fill is easy to see in the light theme** (ONEUP-0198)
+  The light theme fills the bar in a deeper blue-to-teal, so it stands out from its pale track at better than 4:1 instead of under 2:1. The words on the filled part turn white so they stay readable. The dark theme is unchanged.
+
 ## [1.4.11] - 2026-11-01
 
 ### Fixed

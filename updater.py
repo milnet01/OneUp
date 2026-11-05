@@ -34,8 +34,11 @@ import shiboken6
 from PySide6.QtCore import (
     Property,
     QByteArray,
+    QDate,
+    QDateTime,
     QEasingCurve,
     QEvent,
+    QLocale,
     QObject,
     QPointF,
     QProcess,
@@ -44,6 +47,7 @@ from PySide6.QtCore import (
     QRectF,
     QSettings,
     Qt,
+    QTime,
     QTimer,
     QUrl,
     Signal,
@@ -372,7 +376,7 @@ QProgressBar {
     border: none; border-radius: 9px; background: $progbg;
     min-height: $progmin; text-align: center; color: $status; font-size: $fs_body;
 }
-QProgressBar::chunk { border-radius: 9px; background: $accent; }
+QProgressBar::chunk { border-radius: 9px; background: $progfill; }
 
 QPlainTextEdit#Log {
     background: $logbg; color: $logfg;
@@ -511,6 +515,9 @@ _DARK = dict(
     ghostbd="#38414f", ghostfg="#c7d0dd", disbg="#262b34", disfg="#aeb7c4",
     tip="#1a1f27", tipfg="#e9edf3", focus="#66b8ff", chunkink="#0c0f13",
     linkfg="#4aa3ff", linkhov="#6fb6ff", ghosthov="#4aa3ff",
+    # The progress bar's fill, held to 3:1 against its trough `progbg` (ONEUP-0198).
+    # The accent reaches it here as it is.
+    progfill=ACCENT,
 )
 _LIGHT = dict(
     win="#eef1f5", card="#ffffff", header="#1b2027", tag="#5c6673",
@@ -518,7 +525,13 @@ _LIGHT = dict(
     badgebg="#dbe8ff", badgefg="#1f4e9c", logbg="#f6f8fa", logfg="#2a2f36",
     logbd="#d5dbe2", status="#3a424d", lastrun="#8a94a2", amber="#b5730a", progbg="#dfe4ea",
     ghostbd="#c4ccd6", ghostfg="#3a424d", disbg="#d5dbe2", disfg="#9aa3ad",
-    tip="#ffffff", tipfg="#1b2027", focus="#0b5fd0", chunkink="#0c0f13",
+    tip="#ffffff", tipfg="#1b2027", focus="#0b5fd0",
+    # ONEUP-0198: the accent read about 1.4:1 on this pale trough, so the bar looked
+    # empty however far it had got. The fill deepens the same two hues (v2's light
+    # themes, chosen with the user 2026-10-13): 4.19-4.33:1 on `progbg`. The caption
+    # over it turns white, because near-black reads only 3.5:1 on the deeper fill.
+    progfill="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1e66c8, stop:1 #0e7490)",
+    chunkink="#ffffff",
     # The dark blues read at about 2:1 here; these clear 4.5:1 on every surface a
     # link rests on (ONEUP-0269). Rest is ONEUP-0076 §4.3's value. Hover DARKENS,
     # because on this branch focus reuses hover and v2's #446f9c sits 1.02:1 from
@@ -3109,8 +3122,15 @@ for (var i = 0; i < wins.length; i++) {{
             # "Overdue" in WORDS as well as amber: colour alone carries no meaning
             # for a colour-blind user. ⚠ matches the banners' existing idiom.
             overdue = "  ·  ⚠ overdue" if stale else ""
+            # The user's layout (day, month name, year — ONEUP-0182, 2026-10-02) with the
+            # month name from their locale. strftime's %b is always the C locale's, since
+            # Python never calls setlocale(LC_TIME); the full locale format was declined
+            # because it renders all-numeric on this machine's en_ZA.
+            stamp = QLocale().toString(
+                QDateTime(QDate(when.year, when.month, when.day), QTime(when.hour, when.minute)),
+                "dd MMM yyyy, HH:mm")
             self.last_run.setText(
-                f"Last run: {when:%d %b %Y, %H:%M}  ·  {relative}  —  {data['status']}{overdue}")
+                f"Last run: {stamp}  ·  {relative}  —  {data['status']}{overdue}")
         except (OSError, ValueError, KeyError):
             self.last_run.setText("Last run: never")
         # Amber the line once a run is overdue: flip the dynamic property and

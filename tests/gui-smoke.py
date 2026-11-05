@@ -2306,6 +2306,21 @@ def main() -> int:
     check("an overdue run says so in words, not just in amber",
           "overdue" in wN.last_run.text())
 
+    # ONEUP-0182: the month name comes from the user's locale, in the day-month-year
+    # layout the user chose (2026-10-02); Python's %b is always the C locale's "Mar".
+    from PySide6.QtCore import QLocale
+    _orig_locale = QLocale()
+    QLocale.setDefault(QLocale(QLocale.Language.German, QLocale.Country.Germany))
+    try:
+        updater.HISTORY.write_text(updater.json.dumps(
+            {"when": "2026-03-05T14:05:00", "status": "OK"}))
+        wN.refresh_last_run()
+        _month = QLocale().monthName(3, QLocale.FormatType.ShortFormat)
+        check("the last-run date names the month in the user's locale",
+              _month != "Mar" and f"05 {_month} 2026, 14:05" in wN.last_run.text())
+    finally:
+        QLocale.setDefault(_orig_locale)
+
     updater.HISTORY.unlink()
     wN.refresh_last_run()
     check("no history shows 'Last run: never'", wN.last_run.text() == "Last run: never")
@@ -2486,6 +2501,43 @@ def main() -> int:
           on_fill > 0)
     check("the progress caption stays light where it sits on the track",
           on_track > 0)
+
+    # ONEUP-0198: in BOTH themes the fill stands out from its trough at 3:1 (the
+    # light theme's accent read about 1.4:1, so the bar looked empty), and the
+    # caption's ink on the fill still reads at 4.5:1. Real pixels on a half-full
+    # bar with no caption; samples sit mid-fill and mid-trough, clear of the ends.
+    def fill_and_trough(bar, dark):
+        saved = (bar.minimum(), bar.maximum(), bar.value(), bar.format(), bar.size())
+        bar.setStyleSheet(updater.build_theme(dark))
+        bar.ensurePolished()
+        bar.resize(480, 24)
+        bar.setRange(0, 100)
+        bar.setValue(50)
+        bar.setFormat("")
+        img = bar.grab().toImage()
+        ink = bar.get_chunk_ink()
+        bar.setStyleSheet("")
+        bar.setRange(saved[0], saved[1])
+        bar.setValue(saved[2])
+        bar.setFormat(saved[3])
+        bar.resize(saved[4])
+        y = img.height() // 2
+        return img.pixelColor(img.width() // 4, y), img.pixelColor(img.width() * 3 // 4, y), ink
+
+    _short = []
+    for _dark in (True, False):
+        _fill, _trough, _ink = fill_and_trough(wA.bar, _dark)
+        _name = "dark" if _dark else "light"
+        if _ratio(_fill, _trough) < 3.0:
+            _short.append(f"{_name}: fill {_fill.name()} on trough {_trough.name()} = "
+                          f"{_ratio(_fill, _trough):.2f}:1")
+        if _ratio(_ink, _fill) < 4.5:
+            _short.append(f"{_name}: caption {_ink.name()} on fill {_fill.name()} = "
+                          f"{_ratio(_ink, _fill):.2f}:1")
+    check(f"ONEUP-0198 the progress fill clears 3:1 on its trough and its caption "
+          f"4.5:1 on the fill, in both themes ({len(_short)} short)", not _short)
+    for line in _short:
+        print(f"       {line}")
 
     # INV-3: no absolute pixel font size survives, and every size scales. The
     # regex targets the DECLARATION — a plain `"px" in line` test would false-fail
