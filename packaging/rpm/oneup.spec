@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.4.11
+Version:        1.4.12
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -135,6 +135,10 @@ install -Dm0644 data/za.co.antsprojectshub.OneUp1.service \
 %{_datadir}/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service
 
 %changelog
+* Thu Nov 05 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.12-0
+- Updating over SSH with no desktop asks for the password in the terminal
+- The "Last run" date uses your language's name for the month
+- The progress bar's fill is easy to see in the light theme
 * Sun Nov 01 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.11-0
 - Pressing Stop during a retried download no longer says the system was updated
 - OneUp says when it could not list leftover packages

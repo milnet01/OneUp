@@ -217,9 +217,6 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
-- **Updating over SSH with no desktop asks for the password in the terminal** (ONEUP-0360)
-  OneUp could ask for the password only in a window. Over an SSH login with no desktop that window cannot open, so every update failed. It now asks in the terminal there. With a desktop, OneUp still shows its password box.
-
 - **Every failed step now says something** (ONEUP-0338)
   A failed Flatpak, firmware, leftover or cache step, and a system failure with no known cause, now gets a plain sentence.
 
@@ -366,11 +363,6 @@ All notable changes to OneUp are documented here. The format follows
   computer made one of them report a failure that was not real, and could
   stop a background helper the other run needed. Each run now keeps its
   own logs and checks only its own helpers.
-
-- **The "Last run" date uses your language's name for the month** (ONEUP-0182)
-  The date on the last-run line always showed the English month name,
-  whatever language your computer uses. It now uses your language's, in
-  the same day, month, year order as before.
 
 - **The window can no longer stop following a run because of one odd character** (ONEUP-0153)
   A numeric field in an engine message was checked with a test that accepts
@@ -524,6 +516,19 @@ All notable changes to OneUp are documented here. The format follows
   time without the build noticing. Each is now named by its exact contents. The
   build also no longer keeps its access token lying around after it has finished
   checking out the code.
+
+## [1.4.12] - 2026-11-05
+
+### Fixed
+
+- **Updating over SSH with no desktop asks for the password in the terminal** (ONEUP-0360)
+  OneUp could ask for the password only in a window. Over an SSH login with no desktop that window cannot open, so every update failed. It now asks in the terminal there. With a desktop, OneUp still shows its password box.
+
+- **The "Last run" date uses your language's name for the month** (ONEUP-0182)
+  The date on the last-run line always showed the English month name, whatever language your computer uses. It now uses your language's, in the same day, month, year order as before.
+
+- **The progress bar's fill is easy to see in the light theme** (ONEUP-0198)
+  The light theme fills the bar in a deeper blue-to-teal, so it stands out from its pale track at better than 4:1 instead of under 2:1. The words on the filled part turn white so they stay readable. The dark theme is unchanged.
 
 ## [1.4.11] - 2026-11-01
 
@@ -1306,7 +1311,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.11...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.12...HEAD
+[1.4.12]: https://github.com/milnet01/OneUp/releases/tag/v1.4.12
 [1.4.11]: https://github.com/milnet01/OneUp/releases/tag/v1.4.11
 [1.4.10]: https://github.com/milnet01/OneUp/releases/tag/v1.4.10
 [1.4.9]: https://github.com/milnet01/OneUp/releases/tag/v1.4.9
