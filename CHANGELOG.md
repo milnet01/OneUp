@@ -6,6 +6,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.12] - 2026-11-05
+
 ### Fixed
 
 - **Updating over SSH with no desktop asks for the password in the terminal** (ONEUP-0360)
@@ -798,7 +800,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.11...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.12...HEAD
+[1.4.12]: https://github.com/milnet01/OneUp/releases/tag/v1.4.12
 [1.4.11]: https://github.com/milnet01/OneUp/releases/tag/v1.4.11
 [1.4.10]: https://github.com/milnet01/OneUp/releases/tag/v1.4.10
 [1.4.9]: https://github.com/milnet01/OneUp/releases/tag/v1.4.9

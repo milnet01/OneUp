@@ -48,6 +48,16 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.4.12" date="2026-11-05">
+      <description>
+        <p>Release 1.4.12.</p>
+        <ul>
+          <li>Updating over SSH with no desktop asks for the password in the terminal</li>
+          <li>The "Last run" date uses your language's name for the month</li>
+          <li>The progress bar's fill is easy to see in the light theme</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.4.11" date="2026-11-01">
       <description>
         <p>Release 1.4.11.</p>
