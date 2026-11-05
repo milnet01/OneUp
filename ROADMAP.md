@@ -4412,6 +4412,21 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   under load with faulthandler.dump_traceback_later via runpy (as
   ONEUP-0225 did) and read the stack. Hung log kept at
   .git/oneup-scratch/gui-smoke-hang-2026-10-22-main.log.
+  2026-11-05, main 0e2ddc8, load average 24 on 12 cores: one run of
+  main's suite under a wrapper that logs every QMessageBox (exec and the
+  four static calls) and every QDialog.exec, with the calling frames.
+  Passed 469/0, no hang. It opened two boxes in the whole run, each
+  closed by its own timer: "Check for updates" (the ONEUP-0247 centring
+  check) and About (show_about). None opened anywhere near the Rollback
+  naming check or the ONEUP-0304 focus-rectangle loop, which only shows,
+  focuses and grabs. So the ONEUP-0225 hypothesis has no support from
+  this run; it is not ruled out, because a hang is timing-dependent.
+  Wrapper kept outside the repo:
+  /mnt/Games/Scripts/Linux/.oneup-trace/run-smoke-boxes.py <seconds>
+  (run from the checkout; it also dumps every stack via faulthandler at
+  the deadline). Next: run main's local-CI with that wrapper when the
+  load is high again and read the stack if it hangs. Any fix here is
+  tests-only on main, so it needs a user grant (workflow.md §1.2).
   **Layman:** The window tests froze twice tonight while the computer was very busy, then passed nine times in a row once it calmed down.
   Kind: investigate.
   Source: in-session-2026-10-22, ONEUP-0236's local-CI on main.
