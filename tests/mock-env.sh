@@ -163,6 +163,11 @@ run_engine() {
     #     counting the box's prompts failed (four, measured on main). A placeholder
     #     display keeps the box; the engine reads it nowhere else, and the ONEUP-0360
     #     scenario removes it again inside ENGINE_CMD.
+    #   * the download pass's stop wrapper sees zypper end only at its next stop poll,
+    #     every 2 s by default. A mock zypper ends at once, so every system step slept
+    #     out the poll, about 2 s a scenario (measured 2026-11-05). The wrapper's text is
+    #     the download guard's and stays as it is; only the interval, which the engine
+    #     already reads from the environment, is shortened. `:-`, so a scenario's own wins.
     #
     # ONEUP-0126: link this run's log into the suite's $HARVEST_DIR, where one is set. A hard
     # link, not a copy: the engine appends to the log until it exits, so a copy taken here
@@ -186,6 +191,7 @@ run_engine() {
         ONEUP_BACKEND="${ONEUP_BACKEND-sudo}" \
         ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}" \
         ONEUP_ZYPP_RAW="${ONEUP_ZYPP_RAW:-$mockdir/zypp-raw}" \
+        ONEUP_STOP_POLL_SECONDS="${ONEUP_STOP_POLL_SECONDS:-0.2}" \
         "${ENGINE_CMD[@]}" "$@" --log="$mockdir/run.log" 2>&1
 }
 

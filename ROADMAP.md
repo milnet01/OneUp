@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=369 -->
+<!-- ants-roadmap-id-high-water: ONEUP=372 -->
 
 # OneUp Roadmap
 
@@ -10893,6 +10893,50 @@ when complete (that document's §7).
   Kind: investigate.
   Source: user-report-2026-11-04-host-update.
   Lanes: engine.
+
+- 🚧 [ONEUP-0370] **The engine suite sleeps out a 2-second stop poll in every scenario that runs the system step.**
+  Measured 2026-11-05 (load 3-7, nice 10): tests/run-tests.sh took 265 s of
+  wall time for 33 s of CPU. A per-TEST timing put 55 scenarios at about
+  2.2 s each. One traced run showed a 2.0 s gap between the dry run and the
+  real upgrade: the download pass's stop wrapper polls every
+  STOP_POLL_SECONDS (2) and sees a mock zypper end only at its next poll.
+  The wrapper is the download guard's text, so the product is unchanged
+  (engine-traps: editing it is a re-grant). Fix: run_engine in
+  tests/mock-env.sh defaults ONEUP_STOP_POLL_SECONDS to 0.2, `:-` so a
+  scenario's own value wins. After: 121 s, 124 s, 128 s on three
+  consecutive runs, each 639/0.
+  **Layman:** The engine tests spent half their time waiting for nothing; they now finish in about half the time.
+  Kind: perf.
+  Source: user-request-2026-11-05.
+  Lanes: tests.
+
+- 🚧 [ONEUP-0371] **A theme change re-measures each window about 74 times; batch the style-change refits into one pass.**
+  Measured 2026-11-05: cProfile of tests/gui-smoke.py (668 s wall, all
+  CPU) put _fit_minimum at 434k calls. Its callers are the three refits
+  the window's eventFilter scheduled with one QTimer per StyleChange or
+  FontChange on each filtered button. One offscreen window, one
+  apply_app_theme: 74 _fit_minimum calls at HEAD, 3 after batching them
+  through _defer_refit, with the same minimum size (644x796). A slot asked
+  for again moves to the end of the queue, so they run in the order of
+  their last request, as before.
+  **Layman:** Switching theme or text size made the window recalculate its layout dozens of times; it now does it three times.
+  Kind: perf.
+  Source: user-request-2026-11-05.
+  Lanes: gui.
+
+- 📋 [ONEUP-0372] **The window suite keeps every window it builds alive, so each theme change restyles all of them.**
+  tests/gui-smoke.py's main() builds its windows (window.Updater()) as
+  locals of one function and closes none. QApplication.setStyleSheet
+  repolishes every live widget, so each of the suite's theme changes took
+  about 4 s and the suite peaks near 1 GB per pass (cProfile and
+  /usr/bin/time, 2026-11-05). Closing each window once its scenario ends
+  would cut both, but the windows are referenced far from where they are
+  built, so it needs a pass over the whole file. Measure before and after;
+  one lever per change.
+  **Layman:** The window tests open well over a hundred windows and never close them, which makes later tests slower and uses about a gigabyte of memory.
+  Kind: perf.
+  Source: user-request-2026-11-05.
+  Lanes: tests.
 
 ## 2.1.0 — after 2.0
 
