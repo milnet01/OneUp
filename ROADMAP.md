@@ -4449,6 +4449,11 @@ Deferred work, follow-ups, and ideas for OneUp. Shipped items move to
   mechanical port of v2's locale-aware date; 0198 takes the nearest
   colour in main's palette that clears 3:1, shown to the user before
   release.
+  2026-11-05: both ported on main, 8a57d43 (not pushed). Light fill
+  #1e66c8 -> #0e7490 (4.19-4.33:1 on #dfe4ea); main's caption sits on
+  the bar, so the light chunk ink turns white (5.36-5.54:1; near-black
+  was 3.5:1). Red 469/2, green 471/0, local-CI green. Preview shown to
+  the user; release waits on their approval of the colours.
   **Layman:** The released 1.4 app still shows the last-run date in English and draws a hard-to-see progress bar in the light theme; 2.0 already fixes both.
   Kind: fix.
   Source: ONEUP-0210-audit-2026-11-05.
