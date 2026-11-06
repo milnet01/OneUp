@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=379 -->
+<!-- ants-roadmap-id-high-water: ONEUP=382 -->
 
 # OneUp Roadmap
 
@@ -9076,6 +9076,11 @@ when complete (that document's §7).
   installed. 14 leftover packages removed." No password asked. Pass.
   Still owed: the OBS-repository step, once 2.0.0 is on OBS.
   Note: a 12 GB VM left the host 4.9 GB free with peers running.
+  2026-11-06: 2.0.0 is released and OBS builds it (ONEUP-0373). Still
+  owed here: the OBS-repository leg in a CLEAN VM — add
+  home:milnet:oneup as README says, zypper install oneup, then one
+  finished update run from the window. The host install from the repo
+  (ONEUP-0373) is not a clean machine and ran no update.
   **Layman:** Install OneUp on a brand-new test computer, the way a newcomer would, to prove it works without any expert help.
   Kind: test.
   Source: user-decision-2026-10-16.
@@ -10945,7 +10950,7 @@ when complete (that document's §7).
   Source: user-request-2026-11-05.
   Lanes: tests.
 
-- 🚧 [ONEUP-0373] **Release 2.0.0: walk the G1–G10 gate, merge v2 into main, tag, then the OBS leg.**
+- ✅ [ONEUP-0373] **Release 2.0.0: walk the G1–G10 gate, merge v2 into main, tag, then the OBS leg.**
   Gate walk 2026-11-06 (docs/design/oneup-2.0.md §7):
   G1–G5 earned at ONEUP-0054's stages; G7 all ten §1 items shipped;
   G10 RTL pass and i18n-check in the suites. G6: a fresh real run on
@@ -10981,6 +10986,15 @@ when complete (that document's §7).
   1 Flatpak, firmware and leftovers up to date, cache done. Log
   2026-11-06_124352.log: no errors beyond a mirror 404 retried and
   Flatpak's non-fatal warnings for a local test remote.
+  Released 2026-11-06. v2.0.0 tag at 77f9266 (moved twice onto fixes,
+  the user's rule: ONEUP-0378 release-workflow test, ONEUP-0379 OBS
+  filelist). GitHub release workflow green; OneUp-x86_64.AppImage
+  attached. OBS home:milnet:oneup and home:milnet: 2.0.0 succeeded on
+  Tumbleweed x86_64, i586 and Leap 16.0. G8 OBS leg: the host added
+  home:milnet:oneup and installed oneup-2.0.0-4.1 from it; its
+  /usr/share/oneup/oneup matches the tag byte for byte, and it ran
+  offscreen until killed. Then release.sh dropped home:milnet
+  (2a1ab19). Website session told. main and v2 both at the release.
   **Layman:** The checklist and steps that turn the v2 branch into the released OneUp 2.0.0.
   Kind: release.
   Source: user-decision-2026-11-06.
@@ -11364,3 +11378,40 @@ when complete (that document's §7).
   **Layman:** A tool we use to build the AppImage will soon reject our icon format; switch it to the format it wants.
   Kind: package.
   Source: local-ci-full-2026-11-06.
+
+- 📋 [ONEUP-0380] **Run ~/.claude/tools/ci-gate --time once and tell claude-config whether its flags match the engine and window suites.**
+  claude-config, message 1600 (2026-11-06): CFG-0891 shipped
+  `~/.claude/tools/ci-gate --time` — one gate run printing per-step
+  wall, CPU and peak memory, flagging WAITS, ONE CORE and BIG; record
+  in .git/ci-gate/time.json. Asked: run it once (about 16 minutes,
+  check machine load first) and say whether its flags match what was
+  found by hand on the engine and window suites, and whether a nested
+  script's legs came out lumped. Reply via session_message to
+  claude-config.
+  **Layman:** Try a new timing tool on our test gate and report back to its maintainer.
+  Kind: chore.
+  Source: peer-request-claude-config-2026-11-06.
+
+- 📋 [ONEUP-0381] **Does the weekly automatic update work on a repo or RPM install, where there is no Passwordless setting?**
+  Asked by the website session 2026-11-06: its OneUp page says
+  "Automatic updates never fail silently. They need the passwordless
+  setting." README.md's "Update automatically every week" bullet says
+  the same ("It needs updates to run without a password"). On the
+  service route a timer run has no active session, so polkit's
+  implicit-active grant may not apply. Measure on a real or VM install
+  (the timer, then the service's answer), then correct README and send
+  the website session the exact text. Not verified by anyone yet.
+  **Layman:** Check whether the weekly automatic update can run unattended on the normal openSUSE install, and fix the wording that says it needs Passwordless.
+  Kind: investigate.
+  Source: peer-request-website-2026-11-06.
+
+- 📋 [ONEUP-0382] **Send the website 2.0 screenshots: Rows, Rail, Spotlight, and Settings with the theme picker.**
+  Asked by the website session 2026-11-06: its OneUp page's three
+  screenshots show 1.x. Wanted: Rows, Rail, Spotlight, and Settings
+  showing the theme picker, demo data only, no personal data, into
+  /mnt/Games/Trailers/incoming/oneup/shots/ (or send it the paths).
+  Use the record-demo skill (private virtual display, never the real
+  desktop). Separate from the trailer reshoot, ONEUP-0261.
+  **Layman:** New pictures of the 2.0 window for the website, using demo data only.
+  Kind: marketing.
+  Source: peer-request-website-2026-11-06.

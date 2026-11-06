@@ -519,6 +519,12 @@ Three things about that sequence are worth knowing before you run it:
   The GitHub release has already happened by then and is unaffected. The run then ends with
   *"OBS was NOT updated"* and exit status 3, never *"Released"*.
 
+**A release that fails to publish is fixed, never re-versioned.** The user's rule,
+2026-11-06: *"A new version means we added something which we haven't."* When the tag's
+workflow or an OBS build fails, fix it, move the tag onto the fix, push it again, and re-run
+both OBS packages from the moved tag, so every copy of that version is the same source.
+2.0.0 was finished this way twice (ONEUP-0378, ONEUP-0379).
+
 **What the user still has to do by hand:** nothing on the GitHub side — CI builds and
 publishes. The OBS rebuild is the one step that can need finishing manually.
 
