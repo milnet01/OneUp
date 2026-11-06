@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=377 -->
+<!-- ants-roadmap-id-high-water: ONEUP=378 -->
 
 # OneUp Roadmap
 
@@ -11005,6 +11005,26 @@ when complete (that document's §7).
   **Layman:** Building the AppImage could freeze forever while downloading one piece; the build now downloads that piece itself.
   Kind: fix.
   Source: local-ci-full-2026-11-06.
+
+- ✅ [ONEUP-0378] **A forced service route with jeepney missing crashes sudo_init instead of falling back; it failed the v2.0.0 release build.**
+  Release workflow run 42216587807 (tag v2.0.0) failed in the engine
+  suite: "sudo_init falls back or ends the run when the service cannot
+  be reached (ModuleNotFoundError: No module named 'jeepney')" — 561
+  passed, 1 failed; no AppImage, no GitHub release. The ubuntu runner
+  has no jeepney; the host does, so local-CI never saw it, and v2
+  pushes never run release.yml. Cause: service_client._call imports
+  jeepney outside its try, so a missing module escapes as ImportError
+  where every other transport failure becomes Unreachable. Users on
+  auto never reach it (route.engine_route takes sudo when jeepney does
+  not import; the RPM requires python3-jeepney); ONEUP_BACKEND=service
+  without jeepney does. Red reproduced on the host with
+  sys.modules["jeepney"] = None. Ships as 2.0.1 (oneup-2.0.md §7 G8).
+  Fixed in 8608158 (2026-11-06): service_client._call's jeepney import
+  raises Unreachable; the scenario runs again with jeepney hidden. Red
+  with the fix removed, green with it. Released as 2.0.1.
+  **Layman:** One test failed on GitHub's build machine, so the 2.0.0 AppImage was not published; the fix ships as 2.0.1.
+  Kind: fix.
+  Source: release-workflow-v2.0.0-2026-11-06.
 
 ## 2.1.0 — after 2.0
 

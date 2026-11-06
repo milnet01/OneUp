@@ -6,6 +6,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The AppImage is published again** (ONEUP-0378)
+  2.0.0's release build stopped on one engine test, so 2.0.0 shipped through the
+  openSUSE repositories but without an AppImage. 2.0.1 publishes it.
+
+- **Forcing the system-service route without python3-jeepney falls back to the password box instead of stopping with an error** (ONEUP-0378)
+
 ## [2.0.0] - 2026-11-06
 
 ### Added
