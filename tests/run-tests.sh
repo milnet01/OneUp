@@ -5239,7 +5239,7 @@ for info in pkgutil.iter_modules(oneup.engine.__path__):
 raise SystemExit("; ".join(bad) or 0)
 PYEOF
 )"
-py_case "sudo_init falls back or ends the run when the service cannot be reached" "$(cat <<'PYEOF'
+unreachable_case="$(cat <<'PYEOF'
 import os
 from oneup.engine import actions, markers, privilege, proc, route
 ran, said = [], []
@@ -5275,6 +5275,12 @@ if privilege.chosen_route() != route.SUDO:
 raise SystemExit("; ".join(bad) or 0)
 PYEOF
 )"
+py_case "sudo_init falls back or ends the run when the service cannot be reached" "$unreachable_case"
+# ONEUP-0378: the release runner has no jeepney, and the forced route crashed on its
+# import instead of falling back. Hide it here so a machine that has it sees that too.
+py_case "the same, with jeepney not installed" "import sys
+sys.modules['jeepney'] = None
+$unreachable_case"
 # ONEUP-0360: over SSH polkit answered `challenge`, and the line said the service "could
 # not be reached", which was untrue: it answered. Unreachable keeps its wording.
 py_case "a challenge says the service cannot ask here, not that it is unreachable" "$(cat <<'PYEOF'

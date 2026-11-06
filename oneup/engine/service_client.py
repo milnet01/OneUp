@@ -75,7 +75,10 @@ def _router():
 def _call(method: str, signature: str | None = None, body: tuple = (),
           timeout: float | None = None) -> tuple:
     """One method call. Raises `Refused` for the service's errors, `Unreachable` else."""
-    from jeepney import DBusAddress, HeaderFields, MessageType, new_method_call
+    try:
+        from jeepney import DBusAddress, HeaderFields, MessageType, new_method_call
+    except ImportError as exc:   # a forced service route without jeepney (ONEUP-0378)
+        raise Unreachable(f"{method}: jeepney is not installed") from exc
     address = DBusAddress(OBJECT_PATH, bus_name=BUS_NAME, interface=INTERFACE)
     try:
         reply = _router().send_and_get_reply(
