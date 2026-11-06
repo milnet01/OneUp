@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=373 -->
+<!-- ants-roadmap-id-high-water: ONEUP=374 -->
 
 # OneUp Roadmap
 
@@ -10955,6 +10955,20 @@ when complete (that document's §7).
   launch still owed; OBS leg after the tag. G9: ten 2.0 documents
   flipped to Implemented; the user chose a full cold review of the
   2.0 documents (2026-11-06). ONEUP-0263 moves to 2.1, not a blocker.
+  G9 reviews 2026-11-06: review-contract-set found 24 cross-document
+  contradictions, review-readme 2 wrong README lines plus newcomer gaps
+  (gaps → ONEUP-0374, 2.1). User: fix all 26 before the tag.
+  Old OBS repo home:milnet (user 2026-11-06): it gets 2.0.0, then
+  release.sh drops it from obs_projects after the 2.0.0 OBS step.
+  Deleting the package on OBS waits for a separate user OK.
+  G9 fixes closed 2026-11-06 (close-findings): all 26 findings and
+  the five orchestrator notes fixed, none queued or dismissed.
+  dc0ab66 the design and specs (superseded notes and pointers, an
+  impl-0373 loop-log row on each amended spec); fc49a95 standards,
+  ui-traps and CLAUDE.md; a442763 README. Finding 5's code was already
+  right (i18n.counted). documentation.md §5 gains a review-only
+  exception for an invariant no test can decide (finding 13).
+  tests/docs-check.py Failed: 0.
   **Layman:** The checklist and steps that turn the v2 branch into the released OneUp 2.0.0.
   Kind: release.
   Source: user-decision-2026-11-06.
@@ -11231,3 +11245,18 @@ when complete (that document's §7).
   **Layman:** The update engine's tests failed once during an upload check and passed every time after; find out what caused the one-off failure.
   Kind: investigate.
   Source: in-session-2026-10-12.
+
+- 📋 [ONEUP-0374] **README gaps a newcomer hits: uninstall, where to report, which Leap, where the RPM is.**
+  From the G9 review-readme run (ONEUP-0373), deferred to 2.1 by the
+  user 2026-11-06. Open: no uninstall or undo steps (service,
+  Passwordless grant, repo, tray autostart, weekly schedule); no
+  issue-tracker link beside "worth reporting"; "Tumbleweed or Leap"
+  names no Leap version; the RPM install line has no download link;
+  how to start OneUp after a repo install; rollback's Btrfs/snapper
+  need; where pyside6-lupdate comes from and where a .ts file goes;
+  what a polkit/askpass agent is; home:milnet vs home_milnet naming;
+  the step keys for --steps; the build command and its tools.
+  Lane files: ~/.local/share/claude-scratch/OneUp-review-readme-2026-11-06-4D5t/
+  **Layman:** Missing (not wrong) help in the README, found by the 2.0.0 cold read.
+  Kind: doc.
+  Source: review-readme-2026-11-06.
