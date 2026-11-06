@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=375 -->
+<!-- ants-roadmap-id-high-water: ONEUP=376 -->
 
 # OneUp Roadmap
 
@@ -10984,6 +10984,27 @@ when complete (that document's §7).
   **Layman:** The checklist and steps that turn the v2 branch into the released OneUp 2.0.0.
   Kind: release.
   Source: user-decision-2026-11-06.
+
+- ✅ [ONEUP-0376] **The AppImage build hangs in appimagetool's own runtime download; fetch the runtime with curl and pass --runtime-file.**
+  Seen twice on 2026-11-06 (local-CI --full, then a lone rerun):
+  appimagetool continuous build 370 (built 2026-11-06) sat in a futex
+  wait with its GitHub socket in CLOSE-WAIT for 10+ minutes at
+  "Downloading runtime file", while curl fetched the same
+  type2-runtime/continuous/runtime-x86_64 (944632 bytes) in 0.1 s.
+  release.yml runs the same build script, so the 2.0.0 tag build is
+  exposed. Fix: build-appimage.sh downloads the runtime with curl
+  (timeout, retries) and passes appimagetool --runtime-file.
+  Also seen: appimagetool now reports .DirIcon must be a PNG, not SVG,
+  and says a future release will refuse to build — not fixed here.
+  Shipped 2026-11-06. build-appimage.sh fetches the runtime with curl
+  (connect 20 s, max 300 s, 3 retries) and passes --runtime-file; the
+  appimagetool download gained the same bounds. Before: two builds hung
+  10+ min at "Downloading runtime file". After: the build finished in
+  about a minute, and the AppImage ran offscreen 25 s in a scratch HOME
+  until killed (unpacked its engine, made its log folder).
+  **Layman:** Building the AppImage could freeze forever while downloading one piece; the build now downloads that piece itself.
+  Kind: fix.
+  Source: local-ci-full-2026-11-06.
 
 ## 2.1.0 — after 2.0
 

@@ -64,13 +64,20 @@ echo "==> Fetching appimagetool (if needed)"
 tool=$(command -v appimagetool || true)
 if [ -z "$tool" ]; then
     tool="$work/appimagetool"
-    curl -fsSL -o "$tool" \
+    curl -fsSL --connect-timeout 20 --max-time 300 --retry 3 -o "$tool" \
         "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
     chmod +x "$tool"
 fi
 
+# The runtime is fetched here, not by appimagetool: its own download hung with the
+# server's socket already closed (ONEUP-0376), and curl bounds the wait.
+echo "==> Fetching the AppImage runtime"
+runtime="$work/runtime-x86_64"
+curl -fsSL --connect-timeout 20 --max-time 300 --retry 3 -o "$runtime" \
+    "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64"
+
 echo "==> Packing the AppImage"
 out="$here/OneUp-x86_64.AppImage"
 # --appimage-extract-and-run lets appimagetool run without host FUSE.
-ARCH=x86_64 "$tool" --appimage-extract-and-run "$appdir" "$out"
+ARCH=x86_64 "$tool" --appimage-extract-and-run --runtime-file "$runtime" "$appdir" "$out"
 echo "==> Built: $out"
