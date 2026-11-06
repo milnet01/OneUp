@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=374 -->
+<!-- ants-roadmap-id-high-water: ONEUP=375 -->
 
 # OneUp Roadmap
 
@@ -10969,6 +10969,12 @@ when complete (that document's §7).
   right (i18n.counted). documentation.md §5 gains a review-only
   exception for an invariant no test can decide (finding 13).
   tests/docs-check.py Failed: 0.
+  G9 debt sweep 2026-11-06 (v1.4.12...HEAD): fixed in 878b14d — nine
+  bug-worded CHANGELOG Fixed headlines (0329-0337) that bump.py would have
+  shipped as release notes, the metainfo's password sentence, the OBS
+  README's AppImage-Python claim, and stale Bash-name comments in the
+  engine and window. Filed ONEUP-0375. Open: CHANGELOG lacks entries for
+  ONEUP-0363 and ONEUP-0366. docs-check Failed: 0.
   **Layman:** The checklist and steps that turn the v2 branch into the released OneUp 2.0.0.
   Kind: release.
   Source: user-decision-2026-11-06.
@@ -11260,3 +11266,16 @@ when complete (that document's §7).
   **Layman:** Missing (not wrong) help in the README, found by the 2.0.0 cold read.
   Kind: doc.
   Source: review-readme-2026-11-06.
+
+- 📋 [ONEUP-0375] **engine-traps.md's second-sudo_init trap names only the Bash engine's guard and keep-alive.**
+  .claude/rules/engine-traps.md, "The suite's prompt counters cannot see a
+  second sudo_init inside ONE process", names HELD_AUTH and SUDO_KEEPALIVE.
+  The rule file also binds oneup/engine/, where the counterparts are
+  held_auth in __main__.run and privilege._KEEPALIVE. Before naming them,
+  measure whether the Python engine suite has the same blind spot (delete
+  the held_auth guard; does only the keep-alive check fail?) — the trap's
+  claim is a measurement, so it cannot be copied across by analogy.
+  Found by the G9 debt sweep (ONEUP-0373).
+  **Layman:** A note warning about a test blind spot names only the old engine's parts, so it may not protect the new engine.
+  Kind: doc-fix.
+  Source: debt-sweep-2026-11-06.
