@@ -11022,6 +11022,11 @@ when complete (that document's §7).
   Fixed in 8608158 (2026-11-06): service_client._call's jeepney import
   raises Unreachable; the scenario runs again with jeepney hidden. Red
   with the fix removed, green with it. Released as 2.0.1.
+  Correction 2026-11-06: not released as 2.0.1. The user chose to move
+  the v2.0.0 tag from e6f24a5 (OneUp 2.0.0, never published on GitHub:
+  its release workflow failed) to the commit carrying this fix, so
+  GitHub builds 2.0.0's AppImage; both OBS packages are then re-run
+  from the moved tag so every 2.0.0 is the same source.
   **Layman:** One test failed on GitHub's build machine, so the 2.0.0 AppImage was not published; the fix ships as 2.0.1.
   Kind: fix.
   Source: release-workflow-v2.0.0-2026-11-06.
