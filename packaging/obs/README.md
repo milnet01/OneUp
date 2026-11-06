@@ -71,10 +71,9 @@ Do not re-add one without solving both.
 ## The old location: `home:milnet`
 
 Until 1.4.9 the package lived directly in the home project, `home:milnet/oneup`, and
-users added that repo. `release.sh` keeps it updated alongside `home:milnet:oneup`
-until 2.0.0, so nobody on it is stranded; the main README tells them how to move.
-Removing it is a 2.0.0 task: drop `home:milnet` from `obs_projects` in `release.sh`,
-then delete the package on OBS.
+users added that repo. Its last update was 2.0.0: `release.sh` no longer publishes
+there, and the main README tells its users how to move. Deleting the package on OBS
+waits for the user's go-ahead.
 
 ## Build targets
 

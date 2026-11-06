@@ -6,9 +6,7 @@
 #   3. commit, tag vX.Y.Z, push to GitHub — which builds the AppImage and publishes
 #      the release (and the in-app update check then points users at it),
 #   4. update the OBS package home:milnet:oneup/oneup via osc — which rebuilds the
-#      zypper RPM so repo users get it on their next `zypper up`. Until 2.0.0 the old
-#      home:milnet/oneup is updated too, so users still on the old repo keep getting
-#      updates while they move.
+#      zypper RPM so repo users get it on their next `zypper up`.
 #
 # Usage:
 #   ./release.sh X.Y.Z            full release (GitHub + OBS)
@@ -36,9 +34,9 @@ done
 bumped=(oneup/__init__.py packaging/rpm/oneup.spec packaging/obs/_service
         data/za.co.antsprojectshub.OneUp.metainfo.xml CHANGELOG.md)
 
-# The OBS projects that carry the oneup package. The first is the home; the second is
-# the old location, kept updated until 2.0.0 so nobody on it is stranded.
-obs_projects=(home:milnet:oneup home:milnet)
+# The OBS projects that carry the oneup package. The old location, home:milnet, had its
+# last update at 2.0.0 (packaging/obs/README.md).
+obs_projects=(home:milnet:oneup)
 
 # The OBS checkout is removed however the script ends, an interrupt included, and only
 # ever when it was actually made.

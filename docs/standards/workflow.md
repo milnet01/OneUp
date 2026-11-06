@@ -475,7 +475,7 @@ attaches it to the GitHub release.
 ## 8. Releasing
 
 `./release.sh X.Y.Z` does the whole thing. `--no-obs` stops after GitHub. The OBS step updates
-`home:milnet:oneup` and, until 2.0.0, the old `home:milnet` (`packaging/obs/README.md`).
+`home:milnet:oneup`; the old `home:milnet` had its last update at 2.0.0 (`packaging/obs/README.md`).
 
 It validates its arguments first — `X.Y.Z` or nothing happens, and every option after it
 must be `--no-obs` or it refuses. Then its preconditions, which are checks rather than suggestions, and it
