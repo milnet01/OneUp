@@ -10975,6 +10975,12 @@ when complete (that document's §7).
   README's AppImage-Python claim, and stale Bash-name comments in the
   engine and window. Filed ONEUP-0375. Open: CHANGELOG lacks entries for
   ONEUP-0363 and ONEUP-0366. docs-check Failed: 0.
+  G6 met 2026-11-06: real run on the user's machine from the app menu,
+  v2 at 878b14d with the host RPM reinstalled from 2484452 (code
+  identical to the checkout). All five steps OK: 50 system packages,
+  1 Flatpak, firmware and leftovers up to date, cache done. Log
+  2026-11-06_124352.log: no errors beyond a mirror 404 retried and
+  Flatpak's non-fatal warnings for a local test remote.
   **Layman:** The checklist and steps that turn the v2 branch into the released OneUp 2.0.0.
   Kind: release.
   Source: user-decision-2026-11-06.
