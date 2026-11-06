@@ -75,6 +75,14 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Changed
 
+- **After the last package installs, OneUp says it is finishing up instead of looking stuck** (ONEUP-0363)
+  While zypper runs its post-install scripts, the status and the step's badge say
+  "Finishing up" rather than holding "Installing N of N". Stop stays greyed.
+
+- **Removing leftover packages shows how far it has got** (ONEUP-0366)
+  The step's bar fills by count, and the status says "Removing 12 of 48 packages",
+  instead of a bar sliding back and forth.
+
 - **The six project standards say they are OneUp's own, so the copied-standards check stops reporting them as copies** (ONEUP-0236)
   Each now carries an `OWNED-HERE` marker under its title. Nothing in the app changes.
 
