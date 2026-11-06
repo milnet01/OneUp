@@ -55,7 +55,7 @@ class Options:
 
 
 def usage() -> str:
-    """The help text, matching `update_system.sh`'s `usage`.
+    """The help text, derived from `update_system.sh`'s `usage`.
 
     Plain concatenation rather than an f-string: ruff's bandit rules read a long
     interpolated literal as a possible SQL query (S608), and a suppression here

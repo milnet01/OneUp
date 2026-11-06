@@ -109,7 +109,8 @@ python313-pyside6 = 6.9.1-bp160.1.9
 So the spec needs no Leap-specific `Requires`. Re-check this if Leap ever moves its
 primary Python flavour, since the unversioned provide follows whichever flavour is
 primary. If it ever stops resolving, point Leap users at the **AppImage** — it
-bundles its own Qt/PySide6 and does not depend on the distro's Python at all.
+bundles its own Qt/PySide6. Its engine still runs on the distro's `python3`, so
+the 3.13 floor above applies to it too.
 
 ### Adding a further target
 

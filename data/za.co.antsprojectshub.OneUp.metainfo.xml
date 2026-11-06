@@ -19,8 +19,10 @@
     </ul>
     <p>
       Each step is a toggle, so you choose what runs. OneUp itself never runs as
-      root — it asks for your password once through the desktop's standard prompt
-      and streams a live log of everything it does.
+      root, and it streams a live log of everything it does. Installed from the
+      openSUSE repository or the RPM, it asks for the same permission Discover asks
+      for when it installs updates. As an AppImage, it asks for your password once
+      through the desktop's standard prompt.
     </p>
   </description>
   <launchable type="desktop-id">za.co.antsprojectshub.OneUp.desktop</launchable>

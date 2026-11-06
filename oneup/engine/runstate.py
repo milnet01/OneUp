@@ -115,7 +115,7 @@ class _Mirror:
     `BrokenPipeError` on the console write. Swallowing it here is NOT enough:
     the interpreter's shutdown flush of `sys.stdout` fails in its turn and the
     process exits 120, which the window colours as a failure on a run that
-    finished cleanly. `console_is_gone` is what `install_log_mirror` reads to
+    finished cleanly. `console_gone` is what `install_log_mirror` reads to
     neutralise that flush.
     """
 

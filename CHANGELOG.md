@@ -242,26 +242,29 @@ All notable changes to OneUp are documented here. The format follows
 - **Spotlight shows the whole last-run line** (ONEUP-0350)
   It could read "Last r…" with empty space beside it. The line now has a row of its own, with Roll back.
 
-- **Check counts fewer updates than the update then installs.** (ONEUP-0329)
+- **Check counts every package the update will change** (ONEUP-0329)
   On a packaged install, Check now asks OneUp's system service to try the update without installing anything, so its count and package list include new and removed packages. One check on 23 October said 524; the update changed 953. Where that cannot run, such as the AppImage, the count says "at least".
 
-- **The Flatpak step does not say which pass it is on, or whether it is downloading or installing.** (ONEUP-0336)
+- **The Flatpak step says which pass it is on and how far through it is** (ONEUP-0336)
   The status line now names the pass and how far through it is: "Updating your apps: 3 of 12", then "Updating system apps: 3 of 20", then "Removing unused runtimes". Flatpak reports downloading and installing as one, so the window says "updating".
 
-- **The window's package counts and sizes disagree with zypper during a parallel download.** (ONEUP-0335)
+- **The window's package counts and sizes agree with zypper during a parallel download** (ONEUP-0335)
   A total like 1.75 GiB no longer reads as 1.7 GiB. A package that has finished downloading and waits to install now counts as "to go", so "now" holds only what is downloading. During an update, the package count no longer climbs as zypper names more packages (642, then 927, then 931 on 23 October): the update first tries itself without installing anything, so the list starts with every package it will change, and shows removed and new packages as what they are.
 
-- **The sudo route has no way in when a half-finished Qt update breaks the password popup.** (ONEUP-0337)
+- **When the password box cannot start, OneUp says so and names the command** (ONEUP-0337)
+  A half-finished Qt update can stop the password popup from starting. OneUp now says so and gives the command to finish the update in a terminal, with Copy command. This covers the password box, not the system service's permission prompt.
 
-- **A system update that fails part-way still runs the steps after it.** (ONEUP-0330)
+- **A system update that fails part-way ends the run, and says so** (ONEUP-0330)
 
-- **The summary after a half-finished system update does not say the system is half-updated.** (ONEUP-0331)
+- **After a half-finished system update, OneUp says the system is partly updated** (ONEUP-0331)
+  It warns not to restart yet, and says to run the update again or finish it in a terminal with the command it names.
 
-- **An rpm install failure is hinted as a package conflict.** (ONEUP-0332)
+- **An rpm install failure is no longer called a package conflict** (ONEUP-0332)
 
-- **On the service route the window says to approve a password popup that never comes.** (ONEUP-0333)
+- **No "approve the password popup" when no popup is coming** (ONEUP-0333)
+  Through OneUp's system service, or with Passwordless on, the window says "Starting the update…" instead.
 
-- **The package details dialog crashes on rpm output that is not UTF-8.** (ONEUP-0334)
+- **A package's details open even when its text is not plain UTF-8** (ONEUP-0334)
 
 - **The outline around "Retry failed steps" is easier to see on the amber warning strip** (ONEUP-0123)
   In the four dark themes the button's thin border was too faint against the strip's amber tint. It now stands out from it at 3:1 or better, the level WCAG asks of a control's edge. The light themes already did and are unchanged.

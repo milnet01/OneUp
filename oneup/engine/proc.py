@@ -279,7 +279,7 @@ def stop_pending() -> bool:
 
 
 def stop_announced() -> bool:
-    """Has a stop already been honoured this run? The summary's `STOP_HONOURED`."""
+    """Has a stop already been honoured this run? The Bash engine's `STOP_HONOURED`."""
     return _STOP_ANNOUNCED
 
 

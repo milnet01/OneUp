@@ -248,7 +248,7 @@ def _repo_display_name(alias: str) -> str:
 
 def _skip_repo_and_retry(win):
     """Re-run the failed steps with the flagged source(s) set aside for this run
-    only — the engine re-enables them on exit (--skip-repo in update_system.sh)."""
+    only — the engine re-enables them on exit (--skip-repo, in oneup/engine/repos.py)."""
     aliases = list(win._remedy_skips)
     if not aliases:
         return

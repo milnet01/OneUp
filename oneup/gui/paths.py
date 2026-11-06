@@ -45,9 +45,10 @@ def _state_home() -> Path:
     The absolute test is the specification's ("all paths must be absolute; an
     invalid one must be ignored") and is what stops a stray relative value
     creating a state directory under whatever the working directory happens to
-    be. `update_system.sh` applies the identical rule to `RUN_STATE_FILE` and
-    `STOP_FILE`: the two halves must agree, or Stop writes where the engine
-    never looks and quietly stops working (`docs/design/oneup-2.0.md` §6.5).
+    be. The engine applies the identical rule in `oneup/engine/runstate.py` (and
+    the Bash fallback in `update_system.sh`): the two halves must agree, or Stop
+    writes where the engine never looks and quietly stops working
+    (`docs/design/oneup-2.0.md` §6.5).
     """
     xdg = os.environ.get("XDG_STATE_HOME", "")
     return Path(xdg) if xdg.startswith("/") else Path.home() / ".local" / "state"
@@ -275,7 +276,7 @@ def engine_argv(*args: str, env: dict[str, str] | None = None) -> list[str]:
 
     The argv is headed by `env` carrying `PYTHONPATH`: `-m` resolves only from
     the package's parent otherwise, and an argv cannot carry an environment any
-    other way short of a per-site environment at all eight call sites. The engine
+    other way short of a per-site environment at every call site. The engine
     spells a call the same way (`sudo env LC_ALL=C bash -c` in `oneup/engine/steps.py`).
     """
     prefix, tried = _resolve_engine()
@@ -331,11 +332,11 @@ HISTORY = STATE_DIR / "history.json"
 STATE_LOG_DIR = STATE_DIR / "logs"
 # Where the engine records a run in flight, so a window that opens mid-run can find
 # it, say so, and follow the log instead of letting the user launch a second run that
-# can only fail on the package lock (ONEUP-0045). Must match RUN_STATE_FILE in
-# update_system.sh.
+# can only fail on the package lock (ONEUP-0045). Must match RUN_STATE in
+# oneup/engine/runstate.py (and RUN_STATE_FILE in the update_system.sh fallback).
 RUN_STATE = STATE_DIR / "run.state"
 # Creating this file asks a running engine to stop at its next safe point. Must match
-# STOP_FILE in update_system.sh.
+# STOP_REQUEST in oneup/engine/runstate.py (STOP_FILE in update_system.sh).
 STOP_REQUEST = STATE_DIR / "stop.request"
 # ONEUP-0044's pair, and they are a contract between the two halves in exactly the way
 # the two above are — not part of the marker protocol, because the window writes one of
@@ -343,12 +344,13 @@ STOP_REQUEST = STATE_DIR / "stop.request"
 #
 # `hold.state` is written by a held engine and read by us: line 1 is its pid, which is
 # how we tell a live hold from one a SIGKILLed engine left behind. Must match
-# HOLD_STATE_FILE in update_system.sh.
+# HOLD_STATE in oneup/engine/runstate.py (HOLD_STATE_FILE in update_system.sh).
 HOLD_STATE = STATE_DIR / "hold.state"
 # `go.request` is written by US to tell a held engine to proceed, and carries a
 # comma-separated step list on line 1 and nothing else. It is an authorisation read by a
 # root process, so the engine refuses the whole list if any key is unknown rather than
-# running the part that resolved. Must match GO_FILE in update_system.sh.
+# running the part that resolved. Must match GO_REQUEST in oneup/engine/runstate.py
+# (GO_FILE in update_system.sh).
 GO_REQUEST = STATE_DIR / "go.request"
 # zypper's package cache, which is world-readable — so OneUp can weigh it without root.
 # This is the ONLY byte figure available during the prefetch phase: zypper prints one line

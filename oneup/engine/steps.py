@@ -33,7 +33,7 @@ from . import markers, parsers, pkgsizes, privilege, proc, repos, route, runstat
 REPOSD_OVERRIDE = ""
 
 # The human label per step key, in the run order both engines share. Also the
-# closed vocabulary `adopt_go_ahead` tests a go-ahead's steps against.
+# closed vocabulary `_adopt_go_ahead` (in `__main__`) tests a go-ahead's steps against.
 LABEL = {
     "system": "Updating system packages",
     "flatpak": "Updating Flatpak apps",

@@ -12,7 +12,8 @@ PyInstaller entry point and every hand-made launcher all name it by path
 
 Run headless as `oneup --check` (or `updater.py --check`) to perform a read-only
 "updates available?" check and a desktop notification, with no window — this is
-what the optional weekly systemd-user timer calls.
+what the optional weekly systemd-user timer calls. `--update` is the other
+headless mode, which the optional automatic-updates timer calls.
 """
 
 from oneup.gui.app import main
