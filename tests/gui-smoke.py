@@ -13,6 +13,7 @@ engine's own skip-cleanly-for-absent-tools convention.
 
 Run directly, or via tests/run-tests.sh / local-CI.sh.
 """
+import ast
 import contextlib
 import functools
 import importlib.util
@@ -285,13 +286,50 @@ def _track_windows():
     window.Updater.__init__ = _init
 
 
+_LAST_USE = {}
+
+
+def _last_use(code) -> dict:
+    """For main() only: each local's name -> the last line that can still read it. A
+    use counts to the end of its statement (a value already loaded sits on the stack,
+    not in the locals) and to the end of its outermost loop (the loop comes round).
+    main() names every window it builds and never drops one, so its locals alone kept
+    ~130 windows alive for every theme change (ONEUP-0372). Uses inside nested functions
+    count too, which only keeps more alive; a live nested function's closure is followed
+    by _reachable regardless."""
+    if code not in _LAST_USE:
+        tree = ast.parse(Path(code.co_filename).read_text(encoding="utf-8"))
+        fn = next(n for n in tree.body
+                  if isinstance(n, ast.FunctionDef) and n.name == code.co_name)
+        last = {}
+
+        def visit(node, until, loop_end):
+            if isinstance(node, ast.stmt):
+                if loop_end is None and isinstance(node, (ast.For, ast.While)):
+                    loop_end = node.end_lineno
+                until = max(node.end_lineno, loop_end or 0)
+            elif isinstance(node, ast.Name):
+                last[node.id] = max(last.get(node.id, 0), until)
+            for child in ast.iter_child_nodes(node):
+                visit(child, until, loop_end)
+        for stmt in fn.body:
+            visit(stmt, 0, None)
+        _LAST_USE[code] = last
+    return _LAST_USE[code]
+
+
 def _reachable(frame) -> set:
     """Ids of what scenario code can still reach from `frame` and its callers: their
     locals, two levels into containers, closures, partials and bound methods, and every
-    QObject's parents — a dialog a scenario still holds keeps the window it sits in."""
+    QObject's parents — a dialog a scenario still holds keeps the window it sits in. In
+    main(), a local no later line reads is not reachable (_last_use)."""
     seen, todo = set(), []
     while frame is not None:
-        if frame.f_code.co_name != "<module>":   # module globals hold _BUILT itself
+        if frame.f_code is main.__code__:
+            last = _last_use(frame.f_code)
+            now = frame.f_lineno
+            todo.extend(v for k, v in frame.f_locals.items() if last.get(k, now) >= now)
+        elif frame.f_code.co_name != "<module>":   # module globals hold _BUILT itself
             todo.extend(frame.f_locals.values())
         frame = frame.f_back
     for _depth in range(3):
@@ -324,7 +362,8 @@ def _reachable(frame) -> set:
 def _reap_windows():
     """Delete every built window nothing on the stack can reach, with the parentless
     controls it lends to the Settings dialog. Deleted, not closed: closeEvent asks
-    whether to quit, or hides to the tray. A visible window is left alone."""
+    whether to quit, or hides to the tray. A shown window is deleted too: most scenarios
+    show the window they test and never hide it (ONEUP-0372)."""
     live = _reachable(sys._getframe(1))
     kept, doomed = [], []
     for win in _BUILT:
@@ -332,7 +371,7 @@ def _reap_windows():
             continue
         lent = [v for v in vars(win).values()
                 if isinstance(v, QWidget) and shiboken6.isValid(v) and v.parent() is None]
-        if win.isVisible() or any(id(o) in live for o in (win, *lent)):
+        if any(id(o) in live for o in (win, *lent)):
             kept.append(win)
         else:
             doomed.append((win, lent))
@@ -4480,11 +4519,6 @@ def main() -> int:
         racer.wait()
         paths.RUN_STATE = orig_rs
         shutil.rmtree(race_dir, ignore_errors=True)
-
-    # The windows nothing below reads, released so _reap_windows can delete them before
-    # the app-wide theme applies that follow (ONEUP-0267). Each name still bound holds
-    # its window through every apply; a closure's names stay, as a slot may yet read one.
-    del wQ, wI, wP, wK, wS0, wS1, wO, wW, wH, wE, w_on, w_off, wr, w_tmp, w2, w82
 
     # INV-8: both settings persist and apply live, with no restart.
     app_inst = QApplication.instance()

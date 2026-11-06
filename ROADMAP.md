@@ -10928,7 +10928,7 @@ when complete (that document's §7).
   Source: user-request-2026-11-05.
   Lanes: gui.
 
-- 📋 [ONEUP-0372] **The window suite keeps every window it builds alive, so each theme change restyles all of them.**
+- ✅ [ONEUP-0372] **The window suite keeps every window it builds alive, so each theme change restyles all of them.**
   tests/gui-smoke.py's main() builds its windows (window.Updater()) as
   locals of one function and closes none. QApplication.setStyleSheet
   repolishes every live widget, so each of the suite's theme changes took
@@ -10937,6 +10937,17 @@ when complete (that document's §7).
   would cut both, but the windows are referenced far from where they are
   built, so it needs a pass over the whole file. Measure before and after;
   one lever per change.
+  Shipped 2026-11-06 on v2. The premise was half stale: ONEUP-0267's
+  reaper already deleted finished windows, but kept every window main()
+  named and every shown one, so 42-134 stayed alive. Two levers, measured
+  one at a time on one forward pass at load 5-7:
+  - a main() local no later line reads no longer counts as reachable
+    (_last_use, by ast; a use lasts to the end of its statement and its
+    outermost loop): 320 s -> 215 s, peak 929 MB -> 876 MB;
+  - a shown window is reaped too: -> 139 s, 417 MB, 12-21 windows alive.
+  Theme-apply time 242 s -> 86 s. The same 1162 checks pass, sorted "ok"
+  lines identical, no new traceback or warning. ONEUP-0267's manual del
+  block went, as the rule now covers it. local-CI 5m03s, was ~7.5 min.
   **Layman:** The window tests open well over a hundred windows and never close them, which makes later tests slower and uses about a gigabyte of memory.
   Kind: perf.
   Source: user-request-2026-11-05.
