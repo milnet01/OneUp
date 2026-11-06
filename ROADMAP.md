@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=376 -->
+<!-- ants-roadmap-id-high-water: ONEUP=377 -->
 
 # OneUp Roadmap
 
@@ -11306,3 +11306,16 @@ when complete (that document's §7).
   **Layman:** A note warning about a test blind spot names only the old engine's parts, so it may not protect the new engine.
   Kind: doc-fix.
   Source: debt-sweep-2026-11-06.
+
+- 📋 [ONEUP-0377] **The AppImage's .DirIcon is an SVG; appimagetool wants a PNG and says it will soon refuse to build.**
+  Seen 2026-11-06 with appimagetool continuous build 370: "ERROR:
+  .DirIcon is an SVG image … .DirIcon must be a PNG" then "WARNING:
+  AppImage will be created although .DirIcon is not valid. In a future
+  release, appimagetool will refuse to build the AppImage." The build
+  fetches appimagetool's continuous release, so that refusal could
+  arrive on any build. Fix: render a 256 px PNG of
+  data/za.co.antsprojectshub.OneUp.svg into the AppDir and point
+  .DirIcon at it (build-appimage.sh). Found alongside ONEUP-0376.
+  **Layman:** A tool we use to build the AppImage will soon reject our icon format; switch it to the format it wants.
+  Kind: package.
+  Source: local-ci-full-2026-11-06.
