@@ -1,6 +1,6 @@
 # ONEUP-0044 — One authentication for a size preview and the run that follows
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** fix
 **Roadmap:** ONEUP-0044
 **Branch:** v2

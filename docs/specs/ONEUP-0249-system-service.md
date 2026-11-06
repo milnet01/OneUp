@@ -1,6 +1,6 @@
 # ONEUP-0249 — a system service that runs OneUp's root commands
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** feature
 **Roadmap:** ONEUP-0249
 **Branch:** v2

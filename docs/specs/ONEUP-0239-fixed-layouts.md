@@ -1,6 +1,6 @@
 # ONEUP-0239 — three fixed layouts, and the Settings choice between them
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** feature
 **Roadmap:** ONEUP-0239; amended by ONEUP-0306, which is built through ONEUP-0307 to
 ONEUP-0318 and ONEUP-0320; amended by ONEUP-0335 and ONEUP-0336 (§3 items 16 and 17), and

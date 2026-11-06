@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=372 -->
+<!-- ants-roadmap-id-high-water: ONEUP=373 -->
 
 # OneUp Roadmap
 
@@ -8646,30 +8646,6 @@ when complete (that document's §7).
   Kind: ux.
   Source: user-request-2026-10-12.
 
-- 📋 [ONEUP-0263] **The engine suite failed 3 tests once inside a pre-push run and never again; find out which and why.**
-  Seen 2026-10-12 19:38 (cc-job oneup-0260-push1, gating fb5e9a5
-  in place): tests/run-tests.sh reported Passed 462, Failed 3. The
-  pre-push hook printed only the suite's tail, so the 3 failing names
-  were lost. Re-run alone at 19:53 on the same tree: exit 0. The next
-  two pushes (119c802, ab0d0ef) ran it at 465/0. No other edits were
-  made while it ran. Next time it reds, keep the whole log: the first
-  fix may be making the hook print every FAIL line, not just the tail.
-  Progress (2026-10-14, f74d128): the three names cannot be recovered.
-  The hook's output held only the suite's tail, and the full log was in
-  /tmp/local-ci.YDPBo7, gone at the next boot (/tmp is RAM). cc-job's
-  records show what that run overlapped: two ffmpeg trailer renders
-  writing to /mnt/Games (OneUp's own disk), an Ants_Terminal build plus
-  its ctest run, and a long bake. CPU load alone was already measured as
-  not a cause (ONEUP-0203), so disk contention on that drive is the open
-  hypothesis. Not reproduced on purpose: it would load other sessions'
-  disk. Fixed so the next red is readable: a failed suite now prints
-  every FAIL under its TEST: heading, then the tail and the load average,
-  and the logs stay under ~/.local/state/oneup-ci/. Keep this open until
-  a red is caught with names, then fix that scenario's timing.
-  **Layman:** The update engine's tests failed once during an upload check and passed every time after; find out what caused the one-off failure.
-  Kind: investigate.
-  Source: in-session-2026-10-12.
-
 - ✅ [ONEUP-0264] **Two window suites at once fail ONEUP-0260's no-leftover-process check on each other's helper.**
   Seen 2026-10-13: two tests/gui-smoke.py runs started together each
   failed one ONEUP-0260 INV-7 check ("and leaves no mock process
@@ -10969,6 +10945,20 @@ when complete (that document's §7).
   Source: user-request-2026-11-05.
   Lanes: tests.
 
+- 🚧 [ONEUP-0373] **Release 2.0.0: walk the G1–G10 gate, merge v2 into main, tag, then the OBS leg.**
+  Gate walk 2026-11-06 (docs/design/oneup-2.0.md §7):
+  G1–G5 earned at ONEUP-0054's stages; G7 all ten §1 items shipped;
+  G10 RTL pass and i18n-check in the suites. G6: a fresh real run on
+  the user's machine before the tag (user's decision), with the host's
+  test RPM reinstalled from 2484452 so it matches the checkout.
+  G8: RPM launched in ONEUP-0287's VM re-test; AppImage build and
+  launch still owed; OBS leg after the tag. G9: ten 2.0 documents
+  flipped to Implemented; the user chose a full cold review of the
+  2.0 documents (2026-11-06). ONEUP-0263 moves to 2.1, not a blocker.
+  **Layman:** The checklist and steps that turn the v2 branch into the released OneUp 2.0.0.
+  Kind: release.
+  Source: user-decision-2026-11-06.
+
 ## 2.1.0 — after 2.0
 
 **Theme:** features raised after 2.0's list closed. They wait for 2.0.0 to ship
@@ -11217,3 +11207,27 @@ when complete (that document's §7).
   **Layman:** After an update that changes OneUp's download guard, the app should say: OneUp was updated, so switch Passwordless on again.
   Kind: ux.
   Source: user-request-2026-10-26.
+
+- 📋 [ONEUP-0263] **The engine suite failed 3 tests once inside a pre-push run and never again; find out which and why.**
+  Seen 2026-10-12 19:38 (cc-job oneup-0260-push1, gating fb5e9a5
+  in place): tests/run-tests.sh reported Passed 462, Failed 3. The
+  pre-push hook printed only the suite's tail, so the 3 failing names
+  were lost. Re-run alone at 19:53 on the same tree: exit 0. The next
+  two pushes (119c802, ab0d0ef) ran it at 465/0. No other edits were
+  made while it ran. Next time it reds, keep the whole log: the first
+  fix may be making the hook print every FAIL line, not just the tail.
+  Progress (2026-10-14, f74d128): the three names cannot be recovered.
+  The hook's output held only the suite's tail, and the full log was in
+  /tmp/local-ci.YDPBo7, gone at the next boot (/tmp is RAM). cc-job's
+  records show what that run overlapped: two ffmpeg trailer renders
+  writing to /mnt/Games (OneUp's own disk), an Ants_Terminal build plus
+  its ctest run, and a long bake. CPU load alone was already measured as
+  not a cause (ONEUP-0203), so disk contention on that drive is the open
+  hypothesis. Not reproduced on purpose: it would load other sessions'
+  disk. Fixed so the next red is readable: a failed suite now prints
+  every FAIL under its TEST: heading, then the tail and the load average,
+  and the logs stay under ~/.local/state/oneup-ci/. Keep this open until
+  a red is caught with names, then fix that scenario's timing.
+  **Layman:** The update engine's tests failed once during an upload check and passed every time after; find out what caused the one-off failure.
+  Kind: investigate.
+  Source: in-session-2026-10-12.

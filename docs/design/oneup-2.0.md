@@ -1,6 +1,6 @@
 # OneUp 2.0 — programme design
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** programme-design — the release as a whole. Each item below has (or gets) its
 own spec; this document holds only what the items *share* or *contend over*.
 **Roadmap:** ONEUP-0057 (the documentation set this design opens)

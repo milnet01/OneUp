@@ -1,6 +1,6 @@
 # ONEUP-0064 — the interface redesign
 
-**Status:** Draft
+**Status:** Implemented
 **Kind:** ux
 **Roadmap:** ONEUP-0064
 **Branch:** v2

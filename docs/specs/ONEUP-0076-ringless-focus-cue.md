@@ -1,6 +1,6 @@
 # ONEUP-0076 — the ringless focus cue
 
-**Status:** Draft
+**Status:** Implemented
 **Kind:** accessibility
 **Roadmap:** ONEUP-0076
 **Branch:** v2

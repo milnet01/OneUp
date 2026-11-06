@@ -1,6 +1,6 @@
 # ONEUP-0108 — the window's wording, and what an unknown code shows
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** refactor
 **Roadmap:** ONEUP-0108
 **Branch:** v2

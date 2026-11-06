@@ -1,6 +1,6 @@
 # ONEUP-0260 — the package details dialog: About and What changed for one package
 
-**Status:** Reviewed
+**Status:** Implemented
 **Kind:** feature
 **Roadmap:** ONEUP-0260
 **Branch:** v2
