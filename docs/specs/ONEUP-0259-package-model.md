@@ -398,8 +398,8 @@ ONEUP-0239 replaces this list, so nothing here is designed to outlive it.
   `steps.valid_package` — rows that fail are dropped. **This is the trust boundary**:
   package names and repository names come from repository metadata the user does not
   write, and a `|` would shift every later field. The existing defences stay:
-  `markers.marker` replaces a `|` inside any field with `/`, and strips line breaks
-  (`_LINE_BREAKS`).
+  `markers.marker` replaces a `|` inside any field with `/`, and folds every line
+  break to a space (`_LINE_BREAKS`).
   *Test:* `tests/run-tests.sh` — a mock repository named `Main | Extra` arrives as
   `Main / Extra`, and a listed name `-rf` produces no marker.
   *Breaks when:* a field is written without the check.
@@ -513,3 +513,4 @@ neither marker (reference §5 item 1).
 | 1 | 2026-10-12 | Q1 4 · Q2 1 · Q3 4 — 9 verified, 0 dismissed | all 9 fixed. Two lanes, each holding every question; both found the `Retrieving:` contradiction, the empty-edition gap, the merged-stderr parse risk and the Flatpak two-scope identity. Three Q1s came from settling the lanes' open questions: the tray check passes no `--notify`, the G1 citation, and the `i18n-check.py` test wording. Two measurements stay open and are written as such: zypper's XML-mode warning stream, and whether `flatpak update -y` can exit 0 after one app fails |
 | 2 | 2026-10-12 | Q1 4 · Q2 2 · Q3 1 · Q4 1 — 8 verified, 0 dismissed | all 8 fixed; the cap for a spec, so this loop's fixes are read by no lane, and implementation reads them. Two lanes, each holding every question; both found the run-versus-`--sizes` contradiction and the untestable state words. One Q1 came from a measurement a lane asked for: a OneUp run log of 2026-10-12 shows a package script splitting an `Installing:` line before its `done]`. Own-fix share 5 of 8, read as a calm cap: unpropagated consequences of loop 1's decisions, not repairs of repairs. No second share: the gated change was the whole document |
 | 0364-amend | 2026-11-04 | none — an authoring amendment; no reviewer was dispatched, and none is owed | ONEUP-0364: the Flatpak step names each listed app `downloading`, then `downloaded`, as Flatpak reaches it, and says `installed` after each pass rather than after both. §10's deferred bullet for live Flatpak states is delivered and removed. INV-12 and its test are unchanged. The user approved the marker change on 2026-11-04. |
+| impl-0373 | 2026-11-06 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0373 (the user's order of 2026-11-06 to fix the G9 review's findings before the tag): INV-11 says the emitter folds every line break to a space, as `oneup/engine/markers.py`'s `_LINE_BREAKS` does, rather than stripping it. An amendment, so no gate (`CLAUDE.md` rule 14). |

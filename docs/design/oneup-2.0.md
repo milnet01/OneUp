@@ -31,10 +31,10 @@ thing can replace what they run today.
 | **ONEUP-0064** | Redesign the interface for ergonomics, clarity and accessibility — **no focus borders**; the on/off switches stay. `docs/standards/ui-and-accessibility.md` §5.4 adds a hard obligation: pick a ringless focus treatment measuring **≥ 3:1 against its own rest state, in every shipped theme**, and add the measurement to the suite. Because §5.2 lands themes *after* the redesign, ONEUP-0027 re-takes that measurement for each palette it adds | `docs/specs/ONEUP-0064-interface-redesign.md` |
 | **ONEUP-0027** | Selectable colour themes beyond follow-the-desktop. `docs/standards/ui-and-accessibility.md` §7 adds a hard obligation: the contrast check every new theme must pass | `docs/specs/ONEUP-0027-themes.md` |
 | **ONEUP-0032** | Wrap user-facing text for translation, and mirror the window for right-to-left languages — **groundwork only, English alone**, see §5.1 | `docs/specs/ONEUP-0032-i18n.md` |
-| **ONEUP-0044** | The double password box | no spec — see §6.2 |
+| **ONEUP-0044** | The double password box | `docs/specs/ONEUP-0044-one-authentication.md`, written once the investigation found the cause — see §6.2 |
 | **ONEUP-0004** | Dependency refresh — chiefly the CI Python version | no spec — see §6.3 |
 | **ONEUP-0063** | Add `pyproject.toml`, so a bare `ruff check` and the gate agree — not a one-line config drop, see §6.4 | no spec — `docs/standards/coding.md` §2.1 settles it |
-| **ONEUP-0059** | Honour `XDG_STATE_HOME` where it is set, instead of hard-coding `~/.local/state` | no spec — `docs/standards/files-and-naming.md` §5.2 and §7 Trap 3 settle it. It moves **both halves at once** — see §6.5 |
+| **ONEUP-0059** | Honour `XDG_STATE_HOME` when it is set to an absolute path, instead of hard-coding `~/.local/state` | no spec — `docs/standards/files-and-naming.md` §5.2 and §7 Trap 3 settle it. It moves **both halves at once** — see §6.5 |
 | **ONEUP-0249** | A system service that runs the engine's root commands on a packaged install, so a user at the computer updates without a password box | `docs/specs/ONEUP-0249-system-service.md` |
 
 **This is the list of top-level items, each with its own slot in §5.2's order.** Work that a
@@ -117,17 +117,18 @@ if the thing under test still presents the same face.
 
 1. **The `@@MARKER@@` protocol** — every marker `docs/reference/marker-protocol.md` §3
    lists, its field order and its meaning.
-   Documented in `docs/reference/marker-protocol.md`. **One** deliberate, versioned
-   exception, recorded in `docs/reference/marker-protocol.md` §5.1 and sequenced in §5.1
-   below: ONEUP-0072's conversion of **every** engine payload the window renders as its own
-   wording — wider than the `@@HINT@@` / `@@REMEDY@@` pair this clause once named
+   Documented in `docs/reference/marker-protocol.md`. Its §5.1 owns the freeze and records
+   each deliberate, versioned exception the user approved. The first, sequenced in §5.1
+   below, is ONEUP-0072's conversion of **every** engine payload the window renders as its
+   own wording — wider than the `@@HINT@@` / `@@REMEDY@@` pair this clause once named
    (`docs/specs/ONEUP-0072-marker-codes.md` §3.1). The byte counters the engine rewrite makes possible
    (`docs/specs/ONEUP-0054-python-engine.md` §4.3.3) need a marker too, and land **after the
-   2.0.0 tag** — not a second exception inside 2.0. See §10.
+   2.0.0 tag** — not as an exception inside 2.0. See §10.
 2. **The engine's command-line surface** — every flag §2 enumerates, its spelling and its
    behaviour.
 3. **The five step keys and their order** — `system, flatpak, firmware, orphans, cache`.
-4. **The privilege split** — the window never *becomes* root and calls no `sudo`; the work
+4. **The privilege split** — the window never *becomes* root and runs no command through
+   `sudo` (`docs/standards/security.md` §1.1); the work
    of an update run goes through the engine, which authenticates once. On a packaged
    install the engine's root commands run in OneUp's system service, and the one
    authentication is the service's polkit check (ONEUP-0249). The engine itself stays the
@@ -244,7 +245,7 @@ inside the rewrite; the other is content and can arrive in 2.1 without reopening
 Shipping the groundwork also means the first language contributed later is a data file, not
 a project.
 
-(This is why 0032 is *inside* 2.0 but *last* within it, §5.2: the redesign rewrites the
+(This is why 0032 comes after the redesign and 0072, §5.2: the redesign rewrites the
 wording anyway, and 0072 moves the engine's sentences into the window, so wrapping before
 either would mean wrapping twice.)
 
@@ -287,7 +288,8 @@ Two further consequences, both structural:
 
 - **No user-facing sentence may be built by concatenation.** A sentence glued from
   fragments cannot be reordered by a translator, and in RTL the fragments can render in an
-  order nobody intended. Whole sentences with named placeholders, always. The sweep is the
+  order nobody intended. Whole sentences with named placeholders;
+  `docs/standards/wording-and-translation.md` §6.2 owns the rule and its exceptions. The sweep is the
   rule, not its current result: measured at `8d4c93e`, `grep -cE '"\s*\+|\+\s*"' updater.py`
   reported **10** matching *lines*. That is a rough upper bound on the work rather than a
   count of sites: it matches any `+` beside a double-quoted string, not only the ones
@@ -444,8 +446,9 @@ also what makes the dialogs *overlap*, which one process cannot do: it blocks on
 **"No existing gate can see this bug" was true, and is no longer.** G4's scenario counts
 authentications within one process, so it stayed green while the bug was open. The fix
 holds a single `--size --hold` engine across both jobs, and `tests/run-tests.sh` now
-drives one engine, writes a `go.request` and counts prompts across it — red before the
-fix, green after.
+drives one engine, writes a `go.request` and counts prompts across it. It is green after
+the fix; its own red run was never recorded (`docs/specs/ONEUP-0044-one-authentication.md`
+INV-1).
 
 **Two things the fix is bounded by, and both belong to this programme.** It adds no
 marker and changes no marker's field layout, so §5.1's freeze is intact — the go-ahead is
@@ -495,7 +498,7 @@ check is green.
 ### 6.5 XDG state and config paths (ONEUP-0059)
 
 `docs/standards/files-and-naming.md` §5.2 and §7 Trap 3 settle it: honour `XDG_STATE_HOME`
-where it is set, rather than hard-coding `~/.local/state`. (`XDG_CONFIG_HOME` needs no work —
+when it is set to an absolute path, rather than hard-coding `~/.local/state`. (`XDG_CONFIG_HOME` needs no work —
 settings go through `QSettings("OneUp", "OneUp")`, which Qt already resolves under it.)
 
 **This is a change to both halves in one commit, and that is the whole risk in it.**
@@ -535,7 +538,7 @@ nothing can check is not a gate.
 | # | Condition | Checked by |
 | --- | --- | --- |
 | **G1** | Engine suite passes with **no existing assertion weakened** — v2 satisfies the tests v1 was measured by. **Additions are permitted; weakening is not.** One existing scenario is *replaced* rather than carried, because it asserts Bash source rather than behaviour (`ONEUP-0054` §4.3.5), and the harness gains the `ONEUP_ENGINE_CMD` indirection (that spec's §4.4, at the two call sites it names). Every other suite change must be a **new scenario or a new assertion** named by a stage in `ONEUP-0054` §4.6 | the suite green against the new engine, plus a review of `git diff` on the suite: one replacement, one harness change, and additions `ONEUP-0054` §4.6 names. Anything else fails the gate |
-| **G2** | v1 and v2 emit the **same marker stream** under identical mocks | `tests/differential-test.sh` — new, and `ONEUP-0054` §4.5 owes it |
+| **G2** | v1 and v2 emit the **same marker stream** under identical mocks | `tests/differential-test.sh`, which `ONEUP-0054` §4.5 built; measured at the switch-over, then deleted by ONEUP-0072 (`ONEUP-0054` INV-10) |
 | **G3** | GUI suite green with the window driving the new engine | `python3 tests/gui-smoke.py` — **but the suite as it stands feeds the window marker lines and never launches an engine at all**, so on its own it proves the window, not the pairing. G3 needs the run under `ONEUP-0054` §4.6 stage 7's environment switch, with the window actually resolving to v2 |
 | **G4** | A full run **authenticates** exactly once — not the same as one dialog, see §6.2 | the existing one-prompt scenario |
 | **G5** | The engine runs with **PySide6 absent** and imports no Qt — the *dependency direction*, enforced by test. It is half of §3's privilege split, not the whole: `docs/standards/files-and-naming.md` §4.1 rule 2 names what it misses, an engine module importing a Qt-free helper out of `oneup/gui/` | a new scenario with PySide6 hidden from the import path |

@@ -276,9 +276,9 @@ installed CJK font and already wraps CJK text, so the work is not to defeat eith
 - **No wording built by changing case or by joining with a literal separator.** CJK has no
   case, and its list separator is not `, `. So a cased form is written into the source
   string, never derived from another one at run time, and a list a user reads is joined
-  with a separator that is itself a wrapped string, so a catalogue can supply `、`. That is
-  the one sanctioned exception to `wording-and-translation.md` §6.2's *never wrap a
-  fragment*, and each separator carries a §6.4 comment naming the list it joins. Today
+  with a separator that is itself a wrapped string, so a catalogue can supply `、`.
+  `wording-and-translation.md` §6.2 sanctions that as one of its exceptions to *never wrap
+  a fragment*, and each separator carries a §6.4 comment naming the list it joins. Today
   the window breaks both: `TaskRow` lower-cases its title into two accessible names, the
   reboot banner in `oneup/gui/run.py` upper-cases the reason's first letter, and the
   service and repository banners join names with a literal `", "`. **ONEUP-0108's English
@@ -486,10 +486,8 @@ and its teardown noise, and this item owns both.
 
 ## 8. Docs & release
 
-This item lands on `v2` with the rest of 2.0. Its documentation edits are ordinary
-documentation and go to `main` under `docs/standards/workflow.md` §9 — it is **ONEUP-0072**
-that carries §9's marker-change exception, because a marker change binds its reference edit
-to the same commit as 2.0-only code.
+This item lands on `v2` with the rest of 2.0. Which branch each of its documentation edits
+goes to is `docs/standards/workflow.md` §9's decision.
 
 - **`local-CI.sh` and `.github/workflows/release.yml`** — both name `tests/i18n-check.py`,
   and both gain the second, `-reverse` run of `tests/gui-smoke.py`. A suite named in neither
@@ -570,7 +568,8 @@ to the same commit as 2.0-only code.
   `files-and-naming.md` §4 already, but nothing is tracked in it until a real `.ts` lands.
 - **Translating the engine's terminal output.** `./update_system.sh` run directly is a
   system tool's output and stays English (`wording-and-translation.md` §5).
-- **The engine's marker payloads, and the notification its `--notify` raises.** ONEUP-0072.
+- **The engine's marker payloads**, ONEUP-0072, **and the notification its `--notify`
+  raises**, `docs/specs/ONEUP-0077-headless-notification.md`.
 - **Translating log files, diagnostics or the bug-report clipboard payload.** They are read
   by a developer.
 - **Locale-aware number, date and byte formatting.** Worth doing, not this item; the sizes
@@ -599,3 +598,4 @@ to the same commit as 2.0-only code.
 | 10 | 2026-10-02 | 2 lanes, cold, every lane holding every question; first loop of a fresh run on the CJK amendment (47e2ba4); Q1 1 · Q2 3 · Q3 2 · Q4 3, 9 verified, 9 fixed, 2 dismissed | **The amendment's own text drew one finding; the other eight were pre-existing, which is what a whole-document read of a long-gated spec returns.** The one on new text: §4.5 told the implementer to wrap list separators as strings, against `wording-and-translation.md` §6.2's *never wrap a fragment*, and said nothing of the conflict — so one builder refuses and another wraps bare `", "` with no context. It is now the stated exception, with a §6.4 comment per separator, and §8 carries it into the standard. **The best pre-existing one was settled by running it**: both lanes asked whether Qt mirrors `TaskRow`'s `RightArrow` disclosure, and a `QToolButton` grabbed with and without `-reverse` gave byte-identical images, so §4.4 had a fourth handed site and INV-6 cannot see it; §4.4's heading lost its count with it. Both lanes found INV-7's starting list blind to three helpers that take a sentence (`_show_warning`, `_confirm_reboot`, `_set_activity`), and INV-2's *three* loads over four named cases. Lane-unique: INV-3's check, living in `tests/`, would match its own search terms; INV-9's test proved the application object but not that the loader ran; ONEUP-0108 §4.2 hands this item the job of making its English *was/were* branch conditional, which nothing here took; §8's packaging line put Qt's `qtbase_<lang>.qm` where the loader never looks. Promoted from an open question: INV-2's fixture installed in-process could flip the rest of the left-to-right pass if it chose a right-to-left language. **Narrowed by the deletion carve-out, not counted:** §2.2's font row said NoFontMerging stops fallback under the window's own list; the packet's probe shows it does so only on a single-family `QFont`. **Dismissed:** §4.2's stale `updater.py` mention (the call sites it names are already the 2.0 ones), and INV-1's engine scope (on `v2` the engine is `oneup/engine/`). Unrunnable region declared in the packet: no CJK font on this machine, so CJK rendering itself was not observed. |
 | 11 | 2026-10-02 | 2 lanes, cold, every lane holding every question; second and final loop of this run, so the spec cap of 2 binds; Q1 0 · Q2 0 · Q3 2 · Q4 1, 3 verified, 3 fixed, 0 dismissed; one lane returned no findings | **A calm cap: one of the three landed on text this run wrote** — the loop-10 sentence making ONEUP-0108's English *was/were* branch conditional said *while no OneUp translator is installed*, which turns the branch off for a catalogue that lacks that one message and leaves the English agreement to the plural call alone. It now keys on the plural call returning its English source unchanged. **The other two were pre-existing.** INV-11 read *the theme template*, singular, and `oneup/gui/theme.py` holds two (`_QSS`, `_HC_QSS`), so one builder would leave high contrast unchecked. INV-7's check was defined by three shapes — literal, f-string, `+` — so `.format`, `%` and `" · ".join(bits)` at a live site passed it and were named nowhere as a limit; it now passes only a wrapped call, a name or an attribute, and §8's description of it followed. **Open questions resolved clean:** the window has no search field, so §10's *one text field* holds; ONEUP-0072 §8 does put the `@@REBOOT@@` carve-out in §6.2; the `qtbase` fixture comes from Qt's own translations directory; the engine INV-1 scans is Python on `v2`. **Not carried:** both lanes noted INV-10's *boxes* consequence is measured on a single-family font only; the ban is built the same either way. **This loop's four edits were read by no lane**; implementation is their reader. Share of the run's 12 verified findings inside the armed change (`47e2ba4`): 2 — the rest were the whole-document audit a long-gated spec returns. |
 | impl | 2026-10-11 | — | **Amendment, not a review — no reviewer was dispatched to produce this row.** Origin: ONEUP-0219. §4.2 said OneUp's catalogue directory is resolved from the package's own location and found by one relative path, citing `wording-and-translation.md` §7, which no longer says so. It now names what the built loader uses: `oneup/gui/paths.py`'s `TRANSLATIONS_DIR`, `HERE/oneup/translations/`, with each layout's placement left to `files-and-naming.md` §4 and the no-`__file__` rule tied to `tests/imports-test.py` INV-4. Records code that already exists, so the gate does not re-arm. |
+| impl-0373 | 2026-11-06 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0373 (the user's order of 2026-11-06 to fix the G9 review's findings before the tag): §4.5 no longer counts `wording-and-translation.md` §6.2's exceptions; §8 leaves where its documentation edits go to `docs/standards/workflow.md` §9; §10 names ONEUP-0077 as the owner of the `--notify` notification. An amendment, so no gate (`CLAUDE.md` rule 14). |

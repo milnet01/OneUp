@@ -88,8 +88,9 @@ kept at the root — is `docs/design/oneup-2.0.md` §4, restated as rules in
 
 ### 4.1 What does not change
 
-- **The window never runs as root and calls no `sudo`.** `docs/standards/security.md` §1.4
-  owns the boundary, including the window's three `pkexec` actions. No module moves a
+- **The window never runs as root and runs no command through `sudo`.**
+  `docs/standards/security.md` §1.1 and §1.4 own the boundary, including the window's
+  three `pkexec` actions and its one `sudo -n -l` listing. No module moves a
   privileged call across it.
 - **The marker protocol.** `docs/reference/marker-protocol.md` is frozen for 2.0. Every
   marker the window handles today it handles identically afterwards.
@@ -217,8 +218,8 @@ tidy-up. A green suite pointing at the old names is a suite that stopped testing
 ### 4.6 ONEUP-0059 rides along, in one commit across both halves
 
 `docs/design/oneup-2.0.md` §6.5 puts the XDG path change here, because `paths.py` is where
-the window's path constants land. Honour `XDG_STATE_HOME` where it is set; the default is
-unchanged where it is not. (`XDG_CONFIG_HOME` needs no work — settings go through
+the window's path constants land. Honour `XDG_STATE_HOME` as `docs/standards/files-and-naming.md` §5.2
+states; the default is unchanged where that rule does not take it. (`XDG_CONFIG_HOME` needs no work — settings go through
 `QSettings("OneUp", "OneUp")`, which Qt already resolves under it.)
 
 `run.state` and `stop.request` are a contract between the two halves, so **the Bash
@@ -365,8 +366,7 @@ and `.github/workflows/release.yml` names again the ones a tag must run. This on
 both, or it never runs where it matters.
 
 Two things the suite must keep doing while the modules move, both from
-`docs/standards/testing.md`: the `HOME` redirect stays module-level and runs **before**
-`QApplication` is constructed (§2.2), and a passing run stays silent apart from the known
+`docs/standards/testing.md`: the `HOME` redirect stays where §2.2 puts it, and a passing run stays silent apart from the known
 teardown noise (§7).
 
 **`./local-CI.sh` is green at every commit**, not only at the end — the split's whole safety
@@ -446,6 +446,7 @@ argument is that each step is judged by assertions written before it.
 | 2 | 2026-07-27 | 2 high, 4 medium, 1 low — **6 verified, 1 dismissed** | The same defect in three sentences: an invariant worded wider than its test. INV-6 said "every `QDialog` subclass" — `QMessageBox` is one, and the bullet's own next sentence exempts it, so it was false rather than unproven. INV-5 said "every focusable widget" where the sweep walks four roots. §4.2's completeness claim held for module-level names and not for `Updater`'s methods, so an implementer asking where `handle_marker` goes got no answer. §4.3's third import rule had a named consequence and nothing checking it, where both its siblings had invariants — now INV-12. Dismissed: that INV-4 cannot reach `_headless_command`'s last-resort branch; it turns on `$APPIMAGE` and `shutil.which`, and a test controls both |
 | 3 | 2026-07-27 | 1 medium, 2 low — **3 verified, 0 dismissed** | Converging: nothing structural, and nothing from earlier loops returned. Loop 2's fix to the §7 table had stranded a sibling — INV-6 and INV-9 got their own rows and INV-3/INV-4 stayed merged, so INV-4's two `gui-smoke.py` assertions appeared in no row. Audited all twelve rows against their `*Test:*` clauses rather than waiting for the next loop to find them one at a time; that was the only instance. §1 also promised modules "a reader can hold in their head one at a time" when §4.2 says plainly that `window.py` will not |
 | 4 | 2026-07-27 | 1 low — **1 verified, 0 dismissed** | **Converged.** Two lanes clean for the third loop running. The one finding was a convention slip: INV-4's new `gui-smoke.py` assertions were not marked "new" the way INV-6's and INV-7's are, so §5 alone read as though they existed. `Draft` → `Reviewed`; implementation of ONEUP-0034 is unblocked |
+| impl-0373 | 2026-11-06 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0373 (the user's order of 2026-11-06 to fix the G9 review's findings before the tag): §4.1's `sudo` clause now matches `docs/standards/security.md` §1.1, which allows the window one `sudo -n -l` listing; §4.6 points to `docs/standards/files-and-naming.md` §5.2 for when `XDG_STATE_HOME` is taken; §7 points to `docs/standards/testing.md` §2.2 for where the `HOME` redirect runs. An amendment, so no gate (`CLAUDE.md` rule 14). |
 
 ## 12. What the implementation settled (2026-08-20, `v2` at `f0d13e7`)
 
