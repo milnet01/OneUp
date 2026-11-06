@@ -9084,6 +9084,22 @@ when complete (that document's §7).
   header buttons clipped, restart-list failing without lsof, the
   finished line ignoring removed leftovers, a missing-glyph box in the
   package list, and the askpass title "Enter SSH Credentials".
+  User's decision, 2026-11-06: before 2.0.0, repeat the fresh-install
+  run with a local RPM of current v2 HEAD (much changed since b869199).
+  Claude drives the VM; start when load is under about 8. Then release
+  2.0.0, then the OBS-repository step. The "needs them at the keyboard"
+  line above is superseded: the VM runs are driven over QMP and ssh.
+  Re-run 2026-11-06, local RPM of v2 2484452 (headless VM, 12 GB),
+  Live ISO Snapshot20261014. zypper took the RPM and 242 packages with
+  no extra step (the rise from 46 is most likely today's PySide6 needing
+  Qt 6.12 over the ISO's older Qt; requirements unchanged since b869199).
+  Service D-Bus activatable at once; route.engine_route answered
+  service. Check: 931 updates. Run: every root job in oneup-service,
+  all status 0 except snapshot-create/list (Live has no snapper; the
+  log says so). All five steps ok; "All done. 915 system packages
+  installed. 14 leftover packages removed." No password asked. Pass.
+  Still owed: the OBS-repository step, once 2.0.0 is on OBS.
+  Note: a 12 GB VM left the host 4.9 GB free with peers running.
   **Layman:** Install OneUp on a brand-new test computer, the way a newcomer would, to prove it works without any expert help.
   Kind: test.
   Source: user-decision-2026-10-16.
