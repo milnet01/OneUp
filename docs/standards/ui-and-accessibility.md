@@ -366,16 +366,14 @@ which are also the rules:
 - **A focus pair that cannot be derived refuses the theme too, and says so.** §5.1's rule
   always succeeds against a *single* surface, and can fail against a *set*: two surfaces far
   enough apart admit no colour clearing 3:1 against both. The derivation raises rather than
-  returning a best-effort colour, and `apply_app_theme` catches it, applies **nothing**, and
-  says so on the console. **The one outcome not allowed is a silently absent cue** — that is
-  the state §5 exists to end. Same posture as the missing key above: fail at the boundary
-  rather than half-apply. Two things a theme picker must not assume. **Not applying is what
-  preserves the user's text size and high-contrast choice** — the sheet already installed
-  stays, and a fallback that rebuilt without them would turn high contrast off for the one
-  user who cannot do without it. And **the console line is not a user-visible report**;
-  surfacing it belongs to ONEUP-0027's picker, along with turning this into a real fallback
-  — `build_theme` takes no theme argument today, so the built-in palette *is* what failed
-  and there is nothing yet to fall back to.
+  returning a best-effort colour. **The one outcome not allowed is a silently absent cue** —
+  that is the state §5 exists to end. Same posture as the missing key above: fail at the
+  boundary rather than half-apply. What `apply_app_theme` does then — fall back to Follow
+  system, leave the stored choice alone, and tell the user in the picker — is
+  `docs/specs/ONEUP-0027-themes.md` §4.5. **Where the fallback is what failed, it applies
+  nothing**, and the sheet already installed stays: a rebuild without the user's text size
+  and high-contrast choice would turn high contrast off for the one user who cannot do
+  without it.
 - **Contrast is checked, not eyeballed:** body text at least **4.5:1** against its
   background, and any colour that carries meaning — a border, a badge rim, a switch track —
   at least **3:1** (WCAG 2.2 SC 1.4.3 and 1.4.11).

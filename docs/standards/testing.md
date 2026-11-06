@@ -243,7 +243,9 @@ Three rules for writing a mock:
 Every `INV-N` in a spec names the test that locks it in
 (`docs/standards/documentation.md` §5). The obligation runs both ways:
 
-- **A spec invariant with no test is an incomplete spec**, not a spec with a follow-up.
+- **A spec invariant with no test is an incomplete spec**, not a spec with a follow-up —
+  unless no test can decide it, the one exception `docs/standards/documentation.md` §5
+  allows.
 - **A test with no invariant is fine** — plenty of assertions are ordinary coverage — but
   when a test exists precisely because a bug once shipped, say so in a comment naming the
   roadmap id, as the one-prompt scenario's preamble and `run_engine`'s own comment do. The
@@ -271,8 +273,10 @@ engine logic without re-checking them is how the original bug returns:
    item 3. The window leads its summary with the part-updated hint, ahead of any hint sent
    earlier in the run (ONEUP-0330, ONEUP-0331).
 3. **A package-only change offers a service restart (`@@SERVICES@@`), not a reboot.**
-4. **`--check` is strictly read-only and runs without root** — no `zypper dup`, no
-   `zypper update`; the mock exits 99 if either is called.
+4. **`--check` never changes the system and never authenticates** — no `zypper dup` or
+   `zypper update` transaction. On the service route its one root operation is the
+   service's `check-dry-run`, which carries `--dry-run` (`docs/standards/security.md` §9.5). The mock exits 99 on any
+   other `dup` or `update`.
 
 ## 6. Waiting: poll for the condition, never sleep for a duration
 
@@ -377,8 +381,9 @@ with a line and inspect what it returns without running a whole scenario. The Py
   directly; the sandbox is for things that must spawn a process.
 
 The 2.0 release gates (`docs/design/oneup-2.0.md` §7) add **six** suite-level obligations:
-**G1** the engine suite passes with no existing assertion weakened (design §7 states exactly which suite changes it permits); **G2** v1 and v2 emit the same
-marker stream under identical mocks; **G3** the GUI suite is green with the window driving
+**G1** the engine suite passes with no existing assertion weakened (design §7 states exactly which suite changes it permits); **G2** v1 and v2 emitted the same
+marker stream under identical mocks, measured at the switch-over and then withdrawn with
+its harness (`docs/specs/ONEUP-0054-python-engine.md` INV-10); **G3** the GUI suite is green with the window driving
 the new engine; **G4** a full run authenticates exactly once — not the same as one dialog (design §6.2); **G5** the engine
 imports no Qt and runs with PySide6 absent, enforced by test; **G10** the GUI suite passes
 with the layout direction forced right-to-left.

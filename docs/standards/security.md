@@ -238,8 +238,8 @@ new background helper inherits this rule.
 opens a session with the service, which asks polkit once (§12.4), and starts no
 keep-alive. Discover's rule decides: under openSUSE's default policy a user at the desktop
 sees no box (ONEUP-0249 §2.4). When polkit answers `challenge`, because it had no way to ask
-the caller, the run falls back to the sudo route and its one prompt (§4.7). That an SSH
-shell gets `challenge` is not yet measured (§4.12 item 1). Where polkit's list of actions
+the caller, the run falls back to the sudo route and its one prompt (ONEUP-0249 §4.7). That an SSH
+shell gets `challenge` is not yet measured (ONEUP-0249 §4.12 item 1). Where polkit's list of actions
 lacks PackageKit's, the `auto` route takes sudo from the start, as the AppImage does
 (ONEUP-0286); no answer from polkit keeps the service. On the sudo route, a run nobody
 started by hand ends before any `sudo -A` unless Passwordless is current (INV-19).
@@ -413,7 +413,8 @@ supplied by another program, ask what the worst legal name does.
 
 **4.7 — A bad refresh budget fails the refresh; it never falls back.**
 `ONEUP_REFRESH_TIMEOUT` comes from the environment and reaches `sudo timeout <budget>
-zypper …` on every refresh. `docs/specs/ONEUP-0092-passwordless-gaps.md` §6 decides that a
+zypper …` on every per-repository refresh. The bulk fallback, `repo-refresh-all`, carries
+no budget (ONEUP-0249 §4.2). `docs/specs/ONEUP-0092-passwordless-gaps.md` §6 decides that a
 non-numeric budget fails the refresh, rather than quietly falling back to the default. A
 check that substituted the default would hide the user's broken setting.
 

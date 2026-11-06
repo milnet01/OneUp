@@ -321,6 +321,10 @@ Rules:
   shuffle the others, because other documents cite them by number.
 - **Every invariant names its test.** An invariant with no test is a wish. A spec that
   ships with an untested invariant is incomplete — that is the definition, not an opinion.
+  **One exception: an invariant no test can decide** — that a shipped code is never
+  reused for a new meaning, that a guard stays beside the command it protects. Its tests
+  row says `nothing` and names review as its check (`docs/specs/ONEUP-0072-marker-codes.md`
+  INV-5, `docs/specs/ONEUP-0034-gui-modules.md` INV-11).
 - **State it so it can fail.** "Handles errors gracefully" cannot fail a test. "A failed
   step is recorded, emits a plain-English hint, and the run continues to the next step"
   can.

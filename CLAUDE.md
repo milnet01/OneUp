@@ -31,8 +31,9 @@ python3 tests/service-test.py           # system service suite (needs dbus-daemo
 ```
 
 There is no build step: a Python package (plus the retained Bash fallback), run directly
-from the checkout. On `main` the engine is still `./update_system.sh`. The suites take no arguments and run every scenario; to focus on one, comment
-out the others in `tests/run-tests.sh` — there is no per-test selector.
+from the checkout. On `main` the engine is still `./update_system.sh`. No suite has a per-test selector; to
+focus on one scenario, comment out the others in `tests/run-tests.sh`. How the gates run
+each suite is `docs/standards/testing.md` §1.
 
 **`./local-CI.sh` must be green before every push.** What it gates, why the AppImage build
 is opt-in, and how to add a gate: `docs/standards/workflow.md` §6. The `githooks/pre-push`

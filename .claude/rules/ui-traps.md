@@ -19,6 +19,6 @@ exact shape of the rule are in the document named beside each.
   fine. The cue is derived rather than copied for a measured reason, not a preference:
   hover lightens, and pure white measures 2.63:1 against the accent button's top gradient
   stop, so no lighter shade reaches SC 2.4.13's 3:1 there at any saturation. A focused
-  control's fill is blended toward black or white until it clears 3:1 against every surface
-  it rests on. Copying a `:hover` rule into a `:focus` one lands a cue of about 1.2:1 —
-  `docs/standards/ui-and-accessibility.md` §5.
+  control's fill is blended toward black or white until it clears 3:1 against every one of
+  its **rest pixels** — not only the surface it sits on. Copying a `:hover` rule into a
+  `:focus` one lands a cue of about 1.2:1 — `docs/standards/ui-and-accessibility.md` §5.
