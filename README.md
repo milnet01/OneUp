@@ -185,14 +185,15 @@ sudo zypper install oneup
 Built on the [openSUSE Build Service](https://build.opensuse.org/package/show/home:milnet:oneup/oneup)
 and also searchable on [software.opensuse.org](https://software.opensuse.org/package/oneup).
 
-**Added the older `home:milnet` repo?** It keeps getting OneUp updates until 2.0.0.
-To move, remove it and add the new one above: `sudo zypper removerepo home_milnet`.
+**Added the older `home:milnet` repo?** Its last OneUp update is 2.0.0. To keep getting
+updates, remove it and add the new one above: `sudo zypper removerepo home_milnet`.
 
 ### AppImage — one file, nothing to install
 
 Grab `OneUp-x86_64.AppImage` from the
 [latest release](https://github.com/milnet01/OneUp/releases/latest), make it
-executable, and run it. Everything (Python + Qt) is bundled inside:
+executable, and run it. The window, with its own Python and Qt, is bundled inside; the
+update engine runs on your computer's own Python (see [Requirements](#requirements)):
 
 ```bash
 chmod +x OneUp-x86_64.AppImage
