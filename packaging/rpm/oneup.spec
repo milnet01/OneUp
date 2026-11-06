@@ -131,6 +131,11 @@ install -Dm0644 data/za.co.antsprojectshub.OneUp1.service \
 %endif
 /usr/libexec/oneup-service
 %{_unitdir}/oneup-service.service
+# Co-owned: OBS's filelist check refuses folders no package in the build root owns
+# (ONEUP-0379), and the D-Bus packages are not among its build requirements.
+%dir %{_datadir}/dbus-1
+%dir %{_datadir}/dbus-1/system.d
+%dir %{_datadir}/dbus-1/system-services
 %{_datadir}/dbus-1/system.d/za.co.antsprojectshub.OneUp1.conf
 %{_datadir}/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service
 

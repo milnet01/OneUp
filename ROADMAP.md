@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=378 -->
+<!-- ants-roadmap-id-high-water: ONEUP=379 -->
 
 # OneUp Roadmap
 
@@ -11030,6 +11030,26 @@ when complete (that document's §7).
   **Layman:** One test failed on GitHub's build machine, so the 2.0.0 AppImage was not published; the fix ships as 2.0.1.
   Kind: fix.
   Source: release-workflow-v2.0.0-2026-11-06.
+
+- ✅ [ONEUP-0379] **The 2.0.0 RPM fails every OBS build: it installs into /usr/share/dbus-1 folders no package owns.**
+  OBS home:milnet:oneup, all three targets (Tumbleweed x86_64 and i586,
+  Leap 16.0), 2026-11-06: "directories not owned by a package:
+  /usr/share/dbus-1, …/system-services, …/system.d" from the
+  50-check-filelist step. The system service (ONEUP-0249) added the
+  D-Bus policy and activation files there. ONEUP-0287's VM test used a
+  local rpmbuild, which does not run that check. Fix: %dir lines for
+  the three folders in oneup.spec, as it already co-owns /usr/libexec.
+  Per the user's rule (2026-11-06) the fix re-publishes 2.0.0: the tag
+  moves again and both OBS packages rebuild.
+  Fixed 2026-11-06: three %dir lines in oneup.spec. Red: all three
+  OBS targets failed 50-check-filelist on the dbus-1 folders. Green:
+  the fixed spec, uploaded to home:milnet:oneup before the tag moved,
+  built on Tumbleweed x86_64 and i586 and on Leap 16.0. The v2.0.0 tag
+  then moved onto this fix (user's rule: a failed release is fixed,
+  not re-versioned).
+  **Layman:** The openSUSE repositories could not build 2.0.0, so their users are still on 1.4.12; the package now claims the folders it installs into.
+  Kind: fix.
+  Source: obs-build-v2.0.0-2026-11-06.
 
 ## 2.1.0 — after 2.0
 
