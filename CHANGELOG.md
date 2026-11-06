@@ -6,6 +6,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-06
+
 ### Added
 
 - **Developers can build the RPM from a commit and look inside it with one command** (ONEUP-0290)
@@ -1326,7 +1328,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v1.4.12...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/milnet01/OneUp/releases/tag/v2.0.0
 [1.4.12]: https://github.com/milnet01/OneUp/releases/tag/v1.4.12
 [1.4.11]: https://github.com/milnet01/OneUp/releases/tag/v1.4.11
 [1.4.10]: https://github.com/milnet01/OneUp/releases/tag/v1.4.10

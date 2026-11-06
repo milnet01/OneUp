@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        1.4.12
+Version:        2.0.0
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -135,6 +135,115 @@ install -Dm0644 data/za.co.antsprojectshub.OneUp1.service \
 %{_datadir}/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service
 
 %changelog
+* Fri Nov 06 2026 Anthony Schemel <aant.schemel@gmail.com> - 2.0.0-0
+- Developers can build the RPM from a commit and look inside it with one command
+- Show an estimated time left while packages download.
+- Installed from the openSUSE repository or the RPM, OneUp asks for your password the way Discover does
+- Clicking a system package shows what it is and, once its new version has downloaded or installed, what changed in it.
+- Clicking a Flatpak app shows what it is and which versions are new
+- On a screen too small for the window, OneUp scrolls instead of squeezing
+- Three window layouts — Rows, Rail and Spotlight — to choose from in Settings, none of which moves or resizes while an update runs
+- Each package in the list shows its download size, its source and, during an update, its progress
+- OneUp now deletes its own old update logs, after 30 days by default.
+- You can stop OneUp asking GitHub for a newer version as it starts
+- OneUp is ready to be translated, including into right-to-left languages
+- Eight colour themes, chosen in Settings
+- After the last package installs, OneUp says it is finishing up instead of looking stuck
+- Removing leftover packages shows how far it has got
+- The six project standards say they are OneUp's own, so the copied-standards check stops reporting them as copies
+- The download size appears by itself where OneUp's system service needs no password
+- Show technical log and Open log file are small buttons, not links
+- The password box says whose password OneUp needs
+- The finished line says how many leftover packages were removed
+- Package sizes print with one decimal place for KiB and MiB, as every sketch does.
+- The footer is one summary line and a filled red Stop, as in the sketches.
+- Spotlight matches the sketch: a large Now panel with three figure boxes, and clean Up next and Done lists.
+- Rail matches the sketch: package cards in two columns, a coloured progress strip and a large heading with counts.
+- Each step has a short description, and says Waiting until its turn comes
+- Rows highlights the package being downloaded now
+- Rows' update list shows each package on one line, with where it comes from in a small label
+- The chosen package tab is filled in blue, so you can see which list you are looking at
+- Rows' package tabs show how many updates each holds
+- The progress bars show the running step in two halves: downloading, then installing
+- Each package's state is a symbol OneUp draws: a clock, a down arrow, a tick and so on
+- Recenter is a small crosshair, and OneUp draws the Settings gear itself
+- During an update, Stop stands alone where Run and Check were, as in the layout sketches
+- The About window says OneUp is an independent project
+- The openSUSE repository has a new address
+- Scrollbars now follow the chosen theme
+- The weekly timers' notification is written by the app, not the engine
+- The engine sends codes, and the window words every message itself (ONEUP-0072, ONEUP-0108)
+- OneUp now runs its updates with a new engine written in Python
+- The window has been reworked so there is one obvious thing to press.
+- You can now see where you are when using the keyboard.
+- The app's code is now organised into small, focused files instead of one very large one.
+- Switching theme or text size does less work.
+- A documented design for 2.0
+- Retire the stopfg and stophov palette keys, which no stylesheet uses since Stop is filled.
+- Every failed step now says something
+- Rail keeps its words at Larger
+- Closer to the approved pictures
+- Spotlight keeps whole sizes
+- Counts read as English
+- Text size now reaches every button
+- Spotlight shows the whole last-run line
+- Check counts every package the update will change
+- The Flatpak step says which pass it is on and how far through it is
+- The window's package counts and sizes agree with zypper during a parallel download
+- When the password box cannot start, OneUp says so and names the command
+- A system update that fails part-way ends the run, and says so
+- After a half-finished system update, OneUp says the system is partly updated
+- An rpm install failure is no longer called a package conflict
+- No "approve the password popup" when no popup is coming
+- A package's details open even when its text is not plain UTF-8
+- The outline around "Retry failed steps" is easier to see on the amber warning strip
+- The lists of updates now grow with Text size, like the rest of the window
+- No blue box round a button's label when it is reached with the Tab key
+- The words stay on "Installing" once the bar is in its install half
+- Spotlight's and Rail's step names are shown whole
+- Spotlight's Packages box counts up when the total is not known
+- Settings, Recenter and About are the same height
+- Spotlight's package lists no longer scroll sideways
+- The package list always shows a few packages, even in the smallest window
+- In the Rail layout the step names are no longer cut short
+- The finished line says what was installed from each source
+- Check for updates works straight after the download size is shown
+- The progress bar's fill is easy to see in the four light themes
+- The Stop button no longer shrinks when it replaces Check for updates.
+- The key-import dialog and the package-conflict hint say "source", like the rest of the window
+- Engine tidy-ups: exact log path, a hold that ends on time after sleep, and no lost repository after an interrupted cleanup
+- A warning's button always matches the warning above it
+- Thinning old snapshots now tells you how it went
+- Offline, the firmware step no longer says "up to date" from an old firmware list
+- The signing-key messages say "source", like the rest of the window
+- The window opens where you last left it, including after a restart, on KDE Wayland
+- Pressing Update after "Show download size" carries on from the size check instead of asking for your password again
+- A weekly update you stopped no longer says "Already up to date"
+- Two test runs at once no longer fail each other
+- The window can no longer stop following a run because of one odd character
+- The two engines no longer disagree about where a line ends or what a counter looks like
+- The check that keeps the engine and its contract in step now covers the Python engine
+- A rejected request to start the update is now reported, not shown as success
+- A full disk no longer produces an endless stream of error boxes
+- The update engine copes with a full disk, an odd character and a close-run timer
+- A bad keep-alive interval no longer makes the engine spin
+- The words on the progress bar were too faint to read against the coloured fill
+- Asking for the download size with no step name started a full update
+- A stalled software source can no longer hang a run with nothing on screen
+- The "still working" line now appears while checking for updates, not only while installing
+- Screen readers now speak the actual message instead of a fixed word
+- The progress caption is readable in high contrast, and faint borders were darkened
+- Stopping during a retry is no longer reported as a completed update
+- Steps no longer say "up to date" when they could not check
+- The computer can no longer be shut down mid-update on the usual update path
+- Changing the colour theme no longer starts an update
+- Text and controls that were too faint to read reliably
+- One password box instead of two when you check the download size first.
+- OneUp now respects XDG_STATE_HOME, the standard setting for where apps keep their working files.
+- The AppImage build installs exact versions of PySide6 and PyInstaller.
+- Passwordless setup names the real account
+- Package names from the system are checked before reaching a privileged removal
+- The downloadable AppImage is now built from exactly pinned tooling
 * Thu Nov 05 2026 Anthony Schemel <aant.schemel@gmail.com> - 1.4.12-0
 - Updating over SSH with no desktop asks for the password in the terminal
 - The "Last run" date uses your language's name for the month
