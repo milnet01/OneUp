@@ -235,8 +235,11 @@ The banner button is relabelled "What's new" and opens the pop-up.
    (`gh release view v2.0.0 --json assets -q '.assets[].size'` → `85309944` on 2026-11-07,
    so the cap is three times the current size). Qt 6's default redirect policy follows
    GitHub's redirect to its download host; a non-HTTPS redirect is refused by that policy.
-3. `self_update.verify(data: bytes, sig: bytes) -> None` raises `UpdateVerificationError`
-   unless `update_key.public_key().verify(sig, data)` passes.
+3. `self_update.verify(data: bytes, sig: bytes, version: str) -> None` raises
+   `UpdateVerificationError` unless `update_key.public_key().verify(sig, message)` passes,
+   where `message` is `b"OneUp-x86_64.AppImage " + version.encode() + b"\n" + data` and
+   `version` is the offered release's `X.Y.Z`. Binding the version means a genuine older
+   AppImage and its `.sig`, re-attached to a newer tag, fails (finbreak FIBR-0169).
 4. Only then `self_update.install(data, target)`.
 
 **Nothing downloaded touches the disk before it verifies.** The bytes verified are the
@@ -310,7 +313,7 @@ its own swap relaunches it.
   every installed AppImage refuses all later updates until its user downloads one by hand.
 - **Each release**, after the tag is pushed: `release.sh` waits for that tag's Release
   workflow (`gh run watch`), downloads `OneUp-x86_64.AppImage`
-  (`gh release download v$ver`), signs it with `sign-release.py --key "${ONEUP_SIGNING_KEY:-~/.config/oneup-release/signing.key}"`,
+  (`gh release download v$ver`), signs it for `$ver` with `sign-release.py --version "$ver" --key "${ONEUP_SIGNING_KEY:-$HOME/.config/oneup-release/signing.key}"`,
   verifies the signature against the **committed** public key through
   `self_update.verify`, and uploads `OneUp-x86_64.AppImage.sig` (`gh release upload`).
   With no key, or a failed verify, it says so in red and exits non-zero; the release then
@@ -369,7 +372,8 @@ print(cryptography.__version__)'` → `47.0.0` on 2026-11-07).
   `update_key.public_key()`. (§2 consequence 3; the trust boundary.)
   *Test:* `tests/self-update-test.py` — a throwaway key patched into `update_key`; good
   bytes and signature → `install` called; one flipped byte in the data, one in the
-  signature, a 63-byte signature, and a signature from a second key → each raises
+  signature, a 63-byte signature, a signature made for another version, and a signature
+  from a second key → each raises
   `UpdateVerificationError`, the target is byte-identical and its folder holds no new file.
   *Breaks when:* `verify` is skipped on a fetched `.sig` of the wrong length, or the
   verify result is caught and ignored.
@@ -450,8 +454,8 @@ print(cryptography.__version__)'` → `47.0.0` on 2026-11-07).
   *Breaks when:* the signer signs a hash of the file while the verifier checks the file.
 
 - **INV-17** A package install never imports `cryptography`.
-  *Test:* `tests/imports-test.py` — with `sys.modules["cryptography"] = None`, importing
-  `oneup.gui.app_update`, `oneup.gui.self_update` and `oneup.gui.update_dialog` succeeds.
+  *Test:* `tests/imports-test.py`, an AST walk like its other checks — no module under
+  `oneup/` imports `cryptography` outside a function body.
   *Breaks when:* `update_key` or `self_update` imports it at module level.
 
 - **INV-18** The pop-up is non-modal and every control in it is named.
@@ -480,7 +484,7 @@ print(cryptography.__version__)'` → `47.0.0` on 2026-11-07).
 | The relaunch never starts (sh missing) | OneUp closes and does not reopen; the new AppImage is in place | the next launch runs the new version |
 | `disk_version()` unreadable | no restart banner | the old window still works |
 | The signing key is lost | releases ship unsigned; AppImages are offered nothing | users download one by hand; see §4.9 |
-| A GitHub account compromise swaps the AppImage after signing | the swapped asset fails verification | the key is not on GitHub (§3 item 6) |
+| A GitHub account compromise swaps the AppImage after signing, or re-attaches an older signed AppImage to a newer tag | the asset fails verification | the key is not on GitHub (§3 item 6); the signature covers the version (§4.5) |
 | A compromise of the CI build itself, before signing | **not defended**: this PC signs what CI built | residual risk of §3 item 6; the build set is pinned (ONEUP-0060) |
 
 ## 7. Tests
@@ -510,7 +514,7 @@ the restart banner appears; Restart OneUp reopens on N+1.
 - `docs/standards/security.md`: a section on the self-update — the trust boundary (§4.5),
   the signing key's home and backup (§4.9), never root (INV-9), the residual risk (§6) —
   and its **What checks this** rows.
-- `docs/standards/workflow.md` §5: the release's signing step and the one-time key setup.
+- `docs/standards/workflow.md` §8: the release's signing step and the one-time key setup.
 - `docs/standards/dependencies.md`: `cryptography`, `cffi`, `pycparser` in the AppImage set.
 - `docs/standards/testing.md` §1 and `CLAUDE.md` §2: the new suite.
 - `docs/standards/files-and-naming.md` and `docs/specs/ONEUP-0034-gui-modules.md`'s module
@@ -534,8 +538,9 @@ the restart banner appears; Restart OneUp reopens on N+1.
   here; Ed25519 with a committed key has finbreak's.
 - **Verify with the machine's `openssl`** — rejected: its version varies by machine, and a
   program started from the bundle meets the `LD_LIBRARY_PATH` trap ONEUP-0383 just fixed.
-- **Sign a `SHA256SUMS` file instead of the AppImage** — rejected: one asset, so the extra
-  file adds a step and no protection.
+- **Sign a `SHA256SUMS` file instead of the AppImage** — rejected: there is one asset, and
+  signing the version with the bytes (§4.5) gives the binding finbreak's manifest gives
+  (FIBR-0169) without a second file.
 - **Two requests, `/releases/latest` then the list** — rejected: it doubles the use of a
   60-an-hour budget for no information the list lacks.
 - **Download to a temporary file, then verify** — rejected: finbreak's FIBR-0170 closed
