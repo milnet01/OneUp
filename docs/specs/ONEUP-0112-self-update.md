@@ -167,11 +167,11 @@ class Release:
 
 def releases_from_json(data) -> list[Release]:
     """Every entry that is a dict, not draft, not prerelease, whose tag_name parses.
-    Newest first. A malformed entry is dropped, never raised. An asset URL that is not
+    Sorted by version, highest first. A malformed entry is dropped, never raised. An asset URL that is not
     https:// counts as absent."""
 
 def changelog(releases, installed, offered) -> list[Release]:
-    """installed < r.version <= offered, newest first."""
+    """installed < r.version <= offered, highest version first."""
 ```
 
 `_version_tuple` is replaced by `parse_version` everywhere it is called
@@ -216,8 +216,8 @@ download the first self-updating version by hand, once.
   `setOpenExternalLinks(False)`: a link in the notes does nothing (§3 item 1).
   `QTextBrowser.loadResource` fetches no network resource, so an image in the notes shows
   as nothing.
-  Where the list's oldest entry is still newer than `installed + 1`, a last line says
-  earlier versions' notes are not shown.
+  Where the list holds no entry at or below `installed`, a last line says earlier
+  versions' notes are not shown.
 - The action row from §4.3's table. During a download: a progress bar, determinate from
   the asset's `size`, and **Cancel** in place of the actions.
 - Translatable through `QCoreApplication.translate("update_dialog", …)`; accessible names on
@@ -229,8 +229,9 @@ The banner button is relabelled "What's new" and opens the pop-up.
 
 ### 4.5 Download and verify (AppImage only)
 
-1. `app_update` fetches the `.sig` first through the window's `QNetworkAccessManager`.
-   It must be exactly 64 bytes, read with a 1 KiB cap.
+1. `app_update` fetches the `.sig` first, on a `QNetworkAccessManager` of its own: the one
+   `_check_app_update` creates sends every reply to the check's handler. The `.sig` must be
+   exactly 64 bytes, read with a 1 KiB cap.
 2. It fetches the AppImage into memory, aborting past 256 MiB
    (`gh release view v2.0.0 --json assets -q '.assets[].size'` → `85309944` on 2026-11-07,
    so the cap is three times the current size). Qt 6's default redirect policy follows
@@ -311,12 +312,14 @@ its own swap relaunches it.
   the public key's base64, which goes into `update_key.RELEASE_PUBLIC_KEY_B64`. The private
   key never enters the repository or a Claude session. **Back it up**: a lost key means
   every installed AppImage refuses all later updates until its user downloads one by hand.
-- **Each release**, after the tag is pushed: `release.sh` waits for that tag's Release
+- **Each release**, after the OBS step, so a signing failure never skips OBS: `release.sh` waits for that tag's Release
   workflow (`gh run watch`), downloads `OneUp-x86_64.AppImage`
-  (`gh release download v$ver`), signs it for `$ver` with `sign-release.py --version "$ver" --key "${ONEUP_SIGNING_KEY:-$HOME/.config/oneup-release/signing.key}"`,
+  (`gh release download v$ver`, into a temporary directory: the `.sig` is not git-ignored,
+  and an untracked file stops the next release's clean-tree check), signs it for `$ver` with `sign-release.py --version "$ver" --key "${ONEUP_SIGNING_KEY:-$HOME/.config/oneup-release/signing.key}"`,
   verifies the signature against the **committed** public key through
   `self_update.verify`, and uploads `OneUp-x86_64.AppImage.sig` (`gh release upload`).
-  With no key, or a failed verify, it says so in red and exits non-zero; the release then
+  With no key, or a failed verify, it says so in red and exits 4, a code of its own beside
+  OBS's 3; the release then
   carries no `.sig` and no AppImage is offered it.
 - `.gitignore` gains `*.key`.
 
@@ -346,9 +349,9 @@ print(cryptography.__version__)'` → `47.0.0` on 2026-11-07).
 
 - **INV-3** `releases_from_json` drops drafts, prereleases, non-dict entries, unparseable
   tags and non-HTTPS asset URLs, and never raises; `changelog` returns exactly the releases
-  with `installed < v <= offered`, newest first. (§2 consequence 1, §3 item 2.)
+  with `installed < v <= offered`, highest version first. (§2 consequence 1, §3 item 2.)
   *Test:* `tests/self-update-test.py` — a fixture list holding one of each bad kind, and
-  installed `2.0.0` / offered `2.2.0` over `2.3.0, 2.2.0, 2.1.0, 2.0.0` → `[2.2.0, 2.1.0]`.
+  installed `2.0.0` / offered `2.2.0` over `2.0.0, 2.3.0, 1.4.13, 2.1.0, 2.2.0` → `[2.2.0, 2.1.0]`.
   *Breaks when:* the bound is `<` on `offered` or `<=` on `installed`.
 
 - **INV-4** On a package install the banner's offer comes only from a `system`/`oneup`
@@ -379,7 +382,7 @@ print(cryptography.__version__)'` → `47.0.0` on 2026-11-07).
   verify result is caught and ignored.
 
 - **INV-7** The downloaded bytes reach the disk only through `install`, after `verify`.
-  *Test:* `tests/self-update-test.py` — the download path driven with a fake reply; the
+  *Test:* `tests/gui-smoke.py` — the download path driven with a fake reply; the
   target's folder and `tempfile.gettempdir()` listed before `verify` returns → no file
   from this download.
   *Breaks when:* the download streams to a temporary file that is verified and then
@@ -416,7 +419,7 @@ print(cryptography.__version__)'` → `47.0.0` on 2026-11-07).
 
 - **INV-11** Every read is capped: the list at 1 MiB, the `.sig` at 1 KiB and exactly 64
   bytes, the AppImage at 256 MiB; an over-cap read aborts and stores nothing.
-  *Test:* `tests/self-update-test.py` — the reply handlers fed one byte over each cap →
+  *Test:* `tests/gui-smoke.py` — the reply handlers fed one byte over each cap →
   aborted, nothing written.
   *Breaks when:* a cap is checked on `Content-Length` only, which a server may omit.
 
@@ -441,15 +444,16 @@ print(cryptography.__version__)'` → `47.0.0` on 2026-11-07).
   later version too.
 
 - **INV-15** `app_update.py` is the only module under `oneup/` that makes network requests.
-  *Test:* `tests/imports-test.py` — `grep -rlE 'QNetworkAccessManager|urllib|http\.client|socket\.create_connection'
-  oneup --include=*.py` → `oneup/gui/app_update.py` alone; a planted `import urllib.request`
-  in a scratch copy of another module → flagged.
+  *Test:* `tests/imports-test.py`, an AST walk like its other checks — no module under
+  `oneup/` but `app_update.py` imports `QNetworkAccessManager`, `urllib` or `http.client`,
+  or names `socket.create_connection`; a planted `import urllib.request` in a scratch copy
+  of another module → flagged.
   *Breaks when:* the download moves to `self_update.py`.
 
 - **INV-16** No private key material is tracked, and `sign-release.py` round-trips: a
   signature it makes verifies through `self_update.verify` with the matching public key.
   *Test:* `tests/self-update-test.py` — `git ls-files` holds no `*.key` and no file
-  containing `PRIVATE KEY`; a throwaway key pair generated, a file signed, verified → passes;
+  matching `-----BEGIN [A-Z ]*PRIVATE KEY-----`; a throwaway key pair generated, a file signed, verified → passes;
   verified against a second key → `UpdateVerificationError`.
   *Breaks when:* the signer signs a hash of the file while the verifier checks the file.
 
@@ -464,9 +468,10 @@ print(cryptography.__version__)'` → `47.0.0` on 2026-11-07).
   *Breaks when:* the pop-up is opened with `exec()`, which blocks the run's output.
 
 - **INV-19** A failed check stays silent at startup and is reported on the manual check
-  through `_update_check_error`, as today; it never raises out of the network slot.
+  as today; it never raises out of the network slot.
   *Test:* `tests/gui-smoke.py` — a stubbed reply with HTTP 403, a non-JSON body and a JSON
-  list → no box when automatic, the ONEUP-0089 wording when manual.
+  object → no box when automatic; when manual, the ONEUP-0089 wording for the 403 and
+  "Couldn't read GitHub's reply" for the other two.
   *Breaks when:* `releases_from_json` raises on a non-list body.
 
 ## 6. Failure modes
@@ -491,8 +496,8 @@ print(cryptography.__version__)'` → `47.0.0` on 2026-11-07).
 
 | Invariant | Where |
 | --- | --- |
-| INV-1, INV-2, INV-3, INV-6, INV-7, INV-8, INV-9, INV-10, INV-11, INV-16 | `tests/self-update-test.py` (new) — stdlib plus `cryptography`; a throwaway key; synthetic bytes; no network (`docs/standards/testing.md` §2). Exits 77 when `cryptography` is absent. Added to `local-CI.sh` and to `release.yml` after the requirements install, so CI always runs it |
-| INV-4, INV-5, INV-12, INV-13, INV-14, INV-18, INV-19 | `tests/gui-smoke.py`, with `app_update._check_app_update` stubbed as today and replies injected |
+| INV-1, INV-2, INV-3, INV-6, INV-8, INV-9, INV-10, INV-16 | `tests/self-update-test.py` (new) — stdlib plus `cryptography`; a throwaway key; synthetic bytes; no network (`docs/standards/testing.md` §2). Exits 77 when `cryptography` is absent. Added to `local-CI.sh`, and to `release.yml` after the requirements install, where exit 77 fails the step |
+| INV-4, INV-5, INV-7, INV-11, INV-12, INV-13, INV-14, INV-18, INV-19 | `tests/gui-smoke.py`, with each network entry point in `app_update` — the check, the pop-up's list fetch, the download — stubbed as `_check_app_update` is today, under the ONEUP-0098 gate that refuses any real request, and replies injected |
 | INV-15, INV-17 | `tests/imports-test.py` |
 
 Each test is seen failing against a tree without its rule before it is called green.
@@ -561,3 +566,4 @@ the restart banner appears; Restart OneUp reopens on N+1.
 
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
+| 1 | 2026-11-07 | Q1 4 · Q2 4 · Q3 4 · Q4 2 — 14 verified, 1 dismissed | all 14 fixed. Two lanes, each holding every question. Four came from building the packet, fixed before dispatch: a genuine older AppImage and its `.sig` re-attached to a newer tag passed the signature (finbreak FIBR-0169), so the signature now covers the version; a quoted `~` in the key path that bash leaves literal; the signing step pointed at `workflow.md` §5, not §8; and INV-17 importing Qt in the stdlib-only `tests/imports-test.py`. Both lanes found the download routed through `win._nam`, whose `finished` feeds the check's handler, and INV-19 treating a JSON list, the new endpoint's success shape, as a failure. One lane each found INV-15's grep against `imports-test.py`'s AST rule, INV-16's `PRIVATE KEY` match failing on this spec, `installed + 1` on a version triple, INV-7 and INV-11 placed in a suite that has no Qt, the signing step's order and exit code against OBS's, the releases list's sort order, and the suite's exit 77 skipping in `release.yml`. One Q3 came from settling a lane's open question: the pop-up's list fetch and the download met the ONEUP-0098 network gate with no stub named. Dismissed: §2's restart grep also hits `rollback.py`, `run.py` and `layout_host.py`, all about the computer or services, so no code changes. Seven open questions resolved clean. Unrunnable here: the relaunch inside a real AppImage (§7's manual recipe). |
