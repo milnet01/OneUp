@@ -1,6 +1,6 @@
 # ONEUP-0112 — OneUp updates itself: what's new, a signed AppImage swap, and a restart
 
-**Status:** Draft
+**Status:** Reviewed
 **Kind:** feature
 **Roadmap:** ONEUP-0112
 **Branch:** v2
@@ -165,8 +165,9 @@ class Release:
     sig_url: str | None          # browser_download_url of OneUp-x86_64.AppImage.sig
     appimage_size: int           # the asset's "size", 0 when absent
 
-def releases_from_json(data) -> list[Release]:
-    """Every entry that is a dict, not draft, not prerelease, whose tag_name parses.
+def releases_from_json(data) -> list[Release] | None:
+    """None when data is not a list: the caller reports an unreadable reply. Otherwise
+    every entry that is a dict, not draft, not prerelease, whose tag_name parses.
     Sorted by version, highest first. A malformed entry is dropped, never raised. An asset URL that is not
     https:// counts as absent."""
 
@@ -312,15 +313,18 @@ its own swap relaunches it.
   the public key's base64, which goes into `update_key.RELEASE_PUBLIC_KEY_B64`. The private
   key never enters the repository or a Claude session. **Back it up**: a lost key means
   every installed AppImage refuses all later updates until its user downloads one by hand.
-- **Each release**, after the OBS step, so a signing failure never skips OBS: `release.sh` waits for that tag's Release
+- **Each release**, after the OBS step and before the OBS report, `--no-obs` included, so
+  neither failure skips the other: `release.sh` waits for that tag's Release
   workflow (`gh run watch`), downloads `OneUp-x86_64.AppImage`
   (`gh release download v$ver`, into a temporary directory: the `.sig` is not git-ignored,
   and an untracked file stops the next release's clean-tree check), signs it for `$ver` with `sign-release.py --version "$ver" --key "${ONEUP_SIGNING_KEY:-$HOME/.config/oneup-release/signing.key}"`,
   verifies the signature against the **committed** public key through
   `self_update.verify`, and uploads `OneUp-x86_64.AppImage.sig` (`gh release upload`).
-  With no key, or a failed verify, it says so in red and exits 4, a code of its own beside
-  OBS's 3; the release then
-  carries no `.sig` and no AppImage is offered it.
+  With no key, or a failed verify, it says so in red and exits 4, which wins over OBS's 3;
+  the release then carries no `.sig` and no AppImage is offered it.
+- **A moved tag** rebuilds the AppImage, so the old `.sig` no longer matches it.
+  `release.sh --sign-only X.Y.Z` runs the signing step alone and replaces the `.sig`
+  (`gh release upload --clobber`); `workflow.md` §8's move-the-tag recovery ends with it.
 - `.gitignore` gains `*.key`.
 
 ### 4.10 Dependency
@@ -374,17 +378,18 @@ print(cryptography.__version__)'` → `47.0.0` on 2026-11-07).
 - **INV-6** Nothing is written unless the signature verifies against
   `update_key.public_key()`. (§2 consequence 3; the trust boundary.)
   *Test:* `tests/self-update-test.py` — a throwaway key patched into `update_key`; good
-  bytes and signature → `install` called; one flipped byte in the data, one in the
+  bytes and signature → `verify` returns; one flipped byte in the data, one in the
   signature, a 63-byte signature, a signature made for another version, and a signature
-  from a second key → each raises
-  `UpdateVerificationError`, the target is byte-identical and its folder holds no new file.
+  from a second key → each raises `UpdateVerificationError`. That nothing is written after
+  a failed verify is INV-7's test.
   *Breaks when:* `verify` is skipped on a fetched `.sig` of the wrong length, or the
   verify result is caught and ignored.
 
 - **INV-7** The downloaded bytes reach the disk only through `install`, after `verify`.
   *Test:* `tests/gui-smoke.py` — the download path driven with a fake reply; the
   target's folder and `tempfile.gettempdir()` listed before `verify` returns → no file
-  from this download.
+  from this download; a `.sig` that fails `verify` → `install` never called, the target
+  byte-identical.
   *Breaks when:* the download streams to a temporary file that is verified and then
   re-read (finbreak's pre-FIBR-0170 shape).
 
@@ -472,7 +477,7 @@ print(cryptography.__version__)'` → `47.0.0` on 2026-11-07).
   *Test:* `tests/gui-smoke.py` — a stubbed reply with HTTP 403, a non-JSON body and a JSON
   object → no box when automatic; when manual, the ONEUP-0089 wording for the 403 and
   "Couldn't read GitHub's reply" for the other two.
-  *Breaks when:* `releases_from_json` raises on a non-list body.
+  *Breaks when:* a non-list body is read as an empty list, or raises out of the slot.
 
 ## 6. Failure modes
 
@@ -519,7 +524,8 @@ the restart banner appears; Restart OneUp reopens on N+1.
 - `docs/standards/security.md`: a section on the self-update — the trust boundary (§4.5),
   the signing key's home and backup (§4.9), never root (INV-9), the residual risk (§6) —
   and its **What checks this** rows.
-- `docs/standards/workflow.md` §8: the release's signing step and the one-time key setup.
+- `docs/standards/workflow.md` §8: the release's signing step, `--sign-only` after a moved
+  tag, and the one-time key setup.
 - `docs/standards/dependencies.md`: `cryptography`, `cffi`, `pycparser` in the AppImage set.
 - `docs/standards/testing.md` §1 and `CLAUDE.md` §2: the new suite.
 - `docs/standards/files-and-naming.md` and `docs/specs/ONEUP-0034-gui-modules.md`'s module
@@ -567,3 +573,4 @@ the restart banner appears; Restart OneUp reopens on N+1.
 | Loop | Date | Findings | Outcome |
 | --- | --- | --- | --- |
 | 1 | 2026-11-07 | Q1 4 · Q2 4 · Q3 4 · Q4 2 — 14 verified, 1 dismissed | all 14 fixed. Two lanes, each holding every question. Four came from building the packet, fixed before dispatch: a genuine older AppImage and its `.sig` re-attached to a newer tag passed the signature (finbreak FIBR-0169), so the signature now covers the version; a quoted `~` in the key path that bash leaves literal; the signing step pointed at `workflow.md` §5, not §8; and INV-17 importing Qt in the stdlib-only `tests/imports-test.py`. Both lanes found the download routed through `win._nam`, whose `finished` feeds the check's handler, and INV-19 treating a JSON list, the new endpoint's success shape, as a failure. One lane each found INV-15's grep against `imports-test.py`'s AST rule, INV-16's `PRIVATE KEY` match failing on this spec, `installed + 1` on a version triple, INV-7 and INV-11 placed in a suite that has no Qt, the signing step's order and exit code against OBS's, the releases list's sort order, and the suite's exit 77 skipping in `release.yml`. One Q3 came from settling a lane's open question: the pop-up's list fetch and the download met the ONEUP-0098 network gate with no stub named. Dismissed: §2's restart grep also hits `rollback.py`, `run.py` and `layout_host.py`, all about the computer or services, so no code changes. Seven open questions resolved clean. Unrunnable here: the relaunch inside a real AppImage (§7's manual recipe). |
+| 2 | 2026-11-07 | Q2 2 · Q3 1 · Q4 1 — 4 verified, 0 dismissed | all 4 fixed; the cap for a spec, so these fixes are read by no lane, and implementation reads them. Two lanes, each holding every question. Both found `releases_from_json` turning a JSON object into an empty list, which a manual check would report as up to date; INV-6's "`install` called" in a suite where nothing calls `install`; and signing "after the OBS step" left open against `release.sh`'s exit-3 report. One lane found `workflow.md` §8's move-the-tag recovery leaving a `.sig` that no longer matches the rebuilt AppImage, so `release.sh --sign-only` now re-signs. Calm cap: 1 of 4 findings landed on text this run wrote (the signing order). The second share is unreadable, since the armed change was the whole document. Six open questions resolved clean, one by a PyInstaller build showing a function-level `cryptography` import is bundled. |
