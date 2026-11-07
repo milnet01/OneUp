@@ -11189,6 +11189,10 @@ when complete (that document's §7).
   signature covers the version as well as the AppImage's bytes, so a
   genuine older AppImage re-attached to a newer tag is refused (finbreak
   FIBR-0169); release.sh gains --sign-only for a moved tag.
+  User decision 2026-11-07: keep the review's change. The AppImage
+  signature covers "OneUp-x86_64.AppImage <version>\n" plus the bytes,
+  so an old genuine build re-attached to a newer tag is refused, and
+  release.sh gains --sign-only X.Y.Z (spec §4.5, §4.9).
   **Layman:** OneUp will be able to update itself: it spots a new version, downloads it, closes, applies the update and reopens — instead of telling you a new version exists and leaving you to fetch it.
   Kind: feature.
   Source: user-request-2026-08-18.
