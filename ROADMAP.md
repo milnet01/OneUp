@@ -11181,6 +11181,14 @@ when complete (that document's §7).
     prompt exists, checked 2026-11-07). The user asked for a restart button
     for users generally.
   Ordering: the user asked for this now, so it moves ahead of 2.1's queue.
+  Spec: docs/specs/ONEUP-0112-self-update.md, Status Reviewed
+  (2026-11-07). review-contract ran its two loops (the cap for a new
+  spec): 18 verified findings, all fixed, 1 dismissed; a calm cap. The
+  loop-2 fixes were read by no lane, so implementation is their first
+  reader. Design change made in review, for the user to confirm: the
+  signature covers the version as well as the AppImage's bytes, so a
+  genuine older AppImage re-attached to a newer tag is refused (finbreak
+  FIBR-0169); release.sh gains --sign-only for a moved tag.
   **Layman:** OneUp will be able to update itself: it spots a new version, downloads it, closes, applies the update and reopens — instead of telling you a new version exists and leaving you to fetch it.
   Kind: feature.
   Source: user-request-2026-08-18.
