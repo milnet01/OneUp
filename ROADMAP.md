@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=383 -->
+<!-- ants-roadmap-id-high-water: ONEUP=384 -->
 
 # OneUp Roadmap
 
@@ -11434,7 +11434,7 @@ when complete (that document's §7).
   Kind: marketing.
   Source: peer-request-website-2026-11-06.
 
-- 🚧 [ONEUP-0383] **In the AppImage, "View release" and "Open log file" open nothing.**
+- ✅ [ONEUP-0383] **In the AppImage, "View release" and "Open log file" open nothing.**
   The user clicked "View release" on the update banner and nothing opened.
   Cause, measured 2026-11-07: QDesktopServices.openUrl starts kde-open, which
   inherits the PyInstaller bundle's LD_LIBRARY_PATH (its _MEI dir), loads the
@@ -11446,6 +11446,29 @@ when complete (that document's §7).
   own loader read the variable at start-up, so OneUp itself is unaffected.
   Test: gui-smoke, beside the frozen engine_argv checks.
   The banner button itself is replaced by ONEUP-0112.
+  Landed 6a70d6f (v2 and main), 2026-11-07. Reaches AppImage users with
+  the next release; the 2.0.0 AppImage still has the dead buttons. Not
+  verified in a rebuilt AppImage: the AppImage build did not run.
   **Layman:** Buttons that should open a web page or the log file did nothing in the AppImage; now they open.
   Kind: fix.
   Source: user-report-2026-11-07.
+
+- 📋 [ONEUP-0384] **Run selected updates straight after Check for updates should not check all over again.**
+  User request 2026-11-07: pressing Check for updates, then Run selected
+  updates once it is done, repeats the check, which makes the Check button
+  feel pointless.
+  Found 2026-11-07, not yet designed: on the service route the check is the
+  update's own dry run and refreshes the repositories first (rootops.py,
+  the check's dry-run op). A run then refreshes every repository again
+  (repos.refresh_repos) before its own work. The window already has a
+  mechanism for not doing the same work twice: a size-preview engine HOLDS
+  after its dry run (hold.state) and Run adopts it with go.request
+  (ONEUP-0044, run.py _holding). Candidate shapes: let a fresh check leave
+  a held engine Run can adopt, or let a run skip the refresh when one
+  finished within a short window. Either touches the engine/window contract
+  (marker-protocol.md §8, oneup-2.0.md §3's frozen flag surface), so it
+  needs a design decision before code. A run must never install from
+  metadata older than the user would expect.
+  **Layman:** If you just pressed Check for updates, pressing Run should start installing instead of repeating the check.
+  Kind: ux.
+  Source: user-request-2026-11-07.
