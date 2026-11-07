@@ -6,6 +6,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **In the AppImage, buttons that open a web page or the log file now open it** (ONEUP-0383)
+  "View release" and "Open log file" did nothing, because the program that opens links crashed on OneUp's own bundled libraries.
+
 ## [2.0.0] - 2026-11-06
 
 ### Added

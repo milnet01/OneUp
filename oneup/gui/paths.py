@@ -177,6 +177,23 @@ def _library_path_env() -> list[str]:
     return [f"LD_LIBRARY_PATH={orig}"] if orig is not None else ["-u", "LD_LIBRARY_PATH"]
 
 
+def restore_machine_library_path() -> None:
+    """In the AppImage, give every program OneUp starts the machine's libraries.
+
+    The bundle's `LD_LIBRARY_PATH` otherwise reaches what `QDesktopServices.openUrl`
+    starts: `kde-open` then loads the bundle's older Qt, fails on a missing
+    `Qt_6.12` symbol and opens nothing, so "View release" and "Open log file" did
+    nothing (measured 2026-11-07). OneUp's own process is unaffected: the loader
+    reads `LD_LIBRARY_PATH` once, at start-up. Same mapping as `_library_path_env`."""
+    if not getattr(sys, "frozen", False):
+        return
+    orig = os.environ.get("LD_LIBRARY_PATH_ORIG")
+    if orig is None:
+        os.environ.pop("LD_LIBRARY_PATH", None)
+    else:
+        os.environ["LD_LIBRARY_PATH"] = orig
+
+
 def _machine_python() -> str | None:
     """The machine's python3, if it meets PYTHON_FLOOR. Asked once per process."""
     if "python3" not in _engine_cache:

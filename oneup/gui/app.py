@@ -149,6 +149,7 @@ def _raise_existing_instance(intent: str) -> bool:
 
 
 def main():
+    paths.restore_machine_library_path()
     if "--check" in sys.argv[1:]:
         sys.exit(_headless_check())
     if "--update" in sys.argv[1:]:

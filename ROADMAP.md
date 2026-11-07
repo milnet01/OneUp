@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=382 -->
+<!-- ants-roadmap-id-high-water: ONEUP=383 -->
 
 # OneUp Roadmap
 
@@ -11163,6 +11163,24 @@ when complete (that document's §7).
   bytes, a throwaway signing key monkeypatched in, and no network anywhere in the
   suite (`docs/standards/testing.md` §2). The relaunch itself is AppImage-runtime
   only and the tests should say so rather than pretending to cover it.
+  User decisions 2026-11-07, after the banner's "View release" did nothing:
+  - Never send the user to GitHub or any web page. The banner button opens a
+    pop-up inside OneUp.
+  - The pop-up shows the changelog for EVERY version between the one installed
+    and the one offered, not only the newest. Source to evaluate: the GitHub
+    releases list API (each release body holds that version's CHANGELOG
+    section; checked 2026-11-07 for v2.0.0).
+  - AppImage: self-update (download, verify, swap, relaunch), as above.
+  - Repository/RPM install: no self-update (zypper owns the files; user agreed).
+    The pop-up shows the changelog and tells the user how to update: run the
+    System update in OneUp, which updates the oneup package once the OBS repo
+    has built it. Offer only what the repo can deliver, since GitHub can be
+    ahead of OBS.
+  - A "Restart OneUp" button: after a run that updated OneUp itself the open
+    window still runs the old code, and nothing says so today (no restart
+    prompt exists, checked 2026-11-07). The user asked for a restart button
+    for users generally.
+  Ordering: the user asked for this now, so it moves ahead of 2.1's queue.
   **Layman:** OneUp will be able to update itself: it spots a new version, downloads it, closes, applies the update and reopens — instead of telling you a new version exists and leaving you to fetch it.
   Kind: feature.
   Source: user-request-2026-08-18.
@@ -11415,3 +11433,19 @@ when complete (that document's §7).
   **Layman:** New pictures of the 2.0 window for the website, using demo data only.
   Kind: marketing.
   Source: peer-request-website-2026-11-06.
+
+- 🚧 [ONEUP-0383] **In the AppImage, "View release" and "Open log file" open nothing.**
+  The user clicked "View release" on the update banner and nothing opened.
+  Cause, measured 2026-11-07: QDesktopServices.openUrl starts kde-open, which
+  inherits the PyInstaller bundle's LD_LIBRARY_PATH (its _MEI dir), loads the
+  bundle's older libQt6Core and dies on "version Qt_6.12 not found" (journal,
+  and reproduced against an isolated run of the AppImage). With the machine's
+  library path kde-open runs. Fix: paths.restore_machine_library_path(),
+  called first in app.main(), maps LD_LIBRARY_PATH back from
+  LD_LIBRARY_PATH_ORIG (or drops it) in a frozen build only. The process's
+  own loader read the variable at start-up, so OneUp itself is unaffected.
+  Test: gui-smoke, beside the frozen engine_argv checks.
+  The banner button itself is replaced by ONEUP-0112.
+  **Layman:** Buttons that should open a web page or the log file did nothing in the AppImage; now they open.
+  Kind: fix.
+  Source: user-report-2026-11-07.

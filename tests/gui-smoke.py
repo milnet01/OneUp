@@ -2405,6 +2405,25 @@ def main() -> int:
         check("an original LD_LIBRARY_PATH is restored instead",
               paths.engine_argv()[:2] == ["env", "LD_LIBRARY_PATH=/orig/lib"])
         os.environ.pop("LD_LIBRARY_PATH_ORIG")
+        # What openUrl starts (kde-open) inherits the process environment, not
+        # engine_argv's: the bundle's path there made "View release" do nothing.
+        _saved_ld = os.environ.get("LD_LIBRARY_PATH")
+        try:
+            os.environ["LD_LIBRARY_PATH"] = "/bundle/_MEIx"
+            paths.restore_machine_library_path()
+            check("startup drops the bundle's LD_LIBRARY_PATH for everything OneUp opens",
+                  "LD_LIBRARY_PATH" not in os.environ)
+            os.environ["LD_LIBRARY_PATH"] = "/bundle/_MEIx"
+            os.environ["LD_LIBRARY_PATH_ORIG"] = "/orig/lib"
+            paths.restore_machine_library_path()
+            check("and puts an original LD_LIBRARY_PATH back",
+                  os.environ.get("LD_LIBRARY_PATH") == "/orig/lib")
+        finally:
+            os.environ.pop("LD_LIBRARY_PATH_ORIG", None)
+            if _saved_ld is None:
+                os.environ.pop("LD_LIBRARY_PATH", None)
+            else:
+                os.environ["LD_LIBRARY_PATH"] = _saved_ld
         with (_src / "engine" / "markers.py").open("a") as _fh:
             _fh.write("\n# one more byte\n")
         paths.engine_argv()
