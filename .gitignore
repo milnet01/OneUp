@@ -12,6 +12,10 @@ dist/
 build/
 *.spec.bak
 
+# Private keys — above all the release signing key, which must never be committed
+# (ONEUP-0112 §4.9). It lives in ~/.config/oneup-release/, outside the tree.
+*.key
+
 # Editor / OS cruft
 *~
 .DS_Store

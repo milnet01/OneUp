@@ -26,7 +26,18 @@ from PySide6.QtCore import QCoreApplication, QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox
 
 from .. import APP_ID, APP_NAME
-from . import banners, i18n, markers, packages, paths, repos, step_progress, steps, tray
+from . import (
+    app_update,
+    banners,
+    i18n,
+    markers,
+    packages,
+    paths,
+    repos,
+    step_progress,
+    steps,
+    tray,
+)
 from .diagnostics import cache_bytes
 
 # How long the engine may produce NOTHING before the liveness line calls it stalled
@@ -1191,6 +1202,7 @@ def on_finished(win, exit_code: int, _status):
     win._buf = ""
     win._run_active = False
     win._liveness_active = False
+    app_update.refresh_restart(win)   # a run that updated OneUp itself offers a restart
     win.engine_finished = True     # the package pages' empty sentence reads it
     win.current_step = ""
     step_progress.stop_waiting(win)

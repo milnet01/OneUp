@@ -92,6 +92,12 @@ on, and the answer is unchanged.
   pins, this is not a ledger entry: nothing is held back. The RPM takes the distro's
   `python3-pyside6` and pins nothing. Requires only Qt 6 idioms (new-style `connect`, scoped
   enums where practical).
+- **cryptography** → **`50.0.2`**, with its dependencies **cffi** `2.1.1` and **pycparser**
+  `3.12`, in the AppImage build — current (2026-11-08: `pip index versions cryptography`
+  lists 50.0.2 as the newest, and resolving it beside the pinned PySide6 and PyInstaller
+  adds only those two). It checks a self-update's signature (ONEUP-0112 §4.10). The RPM
+  gains nothing: OneUp imports it only inside functions, so a package install, which never
+  verifies a download, runs without it (INV-17).
 - **jeepney** → **`0.9.0`** — current (2026-10-14: `pip index versions jeepney` lists
   0.9.0 as the newest, and Tumbleweed's `python313-jeepney` is `0.9.0-1.4`). The D-Bus
   library on both sides of the system service (ONEUP-0249 §4.3). The RPM takes the
@@ -115,6 +121,7 @@ curl -s https://endoflife.date/api/python.json | python3 -c 'import json,sys; pr
 # AppImage build packages — latest on PyPI; compare with packaging/appimage/requirements.txt,
 # and on a bump replace the whole set with the resolution that file's header names:
 python3 -m pip index versions PySide6 | head -1; python3 -m pip index versions pyinstaller | head -1
+python3 -m pip index versions cryptography | head -1
 # Host packages (openSUSE):
 zypper search -s --provides --match-exact python3-pyside6
 ```

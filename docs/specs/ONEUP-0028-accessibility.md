@@ -108,6 +108,11 @@ only the name made those two passages contradict each other (ONEUP-0162).
 | `services_banner` / `services_label` | "Services should restart" |
 | `warn_banner` / `warn_label` | "Warning" |
 | `appupdate_banner` / `appupdate_label` | "OneUp update available" |
+| `UpdateDialog.notes` | "Release notes" |
+| `UpdateDialog.progress` | "Download progress" |
+| `UpdateDialog.update_btn` | "Update OneUp now" |
+| `UpdateDialog.skip_btn` | "Skip this version of OneUp" |
+| `UpdateDialog.cancel_btn` | "Cancel the download" |
 | `RollbackDialog.list` | "Restore points" |
 
 `RepoManagerDialog._make_row` names each repo switch
@@ -116,7 +121,9 @@ on/off state (`"… — enabled"` would announce "enabled" for a disabled repo);
 state comes from `state().checked`, per the roles note above.
 
 The two new Settings controls (§3, §4) are ordinary text buttons and are named by
-their text, like the existing toggles.
+their text, like the existing toggles. So are the update banner's button — "What's new",
+or "Restart OneUp" once OneUp on disk is newer — and the pop-up's Later or Close button
+(ONEUP-0112).
 
 Buttons that already carry visible text need nothing: Qt derives the accessible
 name from the button text, and the accessible *description* from the tooltip when

@@ -5,7 +5,10 @@
 # These track the latest release; they are pinned, not held back
 # (docs/standards/dependencies.md). To bump, resolve the set afresh and replace
 # every line below:
-#   pip install --dry-run --ignore-installed --quiet --report - PySide6==X pyinstaller==Y
+#   pip install --dry-run --ignore-installed --quiet --report - \
+#       PySide6==X pyinstaller==Y cryptography==Z
+# cryptography checks a self-update's signature (ONEUP-0112 §4.10); cffi and pycparser
+# are its dependencies.
 PySide6==6.11.2
 PySide6_Addons==6.11.2
 PySide6_Essentials==6.11.2
@@ -15,3 +18,6 @@ pyinstaller-hooks-contrib==2026.8
 altgraph==0.17.5
 packaging==26.3
 setuptools==84.0.0
+cryptography==50.0.2
+cffi==2.1.1
+pycparser==3.12

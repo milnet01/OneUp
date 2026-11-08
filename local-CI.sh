@@ -119,6 +119,21 @@ else
     bad "tests/service-test.py (exit $rc)"; show_failure "$LOGS/service.log"
 fi
 
+# --- the self-update's Qt-free half (ONEUP-0112 §7) --------------------------
+# Versions, the release list, the signature, the swap, the relaunch and the signing
+# script, with a throwaway key and no network. Exit 77 means cryptography is not
+# installed here — a skip locally; release.yml installs it and fails on 77.
+step "Self-update suite"
+python3 tests/self-update-test.py >"$LOGS/selfupdate.log" 2>&1
+rc=$?
+if [[ $rc == 0 ]]; then
+    ok "tests/self-update-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/selfupdate.log" | tail -1)"
+elif [[ $rc == 77 ]]; then
+    skip "tests/self-update-test.py" "cryptography not installed"
+else
+    bad "tests/self-update-test.py (exit $rc)"; show_failure "$LOGS/selfupdate.log"
+fi
+
 # --- headless GUI smoke test ------------------------------------------------
 # Constructs the PySide6 window offscreen and feeds it engine markers. Exit 77
 # means PySide6 isn't installed here — a skip, not a failure (matches the

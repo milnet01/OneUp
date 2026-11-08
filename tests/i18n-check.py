@@ -219,8 +219,12 @@ WORD_LOGIC_EXEMPT = {
         "the engine's --steps= argument",
     ("oneup/gui/run.py", "_adopt_held_engine", "join ','"):
         "the go-ahead file's step list, read by the engine",
+    ("oneup/gui/self_update.py", "version_text", "join '.'"):
+        "a version number's X.Y.Z, the form its tag and the signature use",
     ("oneup/gui/theme.py", "derive_focus", "join ', '"):
         "an exception message naming colours, for a palette author",
+    ("oneup/gui/update_dialog.py", "notes_markdown", "join '\\n\\n'"):
+        "layout, not wording: Markdown's blank line between versions, each translated",
 }
 _CASE_CALLS = {"lower", "upper", "capitalize", "title", "swapcase", "casefold"}
 

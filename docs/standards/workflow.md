@@ -474,7 +474,7 @@ attaches it to the GitHub release.
 
 ## 8. Releasing
 
-`./release.sh X.Y.Z` does the whole thing. `--no-obs` stops after GitHub. The OBS step updates
+`./release.sh X.Y.Z` does the whole thing. `--no-obs` skips OBS. The OBS step updates
 `home:milnet:oneup`; the old `home:milnet` had its last update at 2.0.0 (`packaging/obs/README.md`).
 
 It validates its arguments first — `X.Y.Z` or nothing happens, and every option after it
@@ -486,7 +486,8 @@ exits on any of them:
 3. the tag `vX.Y.Z` does not already exist.
 
 Then, in order: bump the six sites → `./local-CI.sh` → show the diffstat → **ask for
-confirmation** → commit `OneUp X.Y.Z`, tag, push → update the OBS package via `osc`.
+confirmation** → commit `OneUp X.Y.Z`, tag, push → update the OBS package via `osc` → sign
+the AppImage.
 
 **A red gate stops it there, with the bump already written to your tree** — the same state a
 declined confirmation leaves. **The recovery is ordered, and the order matters**, because
@@ -518,11 +519,26 @@ Three things about that sequence are worth knowing before you run it:
   the commit fails, it says so and points at `packaging/obs/README.md` for the web-UI route.
   The GitHub release has already happened by then and is unaffected. The run then ends with
   *"OBS was NOT updated"* and exit status 3, never *"Released"*.
+- **The signing step waits for GitHub's build.** It runs after OBS, `--no-obs` included,
+  so neither failure skips the other. It waits for the tag's Release workflow, downloads
+  the AppImage into a temporary folder, signs it with the key on this PC, checks the
+  signature against the committed public key and uploads `OneUp-x86_64.AppImage.sig`.
+  Without that file no installed AppImage is offered the release (ONEUP-0112). With no
+  key, or any step failing, it says so in red and exits 4, which wins over OBS's 3.
+  `./release.sh --sign-only X.Y.Z` runs this step alone.
+
+**Once, before the first signed release, make the signing key:**
+`python3 packaging/sign-release.py --generate`. It writes the private key to
+`~/.config/oneup-release/signing.key` and prints a line to put in
+`oneup/gui/update_key.py`; commit that line. `$ONEUP_SIGNING_KEY` points `release.sh`
+elsewhere. **Back the key up.** `docs/standards/security.md` §13.5 says why.
 
 **A release that fails to publish is fixed, never re-versioned.** The user's rule,
 2026-11-06: *"A new version means we added something which we haven't."* When the tag's
 workflow or an OBS build fails, fix it, move the tag onto the fix, push it again, and re-run
 both OBS packages from the moved tag, so every copy of that version is the same source.
+The moved tag rebuilds the AppImage, so its old `.sig` no longer matches: finish with
+`./release.sh --sign-only X.Y.Z`, which replaces it.
 2.0.0 was finished this way twice (ONEUP-0378, ONEUP-0379).
 
 **What the user still has to do by hand:** nothing on the GitHub side — CI builds and

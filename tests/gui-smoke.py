@@ -20,6 +20,7 @@ import importlib.util
 import inspect
 import io
 import itertools
+import json
 import os
 import pkgutil
 import re
@@ -174,6 +175,7 @@ from oneup.gui import (  # noqa: E402 — same reason.
     repos,
     rollback,
     run,
+    self_update,
     settings_dialog,
     steps,
     symbols,
@@ -410,6 +412,339 @@ def _reap_windows():
     QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
+class _FakeReply:
+    """A QNetworkReply as `app_update._Fetch` reads one: chunks, then the end."""
+
+    def __init__(self, chunks=(), status=None, failed=False):
+        from PySide6.QtNetwork import QNetworkReply
+        self._errors = QNetworkReply.NetworkError
+        self.chunks = list(chunks)
+        self.status = status
+        self._error = self._errors.ContentAccessDenied if failed else self._errors.NoError
+        self.aborted = False
+
+    def readAll(self):
+        return self.chunks.pop(0) if self.chunks else b""
+
+    def abort(self):
+        self.aborted = True
+        self._error = self._errors.OperationCanceledError
+
+    def error(self):
+        return self._error
+
+    def attribute(self, _attr):
+        return self.status
+
+    def rawHeader(self, _name):
+        return b""
+
+    def deleteLater(self):
+        pass
+
+
+def _fetched(cap, done, chunks=(), **kwargs):
+    """Drive one capped request to its end with a fake reply, as Qt would."""
+    fetch = app_update._Fetch(cap, done)
+    fetch.reply = _FakeReply(chunks, **kwargs)
+    while fetch.reply.chunks and not fetch.over:
+        fetch.on_ready()
+    fetch.on_finished()
+    return fetch
+
+
+def _releases_json(*releases) -> bytes:
+    """(version text, signed, body) triples as the releases list endpoint returns them."""
+    base = "https://github.com/milnet01/OneUp/releases/download"
+    out = []
+    for version, signed, body in releases:
+        assets = [{"name": self_update.ASSET, "size": 4,
+                   "browser_download_url": f"{base}/v{version}/{self_update.ASSET}"}]
+        if signed:
+            assets.append({"name": self_update.SIG_ASSET, "size": 64,
+                           "browser_download_url": f"{base}/v{version}/{self_update.SIG_ASSET}"})
+        out.append({"tag_name": f"v{version}", "draft": False, "prerelease": False,
+                    "body": body, "assets": assets})
+    return json.dumps(out).encode()
+
+
+def _self_update_scenarios():
+    """ONEUP-0112 §7: the offer per install kind, the pop-up, the download's caps and
+    order, Skip, the restart banner and the run gate. No request leaves the process:
+    every reply is a fake fed to the real handlers."""
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QDesktopServices
+
+    installed = self_update.parse_version(app_update.APP_VERSION)
+    v1 = self_update.version_text((installed[0], installed[1] + 1, 0))
+    v2 = self_update.version_text((installed[0], installed[1] + 2, 0))
+    lists = functools.partial(_fetched, app_update.LIST_CAP)
+    boxes = []
+
+    class _Box:
+        @staticmethod
+        def warning(_parent, _title, text, *_args):
+            boxes.append(("warning", text))
+
+        @staticmethod
+        def information(_parent, _title, text, *_args):
+            boxes.append(("information", text))
+
+    mark = len(_PATCHES)
+    here_at_start = paths.HERE
+    real_relaunch_and_quit = app_update._relaunch_and_quit
+    saved_appimage = os.environ.get("APPIMAGE")
+    _patch(app_update, "QMessageBox", _Box)
+    _patch(self_update, "install_kind", lambda: "checkout")
+    try:
+        # --- INV-19: a failed check is silent at start-up and named on a manual one.
+        w = window.Updater()
+        for manual in (False, True):
+            boxes.clear()
+            try:
+                on = functools.partial(app_update._on_releases, w, manual)
+                lists(on, status=403, failed=True)
+                lists(on, [b"<html>not json</html>"])
+                lists(on, [b'{"message": "Not Found"}'])
+                raised = ""
+            except Exception as exc:  # noqa: BLE001 — any escape is the defect under test
+                raised = repr(exc)
+            if manual:
+                texts = [t for _k, t in boxes]
+                check("ONEUP-0112 INV-19 a manual check names the rate limit, then an "
+                      f"unreadable reply twice ({raised or texts})",
+                      not raised and len(texts) == 3 and "GitHub limits" in texts[0]
+                      and texts[1] == texts[2] == app_update._unreadable())
+            else:
+                check(f"ONEUP-0112 INV-19 a failed automatic check shows nothing ({raised})",
+                      not raised and not boxes)
+
+        # --- INV-4: on a package install only the software source makes an offer.
+        _patch(self_update, "install_kind", lambda: "package")
+        wP = window.Updater()
+        lists(functools.partial(app_update._on_releases, wP, False),
+              [_releases_json(("9.0.0", True, "Big news."))])
+        check("ONEUP-0112 INV-4 a newer GitHub release alone shows no banner on a package",
+              wP.appupdate_banner.isHidden())
+        run.handle_line(wP, f"@@CHECK_ITEM@@|system|oneup|{app_update.APP_VERSION}-1.1|{v1}-1.1")
+        check(f"ONEUP-0112 INV-4 the software source's oneup row offers {v1}",
+              not wP.appupdate_banner.isHidden() and v1 in wP.appupdate_label.text()
+              and wP.appupdate_btn.text() == "What's new")
+        _patch(self_update, "install_kind", lambda: "checkout")
+
+        # --- INV-5 and INV-18: the notes open nothing, and the pop-up is non-modal.
+        wN = window.Updater()
+        wN.show()
+        body = "See [the site](https://example.com/notes) and ![shot](https://example.com/a.png)."
+        lists(functools.partial(app_update._on_releases, wN, False),
+              [_releases_json((v1, True, body), (app_update.APP_VERSION, True, "old"))])
+        app_update.open_dialog(wN)
+        dlg = wN._update_dialog
+        opened, clicked = [], []
+        _patch(QDesktopServices, "openUrl", lambda url: opened.append(url) or True)
+        dlg.notes.anchorClicked.connect(lambda url: clicked.append(url.toString()))
+        QTest.qWaitForWindowExposed(dlg)
+        dlg.notes.setFocus()
+        QTest.keyClick(dlg.notes, Qt.Key_Tab)
+        QTest.keyClick(dlg.notes, Qt.Key_Return)
+        check("ONEUP-0112 INV-5 activating a link in the notes opens nothing "
+              f"(activated {clicked}, opened {opened})",
+              clicked == ["https://example.com/notes"] and not opened
+              and not dlg.notes.openLinks() and not dlg.notes.openExternalLinks()
+              and dlg.notes.source() == QUrl())
+        check("ONEUP-0112 the notes hold this version's heading and body",
+              f"Version {v1}" in dlg.notes.toPlainText() and "See" in dlg.notes.toPlainText())
+        for name in ("app_update.py", "update_dialog.py"):
+            src = (REPO / "oneup" / "gui" / name).read_text()
+            check(f"ONEUP-0112 INV-5 {name} never calls openUrl", "openUrl" not in src)
+        check("ONEUP-0112 INV-18 the pop-up is not modal and never exec()s",
+              not dlg.isModal() and ".exec(" not in
+              (REPO / "oneup" / "gui" / "update_dialog.py").read_text())
+        dlg.close()
+
+        # --- INV-14: Skip persists across windows; a newer version is offered again.
+        w1 = window.Updater()
+        w1.settings.remove(app_update.SKIP_KEY)
+        lists(functools.partial(app_update._on_releases, w1, False),
+              [_releases_json((v1, True, "n"))])
+        app_update.open_dialog(w1)
+        w1._update_dialog.skip_btn.click()
+        check(f"ONEUP-0112 INV-14 Skip stores {v1} and hides the banner",
+              w1.settings.value(app_update.SKIP_KEY) == v1 and w1.appupdate_banner.isHidden()
+              and w1._update_dialog is None)
+        w2 = window.Updater()
+        lists(functools.partial(app_update._on_releases, w2, False),
+              [_releases_json((v1, True, "n"))])
+        check("ONEUP-0112 INV-14 a new window offered the skipped version shows no banner",
+              w2.appupdate_banner.isHidden())
+        lists(functools.partial(app_update._on_releases, w2, False),
+              [_releases_json((v2, True, "n"), (v1, True, "n"))])
+        check(f"ONEUP-0112 INV-14 a newer {v2} is offered again",
+              not w2.appupdate_banner.isHidden() and v2 in w2.appupdate_label.text())
+        app_update.open_dialog(w2)
+        w2._update_dialog.close_btn.click()
+        check("ONEUP-0112 INV-14 Later stores nothing",
+              w2.settings.value(app_update.SKIP_KEY) == v1)
+        w1.settings.remove(app_update.SKIP_KEY)
+
+        # --- INV-7, INV-11, INV-18: the AppImage download, in order and capped.
+        _patch(self_update, "install_kind", lambda: "appimage")
+        apps = Path(_SANDBOX) / "apps-0112"
+        apps.mkdir()
+        target = apps / self_update.ASSET
+        target.write_bytes(b"old AppImage")
+        target.chmod(0o755)
+        os.environ["APPIMAGE"] = str(target)
+        wU = window.Updater()
+        lists(functools.partial(app_update._on_releases, wU, False),
+              [_releases_json((v2, False, "unsigned"), (v1, True, "signed"))])
+        release = wU._update_release
+        check(f"ONEUP-0112 an AppImage is offered the newest SIGNED release, {v1}",
+              release is not None and self_update.version_text(release.version) == v1)
+        app_update.open_dialog(wU)
+        dlg = wU._update_dialog
+        miss = [f"{type(x).__name__}" for x in dlg.findChildren(QWidget)
+                if x.focusPolicy() != Qt.NoFocus
+                and not (x.accessibleName() or (getattr(x, "text", lambda: "")() or "")).strip()]
+        check(f"ONEUP-0112 INV-18 every control in the pop-up is named (unnamed: {miss})",
+              not miss)
+        started = []
+        _patch(app_update, "_get", lambda _win, url, cap, _done, _progress=None:
+               started.append((url, cap)))
+        app_update._update_now(wU)
+        check("ONEUP-0112 Update now shows the progress bar and Cancel",
+              dlg.progress.isVisibleTo(dlg) and dlg.cancel_btn.isVisibleTo(dlg)
+              and dlg.update_btn.isHidden())
+        sig_step = functools.partial(app_update._on_sig, wU, release)
+        _fetched(app_update.SIG_CAP, sig_step, [b"s" * 63])
+        check("ONEUP-0112 INV-6 a .sig that is not 64 bytes fetches no AppImage",
+              not started and dlg.message.text() == app_update._not_proved())
+        _fetched(app_update.SIG_CAP, sig_step, [b"s" * 64])
+        check("ONEUP-0112 INV-7 a 64-byte .sig, then the AppImage, capped at 256 MiB",
+              started == [(release.appimage_url, app_update.APPIMAGE_CAP)])
+        over = _fetched(app_update.SIG_CAP, sig_step, [b"s" * (app_update.SIG_CAP + 1)])
+        check("ONEUP-0112 INV-11 a .sig one byte over 1 KiB is aborted",
+              over.reply.aborted and over.data is None and len(started) == 1
+              and dlg.message.text() == app_update._didnt_finish())
+
+        payload = os.urandom(4096)
+        tmp = Path(tempfile.gettempdir())
+        before = {p.name for p in tmp.iterdir()}, sorted(os.listdir(apps))
+        seen, installs = [], []
+        real_install = self_update.install
+
+        def _holds_payload(folder, names):
+            for name in names:
+                with contextlib.suppress(OSError):
+                    if (folder / name).is_file() and (folder / name).read_bytes() == payload:
+                        return True
+            return False
+
+        def _verify_fails(data, sig, version):
+            new_tmp = {p.name for p in tmp.iterdir()} - before[0]
+            seen.append((_holds_payload(tmp, new_tmp), sorted(os.listdir(apps))))
+            raise self_update.UpdateVerificationError("not signed")
+
+        _patch(self_update, "verify", _verify_fails)
+        _patch(self_update, "install", lambda data, path: installs.append(path))
+        appimage_step = functools.partial(app_update._on_appimage, wU, release, b"s" * 64)
+        _fetched(app_update.APPIMAGE_CAP, appimage_step, [payload])
+        check("ONEUP-0112 INV-7 nothing from the download is on disk while it is verified",
+              seen == [(False, before[1])])
+        check("ONEUP-0112 INV-7 a download that fails verify is never installed",
+              not installs and target.read_bytes() == b"old AppImage"
+              and dlg.message.text() == app_update._not_proved())
+        mib = b"x" * (1 << 20)
+        over = _fetched(app_update.APPIMAGE_CAP, appimage_step,
+                        [mib] * (app_update.APPIMAGE_CAP >> 20) + [b"x"])
+        check("ONEUP-0112 INV-11 an AppImage one byte over 256 MiB is aborted, nothing written",
+              over.reply.aborted and len(seen) == 1 and not installs
+              and target.read_bytes() == b"old AppImage")
+        del mib, over
+        over = _fetched(app_update.LIST_CAP, functools.partial(app_update._on_releases, wU, True),
+                        [b"[" + b" " * app_update.LIST_CAP])
+        check("ONEUP-0112 INV-11 a release list one byte over 1 MiB is aborted and unread",
+              over.reply.aborted and boxes[-1] == ("warning", app_update._unreadable()))
+
+        relaunched = []
+        _patch(self_update, "verify", lambda data, sig, version: None)
+        _patch(self_update, "install", real_install)
+        _patch(app_update, "_relaunch_and_quit",
+               lambda _win, argv, quit_anyway: relaunched.append((argv, quit_anyway)))
+        wU._run_active = True
+        _fetched(app_update.APPIMAGE_CAP, appimage_step, [payload])
+        check("ONEUP-0112 INV-12 a run started during the download stops the swap",
+              target.read_bytes() == b"old AppImage" and not relaunched)
+        wU._run_active = False
+        _fetched(app_update.APPIMAGE_CAP, appimage_step, [payload])
+        check("ONEUP-0112 a verified download replaces the AppImage, then relaunches it",
+              target.read_bytes() == payload and relaunched == [([str(target)], True)])
+
+        # --- INV-12: Update now waits for a run, and comes back when it ends.
+        wU._run_active, wU._check_mode = True, True
+        wU.set_controls_enabled(False)
+        check("ONEUP-0112 INV-12 Update now is disabled during a run, saying why",
+              not dlg.update_btn.isEnabled() and dlg.update_btn.toolTip() != "")
+        run.on_finished(wU, 0, None)
+        check("ONEUP-0112 INV-12 and enabled when the run ends",
+              dlg.update_btn.isEnabled() and dlg.update_btn.toolTip() == "")
+        dlg.close()
+        _patch(self_update, "install_kind", lambda: "checkout")
+        _patch(app_update, "_relaunch_and_quit", real_relaunch_and_quit)
+
+        # --- INV-13 and INV-12: the restart banner, only for a newer OneUp on disk.
+        here = Path(_SANDBOX) / "here-0112"
+        (here / "oneup").mkdir(parents=True)
+        lines = {"newer": f'APP_VERSION = "{v1}"\n',
+                 "equal": f'APP_VERSION = "{app_update.APP_VERSION}"\n',
+                 "older": 'APP_VERSION = "0.9.0"\n', "absent": 'APP_ID = "x"\n'}
+        restart_shown = {}
+        for case, line in lines.items():
+            wR = window.Updater()
+            (here / "oneup" / "__init__.py").write_text(line)
+            paths.HERE = here           # restored below, before the next window is built
+            wR._run_active, wR._check_mode = True, True
+            wR.set_controls_enabled(False)
+            run.on_finished(wR, 0, None)
+            restart_shown[case] = (wR._update_mode == "restart"
+                                   and not wR.appupdate_banner.isHidden()
+                                   and wR.appupdate_btn.text() == "Restart OneUp")
+            if case == "newer":
+                check("ONEUP-0112 INV-12 Restart OneUp is enabled once the run has ended",
+                      wR.appupdate_btn.isEnabled())
+                wR._run_active = True
+                wR.set_controls_enabled(False)
+                check("ONEUP-0112 INV-12 and disabled while a run is in flight",
+                      not wR.appupdate_btn.isEnabled() and wR.appupdate_btn.toolTip() != "")
+                wR._run_active = False
+                wR.set_controls_enabled(True)
+                spawned, quits = [], []
+                _patch(self_update, "relaunch", spawned.append)
+                wR._quit_requested = functools.partial(quits.append, True)
+                wR._tray = object()          # resident, and hidden in the tray
+                wR.hide()
+                wR.appupdate_btn.click()
+                check("ONEUP-0112 Restart OneUp relaunches this OneUp in the tray, then quits "
+                      f"({spawned}, {quits})",
+                      spawned == [[sys.executable, str(here / "updater.py"), "--tray"]]
+                      and quits == [True])
+                wR._tray = None
+            paths.HERE = here_at_start
+        check(f"ONEUP-0112 INV-13 the restart banner shows for a newer OneUp only "
+              f"({restart_shown})",
+              restart_shown == {"newer": True, "equal": False, "older": False,
+                                "absent": False})
+    finally:
+        paths.HERE = here_at_start
+        if saved_appimage is None:
+            os.environ.pop("APPIMAGE", None)
+        else:
+            os.environ["APPIMAGE"] = saved_appimage
+        while len(_PATCHES) > mark:
+            mod, name, orig = _PATCHES.pop()
+            setattr(mod, name, orig)
+
+
 def main() -> int:
     # The shim is loaded for what loading it PROVES — that the thing every launcher
     # names still starts the app — not for anything read off the module afterwards;
@@ -432,6 +767,10 @@ def main() -> int:
     # check or its reply handler, so stubbing it costs no coverage. Must happen
     # before the first Updater() below.
     app_update._check_app_update = lambda self, manual=False: None
+    # The self-update's two other requests, stubbed for the same reason (ONEUP-0112 §7):
+    # the pop-up's notes fetch and the download. Their scenarios drive the handlers.
+    app_update._fetch_notes = lambda self: None
+    app_update._start_download = lambda self, release: None
 
     # Same argument, same place, for the same reason (ONEUP-0099). Every Updater() runs
     # _query_auth_status, whose settle can now reach _stand_down_autoupdate — and that
@@ -1046,6 +1385,8 @@ def main() -> int:
           absurd_ok)
     check("a real x-ratelimit-reset still says when to try again (ONEUP-0089)",
           "Try again after" in app_update._update_check_error(_RateLimitedReply(b"1760000000")))
+
+    _self_update_scenarios()
 
     # --- Stop button (ONEUP-0047) -----------------------------------------------
     # Stop is deliberately cooperative: it asks, and the engine honours it at a safe
@@ -6261,8 +6602,10 @@ for th in theme.THEMES:
               any("alpha" in t and app.translate("steps", "downloaded") in t
                   for t in _package_lines(w6)))
         check(f"ONEUP-0239 INV-6 only the current layout listens to the model ({_lid})",
-              # The details store listens for the window's whole life (ONEUP-0260).
-              len([c for c in w6.packages._callbacks if c != w6.details._on_model]) == 1)
+              # The details store (ONEUP-0260) and the update offer (ONEUP-0112) listen
+              # for the window's whole life.
+              len([c for c in w6.packages._callbacks
+                   if c not in (w6.details._on_model, w6._update_on_packages)]) == 1)
         run.handle_line(w6, "@@PKG@@|system|downloading|beta|2")   # a fresh state to carry
 
     # INV-7: each layout lays out every shared control exactly once.

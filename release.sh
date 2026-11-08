@@ -6,25 +6,36 @@
 #   3. commit, tag vX.Y.Z, push to GitHub — which builds the AppImage and publishes
 #      the release (and the in-app update check then points users at it),
 #   4. update the OBS package home:milnet:oneup/oneup via osc — which rebuilds the
-#      zypper RPM so repo users get it on their next `zypper up`.
+#      zypper RPM so repo users get it on their next `zypper up`,
+#   5. wait for GitHub's build, sign the AppImage on this PC and upload the signature,
+#      without which no installed AppImage is offered the update (ONEUP-0112 §4.9).
 #
 # Usage:
-#   ./release.sh X.Y.Z            full release (GitHub + OBS)
-#   ./release.sh X.Y.Z --no-obs   GitHub only (do the OBS step later / by hand)
+#   ./release.sh X.Y.Z               full release (GitHub + OBS + signature)
+#   ./release.sh X.Y.Z --no-obs      GitHub and signature only (OBS later / by hand)
+#   ./release.sh --sign-only X.Y.Z   sign an existing release again, after a moved tag
 #
 # Prereqs: a clean tree on main, your changes already written under CHANGELOG's
-# ## [Unreleased] section, and (for the OBS step) a configured `osc`.
+# ## [Unreleased] section, a configured `osc` (for OBS), `gh` signed in, and the
+# signing key at ~/.config/oneup-release/signing.key, or wherever $ONEUP_SIGNING_KEY
+# points (made once with `python3 packaging/sign-release.py --generate`).
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
 
 die() { echo "release: $*" >&2; exit 1; }
 
+sign_only=false
+if [[ "${1:-}" == --sign-only ]]; then
+    sign_only=true
+    shift
+fi
 ver=${1:-}
-[[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "usage: ./release.sh X.Y.Z [--no-obs]"
+[[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+    || die "usage: ./release.sh X.Y.Z [--no-obs]  or  ./release.sh --sign-only X.Y.Z"
 do_obs=true
 for arg in "${@:2}"; do    # every option, not just the second word (ONEUP-0186)
     case "$arg" in
-        --no-obs) do_obs=false ;;
+        --no-obs) $sign_only && die "--sign-only takes no other option"; do_obs=false ;;
         *)        die "unknown option $arg (expected --no-obs)" ;;
     esac
 done
@@ -42,8 +53,55 @@ obs_projects=(home:milnet:oneup)
 # ever when it was actually made.
 work=""
 cleanup() { [[ -n "$work" && -d "$work" ]] && rm -rf -- "$work"; }
-trap cleanup EXIT
+# The download is signed in a folder of its own: the .sig is not git-ignored, and an
+# untracked file in the tree stops the next release's clean-tree check.
+sigdir=""
+trap 'cleanup; [[ -n "$sigdir" && -d "$sigdir" ]] && rm -rf -- "$sigdir"' EXIT
 trap 'exit 130' INT TERM
+
+red() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
+
+# Wait for v$ver's Release build, then sign its AppImage, verify the signature
+# against the COMMITTED public key — the check every AppImage makes — and upload it.
+# --clobber replaces the .sig a moved tag left behind. Returns non-zero on any failure.
+sign_release() {
+    local key="${ONEUP_SIGNING_KEY:-$HOME/.config/oneup-release/signing.key}" sha run
+    local asset=OneUp-x86_64.AppImage
+    echo "==> Signing the AppImage for v$ver"
+    if [[ ! -f "$key" ]]; then
+        red "   No signing key at $key — make one with 'python3 packaging/sign-release.py --generate'."
+        return 1
+    fi
+    command -v gh >/dev/null 2>&1 || { red "   gh is not installed."; return 1; }
+    sha=$(git rev-parse "v$ver^{commit}") || return 1
+    # The run appears a few seconds after the push.
+    for _ in $(seq 1 30); do
+        run=$(gh run list --workflow release.yml --commit "$sha" --limit 1 \
+                  --json databaseId -q '.[0].databaseId' 2>/dev/null)
+        [[ -n "$run" ]] && break
+        sleep 10
+    done
+    [[ -n "$run" ]] || { red "   No Release workflow run found for v$ver."; return 1; }
+    echo "   Waiting for GitHub to build the AppImage (run $run)…"
+    gh run watch "$run" --exit-status >/dev/null \
+        || { red "   The Release workflow failed, so there is no AppImage to sign."; return 1; }
+    sigdir=$(mktemp -d) || return 1
+    gh release download "v$ver" --pattern "$asset" --dir "$sigdir" \
+        || { red "   Couldn't download $asset from the v$ver release."; return 1; }
+    python3 packaging/sign-release.py --version "$ver" --key "$key" "$sigdir/$asset" \
+        || { red "   Signing failed."; return 1; }
+    python3 packaging/sign-release.py --verify --version "$ver" "$sigdir/$asset" \
+        || { red "   The signature does not verify against oneup/gui/update_key.py's public key."; return 1; }
+    gh release upload "v$ver" "$sigdir/$asset.sig" --clobber \
+        || { red "   Couldn't upload the signature."; return 1; }
+    echo "   Signed and uploaded $asset.sig."
+}
+
+if $sign_only; then
+    git rev-parse "v$ver" >/dev/null 2>&1 || die "there is no tag v$ver"
+    sign_release || { red "release: v$ver is NOT signed — no AppImage will be offered it."; exit 4; }
+    exit 0
+fi
 
 [[ -z "$(git status --porcelain)" ]] || die "working tree not clean — commit or stash first"
 [[ "$(git rev-parse --abbrev-ref HEAD)" == "main" ]] || die "not on the main branch"
@@ -115,12 +173,22 @@ if $do_obs; then
     done
 fi
 
+# After OBS, --no-obs included, so neither failure skips the other (ONEUP-0112 §4.9).
+signed=true
+sign_release || signed=false
+
 # A release whose OBS half failed is not a clean release, and exiting 0 with
 # "Released" said it was (ONEUP-0186). GitHub has it either way; say what is left.
 obs_done=true
 $do_obs && [[ "${obs_updated:-}" != true ]] && obs_done=false
 
 echo
+# An unsigned release is offered to no AppImage, so its exit (4) wins over OBS's (3).
+if ! $signed; then
+    red "==> Released $ver, but the AppImage is NOT signed — fix that, then run ./release.sh --sign-only $ver"
+    $obs_done || echo "   OBS was NOT updated either — do that by hand (see above)."
+    exit 4
+fi
 if ! $obs_done; then
     echo "==> Released $ver to GitHub, but OBS was NOT updated — do that by hand (see above)."
     echo "   AppImage:  https://github.com/milnet01/OneUp/releases/tag/v$ver  (once CI finishes)"

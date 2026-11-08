@@ -8,8 +8,19 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
-- **In the AppImage, buttons that open a web page or the log file now open it** (ONEUP-0383)
-  "View release" and "Open log file" did nothing, because the program that opens links crashed on OneUp's own bundled libraries.
+- **In the AppImage, links and the log file now open** (ONEUP-0383)
+  "Open log file" and the About box's links did nothing, because the program that opens links crashed on OneUp's own bundled libraries.
+
+### Added
+
+- **OneUp shows what's new in every version since yours, inside OneUp** (ONEUP-0112)
+  When a newer OneUp is out, the banner's *What's new* button opens a window with each newer version's notes. Nothing opens a web page any more.
+
+- **The AppImage updates itself** (ONEUP-0112)
+  *Update now* downloads the new AppImage, checks its signature to prove it comes from OneUp's author, replaces the file and reopens OneUp. A download that cannot be proved genuine is never installed, and OneUp never asks for your password to do this.
+
+- **After the System update installs a new OneUp, a "Restart OneUp" button loads it** (ONEUP-0112)
+  Installed from the openSUSE repository, OneUp tells you when the software source has a newer OneUp, and offers to restart once the System update has installed it.
 
 ## [2.0.0] - 2026-11-06
 

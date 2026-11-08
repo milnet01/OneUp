@@ -93,6 +93,12 @@ jobs:
             [ "$rc" -eq 77 ] || exit "$rc"
           }
 
+      # The self-update's Qt-free half (ONEUP-0112 §7). Mirrors local-CI.sh. After the
+      # requirements install above, which brings cryptography — so exit 77 here fails
+      # the step: it would mean the AppImage cannot check an update's signature.
+      - name: Self-update suite
+        run: python tests/self-update-test.py
+
       # The same suite mirrored right-to-left (ONEUP-0032 INV-5). Mirrors local-CI.sh.
       - name: GUI smoke test (offscreen, right-to-left)
         run: |

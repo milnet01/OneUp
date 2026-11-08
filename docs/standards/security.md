@@ -17,7 +17,8 @@ project's own prior description, the correction is stated in place.
 
 **Sections:** the threat model · 1 the privilege boundary · 2 one authentication per run · 3 attributable
 prompts · 4 validate at the boundary · 5 the passwordless drop-in · 6 cooperative
-stopping · 7 logs · 8 supply chain · 9 traps · 10 before you commit · what checks this · 11 cold-eyes log
+stopping · 7 logs · 8 supply chain · 9 traps · 10 before you commit · 12 the system service ·
+13 the self-update · what checks this · 11 cold-eyes log
 
 ---
 
@@ -706,6 +707,39 @@ lock (INV-6).
 journal line** (INV-14). With no session and no job for the idle period, the service exits
 (INV-15).
 
+## 13. The self-update
+
+An AppImage replaces itself with a newer one (ONEUP-0112). The spec,
+`docs/specs/ONEUP-0112-self-update.md`, holds the design. These are the rules a change to
+it must keep.
+
+**13.1 — Nothing downloaded is installed unless its signature verifies** against the
+public key built into OneUp, in `oneup/gui/update_key.py`. The signature covers the
+asset's name, the release's version and its bytes. So a genuine older AppImage, re-attached
+to a newer tag, fails (INV-6).
+
+**13.2 — The bytes verified are the bytes written.** The download stays in memory until it
+verifies, and nothing from it reaches the disk before then (INV-7). Every read is capped as
+it arrives, not by its `Content-Length` (INV-11).
+
+**13.3 — The self-update never asks for root.** An AppImage in a folder its user cannot
+write is reported and left alone (INV-9). A package install never updates itself: zypper
+owns its files.
+
+**13.4 — `oneup/gui/app_update.py` is the only module that makes network requests**
+(INV-15). Nothing in the feature opens a browser (INV-5).
+
+**13.5 — The private signing key lives only on the PC that signs releases.** By default
+that is `~/.config/oneup-release/signing.key`, made once by
+`packaging/sign-release.py --generate`. It is never committed (`*.key` is git-ignored),
+never stored on GitHub, and never read by a Claude session. **Back it up.** Without it no
+later release can be signed, and every installed AppImage refuses every update until its
+user downloads one by hand.
+
+**13.6 — What is not defended.** This PC signs what GitHub's CI built. A compromise of the
+CI build itself, before signing, is signed like any other build. The pinned build set
+(ONEUP-0060) is the only defence there.
+
 ## What checks this
 
 | Rule | What catches a breach |
@@ -736,6 +770,12 @@ journal line** (INV-14). With no session and no job for the idle period, the ser
 | §2.5 the route follows polkit's PackageKit action, and a run nobody started never prompts | `tests/service-test.py` — the route against a fake polkit that lists the action, lacks it, errs or stays silent (INV-18); `tests/gui-smoke.py` — the window follows it; `tests/run-tests.sh` — a timer run with no drop-in never reaches `sudo -A`, beside a hand-started control (INV-19) |
 | §12.1–12.8 the system service's rules | `tests/service-test.py` — a private bus, a fake polkit and mock binaries; each invariant the section cites has its own scenario there. INV-13 is a structural check in `tests/run-tests.sh` |
 | §1.2 and §2.5 the service route runs no `sudo` and prints what the sudo route prints | `tests/run-tests.sh` — the same update on both routes against one set of mocks: zero `sudo` calls on the service route, and equal marker streams (INV-8) |
+| §13.1 nothing installs without a valid signature | `tests/self-update-test.py` — a flipped byte, a short signature, another version's signature and another key's each fail; `tests/gui-smoke.py` — a download that fails verification is never installed |
+| §13.2 the bytes verified are the bytes written, and every read is capped | `tests/gui-smoke.py` — nothing from the download is on disk while it is verified, and one byte over each cap aborts the read |
+| §13.3 the self-update never asks for root | `tests/self-update-test.py` — an unwritable folder is refused before anything is written, and `self_update.py` names no privileged route |
+| §13.4 one module reaches the network, and nothing opens a browser | `tests/imports-test.py` (INV-15); `tests/gui-smoke.py` — activating a link in the notes opens nothing |
+| §13.5 no private key is tracked | `tests/self-update-test.py` — `git ls-files` holds no `*.key` and no private-key block. **Nothing checks that the key is backed up** |
+| §13.6 the CI build itself | nothing automatic |
 | §2.4 a new process group, never a new session | `tests/run-tests.sh` — run under `script` for a real terminal, the keep-alive's refresh comes from the engine's session and terminal, and from a group that is not the engine's |
 
 **This is the best-gated standard in the set**, and the reason is worth copying rather than

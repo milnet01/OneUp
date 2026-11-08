@@ -252,7 +252,6 @@ class Updater(QMainWindow):
         self._remedy_skips: list[str] = []  # aliases to offer "Skip … & update the rest" for
         self._remedy_unknown: list[str] = []  # REMEDY codes this window has no action for
         self._log_path: Path | None = None
-        self._latest_tag = ""
         self._warn_repo_dup = False   # is the current warning a duplicate-repo one?
         self._warn_snapshots = False  # pre-flight: many Btrfs snapshots may be using disk
         self._snapshot_count = 0      # how many, for the banner text
@@ -733,8 +732,8 @@ class Updater(QMainWindow):
         self.warn_banner.layout().addWidget(self.retry_btn)
 
         self.appupdate_banner, self.appupdate_label, self.appupdate_btn = banners._make_banner(self,
-            "InfoBanner", "BannerBtn", QCoreApplication.translate("window", "View release"),
-            partial(app_update._open_release, self),
+            "InfoBanner", "BannerBtn", QCoreApplication.translate("window", "What's new"),
+            partial(app_update.banner_clicked, self),
             name=QCoreApplication.translate("window", "OneUp update available"))
         # The one fixed place the four banners show, in this order (ONEUP-0239 §4.4).
         self.message_strip = banners.MessageStrip(
@@ -811,9 +810,9 @@ class Updater(QMainWindow):
         # On Wayland restoreGeometry() brings back the size only; the position is replayed
         # through KWin on each show (ONEUP-0246, showEvent).
 
-        # Non-blocking: is there a newer OneUp release? Only if the user lets it ask.
-        if self.appcheck_btn.isChecked():
-            app_update._check_app_update(self)
+        # Non-blocking: is there a newer OneUp release? Only if the user lets it ask, and
+        # never from GitHub on a package install, where the software source decides.
+        app_update.attach(self, check=self.appcheck_btn.isChecked())
 
         # Non-blocking: reflect whether passwordless authorization is active.
         auth._query_auth_status(self)
@@ -1458,6 +1457,7 @@ class Updater(QMainWindow):
             self._stop_asked = False
             self.stop_btn.setText(QCoreApplication.translate("window", "Stop"))
             run.sync_stop(self)
+        app_update.sync_run_state(self)   # Update now and Restart OneUp wait for a run
 
     def show_about(self):
         """A small About window: version, licence, links, and a manual update check."""

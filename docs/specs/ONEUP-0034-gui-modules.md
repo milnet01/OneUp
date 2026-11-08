@@ -126,7 +126,10 @@ owns the subsystem it serves, and what stays in `window.py` is what the window i
 | `oneup/gui/rollback.py` | `RollbackDialog`, snapshot thinning and the rollback call behind it | going back to a snapshot |
 | `oneup/gui/autostart.py` | the autostart desktop file, both systemd user timers, `_headless_command` | running OneUp without being asked to |
 | `oneup/gui/tray.py` | the tray icon, its background check, the single-instance socket, `TRAY_*` | living in the system tray |
-| `oneup/gui/app_update.py` | `_version_tuple`, the GitHub release check, its reply, and opening the release page | asking GitHub whether a newer OneUp exists |
+| `oneup/gui/app_update.py` | the GitHub releases check, its reply, the offer per install kind, the AppImage download, the update banner | asking GitHub whether a newer OneUp exists, and acting on the answer |
+| `oneup/gui/self_update.py` | `parse_version`, `releases_from_json`, `install_kind`, `verify`, `install`, `relaunch`, `disk_version` | judging and installing a newer OneUp, with no Qt and no network (ONEUP-0112) |
+| `oneup/gui/update_key.py` | `RELEASE_PUBLIC_KEY_B64`, `public_key` | the key a downloaded AppImage must be signed by |
+| `oneup/gui/update_dialog.py` | `UpdateDialog`, `notes_markdown` | the What's new pop-up |
 | `oneup/gui/auth.py` | reading, enabling and disabling passwordless authentication | the "don't ask for my password" setting |
 | `oneup/gui/banners.py` | the reboot, info and warning banners and their remedy actions | telling the user what went wrong and offering the one thing that fixes it |
 | `oneup/gui/run.py` | the run's `QProcess`, its argv, marker application, the activity clock, end-of-run, `STALL_SECONDS` | one update run, from Run to the summary |

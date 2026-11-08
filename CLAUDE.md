@@ -26,6 +26,7 @@ python3 -m oneup.engine --check --sizes       # the same, with each package's do
 tests/run-tests.sh                      # engine suite; non-zero exit on any failure
 python3 tests/gui-smoke.py              # window suite (needs PySide6; exit 77 = skipped)
 python3 tests/service-test.py           # system service suite (needs dbus-daemon, jeepney; 77 = skipped)
+python3 tests/self-update-test.py       # self-update suite (needs cryptography; 77 = skipped)
 ./local-CI.sh                           # every gate that runs before a push (workflow.md §6)
 ./local-CI.sh --full                    # also build the AppImage (needs a good connection)
 ```

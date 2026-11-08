@@ -202,6 +202,11 @@ chmod +x OneUp-x86_64.AppImage
 
 Needs `libfuse2` to run (`sudo zypper install libfuse2`), like any AppImage.
 
+**From the next release on, the AppImage updates itself.** When a newer OneUp is out, a
+banner offers *What's new*; *Update now* downloads it, checks it really comes from OneUp's
+author, swaps the file and reopens OneUp. Version 2.0.0 has no updater, so its users
+download the next version by hand, once.
+
 ### RPM — for `zypper` users
 
 ```bash

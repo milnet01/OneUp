@@ -21,7 +21,7 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .. import APP_ID, APP_NAME
-from . import autostart, i18n, markers, paths, run, theme
+from . import app_update, autostart, i18n, markers, paths, run, theme
 from .theme import _app_icon
 
 # Single-instance handshake budget (ONEUP-0084). Both ends are local sockets on the
@@ -92,6 +92,7 @@ def _tray_icon(attention: bool) -> QIcon:
 def _show_window(win):
     """Un-hide + best-effort raise. Un-hiding is reliable; the focus-raise is
     subject to the same Wayland limitation the app documents for recenter."""
+    app_update.refresh_restart(win)   # OneUp may have been updated while hidden
     win.showNormal()
     win.raise_()
     win.activateWindow()

@@ -22,6 +22,10 @@ place that looks unrelated:
          launch an engine the window no longer runs, or one the AppImage cannot
          reach. The tell is the engine's name outside paths.py: naming
          `update_system.sh` or `oneup.engine` in code means building the launch.
+  0112   (ONEUP-0112 INV-15) a network request outside app_update.py puts a second
+         door in the self-update's trust boundary; (INV-17) a module-level
+         `cryptography` import makes a package install, which never verifies
+         anything, fail to start without a library it does not require.
 
 An AST walk, not a grep: a mention inside a docstring or a comment is prose and
 must not fail the gate, and `# noqa`-style evasion is not available.
@@ -30,9 +34,10 @@ does — `local-CI.sh` and the release workflow both name it by hand, because
 nothing in this project discovers tests.
 
 Contracts: `docs/specs/ONEUP-0034-gui-modules.md` §5 for the INV-numbered rules
-above; `docs/specs/ONEUP-0054-python-engine.md` §4.7 for the engine-launch rule,
-which carries no INV number because it is a build-step guarantee rather than one
-of that spec's invariants.
+above, and `docs/specs/ONEUP-0112-self-update.md` §5 for its two;
+`docs/specs/ONEUP-0054-python-engine.md` §4.7 for the engine-launch rule, which
+carries no INV number because it is a build-step guarantee rather than one of that
+spec's invariants.
 """
 import ast
 import sys
@@ -83,6 +88,40 @@ def _imported_names(tree: ast.AST):
             mod = "." * (node.level or 0) + (node.module or "")
             for alias in node.names:
                 yield mod, alias.name, node
+
+
+def _network_offenders(tree: ast.AST) -> list[int]:
+    """Lines that reach the network: QNetworkAccessManager, urllib, http.client, or
+    socket.create_connection (ONEUP-0112 INV-15)."""
+    lines = []
+    for mod, name, node in _imported_names(tree):
+        bare = mod.lstrip(".")
+        if (name == "QNetworkAccessManager" or bare == "urllib" or bare.startswith("urllib.")
+                or bare == "http.client" or (bare == "http" and name == "client")):
+            lines.append(node.lineno)
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Attribute)
+                and node.attr in ("QNetworkAccessManager", "create_connection")):
+            lines.append(node.lineno)
+    return lines
+
+
+def _top_level_imports(tree: ast.AST):
+    """Import nodes outside every function body: the ones that run at import time."""
+    stack = list(ast.iter_child_nodes(tree))
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            yield node
+        stack.extend(ast.iter_child_nodes(node))
+
+
+def _imports_cryptography(node) -> bool:
+    names = ([a.name for a in node.names] if isinstance(node, ast.Import)
+             else [node.module or ""])
+    return any(n == "cryptography" or n.startswith("cryptography.") for n in names)
 
 
 def main() -> int:
@@ -161,6 +200,29 @@ def main() -> int:
                 offenders.append(f"{_rel(path)}:{node.lineno} imports {mod}")
     check(f"INV-12: nothing under oneup/ imports updater ({'; '.join(offenders) or 'none'})",
           not offenders)
+
+    # --- ONEUP-0112 INV-15: app_update.py alone makes network requests.
+    app_update = GUI / "app_update.py"
+    offenders = [f"{_rel(path)}:{line}" for path, tree in _modules(PKG) if path != app_update
+                 for line in _network_offenders(tree)]
+    check("ONEUP-0112 INV-15: no module but app_update.py reaches the network "
+          f"({'; '.join(offenders) or 'none'})", not offenders)
+    check("ONEUP-0112 INV-15: the rule sees one — a planted `import urllib.request` and "
+          "`socket.create_connection` are flagged",
+          _network_offenders(ast.parse("import urllib.request")) == [1]
+          and _network_offenders(ast.parse("import socket\nsocket.create_connection(a)")) == [2])
+    check("ONEUP-0112 INV-15: app_update.py does make them (the rule is not vacuous)",
+          bool(_network_offenders(ast.parse(app_update.read_text()))))
+
+    # --- ONEUP-0112 INV-17: cryptography only ever imported inside a function.
+    offenders = [f"{_rel(path)}:{node.lineno}" for path, tree in _modules(PKG)
+                 for node in _top_level_imports(tree) if _imports_cryptography(node)]
+    check("ONEUP-0112 INV-17: nothing under oneup/ imports cryptography at import time "
+          f"({'; '.join(offenders) or 'none'})", not offenders)
+    planted = ast.parse("from cryptography.exceptions import X\n"
+                        "def f():\n    import cryptography\n")
+    check("ONEUP-0112 INV-17: the rule flags a module-level import and spares a function's",
+          [n.lineno for n in _top_level_imports(planted) if _imports_cryptography(n)] == [1])
 
     print(f"\n  Passed: {PASS}   Failed: {FAIL}")
     return 1 if FAIL else 0

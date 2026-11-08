@@ -32,6 +32,7 @@ also runs on a `v*` tag is `docs/standards/workflow.md` §6's to state.
 | Version bump | `tests/bump-test.py` | that a real bump still parses the five real version sites, and rewrites the CHANGELOG heading and both links correctly (`docs/standards/workflow.md` §5.1's row owns the exact split) |
 | Package structure | `tests/imports-test.py` | the `oneup/` package's structural rules — how path constants are imported, which way the engine and window may depend on each other, and how the engine is launched (`docs/standards/workflow.md` §6's row names each) |
 | Translation groundwork | `tests/i18n-check.py` | the source rules that keep the window translatable and mirrorable — ONEUP-0032's source-level invariants, each named in the suite's header |
+| Self-update | `tests/self-update-test.py` | the self-update's Qt-free half — versions, the release list, the signature, the swap, the relaunch and the signing script — with a throwaway key and no network (ONEUP-0112 §7). Exit 77 when `cryptography` is absent; the release workflow, which installs it, fails on 77 |
 
 **No sizes or assertion counts appear here, deliberately**
 (`docs/standards/documentation.md` §6b). They are wrong the next time anybody adds a test,
@@ -152,8 +153,9 @@ calls, not a method of it — with a no-op **before its
 first `updater.Updater()`**. Unauthenticated GitHub allows 60 calls an hour per address:
 before the stub, one run spent 56 of them and a few runs exhausted for real the budget the
 app's own *Check for updates* button needs (**ONEUP-0090**, which also closed the earlier
-duplicate ONEUP-0067). Nothing in the suite asserts on the check or its reply handler, so
-the stub costs no coverage.
+duplicate ONEUP-0067). The self-update's two other requests, `_fetch_notes` and
+`_start_download`, are stubbed beside it (ONEUP-0112). Its scenarios feed fake replies to
+the real reply handlers instead, so the stubs cost no coverage.
 
 **A gate under the stub catches what the stub alone cannot** (**ONEUP-0098**). Before
 anything else, `main()` replaces every request method of `QNetworkAccessManager` — on the

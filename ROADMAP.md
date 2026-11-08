@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=384 -->
+<!-- ants-roadmap-id-high-water: ONEUP=385 -->
 
 # OneUp Roadmap
 
@@ -11085,7 +11085,7 @@ when complete (that document's §7).
   Kind: enhancement.
   Source: close-findings 2026-09-19, split from ONEUP-0177 (review-code 2026-08-31).
 
-- 📋 [ONEUP-0112] **In-app auto-update: download, verify, apply and relaunch.**
+- 🚧 [ONEUP-0112] **In-app auto-update: download, verify, apply and relaunch.**
   Requested by the user 2026-08-18, for v2. The app checks for a new version,
   downloads it, closes itself, applies the update and re-opens.
 
@@ -11193,6 +11193,13 @@ when complete (that document's §7).
   signature covers "OneUp-x86_64.AppImage <version>\n" plus the bytes,
   so an old genuine build re-attached to a newer tag is refused, and
   release.sh gains --sign-only X.Y.Z (spec §4.5, §4.9).
+  Built 2026-11-08 from the spec (Status Implemented): self_update.py, update_key.py,
+  update_dialog.py, packaging/sign-release.py, the app_update.py rewrite, release.sh's
+  signing step and --sign-only, cryptography 50.0.2 pinned for the AppImage, and
+  tests/self-update-test.py plus gui-smoke and imports-test checks for every
+  invariant. local-CI green. Still to do before it ships: the user makes the signing
+  key (sign-release.py --generate) and commits its public line into update_key.py;
+  then spec §7's manual recipe on the first signed release.
   **Layman:** OneUp will be able to update itself: it spots a new version, downloads it, closes, applies the update and reopens — instead of telling you a new version exists and leaving you to fetch it.
   Kind: feature.
   Source: user-request-2026-08-18.
@@ -11484,3 +11491,15 @@ when complete (that document's §7).
   **Layman:** If you just pressed Check for updates, pressing Run should start installing instead of repeating the check.
   Kind: ux.
   Source: user-request-2026-11-07.
+
+- 📋 [ONEUP-0385] **Bump the AppImage's toolkit to PySide6 6.12.0 and re-resolve its pinned set.**
+  Seen 2026-11-08 while pinning cryptography: resolving PySide6,
+  pyinstaller and cryptography unpinned gives PySide6 6.12.0 (and
+  pyinstaller-hooks-contrib 2026.9, setuptools 84.2.1).
+  packaging/appimage/requirements.txt pins 6.11.2, and
+  docs/standards/dependencies.md still calls it current (2026-10-01).
+  Bump with that file's header command, then run the full gate and an
+  AppImage build.
+  **Layman:** A newer version of the window toolkit the AppImage bundles is out.
+  Kind: chore.
+  Source: ONEUP-0112 implementation, 2026-11-08.

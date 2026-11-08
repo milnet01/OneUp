@@ -37,8 +37,9 @@ exist yet, and saying so is the point.
 | `docs/reference/` | Frozen contracts (formats, protocols). One file: `marker-protocol.md`. |
 | `packaging/rpm/` | `oneup.spec` — the `zypper`-installable package — `oneup-service`, the system service's launcher, which only the RPM installs, and `inspect-rpm.sh`, which builds the RPM from a commit and lists or prints a file inside it. |
 | `packaging/appimage/` | `build-appimage.sh` — the single-file portable build — and `requirements.txt`, the exact packages it installs. |
+| `packaging/sign-release.py` | Signs and verifies a release's AppImage for the self-update, and makes the signing key once (ONEUP-0112). |
 | `packaging/obs/` | `_service` + `README.md` — the openSUSE Build Service recipe. |
-| `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `imports-test.py` (the `oneup/` package's structural rules), `i18n-check.py` (the translation groundwork's source rules), `bump-test.py` (version lockstep), `parsers-test.py` (the engine's pure parsers), `service-test.py` (the system service, on a private bus), `mock-env.sh` (the mock sandbox both engine suites source), `docs-check.py` (the documentation rules a script can settle). |
+| `tests/` | The whole suite: `run-tests.sh` (engine), `gui-smoke.py` (window), `imports-test.py` (the `oneup/` package's structural rules), `i18n-check.py` (the translation groundwork's source rules), `bump-test.py` (version lockstep), `parsers-test.py` (the engine's pure parsers), `service-test.py` (the system service, on a private bus), `self-update-test.py` (the self-update's Qt-free half), `mock-env.sh` (the mock sandbox both engine suites source), `docs-check.py` (the documentation rules a script can settle). |
 | `githooks/` | Repo-local git hooks. One file: `pre-push`. Not active until `git config core.hooksPath githooks`. |
 | `screenshots/` | Images the README and the app-store metadata point at. |
 | `branding/` | The OneUp wordmark, for pages outside this repository that show the project. Nothing in the app or its packages reads it. |
