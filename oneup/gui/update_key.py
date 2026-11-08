@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import base64
 
-# The raw 32-byte Ed25519 public key, base64. Empty until the signing key exists:
-# then `public_key()` raises, so no download verifies and nothing is ever installed.
-RELEASE_PUBLIC_KEY_B64 = ""
+# The raw 32-byte Ed25519 public key, base64, made by the maintainer on 2026-11-08 with
+# `packaging/sign-release.py --generate`. An empty or malformed value makes
+# `public_key()` raise, so no download verifies and nothing is ever installed.
+RELEASE_PUBLIC_KEY_B64 = "+nARLHNIN4ylW95UWLsxb66+stYpNbnsYUXVos/fXoo="
 
 
 def public_key():
