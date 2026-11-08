@@ -11200,6 +11200,8 @@ when complete (that document's §7).
   invariant. local-CI green. Still to do before it ships: the user makes the signing
   key (sign-release.py --generate) and commits its public line into update_key.py;
   then spec §7's manual recipe on the first signed release.
+  2026-11-08: the user made the signing key; its public half is committed
+  (2b3d173). Left: the first signed release, and spec §7's manual recipe on it.
   **Layman:** OneUp will be able to update itself: it spots a new version, downloads it, closes, applies the update and reopens — instead of telling you a new version exists and leaving you to fetch it.
   Kind: feature.
   Source: user-request-2026-08-18.
