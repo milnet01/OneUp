@@ -11202,6 +11202,12 @@ when complete (that document's §7).
   then spec §7's manual recipe on the first signed release.
   2026-11-08: the user made the signing key; its public half is committed
   (2b3d173). Left: the first signed release, and spec §7's manual recipe on it.
+  2026-11-08: still to do before shipped — the first signed release
+  (release.sh signs it), then spec §7's manual recipe run on it. Offered
+  to the user, not answered yet: a release.sh precondition that refuses
+  before the bump when update_key.py's key is empty or does not match
+  the private key in ~/.config/oneup-release/. Without it a mismatch is
+  caught only after the release is on GitHub.
   **Layman:** OneUp will be able to update itself: it spots a new version, downloads it, closes, applies the update and reopens — instead of telling you a new version exists and leaving you to fetch it.
   Kind: feature.
   Source: user-request-2026-08-18.
