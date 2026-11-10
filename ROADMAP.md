@@ -9023,7 +9023,7 @@ when complete (that document's §7).
   Source: user-request-2026-10-16.
   Lanes: engine, service, packaging.
 
-- 🚧 [ONEUP-0287] **Test a first install on a clean Tumbleweed virtual machine, from adding the repository to a finished update, before 2.0.0.**
+- ✅ [ONEUP-0287] **Test a first install on a clean Tumbleweed virtual machine, from adding the repository to a finished update, before 2.0.0.**
   User's decision, 2026-10-16: someone installing OneUp for the first
   time must get a working service with no help, and a clean virtual
   machine is how it is checked. This machine cannot show it: it has
@@ -9081,6 +9081,16 @@ when complete (that document's §7).
   home:milnet:oneup as README says, zypper install oneup, then one
   finished update run from the window. The host install from the repo
   (ONEUP-0373) is not a clean machine and ran no update.
+  OBS leg passed 2026-11-10 in a clean VM (KDE Live Snapshot20261014,
+  12 GB, headless, driven over QMP and ssh). README's three commands as
+  written: addrepo, refresh (asked once to trust key gpg-pubkey-8c1dcaba,
+  answered a), install oneup: oneup-2.0.0-4.1 from home:milnet:oneup plus
+  72 new packages, no extra step; the D-Bus activation file present.
+  Window: route service; Check found 1060; Run selected updates finished
+  "All done. 1045 system packages installed. 14 leftover packages
+  removed." in about 8 minutes. Every root job ran in oneup-service with
+  status 0, except snapshot-create/list (Live has no snapper config, as
+  on 2026-11-06). No sudo during the run; no password asked. Pass.
   **Layman:** Install OneUp on a brand-new test computer, the way a newcomer would, to prove it works without any expert help.
   Kind: test.
   Source: user-decision-2026-10-16.
@@ -11437,7 +11447,7 @@ when complete (that document's §7).
   Kind: chore.
   Source: peer-request-claude-config-2026-11-06.
 
-- 📋 [ONEUP-0381] **Does the weekly automatic update work on a repo or RPM install, where there is no Passwordless setting?**
+- ✅ [ONEUP-0381] **Does the weekly automatic update work on a repo or RPM install, where there is no Passwordless setting?**
   Asked by the website session 2026-11-06: its OneUp page says
   "Automatic updates never fail silently. They need the passwordless
   setting." README.md's "Update automatically every week" bullet says
@@ -11462,6 +11472,16 @@ when complete (that document's §7).
   measured: a timer-started update end to end. That runs in the
   ONEUP-0287 VM leg (systemctl --user start oneup-update.service).
   README text and the website's message come after it.
+  Confirmed 2026-11-10 in the same clean VM, repo install. The real
+  "Automatic updates" switch turned on with no Passwordless offer and no
+  box (service route); oneup-update.timer enabled for Monday.
+  `systemctl --user start oneup-update.service`, as the timer would:
+  Result=success, a service session opened with no password, every job
+  status 0 (snapshots excepted), "All selected steps completed cleanly."
+  The permission is openSUSE's standard polkit profile:
+  packagekit.system-update auth_admin_keep:auth_admin_keep:yes, so yes
+  for the active local session. README corrected; the website session
+  was sent the sentence.
   **Layman:** Check whether the weekly automatic update can run unattended on the normal openSUSE install, and fix the wording that says it needs Passwordless.
   Kind: investigate.
   Source: peer-request-website-2026-11-06.

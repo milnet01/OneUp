@@ -52,10 +52,13 @@ OneUp can:
   menu. Optional (off by default), and can also start at login.
 - **Update automatically every week** — optionally (off by default). An "Automatic
   updates" setting runs the whole update on a weekly schedule in the background,
-  keeping the snapshot/rollback safety net. It needs updates to run without a
-  password, so an unattended run doesn't stop to ask for one — and if that ever
-  stops working, the weekly update switches itself off and tells you, rather than
-  quietly doing nothing every week.
+  keeping the snapshot/rollback safety net. It runs while you are logged in, and it
+  needs updates to run without a password, so it never stops to ask for one.
+  Installed from the openSUSE repository or the RPM, that is openSUSE's normal
+  setting for whoever is at the computer, so there is nothing to switch on. The
+  AppImage needs its "Passwordless" setting. If that ever stops working, the weekly
+  update switches itself off and tells you, rather than quietly doing nothing every
+  week.
 - **Restart just the affected services** instead of rebooting, when a full reboot
   isn't actually required.
 - **Survive a single broken software source** instead of failing the whole update —
