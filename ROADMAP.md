@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=385 -->
+<!-- ants-roadmap-id-high-water: ONEUP=387 -->
 
 # OneUp Roadmap
 
@@ -11533,3 +11533,34 @@ when complete (that document's §7).
   **Layman:** A newer version of the window toolkit the AppImage bundles is out.
   Kind: chore.
   Source: ONEUP-0112 implementation, 2026-11-08.
+
+- 📋 [ONEUP-0386] **Measure the three speed candidates from the 2026-11-10 performance review, then fix what measures large.**
+  review-code --performance --small, v2 @ 23d0961. Records (not in git,
+  the repo is public): /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/
+  review-code-perf-2026-11-10/ (message-1.md holds every finding).
+  Measure first, on a quiet machine:
+  1. The repository size scan (steps.py, pkgsizes.py): a code comment
+     already gives 3.6 s per main-repo scan (2026-10-12), paid before
+     every download and every sized check. py-spy on --check --sizes.
+  2. Every package marker redraws every package view (two lanes found
+     it): replay 300 vs 3000 @@PKG@@ lines offscreen, count refreshes.
+  3. Launch waits on blocking calls on the GUI thread: the D-Bus route
+     probe, two systemctl calls, sudo -n -l (up to 10 s) and the
+     AppImage hash walk. One strace of a launch sizes them all.
+  The MEDIUM and LOW rows go through close-findings with these. A
+  candidate that measures small is dropped.
+  **Layman:** Time three places the review thinks OneUp may be slow, and speed up only the ones that really are.
+  Kind: perf.
+  Source: review-code-perf-2026-11-10.
+
+- 📋 [ONEUP-0387] **Check four bug leads the 2026-11-10 performance review passed on.**
+  Out of scope for a performance run; each needs locate-defect first.
+  From the same records as the item above:
+  - --check's Flatpak pass has no deadline (_check_flatpak).
+  - service jobs: Job._wait reads status before _job_ended is set.
+  - run.py on_finished lacks the shiboken6.isValid(win) guard that
+    _on_size_finished has.
+  - autostart._timer_enabled calls systemctl with no timeout.
+  **Layman:** Four possible bugs the speed review noticed in passing; each needs a proper look.
+  Kind: investigate.
+  Source: review-code-perf-2026-11-10.
