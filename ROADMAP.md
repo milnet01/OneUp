@@ -11446,17 +11446,39 @@ when complete (that document's §7).
   implicit-active grant may not apply. Measure on a real or VM install
   (the timer, then the service's answer), then correct README and send
   the website session the exact text. Not verified by anyone yet.
+  Measured 2026-11-10 on the host (oneup 2.0.0 from OBS, polkit-128,
+  user logged in at the desk). The weekly timer is a systemd --user
+  unit, so its engine runs in the user manager (logind session class
+  "manager"), not the desk session. The service's own question —
+  CheckAuthorization for org.freedesktop.packagekit.system-update,
+  subject the caller's system-bus-name, flags 0 (non-interactive) —
+  asked from `systemd-run --user` answered (True, False,
+  {'polkit.result': 'yes'}), the same as from the terminal. The
+  action's defaults: implicit active yes, inactive/any auth_admin.
+  So on a repo or RPM install with PackageKit, an unattended weekly
+  run needs no Passwordless setting while the user is logged in and
+  their session is the active one. Otherwise polkit asks for a
+  password; the run is non-interactive, so it stands down. Not yet
+  measured: a timer-started update end to end. That runs in the
+  ONEUP-0287 VM leg (systemctl --user start oneup-update.service).
+  README text and the website's message come after it.
   **Layman:** Check whether the weekly automatic update can run unattended on the normal openSUSE install, and fix the wording that says it needs Passwordless.
   Kind: investigate.
   Source: peer-request-website-2026-11-06.
 
-- 📋 [ONEUP-0382] **Send the website 2.0 screenshots: Rows, Rail, Spotlight, and Settings with the theme picker.**
+- ✅ [ONEUP-0382] **Send the website 2.0 screenshots: Rows, Rail, Spotlight, and Settings with the theme picker.**
   Asked by the website session 2026-11-06: its OneUp page's three
   screenshots show 1.x. Wanted: Rows, Rail, Spotlight, and Settings
   showing the theme picker, demo data only, no personal data, into
   /mnt/Games/Trailers/incoming/oneup/shots/ (or send it the paths).
   Use the record-demo skill (private virtual display, never the real
   desktop). Separate from the trailer reshoot, ONEUP-0261.
+  Done 2026-11-10: four PNGs in /mnt/Games/Trailers/incoming/oneup/shots/
+  (Rows and Rail after a demo check, Spotlight mid-download, Settings'
+  Appearance tab), rendered from v2 on demoreel's private display with
+  scratch XDG config and state dirs. The demo data is ordinary
+  Tumbleweed package names fed as markers. The website session was sent
+  the paths and alt text.
   **Layman:** New pictures of the 2.0 window for the website, using demo data only.
   Kind: marketing.
   Source: peer-request-website-2026-11-06.
