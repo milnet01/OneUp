@@ -358,7 +358,11 @@ def run_firmware() -> None:
         return
     # Claim success only if the flash itself succeeded: a failed update must not
     # report "applied", because that is what advises the reboot.
-    if proc.run(["fwupdmgr", "update", "-y"], stream=True, no_input=True)[0] == 0:
+    # --no-reboot-check: -y may answer fwupd's own "Restart now?" with yes and reboot
+    # before the later steps and the summary. The summary advises the restart instead
+    # (ONEUP-0391).
+    if proc.run(["fwupdmgr", "update", "-y", "--no-reboot-check"],
+                stream=True, no_input=True)[0] == 0:
         FW_CHANGED = True
         end_step("firmware", "ok", "updated", "updates applied")
     else:

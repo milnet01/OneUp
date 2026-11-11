@@ -1012,6 +1012,24 @@ yes | run_engine "$d" --check --steps=firmware >/dev/null
 check_absent "fwupdmgr reads no input, in the run or --check" "BUG: fwupdmgr" "$(cat "$d/stdin-read" 2>/dev/null)"
 rm -rf "$d"
 
+# fwupdmgr --assume-yes may answer its own "Restart now?" with yes, which would reboot
+# the machine before the later steps and the summary. Unsettled without real firmware,
+# so the step opts out of the reboot check outright (ONEUP-0391, the user's ruling of
+# 2026-11-11); the summary already advises the restart a flash needs.
+echo "TEST: the firmware update never lets fwupdmgr reboot mid-run"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/fwupdmgr" <<'EOF'
+#!/usr/bin/env bash
+[[ $1 == update ]] && echo "$*" >> "${0%/*}/update-args"
+case "$1" in get-updates) exit 0 ;; *) exit 0 ;; esac
+EOF
+chmod +x "$d/fwupdmgr"
+out=$(run_engine "$d" --steps=firmware)
+check "the firmware step flashed" "@@STEP_END@@|firmware|ok|updated" "$out"
+check "fwupdmgr update is told not to reboot" "--no-reboot-check" "$(cat "$d/update-args" 2>/dev/null)"
+check "the summary advises the restart instead" "@@REBOOT@@|yes|firmware-updated" "$out"
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 # One unreadable remote must not hide every other remote's updates. `flatpak
 # remote-ls --updates` aborts the WHOLE listing (exit 1, empty stdout) when any
