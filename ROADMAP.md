@@ -5407,6 +5407,8 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   tested by a real release, and 1.4.9 proved the current one works.
   2026-10-17, user: revisit at the first 2.0.x patch release. Still on
   hold until then.
+  User confirmed 2026-11-11: the hold stands. Do it in the first 2.0.x
+  patch release, the same one as ONEUP-0112's first signed release.
   **Layman:** The release step uses a third-party action for something the built-in tooling can already do.
   Kind: chore.
   Source: check-code --tree 2026-08-31 (zizmor superfluous-actions, Informational).
@@ -11218,6 +11220,9 @@ when complete (that document's §7).
   before the bump when update_key.py's key is empty or does not match
   the private key in ~/.config/oneup-release/. Without it a mismatch is
   caught only after the release is on GitHub.
+  User decided 2026-11-11: add a release.sh check that refuses to start
+  a release when the committed public key does not match the private
+  signing key. Build it before the first signed release.
   **Layman:** OneUp will be able to update itself: it spots a new version, downloads it, closes, applies the update and reopens — instead of telling you a new version exists and leaving you to fetch it.
   Kind: feature.
   Source: user-request-2026-08-18.
