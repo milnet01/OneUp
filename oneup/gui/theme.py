@@ -841,11 +841,14 @@ _DARK = dict(
     # 2.63:1 on the accent and 3.06:1 on the danger fill — a real defect on the
     # app's most-pressed control. Both bottom stops already cleared and did not
     # move, so the gradient keeps its hue and only its light end deepens.
+    # The hover and pressed stops carry the same label, so each failing one was
+    # deepened in its own hue to the lightest shade clearing 4.5:1; hover now
+    # reads by saturation, not brightness (ONEUP-0391).
     btn_accent_stops=("#3779bd", "#2f6fe0"),
-    btn_accent_hov_stops=("#5cb0ff", "#3a7cf0"),
-    btn_accent_press_stops=("#3d90ec", "#2560c8"),
+    btn_accent_hov_stops=("#0073e0", "#256eee"),
+    btn_accent_press_stops=("#1573db", "#2560c8"),
     btn_danger_stops=("#bf5544", "#d6412a"),
-    btn_danger_hov_stops=("#f47c68", "#e04a32"),
+    btn_danger_hov_stops=("#df2e10", "#d83a21"),
     # Banner washes. Each is a hue the sheet composites at two alphas; the
     # warning one is also what the focus derivation blends from, so a theme that
     # moved one and not the other would light a focus cue the banner never wears.
@@ -887,11 +890,14 @@ _LIGHT = dict(
     # 2.63:1 on the accent and 3.06:1 on the danger fill — a real defect on the
     # app's most-pressed control. Both bottom stops already cleared and did not
     # move, so the gradient keeps its hue and only its light end deepens.
+    # The hover and pressed stops carry the same label, so each failing one was
+    # deepened in its own hue to the lightest shade clearing 4.5:1; hover now
+    # reads by saturation, not brightness (ONEUP-0391).
     btn_accent_stops=("#3779bd", "#2f6fe0"),
-    btn_accent_hov_stops=("#5cb0ff", "#3a7cf0"),
-    btn_accent_press_stops=("#3d90ec", "#2560c8"),
+    btn_accent_hov_stops=("#0073e0", "#256eee"),
+    btn_accent_press_stops=("#1573db", "#2560c8"),
     btn_danger_stops=("#bf5544", "#d6412a"),
-    btn_danger_hov_stops=("#f47c68", "#e04a32"),
+    btn_danger_hov_stops=("#df2e10", "#d83a21"),
     warntint="#e9b23f", infotint="#4aa3ff", infotint2="#22d3ee", dangertint="#e74c3c",
 )
 
@@ -919,9 +925,9 @@ _CARBON = dict(
     progfill='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
     rowringtint='#4aa3ff', rowringtint2='#22d3ee',
     rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
-    btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
-    btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
-    btn_danger_hov_stops=('#f47c68', '#e04a32'), warntint='#e9b23f', infotint='#4aa3ff',
+    btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#0073e0', '#256eee'),
+    btn_accent_press_stops=('#1573db', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
+    btn_danger_hov_stops=('#df2e10', '#d83a21'), warntint='#e9b23f', infotint='#4aa3ff',
     infotint2='#22d3ee', dangertint='#e74c3c'
 )
 
@@ -940,9 +946,9 @@ _FOREST = dict(
     progfill='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
     rowringtint='#4aa3ff', rowringtint2='#22d3ee',
     rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
-    btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
-    btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
-    btn_danger_hov_stops=('#f47c68', '#e04a32'), warntint='#e9b23f', infotint='#4aa3ff',
+    btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#0073e0', '#256eee'),
+    btn_accent_press_stops=('#1573db', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
+    btn_danger_hov_stops=('#df2e10', '#d83a21'), warntint='#e9b23f', infotint='#4aa3ff',
     infotint2='#22d3ee', dangertint='#e74c3c'
 )
 
@@ -961,9 +967,9 @@ _PLUM = dict(
     progfill='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)',
     rowringtint='#4aa3ff', rowringtint2='#22d3ee',
     rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
-    btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
-    btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
-    btn_danger_hov_stops=('#f47c68', '#e04a32'), warntint='#e9b23f', infotint='#4aa3ff',
+    btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#0073e0', '#256eee'),
+    btn_accent_press_stops=('#1573db', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
+    btn_danger_hov_stops=('#df2e10', '#d83a21'), warntint='#e9b23f', infotint='#4aa3ff',
     infotint2='#22d3ee', dangertint='#e74c3c'
 )
 
@@ -982,9 +988,9 @@ _PAPER = dict(
     progfill='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1e66c8, stop:1 #0e7490)',
     rowringtint='#4aa3ff', rowringtint2='#22d3ee',
     rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
-    btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
-    btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
-    btn_danger_hov_stops=('#f47c68', '#e04a32'), warntint='#e9b23f', infotint='#4aa3ff',
+    btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#0073e0', '#256eee'),
+    btn_accent_press_stops=('#1573db', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
+    btn_danger_hov_stops=('#df2e10', '#d83a21'), warntint='#e9b23f', infotint='#4aa3ff',
     infotint2='#22d3ee', dangertint='#e74c3c'
 )
 
@@ -1003,9 +1009,9 @@ _SKY = dict(
     progfill='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1e66c8, stop:1 #0e7490)',
     rowringtint='#4aa3ff', rowringtint2='#22d3ee',
     rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
-    btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
-    btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
-    btn_danger_hov_stops=('#f47c68', '#e04a32'), warntint='#e9b23f', infotint='#4aa3ff',
+    btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#0073e0', '#256eee'),
+    btn_accent_press_stops=('#1573db', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
+    btn_danger_hov_stops=('#df2e10', '#d83a21'), warntint='#e9b23f', infotint='#4aa3ff',
     infotint2='#22d3ee', dangertint='#e74c3c'
 )
 
@@ -1024,9 +1030,9 @@ _SAND = dict(
     progfill='qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1e66c8, stop:1 #0e7490)',
     rowringtint='#4aa3ff', rowringtint2='#22d3ee',
     rowringhovtint='#68b8ff', rowringhovtint2='#3ae4fa',
-    btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#5cb0ff', '#3a7cf0'),
-    btn_accent_press_stops=('#3d90ec', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
-    btn_danger_hov_stops=('#f47c68', '#e04a32'), warntint='#e9b23f', infotint='#4aa3ff',
+    btn_accent_stops=('#3779bd', '#2f6fe0'), btn_accent_hov_stops=('#0073e0', '#256eee'),
+    btn_accent_press_stops=('#1573db', '#2560c8'), btn_danger_stops=('#bf5544', '#d6412a'),
+    btn_danger_hov_stops=('#df2e10', '#d83a21'), warntint='#e9b23f', infotint='#4aa3ff',
     infotint2='#22d3ee', dangertint='#e74c3c'
 )
 

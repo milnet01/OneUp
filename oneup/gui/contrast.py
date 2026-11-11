@@ -111,6 +111,11 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     # The Run button's label against both stops of its own fill, and the same
     # ink on the danger family's fill — one token, two gradients.
     ("btnfg", ("btn_accent_stops", "btn_danger_stops"), TEXT),
+    # The same label on the hovered and pressed fills. DECORATIVE below excuses
+    # those fills against the rest fill; the label on top of them is text, and it
+    # read 2.31:1 hovered before anything measured it (ONEUP-0391).
+    ("btnfg", ("btn_accent_hov_stops", "btn_accent_press_stops",
+               "btn_danger_hov_stops"), TEXT),
     # ONEUP-0064 and ONEUP-0076 made these sheet literals into tokens. Each is
     # checked on every surface it lands on rather than on `card` alone; *Retry*
     # put the ghost button's hover ink on the warning banner's tint.
