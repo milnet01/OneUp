@@ -345,7 +345,10 @@ class Service:
     def _answer(self, msg: Message, session: Session, offset: int) -> bool:
         """Reply if there is something to say: bytes past `offset`, or the job's end."""
         job = session.job
-        status = job.status          # first: once set, everything is in the file
+        # First: once set, everything is in the file. But the end is told only once the
+        # loop has run `_job_ended`, which frees the service for the next Run (§4.5); the
+        # waiter thread sets `status` a moment before that (ONEUP-0387).
+        status = job.status if job is not self.job else None
         data = job.read(offset)
         if data:
             self._reply(msg, "ayi", (data, -1))

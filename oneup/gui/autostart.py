@@ -154,10 +154,26 @@ def _remove_autostart():
         pass
 
 
+# Every call below runs on the window's thread, so a user manager that never answers
+# would freeze the window (ONEUP-0387). systemctl answers in milliseconds when healthy.
+SYSTEMCTL_SECONDS = 5.0
+
+
+def _systemctl_user(*args: str) -> str | None:
+    """`systemctl --user <args>`'s stdout, or None if it did not answer in time.
+
+    An OSError still propagates: `_install_user_timer` reports it to the user."""
+    try:
+        # Safe: a fixed program, verbs from this module and a unit name built here; no shell.
+        return subprocess.run(["systemctl", "--user", *args],  # noqa: S603,S607
+                              capture_output=True, text=True,
+                              timeout=SYSTEMCTL_SECONDS, check=False).stdout
+    except subprocess.TimeoutExpired:
+        return None
+
+
 def _timer_enabled(timer: str) -> bool:
-    r = subprocess.run(["systemctl", "--user", "is-enabled", timer],  # noqa: S603,S607
-                       capture_output=True, text=True)
-    return r.stdout.strip() == "enabled"
+    return (_systemctl_user("is-enabled", timer) or "").strip() == "enabled"
 
 
 def _autocheck_enabled() -> bool:
@@ -181,9 +197,8 @@ def _install_user_timer(win, basename: str, description: str, exec_flag: str) ->
             "[Timer]\nOnCalendar=weekly\nPersistent=true\n\n"
             "[Install]\nWantedBy=timers.target\n"
         )
-        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)  # noqa: S607
-        subprocess.run(["systemctl", "--user", "enable", "--now",  # noqa: S603,S607
-                        f"{basename}.timer"], check=False)
+        _systemctl_user("daemon-reload")
+        _systemctl_user("enable", "--now", f"{basename}.timer")
     except OSError as exc:
         QMessageBox.warning(win, QCoreApplication.translate(
             "autostart",
@@ -194,14 +209,13 @@ def _install_user_timer(win, basename: str, description: str, exec_flag: str) ->
 
 def _remove_user_timer(basename: str):
     units = _user_units_dir()
-    subprocess.run(["systemctl", "--user", "disable", "--now",  # noqa: S603,S607
-                    f"{basename}.timer"], check=False)
+    _systemctl_user("disable", "--now", f"{basename}.timer")
     for name in (f"{basename}.timer", f"{basename}.service"):
         try:
             (units / name).unlink()
         except OSError:
             pass
-    subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)  # noqa: S607
+    _systemctl_user("daemon-reload")
 
 
 def _refresh_autocheck_label(win):

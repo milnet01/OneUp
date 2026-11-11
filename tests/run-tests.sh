@@ -4765,6 +4765,39 @@ FLATPAK_EOF
 fi
 
 # ---------------------------------------------------------------------------
+echo "TEST: --check's Flatpak count has the same per-call deadline (ONEUP-0387)"
+# The run's count was bounded and the check's was not, so a dead remote hung the
+# weekly check and the tray's. The mock answers after 20 s rather than never, so an
+# unbounded engine fails this scenario instead of hanging the suite.
+if [[ "${ENGINE_CMD[*]}" != *oneup.engine* ]]; then
+    echo "  SKIP - the per-call deadline is the Python engine's; this run drives another engine"
+else
+    d=$(mktemp -d); setup_common "$d"
+    cat > "$d/flatpak" <<'FLATPAK_EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *remotes*)   printf 'flathub\t\n'; exit 0 ;;
+  *remote-ls*) touch "$0.asked"; sleep 20 ;;            # accepts, answers too late
+  *) exit 0 ;;
+esac
+FLATPAK_EOF
+    chmod +x "$d/flatpak"
+    started=$(date +%s)
+    out=$(ONEUP_FLATPAK_TIMEOUT=1 run_engine "$d" --check --steps=flatpak)
+    elapsed=$(( $(date +%s) - started ))
+    check_eq "the slow query was actually made" "yes" \
+             "$([[ -e "$d/flatpak.asked" ]] && echo yes || echo no)"
+    if (( elapsed < 15 )); then
+        echo "  ok   - the budget ended the check's query (${elapsed}s)"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - the check's query was not bounded (${elapsed}s)"; FAIL=$((FAIL+1))
+    fi
+    check "the remote it gave up on is named, not counted as up to date" \
+          "@@CHECK_UNKNOWN@@|flatpak|flatpak-remotes-unreachable|flathub" "$out"
+    rm -rf "$d"
+fi
+
+# ---------------------------------------------------------------------------
 # ONEUP-0176: three gaps in the Python engine's process and state layer, each driven
 # directly through the module because none has an argv that reaches it on demand. The
 # snippet prints the suite's own `ok` / `FAIL` lines, which are counted here.

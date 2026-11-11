@@ -239,7 +239,9 @@ def _check_system(sizes: bool) -> tuple[int, bool, bool]:
 
 def _check_flatpak() -> tuple[int, bool]:
     """Count pending Flatpak updates, asking each remote separately."""
-    rows, unreachable = steps.flatpak_updates()   # why per remote: see the helper
+    # Why per remote: see the helper. The run's own count passes the same per-call
+    # budget, so one dead remote cannot hang the check either (ONEUP-0387).
+    rows, unreachable = steps.flatpak_updates(deadline=steps.FLATPAK_QUERY_SECONDS)
     n = len(rows)
     unreadable: tuple[str, ...] = ()
     if unreachable:

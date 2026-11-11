@@ -692,6 +692,37 @@ def test_route(rig: Rig) -> None:
         (rig.d / "polkit.actions").unlink(missing_ok=True)
 
 
+def test_end_after_bookkeeping(base: Path) -> None:
+    scenario("ONEUP-0387: a Read reports a job's end only once the service has finished it")
+    # The child's waiter thread learns the exit first and posts the bookkeeping to the
+    # loop. A Read answered in that gap told the engine "done" while the service still
+    # held the job, so the engine's next Start met Busy and waited out a poll for nothing.
+    # The gap is a thread switch wide and cannot be forced over the bus, so this holds the
+    # posted event back and asks the loop's own Read path directly, in this process.
+    sys.path.insert(0, str(REPO))
+    from types import SimpleNamespace
+
+    from oneup.service import jobs, server
+    d = base / "end-order"
+    d.mkdir()
+    srv = object.__new__(server.Service)
+    replies: list[tuple] = []
+    srv._reply = lambda _msg, _sig="", body=(): replies.append(body)
+    held: list = []
+    session = SimpleNamespace(uid=os.getuid(), disabled=[], job=None, told=False)
+    job = jobs.Job(op="cache-clean", args={}, argv=["sh", "-c", "exit 3"], merge_stderr=True,
+                   runtime_dir=d / "run", session=session, on_end=held.append)
+    srv.job = session.job = job
+    ended = wait_for(lambda: bool(held), 10)
+    check("the child ended and its end was posted", ended)
+    check("a Read before the loop ran the end reports no end",
+          srv._answer(None, session, 0) is False and not session.told, replies)
+    srv._job_ended(job)
+    check("a Read after the loop ran the end reports the child's status",
+          srv._answer(None, session, 0) is True and replies[-1:] == [(b"", 3)], replies)
+    job.discard()
+
+
 def test_idle(base: Path) -> None:
     scenario("INV-15: with no session and no job, the service exits")
     d = base / "idle"
@@ -750,6 +781,7 @@ def main() -> int:
                 test(rig)
         finally:
             rig.stop()
+        test_end_after_bookkeeping(base)
         test_idle(base)
     finally:
         shutil.rmtree(base, ignore_errors=True)

@@ -11,6 +11,12 @@ All notable changes to OneUp are documented here. The format follows
 - **In the AppImage, links and the log file now open** (ONEUP-0383)
   "Open log file" and the About box's links did nothing, because the program that opens links crashed on OneUp's own bundled libraries.
 
+- **Checking for updates no longer hangs on a Flatpak source that stops answering** (ONEUP-0387)
+  The check now gives up on that source after 60 seconds and names it, as the update already did.
+
+- **The weekly schedule settings can no longer freeze the window** (ONEUP-0387)
+  If the system's user service manager stops answering, OneUp now stops waiting for it.
+
 ### Added
 
 - **OneUp shows what's new in every version since yours, inside OneUp** (ONEUP-0112)

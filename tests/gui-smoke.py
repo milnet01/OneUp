@@ -1567,14 +1567,50 @@ def main() -> int:
         wZ._authstat_proc.waitForFinished(5000)     # so deleting wZ kills no probe
     wZ._traycheck_proc = QProcess(wZ)
     shiboken6.delete(wZ)
+    # on_finished is the main run's (ONEUP-0387): quitting mid-run, after the warning,
+    # tears the window down around a still-running engine just as it does a probe.
     for slot, call in (("_on_size_finished", lambda: run._on_size_finished(wZ, 1, None)),
-                       ("_on_traycheck_finished", lambda: tray._on_traycheck_finished(wZ))):
+                       ("_on_traycheck_finished", lambda: tray._on_traycheck_finished(wZ)),
+                       ("on_finished", lambda: run.on_finished(wZ, 0, None))):
         try:
             call()
             quiet = True
         except RuntimeError:
             quiet = False
         check(f"{slot} ignores a window Qt already destroyed", quiet)
+
+    # ONEUP-0387: the schedule's systemctl calls run on the window's thread, so one
+    # that never answers froze the window. A systemctl answering in 20 s stands in for
+    # a stuck user manager; each action must give up well before it. One process, as
+    # the real systemctl is (`exec`). The limit is lowered so the suite waits seconds.
+    hang_bin = Path(_SANDBOX) / "hang-bin"
+    hang_bin.mkdir(exist_ok=True)
+    (hang_bin / "systemctl").write_text("#!/bin/sh\nexec sleep 20\n")
+    (hang_bin / "systemctl").chmod(0o755)
+    saved_path = os.environ["PATH"]
+    saved_limit = getattr(autostart, "SYSTEMCTL_SECONDS", None)
+    autostart.SYSTEMCTL_SECONDS = 1.0
+    os.environ["PATH"] = f"{hang_bin}{os.pathsep}{saved_path}"
+    try:
+        for label, call in (
+                ("asking whether a timer is on", lambda: autostart._timer_enabled("x.timer")),
+                ("turning a timer off", lambda: autostart._remove_user_timer("oneup-hang")),
+                ("turning a timer on", lambda: autostart._install_user_timer(
+                    None, "oneup-hang", "hang test", "--check"))):
+            began = time.monotonic()
+            got = call()
+            took = time.monotonic() - began
+            check(f"a stuck systemctl does not hold the window: {label} "
+                  f"({took:.1f}s)", took < 15)
+            if label != "turning a timer off":
+                check(f"a stuck systemctl reads as off: {label} (got {got!r})",
+                      got is False)
+    finally:
+        os.environ["PATH"] = saved_path
+        if saved_limit is not None:
+            autostart.SYSTEMCTL_SECONDS = saved_limit
+        for name in ("oneup-hang.timer", "oneup-hang.service"):
+            (autostart._user_units_dir() / name).unlink(missing_ok=True)
 
     # A REPO marker names the duplicate URL and flips the banner button to the
     # repo manager.

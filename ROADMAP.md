@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=389 -->
+<!-- ants-roadmap-id-high-water: ONEUP=390 -->
 
 # OneUp Roadmap
 
@@ -11584,7 +11584,7 @@ when complete (that document's §7).
   Kind: perf.
   Source: review-code-perf-2026-11-10.
 
-- 📋 [ONEUP-0387] **Check four bug leads the 2026-11-10 performance review passed on.**
+- ✅ [ONEUP-0387] **Check four bug leads the 2026-11-10 performance review passed on.**
   Out of scope for a performance run; each needs locate-defect first.
   From the same records as the item above:
   - --check's Flatpak pass has no deadline (_check_flatpak).
@@ -11592,6 +11592,17 @@ when complete (that document's §7).
   - run.py on_finished lacks the shiboken6.isValid(win) guard that
     _on_size_finished has.
   - autostart._timer_enabled calls systemctl with no timeout.
+  Shipped 2026-11-11. All four leads were real; each has a test seen red first.
+  1. actions._check_flatpak now passes FLATPAK_QUERY_SECONDS, as the
+     run's count does (engine suite, ONEUP-0387 scenario).
+  2. Service _answer reports a job's end only once _job_ended has run,
+     so the engine never meets Busy from a job that has ended
+     (ONEUP-0249 §4.5). Effect before: a rare 2 s wait (service suite).
+  3. run.on_finished returns on a window Qt destroyed (window suite,
+     the ONEUP-0204 block).
+  4. autostart's systemctl --user calls give up after SYSTEMCTL_SECONDS
+     (5 s) through _systemctl_user (window suite).
+  Locating lead 3 found ONEUP-0390: quitting mid-run may kill the engine.
   **Layman:** Four possible bugs the speed review noticed in passing; each needs a proper look.
   Kind: investigate.
   Source: review-code-perf-2026-11-10.
@@ -11627,3 +11638,19 @@ when complete (that document's §7).
   **Layman:** Some rule documents still talk about a 2.0 branch that no longer exists; tidy them so nobody is misled.
   Kind: doc-fix.
   Source: user-request-2026-11-11.
+
+- 📋 [ONEUP-0390] **Quitting the window mid-run may kill the engine, against the quit warning's promise.**
+  Found while locating ONEUP-0387 lead 3. The engine is QProcess(win)
+  (oneup/gui/run.py, the run's launch). A QProcess destroyed while its
+  child runs kills the child. Measured 2026-11-11 with a bare QWidget
+  offscreen: deleting the window, or letting it go out of scope as
+  app.main's `win` does after app.exec(), killed a running `sleep 30`.
+  _ask_quit_during_run promises "Closing OneUp won't stop it", and the
+  engine trap "A run must survive the GUI going away" forbids it.
+  Unconfirmed on the real window and quit path: other references (the
+  tray's) may keep the window alive past main. Confirm first: launch
+  the real app with a mock engine, start a run, quit, check the pid.
+  Probes: /mnt/Emulators/.claude/Scratchpad/OneUp/teardown_probe*.py.
+  **Layman:** Closing OneUp during an update may stop the update, even though the warning says it won't; confirm it on the real app and fix it.
+  Kind: fix.
+  Source: oneup-0387-locate-2026-11-11.

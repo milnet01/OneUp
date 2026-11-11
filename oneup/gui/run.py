@@ -1194,6 +1194,10 @@ def _first_hint_command(win) -> str:
 
 
 def on_finished(win, exit_code: int, _status):
+    # Quitting mid-run tears the window down around a running engine, and Qt then
+    # delivers `finished` to a window it already destroyed (ONEUP-0204, ONEUP-0387).
+    if not shiboken6.isValid(win):
+        return
     # Flush any final line the engine emitted without a trailing newline before
     # computing the summary, so a last marker can't be silently dropped.
     win._buf += win._dec.decode(b"", True)   # a truncated last character
