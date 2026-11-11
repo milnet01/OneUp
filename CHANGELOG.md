@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A long update started from the window no longer fails partway when sudo forgets the password** (ONEUP-0392)
+  OneUp keeps the password fresh in the background, but from the window that refresh
+  renewed the wrong entry, so after sudo's timeout every later step failed with "a
+  terminal is required". The refresh now comes from the engine itself.
+
 - **The tray's "Update now" no longer starts a second update over one already running** (ONEUP-0391)
   It used to wipe the running update's progress from the window. Now it just opens the window, which shows the update still going.
 

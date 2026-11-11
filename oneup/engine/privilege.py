@@ -24,7 +24,6 @@ import pathlib
 import shutil
 import signal
 import subprocess
-import sys
 import threading
 import time
 from collections.abc import Callable, Sequence
@@ -281,70 +280,49 @@ def _service_unreachable(why: str) -> None:
 
 
 # How often the keep-alive re-validates. Overridable so a test can watch the loop
-# exit inside its own patience — a 50-second sleep makes the property unobservable.
+# run inside its own patience — at 50 seconds it would refresh once per scenario.
 KEEPALIVE_SECONDS = os.environ.get("ONEUP_KEEPALIVE_SECONDS") or "50"
 
-# `argv[1]` of the keep-alive child — under `-c`, `argv[0]` is "-c". A grep-able
-# tag so a test can find these without matching every `sleep` on the machine;
-# `pgrep -f oneup-keepalive` is what both scenarios use, so renaming it makes them
-# pass by finding nothing.
+# The keep-alive thread's name, so a debugger or a test can pick it out.
 KEEPALIVE_TAG = "oneup-keepalive"
 
-_KEEPALIVE: subprocess.Popen | None = None
+_KEEPALIVE: threading.Thread | None = None
+_KEEPALIVE_STOP: threading.Event | None = None
 
-# The loop, as its own argv so nothing is interpolated into a shell. It watches
-# OUR pid and exits on its own once we are gone: `cleanup`'s group kill is the
-# fast path, but a trap cannot run when the engine is SIGKILLed, and then the
-# loop ran forever — two were found still calling `sudo -n -v` every 50 seconds,
-# 40 minutes after the runs that spawned them were killed (ONEUP-0041).
-#
-# `os.kill(pid, 0)` is the liveness test, against a pid captured ONCE at start.
-# Re-reading our own parent id instead can never fire: it is set at start and is
-# not refreshed on reparenting, and testing it against 1 never fires either,
-# because systemd reparents a user session's orphans to `systemd --user`
-# (CLAUDE.md §6).
-_KEEPALIVE_SRC = """
-import os, subprocess, sys, time
-pid, interval = int(sys.argv[2]), float(sys.argv[3])   # argv[1] is the tag
-while True:
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        break
-    subprocess.run(["sudo", "-n", "-v"], check=False,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(interval)
-"""
+
+def _keepalive_loop(interval: float, stop: threading.Event) -> None:
+    """Refresh the cached credential now, then every `interval` seconds until `stop`."""
+    while True:
+        subprocess.run(["sudo", "-n", "-v"], check=False,  # noqa: S607 — fixed argv
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if stop.wait(interval):
+            return
 
 
 def _start_keepalive() -> None:
     """Refresh the cached credential in the background for the rest of the run.
 
-    Its own process group, so `cleanup` can kill the WHOLE group: killing the
-    child alone leaves its `sleep` orphaned and lingering for up to an interval.
-    A new group, never a new session: started from a terminal, sudo keys the
-    cached credential to that terminal's session, and a child in a new session
-    has no terminal, so its refresh renewed a different record and the real one
-    expired after five minutes (ONEUP-0231, measured on a run from Konsole).
-    Detached from our stdout and stderr so it never pollutes the log stream, and
-    so a consumer capturing our output is not held open by its sleep.
+    A THREAD of the engine, never a child process, so the engine itself is the
+    parent of every `sudo -n -v` it runs. With no terminal sudo keys the cached
+    credential to the parent pid: a refresh from a child process renewed a
+    record of its own, and the engine's expired mid-run. Measured in a VM from
+    the window (ONEUP-0392): after the timeout, every root command failed with
+    "a terminal is required". From a terminal the record is the terminal's,
+    and a thread shares it too (ONEUP-0231).
 
-    Never two, and the early return below is what enforces it: a second
-    keep-alive would overwrite the handle so `cleanup`'s group kill could only
-    reach the later group — the orphan leak of ONEUP-0041 (INV-9).
+    A daemon thread dies with the process, so nothing is left behind even when
+    the engine is SIGKILLed and no cleanup runs (security.md §2.4).
+
+    Never two, and the early return below is what enforces it (INV-9).
     """
-    global _KEEPALIVE
+    global _KEEPALIVE, _KEEPALIVE_STOP
     if _KEEPALIVE is not None:
         return
     interval = KEEPALIVE_SECONDS if KEEPALIVE_SECONDS.replace(".", "", 1).isdecimal() else "50"
-    # The tag rides in argv so `pgrep -f oneup-keepalive` finds this child; it is
-    # read back out of sys.argv rather than used, which is why the loop skips it.
-    _KEEPALIVE = subprocess.Popen(  # noqa: S603 — fixed argv, no shell
-        [sys.executable, "-c", _KEEPALIVE_SRC, KEEPALIVE_TAG, str(os.getpid()), interval],
-        process_group=0,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    _KEEPALIVE_STOP = threading.Event()
+    _KEEPALIVE = threading.Thread(target=_keepalive_loop, name=KEEPALIVE_TAG, daemon=True,
+                                  args=(float(interval), _KEEPALIVE_STOP))
+    _KEEPALIVE.start()
 
 
 def sudo(argv: Sequence[str], *, flags: Sequence[str] = (), merge_stderr: bool = False,
@@ -557,17 +535,13 @@ def reap_orphaned_askpass() -> None:
 
 
 def kill_keepalive() -> None:
-    """Kill the keep-alive's whole process GROUP, not just the child.
-
-    A plain kill leaves the inner sleep orphaned and lingering for up to one
-    interval after a cancelled run.
-    """
-    global _KEEPALIVE
-    if _KEEPALIVE is None:
+    """Stop the keep-alive and wait for a refresh in flight, so none runs after cleanup."""
+    global _KEEPALIVE, _KEEPALIVE_STOP
+    if _KEEPALIVE is None or _KEEPALIVE_STOP is None:
         return
-    with contextlib.suppress(OSError, ProcessLookupError):
-        os.killpg(_KEEPALIVE.pid, signal.SIGTERM)
-    _KEEPALIVE = None
+    _KEEPALIVE_STOP.set()
+    _KEEPALIVE.join(timeout=5)
+    _KEEPALIVE = _KEEPALIVE_STOP = None
 
 
 def cleanup() -> None:
@@ -576,7 +550,7 @@ def cleanup() -> None:
     §4.2 splits the Bash `cleanup` three ways and this is the seam that
     re-joins them. **The ORDER is load-bearing**: the repository re-enable runs
     `sudo -n`, non-interactively, so it needs the credential the keep-alive is
-    keeping warm — kill the group first and an interrupted `--skip-repo` run
+    keeping warm — stop it first and an interrupted `--skip-repo` run
     leaves the user's repository disabled. No scenario can see it; the suite's
     cached-sudo mock succeeds on `sudo -n` either way.
     """

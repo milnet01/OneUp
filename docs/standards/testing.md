@@ -301,8 +301,8 @@ while time.monotonic() < deadline:
 A bare `sleep` is acceptable only **inside a mock**, where the delay is the thing being
 simulated — for example the mirror that stalls (`sleep 30`, in the slow-source scenario),
 the askpass that never returns (`sleep 300`, in the orphaned-dialog scenario), the
-transaction slow enough for the keep-alive to be mid-sleep when it ends (`sleep 1`, in the
-keep-alive scenario). Those are fixtures, not waits.
+transaction slow enough for the keep-alive to be between refreshes when it ends (`sleep 1`,
+in the no-process-behind scenario). Those are fixtures, not waits.
 
 Determinism also means: no dependence on wall-clock time of day, on the order a real
 filesystem returns entries, or on any network at all.

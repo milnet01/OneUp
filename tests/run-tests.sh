@@ -1701,35 +1701,36 @@ rm -rf "$canary"
 # ---------------------------------------------------------------------------
 # ONEUP-0044 INV-9: the held path must not re-enter sudo_init. It has no re-entry guard —
 # its only early return is auth_current, false for precisely the users this fix is for —
-# so a second entry spawns a SECOND keep-alive and overwrites SUDO_KEEPALIVE, leaving
-# cleanup's group kill able to reach only the later group. That is the orphaned-keep-alive
-# leak of ONEUP-0041 (security.md §2.4): two were once found still calling `sudo -n -v`
-# every 50 seconds, 40 minutes after the runs that spawned them were killed. Every other
-# sudo_init call site sits in a dispatch block that exits, so the held path is the first
-# thing in this engine that could reach two of them.
-#
-# Diffed rather than counted absolutely: the developer's own machine may legitimately be
-# running one from a real update (docs/standards/testing.md §2).
-echo "TEST: a held run leaves no orphaned keep-alive behind"
+# so a second entry runs the interactive validate again. The prompt counters cannot see
+# that (one process, one timestamp: engine-traps.md), so this counts the validates
+# themselves. Before ONEUP-0392 the keep-alive was a process and a second entry also
+# orphaned one (ONEUP-0041); it is a thread now, and the leak half asks for any survivor.
+echo "TEST: a held run validates once and leaves nothing behind"
 d=$(mktemp -d); setup_hold_dir "$d" allow
-ka_before=$(keepalives_of "$d")
+mv "$d/sudo" "$d/sudo-inner"
+cat > "$d/sudo" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$d/sudo-calls.log"
+exec "$d/sudo-inner" "\$@"
+EOF
+chmod +x "$d/sudo"
 if ! start_held_engine "$d"; then
-    echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+1))
+    echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+2))
     reap_held_engine >/dev/null 2>&1
 else
     printf 'system,cache\n' > "$d/go.request"
     reap_held_engine >/dev/null 2>&1
-    leaked=""
-    for _ in $(seq 1 40); do      # the group kill is asynchronous, so poll rather than sleep
-        ka_after=$(keepalives_of "$d")
-        leaked=$(comm -13 <(echo "$ka_before") <(echo "$ka_after") | grep -v '^$' || true)
-        [[ -z "$leaked" ]] && break
-        sleep 0.1
-    done
-    if [[ -z "$leaked" ]]; then
-        echo "  ok   - no keep-alive survives a held run (INV-9)"; PASS=$((PASS+1))
+    validates=$(grep -- '-v$' "$d/sudo-calls.log" 2>/dev/null | grep -vc '^-n ')
+    if [[ "$validates" == 1 ]]; then
+        echo "  ok   - one interactive validate across the preview and the run (INV-9)"; PASS=$((PASS+1))
     else
-        echo "  FAIL - a keep-alive survived a held run (INV-9): $leaked"; FAIL=$((FAIL+1))
+        echo "  FAIL - $validates interactive validates across a held run (INV-9)"; FAIL=$((FAIL+1))
+    fi
+    leaked=$(survivors_of "$d")
+    if [[ -z "$leaked" ]]; then
+        echo "  ok   - nothing the held run started survives it"; PASS=$((PASS+1))
+    else
+        echo "  FAIL - processes survived a held run: $leaked"; FAIL=$((FAIL+1))
         echo "$leaked" | xargs -r kill 2>/dev/null
     fi
 fi
@@ -3613,35 +3614,20 @@ check_absent "check mode records no auth fail" "Authentication failed" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
-echo "TEST: the sudo keep-alive leaves no orphaned process when a run ends"
+echo "TEST: a run leaves no process behind when it ends"
 d=$(mktemp -d); setup_common "$d"
-# A dup that takes ~1s so the keep-alive is mid `sleep 50` when the run finishes
-# and cleanup fires — the exact moment a plain `kill <subshell>` (rather than a
-# process-group kill) would orphan the sleep, reparented to init for up to 50s.
+# A dup that takes ~1s so the keep-alive is between refreshes when the run finishes and
+# cleanup fires. Any process carrying this scenario's sandbox environment after the run is
+# one cleanup failed to reap (survivors_of, mock-env.sh).
 printf '#!/usr/bin/env bash\ncase "$*" in *refresh*) exit 0;; *dup*|*update*) sleep 1; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
 chmod +x "$d/zypper"
-# Diff the keep-alive LOOP SHELLS (tagged oneup-keepalive in $0) across the run:
-# a survivor is an orphan cleanup failed to reap. Deliberately NOT `pgrep -xf 'sleep
-# 50'`: the loop spawns a fresh sleep every 50s, so ANY keep-alive already leaked on
-# the machine — including one left by a real interrupted run — made this test fail
-# roughly one run in six with a pid that had nothing to do with the run under test.
-# The loop shell's pid is stable for the life of the run. keepalives_of (mock-env.sh)
-# counts only this scenario's own, which is what keeps another run out (ONEUP-0203).
-ka_before=$(keepalives_of "$d")
 run_engine "$d" --steps=system >/dev/null 2>&1
-# The process-group kill is asynchronous, so poll rather than guessing a fixed delay.
-ka_leaked=""
-for _ in $(seq 1 40); do          # up to 4s, returns as soon as it is clean
-    ka_after=$(keepalives_of "$d")
-    ka_leaked=$(comm -13 <(echo "$ka_before") <(echo "$ka_after") | grep -v '^$' || true)
-    [[ -z "$ka_leaked" ]] && break
-    sleep 0.1
-done
-if [[ -z "$ka_leaked" ]]; then
-    echo "  ok   - no orphaned keep-alive after the run"; PASS=$((PASS+1))
+leaked=$(survivors_of "$d")
+if [[ -z "$leaked" ]]; then
+    echo "  ok   - nothing survives the run"; PASS=$((PASS+1))
 else
-    echo "  FAIL - keep-alive orphaned a process: $ka_leaked"; FAIL=$((FAIL+1))
-    echo "$ka_leaked" | xargs -r kill 2>/dev/null
+    echo "  FAIL - processes survived the run: $leaked"; FAIL=$((FAIL+1))
+    echo "$leaked" | xargs -r kill 2>/dev/null
 fi
 rm -rf "$d"
 
@@ -3674,10 +3660,9 @@ rm -rf "$d"
 # so its `sudo -n -v` refreshes a different record, the terminal's one expires after
 # five minutes, and the next password-needing call prompts unseen in the terminal.
 # Measured on a real run from Konsole. So the keep-alive must stay in the engine's
-# session and terminal, and still lead its own process group, which cleanup's group
-# kill depends on. `script` gives the engine a controlling terminal, as Konsole did;
+# session and terminal. `script` gives the engine a controlling terminal, as Konsole did;
 # the mock sudo records the session, terminal and group of every call.
-echo "TEST: the keep-alive shares the engine's terminal session but has its own group"
+echo "TEST: the keep-alive shares the engine's terminal session"
 d=$(mktemp -d); setup_common "$d"
 printf '#!/usr/bin/env bash\ncase "$*" in *refresh*) exit 0;; *dup*|*update*) sleep 1; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
 mv "$d/sudo" "$d/sudo-inner"
@@ -3703,8 +3688,8 @@ ENGINE_CMD=("${saved_cmd[@]}")
 calls=$(cat "$d/sudo-calls.log" 2>/dev/null)
 eng=$(grep -m1 -- '-v|' <<<"$calls" | grep -v '^-n -v|' || true)   # the interactive validate
 ka=$(grep -m1 '^-n -v|' <<<"$calls" || true)                       # the keep-alive's refresh
-IFS='|' read -r _ eng_sid eng_tty eng_pgid <<<"$eng"
-IFS='|' read -r _ ka_sid ka_tty ka_pgid <<<"$ka"
+IFS="|" read -r _ eng_sid eng_tty _ <<<"$eng"
+IFS="|" read -r _ ka_sid ka_tty _ <<<"$ka"
 if [[ -z "$eng" || -z "$ka" || "$eng_tty" == "?" ]]; then
     echo "  FAIL - setup: no terminal, or no validate/keep-alive call recorded"; FAIL=$((FAIL+1))
     printf '%s\n' "$calls" | sed 's/^/         /'
@@ -3714,10 +3699,39 @@ else
     echo "  FAIL - keep-alive in session $ka_sid on $ka_tty, engine in $eng_sid on $eng_tty"
     FAIL=$((FAIL+1))
 fi
-if [[ -n "$ka" && -n "$ka_pgid" && "$ka_pgid" != "$eng_pgid" ]]; then
-    echo "  ok   - the keep-alive leads its own process group (INV-9)"; PASS=$((PASS+1))
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0392: with no terminal — the window's QProcess — sudo keys the cached credential
+# to the PARENT pid of each sudo. The keep-alive ran `sudo -n -v` from a child process,
+# so its refresh renewed a record of its own and the engine's expired. Measured in the VM
+# 2026-11-11 with timestamp_timeout=1: Run after the size preview failed every root
+# command with "a terminal is required". So the refresh must come from the engine itself.
+echo "TEST: with no terminal, the keep-alive refreshes the engine's own credential (ONEUP-0392)"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\ncase "$*" in *refresh*) exit 0;; *dup*|*update*) sleep 2; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
+mv "$d/sudo" "$d/sudo-inner"
+cat > "$d/sudo" <<EOF
+#!/usr/bin/env bash
+printf '%s|%s\n' "\$*" "\$PPID" >> "$d/sudo-calls.log"
+exec "$d/sudo-inner" "\$@"
+EOF
+chmod +x "$d/sudo" "$d/zypper"
+saved_cmd=("${ENGINE_CMD[@]}")
+ENGINE_CMD=(setsid -w env ONEUP_KEEPALIVE_SECONDS=1 "${saved_cmd[@]}")
+run_engine "$d" --steps=system >/dev/null 2>&1 </dev/null
+ENGINE_CMD=("${saved_cmd[@]}")
+calls=$(cat "$d/sudo-calls.log" 2>/dev/null)
+eng_ppid=$(grep -- '-v|' <<<"$calls" | grep -v '^-n -v|' | head -n1 | cut -d'|' -f2)
+ka_ppids=$(grep '^-n -v|' <<<"$calls" | cut -d'|' -f2 | sort -u)
+if [[ -z "$eng_ppid" || -z "$ka_ppids" ]]; then
+    echo "  FAIL - setup: no validate or no keep-alive refresh recorded"; FAIL=$((FAIL+1))
+    printf '%s\n' "$calls" | sed 's/^/         /'
+elif [[ "$ka_ppids" == "$eng_ppid" ]]; then
+    echo "  ok   - every keep-alive refresh has the engine as sudo's parent"; PASS=$((PASS+1))
 else
-    echo "  FAIL - keep-alive group '$ka_pgid' is the engine's '$eng_pgid'"; FAIL=$((FAIL+1))
+    echo "  FAIL - keep-alive refreshes came from pid(s) ${ka_ppids//$'\n'/ }, the engine is $eng_ppid"
+    FAIL=$((FAIL+1))
 fi
 rm -rf "$d"
 
@@ -3784,48 +3798,48 @@ unset -f validate_call
 # ONEUP-0041: cleanup's trap cannot run when the engine is SIGKILLed, and the
 # keep-alive used to loop forever in that case. Two were found on the reporter's
 # machine still validating sudo every 50 seconds, 40 minutes after the runs that
-# spawned them had been killed. So the loop must also watch the engine's pid and
-# exit on its own. This asserts the guard directly: run the real loop against a pid
-# that is already gone and it must exit rather than idle.
-# ONEUP-0054 §4.3.5. This REPLACES "the keep-alive exits on its own once the engine is gone
-# (SIGKILL-proof)", which sed'd the keep-alive loop out of update_system.sh and ran that Bash
-# fragment — so what it asserted was one engine's implementation, and it fails against a
-# Python engine at its first step. This asserts the PROPERTY instead (INV-7: nothing the
-# engine spawns outlives it), so it holds for whichever engine ONEUP_ENGINE_CMD names.
+# spawned them had been killed. Since ONEUP-0392 the keep-alive is a thread, which dies
+# with the process; this asserts the PROPERTY (INV-7: nothing the engine spawns outlives
+# it), so it holds for whichever engine ONEUP_ENGINE_CMD names.
 #
 # Staged on a held --size run because that path authenticates: hold.state appears only after
 # run_size's dry run, which follows sudo_init, so a keep-alive provably exists at that point.
-# ONEUP_KEEPALIVE_SECONDS shortens the loop's sleep so the guard is observable inside a
-# test's patience; without it the keep-alive would not look at its parent for 50 seconds.
+# ONEUP_KEEPALIVE_SECONDS=1 makes it refresh inside a test's patience, so the scenario can
+# see it running before the kill.
 echo "TEST: nothing the engine spawned survives a SIGKILL (INV-7)"
 d=$(mktemp -d); setup_hold_dir "$d" allow
+mv "$d/sudo" "$d/sudo-inner"
+cat > "$d/sudo" <<EOF
+#!/usr/bin/env bash
+[[ "\$*" == "-n -v" ]] && echo "\$PPID" >> "$d/refreshes.log"
+exec "$d/sudo-inner" "\$@"
+EOF
+chmod +x "$d/sudo"
 if ! start_held_engine "$d" ONEUP_KEEPALIVE_SECONDS=1; then
     # +2: both assertions below, neither of which can run.
     echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+2))
     tail -5 "$d/out" 2>/dev/null | awk '{print "         " $0}'
     reap_held_engine >/dev/null 2>&1
 else
-    # Matched on the tag AND our own engine's pid, which the loop carries as an argument:
-    # the tag alone would match another scenario's keep-alive, or the developer's own run.
-    if pgrep -f "oneup-keepalive $HELD_PID" >/dev/null 2>&1; then
-        echo "  ok   - the engine spawned a keep-alive to outlive it"; PASS=$((PASS+1))
+    # The keep-alive must be running, or "nothing survived" is true of nothing.
+    for _ in $(seq 1 30); do grep -qx "$HELD_PID" "$d/refreshes.log" 2>/dev/null && break; sleep 0.1; done
+    if grep -qx "$HELD_PID" "$d/refreshes.log" 2>/dev/null; then
+        echo "  ok   - the engine's keep-alive was refreshing before the kill"; PASS=$((PASS+1))
     else
-        echo "  FAIL - no keep-alive was spawned, so this scenario asserts nothing"; FAIL=$((FAIL+1))
+        echo "  FAIL - no keep-alive refresh was seen, so this scenario asserts nothing"; FAIL=$((FAIL+1))
     fi
     kill -9 "$HELD_PID" 2>/dev/null
     wait "$HELD_PID" 2>/dev/null
-    # A SIGKILLed engine runs no trap, so nothing tidies up on its behalf — the keep-alive
-    # has to notice its parent is gone and exit by itself. Poll rather than sleep.
-    survived=yes
-    for _ in $(seq 1 100); do
-        pgrep -f "oneup-keepalive $HELD_PID" >/dev/null 2>&1 || { survived=no; break; }
-        sleep 0.1
+    # A SIGKILLed engine runs no cleanup, so nothing tidies up on its behalf. Polled: a
+    # refresh in flight at the kill finishes in milliseconds; a loop never does.
+    for _ in $(seq 1 20); do
+        leaked=$(survivors_of "$d"); [[ -z "$leaked" ]] && break; sleep 0.1
     done
-    if [[ "$survived" == no ]]; then
+    if [[ -z "$leaked" ]]; then
         echo "  ok   - nothing it spawned survived the SIGKILL"; PASS=$((PASS+1))
     else
-        echo "  FAIL - a keep-alive outlived the SIGKILLed engine"; FAIL=$((FAIL+1))
-        pkill -f "oneup-keepalive $HELD_PID" 2>/dev/null
+        echo "  FAIL - processes survived the SIGKILL: $leaked"; FAIL=$((FAIL+1))
+        echo "$leaked" | xargs -r kill 2>/dev/null
     fi
 fi
 rm -rf "$d"

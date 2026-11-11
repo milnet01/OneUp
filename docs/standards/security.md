@@ -216,24 +216,29 @@ one helper is a single sudo parent, one exported askpass environment and one kee
 owner. Write that down at the helper.
 
 **2.4 — Nothing the engine spawns may outlive it.** `cleanup`'s trap cannot run when the
-engine is `SIGKILL`ed, so the keep-alive **also watches the engine's pid and exits on its
-own**. It runs in its own process group so `cleanup` can kill the whole group
-(`kill -- -PGID`) — a plain `kill` on the subshell orphans the inner `sleep 50`, which
-reparents to `systemd --user` rather than to pid 1, so an orphan check written against
-pid 1 can never fire. The live idiom is polling `kill -0` on the captured engine pid, never
-a re-read of `$PPID`. It carries the tag `oneup-keepalive` in `$0` so a test can find it.
+engine is `SIGKILL`ed. In the Python engine the keep-alive is a daemon thread, so it dies
+with the process. Any background helper that is a process must **watch the engine's pid
+and exit on its own**: poll `kill -0` on the pid captured at start, never a re-read of
+`$PPID`. An orphan reparents to `systemd --user`, not to pid 1, so a check against pid 1
+never fires.
 
-That group is a new process group, **never a new session**. Started from a terminal, sudo
-keys the cached credential to that terminal's session. A helper in a new session has no
-terminal, so its refresh renews a different record. Measured 2026-10-02 on a run started
-from Konsole: the real credential expired after five minutes, and the next call needing it
-prompted unseen in the terminal (ONEUP-0231). The Bash engine gets the group by turning on
-job control for that one launch (`set -m`), not with `setsid`; the Python engine passes
-`process_group=0`, not `start_new_session=True`.
+Measured: before that watch, two keep-alives were found still calling `sudo -n -v` every
+50 seconds, **40 minutes after** the runs that spawned them had been killed (ONEUP-0041).
+Any new background helper inherits this rule.
 
-Measured: before this, two keep-alives were found still calling `sudo -n -v` every 50
-seconds, **40 minutes after** the runs that spawned them had been killed (ONEUP-0041). Any
-new background helper inherits this rule.
+**The keep-alive's refresh must come from the engine itself.** Sudo keeps the credential
+in a record keyed to the terminal's session, or, with no terminal, to the sudo's parent
+pid (§2.2). A refresh from any other process renews a record nobody uses, and the engine's
+expires mid-run. Both shapes were measured:
+
+- From Konsole, a helper in a new session renewed a different record. The next call
+  needing the credential prompted unseen in the terminal (ONEUP-0231, 2026-10-02).
+- From the window, a helper process renewed its own pid's record. In a VM with
+  `timestamp_timeout=1`, every root command after the timeout failed with "a terminal is
+  required" (ONEUP-0392, 2026-11-11).
+
+A thread of the engine satisfies both. The Bash fallback, frozen at ONEUP-0054, still runs
+its keep-alive as a background shell and has the ONEUP-0392 defect.
 
 **2.5 — On the service route, the one authentication is one polkit check.** `sudo_init`
 opens a session with the service, which asks polkit once (§12.4), and starts no
@@ -614,10 +619,11 @@ proves nothing about the path users actually take. The regression test models su
 per-parent-pid cache and fails if a run needs more than one prompt — do not weaken it.
 **It sees a second prompt caused by a subshell, and not a second `sudo_init` inside one
 process**: the mock keys its timestamp to `$PPID`, so two calls from one engine share a
-record and log a single prompt. That shape is caught by the keep-alive scenario instead —
-ONEUP-0044's **INV-9**, not its §7.1, which is about the mocks' `-k` handling. Re-measured
-2026-09-02: removing the `HELD_AUTH` guard fails exactly one check, *"a keep-alive survived
-a held run (INV-9)"*, and leaves the one-prompt scenario green.
+record and log a single prompt. That shape is caught by counting the interactive validates
+instead — ONEUP-0044's **INV-9**, not its §7.1, which is about the mocks' `-k` handling.
+Re-measured 2026-11-11: removing the `held_auth` guard fails *"one interactive validate
+across the preview and the run (INV-9)"* with two, and leaves the one-prompt scenario
+green.
 
 **9.3 — `sudoers` wildcards match spaces.** `env LC_ALL=C zypper *` grants everything after
 that literal prefix. This is intended here (§5.3) but is a general hazard: a wildcard in a
@@ -746,7 +752,7 @@ CI build itself, before signing, is signed like any other build. The pinned buil
 | --- | --- |
 | §1 the GUI never runs as root | nothing automatic |
 | §2 one authentication per run | `tests/run-tests.sh` — *"a full run asks for the password exactly once"*, against a mock that models sudo's per-parent-pid credential cache |
-| §2 no `sudo` inside a subshell | the same scenario, because a subshell **is** a second prompt. The rule and its symptom are the same thing, which is what makes this the strongest gate in the set. It does **not** see a re-entrant `sudo_init` inside one process — the mock keys on `$PPID`, so that shape belongs to the keep-alive row |
+| §2 no `sudo` inside a subshell | the same scenario, because a subshell **is** a second prompt. The rule and its symptom are the same thing, which is what makes this the strongest gate in the set. It does **not** see a re-entrant `sudo_init` inside one process — the mock keys on `$PPID`, so that shape belongs to *"a held run validates once and leaves nothing behind"*, which counts the validates (§9.2) |
 | §2.3 one runner object owns every privileged child (Python engine) | nothing automatic — and prompt counting cannot see it, because one Python process is one sudo parent |
 | §3 every prompt says who is asking | nothing automatic, except §3.1's terminal case: the ONEUP-0360 scenario in `tests/run-tests.sh` checks the validate keeps its label and drops `-A` only there |
 | §4 validate at the boundary, by shape — the alias guard | `tests/run-tests.sh` — an unsafe repo alias is refused and never reaches a privileged command, whether it arrives as `--skip-repo=` or in zypper's own repository list; `tests/gui-smoke.py` — an unsafe alias in a skip-repo remedy is not armed, so the window never forwards it. The list half was added 2026-09-18 (ONEUP-0144); until then only `disable_repo` checked, and the refresh took the list unchecked |
@@ -766,7 +772,7 @@ CI build itself, before signing, is signed like any other build. The pinned buil
 | §7.4 the diagnostics bundle carries no identifiers | `tests/gui-smoke.py` — the bundle has its hostname scrubbed |
 | §7.3 captured privileged output is not echoed to the log | nothing automatic — the §10 checklist is the only gate |
 | §8 supply chain | nothing automatic |
-| nothing the engine spawns outlives it | `tests/run-tests.sh` — the sudo keep-alive leaves no orphaned process when a run ends |
+| nothing the engine spawns outlives it | `tests/run-tests.sh` — *"a run leaves no process behind when it ends"* and *"nothing the engine spawned survives a SIGKILL (INV-7)"* |
 | §2.5 the route follows polkit's PackageKit action, and a run nobody started never prompts | `tests/service-test.py` — the route against a fake polkit that lists the action, lacks it, errs or stays silent (INV-18); `tests/gui-smoke.py` — the window follows it; `tests/run-tests.sh` — a timer run with no drop-in never reaches `sudo -A`, beside a hand-started control (INV-19) |
 | §12.1–12.8 the system service's rules | `tests/service-test.py` — a private bus, a fake polkit and mock binaries; each invariant the section cites has its own scenario there. INV-13 is a structural check in `tests/run-tests.sh` |
 | §1.2 and §2.5 the service route runs no `sudo` and prints what the sudo route prints | `tests/run-tests.sh` — the same update on both routes against one set of mocks: zero `sudo` calls on the service route, and equal marker streams (INV-8) |
@@ -776,7 +782,7 @@ CI build itself, before signing, is signed like any other build. The pinned buil
 | §13.4 one module reaches the network, and nothing opens a browser | `tests/imports-test.py` (INV-15); `tests/gui-smoke.py` — activating a link in the notes opens nothing |
 | §13.5 no private key is tracked | `tests/self-update-test.py` — `git ls-files` holds no `*.key` and no private-key block. **Nothing checks that the key is backed up** |
 | §13.6 the CI build itself | nothing automatic |
-| §2.4 a new process group, never a new session | `tests/run-tests.sh` — run under `script` for a real terminal, the keep-alive's refresh comes from the engine's session and terminal, and from a group that is not the engine's |
+| §2.4 the keep-alive's refresh comes from the engine itself | `tests/run-tests.sh` — *"with no terminal, the keep-alive refreshes the engine's own credential (ONEUP-0392)"*, and under `script` for a real terminal, *"the keep-alive shares the engine's terminal session"*. Neither covers the frozen Bash fallback, which fails the first |
 
 **This is the best-gated standard in the set**, and the reason is worth copying rather than
 admiring: each rule was written so that breaking it produces a *visible symptom* — a second

@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=404 -->
+<!-- ants-roadmap-id-high-water: ONEUP=405 -->
 
 # OneUp Roadmap
 
@@ -11847,3 +11847,15 @@ when complete (that document's §7).
   **Layman:** Small problems in the old backup update script, which is kept only for running by hand.
   Kind: review-fix.
   Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0405] **With sudo's timeout under the keep-alive's interval, or 0, a windowed run fails instead of asking again.**
+  Measured in the VM 2026-11-11 (ONEUP-0392): once the engine's record
+  expires, its privileged calls carry no -A and no terminal, so each
+  fails with "a terminal is required" and no dialog opens.
+  ONEUP-0044's failure table assumed a second prompt. ONEUP-0392's
+  thread refresh covers any timeout over 50 s. Below that, or at 0,
+  decide: ask again through the askpass box, or say up front that
+  this sudo setting cannot run from the window.
+  **Layman:** On a computer set to forget the password almost at once, an update from the window fails partway instead of asking for the password again.
+  Kind: fix.
+  Source: ONEUP-0392-vm-2026-11-11.
