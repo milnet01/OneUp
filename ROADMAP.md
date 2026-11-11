@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=391 -->
+<!-- ants-roadmap-id-high-water: ONEUP=404 -->
 
 # OneUp Roadmap
 
@@ -11665,7 +11665,7 @@ when complete (that document's §7).
   Kind: fix.
   Source: oneup-0387-locate-2026-11-11.
 
-- 🚧 [ONEUP-0391] **Fix the four calibrated HIGHs from the 2026-11-11 code review, and stop fwupd rebooting mid-run.**
+- ✅ [ONEUP-0391] **Fix the four calibrated HIGHs from the 2026-11-11 code review, and stop fwupd rebooting mid-run.**
   Records: the review's own folder, outside this public repo.
   1. Tray "Update now" starts a second engine over a live run (tray.py).
   2. A check that fails says "Everything is up to date" and zeroes
@@ -11677,6 +11677,173 @@ when complete (that document's §7).
   5. User ruling: pass fwupdmgr --no-reboot-check in the firmware step,
      defensively; no VM test.
   The keep-alive HIGH (privilege.py) is its own item: VM proof first.
+  Shipped 2026-11-11, one commit per finding, each test seen red first.
+  1. tray._tray_update starts a run only where the Run button could.
+  2. A non-zero check exit says "Couldn't check for updates — see the
+     log.", shows the first hint, leaves the tray alone.
+  3. contrast.PAIRS measures the label on hover/press fills; failing
+     stops deepened in their own hue in all eight themes.
+  4. build-appimage.sh: appimagetool 1.9.1, type2-runtime 20251108,
+     sha256-checked by fetch_pinned.
+  5. fwupdmgr update -y --no-reboot-check.
+  The keep-alive is ONEUP-0392; the MEDIUMs are ONEUP-0393 to 0404.
   **Layman:** Four real problems the full code review found, plus a safety flag so a firmware update can never restart the computer halfway through.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0392] **Prove on the VM whether a long windowed run asks for the password twice, then fix the keep-alive.**
+  Calibrated HIGH, lanes 03 and 12 (not independent: both were
+  handed security.md §2.2's trap). privilege.py's keep-alive runs
+  `sudo -n -v` from a helper, so with no terminal sudo keys the
+  timestamp to the helper's parent, not the engine's. sudoers(5): tty
+  with no terminal behaves as ppid. Unmeasured: whether the engine's
+  own sudo calls renew often enough to hide it. User ruling
+  2026-11-11: a windowed run longer than timestamp_timeout on the VM,
+  watching for a second prompt; fix only after.
+  **Layman:** A long update started from the window might ask for your password a second time; test it on the virtual machine first, then fix it.
+  Kind: investigate.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0393] **A software source OneUp switches off for a run can stay off after an abnormal end.**
+  Review theme 1: the disabled-sources record lives only in memory.
+  - privilege.py:616-621: a second signal during cleanup skips
+    repos.restore_disabled() (HIGH calibrated to MEDIUM).
+  - service server.py:82 (in-memory list), :460-464 (a failed
+    re-enable is never retried), :398 (an already-disabled source
+    gets re-enabled).
+  - update_system.sh DISABLED_REPOS, memory only.
+  **Layman:** If an update is interrupted in an unusual way, a software source OneUp paused may be left switched off.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0394] **Claiming run.state races, and judging an old run live trusts a bare pid.**
+  Review theme 2.
+  - runstate.py:276-280 and update_system.sh:1111-1121: the same
+    check-then-delete race; update_system.sh:1440-1449 claim_rc.
+  - window.py:866-873: liveness is os.kill(pid, 0), fooled by pid
+    reuse after a reboot.
+  - __main__.py:658/679: a Stop pressed before run.state exists is
+    lost (ONEUP-0054 §4.1.1 specifies it; partly doc-side).
+  - run.py:214-217: hold.state read is check-then-act.
+  **Layman:** Two OneUp runs starting at the same moment, or a reboot, can confuse OneUp about whether an update is still running.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0395] **When the shutdown inhibitor cannot start, the run must still run.**
+  Review theme 3: degrade to no inhibitor, never to no run.
+  - __main__.py:324 probes --what=shutdown, but the exec takes
+    shutdown:sleep --mode=block (:341).
+  - update_system.sh:286-289 re-execs "$0", which needs the exec
+    bit the probe cannot see.
+  **Layman:** OneUp tries to stop the computer shutting down mid-update; if that protection fails, the update itself should still go ahead.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0396] **Text from outside OneUp is shown as rich text in four places.**
+  Review theme 4: Qt's default AutoText or Markdown renders data the
+  threat model treats as the attacker.
+  - repos.py:194/200 (source names in QLabel).
+  - details_dialog.py:384.
+  - banners.py:377-385 (tool output in a QMessageBox).
+  - update_dialog.py:117 setMarkdown on release notes; may load local
+    file: images (unverified Qt behaviour).
+  **Layman:** Names and messages that come from software sources or tools could be shown with formatting OneUp never meant to allow.
+  Kind: security.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0397] **A corrupt gzip file escapes handlers written for any read failure.**
+  Review theme 5: zlib.error is not an OSError.
+  - pkgsizes.py:130: escapes into the system step outside its try,
+    and into --check.
+  - flatpak_details.py:114/141: one bad catalogue loses every
+    Flatpak's details.
+  **Layman:** One damaged download cache file can break the size display or every Flatpak's details.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0398] **A helper process that fails to start leaves the window stuck.**
+  Review theme 6: no errorOccurred/FailedToStart handler.
+  - run.py:333-344 (the size preview).
+  - run.py:1182-1194 (on_error's partial teardown).
+  - auth.py:64-73 (the auth probe; :64-65 also returns early when
+    the log folder is not ready).
+  - rollback.py:212-218 (_thin_snapshots).
+  **Layman:** If one of OneUp's background helpers cannot start, a part of the window can stay waiting forever.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0399] **Calls that can block with no time limit, beyond the four ONEUP-0387 fixed.**
+  Review theme 7; ONEUP-0387's four stay fixed.
+  - service_client.py:143/182 (service Read/Run) and OpenSession.
+  - polkit.py:34 CheckAuthorization.
+  - autostart.py:133 daemon-reload.
+  - placement.py:107-114, 316-327 (KWin script calls, GUI thread).
+  **Layman:** A few places still wait forever on a system service that stops answering, which can freeze the window.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0400] **Confident "up to date" or zero answers the run did not earn, in seven more places.**
+  Review theme 8 (testing.md §5); the failed-check case was
+  ONEUP-0391.
+  - actions.py:395: zypper 100-103 with no size reads as 0 B.
+  - steps.py:134, :270, :971.
+  - run.py:1351 with 1502-1507 (summary and tray coverage from the
+    selection), and the hold-expiry "All done".
+  - tray.py:191-198 loses the uncertain flag.
+  - package_views.py:139/153; details_dialog.py:321-322 with
+    package_details.py:219-220.
+  **Layman:** OneUp sometimes says everything is fine or shows zero when it does not actually know.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0401] **Root-boundary and privacy findings from the 2026-11-11 review.**
+  - actions.py:39/44/53: the drop-in's binaries resolve through the
+    user's PATH, so a writable ~/bin gains a root entry (maybe above
+    MEDIUM). Also :55 writes LC_ALL=C where sudoers says = must be
+    escaped (unsettled).
+  - banners.py:275-277/332: a .target unit name reaches pkexec
+    systemctl restart.
+  - diagnostics.py:83-89: user name and URL credentials not scrubbed.
+  - privilege.py:471/483 (service route) and privilege.py:66,70-72 vs
+    repos.py:197 (two timeout budgets).
+  - steps.py:446/469: orphan removal and multiversion kernels
+    (unsettled in general).
+  **Layman:** Five places where OneUp's root access or its diagnostic report could be tightened.
+  Kind: security.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0402] **Release-tooling findings from the 2026-11-11 review.**
+  - release.sh:151-153: add, commit and tag unchecked with no set -e;
+    a failed commit tags the old HEAD as the new version.
+  - build-appimage.sh:25: pip --upgrade installs whatever pip is
+    newest (security.md §8.2).
+  - githooks/pre-push:83: the changed-files diff.
+  **Layman:** Three ways the release scripts could publish the wrong thing or skip a check.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0403] **Window and settings findings from the 2026-11-11 review.**
+  - autostart.py:176: a timed-out is-enabled reads as off, so
+    revoking passwordless leaves the weekly root timer running (new
+    with ONEUP-0387's timeout). :212 discards disable's result.
+  - tray.py:229-233 single-instance probe; window.py:803 accessible
+    name; update_dialog.py:162-164 closeEvent cancels.
+  - run.py:237-252: controls disabled before _run_active is set.
+  - banners.py:283-285; elided_label.py:33, :56-60;
+    package_views.py:496 SIZE_TEXT.
+  - contrast.py:87-109: PAIRS misses surfaces the sheet paints.
+  - placement.py:180/265 vs :348/:351 (copies diverged).
+  **Layman:** A group of smaller window problems: settings that can be wrong after a slow system, labels, and a few edge cases.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0404] **Bash fallback findings from the 2026-11-11 review.**
+  Frozen fallback (CLAUDE.md §4); fix only what a hand run meets.
+  - update_system.sh:815 hold record; marker payloads predate
+    ONEUP-0072.
+  - :937-941 keep-alive (calibrated LOW: run from a terminal).
+  The run.state, inhibitor and disabled-sources findings are in
+  those themes' items.
+  **Layman:** Small problems in the old backup update script, which is kept only for running by hand.
   Kind: review-fix.
   Source: review-code-2026-11-11.
