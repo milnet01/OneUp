@@ -1256,7 +1256,16 @@ def on_finished(win, exit_code: int, _status):
         # marker exists to prevent: the app said "up to date 🎉" while 8 updates
         # were waiting, because a repository it silently skipped held them all
         # (ONEUP-0056). Say what we found AND what we couldn't see.
-        if win._unchecked:
+        #
+        # A check that finished always exits 0, so a non-zero exit means it never
+        # did — crashed, killed, or refused because a run was going. Its count is
+        # no answer at all, and the hint says why (ONEUP-0391).
+        if not ok:
+            win.status.setText(QCoreApplication.translate(
+                "run", "Couldn't check for updates — see the log."))
+            if win._hints:
+                banners._show_warning(win, win._hints[0], _first_hint_command(win))
+        elif win._unchecked:
             win.status.setText(
                 i18n.counted("updates-partial", total) if total
                 else QCoreApplication.translate(
@@ -1269,14 +1278,14 @@ def on_finished(win, exit_code: int, _status):
                 i18n.counted("updates-available-run" + least, total) if total
                 else QCoreApplication.translate("run", "Everything is up to date. 🎉"))
         win._announce(win.status.text())
-        if total:
-            away = i18n.counted("updates-available" + least, total)
-        elif win._unchecked:
+        if not ok or (win._unchecked and not total):
             away = QCoreApplication.translate("run", "Couldn't check for updates.")
+        elif total:
+            away = i18n.counted("updates-available" + least, total)
         else:
             away = QCoreApplication.translate("run", "Everything is up to date.")
         _notify_when_away(win, away)
-        if _covers_tray_check(win):
+        if ok and _covers_tray_check(win):
             tray._apply_tray_total(win, total, uncertain=bool(win._unchecked),
                                    at_least=bool(least))
         win._check_mode = False

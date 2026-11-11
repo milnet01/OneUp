@@ -4110,6 +4110,25 @@ def main() -> int:
     run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("a complete check still reports up to date", "up to date" in w.status.text())
     _unpatch_all()
+    # ONEUP-0391: a check that never finished — crashed, killed, or refused because a
+    # run was going — exits non-zero with no CHECK_UNKNOWN. It said "Everything is up
+    # to date. 🎉" and zeroed the tray, and dropped the hint saying why.
+    w = window.Updater()
+    _tray_set = []
+    _patch(tray, "_apply_tray_total", lambda win, n, **_: _tray_set.append(n))
+    w._check_mode = True
+    w._installed_count = ""
+    w._hints = ["Another OneUp run is already going."]
+    w._hint_commands = [""]
+    w.proc = QProcess(w)
+    run.on_finished(w, 1, QProcess.ExitStatus.NormalExit)
+    check("ONEUP-0391 a failed check is no all-clear", "up to date" not in w.status.text())
+    check("ONEUP-0391 a failed check says it couldn't check",
+          "ouldn't check" in w.status.text())
+    check("ONEUP-0391 a failed check leaves the tray count alone", _tray_set == [])
+    check("ONEUP-0391 a failed check shows its hint",
+          w.warn_banner.isVisibleTo(w) and "already going" in w.warn_label.text())
+    _unpatch_all()
 
     # (12c) The tray makes the same claim from the same markers, so it needs the same
     # guard: CHECK_UNKNOWN arrives before the TOTAL it qualifies.
