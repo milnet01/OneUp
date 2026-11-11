@@ -7,7 +7,7 @@ version and not slipped out as a fix.
 **Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0339
-**Branch:** v2
+**Branch:** main
 **Verified at:** `a2fe97b` — every path, symbol and name below was read in this tree on
 2026-10-26, not recalled.
 

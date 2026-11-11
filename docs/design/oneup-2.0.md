@@ -4,8 +4,9 @@
 **Kind:** programme-design — the release as a whole. Each item below has (or gets) its
 own spec; this document holds only what the items *share* or *contend over*.
 **Roadmap:** ONEUP-0057 (the documentation set this design opens)
-**Branch:** `v2` — the branch the *work* lands on. This document itself lands on `main`
-(§5.3). `main` released **1.4.0** and is now frozen — see §5.4.
+**Branch:** `v2` — the branch the *work* landed on, retired 2026-11-11 (ONEUP-0388). This
+document itself landed on `main` (§5.3). `main` released **1.4.0** and was frozen until the
+2.0.0 merge — see §5.4.
 **Verified at:** `8d4c93e` — every figure below was measured against that tree on
 2026-07-27, not recalled, unless the figure names its own commit.
 
@@ -384,6 +385,10 @@ tables and adds the `QCoreApplication` its own §4.2 describes. 0032's §4.1 alr
 correctly under this order: it marks tables 0072 built.
 
 ### 5.3 Where each item lands
+
+**The programme is over.** 2.0.0 merged into `main` and was released on 2026-11-06, and `v2`
+was retired on 2026-11-11 (ONEUP-0388). The `docs/standards/workflow.md` sections that §5.3
+and §5.4 cite now live in `docs/history/workflow.md`.
 
 | Item | Branch | Why |
 | --- | --- | --- |

@@ -164,18 +164,14 @@ and sends nothing. The last check of the run fails if anything was recorded, and
 request. So a window built above the stub, or a new network call anywhere in the window,
 turns the suite red instead of reaching GitHub.
 
-**Two exceptions exist today. One is a defect and one is a deliberate carve-out**, and the
-difference between those is the point — a rule with a silent exception is worse than a rule
-with a stated one:
+**One exception exists today, a deliberate carve-out.** It is stated because a rule with a
+silent exception is worse than a rule with a stated one.
 
-- **The engine suite does not redirect `HOME`, on either branch.** *A defect on `main`;
-  closed on `v2`.* The `ONEUP_*` paths are redirected and `HOME` is not, so what
-  decides the outcome is when the engine makes its log directory. On `main`
-  `update_system.sh` runs `mkdir -p "$LOG_DIR"` — `LOG_DIR="$HOME/Documents/update-logs"` —
-  before it has looked at `--log=`, so every scenario creates that directory on the real
-  machine. On `v2` both engines create it only when about to default into it, so nothing
-  appears, and a scenario asserts that. Filed as **ONEUP-0058**, closed by ONEUP-0054
-  stage 2; `main` is frozen and keeps the old shape.
+The engine suite does not redirect `HOME`, so what decides the outcome is when the engine
+makes its log directory. Both engines create `~/Documents/update-logs` only when about to
+default into it, so nothing appears, and a scenario asserts that. Until ONEUP-0054 stage 2
+the Bash engine made it before looking at `--log=`, a defect filed as **ONEUP-0058**.
+
 - **One engine scenario reaches the network on purpose.** *A carve-out.* ONEUP-0094's T-1
   asks the real openSUSE content CDN for a repository-metadata file and asserts HTTP 200,
   because the item's whole claim is that a named third-party host is still there — a mock
@@ -429,7 +425,7 @@ with the layout direction forced right-to-left.
 | §2.1 the redirects | `run_engine` applies them itself, so a scenario that goes through it cannot forget. A scenario that invokes the engine directly must repeat them by hand, and **nothing catches that** — nor does anything catch this list going stale, which it has twice |
 | §2.2 the GUI suite redirects `HOME` | the redirect is unconditional and module-level in `tests/gui-smoke.py`, so no individual test can forget it. **Nothing checks it still runs before the window's modules are imported** — and that ordering is the whole point, because `oneup/gui/paths.py` computes every state path at import |
 | §2.3 no root | **half-covered.** `run_engine` puts the mock directory in front of the real `PATH`, so a name the scenario mocks — `setup_common` mocks `sudo` — shadows the real one. The real tools are still behind it: a scenario without `setup_common`, an absolute path, or `pkexec` (mocked nowhere) reaches the real binary, and nothing catches that |
-| §2.3 a test writes only inside its own temporary directory | **on `v2`, the ONEUP-0058 scenario** — it redirects `HOME` and asserts no log directory appears when `--log=` points elsewhere. **On `main`, nothing:** `update_system.sh` there builds `LOG_DIR` from `$HOME` and creates it before looking at `--log=`, and `tests/run-tests.sh` does not redirect `HOME`, so every scenario creates `~/Documents/update-logs` on the real machine (ONEUP-0058) |
+| §2.3 a test writes only inside its own temporary directory | **the ONEUP-0058 scenario** — it redirects `HOME` and asserts no log directory appears when `--log=` points elsewhere |
 | §2.3 every `mktemp -d` is paired with its `rm -rf` | **nothing** — a scenario that drops the removal leaks its directory silently, and a count of the two cannot show it |
 | §2.3 no network | **GUI suite: its closing check. Engine suite: nothing automated.** Verified 2026-08-07 by running each suite inside an empty network namespace (`unshare -rn`): engine **246 passed / 0 failed** with T-1 SKIPping loudly, GUI **307 / 0** — identical to their networked results but for T-1. For the GUI suite there is now a gate as well: its last check fails if any window made a `QNetworkAccessManager` request (ONEUP-0098). The engine suite has no such gate |
 | §3 a mock fails loudly rather than quietly | several scenarios carry an `exit 99` trap. Nothing checks that a *new* mock has one |

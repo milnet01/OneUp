@@ -8,7 +8,7 @@ translated into another language later without rewriting the app.
 **Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0057
-**Branch:** v2
+**Branch:** main
 **Verified at:** `89c0b25` — §2.2's quotations, §4's markers, §6's PySide6 behaviour and §7's
 commands were re-run against this tree on 2026-10-01, not recalled.
 

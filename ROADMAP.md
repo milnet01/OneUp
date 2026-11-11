@@ -11607,7 +11607,7 @@ when complete (that document's §7).
   Kind: chore.
   Source: user-request-2026-11-11.
 
-- 📋 [ONEUP-0389] **Sweep the remaining 'on v2' and 'Branch: v2' wording from the living standards.**
+- ✅ [ONEUP-0389] **Sweep the remaining 'on v2' and 'Branch: v2' wording from the living standards.**
   Left by ONEUP-0389. Living documents still say v2 or describe
   main as frozen: the Branch: v2 header in files-and-naming.md,
   dependencies.md, ui-and-accessibility.md and marker-protocol.md;
@@ -11616,6 +11616,14 @@ when complete (that document's §7).
   pointer at workflow.md §9; marker-protocol.md's "main is frozen"
   (workflow.md §1); design/oneup-2.0.md §5.3/§5.4. Specs, plans and
   ROADMAP.md are history and stay.
+  Done 2026-11-11. Branch: headers now main in the six living documents.
+  The on-v2 and frozen-main sentences were rewritten to describe main as
+  it is; the HOME/log-directory passages in testing.md and
+  files-and-naming.md were false on main and now say the ONEUP-0058 fix
+  is in both engines. documentation.md's header template drops v2. The
+  2.0 design doc keeps its history and gains a dated "programme is over"
+  note in §5.3. Left as dated history: workflow.md's v2 timing,
+  security.md's ONEUP-0034 date, the G2 gate wording.
   **Layman:** Some rule documents still talk about a 2.0 branch that no longer exists; tidy them so nobody is misled.
   Kind: doc-fix.
   Source: user-request-2026-11-11.

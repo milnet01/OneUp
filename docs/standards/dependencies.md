@@ -9,7 +9,7 @@ cue to re-test — so nobody has to remember why a version is old.
 **Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0004
-**Branch:** v2
+**Branch:** main
 **Verified at:** `3aa4357` — the snapshot and the *How to check* commands below were re-run
 against this tree on 2026-10-01, not recalled.
 
@@ -77,10 +77,8 @@ This is **not** a ledger entry. Nothing is held back — each pin is the latest
 release, spelled immutably. Rule 2's "older pin" test asks which release you are
 on, and the answer is unchanged.
 
-- `python-version` in `.github/workflows/release.yml` → **`3.14`** on `v2`, **`3.13`** on
-  `main`. Bumped on `v2` as ONEUP-0004 on 2026-08-19, the 2.0 dependency refresh. `main`
-  is frozen and takes only qualifying bug fixes, so it keeps 3.13 until the 2.0.0 merge —
-  which is why this row names a branch where the others do not. Re-verified at the bump
+- `python-version` in `.github/workflows/release.yml` → **`3.14`**. Bumped as
+  ONEUP-0004 on 2026-08-19, the 2.0 dependency refresh. Re-verified at the bump
   rather than recalled: 3.14 is the current stable series (3.14.7, EOL 2030-10-31), and
   PySide6 6.11.2 still ships `cp310-abi3` wheels at `requires_python <3.15,>=3.10`, so
   the 2026-07-26 sweep (`docs/history/dependencies.md`) still holds. The three action pins above were re-checked the same day

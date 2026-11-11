@@ -8,17 +8,10 @@ below names the test that enforces it.
 **Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0057
-**Branch:** v2
+**Branch:** main
 **Verified at:** `3c645e4` — §5, §6.1, §7's check status and the *What checks this* table
 were re-measured against this tree on 2026-08-21, after ONEUP-0064 and ONEUP-0076 landed.
 Everything else was measured at `58ea3bc` on 2026-07-26, not recalled.
-
-**This file lives on `v2` from 2026-08-21**, by `docs/standards/workflow.md` §9's second
-binding: it now backticks `oneup/gui/theme.py`, a file 2.0 creates, so `tests/docs-check.py`
-would fail it on `main`. The same conclusion follows from the content — §5's rule and four
-of its *What checks this* rows name a focus treatment and suite invariants that exist only
-here, and `main` is frozen at 1.4.x — but the path is the mechanical half. It reaches `main`
-at the 2.0.0 merge.
 
 **Sections:** 1 the one-line version · 2 accessible names · 3 never colour alone ·
 4 text that scales · 5 focus · 6 dialogs · 7 themes · 8 right-to-left · 9 traps ·

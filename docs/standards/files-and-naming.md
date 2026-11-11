@@ -7,7 +7,7 @@ nothing is half-installed.
 **Status:** Reviewed
 **Kind:** doc
 **Roadmap:** ONEUP-0057
-**Branch:** v2
+**Branch:** main
 **Verified at:** `0fda0d4` — §1, §4, §5, §6, §7 and the *What checks this* table were
 re-measured against this tree on 2026-10-01. Everything else was read out of the tree at
 `58ea3bc`, not recalled.
@@ -58,7 +58,7 @@ introduces exactly one new source directory, `oneup/` (§4).
 the working directory** — the same reason §1's table already grants the root dotfiles.
 Neither is a program or a developer script, so the closed root above still holds.
 
-- **`pyproject.toml`** (ONEUP-0063, on `v2` since 2026-08-19 — `docs/standards/coding.md`
+- **`pyproject.toml`** (ONEUP-0063, since 2026-08-19 — `docs/standards/coding.md`
   §2.1 settles its contents). Lint configuration only, with no `[project]` table; OneUp
   stays not-pip-installable. `ruff` finds it by walking up, so anywhere else and it is not
   found.
@@ -364,24 +364,24 @@ build. See the UI standard.
 
 Measured, not suspected. Recorded here so 2.0 does not reproduce them.
 
-**Trap 1 — `LOG_DIR` named two different directories. CLOSED on `v2` by ONEUP-0054
+**Trap 1 — `LOG_DIR` named two different directories. CLOSED by ONEUP-0054
 stage 2.** In `update_system.sh` it is `~/Documents/update-logs`; in the window it was
 `~/.local/state/oneup/logs`. While the two halves were in separate languages they could
 not collide; in one package they would. The window's is now `STATE_LOG_DIR` and the Python
 engine's is `USER_LOG_DIR`, renamed in one commit so the collision could not simply move.
 **`update_system.sh` keeps `LOG_DIR`** — it is Bash, no Python imports it, and it retires
-with the file. On frozen `main` both halves are unchanged and the trap stands as written.
+with the file.
 
 **Trap 2 — the engine's log directory is created on the real machine during tests.
-CLOSED on `v2` by ONEUP-0054 stage 2, and live on `main`.** `update_system.sh`'s
+CLOSED by ONEUP-0054 stage 2.** `update_system.sh`'s
 logging preamble ran `mkdir -p "$LOG_DIR"` *before* checking whether `--log=` was
 passed, and `run_engine` does not redirect `HOME`. So the suite created
 `~/Documents/update-logs` on any machine it ran on, including one that had never
-installed OneUp — and on frozen `main` it still does. It writes nothing there — `--log=`
+installed OneUp. It wrote nothing there — `--log=`
 is always supplied — but it is still the suite touching the box, which the testing
 standard forbids. Filed as **ONEUP-0058**.
-On `v2` both engines now create the directory only when about to default into it, and a
-scenario asserts it; frozen `main` keeps the old shape.
+Both engines now create the directory only when about to default into it, and a
+scenario asserts it.
 
 **Trap 3 — `XDG_STATE_HOME` was set by the tests and ignored by the app. CLOSED by
 ONEUP-0059 on 2026-08-20.** The sandbox block exported `XDG_CONFIG_HOME` and

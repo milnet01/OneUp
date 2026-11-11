@@ -7,7 +7,7 @@ a time, in one direction.
 **Status:** Reviewed
 **Kind:** reference
 **Roadmap:** ONEUP-0057
-**Branch:** v2
+**Branch:** main
 **Verified at:** `cd14877` — §1, §2, §3, §7 and §8 were re-read against both engines and
 `oneup/gui/` on 2026-10-01, not recalled. §1, §3, §4, §5 and §6 were re-read against the
 Python engine and `oneup/gui/` again on 2026-10-02, when ONEUP-0072 turned the worded
@@ -516,8 +516,7 @@ reader who trusts them writes a wrong parser:
 | done | `ok\|errors` | `stopped` is a third value, and the one with a behaviour rule attached (§4.9) |
 | reboot | `yes\|no[\|reason]` | `yes[\|reason]` *or* `no` — the reason follows `yes` only (§4.8) |
 
-Left as-is rather than patched: `main` is frozen (`docs/standards/workflow.md` §1), the
-fallback is frozen at the switch-over, and none of them is a defect in running code. This
+Left as-is rather than patched: the fallback is frozen at the switch-over, and none of them is a defect in running code. This
 document is the authority.
 
 ## 8. The four state files — a contract this protocol does *not* cover

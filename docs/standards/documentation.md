@@ -199,7 +199,7 @@ Every spec, design document, standard and reference opens with a header block:
 **Kind:** implement | fix | refactor | feature | doc | investigate | accessibility |
           programme-design | reference
 **Roadmap:** ONEUP-NNNN
-**Branch:** main | v2 | <branch name>
+**Branch:** main | <branch name>
 **Verified at:** <commit> — every figure below was measured against this tree, not recalled.
 ```
 
@@ -233,7 +233,7 @@ next time it is edited for another reason, not in a sweep. `ONEUP-0054` was the 
 
 **`Branch:` names the branch the *work* lands on, not the branch this file is committed
 to.** They differ routinely and on purpose: every 2.0 document was written on `main` while
-describing work that happens on `v2`. Say `main` only when the work itself lands there.
+describing work that happened on `v2`. Say `main` only when the work itself lands there.
 
 `Verified at` is not decoration. It is the only thing that lets a later reader know
 whether a figure is current — and §6b says how each figure was counted, so re-checking one

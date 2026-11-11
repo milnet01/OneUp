@@ -93,9 +93,9 @@ lower it. Verify with `python3 -V` on the target, not from memory.
 
 ### 2.1 The decision: a `pyproject.toml` is added in 2.0
 
-**Adopted on `v2` as ONEUP-0063, 2026-08-19.** The decision below is unchanged and is
-still what the file must contain; what has moved on is the *state it was settled against*,
-which is still `main`'s. On `v2` the file exists and the gate calls a bare `ruff check`.
+**Adopted as ONEUP-0063, 2026-08-19.** The decision below is unchanged and is still what
+the file must contain; the state it was settled against is the tree before the adoption.
+The file exists and the gate calls a bare `ruff check`.
 §2.1.1's measurement was re-taken before the adoption, and what it found is recorded
 there.
 
@@ -185,8 +185,8 @@ executable literal, which is the line *after* the `subprocess.run(` / `subproces
 that the comment is attached to. So the directive suppresses nothing (`RUF100: unused
 noqa`) **and** the underlying `S607` fires unsuppressed — two errors where the author
 intended none. The three in `run_kwin_script` are fine; the ones in `read_repos` and the
-two `Updater` `Popen` calls are not. ONEUP-0063 re-anchored them when it enabled `S`: on
-`v2` each `S607` now sits on the line carrying the executable.
+two `Updater` `Popen` calls are not. ONEUP-0063 re-anchored them when it enabled `S`:
+each `S607` now sits on the line carrying the executable.
 
 Adopting the config is therefore a small, bounded piece of work — wrap the over-long lines
 measured above, re-anchor the misplaced `noqa` comments, resolve or explicitly ignore the
@@ -216,7 +216,7 @@ Current coverage, measured on `main`: **51 of 174** function definitions in `upd
 carry a return annotation (~29%). New modules start at 100% on their public surface; existing
 functions get annotated when you are already editing them, not in a sweep of their own.
 
-**On `v2` this rule is now live, and one thing it does not yet cover is recorded rather than
+**This rule is now live, and one thing it does not yet cover is recorded rather than
 quietly skipped.** The split moved each subsystem's functions into their own module, so their
 parameters and returns cross a real boundary — the annotations they already carried came with
 them. The window they are handed is the exception: annotating it means naming the window's
@@ -238,8 +238,8 @@ module-level `_app_icon` — is nearly four times it on its own.**
 
 A class that size cannot be held in a reader's head, cannot be reviewed as a unit, and cannot
 be tested except through the whole application. Splitting it is ONEUP-0034, specced in
-`docs/specs/ONEUP-0034-gui-modules.md` and **done on `v2` on 2026-08-20**; the figures above
-describe `main`, which still ships the single file. This standard's job is to stop the next
+`docs/specs/ONEUP-0034-gui-modules.md` and **done on 2026-08-20**; the figures above
+describe the single file before the split. This standard's job is to stop the next
 file getting there.
 
 *(The exact line counts are deliberately not quoted — `docs/standards/documentation.md` §6b.
