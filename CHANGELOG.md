@@ -8,6 +8,18 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The tray's "Update now" no longer starts a second update over one already running** (ONEUP-0391)
+  It used to wipe the running update's progress from the window. Now it just opens the window, which shows the update still going.
+
+- **A check that fails no longer says "Everything is up to date"** (ONEUP-0391)
+  If a check crashed or could not start, OneUp told you all was well and cleared the tray's count. It now says it couldn't check, and shows why when it knows.
+
+- **Button text stays easy to read under the mouse pointer** (ONEUP-0391)
+  The white text on the Run, Restart and Stop buttons was hard to read while hovered or pressed. Those colours are deeper now, in every theme.
+
+- **A firmware update can no longer restart the computer partway through an update** (ONEUP-0391)
+  OneUp now tells the firmware tool never to restart by itself. The summary still tells you when a restart is needed.
+
 - **In the AppImage, links and the log file now open** (ONEUP-0383)
   "Open log file" and the About box's links did nothing, because the program that opens links crashed on OneUp's own bundled libraries.
 
@@ -30,6 +42,11 @@ All notable changes to OneUp are documented here. The format follows
 
 - **After the System update installs a new OneUp, a "Restart OneUp" button loads it** (ONEUP-0112)
   Installed from the openSUSE repository, OneUp tells you when the software source has a newer OneUp, and offers to restart once the System update has installed it.
+
+### Security
+
+- **The AppImage is built only from fixed, checked versions of its packing tools** (ONEUP-0391)
+  Two tools were downloaded at their newest version on every build, unchecked. Each is now a fixed version, and the build stops if a download does not match its recorded fingerprint.
 
 ## [2.0.0] - 2026-11-06
 
