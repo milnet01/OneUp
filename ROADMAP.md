@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=387 -->
+<!-- ants-roadmap-id-high-water: ONEUP=389 -->
 
 # OneUp Roadmap
 
@@ -11595,3 +11595,27 @@ when complete (that document's §7).
   **Layman:** Four possible bugs the speed review noticed in passing; each needs a proper look.
   Kind: investigate.
   Source: review-code-perf-2026-11-10.
+
+- ✅ [ONEUP-0388] **Retire the v2 branch: one branch, main.**
+  main already held every v2 commit, so nothing was merged. The
+  main worktree was removed, this checkout switched to main, and
+  v2 deleted locally and on GitHub. workflow.md §1 and §9 now say
+  "one branch"; the old freeze and branch tree moved verbatim to
+  docs/history/workflow.md. CLAUDE.md §4 rewritten; the
+  .claude/rules/docs-v2-paths.md rule deleted.
+  **Layman:** 2.0 is out, so the separate 2.0 work branch is gone and every change now goes to one place.
+  Kind: chore.
+  Source: user-request-2026-11-11.
+
+- 📋 [ONEUP-0389] **Sweep the remaining 'on v2' and 'Branch: v2' wording from the living standards.**
+  Left by ONEUP-0389. Living documents still say v2 or describe
+  main as frozen: the Branch: v2 header in files-and-naming.md,
+  dependencies.md, ui-and-accessibility.md and marker-protocol.md;
+  "on v2 / live on main" passages in coding.md, testing.md,
+  files-and-naming.md and dependencies.md; ui-and-accessibility.md's
+  pointer at workflow.md §9; marker-protocol.md's "main is frozen"
+  (workflow.md §1); design/oneup-2.0.md §5.3/§5.4. Specs, plans and
+  ROADMAP.md are history and stay.
+  **Layman:** Some rule documents still talk about a 2.0 branch that no longer exists; tidy them so nobody is misled.
+  Kind: doc-fix.
+  Source: user-request-2026-11-11.

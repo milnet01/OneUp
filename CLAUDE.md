@@ -32,7 +32,7 @@ python3 tests/self-update-test.py       # self-update suite (needs cryptography;
 ```
 
 There is no build step: a Python package (plus the retained Bash fallback), run directly
-from the checkout. On `main` the engine is still `./update_system.sh`. No suite has a per-test selector; to
+from the checkout. No suite has a per-test selector; to
 focus on one scenario, comment out the others in `tests/run-tests.sh`. How the gates run
 each suite is `docs/standards/testing.md` §1.
 
@@ -67,26 +67,18 @@ with `roadmap_log`, never by editing the file, which is generated output (§6).
 
 ## 4. Architecture: a thin window driving a privileged engine
 
-**Read the branch you are on.** On `main` the app is the two files below. On `v2`, as of
-ONEUP-0034, the window is a package — `oneup/gui/`, a module per job, behind a shim still
-called `updater.py`; as of ONEUP-0054 stage 9 the engine is one too — `oneup/engine/`, run
-as `python3 -m oneup.engine`, with `update_system.sh` kept only as a terminal fallback,
-frozen at the switch. `main` is frozen at 1.4.0 and takes only qualifying bug fixes
-(`docs/standards/workflow.md` §1).
-The privilege split, the marker contract, the step keys and everything else in this
-section are unchanged by either; only the file boundaries and the engine's language moved.
+**One branch: `main`** (`docs/standards/workflow.md` §1). The window is a package —
+`oneup/gui/`, a module per job, behind a shim still called `updater.py` (ONEUP-0034). The
+engine is one too — `oneup/engine/`, run as `python3 -m oneup.engine`, with
+`update_system.sh` kept only as a terminal fallback, frozen at the switch (ONEUP-0054).
 
-**Before writing a document `tests/docs-check.py` scans, read `.claude/rules/docs-v2-paths.md`:**
-on `main`, no such document may backtick a path that exists only on `v2`. `v2`'s own copies
-may, because there the path resolves.
+Two halves, split by privilege — and on a packaged install, a root service beside them:
 
-Two halves, split by privilege — and on a packaged `v2` install, a root service beside them:
-
-- **The engine** — `update_system.sh` on `main`, the `oneup/engine/` package on `v2`. Does
+- **The engine** — the `oneup/engine/` package. Does
   all the real work and decides every root command a run makes. On the sudo route it
   becomes root itself, authenticates once up front and keeps the credential warm for the
   run. Fully usable on its own in a terminal.
-- **The system service** — `oneup/service/`, on `v2` only (ONEUP-0249). On a packaged
+- **The system service** — `oneup/service/` (ONEUP-0249). On a packaged
   install the engine asks it to run each root command by NAME, from
   `oneup/engine/rootops.py`'s table, and the service builds and runs it as root after a
   polkit check. The engine picks its route to root once per run
@@ -102,9 +94,8 @@ marker means changing every file §5 lists — the emitter, the window's parser 
 suites — plus the reference itself, in one commit. §5 names them; this file does not.
 
 Step keys, the run order both halves share: `system, flatpak, firmware, orphans, cache` —
-the `TASKS` list (in `updater.py` on `main`; inside the package on `v2`, where `updater.py`
-is only the shim) and the engine's `LABEL` map (in `update_system.sh` on `main`; in the
-engine package's step module on `v2`).
+the `TASKS` list in `oneup/gui/steps.py` and the engine's `LABEL` map in
+`oneup/engine/steps.py`.
 
 A step whose tool is absent (`flatpak`, `fwupd`) is **skipped cleanly, never errored**.
 Keep new steps tolerant of a missing binary.
@@ -116,8 +107,7 @@ must never claim success or advise a reboot it did not earn — are
 Runtime state lives in `~/.local/state/oneup/`, and four files there are a contract between
 the two halves rather than mere state: `docs/reference/marker-protocol.md` §8. `run.state`
 and `stop.request` are the original pair; `hold.state` and `go.request` were added by
-ONEUP-0044 so one engine can span the size preview and the run. (On `v2`
-that directory follows `XDG_STATE_HOME` when it is set to an ABSOLUTE path, and falls back
+ONEUP-0044 so one engine can span the size preview and the run. (That directory follows `XDG_STATE_HOME` when it is set to an ABSOLUTE path, and falls back
 to `~/.local/state/oneup/` otherwise (ONEUP-0059) — in **both** halves, in one commit,
 because moving one side alone leaves Stop writing where the engine never looks.)
 
