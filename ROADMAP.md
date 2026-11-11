@@ -11691,7 +11691,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0392] **Prove on the VM whether a long windowed run asks for the password twice, then fix the keep-alive.**
+- ✅ [ONEUP-0392] **Prove on the VM whether a long windowed run asks for the password twice, then fix the keep-alive.**
   Calibrated HIGH, lanes 03 and 12 (not independent: both were
   handed security.md §2.2's trap). privilege.py's keep-alive runs
   `sudo -n -v` from a helper, so with no terminal sudo keys the
@@ -11700,6 +11700,11 @@ when complete (that document's §7).
   own sudo calls renew often enough to hide it. User ruling
   2026-11-11: a windowed run longer than timestamp_timeout on the VM,
   watching for a second prompt; fix only after.
+  Shipped 2026-11-11 in 43db1a7. Proved on the VM first, per the ruling:
+  with timestamp_timeout=1, Run after the preview failed every root
+  command ("a terminal is required"), not a second prompt. The
+  keep-alive is now a thread of the engine; the same VM sequence then
+  finished all five steps. Edge left: ONEUP-0405.
   **Layman:** A long update started from the window might ask for your password a second time; test it on the virtual machine first, then fix it.
   Kind: investigate.
   Source: review-code-2026-11-11.
