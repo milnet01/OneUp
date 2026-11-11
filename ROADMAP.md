@@ -11227,6 +11227,8 @@ when complete (that document's §7).
   `release.sh` runs it before it changes anything (`--sign-only` too).
   It has not yet run against the real key. The first signed release runs
   it.
+  2026-11-11: the user ran `sign-release.py --check-key` against the
+  real key, and it matches the committed public key.
   **Layman:** OneUp will be able to update itself: it spots a new version, downloads it, closes, applies the update and reopens — instead of telling you a new version exists and leaving you to fetch it.
   Kind: feature.
   Source: user-request-2026-08-18.
