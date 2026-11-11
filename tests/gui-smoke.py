@@ -3827,6 +3827,28 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         check(f"_show_window runs without error ({exc})", False)
 
+    # (3b) ONEUP-0391: the tray's "Update now" starts nothing while the window is busy.
+    # It used to call start_run unguarded, so a tray user whose run was still going
+    # wiped its display and started a second engine. Busy is whatever disables the
+    # window's own Run button: a run, a check, or a run being followed.
+    _launched = []
+    _real_launch = run._launch
+    run._launch = lambda w, st, check, **kw: _launched.append(check)
+    try:
+        w = window.Updater()
+        w._run_active = True
+        w.set_controls_enabled(False)
+        tray._tray_update(w)
+        check("ONEUP-0391 tray Update now starts no engine while a run is going",
+              _launched == [])
+        _launched.clear()
+        w = window.Updater()
+        tray._tray_update(w)
+        check("ONEUP-0391 tray Update now starts a run when the window is idle",
+              _launched == [False])
+    finally:
+        run._launch = _real_launch
+
     # (4) The periodic check is silent and parses the real THREE-field TOTAL line.
     w = window.Updater()
     args = tray._tray_check_args("/tmp/x.log")  # noqa: S108 — an argument value, never opened.

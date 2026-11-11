@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=390 -->
+<!-- ants-roadmap-id-high-water: ONEUP=391 -->
 
 # OneUp Roadmap
 
@@ -11664,3 +11664,19 @@ when complete (that document's §7).
   **Layman:** Closing OneUp during an update may stop the update, even though the warning says it won't; confirm it on the real app and fix it.
   Kind: fix.
   Source: oneup-0387-locate-2026-11-11.
+
+- 🚧 [ONEUP-0391] **Fix the four calibrated HIGHs from the 2026-11-11 code review, and stop fwupd rebooting mid-run.**
+  Records: the review's own folder, outside this public repo.
+  1. Tray "Update now" starts a second engine over a live run (tray.py).
+  2. A check that fails says "Everything is up to date" and zeroes
+     the tray (run.py, check branch of on_finished).
+  3. The white label on hovered/pressed accent and danger buttons is
+     below 4.5:1, and contrast.py never measures it (theme.py).
+  4. The AppImage runtime and appimagetool come from the mutable
+     `continuous` release with no checksum (build-appimage.sh).
+  5. User ruling: pass fwupdmgr --no-reboot-check in the firmware step,
+     defensively; no VM test.
+  The keep-alive HIGH (privilege.py) is its own item: VM proof first.
+  **Layman:** Four real problems the full code review found, plus a safety flag so a firmware update can never restart the computer halfway through.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.

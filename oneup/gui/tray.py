@@ -280,8 +280,13 @@ def refresh_icon(win):
 
 
 def _tray_update(win):
+    """The menu's "Update now". Raise the window; start a run only where its own Run
+    button could. That button is disabled while a run, a check or a followed run is
+    going, and starting anyway wiped the live display and began a second engine
+    (ONEUP-0391)."""
     _show_window(win)
-    run.start_run(win)
+    if win.run_btn.isEnabled():
+        run.start_run(win)
 
 
 def _ensure_tray(win):
