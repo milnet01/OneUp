@@ -5345,6 +5345,21 @@ PYEOF
 )"
 fi
 
+echo "TEST: the AppImage build fetches only pinned, checksummed files (ONEUP-0391)"
+# The runtime is copied into every shipped AppImage and appimagetool runs inside the
+# build, and both came from the moving `continuous` release unchecked — a build whose
+# output nobody chose (security.md §8.2). Every URL the script fetches must go through
+# fetch_pinned with a sha256 beside it.
+root_dir=$(dirname "$ENGINE")
+build="$(grep -vE '^[[:space:]]*#' "$root_dir/packaging/appimage/build-appimage.sh")"
+check_absent "the AppImage build names no moving 'continuous' release" "continuous" "$build"
+check "the AppImage build fetches at least one file" "https://" "$build"
+check_absent "every URL the AppImage build fetches carries a pinned sha256" "unpinned" \
+    "$(grep 'https://' <<<"$build" \
+       | grep -vE '^[[:space:]]*fetch_pinned "https://[^"]+" [0-9a-f]{64} ' \
+       | sed 's/^/unpinned: /')"
+check "fetch_pinned verifies the checksum" "sha256sum -c" "$build"
+
 echo "TEST: the service ships no polkit file and its unit never kills a transaction (ONEUP-0249 INV-13)"
 # CVE-2018-1106's shape is a convenience .rules file shipped with the package; an
 # [Install] section would start the service at boot; and without KillMode=process,

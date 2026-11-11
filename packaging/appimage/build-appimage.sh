@@ -60,21 +60,30 @@ exec "$HERE/usr/bin/oneup" "$@"
 EOF
 chmod +x "$appdir/AppRun"
 
-echo "==> Fetching appimagetool (if needed)"
-tool=$(command -v appimagetool || true)
-if [ -z "$tool" ]; then
-    tool="$work/appimagetool"
-    curl -fsSL --connect-timeout 20 --max-time 300 --retry 3 -o "$tool" \
-        "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
-    chmod +x "$tool"
-fi
+# Both tools come from a fixed release and must match the sha256 written here
+# (security.md §8.2). The runtime is copied into every shipped AppImage and the tool
+# runs inside the build, so the moving `continuous` release they came from before
+# meant a build whose output nobody chose (ONEUP-0391). A host appimagetool is not
+# used either, for the same reason. To move a pin: change the tag and the checksum
+# together, and the row in docs/standards/dependencies.md.
+fetch_pinned() {  # url, sha256, destination
+    curl -fsSL --connect-timeout 20 --max-time 300 --retry 3 -o "$3" "$1"
+    echo "$2  $3" | sha256sum -c --quiet - || {
+        echo "build-appimage: checksum mismatch for $1" >&2
+        exit 1
+    }
+}
+
+echo "==> Fetching appimagetool"
+tool="$work/appimagetool"
+fetch_pinned "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage" ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0 "$tool"
+chmod +x "$tool"
 
 # The runtime is fetched here, not by appimagetool: its own download hung with the
 # server's socket already closed (ONEUP-0376), and curl bounds the wait.
 echo "==> Fetching the AppImage runtime"
 runtime="$work/runtime-x86_64"
-curl -fsSL --connect-timeout 20 --max-time 300 --retry 3 -o "$runtime" \
-    "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64"
+fetch_pinned "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64" 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d "$runtime"
 
 echo "==> Packing the AppImage"
 out="$here/OneUp-x86_64.AppImage"

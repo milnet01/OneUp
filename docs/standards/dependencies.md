@@ -101,6 +101,13 @@ on, and the answer is unchanged.
   library on both sides of the system service (ONEUP-0249 §4.3). The RPM takes the
   distro's package. The engine imports it only inside functions, so the AppImage's
   engine, which takes the sudo route, runs without it (INV-12).
+- **appimagetool** → **`1.9.1`** and the AppImage **type2-runtime** → **`20251108`** — the
+  newest tagged release of each (2026-11-11: `gh api repos/AppImage/<repo>/releases`).
+  `packaging/appimage/build-appimage.sh` fetches each by tag and checks a sha256 written
+  beside it, and the engine suite fails a fetch without one (ONEUP-0391). Before that
+  both came from the moving `continuous` release, unchecked (`security.md` §8.2). A bump
+  changes the tag and the checksum together; GitHub records each asset's sha256 as its
+  `digest`. Not a ledger entry: nothing is held back.
 - `zypper`, `flatpak`, `fwupd`, `snapper` — host tools, versioned by the user's openSUSE
   install; OneUp calls stable CLI surfaces.
 
@@ -120,6 +127,11 @@ curl -s https://endoflife.date/api/python.json | python3 -c 'import json,sys; pr
 # and on a bump replace the whole set with the resolution that file's header names:
 python3 -m pip index versions PySide6 | head -1; python3 -m pip index versions pyinstaller | head -1
 python3 -m pip index versions cryptography | head -1
+# AppImage tools — newest tagged release, and its sha256, against build-appimage.sh:
+for r in appimagetool type2-runtime; do
+  gh api "repos/AppImage/$r/releases" -q '[.[] | select(.tag_name != "continuous")][0] | .tag_name'
+done
+#   gh api repos/AppImage/<repo>/releases/tags/<tag> -q '.assets[] | .name + " " + .digest'
 # Host packages (openSUSE):
 zypper search -s --provides --match-exact python3-pyside6
 ```
