@@ -103,6 +103,27 @@ def request_stop(win):
     win._announce(QCoreApplication.translate("run", "Stopping after the current step."))
 
 
+class EngineProcess(QProcess):
+    """The engine's process. A QProcess destroyed while its child runs kills the
+    child, and quitting destroys the window and every process it owns, so quitting
+    mid-run killed the engine the quit warning promises keeps going (ONEUP-0390).
+    `detach` marks it not running, so its destruction leaves the child alone."""
+
+    def detach(self):
+        if self.state() != QProcess.ProcessState.NotRunning:
+            self.setProcessState(QProcess.ProcessState.NotRunning)
+
+
+def release_engine(win):
+    """At quit: let the engine run on without the window (security.md §6.3).
+
+    Only `win.proc`: the run, a held preview it adopted included. A preview still
+    holding is no run; it sees the window's pid gone and exits (ONEUP-0044)."""
+    proc = getattr(win, "proc", None)
+    if isinstance(proc, EngineProcess) and shiboken6.isValid(proc):
+        proc.detach()
+
+
 def start_check(win):
     _launch(win, win.selected_steps(), check=True)
 
@@ -309,7 +330,7 @@ def request_size(win, key: str, unasked: bool = False):
     # at the last real run until this preview actually becomes one.
     size_log = paths.STATE_LOG_DIR / f"{stamp}.log"
     win._hold_log = size_log
-    p = QProcess(win)
+    p = EngineProcess(win)     # it may become the run (`_adopt_held_engine`)
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.readyReadStandardOutput.connect(partial(_on_size_output, win))
     p.finished.connect(partial(_on_size_finished, win))
@@ -549,7 +570,7 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
 
     args = _engine_args(steps, check, import_keys, skip_repos)
     args.insert(1, f"--log={win._log_path}")  # after --steps, before --check/etc.
-    win.proc = QProcess(win)
+    win.proc = EngineProcess(win)
     win.proc.setProcessChannelMode(QProcess.MergedChannels)
     win.proc.readyReadStandardOutput.connect(partial(on_output, win))
     win.proc.finished.connect(partial(on_finished, win))

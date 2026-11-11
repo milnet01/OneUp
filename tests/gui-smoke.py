@@ -1579,6 +1579,29 @@ def main() -> int:
             quiet = False
         check(f"{slot} ignores a window Qt already destroyed", quiet)
 
+    # ONEUP-0390: "Close anyway" promises the run carries on, but quitting destroys the
+    # window, and a QProcess destroyed while its child runs kills the child. Measured
+    # on the real app on both quit routes. Quit is aboutToQuit, then the teardown.
+    wQ = window.Updater()
+    saved_argv = paths.engine_argv
+    paths.engine_argv = lambda *a, env=None: ["sleep", "30"]
+    try:
+        run._launch(wQ, ["cache"], False)
+    finally:
+        paths.engine_argv = saved_argv
+    wQ.proc.waitForStarted(5000)
+    engine_pid = wQ.proc.processId()
+    QApplication.instance().aboutToQuit.emit()
+    shiboken6.delete(wQ)
+    try:
+        os.kill(engine_pid, 0)
+        survived = engine_pid > 0
+    except OSError:
+        survived = False
+    check("the engine outlives quitting the window mid-run", survived)
+    if survived:
+        os.kill(engine_pid, 15)
+
     # ONEUP-0387: the schedule's systemctl calls run on the window's thread, so one
     # that never answers froze the window. A systemctl answering in 20 s stands in for
     # a stuck user manager; each action must give up well before it. One process, as

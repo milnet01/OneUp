@@ -11639,7 +11639,7 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: user-request-2026-11-11.
 
-- 📋 [ONEUP-0390] **Quitting the window mid-run may kill the engine, against the quit warning's promise.**
+- ✅ [ONEUP-0390] **Quitting the window mid-run may kill the engine, against the quit warning's promise.**
   Found while locating ONEUP-0387 lead 3. The engine is QProcess(win)
   (oneup/gui/run.py, the run's launch). A QProcess destroyed while its
   child runs kills the child. Measured 2026-11-11 with a bare QWidget
@@ -11651,6 +11651,16 @@ when complete (that document's §7).
   tray's) may keep the window alive past main. Confirm first: launch
   the real app with a mock engine, start a run, quit, check the pid.
   Probes: /mnt/Emulators/.claude/Scratchpad/OneUp/teardown_probe*.py.
+  Confirmed 2026-11-11 on the real app.main with a mock engine: after
+  "Close anyway", the engine died on both the tray Quit and the no-tray
+  close routes, killed by QProcess's destructor at interpreter teardown.
+  Fix: the run's process is run.EngineProcess, and the window's
+  aboutToQuit handler detaches it (setProcessState NotRunning), so
+  teardown leaves it running. A held preview that was never adopted is
+  left alone: it exits on its own once the window's pid is gone
+  (ONEUP-0044). Re-probed: the engine survives both routes and is
+  reparented to systemd. Test: gui-smoke "the engine outlives quitting
+  the window mid-run", red before the fix.
   **Layman:** Closing OneUp during an update may stop the update, even though the warning says it won't; confirm it on the real app and fix it.
   Kind: fix.
   Source: oneup-0387-locate-2026-11-11.

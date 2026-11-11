@@ -17,6 +17,9 @@ All notable changes to OneUp are documented here. The format follows
 - **The weekly schedule settings can no longer freeze the window** (ONEUP-0387)
   If the system's user service manager stops answering, OneUp now stops waiting for it.
 
+- **Closing OneUp during an update no longer stops the update** (ONEUP-0390)
+  The warning promised the update would carry on in the background, but quitting ended it. Now it finishes on its own, as promised.
+
 ### Added
 
 - **OneUp shows what's new in every version since yours, inside OneUp** (ONEUP-0112)

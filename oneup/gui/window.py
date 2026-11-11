@@ -257,6 +257,10 @@ class Updater(QMainWindow):
         self._snapshot_count = 0      # how many, for the banner text
         self._run_active = False      # is a full update run in flight? (guards the thin action)
         self._liveness_active = False # is ANY engine in flight? (drives the ONEUP-0048 line)
+        # Every way out (Quit, closing with no tray, logout) passes aboutToQuit before
+        # the teardown that would kill a running engine (ONEUP-0390). A bound method,
+        # so the connection does not keep the window alive.
+        QApplication.instance().aboutToQuit.connect(self._release_engine)
         self._settings_dialog: SettingsDialog | None = None
         self._pending_autoupdate = False   # one-shot latch: an enable awaiting a fresh auth settle
         self._tray = None
@@ -972,6 +976,9 @@ class Updater(QMainWindow):
         if not self._run_active:
             return True
         return self._ask_quit_during_run()
+
+    def _release_engine(self):
+        run.release_engine(self)
 
     def _quit_requested(self):
         if self._confirm_quit():
