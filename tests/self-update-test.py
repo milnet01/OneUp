@@ -327,10 +327,20 @@ def test_signer(work: Path):
         update_key.RELEASE_PUBLIC_KEY_B64 = public
         self_update.verify(artifact.read_bytes(), sig, "2.1.0")
         check("INV-16 a signature the signer makes verifies through self_update.verify", True)
+        check("INV-16 --check-key accepts the committed key's private half",
+              signer.key_matches(work / "keys" / "signing.key"))
+        check("INV-16 --check-key exits 0 on a match",
+              signer.main(["--check-key", "--key", str(work / "keys" / "signing.key")]) == 0)
         update_key.RELEASE_PUBLIC_KEY_B64 = _keypair()[1]
         check("INV-16 and fails against a second key",
               _raises(lambda: self_update.verify(artifact.read_bytes(), sig, "2.1.0"),
                       self_update.UpdateVerificationError))
+        check("INV-16 --check-key refuses a key that is not the committed key's half",
+              not signer.key_matches(work / "keys" / "signing.key"))
+        check("INV-16 --check-key exits 1 on a mismatch",
+              signer.main(["--check-key", "--key", str(work / "keys" / "signing.key")]) == 1)
+        check("INV-16 --check-key exits 1 when the key file is missing",
+              signer.main(["--check-key", "--key", str(work / "keys" / "absent.key")]) == 1)
     finally:
         update_key.RELEASE_PUBLIC_KEY_B64 = saved
 

@@ -11223,6 +11223,10 @@ when complete (that document's §7).
   User decided 2026-11-11: add a release.sh check that refuses to start
   a release when the committed public key does not match the private
   signing key. Build it before the first signed release.
+  2026-11-11: the key check is built. `sign-release.py --check-key`, and
+  `release.sh` runs it before it changes anything (`--sign-only` too).
+  It has not yet run against the real key. The first signed release runs
+  it.
   **Layman:** OneUp will be able to update itself: it spots a new version, downloads it, closes, applies the update and reopens — instead of telling you a new version exists and leaving you to fetch it.
   Kind: feature.
   Source: user-request-2026-08-18.

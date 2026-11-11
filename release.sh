@@ -61,11 +61,24 @@ trap 'exit 130' INT TERM
 
 red() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 
+key="${ONEUP_SIGNING_KEY:-$HOME/.config/oneup-release/signing.key}"
+
+# Before anything changes: is the signing key here, and is it the private half of the
+# public key every installed AppImage checks against? A missing or mismatched key
+# would otherwise surface only after the tag is pushed, as a release no AppImage is
+# offered. sign-release.py prints only the answer, never key material.
+check_signing_key() {
+    echo "==> Checking the signing key"
+    [[ -f "$key" ]] || die "no signing key at $key — make one with 'python3 packaging/sign-release.py --generate', or point \$ONEUP_SIGNING_KEY at it"
+    python3 packaging/sign-release.py --check-key --key "$key" \
+        || die "the signing key does not match oneup/gui/update_key.py's public key — not releasing"
+}
+
 # Wait for v$ver's Release build, then sign its AppImage, verify the signature
 # against the COMMITTED public key — the check every AppImage makes — and upload it.
 # --clobber replaces the .sig a moved tag left behind. Returns non-zero on any failure.
 sign_release() {
-    local key="${ONEUP_SIGNING_KEY:-$HOME/.config/oneup-release/signing.key}" sha run
+    local sha run
     local asset=OneUp-x86_64.AppImage
     echo "==> Signing the AppImage for v$ver"
     if [[ ! -f "$key" ]]; then
@@ -99,6 +112,7 @@ sign_release() {
 
 if $sign_only; then
     git rev-parse "v$ver" >/dev/null 2>&1 || die "there is no tag v$ver"
+    check_signing_key
     sign_release || { red "release: v$ver is NOT signed — no AppImage will be offered it."; exit 4; }
     exit 0
 fi
@@ -106,6 +120,7 @@ fi
 [[ -z "$(git status --porcelain)" ]] || die "working tree not clean — commit or stash first"
 [[ "$(git rev-parse --abbrev-ref HEAD)" == "main" ]] || die "not on the main branch"
 git rev-parse "v$ver" >/dev/null 2>&1 && die "tag v$ver already exists"
+check_signing_key
 
 echo "==> Bumping to $ver"
 ./bump.py "$ver" || die "bump failed (is there a non-empty ## [Unreleased] in CHANGELOG.md?)"

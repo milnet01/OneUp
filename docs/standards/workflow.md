@@ -523,9 +523,13 @@ Three things about that sequence are worth knowing before you run it:
   so neither failure skips the other. It waits for the tag's Release workflow, downloads
   the AppImage into a temporary folder, signs it with the key on this PC, checks the
   signature against the committed public key and uploads `OneUp-x86_64.AppImage.sig`.
-  Without that file no installed AppImage is offered the release (ONEUP-0112). With no
-  key, or any step failing, it says so in red and exits 4, which wins over OBS's 3.
+  Without that file no installed AppImage is offered the release (ONEUP-0112). With any
+  step failing, it says so in red and exits 4, which wins over OBS's 3.
   `./release.sh --sign-only X.Y.Z` runs this step alone.
+- **The key is checked before anything changes.** A missing signing key, or one that is
+  not the private half of the committed public key, stops the release at the start,
+  `--sign-only` included. `python3 packaging/sign-release.py --check-key` runs the same
+  check by hand.
 
 **Once, before the first signed release, make the signing key:**
 `python3 packaging/sign-release.py --generate`. It writes the private key to
