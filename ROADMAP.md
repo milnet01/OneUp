@@ -11709,7 +11709,7 @@ when complete (that document's §7).
   Kind: investigate.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0393] **A software source OneUp switches off for a run can stay off after an abnormal end.**
+- ✅ [ONEUP-0393] **A software source OneUp switches off for a run can stay off after an abnormal end.**
   Review theme 1: the disabled-sources record lives only in memory.
   - privilege.py:616-621: a second signal during cleanup skips
     repos.restore_disabled() (HIGH calibrated to MEDIUM).
@@ -11717,6 +11717,11 @@ when complete (that document's §7).
     re-enable is never retried), :398 (an already-disabled source
     gets re-enabled).
   - update_system.sh DISABLED_REPOS, memory only.
+  Closed 2026-11-12 in 525a885. Fixed: the second-signal cleanup gap, an
+  already-off source being switched on (engine and service), and the
+  service's dropped re-enable (now retried for 10 minutes). Queued: a
+  dead service losing its list, as ONEUP-0406. Dismissed: the Bash
+  fallback's DISABLED_REPOS, as that engine is frozen (ONEUP-0054).
   **Layman:** If an update is interrupted in an unusual way, a software source OneUp paused may be left switched off.
   Kind: review-fix.
   Source: review-code-2026-11-11.
