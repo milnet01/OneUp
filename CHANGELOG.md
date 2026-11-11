@@ -8,6 +8,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Pressing Stop or closing the window again while OneUp tidies up no longer leaves a skipped software source switched off** (ONEUP-0393)
+
+- **Skipping a software source that was already switched off no longer switches it on at the end** (ONEUP-0393)
+
+- **When the system service cannot switch a skipped source back on straight away, it keeps trying for up to ten minutes** (ONEUP-0393)
+
 - **A long update started from the window no longer fails partway when sudo forgets the password** (ONEUP-0392)
   OneUp keeps the password fresh in the background, but from the window that refresh
   renewed the wrong entry, so after sudo's timeout every later step failed with "a

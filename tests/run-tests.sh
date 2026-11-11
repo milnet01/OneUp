@@ -4064,6 +4064,51 @@ unset MOCK_ZLOG
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0393: the exit handlers stayed armed while `cleanup` ran, so a second
+# signal (a second Ctrl-C, or the window closing) raised inside it and skipped
+# every re-enable still owed. The first re-enable here sends that second signal.
+echo "TEST: a second signal during cleanup still re-enables every skipped source"
+d=$(mktemp -d); setup_common "$d"
+setup_cached_sudo "$d"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "zypper $*" >> "$MOCK_ZLOG"
+case "$*" in
+  *"modifyrepo --enable first"*) kill -TERM $PPID; sleep 1; exit 0 ;;
+  *dup*|*update*)                 kill -TERM $PPID; sleep 5; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+run_engine "$d" --steps=system --skip-repo=first --skip-repo=second >/dev/null 2>&1 || true
+check "the second source is re-enabled too" "modifyrepo --enable second" "$(cat "$MOCK_ZLOG")"
+unset MOCK_ZLOG
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# ONEUP-0393: a source the administrator had already switched off was "skipped",
+# recorded, and switched ON at the end. The run must leave it as it found it.
+echo "TEST: --skip-repo on a source already switched off leaves it off"
+d=$(mktemp -d); setup_common "$d"
+setup_cached_sudo "$d"
+printf '[offrepo]\nname=Off\nenabled=0\nbaseurl=http://x.example/off/\n' > "$d/repos.d/off.repo"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "zypper $*" >> "$MOCK_ZLOG"
+case "$*" in *dup*|*update*) echo "3 packages to upgrade."; exit 0 ;; *) exit 0 ;; esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system --skip-repo=offrepo)
+check_absent "an already-off source is never switched on" "modifyrepo --enable offrepo" "$(cat "$MOCK_ZLOG")"
+check_absent "nor switched off again" "modifyrepo --disable offrepo" "$(cat "$MOCK_ZLOG")"
+check "the run still reports it skipped" "@@REPO_SKIPPED@@|offrepo|manual" "$out"
+check "and the upgrade succeeds" "@@STEP_END@@|system|ok" "$out"
+unset MOCK_ZLOG
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
 echo "TEST: an unsafe repo alias is refused and never reaches a privileged command"
 d=$(mktemp -d); setup_common "$d"
 export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"

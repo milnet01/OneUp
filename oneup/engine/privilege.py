@@ -553,7 +553,14 @@ def cleanup() -> None:
     keeping warm — stop it first and an interrupted `--skip-repo` run
     leaves the user's repository disabled. No scenario can see it; the suite's
     cached-sudo mock succeeds on `sudo -n` either way.
+
+    **A second signal must not cut it short** (ONEUP-0393). The exit handlers
+    raise `SystemExit`, and one raised in here skips every re-enable still owed.
+    A no-op handler, not `SIG_IGN`: an ignored signal stays ignored across
+    `exec`, so the `sudo` children below would inherit it.
     """
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, _ignore_signal)
     # Deferred: both modules import this one, so a top-level import is a cycle.
     from . import repos, runstate
 
@@ -585,6 +592,10 @@ def _signal_exit(code: int):
     def handler(_signum, _frame):
         raise SystemExit(code)
     return handler
+
+
+def _ignore_signal(_signum, _frame) -> None:
+    """Swallow a signal that arrives while `cleanup` runs."""
 
 
 def install_exit_handlers() -> None:

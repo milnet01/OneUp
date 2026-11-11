@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=405 -->
+<!-- ants-roadmap-id-high-water: ONEUP=406 -->
 
 # OneUp Roadmap
 
@@ -11864,3 +11864,17 @@ when complete (that document's §7).
   **Layman:** On a computer set to forget the password almost at once, an update from the window fails partway instead of asking for the password again.
   Kind: fix.
   Source: ONEUP-0392-vm-2026-11-11.
+
+- 📋 [ONEUP-0406] **A software source OneUp switched off stays off if the system service itself dies.**
+  Split from ONEUP-0393 (review theme 1), finding F4: the service
+  keeps each session's disabled aliases in memory only
+  (oneup/service/server.py, Session.disabled). A dead service loses
+  them. ONEUP-0249 section 6 now states the gap.
+  Not fixed with ONEUP-0393 because where the record lives is a design
+  choice for the user: /run/oneup survives a service restart but not a
+  reboot; /var/lib/oneup survives both but is new persistent root state.
+  The sudo route has the same gap for a SIGKILLed engine (section 4.5
+  names it); one design could cover both.
+  **Layman:** If OneUp's background helper crashes in the middle of an update, a software source it paused for that update is not switched back on.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.

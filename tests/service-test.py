@@ -83,10 +83,13 @@ BUS_CONFIG = """<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Config
 # DIR/done; it turns SIGTERM into 105, as zypper does. `clean` prints to both streams;
 # DIR/clean-dies makes it die of SIGKILL instead, DIR/clean-termed of SIGTERM, and
 # DIR/clean-chunks print a chunk with no line ending, pause, finish the line, exit 3.
+# While DIR/enable-fails exists, `modifyrepo --enable` fails as a held zypp lock does.
 ZYPPER = r"""#!/usr/bin/env bash
 d="$ONEUP_MOCK_DIR"
 printf '%s|%s\n' "$LC_ALL" "$*" >> "$d/calls.log"
 case " $* " in
+  *" modifyrepo --enable "*)
+    [[ -e "$d/enable-fails" ]] && exit 7 ;;
   *" packages --unneeded "*)
     printf 'Loading repository data...\nS | Repository | Name | Version | Arch\n'
     printf '%s\n' '--+------------+------+---------+-------'
@@ -107,13 +110,16 @@ exit 0
 
 
 def write_mocks(d: Path) -> None:
-    """The zypper mock and two repository files whose aliases the service may name."""
+    """The zypper mock and the repository files whose aliases the service may name.
+
+    `offrepo` is one an administrator has switched off.
+    """
     (d / "zypper").write_text(ZYPPER)
     (d / "zypper").chmod(0o755)
     (d / "repos.d").mkdir(exist_ok=True)
-    for alias in ("oss", "packman"):
+    for alias, on in (("oss", 1), ("packman", 1), ("offrepo", 0)):
         (d / "repos.d" / f"{alias}.repo").write_text(
-            f"[{alias}]\nname={alias}\nenabled=1\nbaseurl=http://download.opensuse.org/x/\n")
+            f"[{alias}]\nname={alias}\nenabled={on}\nbaseurl=http://download.opensuse.org/x/\n")
 
 
 # --- the fake polkit -------------------------------------------------------------
@@ -191,7 +197,8 @@ class Rig:
                     "ONEUP_MOCK_DIR": str(d), "PATH": f"{d}{os.pathsep}{os.environ['PATH']}",
                     "PYTHONPATH": str(REPO), "ONEUP_REPOS_DIR": str(d / "repos.d"),
                     "ONEUP_SERVICE_RUNTIME_DIR": str(d / "run"),
-                    "ONEUP_SERVICE_IDLE_SECONDS": idle}
+                    "ONEUP_SERVICE_IDLE_SECONDS": idle,
+                    "ONEUP_SERVICE_RETRY_SECONDS": "0.5"}
         self.procs.append(subprocess.Popen(  # noqa: S603 — this file, fixed argv
             [sys.executable, __file__, "--fake-polkit", str(d)], env=self.env))
         wait_for(lambda: (d / "polkit.ready").exists(), 10)
@@ -546,6 +553,49 @@ def test_repo_restore(rig: Rig) -> None:
     close(c)
 
 
+def test_repo_already_off(rig: Rig) -> None:
+    scenario("ONEUP-0393: a session never switches on a repository it found switched off")
+    c = rig.client()
+    open_session(c)
+    got = run(c, "repo-disable", {"alias": "offrepo"})
+    check("disabling an already-off alias runs", got[0] == "ok" and got[2] == "0", got)
+    got = run(c, "repo-enable", {"alias": "offrepo"})
+    check("but enabling it is Invalid: this session did not switch it off",
+          got[0] == "Invalid", got)
+    ended = rig.audit().count("why=closed re-enabled=-")
+    check("CloseSession is accepted", call(c, SERVICE, "CloseSession") == ("ok", ()))
+    check("the session ends re-enabling nothing",
+          wait_for(lambda: rig.audit().count("why=closed re-enabled=-") > ended, 5),
+          rig.audit()[-300:])
+    check("and it is never switched on",
+          not any(line.endswith("modifyrepo --enable offrepo") for line in rig.calls()),
+          rig.calls()[-3:])
+    close(c)
+
+
+def test_repo_retry(rig: Rig) -> None:
+    scenario("ONEUP-0393: a re-enable that fails at a session's end is tried again")
+    flag = rig.d / "enable-fails"
+    flag.touch()
+    try:
+        c = rig.client()
+        open_session(c)
+        run(c, "repo-disable", {"alias": "oss"})
+        start_at = len(rig.calls())
+        call(c, SERVICE, "CloseSession")
+        check("the first re-enable fails and is audited",
+              wait_for(lambda: "re-enable failed" in rig.audit(), 5), rig.audit()[-300:])
+        check("and is tried again while it keeps failing",
+              wait_for(lambda: sum(line.endswith("modifyrepo --enable oss")
+                                   for line in rig.calls()[start_at:]) >= 2, 5),
+              rig.calls()[start_at:])
+    finally:
+        flag.unlink(missing_ok=True)
+    check("once zypper can, the retry switches it back on",
+          wait_for(lambda: "re-enabled on retry" in rig.audit(), 5), rig.audit()[-300:])
+    close(c)
+
+
 def test_caps(rig: Rig) -> None:
     scenario("INV-9: one session per caller, eight in all, one job in the service")
     first = rig.client()
@@ -775,7 +825,8 @@ def main() -> int:
         rig = Rig(d)
         try:
             for test in (test_polkit, test_import_keys, test_validation, test_relay,
-                         test_read, test_orphans, test_repo_restore, test_caps, test_stop_download,
+                         test_read, test_orphans, test_repo_restore, test_repo_already_off,
+                         test_repo_retry, test_caps, test_stop_download,
                          test_client_killed, test_service_killed, test_sigterm, test_audit,
                          test_route):
                 test(rig)

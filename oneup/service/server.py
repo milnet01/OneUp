@@ -44,6 +44,7 @@ _ERR = BUS_NAME + ".Error."
 
 MAX_SESSIONS = 8                  # §4.5
 READ_WAIT_SECONDS = 1.0           # the longest a `Read` with nothing to say waits (§4.3)
+RETRY_FOR = 600.0                 # how long a failed re-enable is retried (§4.5)
 
 _DBUS = DBusAddress("/org/freedesktop/DBus", bus_name="org.freedesktop.DBus",
                     interface="org.freedesktop.DBus")
@@ -80,6 +81,7 @@ class Session:
     user: str
     import_keys: bool
     disabled: list[str] = field(default_factory=list)   # aliases to re-enable at the end
+    found_off: set[str] = field(default_factory=set)    # disabled already when it asked
     cdn_dir: str = ""
     why: str = ""                 # how it ended, for the audit line
     job: jobs.Job | None = None   # its last job, running or ended, until read (§4.3)
@@ -130,6 +132,10 @@ class Service:
         self.checking: set[str] = set()             # callers whose OpenSession is with polkit
         self.job: jobs.Job | None = None
         self.ending: list[Session] = []             # sessions whose clean-up is still owed
+        # Re-enables that failed at a session's end, each with when to give up (§4.5).
+        self.retry: list[tuple[int, str, float]] = []
+        self.retry_every = _env_seconds("ONEUP_SERVICE_RETRY_SECONDS", 5)
+        self.retry_next = 0.0
         self.waiting: list[tuple[Message, Session, int, float]] = []   # parked Reads
         self.stopping = False
         self.idle_seconds = _env_seconds("ONEUP_SERVICE_IDLE_SECONDS", 60)
@@ -160,7 +166,7 @@ class Service:
                     if session.job is None or session.told:
                         self._end_session(session, "service stopping")
             self._clean_up()
-            if self.sessions or self.checking or self.job or self.ending:
+            if self.sessions or self.checking or self.job or self.ending or self.retry:
                 self.last_busy = time.monotonic()
                 continue
             if self.stopping:
@@ -307,6 +313,13 @@ class Service:
             raise Refusal("NotAuthorized", polkit.DENIED)
         if op == "repo-enable" and args["alias"] not in session.disabled:
             raise Refusal("Invalid", "repo-enable undoes only this session's own disable")
+        if op == "repo-disable":
+            # INV-6: a repository an administrator switched off is never this
+            # session's to switch on, so its disable is not recorded (ONEUP-0393).
+            if repos.repo_switched_off(args["alias"]):
+                session.found_off.add(args["alias"])
+            else:
+                session.found_off.discard(args["alias"])
         if op == "orphans-remove":
             self._check_unneeded(args["names"])
         if args.get("cdn") is True and not session.cdn_dir:
@@ -395,7 +408,8 @@ class Service:
     def _job_ended(self, job: jobs.Job) -> None:
         session = job.session
         alias = job.args.get("alias")
-        if job.status == 0 and job.op == "repo-disable" and alias not in session.disabled:
+        if (job.status == 0 and job.op == "repo-disable" and alias not in session.disabled
+                and alias not in session.found_off):
             session.disabled.append(alias)
         if job.status == 0 and job.op == "repo-enable" and alias in session.disabled:
             session.disabled.remove(alias)
@@ -453,6 +467,7 @@ class Service:
         """
         if self.job is not None:
             return
+        self._retry_reenables()
         while self.ending:
             session = self.ending.pop(0)
             enabled = []
@@ -462,12 +477,40 @@ class Service:
                     enabled.append(alias)
                 else:
                     audit(f"re-enable failed uid={session.uid} alias={alias} status={rc}")
+                    self.retry.append((session.uid, alias, time.monotonic() + RETRY_FOR))
+                    self.retry_next = time.monotonic() + self.retry_every
             if session.cdn_dir:
                 shutil.rmtree(session.cdn_dir, ignore_errors=True)
             if session.job is not None:      # ended: no job runs here
                 session.job.discard()
             audit(f"session ended uid={session.uid} caller={session.owner} "
                   f"why={session.why} re-enabled={','.join(enabled) or '-'}")
+
+    def _retry_reenables(self) -> None:
+        """Try a failed re-enable again until it works or `RETRY_FOR` runs out.
+
+        A re-enable fails when something else holds zypp's lock at the session's
+        end, PackageKit for one (§6); dropped, it left the repository off for good
+        (ONEUP-0393). An alias a live session has disabled again is that
+        session's to re-enable now, so it leaves this list.
+        """
+        now = time.monotonic()
+        if not self.retry or now < self.retry_next:
+            return
+        self.retry_next = now + self.retry_every
+        held = {alias for session in self.sessions.values() for alias in session.disabled}
+        kept = []
+        for uid, alias, give_up in self.retry:
+            if alias in held:
+                continue
+            rc, _ = jobs.run_captured(rootops.build("repo-enable", {"alias": alias}))
+            if rc == 0:
+                audit(f"re-enabled on retry uid={uid} alias={alias}")
+            elif now >= give_up:
+                audit(f"re-enable gave up uid={uid} alias={alias} status={rc}")
+            else:
+                kept.append((uid, alias, give_up))
+        self.retry = kept
 
     # --- properties -----------------------------------------------------------------
 

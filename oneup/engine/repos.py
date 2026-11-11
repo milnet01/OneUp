@@ -205,11 +205,54 @@ def release_zypper_lock() -> None:
         privilege.root("release-lock")
 
 
+_ON = frozenset({"1", "yes", "true", "on", "+"})
+
+
+def repo_switched_off(alias: str) -> bool:
+    """Does a repository file define `alias` with zypper reading it as switched off?
+
+    Read from the files, as zypper reads them — measured with `zypper
+    --reposd-dir … lr` (ONEUP-0393): no `enabled=` line is on; `1`, `yes`,
+    `true`, `on` and a non-zero number are on; `0`, `no`, `false`, `off`, an
+    empty value and anything else are off. An alias no file defines is not
+    "off": False, so the caller acts as it did before this check.
+    """
+    for path in sorted(REPOS_DIR.glob("*.repo")):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        section, value = None, None
+        for line in [*text.splitlines(), "[]"]:     # the sentinel closes the last section
+            line = line.strip()
+            if line.startswith("[") and line.endswith("]"):
+                if section == alias:
+                    if value is None:
+                        return False
+                    value = value.lower()
+                    number = value.lstrip("+-")
+                    return not (value in _ON or (number.isdigit() and int(number) != 0))
+                section, value = line[1:-1], None
+            elif section == alias and "=" in line:
+                key, _, val = line.partition("=")
+                if key.strip() == "enabled":
+                    value = val.strip()
+    return False
+
+
 def disable_repo(alias: str, reason: str) -> bool:
-    """Disable one repository. Fail-closed, and records what to re-enable."""
+    """Disable one repository. Fail-closed, and records what to re-enable.
+
+    A repository already switched off is left alone and not recorded, so the
+    run's end never switches on what an administrator turned off (ONEUP-0393).
+    It is still reported skipped: for this run it is out of the way.
+    """
     if not valid_alias(alias):
         markers.err(f"  Refusing unsafe repo alias: {alias}")
         return False
+    if repo_switched_off(alias):
+        markers.marker("REPO_SKIPPED", alias, reason)
+        return True
     rc, _ = privilege.root("repo-disable", {"alias": alias})
     if rc != 0:
         return False
