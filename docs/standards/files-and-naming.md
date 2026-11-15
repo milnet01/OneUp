@@ -260,7 +260,7 @@ that has none:
 | Passwordless-auth drop-in | `/etc/sudoers.d/oneup` | engine | `ONEUP_AUTH_FILE` |
 | Download guard | `/usr/libexec/oneup-download-guard`, or `/usr/lib/oneup-download-guard` where `/usr/libexec` does not exist (Leap 15.x) | engine | `ONEUP_GUARD_FILE` |
 | Graphical password helper | `/usr/libexec/ssh/ksshaskpass` | engine | `ONEUP_ASKPASS` |
-| Where the passwordless rule's and the guard's binaries are found | `/usr/sbin:/usr/bin:/sbin:/bin`, never the user's `PATH` (ONEUP-0408) | Python engine only | `ONEUP_SYSTEM_PATH` — **tests only**: `run_engine` puts the scenario's mock folder first |
+| Where the passwordless rule's and the guard's binaries are found | `/usr/sbin:/usr/bin:/sbin:/bin`, never the user's `PATH` (ONEUP-0408, ONEUP-0417) | both engines | `ONEUP_SYSTEM_PATH` — **tests only**: `run_engine` puts the scenario's mock folder first |
 | Per-repository refresh budget | `120` seconds | engine | `ONEUP_REFRESH_TIMEOUT` |
 | Flatpak update-count query budget | `60` seconds | Python engine only | `ONEUP_FLATPAK_TIMEOUT` |
 | Repository definitions | `/etc/zypp/repos.d` | engine | `ONEUP_REPOS_DIR` — **engine only** |

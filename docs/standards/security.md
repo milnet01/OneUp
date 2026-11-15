@@ -451,11 +451,11 @@ not in a keyring, not in a file, not in memory.
 **5.2 — The exact scope**, built from resolved absolute paths at grant time
 (`build_auth_rule` in the engine's actions module; the Bash fallback has its own):
 
-**The Python engine resolves each path in the system's own directories, never the user's
-`PATH`** (`privilege.SYSTEM_PATH`, as sudo's `secure_path` does). openSUSE puts `~/bin`
+**Both engines resolve each path in the system's own directories, never the user's
+`PATH`** (`privilege.SYSTEM_PATH`, and `system_which` in the Bash fallback, as sudo's
+`secure_path` does). openSUSE puts `~/bin`
 first on `PATH`, so a `~/bin/zypper` became a passwordless root entry, and the root-owned
-guard ran it (ONEUP-0408). The Bash fallback still resolves through `PATH`; where the two
-differ, its guard check reads not current and it asks for the password.
+guard ran it (ONEUP-0408, and ONEUP-0417 in the Bash fallback).
 
 | Entry | Why |
 | --- | --- |

@@ -5328,6 +5328,30 @@ assert userbin not in (actions.download_guard_src() or ""), "the guard names the
 ' "ONEUP_SYSTEM_PATH=$sysbin" "PATH=$userbin:$PATH" "SYSBIN=$sysbin" "USERBIN=$userbin"
 rm -rf "$sysbin" "$userbin"
 
+echo "TEST: the Bash fallback's rule names system binaries, never the user's PATH (ONEUP-0417)"
+# The same defect in update_system.sh, reachable from a terminal. run_engine puts the
+# scenario folder first on PATH, so its zypper stands in for the user's ~/bin copy, and
+# $sysbin is the system's.
+d=$(mktemp -d); setup_common "$d"; sysbin=$(mktemp -d)
+for b in zypper env timeout du; do printf '#!/bin/sh\nexit 0\n' > "$sysbin/$b"; done
+printf '#!/bin/sh\nexit 0\n' > "$d/zypper"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/visudo"
+cat > "$d/install" <<'EOF'
+#!/usr/bin/env bash
+args=(); while [[ $# -gt 0 ]]; do case "$1" in -o|-g|-m) shift 2;; *) args+=("$1"); shift;; esac; done
+cp "${args[0]}" "${args[1]}"
+EOF
+chmod +x "$sysbin"/* "$d/zypper" "$d/visudo" "$d/install"
+authfile="$d/oneup-sudoers"
+out=$(ENGINE_CMD=(bash "$ENGINE"); ONEUP_SYSTEM_PATH="$sysbin" ONEUP_AUTH_FILE="$authfile" \
+      run_engine "$d" --grant-auth)
+rule=$(cat "$authfile" 2>/dev/null)
+check        "the Bash rule names the system zypper"      "= $sysbin/zypper," "$rule"
+check_absent "and nothing from the user's PATH"           "$d/zypper"         "$rule"
+check_absent "nor does the Bash guard"                    "$d/zypper" \
+    "$(cat "$d/oneup-download-guard" 2>/dev/null)"
+rm -rf "$d" "$sysbin"
+
 echo "TEST: on the sudo route a source is recorded before it is switched off (ONEUP-0411)"
 pd=$(mktemp -d); mkdir "$pd/repos.d"
 printf '[packman]\nenabled=1\nbaseurl=https://x/\n' > "$pd/repos.d/packman.repo"

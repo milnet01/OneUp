@@ -174,13 +174,28 @@ REFRESH_TIMEOUT="${ONEUP_REFRESH_TIMEOUT:-120}"   # per-repository refresh budge
 # non-numeric budget refuse at grant time and fail the refresh at run time.
 [[ "$KEEPALIVE_SECONDS" =~ ^([0-9]+(\.[0-9]*)?|\.[0-9]+)$ ]] || KEEPALIVE_SECONDS=50
 
+# Where a binary that lands in the passwordless rule or the guard is looked up: the system's
+# own directories, as sudo's `secure_path` does, never the user's PATH. openSUSE puts ~/bin
+# first there, so a ~/bin/zypper became a NOPASSWD root entry that the root-owned guard then
+# ran (ONEUP-0408, ONEUP-0417). A loop, not `PATH=… command -v`, which can answer from the
+# hash table. The Python engine's `privilege.system_which`; ONEUP_SYSTEM_PATH is the suite's
+# seam for both.
+system_which() {
+    local dir dirs
+    IFS=: read -r -a dirs <<<"${ONEUP_SYSTEM_PATH:-/usr/sbin:/usr/bin:/sbin:/bin}"
+    for dir in "${dirs[@]}"; do
+        [[ -n "$dir" && -f "$dir/$1" && -x "$dir/$1" ]] && { echo "$dir/$1"; return 0; }
+    done
+    return 1
+}
+
 # The refresh and the cache measurement both run under sudo, so the ONEUP-0023 drop-in must
 # grant the EXACT argv each types or passwordless silently keeps prompting (ONEUP-0092).
 # One definition each, used by the call site AND by auth_cmnds, so the rule cannot drift
 # from the call. Absolute paths because sudoers refuses a bare command name outright
 # ("expected a fully-qualified path name") — a rule carrying one is rejected whole.
-REFRESH_SUDO_ARGV=("$(command -v timeout)" "$REFRESH_TIMEOUT" zypper)
-CACHE_DU_ARGV=("$(command -v du)" -sB1 /var/cache/zypp)
+REFRESH_SUDO_ARGV=("$(system_which timeout)" "$REFRESH_TIMEOUT" zypper)
+CACHE_DU_ARGV=("$(system_which du)" -sB1 /var/cache/zypp)
 
 # The root-side download wrapper, as a root-owned file rather than an argument to bash
 # (ONEUP-0092 §4.3). `env LC_ALL=C bash -c *` cannot be granted — it is a root shell in
@@ -1163,21 +1178,21 @@ claim_run_state_locked() {
 AUTH_FILE="${ONEUP_AUTH_FILE:-/etc/sudoers.d/oneup}"
 
 # The granted scope, written in ONE place (ONEUP-0092). Echoes the comma-joined Cmnd list.
-# Built from the binaries actually present on THIS machine (command -v, not a hardcoded
+# Built from the binaries actually present on THIS machine (system_which, not a hardcoded
 # /usr/bin) so each rule matches the exact path sudo will resolve. zypper is required; the
 # optional ones are skipped when absent.
 auth_cmnds() {
     local zypper cmd cmds=()
-    zypper=$(command -v zypper) || return 1
+    zypper=$(system_which zypper) || return 1
     cmds+=("$zypper")                                   # any zypper subcommand
-    cmd=$(command -v snapper)   && cmds+=("$cmd")        # snapper create/list
-    cmd=$(command -v flatpak)   && cmds+=("$cmd")        # flatpak update/uninstall
-    cmd=$(command -v systemctl) && cmds+=("$cmd stop packagekit")
+    cmd=$(system_which snapper)   && cmds+=("$cmd")        # snapper create/list
+    cmd=$(system_which flatpak)   && cmds+=("$cmd")        # flatpak update/uninstall
+    cmd=$(system_which systemctl) && cmds+=("$cmd stop packagekit")
     # The engine pins the locale via `sudo env LC_ALL=C zypper …`. sudo resolves the
     # command (env) to a path but matches the REST of the argv literally, so this
     # pattern's second word must be the bare `zypper` the engine typed, not its path.
-    cmd=$(command -v env)       && cmds+=("$cmd LC_ALL=C zypper *")
-    # The three ONEUP-0092 entries. Empty means `command -v` failed at file scope, where a
+    cmd=$(system_which env)       && cmds+=("$cmd LC_ALL=C zypper *")
+    # The three ONEUP-0092 entries. Empty means `system_which` failed at file scope, where a
     # failure leaves an empty element rather than a non-zero status — so test the element,
     # never the substitution. Emitting a bare name here would make visudo reject the file.
     [[ -n "${REFRESH_SUDO_ARGV[0]}" && -n "${CACHE_DU_ARGV[0]}" ]] || return 1
@@ -1198,7 +1213,7 @@ auth_cmnds() {
 # Compared byte-for-byte by guard_current, so every edit here re-grants for every user.
 download_guard_src() {
     local zypper scope
-    zypper=$(command -v zypper) || return 1
+    zypper=$(system_which zypper) || return 1
     scope=$(auth_cmnds) || return 1
     # `# oneup-auth-scope:` is what makes this file a version stamp for the drop-in beside
     # it: the drop-in is 0440 root-only, so the engine cannot read back what it granted,
@@ -1244,7 +1259,7 @@ guard_current() {
 # one command out of six, which is how ONEUP-0092's three uncovered calls went unseen.
 auth_current() {
     local zypper
-    zypper=$(command -v zypper) || return 1
+    zypper=$(system_which zypper) || return 1
     # `-k` ignores any cached credential (so a recent run can't false-positive) and `-n`
     # refuses to prompt. Measured: -k does NOT invalidate a warm credential, so this is
     # safe to issue at any point in a run.
