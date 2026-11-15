@@ -11789,13 +11789,17 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0398] **A helper process that fails to start leaves the window stuck.**
+- ✅ [ONEUP-0398] **A helper process that fails to start leaves the window stuck.**
   Review theme 6: no errorOccurred/FailedToStart handler.
   - run.py:333-344 (the size preview).
   - run.py:1182-1194 (on_error's partial teardown).
   - auth.py:64-73 (the auth probe; :64-65 also returns early when
     the log folder is not ready).
   - rollback.py:212-218 (_thin_snapshots).
+  Shipped 2026-11-15 in ced711a. All four sites now settle on a failed
+  start: the size link re-arms, on_error shares on_finished's teardown,
+  the auth probe settles a pending enable as off (also with no engine or
+  no log folder), and thinning gives its button back and says why.
   **Layman:** If one of OneUp's background helpers cannot start, a part of the window can stay waiting forever.
   Kind: review-fix.
   Source: review-code-2026-11-11.
@@ -11912,7 +11916,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0407] **The window check "with no guard, sudo is asked only to list (-n -l)" failed once under load.**
+- ✅ [ONEUP-0407] **The window check "with no guard, sudo is asked only to list (-n -l)" failed once under load.**
   Seen 2026-11-15 in the pre-push gate at load ~24, on ba0cce6, a tree
   whose full local CI had passed minutes before; gui-smoke.py alone then
   passed. The check counts lines in the shared mock sudo log, so a late
@@ -11925,6 +11929,10 @@ when complete (that document's §7).
   --version"). Not reproduced: with that call delayed 3 s and then 10 s,
   the check at HEAD still passed. Next: wait for the next failure and
   read what it prints.
+  Shipped 2026-11-15 in ced711a. Cause proven by forcing the race: the
+  windows' start-up --auth-status engines wrote "-k -n" lines into the
+  log between its removal and its read. The check now waits for both
+  probes, and names the log's contents if it ever fails again.
   **Layman:** One of the window's automatic checks failed once on a busy computer and passed on a re-run, so it can block a push for no real reason.
   Kind: test.
   Source: pre-push-gate-2026-11-15.
