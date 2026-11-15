@@ -204,6 +204,10 @@ def _thin_snapshots(win):
     QTimer.singleShot(0, lambda: win._center_child(box))
     if box.exec() != QMessageBox.Ok or not paths.log_dir_ready(win):
         return
+    if not paths.engine_available():
+        # engine_argv would raise after the button below was disabled (ONEUP-0398).
+        _thin_not_started(win)
+        return
     win.warn_btn.setEnabled(False)
     win.status.setText(QCoreApplication.translate(
         "rollback",
@@ -212,10 +216,23 @@ def _thin_snapshots(win):
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.finished.connect(lambda _c, _s, pr=p: _on_thin_finished(win, pr))
+    # No `finished` follows a failed start, so the button stayed disabled (ONEUP-0398).
+    p.errorOccurred.connect(lambda err: err == QProcess.ProcessError.FailedToStart
+                            and _thin_not_started(win))
     win._thin_proc = p
     argv = paths.engine_argv(
         "--thin-snapshots", f"--log={paths.STATE_LOG_DIR / f'{stamp}.thin.log'}")
     p.start(argv[0], argv[1:])
+
+
+def _thin_not_started(win):
+    """The thinning engine never started: say so, and give the button back."""
+    win.warn_btn.setEnabled(True)
+    text = QCoreApplication.translate(
+        "rollback", "Snapshots were not thinned: OneUp's update engine could not be started.")
+    win.status.setText(text)
+    QMessageBox.warning(
+        win, QCoreApplication.translate("rollback", "Snapshots not thinned"), text)
 
 
 def _on_thin_finished(win, proc: QProcess):

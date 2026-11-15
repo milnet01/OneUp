@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **When one of OneUp's helpers cannot start, the window no longer waits forever** (ONEUP-0398)
+  The download-size link, the step list, the automatic-updates switch and the "thin
+  snapshots" button could each stay stuck after a helper failed to start. Each now
+  settles, and the snapshot button says what went wrong.
+
 - **One damaged download cache file no longer breaks an update, a check, or every Flatpak's details** (ONEUP-0397)
   A corrupt compressed file in the package cache could crash the system step or the
   "updates available?" check. A corrupt Flatpak catalogue hid the details of every app,

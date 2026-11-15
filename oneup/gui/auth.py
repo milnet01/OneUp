@@ -52,8 +52,13 @@ def _query_auth_status(win):
     """Probe the engine for whether the drop-in is active and set the toggle to
     match — so it always shows the truth, not a saved preference (which could
     drift if the rule were removed outside OneUp). Output is tiny, so it's read
-    once on finish (no incremental slot that could fire after teardown)."""
+    once on finish (no incremental slot that could fire after teardown).
+
+    Every way it can end without starting a probe settles a pending auto-update
+    enable as off: no answer would ever come, and the switch stayed greyed out for
+    the rest of the session (ONEUP-0398)."""
     if not paths.engine_available():
+        _probe_not_started(win)
         return
     p = getattr(win, "_authstat_proc", None)
     if p is not None and p.state() != QProcess.NotRunning:
@@ -61,16 +66,29 @@ def _query_auth_status(win):
         # probe in flight started before it. Ask again when that one finishes.
         win._authstat_rerun = True
         return
-    if not paths.log_dir_ready(quiet=True):
+    # Quiet unless the user is waiting on the answer: a background probe has nobody
+    # to tell, but a click on the automatic-updates switch deserves the reason.
+    if not paths.log_dir_ready(win, quiet=not win._pending_autoupdate):
+        _probe_not_started(win)
         return
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.finished.connect(lambda _c, _s, pr=p: _on_auth_status_finished(win, pr))
+    p.errorOccurred.connect(lambda err: err == QProcess.ProcessError.FailedToStart
+                            and _probe_not_started(win))
     win._authstat_proc = p
     argv = paths.engine_argv(
         "--auth-status", f"--log={paths.STATE_LOG_DIR / f'{stamp}.auth.log'}")
     p.start(argv[0], argv[1:])
+
+
+def _probe_not_started(win):
+    """No probe answer will come: settle a pending auto-update enable as off."""
+    if win._pending_autoupdate:
+        win._pending_autoupdate = False
+        win.autoupdate_btn.setEnabled(True)
+        autostart._set_autoupdate_checked(win, False)
 
 
 def _on_auth_status_finished(win, proc: QProcess):

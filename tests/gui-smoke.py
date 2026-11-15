@@ -2719,6 +2719,61 @@ def main() -> int:
     check("a failed engine start stops the indeterminate progress bar",
           (wE.bar.minimum(), wE.bar.maximum()) == (0, 1))
 
+    # ONEUP-0398: a helper that fails to start emits errorOccurred and never `finished`,
+    # so whatever waited on `finished` waited for the rest of the session. Each one below
+    # starts a program that does not exist, which is a real FailedToStart.
+    def _until(cond, ms=5000):
+        for _ in range(ms // 20):
+            if cond():
+                return True
+            QTest.qWait(20)
+        return cond()
+
+    _no_engine = ["/nonexistent/oneup-engine-0398"]
+    wF = window.Updater()
+    if getattr(wF, "_authstat_proc", None) is not None:
+        wF._authstat_proc.waitForFinished(15000)    # settle the real startup probe first
+    _saved_398 = (paths.engine_argv, paths.engine_available, paths.log_dir_ready,
+                  QMessageBox.warning, QMessageBox.exec)
+    _said_398 = []
+    paths.engine_argv = lambda *a, env=None: list(_no_engine)
+    QMessageBox.warning = staticmethod(lambda *a, **k: _said_398.append(a[2]) or 0)
+    QMessageBox.exec = lambda self: QMessageBox.Ok
+    try:
+        run.request_size(wF, "system")
+        check("ONEUP-0398 a size preview that cannot start offers the link again",
+              _until(lambda: wF.size_link.size_btn.isEnabled()))
+        run._launch(wF, ["system", "cache"], False)
+        check("ONEUP-0398 a run that cannot start leaves no step waiting",
+              _until(lambda: not wF._run_active) and not wF.waiting
+              and wF.engine_finished and wF.current_step == "")
+        wF._pending_autoupdate = True
+        wF.autoupdate_btn.setEnabled(False)
+        auth._query_auth_status(wF)
+        check("ONEUP-0398 an auth probe that cannot start gives the switch back",
+              _until(lambda: wF.autoupdate_btn.isEnabled())
+              and not wF._pending_autoupdate and not wF.autoupdate_btn.isChecked())
+        paths.log_dir_ready = lambda *a, **k: False
+        wF._pending_autoupdate = True
+        wF.autoupdate_btn.setEnabled(False)
+        auth._query_auth_status(wF)
+        check("ONEUP-0398 so does a probe with no log folder to write",
+              wF.autoupdate_btn.isEnabled() and not wF._pending_autoupdate)
+        paths.log_dir_ready = _saved_398[2]
+        _said_398.clear()
+        rollback._thin_snapshots(wF)
+        check("ONEUP-0398 a thin that cannot start gives its button back, and says so",
+              _until(lambda: wF.warn_btn.isEnabled())
+              and any("could not be started" in t for t in _said_398))
+        paths.engine_available = lambda: False
+        _said_398.clear()
+        rollback._thin_snapshots(wF)
+        check("ONEUP-0398 so does a thin with no engine to run",
+              wF.warn_btn.isEnabled() and any("could not be started" in t for t in _said_398))
+    finally:
+        (paths.engine_argv, paths.engine_available, paths.log_dir_ready,
+         QMessageBox.warning, QMessageBox.exec) = _saved_398
+
     # ONEUP-0344: any other error arrives while the engine is still running (or just
     # ending, when `finished` follows). Treating it as a failed start deleted the
     # QProcess, and deleting a running QProcess kills the engine mid-transaction.
@@ -3463,6 +3518,11 @@ def main() -> int:
         check("ONEUP-0249 the offer comes once", len(_offers) == 1)
         Path(auth.OLD_GUARDS[1]).unlink()
         wS.settings.remove("old_dropin_offered")
+        # ONEUP-0407: each window's start-up --auth-status engine writes "-k -n …" to the
+        # same mock sudo log; under load one landed after the remove below. Let both end.
+        for _wq in (wP, wS):
+            if getattr(_wq, "_authstat_proc", None) is not None:
+                _wq._authstat_proc.waitForFinished(15000)
         with contextlib.suppress(FileNotFoundError):
             os.remove(_SUDO_LOG)
         auth.offer_old_dropin_removal(wS)

@@ -334,6 +334,10 @@ def request_size(win, key: str, unasked: bool = False):
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.readyReadStandardOutput.connect(partial(_on_size_output, win))
     p.finished.connect(partial(_on_size_finished, win))
+    # No `finished` follows a failed start, so without this the link said "working
+    # out…" for the rest of the session (ONEUP-0398). It ends as a failed size.
+    p.errorOccurred.connect(lambda err: err == QProcess.ProcessError.FailedToStart
+                            and _on_size_finished(win, -1, None))
     win._size_proc = p
     # --hold keeps this process alive after it has quoted the size, so the run that
     # follows reuses the credential it has already cached. Two engines are two sudo
@@ -1190,6 +1194,13 @@ def on_error(win, err):
     win._run_active = False
     win._liveness_active = False
     win._activity_timer.stop()
+    # The rest of on_finished's teardown: the rows `_reset_for_run` set waiting stayed
+    # waiting, and the package pages still read the run as going (ONEUP-0398).
+    win.engine_finished = True
+    win.current_step = ""
+    step_progress.stop_waiting(win)
+    _set_activity(win, "")
+    _refresh_layout(win)
     # Release the process object on a start failure too (finished never fires here).
     win.proc.deleteLater()
 
