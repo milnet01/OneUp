@@ -11819,7 +11819,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0400] **Confident "up to date" or zero answers the run did not earn, in seven more places.**
+- 🚧 [ONEUP-0400] **Confident "up to date" or zero answers the run did not earn, in seven more places.**
   Review theme 8 (testing.md §5); the failed-check case was
   ONEUP-0391.
   - actions.py:395: zypper 100-103 with no size reads as 0 B.
@@ -11834,6 +11834,13 @@ when complete (that document's §7).
   engine that exits 0 with no STEP_BEGIN and says "All done". Lane 05's
   remedy: in on_finished, a non-check run that saw no STEP_BEGIN is "did
   not start", never ok. Fix it with the hold-expiry case here.
+  Engine half shipped 2026-11-15 in 9cb500e: actions.py:395 (0 B needs
+  "Nothing to do." or a remove-only plan), steps.py:134 (an unlisted
+  installation is unreachable), steps.py:270 (uncounted ends "done"),
+  steps.py:971 (rpm decides after a 103 rerun). Still open, the window
+  half: run.py:1351/1502-1507 (run's own steps), the hold-expiry "All
+  done" with run.py:214-217, tray.py:191-198, package_views.py:139/153,
+  details_dialog.py:321-322 with package_details.py:219-220.
   **Layman:** OneUp sometimes says everything is fine or shows zero when it does not actually know.
   Kind: review-fix.
   Source: review-code-2026-11-11.
