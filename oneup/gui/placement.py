@@ -315,10 +315,13 @@ for (var i = 0; i < wins.length; i++) {{
         return None
     deadline = time.monotonic() + FRAME_ANSWER_TIMEOUT
     while True:
+        # Each read gets only what is left of the deadline, so the wait on the GUI
+        # thread stays FRAME_ANSWER_TIMEOUT rather than that plus a whole read (ONEUP-0399).
+        left = max(0.1, deadline - time.monotonic())
         try:
             out = subprocess.run(["journalctl", "--user", "-b", "--since", since,  # noqa: S603, S607
                                   "-o", "cat"],
-                                 capture_output=True, text=True, timeout=2).stdout
+                                 capture_output=True, text=True, timeout=left).stdout
         except (OSError, subprocess.SubprocessError):
             return None
         pos = _frame_from_journal(out, marker)

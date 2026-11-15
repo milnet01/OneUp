@@ -8,6 +8,10 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A system service that stops answering can no longer freeze OneUp or hold its root helper open** (ONEUP-0399)
+  Every wait on OneUp's system service, on polkit and on systemd now has a time limit.
+  Opening the window also waits less on the desktop's window manager.
+
 - **When one of OneUp's helpers cannot start, the window no longer waits forever** (ONEUP-0398)
   The download-size link, the step list, the automatic-updates switch and the "thin
   snapshots" button could each stay stuck after a helper failed to start. Each now

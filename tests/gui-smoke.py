@@ -3858,7 +3858,7 @@ def main() -> int:
 
     def _spy_run(args, *a, **k):
         if list(args[:3]) == ["systemctl", "--user", "daemon-reload"]:
-            reloads.append(args)
+            reloads.append(k.get("timeout"))
             return autostart.subprocess.CompletedProcess(args, 0)
         return _orig_run(args, *a, **k)
 
@@ -3871,6 +3871,8 @@ def main() -> int:
               f"ExecStart={autostart._headless_command('--check')}\n"
               in stale_svc.read_text())
         check("ONEUP-0158: a rewritten service reloads systemd once", len(reloads) == 1)
+        check("ONEUP-0399: and that reload has a time limit, as every systemctl call does",
+              len(reloads) == 1 and reloads[0] is not None)
         check("ONEUP-0158: a timer that was never installed is not created",
               not (units / "oneup-update.service").exists())
         reloads.clear()

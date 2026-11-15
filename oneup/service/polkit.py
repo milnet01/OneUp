@@ -24,6 +24,12 @@ CHALLENGE = "challenge"
 DENIED = "denied"
 
 
+# A check that cannot ask anyone answers at once; one that can ask waits on a person,
+# who has ten minutes to answer the password prompt.
+CHECK_SECONDS = 30
+PROMPT_SECONDS = 600
+
+
 def check(router, caller: str, action: str, *, interactive: bool) -> str:
     """`YES`, or the reason code for a refusal. Blocks while polkit asks the user."""
     subject = ("system-bus-name", {"name": ("s", caller)})
@@ -31,7 +37,10 @@ def check(router, caller: str, action: str, *, interactive: bool) -> str:
     msg = new_method_call(_AUTHORITY, "CheckAuthorization", "(sa{sv})sa{ss}us",
                           (subject, action, {}, flags, ""))
     try:
-        reply = router.send_and_get_reply(msg)
+        # Bounded, so a hung or restarted polkitd cannot hold the session open as root
+        # for ever (ONEUP-0399); a timeout refuses, as an unreachable polkit does.
+        reply = router.send_and_get_reply(
+            msg, timeout=PROMPT_SECONDS if interactive else CHECK_SECONDS)
         if reply.header.message_type != MessageType.method_return:
             return DENIED
         authorized, challenge, details = reply.body[0]

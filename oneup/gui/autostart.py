@@ -130,7 +130,7 @@ def _refresh_stale_launchers():
         except OSError as exc:
             print(f"OneUp: could not refresh {path}: {exc}", file=sys.stderr)
     if reload:
-        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)  # noqa: S607
+        _systemctl_user("daemon-reload")   # bounded, as every other call (ONEUP-0399)
 
 
 def _install_autostart(win) -> bool:

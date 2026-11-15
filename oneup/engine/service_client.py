@@ -72,6 +72,12 @@ def _router():
     return _ROUTER
 
 
+# Bounds on the calls that never prompt (ONEUP-0399). Run checks its arguments and
+# may stage the CDN repository copy before it replies, so it gets longer than Read.
+READ_SECONDS = 30
+RUN_SECONDS = 120
+
+
 def _call(method: str, signature: str | None = None, body: tuple = (),
           timeout: float | None = None) -> tuple:
     """One method call. Raises `Refused` for the service's errors, `Unreachable` else."""
@@ -140,7 +146,9 @@ class _Pull(io.RawIOBase):
     def readinto(self, buffer) -> int:
         while not self._pending and self.status is None:
             try:
-                data, status = _call("Read", "t", (self.offset,))
+                # §4.3: Read answers within a second, so 30 s means a wedged
+                # service, which then reads as a failed Read (ONEUP-0399).
+                data, status = _call("Read", "t", (self.offset,), timeout=READ_SECONDS)
             except (Unreachable, Refused):
                 self.status = 1
                 break
@@ -180,7 +188,8 @@ class Job:
 def run(op: str, args: Mapping[str, object], *, merge_stderr: bool) -> Job:
     """`Run`: start one operation; its output and status are pulled from the `Job`."""
     _call("Run", "sa{sv}b",
-          (op, {name: _variant(value) for name, value in args.items()}, merge_stderr))
+          (op, {name: _variant(value) for name, value in args.items()}, merge_stderr),
+          timeout=RUN_SECONDS)
     return Job()
 
 

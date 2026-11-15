@@ -816,6 +816,46 @@ def serve_mode(d: Path) -> int:
     return 0
 
 
+def test_bounds(_base: Path) -> None:
+    """ONEUP-0399: no call to or from the service may wait for ever. A fake router
+    records each call's timeout and then times out, as a wedged peer would."""
+    scenario("ONEUP-0399: polkit and the service's Read and Run are bounded")
+    from oneup.engine import service_client
+    from oneup.service import polkit
+
+    class _Wedged:
+        def __init__(self):
+            self.timeouts = []
+
+        def send_and_get_reply(self, _msg, timeout=None):
+            self.timeouts.append(timeout)
+            raise TimeoutError("no reply")
+
+    fake = _Wedged()
+    for interactive in (False, True):
+        answer = polkit.check(fake, ":1.1", SYSTEM_UPDATE, interactive=interactive)
+        check(f"a polkit check that never answers refuses (interactive={interactive})",
+              answer == polkit.DENIED, answer)
+    check("both polkit checks carry a time limit, the prompt's the longer",
+          len(fake.timeouts) == 2 and None not in fake.timeouts
+          and fake.timeouts[0] < fake.timeouts[1], fake.timeouts)
+    fake = _Wedged()
+    saved = service_client._router
+    service_client._router = lambda: fake
+    try:
+        try:
+            service_client.run("cache-clean", {}, merge_stderr=False)
+            ran = "returned"
+        except service_client.Unreachable:
+            ran = "unreachable"
+        status = service_client.Job().wait()
+    finally:
+        service_client._router = saved
+    check("a Run that never answers is Unreachable, not a hang", ran == "unreachable", ran)
+    check("a Read that never answers ends the job as failed", status == 1, status)
+    check("Run and Read carry their time limits",
+          len(fake.timeouts) == 2 and None not in fake.timeouts, fake.timeouts)
+
 def main() -> int:
     base = Path(tempfile.mkdtemp(prefix="oneup-servicetest-"))
     try:
@@ -834,6 +874,7 @@ def main() -> int:
             rig.stop()
         test_end_after_bookkeeping(base)
         test_idle(base)
+        test_bounds(base)
     finally:
         shutil.rmtree(base, ignore_errors=True)
     print()
