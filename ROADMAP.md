@@ -12174,7 +12174,7 @@ when complete (that document's §7).
   Kind: security.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0417] **The Bash fallback's --grant-auth still names binaries found through the user's PATH.**
+- ✅ [ONEUP-0417] **The Bash fallback's --grant-auth still names binaries found through the user's PATH.**
   review-code 2026-11-15, lane 12 HIGH, calibrated HIGH -> MEDIUM
   (terminal only, frozen fallback). update_system.sh `zypper=$(command -v
   zypper)` and the lines after it build the drop-in and the guard text
@@ -12182,6 +12182,11 @@ when complete (that document's §7).
   meets it, so the frozen-fallback rule allows the fix (CLAUDE.md §4).
   Fix as 0408 did: resolve in /usr/sbin:/usr/bin:/sbin:/bin. security.md
   §5.2 then drops its note that the two engines resolve differently.
+  Shipped 2026-11-15 in f50a757. update_system.sh resolves the rule's
+  and the guard's binaries through a new system_which
+  (/usr/sbin:/usr/bin:/sbin:/bin), as 0408 did for Python. New engine
+  scenario red against the old script, green with the fix; local-CI
+  green. security.md §5.2 now says both engines resolve the same way.
   **Layman:** The old backup update script can still give password-free rights to a program in your own folders.
   Kind: security.
   Source: review-code-2026-11-15.
