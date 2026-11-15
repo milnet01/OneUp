@@ -18,6 +18,7 @@ import subprocess
 import threading
 import time
 import xml.etree.ElementTree as ET
+import zlib
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -127,7 +128,9 @@ def _scan(primary: Path, keys: set[tuple[str, str, str]],
                 node.clear()
                 if len(found) == len(keys) or time.monotonic() > ends:
                     break
-    except (OSError, ET.ParseError, EOFError):
+    # zlib.error is not an OSError: a corrupt deflate stream raises it from inside the
+    # gzip read, and it escaped into the system step and --check (ONEUP-0397).
+    except (OSError, ET.ParseError, EOFError, zlib.error):
         pass        # what was found before the failure still stands
     finally:
         if timer is not None:

@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **One damaged download cache file no longer breaks an update, a check, or every Flatpak's details** (ONEUP-0397)
+  A corrupt compressed file in the package cache could crash the system step or the
+  "updates available?" check. A corrupt Flatpak catalogue hid the details of every app,
+  not just its own. Now OneUp skips the damaged file and carries on.
+
 - **On a computer that lets OneUp block shutdown but not sleep, updates run again** (ONEUP-0395)
   OneUp holds off shutdown and sleep while it installs. Where it was allowed to block only
   one of them, the update silently never started. Now it runs without that protection.

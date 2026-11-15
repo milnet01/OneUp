@@ -29,7 +29,7 @@ from pathlib import Path
 # The repo root, so `oneup.engine` imports without an install step.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from oneup.engine import markers, parsers
+from oneup.engine import markers, parsers, pkgsizes
 from oneup.gui import flatpak_details as fd
 from oneup.gui import package_details as pd
 
@@ -524,6 +524,35 @@ def flatpak_checks() -> None:
         check("read: a truncated catalogue keeps what it gave before failing",
               list(fd.read([str(broken), str(Path(tmp, "absent.xml"))], wanted)),
               ["com.example.Chat"])
+        # ONEUP-0397: a corrupt deflate stream raises zlib.error, which is no OSError, and
+        # one bad catalogue lost every other file's details. Byte 10 is the first deflate
+        # block's header; 0x07 is the reserved block type, so the read fails every time.
+        good = gzip.compress(APPSTREAM.encode())
+        corrupt = Path(tmp, "corrupt.xml.gz")
+        corrupt.write_bytes(good[:10] + b"\x07" + good[11:])
+        try:
+            kept = sorted(fd.read([str(corrupt), files[0]], wanted))
+        except Exception as exc:  # noqa: BLE001 — the escape is the failure
+            kept = repr(exc)
+        check("read: a corrupt gzip catalogue costs only its own components",
+              kept, ["com.example.Chat", "org.example.Base", "org.example.Old",
+                     "org.example.Platform"])
+        odd = Path(tmp, "odd.xml")
+        odd.write_text('<components><component type="desktop"><id>org.example.Odd</id>'
+                       '<releases><release timestamp="²" version="1"/></releases>'
+                       '</component></components>')
+        try:
+            stamps = [r.time for r in fd.read([str(odd)], {"org.example.Odd"})
+                      ["org.example.Odd"][0].releases]
+        except Exception as exc:  # noqa: BLE001 — the escape is the failure
+            stamps = repr(exc)
+        check("read: a timestamp of digits int() refuses reads as none", stamps, [0])
+        try:
+            sizes = pkgsizes._scan(corrupt, {("bash", "1-1", "x86_64")}, 5.0)
+        except Exception as exc:  # noqa: BLE001 — the escape is the failure
+            sizes = repr(exc)
+        check("pkgsizes: a corrupt gzip repository index gives no sizes, and no crash",
+              sizes, {})
 
     check("read: only the wanted IDs, a .desktop suffix dropped, an absent one absent",
           sorted(got), ["com.example.Chat", "org.example.Base", "org.example.Old",

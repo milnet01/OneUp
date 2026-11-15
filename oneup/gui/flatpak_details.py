@@ -13,6 +13,7 @@ import os
 import platform
 import re
 import xml.etree.ElementTree as ET
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -111,7 +112,7 @@ def _component(el: ET.Element) -> Component:
     releases = []
     for rel in el.findall("releases/release"):
         stamp = rel.get("timestamp") or ""
-        releases.append(Release(rel.get("version") or "", int(stamp) if stamp.isdigit() else 0,
+        releases.append(Release(rel.get("version") or "", int(stamp) if stamp.isdecimal() else 0,
                                 _text(_untranslated(rel, "description"))))
     releases.sort(key=lambda r: r.time, reverse=True)   # stable: equal times keep file order
     return Component(plain("name"), plain("summary"),
@@ -138,7 +139,9 @@ def read(files: list[str], ids: set[str]) -> dict[str, list[Component]]:
                     if found is not None and (comp := _component(el)) not in found:
                         found.append(comp)
                     el.clear()
-        except (OSError, EOFError, ET.ParseError):
+        # zlib.error is not an OSError: one corrupt catalogue lost every file's details
+        # (ONEUP-0397). isdecimal above, not isdigit, which passes "²" to int().
+        except (OSError, EOFError, ET.ParseError, zlib.error):
             continue
     return out
 
