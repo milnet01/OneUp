@@ -11905,13 +11905,18 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0404] **Bash fallback findings from the 2026-11-11 review.**
+- ✅ [ONEUP-0404] **Bash fallback findings from the 2026-11-11 review.**
   Frozen fallback (CLAUDE.md §4); fix only what a hand run meets.
   - update_system.sh:815 hold record; marker payloads predate
     ONEUP-0072.
   - :937-941 keep-alive (calibrated LOW: run from a terminal).
   The run.state, inhibitor and disabled-sources findings are in
   those themes' items.
+  Shipped 2026-11-15 (170946d): the hold record and the pre-0072
+  payloads are recorded as known drift in marker-protocol section 7, not
+  fixed; a terminal run meets neither. The keep-alive finding is
+  dismissed: from a terminal, sudo keys the record by tty and session
+  (ONEUP-0231).
   **Layman:** Small problems in the old backup update script, which is kept only for running by hand.
   Kind: review-fix.
   Source: review-code-2026-11-11.
