@@ -12027,7 +12027,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0410] **An elided label's height is fixed from the primary font, which may clip a taller fallback glyph.**
+- ✅ [ONEUP-0410] **An elided label's height is fixed from the primary font, which may clip a taller fallback glyph.**
   Split from ONEUP-0403 (2026-11-15). elided_label.py: every
   ElidedLabel takes a Fixed vertical policy and a height of the primary
   font's fm.height(). ONEUP-0032 section 4.5 says a translatable label
@@ -12037,6 +12037,10 @@ when complete (that document's §7).
   First step: measure with a CJK font installed (Noto Sans CJK) whether a
   fallback glyph's bounding rect exceeds fm.height(). If it does, decide
   which spec yields, then fix the label or exempt it in ONEUP-0032 4.5.
+  Shipped 2026-11-15 (fa89574): measured, no CJK clipping (method
+  validated by a 6 px short control); ONEUP-0032 §4.5 exempts the label
+  with the measurement. Script:
+  /mnt/Emulators/.claude/Scratchpad/OneUp/0402/measure-cjk.py.
   **Layman:** Some one-line labels might cut off the top or bottom of Chinese, Japanese or Korean characters.
   Kind: review-fix.
   Source: review-code-2026-11-11.

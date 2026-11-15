@@ -373,7 +373,11 @@ def _text_for(store: DetailsStore, package: Package) -> str:
 def open_details(win, package: Package) -> None:
     """Open the dialog for a package with details; for one without, nothing."""
     if win.details.has_details(package):
-        PackageDetailsDialog(win, win.details, package).exec()
+        dialog = PackageDetailsDialog(win, win.details, package)
+        dialog.exec()
+        # Parented to the window, a closed dialog lived as long as it did, with its
+        # changelog text, one per package opened (ONEUP-0386).
+        dialog.deleteLater()
 
 
 class PackageDetailsDialog(QDialog):

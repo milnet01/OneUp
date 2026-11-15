@@ -5029,6 +5029,20 @@ def main() -> int:
               len(_dlabels) == 2
               and all(lb.textFormat() == Qt.TextFormat.PlainText for lb in _dlabels))
         _ddlg.deleteLater()
+        # ONEUP-0386: a closed details dialog is deleted, not kept under the window.
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        _real_exec, _real_has = details_dialog.PackageDetailsDialog.exec, wA.details.has_details
+        details_dialog.PackageDetailsDialog.exec = lambda self: 0
+        wA.details.has_details = lambda _pkg: True
+        try:
+            for _ in range(3):
+                details_dialog.open_details(wA, packages.Package("system", "pkg", "1-1"))
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            check("ONEUP-0386 a closed package-details dialog does not stay alive",
+                  not wA.findChildren(details_dialog.PackageDetailsDialog))
+        finally:
+            details_dialog.PackageDetailsDialog.exec = _real_exec
+            wA.details.has_details = _real_has
     finally:
         details_dialog._text_for = _orig_text_for
     # Qt reads a Markdown image's file: URL from disk (measured: /etc/hostname, 7 bytes),
