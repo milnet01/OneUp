@@ -3467,8 +3467,11 @@ def main() -> int:
             os.remove(_SUDO_LOG)
         auth.offer_old_dropin_removal(wS)
         _sudo_calls = Path(_SUDO_LOG).read_text() if os.path.exists(_SUDO_LOG) else ""
-        check("ONEUP-0249 with no guard, sudo is asked only to list (-n -l)",
-              _sudo_calls.startswith("-n -l") and _sudo_calls.count("\n") == 1)
+        # ONEUP-0407: this failed once under load and passed on a re-run; on a failure,
+        # name what the log held, so the stray writer can be found.
+        _only_list = _sudo_calls.startswith("-n -l") and _sudo_calls.count("\n") == 1
+        check("ONEUP-0249 with no guard, sudo is asked only to list (-n -l)"
+              + ("" if _only_list else f" — the log held {_sudo_calls!r}"), _only_list)
         check("ONEUP-0249 and its refusal brings no offer", len(_offers) == 1)
 
         # ONEUP-0293: a general password-free rule lets zypper run too, but it is not
