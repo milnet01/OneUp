@@ -5567,6 +5567,28 @@ if len(seen) != 1 or seen[0][:7] != wrapper or seen[0][-len(txn) + 2:] != txn[2:
 raise SystemExit("; ".join(bad) or 0)
 PYEOF
 )"
+# ONEUP-0409: the download pass chose the service branch before any session existed. When
+# opening it fell back to sudo, root_stream ran the table's bare row, so the guard and the
+# stop wrapper were skipped and Stop went unheard mid-download.
+py_case "a service route that falls back before the download keeps the stop wrapper (ONEUP-0409)" "$(cat <<'PYEOF'
+from oneup.engine import actions, privilege, proc, route, service_client, steps
+privilege._ROUTE = route.SERVICE
+service_client.has_session = lambda: False
+privilege.sudo_init = lambda: setattr(privilege, "_ROUTE", route.SUDO)   # the fallback
+actions.guard_current = lambda: False
+seen = []
+proc.stream_filtered = lambda argv, **kw: (seen.append(list(argv)), 0)[1]
+steps._download_pass()
+wrapper = ["sudo", "env", "LC_ALL=C", "bash", "-c", steps._STOP_WRAPPER, "_"]
+if len(seen) != 1 or seen[0][:7] != wrapper:
+    raise SystemExit(f"the download ran {seen}")
+try:
+    privilege.root_argv("system-download", {"cdn": False})
+except Exception:
+    raise SystemExit(0)
+raise SystemExit("root_argv built the bare system-download row for sudo")
+PYEOF
+)"
 py_case "the table refuses what it does not define, and runs nothing" "$(cat <<'PYEOF'
 from oneup.engine import privilege, proc, rootops
 refused = [

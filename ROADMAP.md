@@ -11974,7 +11974,7 @@ when complete (that document's §7).
   Kind: test.
   Source: pre-push-gate-2026-11-15.
 
-- 📋 [ONEUP-0408] **The passwordless rule and the download guard name binaries found through the user's PATH.**
+- ✅ [ONEUP-0408] **The passwordless rule and the download guard name binaries found through the user's PATH.**
   Split from ONEUP-0401 (2026-11-15). actions.py:39/44/53/83/143 and
   privilege.py:60-61 resolve zypper, snapper, flatpak, systemctl, env,
   timeout and du with shutil.which, so a ~/bin/zypper becomes a NOPASSWD
@@ -11990,6 +11990,11 @@ when complete (that document's §7).
   Decided by the user 2026-11-15: fix it now, accepting that users with
   password-free updates approve the new rule once more. The CHANGELOG
   entry says why.
+  Shipped 2026-11-15 (9262229): rule and guard binaries resolve in
+  /usr/sbin:/usr/bin:/sbin:/bin, with ONEUP_SYSTEM_PATH as the suite
+  seam. The LC_ALL=C escaping half is dismissed: sudo 1.9.17p2 parses
+  both spellings to the same command (cvtsudoers -f json), measured on
+  the host rather than the VM.
   **Layman:** On a computer where a program in your own folders shadows a system one, OneUp's password-free permission could point at the wrong program.
   Kind: security.
   Source: review-code-2026-11-11.

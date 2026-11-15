@@ -785,10 +785,12 @@ def _download_pass() -> bool:
     passwordless run would otherwise meet a password dialog right here.
     """
     global SYS_DL_RC
-    from . import actions, route  # deferred: actions imports this module
-    if privilege.chosen_route() == route.SERVICE:
+    from . import actions  # deferred: actions imports this module
+    if privilege.service_ready():
         # The service runs the table's row and forwards the user's Stop as `SIGTERM`;
-        # the guard and the stop wrapper are the sudo route's (ONEUP-0249 §4.6).
+        # the guard and the stop wrapper are the sudo route's (ONEUP-0249 §4.6). Asked
+        # with the session opened, so a route that falls back here takes the sudo
+        # branch below rather than the bare row (ONEUP-0409).
         SYS_DL_RC = privilege.root_stream(
             "system-download", {"cdn": bool(REPOSD_OVERRIDE)}, cdn_dir=REPOSD_OVERRIDE,
             step="system", phase="download", log=_SYS_LOG, append=False,

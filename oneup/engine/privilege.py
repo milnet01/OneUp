@@ -394,6 +394,14 @@ def root(op: str, args: dict[str, object] | None = None, *, flags: Sequence[str]
                 on_line=on_line)
 
 
+def service_ready() -> bool:
+    """True when root calls go to the service, opening its session first if need be. False
+    when the run is on sudo, including a service route that just fell back to it. A caller
+    with a sudo-only shape asks this before choosing its branch (ONEUP-0409)."""
+    from . import route
+    return chosen_route() == route.SERVICE and _service_session()
+
+
 def _service_session() -> bool:
     """A session for a root call made before `sudo_init`, or False if the route fell back."""
     from . import route, service_client
@@ -510,6 +518,10 @@ def root_argv(op: str, args: dict[str, object] | None = None, *,
     so a refusal there is a bug to surface, not a run condition.
     """
     from . import rootops
+    if op == "system-download":
+        # Its sudo route is the guard or the stop wrapper (steps._download_pass). The bare
+        # row skipped both, so Stop was not honoured mid-download (ONEUP-0409).
+        raise rootops.Invalid("system-download runs through the guard or wrapper on sudo")
     return sudo_argv(rootops.build(op, args, cdn_dir=cdn_dir))
 
 

@@ -8,6 +8,10 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Stop works during a download even when OneUp's system service cannot be reached** (ONEUP-0409)
+  If the system service failed just before the download and OneUp switched to asking
+  for the password, the download ran without the part that listens for Stop.
+
 - **On a computer set to forget the password quickly, an update from the window asks again instead of failing** (ONEUP-0405)
   Where the system forgets the administrator password within a minute, an update
   started from the window failed part-way with no password box. OneUp now shows its
@@ -118,8 +122,8 @@ All notable changes to OneUp are documented here. The format follows
 - **Password-free updates now name only the system's own programs** (ONEUP-0408)
   OneUp's password-free permission found programs such as zypper through your own
   folders first, so a program in ~/bin could have been given administrator rights.
-  It now uses only the system's copies. If yours pointed elsewhere, OneUp asks you
-  to switch password-free updates on again, once.
+  It now uses only the system's copies. If yours pointed elsewhere, the switch reads
+    off and you turn password-free updates on again, once.
 
 - **Tighter limits on what OneUp asks root to do, and a more private diagnostics report** (ONEUP-0401)
   Restarting services can now only restart services, never reboot the machine through an
