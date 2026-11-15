@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=440 -->
+<!-- ants-roadmap-id-high-water: ONEUP=441 -->
 
 # OneUp Roadmap
 
@@ -12148,7 +12148,7 @@ when complete (that document's §7).
   Kind: perf.
   Source: review-code-perf-2026-11-10.
 
-- 📋 [ONEUP-0416] **Turning passwordless off, or re-granting it, skips the password check and then runs a root rm the rule does not grant.**
+- 🚫 [ONEUP-0416] **Turning passwordless off, or re-granting it, skips the password check and then runs a root rm the rule does not grant.**
   review-code 2026-11-15, lane 01 HIGH (calibrated HIGH, security.md
   §5.5 consent). actions.py revoke_auth calls privilege.sudo_init(),
   which returns early when actions.auth_current() is true
@@ -12160,6 +12160,16 @@ when complete (that document's §7).
   /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/lane-01-engine-run-core.md.
   Open: whether sudo falls back to askpass here (unsettled read-only;
   measure on the VM).
+  Dismissed 2026-11-15 by close-findings: the skip is real, the harm is not.
+  sudo_init does return early on auth_current, and rm is not in
+  auth_cmnds. But privilege.sudo() calls install_environment() on every
+  call, which exports SUDO_ASKPASS, and sudo runs the askpass helper
+  when there is no terminal even without -A. Measured on the host:
+  `setsid -w env SUDO_ASKPASS=/bin/false sudo -k true </dev/null` says
+  "no password was provided" (the helper ran); with SUDO_ASKPASS unset
+  it says "a terminal is required". man sudo, ENVIRONMENT, agrees. So
+  revoke and grant still ask, through the box, and consent can be
+  withdrawn. What remains is the box's wording, filed as its own item.
   **Layman:** Switching off OneUp's password-free updates may fail from the window, because a step it needs is not covered by the password-free rule.
   Kind: security.
   Source: review-code-2026-11-15.
@@ -12483,3 +12493,18 @@ when complete (that document's §7).
   **Layman:** Test the fixes that need a real computer update on a clean virtual machine before releasing.
   Kind: chore.
   Source: verify-delivery-2026-11-15.
+
+- 📋 [ONEUP-0441] **Turning passwordless on or off asks for the password in a box that says it is for updating.**
+  Found closing ONEUP-0416. With passwordless live, grant_auth and
+  revoke_auth skip sudo_init's labelled validate (it returns on
+  auth_current), so their first sudo call asks through the askpass
+  fallback with SUDO_PROMPT: "...to continue updating". With
+  passwordless off, sudo_init asks "...to install updates". Neither
+  names the action. A fix needs a prompt of its own for grant and
+  revoke, added to _PROMPT_MARKS so the askpass reaper still matches
+  it (privilege.py), and wording per wording-and-translation.md.
+  Not fixed now: it is wording, not a failure, and the label needs a
+  decision on what it says.
+  **Layman:** When you switch password-free updates off, the password box says OneUp wants it "to continue updating", which is not what you are doing.
+  Kind: ux.
+  Source: close-findings-2026-11-15 (from ONEUP-0416).
