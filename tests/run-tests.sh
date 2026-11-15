@@ -5346,6 +5346,31 @@ assert not repos.PAUSED_FILE.exists(), "a restored source stays in the record"
 ' "ONEUP_REPOS_DIR=$pd/repos.d" "ONEUP_PAUSED_FILE=$pd/paused-sources"
 rm -rf "$pd"
 
+echo "TEST: the size scan reads createrepo's layout fast, and any other layout still right (ONEUP-0386)"
+py_case "the byte pattern reads the standard layout, and another falls back to the XML parser" '
+import gzip, io, os, tempfile
+from pathlib import Path
+from oneup.engine import pkgsizes
+HEAD = b"<?xml version=\"1.0\"?>\n<metadata xmlns=\"http://linux.duke.edu/metadata/common\">\n"
+std = HEAD + (b"<package type=\"rpm\">\n  <name>vlc</name>\n  <arch>x86_64</arch>\n"
+              b"  <version epoch=\"0\" ver=\"3.0\" rel=\"2.1\"/>\n  <checksum>x</checksum>\n"
+              b"  <size package=\"222\" installed=\"1\" archive=\"1\"/>\n</package>\n"
+              b"<package type=\"rpm\"><name>k</name><arch>noarch</arch>"
+              b"<version epoch=\"1\" ver=\"2\" rel=\"3\"/><size package=\"7\"/></package>\n"
+              b"</metadata>\n")
+odd = std.replace(b"epoch=\"0\" ver=\"3.0\" rel=\"2.1\"", b"rel=\"2.1\" ver=\"3.0\" epoch=\"0\"")
+want = {("vlc", "3.0-2.1", "x86_64"): 222, ("k", "1:2-3", "noarch"): 7}
+d = Path(tempfile.mkdtemp())
+for name, data in (("std", std), ("odd", odd)):
+    f = d / f"{name}-primary.xml.gz"
+    f.write_bytes(gzip.compress(data))
+    got = pkgsizes._scan(f, set(want), 10)
+    assert got == want, (name, got)
+fast = pkgsizes._pattern_pass(io.BytesIO(std), set(want), float("inf"))
+assert fast == want, ("the pattern no longer reads the standard layout", fast)
+assert pkgsizes._pattern_pass(io.BytesIO(odd), set(want), float("inf")) is None, "odd layout"
+'
+
 echo "TEST: the --log= path reaches run.state and the banner verbatim"
 py_case "a --log= value is not normalised" '
 from oneup.engine import runstate

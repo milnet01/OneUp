@@ -7,6 +7,7 @@ Every package view shows each package's state as a word (INV-3).
 """
 from __future__ import annotations
 
+import operator
 from collections.abc import Callable
 from typing import ClassVar
 
@@ -254,6 +255,15 @@ class PackageItems(QAbstractTableModel):
         """Become `new`, by inserting and removing rows — never a reset, which
         would throw away the view's scroll position. `new` and the rows held are
         both in the model's engine order, so the rows kept are a subsequence of it."""
+        # The common case during a run: the same packages, only a state changed. Then
+        # nothing is inserted or removed, and walking both lists in Python for every
+        # PKG line made a run's cost grow with the square of its size (ONEUP-0386:
+        # 2.85 ms a line at 2000 packages, measured offscreen 2026-11-15).
+        if len(new) == len(self._rows) and all(map(operator.is_, new, self._rows)):
+            if self._rows:
+                self.dataChanged.emit(self.index(0, 0),
+                                      self.index(len(self._rows) - 1, len(self._columns) - 1))
+            return
         keep = {id(p) for p in new}
         i = len(self._rows) - 1
         while i >= 0:

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import gzip
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -24,8 +25,9 @@ from pathlib import Path
 
 from . import proc
 
-# One budget for the whole lookup, across every repository. Measured 2026-10-12:
-# the main Tumbleweed repository alone (52,972 packages) took 3.6 s to scan.
+# One budget for the whole lookup, across every repository. The main Tumbleweed
+# repository alone took 3.6 s to scan with ElementTree (2026-10-12) and 0.59 s with
+# the byte pattern below (53,080 packages, 2026-11-15).
 SIZE_LOOKUP_SECONDS = float(os.environ.get("ONEUP_SIZE_LOOKUP_TIMEOUT") or "15")
 
 _REPO = "{http://linux.duke.edu/metadata/repo}"
@@ -90,13 +92,78 @@ def _edition(version: ET.Element) -> str:
     return edition if epoch in ("", "0") else f"{epoch}:{edition}"
 
 
+# createrepo's layout of one package's head, as every repository this was measured on
+# writes it (12 repositories, 2026-11-15). A block whose packages this does not all
+# match is read by ElementTree instead, so another layout costs time, never a size.
+_PACKAGE = re.compile(
+    rb'<package type="rpm">\s*<name>([^<&]*)</name>\s*<arch>([^<&]*)</arch>\s*'
+    rb'<version epoch="([^"&]*)" ver="([^"&]*)" rel="([^"&]*)"/>.*?<size package="(\d+)"',
+    re.S)
+_CHUNK = 1 << 20
+
+
 def _scan(primary: Path, keys: set[tuple[str, str, str]],
           budget: float) -> dict[tuple[str, str, str], int]:
-    """Stream `primary`, keeping the size of each wanted (name, edition, arch)."""
-    found: dict[tuple[str, str, str], int] = {}
+    """The size of each wanted (name, edition, arch) in `primary`.
+
+    A byte pattern first, five times faster than ElementTree on the main Tumbleweed
+    repository (0.66 s against 3.55 s, ONEUP-0386); ElementTree when the pattern does
+    not account for every package."""
     ends = time.monotonic() + budget
+    found = _read(primary, keys, ends, _pattern_pass)
+    if found is None:
+        found = _read(primary, keys, ends, _tree_pass) or {}
+    return found
+
+
+def _pattern_pass(stream, keys, ends) -> dict[tuple[str, str, str], int] | None:
+    """None as soon as a block holds a package the pattern does not match."""
+    found: dict[tuple[str, str, str], int] = {}
+    buf = b""
+    while chunk := stream.read(_CHUNK):
+        buf += chunk
+        cut = buf.rfind(b"</package>")
+        if cut < 0:
+            continue
+        cut += len(b"</package>")
+        block, buf = buf[:cut], buf[cut:]
+        matched = 0
+        for m in _PACKAGE.finditer(block):
+            matched += 1
+            name, arch, epoch, ver, rel, size = (g.decode() for g in m.groups())
+            edition = f"{ver}-{rel}" if epoch in ("", "0") else f"{epoch}:{ver}-{rel}"
+            if (name, edition, arch) in keys:
+                found[(name, edition, arch)] = int(size)
+        if matched != block.count(b"<package "):
+            return None
+        if len(found) == len(keys) or time.monotonic() > ends:
+            break
+    return found
+
+
+def _tree_pass(stream, keys, ends) -> dict[tuple[str, str, str], int]:
+    found: dict[tuple[str, str, str], int] = {}
+    for _event, node in ET.iterparse(stream):  # noqa: S314 — see _primary
+        if node.tag != f"{_COMMON}package":
+            continue
+        version = node.find(f"{_COMMON}version")
+        size = node.find(f"{_COMMON}size")
+        key = (node.findtext(f"{_COMMON}name", ""),
+               _edition(version) if version is not None else "",
+               node.findtext(f"{_COMMON}arch", ""))
+        if key in keys and size is not None and size.get("package", "").isdecimal():
+            found[key] = int(size.get("package", "0"))
+        node.clear()
+        if len(found) == len(keys) or time.monotonic() > ends:
+            break
+    return found
+
+
+def _read(primary: Path, keys, ends, reader):
+    """Open `primary` decompressed and hand it to `reader`; {} on any read failure."""
     child = None
     timer = None
+    budget = max(ends - time.monotonic(), 0.0)
     try:
         if primary.name.endswith(".gz"):
             stream = gzip.open(primary)
@@ -109,33 +176,20 @@ def _scan(primary: Path, keys: set[tuple[str, str, str]],
             )
             stream = child.stdout
             # A watchdog, because a reader that never gets a byte never reaches
-            # the per-package time check below.
+            # the per-package time check.
             timer = threading.Timer(budget, proc.kill_group, (child.pid,))
             timer.start()
         else:
-            return found
+            return {}
         with stream:
-            for _event, node in ET.iterparse(stream):  # noqa: S314 — see _primary
-                if node.tag != f"{_COMMON}package":
-                    continue
-                version = node.find(f"{_COMMON}version")
-                size = node.find(f"{_COMMON}size")
-                key = (node.findtext(f"{_COMMON}name", ""),
-                       _edition(version) if version is not None else "",
-                       node.findtext(f"{_COMMON}arch", ""))
-                if key in keys and size is not None and size.get("package", "").isdecimal():
-                    found[key] = int(size.get("package", "0"))
-                node.clear()
-                if len(found) == len(keys) or time.monotonic() > ends:
-                    break
+            return reader(stream, keys, ends)
     # zlib.error is not an OSError: a corrupt deflate stream raises it from inside the
     # gzip read, and it escaped into the system step and --check (ONEUP-0397).
     except (OSError, ET.ParseError, EOFError, zlib.error):
-        pass        # what was found before the failure still stands
+        return {}
     finally:
         if timer is not None:
             timer.cancel()
         if child is not None:
             proc.kill_group(child.pid)
             child.wait()
-    return found
