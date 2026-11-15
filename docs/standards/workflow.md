@@ -231,7 +231,7 @@ Deliberate design points:
 - **A gate whose tool is not installed is reported as skipped, never silently passed.** A
   green run that quietly checked nothing is worse than a red one.
 - **The AppImage build is opt-in** (`./local-CI.sh --full`, wrapped in a 10-minute
-  timeout). `appimagetool` downloads its runtime from GitHub on every run and can stall on
+  timeout). The build downloads `appimagetool` and its runtime from GitHub on every run and can stall on
   a slow or filtered link; the tag workflow builds and attaches it anyway (§7), so the local build is a convenience,
   not a gate. **Neither CI nor `--full`
   launches the result** — that check is a person, once, per `docs/design/oneup-2.0.md` §7's

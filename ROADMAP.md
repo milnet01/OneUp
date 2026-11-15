@@ -11871,12 +11871,16 @@ when complete (that document's §7).
   Kind: security.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0402] **Release-tooling findings from the 2026-11-11 review.**
+- ✅ [ONEUP-0402] **Release-tooling findings from the 2026-11-11 review.**
   - release.sh:151-153: add, commit and tag unchecked with no set -e;
     a failed commit tags the old HEAD as the new version.
   - build-appimage.sh:25: pip --upgrade installs whatever pip is
     newest (security.md §8.2).
   - githooks/pre-push:83: the changed-files diff.
+  Shipped 2026-11-15 (89483a2): all three fixed. release.sh dies on a
+  failed add, commit or tag; build-appimage.sh drops the pip upgrade;
+  pre-push diffs with --no-renames, locked by a new engine-suite check
+  (red without the flag).
   **Layman:** Three ways the release scripts could publish the wrong thing or skip a check.
   Kind: review-fix.
   Source: review-code-2026-11-11.

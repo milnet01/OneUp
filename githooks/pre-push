@@ -4,8 +4,8 @@
 # aborts the push, so a failing test / lint / version-lockstep never reaches GitHub.
 #
 # It runs the FAST gates only (tests + lint + packaging validation + version
-# lockstep — seconds). The AppImage build is NOT run here: it downloads
-# appimagetool's runtime from GitHub each time and can stall on a slow/filtered
+# lockstep). The AppImage build is NOT run here: it downloads appimagetool
+# and its runtime from GitHub each time and can stall on a slow/filtered
 # link, and GitHub CI builds + verifies the AppImage itself on every tag push. To
 # check the build locally when you have a good connection: ./local-CI.sh --full
 #

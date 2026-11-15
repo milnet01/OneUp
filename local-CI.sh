@@ -6,13 +6,13 @@
 # packaging validation, version lockstep, documentation) — all best-effort: a gate
 # whose tool isn't installed is skipped, never silently passed. The AppImage build
 # (packaging/appimage/build-appimage.sh — the same step the release workflow runs)
-# is opt-in via --full, because appimagetool downloads its runtime from GitHub on
-# every run and can stall on a slow/filtered link (e.g. a VPN). GitHub CI builds and
+# is opt-in via --full, because it downloads appimagetool and its runtime from GitHub
+# on every run and can stall on a slow/filtered link (e.g. a VPN). GitHub CI builds and
 # verifies the AppImage on every tag push, so the local build is a convenience.
 #
 # Usage:
 #   ./local-CI.sh          fast gates — tests, lint, packaging validation, version
-#                          lockstep, documentation (seconds). The reliable pre-push check.
+#                          lockstep, documentation. The reliable pre-push check.
 #   ./local-CI.sh --full   also run the AppImage build (wrapped in a 10-min timeout).
 #   ./local-CI.sh --docs   ONLY the gates that can read a markdown file — the version
 #                          lockstep (CHANGELOG.md is one of the six sites), bump.py's
@@ -369,14 +369,14 @@ fi
 # --- AppImage build (opt-in; also built + verified by GitHub CI on a tag push) ---
 if $FULL; then
     step "AppImage build (--full; same step the release workflow runs)"
-    # appimagetool downloads its runtime from GitHub each run, which can stall on a
+    # The build downloads appimagetool and its runtime from GitHub each run, which can stall on a
     # slow/filtered link — cap it so local CI fails cleanly instead of hanging.
     if timeout 600 bash packaging/appimage/build-appimage.sh; then
         ok "build-appimage.sh → OneUp-x86_64.AppImage"
     else
         rc=$?
         if [[ $rc -eq 124 ]]; then
-            bad "build-appimage.sh timed out after 10 min — likely the appimagetool runtime download stalled (network/VPN), not a code fault"
+            bad "build-appimage.sh timed out after 10 min — likely a download from GitHub stalled (network/VPN), not a code fault"
         else
             bad "build-appimage.sh (exit $rc)"
         fi
