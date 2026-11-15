@@ -191,6 +191,7 @@ def _tooltip(n: int, uncertain: bool = False, at_least: bool = False) -> str:
 def _apply_tray_total(win, n: int, uncertain: bool = False, at_least: bool = False):
     win._tray_total = n
     win._tray_at_least = at_least
+    win._tray_uncertain = uncertain   # a rebuilt tooltip must not drop it (ONEUP-0400)
     win._tray_checked_at = datetime.now()
     if win._tray is None:
         return
@@ -308,8 +309,9 @@ def _ensure_tray(win):
     win._tray.setIcon(_tray_icon(win._tray_total > 0))
     win._tray.setToolTip(
         QCoreApplication.translate("tray", "{app} — not checked yet").format(app=APP_NAME)
-        if win._tray_checked_at is None else _tooltip(win._tray_total,
-                                                      at_least=win._tray_at_least))
+        if win._tray_checked_at is None else _tooltip(
+            win._tray_total, getattr(win, "_tray_uncertain", False),
+            at_least=win._tray_at_least))
     win._tray.show()
     _arm_single_instance(win)
     win._tray_timer = QTimer(win)

@@ -55,7 +55,8 @@ class Entry:
 
 @dataclass
 class WhatChanged:
-    """`kind` is "entries", "no-notes", "not-found" or "not-yet". `known` is
+    """`kind` is "entries", "no-notes", "not-found", "not-yet" or, for a package the
+    update removes, "removal". `known` is
     False when OneUp could not tell which entries are new (§4.3)."""
     kind: str
     entries: list[Entry] = field(default_factory=list)

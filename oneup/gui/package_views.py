@@ -133,10 +133,17 @@ def counts(model: PackageModel, packages: list[Package]) -> dict[str, int]:
     return out
 
 
+def _size_unknown(packages: list[Package]) -> bool:
+    """Is some download size not known? A removal downloads nothing, so its 0 is an
+    answer, not a gap (ONEUP-0329 §4.4); counting it said "some sizes not known" on
+    every update that removed a package (ONEUP-0400)."""
+    return any(not p.size and p.change != "remove" for p in packages)
+
+
 def total_phrase(packages: list[Package]) -> str:
     """The packages' total size. A total counts only known sizes, and says so."""
     total = sum(p.size for p in packages)
-    unknown = any(not p.size for p in packages)
+    unknown = _size_unknown(packages)
     if not total:
         return QCoreApplication.translate("package_views", "size not known") if unknown else ""
     if unknown:
@@ -150,7 +157,7 @@ def download_sentence(packages: list[Package]) -> str:
     download" (§4.3 Rail). A total counts only known sizes, and says so."""
     count = i18n.counted("package-count", len(packages))
     total = sum(p.size for p in packages)
-    unknown = any(not p.size for p in packages)
+    unknown = _size_unknown(packages)
     if total and unknown:
         return QCoreApplication.translate(
             "package_views", "{count} · {size} to download, some sizes not known").format(

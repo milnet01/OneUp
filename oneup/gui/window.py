@@ -887,7 +887,9 @@ class Updater(QMainWindow):
         self._done_status = ""
         run._reset_activity(self)
         self._activity_timer.start()
-        self._total = len([s for s in steps.split(",") if s])
+        # The run's own steps, which the summary and the tray judge it by (ONEUP-0400).
+        self._run_steps = [s for s in steps.split(",") if s]
+        self._total = len(self._run_steps)
         self.bar.setRange(0, max(self._total, 1))
         self.set_controls_enabled(False)
         self.status.setText(QCoreApplication.translate(

@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The window no longer reports results a run did not produce** (ONEUP-0400)
+  Retrying only the failed steps could clear the tray's "updates waiting" count. An
+  update that never started could say "All done". Packages an update removes no longer
+  make sizes read "some not known", and their details now say they are being removed.
+
 - **OneUp no longer says "up to date" or "0 B" when it could not tell** (ONEUP-0400)
   The download size could read 0 B when OneUp failed to read it. A Flatpak source that
   could not be asked could make a check or an update say "up to date". And an update that

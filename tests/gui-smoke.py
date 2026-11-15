@@ -2787,6 +2787,53 @@ def main() -> int:
     check("ONEUP-0344 a read error mid-run leaves the run controls locked",
           not wE2.run_btn.isEnabled())
 
+    # ONEUP-0400: the window's confident answers it did not earn.
+    # A retry runs only the failed steps; the summary and the tray judged the switches,
+    # so a Flatpak-only retry with every switch on cleared "5 updates waiting".
+    wT = window.Updater()
+    wT.proc = QProcess(wT)
+    tray._apply_tray_total(wT, 5)
+    run._reset_for_run(wT, ["flatpak"], check=False)
+    for line in ("@@STEP_BEGIN@@|flatpak|1|1", "@@STEP_END@@|flatpak|ok|up-to-date",
+                 "@@DONE@@|ok"):
+        run.handle_line(wT, line)
+    run.on_finished(wT, 0, QProcess.ExitStatus.NormalExit)
+    check("ONEUP-0400 a run of some steps leaves the tray's count alone",
+          wT._tray_total == 5)
+    check("ONEUP-0400 and does not call the system up to date",
+          "already up to date" not in wT.status.text())
+    # A held engine that ended as Update was pressed exits 0 having begun no step.
+    wN = window.Updater()
+    wN.proc = QProcess(wN)
+    run._reset_for_run(wN, ["system"], check=False)
+    run.handle_line(wN, "@@DONE@@|ok")
+    run.on_finished(wN, 0, QProcess.ExitStatus.NormalExit)
+    check("ONEUP-0400 a run that began no step is not 'All done'",
+          "All done" not in wN.status.text() and "did not start" in wN.status.text())
+    # A tooltip rebuilt when the tray comes back kept the count and dropped the doubt.
+    wU = window.Updater()
+    tray._apply_tray_total(wU, 0, uncertain=True)
+    wU._tray_available = True
+    tray._ensure_tray(wU)
+    check("ONEUP-0400 a rebuilt tray tooltip keeps 'could not check every source'",
+          wU._tray is not None and wU._tray.toolTip() == tray._tooltip(0, True))
+    tray._teardown_tray(wU)
+    # A removal downloads nothing by design; its 0 is an answer, not an unknown size.
+    _pk = [packages.Package("system", "kept", "2-1", size=1_048_576),
+           packages.Package("system", "gone", "1-1", change="remove")]
+    check("ONEUP-0400 a removal is not an unknown size",
+          "not known" not in package_views.total_phrase(_pk)
+          and "not known" not in package_views.download_sentence(_pk))
+    _orig_cl = package_details.changelog
+    package_details.changelog = lambda *a, **k: package_details.WhatChanged("not-yet")
+    try:
+        _removal = details_dialog._text_for(
+            wT.details, packages.Package("system", "gone", "1-1", change="remove"))
+    finally:
+        package_details.changelog = _orig_cl
+    check("ONEUP-0400 a removal's details say it is removed, not that notes will come",
+          "removes the package" in _removal and "once the new version" not in _removal)
+
     # --- headless command builder shared by both timers ------------------------
     check("headless --check command ends in --check",
           autostart._headless_command("--check").endswith("--check"))

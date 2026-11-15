@@ -318,6 +318,9 @@ def details_text(about: package_details.About | None,
         lines.append(QCoreApplication.translate(
             "details_dialog", "The downloaded package is not in the cache; its notes "
             "show once it is installed."))
+    elif changed.kind == "removal":
+        lines.append(QCoreApplication.translate(
+            "details_dialog", "This update removes the package, so it has no new notes."))
     else:
         lines.append(QCoreApplication.translate(
             "details_dialog", "The notes show once the new version has downloaded."))
@@ -358,6 +361,10 @@ def _text_for(store: DetailsStore, package: Package) -> str:
         comp = store.flatpak(package)
         return flatpak_text(comp, flatpak_details.what_changed(
             comp, store.installed(package.name)))
+    if package.change == "remove":
+        # A removal downloads no new version, so "once the new version has
+        # downloaded" would never come true (ONEUP-0400).
+        return details_text(store.about(package.name), package_details.WhatChanged("removal"))
     changed = package_details.changelog(
         package.name, package.edition, package.state, store.baseline(package.name), run=_run)
     return details_text(store.about(package.name), changed)

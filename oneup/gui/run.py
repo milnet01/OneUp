@@ -493,6 +493,10 @@ def _reset_for_run(win, steps: list[str], check: bool):
     win.current_step = ""
     win.latest_package = None
     win.engine_finished = False
+    # Recorded here, so the summary and the tray judge the steps the run really ran,
+    # and cleared so a run that never begins a step is not reported done (ONEUP-0400).
+    win._run_steps = list(steps)
+    win._step_begun = False
     step_progress.reset(win)
     for r in win.rows.values():
         r.clear_badge()
@@ -889,6 +893,7 @@ def handle_marker(win, line: str):
         # The step's own bar and the window's, busy until PROGRESS says how far
         # (ONEUP-0239 §4.1.1).
         win.current_step = key
+        win._step_begun = True
         step_progress.begin(win, key)
         _refresh_layout(win)
         # Progress out loud: without this a blind user gets silence for the
@@ -1328,6 +1333,16 @@ def on_finished(win, exit_code: int, _status):
             win.rollback_btn.setVisible(True)
         return
 
+    if ok and not getattr(win, "_step_begun", True):
+        # Exit 0 with no step begun: a held preview whose ceiling fired as Update was
+        # pressed ended without running anything. Nothing was done, so nothing is
+        # "All done", and the tray's count stands (ONEUP-0400).
+        win.bar.setFormat(QCoreApplication.translate("run", "Not started"))
+        win.status.setText(QCoreApplication.translate(
+            "run", "The update did not start. Press Update to try again."))
+        win._announce(win.status.text())
+        return
+
     n = win._installed_count
     count = int(n) if n.isdecimal() else 0
     # A source set aside this run is named in the summary. Without it a run that
@@ -1368,7 +1383,7 @@ def on_finished(win, exit_code: int, _status):
             "run", "All done. {installed}",
             "then one whole sentence per source that changed something").format(
                 installed=between.join(installed))
-    elif "system" in win.selected_steps():
+    elif "system" in run_steps(win):
         summary = QCoreApplication.translate("run", "All done — already up to date.")
     else:
         summary = QCoreApplication.translate("run", "All done — finished.")
@@ -1523,7 +1538,15 @@ def _covers_tray_check(win) -> bool:
     """True when this run covered every step the tray's own check counts. A run of
     only some of them knows nothing about the rest, so it must leave the tray's count
     alone rather than turn "3 updates waiting" into "up to date" (ONEUP-0345)."""
-    steps = win.selected_steps()
+    steps = run_steps(win)
     return all(key in steps for key in ("system", "flatpak", "firmware"))
+
+
+def run_steps(win) -> list[str]:
+    """The steps this run was started with. Not the switches as they stand now: a
+    retry runs only the failed steps, and a followed run ran what `run.state` names
+    (ONEUP-0400). A window that never started a run falls back to its switches."""
+    steps = getattr(win, "_run_steps", None)
+    return list(steps) if steps is not None else win.selected_steps()
 
 
