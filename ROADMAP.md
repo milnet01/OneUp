@@ -12041,11 +12041,15 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0411] **On the sudo route, an engine killed outright leaves the sources it paused switched off.**
+- ✅ [ONEUP-0411] **On the sudo route, an engine killed outright leaves the sources it paused switched off.**
   Split from ONEUP-0406 (2026-11-15), which closed the service route.
   ONEUP-0249 section 4.5 names it: an engine killed with SIGKILL never
   runs repos.restore_disabled, so its in-memory list of disabled aliases
   is lost. Every AppImage run takes this route.
+  Shipped 2026-11-15 (9d9b93a): ~/.local/state/oneup/paused-sources,
+  written before each switch-off and restored by the next run that owns
+  run.state. Locked by an engine scenario and a py_case, both red
+  against HEAD.
   **Layman:** If OneUp is force-closed in the middle of an update without its background helper, a software source it paused can stay off.
   Kind: review-fix.
   Source: review-code-2026-11-11.
