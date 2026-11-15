@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=412 -->
+<!-- ants-roadmap-id-high-water: ONEUP=415 -->
 
 # OneUp Roadmap
 
@@ -11573,7 +11573,7 @@ when complete (that document's §7).
   Kind: chore.
   Source: ONEUP-0112 implementation, 2026-11-08.
 
-- 📋 [ONEUP-0386] **Measure the three speed candidates from the 2026-11-10 performance review, then fix what measures large.**
+- ✅ [ONEUP-0386] **Measure the three speed candidates from the 2026-11-10 performance review, then fix what measures large.**
   review-code --performance --small, v2 @ 23d0961. Records (not in git,
   the repo is public): /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/
   review-code-perf-2026-11-10/ (message-1.md holds every finding).
@@ -11588,6 +11588,15 @@ when complete (that document's §7).
      AppImage hash walk. One strace of a launch sizes them all.
   The MEDIUM and LOW rows go through close-findings with these. A
   candidate that measures small is dropped.
+  Shipped 2026-11-15 (276e0a8, 4be24f5). Measured on this machine: the
+  size scan 3.55 s to 0.59 s (byte pattern, ElementTree fallback,
+  identical on all 12 repositories); package markers 1.96 to 1.06 ms a
+  line at 3000 packages, the rest queued as ONEUP-0412; launch 0.36 s,
+  dropped. Of the MEDIUM and LOW rows (triaged against HEAD, all 20
+  still present): the details-dialog leak fixed; the log prune,
+  second-copy theme apply and log-pane growth measured small and closed;
+  the rest filed by subject as ONEUP-0413 (engine), ONEUP-0414 (service)
+  and ONEUP-0415 (window).
   **Layman:** Time three places the review thinks OneUp may be slow, and speed up only the ones that really are.
   Kind: perf.
   Source: review-code-perf-2026-11-10.
@@ -12073,3 +12082,59 @@ when complete (that document's §7).
   **Layman:** During a very large update, the window spends several seconds redrawing its package list over and over.
   Kind: perf.
   Source: ONEUP-0386-measure-2026-11-15.
+
+- 📋 [ONEUP-0413] **The engine repeats work a run already did: a second refresh, extra solves, serial queries.**
+  Split from ONEUP-0386 (2026-11-15); rows still present at HEAD,
+  none measured yet. Measure each before fixing, as 0386 did.
+  - repos.py find_failing_repos refreshes every repository again;
+    refresh_repos could keep each alias's result. Design: one probe
+    captures, the other streams.
+  - steps.py plan-dry-run: the --size --hold path solves the
+    transaction four times. Needs a rootops change; ONEUP-0329 §4.3 and
+    §10 reject reusing size-dry-run. Same shape as ONEUP-0384.
+  - steps.py flatpak_updates asks each remote in turn; actions.py check
+    runs zypper, Flatpak and fwupd in series. Concurrency must keep the
+    marker order.
+  - __main__.py reads `lr -u` and snapshot-list more than once before
+    the banner. Tests count calls.
+  - steps.py _STOP_WRAPPER sleeps out its poll after zypper exits (up
+    to 2 s, password route only).
+  - privilege.py BUSY_POLL_SECONDS = 2.0; ONEUP-0329 §4.7 states 2 s.
+  **Layman:** OneUp's updater does some of the same slow steps twice in one run, or one after another when they could overlap.
+  Kind: perf.
+  Source: review-code-perf-2026-11-10.
+
+- 📋 [ONEUP-0414] **The system service polls its jobs every 20 ms instead of being woken.**
+  Split from ONEUP-0386 (2026-11-15); still present at HEAD.
+  server.py's loop ticks every 20 ms while a Read is parked, and
+  jobs.py opens, seeks, reads and closes the job file on each tick. A
+  wake from _job_ended, or inotify, replaces the tick. Design: the
+  pull model is ONEUP-0249 §4.3's and INV-5's, so the spec changes
+  with it. Measure the service's CPU during a long job first.
+  **Layman:** OneUp's background helper checks for news fifty times a second while a job runs, instead of being told.
+  Kind: perf.
+  Source: review-code-perf-2026-11-10.
+
+- 📋 [ONEUP-0415] **The window does slow work on its own thread: rpm queries, a cache walk, font measuring, refits.**
+  Split from ONEUP-0386 (2026-11-15); rows still present at HEAD,
+  none measured yet.
+  - details_dialog.py runs rpm (changelog) and flatpak list on the
+    GUI thread, each with a 5 s timeout. Design: the comment beside it
+    orders it before zypper; tests record _run.
+  - package_details.py find_download walks the whole package cache
+    with a ** glob; the len(hits)==1 rule must hold.
+  - package_views.py rebuilds fonts and measures every state word on
+    each card paint; a cache must reset on a text-size or language change.
+  - window.py _fit_minimum walks every widget, three times a theme
+    change; ONEUP-0361 needs its cache clear.
+  - app_update.py copies a self-update download whole, and
+    self_update.signed_message copies it again. Security-relevant:
+    the signature covers those exact bytes (ONEUP-0112 INV-6).
+  - app_update.py sends no If-None-Match on the release list; needs a
+    stored ETag and 304 handling.
+  Measured small and closed with 0386: the log prune (9.4 ms a run),
+  the second copy's theme apply (24 ms), the log pane's growth (cleared
+  every run), install_kind per marker (part of ONEUP-0412).
+  **Layman:** A few window actions make OneUp pause briefly while it does work that could happen in the background or be remembered.
+  Kind: perf.
+  Source: review-code-perf-2026-11-10.
