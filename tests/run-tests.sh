@@ -233,6 +233,26 @@ check "the update still runs when the lock can't be taken" "@@STEP_END@@|cache|o
 check "and the run still reports a clean finish"           "@@DONE@@|ok"           "$out"
 rm -rf "$d"
 
+# ONEUP-0395: blocking sleep is a separate permission from blocking shutdown. The probe
+# used to ask for shutdown alone, so where only that was allowed it passed, the real call
+# refused and ran nothing, and the update never ran at all.
+echo "TEST: an inhibitor that may block shutdown but not sleep still leaves a run"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"
+cat > "$d/systemd-inhibit" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do
+    [[ "$a" == --what=*sleep* ]] && { echo "Failed to inhibit: Access denied" >&2; exit 1; }
+done
+while [[ "$1" == --* ]]; do shift; done
+exec "$@"
+EOF
+chmod +x "$d/zypper" "$d/systemd-inhibit"
+out=$(ONEUP_INHIBITED="" run_engine "$d" --steps=cache)
+check "the update runs without the lock it may not take" "@@STEP_END@@|cache|ok" "$out"
+check "and reports a clean finish"                       "@@DONE@@|ok"           "$out"
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 echo "TEST: an already-empty cache reclaims nothing and emits no FREED marker"
 d=$(mktemp -d); setup_common "$d"

@@ -321,9 +321,12 @@ def _reexec_under_inhibitor(opts: Options, argv: list[str]) -> None:
     # is the GUI's ordinary Update path, so it is inhibited like any other run.
     if opts.size_step and not opts.hold:
         return
-    probe = ["systemd-inhibit", "--what=shutdown", "--who=OneUp", "--why=probe", "true"]
+    # The probe asks for exactly the lock the exec takes (ONEUP-0395). Blocking sleep
+    # is a separate permission from blocking shutdown, so a probe for shutdown alone
+    # could pass where the real call then refused, ran nothing, and the update never ran.
+    lock = ["--what=shutdown:sleep", "--mode=block", "--who=OneUp"]
     try:
-        if not proc.succeeds(probe):
+        if not proc.succeeds(["systemd-inhibit", *lock, "--why=probe", "true"]):
             return
     except OSError:
         return                                    # not installed at all
@@ -338,7 +341,7 @@ def _reexec_under_inhibitor(opts: Options, argv: list[str]) -> None:
         # S607: a bare name, on purpose — the probe two lines up ran the same
         # name through PATH, so resolving it here would answer a different question.
         os.execvp("systemd-inhibit", [  # noqa: S606,S607 — fixed argv, probed above
-            "systemd-inhibit", "--what=shutdown:sleep", "--mode=block", "--who=OneUp",
+            "systemd-inhibit", *lock,
             "--why=Installing updates — interrupting now can leave packages "
             "half-installed",
             sys.executable, "-m", "oneup.engine", *argv,

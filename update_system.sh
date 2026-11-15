@@ -278,15 +278,20 @@ step_selected() { [[ ",$STEPS," == *",$1,"* ]]; }
 # `--size` alone is a read-only price quote and needs no lock. `--size --hold` is
 # NOT that: it falls through into the full transaction below (ONEUP-0044 §4.5), and
 # it is the GUI's ordinary Update path — so it must be inhibited like any other run.
+# The probe asks for exactly the lock the exec takes: blocking sleep is a separate
+# permission from blocking shutdown (ONEUP-0395). And the script is re-run through
+# "$BASH", because "$0" alone needs the exec bit, which a copy may lack and the probe
+# cannot see.
 if [[ -z "${ONEUP_INHIBITED:-}" && -z "$AUTH_ACTION" ]] \
    && { [[ -z "$SIZE_STEP" ]] || $HOLD; } \
    && ! $CHECK_ONLY \
-   && systemd-inhibit --what=shutdown --who=OneUp --why=probe true >/dev/null 2>&1; then
+   && systemd-inhibit --what=shutdown:sleep --mode=block --who=OneUp --why=probe true \
+        >/dev/null 2>&1; then
     export ONEUP_INHIBITED=1
     exec systemd-inhibit \
         --what=shutdown:sleep --mode=block --who="OneUp" \
         --why="Installing updates — interrupting now can leave packages half-installed" \
-        "$0" "$@"
+        "$BASH" "$0" "$@"
 fi
 
 # ---------------------------------------------------------------------------

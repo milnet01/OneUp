@@ -8,6 +8,10 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **On a computer that lets OneUp block shutdown but not sleep, updates run again** (ONEUP-0395)
+  OneUp holds off shutdown and sleep while it installs. Where it was allowed to block only
+  one of them, the update silently never started. Now it runs without that protection.
+
 - **Pressing Stop while OneUp is still asking for the password, or waiting for another program to finish, now stops the update** (ONEUP-0394)
   The Stop was ignored as a leftover, and the full update ran anyway. Now no step starts,
   and the window reports the run as stopped.
