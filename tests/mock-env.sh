@@ -155,6 +155,9 @@ run_engine() {
     #     scenario opts back IN by setting it to the empty string.
     #   * the size lookup reads zypper's cached repository data, so a check's sizes
     #     would be this machine's packages rather than the scenario's (ONEUP-0259 INV-3).
+    #   * the passwordless rule and the guard look their binaries up in the system's own
+    #     directories, never PATH (ONEUP-0408), so the mocks would go unseen there. The
+    #     scenario's folder goes first, as on PATH; `-`, so a scenario can set its own.
     #   * the route to root takes the system service wherever its RPM is installed, so on
     #     such a machine every scenario would ask the real service instead of the sudo mock
     #     (ONEUP-0249 §4.7). Pinned to sudo, with `-` so a scenario can set its own.
@@ -189,6 +192,7 @@ run_engine() {
         ONEUP_GUARD_FILE="${ONEUP_GUARD_FILE:-$mockdir/oneup-download-guard}" \
         ONEUP_INHIBITED="${ONEUP_INHIBITED-1}" \
         ONEUP_BACKEND="${ONEUP_BACKEND-sudo}" \
+        ONEUP_SYSTEM_PATH="${ONEUP_SYSTEM_PATH-$mockdir:$PATH}" \
         ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}" \
         ONEUP_ZYPP_RAW="${ONEUP_ZYPP_RAW:-$mockdir/zypp-raw}" \
         ONEUP_STOP_POLL_SECONDS="${ONEUP_STOP_POLL_SECONDS:-0.2}" \

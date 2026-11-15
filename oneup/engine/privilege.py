@@ -45,6 +45,19 @@ _LDD_SECONDS = 10
 # rootpw and runaspw, so the prompt names the right password on any setup (ONEUP-0298).
 SUDO_PROMPT = "OneUp needs the password for %p to continue updating. Password: "
 
+# Where a binary that lands in the passwordless rule or the guard is looked up: the
+# system's own directories, as sudo's `secure_path` does, never the user's PATH. On
+# openSUSE ~/bin comes first there, so a ~/bin/zypper became a NOPASSWD root entry
+# that the root-owned guard then ran (ONEUP-0408). `ONEUP_SYSTEM_PATH` is the suite's
+# seam: its mock binaries live in a scenario folder (files-and-naming.md §5.1).
+SYSTEM_PATH = os.environ.get("ONEUP_SYSTEM_PATH") or "/usr/sbin:/usr/bin:/sbin:/bin"
+
+
+def system_which(name: str) -> str | None:
+    """`name`'s path in SYSTEM_PATH, or None when it is not installed there."""
+    return shutil.which(name, path=SYSTEM_PATH)
+
+
 # ---------------------------------------------------------------------------
 # The privileged argvs this engine issues in more than one place.
 # ---------------------------------------------------------------------------
@@ -57,8 +70,8 @@ SUDO_PROMPT = "OneUp needs the password for %p to continue updating. Password: "
 # `build_auth_rule` must emit an absolute path or `visudo -cf` rejects the whole
 # file, so the two readers want opposite things on failure and the refusal has to
 # win. `auth_cmnds` returns None on it; a caller that needs to RUN one checks first.
-_TIMEOUT_BIN = shutil.which("timeout")
-_DU_BIN = shutil.which("du")
+_TIMEOUT_BIN = system_which("timeout")
+_DU_BIN = system_which("du")
 
 # The per-repository refresh budget. It arrives from the environment, so it is
 # pinned to digits where it reaches the sudoers rule rather than trusted here.

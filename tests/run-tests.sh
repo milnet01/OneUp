@@ -5280,6 +5280,25 @@ py_case() {  # name, python source, [extra env assignments...]
     rm -rf "$d"
 }
 
+echo "TEST: the passwordless rule names system binaries, never the user's PATH (ONEUP-0408)"
+# openSUSE puts ~/bin first on PATH, so a ~/bin/zypper used to become a NOPASSWD root
+# entry, and the root-owned guard then ran it. Two folders stand in for the two places:
+# a "system" one (ONEUP_SYSTEM_PATH) and a user's, first on PATH, holding its own zypper.
+sysbin=$(mktemp -d); userbin=$(mktemp -d)
+for b in zypper env timeout du; do printf '#!/bin/sh\nexit 0\n' > "$sysbin/$b"; done
+printf '#!/bin/sh\nexit 0\n' > "$userbin/zypper"
+chmod +x "$sysbin"/* "$userbin/zypper"
+py_case "the rule names the system zypper and nothing from the user's PATH (ONEUP-0408)" '
+import os
+from oneup.engine import actions
+scope = actions.auth_cmnds() or ""
+sysbin, userbin = os.environ["SYSBIN"], os.environ["USERBIN"]
+assert scope.startswith(sysbin + "/zypper,"), scope
+assert userbin not in scope, scope
+assert userbin not in (actions.download_guard_src() or ""), "the guard names the user copy"
+' "ONEUP_SYSTEM_PATH=$sysbin" "PATH=$userbin:$PATH" "SYSBIN=$sysbin" "USERBIN=$userbin"
+rm -rf "$sysbin" "$userbin"
+
 echo "TEST: the --log= path reaches run.state and the banner verbatim"
 py_case "a --log= value is not normalised" '
 from oneup.engine import runstate

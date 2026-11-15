@@ -115,6 +115,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Security
 
+- **Password-free updates now name only the system's own programs** (ONEUP-0408)
+  OneUp's password-free permission found programs such as zypper through your own
+  folders first, so a program in ~/bin could have been given administrator rights.
+  It now uses only the system's copies. If yours pointed elsewhere, OneUp asks you
+  to switch password-free updates on again, once.
+
 - **Tighter limits on what OneUp asks root to do, and a more private diagnostics report** (ONEUP-0401)
   Restarting services can now only restart services, never reboot the machine through an
   odd unit name. Leftover-package removal never removes a package installed in several

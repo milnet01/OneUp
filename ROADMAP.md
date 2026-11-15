@@ -11921,7 +11921,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0405] **With sudo's timeout under the keep-alive's interval, or 0, a windowed run fails instead of asking again.**
+- ✅ [ONEUP-0405] **With sudo's timeout under the keep-alive's interval, or 0, a windowed run fails instead of asking again.**
   Measured in the VM 2026-11-11 (ONEUP-0392): once the engine's record
   expires, its privileged calls carry no -A and no terminal, so each
   fails with "a terminal is required" and no dialog opens.
@@ -11929,6 +11929,10 @@ when complete (that document's §7).
   thread refresh covers any timeout over 50 s. Below that, or at 0,
   decide: ask again through the askpass box, or say up front that
   this sudo setting cannot run from the window.
+  Decided by the user 2026-11-15: ask again. Shipped 2026-11-15
+  (790da63): after a box prompt every privileged call carries -A, so a
+  forgotten credential reopens the box. Locked by an engine-suite
+  scenario with a sudo that forgets at once (red against HEAD).
   **Layman:** On a computer set to forget the password almost at once, an update from the window fails partway instead of asking for the password again.
   Kind: fix.
   Source: ONEUP-0392-vm-2026-11-11.

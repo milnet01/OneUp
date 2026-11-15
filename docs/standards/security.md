@@ -451,13 +451,19 @@ not in a keyring, not in a file, not in memory.
 **5.2 — The exact scope**, built from resolved absolute paths at grant time
 (`build_auth_rule` in the engine's actions module; the Bash fallback has its own):
 
+**The Python engine resolves each path in the system's own directories, never the user's
+`PATH`** (`privilege.SYSTEM_PATH`, as sudo's `secure_path` does). openSUSE puts `~/bin`
+first on `PATH`, so a `~/bin/zypper` became a passwordless root entry, and the root-owned
+guard ran it (ONEUP-0408). The Bash fallback still resolves through `PATH`; where the two
+differ, its guard check reads not current and it asks for the password.
+
 | Entry | Why |
 | --- | --- |
 | `zypper` (any arguments) | the update itself |
 | `snapper` (any arguments) | snapshot create/list — the rule adds the bare resolved path, so it also permits `snapper delete` |
 | `flatpak` (any arguments) | flatpak update/uninstall — likewise unrestricted by subcommand |
 | `systemctl stop packagekit` | releases the package lock |
-| `env LC_ALL=C zypper *` | the engine pins the locale via `sudo env …`, and sudo matches the rest of the argv literally, so the wrapper form needs its own entry |
+| `env LC_ALL=C zypper *` | the engine pins the locale via `sudo env …`, and sudo matches the rest of the argv literally, so the wrapper form needs its own entry. The `=` is left unescaped: sudo 1.9.17p2 parses `LC_ALL=C` and `LC_ALL\=C` to the same command (`cvtsudoers -f json`, 2026-11-15) |
 | `timeout <budget> zypper *` | `refresh_repos` bounds each repository with `sudo timeout`, because zypper has none of its own. **The budget is a literal, never a wildcard**: sudoers matches arguments as one space-joined string, so `timeout * zypper *` is satisfied by `timeout 5 /bin/sh -c 'zypper x'` — a root shell. Measured against that exact string before it shipped (ONEUP-0092) |
 | `du -sB1 /var/cache/zypp` | the cache step measures the package cache before and after the clean. Fixed argv, no wildcard: `du` takes no sub-command, so there is nothing to escape into |
 | the download guard (`/usr/libexec/oneup-download-guard`, `/usr/lib/…` on Leap) | §5.7. **No argument spec**, so any arguments are permitted — required, because the transaction argv varies. The guard restricts itself instead |

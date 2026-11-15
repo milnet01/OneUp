@@ -36,21 +36,21 @@ def auth_cmnds() -> str | None:
     ones are skipped when absent. Returns None when the scope cannot be built —
     a bare command name makes visudo reject the whole file.
     """
-    zypper = shutil.which("zypper")
+    zypper = privilege.system_which("zypper")
     if not zypper:
         return None
     cmds = [zypper]                                    # any zypper subcommand
     for name in ("snapper", "flatpak"):                # snapper create/list, flatpak update
-        found = shutil.which(name)
+        found = privilege.system_which(name)
         if found:
             cmds.append(found)
-    systemctl = shutil.which("systemctl")
+    systemctl = privilege.system_which("systemctl")
     if systemctl:
         cmds.append(f"{systemctl} stop packagekit")
     # The engine pins the locale via `sudo env LC_ALL=C zypper …`. sudo resolves the
     # command (env) to a path but matches the REST of the argv literally, so this
     # pattern's second word must be the bare `zypper` the engine typed, not its path.
-    env = shutil.which("env")
+    env = privilege.system_which("env")
     if env:
         cmds.append(f"{env} LC_ALL=C zypper *")
     # Both argvs are written once, in privilege.py, and read by the call site AND by
@@ -80,7 +80,7 @@ def download_guard_src() -> str | None:
     to `update_system.sh`'s `download_guard_src`: a guard granted by either
     engine has to read as current to the other.
     """
-    zypper = shutil.which("zypper")
+    zypper = privilege.system_which("zypper")
     if not zypper:
         return None
     scope = auth_cmnds()
@@ -140,7 +140,7 @@ def auth_current() -> bool:
     needs. Asking only the first question of one command out of six is how
     ONEUP-0092's three uncovered calls went unseen.
     """
-    zypper = shutil.which("zypper")
+    zypper = privilege.system_which("zypper")
     if not zypper:
         return False
     # `-k` ignores any cached credential so a recent run cannot false-positive, and `-n`
