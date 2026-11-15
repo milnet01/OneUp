@@ -15,6 +15,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A software source an interrupted update left off is switched back on by the next update** (ONEUP-0411)
+  Without the system service (the AppImage, for one), OneUp being force-closed
+  mid-update could leave a software source it had paused switched off. OneUp now writes
+  each paused source down first, and the next update switches it back on.
+
 - **A software source OneUp paused is switched back on even if its background helper crashed** (ONEUP-0406)
   OneUp's system service now writes down, in /var/lib/oneup, each software source it
   pauses for an update. If the service dies mid-update, even across a reboot, the next

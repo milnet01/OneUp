@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=410 -->
+<!-- ants-roadmap-id-high-water: ONEUP=411 -->
 
 # OneUp Roadmap
 
@@ -11945,7 +11945,7 @@ when complete (that document's §7).
   Kind: fix.
   Source: ONEUP-0392-vm-2026-11-11.
 
-- 📋 [ONEUP-0406] **A software source OneUp switched off stays off if the system service itself dies.**
+- ✅ [ONEUP-0406] **A software source OneUp switched off stays off if the system service itself dies.**
   Split from ONEUP-0393 (review theme 1), finding F4: the service
   keeps each session's disabled aliases in memory only
   (oneup/service/server.py, Session.disabled). A dead service loses
@@ -11957,6 +11957,10 @@ when complete (that document's §7).
   names it); one design could cover both.
   Decided by the user 2026-11-15: the service keeps its list of paused
   software sources in /var/lib/oneup, so it survives a reboot.
+  Shipped 2026-11-15 (2b77078): /var/lib/oneup/paused-sources, written
+  before each disable and restored by the next service start
+  (StateDirectory=oneup). The sudo route's SIGKILLed engine gap is filed
+  separately as ONEUP-0411.
   **Layman:** If OneUp's background helper crashes in the middle of an update, a software source it paused for that update is not switched back on.
   Kind: review-fix.
   Source: review-code-2026-11-11.
@@ -12034,5 +12038,14 @@ when complete (that document's §7).
   fallback glyph's bounding rect exceeds fm.height(). If it does, decide
   which spec yields, then fix the label or exempt it in ONEUP-0032 4.5.
   **Layman:** Some one-line labels might cut off the top or bottom of Chinese, Japanese or Korean characters.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0411] **On the sudo route, an engine killed outright leaves the sources it paused switched off.**
+  Split from ONEUP-0406 (2026-11-15), which closed the service route.
+  ONEUP-0249 section 4.5 names it: an engine killed with SIGKILL never
+  runs repos.restore_disabled, so its in-memory list of disabled aliases
+  is lost. Every AppImage run takes this route.
+  **Layman:** If OneUp is force-closed in the middle of an update without its background helper, a software source it paused can stay off.
   Kind: review-fix.
   Source: review-code-2026-11-11.

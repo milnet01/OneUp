@@ -319,8 +319,10 @@ sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
   its output waits to be read.
 - **A session's repository changes are undone when it ends.** The service records each
   alias a session disabled. On `CloseSession`, or when the caller leaves the bus, it
-  re-enables each one this session disabled and has not re-enabled. That closes a gap in
-  today's route, where an engine killed with `SIGKILL` never runs `repos.restore_disabled`.
+  re-enables each one this session disabled and has not re-enabled. On the sudo route an
+  engine killed with `SIGKILL` never runs `repos.restore_disabled`; there the engine keeps
+  its own record, `~/.local/state/oneup/paused-sources`, which the next run restores once
+  it owns `run.state` (ONEUP-0411).
   A repository that was already off when the session disabled it is not recorded, so the
   session's end leaves it off. The engine and the service both read that from the
   repository files, with `repos.repo_switched_off` (ONEUP-0393).

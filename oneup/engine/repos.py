@@ -18,7 +18,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from . import markers, parsers, privilege, proc
+from . import markers, parsers, privilege, proc, runstate
 
 # Overridable so tests never read or damage the real machine's state
 # (`docs/standards/testing.md` §2).
@@ -28,6 +28,12 @@ REPOS_DIR = Path(os.environ.get("ONEUP_REPOS_DIR") or "/etc/zypp/repos.d")
 # Aliases WE disabled this run. `cleanup` re-enables every one (§4.2's split
 # table calls this the part of `cleanup` to be careful with).
 DISABLED: list[str] = []
+# The sudo route's copy of DISABLED on disk (ONEUP-0411). An engine killed outright never
+# reaches restore_disabled, so the next run switches back on what this file still names.
+# The service route keeps its own, as root (ONEUP-0406).
+PAUSED_FILE = Path(os.environ.get("ONEUP_PAUSED_FILE") or runstate.STATE_DIR / "paused-sources")
+# What restore_stranded could not switch back on: kept in every later write of the record.
+STRANDED: list[str] = []
 
 # A FULL match, not an anchored `re.match`. Bash's `=~ ^…$` rejects a trailing
 # newline; Python's `$` matches before one, so `re.match` on the same pattern
@@ -253,8 +259,10 @@ def disable_repo(alias: str, reason: str) -> bool:
     if repo_switched_off(alias):
         markers.marker("REPO_SKIPPED", alias, reason)
         return True
+    _record_paused([*DISABLED, alias])      # before the switch-off, so a kill cannot lose it
     rc, _ = privilege.root("repo-disable", {"alias": alias})
     if rc != 0:
+        _record_paused(DISABLED)
         return False
     DISABLED.append(alias)
     markers.marker("REPO_SKIPPED", alias, reason)
@@ -375,6 +383,61 @@ def restore_disabled() -> None:
         if rc != 0:
             markers.err(f"  ! Couldn't re-enable repository '{alias}' — run: "
                         f"sudo zypper modifyrepo --enable {alias}")
+        else:
+            _record_paused([*DISABLED, *(a for a in _read_paused() if a != alias)])
+
+
+def _sudo_route() -> bool:
+    from . import route
+    return privilege.chosen_route() == route.SUDO
+
+
+def _read_paused() -> list[str]:
+    try:
+        return [a for a in PAUSED_FILE.read_text().split() if valid_alias(a)]
+    except OSError:
+        return []
+
+
+def _record_paused(aliases: list[str]) -> None:
+    """Write the sudo route's record whole, or remove it when nothing is off. Never on the
+    service route, whose service keeps its own. A failed write costs only the recovery."""
+    if not _sudo_route():
+        return
+    kept = sorted(set(aliases) | set(STRANDED))
+    try:
+        if not kept:
+            PAUSED_FILE.unlink(missing_ok=True)
+            return
+        PAUSED_FILE.parent.mkdir(parents=True, exist_ok=True)
+        fd, name = tempfile.mkstemp(prefix=PAUSED_FILE.name + ".", dir=PAUSED_FILE.parent)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write("".join(f"{a}\n" for a in kept))
+        os.replace(name, PAUSED_FILE)
+    except OSError as exc:
+        markers.err(f"  ! Could not record the paused sources in {PAUSED_FILE}: {exc}")
+
+
+def restore_stranded() -> None:
+    """Switch back on what an earlier run on this route left off (ONEUP-0411).
+
+    Called once the run owns `run.state`, so no live run's sources are in the file. An
+    alias no longer switched off, or no longer defined, only leaves the record."""
+    if not _sudo_route():
+        return
+    left = []
+    for alias in _read_paused():
+        if not repo_switched_off(alias):
+            continue
+        rc, _ = privilege.root("repo-enable", {"alias": alias})
+        if rc == 0:
+            markers.out(f"  Switched '{alias}' back on: an interrupted run had left it off.")
+        else:
+            left.append(alias)
+            markers.err(f"  ! Couldn't re-enable repository '{alias}', left off by an "
+                        f"interrupted run — run: sudo zypper modifyrepo --enable {alias}")
+    STRANDED[:] = left
+    _record_paused([])
 
 
 

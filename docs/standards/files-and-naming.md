@@ -217,8 +217,8 @@ The same applies inside the AppImage, where PyInstaller unpacks bundled data fla
 
 Three directories hold everything OneUp writes at runtime:
 
-- **`~/.local/state/oneup/`** — `history.json`, `logs/`, and the four state files in
-  §5.1's table; and, from the AppImage only, `engine/` — the engine copied out of the
+- **`~/.local/state/oneup/`** — `history.json`, `logs/`, the four state files in
+  §5.1's table and the sudo route's `paused-sources` (ONEUP-0411); and, from the AppImage only, `engine/` — the engine copied out of the
   bundle, one directory per digest of its source, never pruned (ONEUP-0054 §4.7).
   `logs/` is pruned by age each time `paths.log_dir_ready` makes it, at the age the
   user picks in Settings; the running run's log and the newest run log are always kept
@@ -252,6 +252,7 @@ that has none:
 | Stop request | `~/.local/state/oneup/stop.request` | both | `ONEUP_STOP_FILE` — **engine only** |
 | Hold stamp | `~/.local/state/oneup/hold.state` | both | `ONEUP_HOLD_STATE` — **engine only** |
 | Go-ahead request | `~/.local/state/oneup/go.request` | both | `ONEUP_GO_FILE` — **engine only** |
+| Paused sources, sudo route | `~/.local/state/oneup/paused-sources` | Python engine only | `ONEUP_PAUSED_FILE` (ONEUP-0411) |
 | The `~/.local/state` base of every `oneup/` path above | `~/.local/state` | both | `XDG_STATE_HOME` — taken only when ABSOLUTE; unset, empty or relative falls back (ONEUP-0059) |
 | Hold ceiling | `120` seconds | engine | `ONEUP_HOLD_SECONDS` |
 | Keep-alive refresh interval | `50` seconds | engine | `ONEUP_KEEPALIVE_SECONDS` |
@@ -279,7 +280,8 @@ were true would have misled the 2.0 implementer.** What is actually true:
 
 - **The engine is isolated by environment variable.** `run_engine` in
   `tests/mock-env.sh` sets the four state-file overrides, `ONEUP_ZYPP_PID_FILE`,
-  `ONEUP_GUARD_FILE`, `ONEUP_REPOS_DIR`, `ONEUP_SYSTEM_PATH` and `ONEUP_BACKEND=sudo`, unless the scenario
+  `ONEUP_GUARD_FILE`, `ONEUP_REPOS_DIR`, `ONEUP_SYSTEM_PATH`, `ONEUP_PAUSED_FILE` and
+  `ONEUP_BACKEND=sudo`, unless the scenario
   sets them itself;
   scenarios that need `ONEUP_AUTH_FILE` set it themselves.
   `ONEUP_REPOS_DIR` is seeded by `setup_common` rather than left empty, because download

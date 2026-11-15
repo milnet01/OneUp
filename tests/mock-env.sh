@@ -181,6 +181,7 @@ run_engine() {
         ln "$(mktemp "$HARVEST_DIR/XXXXXX")" "$mockdir/run.log" 2>/dev/null || true
     fi
     local display="${DISPLAY:-}"
+    local syspath="$mockdir:$PATH"      # the mocks first, then the real system (ONEUP-0408)
     [[ -z "$display" && -z "${WAYLAND_DISPLAY:-}" ]] && display=":oneup-test"
     DISPLAY="$display" \
         PATH="$mockdir:$PATH" \
@@ -192,7 +193,8 @@ run_engine() {
         ONEUP_GUARD_FILE="${ONEUP_GUARD_FILE:-$mockdir/oneup-download-guard}" \
         ONEUP_INHIBITED="${ONEUP_INHIBITED-1}" \
         ONEUP_BACKEND="${ONEUP_BACKEND-sudo}" \
-        ONEUP_SYSTEM_PATH="${ONEUP_SYSTEM_PATH-$mockdir:$PATH}" \
+        ONEUP_SYSTEM_PATH="${ONEUP_SYSTEM_PATH-$syspath}" \
+        ONEUP_PAUSED_FILE="${ONEUP_PAUSED_FILE:-$mockdir/paused-sources}" \
         ONEUP_REPOS_DIR="${ONEUP_REPOS_DIR:-$mockdir/repos.d}" \
         ONEUP_ZYPP_RAW="${ONEUP_ZYPP_RAW:-$mockdir/zypp-raw}" \
         ONEUP_STOP_POLL_SECONDS="${ONEUP_STOP_POLL_SECONDS:-0.2}" \

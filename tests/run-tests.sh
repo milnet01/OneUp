@@ -1355,6 +1355,33 @@ rm -rf "$d"
 # every later call has to ask. Measured in a VM (ONEUP-0392): with no -A and no terminal,
 # each call died on "a terminal is required" and no box opened. This mock is that sudo:
 # without -A there is no way to ask, with it the box asks (and is logged) and the call runs.
+echo "TEST: a source an interrupted run left off is switched back on by the next run (ONEUP-0411)"
+# An engine killed outright never reaches restore_disabled, so on the sudo route the paused
+# sources go to a file first. The next run reads it: packman is recorded and still off, so
+# it is switched on; oss is recorded but on, so it only leaves the record.
+d=$(mktemp -d); setup_common "$d"; setup_cached_sudo "$d"
+sed -i 's/^enabled=1/enabled=0/' "$d/repos.d/packman.repo"
+printf 'packman\ndownload.opensuse.org-oss\n' > "$d/paused-sources"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >> "${ONEUP_MOCK_ZLOG:?}"
+exit 0
+EOF
+printf '#!/usr/bin/env bash\necho "1024\t/var/cache/zypp"\n' > "$d/du"
+chmod +x "$d/zypper" "$d/du"
+ONEUP_MOCK_ZLOG="$d/zlog" run_engine "$d" --steps=cache >/dev/null 2>&1
+check "ONEUP-0411 the recorded source still off is switched back on" \
+    "modifyrepo --enable packman" "$(cat "$d/zlog" 2>/dev/null)"
+check_absent "ONEUP-0411 a recorded source already on is not touched" \
+    "modifyrepo --enable download.opensuse.org-oss" "$(cat "$d/zlog" 2>/dev/null)"
+if [[ ! -e "$d/paused-sources" ]]; then
+    echo "  ok   - ONEUP-0411 and the record is cleared"; PASS=$((PASS+1))
+else
+    echo "  FAIL - ONEUP-0411 and the record is cleared ($(tr '\n' ' ' < "$d/paused-sources"))"
+    FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+
 echo "TEST: a credential sudo forgets at once is asked for again in the box (ONEUP-0405)"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/sudo" <<'EOF'
@@ -4927,12 +4954,14 @@ else
     # whose download keeps its guard or wrapper, so it adds no shape `auth_cmnds` must grant.
     # It went 35 -> 36 for the run's own dry run (ONEUP-0335 (d)), whose argv opens with
     # `env LC_ALL=C zypper`, a shape `auth_cmnds` already grants.
+    # It went 36 -> 37 for restore_stranded's re-enable (ONEUP-0411), the table's existing
+    # `repo-enable` row, which the `zypper` entry already grants.
     pn=$(( $(grep -c '\["sudo"' <<<"$py_stripped") \
          + $(grep -cE 'privilege\.(sudo|root)(_argv|_stream)?\(' <<<"$py_stripped") ))
-    if [[ "$pn" == "36" ]]; then
-        echo "  ok   - the Python engine has its known 36 privileged call sites"; PASS=$((PASS+1))
+    if [[ "$pn" == "37" ]]; then
+        echo "  ok   - the Python engine has its known 37 privileged call sites"; PASS=$((PASS+1))
     else
-        echo "  FAIL - privileged call sites moved: $pn, expected 36. A NEW one needs a matching"; FAIL=$((FAIL+1))
+        echo "  FAIL - privileged call sites moved: $pn, expected 37. A NEW one needs a matching"; FAIL=$((FAIL+1))
         echo "         entry in auth_cmnds, or passwordless silently starts prompting again."
     fi
     # ONEUP-0249 INV-4: only the calls the spec keeps off the table build their own argv —
@@ -5298,6 +5327,24 @@ assert userbin not in scope, scope
 assert userbin not in (actions.download_guard_src() or ""), "the guard names the user copy"
 ' "ONEUP_SYSTEM_PATH=$sysbin" "PATH=$userbin:$PATH" "SYSBIN=$sysbin" "USERBIN=$userbin"
 rm -rf "$sysbin" "$userbin"
+
+echo "TEST: on the sudo route a source is recorded before it is switched off (ONEUP-0411)"
+pd=$(mktemp -d); mkdir "$pd/repos.d"
+printf '[packman]\nenabled=1\nbaseurl=https://x/\n' > "$pd/repos.d/packman.repo"
+py_case "the record names the source when its switch-off runs (ONEUP-0411)" '
+from oneup.engine import privilege, repos, route
+privilege._ROUTE = route.SUDO
+seen = []
+def root(op, args=None, **kw):
+    seen.append((op, repos.PAUSED_FILE.read_text().split() if repos.PAUSED_FILE.exists() else []))
+    return 0, ""
+privilege.root = root
+assert repos.disable_repo("packman", "test")
+assert seen == [("repo-disable", ["packman"])], seen
+repos.restore_disabled()
+assert not repos.PAUSED_FILE.exists(), "a restored source stays in the record"
+' "ONEUP_REPOS_DIR=$pd/repos.d" "ONEUP_PAUSED_FILE=$pd/paused-sources"
+rm -rf "$pd"
 
 echo "TEST: the --log= path reaches run.state and the banner verbatim"
 py_case "a --log= value is not normalised" '

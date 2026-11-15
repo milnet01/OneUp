@@ -701,6 +701,8 @@ def run(opts: Options, run_keys: list[str], log_file: str, held_auth: bool = Fal
             "finished.")
         markers.marker("DONE", "errors")
         return 1
+    if needs_zypper:
+        repos.restore_stranded()
 
     if opts.selected("system"):
         _pre_update_snapshot()
