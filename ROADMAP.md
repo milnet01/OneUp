@@ -11776,12 +11776,15 @@ when complete (that document's §7).
   Kind: security.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0397] **A corrupt gzip file escapes handlers written for any read failure.**
+- ✅ [ONEUP-0397] **A corrupt gzip file escapes handlers written for any read failure.**
   Review theme 5: zlib.error is not an OSError.
   - pkgsizes.py:130: escapes into the system step outside its try,
     and into --check.
   - flatpak_details.py:114/141: one bad catalogue loses every
     Flatpak's details.
+  Shipped 2026-11-15 in 850575f. zlib.error is caught beside the other
+  read failures in pkgsizes._scan and per file in flatpak_details.read;
+  the release timestamp test is isdecimal().
   **Layman:** One damaged download cache file can break the size display or every Flatpak's details.
   Kind: review-fix.
   Source: review-code-2026-11-11.
@@ -11916,6 +11919,12 @@ when complete (that document's §7).
   call from earlier in the suite would break the count; unconfirmed,
   because the check does not print what it read. First step: print
   _sudo_calls on failure, then find the writer.
+  2026-11-15: the check now prints the log it held when it fails. The
+  Pressless session's read-only diagnosis suspected the windows' start-
+  up --auth-status engines, which do call the mock sudo ("-k -n zypper
+  --version"). Not reproduced: with that call delayed 3 s and then 10 s,
+  the check at HEAD still passed. Next: wait for the next failure and
+  read what it prints.
   **Layman:** One of the window's automatic checks failed once on a busy computer and passed on a re-run, so it can block a push for no real reason.
   Kind: test.
   Source: pre-push-gate-2026-11-15.
