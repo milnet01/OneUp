@@ -11758,7 +11758,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0396] **Text from outside OneUp is shown as rich text in four places.**
+- ✅ [ONEUP-0396] **Text from outside OneUp is shown as rich text in four places.**
   Review theme 4: Qt's default AutoText or Markdown renders data the
   threat model treats as the attacker.
   - repos.py:194/200 (source names in QLabel).
@@ -11766,6 +11766,12 @@ when complete (that document's §7).
   - banners.py:377-385 (tool output in a QMessageBox).
   - update_dialog.py:117 setMarkdown on release notes; may load local
     file: images (unverified Qt behaviour).
+  Shipped 2026-11-15 in 2809ca9. Fixed: repos.py and details_dialog.py
+  labels are PlainText; the release-notes view loads no images (Qt read
+  a file: image from disk). Dismissed: banners.py:377-385, which Qt
+  reads as plain because every message opens with OneUp's own line.
+  No standard states the plain-text rule for outside text; a line in
+  coding.md's Qt idioms would stop the next one.
   **Layman:** Names and messages that come from software sources or tools could be shown with formatting OneUp never meant to allow.
   Kind: security.
   Source: review-code-2026-11-11.
