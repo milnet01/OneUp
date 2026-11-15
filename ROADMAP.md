@@ -11726,7 +11726,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0394] **Claiming run.state races, and judging an old run live trusts a bare pid.**
+- ✅ [ONEUP-0394] **Claiming run.state races, and judging an old run live trusts a bare pid.**
   Review theme 2.
   - runstate.py:276-280 and update_system.sh:1111-1121: the same
     check-then-delete race; update_system.sh:1440-1449 claim_rc.
@@ -11735,6 +11735,13 @@ when complete (that document's §7).
   - __main__.py:658/679: a Stop pressed before run.state exists is
     lost (ONEUP-0054 §4.1.1 specifies it; partly doc-side).
   - run.py:214-217: hold.state read is check-then-act.
+  Shipped 2026-11-15 in 4b33857. Fixed: the claim race in both engines
+  (run.state.lock), the unchecked rename fallback, the window's bare-pid
+  liveness test (now the command line, delete under the lock), and the
+  Stop lost before run.state exists (record stamped with the run's start;
+  the lock wait ends on Stop). Dismissed: Bash claim_rc 2, the deliberate
+  unowned degrade. Queued into ONEUP-0400: run.py:214-217, whose harm is
+  that item's hold-expiry "All done".
   **Layman:** Two OneUp runs starting at the same moment, or a reboot, can confuse OneUp about whether an update is still running.
   Kind: review-fix.
   Source: review-code-2026-11-11.
@@ -11802,6 +11809,11 @@ when complete (that document's §7).
   - tray.py:191-198 loses the uncertain flag.
   - package_views.py:139/153; details_dialog.py:321-322 with
     package_details.py:219-220.
+  From ONEUP-0394 (2026-11-15): run.py:214-217 reads hold.state and
+  writes go.request as the hold's ceiling fires, so the window adopts an
+  engine that exits 0 with no STEP_BEGIN and says "All done". Lane 05's
+  remedy: in on_finished, a non-check run that saw no STEP_BEGIN is "did
+  not start", never ok. Fix it with the hold-expiry case here.
   **Layman:** OneUp sometimes says everything is fine or shows zero when it does not actually know.
   Kind: review-fix.
   Source: review-code-2026-11-11.
@@ -11880,6 +11892,11 @@ when complete (that document's §7).
   reboot; /var/lib/oneup survives both but is new persistent root state.
   The sudo route has the same gap for a SIGKILLed engine (section 4.5
   names it); one design could cover both.
+  Waiting-on: user (where should the service keep its list of paused
+  software sources: /var/lib/oneup, which survives a reboot, or
+  /run/oneup, which does not? Recommendation: /var/lib/oneup, because a
+  crash followed by a reboot is the case that strands a source off for
+  good, 2026-11-15)
   **Layman:** If OneUp's background helper crashes in the middle of an update, a software source it paused for that update is not switched back on.
   Kind: review-fix.
   Source: review-code-2026-11-11.
