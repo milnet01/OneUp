@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=409 -->
+<!-- ants-roadmap-id-high-water: ONEUP=410 -->
 
 # OneUp Roadmap
 
@@ -11885,7 +11885,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0403] **Window and settings findings from the 2026-11-11 review.**
+- ✅ [ONEUP-0403] **Window and settings findings from the 2026-11-11 review.**
   - autostart.py:176: a timed-out is-enabled reads as off, so
     revoking passwordless leaves the weekly root timer running (new
     with ONEUP-0387's timeout). :212 discards disable's result.
@@ -11896,6 +11896,11 @@ when complete (that document's §7).
     package_views.py:496 SIZE_TEXT.
   - contrast.py:87-109: PAIRS misses surfaces the sheet paints.
   - placement.py:180/265 vs :348/:351 (copies diverged).
+  Shipped 2026-11-15 (4c4a521): ten of eleven fixed, each locked by a
+  window-suite check that fails with its fix undone. The ElidedLabel
+  height is queued as ONEUP-0410 (spec conflict, unmeasured). The
+  hold-wait fix adds Cancel but no ceiling: a fallback _launch there is
+  refused by the second-engine guard.
   **Layman:** A group of smaller window problems: settings that can be wrong after a slow system, labels, and a few edge cases.
   Kind: review-fix.
   Source: review-code-2026-11-11.
@@ -11989,5 +11994,19 @@ when complete (that document's §7).
   steps._download_pass takes its sudo branch, or refuse system-download
   in root_argv.
   **Layman:** In a situation OneUp should never reach, pressing Stop during a download might not work.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0410] **An elided label's height is fixed from the primary font, which may clip a taller fallback glyph.**
+  Split from ONEUP-0403 (2026-11-15). elided_label.py: every
+  ElidedLabel takes a Fixed vertical policy and a height of the primary
+  font's fm.height(). ONEUP-0032 section 4.5 says a translatable label
+  takes a minimum size, never a fixed one; ONEUP-0239 section 4.2 item 1
+  asks for heights fixed from the font. Not fixed with 0403: the two
+  specs disagree, and the clipping is unmeasured.
+  First step: measure with a CJK font installed (Noto Sans CJK) whether a
+  fallback glyph's bounding rect exceeds fm.height(). If it does, decide
+  which spec yields, then fix the label or exempt it in ONEUP-0032 4.5.
+  **Layman:** Some one-line labels might cut off the top or bottom of Chinese, Japanese or Korean characters.
   Kind: review-fix.
   Source: review-code-2026-11-11.
