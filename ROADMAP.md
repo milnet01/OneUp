@@ -11819,7 +11819,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 🚧 [ONEUP-0400] **Confident "up to date" or zero answers the run did not earn, in seven more places.**
+- ✅ [ONEUP-0400] **Confident "up to date" or zero answers the run did not earn, in seven more places.**
   Review theme 8 (testing.md §5); the failed-check case was
   ONEUP-0391.
   - actions.py:395: zypper 100-103 with no size reads as 0 B.
@@ -11841,6 +11841,10 @@ when complete (that document's §7).
   half: run.py:1351/1502-1507 (run's own steps), the hold-expiry "All
   done" with run.py:214-217, tray.py:191-198, package_views.py:139/153,
   details_dialog.py:321-322 with package_details.py:219-220.
+  Window half shipped 2026-11-15 in 35df6e9: the run's own steps decide
+  the summary and the tray; a run with no step begun says it did not
+  start; the tray keeps "uncertain"; a removal is no unknown size and its
+  details say it is removed (ONEUP-0260 4.3 case 0). Both halves done.
   **Layman:** OneUp sometimes says everything is fine or shows zero when it does not actually know.
   Kind: review-fix.
   Source: review-code-2026-11-11.
