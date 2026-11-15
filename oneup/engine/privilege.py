@@ -112,6 +112,14 @@ _PROMPT_MARKS = (
 )
 
 
+# Set once sudo_init has asked through the password box. From then on a privileged call
+# carries `-A`, so a credential sudo has already forgotten (a timeout under the
+# keep-alive's interval, or 0) opens the box again instead of failing with "a terminal
+# is required" (ONEUP-0405). A warm credential asks nothing. Never on a passwordless or
+# terminal run: the first asks nobody, the second asks in the terminal.
+_REASK_WITH_BOX = False
+
+
 def sudo_init() -> None:
     """Become root once, up front, so nothing later has to ask again.
 
@@ -179,6 +187,8 @@ def sudo_init() -> None:
                     f"update in a terminal with: {command}")
         markers.err("Authentication failed or cancelled — aborting.")
         raise SystemExit(1)
+    global _REASK_WITH_BOX
+    _REASK_WITH_BOX = use_box
     _start_keepalive()
 
 
@@ -341,6 +351,8 @@ def sudo(argv: Sequence[str], *, flags: Sequence[str] = (), merge_stderr: bool =
     `proc.run`, which also says what `on_line` is.
     """
     install_environment()
+    if _REASK_WITH_BOX and "-n" not in flags and "-A" not in flags:
+        flags = ("-A", *flags)          # ask again rather than fail (ONEUP-0405)
     return proc.run(["sudo", *flags, *argv], merge_stderr=merge_stderr, stream=stream,
                     on_line=on_line)
 
@@ -497,7 +509,7 @@ def sudo_argv(argv: Sequence[str]) -> list[str]:
     once (ONEUP-0174).
     """
     install_environment()
-    return ["sudo", *argv]
+    return ["sudo", *(["-A"] if _REASK_WITH_BOX else []), *argv]   # as sudo() (ONEUP-0405)
 
 
 def reap_orphaned_askpass() -> None:

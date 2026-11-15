@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **On a computer set to forget the password quickly, an update from the window asks again instead of failing** (ONEUP-0405)
+  Where the system forgets the administrator password within a minute, an update
+  started from the window failed part-way with no password box. OneUp now shows its
+  password box again when needed. With the setting at 0, that can mean several boxes.
+
 - **Turning off automatic updates now says so if the weekly timer would not switch off** (ONEUP-0403)
   On a slow system the switch could read "off" while the weekly update timer kept
   running, even after password-free updates were turned off. The switch now stays on

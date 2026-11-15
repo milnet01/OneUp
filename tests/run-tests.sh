@@ -1351,6 +1351,53 @@ else
 fi
 rm -rf "$d"
 
+# ONEUP-0405: with sudo's timeout at 0, a credential is forgotten the moment it is used, so
+# every later call has to ask. Measured in a VM (ONEUP-0392): with no -A and no terminal,
+# each call died on "a terminal is required" and no box opened. This mock is that sudo:
+# without -A there is no way to ask, with it the box asks (and is logged) and the call runs.
+echo "TEST: a credential sudo forgets at once is asked for again in the box (ONEUP-0405)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+box=false
+for a in "$@"; do [[ "$a" == "-n" ]] && exit 1; [[ "$a" == "-A" ]] && box=true; done
+if ! $box; then echo "sudo: a terminal is required to read the password" >&2; exit 1; fi
+echo "BOX cmd=$*" >> "${ONEUP_TEST_TS:?}/boxes"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -A|-v|-k|-E) shift ;;
+        -p) shift 2 ;;
+        --) shift; break ;;
+        -*) shift ;;
+        *) break ;;
+    esac
+done
+[[ $# -eq 0 ]] && exit 0
+exec "$@"
+EOF
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *dup*|*update*)      echo "Nothing to do." ; exit 0 ;;
+  *" lr "*|*" lr -u"*) echo "1 | repo | X | Yes | (r ) | Yes | http://x" ; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+printf '#!/usr/bin/env bash\necho "1024\t/var/cache/zypp"\n' > "$d/du"
+chmod +x "$d/sudo" "$d/zypper" "$d/du"
+rc=0
+out=$(ONEUP_TEST_TS="$d" run_engine "$d" --steps=system,cache) || rc=$?
+boxes=$(grep -c . "$d/boxes" 2>/dev/null || echo 0)
+check_absent "ONEUP-0405 no privileged call dies on 'a terminal is required'" \
+    "a terminal is required" "$out"
+check_eq "ONEUP-0405 and the run completes" "0" "$rc"
+if (( boxes > 1 )); then
+    echo "  ok   - ONEUP-0405 the box asked again after the first prompt ($boxes)"; PASS=$((PASS+1))
+else
+    echo "  FAIL - ONEUP-0405 the box asked again after the first prompt (got $boxes)"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 # ONEUP-0044: one engine process spans the preview and the run.
 #

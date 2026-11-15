@@ -166,7 +166,9 @@ without validation is a root shell injection, full stop.
 
 **2.1 — The engine authenticates once, up front.** The engine's `sudo_init` (in its
 privilege module; the Bash fallback has a function of the same name) raises a single graphical prompt via `sudo -A -p "<label>" -v`, then starts a keep-alive that refreshes
-the credential every 50 seconds for the life of the run. **Zero** prompts, and no
+the credential every 50 seconds for the life of the run. Where sudo forgets the credential
+sooner than that, the Python engine asks again in the same box rather than failing: after
+a box prompt, every privileged call carries `-A` (ONEUP-0405). **Zero** prompts, and no
 keep-alive at all, when §5's passwordless drop-in is active **and covers what this engine
 issues** — `sudo_init` asks `auth_current`, not merely whether a rule exists, and returns
 early only then.
