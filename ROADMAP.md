@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=406 -->
+<!-- ants-roadmap-id-high-water: ONEUP=407 -->
 
 # OneUp Roadmap
 
@@ -11746,12 +11746,14 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0395] **When the shutdown inhibitor cannot start, the run must still run.**
+- ✅ [ONEUP-0395] **When the shutdown inhibitor cannot start, the run must still run.**
   Review theme 3: degrade to no inhibitor, never to no run.
   - __main__.py:324 probes --what=shutdown, but the exec takes
     shutdown:sleep --mode=block (:341).
   - update_system.sh:286-289 re-execs "$0", which needs the exec
     bit the probe cannot see.
+  Shipped 2026-11-15 in ae2bfc6. Both probes now ask for the exec's own
+  lock (shutdown:sleep, block); the Bash re-exec runs "$BASH" "$0".
   **Layman:** OneUp tries to stop the computer shutting down mid-update; if that protection fails, the update itself should still go ahead.
   Kind: review-fix.
   Source: review-code-2026-11-11.
@@ -11900,3 +11902,14 @@ when complete (that document's §7).
   **Layman:** If OneUp's background helper crashes in the middle of an update, a software source it paused for that update is not switched back on.
   Kind: review-fix.
   Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0407] **The window check "with no guard, sudo is asked only to list (-n -l)" failed once under load.**
+  Seen 2026-11-15 in the pre-push gate at load ~24, on ba0cce6, a tree
+  whose full local CI had passed minutes before; gui-smoke.py alone then
+  passed. The check counts lines in the shared mock sudo log, so a late
+  call from earlier in the suite would break the count; unconfirmed,
+  because the check does not print what it read. First step: print
+  _sudo_calls on failure, then find the writer.
+  **Layman:** One of the window's automatic checks failed once on a busy computer and passed on a re-run, so it can block a push for no real reason.
+  Kind: test.
+  Source: pre-push-gate-2026-11-15.
