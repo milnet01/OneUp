@@ -482,6 +482,17 @@ APPSTREAM = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+def size_checks() -> None:
+    """ONEUP-0400: zero download needs the dry run to say so."""
+    for text, want in (("Nothing to do.\n", True),
+                       ("3 packages to remove.\n", True),
+                       ("2 packages to upgrade, 1 to remove.\n", False),
+                       ("1 new package to install, 3 packages to remove.\n", False),
+                       ("12 packages to upgrade.\n", False),
+                       ("", False)):
+        check(f"nothing_to_fetch({text.strip()!r})", parsers.nothing_to_fetch(text), want)
+
+
 def flatpak_checks() -> None:
     import gzip
     import os
@@ -785,6 +796,7 @@ def main() -> int:
               not any(c in body for c in "\n\r\x0b\x0c"), True)
 
     details_checks()
+    size_checks()
     flatpak_checks()
 
     print(f"\n  Passed: {PASS}   Failed: {FAIL}")

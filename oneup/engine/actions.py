@@ -392,9 +392,10 @@ def run_size(step: str) -> int:
         markers.out(f"  Download size: {size}")
         size_delivered(size)
         return 0
-    if rc == 0 or _INF_FIRST <= rc <= _INF_LAST:
-        # zypper ran fine and reported no size = nothing to fetch (up to date, or
-        # all cached). Report zero so the window shows a definitive answer.
+    if (rc == 0 or _INF_FIRST <= rc <= _INF_LAST) and parsers.nothing_to_fetch(out):
+        # zypper ran fine and said there is nothing to fetch. Report zero so the
+        # window shows a definitive answer. With no size line and no such words,
+        # the failure arm below answers instead (ONEUP-0400).
         markers.marker("SIZE", "system", "0 B")
         markers.out("  Download size: nothing to fetch.")
         size_delivered("0 B")

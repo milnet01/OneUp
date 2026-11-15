@@ -80,6 +80,26 @@ _SIZE_CACHED_TEXT = re.compile(r"[ \t\r\f\v]*([0-9.]+ [A-Za-z]+)[ \t\r\f\v]*\|.*
 _SIZE_CACHED_BYTES = re.compile(r" *([0-9.]+) *([KMG]?i?B) *\|")
 
 
+# zypper's plan summary: "3 packages to upgrade, 2 new, 1 to remove." Read by the
+# system step's count and by `nothing_to_fetch` (ONEUP-0400).
+UPGRADE_COUNT = re.compile(r"([0-9]+) packages? to upgrade", re.IGNORECASE)
+INSTALL_COUNT = re.compile(r"([0-9]+) new(?: packages? to install)?[,.]")
+_REMOVE_COUNT = re.compile(r"([0-9]+) (?:packages? )?to remove", re.IGNORECASE)
+
+
+def nothing_to_fetch(text: str) -> bool:
+    """Does a dry run's output SAY there is nothing to download?
+
+    "Nothing to do.", or a plan that only removes. A run that printed neither and
+    no size line is not evidence of zero: zypper's wording may have moved past the
+    parser, and a confident 0 B is the answer the suite exists to forbid.
+    """
+    if "Nothing to do." in text:
+        return True
+    adds = UPGRADE_COUNT.findall(text) + INSTALL_COUNT.findall(text)
+    return bool(_REMOVE_COUNT.search(text)) and not any(int(n) for n in adds)
+
+
 def download_size(text: str) -> str | None:
     """`run_size`'s parse: the first line carrying a figure, as text.
 

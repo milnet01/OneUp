@@ -360,6 +360,34 @@ check_eq "the transaction ran a second time after 103" "2" "$(wc -l < "$d/commit
 check    "and the step ends ok"                       "@@STEP_END@@|system|ok" "$out"
 rm -rf "$d"
 
+# ONEUP-0400: after an exit 103 the commit runs again and appends to the same log. When
+# zypper's own update was all there was, the rerun prints "Nothing to do.", and a step
+# that had installed packages ended "already up to date" with nothing changed.
+echo "TEST: a rerun after exit 103 that prints 'Nothing to do.' does not erase the first run's installs"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *--download-only*) exit 0 ;;
+  *--dry-run*|*list-updates*) exit 0 ;;
+  *dup*|*update*)
+    echo run >> "$d/commits"
+    if [[ \$(wc -l < "$d/commits") -eq 1 ]]; then
+      echo "2 packages to upgrade."
+      echo "(1/2) Installing: zypper-1.14.99-1.1.x86_64 [...done]"
+      echo "(2/2) Installing: libzypp-17.38.1-1.1.x86_64 [...done]"
+      exit 103
+    fi
+    echo "Nothing to do."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check_absent "the step is not 'already up to date'" "@@STEP_END@@|system|ok|up-to-date" "$out"
+check        "it counts what the first run installed" "@@STEP_END@@|system|ok|installed|2" "$out"
+rm -rf "$d"
+
 echo "TEST: kernel/core change (needs-rebooting=102) DOES advise a reboot"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'
@@ -2682,6 +2710,46 @@ printf '#!/usr/bin/env bash\n[[ "$*" == *--dry-run* ]] && { echo "Nothing to do.
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --size=system)
 check "informational exit still reports 0 B" "@@SIZE@@|system|0 B" "$out"
+rm -rf "$d"
+
+# ONEUP-0400: a dry run that printed no size line and no "Nothing to do." has not said
+# there is nothing to fetch. Reporting 0 B there was a confident zero the run did not
+# earn: zypper's wording moving past the parser looks exactly like this.
+echo "TEST: --size with no size line and no 'Nothing to do.' is not 0 B"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\n[[ "$*" == *--dry-run* ]] && { echo "12 packages to upgrade."; exit 0; }\nexit 0\n' > "$d/zypper"
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --size=system)
+check_absent "an unparsed size is not 0 B"   "@@SIZE@@|system|0 B" "$out"
+check        "it is reported as unavailable" "Download size: unavailable" "$out"
+printf '#!/usr/bin/env bash\n[[ "$*" == *--dry-run* ]] && { echo "3 packages to remove."; exit 0; }\nexit 0\n' > "$d/zypper"
+out=$(run_engine "$d" --size=system)
+check        "a plan that only removes fetches nothing" "@@SIZE@@|system|0 B" "$out"
+rm -rf "$d"
+
+# ONEUP-0400: a `flatpak remotes` that failed listed nothing, and nothing listed read as
+# nothing to update: a confident zero for that whole installation.
+echo "TEST: a Flatpak installation whose remotes cannot be listed is unknown, not 0"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"
+cat > "$d/flatpak" <<'EOF2'
+#!/usr/bin/env bash
+case "$1" in
+  remotes) [[ "$*" == *--system* ]] && exit 1; exit 0 ;;
+  remote-ls) exit 0 ;;
+esac
+exit 0
+EOF2
+chmod +x "$d/zypper" "$d/flatpak"
+out=$(run_engine "$d" --check --steps=flatpak)
+check        "the unlisted installation is named as flatpak names it" \
+             "@@CHECK_UNKNOWN@@|flatpak|flatpak-remotes-unreachable|system" "$out"
+check_absent "and no bare zero is claimed" "@@CHECK@@|flatpak|0" "$out"
+# The run: the count query could not ask every source, so the step cannot know that
+# nothing updated. It ends ok, as "done", never "up to date".
+out=$(run_engine "$d" --steps=flatpak)
+check        "an uncounted Flatpak step ends as done" "@@STEP_END@@|flatpak|ok|done" "$out"
+check_absent "never as up to date" "@@STEP_END@@|flatpak|ok|up-to-date" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------

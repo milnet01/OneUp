@@ -247,7 +247,9 @@ while eight updates waited.
   be read. The window records the reason and refuses the "up to date" summary.
 - **Its reason is one of four codes.** `sources-unreadable` and
   `flatpak-remotes-unreachable` carry one source name per trailing field, so a name with
-  spaces stays one name; `sources-unknown-error` carries zypper's exit status;
+  spaces stays one name. Where a whole Flatpak installation's sources could not be listed,
+  its field is the installation as Flatpak names it, `user` or `system` (ONEUP-0400);
+  `sources-unknown-error` carries zypper's exit status;
   `fwupd-unreachable` carries nothing. The tray check reads the marker only as a flag.
 - **A step's bare zero is withheld when something was unreadable.** The engine emits a
   step's `CHECK` only when everything was readable *or* the count is greater than zero:

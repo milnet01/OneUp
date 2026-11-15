@@ -131,8 +131,12 @@ def flatpak_updates(deadline: float | None = None) -> tuple[list[FlatpakRow], li
     found: dict[tuple[str, str], FlatpakRow] = {}
     unreachable: list[str] = []
     for scope in ("--user", "--system"):
-        _, listing = proc.run(["flatpak", "remotes", scope, "--columns=name,options"],
-                              deadline=deadline)
+        rc, listing = proc.run(["flatpak", "remotes", scope, "--columns=name,options"],
+                               deadline=deadline)
+        if rc != 0:
+            # Its remotes could not even be listed, so none of them was asked. Named
+            # as flatpak names the installation, "user" or "system" (ONEUP-0400).
+            unreachable.append(scope.removeprefix("--"))
         for entry in listing.splitlines():
             remote, _, opts = entry.partition("\t")
             if not remote.strip():
@@ -267,8 +271,8 @@ def run_flatpak() -> None:
     ok = True
     # Count what will update FIRST — the same read-only query `--check` uses — so
     # the detail can say how many apps were updated rather than just "done".
-    rows = [row for row in flatpak_updates(deadline=FLATPAK_QUERY_SECONDS)[0]
-            if valid_package(row.app)]
+    listed, unasked = flatpak_updates(deadline=FLATPAK_QUERY_SECONDS)
+    rows = [row for row in listed if valid_package(row.app)]
     count = len(rows)
     for row in rows:
         markers.marker("PKG", "flatpak", "queued", row.app, row.version, 0, "", row.remote)
@@ -312,6 +316,10 @@ def run_flatpak() -> None:
     elif count > 0:
         FLATPAK_UPDATED = count
         end_step("flatpak", "ok", "installed", f"{count} app(s) updated", count)
+    elif unasked:
+        # A source that could not be asked may have had updates, and the update
+        # above may have installed them: finished, but not "up to date" (ONEUP-0400).
+        end_step("flatpak", "ok", "done", "finished; some sources could not be counted")
     else:
         end_step("flatpak", "ok", "up-to-date", "up to date")
 
@@ -902,11 +910,11 @@ def _system_upgrade_inner() -> bool:
     return False
 
 
-_UPGRADE_COUNT = re.compile(r"([0-9]+) packages? to upgrade", re.IGNORECASE)
+_UPGRADE_COUNT = parsers.UPGRADE_COUNT
 # zypper's summary says "122 packages to upgrade, 4 new." or, with no upgrades,
 # "4 new packages to install." Case-sensitive, so the list header "The following
 # 4 NEW packages are going to be installed:" is not a second match (ONEUP-0288).
-_INSTALL_COUNT = re.compile(r"([0-9]+) new(?: packages? to install)?[,.]")
+_INSTALL_COUNT = parsers.INSTALL_COUNT
 _FAILED_PKG = re.compile(r"^(?:Preloading|Retrieving): (\S+) \[([^]]*)\]", re.MULTILINE)
 _CACHED = re.compile(r"^(done|already in cache)$", re.IGNORECASE)
 
@@ -972,7 +980,10 @@ def _success(refresh_ok: bool) -> None:
         # genuinely newer package is silently missed until the next run.
         _note("Couldn't refresh one or more repositories — upgraded from cached "
               "metadata. A future run should refresh cleanly.", "refresh-failed-cached")
-    if "Nothing to do." in log:
+    # After an exit 103 the commit runs again and appends to this log, and that rerun
+    # may print "Nothing to do." after the first run installed zypper itself. So rpm's
+    # own lines decide, not the words alone (ONEUP-0400).
+    if "Nothing to do." in log and not parsers.rpm_changed(log):
         SYS_COUNT = "0"
         end_step("system", "ok", "up-to-date", "already up to date")
     else:
@@ -990,6 +1001,10 @@ def _success(refresh_ok: bool) -> None:
             markers.out("  Note: no progress lines recognised in zypper's output "
                         "(see the hint above).")
         count = _last_count(_UPGRADE_COUNT, log) + _last_count(_INSTALL_COUNT, log)
+        if count == 0:
+            # The rerun's plan was empty; the run before it is what installed.
+            count = (max(map(int, _UPGRADE_COUNT.findall(log)), default=0)
+                     + max(map(int, _INSTALL_COUNT.findall(log)), default=0))
         SYS_COUNT = str(count)
         # Read the reboot-reason components now, while the transaction log still
         # exists — it is discarded at the end of this step, long before the

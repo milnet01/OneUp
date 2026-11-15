@@ -8,6 +8,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **OneUp no longer says "up to date" or "0 B" when it could not tell** (ONEUP-0400)
+  The download size could read 0 B when OneUp failed to read it. A Flatpak source that
+  could not be asked could make a check or an update say "up to date". And an update that
+  first updated the package manager itself could end saying "already up to date".
+
 - **A system service that stops answering can no longer freeze OneUp or hold its root helper open** (ONEUP-0399)
   Every wait on OneUp's system service, on polkit and on systemd now has a time limit.
   Opening the window also waits less on the desktop's window manager.
