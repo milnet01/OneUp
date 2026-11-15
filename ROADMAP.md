@@ -11929,11 +11929,8 @@ when complete (that document's §7).
   reboot; /var/lib/oneup survives both but is new persistent root state.
   The sudo route has the same gap for a SIGKILLed engine (section 4.5
   names it); one design could cover both.
-  Waiting-on: user (where should the service keep its list of paused
-  software sources: /var/lib/oneup, which survives a reboot, or
-  /run/oneup, which does not? Recommendation: /var/lib/oneup, because a
-  crash followed by a reboot is the case that strands a source off for
-  good, 2026-11-15)
+  Decided by the user 2026-11-15: the service keeps its list of paused
+  software sources in /var/lib/oneup, so it survives a reboot.
   **Layman:** If OneUp's background helper crashes in the middle of an update, a software source it paused for that update is not switched back on.
   Kind: review-fix.
   Source: review-code-2026-11-11.
@@ -11972,6 +11969,9 @@ when complete (that document's §7).
   Also settle actions.py:55: sudoers says '=' in a command argument must
   be escaped; LC_ALL=C is written bare. Measure with visudo -cf and a
   sudo -l on the VM before changing it.
+  Decided by the user 2026-11-15: fix it now, accepting that users with
+  password-free updates approve the new rule once more. The CHANGELOG
+  entry says why.
   **Layman:** On a computer where a program in your own folders shadows a system one, OneUp's password-free permission could point at the wrong program.
   Kind: security.
   Source: review-code-2026-11-11.
