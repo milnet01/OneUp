@@ -5130,6 +5130,21 @@ else
     # coverage, and that is the only safe way round for a gate.
     check "a new remote branch falls back to the whole suite" \
         "STUB-CI[]" "$(hook_probe 090a11b 0000000000000000000000000000000000000000)"
+    # A rename from code to markdown. Git's rename detection makes `--name-only` print the
+    # new name alone, so x.py -> x.md once read as markdown-only (ONEUP-0402). History has
+    # no such commit, so a throwaway repository stands in for it.
+    rend="$hookd/rename-repo"
+    mkdir "$rend" && git -C "$rend" init -q
+    printf 'x = 1\n' > "$rend/x.py"
+    git -C "$rend" add x.py
+    git -C "$rend" -c user.name=t -c user.email=t@t commit -q -m base
+    git -C "$rend" mv x.py x.md
+    git -C "$rend" -c user.name=t -c user.email=t@t commit -q -m rename
+    out=$(printf 'refs/heads/probe %s refs/heads/probe %s\n' \
+              "$(git -C "$rend" rev-parse HEAD)" "$(git -C "$rend" rev-parse HEAD~1)" |
+          (cd "$hookd" && GIT_DIR="$rend/.git" GIT_WORK_TREE="$hookd" ONEUP_PREPUSH_GATE="$hookd/gate" \
+           ANTS_GLOBAL_HOOKS="$hookd/global" bash "$REPO/githooks/pre-push" origin 2>&1))
+    check "a push renaming code to markdown runs the whole suite (ONEUP-0402)" "STUB-CI[]" "$out"
     rm -rf "$hookd"
 fi
 

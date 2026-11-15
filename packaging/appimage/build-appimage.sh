@@ -22,7 +22,6 @@ trap 'rm -rf "$work"' EXIT
 
 echo "==> Freezing OneUp with PyInstaller"
 python3 -m venv "$work/venv"
-"$work/venv/bin/pip" install --quiet --upgrade pip
 "$work/venv/bin/pip" install --quiet -r "$here/packaging/appimage/requirements.txt"
 
 # --paths puts the repo root on the analysis path so PyInstaller resolves the

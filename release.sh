@@ -148,9 +148,11 @@ stray=$( { git ls-files --modified --others --exclude-standard; git diff --cache
          | sort -u | grep -vxF -f <(printf '%s\n' "${bumped[@]}") )
 [[ -z "$stray" ]] || die "files changed outside the version bump — not releasing:
 $stray"
-git add -- "${bumped[@]}"
-git commit -q -m "OneUp $ver"
-git tag "v$ver"
+# Each step is checked: under no `set -e`, a failed commit would tag the old HEAD as
+# v$ver and the push would publish it (ONEUP-0402).
+git add -- "${bumped[@]}" || die "git add failed — nothing committed or pushed"
+git commit -q -m "OneUp $ver" || die "git commit failed — nothing tagged or pushed; the bump is in your tree"
+git tag "v$ver" || die "git tag failed — nothing was pushed; undo the local commit with 'git reset HEAD~1' (workflow.md §8)"
 # --atomic: the branch and the tag land together or not at all. Without it a rejected
 # main could still leave the tag on GitHub, and release.yml publishes a tag
 # (ONEUP-0186; docs/standards/workflow.md §8's undo assumes nothing reached the remote).

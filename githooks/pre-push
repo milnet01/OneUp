@@ -80,7 +80,7 @@ for line in "${reflines[@]}"; do
     if [[ "$remote_sha" =~ ^0+$ ]]; then              # new remote branch — no base to diff
         docs_only=false; continue
     fi
-    if ! changed=$(git diff --name-only "$remote_sha..$local_sha" 2>/dev/null); then
+    if ! changed=$(git diff --no-renames --name-only "$remote_sha..$local_sha" 2>/dev/null); then
         docs_only=false; continue                     # unresolvable range
     fi
     [[ -z "$changed" ]] && continue
