@@ -240,6 +240,9 @@ def _rgba(colour: str, alpha: str) -> str:
 # the surface beneath (`card`). §4.4 resolves it that way rather than by
 # rendering, which is what keeps the whole check a pure computation.
 WARN_TINT_ALPHAS = (0.20, 0.04)
+# The information and reboot banners' washes, the same way: (token, alpha) per stop.
+INFO_TINT_STOPS = (("infotint", 0.20), ("infotint2", 0.05))
+DANGER_TINT_STOPS = (("dangertint", 0.22), ("dangertint", 0.05))
 
 # Text-size choices offered in Settings. The multiplier scales every font size
 # plus the two metrics that BOUND text (badge padding, progress-bar height) —
@@ -1116,6 +1119,16 @@ def warn_tint(palette: dict) -> tuple[str, str]:
                  for a in WARN_TINT_ALPHAS)
 
 
+def info_tint(palette: dict) -> tuple[str, str]:
+    """The information banner's two ground colours, composited over the card."""
+    return tuple(composite(palette[k], a, palette["card"]) for k, a in INFO_TINT_STOPS)
+
+
+def danger_tint(palette: dict) -> tuple[str, str]:
+    """The reboot banner's two ground colours, composited over the card."""
+    return tuple(composite(palette[k], a, palette["card"]) for k, a in DANGER_TINT_STOPS)
+
+
 def focus_keys(palette: dict) -> dict:
     """Every derived focus pair for one BASE palette.
 
@@ -1352,14 +1365,15 @@ def _derive_keys(palette: dict) -> dict:
         "btn_danger": _vgradient(palette["btn_danger_stops"]),
         "btn_danger_hov": _vgradient(palette["btn_danger_hov_stops"]),
         # The banner washes, at the alphas the sheet used to spell in decimal.
-        "warnwash1": _rgba(palette["warntint"], "0.20"),
-        "warnwash2": _rgba(palette["warntint"], "0.04"),
+        # The wash alphas are the constants the contrast check composites with.
+        "warnwash1": _rgba(palette["warntint"], f"{WARN_TINT_ALPHAS[0]:.2f}"),
+        "warnwash2": _rgba(palette["warntint"], f"{WARN_TINT_ALPHAS[1]:.2f}"),
         "warnbd2": _rgba(palette["warntint"], "0.6"),
-        "infowash1": _rgba(palette["infotint"], "0.20"),
-        "infowash2": _rgba(palette["infotint2"], "0.05"),
+        "infowash1": _rgba(palette[INFO_TINT_STOPS[0][0]], f"{INFO_TINT_STOPS[0][1]:.2f}"),
+        "infowash2": _rgba(palette[INFO_TINT_STOPS[1][0]], f"{INFO_TINT_STOPS[1][1]:.2f}"),
         "infobd2": _rgba(palette["infotint"], "0.55"),
-        "dangerwash1": _rgba(palette["dangertint"], "0.22"),
-        "dangerwash2": _rgba(palette["dangertint"], "0.05"),
+        "dangerwash1": _rgba(palette[DANGER_TINT_STOPS[0][0]], f"{DANGER_TINT_STOPS[0][1]:.2f}"),
+        "dangerwash2": _rgba(palette[DANGER_TINT_STOPS[1][0]], f"{DANGER_TINT_STOPS[1][1]:.2f}"),
         # The task row's ring and its hover, composited here for the same reason
         # the washes are: the alphas belong to the sheet, the hues to the palette.
         "rowring": ("qlineargradient(x1:0, y1:0, x2:1, y2:1, "

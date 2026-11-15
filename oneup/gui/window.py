@@ -799,7 +799,10 @@ class Updater(QMainWindow):
         # Last-run line.
         self.last_run = ElidedLabel()
         self.last_run.setObjectName("LastRun")
-        self.last_run.setAccessibleName(QCoreApplication.translate("window", "Last update run"))
+        # A description, not a name, as for `status`: a name would replace the date,
+        # outcome and "overdue" warning a screen reader should hear (ONEUP-0403).
+        self.last_run.setAccessibleDescription(
+            QCoreApplication.translate("window", "Last update run"))
         self.refresh_last_run()
 
         # Everything below the header is the current layout's to arrange. An
@@ -1441,7 +1444,9 @@ class Updater(QMainWindow):
         # only — a --check installs nothing, so there is nothing to stop. It REPLACES
         # Run and Check rather than sitting beside them, so during a run it stands
         # alone (ONEUP-0239 §4.1.3); during a check the slot holds both, disabled.
-        stoppable = (not enabled) and self._run_active and not self._check_mode
+        # Also while Update waits for the size preview, where Stop is that wait's Cancel.
+        stoppable = (not enabled) and ((self._run_active and not self._check_mode)
+                                       or run.hold_waiting(self))
         # The outgoing buttons are hidden first. Showing a widget lays its row out at
         # once, so showing first put both in the row for that pass and pushed the
         # status column aside (ONEUP-0239 INV-1).

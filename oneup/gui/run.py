@@ -74,6 +74,15 @@ def sync_stop(win):
     out and say why instead. Re-run whenever _progress_phase changes."""
     if win._stop_asked:
         return
+    if hold_waiting(win):
+        win.stop_btn.setEnabled(True)
+        win.stop_btn.setText(QCoreApplication.translate("run", "Cancel"))
+        tip = QCoreApplication.translate(
+            "run",
+            "Stop waiting, and do not start the update. Nothing has been installed.")
+        win.stop_btn.setToolTip(tip)
+        win.stop_btn.setAccessibleDescription(tip)
+        return
     installing = win._progress_phase in ("install", "remove", "finish")
     win.stop_btn.setEnabled(not installing)
     tip = stop_tooltip(installing)
@@ -81,10 +90,32 @@ def sync_stop(win):
     win.stop_btn.setAccessibleDescription(tip)
 
 
+def hold_waiting(win) -> bool:
+    """True while Update waits for the size preview to hold (§4.5's middle row)."""
+    timer = getattr(win, "_hold_wait", None)
+    # Not once the held engine is adopted: the timer is still live as that run starts.
+    return timer is not None and timer.isActive() and not win._run_active
+
+
+def cancel_hold_wait(win):
+    """Stop waiting for the preview to hold, and start nothing. The preview itself is
+    left to finish: it installs nothing, and the engine is never signalled (security.md
+    §6). Without this the wait had no way out but quitting (ONEUP-0403)."""
+    win._hold_wait.stop()
+    win.set_controls_enabled(True)
+    win.status.setText(QCoreApplication.translate(
+        "run", "Update cancelled. Nothing was installed."))
+    win._announce(QCoreApplication.translate("run", "Update cancelled."))
+
+
 def request_stop(win):
     """Ask the engine to stop at its next safe point by creating the file it watches.
     Not a signal: signalling mid-transaction would either leave rpm half-applied or
-    orphan a zypper that carries on anyway (ONEUP-0047)."""
+    orphan a zypper that carries on anyway (ONEUP-0047). While Update is only waiting
+    for the size preview, there is no run yet, and Stop is that wait's Cancel."""
+    if hold_waiting(win):
+        cancel_hold_wait(win)
+        return
     try:
         paths.RUN_STATE.parent.mkdir(parents=True, exist_ok=True)
         paths.STOP_REQUEST.touch()
@@ -248,8 +279,9 @@ def _wait_for_hold(win):
         "run",
         "Working out the download size first. The update will start as "
         "soon as that finishes."))
-    win.set_controls_enabled(False)
+    # Started first: set_controls_enabled offers Cancel only while the wait is live.
     win._hold_wait.start()
+    win.set_controls_enabled(False)
 
 
 def _show_hold_wait(win):

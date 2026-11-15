@@ -177,7 +177,7 @@ for (var i = wins.length - 1; i >= 0; i--) {{
     if (Math.abs(cg.width - {widget.width()}) > 1
             || Math.abs(cg.height - {widget.height()}) > 1) continue;{parent_check}
     var g = c.frameGeometry, pg = c.transientFor.frameGeometry;
-    var area = workspace.clientArea(workspace.PlacementArea, c);
+    var area = workspace.clientArea(KWin.PlacementArea, c);
     var x = pg.x + Math.round((pg.width - g.width) / 2);
     var y = pg.y + Math.round((pg.height - g.height) / 2);
     // Clamp to the screen: a dialog taller than its parent would otherwise hang off it.
@@ -253,7 +253,7 @@ def install_message_box_centring(app) -> None:
 
 def kwin_recenter() -> None:
     # Center via KWin scripting (Plasma 5 & 6). We match our own window by PID and use
-    # workspace.PlacementArea for the usable screen rectangle — the approach proven to
+    # KWin.PlacementArea for the usable screen rectangle — the approach proven to
     # work on this machine's KDE Wayland session. Transients are skipped so this
     # always finds the main window, never a dialog that happens to come first;
     # centring a dialog is center_on_parent's job.
@@ -262,7 +262,7 @@ var wins = workspace.windowList();
 for (var i = 0; i < wins.length; i++) {{
     var c = wins[i];
     if (c.pid !== {os.getpid()} || c.transientFor) continue;
-    var area = workspace.clientArea(workspace.PlacementArea, c);
+    var area = workspace.clientArea(KWin.PlacementArea, c);
     c.frameGeometry = {{
         x: area.x + Math.round((area.width - c.frameGeometry.width) / 2),
         y: area.y + Math.round((area.height - c.frameGeometry.height) / 2),

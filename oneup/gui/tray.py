@@ -28,6 +28,8 @@ from .theme import _app_icon
 # same machine, so this is generous; it only has to be long enough that a copy still
 # working through its own startup can still answer before we conclude it isn't there.
 SINGLE_INSTANCE_TIMEOUT_MS = 500
+# What a copy that lost the socket writes to the winner before hanging up (ONEUP-0403).
+PROBE_INTENT = b"probe"
 
 
 # Tray: one QTimer drives both the short initial check and the recurring one, so a
@@ -230,7 +232,13 @@ def _arm_single_instance(win):
         probe = QLocalSocket()
         probe.connectToServer(name)
         if probe.waitForConnected(SINGLE_INSTANCE_TIMEOUT_MS):
-            probe.disconnectFromServer()     # a live copy owns it — leave it be
+            # A live copy owns it — leave it be. The probe is itself a connection, so
+            # it says so: with no intent the winner would read "a person launched
+            # OneUp" and throw its window up at login (ONEUP-0403).
+            probe.write(PROBE_INTENT)
+            probe.flush()
+            probe.waitForBytesWritten(SINGLE_INSTANCE_TIMEOUT_MS)
+            probe.disconnectFromServer()
             return False
         QLocalServer.removeServer(name)      # proven stale (a crash left it)
         if not server.listen(name):
@@ -248,9 +256,9 @@ def _on_single_instance_connection(win):
     if conn.waitForReadyRead(SINGLE_INSTANCE_TIMEOUT_MS):
         intent = bytes(conn.readAll()).decode(errors="replace").strip()
     conn.close()
-    # The autostart entry only needs to learn that someone is already resident.
-    # Anything else is a person launching OneUp, and wants the window.
-    if intent != "tray":
+    # The autostart entry, and another copy's liveness probe, only need to learn that
+    # someone is already resident. Anything else is a person launching OneUp.
+    if intent not in ("tray", PROBE_INTENT.decode()):
         _show_window(win)
 
 

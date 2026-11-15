@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import i18n, steps, symbols, theme
-from .markers import _format_size
+from .markers import WIDEST_SIZE, _format_size
 from .packages import Package, PackageModel
 
 # The three groups every count and the size strip use, by the state a view shows.
@@ -500,7 +500,7 @@ class CardDelegate(LinesDelegate):
     PAD = 10    # inside the card's rim
     RIM = 2     # every card's rim, so the accent one moves nothing
     SPACE = 4   # between the card's lines
-    SIZE_TEXT = "999.9 MiB"    # the widest size, which sets the size's place
+    SIZE_TEXT = WIDEST_SIZE    # the widest size, which sets the size's place
 
     def __init__(self, parts: Callable[[Package], tuple[str, str, str, str, str, str]],
                  parent=None) -> None:

@@ -175,7 +175,10 @@ class UpdateDialog(QDialog):
         super().showEvent(event)
         center_on_parent(self)
 
-    def closeEvent(self, event) -> None:
+    def reject(self) -> None:
+        """Escape and the title bar's close both land here (QDialog.closeEvent calls
+        reject), so leaving the dialog mid-download always cancels it. A closeEvent
+        override alone missed Escape, and the download carried on hidden (ONEUP-0403)."""
         if self.cancel_btn.isVisible():
             self._on_cancel()
-        super().closeEvent(event)
+        super().reject()

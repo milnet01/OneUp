@@ -193,9 +193,18 @@ def _stand_down_autoupdate(win, lead: str = ""):
     stands the timer down regardless of the latch and clears it afterwards, so moving
     the check inside would let a revoke racing an enable leave an enabled weekly timer
     behind — the exact coupling this method exists to guarantee."""
-    if not autostart._autoupdate_enabled():
+    if not autostart._autoupdate_may_be_enabled():
         return
-    autostart._remove_user_timer("oneup-update")
+    if not autostart._remove_user_timer("oneup-update"):
+        autostart._set_autoupdate_checked(win, True)
+        QMessageBox.warning(
+            win, QCoreApplication.translate("auth", "Could not turn off automatic updates"),
+            QCoreApplication.translate(
+                "auth",
+                "{lead}Automatic weekly updates need updates without a password, but their "
+                "timer could not be switched off. Turn them off in Settings, or run:\n"
+                "systemctl --user disable --now oneup-update.timer").format(lead=lead))
+        return
     autostart._set_autoupdate_checked(win, False)
     if win._service_route:
         text = QCoreApplication.translate(

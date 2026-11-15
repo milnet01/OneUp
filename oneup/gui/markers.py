@@ -560,6 +560,12 @@ def _format_duration(secs: int) -> str:
         return f"{secs}s"
     return f"{secs // 60}m {secs % 60}s"
 
+# The widest text `_format_size` prints: just under a unit's top rounds up to "1024.0".
+# The one sample anything sizes a size's place by (ONEUP-0403); a narrower one clipped a
+# leading digit, the misreading ONEUP-0356 set out to prevent.
+WIDEST_SIZE = "1024.0 MiB"
+
+
 def _format_size(n: int) -> str:
     """A compact human size: '900 B', '57.6 KiB', '1.0 MiB', '1.4 GiB'.
 

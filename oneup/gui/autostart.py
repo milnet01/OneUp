@@ -172,8 +172,14 @@ def _systemctl_user(*args: str) -> str | None:
         return None
 
 
+def _timer_state(timer: str) -> bool | None:
+    """True if `timer` is enabled, False if not, None if systemctl did not answer."""
+    out = _systemctl_user("is-enabled", timer)
+    return None if out is None else out.strip() == "enabled"
+
+
 def _timer_enabled(timer: str) -> bool:
-    return (_systemctl_user("is-enabled", timer) or "").strip() == "enabled"
+    return _timer_state(timer) is True
 
 
 def _autocheck_enabled() -> bool:
@@ -182,6 +188,12 @@ def _autocheck_enabled() -> bool:
 
 def _autoupdate_enabled() -> bool:
     return _timer_enabled("oneup-update.timer")
+
+
+def _autoupdate_may_be_enabled() -> bool:
+    """False only when systemctl says the weekly update timer is off. A timed-out answer
+    is not "off": the revoke path must still remove a timer it cannot see (ONEUP-0403)."""
+    return _timer_state("oneup-update.timer") is not False
 
 
 def _install_user_timer(win, basename: str, description: str, exec_flag: str) -> bool:
@@ -207,7 +219,9 @@ def _install_user_timer(win, basename: str, description: str, exec_flag: str) ->
     return _timer_enabled(f"{basename}.timer")
 
 
-def _remove_user_timer(basename: str):
+def _remove_user_timer(basename: str) -> bool:
+    """Disable and delete a weekly timer. True iff systemctl then says it is off: a
+    disable that timed out or failed must not read as done (ONEUP-0403)."""
     units = _user_units_dir()
     _systemctl_user("disable", "--now", f"{basename}.timer")
     for name in (f"{basename}.timer", f"{basename}.service"):
@@ -216,6 +230,7 @@ def _remove_user_timer(basename: str):
         except OSError:
             pass
     _systemctl_user("daemon-reload")
+    return _timer_state(f"{basename}.timer") is False
 
 
 def _refresh_autocheck_label(win):
@@ -282,9 +297,18 @@ def on_autoupdate_toggled(win, on: bool):
                 win.autoupdate_btn.setEnabled(True)
                 _set_autoupdate_checked(win, False)
     else:
-        # User turns auto-update off: remove the timer, clear any stray latch.
-        _remove_user_timer("oneup-update")
+        # User turns auto-update off: remove the timer, clear any stray latch. A timer
+        # that is still on keeps the switch on, so it never reads off while active.
         win._pending_autoupdate = False
+        if not _remove_user_timer("oneup-update"):
+            _set_autoupdate_checked(win, True)
+            QMessageBox.warning(
+                win,
+                QCoreApplication.translate("autostart", "Could not turn off automatic updates"),
+                QCoreApplication.translate(
+                    "autostart",
+                    "The weekly update timer may still be on. Try again, or run:\n"
+                    "systemctl --user disable --now oneup-update.timer"))
         _refresh_autoupdate_label(win)
 
 

@@ -282,7 +282,35 @@ def _confirm_reboot(win, title: str, body: str):
     No is the default, so Enter never reboots (ONEUP-0183)."""
     if QMessageBox.question(win, title, body, QMessageBox.Yes | QMessageBox.No,
                             QMessageBox.No) == QMessageBox.Yes:
-        QProcess.startDetached("systemctl", ["reboot"])
+        _start_reboot(win)
+
+
+def _start_reboot(win) -> None:
+    """Run `systemctl reboot` attached, so a refusal is reported (ONEUP-0403). Started
+    detached, a logind or polkit refusal left a user who said Yes with nothing — the
+    pattern ONEUP-0229 fixed for the service restart. The one place it starts: the suite
+    replaces this, so no test reboots the machine."""
+    p = QProcess(win)
+    p.setProcessChannelMode(QProcess.MergedChannels)
+    p.finished.connect(lambda code, _status, p=p: _on_reboot_finished(
+        win, code, bytes(p.readAll()).decode(errors="replace")))
+    p.errorOccurred.connect(lambda err: err == QProcess.FailedToStart
+                            and _on_reboot_finished(win, -1, ""))
+    win._reboot_proc = p
+    p.start("systemctl", ["reboot"])
+
+
+def _on_reboot_finished(win, code: int, output: str) -> None:
+    """Say why a restart did not happen. A zero exit says nothing: the session is ending."""
+    if code == 0:
+        return
+    # The tool's own output is data, shown as it came; only the frame is worded.
+    detail = output.strip()[-600:] or QCoreApplication.translate(
+        "banners", "exit code {code}").format(code=code)
+    QMessageBox.warning(
+        win, QCoreApplication.translate("banners", "Could not restart"),
+        QCoreApplication.translate(
+            "banners", "The computer could not be restarted:\n\n{detail}").format(detail=detail))
 
 
 def restart_now(win):

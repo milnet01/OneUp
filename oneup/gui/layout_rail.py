@@ -10,7 +10,7 @@ from __future__ import annotations
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
-from . import i18n, steps
+from . import i18n, markers, steps
 from . import package_views as pv
 from .elided_label import ElidedLabel
 from .layout_host import LayoutHost
@@ -133,6 +133,6 @@ class RailLayout(LayoutHost):
             pv.counts_sentence({"done": 999, "now": 9, "togo": 999})))
         self.summary.setMinimumWidth(self.summary.whole_width(QCoreApplication.translate(
             "package_views", "{count} · {size} to download").format(
-            count=i18n.counted("package-count", 999), size="999.9 MiB")))
+            count=i18n.counted("package-count", 999), size=markers.WIDEST_SIZE)))
         pv.fit_board(self.board)
         pv.hold_rows(self.board, self.PACKAGE_ROWS, self.board.gridSize().height())

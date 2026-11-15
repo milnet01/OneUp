@@ -103,7 +103,15 @@ os.environ["ONEUP_BACKEND"] = "sudo"
 try:
     import shiboken6
     from PySide6.QtCore import QEvent, QObject, QPoint, QProcess, QSize, Qt, QTimer
-    from PySide6.QtGui import QAccessible, QCloseEvent, QColor, QFont, QFontInfo, QPalette
+    from PySide6.QtGui import (
+        QAccessible,
+        QCloseEvent,
+        QColor,
+        QFont,
+        QFontInfo,
+        QFontMetricsF,
+        QPalette,
+    )
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import (
         QApplication,
@@ -780,6 +788,8 @@ def main() -> int:
     # machine" (testing.md §2). Scenarios that assert on it re-enable it locally with a spy.
     _real_stand_down = auth._stand_down_autoupdate
     auth._stand_down_autoupdate = lambda self, lead="": None
+    # And the restart: a scenario answering Yes must never reboot this machine (ONEUP-0403).
+    banners._start_reboot = lambda win: None
 
     # Likewise the single-instance socket: left alone, the guard would connect to the
     # user's LIVE OneUp and pop its window open mid-test (testing.md §2).
@@ -920,6 +930,14 @@ def main() -> int:
                    (900, 512 << 10, 59000, 41 << 20, 15518924, 3 << 29))
     check(f"_format_size labels binary units, with one decimal for KiB and MiB ({_sizes})",
           _sizes == ("900 B", "512.0 KiB", "57.6 KiB", "41.0 MiB", "14.8 MiB", "1.5 GiB"))
+    # ONEUP-0403: the sample that sizes a size's place is as wide as the widest size the
+    # formatter prints. "999.9 MiB" was not, so a package of about 1 MB lost a digit.
+    _fm = QFontMetricsF(QApplication.font())
+    _widest = max((markers._format_size(n) for n in
+                   ((1 << 20) - 1, (1 << 30) - 1, 1023 << 10, 1023 << 20, 999 << 30)),
+                  key=_fm.horizontalAdvance)
+    check(f"ONEUP-0403 no size is wider than the sample its place is sized by ({_widest})",
+          _fm.horizontalAdvance(_widest) <= _fm.horizontalAdvance(markers.WIDEST_SIZE))
     # ONEUP-0190: a status outside ok / skip / fail earned no "Done".
     check("an unrecognised step status badges as unknown, not a success",
           markers._step_badge("spliced", "installed", ["3"]) == "Result unknown")
@@ -1639,7 +1657,10 @@ def main() -> int:
             took = time.monotonic() - began
             check(f"a stuck systemctl does not hold the window: {label} "
                   f"({took:.1f}s)", took < 15)
-            if label != "turning a timer off":
+            if label == "turning a timer off":
+                check(f"a stuck systemctl is not read as done: {label} (got {got!r})",
+                      got is False)
+            else:
                 check(f"a stuck systemctl reads as off: {label} (got {got!r})",
                       got is False)
     finally:
@@ -1839,14 +1860,16 @@ def main() -> int:
         QMessageBox.information = staticmethod(lambda *a, **k: 0)
         QProcess.startDetached = staticmethod(
             lambda prog, args=None, *a, **k: (calls.append([prog, *(args or [])]), True)[1])
-        _ls = banners._start_service_restart
+        _ls, _lr = banners._start_service_restart, banners._start_reboot
         banners._start_service_restart = lambda _w, prog, args: calls.append([prog, *args])
+        # The reboot's one starting place (ONEUP-0403), recorded as the command it runs.
+        banners._start_reboot = lambda _w: calls.append(["systemctl", "reboot"])
         try:
             banners.restart_services(win)
         finally:
             (QMessageBox.question, QMessageBox.information,
              QProcess.startDetached) = _q, _i, _d
-            banners._start_service_restart = _ls
+            banners._start_service_restart, banners._start_reboot = _ls, _lr
         return win, [a for call in calls for a in call]
 
     CRITICAL = ["display-manager", "user@1000", "dbus", "systemd-logind", "polkit"]
@@ -2672,6 +2695,18 @@ def main() -> int:
               "so far" in _first and "1m 5s so far" in _later)
         check("ONEUP-0238 a tick keeps waiting rather than starting a second engine",
               wC._hold_wait.isActive() and not _launched)
+        # ONEUP-0403: the wait had no way out but quitting. Its Cancel stops waiting,
+        # starts nothing and writes no stop.request, since there is no run to stop.
+        check("ONEUP-0403 the wait offers Cancel in the Stop slot",
+              not wC.stop_btn.isHidden() and wC.stop_btn.isEnabled()
+              and wC.stop_btn.text() == "Cancel")
+        paths.STOP_REQUEST.unlink(missing_ok=True)
+        wC.stop_btn.click()
+        check("ONEUP-0403 Cancel ends the wait and gives back Run",
+              not wC._hold_wait.isActive() and wC.run_btn.isEnabled()
+              and not wC.run_btn.isHidden())
+        check("ONEUP-0403 Cancel starts nothing and asks no engine to stop",
+              not _launched and not paths.STOP_REQUEST.exists())
     finally:
         time.monotonic = _real_monotonic
         if getattr(wC, "_hold_wait", None) is not None:
@@ -3431,8 +3466,8 @@ def main() -> int:
     w = window.Updater()
     removed_d = []
     _patch(auth, "_stand_down_autoupdate", _real_stand_down)   # neutralised suite-wide
-    _patch(autostart, "_autoupdate_enabled", lambda: True)
-    _patch(autostart, "_remove_user_timer", lambda name: removed_d.append(name))
+    _patch(autostart, "_autoupdate_may_be_enabled", lambda: True)
+    _patch(autostart, "_remove_user_timer", lambda name: removed_d.append(name) or True)
     _patch(auth, "_run_auth", lambda *a, **k: None)          # don't spawn a real process
     autostart._set_autoupdate_checked(w, True)
     auth.on_auth_toggled(w, False)                                 # user revokes
@@ -3449,8 +3484,8 @@ def main() -> int:
     w = window.Updater()
     removed_e = []
     _patch(auth, "_stand_down_autoupdate", _real_stand_down)
-    _patch(autostart, "_autoupdate_enabled", lambda: True)
-    _patch(autostart, "_remove_user_timer", lambda name: removed_e.append(name))
+    _patch(autostart, "_autoupdate_may_be_enabled", lambda: True)
+    _patch(autostart, "_remove_user_timer", lambda name: removed_e.append(name) or True)
     autostart._set_autoupdate_checked(w, True)
     auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|off\n"))
     check("a discovered passwordless-off removes the update timer", "oneup-update" in removed_e)
@@ -3459,7 +3494,7 @@ def main() -> int:
     _unpatch_all()
 
     # (f) INV-12: a failed ENABLE must not answer with "we turned it off". Two halves, and
-    # the second is the one a false-only fixture misses: _autoupdate_enabled shells out to
+    # the second is the one a false-only fixture misses: _autoupdate_may_be_enabled shells out to
     # systemctl, so it reports the MACHINE, and a timer enabled outside OneUp would make it
     # true while the user's own enable is still in flight.
     for label, enabled in (("no timer present", False),
@@ -3467,8 +3502,9 @@ def main() -> int:
         w = window.Updater()
         removed_f = []
         _patch(auth, "_stand_down_autoupdate", _real_stand_down)
-        _patch(autostart, "_autoupdate_enabled", lambda e=enabled: e)
-        _patch(autostart, "_remove_user_timer", lambda name, acc=removed_f: acc.append(name))
+        _patch(autostart, "_autoupdate_may_be_enabled", lambda e=enabled: e)
+        _patch(autostart, "_remove_user_timer",
+               lambda name, acc=removed_f: acc.append(name) or True)
         w._pending_autoupdate = True
         auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|off\n"))
         check(f"a failed enable ({label}) removes no timer", not removed_f)
@@ -3481,12 +3517,39 @@ def main() -> int:
     w = window.Updater()
     removed_g = []
     _patch(auth, "_stand_down_autoupdate", _real_stand_down)
-    _patch(autostart, "_autoupdate_enabled", lambda: True)
-    _patch(autostart, "_remove_user_timer", lambda name: removed_g.append(name))
+    _patch(autostart, "_autoupdate_may_be_enabled", lambda: True)
+    _patch(autostart, "_remove_user_timer", lambda name: removed_g.append(name) or True)
     auth._on_auth_status_finished(w, _StubProc(""))
     check("a probe that emitted nothing removes no timer", not removed_g)
     check("a probe that emitted nothing still reflects passwordless as off",
           not w.auth_btn.isChecked())
+    _unpatch_all()
+
+    # (g2) ONEUP-0403: a systemctl that does not answer is not a timer that is off. The
+    # stand-down must still try to remove it, and a removal it cannot confirm leaves the
+    # switch on with a warning, never "turned off" over a timer that may still fire.
+    w = window.Updater()
+    warned_g2 = []
+    _patch(auth, "_stand_down_autoupdate", _real_stand_down)
+    _patch(autostart, "_systemctl_user", lambda *a: None)          # every call times out
+    _patch(QMessageBox, "warning", staticmethod(lambda *a, **k: warned_g2.append(a[1]) or 0))
+    _patch(QMessageBox, "information", staticmethod(lambda *a, **k: 0))
+    autostart._set_autoupdate_checked(w, True)
+    auth._stand_down_autoupdate(w)
+    check("a timed-out timer check still leads to a removal attempt (ONEUP-0403)",
+          warned_g2 == ["Could not turn off automatic updates"])
+    check("a removal systemctl cannot confirm leaves the switch on (ONEUP-0403)",
+          w.autoupdate_btn.isChecked())
+    _unpatch_all()
+    # The same over the user's own click: switching off a timer that will not go off.
+    w = window.Updater()
+    warned_g3 = []
+    _patch(autostart, "_remove_user_timer", lambda name: False)
+    _patch(QMessageBox, "warning", staticmethod(lambda *a, **k: warned_g3.append(a[1]) or 0))
+    autostart._set_autoupdate_checked(w, True)
+    autostart.on_autoupdate_toggled(w, False)
+    check("switching off a timer that stays on keeps the switch on (ONEUP-0403)",
+          w.autoupdate_btn.isChecked() and warned_g3 == ["Could not turn off automatic updates"])
     _unpatch_all()
 
     auth._query_auth_status = _real_query_auth_status
@@ -3958,6 +4021,34 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         check(f"_show_window runs without error ({exc})", False)
 
+    # (3a) ONEUP-0403: a copy that loses the socket probes the winner, and that probe is
+    # itself a connection. Sent with no intent it read as "a person launched OneUp", so
+    # two copies started together at login threw the resident window up.
+    shown = []
+    _patch(tray, "_show_window", lambda win: shown.append(win))
+    # A name of its own: a window an earlier scenario armed may still hold the suite's.
+    _saved_name = os.environ["ONEUP_INSTANCE_NAME"]
+    os.environ["ONEUP_INSTANCE_NAME"] = f"{_saved_name}-probe"
+    w_owner, w_loser = window.Updater(), window.Updater()
+    check("the first copy owns the single-instance socket", tray._arm_single_instance(w_owner))
+    check("a second copy defers to it", not tray._arm_single_instance(w_loser))
+    deadline = time.monotonic() + 0.5             # long enough for the connection to land
+    while time.monotonic() < deadline:
+        QApplication.processEvents()
+    tray._on_single_instance_connection(w_owner)    # drains anything the loop did not
+    check("the loser's liveness probe does not raise the owner's window (ONEUP-0403)",
+          not shown)
+    if w_owner._local_server is not None:
+        w_owner._local_server.close()
+        w_owner._local_server = None
+    os.environ["ONEUP_INSTANCE_NAME"] = _saved_name
+    _unpatch_all()
+    # ONEUP-0403: an explicit name on a QLabel replaces its text for a screen reader, so
+    # the last-run line carries its role as a description and keeps its text readable.
+    check("the last-run line has no accessible name to hide its text (ONEUP-0403)",
+          w_owner.last_run.accessibleName() == ""
+          and w_owner.last_run.accessibleDescription() != "")
+
     # (3b) ONEUP-0391: the tray's "Update now" starts nothing while the window is busy.
     # It used to call start_run unguarded, so a tray user whose run was still going
     # wiped its display and started a second engine. Busy is whatever disables the
@@ -4154,6 +4245,11 @@ def main() -> int:
           len(placed) == 1)
     check("ONEUP-0246: the replay clamps to the usable area with KWin.PlacementArea",
           bool(placed) and "KWin.PlacementArea" in placed[0])
+    # ONEUP-0403: the fix above reached one of three copies. `workspace.PlacementArea` is
+    # undefined on Plasma 6, so no KWin script the window writes may name it.
+    _place_src = (REPO / "oneup" / "gui" / "placement.py").read_text()
+    check("ONEUP-0403 no KWin script asks for workspace.PlacementArea",
+          "clientArea(workspace.PlacementArea" not in _place_src)
     w.hide()
     w.show()
     _pump(3000, until=lambda: not w._placement_pending)
@@ -4949,6 +5045,21 @@ def main() -> int:
                                    QUrl(_img.as_uri())) is None)
     _udlg.deleteLater()
     shutil.rmtree(_img.parent, ignore_errors=True)
+    # ONEUP-0403: Escape calls reject(), which never reaches closeEvent, so a download
+    # left by Escape carried on hidden. Both ways out must cancel it, once each.
+    for _how in ("Escape", "close"):
+        _cancels = []
+        _udlg = update_dialog.UpdateDialog(wA, "9.9.9", "rpm", lambda: None, lambda: None,
+                                           lambda acc=_cancels: acc.append(1))
+        _udlg.show()
+        _udlg.downloading(0)
+        if _how == "Escape":
+            QTest.keyClick(_udlg, Qt.Key.Key_Escape)
+        else:
+            _udlg.close()
+        check(f"ONEUP-0403 leaving the update dialog by {_how} cancels the download once",
+              _cancels == [1])
+        _udlg.deleteLater()
 
     # INV-7: progress and outcome are spoken. _announce records unconditionally,
     # since QAccessible.isActive() is False offscreen.
@@ -5070,6 +5181,17 @@ def main() -> int:
     finally:
         QMessageBox.question = _orig_q
     check("both restart questions were asked", len(asked_q) == 2)
+    # ONEUP-0403: a restart the system refuses is reported, never silent.
+    _warned_r = []
+    _orig_w = QMessageBox.warning
+    QMessageBox.warning = staticmethod(lambda *a, **k: _warned_r.append(a[2]) or 0)
+    try:
+        banners._on_reboot_finished(wT, 1, "Operation inhibited by \"x\"")
+        banners._on_reboot_finished(wT, 0, "")
+    finally:
+        QMessageBox.warning = _orig_w
+    check("ONEUP-0403 a refused restart says so, with systemctl's reason",
+          len(_warned_r) == 1 and "inhibited" in _warned_r[0])
     check("Enter on a restart question picks No, never Yes",
           len(asked_q) == 2
           and all(k.get("defaultButton", a[4] if len(a) > 4 else None)

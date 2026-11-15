@@ -8,6 +8,21 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Turning off automatic updates now says so if the weekly timer would not switch off** (ONEUP-0403)
+  On a slow system the switch could read "off" while the weekly update timer kept
+  running, even after password-free updates were turned off. The switch now stays on
+  and OneUp says how to turn the timer off by hand.
+
+- **While OneUp works out the download size before an update, you can cancel the wait** (ONEUP-0403)
+  Pressing Update during the size check left the window waiting with no way out but
+  quitting. A Cancel button now ends the wait without starting anything.
+
+- **Smaller window fixes** (ONEUP-0403)
+  Pressing Escape in the update window now cancels the download, not only hides it.
+  A restart the computer refuses now says why. Starting two copies of OneUp at login
+  no longer pops the window open. Screen readers now read the last-run line's date
+  and outcome. Package sizes near 1 MB no longer lose a digit.
+
 - **The window no longer reports results a run did not produce** (ONEUP-0400)
   Retrying only the failed steps could clear the tray's "updates waiting" count. An
   update that never started could say "All done". Packages an update removes no longer

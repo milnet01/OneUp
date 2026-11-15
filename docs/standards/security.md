@@ -145,7 +145,7 @@ when this list is checked:
 
 | Site | Command | Guard |
 | --- | --- | --- |
-| `banners.restart_now` | `QProcess.startDetached("systemctl", ["reboot"])` — argv form | **no arguments, so nothing to validate**; logind's own polkit policy decides whether an active local session may reboot |
+| `banners._start_reboot` | `QProcess.start("systemctl", ["reboot"])`, attached so a refusal is reported — argv form | **no arguments, so nothing to validate**; logind's own polkit policy decides whether an active local session may reboot |
 
 It is listed because the *shape* is the risk: a future `startDetached` that interpolates a
 value would be a privileged call with no validation and no `pkexec` to make it obvious.

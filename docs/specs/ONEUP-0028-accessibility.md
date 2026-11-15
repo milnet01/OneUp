@@ -90,8 +90,9 @@ not "Show …"): the control toggles, so an imperative name would read backwards
 once the panel is open. Qt reports the expanded/collapsed state separately.
 
 `Updater.__init__` names the non-text widgets: progress bar ("Update progress"),
-log pane ("Update log"), the last-run line ("Last update run"), and each banner
-frame plus its label — for its role, not its styling.
+log pane ("Update log"), and each banner frame plus its label — for its role, not
+its styling. The last-run line is a label, so "Last update run" is its accessible
+DESCRIPTION: a name would replace the date and outcome it reads (ONEUP-0403).
 
 **A banner's role text is carried two different ways, and the table gives the
 text rather than the call.** It is the accessible NAME on the frame and the

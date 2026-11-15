@@ -29,8 +29,10 @@ from .theme import (
     FOCUS_MIN,
     INK_MIN,
     contrast,
+    danger_tint,
     derived_keys,
     hc_focus_keys,
+    info_tint,
     warn_tint,
 )
 
@@ -44,6 +46,14 @@ _STOP_RE = re.compile(r"stop:\d+(?:\.\d+)? (#[0-9a-fA-F]{6})")
 # wash, so a control inside it has no hex to measure against until the tint is
 # composited over what is beneath it.
 WARN_GROUND = "«warn ground»"
+# The information and reboot banners' grounds, composited the same way (ONEUP-0403).
+INFO_GROUND = "«info ground»"
+DANGER_GROUND = "«danger ground»"
+_GROUNDS = {WARN_GROUND: warn_tint, INFO_GROUND: info_tint, DANGER_GROUND: danger_tint}
+# What each composited ground is made of, so naming the ground covers its tokens.
+_GROUND_TOKENS = {WARN_GROUND: ("warntint", "card"),
+                  INFO_GROUND: ("infotint", "infotint2", "card"),
+                  DANGER_GROUND: ("dangertint", "card")}
 
 
 def surfaces(palette: dict, name: str) -> list[str]:
@@ -52,8 +62,8 @@ def surfaces(palette: dict, name: str) -> list[str]:
     A stop pair and a gradient string both expand to their stops, because a
     gradient is governed by its worst pixel rather than by its declaration.
     """
-    if name == WARN_GROUND:
-        return list(warn_tint(palette))
+    if name in _GROUNDS:
+        return list(_GROUNDS[name](palette))
     value = palette[name]
     if isinstance(value, tuple):
         return list(value)
@@ -89,6 +99,8 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     # `tname` is also every unnamed label's ink, on the dialog root as well as on
     # the settings and repository rows (ONEUP-0301).
     ("tname", ("rowcard", "rowhov", "win"), TEXT),
+    # And on the card: the `QLabel` catch-all, the theme list and the size strip's ink.
+    ("tname", ("card",), TEXT),
     ("tdesc", ("rowcard", "rowhov"), TEXT),
     ("badgefg", ("badgebg",), TEXT),
     ("logfg", ("logbg",), TEXT),
@@ -99,6 +111,12 @@ PAIRS: list[tuple[str, tuple[str, ...], float]] = [
     # The dialog's Close and Settings' tabs (ONEUP-0303) put the ghost label on
     # `win`, and the current tab its hover ink.
     ("ghostfg", ("win",), TEXT),
+    # A row's ghost buttons, the theme combo on a settings row, and Retry's label on
+    # the warning banner (ONEUP-0403).
+    ("ghostfg", ("rowcard", "rowhov", WARN_GROUND), TEXT),
+    # Every banner's text, on its composited ground: the washes are excused below
+    # because this is what has to read (ONEUP-0403).
+    ("header", (WARN_GROUND, INFO_GROUND, DANGER_GROUND), TEXT),
     ("ghosthov", ("win",), TEXT),
     # Spotlight's "Now" heading and its percentage, on the panel (ONEUP-0316).
     ("ghosthov", ("rowcard",), TEXT),
@@ -313,9 +331,11 @@ def uncovered(palette: dict) -> list[str]:
     for fg, bgs, _reason, _rid in DECORATIVE + EXEMPT:
         named.add(fg)
         named.update(bgs)
-    named.discard(WARN_GROUND)
-    # WARN_GROUND is `warntint` composited over `card`, so naming it covers both.
-    named.update(("warntint", "card"))
+    # A composited ground is its tokens over `card`, so naming it covers them.
+    for ground, tokens in _GROUND_TOKENS.items():
+        if ground in named:
+            named.discard(ground)
+            named.update(tokens)
     missing = [k for k in palette if k not in named]
     # A derived key rides on its source, so a source that nothing checks leaves
     # BOTH uncovered — otherwise DERIVED_FROM would be a way to launder a token
