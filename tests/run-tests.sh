@@ -3267,6 +3267,37 @@ check_absent "no false reboot=yes on non-102"       "@@REBOOT@@|yes" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
+# ONEUP-0401: the removal is by bare name, and `zypper remove <name>` takes every
+# installed version. One old multiversion kernel listed as unneeded would remove all of
+# them, the running one included. rpm, mocked, says kernel-default has two versions.
+echo "TEST: a package installed in more than one version is never removed by name"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *packages*--unneeded*) printf 'S|Repo|Name|Ver|Arch\n-+-+-+-+-\ni|r|kernel-default|7.3.1|x\ni|r|foo|1|x\n'; exit 0 ;;
+  *packages*--orphaned*) exit 0 ;;
+  *remove*)              echo "\$*" >> "$d/removed"; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+cat > "$d/rpm" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do
+  case "$a" in
+    kernel-default) printf 'kernel-default\nkernel-default\n' ;;
+    foo)            echo foo ;;
+  esac
+done
+EOF
+chmod +x "$d/zypper" "$d/rpm"
+out=$(run_engine "$d" --steps=orphans)
+removed=$(cat "$d/removed" 2>/dev/null)
+check        "the single-version package is removed"   "foo" "$removed"
+check_absent "the multiversion one is not"             "kernel-default" "$removed"
+check        "and the log says why it was kept"        "Kept kernel-default" "$out"
+rm -rf "$d"
+
 echo "TEST: orphans step removes unneeded packages and reports the count"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'
@@ -5319,6 +5350,17 @@ with contextlib.redirect_stdout(out):
 text = out.getvalue()
 ok = rc == 0 and "@@DONE@@|stopped" in text and "busy" not in text
 raise SystemExit(0 if ok else f"rc={rc} out={text[-200:]!r}")'
+
+# ONEUP-0401: the rule granted the budget as typed (`timeout 0120 zypper *`) while the
+# call sent `timeout 120`, so a passwordless user met a prompt mid-refresh.
+echo "TEST: the refresh budget is spelt the same in the rule and in the call"
+py_case "ONEUP_REFRESH_TIMEOUT=0120 is 120 on both sides" '
+from oneup.engine import privilege, repos
+argv = privilege.REFRESH_SUDO_ARGV
+ok = (privilege.REFRESH_TIMEOUT == "120" and repos._BUDGET == 120
+      and (argv is None or argv[1] == "120"))
+raise SystemExit(0 if ok else f"{privilege.REFRESH_TIMEOUT!r} {repos._BUDGET!r} {argv!r}")' \
+    ONEUP_REFRESH_TIMEOUT=0120
 
 echo "TEST: an interrupted re-enable leaves the repository to the next cleanup"
 py_case "restore_disabled keeps what it has not yet re-enabled" '

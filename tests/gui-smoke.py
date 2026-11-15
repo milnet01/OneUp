@@ -1762,8 +1762,8 @@ def main() -> int:
     check("restart services passes every bare unit name to systemctl",
           bool(launched)
           and launched[0][1][:2] == ["systemctl", "restart"]
-          and ["sshd", "cups", "getty@tty1", "avahi-daemon"] == [
-              a for a in launched[0][1][2:]])
+          and ["sshd.service", "cups.service", "getty@tty1.service",
+               "avahi-daemon.service"] == [a for a in launched[0][1][2:]])
     check("restart services still drops an option-shaped token",
           all("-f" not in call[1] for call in launched))
     check("restart services hides the banner once it has launched",
@@ -1853,13 +1853,18 @@ def main() -> int:
 
     _w, args = _run_restart("sshd cups " + " ".join(CRITICAL))
     check("mixed list still restarts the safe services",
-          "sshd" in args and "cups" in args)
+          "sshd.service" in args and "cups.service" in args)
     check("mixed list restarts NO session-critical service",
-          not any(c in args for c in CRITICAL))
+          not any(c in a for a in args for c in CRITICAL))
+    # ONEUP-0401: the name check accepts "reboot.target", and root's `systemctl restart
+    # reboot.target` reboots the machine. Every name reaches systemctl as a .service.
+    _wt, args_t = _run_restart("sshd reboot.target")
+    check("ONEUP-0401 a unit-type suffix reaches systemctl only as a .service name",
+          "reboot.target" not in args_t and "reboot.target.service" in args_t)
 
     _w2, args2 = _run_restart(" ".join(CRITICAL))
     check("an all-critical list restarts no service at all",
-          not any(c in args2 for c in CRITICAL) and "restart" not in args2)
+          not any(c in a for a in args2 for c in CRITICAL) and "restart" not in args2)
 
     # --- 4a-iii. Where the advice is a reboot, OFFER the reboot (ONEUP-0115) --
     # Asked by the user 2026-08-19. ONEUP-0111 refuses to restart a session-critical
@@ -4437,6 +4442,24 @@ def main() -> int:
     check("diagnostics: disabled tasks marked off", "flatpak ✗" in _rep)
     check("diagnostics: home path scrubbed to ~", "/home/ants" not in _rep and "~/x" in _rep)
     check("diagnostics: hostname scrubbed", "boxname" not in _rep and "<host>" in _rep)
+    # ONEUP-0401: the report is for public paste. sudo names the user bare, outside any
+    # home path, and a repository URL can carry a login.
+    import getpass as _gp
+    _orig_user = _gp.getuser
+    _gp.getuser = lambda: "ants"
+    try:
+        _rep_u = _build("1", "x", [], "r.log",
+                        "sudo: ants is not allowed to run sudo\nants: pants fit\n"
+                        "baseurl=https://bob:s3cret@repo.example/oss/ and ftp://carol@m.example/\n",
+                        "w", "/home/ants", "")
+    finally:
+        _gp.getuser = _orig_user
+    check("ONEUP-0401 diagnostics: the user name is scrubbed where it stands alone",
+          "sudo: <user> is not allowed" in _rep_u and "<user>: pants fit" in _rep_u)
+    check("ONEUP-0401 diagnostics: a URL's login is scrubbed, password and all",
+          "s3cret" not in _rep_u and "bob" not in _rep_u and "carol" not in _rep_u
+          and "https://<login>@repo.example/oss/" in _rep_u
+          and "ftp://<login>@m.example/" in _rep_u)
     # ONEUP-0159: openSUSE host names are often words the log also uses, so the scrub
     # matches the name only where it stands alone, never inside a longer token or path.
     _short = _build("1", "x", [], "r.log",

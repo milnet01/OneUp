@@ -422,6 +422,25 @@ def _package_column(text: str) -> list[str] | None:
     return names
 
 
+def _keep_multiversion(names: list[str]) -> list[str]:
+    """`names` less any installed in more than one version, which are kept.
+
+    The removal is by bare name, and `zypper remove <name>` takes EVERY installed
+    version: one old multiversion kernel listed as unneeded would remove them all,
+    the running one included (ONEUP-0401). One `rpm -q` prints a line per installed
+    version, so a name it prints twice is one to keep.
+    """
+    if not names or not shutil.which("rpm"):
+        return names
+    _, out = proc.run(["rpm", "-q", "--qf", "%{NAME}\n", "--", *names])
+    seen = out.split("\n")
+    multi = [n for n in names if seen.count(n) > 1]
+    for name in multi:
+        markers.out(f"  Kept {name}: more than one version is installed, and removing it "
+                    "by name would remove every version.")
+    return [n for n in names if n not in multi]
+
+
 def run_orphans(opts) -> None:
     """Remove packages nothing needs any more; merely REPORT orphaned ones.
 
@@ -462,6 +481,7 @@ def run_orphans(opts) -> None:
                          "The log has the reason.")
         end_step("orphans", "fail", "failed", "unreadable package name in zypper's output")
         return
+    unneeded = _keep_multiversion(unneeded)
     if unneeded:
         markers.out(f"Removing {len(unneeded)} leftover dependency package(s):")
         for name in unneeded:

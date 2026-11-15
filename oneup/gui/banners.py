@@ -329,7 +329,11 @@ def restart_services(win):
     title = QCoreApplication.translate("banners", "Restart services?")
     if QMessageBox.question(win, title, body, QMessageBox.Yes | QMessageBox.No,
                             QMessageBox.No) == QMessageBox.Yes:   # Enter = No (ONEUP-0183)
-        _start_service_restart(win, "pkexec", ["systemctl", "restart", *safe])
+        # Each name goes to root's systemctl as a .service unit, written out: the name
+        # check also accepts "reboot.target", and `systemctl restart reboot.target`
+        # reboots the machine (ONEUP-0401). "reboot.target.service" names no unit.
+        units = [s if s.endswith(".service") else f"{s}.service" for s in safe]
+        _start_service_restart(win, "pkexec", ["systemctl", "restart", *units])
         # Hidden while it runs, and shown again only if the restart fails, so a failed
         # one can be retried. Anything still needing a reboot is carried by the reboot
         # banner, which on_finished has already shown.

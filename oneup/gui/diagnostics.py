@@ -5,6 +5,7 @@ run log, and what zypper's package cache weighs.
 """
 from __future__ import annotations
 
+import getpass
 import os
 import re
 import socket
@@ -82,6 +83,13 @@ def build_diagnostics(version: str, os_pretty: str, enabled: list[str],
     report = "\n".join(out)
     if home:
         report = report.replace(home, "~")
+    # The report is written to be pasted publicly (security.md §7.4). The home path
+    # above is not the only place a user name appears — sudo's "user X is not
+    # allowed" names it bare — and a repository URL can carry a login (ONEUP-0401).
+    report = _URL_LOGIN.sub(r"\1<login>@", report)
+    user = _user_name()
+    if user:
+        report = re.sub(rf"(?<![\w.-]){re.escape(user)}(?![\w-])", "<user>", report)
     if host:
         # Only where the name stands alone (ONEUP-0159): openSUSE host names are often
         # words the log uses too, and `oss` must not rewrite `repo-oss` or `/repo/oss/`.
@@ -89,6 +97,18 @@ def build_diagnostics(version: str, os_pretty: str, enabled: list[str],
         report = re.sub(rf"(?<![\w./-]){re.escape(host)}(?![\w/-])", "<host>", report)
     return report
 
+
+
+# `scheme://user:password@` or `scheme://user@`: everything between the scheme and
+# the @ is the login, whatever it holds.
+_URL_LOGIN = re.compile(r"(\b[a-z][a-z0-9+.-]*://)[^\s/@]+@", re.IGNORECASE)
+
+
+def _user_name() -> str:
+    try:
+        return getpass.getuser()
+    except (KeyError, OSError):
+        return ""
 
 
 def cache_bytes() -> int:

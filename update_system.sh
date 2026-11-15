@@ -2329,6 +2329,21 @@ if step_selected orphans && ! stop_pending && ! $SYS_PARTIAL; then
             break
         fi
     done
+    # A name installed in more than one version (a multiversion kernel) is kept: the
+    # removal is by bare name, and that takes EVERY version (ONEUP-0401).
+    if ! $UNSAFE_PKG && ((${#UNNEEDED[@]})); then
+        mapfile -t MULTI_PKG < <(rpm -q --qf '%{NAME}\n' -- "${UNNEEDED[@]}" 2>/dev/null \
+                                 | sort | uniq -d)
+        if ((${#MULTI_PKG[@]})); then
+            KEEP_PKG=()
+            for pkg in "${UNNEEDED[@]}"; do
+                [[ " ${MULTI_PKG[*]} " == *" $pkg "* ]] || KEEP_PKG+=("$pkg")
+            done
+            printf '  Kept %s: more than one version is installed, and removing it by name would remove every version.\n' \
+                "${MULTI_PKG[@]}"
+            UNNEEDED=("${KEEP_PKG[@]}")
+        fi
+    fi
     if $UNSAFE_PKG; then
         :                                    # end_step already reported the refusal
     elif ((${#UNNEEDED[@]})); then

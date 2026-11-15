@@ -62,7 +62,12 @@ _DU_BIN = shutil.which("du")
 
 # The per-repository refresh budget. It arrives from the environment, so it is
 # pinned to digits where it reaches the sudoers rule rather than trusted here.
-REFRESH_TIMEOUT = os.environ.get("ONEUP_REFRESH_TIMEOUT") or "120"
+# Normalised once, here, so the rule and the call spell it alike: the rule granted
+# `timeout 0120 zypper *` while the call sent `timeout 120`, and a passwordless user
+# met a prompt (ONEUP-0401). Anything but digits stays as given, for the rule to refuse.
+_REFRESH_RAW = os.environ.get("ONEUP_REFRESH_TIMEOUT") or "120"
+REFRESH_TIMEOUT = (str(int(_REFRESH_RAW)) if _REFRESH_RAW.isascii() and _REFRESH_RAW.isdecimal()
+                   else _REFRESH_RAW)
 
 # `sudo timeout <budget> zypper …` — zypper has no timeout of its own, so a
 # crawling mirror is bounded from outside (ONEUP-0048).

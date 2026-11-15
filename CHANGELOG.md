@@ -95,6 +95,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Security
 
+- **Tighter limits on what OneUp asks root to do, and a more private diagnostics report** (ONEUP-0401)
+  Restarting services can now only restart services, never reboot the machine through an
+  odd unit name. Leftover-package removal never removes a package installed in several
+  versions, such as a kernel, by name. Copy diagnostics now hides your user name and any
+  login in a software source's address.
+
 - **Names and notes from outside OneUp are shown as plain text** (ONEUP-0396)
   A software source's name or address, a package's details, and OneUp's own release notes
   could carry formatting OneUp never meant to show. Release notes could even name a file
