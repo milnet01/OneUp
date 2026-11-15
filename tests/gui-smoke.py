@@ -6791,11 +6791,28 @@ for th in theme.THEMES:
             # ONEUP-0350: Spotlight's footer left the line 48 pixels, with the hidden
             # Roll back's slot empty beside it. The longest line a run can leave.
             if _lid == "spotlight":
-                wC2.last_run.setText("Last run: 15 Sept 2026, 19:00  ·  45 days ago  —  "
-                                     "errors  ·  ⚠ overdue")
+                wC2.last_run.setText("Last run: errors  ·  ⚠ overdue  —  "
+                                     "15 Sept 2026, 19:00  ·  45 days ago")
                 check(f"ONEUP-0350 Spotlight shows the whole last-run line ({_label}: "
                       f"{wC2.last_run.width()} for {wC2.last_run.whole_width()})",
                       wC2.last_run.width() >= wC2.last_run.whole_width())
+            # ONEUP-0351: Rows and Rail still cut that line at their smallest size, so the
+            # outcome leads it. What the label paints must still say how the run ended, and
+            # show the warning sign; at Rows' two larger sizes the word "overdue" itself is
+            # cut after the sign (measured 2026-11-15), which the amber colour also carries.
+            from datetime import datetime as _dt
+            from datetime import timedelta as _td
+            paths.HISTORY.write_text(json.dumps(
+                {"when": (_dt.now() - _td(days=45)).isoformat(timespec="seconds"),
+                 "status": "errors"}))
+            wC2.refresh_last_run()
+            _shown = wC2.last_run.fontMetrics().elidedText(
+                wC2.last_run.text(), Qt.TextElideMode.ElideRight,
+                wC2.last_run.contentsRect().width())
+            check(f"ONEUP-0351 the last-run line shows the outcome however it is cut "
+                  f"({_lid}, {_label}: {_shown!r})", "errors" in _shown and "⚠" in _shown)
+            paths.HISTORY.unlink(missing_ok=True)
+            wC2.refresh_last_run()
     _qs.setValue("text_scale", _scale0)
     theme.apply_app_theme(QApplication.instance())
 

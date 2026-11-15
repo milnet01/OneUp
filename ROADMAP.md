@@ -11419,7 +11419,7 @@ when complete (that document's §7).
   Kind: doc.
   Source: review-readme-2026-11-06.
 
-- 📋 [ONEUP-0375] **engine-traps.md's second-sudo_init trap names only the Bash engine's guard and keep-alive.**
+- ✅ [ONEUP-0375] **engine-traps.md's second-sudo_init trap names only the Bash engine's guard and keep-alive.**
   .claude/rules/engine-traps.md, "The suite's prompt counters cannot see a
   second sudo_init inside ONE process", names HELD_AUTH and SUDO_KEEPALIVE.
   The rule file also binds oneup/engine/, where the counterparts are
@@ -11428,6 +11428,11 @@ when complete (that document's §7).
   the held_auth guard; does only the keep-alive check fail?) — the trap's
   claim is a measurement, so it cannot be copied across by analogy.
   Found by the G9 debt sweep (ONEUP-0373).
+  Shipped 2026-11-15 by ONEUP-0392's 43db1a7: the trap now names the
+  Python engine's held_auth and records the re-measurement (removing the
+  guard fails INV-9's count of two and leaves the one-prompt scenario
+  green). SUDO_KEEPALIVE no longer appears; checked by grep of
+  .claude/rules/engine-traps.md.
   **Layman:** A note warning about a test blind spot names only the old engine's parts, so it may not protect the new engine.
   Kind: doc-fix.
   Source: debt-sweep-2026-11-06.
@@ -11999,7 +12004,7 @@ when complete (that document's §7).
   Kind: security.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0409] **On the service route, a fallback before sudo_init runs the download as the bare table row.**
+- ✅ [ONEUP-0409] **On the service route, a fallback before sudo_init runs the download as the bare table row.**
   Split from ONEUP-0401 (2026-11-15). privilege.py:471/483: when
   _service_session() falls back to sudo and sudo_init has not run,
   system-download runs rootops' table argv, so the guard or stop-wrapper
@@ -12007,6 +12012,10 @@ when complete (that document's §7).
   because __main__ calls sudo_init first. Fix: return a sentinel so
   steps._download_pass takes its sudo branch, or refuse system-download
   in root_argv.
+  Shipped 2026-11-15 (114a3ac): _download_pass asks
+  privilege.service_ready() with the session opened, and root_argv
+  refuses system-download. Locked by a py_case forcing the fallback (red
+  against HEAD).
   **Layman:** In a situation OneUp should never reach, pressing Stop during a download might not work.
   Kind: review-fix.
   Source: review-code-2026-11-11.

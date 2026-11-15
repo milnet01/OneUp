@@ -1269,10 +1269,13 @@ class Updater(QMainWindow):
             stamp = QLocale().toString(
                 QDateTime(QDate(when.year, when.month, when.day), QTime(when.hour, when.minute)),
                 "dd MMM yyyy, HH:mm")
+            # The outcome first: where the line is cut at a small window, it loses the
+            # date's tail, never how the run ended (ONEUP-0351, the user's choice
+            # 2026-11-15).
             self.last_run.setText(
                 QCoreApplication.translate(
                     "window",
-                    "Last run: {stamp}  ·  {relative}  —  {value}{overdue}").format(
+                    "Last run: {value}{overdue}  —  {stamp}  ·  {relative}").format(
                     stamp=stamp,
                     relative=relative,
                     value=_last_run_outcome(data['status']),

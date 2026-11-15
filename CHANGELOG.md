@@ -6,6 +6,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The "Last run" line now says how the run ended first, then when** (ONEUP-0351)
+  In a small window the line could be cut before the result. It now reads, for example,
+  "Last run: errors · ⚠ overdue — 01 Oct 2026, 16:33 · 45 days ago", so a cut loses only
+  the date.
+
 ### Fixed
 
 - **Stop works during a download even when OneUp's system service cannot be reached** (ONEUP-0409)
