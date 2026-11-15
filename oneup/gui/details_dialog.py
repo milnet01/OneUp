@@ -19,6 +19,7 @@ from PySide6.QtCore import (
     QObject,
     QProcess,
     QProcessEnvironment,
+    Qt,
     QTimer,
     Signal,
 )
@@ -384,6 +385,9 @@ class PackageDetailsDialog(QDialog):
         line = QLabel(package_views.join_parts(package_views.versions(package), package.repo))
         line.setObjectName("Tagline")
         line.setWordWrap(True)
+        # A package's name, versions and repository are data: shown as typed (ONEUP-0396).
+        for label in (title, line):
+            label.setTextFormat(Qt.TextFormat.PlainText)
         root.addWidget(line)
 
         self.text = QPlainTextEdit(_text_for(store, package))

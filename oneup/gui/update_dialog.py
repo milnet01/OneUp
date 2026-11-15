@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import QCoreApplication
+from PySide6.QtGui import QTextDocument
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -52,6 +53,20 @@ def _kind_message(kind: str) -> str:
     return ""
 
 
+class _NotesBrowser(QTextBrowser):
+    """The release-notes view, which loads no image the notes name (ONEUP-0396).
+
+    The notes arrive over the network, and a Markdown image may name any local file:
+    Qt reads a `file:` image from disk, so one naming a device that never ends, such
+    as `/dev/zero`, would freeze the window. The notes need no images.
+    """
+
+    def loadResource(self, kind, url):
+        if kind == QTextDocument.ResourceType.ImageResource:
+            return None
+        return super().loadResource(kind, url)
+
+
 class UpdateDialog(QDialog):
     """`kind` is self_update.install_kind()'s answer; only an AppImage gets Update now."""
 
@@ -64,7 +79,7 @@ class UpdateDialog(QDialog):
             "update_dialog", "OneUp {offered} is available — you have {installed}.").format(
                 offered=offered, installed=APP_VERSION))
         self.heading.setWordWrap(True)
-        self.notes = QTextBrowser()
+        self.notes = _NotesBrowser()
         self.notes.setOpenLinks(False)
         self.notes.setOpenExternalLinks(False)
         self.notes.setAccessibleName(QCoreApplication.translate("update_dialog",
@@ -114,6 +129,7 @@ class UpdateDialog(QDialog):
         (self.update_btn if kind == "appimage" else self.close_btn).setDefault(True)
 
     def set_notes(self, markdown: str) -> None:
+        """Render the release notes. Their images are never loaded: `_NotesBrowser`."""
         self.notes.setMarkdown(markdown)
 
     def set_notes_unavailable(self) -> None:

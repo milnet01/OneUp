@@ -4774,6 +4774,47 @@ def main() -> int:
         check(f"every {title} RowBorder paints a RowCard over itself",
               all(f.findChild(QFrame, "RowCard") is not None for f in borders))
 
+    # ONEUP-0396: text from outside OneUp is shown as typed. Qt's default AutoText reads a
+    # line that starts with a tag as rich text, so a repository named "<b>x</b>" rendered
+    # bold, and a package's name and repository reached the details dialog the same way.
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QTextDocument
+
+    from oneup.gui import update_dialog
+    _tagged = "<b>Bold repo</b>"
+    _rdlg = repos.RepoManagerDialog(wA, [{"alias": "x", "name": _tagged, "enabled": True,
+                                          "url": "<i>http://example.invalid/</i>"}])
+    _rlabels = [lb for lb in _rdlg.findChildren(QLabel) if "<" in lb.text()]
+    check("ONEUP-0396 a repository's name and URL are shown as typed",
+          len(_rlabels) == 2
+          and all(lb.textFormat() == Qt.TextFormat.PlainText for lb in _rlabels))
+    _orig_text_for = details_dialog._text_for
+    details_dialog._text_for = lambda _store, _pkg: "about"
+    try:
+        _ddlg = details_dialog.PackageDetailsDialog(
+            wA, wA.details, packages.Package("system", "<b>pkg</b>", "1-1", repo="<i>r</i>"))
+        _dlabels = [lb for lb in _ddlg.findChildren(QLabel) if "<" in lb.text()]
+        check("ONEUP-0396 a package's name and repository are shown as typed",
+              len(_dlabels) == 2
+              and all(lb.textFormat() == Qt.TextFormat.PlainText for lb in _dlabels))
+        _ddlg.deleteLater()
+    finally:
+        details_dialog._text_for = _orig_text_for
+    # Qt reads a Markdown image's file: URL from disk (measured: /etc/hostname, 7 bytes),
+    # so release notes naming /dev/zero froze the window. The notes load no image.
+    _img = Path(tempfile.mkdtemp()) / "img.png"
+    _img.write_bytes(b"not really a png")
+    _udlg = update_dialog.UpdateDialog(wA, "9.9.9", "rpm", lambda: None, lambda: None,
+                                       lambda: None)
+    _udlg.set_notes(f"Notes ![x]({_img.as_uri()})")
+    check("ONEUP-0396 release notes still render their text",
+          "Notes" in _udlg.notes.toPlainText())
+    check("ONEUP-0396 an image the release notes name is never read",
+          _udlg.notes.loadResource(QTextDocument.ResourceType.ImageResource,
+                                   QUrl(_img.as_uri())) is None)
+    _udlg.deleteLater()
+    shutil.rmtree(_img.parent, ignore_errors=True)
+
     # INV-7: progress and outcome are spoken. _announce records unconditionally,
     # since QAccessible.isActive() is False offscreen.
     wB = window.Updater()

@@ -200,6 +200,10 @@ class RepoManagerDialog(QDialog):
         url = QLabel(repo["url"])
         url.setObjectName("TaskDesc")
         url.setWordWrap(True)
+        # Names and URLs come from the machine's repository files: shown as typed, never
+        # as rich text (ONEUP-0396). The purpose line quotes none of them today.
+        for label in (name, purpose, url):
+            label.setTextFormat(Qt.TextFormat.PlainText)
         text.addWidget(name)
         text.addWidget(purpose)
         text.addWidget(url)

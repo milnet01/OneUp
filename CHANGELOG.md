@@ -71,6 +71,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Security
 
+- **Names and notes from outside OneUp are shown as plain text** (ONEUP-0396)
+  A software source's name or address, a package's details, and OneUp's own release notes
+  could carry formatting OneUp never meant to show. Release notes could even name a file
+  on your computer as a picture, which could freeze the window. Now none of that happens.
+
 - **The AppImage is built only from fixed, checked versions of its packing tools** (ONEUP-0391)
   Two tools were downloaded at their newest version on every build, unchecked. Each is now a fixed version, and the build stops if a download does not match its recorded fingerprint.
 
