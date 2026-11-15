@@ -326,8 +326,14 @@ sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
   repository files, with `repos.repo_switched_off` (ONEUP-0393).
 - **A re-enable that fails is tried again.** Something else can hold zypp's lock when a
   session ends. The service tries again every 5 seconds for up to 10 minutes, staying up
-  meanwhile, then gives up (ONEUP-0393). The record is in memory only: §6 says what a
-  service that dies loses.
+  meanwhile, then gives up (ONEUP-0393).
+- **The record is on disk as well, in `/var/lib/oneup/paused-sources`** (ONEUP-0406, the
+  user's choice 2026-11-15). It holds every alias a session switched off and the service
+  has not switched back on, including one given up on. An alias is written before its
+  `repo-disable` job starts, and removed once it is back on. When nothing is off, the file
+  is removed. A service that starts and finds the file treats each alias as a failed
+  re-enable and retries it, so a service that died, or a reboot after it, cannot leave a
+  source off for good. It skips an alias no repository defines any more.
 - **A session's CDN directory is deleted when it ends.** The commit after a download
   recovery reuses it, so it lives for the session.
 - **A job outlives its session, and so does the session's clean-up.** A running job is
@@ -449,6 +455,7 @@ LockPersonality=yes  SystemCallArchitectures=native
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 KillMode=process  TimeoutStopSec=30min
 RuntimeDirectory=oneup  RuntimeDirectoryPreserve=yes
+StateDirectory=oneup
 ```
 
 These are left out on purpose, because each would break a package transaction:
@@ -463,6 +470,8 @@ kernel update on 2026-10-16, systemd's `%transfiletriggerin` failed on a read-on
   dies with the service. `RuntimeDirectory=oneup` with `RuntimeDirectoryPreserve=yes`
   keeps `/run/oneup/` across a restart. A killed service must never become a killed
   transaction.
+- **`StateDirectory=oneup`** gives the service `/var/lib/oneup/`, which survives a reboot.
+  It holds one file, `paused-sources` (§4.5).
 - **Idle exit.** With no session and no job for 60 seconds, the service releases its bus
   name and exits. D-Bus starts it again on the next call.
 - **On `SIGTERM`** it refuses new sessions, and `Run` gets `Busy`. A session whose job's
@@ -704,7 +713,7 @@ result that contradicts the design is a fold-back to this spec, not a workaround
 | polkit refuses, non-interactively | an automatic update stands down, as it does today when Passwordless is off |
 | PackageKit's action is not registered | `auto` takes the sudo route and the window keeps the Passwordless switch, as the AppImage does (§4.7). Forced `ONEUP_BACKEND=service` reaches the service, whose polkit check refuses (§4.4 step 6) |
 | polkit does not answer `engine_route` | the service route, as before ONEUP-0286, with §4.7's fallbacks |
-| The service dies mid-job | `KillMode=process` and the job file (§4.3) leave zypper running. The engine's next `Read` fails, with no reply or with `NoSession` from a restarted service; the engine treats that as failure, and the step fails. The journal has the job-start line and no end line. Any repository its sessions disabled stays off: the record of them is in memory only (ONEUP-0406) |
+| The service dies mid-job | `KillMode=process` and the job file (§4.3) leave zypper running. The engine's next `Read` fails, with no reply or with `NoSession` from a restarted service; the engine treats that as failure, and the step fails. The journal has the job-start line and no end line. Any repository its sessions disabled is switched back on by the next service, from `/var/lib/oneup/paused-sources` (§4.5, ONEUP-0406) |
 | The window quits mid-run | unchanged: the engine survives it. If the engine also dies, the service finishes the job and re-enables the session's repositories |
 | Another program holds the zypp lock | unchanged: `release-lock`, then the engine's existing `repos.lock_holder` check |
 | Discover starts PackageKit mid-run | PackageKit's transactions fail at once on zypp's lock, which zypper holds for the transaction, and the run goes on. Measured as §4.12 item 3 |
@@ -839,3 +848,4 @@ Each of these is amended in the commit that lands the matching code:
 | impl | 2026-10-16 | none: an implementation fold-back (write-spec Step 8), no reviewer dispatched | – | – | – | – | **§4.10's old drop-in test was false (ONEUP-0293).** In the ONEUP-0287 clean VM, a first install offered to remove "the Passwordless rule from an earlier OneUp": `sudo -n -l <zypper>` also succeeds under the Live CD's `NOPASSWD: ALL`. The bullet now counts only a `NOPASSWD` entry naming zypper's path. Measured that day with sudo 1.9.17p2 in the VM: `sudo -n -l` prints `(ALL) NOPASSWD: ALL` for the general rule and OneUp's `Cmnd_Alias` expanded, zypper's path first, on one line. Every drop-in since the first (`0001b4f`) grants zypper's bare path. Changed: §4.10's old drop-in bullet. Rule 14: records what the verified build settled; no work still to come is built from it, no gate. |
 | impl-0373 | 2026-11-06 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0373 (the user's order of 2026-11-06 to fix the G9 review's findings before the tag): §10's `--check` line no longer says the check never needs root; it points to ONEUP-0329's `check-dry-run`. An amendment, so no gate (`CLAUDE.md` rule 14). |
 | impl-0393 | 2026-11-12 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0393 closed review theme 1 (2026-11-11 code review). §4.5 now says an alias already off is never recorded, and that a failed re-enable is retried every 5 seconds for up to 10 minutes. INV-6's statement and test clause say the same. §4.9 adds the retry's audit lines. §6's *service dies mid-job* row states the gap that remains: the record is in memory only, queued as ONEUP-0406. |
+| impl-0406 | 2026-11-15 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0406: §4.5's in-memory record of a session's switched-off sources is now also written to `/var/lib/oneup/paused-sources` and restored by the next service; the unit gains `StateDirectory=oneup` (§4.8). Locked by `tests/service-test.py`'s kill-and-restart scenario, red against HEAD. |

@@ -197,6 +197,7 @@ class Rig:
                     "ONEUP_MOCK_DIR": str(d), "PATH": f"{d}{os.pathsep}{os.environ['PATH']}",
                     "PYTHONPATH": str(REPO), "ONEUP_REPOS_DIR": str(d / "repos.d"),
                     "ONEUP_SERVICE_RUNTIME_DIR": str(d / "run"),
+                    "ONEUP_SERVICE_STATE_DIR": str(d / "state"),
                     "ONEUP_SERVICE_IDLE_SECONDS": idle,
                     "ONEUP_SERVICE_RETRY_SECONDS": "0.5"}
         self.procs.append(subprocess.Popen(  # noqa: S603 — this file, fixed argv
@@ -596,6 +597,33 @@ def test_repo_retry(rig: Rig) -> None:
     close(c)
 
 
+def test_repo_after_crash(rig: Rig) -> None:
+    scenario("ONEUP-0406: a source switched off survives the service dying, and comes back on")
+    paused = rig.d / "state" / "paused-sources"
+    c = rig.client()
+    open_session(c)
+    got = run(c, "repo-disable", {"alias": "oss"})
+    check("disabling a real alias runs", got[0] == "ok" and got[2] == "0", got)
+    run(c, "repo-disable", {"alias": "offrepo"})
+    check("the record on disk names it",
+          paused.exists() and paused.read_text().split() == ["oss"],
+          paused.read_text() if paused.exists() else "no record")
+    rig.service.kill()                  # no CloseSession, no clean-up: the in-memory list dies
+    rig.service.wait()
+    close(c)
+    start_at = len(rig.calls())
+    rig.start_service()
+    check("a restarted service switches the recorded source back on",
+          wait_for(lambda: any(line.endswith("modifyrepo --enable oss")
+                               for line in rig.calls()[start_at:]), 10),
+          rig.calls()[start_at:])
+    check("but never one it found already off",
+          not any(line.endswith("modifyrepo --enable offrepo")
+                  for line in rig.calls()[start_at:]), rig.calls()[start_at:])
+    check("and the record is gone once nothing is off",
+          wait_for(lambda: not paused.exists(), 5), paused.read_text() if paused.exists() else "")
+
+
 def test_caps(rig: Rig) -> None:
     scenario("INV-9: one session per caller, eight in all, one job in the service")
     first = rig.client()
@@ -866,7 +894,8 @@ def main() -> int:
         try:
             for test in (test_polkit, test_import_keys, test_validation, test_relay,
                          test_read, test_orphans, test_repo_restore, test_repo_already_off,
-                         test_repo_retry, test_caps, test_stop_download,
+                         test_repo_retry, test_repo_after_crash, test_caps,
+                         test_stop_download,
                          test_client_killed, test_service_killed, test_sigterm, test_audit,
                          test_route):
                 test(rig)

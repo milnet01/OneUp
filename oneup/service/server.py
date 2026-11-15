@@ -142,6 +142,18 @@ class Service:
         self.runtime_dir = Path(os.environ.get("ONEUP_SERVICE_RUNTIME_DIR")
                                 or os.environ.get("RUNTIME_DIRECTORY") or "/run/oneup")
         jobs.clear_stale(self.runtime_dir)
+        # §4.5: every alias a session switched off and the service has not switched back
+        # on, on disk, so a service that dies (and a reboot after it) cannot strand a
+        # source off for good (ONEUP-0406; /var/lib/oneup, the user's choice 2026-11-15).
+        state_dir = Path(os.environ.get("ONEUP_SERVICE_STATE_DIR")
+                         or os.environ.get("STATE_DIRECTORY") or "/var/lib/oneup")
+        self.paused_file = state_dir / "paused-sources"
+        self.gave_up: set[str] = set()     # retries that ran out, kept for the next start
+        self.pending: str | None = None    # the alias a running repo-disable switches off
+        restore = self._read_paused()
+        if restore:
+            audit(f"restoring sources a previous service left off: {','.join(sorted(restore))}")
+            self.retry = [(0, alias, time.monotonic() + RETRY_FOR) for alias in sorted(restore)]
         self.last_busy = time.monotonic()
 
     # --- the loop ---------------------------------------------------------------
@@ -338,6 +350,9 @@ class Service:
             raise Refusal("Invalid", f"could not start {op}: {exc.strerror}") from exc
         self.job = job
         session.job = job
+        if op == "repo-disable" and args["alias"] not in session.found_off:
+            self.pending = args["alias"]
+            self._save_paused()
         session.told = False
         audit(f"job started uid={session.uid} op={op} args={_args_text(args)}")
         self._reply(msg)
@@ -416,6 +431,9 @@ class Service:
         audit(f"job ended uid={session.uid} op={job.op} status={job.status}")
         if self.job is job:
             self.job = None
+        if job.op in ("repo-disable", "repo-enable"):
+            self.pending = None
+            self._save_paused()
 
     # --- Stop, CloseSession, CanUpdate (§4.6, §4.4) ---------------------------------
 
@@ -485,6 +503,7 @@ class Service:
                 session.job.discard()
             audit(f"session ended uid={session.uid} caller={session.owner} "
                   f"why={session.why} re-enabled={','.join(enabled) or '-'}")
+            self._save_paused()
 
     def _retry_reenables(self) -> None:
         """Try a failed re-enable again until it works or `RETRY_FOR` runs out.
@@ -508,9 +527,56 @@ class Service:
                 audit(f"re-enabled on retry uid={uid} alias={alias}")
             elif now >= give_up:
                 audit(f"re-enable gave up uid={uid} alias={alias} status={rc}")
+                self.gave_up.add(alias)
             else:
                 kept.append((uid, alias, give_up))
         self.retry = kept
+        self._save_paused()
+
+    # --- the paused-sources record (§4.5, ONEUP-0406) -------------------------------
+
+    def _paused_now(self) -> set[str]:
+        """Every alias switched off by a session and not yet back on."""
+        held = {alias for session in [*self.sessions.values(), *self.ending]
+                for alias in session.disabled}
+        held.update(alias for _uid, alias, _give_up in self.retry)
+        held.update(self.gave_up)
+        if self.pending:
+            held.add(self.pending)
+        return held
+
+    def _save_paused(self) -> None:
+        """Write the record whole, or remove it when nothing is off. A failed write is
+        audited and the run goes on: the record only matters if the service dies."""
+        paused = self._paused_now()
+        try:
+            if not paused:
+                self.paused_file.unlink(missing_ok=True)
+                return
+            self.paused_file.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.paused_file.with_suffix(".tmp")
+            tmp.write_text("".join(f"{alias}\n" for alias in sorted(paused)))
+            os.replace(tmp, self.paused_file)
+        except OSError as exc:
+            audit(f"paused-sources record not written: {exc.strerror}")
+
+    def _read_paused(self) -> set[str]:
+        """The record a previous service left. Only names `rootops` would accept are
+        taken: the file is root's, but the alias still reaches `zypper`."""
+        try:
+            lines = self.paused_file.read_text().split()
+        except OSError:
+            return set()
+        kept, known = set(), _repo_aliases()
+        for alias in lines:
+            try:
+                rootops.build("repo-enable", {"alias": alias})
+            except rootops.Invalid:
+                audit(f"paused-sources record: ignored {alias!r}")
+                continue
+            if alias in known:            # a repository removed since has nothing to restore
+                kept.add(alias)
+        return kept
 
     # --- properties -----------------------------------------------------------------
 

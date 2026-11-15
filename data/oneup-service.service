@@ -18,6 +18,9 @@ KillMode=process
 TimeoutStopSec=30min
 RuntimeDirectory=oneup
 RuntimeDirectoryPreserve=yes
+# /var/lib/oneup: the sources a session switched off, so a service that dies, or a
+# reboot after it, cannot leave one off for good (ONEUP-0406).
+StateDirectory=oneup
 PrivateTmp=yes
 ProtectClock=yes
 ProtectHostname=yes

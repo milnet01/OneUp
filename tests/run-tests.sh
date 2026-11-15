@@ -5789,6 +5789,9 @@ check "the unit starts the launcher the spec names" "ExecStart=/usr/libexec/oneu
 # trigger failed on a read-only /root and /run/user during a real kernel update.
 check_absent "the unit sets no ProtectHome=" "ProtectHome=" \
     "$(grep -vE '^[[:space:]]*#' "$unit" 2>/dev/null)"
+# ONEUP-0406: the paused-sources record lives in /var/lib/oneup, which systemd makes.
+check "the unit gives the service /var/lib/oneup" "StateDirectory=oneup" \
+    "$(grep -vE '^[[:space:]]*#' "$unit" 2>/dev/null)"
 
 echo "TEST: the service route updates with no sudo and the same markers (ONEUP-0249 INV-8, INV-11, INV-16)"
 # The real service, on a private bus with a fake polkit, run by tests/service-test.py's

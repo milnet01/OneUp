@@ -10574,7 +10574,7 @@ when complete (that document's §7).
   Source: ONEUP-0322-build-2026-10-30.
   Lanes: gui.
 
-- 📋 [ONEUP-0351] **Rows and Rail cut the real last-run line short at their smallest window size.**
+- ✅ [ONEUP-0351] **Rows and Rail cut the real last-run line short at their smallest window size.**
   Measured offscreen 2026-10-30, window at its minimum, the longest line a run
   leaves ("Last run: 15 Sept 2026, 19:00 · 45 days ago — errors · ⚠ overdue"),
   px given/needed. Rows: Normal 191/348, Large 253/411, Larger 342/506.
@@ -10582,6 +10582,9 @@ when complete (that document's §7).
   back's kept slot (137 px) sits beside it, as it did in Spotlight (ONEUP-0350).
   The tooltip holds the whole line. Not fixed with 0350: a second footer line
   makes Rows' minimum height, already the tallest, taller.
+  Decided by the user 2026-11-15: outcome first. Shipped 2026-11-15
+  (a785d2b). At Rows' Large and Larger sizes the word "overdue" is still
+  cut after the ⚠ sign; the sign and amber colour carry it.
   **Layman:** In the Rows and Rail layouts, at the smallest window size, the last-run line can stop before saying how the run ended.
   Kind: fix.
   Source: ONEUP-0350-build-2026-10-30.

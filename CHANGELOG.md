@@ -15,6 +15,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A software source OneUp paused is switched back on even if its background helper crashed** (ONEUP-0406)
+  OneUp's system service now writes down, in /var/lib/oneup, each software source it
+  pauses for an update. If the service dies mid-update, even across a reboot, the next
+  time it starts it switches those sources back on.
+
 - **Stop works during a download even when OneUp's system service cannot be reached** (ONEUP-0409)
   If the system service failed just before the download and OneUp switched to asking
   for the password, the download ran without the part that listens for Stop.
