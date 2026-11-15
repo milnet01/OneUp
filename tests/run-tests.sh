@@ -5133,6 +5133,105 @@ if os.geteuid() == 0:
     raise SystemExit(0)        # root may signal pid 1, so there is nothing to see
 raise SystemExit(0 if runstate._alive(1) else "pid 1 read as gone")'
 
+# ONEUP-0394: two engines meeting one stale record both judged it stale; the first
+# linked its own, and the second then deleted that live record. The judgement must be
+# made holding run.state.lock, which the window's delete and the Bash claim take too.
+echo "TEST: a stale run.state is judged and replaced holding the claim lock"
+py_case "the stale-record decision is made under run.state.lock" '
+import fcntl, os
+from oneup.engine import runstate
+runstate.RUN_STATE.parent.mkdir(parents=True, exist_ok=True)
+runstate.RUN_STATE.write_text("999999999\nold.log\nsystem\n1\n")
+seen = []
+real = runstate.run_state_holder
+def probe():
+    fd = os.open(f"{runstate.RUN_STATE}.lock", os.O_RDWR | os.O_CREAT)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        seen.append("free")
+    except BlockingIOError:
+        seen.append("held")
+    finally:
+        os.close(fd)
+    return real()
+runstate.run_state_holder = probe
+got = runstate.claim_run_state("x.log", "system")
+first = runstate.RUN_STATE.read_text().split("\n", 1)[0]
+ok = got is None and seen and set(seen) == {"held"} and first == str(os.getpid())
+raise SystemExit(0 if ok else f"holder={got} lock={seen} first={first}")'
+
+py_case "with no hard links, the rename fallback leaves a live engine's record alone" '
+import os, subprocess, sys
+from oneup.engine import runstate
+live = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", "oneup.engine"])
+try:
+    runstate.RUN_STATE.parent.mkdir(parents=True, exist_ok=True)
+    record = f"{live.pid}\nother.log\nflatpak\n1\n"
+    runstate.RUN_STATE.write_text(record)
+    def no_links(*_a, **_k):
+        raise PermissionError("no hard links here")
+    os.link = no_links
+    got = runstate.claim_run_state("x.log", "system")
+    kept = runstate.RUN_STATE.read_text()
+finally:
+    live.kill(); live.wait()
+raise SystemExit(0 if got == live.pid and kept == record
+                 else f"holder={got} record now {kept!r}")'
+
+# ONEUP-0394: the record is the run start stamp stop_pending compares against, and it was
+# written only once the password prompt and the lock wait were over — so a Stop pressed
+# during either was older than it and ignored as a leftover.
+echo "TEST: a Stop pressed before run.state is written still counts"
+py_case "a stop requested after the engine began, before its claim, is pending" '
+import os, time
+from oneup.engine import proc, runstate
+runstate.STOP_REQUEST.parent.mkdir(parents=True, exist_ok=True)
+time.sleep(0.05)
+runstate.STOP_REQUEST.touch()          # Stop, pressed during sudo_init or the lock wait
+time.sleep(0.05)
+runstate.claim_run_state("x.log", "system")
+raise SystemExit(0 if proc.stop_requested() else "the early stop was read as a leftover")'
+
+py_case "a stop request older than the engine is still a leftover" '
+import os, time
+from oneup.engine import proc, runstate
+runstate.STOP_REQUEST.parent.mkdir(parents=True, exist_ok=True)
+runstate.STOP_REQUEST.touch()
+past = runstate._BEGAN - 60
+os.utime(runstate.STOP_REQUEST, (past, past))
+runstate.claim_run_state("x.log", "system")
+raise SystemExit(0 if not proc.stop_requested() else "a leftover request stopped the run")'
+
+py_case "a Stop ends the wait for the package lock at once" '
+import time
+from oneup.engine import __main__ as engine, privilege, repos, route, runstate
+repos.lock_holder = lambda: "4242 zypper"
+privilege.chosen_route = lambda: route.SERVICE
+privilege.BUSY_WAIT_SECONDS, privilege.BUSY_POLL_SECONDS = 30, 0.05
+runstate.STOP_REQUEST.parent.mkdir(parents=True, exist_ok=True)
+time.sleep(0.05)
+runstate.STOP_REQUEST.touch()
+began = time.monotonic()
+got = engine._wait_for_lock()
+took = time.monotonic() - began
+raise SystemExit(0 if got and took < 5 else f"waited {took:.1f}s for {got!r}")'
+
+py_case "a run stopped while it waited for the lock ends as stopped, not busy" '
+import contextlib, io, time
+from oneup.engine import __main__ as engine, privilege, repos, runstate
+privilege.sudo_init = lambda: None
+repos.release_zypper_lock = lambda: None
+engine._wait_for_lock = lambda: "4242 zypper"
+runstate.STOP_REQUEST.parent.mkdir(parents=True, exist_ok=True)
+time.sleep(0.05)
+runstate.STOP_REQUEST.touch()
+out = io.StringIO()
+with contextlib.redirect_stdout(out):
+    rc = engine.run(engine.Options(steps="system"), ["system"], "x.log")
+text = out.getvalue()
+ok = rc == 0 and "@@DONE@@|stopped" in text and "busy" not in text
+raise SystemExit(0 if ok else f"rc={rc} out={text[-200:]!r}")'
+
 echo "TEST: an interrupted re-enable leaves the repository to the next cleanup"
 py_case "restore_disabled keeps what it has not yet re-enabled" '
 from oneup.engine import privilege, repos

@@ -256,14 +256,20 @@ def stop_pending() -> bool:
     before it starts. `docs/specs/ONEUP-0054-python-engine.md` §4.1.1 states it:
     with no `run.state` at all no stop is ever honoured.
 
-    The newness test is load-bearing too. The run-state file is written the
-    moment the run commits, so it doubles as the run's start stamp — deleting a
-    leftover request at start-up instead would race, silently swallowing a stop
-    clicked in the moment before the engine got there.
+    The newness test is load-bearing too. The run-state file's mtime is set to
+    when the run began (`runstate.claim_run_state`), so it doubles as the run's
+    start stamp — deleting a leftover request at start-up instead would race,
+    silently swallowing a stop clicked in the moment before the engine got there.
     """
-    global _STOP_ANNOUNCED
     if not stop_requested():
         return False
+    announce_stop()
+    return True
+
+
+def announce_stop() -> None:
+    """Say once that the run is stopping at the user's request."""
+    global _STOP_ANNOUNCED
     if not _STOP_ANNOUNCED:
         _STOP_ANNOUNCED = True
         markers.out("")
@@ -275,7 +281,6 @@ def stop_pending() -> bool:
             "never interrupts an install half-way, because that can leave programs broken. "
             "Run the update again whenever you like."
         )
-    return True
 
 
 def stop_announced() -> bool:

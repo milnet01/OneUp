@@ -16,6 +16,8 @@ the real run's `run.state`
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import hashlib
 import os
 import shutil
@@ -152,6 +154,50 @@ def _prune_by_setting() -> None:
         keep.add(newest)
     prune_logs(log_keep_days(QSettings("OneUp", "OneUp").value("log_keep_days")), keep)
 
+
+
+# What an engine's command line contains: either engine, since both write `run.state`.
+# The same marks as `runstate._ENGINE_MARKS` in the engine.
+ENGINE_MARKS = (b"update_system", b"oneup.engine")
+
+
+def engine_alive(pid: int) -> bool:
+    """Is `pid` a live OneUp engine? The engine's own test (`runstate.run_state_holder`).
+
+    A bare `kill -0` is fooled after a power loss: pids restart at boot, so a stale
+    record's pid can belong to any process, and the window then followed a run that did
+    not exist (ONEUP-0394). The command line is readable for root's processes too, so an
+    engine we may not signal still counts.
+    """
+    try:
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return False
+    return any(mark in cmdline for mark in ENGINE_MARKS)
+
+
+def clear_run_state(pid: int) -> None:
+    """Delete `run.state` if it still names `pid`, holding the engines' claim lock.
+
+    Unlocked, a window deleting a stale record could delete the one a starting engine
+    had just put in its place, and that run's Stop would then do nothing (ONEUP-0394).
+    Same lock file and the same rules as `runstate.claim_lock`; a lock that cannot be
+    had at once is skipped, because the engine's claim removes a stale record itself.
+    """
+    try:
+        fd = os.open(f"{RUN_STATE}.lock", os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+    except OSError:
+        return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with contextlib.suppress(OSError):
+            first = RUN_STATE.read_text(errors="replace").split("\n", 1)[0].strip()
+            if first == str(pid):
+                RUN_STATE.unlink()
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
 
 # The lowest Python the engine runs on: `docs/standards/coding.md` §1's floor. Only
 # the AppImage asks, because only there is the interpreter the machine's own.

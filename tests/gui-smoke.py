@@ -1448,8 +1448,10 @@ def main() -> int:
     import subprocess as _sp
     attach_dir = tempfile.mkdtemp()
     attach_log = os.path.join(attach_dir, "run.log")
-    # A stand-in engine: alive, so the pid check passes, and writing real marker lines.
-    holder = _sp.Popen(["sleep", "60"])  # noqa: S607 — fixed argv.
+    # A stand-in engine: alive, its command line naming oneup.engine so the identity
+    # check passes (ONEUP-0394), and writing real marker lines.
+    holder = _sp.Popen([sys.executable, "-c", "import time; time.sleep(60)",
+                        "oneup.engine"])
     with open(attach_log, "w") as fh:
         fh.write("@@STEP_BEGIN@@|system|1|2\n"
                  "@@PROGRESS@@|system|12|141|download\n")
@@ -1502,6 +1504,18 @@ def main() -> int:
         wB = window.Updater()
         check("a stale record does not lock the app", wB._run_active is False)
         check("a stale record is deleted", not paths.RUN_STATE.exists())
+        # ONEUP-0394: after a reboot the stored pid can belong to any live process. A
+        # pid that exists but is not an engine is a stale record, not a run to follow.
+        stranger = _sp.Popen(["sleep", "60"])  # noqa: S607 — fixed argv.
+        try:
+            paths.RUN_STATE.write_text(f"{stranger.pid}\n{attach_log}\nsystem\n0\n")
+            wC = window.Updater()
+            check("ONEUP-0394 a live pid that is not an engine is not followed",
+                  wC._run_active is False)
+            check("ONEUP-0394 and its record is deleted", not paths.RUN_STATE.exists())
+        finally:
+            stranger.terminate()
+            stranger.wait()
     finally:
         if holder.poll() is None:
             holder.terminate()
@@ -4950,28 +4964,29 @@ def main() -> int:
     race_dir = tempfile.mkdtemp()
     race_log = os.path.join(race_dir, "run.log")
     Path(race_log).write_text("@@STEP_BEGIN@@|system|1|1\n")
-    racer = _sp.Popen(["sleep", "60"])  # noqa: S607 — fixed argv.
+    racer = _sp.Popen([sys.executable, "-c", "import time; time.sleep(60)",
+                       "oneup.engine"])
     orig_rs = paths.RUN_STATE
     paths.RUN_STATE = Path(race_dir) / "run.state"
     paths.RUN_STATE.write_text(f"{racer.pid}\n{race_log}\nsystem\n0\n")
-    real_kill, real_finished = os.kill, run.on_finished
+    real_alive, real_finished = paths.engine_alive, run.on_finished
 
-    def _ends_in_the_gap(pid, sig):
-        if pid == racer.pid and sig == 0:
+    def _ends_in_the_gap(pid):
+        if pid == racer.pid:
             with open(race_log, "a") as fh:
                 fh.write("@@DONE@@|ok\n")
-            raise ProcessLookupError
-        return real_kill(pid, sig)
+            return False
+        return real_alive(pid)
 
     try:
         wR = window.Updater()
         verdicts = []
         run.on_finished = lambda _win, code, _status: verdicts.append(code)
-        os.kill = _ends_in_the_gap
+        paths.engine_alive = _ends_in_the_gap
         try:
             wR._poll_attached_run()
         finally:
-            os.kill, run.on_finished = real_kill, real_finished
+            paths.engine_alive, run.on_finished = real_alive, real_finished
         check("a run ending between the log read and the pid check keeps its verdict",
               verdicts == [0])
     finally:

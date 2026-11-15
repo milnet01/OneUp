@@ -609,6 +609,9 @@ def _wait_for_lock() -> str | None:
     meanwhile waits rather than stopping as busy — and so it waits for YaST or a
     hand-run zypper too, by the user's choice (ONEUP-0329 §4.7, §3 item 9). The sudo
     route runs no check's dry run, and still stops at once (ONEUP-0039).
+
+    A Stop pressed meanwhile ends the wait at once (ONEUP-0394): `run` then reports
+    the run as stopped, not busy.
     """
     holder = repos.lock_holder()
     if not holder or privilege.chosen_route() != route.SERVICE:
@@ -616,7 +619,7 @@ def _wait_for_lock() -> str | None:
     give_up = time.monotonic() + privilege.BUSY_WAIT_SECONDS
     pid, _, name = holder.partition(" ")
     markers.out(f"Waiting for {name or 'another program'} (process {pid}) to finish…")
-    while holder and time.monotonic() < give_up:
+    while holder and time.monotonic() < give_up and not runstate.stop_since_begun():
         time.sleep(privilege.BUSY_POLL_SECONDS)
         holder = repos.lock_holder()
     return holder
@@ -656,6 +659,11 @@ def run(opts: Options, run_keys: list[str], log_file: str, held_auth: bool = Fal
     needs_zypper = any(opts.selected(k) for k in ("system", "orphans", "cache"))
     if needs_zypper:
         holder = _wait_for_lock()
+        if holder and runstate.stop_since_begun():
+            proc.announce_stop()
+            markers.out("  Stopped at your request — nothing was changed.")
+            markers.marker("DONE", "stopped")
+            return 0
         if holder:
             holder_pid, _, holder_name = holder.partition(" ")
             named = holder_name

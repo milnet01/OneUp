@@ -8,6 +8,17 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Pressing Stop while OneUp is still asking for the password, or waiting for another program to finish, now stops the update** (ONEUP-0394)
+  The Stop was ignored as a leftover, and the full update ran anyway. Now no step starts,
+  and the window reports the run as stopped.
+
+- **After a power cut, OneUp no longer follows an update that is not running** (ONEUP-0394)
+  The window could mistake an unrelated program for the interrupted update, and stay
+  locked until that program closed. It now checks that the program really is OneUp.
+
+- **Two updates starting at the same moment can no longer both think they own the run** (ONEUP-0394)
+  When that happened, Stop could stop working for whichever update was still going.
+
 - **Pressing Stop or closing the window again while OneUp tidies up no longer leaves a skipped software source switched off** (ONEUP-0393)
 
 - **Skipping a software source that was already switched off no longer switches it on at the end** (ONEUP-0393)

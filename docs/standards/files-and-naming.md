@@ -248,6 +248,7 @@ that has none:
 | Path or setting | Default | Used by | Override |
 | --- | --- | --- | --- |
 | Run record | `~/.local/state/oneup/run.state` | both | `ONEUP_RUN_STATE` — **engine only** |
+| Run-record claim lock | `run.state.lock`, beside the run record | both | none of its own: it follows `ONEUP_RUN_STATE` (ONEUP-0394) |
 | Stop request | `~/.local/state/oneup/stop.request` | both | `ONEUP_STOP_FILE` — **engine only** |
 | Hold stamp | `~/.local/state/oneup/hold.state` | both | `ONEUP_HOLD_STATE` — **engine only** |
 | Go-ahead request | `~/.local/state/oneup/go.request` | both | `ONEUP_GO_FILE` — **engine only** |

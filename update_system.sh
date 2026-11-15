@@ -1102,12 +1102,26 @@ run_state_holder() {
 # to replace a record that is already there — so two engines cannot both own it. A
 # record that is there but stale is removed and the link retried once. Returns 1 when a
 # live engine holds it, 2 when the record could not be written at all.
+#
+# The claim holds run.state.lock, the Python engine's claim_lock file (ONEUP-0394):
+# unlocked, two engines meeting one stale record could both judge it stale, and the
+# second then removed the first one's live record. A lock not had in five seconds, or
+# no flock at all, leaves the claim unlocked as before rather than holding up the run.
 claim_run_state() {
-    local tmp
+    local tmp rc claim_fd='' lock_file="$RUN_STATE_FILE.lock"
     mkdir -p "$(dirname "$RUN_STATE_FILE")" 2>/dev/null
     tmp=$(mktemp "$RUN_STATE_FILE.XXXXXX" 2>/dev/null) || return 2
     printf '%s\n%s\n%s\n%s\n' "$$" "$LOG_FILE" "$STEPS" "$(date +%s)" > "$tmp" \
         || { rm -f "$tmp"; return 2; }
+    { exec {claim_fd}>>"$lock_file"; } 2>/dev/null \
+        && flock -w 5 "$claim_fd" 2>/dev/null
+    claim_run_state_locked "$tmp"; rc=$?
+    [[ -n "$claim_fd" ]] && exec {claim_fd}>&-
+    return "$rc"
+}
+
+claim_run_state_locked() {
+    local tmp=$1
     for _ in 1 2; do
         if ln "$tmp" "$RUN_STATE_FILE" 2>/dev/null; then
             rm -f "$tmp"
@@ -1120,6 +1134,11 @@ claim_run_state() {
         rm -f "$RUN_STATE_FILE"
     done
     # A filesystem without hard links still gets the whole-file guarantee from rename.
+    # A rename replaces whatever is there, so ask first, or it overwrites a live record.
+    if run_state_holder >/dev/null; then
+        rm -f "$tmp"
+        return 1
+    fi
     mv -f "$tmp" "$RUN_STATE_FILE" 2>/dev/null || { rm -f "$tmp"; return 2; }
 }
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import atexit
 import contextlib
+import fcntl
 import os
 import sys
 import tempfile
@@ -88,6 +89,10 @@ def resolve_log_path(explicit: str | None) -> str:
 # Only the process that WROTE the run-state file clears it, so a `--check` or a
 # `--size` run cannot erase a real run's record.
 _RUN_STATE_OWNED = False
+
+# When this run began: the engine's start, or a held preview's go-ahead. Taken at
+# import, before authentication, so a Stop pressed during the password prompt counts.
+_BEGAN = time.time()
 
 
 def clear_owned_state() -> None:
@@ -257,8 +262,16 @@ def claim_run_state(log_file: str, steps: str) -> int | None:
     so two engines cannot both own it (ONEUP-0145). A stale record is removed
     and the link retried once. A record that cannot be written at all leaves
     the run going ahead unowned. The Bash engine's `claim_run_state` is the twin.
+
+    The whole claim runs under `claim_lock` (ONEUP-0394). Without it two engines
+    meeting one stale record could both judge it stale: the first removed it and
+    linked its own, and the second then removed the FIRST engine's live record.
+
+    The record's mtime is then set back to when this run began, because
+    `stop_pending` reads it as the run's start: a Stop pressed during the
+    password prompt or the lock wait would otherwise be older than the record
+    and ignored as a leftover (ONEUP-0394).
     """
-    global _RUN_STATE_OWNED
     try:
         tmp = _temp_beside(RUN_STATE,
                            f"{os.getpid()}\n{log_file}\n{steps}\n{int(time.time())}\n")
@@ -267,26 +280,96 @@ def claim_run_state(log_file: str, steps: str) -> int | None:
         # a window cannot follow it, but an update must not fail over its record.
         return None
     try:
-        for _ in range(2):
-            try:
-                os.link(tmp, RUN_STATE)
-                _RUN_STATE_OWNED = True
-                return None
-            except FileExistsError:
-                holder = run_state_holder()
-                if holder is not None:
-                    return holder
-                with contextlib.suppress(OSError):
-                    RUN_STATE.unlink()
-            except OSError:
-                break                      # no hard links here: fall back to a rename
-        with contextlib.suppress(OSError):
-            os.replace(tmp, RUN_STATE)
-            _RUN_STATE_OWNED = True
-        return None
+        with claim_lock():
+            holder = _link_or_replace(tmp)
+        if holder is None and _RUN_STATE_OWNED:
+            with contextlib.suppress(OSError):
+                os.utime(RUN_STATE, (_BEGAN, _BEGAN))
+        return holder
     finally:
         with contextlib.suppress(OSError):
             tmp.unlink()
+
+
+def _link_or_replace(tmp: Path) -> int | None:
+    """`claim_run_state`'s write, made while holding `claim_lock`."""
+    global _RUN_STATE_OWNED
+    for _ in range(2):
+        try:
+            os.link(tmp, RUN_STATE)
+            _RUN_STATE_OWNED = True
+            return None
+        except FileExistsError:
+            holder = run_state_holder()
+            if holder is not None:
+                return holder
+            with contextlib.suppress(OSError):
+                RUN_STATE.unlink()
+        except OSError:
+            break                          # no hard links here: fall back to a rename
+    # A rename replaces whatever is there, so ask first: without this a filesystem
+    # with no hard links let a second engine overwrite a live run's record.
+    holder = run_state_holder()
+    if holder is not None:
+        return holder
+    with contextlib.suppress(OSError):
+        os.replace(tmp, RUN_STATE)
+        _RUN_STATE_OWNED = True
+    return None
+
+
+# How long a claim waits for another process's claim to finish. A claim takes
+# microseconds, so this only matters when the holder has stalled; then the claim
+# goes ahead unlocked, as before the lock existed, rather than holding up an update.
+CLAIM_LOCK_SECONDS = 5.0
+
+
+@contextlib.contextmanager
+def claim_lock():
+    """Hold `run.state.lock` while deciding about and changing `run.state`.
+
+    Taken by both engines' claim and by the window before it deletes a stale
+    record — flock(2) on one file, so the Bash `flock` and this one exclude each
+    other. The lock file is never deleted: removing it would let two processes
+    lock two different files of the same name. It sits beside `run.state`, so the
+    suite's redirect of that file carries the lock with it. A lock that cannot be
+    had in time, or a file that cannot be opened, leaves the caller unlocked.
+    """
+    try:
+        fd = os.open(f"{RUN_STATE}.lock", os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+    except OSError:
+        fd = -1
+    try:
+        give_up = time.monotonic() + CLAIM_LOCK_SECONDS
+        while fd >= 0:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= give_up:
+                    break
+                time.sleep(0.05)
+            except OSError:
+                break
+        yield
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
+def mark_begun() -> None:
+    """Restamp this run's start: a held preview's run begins at its go-ahead."""
+    global _BEGAN
+    _BEGAN = time.time()
+
+
+def stop_since_begun() -> bool:
+    """Was Stop pressed after this run began, before it wrote `run.state`?
+
+    For the waits before the claim (the lock wait), where `stop_pending` cannot
+    answer yet because the record it compares against does not exist.
+    """
+    return _newer_than(STOP_REQUEST, _BEGAN)
 
 
 
@@ -344,6 +427,7 @@ def hold_for_go_ahead(log_file: str, size: str, launch_pid: int, window_pid: int
             # leftovers at start-up instead would race a go-ahead pressed in
             # that very moment.
             if _newer_than(GO_REQUEST, stamp):
+                mark_begun()
                 return GO_REQUEST.read_text(errors="replace").split("\n", 1)[0].strip()
             if _newer_than(STOP_REQUEST, stamp):
                 return None                              # Cancel

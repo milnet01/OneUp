@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import itertools
 import json
-import os
 import sys
 import time
 from datetime import datetime
@@ -854,8 +853,8 @@ class Updater(QMainWindow):
 
     def _read_run_state(self):
         """The engine's record of a run in flight: (pid, log path, steps). None when
-        there is no run, or when the record is stale — a pid that no longer exists means
-        the engine was killed before it could clean up, so the record is deleted."""
+        there is no run, or when the record is stale — a pid that is not a live engine
+        means the engine was killed before it could clean up, so the record is deleted."""
         try:
             lines = paths.RUN_STATE.read_text().splitlines()
         except OSError:
@@ -863,13 +862,9 @@ class Updater(QMainWindow):
         if len(lines) < 3 or not lines[0].isdecimal():
             return None
         pid = int(lines[0])
-        try:
-            os.kill(pid, 0)          # signal 0 = "does this pid exist?", changes nothing
-        except ProcessLookupError:
-            paths.RUN_STATE.unlink(missing_ok=True)
+        if not paths.engine_alive(pid):
+            paths.clear_run_state(pid)
             return None
-        except PermissionError:
-            pass                     # alive, just not ours to signal
         return pid, lines[1], lines[2]
 
     def _attach_to_running_engine(self):
@@ -913,13 +908,7 @@ class Updater(QMainWindow):
         run write its @@DONE@@ and exit in the gap: the read saw no verdict, the pid was
         gone, and a successful run was recorded as failed. Asked first, a run found
         gone has already written everything it will write, so the read below has it."""
-        try:
-            os.kill(self._attached_pid, 0)
-            alive = True
-        except PermissionError:
-            alive = True                            # alive, just not ours to signal
-        except ProcessLookupError:
-            alive = False
+        alive = paths.engine_alive(self._attached_pid)
         try:
             with self._attached_log.open("rb") as fh:
                 fh.seek(self._attached_pos)
@@ -940,7 +929,7 @@ class Updater(QMainWindow):
         if alive:
             return                                  # still going
         self._attach_timer.stop()
-        paths.RUN_STATE.unlink(missing_ok=True)
+        paths.clear_run_state(self._attached_pid)
         # No exit code to read for someone else's process, so the run's own @@DONE@@ is
         # the verdict. A run killed before printing one is reported as errors rather
         # than success — never claim an outcome the run didn't actually report.

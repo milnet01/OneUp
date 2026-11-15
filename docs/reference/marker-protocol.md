@@ -533,7 +533,9 @@ this file, and finding nothing would suggest there is nothing to agree on.
   and follow its log (`Updater._attach_to_running_engine`). It appears whole or not at
   all, never truncated mid-write (ONEUP-0177). An engine that finds it owned by another
   live engine refuses to run rather than take it over, because the first to exit would
-  delete it and leave the other's Stop dead (ONEUP-0145).
+  delete it and leave the other's Stop dead (ONEUP-0145). Both engines' claim and the
+  window's delete of a stale record hold `run.state.lock`, an `flock` on a file beside it
+  (ONEUP-0394); `docs/specs/ONEUP-0054-python-engine.md` §4.1.1 has the rules.
 - **`stop.request`** — created by the *window* to ask for a stop. The engine reads it only
   at safe boundaries (`docs/standards/security.md` §6). A request not newer than `run.state`, or
   with no `run.state` at all, is a leftover and is ignored — except during a `--hold` wait,
