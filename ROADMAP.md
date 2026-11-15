@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=411 -->
+<!-- ants-roadmap-id-high-water: ONEUP=412 -->
 
 # OneUp Roadmap
 
@@ -12053,3 +12053,19 @@ when complete (that document's §7).
   **Layman:** If OneUp is force-closed in the middle of an update without its background helper, a software source it paused can stay off.
   Kind: review-fix.
   Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0412] **Every package marker still refreshes every package view, so a large run's cost grows with the square of its size.**
+  Split from ONEUP-0386 (2026-11-15). Measured offscreen, Rows layout:
+  1.06 ms a PKG line at 3000 packages (6.35 s a run) after 276e0a8's
+  set_packages fast path, 1.96 ms before. cProfile at 2000 packages:
+  PackageModel.packages() runs about nine times a line, plus
+  package_views' counting sums and details_dialog._wanting_baseline,
+  each over every package. The review's fix: coalesce PackageModel's
+  notify on a zero-delay timer, as _defer_refit does. Design decision:
+  the views would then lag a marker by one event-loop pass, and
+  tests/gui-smoke.py asserts on views straight after handle_line, so
+  those scenarios need a flush. Measurement script:
+  /mnt/Emulators/.claude/Scratchpad/OneUp/0402/measure-pkg.py.
+  **Layman:** During a very large update, the window spends several seconds redrawing its package list over and over.
+  Kind: perf.
+  Source: ONEUP-0386-measure-2026-11-15.
