@@ -8738,6 +8738,15 @@ when complete (that document's §7).
   (wZ, win, wSF), which _reap_windows rightly treats as reachable.
   Releasing them means a del per scenario or narrowing each closure -
   smaller gain than ONEUP-0267's, so filed as considered, not planned.
+  Re-measured 2026-11-15 (cProfile of tests/gui-smoke.py, 1255 checks):
+  the 63 theme applies take 81.9 s of the suite's 146.7 s. Before the
+  first apply of the theme section, 177 Updater windows are alive: 52
+  bound to local names, the rest held through about 370 closure cells.
+  So the gain is larger than this item assumed, and the fix is a
+  restructure (each scenario in a function of its own, so its windows go
+  when it returns), not a del per name. Probe:
+  /mnt/Emulators/.claude/Scratchpad/OneUp/0402/find-live.py. Left for
+  the user to schedule.
   **Layman:** The window tests still keep about 30 old test windows alive; releasing them would make the tests a little faster again.
   Kind: perf.
   Source: in-session-2026-10-13, measured after ONEUP-0267.
