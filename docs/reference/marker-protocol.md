@@ -521,6 +521,14 @@ reader who trusts them writes a wrong parser:
 Left as-is rather than patched: the fallback is frozen at the switch-over, and none of them is a defect in running code. This
 document is the authority.
 
+**The fallback's payloads also predate ONEUP-0072.** A step end can carry prose, or an empty
+code, where §4.2 expects a badge code; `CHECK_UNKNOWN` and the `REBOOT` reason carry prose
+where §4.6 and §4.8 expect codes. Its `hold.state` line 1 is `$$`, the re-exec'd engine,
+where §8 expects the `systemd-inhibit` wrapper's pid, so a window never adopts its hold.
+A window following a fallback run through `run.state` reads these by this document's rules.
+Left as-is for the same reason: the fallback is fixed only where a run from a terminal
+meets a defect (ONEUP-0404).
+
 ## 8. The four state files — a contract this protocol does *not* cover
 
 `<state>/oneup/run.state`, `stop.request`, `hold.state` and `go.request` — where
