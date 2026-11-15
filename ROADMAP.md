@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=415 -->
+<!-- ants-roadmap-id-high-water: ONEUP=440 -->
 
 # OneUp Roadmap
 
@@ -12147,3 +12147,339 @@ when complete (that document's §7).
   **Layman:** A few window actions make OneUp pause briefly while it does work that could happen in the background or be remembered.
   Kind: perf.
   Source: review-code-perf-2026-11-10.
+
+- 📋 [ONEUP-0416] **Turning passwordless off, or re-granting it, skips the password check and then runs a root rm the rule does not grant.**
+  review-code 2026-11-15, lane 01 HIGH (calibrated HIGH, security.md
+  §5.5 consent). actions.py revoke_auth calls privilege.sudo_init(),
+  which returns early when actions.auth_current() is true
+  (privilege.py `if actions.auth_current(): return`, verified), then runs
+  `sudo rm -f` on the drop-in and guards. rm is not in auth_cmnds
+  (verified), and with no box prompt _REASK_WITH_BOX stays off, so from
+  the window the rm has no way to ask. grant_auth has the same flaw when
+  it re-grants. Lane file:
+  /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/lane-01-engine-run-core.md.
+  Open: whether sudo falls back to askpass here (unsettled read-only;
+  measure on the VM).
+  **Layman:** Switching off OneUp's password-free updates may fail from the window, because a step it needs is not covered by the password-free rule.
+  Kind: security.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0417] **The Bash fallback's --grant-auth still names binaries found through the user's PATH.**
+  review-code 2026-11-15, lane 12 HIGH, calibrated HIGH -> MEDIUM
+  (terminal only, frozen fallback). update_system.sh `zypper=$(command -v
+  zypper)` and the lines after it build the drop-in and the guard text
+  from PATH: ONEUP-0408's defect, in the Bash copy. A run from a terminal
+  meets it, so the frozen-fallback rule allows the fix (CLAUDE.md §4).
+  Fix as 0408 did: resolve in /usr/sbin:/usr/bin:/sbin:/bin. security.md
+  §5.2 then drops its note that the two engines resolve differently.
+  **Layman:** The old backup update script can still give password-free rights to a program in your own folders.
+  Kind: security.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0418] **While Update waits for the size preview, a second tick can start a second engine, and a failed go-ahead write leaves Update dead.**
+  review-code 2026-11-15, lane 05, two MEDIUM. run.py: the hold-wait
+  tick runs again while its own QMessageBox.warning is open (re-entrant;
+  `win._go_write_failed = False`), so the fallback can _launch twice.
+  And after a failed go.request write the fallback _launch is refused by
+  the second-engine guard while the preview runs, so Update does nothing
+  (INV-7). Not the settled no-ceiling question (ONEUP-0044 impl-0403):
+  both are new claims. Lane file: lane-05-gui-run-driver.md in
+  /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  **Layman:** In rare cases the Update button can start two updates at once, or stop responding after a disk error.
+  Kind: review-fix.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0419] **Environment values reach root commands and tight loops unchecked.**
+  review-code 2026-11-15, theme (a), four lanes independently:
+  - actions.py GUARD_FILE/AUTH_FILE from ONEUP_GUARD_FILE and
+    ONEUP_AUTH_FILE land in the NOPASSWD rule (lane 01, MEDIUM; §5 is
+    outside the trusted-environment exclusion).
+  - update_system.sh GUARD_FILE (lane 12).
+  - steps.py: ONEUP_STOP_POLL_SECONDS goes raw into the root sleep on the
+    sudo route; the service route parses it (lane 02; readability lead
+    confirmed this).
+  - update_system.sh STOP_POLL_SECONDS (lane 12).
+  - privilege.py: a keep-alive interval of 0 busy-loops; a bad
+    BUSY_WAIT raises at import (privilege.py, rootops.py; lane 03).
+  Lane files in /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  **Layman:** Some settings OneUp reads at start are used without checking them, in places where a bad value matters.
+  Kind: security.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0420] **A failed query reads as "nothing there", and the run goes on as if it succeeded.**
+  review-code 2026-11-15, theme (b), five lanes independently:
+  - steps.py multiversion guard fails open: rpm's exit status is
+    discarded (lane 02, MEDIUM, verified).
+  - package_details.py: an rpm failure shows as "no change notes"
+    (lane 09, MEDIUM).
+  - repos.py, rollback.py: a pkexec CrashExit reads as applied (lane 08).
+  - release.sh: an unchecked cp still reports OBS success (lane 13,
+    MEDIUM).
+  - steps.py: a changed zypper table reads as "nothing to remove"
+    (lane 02).
+  Lane files in /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  **Layman:** When a check OneUp relies on fails, it sometimes carries on as though the answer were "none".
+  Kind: review-fix.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0421] **A --skip-repo source that fails to switch off is skipped silently in both engines.**
+  review-code 2026-11-15, theme (c): steps.py's skip_repos loop ignores
+  disable_repo's False (lane 02, MEDIUM) and update_system.sh does the
+  same (lane 12, with its cleanup re-enable). The run then fails on the
+  source the user asked to skip, with no line saying why.
+  **Layman:** If OneUp cannot pause a broken software source you asked it to skip, it does not say so.
+  Kind: review-fix.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0422] **Failure patterns matched against the whole transaction log also match package names.**
+  review-code 2026-11-15, theme (d): steps.py's error patterns
+  (`No space left|...|conflict`, `...|metadata|...|Curl|...`,
+  `Timeo...`), repos.py's and the Bash kernel reboot reason in
+  update_system.sh are searched across lines that include package names
+  (lanes 02 and 12). The lane says the spec is also at fault, so the
+  spec's patterns change with the code. Lane files in
+  /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  **Layman:** OneUp can misread an update's log when a package's name happens to contain a word like "metadata" or "timeout".
+  Kind: review-fix.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0423] **A full or unwritable disk breaks log and state writes before the run can say why; replaced files skip fsync.**
+  review-code 2026-11-15, themes (e) and (g):
+  - runstate.py opens the log unguarded before any marker (lane 01).
+  - proc.py opens its log after the root zypper has started (lane 03,
+    order verified).
+  - steps.py (lane 02).
+  - server.py's paused-sources write (ONEUP-0406's) and paths.py's
+    write_whole replace with no fsync (lanes 04 and 08).
+  Lane files in /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  **Layman:** On a full disk, OneUp can fail before it shows any message, and two small files might not survive a power cut.
+  Kind: review-fix.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0424] **Some calls have no time limit or no Stop check: OpenSession, the service's captured runs, a refresh loop.**
+  review-code 2026-11-15, theme (f):
+  - service_client.py OpenSession, non-interactive, has no timeout
+    (lane 03, MEDIUM).
+  - jobs.py run_captured on the service's main loop has no timeout
+    (lane 04, MEDIUM).
+  - repos.py (lane 02).
+  - update_system.sh's per-repo probe (lane 12, MEDIUM).
+  The readability review's lead on server.py's CanUpdate threads, which
+  are unbounded and uncounted, belongs here too. Lane files in
+  /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  **Layman:** A few of OneUp's waits could hang for a long time if another program stops answering.
+  Kind: review-fix.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0425] **Engine findings from the 2026-11-15 review not in a theme.**
+  review-code 2026-11-15, lanes 01-03 (engine). MEDIUM:
+  - runstate.py: the go.request freshness test is strictly newer than
+    the hold stamp, so a same-second write is refused.
+  - proc.py: the TimeoutExpired branch's kill_group and wait.
+  - pkgsizes.py: the byte pattern's g.decode() raises on non-UTF-8
+    bytes, and ElementTree would have read them (new with ONEUP-0386,
+    276e0a8).
+  Plus the LOW rows in lane-01/02/03 files at
+  /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/
+  (9, 5 and 7). Verify each against HEAD before fixing.
+  **Layman:** Smaller problems in OneUp's updater engine found by the code review.
+  Kind: review-fix.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0426] **System service findings from the 2026-11-15 review not in a theme.**
+  review-code 2026-11-15, lane 04. MEDIUM:
+  - server.py _retry_reenables skips an alias a live session holds,
+    which may drop it for good.
+  - server.py main builds Service() (which clears stale job files)
+    before RequestName, so a second instance can clear the first's live
+    job files.
+  Plus 12 LOW rows in lane-04-system-service.md at
+  /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  **Layman:** Smaller problems in OneUp's background helper found by the code review.
+  Kind: review-fix.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0427] **Window findings from the 2026-11-15 review not in a theme.**
+  review-code 2026-11-15, lanes 05, 06 and 08-11. MEDIUM:
+  - run.py release_engine and a held preview.
+  - app.py builds Updater() before _arm_single_instance, so two copies
+    at login each build a window.
+  - tray.py stale-socket recovery; a listen() failing for another
+    reason exits with no window and no message (the readability review
+    found it too).
+  - autostart.py: an old passwordless answer can cancel a newer
+    auto-update enable.
+  - auth.py _stand_down_autoupdate (changed by ONEUP-0403).
+  - repos.py removerepo by number: zypper accepts a number (verified
+    `zypper lr 1`), so an alias spelled like a number may hit the wrong
+    repository.
+  - details_dialog.py baseline timer.
+  - theme.py switch focus derivation.
+  - banners.py: the services restart accepts systemd-reboot.service
+    (calibrated MEDIUM; a Yes/No box guards it).
+  - placement.py, two rows.
+  - i18n.py.
+  Plus the LOW rows in each lane file at
+  /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  **Layman:** Smaller problems in OneUp's window found by the code review.
+  Kind: review-fix.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0428] **Self-update findings from the 2026-11-15 review.**
+  review-code 2026-11-15, lane 07. MEDIUM:
+  - update_dialog.py _NotesBrowser.loadResource passes every
+    non-image resource to the base class (a stylesheet? the Qt Markdown
+    claim was inconclusive offscreen; route: write-test).
+  - app_update.py: an AppImage release missing its .sig is offered
+    anyway, or not, as the two branches disagree.
+  Plus 5 LOW rows in lane-07-self-update.md. The double copy of the
+  download is ONEUP-0415's.
+  **Layman:** Smaller problems in how OneUp updates itself, found by the code review.
+  Kind: review-fix.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0429] **Bash fallback findings from the 2026-11-15 review that a terminal run meets.**
+  review-code 2026-11-15, lane 12. The fallback is fixed only where a
+  terminal run meets a defect (CLAUDE.md §4), so triage each first.
+  MEDIUM:
+  - update_system.sh: neither root wrapper (inline or installed guard)
+    forwards a signal to the backgrounded zypper.
+  - `fwupdmgr update -y` may answer the restart prompt yes; fwupdmgr
+    has --no-reboot-check (verified in --help), which the Python engine
+    passes.
+  - the per-repo probe and the skip-repo cleanup are in ONEUP-0424 and
+    ONEUP-0421.
+  Plus 9 LOW rows in lane-12-bash-fallback-engine.md.
+  **Layman:** Problems in the old backup update script that someone running it by hand could hit.
+  Kind: review-fix.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0430] **Release tooling findings from the 2026-11-15 review.**
+  review-code 2026-11-15, lane 13. MEDIUM:
+  - release.sh: the OBS cp is unchecked (in ONEUP-0420).
+  - release.yml never checks the tag against APP_VERSION.
+  - release.yml grants contents: write workflow-wide (zizmor would
+    catch it; zizmor is not in local-CI).
+  Plus 11 LOW rows in lane-13-release-tooling.md at
+  /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  **Layman:** Smaller problems in the scripts that publish OneUp releases.
+  Kind: review-fix.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0431] **Two checks the code review found missing from local CI: vulture for unused names, zizmor for workflows.**
+  review-code and review-readability 2026-11-15, Tool gaps. Real
+  gaps: oneup/gui/steps.py DETAIL_NAMES has no reader (vulture), and
+  release.yml's workflow-wide contents: write (zizmor). Not gaps: the
+  ruff BLE001/S110 tags, which do not fire on those shapes. Decide
+  whether local-CI runs vulture and zizmor, then drop DETAIL_NAMES.
+  **Layman:** Two automatic checks would have caught problems the review had to find by hand.
+  Kind: chore.
+  Source: review-code-2026-11-15.
+
+- 📋 [ONEUP-0432] **Two docstrings state the opposite of the code: service_client's only caller, and the tray icon rebuild.**
+  review-readability 2026-11-15, the two HIGH, both premises confirmed:
+  - oneup/engine/service_client.py module docstring says privilege is
+    the only caller; steps.py and actions.py call it too.
+  - oneup/gui/tray.py says apply_app_theme rebuilds the icon; app.py
+    says it deliberately does not, and app.py and window.py call
+    tray.refresh_icon themselves.
+  Comment-only, one edit each.
+  **Layman:** Two notes in OneUp's code describe it wrongly, which could lead someone changing it astray.
+  Kind: doc-fix.
+  Source: review-readability-2026-11-15.
+
+- 📋 [ONEUP-0433] **Readability findings in the engine and the system service (2026-11-15).**
+  review-readability 2026-11-15, lanes 01-04: MEDIUM and LOW rows,
+  one line each with a premise mark, in message-1.md at
+  /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-readability-2026-11-15/
+  (full text in lanes/*.result). Examples: the guard's two paths typed
+  by hand in several places, three copies of write-temp-then-rename,
+  reason/why naming in _reboot_and_services, help text missing --hold
+  and --emit-guard. Rows marked unchecked are verified before fixing.
+  **Layman:** Places in OneUp's engine where someone changing the code could easily go wrong.
+  Kind: refactor.
+  Source: review-readability-2026-11-15.
+
+- 📋 [ONEUP-0434] **Readability findings in the window (2026-11-15).**
+  review-readability 2026-11-15, lanes 05, 06 and 08-11: MEDIUM and
+  LOW rows in message-1.md at
+  /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-readability-2026-11-15/
+  (full text in lanes/*.result). Includes private members used across
+  modules (markers._format_size, banners._show_warning,
+  tray._apply_tray_total and others; a tool-gap tag). Rows marked
+  unchecked are verified before fixing.
+  **Layman:** Places in OneUp's window code where someone changing it could easily go wrong.
+  Kind: refactor.
+  Source: review-readability-2026-11-15.
+
+- 📋 [ONEUP-0435] **Readability findings in self-update, release tooling and the Bash fallback (2026-11-15).**
+  review-readability 2026-11-15, lanes 07, 12 and 13: rows in
+  message-1.md at
+  /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-readability-2026-11-15/.
+  Lane 12's rows are refactors of the frozen fallback; per CLAUDE.md §4
+  only what a terminal run meets is fixed, and the rest is dropped with
+  that reason.
+  **Layman:** Places in OneUp's release scripts and old backup script where someone changing them could go wrong.
+  Kind: refactor.
+  Source: review-readability-2026-11-15.
+
+- 📋 [ONEUP-0436] **Correctness leads from the 2026-11-15 readability review, most unchecked.**
+  review-readability 2026-11-15, synthesis part 3: 33 leads, two
+  confirmed (the STOP_POLL raw argv, now in ONEUP-0419; DETAIL_NAMES,
+  in the tool-gap item). The rest are unchecked. Among them: actions.py
+  _spill leaving the sudoers temp file on a second OSError;
+  privilege.py _service_root dropping flags on fallback;
+  sign-release.py signing a v-prefixed version that every installed copy
+  refuses; release.sh `cd ""` when mktemp fails; banners.py's "exit code
+  -1" for a reboot that could not start. Full list:
+  message-2-synthesis.md at
+  /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-readability-2026-11-15/.
+  Verify each, then fix or drop it with the reason.
+  **Layman:** Possible bugs the readability review noticed in passing, still to be confirmed.
+  Kind: review-fix.
+  Source: review-readability-2026-11-15.
+
+- 📋 [ONEUP-0437] **Release notes still render raw HTML from a GitHub release body, which ONEUP-0396's changelog line says no longer happens.**
+  verify-delivery 2026-11-15, verified in source: update_dialog.py
+  set_notes calls self.notes.setMarkdown(markdown), which passes HTML
+  through; _NotesBrowser blocks images only. A probe fed a red span, an
+  h1 and a link: the view held the colour and the link target (links do
+  not open). CHANGELOG [Unreleased] ONEUP-0396 claims more than shipped.
+  Recommended: render without HTML (strip tags, or a Markdown dialect
+  with HTML off) and add a gui-smoke case for a span, an h1 and a link,
+  rather than narrowing the changelog line.
+  **Layman:** OneUp's "What's new" window can still show formatting from the release page that it promised to show as plain text.
+  Kind: security.
+  Source: verify-delivery-2026-11-15.
+
+- 📋 [ONEUP-0438] **The README says OneUp can start at login; its switch says "Start at boot".**
+  verify-delivery 2026-11-15: README.md "can also start at login";
+  the Settings button reads "Start at boot: off". It is an autostart
+  entry, so login is the true word: change the switch's wording (and
+  its translations) or the README.
+  **Layman:** The instructions and the settings use different words for the same option.
+  Kind: doc-fix.
+  Source: verify-delivery-2026-11-15.
+
+- 📋 [ONEUP-0439] **The service suite aborts with "Socket name too long" under a long TMPDIR.**
+  verify-delivery 2026-11-15: tests/service-test.py makes its bus
+  directory with tempfile.mkdtemp, under TMPDIR. The scratchpad path
+  CLAUDE.md rule 17a asks for is long enough that dbus-daemon refuses
+  the socket, and the suite prints "ABORTED after 0 checks" with a
+  jeepney ValueError, which reads as a product failure. Use a short
+  fixed parent for the socket, or say why in the abort.
+  **Layman:** One of OneUp's test suites fails for a reason that has nothing to do with OneUp when run from a long folder path.
+  Kind: test.
+  Source: verify-delivery-2026-11-15.
+
+- 📋 [ONEUP-0440] **Before the next release, run the clean-VM kit for the promises no suite here can execute.**
+  verify-delivery 2026-11-15 could not execute, without root, a real
+  update or the service: ONEUP-0405, 0409, 0411 and 0392 on real sudo;
+  the service route (ONEUP-0249, 0406, including a kill and restart);
+  the AppImage self-update (ONEUP-0112, 0383); KDE Wayland placement
+  (0246). Kit: /mnt/Games/oneup-vmtest/ (memory vm-test-kit). Also
+  settle there whether sudo falls back to askpass on revoke
+  (ONEUP-0416).
+  **Layman:** Test the fixes that need a real computer update on a clean virtual machine before releasing.
+  Kind: chore.
+  Source: verify-delivery-2026-11-15.
