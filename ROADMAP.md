@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=407 -->
+<!-- ants-roadmap-id-high-water: ONEUP=409 -->
 
 # OneUp Roadmap
 
@@ -11849,7 +11849,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0401] **Root-boundary and privacy findings from the 2026-11-11 review.**
+- ✅ [ONEUP-0401] **Root-boundary and privacy findings from the 2026-11-11 review.**
   - actions.py:39/44/53: the drop-in's binaries resolve through the
     user's PATH, so a writable ~/bin gains a root entry (maybe above
     MEDIUM). Also :55 writes LC_ALL=C where sudoers says = must be
@@ -11861,6 +11861,12 @@ when complete (that document's §7).
     repos.py:197 (two timeout budgets).
   - steps.py:446/469: orphan removal and multiversion kernels
     (unsettled in general).
+  Shipped 2026-11-15 in b26c50b: unit names reach systemctl as .service;
+  diagnostics scrubs the user name and URL logins; the refresh budget is
+  normalised once; a package installed in several versions is never
+  removed by name (both engines). Queued: ONEUP-0408 (PATH-resolved
+  drop-in binaries, LC_ALL escaping) and ONEUP-0409 (service fallback
+  before sudo_init).
   **Layman:** Five places where OneUp's root access or its diagnostic report could be tightened.
   Kind: security.
   Source: review-code-2026-11-11.
@@ -11952,3 +11958,32 @@ when complete (that document's §7).
   **Layman:** One of the window's automatic checks failed once on a busy computer and passed on a re-run, so it can block a push for no real reason.
   Kind: test.
   Source: pre-push-gate-2026-11-15.
+
+- 📋 [ONEUP-0408] **The passwordless rule and the download guard name binaries found through the user's PATH.**
+  Split from ONEUP-0401 (2026-11-15). actions.py:39/44/53/83/143 and
+  privilege.py:60-61 resolve zypper, snapper, flatpak, systemctl, env,
+  timeout and du with shutil.which, so a ~/bin/zypper becomes a NOPASSWD
+  root entry and the root-owned guard execs it. Note: "zypper *" is
+  root-equivalent anyway, so the gain is small. Fix: resolve against a
+  fixed system path (sudo's secure_path). Not done in 0401 because the
+  suites find their mock zypper and sudo through PATH, so it needs a
+  suite-only override (testing.md section 2 and files-and-naming 5.1),
+  and any user whose path changes is re-granted (security.md 5.7).
+  Also settle actions.py:55: sudoers says '=' in a command argument must
+  be escaped; LC_ALL=C is written bare. Measure with visudo -cf and a
+  sudo -l on the VM before changing it.
+  **Layman:** On a computer where a program in your own folders shadows a system one, OneUp's password-free permission could point at the wrong program.
+  Kind: security.
+  Source: review-code-2026-11-11.
+
+- 📋 [ONEUP-0409] **On the service route, a fallback before sudo_init runs the download as the bare table row.**
+  Split from ONEUP-0401 (2026-11-15). privilege.py:471/483: when
+  _service_session() falls back to sudo and sudo_init has not run,
+  system-download runs rootops' table argv, so the guard or stop-wrapper
+  is skipped and Stop is not honoured mid-download. Normally unreachable,
+  because __main__ calls sudo_init first. Fix: return a sentinel so
+  steps._download_pass takes its sudo branch, or refuse system-download
+  in root_argv.
+  **Layman:** In a situation OneUp should never reach, pressing Stop during a download might not work.
+  Kind: review-fix.
+  Source: review-code-2026-11-11.
