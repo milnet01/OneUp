@@ -11804,12 +11804,17 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-11.
 
-- 📋 [ONEUP-0399] **Calls that can block with no time limit, beyond the four ONEUP-0387 fixed.**
+- ✅ [ONEUP-0399] **Calls that can block with no time limit, beyond the four ONEUP-0387 fixed.**
   Review theme 7; ONEUP-0387's four stay fixed.
   - service_client.py:143/182 (service Read/Run) and OpenSession.
   - polkit.py:34 CheckAuthorization.
   - autostart.py:133 daemon-reload.
   - placement.py:107-114, 316-327 (KWin script calls, GUI thread).
+  Shipped 2026-11-15 in 7f1b23d. Bounded: Read 30 s, Run 120 s, polkit
+  30 s (600 s while it may prompt), daemon-reload via _systemctl_user,
+  and the journal reads within the frame deadline (that one untested).
+  Dismissed: OpenSession, which waits on the user's prompt by design.
+  The 600 s prompt bound is my choice; a user who wants longer can say.
   **Layman:** A few places still wait forever on a system service that stops answering, which can freeze the window.
   Kind: review-fix.
   Source: review-code-2026-11-11.
