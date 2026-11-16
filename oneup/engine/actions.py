@@ -27,6 +27,21 @@ AUTH_FILE = Path(os.environ.get("ONEUP_AUTH_FILE") or "/etc/sudoers.d/oneup")
 # /usr/libexec per FHS 3.0 (Tumbleweed since 2020), /usr/lib on Leap 15.x.
 GUARD_DIR = "/usr/libexec" if Path("/usr/libexec").is_dir() else "/usr/lib"
 GUARD_FILE = Path(os.environ.get("ONEUP_GUARD_FILE") or f"{GUARD_DIR}/oneup-download-guard")
+_SYSTEM_GUARDS = ("/usr/libexec/oneup-download-guard", "/usr/lib/oneup-download-guard")
+# Where sudo reads its policy: a drop-in under either is live.
+_LIVE_POLICY = ("/etc/", "/usr/etc/")
+
+
+def _guard_unfit_for_rule() -> bool:
+    """True when a live rule would name a guard outside the system's own paths.
+
+    `ONEUP_GUARD_FILE` is the suite's seam. Left exported, it put a guard in a folder
+    the user owns — root-owned, yet replaceable — into a live NOPASSWD rule with any
+    arguments (ONEUP-0419). A drop-in outside `_LIVE_POLICY` is the suite's sandbox,
+    which sudo never reads, so an overridden guard is accepted there.
+    """
+    live = os.path.realpath(AUTH_FILE).startswith(_LIVE_POLICY)
+    return live and str(GUARD_FILE) not in _SYSTEM_GUARDS
 
 def auth_cmnds() -> str | None:
     """The granted scope, written in ONE place (ONEUP-0092).
@@ -449,6 +464,11 @@ def grant_auth() -> int:
     off, which makes the window's revoke arm unreachable, so the user has
     consented to a file they can no longer withdraw.
     """
+    if _guard_unfit_for_rule():
+        markers.hint("passwordless-unsupported",
+                     say=f"The download helper path {GUARD_FILE} is not one of the system's "
+                     "own, so no live rule may name it. Unset ONEUP_GUARD_FILE.")
+        return 1
     rule, guard = build_auth_rule(), download_guard_src()
     if rule is None or guard is None:
         markers.hint("passwordless-unsupported", say=_GRANT_IMPOSSIBLE)
@@ -510,7 +530,7 @@ def revoke_auth() -> int:
     if os.environ.get("ONEUP_GUARD_FILE"):
         guards = [str(GUARD_FILE)]
     else:
-        guards = ["/usr/libexec/oneup-download-guard", "/usr/lib/oneup-download-guard"]
+        guards = list(_SYSTEM_GUARDS)
     if privilege.sudo(["rm", "-f", str(AUTH_FILE), *guards])[0] != 0:
         markers.hint("auth-remove-failed", AUTH_FILE,
                      say=f"Could not remove the authorization rule ({AUTH_FILE}).")

@@ -525,6 +525,13 @@ recorded rather than papered over: it is not proof that sudo *matches* the entri
 OneUp. **Editing the guard's text is a re-grant for every existing user**, because the
 comparison is over the whole text.
 
+**A live rule names only a system guard path.** `ONEUP_GUARD_FILE` is the suite's seam.
+A grant refuses when the drop-in lands where sudo reads it, under `/etc` or `/usr/etc`,
+and the guard is not `/usr/libexec/oneup-download-guard` or
+`/usr/lib/oneup-download-guard`. The suite's guard sits in a folder the user can write,
+so a leftover export put a replaceable root file into a NOPASSWD rule with any arguments
+(ONEUP-0419). Both engines refuse it.
+
 ---
 
 ## 6. Stopping is cooperative — and that is a safety decision
@@ -774,6 +781,7 @@ CI build itself, before signing, is signed like any other build. The pinned buil
 | §5.4 the grant is all-or-nothing | `tests/run-tests.sh` — an `install` that refuses the drop-in leaves neither file, and a non-numeric refresh budget is refused with a hint |
 | §5.5 revocation removes the guard too | `tests/run-tests.sh` — revoke deletes both files |
 | §5.6 "on" means passwordless works | `tests/run-tests.sh` — `--auth-status` across live-and-current, live-but-stale, and absent |
+| §5.7 a live rule names only a system guard path | `tests/run-tests.sh` — in both engines, a grant whose drop-in path is under `/etc` and whose guard is the suite's own is refused with a hint and installs nothing |
 | §5.7 the guard runs zypper and nothing else | `tests/run-tests.sh` — it refuses a non-zypper argv with exit 2, appends `--download-only`, TERMs its child on a stop request and reaps it. The stop scenario also runs over **both** wrappers, so the guard cannot silently drop the stop poll for the users who enabled passwordless |
 | §9.5 `--check` invokes `sudo` zero times | `tests/run-tests.sh` — *"`--check` performs NO privileged auth"*, backed by a mock that exits 99 if a transaction is attempted, plus the sentinel that counts `sudo` invocations. On the service route, *"INV-1 the service-route check reaches root without privilege's sudo paths"* (ONEUP-0329) fails if the check reaches `sudo_init`, `root` or `sudo`. **Invoking and authenticating are not the same test** — §5.6's `auth_current` probe (`sudo -k -n … --version`) is a `sudo` invocation that authenticates nothing |
 | §6 stopping is cooperative | `tests/run-tests.sh` |

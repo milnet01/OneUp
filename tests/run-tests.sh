@@ -3827,25 +3827,41 @@ rm -rf "$d"
 echo "TEST: a non-numeric keep-alive interval falls back to the default, never busy-spins (ONEUP-0175)"
 # The interval feeds `sleep`, which fails at once on `abc`, so an unchecked value turned the
 # keep-alive into a tight loop of `sudo -n -v` for the whole run. Checked where it is read,
-# the loop validates once and sleeps.
-d=$(mktemp -d); setup_common "$d"
-printf '#!/usr/bin/env bash\ncase "$*" in *dup*|*update*) sleep 2; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
-mv "$d/sudo" "$d/sudo.real"
-cat > "$d/sudo" <<SUDO
+# the loop validates once and sleeps. `0` passed the check and busy-spun the same way
+# (ONEUP-0419), in both engines.
+run_bash_engine() {  # run_engine on update_system.sh, kept out of the marker harvest:
+    # the Bash fallback's STEP_BEGIN has its own field layout.
+    local ENGINE_CMD=(bash "$ENGINE") HARVEST_DIR=
+    run_engine "$@"
+}
+for eng in python bash; do
+  for bad in abc 0; do
+    d=$(mktemp -d); setup_common "$d"
+    printf '#!/usr/bin/env bash\ncase "$*" in *dup*|*update*) sleep 2; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
+    mv "$d/sudo" "$d/sudo.real"
+    cat > "$d/sudo" <<SUDO
 #!/usr/bin/env bash
 [[ "\$*" == "-n -v" ]] && echo x >> "$d/keepalive.log"
 exec "$d/sudo.real" "\$@"
 SUDO
-chmod +x "$d/zypper" "$d/sudo"
-: > "$d/keepalive.log"
-ONEUP_KEEPALIVE_SECONDS=abc run_engine "$d" --steps=system >/dev/null 2>&1
-n=$(wc -l < "$d/keepalive.log")
-if (( n >= 1 && n <= 3 )); then
-    echo "  ok   - the keep-alive validated $n time(s) in a two-second run"; PASS=$((PASS+1))
-else
-    echo "  FAIL - the keep-alive validated $n times in a two-second run (want 1-3)"; FAIL=$((FAIL+1))
-fi
-rm -rf "$d"
+    chmod +x "$d/zypper" "$d/sudo"
+    : > "$d/keepalive.log"
+    if [[ $eng == bash ]]; then
+        ONEUP_KEEPALIVE_SECONDS="$bad" run_bash_engine "$d" --steps=system >/dev/null 2>&1
+    else
+        ONEUP_KEEPALIVE_SECONDS="$bad" run_engine "$d" --steps=system >/dev/null 2>&1
+    fi
+    n=$(wc -l < "$d/keepalive.log")
+    if (( n >= 1 && n <= 3 )); then
+        echo "  ok   - $eng, '$bad': the keep-alive validated $n time(s) in a two-second run"
+        PASS=$((PASS+1))
+    else
+        echo "  FAIL - $eng, '$bad': the keep-alive validated $n times in a two-second run (want 1-3)"
+        FAIL=$((FAIL+1))
+    fi
+    rm -rf "$d"
+  done
+done
 
 # ---------------------------------------------------------------------------
 # ONEUP-0231: launched from a terminal, sudo keys the cached credential to that
@@ -5351,6 +5367,93 @@ check_absent "and nothing from the user's PATH"           "$d/zypper"         "$
 check_absent "nor does the Bash guard"                    "$d/zypper" \
     "$(cat "$d/oneup-download-guard" 2>/dev/null)"
 rm -rf "$d" "$sysbin"
+
+echo "TEST: a guard outside the system's paths is never named by a rule sudo reads (ONEUP-0419)"
+# ONEUP_GUARD_FILE is the suite's seam. Left exported by accident, it put a guard in a
+# folder the user owns, root-owned but replaceable, into a live NOPASSWD rule with any
+# arguments. The drop-in path here is under /etc, where sudo reads; the install mock
+# logs every call and writes only inside the scenario folder, so nothing reaches /etc.
+for eng in python bash; do
+    d=$(mktemp -d); setup_common "$d"
+    cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == "--version" ]] && { echo v; exit 0; }
+exit 0
+EOF
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$d/visudo"
+    cat > "$d/install" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$d/installs"
+args=(); while [[ \$# -gt 0 ]]; do case "\$1" in -o|-g|-m) shift 2;; *) args+=("\$1"); shift;; esac; done
+[[ "\${args[1]}" == "$d"/* ]] || exit 1
+cp "\${args[0]}" "\${args[1]}"
+EOF
+    chmod +x "$d/zypper" "$d/visudo" "$d/install"
+    if [[ $eng == bash ]]; then
+        out=$(ONEUP_AUTH_FILE=/etc/sudoers.d/oneup-suite-never-written \
+              run_bash_engine "$d" --grant-auth 2>&1)
+    else
+        out=$(ONEUP_AUTH_FILE=/etc/sudoers.d/oneup-suite-never-written \
+              run_engine "$d" --grant-auth 2>&1)
+    fi
+    check_absent "$eng: a live rule naming the suite's guard is never granted" "@@AUTH@@|on" "$out"
+    check        "$eng: and the refusal says so"                               "HINT"        "$out"
+    if [[ -s "$d/installs" ]]; then
+        echo "  FAIL - $eng: the refused grant still installed: $(head -1 "$d/installs")"
+        FAIL=$((FAIL+1))
+    else
+        echo "  ok   - $eng: and installs nothing"; PASS=$((PASS+1))
+    fi
+    rm -rf "$d"
+done
+
+echo "TEST: a bad stop-poll interval never reaches the root stop wrapper (ONEUP-0419)"
+# The interval is the wrapper's `sleep`: `abc` fails at once and `0` returns at once, so
+# the root loop spun at full CPU; `inf` never woke after zypper exited. Each falls back
+# to the default, 2 seconds, before the argv is built — in both engines. `inf` is checked
+# on the parsed value below, because a run given it hangs rather than failing.
+for eng in python bash; do
+    for bad in abc 0; do
+        d=$(mktemp -d); setup_common "$d"
+        printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"
+        mv "$d/sudo" "$d/sudo.real"
+        cat > "$d/sudo" <<SUDO
+#!/usr/bin/env bash
+echo "\$*" >> "$d/sudo.log"
+exec "$d/sudo.real" "\$@"
+SUDO
+        chmod +x "$d/zypper" "$d/sudo"
+        if [[ $eng == bash ]]; then
+            ONEUP_STOP_POLL_SECONDS="$bad" run_bash_engine "$d" --steps=system >/dev/null 2>&1
+        else
+            ONEUP_STOP_POLL_SECONDS="$bad" run_engine "$d" --steps=system >/dev/null 2>&1
+        fi
+        # The log holds the wrapper's own text too, whose comments say "run.state"; the
+        # argv line is the one naming the PATH.
+        wrapper=$(grep -F "/run.state " "$d/sudo.log" | head -1)
+        check "$eng: a stop poll of '$bad' reaches the wrapper as 2" "/run.state 2 " "$wrapper"
+        rm -rf "$d"
+    done
+done
+
+py_case "a bad stop poll falls back to 2 seconds in the hold too (ONEUP-0419)" '
+from oneup.engine import __main__ as engine
+assert engine._poll_seconds() == 2.0, engine._poll_seconds()
+' "ONEUP_STOP_POLL_SECONDS=0"
+py_case "an infinite stop poll falls back too, for the wrapper and the hold (ONEUP-0419)" '
+from oneup.engine import __main__ as engine, steps
+assert float(steps.STOP_POLL_SECONDS) == 2.0, steps.STOP_POLL_SECONDS
+assert engine._poll_seconds() == 2.0, engine._poll_seconds()
+' "ONEUP_STOP_POLL_SECONDS=inf"
+py_case "malformed wait budgets fall back rather than crash the import (ONEUP-0419)" '
+from oneup.engine import privilege, rootops
+assert privilege.BUSY_WAIT_SECONDS == 210, privilege.BUSY_WAIT_SECONDS
+assert rootops.CHECK_DRY_RUN_SECONDS == 180, rootops.CHECK_DRY_RUN_SECONDS
+' "ONEUP_BUSY_WAIT_SECONDS=abc" "ONEUP_CHECK_DRY_RUN_SECONDS=abc"
+py_case "a zero dry-run budget is no budget, so it falls back (ONEUP-0419)" '
+from oneup.engine import rootops
+assert rootops.CHECK_DRY_RUN_SECONDS == 180, rootops.CHECK_DRY_RUN_SECONDS
+' "ONEUP_CHECK_DRY_RUN_SECONDS=0"
 
 echo "TEST: on the sudo route a source is recorded before it is switched off (ONEUP-0411)"
 pd=$(mktemp -d); mkdir "$pd/repos.d"

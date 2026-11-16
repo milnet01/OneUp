@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import atexit
 import contextlib
+import math
 import os
 import pathlib
 import shutil
@@ -29,6 +30,20 @@ import time
 from collections.abc import Callable, Sequence
 
 from . import markers, proc
+
+
+def env_seconds(name: str, default: float) -> float:
+    """A positive, finite number of seconds from the environment, else `default`.
+
+    Each such value feeds a sleep or a wait: zero or a malformed value busy-loops or
+    raises at import, and infinity never wakes (ONEUP-0419).
+    """
+    try:
+        value = float(os.environ.get(name) or default)
+    except ValueError:
+        return default
+    return value if 0 < value < math.inf else default
+
 
 # Overridable so the suite points it at a mock instead of raising a real KDE dialog.
 ASKPASS = os.environ.get("ONEUP_ASKPASS") or "/usr/libexec/ssh/ksshaskpass"
@@ -309,7 +324,7 @@ def _service_unreachable(why: str) -> None:
 
 # How often the keep-alive re-validates. Overridable so a test can watch the loop
 # run inside its own patience — at 50 seconds it would refresh once per scenario.
-KEEPALIVE_SECONDS = os.environ.get("ONEUP_KEEPALIVE_SECONDS") or "50"
+KEEPALIVE_SECONDS = env_seconds("ONEUP_KEEPALIVE_SECONDS", 50.0)
 
 # The keep-alive thread's name, so a debugger or a test can pick it out.
 KEEPALIVE_TAG = "oneup-keepalive"
@@ -346,10 +361,9 @@ def _start_keepalive() -> None:
     global _KEEPALIVE, _KEEPALIVE_STOP
     if _KEEPALIVE is not None:
         return
-    interval = KEEPALIVE_SECONDS if KEEPALIVE_SECONDS.replace(".", "", 1).isdecimal() else "50"
     _KEEPALIVE_STOP = threading.Event()
     _KEEPALIVE = threading.Thread(target=_keepalive_loop, name=KEEPALIVE_TAG, daemon=True,
-                                  args=(float(interval), _KEEPALIVE_STOP))
+                                  args=(KEEPALIVE_SECONDS, _KEEPALIVE_STOP))
     _KEEPALIVE.start()
 
 
@@ -413,7 +427,7 @@ def _service_session() -> bool:
 # How long a root operation, or the run's lock check, waits for another OneUp job:
 # a check's dry run, at most `rootops.CHECK_DRY_RUN_SECONDS`, plus a margin for its
 # start-up. Change the two together (ONEUP-0329 §4.7).
-BUSY_WAIT_SECONDS = float(os.environ.get("ONEUP_BUSY_WAIT_SECONDS") or "210")
+BUSY_WAIT_SECONDS = env_seconds("ONEUP_BUSY_WAIT_SECONDS", 210.0)
 BUSY_POLL_SECONDS = 2.0
 _JOB_RUNNING = "a job is running"    # the service's own `Busy` reason, verbatim
 

@@ -109,11 +109,11 @@ fields this needs are §4.5's.
 
 ### 4.1 The new root operation
 
-`oneup/engine/rootops.py` gains one row, `check-dry-run`, with no arguments:
+`oneup/engine/rootops.py` gains one row, `check-dry-run`, with no arguments. Its budget,
+`CHECK_DRY_RUN_SECONDS`, is 180 s, overridable by `ONEUP_CHECK_DRY_RUN_SECONDS` as whole
+seconds above zero; anything else falls back (ONEUP-0419).
 
 ```python
-CHECK_DRY_RUN_SECONDS = int(os.environ.get("ONEUP_CHECK_DRY_RUN_SECONDS") or "180")
-
 "check-dry-run": Op({}, _check_dry_run),
 ```
 
@@ -302,11 +302,9 @@ operation with `Busy`.
 
 So `privilege._service_job`, on `Refused` with code `Busy` and reason `a job is running`,
 prints one line — *"Waiting for another OneUp task to finish…"* — and retries every 2 s
-for up to `BUSY_WAIT_SECONDS`:
-
-```python
-BUSY_WAIT_SECONDS = float(os.environ.get("ONEUP_BUSY_WAIT_SECONDS") or "210")
-```
+for up to `BUSY_WAIT_SECONDS`: 210 s, overridable by `ONEUP_BUSY_WAIT_SECONDS`, where a
+value that is not a positive, finite number falls back (`privilege.env_seconds`,
+ONEUP-0419).
 
 Its default is `CHECK_DRY_RUN_SECONDS`' plus a margin for the dry run's start-up; a change
 to one changes the other. Past it, the operation fails as
@@ -556,3 +554,4 @@ the wording this spec's gate reviewed.
 | 3 | 2026-10-23 | Q1 2 · Q2 1 · Q4 2 — 5 verified, 0 dismissed | 2 fixed, 2 surfaced to the user, 1 filed on ONEUP-0329; a continued run of one loop on `baa6d7e`, so its fixes are read by no lane. Two lanes, each holding every question; both found INV-12's test looking for an `OpenSession` line the service never logs (fixed). One lane found the check's flags unpointed from ONEUP-0249 §4.4 item 4 (fixed in §8, out of radius, no loop left). Surfaced: a run started during a check's dry run meets `repos.lock_holder` before any root operation unless PackageKit is active, so it stops as "busy" instead of §4.7's wait, against step 0's last sentence and §6; and zypper 1.14.101's binary carries a `<to-change-vendor>` element §4.3's table lacks, so a vendor-changing snapshot takes the fallback (`strings /usr/bin/zypper`). Filed: INV-4's count and rows are built by `system_changes`, which `tests/parsers-test.py` cannot reach. Own-fix share 0 of 5, a calm cap. Second share: 2 of 5 inside `baa6d7e` |
 | 4 | 2026-10-23 | Q2 1 — 1 verified, 2 dismissed | 1 fixed; a continued run of one loop on `b8173a5`, so its fix is read by no lane. Two lanes, each holding every question; neither filed a finding the run kept. The orchestrator found, while settling the lanes' open questions, that §4.7's lock wait printed "another OneUp task" while YaST or a hand-run zypper held the lock (§3 item 9); the line now names `lock_holder`'s holder, and INV-13 checks it. Dismissed: the `Busy` reasons as unbound free text (`oneup/service/server.py` raises both strings verbatim); §4.3's no-summary `None` against §4.8 item 3's nothing-to-do branch (§4.8 item 3 states the branch and its exact count, so one build follows both). Both lanes noted `release-lock` runs before `lock_holder`; that false clause was deleted, outside the tally. Eight open questions resolved clean, among them `_ENGINE_MARKS` accepting INV-12's process, the service's `session opened` audit line, and ONEUP-0249 INV-4's table test needing a `check-dry-run` case. Root-only measurements remain an unrunnable region. Own-fix share 0 of 1, a calm cap. Second share: 1 of 1 inside `b8173a5` |
 | impl-0373 | 2026-11-06 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0373 (the user's order of 2026-11-06 to fix the G9 review's findings before the tag): §4.5's `CHECK_ITEM` form marks `bytes` and `repo` optional, as `docs/reference/marker-protocol.md` does. An amendment, so no gate (`CLAUDE.md` rule 14). |
+| impl-0419 | 2026-11-16 | none: an amendment, no reviewer dispatched | **Not a review.** ONEUP-0419 (review-code 2026-11-15): a malformed `ONEUP_CHECK_DRY_RUN_SECONDS` or `ONEUP_BUSY_WAIT_SECONDS` raised at import, in the service too. Both now fall back to their defaults. §4.1 and the busy-wait passage stop quoting the old parsing code and state the rule instead. |

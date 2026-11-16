@@ -42,7 +42,11 @@ _ALGORITHMS = ("number", "timeline")
 # How long the check's dry run may take, refresh included, before `timeout` ends it
 # (ONEUP-0329 §4.1). Read where the argv is built: on the service route, the service.
 # `privilege.BUSY_WAIT_SECONDS` is this plus a margin; change the two together.
-CHECK_DRY_RUN_SECONDS = int(os.environ.get("ONEUP_CHECK_DRY_RUN_SECONDS") or "180")
+# Whole seconds above zero, else the default: `timeout 0` is no limit at all, and a
+# malformed value used to raise at import, in the service too (ONEUP-0419).
+_DRY_RUN_RAW = os.environ.get("ONEUP_CHECK_DRY_RUN_SECONDS") or ""
+CHECK_DRY_RUN_SECONDS = (int(_DRY_RUN_RAW) if _DRY_RUN_RAW.isascii() and _DRY_RUN_RAW.isdecimal()
+                         and int(_DRY_RUN_RAW) > 0 else 180)
 
 
 def _now() -> str:

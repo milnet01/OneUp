@@ -171,8 +171,14 @@ REFRESH_TIMEOUT="${ONEUP_REFRESH_TIMEOUT:-120}"   # per-repository refresh budge
 # where it is read: a bad value made `sleep` fail at once and the keep-alive busy-spin on
 # `sudo -n -v` for the whole run (ONEUP-0175). It falls back to its default, as the Python
 # engine does. REFRESH_TIMEOUT is deliberately NOT checked here: ONEUP-0092 §6 has a
-# non-numeric budget refuse at grant time and fail the refresh at run time.
-[[ "$KEEPALIVE_SECONDS" =~ ^([0-9]+(\.[0-9]*)?|\.[0-9]+)$ ]] || KEEPALIVE_SECONDS=50
+# non-numeric budget refuse at grant time and fail the refresh at run time. The stop poll
+# feeds the root wrappers' `sleep` the same way. Zero passed the shape check and spun just
+# as hard, so a digit other than 0 is required too (ONEUP-0419).
+positive_seconds() {
+    [[ "$1" =~ ^([0-9]+(\.[0-9]*)?|\.[0-9]+)$ && "$1" =~ [1-9] ]]
+}
+positive_seconds "$KEEPALIVE_SECONDS" || KEEPALIVE_SECONDS=50
+positive_seconds "$STOP_POLL_SECONDS" || STOP_POLL_SECONDS=2
 
 # Where a binary that lands in the passwordless rule or the guard is looked up: the system's
 # own directories, as sudo's `secure_path` does, never the user's PATH. openSUSE puts ~/bin
@@ -1286,7 +1292,17 @@ EOF
 # worse than a failed grant: afterwards the toggle reads off, which makes the GUI's revoke
 # arm unreachable, so the user has consented to a file they can no longer withdraw.
 grant_auth() {
-    local tmp guard
+    local tmp guard live
+    # A live rule never names a guard outside the system's paths: ONEUP_GUARD_FILE is the
+    # suite's seam, and left exported it put a user-replaceable guard into a NOPASSWD rule
+    # with any arguments. A drop-in outside /etc is the suite's sandbox (ONEUP-0419).
+    live=$(realpath -m -- "$AUTH_FILE")
+    if [[ ( "$live" == /etc/* || "$live" == /usr/etc/* )
+          && "$GUARD_FILE" != /usr/libexec/oneup-download-guard
+          && "$GUARD_FILE" != /usr/lib/oneup-download-guard ]]; then
+        marker HINT "The download helper path $GUARD_FILE is not one of the system's own, so no live rule may name it. Unset ONEUP_GUARD_FILE."
+        return 1
+    fi
     tmp=$(mktemp) || { marker HINT "Could not create a temporary file."; return 1; }
     guard=$(mktemp) || { rm -f "$tmp"; marker HINT "Could not create a temporary file."; return 1; }
     if ! build_auth_rule > "$tmp" || ! download_guard_src > "$guard"; then

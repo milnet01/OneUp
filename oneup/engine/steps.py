@@ -708,8 +708,11 @@ def finish_in_terminal() -> tuple[str, str]:
     return ("-leap", "sudo zypper update") if _is_leap() else ("", "sudo zypper dup")
 
 
-# How often the download pass's root-side wrapper looks for a stop request.
-STOP_POLL_SECONDS = os.environ.get("ONEUP_STOP_POLL_SECONDS") or "2"
+# How often the download pass's root-side wrapper looks for a stop request. Checked once,
+# here, for both routes: the sudo route passed the raw text to the root `sleep`
+# (ONEUP-0419). `_STOP_POLL_ARG` is that argv word, `2` rather than `2.0`.
+STOP_POLL_SECONDS = privilege.env_seconds("ONEUP_STOP_POLL_SECONDS", 2.0)
+_STOP_POLL_ARG = f"{STOP_POLL_SECONDS:g}"
 # More than this failing at once is systemic — a network or system problem, not
 # one bad source — so we do not silently set them all aside.
 MAX_SKIP_REPOS = 2
@@ -794,20 +797,19 @@ def _download_pass() -> bool:
         SYS_DL_RC = privilege.root_stream(
             "system-download", {"cdn": bool(REPOSD_OVERRIDE)}, cdn_dir=REPOSD_OVERRIDE,
             step="system", phase="download", log=_SYS_LOG, append=False,
-            stop_poll=float(STOP_POLL_SECONDS) if STOP_POLL_SECONDS.replace(".", "", 1)
-            .isdecimal() else 2.0)
+            stop_poll=STOP_POLL_SECONDS)
         return _download_status()
     txn = system_txn_argv()
     stop_file, run_state = str(runstate.STOP_REQUEST), str(runstate.RUN_STATE)
     if actions.guard_current():
         argv = privilege.sudo_argv([str(actions.GUARD_FILE), stop_file, run_state,
-                                    STOP_POLL_SECONDS, *txn])
+                                    _STOP_POLL_ARG, *txn])
     else:
         # LC_ALL=C reaches the child as an ARGV PREFIX through `sudo env`, never
         # as a Python `env=` argument: sudo resets the environment, and the
         # sudoers rule grants those literal words.
         argv = privilege.sudo_argv(["env", "LC_ALL=C", "bash", "-c", _STOP_WRAPPER, "_",
-                                    stop_file, run_state, STOP_POLL_SECONDS, *txn])
+                                    stop_file, run_state, _STOP_POLL_ARG, *txn])
     SYS_DL_RC = proc.stream_filtered(argv, step="system", phase="download",
                                      log=_SYS_LOG, append=False)
     return _download_status()

@@ -252,11 +252,9 @@ _LAUNCH_PID = _passed_pid("ONEUP_LAUNCH_PID", os.getpid())
 
 
 def _poll_seconds() -> float:
-    """How often the hold looks for an answer — the stop poll's own interval."""
-    try:
-        return float(steps.STOP_POLL_SECONDS)
-    except ValueError:
-        return 2.0
+    """How often the hold looks for an answer — the stop poll's own interval, checked
+    where it is read (ONEUP-0419)."""
+    return steps.STOP_POLL_SECONDS
 
 
 def _adopt_go_ahead(opts: Options, asked: str | None) -> list[str] | None:

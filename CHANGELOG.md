@@ -142,6 +142,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Security
 
+- **Settings read from the environment are checked before they reach root commands or timing loops** (ONEUP-0419)
+  A leftover test setting could make "remember my authorization" name a helper file in a
+  folder you own, which could then be swapped for anything. OneUp now refuses that. Bad
+  timing values (zero, text, infinity) no longer make a background check spin at full
+  speed, hang a download, or stop OneUp from starting; they fall back to the defaults.
+
 - **Password-free updates now name only the system's own programs** (ONEUP-0408, ONEUP-0417)
   OneUp's password-free permission found programs such as zypper through your own
   folders first, so a program in ~/bin could have been given administrator rights.
