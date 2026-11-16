@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=441 -->
+<!-- ants-roadmap-id-high-water: ONEUP=442 -->
 
 # OneUp Roadmap
 
@@ -12262,16 +12262,21 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0421] **A --skip-repo source that fails to switch off is skipped silently in both engines.**
+- ✅ [ONEUP-0421] **A --skip-repo source that fails to switch off is skipped silently in both engines.**
   review-code 2026-11-15, theme (c): steps.py's skip_repos loop ignores
   disable_repo's False (lane 02, MEDIUM) and update_system.sh does the
   same (lane 12, with its cleanup re-enable). The run then fails on the
   source the user asked to skip, with no line saying why.
+  Shipped 2026-11-16 in ef3a9f1 and e4fa081. Both engines: a --skip-repo
+  source that will not switch off ends the step before the refresh,
+  names the source in the log, and (Python) sends the new hint
+  repo-skip-failed. Not changed: the auto-skip path still retries after a
+  partly failed disable; it now logs each failure.
   **Layman:** If OneUp cannot pause a broken software source you asked it to skip, it does not say so.
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0422] **Failure patterns matched against the whole transaction log also match package names.**
+- ✅ [ONEUP-0422] **Failure patterns matched against the whole transaction log also match package names.**
   review-code 2026-11-15, theme (d): steps.py's error patterns
   (`No space left|...|conflict`, `...|metadata|...|Curl|...`,
   `Timeo...`), repos.py's and the Bash kernel reboot reason in
@@ -12279,11 +12284,17 @@ when complete (that document's §7).
   (lanes 02 and 12). The lane says the spec is also at fault, so the
   spec's patterns change with the code. Lane files in
   /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  Shipped 2026-11-16 in 00243ff. The failure patterns read the log with
+  package names taken out (parsers.without_package_names; Python engine),
+  shapes measured in real run logs. The reboot reason reads only what rpm
+  installed, and kernel-default-devel is not a kernel (both engines).
+  ONEUP-0025 and ONEUP-0094 4.1 amended. Not changed: the Bash fallback's
+  own failure patterns.
   **Layman:** OneUp can misread an update's log when a package's name happens to contain a word like "metadata" or "timeout".
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0423] **A full or unwritable disk breaks log and state writes before the run can say why; replaced files skip fsync.**
+- ✅ [ONEUP-0423] **A full or unwritable disk breaks log and state writes before the run can say why; replaced files skip fsync.**
   review-code 2026-11-15, themes (e) and (g):
   - runstate.py opens the log unguarded before any marker (lane 01).
   - proc.py opens its log after the root zypper has started (lane 03,
@@ -12292,11 +12303,17 @@ when complete (that document's §7).
   - server.py's paused-sources write (ONEUP-0406's) and paths.py's
     write_whole replace with no fsync (lanes 04 and 08).
   Lane files in /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  Shipped 2026-11-16 in a9ce75b. Unopenable run and transaction logs no
+  longer raise; a fault reading a line drains the pipe. Measured: the
+  risk was a hang once zypper filled the unread pipe, not SIGPIPE.
+  mkstemp failures fail the step or skip the snapshot. write_whole and
+  the paused-sources record fsync. Not locked by a test: the fsync calls
+  and the snapshot guard.
   **Layman:** On a full disk, OneUp can fail before it shows any message, and two small files might not survive a power cut.
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0424] **Some calls have no time limit or no Stop check: OpenSession, the service's captured runs, a refresh loop.**
+- ✅ [ONEUP-0424] **Some calls have no time limit or no Stop check: OpenSession, the service's captured runs, a refresh loop.**
   review-code 2026-11-15, theme (f):
   - service_client.py OpenSession, non-interactive, has no timeout
     (lane 03, MEDIUM).
@@ -12307,6 +12324,11 @@ when complete (that document's §7).
   The readability review's lead on server.py's CanUpdate threads, which
   are unbounded and uncounted, belongs here too. Lane files in
   /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  Shipped 2026-11-16 in e949dbb. Non-interactive OpenSession bounded;
+  the service's captured runs bounded (60 s); the repo probe hears Stop
+  in both engines and no retry follows a Stop; CanUpdate capped at 16
+  checks at once (Busy past it). The window showing the probe is queued
+  as its own item.
   **Layman:** A few of OneUp's waits could hang for a long time if another program stops answering.
   Kind: review-fix.
   Source: review-code-2026-11-15.
@@ -12544,3 +12566,16 @@ when complete (that document's §7).
   **Layman:** When you switch password-free updates off, the password box says OneUp wants it "to continue updating", which is not what you are doing.
   Kind: ux.
   Source: close-findings-2026-11-15 (from ONEUP-0416).
+
+- 📋 [ONEUP-0442] **The window shows nothing while the engine tests which software source failed.**
+  Split from ONEUP-0424 (lane 02, repos.py find_failing_repos). The
+  probe refreshes each source under its budget with no REFRESH marker, so
+  a slow source looks like a hang (engine trap: a slow server must never
+  be indistinguishable from a hang). Not fixed there: a second REFRESH
+  emitter is a marker-contract change (marker-protocol 4.4 names
+  refresh_repos), and the window's REFRESH display after a failed
+  transaction needs a design call. Needs: the wording, whether the probe
+  reuses REFRESH or gets its own marker, and both suites.
+  **Layman:** After an update fails, OneUp can spend minutes testing each software source while the window looks frozen.
+  Kind: ux.
+  Source: review-code-2026-11-15.
