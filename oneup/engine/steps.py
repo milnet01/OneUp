@@ -1181,10 +1181,9 @@ def run_system(opts) -> None:
     # probe that would name it is off on a --skip-repo run (ONEUP-0421).
     for alias in opts.skip_repos:
         if alias and not repos.disable_repo(alias, "manual"):
-            markers.hint("repo-skip-failed", alias,
-                         say=f"OneUp could not set aside the '{alias}' source, so it "
-                             "installed nothing. The log has the reason; run the update "
-                             "again.")
+            say = (f"OneUp could not set aside the '{alias}' source, so it installed "
+                   "nothing. The log has the reason; run the update again.")
+            markers.hint("repo-skip-failed", alias, say=say)
             end_step("system", "fail", "failed", f"couldn't set aside {alias}")
             return
     repos.REFRESH_FAILED = False
