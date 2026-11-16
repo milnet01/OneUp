@@ -4293,6 +4293,30 @@ check        "skipped source re-enabled on exit"     "modifyrepo --enable google
 unset MOCK_ZLOG
 rm -rf "$d"
 
+# ONEUP-0421: the disable's result was ignored, so the "Skip & update the rest" re-run
+# updated with the broken source still on, and no line said the skip had not happened.
+# ONEUP-0025's failure table: the step fails with a hint rather than pretending success.
+echo "TEST: a --skip-repo source that will not switch off fails the step, and says so (ONEUP-0421)"
+d=$(mktemp -d); setup_common "$d"
+setup_cached_sudo "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+echo "zypper $*" >> "$MOCK_ZLOG"
+case "$*" in
+  *"modifyrepo --disable"*) echo "System management is locked." >&2; exit 7 ;;
+  *dup*|*update*)           echo "3 packages to upgrade."; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+export MOCK_ZLOG="$d/zypper.log"; : > "$MOCK_ZLOG"
+out=$(run_engine "$d" --steps=system --skip-repo=google-chrome)
+check        "the step fails"                         "@@STEP_END@@|system|fail" "$out"
+check        "the window is told which source"        "@@HINT@@|repo-skip-failed|google-chrome" "$out"
+check        "the log says the source stayed on"      "Couldn't switch off the 'google-chrome' source" "$out"
+unset MOCK_ZLOG
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 echo "TEST: an interrupted --skip-repo run still re-enables the source (trap restore)"
 d=$(mktemp -d); setup_common "$d"

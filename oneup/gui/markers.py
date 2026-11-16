@@ -250,6 +250,10 @@ HINTS: dict[str, tuple[tuple[str, ...], str]] = {
         "installed — a stop never interrupts an install half-way, "
         "because that can leave programs broken. Run the update again "
         "whenever you like.")),
+    "repo-skip-failed": (('alias',), QT_TRANSLATE_NOOP(
+        "markers",
+        "OneUp could not set aside the '{alias}' source, so it installed nothing. "
+        "The log has the reason; run the update again.")),
     "repo-slow": (('alias',), QT_TRANSLATE_NOOP(
         "markers",
         "The '{alias}' source is serving updates too slowly to wait "

@@ -15,6 +15,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **"Skip & update the rest" now says so when a source would not switch off** (ONEUP-0421)
+  If OneUp could not switch off the source you chose to skip, it went on updating with
+  that source still on, and nothing said the skip had not happened. It now installs
+  nothing, names the source, and asks you to run the update again.
+
 - **When a check fails, OneUp no longer carries on as if the answer were "none"** (ONEUP-0420)
   If OneUp could not check which leftover packages have more than one version
   installed, it removed them anyway — and removing a kernel by name removes every

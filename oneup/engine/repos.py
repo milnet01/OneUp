@@ -263,6 +263,7 @@ def disable_repo(alias: str, reason: str) -> bool:
     rc, _ = privilege.root("repo-disable", {"alias": alias})
     if rc != 0:
         _record_paused(DISABLED)
+        markers.out(f"  Couldn't switch off the '{alias}' source (zypper exit {rc}).")
         return False
     DISABLED.append(alias)
     markers.marker("REPO_SKIPPED", alias, reason)

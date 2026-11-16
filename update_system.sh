@@ -2014,9 +2014,17 @@ echo "########################################################"
 if step_selected system && ! stop_pending; then
     begin_step system
     # Interactive "Skip & update the rest" re-run: set the named sources aside up front.
+    # A source that will not switch off ends the step before the refresh: updating with
+    # it on is the run the user declined, and the probe is off on a --skip-repo run
+    # (ONEUP-0421).
+    SKIP_FAILED=""
     for alias in "${SKIP_REPOS[@]:-}"; do
         [[ -z "$alias" ]] && continue
-        disable_repo "$alias" manual || true
+        if ! disable_repo "$alias" manual; then
+            echo "  Couldn't switch off the '$alias' source."
+            SKIP_FAILED="$alias"
+            break
+        fi
     done
     # The transaction below (dup/update) — NOT the refresh — decides whether the
     # step succeeded. A repo refresh can fail transiently (one mirror timing out)
@@ -2030,13 +2038,16 @@ if step_selected system && ! stop_pending; then
     # can't hang the run and the GUI can name the source it's waiting on — see
     # refresh_repos, which also honours --import-keys (the user's approval to accept a
     # rotated signing key) and checks for a stop between repositories.
-    refresh_repos
+    [[ -z "$SKIP_FAILED" ]] && refresh_repos
     if $REFRESH_FAILED; then refresh_ok=false; fi
     # Second safe boundary: the refresh above can take a minute on a slow mirror, so
     # honour a stop asked for during it. Nothing has been installed at this point, which
     # is exactly why stopping here is free — once the transaction starts it is seen
     # through, because interrupting rpm can leave programs broken.
-    if stop_pending; then
+    if [[ -n "$SKIP_FAILED" ]]; then
+        echo "  Hint: OneUp could not set aside the '$SKIP_FAILED' source, so it installed nothing. Run the update again."
+        end_step system fail "couldn't set aside $SKIP_FAILED"
+    elif stop_pending; then
         end_step system skip "stopped before installing anything"
     else
     # Capture the transaction output so we can tell whether anything actually

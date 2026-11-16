@@ -1168,10 +1168,17 @@ def run_system(opts) -> None:
     global _SYS_LOG
     begin_step("system")
     # An interactive "Skip & update the rest" re-run: set the named sources aside
-    # up front, before anything reads them.
+    # up front, before anything reads them. A source that will not switch off ends
+    # the step here: updating with it on is the run the user just declined, and the
+    # probe that would name it is off on a --skip-repo run (ONEUP-0421).
     for alias in opts.skip_repos:
-        if alias:
-            repos.disable_repo(alias, "manual")
+        if alias and not repos.disable_repo(alias, "manual"):
+            markers.hint("repo-skip-failed", alias,
+                         say=f"OneUp could not set aside the '{alias}' source, so it "
+                             "installed nothing. The log has the reason; run the update "
+                             "again.")
+            end_step("system", "fail", "failed", f"couldn't set aside {alias}")
+            return
     repos.REFRESH_FAILED = False
     # One repository at a time, each with its own budget, so a crawling mirror
     # cannot hang the run and the window can name the source it is waiting on.
