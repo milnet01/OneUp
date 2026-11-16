@@ -197,7 +197,10 @@ changed. Time alone is not enough, nor time and author: two entries on one day s
   *"OneUp could not tell which of these are new."*
 - **The baseline entry is never met** (the packager rewrote history): the same.
 - **The new version has no entries** (the Packman case, §2): *"This package has no change
-  notes."*
+  notes."* Only an rpm that exited 0 says so.
+- **rpm fails** — it cannot start, passes the timeout, or exits non-zero (as when the named
+  edition is not installed): *"OneUp could not read this package's change notes."*
+  (ONEUP-0420).
 
 ### 4.4 Which packages can be opened
 
@@ -386,6 +389,7 @@ before it becomes a directory. Its first character excludes `-` and `.`.
 | The downloaded file is `<name>-<edition>.<arch>.rpm` somewhere below the packages directory | Not measured: the cache was empty (§2) | What changed is "not found" while downloaded, and appears once installed |
 | Every system package in the list is known to zypper | A package from a repository removed since the check | No About and no mark, even once installed with change notes (§3 item 8) |
 | The package carries a changelog | Packman and some third-party packages (§2) | *"This package has no change notes."* |
+| rpm answers within the timeout, with exit 0 | Not measured: a busy or failing rpm, or an edition rpm does not have | *"OneUp could not read this package's change notes."*, never "no change notes" (§4.3) |
 | The baseline was taken before the install | A window that attached to a run already past its commit | The newest 20 entries, with the sentence saying OneUp could not tell which are new |
 | A font can draw the mark | None needs to: the app draws it (ONEUP-0357) | U+24D8, the first choice, was in no font a stock KDE Live install carries (ONEUP-0297); U+2139 in Noto Sans reads as a plain letter i |
 | zypper's text layout stays `Key : value` | A zypper release that changes `info`'s output | The parse finds no About: no marks until installed, never a wrong description |

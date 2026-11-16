@@ -85,6 +85,17 @@ EOF
     printf '#!/usr/bin/env bash\nexit 0\n' > "$d/notify-send"
     printf '#!/usr/bin/env bash\nexit 0\n' > "$d/flatpak"
     printf '#!/usr/bin/env bash\nexit 0\n' > "$d/fwupdmgr"
+    # The orphans step asks `rpm -q --qf '%{NAME}\n' -- <names>` which names are installed
+    # in more than one version. Unmocked it asks the real rpm database, where the
+    # scenarios' made-up names are not installed — and a failed query now stops the
+    # removal (ONEUP-0420). Each name is installed once; a scenario wanting a
+    # multiversion package or a failing query writes its own.
+    cat > "$d/rpm" <<'EOF'
+#!/usr/bin/env bash
+while [[ $# -gt 0 && "$1" != "--" ]]; do shift; done
+shift
+printf '%s\n' "$@"
+EOF
     # The engine's pre-flight reads `df -PB1 <mount>` for / and /var. Unmocked it reads
     # the real machine, so on a box under the 2 GiB threshold every system-step scenario
     # gains a real @@DISK@@|warn line sourced from whatever the developer's disk happens

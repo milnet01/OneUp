@@ -22,6 +22,7 @@ nothing in this project discovers tests.
 """
 import contextlib
 import io
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -392,6 +393,23 @@ def details_checks() -> None:
     got = pd.changelog("foo", "2.*", "installed", None, run=run)
     check("changelog: an edition with '*' gives no entries and calls nothing",
           (got.entries, calls), ([], []))
+
+    # ONEUP-0420: a failed or timed-out rpm reached the dialog as "no change notes",
+    # a fact OneUp never established. Only an rpm that answered with no entries is that.
+    def answered(code, text=""):
+        return lambda argv, **_kw: subprocess.CompletedProcess(argv, code, text, "")
+
+    def timed_out(argv, **_kw):
+        raise subprocess.TimeoutExpired(argv, 5)
+
+    check("changelog: rpm exiting non-zero is unreadable, not 'no notes'",
+          pd.changelog("foo", "2.3-4", "installed", None,
+                       run=answered(1, "package foo-2.3-4 is not installed\n")).kind,
+          "unreadable")
+    check("changelog: rpm timing out is unreadable",
+          pd.changelog("foo", "2.3-4", "installed", None, run=timed_out).kind, "unreadable")
+    check("changelog: an rpm that answered with no entries is still 'no notes'",
+          pd.changelog("foo", "2.3-4", "installed", None, run=answered(0)).kind, "no-notes")
 
     base = (_F.join(("bash", "5.3.20-9.1", "100", "A <a@x>", "old text")) + _E
             + "package nosuch is not installed\n"

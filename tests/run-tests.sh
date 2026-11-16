@@ -3372,6 +3372,49 @@ check_absent "the multiversion one is not"             "kernel-default" "$remove
 check        "and the log says why it was kept"        "Kept kernel-default" "$out"
 rm -rf "$d"
 
+# ONEUP-0420: the check above discarded rpm's exit status, so a query that failed (a
+# locked rpm database) printed nothing, every name read as single-version, and the bare-
+# name removal went ahead — the harm the check exists to stop. It must fail closed.
+echo "TEST: a failed multiversion check removes nothing (ONEUP-0420)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *packages*--unneeded*) printf 'S|Repo|Name|Ver|Arch\n-+-+-+-+-\ni|r|kernel-default|7.3.1|x\ni|r|foo|1|x\n'; exit 0 ;;
+  *packages*--orphaned*) exit 0 ;;
+  *remove*)              echo "\$*" >> "$d/removed"; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+printf '#!/usr/bin/env bash\necho "error: cannot open Packages database" >&2\nexit 1\n' > "$d/rpm"
+chmod +x "$d/zypper" "$d/rpm"
+out=$(run_engine "$d" --steps=orphans)
+check_eq     "nothing is removed"                      "" "$(cat "$d/removed" 2>/dev/null)"
+check        "the step fails rather than claiming a clean-up" \
+             "@@STEP_END@@|orphans|fail|" "$out"
+check        "and the window is told why"              "@@HINT@@|orphans-versions-unknown" "$out"
+rm -rf "$d"
+
+# ONEUP-0420: a table with rows but no `---+` line under its heading is a layout this
+# parser does not know. Reading it as "no rows" told the user nothing needed removing.
+echo "TEST: a zypper table without its heading rule is unreadable, not empty (ONEUP-0420)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *packages*--unneeded*) printf 'S|Repo|Name|Ver|Arch\ni|r|foo|1|x\n'; exit 0 ;;
+  *packages*--orphaned*) exit 0 ;;
+  *remove*)              echo "\$*" >> "$d/removed"; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=orphans)
+check_eq     "nothing is removed"                      "" "$(cat "$d/removed" 2>/dev/null)"
+check_absent "it does not say there was nothing to remove" "nothing to remove" "$out"
+check        "the window is told the list was unreadable" "@@HINT@@|orphans-unreadable" "$out"
+rm -rf "$d"
+
 echo "TEST: orphans step removes unneeded packages and reports the count"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/zypper" <<'EOF'
@@ -5324,6 +5367,15 @@ py_case() {  # name, python source, [extra env assignments...]
     fi
     rm -rf "$d"
 }
+
+# ONEUP-0420: with no rpm the multiversion check returned every name unchecked, so the
+# removal went ahead blind. No run reaches it end to end: the machine's own rpm is on PATH.
+echo "TEST: the multiversion check fails closed when rpm is missing (ONEUP-0420)"
+py_case "no rpm is 'could not check', never 'nothing to keep'" '
+from oneup.engine import steps
+steps.shutil.which = lambda _name: None
+got = steps._keep_multiversion(["foo", "kernel-default"])
+raise SystemExit(0 if got is None else f"got {got!r}")'
 
 echo "TEST: the passwordless rule names system binaries, never the user's PATH (ONEUP-0408)"
 # openSUSE puts ~/bin first on PATH, so a ~/bin/zypper used to become a NOPASSWD root

@@ -400,10 +400,17 @@ def _package_column(text: str) -> list[str] | None:
     Returns None when any row fails the shape test — fail closed, per security.md
     §4.2. Dropping the bad row and removing the rest would be a clean-up-and-
     continue on the argv of a root package removal, which §4.4 forbids.
+
+    Also None when a table appears with no `---+` line: a layout this does not know,
+    which "no rows" would report as nothing to remove (ONEUP-0420).
     """
+    lines = text.splitlines()
+    if not any(re.match(r"-+\+", line) for line in lines) and any("|" in line for line in lines):
+        markers.err("Refusing zypper's package table: its layout is not the one OneUp reads.")
+        return None
     names = []
     rows = False
-    for line in text.splitlines():
+    for line in lines:
         if re.match(r"-+\+", line):
             rows = True
             continue
@@ -422,17 +429,26 @@ def _package_column(text: str) -> list[str] | None:
     return names
 
 
-def _keep_multiversion(names: list[str]) -> list[str]:
+def _keep_multiversion(names: list[str]) -> list[str] | None:
     """`names` less any installed in more than one version, which are kept.
 
     The removal is by bare name, and `zypper remove <name>` takes EVERY installed
     version: one old multiversion kernel listed as unneeded would remove them all,
     the running one included (ONEUP-0401). One `rpm -q` prints a line per installed
     version, so a name it prints twice is one to keep.
+
+    Returns None when rpm is missing or the query fails — fail closed (security.md
+    §4.2). A failed query prints nothing, which reads as "no name twice" (ONEUP-0420).
     """
-    if not names or not shutil.which("rpm"):
+    if not names:
         return names
-    _, out = proc.run(["rpm", "-q", "--qf", "%{NAME}\n", "--", *names])
+    if not shutil.which("rpm"):
+        markers.out("Couldn't check installed versions: rpm was not found.")
+        return None
+    rc, out = proc.run(["rpm", "-q", "--qf", "%{NAME}\n", "--", *names])
+    if rc != 0:
+        markers.out(f"Couldn't check installed versions (rpm exit {rc}).")
+        return None
     seen = out.split("\n")
     multi = [n for n in names if seen.count(n) > 1]
     for name in multi:
@@ -482,6 +498,12 @@ def run_orphans(opts) -> None:
         end_step("orphans", "fail", "failed", "unreadable package name in zypper's output")
         return
     unneeded = _keep_multiversion(unneeded)
+    if unneeded is None:
+        markers.hint("orphans-versions-unknown",
+                     say="OneUp could not check which leftover packages have more than one "
+                         "version installed, so it removed none. The log has the reason.")
+        end_step("orphans", "fail", "failed", "couldn't check installed versions")
+        return
     if unneeded:
         markers.out(f"Removing {len(unneeded)} leftover dependency package(s):")
         for name in unneeded:

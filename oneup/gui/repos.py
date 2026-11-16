@@ -301,8 +301,9 @@ class RepoManagerDialog(QDialog):
                                 "could not be started."))
         self.apply_btn.setEnabled(True)
 
-    def _on_applied(self, code: int, _status):
-        if code == 0:
+    def _on_applied(self, code: int, status):
+        # Qt defines the exit code only for a normal exit (ONEUP-0420).
+        if code == 0 and status != QProcess.CrashExit:
             QMessageBox.information(self, QCoreApplication.translate(
                 "repos", "Repositories"), QCoreApplication.translate(
                 "repos",

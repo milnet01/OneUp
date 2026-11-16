@@ -2947,6 +2947,9 @@ def main() -> int:
         package_details.changelog = _orig_cl
     check("ONEUP-0400 a removal's details say it is removed, not that notes will come",
           "removes the package" in _removal and "once the new version" not in _removal)
+    _unread = details_dialog.details_text(None, package_details.WhatChanged("unreadable"))
+    check("ONEUP-0420 notes rpm could not read are not called 'no change notes'",
+          "could not read" in _unread and "no change notes" not in _unread)
 
     # --- headless command builder shared by both timers ------------------------
     check("headless --check command ends in --check",
@@ -3900,16 +3903,19 @@ def main() -> int:
           and "removerepo debug-dup" not in (dlg_f._build_apply_command() or ["", "", "", ""])[3])
 
     # ONEUP-0157: a failed apply re-reads the machine and says what it found.
-    def _failed_apply(code, now_repos):
+    def _failed_apply(code, now_repos, status=None):
         d = repos.RepoManagerDialog(None, parsed)
         said = []
         _w, _r = QMessageBox.warning, repos.read_repos
+        _i = QMessageBox.information
         QMessageBox.warning = staticmethod(lambda _p, _t, text, *a, **k: said.append(text))
+        QMessageBox.information = staticmethod(lambda _p, _t, text, *a, **k: said.append(text))
         repos.read_repos = lambda: now_repos
         try:
-            d._on_applied(code, None)
+            d._on_applied(code, status)
         finally:
             QMessageBox.warning, repos.read_repos = _w, _r
+            QMessageBox.information = _i
         return d, " ".join(said)
     half = [dict(r) for r in parsed]
     half[0]["enabled"] = False                  # the disable landed ...
@@ -3929,6 +3935,10 @@ def main() -> int:
     _d, said = _failed_apply(1, [])
     check("an unreadable result claims neither outcome",
           "couldn't re-read" in said)
+    # ONEUP-0420: Qt defines the exit code only for a normal exit.
+    _d, said = _failed_apply(0, [dict(r) for r in parsed], QProcess.CrashExit)
+    check("a crashed apply is never reported as applied",
+          "applied." not in said and "Nothing was changed" in said)
 
     # ONEUP-0157: a rollback reports which half failed instead of saying nothing.
     wr = window.Updater()
@@ -3952,6 +3962,12 @@ def main() -> int:
         said.clear()
         rollback._on_rollback_finished(wr, 0, "42")
         check("a rollback that is restarting says nothing", said == [])
+        # ONEUP-0420: a helper killed by signal 4 reports code 4 — the code that means
+        # "the rollback is set". A crash proves neither half, so it is the unexpected end.
+        said.clear()
+        rollback._on_rollback_finished(wr, 4, "42", QProcess.CrashExit)
+        check("a crashed rollback claims neither half",
+              "restart failed" not in " ".join(said) and "unexpectedly" in " ".join(said))
     finally:
         QMessageBox.warning, QMessageBox.information, QProcess.start = _warn, _info, _start
 

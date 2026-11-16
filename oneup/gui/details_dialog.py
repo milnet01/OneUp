@@ -314,6 +314,9 @@ def details_text(about: package_details.About | None,
     elif changed.kind == "no-notes":
         lines.append(QCoreApplication.translate(
             "details_dialog", "This package has no change notes."))
+    elif changed.kind == "unreadable":
+        lines.append(QCoreApplication.translate(
+            "details_dialog", "OneUp could not read this package's change notes."))
     elif changed.kind == "not-found":
         lines.append(QCoreApplication.translate(
             "details_dialog", "The downloaded package is not in the cache; its notes "

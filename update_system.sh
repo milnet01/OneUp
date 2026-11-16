@@ -2361,10 +2361,19 @@ if step_selected orphans && ! stop_pending && ! $SYS_PARTIAL; then
         fi
     done
     # A name installed in more than one version (a multiversion kernel) is kept: the
-    # removal is by bare name, and that takes EVERY version (ONEUP-0401).
+    # removal is by bare name, and that takes EVERY version (ONEUP-0401). A failed
+    # query prints nothing, which reads as "no name twice", so its status is checked
+    # and a failure removes nothing (ONEUP-0420).
     if ! $UNSAFE_PKG && ((${#UNNEEDED[@]})); then
-        mapfile -t MULTI_PKG < <(rpm -q --qf '%{NAME}\n' -- "${UNNEEDED[@]}" 2>/dev/null \
-                                 | sort | uniq -d)
+        RPM_NAMES=$(rpm -q --qf '%{NAME}\n' -- "${UNNEEDED[@]}" 2>/dev/null)
+        RPM_RC=$?
+        if ((RPM_RC != 0)); then
+            echo "Couldn't check installed versions (rpm exit $RPM_RC)."
+            end_step orphans fail "couldn't check installed versions"
+            UNNEEDED=()
+            UNSAFE_PKG=true
+        fi
+        mapfile -t MULTI_PKG < <(sort <<<"$RPM_NAMES" | uniq -d)
         if ((${#MULTI_PKG[@]})); then
             KEEP_PKG=()
             for pkg in "${UNNEEDED[@]}"; do

@@ -124,7 +124,7 @@ def rollback(win):
         # user must be told to restart rather than left to assume nothing changed.
         win._rollback_proc = QProcess(win)
         win._rollback_proc.finished.connect(
-            lambda code, _status=None, t=target: _on_rollback_finished(win, code, t))
+            lambda code, status=None, t=target: _on_rollback_finished(win, code, t, status))
         win._rollback_proc.errorOccurred.connect(   # no `finished` follows (ONEUP-0183)
             lambda err: err == QProcess.FailedToStart and QMessageBox.information(
                 win, QCoreApplication.translate("rollback", "Roll back"),
@@ -137,25 +137,29 @@ def rollback(win):
                        f"snapper rollback {target} || exit 3; systemctl reboot || exit 4"])
 
 
-def _on_rollback_finished(win, code: int, target: str):
+def _on_rollback_finished(win, code: int, target: str, status=None):
     """Say what a rollback that did not end in a restart actually did."""
-    if code == 0:
+    # Qt defines the code only for a normal exit; a helper killed by signal 3 or 4
+    # reports 3 or 4, which would claim a half it never reached (ONEUP-0420). A crash
+    # matches no branch below and so reaches the unexpected end, which shows the number.
+    meant = None if status == QProcess.CrashExit else code
+    if meant == 0:
         return   # the restart is under way
-    if code in (126, 127):   # pkexec: prompt dismissed, or not authorised
+    if meant in (126, 127):   # pkexec: prompt dismissed, or not authorised
         QMessageBox.information(
             win, QCoreApplication.translate("rollback", "Roll back"),
             QCoreApplication.translate(
                 "rollback",
                 "Nothing was changed — the administrator prompt was cancelled or "
                 "refused."))
-    elif code == 3:
+    elif meant == 3:
         QMessageBox.warning(
             win, QCoreApplication.translate("rollback", "Roll back"),
             QCoreApplication.translate(
                 "rollback",
                 "Snapper couldn't roll back to restore point #{target}, so OneUp "
                 "did not restart the computer.").format(target=target))
-    elif code == 4:
+    elif meant == 4:
         QMessageBox.warning(
             win, QCoreApplication.translate("rollback", "Roll back"),
             QCoreApplication.translate(

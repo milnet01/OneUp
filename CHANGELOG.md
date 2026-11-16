@@ -15,6 +15,15 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **When a check fails, OneUp no longer carries on as if the answer were "none"** (ONEUP-0420)
+  If OneUp could not check which leftover packages have more than one version
+  installed, it removed them anyway — and removing a kernel by name removes every
+  installed version. It now removes nothing and says why. A list of leftover packages
+  in a layout OneUp does not know is reported as unreadable, not as "nothing to
+  remove". A package whose change notes could not be read now says so, instead of
+  "This package has no change notes". A rollback whose helper crashed no longer
+  claims to know which half failed.
+
 - **Update no longer stops responding, or starts twice, when OneUp cannot save its go-ahead note** (ONEUP-0418)
   If you pressed Update while OneUp was working out the download size, and OneUp then
   could not write to its state folder, the error message could reappear over and over

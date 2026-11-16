@@ -70,6 +70,10 @@ HINTS: dict[str, tuple[tuple[str, ...], str]] = {
         "markers",
         "OneUp could not read the list of leftover packages, so it removed none. "
         "The log has the reason.")),
+    "orphans-versions-unknown": ((), QT_TRANSLATE_NOOP(
+        "markers",
+        "OneUp could not check which leftover packages have more than one version "
+        "installed, so it removed none. The log has the reason.")),
     "orphans-remove-failed": ((), QT_TRANSLATE_NOOP(
         "markers",
         "The leftover packages could not be removed. The log has the reason.")),

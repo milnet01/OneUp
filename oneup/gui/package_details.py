@@ -55,8 +55,9 @@ class Entry:
 
 @dataclass
 class WhatChanged:
-    """`kind` is "entries", "no-notes", "not-found", "not-yet" or, for a package the
-    update removes, "removal". `known` is
+    """`kind` is "entries", "no-notes", "not-found", "not-yet", "unreadable" (rpm
+    failed, so OneUp does not know) or, for a package the update removes, "removal".
+    `known` is
     False when OneUp could not tell which entries are new (§4.3)."""
     kind: str
     entries: list[Entry] = field(default_factory=list)
@@ -194,13 +195,14 @@ def find_download(name: str, edition: str, root: str | None = None) -> str | Non
 
 
 def _rpm(argv: list[str], run: Callable) -> str | None:
+    """rpm's output, or None when it could not start, timed out or exited non-zero."""
     try:
         # Lenient: a packager's changelog need not be UTF-8 (ONEUP-0334).
         out = run(argv, capture_output=True, text=True, errors="replace",
                   timeout=RPM_TIMEOUT, env=ENV)
     except (OSError, subprocess.SubprocessError):
         return None
-    return out.stdout
+    return out.stdout if out.returncode == 0 else None
 
 
 def changelog(name: str, edition: str, state: str, baseline: Entry | None,
@@ -219,7 +221,9 @@ def changelog(name: str, edition: str, state: str, baseline: Entry | None,
         text = _rpm(["rpm", "-qp", "--qf", _ENTRIES_QF, path], run)
     else:
         return WhatChanged("not-yet")
-    entries = parse_entries(text or "")
+    if text is None:
+        return WhatChanged("unreadable")
+    entries = parse_entries(text)
     if not entries:
         return WhatChanged("no-notes")
     shown, known = new_entries(entries, baseline)

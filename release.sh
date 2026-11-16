@@ -171,7 +171,13 @@ if $do_obs; then
         cleanup
         work=$(mktemp -d) || work=""
         if ( cd "$work" && osc checkout "$proj" oneup >/dev/null 2>&1 ); then
-            cp packaging/obs/_service packaging/rpm/oneup.spec "$work/$proj/oneup/"
+            # Checked: a failed copy leaves the old files, and `osc commit` would then
+            # report success for a commit that changed nothing (ONEUP-0420).
+            if ! cp packaging/obs/_service packaging/rpm/oneup.spec "$work/$proj/oneup/"; then
+                echo "   copy into the OBS checkout failed — re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
+                obs_updated=false
+                continue
+            fi
             # `osc add` stays out of the && chain: on a file the checkout already
             # tracks some osc versions error rather than warn, and that must not skip
             # the commit. Kept for a file that is genuinely new (ONEUP-0255).
