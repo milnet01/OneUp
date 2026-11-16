@@ -93,7 +93,8 @@ def sync_stop(win):
 def hold_waiting(win) -> bool:
     """True while Update waits for the size preview to hold (§4.5's middle row)."""
     timer = getattr(win, "_hold_wait", None)
-    # Not once the held engine is adopted: the timer is still live as that run starts.
+    # Not once a run is under way. The tick stops the timer before adopting (ONEUP-0418);
+    # this keeps a live timer from ever reading as a wait during a run.
     return timer is not None and timer.isActive() and not win._run_active
 
 
@@ -182,6 +183,8 @@ def start_run(win):
         if not win._go_write_failed:
             _wait_for_hold(win)
             return
+        _launch(win, win.selected_steps(), check=False, beside_hold=True)
+        return
     _launch(win, win.selected_steps(), check=False)
 
 
@@ -306,16 +309,20 @@ def _hold_wait_tick(win):
         win.set_controls_enabled(True)
         _launch(win, win.selected_steps(), check=False)
         return
+    # Stopped BEFORE adopting: a failed write opens a modal box, whose event loop would
+    # otherwise run this tick again inside it — another box, and a second launch when
+    # both frames fall back (ONEUP-0418).
+    win._hold_wait.stop()
     win._go_write_failed = False
     if _adopt_held_engine(win):
-        win._hold_wait.stop()
-    elif win._go_write_failed:
+        return
+    if win._go_write_failed:
         # The go-ahead could not be written and would fail again. Fall back to a fresh
         # engine — the status quo, as for a preview that never held (INV-7).
-        win._hold_wait.stop()
         win.set_controls_enabled(True)
-        _launch(win, win.selected_steps(), check=False)
+        _launch(win, win.selected_steps(), check=False, beside_hold=True)
     else:
+        win._hold_wait.start()
         _show_hold_wait(win)
 
 
@@ -541,7 +548,7 @@ def _reset_for_run(win, steps: list[str], check: bool):
 
 
 def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
-            skip_repos: list[str] | None = None):
+            skip_repos: list[str] | None = None, beside_hold: bool = False):
     if not steps:
         QMessageBox.information(win, QCoreApplication.translate("run", "Nothing selected"),
                                 QCoreApplication.translate(
@@ -564,10 +571,12 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
     # of the two it is (ONEUP-0266). A check never asks for a password, so it may run
     # beside a hold; while the size is still being worked out it waits, because both
     # drive zypper. A retry is a run and always waits, told the truth either way.
+    # `beside_hold` is Update's fallback after the go-ahead could not be written: the
+    # hold cannot be adopted, so refusing here left Update dead (ONEUP-0418).
     size_proc = getattr(win, "_size_proc", None)
     if size_proc is not None and size_proc.state() != QProcess.NotRunning:
         held = _holding(win)
-        if not (held and check):
+        if not (held and (check or beside_hold)):
             if held:
                 text = QCoreApplication.translate(
                     "run",

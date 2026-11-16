@@ -15,6 +15,12 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Update no longer stops responding, or starts twice, when OneUp cannot save its go-ahead note** (ONEUP-0418)
+  If you pressed Update while OneUp was working out the download size, and OneUp then
+  could not write to its state folder, the error message could reappear over and over
+  and two updates could start. Pressing Update again did nothing. OneUp now shows the
+  error once and then tries to start the update the ordinary way.
+
 - **A software source an interrupted update left off is switched back on by the next update** (ONEUP-0411)
   Without the system service (the AppImage, for one), OneUp being force-closed
   mid-update could leave a software source it had paused switched off. OneUp now writes

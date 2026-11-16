@@ -347,6 +347,9 @@ who presses **Show download size** and then immediately presses **Update** is in
 `_launch` also gains the guard §2.3 found missing: it must not start a second engine while
 `_size_proc` is live. And if the engine has gone by the time the window looks, the window
 clears its held-engine state and falls back to `_launch` as it works today (INV-7).
+One exception: when the hold is ours but `go.request` cannot be written, the hold cannot
+be adopted, so Update's fallback passes the guard and starts a fresh engine beside it
+(ONEUP-0418). While the size is still being worked out the guard holds even then.
 
 ### 4.6 The steps travel with the go-ahead
 
@@ -387,7 +390,9 @@ root process, and the two do not warrant the same leniency.
   the defect, not about the rewritten scenario, whose own red run is still owed
   (`docs/standards/testing.md` §1).
   *Breaks when:* the run reaches `sudo_init` in a process that did not already
-  authenticate — any change that starts a second engine for the run.
+  authenticate — any change that starts a second engine for the run. One exception is
+  deliberate: §4.5's fallback when `go.request` cannot be written, which costs a second
+  prompt rather than leaving Update dead (ONEUP-0418).
 
 - **INV-2** A held engine never begins a transaction without a go-ahead newer than its own
   `hold.state`.
@@ -602,3 +607,4 @@ No version-site change: this is not a release on its own.
 | impl-0392 | 2026-11-11 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0392 measured in a VM that the keep-alive refreshed its own record, not the engine's, and made it a thread. §10's open question is settled; INV-9's test is renamed and now counts validates; the failure table's two "second prompt" claims are corrected to the measured failed run. |
 | impl-0403 | 2026-11-15 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0403 (review-code 2026-11-11): §4.5's middle row had no way out but quitting. The Stop slot now offers Cancel during the wait, which ends the wait and starts nothing; the preview is left to finish, since the engine is never signalled. The suggested ceiling was not added: falling back to `_launch` there is refused by §4.5's own second-engine guard while the preview runs. |
 | impl-0405 | 2026-11-15 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0405, decided by the user 2026-11-15: a credential sudo forgets before the keep-alive refreshes it is asked for again in the box, not left to fail. §6's warm-credential row and §7's ceiling row now say so. |
+| impl-0418 | 2026-11-16 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0418 (review-code 2026-11-15): after a failed `go.request` write, Update's fallback to `_launch` was refused by §4.5's own second-engine guard while the preview held, so Update did nothing. §4.5 now names the one exception: a hold that is ours but cannot be adopted lets the fallback pass the guard. The guard still holds while the size is being worked out. INV-1's *Breaks when* names the exception, which costs a second prompt. |

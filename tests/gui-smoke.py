@@ -2630,6 +2630,80 @@ def main() -> int:
         run._launch = _real_launch
     paths.HOLD_STATE.unlink(missing_ok=True)
 
+    # ONEUP-0418: the error box is modal, so it runs a nested event loop, and the wait
+    # timer went on firing inside it. Each inner tick cleared the latch, failed the
+    # write again and opened another box, and the inner and outer frames each launched
+    # — two engines. The first box spins a REAL event loop for three ticks, as the
+    # modal box does; boxes opened inside it return at once.
+    wR = window.Updater()
+    wR._size_proc = _SizeProc(16181)
+    wR._hold_log = paths.STATE_LOG_DIR / "reentrant.log"
+    paths.HOLD_STATE.unlink(missing_ok=True)
+    _warnings, _launched = [], []
+
+    def _modal(*a, **_k):
+        _warnings.append(a)
+        if len(_warnings) == 1:
+            QTest.qWait(3 * run.HOLD_WAIT_POLL_MS + 100)
+        return 0
+
+    QMessageBox.warning = staticmethod(_modal)
+    paths.GO_REQUEST = Path(os.devnull) / "go.request"
+    run._launch = lambda w, st, check, **kw: _launched.append(kw.get("beside_hold"))
+    try:
+        run.start_run(wR)
+        paths.HOLD_STATE.write_text(f"16181\n{wR._hold_log}\n412 MB\n")
+        run._hold_wait_tick(wR)
+        check("ONEUP-0418 no tick runs while the failed write's box is open",
+              len(_warnings) == 1)
+        check("ONEUP-0418 and only one engine is started",
+              len(_launched) == 1)
+        check("ONEUP-0418 and that launch may pass the hold it could not adopt",
+              _launched == [True])
+    finally:
+        QMessageBox.warning = _real_warning
+        paths.GO_REQUEST = _real_go
+        run._launch = _real_launch
+    paths.HOLD_STATE.unlink(missing_ok=True)
+
+    # ONEUP-0418: the fresh engine the failed write falls back to was refused by
+    # `_launch`'s own guard, because the preview is still holding — so Update did
+    # nothing and said to press Update. Uses the real `_launch`; `log_dir_ready`
+    # returning False stops it just past the guard, as ONEUP-0266's checks below do.
+    wF = window.Updater()
+    wF._size_proc = _SizeProc(16182)
+    wF._hold_log = paths.STATE_LOG_DIR / "dead-update.log"
+    paths.HOLD_STATE.write_text(f"16182\n{wF._hold_log}\n412 MB\n")
+    _boxes, _reached = [], []
+    _real_info, _real_ready = QMessageBox.information, paths.log_dir_ready
+    QMessageBox.warning = staticmethod(lambda *a, **k: 0)
+    QMessageBox.information = staticmethod(lambda *a, **k: _boxes.append(a[2]) or 0)
+    paths.log_dir_ready = lambda *_a, **_k: _reached.append(True) and False
+    paths.GO_REQUEST = Path(os.devnull) / "go.request"
+    try:
+        run.start_run(wF)
+        check("ONEUP-0418 a failed go-ahead write still reaches a fresh launch",
+              bool(_reached) and not _boxes)
+    finally:
+        QMessageBox.warning = _real_warning
+        QMessageBox.information = _real_info
+        paths.log_dir_ready = _real_ready
+        paths.GO_REQUEST = _real_go
+    paths.HOLD_STATE.unlink(missing_ok=True)
+    # A retry is no failed write: it still waits while the size is held (ONEUP-0266).
+    paths.HOLD_STATE.write_text(f"16182\n{wF._hold_log}\n412 MB\n")
+    _boxes.clear()
+    QMessageBox.information = staticmethod(lambda *a, **k: _boxes.append(a[2]) or 0)
+    paths.log_dir_ready = lambda *_a, **_k: False
+    try:
+        run._launch(wF, ["system"], check=False)
+        check("ONEUP-0418 the guard still holds a retry back while the size is held",
+              len(_boxes) == 1)
+    finally:
+        QMessageBox.information = _real_info
+        paths.log_dir_ready = _real_ready
+    paths.HOLD_STATE.unlink(missing_ok=True)
+
     # ONEUP-0266: once the size is known the preview engine HOLDS, alive for up to two
     # minutes so Update can adopt it. `_launch`'s guard read "alive" as "still working
     # out the size", so Check for updates said so and refused. A check never asks for a
