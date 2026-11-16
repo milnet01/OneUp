@@ -15,6 +15,24 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **A package's name no longer decides which problem OneUp reports** (ONEUP-0422)
+  An update that failed while installing a package with "timeout" in its name was
+  told to check the internet connection, and a package named like a conflict could
+  stop OneUp retrying a failed download. Removing an old kernel, or installing kernel
+  headers, no longer reads as "a new kernel was installed".
+
+- **A full disk no longer stops an update before OneUp can say why** (ONEUP-0423)
+  If OneUp could not write its log, an update could end before it showed any message,
+  and a running update could stall partway. The update now runs on and says the log
+  is missing. Two small files OneUp keeps are now saved so a power cut cannot leave
+  them empty.
+
+- **Unattended updates and checks no longer wait for ever on a stuck system service** (ONEUP-0424)
+  A scheduled update or check could hang with nobody watching if OneUp's system
+  service stopped answering, and one stuck task inside the service could freeze it
+  for everyone. Each wait now has a time limit, and Stop is heard while OneUp tests
+  which software source failed.
+
 - **"Skip & update the rest" now says so when a source would not switch off** (ONEUP-0421)
   If OneUp could not switch off the source you chose to skip, it went on updating with
   that source still on, and nothing said the skip had not happened. It now installs
