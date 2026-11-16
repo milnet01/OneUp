@@ -12213,7 +12213,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0419] **Environment values reach root commands and tight loops unchecked.**
+- ✅ [ONEUP-0419] **Environment values reach root commands and tight loops unchecked.**
   review-code 2026-11-15, theme (a), four lanes independently:
   - actions.py GUARD_FILE/AUTH_FILE from ONEUP_GUARD_FILE and
     ONEUP_AUTH_FILE land in the NOPASSWD rule (lane 01, MEDIUM; §5 is
@@ -12226,6 +12226,14 @@ when complete (that document's §7).
   - privilege.py: a keep-alive interval of 0 busy-loops; a bad
     BUSY_WAIT raises at import (privilege.py, rootops.py; lane 03).
   Lane files in /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  Shipped 2026-11-16 in 3cd3d8d. All six verified and fixed. A grant
+  refuses a live drop-in (under /etc or /usr/etc) naming a guard outside
+  the two system paths, in both engines. Stop poll, keep-alive and busy
+  wait go through privilege.env_seconds (positive and finite, else the
+  default); the Bash fallback's positive_seconds covers its keep-alive
+  and stop poll; CHECK_DRY_RUN_SECONDS takes whole seconds above zero.
+  The guard's text is unchanged (a re-grant). security.md §5.7 holds the
+  rule. Tests in both engines, red before the fix.
   **Layman:** Some settings OneUp reads at start are used without checking them, in places where a bad value matters.
   Kind: security.
   Source: review-code-2026-11-15.
