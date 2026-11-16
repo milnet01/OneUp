@@ -12238,7 +12238,7 @@ when complete (that document's §7).
   Kind: security.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0420] **A failed query reads as "nothing there", and the run goes on as if it succeeded.**
+- ✅ [ONEUP-0420] **A failed query reads as "nothing there", and the run goes on as if it succeeded.**
   review-code 2026-11-15, theme (b), five lanes independently:
   - steps.py multiversion guard fails open: rpm's exit status is
     discarded (lane 02, MEDIUM, verified).
@@ -12250,6 +12250,14 @@ when complete (that document's §7).
   - steps.py: a changed zypper table reads as "nothing to remove"
     (lane 02).
   Lane files in /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  Shipped 2026-11-16 in 1cf58a0. All five fixed: the multiversion guard
+  fails closed in both engines (new hint orphans-versions-unknown); a
+  zypper table without its ---+ line is unreadable; a failed rpm shows
+  "could not read" (ONEUP-0260 4.3, 6 amended); repos and rollback read
+  Qt's exit status; release.sh checks its copy into the OBS checkout.
+  Measured: Qt reports a crashed child's signal number, never 0, so
+  "reads as applied" did not occur; rollback's codes 3 and 4 were the
+  live part. Not changed: the frozen Bash fallback's awk table parse.
   **Layman:** When a check OneUp relies on fails, it sometimes carries on as though the answer were "none".
   Kind: review-fix.
   Source: review-code-2026-11-15.
