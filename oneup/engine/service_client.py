@@ -120,10 +120,14 @@ def has_session() -> bool:
 
 
 def open_session(*, interactive: bool, import_keys: bool) -> None:
-    """`OpenSession`, once per run. Polkit may ask the user here, so there is no timeout."""
+    """`OpenSession`, once per run. Polkit may ask the user here, so an interactive
+    call has no timeout. A non-interactive one — the timer's run, every `--check` —
+    tells polkit never to ask, so it is bounded like the other calls that never
+    prompt: unbounded, a wedged service hung it with nobody watching (ONEUP-0424)."""
     global _SESSION
     _call("OpenSession", "a{sv}",
-          ({"interactive": ("b", interactive), "import_keys": ("b", import_keys)},))
+          ({"interactive": ("b", interactive), "import_keys": ("b", import_keys)},),
+          timeout=None if interactive else RUN_SECONDS)
     _SESSION = True
 
 

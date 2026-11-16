@@ -95,16 +95,26 @@ class Job:
         self._on_end(self)
 
 
+CAPTURED_SECONDS = 60
+
+
 def run_captured(argv: Sequence[str]) -> tuple[int, str]:
     """A short root child run to completion inside the service, for its own checks.
 
     Used for `orphans-unneeded` before an `orphans-remove` (§4.2) and for a session's
     re-enables (§4.5). Not a job: the caller sees none of it.
+
+    Bounded by `CAPTURED_SECONDS`, because it runs on the service's only loop: a
+    zypper that hung here stopped every Read, every reply and SIGTERM with it
+    (ONEUP-0424). Expiry reads as a failure, which each caller already handles — a
+    re-enable goes on the retry list, and an unneeded-list check refuses.
     """
     try:
         done = subprocess.run(  # noqa: S603 — argv from rootops' table, no shell
             list(argv), stdin=subprocess.DEVNULL, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", check=False)
+            encoding="utf-8", errors="replace", check=False, timeout=CAPTURED_SECONDS)
+    except subprocess.TimeoutExpired:
+        return 124, f"no answer within {CAPTURED_SECONDS} s"
     except OSError as exc:
         return 127, str(exc)
     return done.returncode, done.stdout

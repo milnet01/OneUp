@@ -800,6 +800,43 @@ def test_end_after_bookkeeping(base: Path) -> None:
           srv._answer(None, session, 0) is True and replies[-1:] == [(b"", 3)], replies)
     job.discard()
 
+    # ONEUP-0424: the service's own captured runs sit on its only loop, and had no
+    # bound: one hung zypper there stopped every Read and reply with it.
+    jobs.CAPTURED_SECONDS = 0.5
+    began = time.monotonic()
+    rc, _ = jobs.run_captured(["sleep", "5"])
+    took = time.monotonic() - began
+    check("a captured run that never answers is ended, and reads as a failure",
+          rc != 0 and took < 3, (rc, round(took, 1)))
+
+    # ONEUP-0424: CanUpdate started a thread per call and counted none of them.
+    import threading
+    cap = getattr(server, "MAX_CHECKS", 16)
+    gate = threading.Event()
+    real_check = server.polkit.check
+    server.polkit.check = lambda *_a, **_k: (gate.wait(5), server.polkit.YES)[1]
+    errors: list[str] = []
+    answers: list[tuple] = []
+    srv._error = lambda _msg, name, _text: errors.append(name)
+    srv._reply = lambda _msg, _sig="", body=(): answers.append(body)
+    srv.router = None
+    asking = SimpleNamespace(header=SimpleNamespace(fields={}))
+    try:
+        for _ in range(cap + 1):
+            srv._can_update(asking)
+        busy = list(errors)
+    finally:
+        gate.set()
+        server.polkit.check = real_check
+    wait_for(lambda: len(answers) >= cap, 10)
+    check("past the cap, CanUpdate answers Busy instead of starting another thread",
+          len(busy) == 1 and busy[0].endswith("Busy") and len(answers) == cap,
+          (busy, len(answers)))
+    srv._can_update(asking)                       # the slots came back with the answers
+    check("once those are answered, the next CanUpdate is answered too",
+          wait_for(lambda: len(answers) == cap + 1, 10) and len(errors) == 1,
+          (errors, len(answers)))
+
 
 def test_idle(base: Path) -> None:
     scenario("INV-15: with no session and no job, the service exits")

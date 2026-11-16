@@ -1234,6 +1234,10 @@ def run_system(opts) -> None:
         if (not ok and not SYS_PARTIAL and not opts.skip_repos
                 and repos.repo_scoped_failure(_SYS_LOG)):
             failing = repos.find_failing_repos()
+            if proc.stop_pending():
+                # A probe cut short names only some sources, and a Stop is never
+                # answered by setting sources aside and running again (ONEUP-0424).
+                failing = []
             if len(failing) > MAX_SKIP_REPOS:
                 systemic = True                    # too many at once: not one bad source
             elif failing:

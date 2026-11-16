@@ -5075,7 +5075,8 @@ fi
 # and the rule that grants it, so a respelling on either side cannot drift unnoticed.
 # Comments stripped for the reason above.
 stripped=$(grep -vE '^[[:space:]]*#' "$ENGINE")
-for pair in "REFRESH_SUDO_ARGV:5" "CACHE_DU_ARGV:5"; do
+# REFRESH_SUDO_ARGV gained its second call site in ONEUP-0424: the repo-failure probe.
+for pair in "REFRESH_SUDO_ARGV:6" "CACHE_DU_ARGV:5"; do
     var="${pair%%:*}"; want="${pair##*:}"
     got=$(grep -c "$var" <<<"$stripped")
     if [[ "$got" == "$want" ]]; then
@@ -5735,6 +5736,31 @@ py_case "a --log= value is not normalised" '
 from oneup.engine import runstate
 got = str(runstate.resolve_log_path("logs//./run.log"))
 raise SystemExit(0 if got == "logs//./run.log" else f"got {got!r}")'
+
+# ONEUP-0424: two waits had no bound or no Stop check. A non-interactive OpenSession —
+# the timer's run, every --check — tells polkit never to ask, yet waited for ever on a
+# wedged service; the repo probe waited out one budget per source after a Stop.
+echo "TEST: the calls nobody watches are bounded, and the probe hears a Stop (ONEUP-0424)"
+py_case "a non-interactive OpenSession is bounded; an interactive one is not" '
+from oneup.engine import service_client as sc
+seen = []
+sc._call = lambda _method, _sig=None, _body=(), timeout=None: seen.append(timeout) or ()
+sc.open_session(interactive=False, import_keys=False)
+sc.open_session(interactive=True, import_keys=False)
+raise SystemExit(0 if seen == [sc.RUN_SECONDS, None] else f"got {seen}")'
+
+py_case "a Stop ends the repo probe between sources" '
+from oneup.engine import privilege, proc, repos
+repos.enabled_repo_aliases = lambda: ["a", "b", "c"]
+asked = []
+def root(_op, args, **_k):
+    asked.append(args["alias"])
+    return 1, "Curl error"
+privilege.root = root
+answers = iter([False, True])
+proc.stop_pending = lambda: next(answers, True)
+repos.find_failing_repos()
+raise SystemExit(0 if asked == ["a"] else f"asked {asked}")'
 
 echo "TEST: a mistyped hold ceiling falls back to its default instead of killing the engine"
 py_case "ONEUP_HOLD_SECONDS=abc still imports, at 120" '

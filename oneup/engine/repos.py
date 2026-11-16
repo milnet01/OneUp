@@ -283,6 +283,10 @@ def find_failing_repos() -> list[str]:
     for alias in enabled_repo_aliases():
         if not alias:
             continue
+        # Between sources, as `refresh_repos` checks: unchecked, a Stop waited out one
+        # budget per repository (ONEUP-0424). The caller acts on no list after a Stop.
+        if proc.stop_pending():
+            break
         # Under the SAME per-source budget `refresh_repos` uses. This function runs
         # only after a failure, i.e. exactly when a source is broken or crawling,
         # and its output goes to a variable rather than the log pane — so unbounded

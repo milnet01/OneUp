@@ -43,6 +43,8 @@ VERSION = 1
 _ERR = BUS_NAME + ".Error."
 
 MAX_SESSIONS = 8                  # §4.5
+MAX_CHECKS = 16                   # CanUpdate checks at once, each its own thread (ONEUP-0424)
+_CHECK_SLOTS = threading.BoundedSemaphore(MAX_CHECKS)
 READ_WAIT_SECONDS = 1.0           # the longest a `Read` with nothing to say waits (§4.3)
 RETRY_FOR = 600.0                 # how long a failed re-enable is retried (§4.5)
 
@@ -456,11 +458,20 @@ class Service:
 
     def _can_update(self, msg: Message) -> None:
         caller = self._sender(msg)
+        # Each check is bounded in time by polkit's own call, but nothing counted them:
+        # a caller asking in a loop started a thread per call. Past the cap the answer
+        # is Busy — "ask again", never a "no" OneUp did not establish (ONEUP-0424).
+        if not _CHECK_SLOTS.acquire(blocking=False):
+            self._error(msg, _ERR + "Busy", "too many checks at once")
+            return
 
         def check() -> None:
-            answer = polkit.check(self.router, caller, polkit.SYSTEM_UPDATE,
-                                  interactive=False)
-            self._reply(msg, "s", ("yes" if answer == polkit.YES else "no",))
+            try:
+                answer = polkit.check(self.router, caller, polkit.SYSTEM_UPDATE,
+                                      interactive=False)
+                self._reply(msg, "s", ("yes" if answer == polkit.YES else "no",))
+            finally:
+                _CHECK_SLOTS.release()
 
         threading.Thread(target=check, daemon=True).start()
 

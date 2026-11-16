@@ -1659,7 +1659,11 @@ find_failing_repos() {
     FAILING_REPOS=()
     for alias in "${aliases[@]}"; do
         [[ -z "$alias" ]] && continue
-        sudo_capture -e out zypper --non-interactive refresh "$alias"; rc=$?
+        # Bounded and stoppable like refresh_repos: this runs exactly when a source is
+        # crawling, into a variable, so unbounded it hung the run showing nothing
+        # (ONEUP-0424). The bounded argv is already in the drop-in (security.md §5.2).
+        stop_pending && break
+        sudo_capture -e out "${REFRESH_SUDO_ARGV[@]}" --non-interactive refresh "$alias"; rc=$?
         (( rc == 0 )) && continue
         if   grep -qiE "$KEY_FAILURE_RE" <<<"$out"; then reason=signature
         elif grep -qiE 'metadata|Valid metadata not found' <<<"$out"; then reason=metadata
@@ -2085,6 +2089,7 @@ if step_selected system && ! stop_pending; then
     if ! $ok && ! $SYS_PARTIAL && (( ${#SKIP_REPOS[@]} == 0 )) && repo_scoped_failure; then
         find_failing_repos                    # fills FAILING_REPOS[] in THIS shell
         failing=("${FAILING_REPOS[@]}")
+        stop_pending && failing=()            # a Stop is never answered by a retry (ONEUP-0424)
         if (( ${#failing[@]} > MAX_SKIP_REPOS )); then
             systemic_repo_fail=true                       # too many at once → not one bad source
         elif (( ${#failing[@]} > 0 )); then
