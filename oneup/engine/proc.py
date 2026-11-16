@@ -311,8 +311,16 @@ def _filter_lines(lines: Iterable[str], *, step: str, phase: str, log: Path,
     # Each package's own progress, beside the counts above and never instead of
     # them: PROGRESS and the canary's `seen` are untouched (ONEUP-0259 INV-10).
     packages = parsers.PackageLines()
-    with _closing_quietly(log.open("a" if append else "w", encoding="utf-8",
-                                   errors="replace")) as handle:
+    try:
+        sink = log.open("a" if append else "w", encoding="utf-8", errors="replace")
+    except OSError as exc:
+        # The transaction is already running when this opens. Raising here left it
+        # writing into a pipe nobody read, which ends a `zypper dup` mid-way — the
+        # first engine trap (ONEUP-0423). The pass runs on, unlogged.
+        markers.err(f"  Couldn't open the transaction log ({exc.strerror or exc}); "
+                    "this pass is not logged.")
+        sink = open(os.devnull, "w", encoding="utf-8")
+    with _closing_quietly(sink) as handle:
         for raw in lines:
             line = raw.rstrip("\n")
             markers.out(line)
@@ -419,7 +427,18 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
         # runs when a line arrives can never fire on it.
         timer = threading.Timer(deadline, _expire)
         timer.start()
-    seen = _filter_lines(child.stdout, step=step, phase=phase, log=log, append=append)
+    try:
+        seen = _filter_lines(child.stdout, step=step, phase=phase, log=log, append=append)
+    except Exception as exc:  # noqa: BLE001 — any reading fault must keep the pipe drained
+        # A fault in reading a line must not close our end of the pipe: the child would
+        # die of it mid-transaction (ONEUP-0423). Read the rest unprinted; the child's
+        # own status still decides the pass, as a line we failed to match must.
+        markers.err(f"  OneUp stopped following this pass's output ({exc!r}); "
+                    "it runs to its end.")
+        with contextlib.suppress(Exception):
+            for _ in child.stdout:
+                pass
+        seen = 0
     # Wait for the child to EXIT without reaping it, so its pid still names it
     # while the watchdog is live: a child that closed its output and kept going
     # stays under its budget. Once settled, the watchdog can no longer fire.

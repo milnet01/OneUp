@@ -555,8 +555,19 @@ class Service:
                 return
             self.paused_file.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.paused_file.with_suffix(".tmp")
-            tmp.write_text("".join(f"{alias}\n" for alias in sorted(paused)))
+            # Synced before the rename and the folder after it: the record exists to
+            # survive the service dying, and a power cut is one way to die (ONEUP-0423).
+            with tmp.open("w") as handle:
+                handle.write("".join(f"{alias}\n" for alias in sorted(paused)))
+                handle.flush()
+                os.fsync(handle.fileno())
             os.replace(tmp, self.paused_file)
+            with contextlib.suppress(OSError):      # best effort: the rename has happened
+                folder = os.open(self.paused_file.parent, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(folder)
+                finally:
+                    os.close(folder)
         except OSError as exc:
             audit(f"paused-sources record not written: {exc.strerror}")
 

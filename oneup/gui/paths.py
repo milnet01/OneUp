@@ -57,16 +57,36 @@ def _state_home() -> Path:
 
 
 
+def sync_folder(folder: Path) -> None:
+    """Make a rename inside `folder` durable. Best effort: the rename has happened."""
+    try:
+        fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
 def write_whole(path: Path, text: str) -> None:
     """Write `path` whole, through a temporary file and a rename (ONEUP-0184). A full
     disk or a crash part-way leaves the old file rather than a truncated one, which
-    systemd refuses as a unit and history.json reads as "never". Raises OSError."""
+    systemd refuses as a unit and history.json reads as "never". Raises OSError.
+
+    The data is synced before the rename and the folder after it, or a power cut can
+    leave the new name pointing at an empty file (ONEUP-0423)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
         os.replace(name, path)
+        sync_folder(path.parent)
     except BaseException:
         try:
             os.unlink(name)

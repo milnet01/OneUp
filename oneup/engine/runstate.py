@@ -82,7 +82,9 @@ def resolve_log_path(explicit: str | None) -> str:
     """
     if explicit:
         return explicit
-    USER_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    # A folder that cannot be made is `install_log_mirror`'s to report (ONEUP-0423).
+    with contextlib.suppress(OSError):
+        USER_LOG_DIR.mkdir(parents=True, exist_ok=True)
     return str(USER_LOG_DIR / f"{datetime.now().strftime('%Y-%m-%d_%H%M')}.log")
 
 
@@ -172,9 +174,19 @@ def install_log_mirror(path: Path) -> None:
     dispatch, so `--check`, `--size`, `--thin-snapshots` and the auth actions
     are all logged. The directory is created here, at the moment it is about to
     be written to, and not before (ONEUP-0058).
+
+    A log that cannot be opened — a full disk, an unwritable folder — leaves the run
+    on the console alone, said once on stderr. A full disk is when an update matters
+    most, and the log is a copy of what the console already shows (ONEUP-0423).
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle = path.open("a", encoding="utf-8", errors="replace")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = path.open("a", encoding="utf-8", errors="replace")
+    except OSError as exc:
+        with contextlib.suppress(OSError, ValueError):
+            print(f"OneUp couldn't open its log {path} ({exc.strerror or exc}); "
+                  "this run is not logged.", file=sys.__stderr__, flush=True)
+        return
     sys.stdout = _Mirror(sys.__stdout__, handle)
     sys.stderr = _Mirror(sys.__stderr__, handle)
 

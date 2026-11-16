@@ -935,10 +935,12 @@ def _system_upgrade_inner() -> bool:
                 DL_RECOVERY_TRIED = True
                 # The retry TRUNCATES the transaction log, and the failure hint
                 # below names its package from this snapshot of the first attempt.
-                handle, first = tempfile.mkstemp(prefix="oneup-sys-")
-                os.close(handle)
-                _SYS_LOG_FIRST = Path(first)
+                # A snapshot that cannot be made costs only the package's name in
+                # the hint; recovery still runs (ONEUP-0094 §4.5, ONEUP-0423).
                 with contextlib.suppress(OSError):
+                    handle, first = tempfile.mkstemp(prefix="oneup-sys-")
+                    os.close(handle)
+                    _SYS_LOG_FIRST = Path(first)
                     _SYS_LOG_FIRST.write_text(log, encoding="utf-8", errors="replace")
                 REPOSD_OVERRIDE = cdn_dir
                 markers.out("  Recovery: retrying downloads via "
@@ -1202,7 +1204,17 @@ def run_system(opts) -> None:
     for row in listing.rows:
         markers.marker("PKG", "system", "queued", row.name, row.edition, row.size,
                        row.old, row.repo, row.change if listing.exact else None)
-    handle, path = tempfile.mkstemp(prefix="oneup-sys-")
+    try:
+        handle, path = tempfile.mkstemp(prefix="oneup-sys-")
+    except OSError as exc:
+        # Nothing is installed yet, so the step ends here rather than the run
+        # ending in a traceback (ONEUP-0423).
+        markers.out(f"Couldn't create the transaction log ({exc.strerror or exc}).")
+        markers.hint("system-failed",
+                     say="The system update failed. The log has the reason; run the "
+                         "update again.")
+        end_step("system", "fail", "failed", "couldn't create the transaction log")
+        return
     os.close(handle)
     _SYS_LOG = Path(path)
     try:

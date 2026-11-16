@@ -5666,6 +5666,70 @@ assert fast == want, ("the pattern no longer reads the standard layout", fast)
 assert pkgsizes._pattern_pass(io.BytesIO(odd), set(want), float("inf")) is None, "odd layout"
 '
 
+# ONEUP-0423: the transaction's log was opened after the root zypper had started, so a
+# failed open raised with the child still writing into a pipe nobody read, and a fault
+# reading one line did the same. Either ends a `zypper dup` mid-way: the first engine
+# trap. Each child writes more than a pipe holds after the fault, then marks that it
+# finished: unread, it blocks there for good (measured at HEAD, 2026-11-16).
+echo "TEST: a log that cannot be written never cuts a running transaction off (ONEUP-0423)"
+py_case "an unopenable transaction log neither raises, kills the child, nor hides its output" '
+import os, pathlib, time
+from oneup.engine import proc
+d = pathlib.Path(os.environ["XDG_STATE_HOME"])
+done = d / "finished"
+shown = []
+proc.markers.out = shown.append
+argv = ["sh", "-c", f"echo a; sleep 0.3; yes b | head -c 200000; echo yes > {done}"]
+try:
+    rc = proc.stream_filtered(argv, step="system", phase="commit",
+                              log=d / "no" / "such" / "x.log", append=True)
+except OSError as exc:
+    rc = f"raised {exc.strerror}"
+time.sleep(1)
+ok = rc == 0 and done.exists() and "b" in shown   # still on screen, unlogged
+raise SystemExit(0 if ok else f"rc={rc} finished={done.exists()} shown={len(shown)}")'
+
+py_case "a fault reading a line lets the child finish, and its status still counts" '
+import os, pathlib, time
+from oneup.engine import proc
+d = pathlib.Path(os.environ["XDG_STATE_HOME"])
+done = d / "finished"
+proc.markers.out = lambda text: None
+def boom(_line):
+    raise ValueError("a parser bug")
+proc.parsers.progress_total_bytes = boom
+argv = ["sh", "-c", f"echo a; sleep 0.3; yes b | head -c 200000; echo yes > {done}; exit 3"]
+try:
+    rc = proc.stream_filtered(argv, step="system", phase="commit", log=d / "x.log",
+                              append=True)
+except ValueError:
+    rc = "raised"
+time.sleep(1)
+raise SystemExit(0 if rc == 3 and done.exists() else f"rc={rc} finished={done.exists()}")'
+
+py_case "a run log that cannot be opened leaves the run on the console" '
+import pathlib, sys
+from oneup.engine import runstate
+runstate.USER_LOG_DIR = pathlib.Path("/proc/oneup-no-such/logs")
+path = runstate.resolve_log_path(None)
+before = sys.stdout
+runstate.install_log_mirror(pathlib.Path(path))
+raise SystemExit(0 if sys.stdout is before else "a mirror was installed")'
+
+py_case "a transaction log that cannot be created fails the step, not the run" '
+import contextlib, io, types
+from oneup.engine import repos, steps
+repos.refresh_repos = lambda **_k: None
+steps.run_changes = lambda: types.SimpleNamespace(rows=[], exact=False)
+def full(*_a, **_k):
+    raise OSError(28, "No space left on device")
+steps.tempfile.mkstemp = full
+out = io.StringIO()
+with contextlib.redirect_stdout(out):
+    steps.run_system(types.SimpleNamespace(skip_repos=[], import_keys=False, auto_skip=False))
+text = out.getvalue()
+raise SystemExit(0 if "@@STEP_END@@|system|fail" in text else text[-300:])'
+
 echo "TEST: the --log= path reaches run.state and the banner verbatim"
 py_case "a --log= value is not normalised" '
 from oneup.engine import runstate
