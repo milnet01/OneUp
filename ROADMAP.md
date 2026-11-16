@@ -12191,7 +12191,7 @@ when complete (that document's §7).
   Kind: security.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0418] **While Update waits for the size preview, a second tick can start a second engine, and a failed go-ahead write leaves Update dead.**
+- ✅ [ONEUP-0418] **While Update waits for the size preview, a second tick can start a second engine, and a failed go-ahead write leaves Update dead.**
   review-code 2026-11-15, lane 05, two MEDIUM. run.py: the hold-wait
   tick runs again while its own QMessageBox.warning is open (re-entrant;
   `win._go_write_failed = False`), so the fallback can _launch twice.
@@ -12200,6 +12200,15 @@ when complete (that document's §7).
   (INV-7). Not the settled no-ceiling question (ONEUP-0044 impl-0403):
   both are new claims. Lane file: lane-05-gui-run-driver.md in
   /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  Shipped 2026-11-16 in e48a17e. Both findings verified against
+  run.py and fixed. The tick stops its timer before adopting and
+  restarts it only while still waiting, so the error box's event loop
+  no longer re-runs it. The fallback launch passes _launch's guard
+  (beside_hold) when the hold is ours and cannot be adopted; the guard
+  still holds while the size is being worked out. ONEUP-0044 §4.5 and
+  INV-1 name the exception (a second prompt, only on an unwritable
+  state folder). Four gui-smoke checks, red on the old code; each part
+  of the fix, removed in a copy, fails one.
   **Layman:** In rare cases the Update button can start two updates at once, or stop responding after a disk error.
   Kind: review-fix.
   Source: review-code-2026-11-15.
