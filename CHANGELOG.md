@@ -155,7 +155,7 @@ All notable changes to OneUp are documented here. The format follows
   versions, such as a kernel, by name. Copy diagnostics now hides your user name and any
   login in a software source's address.
 
-- **Names and notes from outside OneUp are shown as plain text** (ONEUP-0396)
+- **Names and notes from outside OneUp are shown as plain text** (ONEUP-0396, ONEUP-0437)
   A software source's name or address, a package's details, and OneUp's own release notes
   could carry formatting OneUp never meant to show. Release notes could even name a file
   on your computer as a picture, which could freeze the window. Now none of that happens.

@@ -129,8 +129,13 @@ class UpdateDialog(QDialog):
         (self.update_btn if kind == "appimage" else self.close_btn).setDefault(True)
 
     def set_notes(self, markdown: str) -> None:
-        """Render the release notes. Their images are never loaded: `_NotesBrowser`."""
-        self.notes.setMarkdown(markdown)
+        """Render the release notes. Their images are never loaded: `_NotesBrowser`.
+        HTML in them is shown as typed (ONEUP-0437): the default dialect passes it
+        through, and the notes come from the network. Only the document's
+        `setMarkdown` takes the features; the browser's does not."""
+        features = (QTextDocument.MarkdownFeature.MarkdownDialectGitHub
+                    | QTextDocument.MarkdownFeature.MarkdownNoHTML)
+        self.notes.document().setMarkdown(markdown, features)
 
     def set_notes_unavailable(self) -> None:
         self.notes.setPlainText(QCoreApplication.translate(

@@ -5131,6 +5131,20 @@ def main() -> int:
     check("ONEUP-0396 an image the release notes name is never read",
           _udlg.notes.loadResource(QTextDocument.ResourceType.ImageResource,
                                    QUrl(_img.as_uri())) is None)
+    # ONEUP-0437: HTML in the notes is shown as typed. Qt's default Markdown dialect
+    # passes it through, so a release body could colour text and plant a link target.
+    _udlg.set_notes('**Bold** <span style="color:#ff0000">red</span>\n\n<h1>Big</h1>\n\n'
+                    '<a href="https://example.invalid/">click</a>\n')
+    # An applied colour is written ` color:#ff0000;` and a link `href="…"`; the escaped
+    # text of the shown tags is neither.
+    _notes_html = _udlg.notes.toHtml()
+    check("ONEUP-0437 HTML in the release notes is shown as typed",
+          "<h1>Big</h1>" in _udlg.notes.toPlainText())
+    check("ONEUP-0437 and carries no colour or link from the notes",
+          " color:#ff0000;" not in _notes_html
+          and 'href="https://example.invalid/"' not in _notes_html)
+    check("ONEUP-0437 while Markdown still renders",
+          "**" not in _udlg.notes.toPlainText())
     _udlg.deleteLater()
     shutil.rmtree(_img.parent, ignore_errors=True)
     # ONEUP-0403: Escape calls reject(), which never reaches closeEvent, so a download
