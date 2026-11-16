@@ -389,15 +389,21 @@ marker() { printf '@@%s@@|%s\n' "$1" "$2"; }
 reboot_reason_from_log() {  # transaction-log path
     local log="${1:-}"; [[ -f "$log" ]] || return 0
     local -a parts=()
-    grep -qE '\bkernel-(default|preempt|rt|64kb|lpae|kvmsmall|vanilla)\b' "$log" \
+    # Only the packages installed: the plan also lists what is removed or skipped, so an
+    # old kernel being removed read as a new one. The flavour must be followed by the
+    # version, or kernel-default-devel counted as a kernel (ONEUP-0422).
+    local names
+    names=$(sed -nE 's/^\( *[0-9]+\/[0-9]+\) (Installing|Upgrading): ([^ ]+).*/\2/p' "$log")
+    [[ -n "$names" ]] || return 0
+    grep -qE '\bkernel-(default|preempt|rt|64kb|lpae|kvmsmall|vanilla)(-base)?-[0-9]' <<<"$names" \
         && parts+=("a new kernel")
-    if grep -qiE '\bnvidia' "$log"; then
+    if grep -qiE '\bnvidia' <<<"$names"; then
         parts+=("your NVIDIA graphics driver")
-    elif grep -qE '\b(Mesa|xf86-video-|libvulkan|libdrm)' "$log"; then
+    elif grep -qE '\b(Mesa|xf86-video-|libvulkan|libdrm)' <<<"$names"; then
         parts+=("your graphics driver")
     fi
     # DKMS / kernel-module packages other than the NVIDIA one already named above.
-    if grep -E '(-kmp-|\bdkms\b)' "$log" 2>/dev/null | grep -qvi nvidia; then
+    if grep -E '(-kmp-|\bdkms\b)' <<<"$names" 2>/dev/null | grep -qvi nvidia; then
         parts+=("kernel driver modules")
     fi
     (( ${#parts[@]} )) || return 0

@@ -119,10 +119,12 @@ and alias-precise:
    anything else → `unreachable` (generic default). The `--skip-repo` path, where
    the culprit is named by the user rather than probed, uses `reason=manual`.
 
-A "repo-scoped failure" worth probing = the `$SYS_LOG` matches
-`KEY_FAILURE_RE` or `metadata|Valid metadata not found|Curl|could not resolve|Download.*failed|Skipping repository`.
+A "repo-scoped failure" worth probing = the `$SYS_LOG`, with its package names taken
+out, matches `KEY_FAILURE_RE` or `metadata|Valid metadata not found|Curl|could not resolve|Download.*failed|Skipping repository`.
 Disk-full and package-conflict failures are **not** repo-scoped — they do not
-trigger probing (unchanged behaviour). All of this probing/classification reads
+trigger probing (unchanged behaviour). The names come out first because the plan and
+the progress lines list packages, and `libcurl4` matched `Curl` (ONEUP-0422,
+`parsers.without_package_names`; the Python engine only). All of this probing/classification reads
 `$SYS_LOG`, so it must run **before** the existing `rm -f "$SYS_LOG"` at the end of
 the system step (`update_system.sh`).
 

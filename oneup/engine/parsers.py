@@ -257,7 +257,9 @@ def lock_pid(text: str) -> int | None:
 # §4.8). Cosmetic in itself, but it is the marker INV-1 governs, and losing the
 # reason turns a correct verdict into an unexplained one.
 
-_KERNEL = re.compile(r"\bkernel-(default|preempt|rt|64kb|lpae|kvmsmall|vanilla)\b")
+# The flavour, then the version: `kernel-default-devel` and `-extra` are not a kernel,
+# and `\b` alone matched them, because it sits before their `-` (ONEUP-0422).
+_KERNEL = re.compile(r"\bkernel-(default|preempt|rt|64kb|lpae|kvmsmall|vanilla)(-base)?-[0-9]")
 _NVIDIA = re.compile(r"\bnvidia", re.IGNORECASE)
 _GRAPHICS = re.compile(r"\b(Mesa|xf86-video-|libvulkan|libdrm)")
 _MODULE = re.compile(r"(-kmp-|\bdkms\b)")
@@ -464,6 +466,46 @@ def split_nvra(nvra: str) -> tuple[str, str, str] | None:
 _ACTION = re.compile(r"^\( *[0-9]+/[0-9]+\) (Installing|Upgrading|Removing): (\S+)")
 _ACTION_STATE = {"Installing": "installed", "Upgrading": "installed",
                  "Removing": "removed"}
+
+
+def installed_packages(text: str) -> str:
+    """`name-edition`, one per line, for each package rpm finished installing.
+
+    What the reboot reason reads. The whole log also holds the plan, which lists
+    what is removed and what is recommended but skipped, so an old kernel being
+    removed read as "a new kernel was installed" (ONEUP-0422).
+    """
+    lines = PackageLines()
+    return "\n".join(f"{row[1]}-{row[2]}" for line in text.splitlines()
+                     for row in lines.feed(line) if row[0] == "installed")
+
+
+# The lines of a transaction log that carry a package name, as real runs print them
+# (measured in this machine's run logs, 2026-11-16), and the `Installation of <name>
+# failed` line `steps._INSTALL_FAILED` reads. The name is masked and the rest of the
+# line kept, because a download's error rides on its line:
+# `Preloading: <file> [Error: "The requested URL returned error: 404", ...]`.
+_NAMED_FIELD = re.compile(
+    r"^((?:Retrieving|Preloading): |In cache |\( *[0-9]+/[0-9]+\) [A-Z][a-z]+: "
+    r"|Installation of )\S+", re.MULTILINE)
+_PLAN_HEAD = re.compile(r"^The following .*:\s*$")
+
+
+def without_package_names(log: str) -> str:
+    """The log with package names taken out, for the failure patterns to read.
+
+    A bare token such as `Curl`, `metadata` or `Timeout` also matches `libcurl4`,
+    `python3-importlib-metadata` and `python3-async_timeout` (ONEUP-0422). The
+    plan's indented name lists under a `The following …:` heading are dropped, and
+    a progress line's name becomes `<package>`. Every other line is kept as it is.
+    """
+    out, in_plan = [], False
+    for line in log.split("\n"):
+        if in_plan and line.startswith(" "):
+            continue
+        in_plan = bool(_PLAN_HEAD.match(line))
+        out.append(_NAMED_FIELD.sub(r"\1<package>", line))
+    return "\n".join(out)
 
 
 def rpm_changed(text: str) -> bool:

@@ -923,8 +923,11 @@ def _system_upgrade_inner() -> bool:
         # repository, and a transfer failure is the one case where doing so
         # throws away a working source.
         log = _log_text()
+        # The patterns read it with package names taken out (ONEUP-0422); the
+        # snapshot below keeps them, because the hint names the failed package.
+        text = parsers.without_package_names(log)
         if (not DL_RECOVERY_TRIED and not proc.stop_pending()
-                and _TRANSFER_FAILURE.search(log) and not _NOT_TRANSFER.search(log)
+                and _TRANSFER_FAILURE.search(text) and not _NOT_TRANSFER.search(text)
                 and repos.redirectable()):
             cdn_dir = repos.make_cdn_reposd()
             if cdn_dir:
@@ -1055,7 +1058,7 @@ def _success(refresh_ok: bool) -> None:
         # Read the reboot-reason components now, while the transaction log still
         # exists — it is discarded at the end of this step, long before the
         # reboot check runs.
-        SYS_REBOOT_PARTS = parsers.reboot_components(log)
+        SYS_REBOOT_PARTS = parsers.reboot_components(parsers.installed_packages(log))
         if count > 0:
             end_step("system", "ok", "installed", f"{count} package(s) updated", count)
         else:
@@ -1083,12 +1086,15 @@ _INSTALL_FAILED = re.compile(r"^Installation of (\S+) failed", re.MULTILINE)
 def _failure(systemic: bool, import_keys: bool) -> None:
     """Turn the most common zypper failures into one plain-English line."""
     log = _log_text()
+    # The bare-token arms read the log with its package names taken out; the
+    # install-failed arm needs the name, so it reads the log itself (ONEUP-0422).
+    text = parsers.without_package_names(log)
     hint, code, args = "", "", []
     if systemic:
         code = "repos-failing-systemic"
         hint = ("Several repositories are failing at once — likely a network or system "
                 "problem, not a single bad source. Check your connection and retry.")
-    elif DL_RETRY_FAILED and _TRANSFER_FAILURE.search(log):
+    elif DL_RETRY_FAILED and _TRANSFER_FAILURE.search(text):
         # Guarded on the RETRY having failed, not merely on recovery having been
         # tried: the latter is still true when the retry succeeded and the commit
         # then failed. The log is re-tested so a retry that died of a full disk
@@ -1100,11 +1106,11 @@ def _failure(systemic: bool, import_keys: bool) -> None:
         hint += ("openSUSE's servers are still catching up with this update. Nothing was "
                  "installed and everything already downloaded has been kept; try again "
                  "later.")
-    elif re.search(r"No space left|disk full", log, re.IGNORECASE):
+    elif re.search(r"No space left|disk full", text, re.IGNORECASE):
         code = "disk-full"
         hint = ("Ran out of disk space — free some room (clear the package cache, delete "
                 "old snapshots) and retry.")
-    elif re.search(repos.KEY_FAILURE_RE, log, re.IGNORECASE):
+    elif re.search(repos.KEY_FAILURE_RE, text, re.IGNORECASE):
         if import_keys:
             # Keys were already imported this run and it STILL failed, so
             # importing will not help: do not offer the one-click remedy again.
@@ -1119,7 +1125,7 @@ def _failure(systemic: bool, import_keys: bool) -> None:
                     'retry" to fix it, or run: sudo zypper --gpg-auto-import-keys refresh, '
                     "then retry.")
     elif re.search(r"Timeout|could not resolve|connection failed|Curl error"
-                   r"|Download.*failed|Temporary failure", log, re.IGNORECASE):
+                   r"|Download.*failed|Temporary failure", text, re.IGNORECASE):
         code = "network-failed"
         hint = "A download failed — check your internet connection, then retry."
     elif not SYS_PARTIAL and (failed := _INSTALL_FAILED.search(log)):
@@ -1133,7 +1139,7 @@ def _failure(systemic: bool, import_keys: bool) -> None:
     # "Problem: 1: … cannot be provided" and got no hint at all (ONEUP-0227).
     elif re.search(r"conflict|nothing provides|not installable|cannot be provided"
                    r"|^Problem: [0-9]|does not belong to a distupgrade repository",
-                   _FILE_CONFLICT_CHECK.sub("", log), re.IGNORECASE | re.MULTILINE):
+                   _FILE_CONFLICT_CHECK.sub("", text), re.IGNORECASE | re.MULTILINE):
         code = "package-conflict"
         hint = ("A package conflict — often a third-party repo. Check the log; you may "
                 "need to disable a conflicting repository.")

@@ -417,10 +417,14 @@ cat > "$d/zypper" <<'EOF'
 case "$*" in
   *refresh*)         exit 0 ;;
   *dup*|*update*)
+    # The reason reads the install lines, as a real transaction prints them (ONEUP-0422).
     cat <<'LOG'
-The following 7 packages are going to be upgraded:
-  kernel-default kernel-default-devel Mesa Mesa-dri nvidia-video-G06 nvidia-gl-G06 glibc
-7 packages to upgrade.
+The following 3 packages are going to be upgraded:
+  kernel-default nvidia-video-G06 glibc
+3 packages to upgrade.
+(1/3) Installing: kernel-default-6.9.1-1.1.x86_64 [...done]
+(2/3) Installing: nvidia-video-G06-550.1-1.1.x86_64 [...done]
+(3/3) Installing: glibc-2.40-1.1.x86_64 [...done]
 LOG
     exit 0 ;;
   *needs-rebooting*) exit 102 ;;           # reboot required
@@ -435,6 +439,36 @@ check "reboot reason is the component codes" "@@REBOOT@@|yes|kernel-new graphics
 check "terminal summary keeps the English"   "a new kernel and your NVIDIA graphics driver were installed" "$out"
 check_codes "INV-1 REBOOT components are members" REBOOT   "$out"
 check_codes "INV-1 STEP_END carries a code"        STEP_END "$out"
+rm -rf "$d"
+
+# ONEUP-0422: the reason searched the whole log, so the plan's list of what is REMOVED
+# named a kernel, and `\bkernel-default\b` matched kernel-default-devel.
+echo "TEST: a removed old kernel, or new kernel headers, is not 'a new kernel' (ONEUP-0422)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)         exit 0 ;;
+  *dup*|*update*)
+    cat <<'LOG'
+The following package is going to be REMOVED:
+  kernel-default-6.8.0-1.1
+The following package is going to be upgraded:
+  kernel-default-devel
+1 package to upgrade, 1 to remove.
+(1/2) Removing: kernel-default-6.8.0-1.1.x86_64 [...done]
+(2/2) Installing: kernel-default-devel-6.9.1-1.1.noarch [...done]
+LOG
+    exit 0 ;;
+  *needs-rebooting*) exit 102 ;;
+  *ps*)              exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check        "a reboot is still advised"             "@@REBOOT@@|yes" "$out"
+check_absent "the reason does not name a new kernel" "kernel-new" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -560,6 +594,37 @@ check        "the install hint is given"               "@@HINT@@|install-failed"
 check_absent "it is not a package conflict"            "@@HINT@@|package-conflict" "$out"
 check_absent "nothing changed, so not part-updated"    "@@HINT@@|system-incomplete" "$out"
 check        "the next step still runs"                "@@STEP_BEGIN@@|flatpak" "$out"
+rm -rf "$d"
+
+# ONEUP-0422: the failure patterns searched the whole log, and the plan and the progress
+# lines name packages. `Timeout` matched python3-async_timeout, so this install failure
+# was told to check its internet connection; `Curl` matched libcurl4 beside it.
+echo "TEST: a package name never decides which failure hint is given (ONEUP-0422)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*)        exit 0 ;;
+  *download-only*)
+    echo "The following 2 packages are going to be upgraded:"
+    echo "  libcurl4 python3-async_timeout"
+    echo "Retrieving: libcurl4-8.23.0-3.1.x86_64 (Main Repository (OSS)) (1/2), 586.6 KiB"
+    echo "Retrieving: python3-async_timeout-5.0.1-1.1.noarch (Main Repository (OSS)) (2/2), 20.0 KiB"
+    exit 0 ;;
+  *dup*|*update*)
+    echo "Checking for file conflicts: [....................done]"
+    echo "(1/2) Installing: python3-async_timeout-5.0.1-1.1.noarch [.."
+    echo "error]"
+    echo "Installation of python3-async_timeout-5.0.1-1.1.noarch failed:"
+    echo "Error: Subprocess failed. Error: RPM failed: Command exited with status 1."
+    exit 8 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system)
+check        "the install hint is given"               "@@HINT@@|install-failed" "$out"
+check_absent "not the internet-connection hint"        "@@HINT@@|network-failed" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -4935,6 +5000,19 @@ else
 fi
 check        "and the disk-full hint still reaches the user" "Ran out of disk space" "$out"
 rm -rf "$d"
+# (c) ONEUP-0422: a package NAME is not a signature. The exclusion's bare `conflict`
+# matched perl-Dist-CheckConflicts in the plan, which stopped a real 404 recovering.
+d=$(mktemp -d); setup_common "$d"
+mk_recovery_zypper "$d" "The following package is going to be upgraded:
+  perl-Dist-CheckConflicts
+Preloading: demo.rpm [Error: The requested URL returned error: 404, trying next mirror.]" 1 "unused" 0
+out=$(run_engine "$d" --steps=system)
+if [[ "$(dl_calls "$d")" == "2" ]]; then
+    echo "  ok   - a package named like a conflict does not stop recovery"; PASS=$((PASS+1))
+else
+    echo "  FAIL - a package name stopped recovery ($(dl_calls "$d") passes)"; FAIL=$((FAIL+1))
+fi
+rm -rf "$d"
 
 echo "TEST: a stop is not answered with another download (ONEUP-0094 INV-8)"
 d=$(mktemp -d); setup_common "$d"
@@ -5400,6 +5478,20 @@ from oneup.engine import steps
 steps.shutil.which = lambda _name: None
 got = steps._keep_multiversion(["foo", "kernel-default"])
 raise SystemExit(0 if got is None else f"got {got!r}")'
+
+# ONEUP-0422: `Curl` matched libcurl4 in the plan, so a disk-full failure read as one
+# source's fault and set off the probe ONEUP-0025 says it must not.
+echo "TEST: a package name does not make a failure repo-scoped (ONEUP-0422)"
+py_case "libcurl4 beside a full disk is not repo-scoped; zypper's own wording still is" '
+import os, pathlib
+from oneup.engine import repos
+d = pathlib.Path(os.environ["XDG_STATE_HOME"])
+plan = "The following package is going to be upgraded:\n  libcurl4\n"
+(d / "disk").write_text(plan + "Retrieving: libcurl4-8.23.0-3.1.x86_64 (OSS) (1/1), 1 KiB\n"
+                        "No space left on device\n")
+(d / "repo").write_text(plan + "Valid metadata not found at specified URL\n")
+got = (repos.repo_scoped_failure(d / "disk"), repos.repo_scoped_failure(d / "repo"))
+raise SystemExit(0 if got == (False, True) else f"got {got}")'
 
 echo "TEST: the passwordless rule names system binaries, never the user's PATH (ONEUP-0408)"
 # openSUSE puts ~/bin first on PATH, so a ~/bin/zypper used to become a NOPASSWD root

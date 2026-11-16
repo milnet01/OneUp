@@ -122,7 +122,7 @@ def repo_scoped_failure(log: Path) -> bool:
         text = log.read_text(errors="replace")
     except OSError:
         return False
-    return bool(_REPO_SCOPED.search(text))
+    return bool(_REPO_SCOPED.search(parsers.without_package_names(text)))
 
 
 def make_cdn_reposd() -> str:

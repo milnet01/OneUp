@@ -171,6 +171,8 @@ REBOOT = [
      "a new kernel and your NVIDIA graphics driver were installed"),
     ("libfoo-1.2.3.x86_64\nbar-2.0.noarch", ""),
     ("", ""),
+    # ONEUP-0422: headers are not a kernel.
+    ("kernel-default-devel-6.9.1-1.1", ""),
 ]
 
 
@@ -710,6 +712,37 @@ def main() -> int:
           ["kernel-new", "graphics-driver-generic", "kernel-modules"])
     check("reboot_components: nothing qualifying is empty",
           parsers.reboot_components("libfoo-1.2.3.x86_64"), [])
+    # ONEUP-0422: headers are not a kernel; the minimal kernel is.
+    check("reboot_components: kernel-default-devel is not a new kernel",
+          parsers.reboot_components("kernel-default-devel-6.9.1-1.1"), [])
+    check("reboot_components: kernel-default-base is a new kernel",
+          parsers.reboot_components("kernel-default-base-6.9.1-1.1"), ["kernel-new"])
+
+    # ONEUP-0422: the reason reads only what rpm finished installing.
+    check("installed_packages: installs only, never the plan or a removal",
+          parsers.installed_packages(
+              "The following package is going to be REMOVED:\n  kernel-default-6.8.0-1.1\n"
+              "(1/2) Removing: kernel-default-6.8.0-1.1.x86_64 [...done]\n"
+              "(2/2) Installing: kernel-default-devel-6.9.1-1.1.noarch [...done]\n"),
+          "kernel-default-devel-6.9.1-1.1")
+
+    # ONEUP-0422: the failure patterns read the log with package names taken out. The
+    # line shapes are a real run's (2026-11-16); a download error on its line survives.
+    masked = parsers.without_package_names(
+        "The following 2 packages are going to be upgraded:\n"
+        "  libcurl4 python3-importlib-metadata\n"
+        "\n"
+        "Retrieving: libcurl4-8.23.0-3.1.x86_64 (Main Repository (OSS)) (1/2), 586.6 KiB\n"
+        "In cache python3-importlib-metadata-8.7.0-1.1.noarch.rpm (2/2), 50.0 KiB\n"
+        'Preloading: python3-async_timeout-5.0.1-1.1.noarch.rpm [Error: "The requested '
+        'URL returned error: 404", trying next mirror.]\n'
+        "( 1/2) Installing: libcurl4-8.23.0-3.1.x86_64 [...done]\n"
+        "Installation of python3-async_timeout-5.0.1-1.1.noarch failed:\n"
+        "Error: Download (curl) error for 'https://x/': Curl error 28\n")
+    check("without_package_names: no package name is left to match",
+          [t for t in ("libcurl4", "metadata", "async_timeout") if t in masked], [])
+    check("without_package_names: an error on a progress line is kept",
+          "returned error: 404" in masked and "Curl error 28" in masked, True)
 
     for nvra, want in NVRA:
         check(f"split_nvra({nvra!r})", parsers.split_nvra(nvra), want)
