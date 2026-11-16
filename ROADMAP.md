@@ -12463,7 +12463,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-readability-2026-11-15.
 
-- 📋 [ONEUP-0437] **Release notes still render raw HTML from a GitHub release body, which ONEUP-0396's changelog line says no longer happens.**
+- ✅ [ONEUP-0437] **Release notes still render raw HTML from a GitHub release body, which ONEUP-0396's changelog line says no longer happens.**
   verify-delivery 2026-11-15, verified in source: update_dialog.py
   set_notes calls self.notes.setMarkdown(markdown), which passes HTML
   through; _NotesBrowser blocks images only. A probe fed a red span, an
@@ -12472,6 +12472,12 @@ when complete (that document's §7).
   Recommended: render without HTML (strip tags, or a Markdown dialect
   with HTML off) and add a gui-smoke case for a span, an h1 and a link,
   rather than narrowing the changelog line.
+  Shipped 2026-11-16 in 79041b1, as recommended: the notes render
+  with MarkdownDialectGitHub | MarkdownNoHTML, through the document's
+  setMarkdown (the browser's takes no features). HTML tags now show as
+  typed; Markdown still renders. gui-smoke checks a span, an h1 and an
+  <a>: red before, green after. ONEUP-0396's changelog line stands and
+  now cites this item too.
   **Layman:** OneUp's "What's new" window can still show formatting from the release page that it promised to show as plain text.
   Kind: security.
   Source: verify-delivery-2026-11-15.
