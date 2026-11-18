@@ -7,6 +7,7 @@ that turn a payload into the words the window shows.
 from __future__ import annotations
 
 import codecs
+import re
 from collections.abc import Callable
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
@@ -505,16 +506,21 @@ def check_notification(total: int, reasons: list[str],
     return _notification(key, total, reasons=between.join(reasons))
 
 
+_TAG = re.compile(r"[A-Z_]+")   # every tag in marker-protocol.md §3's table
+
+
 def split_marker(line: str) -> tuple[str, list[str], str] | None:
     """Split an `@@TAG@@|payload` line into (tag, fields, raw payload).
 
     None for a line that starts with `@@` but is not a marker: a diff hunk
     header ("@@ -1,4 +1,4 @@") is ordinary output and must be logged rather
-    than dropped.
+    than dropped. So is a line whose tag is not a tag's shape, `@@ x @@|y`.
     """
     try:
         tag, rest = line[2:].split("@@|", 1)
     except ValueError:
+        return None
+    if not _TAG.fullmatch(tag):
         return None
     return tag, rest.split("|"), rest
 

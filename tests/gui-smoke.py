@@ -1634,6 +1634,29 @@ def main() -> int:
     if survived:
         os.kill(engine_pid, 15)
 
+    # ONEUP-0427 (05-M3): the size preview is the window's process too. Quitting
+    # during the dry run or the hold killed it, so it never reached its own "window
+    # gone" exit and left what it had started behind (ONEUP-0044 §6 row 1).
+    wP = window.Updater()
+    paths.engine_argv = lambda *a, env=None: ["sleep", "30"]
+    try:
+        run.request_size(wP, "system")
+    finally:
+        paths.engine_argv = saved_argv
+    check("the size preview started", wP._size_proc is not None
+          and wP._size_proc.waitForStarted(5000))
+    preview_pid = wP._size_proc.processId()
+    QApplication.instance().aboutToQuit.emit()
+    shiboken6.delete(wP)
+    try:
+        os.kill(preview_pid, 0)
+        survived = preview_pid > 0
+    except OSError:
+        survived = False
+    check("ONEUP-0427 quitting leaves the size preview to exit on its own", survived)
+    if survived:
+        os.kill(preview_pid, 15)
+
     # ONEUP-0387: the schedule's systemctl calls run on the window's thread, so one
     # that never answers froze the window. A systemctl answering in 20 s stands in for
     # a stuck user manager; each action must give up well before it. One process, as
@@ -1743,6 +1766,23 @@ def main() -> int:
     run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)
     check("services banner shown for a package-only change", w.services_banner.isVisibleTo(w))
     check("no reboot banner for a package-only change", not w.reboot_banner.isVisibleTo(w))
+
+    # --- 4b. A stop does not hide restart advice the finished steps earned --------
+    # ONEUP-0427 (05-L1): the engine's summary still prints "A REBOOT is recommended"
+    # after a stop, but the window returned before its banners, so a stop after the
+    # system step installed a kernel hid the reboot.
+    for _extra, _banner in ((("@@REBOOT@@|yes",), "reboot_banner"),
+                            (("@@SERVICES@@|foo.service", "@@REBOOT@@|no"),
+                             "services_banner")):
+        wS = window.Updater()
+        for line in ("@@STEP_END@@|system|ok|updated", "@@INSTALLED@@|2|yes|no",
+                     *_extra, "@@DONE@@|stopped"):
+            run.handle_line(wS, line)
+        wS.proc = QProcess(wS)
+        run.on_finished(wS, 0, QProcess.ExitStatus.NormalExit)
+        check(f"ONEUP-0427 a stopped run still shows the {_banner} it earned",
+              getattr(wS, _banner).isVisibleTo(wS))
+        check("and still reads as stopped", wS.bar.format() == "Stopped")
 
     # --- 4a. The services button actually restarts them (ONEUP-0110) -----------
     # Regression, reported 2026-08-18: clicking "Restart services" did nothing at all.
@@ -2574,6 +2614,11 @@ def main() -> int:
     _held_log = paths.STATE_LOG_DIR / "held-preview.log"
     wA._hold_log = _held_log
     wA._size_buf = "partial-mark"
+    # ONEUP-0427 (05-L3): the preview's last read ended inside a character. Its decoder
+    # holds the first byte; a fresh decoder made on adoption threw it away (ONEUP-0343).
+    _e_acute = "é".encode()
+    wA._size_dec = markers.utf8_decoder()
+    wA._size_dec.decode(_e_acute[:1])
     for _k in ("flatpak", "firmware", "orphans"):
         if wA.rows[_k].switch.isChecked():
             wA.rows[_k].switch.setChecked(False)
@@ -2593,8 +2638,31 @@ def main() -> int:
     # dropping it would lose the head of the next marker.
     check("a partial line read by the preview is not dropped on adoption",
           wA._buf == "partial-mark")
+    check("ONEUP-0427 a character split across adoption is decoded whole",
+          wA._dec.decode(_e_acute[1:]) == "é")
     paths.GO_REQUEST.unlink(missing_ok=True)
     paths.HOLD_STATE.unlink(missing_ok=True)
+
+    # ONEUP-0427 (05-L4): the stall clock reads the raw bytes. A read holding only the
+    # first byte of a character decodes to "" and was not counted as a sign of life.
+    class _ByteProc:
+        def readAllStandardOutput(self):
+            return _e_acute[:1]
+    wB = window.Updater()
+    wB.proc, wB._dec, wB._buf, wB._activity_at = _ByteProc(), markers.utf8_decoder(), "", 0.0
+    run.on_output(wB)
+    check("ONEUP-0427 a read ending inside a character still counts as activity",
+          wB._activity_at > 0.0)
+    wB.proc = None
+
+    # ONEUP-0427 (05-L2): a line shaped like a marker whose tag is not a tag is ordinary
+    # output, logged rather than dropped (marker-protocol §1).
+    check("ONEUP-0427 a tag that is not upper-case letters is not a marker",
+          markers.split_marker("@@ x @@|y") is None
+          and markers.split_marker("@@STEP_END@@|system|ok|updated") is not None)
+    wB.log.clear()
+    run.handle_line(wB, "@@ x @@|y")
+    check("and such a line reaches the log", "@@ x @@|y" in wB.log.toPlainText())
 
     # ONEUP-0156: a go.request that cannot be written must be reported ONCE. The wait
     # timer used to retry the failed write every tick, and each retry raised another

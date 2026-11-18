@@ -15,6 +15,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Smaller window fixes from the code review** (ONEUP-0427)
+  Stopping an update part-way no longer hides the advice to restart when the steps that
+  finished installed a new kernel or replaced libraries. Closing OneUp while it worked out
+  the download size no longer cuts that check off before it could tidy up after itself.
+
 - **Smaller fixes to OneUp's system service from the code review** (ONEUP-0426)
   A software source the service was still trying to switch back on could be switched on
   in the middle of your next update, after you had switched it off for it. Starting a

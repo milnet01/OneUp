@@ -149,11 +149,13 @@ class EngineProcess(QProcess):
 def release_engine(win):
     """At quit: let the engine run on without the window (security.md §6.3).
 
-    Only `win.proc`: the run, a held preview it adopted included. A preview still
-    holding is no run; it sees the window's pid gone and exits (ONEUP-0044)."""
-    proc = getattr(win, "proc", None)
-    if isinstance(proc, EngineProcess) and shiboken6.isValid(proc):
-        proc.detach()
+    The run, a held preview it adopted included, and a size preview still going. That
+    preview is no run, but killing it skips its cleanup; left alone it sees the
+    window's pid gone and exits (ONEUP-0044 §6 row 1)."""
+    for name in ("proc", "_size_proc"):
+        proc = getattr(win, name, None)
+        if isinstance(proc, EngineProcess) and shiboken6.isValid(proc):
+            proc.detach()
 
 
 def start_check(win):
@@ -214,6 +216,8 @@ def _adopt_held_engine(win) -> bool:
     carried = getattr(win, "_size_buf", "")
     _reset_for_run(win, steps, check=False)
     win._buf = carried
+    # And the part of a character the preview's last read ended inside (ONEUP-0343).
+    win._dec = getattr(win, "_size_dec", win._dec)
     # `_log_path` is assigned from what `request_size` already passed as `--log=`, NOT
     # recomputed from a fresh stamp — see `_reset_for_run`'s docstring.
     win._log_path = win._hold_log
@@ -629,12 +633,13 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
 
 
 def on_output(win):
-    chunk = win._dec.decode(bytes(win.proc.readAllStandardOutput()))
-    # Stamped on the raw chunk, before any line splitting: zypper's progress is a
-    # stream of dots with no line ending, so a partial line is the only proof of life
+    raw = bytes(win.proc.readAllStandardOutput())
+    chunk = win._dec.decode(raw)
+    # Stamped on the raw bytes, before decoding or line splitting: zypper's progress is
+    # a stream of dots with no line ending, so a partial line is the only proof of life
     # during a metadata fetch. Waiting for a complete line would call a working
-    # download stalled (ONEUP-0048).
-    if chunk:
+    # download stalled (ONEUP-0048), and a read ending inside a character decodes to "".
+    if raw:
         win._activity_at = time.monotonic()
     lines, win._buf = markers.split_lines(win._buf, chunk)
     for line in lines:
@@ -1271,6 +1276,62 @@ def _first_hint_command(win) -> str:
     return win._hint_commands[0] if win._hints and win._hint_commands else ""
 
 
+def _show_restart_banners(win):
+    """The reboot and services banners, from what the run reported. Shown for a
+    stopped run too: the steps that finished earned them, and the engine's own
+    summary still prints the reboot advice after a stop (ONEUP-0427)."""
+    n = win._installed_count
+    count = int(n) if n.isdecimal() else 0
+    # Reboot vs the lighter "just restart these services" path.
+    #
+    # The service list is split HERE as well as in the button (ONEUP-0115). A unit
+    # this window will never restart (ONEUP-0111) is not advice the user can act on
+    # from the services banner, so where the honest answer is a reboot the reboot is
+    # what gets offered — rather than a banner whose button opens a dialog naming
+    # what it refuses to touch. Both halves can be true at once, and then both
+    # banners show: restart the safe ones now, reboot for the rest.
+    svc_safe, svc_risky = banners._split_session_critical(banners._service_units(win))
+    if win._reboot:
+        if win._reboot_reason:
+            # Name what triggered it, e.g. "A new kernel and your NVIDIA graphics
+            # driver were installed — restart …". The reason arrives already in its
+            # sentence-start form: deriving one with a case change would break every
+            # language without case (ONEUP-0032 §4.5).
+            r = win._reboot_reason
+            # The fallback (ONEUP-0108 §4.3) is already a whole sentence.
+            win.reboot_label.setText(
+                QCoreApplication.translate(
+                    "run", "⚠  {reason} Restart so everything uses the latest version.")
+                .format(reason=r) if r.endswith(".") else
+                QCoreApplication.translate(
+                    "run", "⚠  {reason} — restart so everything uses the latest version.")
+                .format(reason=r))
+        elif count:
+            win.reboot_label.setText(i18n.counted("reboot-updates-installed", count))
+        else:
+            win.reboot_label.setText(
+                QCoreApplication.translate(
+                    "run",
+                    "⚠  Updates were installed — a restart is recommended so "
+                    "everything uses the latest libraries."))
+        win.reboot_banner.setVisible(True)
+    else:
+        # The unit names are listed space-separated, as they always were; the
+        # separator is still the language's to choose.
+        units_sep = QCoreApplication.translate(
+            "run", " ", "separator between service names in a button's tooltip")
+        if svc_safe:
+            win.services_label.setText(i18n.counted(
+                "services-restart" if svc_risky else "services-restart-no-reboot",
+                len(svc_safe)))
+            win.services_btn.setToolTip(units_sep.join(svc_safe))
+            win.services_banner.setVisible(True)
+        if svc_risky:
+            win.reboot_label.setText(i18n.counted("services-session", len(svc_risky)))
+            win.restart_btn.setToolTip(units_sep.join(svc_risky))
+            win.reboot_banner.setVisible(True)
+
+
 def on_finished(win, exit_code: int, _status):
     # Quitting mid-run tears the window down around a running engine, and Qt then
     # delivers `finished` to a window it already destroyed (ONEUP-0204, ONEUP-0387).
@@ -1368,6 +1429,7 @@ def on_finished(win, exit_code: int, _status):
         win._announce(win.status.text())
         win.save_last_run("stopped")
         win.refresh_last_run()
+        _show_restart_banners(win)
         if win._hints:
             banners._show_warning(win, win._hints[0], _first_hint_command(win))
         if win._sys_changed and win._snapshot:
@@ -1437,54 +1499,7 @@ def on_finished(win, exit_code: int, _status):
     win._announce(win.status.text())
     win.save_last_run("OK" if ok else "errors")
 
-    # Reboot vs the lighter "just restart these services" path.
-    #
-    # The service list is split HERE as well as in the button (ONEUP-0115). A unit
-    # this window will never restart (ONEUP-0111) is not advice the user can act on
-    # from the services banner, so where the honest answer is a reboot the reboot is
-    # what gets offered — rather than a banner whose button opens a dialog naming
-    # what it refuses to touch. Both halves can be true at once, and then both
-    # banners show: restart the safe ones now, reboot for the rest.
-    svc_safe, svc_risky = banners._split_session_critical(banners._service_units(win))
-    if win._reboot:
-        if win._reboot_reason:
-            # Name what triggered it, e.g. "A new kernel and your NVIDIA graphics
-            # driver were installed — restart …". The reason arrives already in its
-            # sentence-start form: deriving one with a case change would break every
-            # language without case (ONEUP-0032 §4.5).
-            r = win._reboot_reason
-            # The fallback (ONEUP-0108 §4.3) is already a whole sentence.
-            win.reboot_label.setText(
-                QCoreApplication.translate(
-                    "run", "⚠  {reason} Restart so everything uses the latest version.")
-                .format(reason=r) if r.endswith(".") else
-                QCoreApplication.translate(
-                    "run", "⚠  {reason} — restart so everything uses the latest version.")
-                .format(reason=r))
-        elif count:
-            win.reboot_label.setText(i18n.counted("reboot-updates-installed", count))
-        else:
-            win.reboot_label.setText(
-                QCoreApplication.translate(
-                    "run",
-                    "⚠  Updates were installed — a restart is recommended so "
-                    "everything uses the latest libraries."))
-        win.reboot_banner.setVisible(True)
-    else:
-        # The unit names are listed space-separated, as they always were; the
-        # separator is still the language's to choose.
-        units_sep = QCoreApplication.translate(
-            "run", " ", "separator between service names in a button's tooltip")
-        if svc_safe:
-            win.services_label.setText(i18n.counted(
-                "services-restart" if svc_risky else "services-restart-no-reboot",
-                len(svc_safe)))
-            win.services_btn.setToolTip(units_sep.join(svc_safe))
-            win.services_banner.setVisible(True)
-        if svc_risky:
-            win.reboot_label.setText(i18n.counted("services-session", len(svc_risky)))
-            win.restart_btn.setToolTip(units_sep.join(svc_risky))
-            win.reboot_banner.setVisible(True)
+    _show_restart_banners(win)
 
     # Rollback offer once the system actually changed.
     if win._sys_changed and win._snapshot:
