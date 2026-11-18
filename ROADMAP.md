@@ -12432,6 +12432,13 @@ when complete (that document's §7).
   decision, queued as ONEUP-0450. Each fix has a gui-smoke check seen
   red on the unfixed tree. ONEUP-0092 §4.7's self-contradiction (the
   lane's open question) corrected. Lanes 09, 10, 11 remain.
+  2026-11-18: lane 09 (packages) closed in fc6da09. 09-M2: the
+  details timer restarts only when a step gains a package, as ONEUP-0260
+  §4.2 says. 09-L1..L7 fixed (date overflow, plural counts, legend
+  disambiguation, hatched dot, empty CHECK_ITEM fields, one live
+  LC_ALL=C environment, a reason on a bare except). 09-M1 was already
+  fixed by ONEUP-0420. Each behavioural fix has a gui-smoke check seen
+  red. Lanes 10 and 11 remain.
   **Layman:** Smaller problems in OneUp's window found by the code review.
   Kind: review-fix.
   Source: review-code-2026-11-15.
