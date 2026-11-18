@@ -12410,6 +12410,9 @@ when complete (that document's §7).
   already fixed by ONEUP-0418. 05-L1 decided by the engine's own summary,
   which prints the reboot advice after a stop: the window now shows the
   restart banners on a stopped run too. Lanes 06, 08, 09, 10, 11 remain.
+  2026-11-18, user decision on 10-M1: the white knob and mark are what
+  identify a focused switch and its state in the dark themes. No code
+  change; lane 10's run records this in ONEUP-0076 §4.2's switch row.
   **Layman:** Smaller problems in OneUp's window found by the code review.
   Kind: review-fix.
   Source: review-code-2026-11-15.
