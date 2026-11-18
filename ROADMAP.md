@@ -12398,6 +12398,13 @@ when complete (that document's §7).
   - i18n.py.
   Plus the LOW rows in each lane file at
   /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  2026-11-18: verified against f540e79, not yet fixed. Of 44
+  findings, 5 were already fixed (two by ONEUP-0418, two by ONEUP-0420,
+  one by ONEUP-0423), 06-L4 shipped with ONEUP-0431, 3 need a live
+  desktop (08-M3, 11-M2, 11-M3), and 10-M1 is a design decision for the
+  user (ONEUP-0076 4.2). Verdicts and the per-subject plan:
+  /mnt/Emulators/.claude/Scratchpad/OneUp/close-0427/. Close one subject
+  (lane) per run.
   **Layman:** Smaller problems in OneUp's window found by the code review.
   Kind: review-fix.
   Source: review-code-2026-11-15.
