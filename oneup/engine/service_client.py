@@ -9,7 +9,10 @@ taking one from the service (ONEUP-0282, INV-17).
 
 `jeepney` is imported inside functions only. The AppImage's copied-out engine runs
 on a machine without it, and its route is sudo, which never reaches this module
-(INV-12). `privilege` is the only caller.
+(INV-12). Its callers are `privilege`, which owns a run's session, and two that
+must never go through it, because its `auto` route can fall back to a password:
+`actions` (`can_update`, for `--auth-status`) and `steps` (`--check`'s dry run, in a
+session of its own that never asks).
 """
 
 from __future__ import annotations

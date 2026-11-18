@@ -55,8 +55,9 @@ def _tray_icon(attention: bool) -> QIcon:
     falls back to a plain disc if the app icon can't be found (never blank).
 
     Its four colours are palette tokens (ONEUP-0027 §4.3), read through
-    `current_palette()` on every call so a theme change repaints the badge —
-    which is why `apply_app_theme` rebuilds the icon rather than only the sheet."""
+    `current_palette()` on every call so a theme change repaints the badge. Nothing
+    rebuilds it by itself: `apply_app_theme` leaves the tray alone, so each re-theme
+    path calls `refresh_icon` after it (`app.py`, `window.py`)."""
     pal = theme.current_palette()
     base = _app_icon()
     if not base.isNull():
