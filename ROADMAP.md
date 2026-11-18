@@ -12548,6 +12548,11 @@ when complete (that document's §7).
   (0246). Kit: /mnt/Games/oneup-vmtest/ (memory vm-test-kit). Also
   settle there whether sudo falls back to askpass on revoke
   (ONEUP-0416).
+  Decided by the user 2026-11-18: run this kit, then release 2.1.0,
+  which carries ONEUP-0443 (the 32-bit scriptlet failure). Not a 2.0.1:
+  [Unreleased] holds ### Added (ONEUP-0112), and main is the only branch.
+  Add to the run: an update whose transaction includes a 32-bit package
+  with a scriptlet (glibc-32bit), on the service route.
   **Layman:** Test the fixes that need a real computer update on a clean virtual machine before releasing.
   Kind: chore.
   Source: verify-delivery-2026-11-15.
@@ -12595,6 +12600,10 @@ when complete (that document's §7).
   Shipped 2026-11-18: the unit and §4.8 drop the directive; INV-13's
   scenario in tests/run-tests.sh checks it stays out (red against the
   old unit, green after). A host gets it only from a new package.
+  2026-11-18, the user's own host only: a drop-in,
+  /etc/systemd/system/oneup-service.service.d/allow-32bit.conf, sets
+  SystemCallArchitectures= (empty) until 2.1.0 is installed. Delete it
+  then; systemctl show reported the property empty after daemon-reload.
   **Layman:** An update that included 32-bit parts of the system stopped part-way, because OneUp's background helper was not allowed to run 32-bit programs.
   Kind: fix.
   Source: user-report-2026-11-18.
