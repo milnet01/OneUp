@@ -263,8 +263,9 @@ Errors are `za.co.antsprojectshub.OneUp1.Error.NotAuthorized`, `.Busy`, `.Invali
 - **The job file is deleted** when the job has ended and either its session has ended or
   its session starts another `Run`. Until then a repeated `Read` at the end returns the
   same `status`. A service that
-  starts deletes any job file an earlier instance left; a child still writing to it is
-  unaffected, because an unlinked file stays writable.
+  starts deletes any job file an earlier instance left, once it owns the bus name, so a
+  second copy that is refused the name leaves a live instance's files alone; a child still
+  writing to one is unaffected, because an unlinked file stays writable.
 - **`CanUpdate` answers the non-interactive question** (§4.4), so `--auth-status` reports
   what an automatic update would actually get.
 
@@ -328,7 +329,10 @@ sends after `OpenSession` widens a session (§2.3, PackageKit's CVE-2026-41651).
   repository files, with `repos.repo_switched_off` (ONEUP-0393).
 - **A re-enable that fails is tried again.** Something else can hold zypp's lock when a
   session ends. The service tries again every 5 seconds for up to 10 minutes, staying up
-  meanwhile, then gives up (ONEUP-0393).
+  meanwhile, then gives up (ONEUP-0393). An alias still waiting for that re-enable, or
+  given up on, is off because of OneUp, not an administrator: a session that disables it
+  again takes it over, and the retry stops, so it is never switched on under that
+  session (ONEUP-0426).
 - **The record is on disk as well, in `/var/lib/oneup/paused-sources`** (ONEUP-0406, the
   user's choice 2026-11-15). It holds every alias a session switched off and the service
   has not switched back on, including one given up on. An alias is written before its
@@ -494,7 +498,9 @@ way. In a real update on 2026-11-18, glibc-32bit's scriptlet runs the 32-bit
 The service writes one line to its journal for each of these:
 
 - a session opened, with the caller's uid, user name and unique name;
-- a session refused, with the same and the reason code;
+- a session refused, with the same and the reason code — the uid and user as `?` for a
+  refusal made before the caller is looked up (`stopping`, `busy-own-session`,
+  `busy-too-many`);
 - a job started, with uid, operation and arguments;
 - a job ended, with its status;
 - a session ended, with any repository it re-enabled;
@@ -854,3 +860,4 @@ Each of these is amended in the commit that lands the matching code:
 | impl-0393 | 2026-11-12 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0393 closed review theme 1 (2026-11-11 code review). §4.5 now says an alias already off is never recorded, and that a failed re-enable is retried every 5 seconds for up to 10 minutes. INV-6's statement and test clause say the same. §4.9 adds the retry's audit lines. §6's *service dies mid-job* row states the gap that remains: the record is in memory only, queued as ONEUP-0406. |
 | impl-0406 | 2026-11-15 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0406: §4.5's in-memory record of a session's switched-off sources is now also written to `/var/lib/oneup/paused-sources` and restored by the next service; the unit gains `StateDirectory=oneup` (§4.8). Locked by `tests/service-test.py`'s kill-and-restart scenario, red against HEAD. |
 | impl-0443 | 2026-11-18 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0443: §4.12's rule failed a second directive. In the user's update of 2026-11-18 (log `2026-11-18_085021`), glibc-32bit's scriptlet ran the 32-bit `iconvconfig-32`, which died with `SIGSYS` under `SystemCallArchitectures=native`, and rpm aborted the transaction. Changed: §4.8 moves the directive to the left-out list; the unit drops it in the same commit, and INV-13's scenario checks it stays out, red against HEAD. |
+| impl-0426 | 2026-11-18 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0426 (review-code 2026-11-15, lane 04). §4.5: an alias still waiting for its re-enable read as already off when a new session disabled it, so the retry switched it on under that session; the session now takes it over. §4.3: a second copy cleared the live instance's job files before it was refused the bus name; start-up clears them only once it owns the name. New service scenarios for both, red before the fix. |

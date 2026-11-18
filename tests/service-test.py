@@ -35,6 +35,7 @@ import sys
 import tempfile
 import time
 import traceback
+import types
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -597,6 +598,63 @@ def test_repo_retry(rig: Rig) -> None:
     close(c)
 
 
+def test_retry_yields_to_live_session(rig: Rig) -> None:
+    scenario("ONEUP-0426: a retried re-enable never switches a source on under a live session")
+    flag = rig.d / "enable-fails"
+    repo = rig.d / "repos.d" / "oss.repo"
+    on = repo.read_text()
+    flag.touch()
+    try:
+        c = rig.client()
+        open_session(c)
+        run(c, "repo-disable", {"alias": "oss"})
+        repo.write_text(on.replace("enabled=1", "enabled=0"))   # what a real disable leaves
+        failed = rig.audit().count("re-enable failed")
+        call(c, SERVICE, "CloseSession")
+        check("the session's re-enable fails and waits to be retried",
+              wait_for(lambda: rig.audit().count("re-enable failed") > failed, 5),
+              rig.audit()[-300:])
+        c2 = rig.client()
+        open_session(c2)
+        got = run(c2, "repo-disable", {"alias": "oss"})
+        check("a new session switches the same source off", got[0] == "ok", got)
+        start_at = len(rig.calls())
+        flag.unlink()                     # a retry would now succeed
+        time.sleep(2)                     # four retry intervals
+        check("no retry switches it on while that session holds it",
+              not any(line.endswith("modifyrepo --enable oss")
+                      for line in rig.calls()[start_at:]), rig.calls()[start_at:])
+        call(c2, SERVICE, "CloseSession")
+        check("the session that holds it switches it on at its end",
+              wait_for(lambda: any(line.endswith("modifyrepo --enable oss")
+                                   for line in rig.calls()[start_at:]), 5),
+              rig.calls()[start_at:])
+        close(c)
+        close(c2)
+    finally:
+        flag.unlink(missing_ok=True)
+        repo.write_text(on)
+
+
+def test_second_copy(rig: Rig) -> None:
+    scenario("ONEUP-0426: a second copy that cannot own the name leaves the first's jobs alone")
+    c = rig.client()
+    open_session(c)
+    (rig.d / "dup-sleep").write_text("4")
+    start(c, "system-download", {"cdn": False})
+    time.sleep(0.5)
+    files = sorted((rig.d / "run").glob("job-*.out"))
+    second = subprocess.run(
+        [sys.executable, "-m", "oneup.service"], env=rig.env, cwd=rig.d,
+        capture_output=True, text=True, timeout=30, check=False)
+    check("the second copy refuses to run", second.returncode == 1, second.stderr)
+    check("and the running job's output is still there",
+          files and all(path.exists() for path in files), files)
+    pull(c)
+    close(c)
+    (rig.d / "dup-sleep").unlink()
+
+
 def test_repo_after_crash(rig: Rig) -> None:
     scenario("ONEUP-0406: a source switched off survives the service dying, and comes back on")
     paused = rig.d / "state" / "paused-sources"
@@ -633,6 +691,10 @@ def test_caps(rig: Rig) -> None:
     others = [rig.client() for _ in range(8)]
     results = [open_session(c)[0] for c in others]
     check("seven more open, and the ninth is Busy", results == ["ok"] * 7 + ["Busy"], results)
+    # ONEUP-0426: INV-14 wants a line for every refused session, these two included.
+    check("both Busy refusals are audited",
+          "reason=busy-own-session" in rig.audit() and "reason=busy-too-many" in rig.audit(),
+          rig.audit()[-400:])
     (rig.d / "dup-sleep").write_text("2")
     (rig.d / "done").unlink(missing_ok=True)
     start(first, "system-commit", {"cdn": False})
@@ -891,10 +953,14 @@ def test_bounds(_base: Path) -> None:
     class _Wedged:
         def __init__(self):
             self.timeouts = []
+            self.sent = []
 
         def send_and_get_reply(self, _msg, timeout=None):
             self.timeouts.append(timeout)
             raise TimeoutError("no reply")
+
+        def send(self, msg):
+            self.sent.append(msg)
 
     fake = _Wedged()
     for interactive in (False, True):
@@ -904,6 +970,35 @@ def test_bounds(_base: Path) -> None:
     check("both polkit checks carry a time limit, the prompt's the longer",
           len(fake.timeouts) == 2 and None not in fake.timeouts
           and fake.timeouts[0] < fake.timeouts[1], fake.timeouts)
+    # ONEUP-0426: a prompt that ran out left polkit's password box on screen.
+    cancels = [m.body for m in fake.sent
+               if m.header.fields.get(HeaderFields.member) == "CancelCheckAuthorization"]
+    check("a timed-out check takes its password box down", len(cancels) >= 1
+          and all(body[0] for body in cancels), cancels)
+
+    class _Odd:
+        def send_and_get_reply(self, _msg, timeout=None):
+            return types.SimpleNamespace(
+                header=types.SimpleNamespace(message_type=MessageType.method_return),
+                body=("not-a-number",))
+
+    try:
+        uid = polkit.caller_uid(_Odd(), ":1.1")
+    except Exception as exc:  # noqa: BLE001 — the escape is the failure
+        uid = repr(exc)
+    check("a malformed uid reply refuses the caller, not the check thread (ONEUP-0426)",
+          uid is None, uid)
+
+    from oneup.service import server
+    srv = object.__new__(server.Service)
+    srv.paused_file = _base / "paused-garbled"
+    srv.paused_file.write_bytes(b"oss\n\xff\xfe\n")
+    try:
+        kept = srv._read_paused()
+    except Exception as exc:  # noqa: BLE001 — the escape is the failure
+        kept = repr(exc)
+    check("a record that does not decode is set aside, not a crash on every start "
+          "(ONEUP-0426)", isinstance(kept, set), kept)
     fake = _Wedged()
     saved = service_client._router
     service_client._router = lambda: fake
@@ -931,7 +1026,8 @@ def main() -> int:
         try:
             for test in (test_polkit, test_import_keys, test_validation, test_relay,
                          test_read, test_orphans, test_repo_restore, test_repo_already_off,
-                         test_repo_retry, test_repo_after_crash, test_caps,
+                         test_repo_retry, test_retry_yields_to_live_session,
+                         test_repo_after_crash, test_second_copy, test_caps,
                          test_stop_download,
                          test_client_killed, test_service_killed, test_sigterm, test_audit,
                          test_route):

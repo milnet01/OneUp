@@ -143,7 +143,6 @@ class Service:
         self.idle_seconds = _env_seconds("ONEUP_SERVICE_IDLE_SECONDS", 60)
         self.runtime_dir = Path(os.environ.get("ONEUP_SERVICE_RUNTIME_DIR")
                                 or os.environ.get("RUNTIME_DIRECTORY") or "/run/oneup")
-        jobs.clear_stale(self.runtime_dir)
         # §4.5: every alias a session switched off and the service has not switched back
         # on, on disk, so a service that dies (and a reboot after it) cannot strand a
         # source off for good (ONEUP-0406; /var/lib/oneup, the user's choice 2026-11-15).
@@ -152,11 +151,19 @@ class Service:
         self.paused_file = state_dir / "paused-sources"
         self.gave_up: set[str] = set()     # retries that ran out, kept for the next start
         self.pending: str | None = None    # the alias a running repo-disable switches off
+        self.last_busy = time.monotonic()
+
+    def take_over(self) -> None:
+        """Clear an earlier instance's job files and resume its restores.
+
+        Only once this process owns the bus name: a second copy that is then refused
+        it must not delete the live instance's job files (ONEUP-0426).
+        """
+        jobs.clear_stale(self.runtime_dir)
         restore = self._read_paused()
         if restore:
             audit(f"restoring sources a previous service left off: {','.join(sorted(restore))}")
             self.retry = [(0, alias, time.monotonic() + RETRY_FOR) for alias in sorted(restore)]
-        self.last_busy = time.monotonic()
 
     # --- the loop ---------------------------------------------------------------
 
@@ -171,7 +178,10 @@ class Service:
             if isinstance(item, Message):
                 self._message(item)
             elif item is not None:
-                item()                                 # a worker's result, run here
+                try:
+                    item()                             # a worker's result, run here
+                except Exception as exc:  # noqa: BLE001 — a bug costs one result, never the service
+                    audit(f"error in a worker's result: {exc!r}")
             self._answer_waiting()
             if self.stopping:
                 # §4.8: a session keeps its job readable until the final status has
@@ -262,12 +272,17 @@ class Service:
         options = self._options(msg, "a{sv}", {"interactive": "b", "import_keys": "b"})
         interactive = options.get("interactive", True)
         import_keys = options.get("import_keys", False)
+        # INV-14: a line for every refused session, these before polkit too (ONEUP-0426).
+        refusal = None
         if self.stopping:
-            raise Refusal("Busy", "the service is stopping")
-        if caller in self.sessions or caller in self.checking:
-            raise Refusal("Busy", "this caller already has a session")
-        if len(self.sessions) + len(self.checking) >= MAX_SESSIONS:
-            raise Refusal("Busy", "too many sessions")
+            refusal = ("stopping", "the service is stopping")
+        elif caller in self.sessions or caller in self.checking:
+            refusal = ("busy-own-session", "this caller already has a session")
+        elif len(self.sessions) + len(self.checking) >= MAX_SESSIONS:
+            refusal = ("busy-too-many", "too many sessions")
+        if refusal:
+            audit(f"session refused uid=? user=? caller={caller} reason={refusal[0]}")
+            raise Refusal("Busy", refusal[1])
         self.checking.add(caller)
 
         def check() -> None:
@@ -330,7 +345,11 @@ class Service:
         if op == "repo-disable":
             # INV-6: a repository an administrator switched off is never this
             # session's to switch on, so its disable is not recorded (ONEUP-0393).
-            if repos.repo_switched_off(args["alias"]):
+            # One the service itself still owes a re-enable is off because of OneUp,
+            # so this session takes it over; `_job_ended` drops the retry (ONEUP-0426).
+            if args["alias"] in self._owed():
+                session.found_off.discard(args["alias"])
+            elif repos.repo_switched_off(args["alias"]):
                 session.found_off.add(args["alias"])
             else:
                 session.found_off.discard(args["alias"])
@@ -344,17 +363,21 @@ class Service:
         if session.job is not None:      # its last job has ended; its output goes now
             session.job.discard()
             session.job = None
+        # §4.5: the alias is on disk before its repo-disable starts (ONEUP-0426).
+        if op == "repo-disable" and args["alias"] not in session.found_off:
+            self.pending = args["alias"]
+            self._save_paused()
         try:
             job = jobs.Job(op=op, args=args, argv=argv, merge_stderr=merge_stderr,
                            runtime_dir=self.runtime_dir, session=session,
                            on_end=lambda j: self._post(lambda: self._job_ended(j)))
         except OSError as exc:
+            if self.pending == args.get("alias"):
+                self.pending = None
+                self._save_paused()
             raise Refusal("Invalid", f"could not start {op}: {exc.strerror}") from exc
         self.job = job
         session.job = job
-        if op == "repo-disable" and args["alias"] not in session.found_off:
-            self.pending = args["alias"]
-            self._save_paused()
         session.told = False
         audit(f"job started uid={session.uid} op={op} args={_args_text(args)}")
         self._reply(msg)
@@ -428,6 +451,9 @@ class Service:
         if (job.status == 0 and job.op == "repo-disable" and alias not in session.disabled
                 and alias not in session.found_off):
             session.disabled.append(alias)
+            # Now the session's to switch on: a retry would do it under the live run.
+            self.retry = [row for row in self.retry if row[1] != alias]
+            self.gave_up.discard(alias)
         if job.status == 0 and job.op == "repo-enable" and alias in session.disabled:
             session.disabled.remove(alias)
         audit(f"job ended uid={session.uid} op={job.op} status={job.status}")
@@ -546,6 +572,10 @@ class Service:
 
     # --- the paused-sources record (§4.5, ONEUP-0406) -------------------------------
 
+    def _owed(self) -> set[str]:
+        """Aliases a session switched off whose re-enable the service still owes."""
+        return {alias for _uid, alias, _give_up in self.retry} | self.gave_up
+
     def _paused_now(self) -> set[str]:
         """Every alias switched off by a session and not yet back on."""
         held = {alias for session in [*self.sessions.values(), *self.ending]
@@ -586,7 +616,9 @@ class Service:
         """The record a previous service left. Only names `rootops` would accept are
         taken: the file is root's, but the alias still reaches `zypper`."""
         try:
-            lines = self.paused_file.read_text().split()
+            # `replace`: a line that does not decode fails the shape check below,
+            # rather than failing every start of the service (ONEUP-0426).
+            lines = self.paused_file.read_text(errors="replace").split()
         except OSError:
             return set()
         kept, known = set(), _repo_aliases()
@@ -674,6 +706,7 @@ def main() -> int:
     if reply.header.message_type != MessageType.method_return or reply.body[0] != 1:
         print("oneup-service: could not own the bus name", file=sys.stderr, flush=True)
         return 1
+    service.take_over()
 
     def on_term(_signum, _frame) -> None:
         # §4.8: refuse new sessions, and exit once the running job has ended. A flag

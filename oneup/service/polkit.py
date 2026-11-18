@@ -7,6 +7,9 @@ the pid-based subject. A caller who left mid-check gets `denied`, never a yes
 
 from __future__ import annotations
 
+import contextlib
+import uuid
+
 from jeepney import DBusAddress, MessageType, new_method_call
 
 SYSTEM_UPDATE = "org.freedesktop.packagekit.system-update"
@@ -34,8 +37,10 @@ def check(router, caller: str, action: str, *, interactive: bool) -> str:
     """`YES`, or the reason code for a refusal. Blocks while polkit asks the user."""
     subject = ("system-bus-name", {"name": ("s", caller)})
     flags = _ALLOW_USER_INTERACTION if interactive else 0
+    # Named, so a check that runs out can take its password box down with it.
+    cancel_id = f"oneup-{uuid.uuid4().hex}"
     msg = new_method_call(_AUTHORITY, "CheckAuthorization", "(sa{sv})sa{ss}us",
-                          (subject, action, {}, flags, ""))
+                          (subject, action, {}, flags, cancel_id))
     try:
         # Bounded, so a hung or restarted polkitd cannot hold the session open as root
         # for ever (ONEUP-0399); a timeout refuses, as an unreachable polkit does.
@@ -44,6 +49,13 @@ def check(router, caller: str, action: str, *, interactive: bool) -> str:
         if reply.header.message_type != MessageType.method_return:
             return DENIED
         authorized, challenge, details = reply.body[0]
+    except TimeoutError:
+        # The session is refused, so the box asking for it must not stay on screen
+        # (ONEUP-0426). Sent without waiting: a wedged polkit would not answer this either.
+        with contextlib.suppress(Exception):
+            router.send(new_method_call(_AUTHORITY, "CancelCheckAuthorization", "s",
+                                        (cancel_id,)))
+        return DENIED
     except Exception:  # noqa: BLE001 — unreachable, unregistered, malformed: each refuses
         return DENIED
     if authorized is True:
@@ -62,8 +74,8 @@ def caller_uid(router, caller: str) -> int | None:
     try:
         reply = router.send_and_get_reply(
             new_method_call(bus, "GetConnectionUnixUser", "s", (caller,)), timeout=10)
+        if reply.header.message_type != MessageType.method_return:
+            return None
+        return int(reply.body[0])
     except Exception:  # noqa: BLE001 — an unresolvable caller is refused
         return None
-    if reply.header.message_type != MessageType.method_return:
-        return None
-    return int(reply.body[0])

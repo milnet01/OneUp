@@ -15,6 +15,13 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Smaller fixes to OneUp's system service from the code review** (ONEUP-0426)
+  A software source the service was still trying to switch back on could be switched on
+  in the middle of your next update, after you had switched it off for it. Starting a
+  second copy of the service by hand no longer breaks an update the first is running. A
+  password box that timed out no longer stays on screen, and one damaged record file no
+  longer stops the service from starting.
+
 - **Smaller engine fixes from the code review** (ONEUP-0425)
   Pressing Update while the download size was being worked out could, rarely, end with
   nothing installed and no error. Stopping OneUp while it asked about Flatpaks could leave
