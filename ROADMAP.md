@@ -12453,7 +12453,7 @@ when complete (that document's §7).
   Kind: chore.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0432] **Two docstrings state the opposite of the code: service_client's only caller, and the tray icon rebuild.**
+- ✅ [ONEUP-0432] **Two docstrings state the opposite of the code: service_client's only caller, and the tray icon rebuild.**
   review-readability 2026-11-15, the two HIGH, both premises confirmed:
   - oneup/engine/service_client.py module docstring says privilege is
     the only caller; steps.py and actions.py call it too.
@@ -12461,6 +12461,10 @@ when complete (that document's §7).
     says it deliberately does not, and app.py and window.py call
     tray.refresh_icon themselves.
   Comment-only, one edit each.
+  Shipped 2026-11-18 in 53df17f. Both re-verified: service_client now
+  names all three callers and why two bypass privilege; tray's
+  docstring says apply_app_theme leaves the tray alone and each
+  re-theme path calls refresh_icon. Comment only.
   **Layman:** Two notes in OneUp's code describe it wrongly, which could lead someone changing it astray.
   Kind: doc-fix.
   Source: review-readability-2026-11-15.
