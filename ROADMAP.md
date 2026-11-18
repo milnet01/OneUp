@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=443 -->
+<!-- ants-roadmap-id-high-water: ONEUP=444 -->
 
 # OneUp Roadmap
 
@@ -12605,5 +12605,21 @@ when complete (that document's §7).
   SystemCallArchitectures= (empty) until 2.1.0 is installed. Delete it
   then; systemctl show reported the property empty after daemon-reload.
   **Layman:** An update that included 32-bit parts of the system stopped part-way, because OneUp's background helper was not allowed to run 32-bit programs.
+  Kind: fix.
+  Source: user-report-2026-11-18.
+
+- 📋 [ONEUP-0444] **A retried update whose packages are all already downloaded wrongly says OneUp couldn't follow the progress.**
+  The user's run of 2026-11-18 (log 2026-11-18_090336, the retry after
+  ONEUP-0443's failure) installed 594 packages and showed the
+  progress-unrecognised hint. proc.py sets PROGRESS_SEEN from the
+  download pass only, counting Retrieving: and Preloading: lines; every
+  package was cached, so that pass printed 1188 "In cache ... (n/m)"
+  lines and none of the counted kind (measured in the log). The commit
+  pass's "(n/598) Installing:" lines were recognised but are not
+  counted. Fix: count a cached package as a recognised download line,
+  keeping the canary able to catch a renamed Retrieving: line when only
+  some packages were cached. The ONEUP-0046 canary's test needs an
+  all-cached scenario, red first.
+  **Layman:** After a failed update is run again, OneUp shows a warning asking you to report a problem that is not there.
   Kind: fix.
   Source: user-report-2026-11-18.
