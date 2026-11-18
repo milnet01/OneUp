@@ -12608,7 +12608,7 @@ when complete (that document's §7).
   Kind: fix.
   Source: user-report-2026-11-18.
 
-- 📋 [ONEUP-0444] **A retried update whose packages are all already downloaded wrongly says OneUp couldn't follow the progress.**
+- ✅ [ONEUP-0444] **A retried update whose packages are all already downloaded wrongly says OneUp couldn't follow the progress.**
   The user's run of 2026-11-18 (log 2026-11-18_090336, the retry after
   ONEUP-0443's failure) installed 594 packages and showed the
   progress-unrecognised hint. proc.py sets PROGRESS_SEEN from the
@@ -12620,6 +12620,9 @@ when complete (that document's §7).
   keeping the canary able to catch a renamed Retrieving: line when only
   some packages were cached. The ONEUP-0046 canary's test needs an
   all-cached scenario, red first.
+  Fixed in 0135c3e: In cache lines count as recognised when they cover
+  every package of the download pass; two engine scenarios (all cached,
+  red first; partly cached with a renamed fetch line, the guard).
   **Layman:** After a failed update is run again, OneUp shows a warning asking you to report a problem that is not there.
   Kind: fix.
   Source: user-report-2026-11-18.
