@@ -260,15 +260,17 @@ A root password prompt the user cannot attribute is indistinguishable from a phi
 dialog, and the correct response to one is to refuse it. So:
 
 **3.1 — Attribution comes from the exported environment, and the *authenticating* call
-carries it explicitly.** Exactly one `sudo` in the engine passes `-A` and `-p`:
+carries it explicitly.** Exactly one `sudo` in the engine passes `-p`:
 `sudo_init`'s `sudo -A -p "<label>" -v`, which is the call that actually prompts. Rendered
 with the `-p` it asserts, because this is the worked form §2.3 tells the Python engine to
 reproduce. One exception drops `-A` and keeps `-p`: where neither `DISPLAY` nor
 `WAYLAND_DISPLAY` is set and `/dev/tty` opens, as on an SSH login with no desktop, the
 box cannot appear. There sudo asks in the terminal, under the same label (ONEUP-0360).
 Every other
-privileged call — direct or through `sudo_capture`, §1.2 owning the breakdown — is
-plain `sudo` **on purpose**: each inherits the exported `SUDO_ASKPASS` and `SUDO_PROMPT`
+privileged call — direct or through `sudo_capture`, §1.2 owning the breakdown — carries
+no `-p` **on purpose**, and `-A` only once that validate has asked through the box, so
+a credential sudo has already forgotten opens the box again rather than failing
+(ONEUP-0405). Each inherits the exported `SUDO_ASKPASS` and `SUDO_PROMPT`
 (3.2, 3.3), so if any of them ever has to ask, the prompt is graphical and labelled
 anyway. That is why the export is mandatory rather than a convenience: it is what makes
 "every prompt is attributable" true of a call site that never mentions it.

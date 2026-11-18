@@ -352,9 +352,10 @@ genuinely is the only option, a comment names the constraint so it reads as deli
 - **No bare `except:`.** There are none (measured). Catch what you can name:
   `except (OSError, subprocess.SubprocessError)` — the form already used in
   `run_kwin_script` and `read_repos`.
-- **No `except Exception: pass`.** There is exactly **one** `except Exception` in
-  the app's code (`updater.py` and `oneup/`), in `oneup/gui/theme.py`'s colour-scheme
-  probe. One is a defensible number; keep it there.
+- **No `except Exception: pass`.** An `except Exception` is the last resort, for a
+  library that raises types it does not document. Each one, and each
+  `contextlib.suppress(Exception)`, carries a comment naming why nothing narrower will do
+  — in a `noqa: BLE001` where ruff flags the line, as a plain comment where it does not.
 - **A failure is reported, never silenced**, and **never claim success you did not earn.**
   These are not style preferences — they are the four correctness invariants the engine
   suite exists to protect, and `docs/standards/testing.md` §5 states them in full and owns
@@ -485,7 +486,7 @@ and the guards it requires.
 | §4 module and function size | nothing automatic, deliberately. It is a soft ceiling, and a hard one is met by splitting badly |
 | §5 subprocess discipline | half-covered. `ruff`'s `S` rules in `local-CI.sh`, and `tests/run-tests.sh`'s proof that an unsafe repo alias never reaches a privileged command. A `noqa` with no reason (§5.2) and a privileged call outside §5.1 rule 4's runner are caught by nothing |
 | §6 Qt idioms | nothing automatic |
-| §7 error handling | `ruff` in `local-CI.sh`: `E722` a bare `except:`, `BLE001` an `except Exception`, `S110` either one ending in `pass` (measured 2026-09-28, ruff 0.16.8). A **named** exception silenced with `pass` — `except OSError: pass` — is caught by nothing |
+| §7 error handling | `ruff` in `local-CI.sh`: `E722` a bare `except:`, `BLE001` an `except Exception`, `S110` either one ending in `pass` (measured 2026-09-28, ruff 0.16.8). A **named** exception silenced with `pass` — `except OSError: pass` — is caught by nothing, nor is an `except Exception` whose exception is re-raised or used, nor `contextlib.suppress(Exception)` (measured 2026-11-18: ruff's `RUF100` refuses a `noqa: BLE001` on either) |
 | §8 comments | nothing automatic |
 | §9 reuse before rewriting | nothing automatic |
 

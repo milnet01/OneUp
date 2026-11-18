@@ -15,6 +15,15 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Smaller engine fixes from the code review** (ONEUP-0425)
+  Pressing Update while the download size was being worked out could, rarely, end with
+  nothing installed and no error. Stopping OneUp while it asked about Flatpaks could leave
+  that question running. One unusual character in a software source no longer loses
+  every package's download size. A restart left pending by an earlier update no longer
+  says this run updated core packages. A failed passwordless setup now says when it could
+  not remove the helper it had installed, and the system service being busy is no longer
+  reported as unreachable.
+
 - **Running an update again no longer wrongly asks you to report a progress problem** (ONEUP-0444)
   When every package was already downloaded, such as on a second try after a failed
   update, OneUp said it couldn't follow the progress and asked for a report, even though

@@ -290,7 +290,8 @@ The payload is `yes` or `no`, and **`no` never carries anything after it**. The 
 codes**, space-separated, read from the run's system transaction log — `kernel-new`,
 `graphics-driver-nvidia`, `graphics-driver-generic`, `kernel-modules` — or **one
 standalone code**, `core-packages-updated` or `firmware-updated`. The two sets are
-disjoint. The window words them by `docs/specs/ONEUP-0108-window-wording.md` §4.4 —
+disjoint. `core-packages-updated` is sent only when the run installed packages; a reboot
+an earlier update left pending, on a run that installed nothing, carries no reason. The window words them by `docs/specs/ONEUP-0108-window-wording.md` §4.4 —
 *"a new kernel and your NVIDIA graphics driver were installed"*, agreeing *was* or *were*
 with what the sentence lists — and falls back to generic wording when the reason is
 absent.
@@ -563,7 +564,9 @@ this file, and finding nothing would suggest there is nothing to agree on.
 - **`go.request`** — created by the *window* to tell a held engine to proceed, written
   whole so the engine never reads it empty. Line 1 carries a comma-separated step list
   and nothing else, and is the only line the engine reads. A request not newer than `hold.state` is a leftover and is ignored, the same rule
-  `stop.request` follows against `run.state` and for the same reason. **Every key must
+  `stop.request` follows against `run.state` and for the same reason — except one with the
+  same mtime that was not there before the hold, which file times ticking coarsely make
+  possible (`docs/specs/ONEUP-0044-one-authentication.md` §4.3). **Every key must
   resolve in the engine's `LABEL` map or the whole go-ahead is refused** — stricter than
   `--steps=`, which silently drops an unknown key, because this file is an authorisation
   read by a root process rather than a flag a person typed. A refused go-ahead ends the

@@ -145,7 +145,7 @@ returning into the dispatch's `exit $?`, enters the hold:
 hold_for_go_ahead()                 # RECORDS a decision; it never runs a step itself
   write   $HOLD_STATE_FILE          # see §4.3 for the pinned layout
   poll    every $STOP_POLL_SECONDS, up to $ONEUP_HOLD_SECONDS:
-            go.request   newer than hold.state -> adopt its steps (below), return 0
+            go.request   fresh (§4.3)          -> adopt its steps (below), return 0
             stop.request newer than hold.state -> return 1
             kill -0 $WINDOW_PID fails (window gone) -> return 1
   ceiling reached                              -> return 1
@@ -279,7 +279,10 @@ the run — unchanged from today. A hold is not a run.
 
 **Staleness is decided the way `stop_pending` decides it**, and for the same reason: a
 request older than the stamp is a leftover from an earlier session. `hold.state` is the
-stamp, so a `go.request` counts only if it is newer than `hold.state`. Deleting leftovers at
+stamp, so a `go.request` counts only if it is newer than `hold.state` — or carries the same
+mtime and is not the file that was there before `hold.state` was written. File times tick
+coarsely, so a go-ahead written the moment `hold.state` appears can tie with it, and it is
+no leftover. Deleting leftovers at
 startup instead would race a go-ahead pressed in that same moment, exactly as
 `stop_pending`'s own comment records.
 
@@ -394,8 +397,8 @@ root process, and the two do not warrant the same leniency.
   deliberate: §4.5's fallback when `go.request` cannot be written, which costs a second
   prompt rather than leaving Update dead (ONEUP-0418).
 
-- **INV-2** A held engine never begins a transaction without a go-ahead newer than its own
-  `hold.state`.
+- **INV-2** A held engine never begins a transaction without a go-ahead that is fresh
+  against its own `hold.state` (§4.3).
   *Test:* `tests/run-tests.sh` — hold with no `go.request`; the mock `zypper` exits 99 on a
   `dup` or `update` that does **not** carry `--dry-run`.
   *Breaks when:* the ceiling path falls through into the run instead of returning non-zero,
@@ -413,9 +416,10 @@ root process, and the two do not warrant the same leniency.
   *Breaks when:* the ceiling is unset, infinite, or only checked after a blocking read; or
   the dispatch propagates the hold's internal non-zero return to the caller.
 
-- **INV-4** A `go.request` older than `hold.state` is ignored.
+- **INV-4** A `go.request` older than `hold.state` is ignored; one stamped in the same tick
+  and written after it is not.
   *Test:* `tests/run-tests.sh` — write `go.request` first, then start the held engine, and
-  assert no transaction ran.
+  assert no transaction ran; and a go-ahead given `hold.state`'s own mtime starts the run.
   *Breaks when:* the freshness comparison is dropped, or leftovers are deleted at startup
   instead, which races a go-ahead pressed in the same moment.
 
@@ -608,3 +612,4 @@ No version-site change: this is not a release on its own.
 | impl-0403 | 2026-11-15 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0403 (review-code 2026-11-11): §4.5's middle row had no way out but quitting. The Stop slot now offers Cancel during the wait, which ends the wait and starts nothing; the preview is left to finish, since the engine is never signalled. The suggested ceiling was not added: falling back to `_launch` there is refused by §4.5's own second-engine guard while the preview runs. |
 | impl-0405 | 2026-11-15 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0405, decided by the user 2026-11-15: a credential sudo forgets before the keep-alive refreshes it is asked for again in the box, not left to fail. §6's warm-credential row and §7's ceiling row now say so. |
 | impl-0418 | 2026-11-16 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0418 (review-code 2026-11-15): after a failed `go.request` write, Update's fallback to `_launch` was refused by §4.5's own second-engine guard while the preview held, so Update did nothing. §4.5 now names the one exception: a hold that is ours but cannot be adopted lets the fallback pass the guard. The guard still holds while the size is being worked out. INV-1's *Breaks when* names the exception, which costs a second prompt. |
+| impl-0425 | 2026-11-18 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0425 (review-code 2026-11-15, lane 01): file times tick coarsely, so a go-ahead the window writes the moment `hold.state` appears can carry the same mtime and was refused as a leftover, ending the hold at its ceiling with `DONE\|ok` and no run. §4.3's freshness rule now also accepts a same-mtime `go.request` that is not the file present before the hold; §4.1's table, INV-2 and INV-4 point at it. New engine scenario, red before the fix. |

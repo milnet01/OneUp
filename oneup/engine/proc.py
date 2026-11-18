@@ -164,7 +164,7 @@ def _run_bounded(argv: Sequence[str], deadline: float, *, merge_stderr: bool,
         stdin=stdin,
         # Captured on BOTH paths: a streaming child that inherited fd 1 would
         # bypass the log mirror and die on SIGPIPE when the window quits (see
-        # `run`). Streamed output is relayed below as it is read.
+        # `run`). Streamed output is relayed below once the child has exited.
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT if (stream or merge_stderr) else subprocess.DEVNULL,
         text=True,
@@ -186,6 +186,11 @@ def _run_bounded(argv: Sequence[str], deadline: float, *, merge_stderr: bool,
         except subprocess.TimeoutExpired:
             pass
         return DEADLINE_EXPIRED, ""
+    except BaseException:
+        # A Stop or quit unwinding through `communicate`: the child is in its own
+        # session, so the signal that reached us missed it (security.md §2.4).
+        kill_group(child.pid)
+        raise
 
 
 # How long to wait for a killed group to actually go before giving up on it.

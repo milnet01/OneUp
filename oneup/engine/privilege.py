@@ -280,9 +280,9 @@ def _open_service() -> str | None:
     """Open this run's session with the service, or reuse the one already open.
 
     None once it is open. Otherwise why §4.7 allows falling back: `"challenge"` when
-    polkit had no agent to ask this caller, `"unreachable"` for the service missing or
-    a D-Bus error that is not `NotAuthorized`. A `dismissed` or `denied` answer ends
-    the run as a cancelled validate does.
+    polkit had no agent to ask this caller, `"refused"` for any other error the service
+    answered with (`Busy`, say), `"unreachable"` for no answer at all. A `dismissed` or
+    `denied` answer ends the run as a cancelled validate does.
     """
     from . import service_client
     if service_client.has_session():
@@ -295,7 +295,7 @@ def _open_service() -> str | None:
         if exc.code == "NotAuthorized" and exc.reason != "challenge":
             markers.err("Authentication failed or cancelled — aborting.")
             raise SystemExit(1) from None
-        return "challenge" if exc.code == "NotAuthorized" else "unreachable"
+        return "challenge" if exc.code == "NotAuthorized" else "refused"
     except service_client.Unreachable:
         return "unreachable"
     return None
@@ -307,13 +307,14 @@ def _service_unreachable(why: str) -> None:
     §4.7: only the `auto` route falls back, and only interactively, with one line saying
     so. A forced `ONEUP_BACKEND=service` fails the run, and a run nobody started by hand
     (`ONEUP_NONINTERACTIVE=1`) stands down rather than raise a box nobody can answer.
-    `why` is `_open_service`'s answer. On `"challenge"` the service answered, so the
-    line must not say it could not be reached (ONEUP-0360, seen over SSH).
+    `why` is `_open_service`'s answer. On `"challenge"` or `"refused"` the service
+    answered, so the line must not say it could not be reached (ONEUP-0360, seen over
+    SSH; ONEUP-0425).
     """
     global _ROUTE
     from . import route
-    reason = ("cannot ask for the password here" if why == "challenge"
-              else "could not be reached")
+    reason = {"challenge": "cannot ask for the password here",
+              "refused": "turned the request down"}.get(why, "could not be reached")
     if (os.environ.get("ONEUP_BACKEND") == route.SERVICE
             or os.environ.get("ONEUP_NONINTERACTIVE") == "1"):
         markers.err(f"OneUp's system service {reason} — aborting.")

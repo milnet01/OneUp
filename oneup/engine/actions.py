@@ -296,8 +296,8 @@ def _check_firmware() -> tuple[int, bool]:
 def check(opts: Options) -> int:
     """`--check`: report what WOULD update, install nothing, become root nowhere.
 
-    `orphans` and `cache` have no check arm, and a step whose tool is absent is
-    not checked at all — neither case emits a marker of any kind.
+    `orphans` and `cache` have no check arm, and a Flatpak or firmware step whose tool
+    is absent is not checked at all — neither case emits a marker of any kind.
     """
     markers.out("Checking for available updates (read-only)…")
     total = 0
@@ -474,8 +474,15 @@ def grant_auth() -> int:
         markers.hint("passwordless-unsupported", say=_GRANT_IMPOSSIBLE)
         return 1
     try:
-        rule_file, guard_file = _spill(rule), _spill(guard)
+        rule_file = _spill(rule)
     except OSError:
+        markers.hint("temp-file-failed", say="Could not create a temporary file.")
+        return 1
+    try:
+        guard_file = _spill(guard)
+    except OSError:
+        with contextlib.suppress(OSError):
+            os.unlink(rule_file)
         markers.hint("temp-file-failed", say="Could not create a temporary file.")
         return 1
     try:
@@ -497,9 +504,12 @@ def grant_auth() -> int:
         # install(1) places it root-owned and 0440 atomically, the mode sudo requires.
         if privilege.sudo(["install", "-o", "root", "-g", "root", "-m", "0440",
                            rule_file, str(AUTH_FILE)])[0] != 0:
-            privilege.sudo(["rm", "-f", str(GUARD_FILE)])   # never leave a guard ruleless
             markers.hint("auth-write-failed", AUTH_FILE,
                          say=f"Could not write the authorization rule ({AUTH_FILE}).")
+            # Never leave a guard ruleless — and say so when it cannot be removed.
+            if privilege.sudo(["rm", "-f", str(GUARD_FILE)])[0] != 0:
+                markers.hint("guard-remove-failed", GUARD_FILE,
+                             say=f"Could not remove the download helper ({GUARD_FILE}).")
             return 1
     finally:
         for path in (rule_file, guard_file):
@@ -513,8 +523,13 @@ def grant_auth() -> int:
 def _spill(text: str) -> str:
     """Write `text` to a fresh temporary file and return its path."""
     handle, path = tempfile.mkstemp(prefix="oneup-auth-")
-    with os.fdopen(handle, "w", encoding="utf-8") as out:
-        out.write(text)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as out:
+            out.write(text)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(path)
+        raise
     return path
 
 

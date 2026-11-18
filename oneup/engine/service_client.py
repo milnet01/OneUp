@@ -215,6 +215,8 @@ def close() -> None:
             _call("CloseSession", timeout=30)
         _SESSION = False
     if _ROUTER is not None:
+        # Any exception: on the way out, a close that fails in any of jeepney's ways
+        # must not turn a finished run into a traceback.
         with contextlib.suppress(Exception):
             _ROUTER.close()
         with contextlib.suppress(Exception):

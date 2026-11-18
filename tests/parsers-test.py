@@ -584,6 +584,20 @@ def flatpak_checks() -> None:
             sizes = repr(exc)
         check("pkgsizes: a corrupt gzip repository index gives no sizes, and no crash",
               sizes, {})
+        # ONEUP-0425: the pattern pass decoded every match strictly, so one byte that
+        # is not UTF-8 in ANY package raised UnicodeDecodeError past _read.
+        block = ('<package type="rpm"><name>{}</name><arch>x86_64</arch>'
+                 '<version epoch="0" ver="1" rel="1"/><size package="{}"/></package>\n')
+        odd_bytes = Path(tmp, "primary.xml.gz")
+        odd_bytes.write_bytes(gzip.compress(
+            b"<metadata>\n" + block.format("caf\udcff", 7).encode("utf-8", "surrogateescape")
+            + block.format("bash", 42).encode() + b"</metadata>\n"))
+        try:
+            sizes = pkgsizes._scan(odd_bytes, {("bash", "1-1", "x86_64")}, 5.0)
+        except Exception as exc:  # noqa: BLE001 — the escape is the failure
+            sizes = repr(exc)
+        check("pkgsizes: a byte that is not UTF-8 costs no other package its size",
+              sizes, {("bash", "1-1", "x86_64"): 42})
 
     check("read: only the wanted IDs, a .desktop suffix dropped, an absent one absent",
           sorted(got), ["com.example.Chat", "org.example.Base", "org.example.Old",

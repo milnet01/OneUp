@@ -423,6 +423,7 @@ def hold_for_go_ahead(log_file: str, size: str, launch_pid: int, window_pid: int
     """
     with contextlib.suppress(OSError):
         HOLD_STATE.parent.mkdir(parents=True, exist_ok=True)
+    leftover = _identity(GO_REQUEST)
     try:
         write_whole(HOLD_STATE, f"{launch_pid}\n{log_file}\n{size}\n")
     except OSError:
@@ -430,7 +431,7 @@ def hold_for_go_ahead(log_file: str, size: str, launch_pid: int, window_pid: int
         # fresh engine (INV-7), as the Bash engine's hold does.
         return None
     try:
-        stamp = HOLD_STATE.stat().st_mtime
+        stamp = HOLD_STATE.stat().st_mtime_ns
         started = _elapsed_clock()
         step = poll if poll > 0 else 1.0
         while _elapsed_clock() - started < HOLD_SECONDS:
@@ -438,15 +439,19 @@ def hold_for_go_ahead(log_file: str, size: str, launch_pid: int, window_pid: int
             # our own stamp is a leftover from an earlier session. Deleting
             # leftovers at start-up instead would race a go-ahead pressed in
             # that very moment.
-            if _newer_than(GO_REQUEST, stamp):
+            if _go_ahead_fresh(stamp, leftover):
                 mark_begun()
                 return GO_REQUEST.read_text(errors="replace").split("\n", 1)[0].strip()
-            if _newer_than(STOP_REQUEST, stamp):
+            if _newer_than(STOP_REQUEST, stamp / 1e9):
                 return None                              # Cancel
             if not _alive(window_pid):
                 return None                              # the window has gone
             time.sleep(step)
         return None                                      # the ceiling
+    except OSError:
+        # `hold.state` or `go.request` unreadable: end the hold as one that could
+        # not be recorded ends, so the window falls back (INV-7).
+        return None
     finally:
         for path in (HOLD_STATE, GO_REQUEST):
             with contextlib.suppress(OSError):
@@ -458,6 +463,28 @@ def _newer_than(path: Path, stamp: float) -> bool:
         return path.stat().st_mtime > stamp
     except OSError:
         return False
+
+
+def _identity(path: Path) -> tuple[int, int] | None:
+    """`path`'s inode and mtime in nanoseconds, or None when it does not exist."""
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return st.st_ino, st.st_mtime_ns
+
+
+def _go_ahead_fresh(stamp_ns: int, leftover: tuple[int, int] | None) -> bool:
+    """Is `go.request` the window's answer to THIS hold (ONEUP-0044 §4.3)?
+
+    Newer than `hold.state`, or stamped in the same clock tick and not the file that
+    was there before the hold was written: file times tick coarsely, so a go-ahead
+    written the moment `hold.state` appears can tie with it (ONEUP-0425).
+    """
+    now = _identity(GO_REQUEST)
+    if now is None:
+        return False
+    return now[1] > stamp_ns or (now[1] == stamp_ns and now != leftover)
 
 
 def _alive(pid: int) -> bool:

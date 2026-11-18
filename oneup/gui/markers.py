@@ -231,6 +231,9 @@ HINTS: dict[str, tuple[tuple[str, ...], str]] = {
     "auth-write-failed": (('path',), QT_TRANSLATE_NOOP(
         "markers",
         "Could not write the authorization rule ({path}).")),
+    "guard-remove-failed": (('path',), QT_TRANSLATE_NOOP(
+        "markers",
+        "Could not remove the download helper ({path}).")),
     "auth-remove-failed": (('path',), QT_TRANSLATE_NOOP(
         "markers",
         "Could not remove the authorization rule ({path}).")),

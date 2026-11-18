@@ -407,6 +407,12 @@ check "reboot advised on kernel change" "@@REBOOT@@|yes" "$out"
 # the reason must fall back to the standalone code and NOT invent a kernel.
 check        "unnamed reboot is the standalone reason" "@@REBOOT@@|yes|core-packages-updated" "$out"
 check_absent "no false kernel naming without evidence" "kernel-new" "$out"
+# ONEUP-0425: a run that installed nothing can still meet a reboot an earlier update
+# left pending. The advice stands; the reason must not claim this run updated packages.
+out=$(run_engine "$d" --steps=cache)
+check        "a pending reboot is still advised on a run that installed nothing" \
+             "@@REBOOT@@|yes" "$out"
+check_absent "...without claiming core packages were updated" "core-packages-updated" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -1729,6 +1735,33 @@ else
     fi
 fi
 rm -rf "$d"
+
+# ONEUP-0425: file times tick coarsely, so a go-ahead the window writes the moment
+# hold.state appears can carry the SAME mtime. It was not there before the hold, so it is
+# no leftover — refusing it ended the hold at its ceiling with DONE|ok and no run.
+echo "TEST: a go-ahead stamped in the same clock tick as the hold is adopted"
+if [[ "${ENGINE_CMD[*]}" != *oneup.engine* ]]; then
+    echo "  SKIP - the Bash fallback is frozen (CLAUDE.md §4); its hold is window-only"
+else
+    d=$(mktemp -d); setup_hold_dir "$d" allow
+    if ! start_held_engine "$d" ONEUP_HOLD_SECONDS=4; then
+        echo "  FAIL - could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+1))
+        tail -5 "$d/out" 2>/dev/null | awk '{print "         " $0}'
+        reap_held_engine >/dev/null 2>&1
+    else
+        printf 'system\n' > "$d/go.tmp"
+        touch -r "$d/hold.state" "$d/go.tmp"     # the tie, made certain
+        mv "$d/go.tmp" "$d/go.request"            # a rename keeps the mtime
+        reap_held_engine >/dev/null 2>&1
+        if grep -q '@@STEP_BEGIN@@|system|' "$d/out" 2>/dev/null; then
+            echo "  ok   - the same-tick go-ahead started the run"; PASS=$((PASS+1))
+        else
+            echo "  FAIL - the same-tick go-ahead was taken for a leftover"; FAIL=$((FAIL+1))
+            tail -3 "$d/out" 2>/dev/null | awk '{print "         " $0}'
+        fi
+    fi
+    rm -rf "$d"
+fi
 
 # ---------------------------------------------------------------------------
 # ONEUP-0238. The real systemd-inhibit FORKS its command and waits for it; it does not
@@ -3219,6 +3252,12 @@ if [[ -e "$d/oneup-download-guard" ]]; then
 else
     echo "  ok   - failed grant removed the guard it had installed"; PASS=$((PASS+1))
 fi
+# ONEUP-0425: the guard's removal was not checked, so a failed one stranded it silently.
+printf '#!/usr/bin/env bash\nexit 1\n' > "$d/rm"
+chmod +x "$d/rm"
+out=$(ONEUP_AUTH_FILE="$authfile" run_engine "$d" --grant-auth 2>&1)
+check "a guard the failed grant could not remove is named" \
+      "@@HINT@@|guard-remove-failed|$d/oneup-download-guard" "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -5255,6 +5294,44 @@ FLATPAK_EOF
 fi
 
 # ---------------------------------------------------------------------------
+echo "TEST: a bounded query does not outlive an engine stopped by a signal (ONEUP-0425)"
+# The query runs in its own session, so a signal to the engine's group misses it, and the
+# budget's kill_group ran only on expiry. A SIGTERM mid-query left it running unbounded
+# (security.md §2.4).
+if [[ "${ENGINE_CMD[*]}" != *oneup.engine* ]]; then
+    echo "  SKIP - the per-call deadline is the Python engine's; this run drives another engine"
+else
+    d=$(mktemp -d); setup_common "$d"
+    cat > "$d/flatpak" <<'FLATPAK_EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *remotes*)   printf 'flathub\t\n'; exit 0 ;;
+  *remote-ls*) echo "$PPID" > "$0.engine"; echo "$$" > "$0.query"; exec sleep 300 ;;
+  *) exit 0 ;;
+esac
+FLATPAK_EOF
+    chmod +x "$d/flatpak"
+    ONEUP_FLATPAK_TIMEOUT=120 run_engine "$d" --steps=flatpak >/dev/null 2>&1 &
+    runner=$!
+    for _ in $(seq 1 100); do [[ -s "$d/flatpak.query" ]] && break; sleep 0.1; done
+    query=$(cat "$d/flatpak.query" 2>/dev/null)
+    if [[ -z "$query" ]]; then
+        echo "  FAIL - the query was never made"; FAIL=$((FAIL+1))
+    else
+        kill -TERM "$(cat "$d/flatpak.engine")" 2>/dev/null
+        wait "$runner" 2>/dev/null
+        sleep 0.5
+        if kill -0 "$query" 2>/dev/null; then
+            echo "  FAIL - the query outlived the stopped engine"; FAIL=$((FAIL+1))
+            kill -9 "$query" 2>/dev/null
+        else
+            echo "  ok   - the query went with the engine"; PASS=$((PASS+1))
+        fi
+    fi
+    rm -rf "$d"
+fi
+
+# ---------------------------------------------------------------------------
 echo "TEST: --check's Flatpak count has the same per-call deadline (ONEUP-0387)"
 # The run's count was bounded and the check's was not, so a dead remote hung the
 # weekly check and the tray's. The mock answers after 20 s rather than never, so an
@@ -6252,8 +6329,11 @@ service_client.has_session = lambda: False
 os.environ["ONEUP_BACKEND"] = "auto"
 os.environ["ONEUP_NONINTERACTIVE"] = ""
 bad = []
+# ONEUP-0425: any other refusal (Busy, say) is an answer too, so it is not "unreachable".
 for error, want in ((service_client.Refused("NotAuthorized", "challenge"), "cannot ask"),
-                    (service_client.Unreachable("no bus"), "could not be reached")):
+                    (service_client.Unreachable("no bus"), "could not be reached"),
+                    (service_client.Refused("Busy", "another run holds it"),
+                     "turned the request down")):
     def refuse(**kw):
         raise error
     service_client.open_session = refuse

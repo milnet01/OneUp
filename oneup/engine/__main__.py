@@ -344,6 +344,10 @@ def _reexec_under_inhibitor(opts: Options, argv: list[str]) -> None:
             "half-installed",
             sys.executable, "-m", "oneup.engine", *argv,
         ])
+    # The exec failed, so this process runs on uninhibited: its children must not
+    # inherit a claim that they were wrapped (ONEUP-0425).
+    for name in ("ONEUP_INHIBITED", "ONEUP_LAUNCH_PID", "ONEUP_WINDOW_PID"):
+        os.environ.pop(name, None)
 
 
 def _pre_update_snapshot() -> None:
@@ -480,8 +484,10 @@ def _reboot_and_services(opts: Options) -> tuple[str, str, str, str]:
             if steps.SYS_REBOOT_PARTS:
                 reason = " ".join(steps.SYS_REBOOT_PARTS)
                 why = parsers.reboot_phrase(steps.SYS_REBOOT_PARTS)
-            else:
+            elif steps.SYS_CHANGED:
                 reason, why = "core-packages-updated", "core system packages were updated"
+            # Otherwise an earlier update left the reboot pending: advised with no
+            # reason, since this run updated nothing to name (ONEUP-0425).
     if reboot == "no" and steps.FW_CHANGED:
         reboot, reason, why = "yes", "firmware-updated", "firmware was updated"
     markers.marker("INSTALLED", steps.SYS_COUNT,
@@ -565,7 +571,8 @@ def _summary(opts: Options, run_keys: list[str], reboot: str, reason: str,
         markers.marker("DONE", "ok")
     if reboot == "yes":
         markers.out("")
-        markers.out(f"  ! A REBOOT is recommended — {reason}.")
+        markers.out(f"  ! A REBOOT is recommended — {reason}." if reason
+                    else "  ! A REBOOT is recommended — an earlier update still needs it.")
     elif safe or risky:
         if safe:
             markers.out("")

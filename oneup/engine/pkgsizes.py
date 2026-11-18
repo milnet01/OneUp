@@ -130,7 +130,10 @@ def _pattern_pass(stream, keys, ends) -> dict[tuple[str, str, str], int] | None:
         matched = 0
         for m in _PACKAGE.finditer(block):
             matched += 1
-            name, arch, epoch, ver, rel, size = (g.decode() for g in m.groups())
+            # `replace`: one byte that is not UTF-8 must not cost every other
+            # package its size, or escape this module (ONEUP-0425).
+            name, arch, epoch, ver, rel, size = (g.decode(errors="replace")
+                                                 for g in m.groups())
             edition = f"{ver}-{rel}" if epoch in ("", "0") else f"{epoch}:{ver}-{rel}"
             if (name, edition, arch) in keys:
                 found[(name, edition, arch)] = int(size)
