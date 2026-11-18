@@ -12413,6 +12413,15 @@ when complete (that document's §7).
   2026-11-18, user decision on 10-M1: the white knob and mark are what
   identify a focused switch and its state in the dark themes. No code
   change; lane 10's run records this in ONEUP-0076 §4.2's switch row.
+  2026-11-18: lane 06 (window shell) closed. 06-M1..M3: the socket is
+  now claimed before the window is built (app._build_window), under a
+  lock beside the socket file, and a failure other than a live owner
+  runs without the guard and says so on stderr. 06-L1, L2, L3 fixed.
+  Each has a gui-smoke check seen red on a copy with that part undone.
+  06-L5/L6: ONEUP-0018 §2, §7, §8 and ONEUP-0034 rule 2 and INV-8
+  corrected. 06-L4 shipped with ONEUP-0431. The lane's three open
+  questions (Wayland activation token, the tray's couldn't-check icon,
+  notification markup) went to the user. Lanes 08, 09, 10, 11 remain.
   **Layman:** Smaller problems in OneUp's window found by the code review.
   Kind: review-fix.
   Source: review-code-2026-11-15.
