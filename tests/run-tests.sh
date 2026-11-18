@@ -2669,6 +2669,62 @@ check        "progress is reported" "@@PROGRESS@@|system|1|3|install" "$out"
 check_absent "no false stale-parser warning" "probably renamed the lines" "$out"
 rm -rf "$d"
 
+# ONEUP-0444: a retry finds every package already downloaded, so its download pass prints
+# only `In cache … (n/m)` lines, as the user's run of 2026-11-18 did. That is recognised
+# progress, and the canary must stay quiet.
+echo "TEST: a download pass whose packages are all cached raises NO stale-parser warning"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*) exit 0 ;;
+  *download-only*)
+    echo "In cache alpha-2.0-1.1.x86_64.rpm (1/2),  19.9 KiB    "
+    echo "In cache beta-3.0-1.1.noarch.rpm (2/2), 224.3 KiB    "
+    exit 0 ;;
+  *dup*|*update*)
+    echo "2 packages to upgrade."
+    echo "In cache alpha-2.0-1.1.x86_64.rpm (1/2),  19.9 KiB    "
+    echo "In cache beta-3.0-1.1.noarch.rpm (2/2), 224.3 KiB    "
+    echo "(1/2) Installing: alpha-2.0-1.1.x86_64 [...done]"
+    echo "(2/2) Installing: beta-3.0-1.1.noarch [...done]"
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+check        "the step succeeds" "@@STEP_END@@|system|ok" "$out"
+check_absent "no false stale-parser warning" "probably renamed the lines" "$out"
+rm -rf "$d"
+
+# ...while a partly cached pass whose fetch lines zypper has renamed still trips it: the
+# cached lines alone do not account for every package.
+echo "TEST: a partly cached download pass with renamed fetch lines still says so"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *refresh*) exit 0 ;;
+  *download-only*)
+    echo "In cache alpha-2.0-1.1.x86_64.rpm (1/2),  19.9 KiB    "
+    # Plausible future wording for a fetch that today's parser does NOT recognise.
+    echo "Fetching: beta-3.0-1.1.noarch (repo-oss) (2/2), 224.3 KiB    "
+    exit 0 ;;
+  *dup*|*update*)
+    echo "2 packages to upgrade."
+    echo "(1/2) Installing: alpha-2.0-1.1.x86_64 [...done]"
+    echo "(2/2) Installing: beta-3.0-1.1.noarch [...done]"
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/zypper"
+out=$(run_engine "$d" --steps=system 2>&1)
+check "the run warns that progress could not be followed" \
+      "zypper has probably renamed the lines it reports progress on" "$out"
+rm -rf "$d"
+
 echo "TEST: progress parsing does not cost an extra password prompt"
 d=$(mktemp -d); setup_common "$d"
 cat > "$d/sudo" <<'EOF'

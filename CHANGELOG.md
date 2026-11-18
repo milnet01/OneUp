@@ -15,6 +15,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Running an update again no longer wrongly asks you to report a progress problem** (ONEUP-0444)
+  When every package was already downloaded, such as on a second try after a failed
+  update, OneUp said it couldn't follow the progress and asked for a report, even though
+  the update itself was fine.
+
 - **An update that includes 32-bit packages no longer stops part-way when OneUp's system service runs it** (ONEUP-0443)
   The service was not allowed to run 32-bit programs, so a package whose install
   script runs one (glibc-32bit does) was killed and the update aborted.

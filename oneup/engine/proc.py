@@ -308,6 +308,10 @@ def _filter_lines(lines: Iterable[str], *, step: str, phase: str, log: Path,
     """
     preloaded = seen = got = 0
     want = 0
+    # `In cache … (n/m)` lines, and the m they count to. A pass whose packages were
+    # ALL cached prints nothing else, so they count as recognised then — and only
+    # then, or a partly cached pass would hide renamed fetch lines (ONEUP-0444).
+    cached = cached_of = 0
     # Each package's own progress, beside the counts above and never instead of
     # them: PROGRESS and the canary's `seen` are untouched (ONEUP-0259 INV-10).
     packages = parsers.PackageLines()
@@ -345,6 +349,11 @@ def _filter_lines(lines: Iterable[str], *, step: str, phase: str, log: Path,
                 if markers.emit_progress(step, parsers.retrieving_fraction(line),
                                          phase, str(got), str(want)):
                     seen += 1
+            elif line.startswith("In cache "):
+                _, _, of = parsers.retrieving_fraction(line).partition("/")
+                if of.isdigit():
+                    cached += 1
+                    cached_of = int(of)
             elif line.startswith("(") and (
                     "Installing:" in line or "Removing:" in line or "Upgrading:" in line):
                 if markers.emit_progress(step, parsers.install_fraction(line), "install"):
@@ -357,6 +366,8 @@ def _filter_lines(lines: Iterable[str], *, step: str, phase: str, log: Path,
         # The pass's end also ends the last package's fetch (ONEUP-0239 §4.3.1).
         for package in packages.finish():
             _mark_package(step, package)
+    if cached and cached == cached_of:
+        seen += cached
     return seen
 
 
