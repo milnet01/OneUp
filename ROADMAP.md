@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=446 -->
+<!-- ants-roadmap-id-high-water: ONEUP=448 -->
 
 # OneUp Roadmap
 
@@ -12356,7 +12356,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0426] **System service findings from the 2026-11-15 review not in a theme.**
+- ✅ [ONEUP-0426] **System service findings from the 2026-11-15 review not in a theme.**
   review-code 2026-11-15, lane 04. MEDIUM:
   - server.py _retry_reenables skips an alias a live session holds,
     which may drop it for good.
@@ -12365,6 +12365,13 @@ when complete (that document's §7).
     job files.
   Plus 12 LOW rows in lane-04-system-service.md at
   /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  Shipped 2026-11-18 in 9429273 by close-findings: 13 findings, 9
+  fixed (6 new service checks, red first), 2 already fixed (the
+  CanUpdate cap by ONEUP-0424, the record's fsync by ONEUP-0423), 2
+  queued as ONEUP-0447 (a call caught by the idle exit) and ONEUP-0448
+  (root stderr in the journal, a document conflict), 1 dismissed (the
+  audit line's length: journald splits it and keeps every byte).
+  ONEUP-0249 4.3, 4.5 and 4.9 amended (impl-0426). local-CI green.
   **Layman:** Smaller problems in OneUp's background helper found by the code review.
   Kind: review-fix.
   Source: review-code-2026-11-15.
@@ -12658,3 +12665,25 @@ when complete (that document's §7).
   **Layman:** When an update has to restart OneUp's package manager part-way, the number of updated packages shown can be slightly wrong.
   Kind: review-fix.
   Source: close-findings-2026-11-18 (from ONEUP-0425).
+
+- 📋 [ONEUP-0447] **A call that reaches the system service as it exits for being idle is never answered.**
+  review-code 2026-11-15, lane 04 LOW, verified 2026-11-18 against
+  9429273. server.py serve() returns on idle, and main's finally
+  releases the bus name without draining the event queue, so a method
+  call queued in between gets no reply; the client waits out its own
+  time limit. Not fixed now: it needs a decision on what such a caller
+  is told (an error that makes the engine ask again, or serving it).
+  **Layman:** If OneUp asks its background helper for something at the very moment the helper is closing, the request can go unanswered for a while.
+  Kind: review-fix.
+  Source: close-findings-2026-11-18 (from ONEUP-0426).
+
+- 📋 [ONEUP-0448] **Decide whether the system service may send root's error output to the system journal.**
+  review-code 2026-11-15, lane 04 LOW, verified 2026-11-18. jobs.py
+  leaves an unmerged job's stderr to the unit, so it reaches the
+  journal unredacted; security.md 7.3 says not to echo captured
+  privileged output without review, and ONEUP-0249 4.3 chose this on
+  purpose. The two documents disagree; which one gives way is the
+  user's call.
+  **Layman:** Two of OneUp's own rules disagree about whether error messages from updates may be written to the system log.
+  Kind: review-fix.
+  Source: close-findings-2026-11-18 (from ONEUP-0426).
