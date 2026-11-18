@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=444 -->
+<!-- ants-roadmap-id-high-water: ONEUP=446 -->
 
 # OneUp Roadmap
 
@@ -12333,7 +12333,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0425] **Engine findings from the 2026-11-15 review not in a theme.**
+- ✅ [ONEUP-0425] **Engine findings from the 2026-11-15 review not in a theme.**
   review-code 2026-11-15, lanes 01-03 (engine). MEDIUM:
   - runstate.py: the go.request freshness test is strictly newer than
     the hold stamp, so a same-second write is refused.
@@ -12344,6 +12344,14 @@ when complete (that document's §7).
   Plus the LOW rows in lane-01/02/03 files at
   /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/
   (9, 5 and 7). Verify each against HEAD before fixing.
+  Shipped 2026-11-18 in 7a17c4b by close-findings: 18 findings, 14
+  fixed (6 with new tests, red first), 2 queued as ONEUP-0445 (partial
+  snapshot cleanup) and ONEUP-0446 (counts after exit 103), 3 dismissed:
+  two holds at once need two windows (the root is ONEUP-0427's app.py
+  race); a temp file left by a kill inside a microsecond window; and
+  stream_filtered's watchdog, which no caller arms. ONEUP-0044 and
+  ONEUP-0108 amended (impl-0425 rows); security.md 3.1, coding.md 7 and
+  marker-protocol 4.8 and 8 follow the code. local-CI green.
   **Layman:** Smaller problems in OneUp's updater engine found by the code review.
   Kind: review-fix.
   Source: review-code-2026-11-15.
@@ -12626,3 +12634,27 @@ when complete (that document's §7).
   **Layman:** After a failed update is run again, OneUp shows a warning asking you to report a problem that is not there.
   Kind: fix.
   Source: user-report-2026-11-18.
+
+- 📋 [ONEUP-0445] **Thinning restore points hides a failed snapper cleanup when the other one removed some.**
+  review-code 2026-11-15, lane 01 LOW, verified 2026-11-18 against
+  7a17c4b. actions.py thin_snapshots: when snapper's number cleanup
+  fails and its timeline cleanup removes snapshots (or the reverse),
+  the before > after branch reports thinned and exit 0, and the
+  failure is never mentioned. Not fixed now: it needs wording for a
+  partial cleanup and a decision on the exit code the window's
+  _on_thin_finished reads.
+  **Layman:** If one of the two ways OneUp tidies old restore points fails, it does not say so when the other one worked.
+  Kind: review-fix.
+  Source: close-findings-2026-11-18 (from ONEUP-0425).
+
+- 📋 [ONEUP-0446] **After zypper restarts itself mid-update, the count of updated packages can be off.**
+  review-code 2026-11-15, lane 02 LOW, verified 2026-11-18 against
+  7a17c4b. steps.py _success takes the last "N packages to upgrade"
+  and the last "N new" separately, so after an exit-103 rerun the two
+  can come from different plans, and packages the first, self-updating
+  commit installed are left out. Not fixed now: designing it needs a
+  real exit-103 transaction log, and none of this machine's run logs
+  holds one (searched 2026-11-18).
+  **Layman:** When an update has to restart OneUp's package manager part-way, the number of updated packages shown can be slightly wrong.
+  Kind: review-fix.
+  Source: close-findings-2026-11-18 (from ONEUP-0425).
