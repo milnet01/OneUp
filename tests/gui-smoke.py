@@ -4057,6 +4057,74 @@ def main() -> int:
     check("08-L4: a repository name that is not UTF-8 still lists",
           _bad_utf8 is not None and len(_bad_utf8) == 1 and _bad_utf8[0]["enabled"])
 
+    # --- ONEUP-0427 lane 09: package details and views ---------------------------------
+    # 09-M2: ONEUP-0260 §4.2 restarts the batching timer on each ADDITION. Restarted on
+    # every state line too, a busy PKG stream kept pushing the fetch back until a package
+    # reached "installed" and lost its baseline for good.
+    _m09 = packages.PackageModel()
+    _st09 = details_dialog.DetailsStore(_m09)
+    _starts09 = []
+
+    class _SpyTimer:
+        def start(self, *a): _starts09.append(1)
+        def stop(self): pass
+        def isActive(self): return False
+
+    _st09._timer = _SpyTimer()
+    for _state in ("queued", "downloading", "downloaded"):
+        _m09.apply(["system", _state, "alpha", "2"])
+    check("09-M2: a package's state changes do not restart the details timer",
+          _starts09 == [1])
+    _m09.apply(["system", "queued", "beta", "2"])
+    check("09-M2: a package added later restarts it", _starts09 == [1, 1])
+    _m09.reset()
+    _m09.apply(["system", "queued", "alpha", "2"])
+    check("09-M2: after a reset the first package restarts it again", _starts09 == [1, 1, 1])
+    _st09.stop()
+
+    # 09-L1: a Flatpak catalogue is untrusted, and time.gmtime() raises on a huge stamp.
+    try:
+        _rel09 = details_dialog._release_lines(flatpak_details.Release("1.0", 10**20, "n"))
+    except (OverflowError, OSError, ValueError):
+        _rel09 = None
+    check("09-L1: a release time out of range shows no date, not an error",
+          _rel09 is not None and _rel09[0] == "1.0")
+
+    # 09-L2: each size-strip count agrees in number with its own word.
+    _keys09 = []
+    _orig_counted09 = i18n.counted
+    _patch(i18n, "counted", lambda k, n: _keys09.append(k) or _orig_counted09(k, n))
+    _sent09 = package_views.counts_sentence({"done": 1, "now": 2, "togo": 3})
+    _unpatch_all()
+    check("09-L2: each size-strip count takes its own plural form",
+          sorted(_keys09) == ["count-done", "count-now", "count-to-go"]
+          and _sent09 == "1 done · 2 now · 3 to go")
+
+    # 09-L4: a card's dot is filled as the strip fills its group — hatched for "now".
+    check("09-L4: the dot for a package being installed is hatched, as the strip's is",
+          package_views.dot_brush(QColor("red"), "now").style()
+          == package_views.SizeStrip.FILLS["now"]
+          and package_views.dot_brush(QColor("red"), "togo").style()
+          == Qt.BrushStyle.NoBrush)
+
+    # 09-L5: an empty size or change on CHECK_ITEM means unknown and upgrade, as on PKG.
+    _m09b = packages.PackageModel()
+    _m09b.add_check_item(["system", "gamma", "1", "2", "", "Main", ""])
+    _rows09b = _m09b.packages()
+    check("09-L5: CHECK_ITEM reads an empty size and change as absent",
+          len(_rows09b) == 1 and _rows09b[0].size == 0 and _rows09b[0].change == "upgrade")
+
+    # 09-L6: rpm ran in the environment as it was when package_details was imported.
+    _seen09 = {}
+    os.environ["ONEUP_TEST_0427"] = "late"
+    try:
+        package_details._rpm(["rpm"], lambda argv, **kw: _seen09.update(kw.get("env") or {})
+                             or subprocess.CompletedProcess(argv, 0, ""))
+    finally:
+        del os.environ["ONEUP_TEST_0427"]
+    check("09-L6: rpm runs in the environment as it is now, under LC_ALL=C",
+          _seen09.get("ONEUP_TEST_0427") == "late" and _seen09.get("LC_ALL") == "C")
+
     # --- ONEUP-0034 INV-7: the locale pin read_repos has always carried ---------
     # _parse_repos decides enabled from the FIRST LETTER of a column, so a German
     # desktop's "Ja" reads as "j" and every repository shows as disabled. The engine

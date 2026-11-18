@@ -35,6 +35,10 @@ All notable changes to OneUp are documented here. The format follows
   correctly. Copied diagnostics no longer let part of a password through when a long
   log is cut short. Start at boot now works from a folder whose name holds a quote mark
   or a backtick.
+  During a busy update, a package's details are no longer read too late to tell which
+  change notes are new. A Flatpak whose software source gives a release an impossible
+  date now opens its details instead of nothing. In the card layout, the dot of the
+  package installing now is hatched, as the size strip shows it.
 
 - **Smaller fixes to OneUp's system service from the code review** (ONEUP-0426)
   A software source the service was still trying to switch back on could be switched on

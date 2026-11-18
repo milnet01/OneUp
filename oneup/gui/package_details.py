@@ -36,7 +36,11 @@ _BASELINE_QF = (f"%{{NAME}}{_F}%{{VERSION}}-%{{RELEASE}}{_F}%{{CHANGELOGTIME}}{_
                 f"%{{CHANGELOGNAME}}{_F}%{{CHANGELOGTEXT}}{_E}")
 _FALLBACK = 20          # entries shown when OneUp cannot tell which are new
 RPM_TIMEOUT = 5         # seconds; rpm answers in well under one (§2)
-ENV = {**os.environ, "LC_ALL": "C"}
+
+
+def c_locale_env() -> dict[str, str]:
+    """The environment as it is now, with rpm's and zypper's output pinned to C."""
+    return {**os.environ, "LC_ALL": "C"}
 
 
 @dataclass(frozen=True)
@@ -199,7 +203,7 @@ def _rpm(argv: list[str], run: Callable) -> str | None:
     try:
         # Lenient: a packager's changelog need not be UTF-8 (ONEUP-0334).
         out = run(argv, capture_output=True, text=True, errors="replace",
-                  timeout=RPM_TIMEOUT, env=ENV)
+                  timeout=RPM_TIMEOUT, env=c_locale_env())
     except (OSError, subprocess.SubprocessError):
         return None
     return out.stdout if out.returncode == 0 else None

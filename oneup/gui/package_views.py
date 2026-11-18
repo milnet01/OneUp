@@ -174,8 +174,13 @@ def download_sentence(packages: list[Package]) -> str:
 
 
 def counts_sentence(c: dict[str, int]) -> str:
+    """Each count takes its own plural form (wording §6.3), then one line joins them."""
     return QCoreApplication.translate(
-        "package_views", "{done} done · {now} now · {togo} to go").format(**c)
+        "package_views", "{done} · {now} · {togo}",
+        "size-strip counts: installed, installing now, still to go").format(
+        done=i18n.counted("count-done", c["done"]),
+        now=i18n.counted("count-now", c["now"]),
+        togo=i18n.counted("count-to-go", c["togo"]))
 
 
 def empty_sentence(win) -> str:
@@ -604,8 +609,8 @@ class CardDelegate(LinesDelegate):
         # The dot, filled as the size strip fills the package's group: a shape, as
         # well as a colour, and the state word says it again.
         painter.setPen(QPen(ink, 1))
-        painter.setBrush({"done": view.get_done_fill(), "now": view.get_now_fill()}
-                         .get(group, QBrush()))
+        painter.setBrush(dot_brush({"done": view.get_done_fill(),
+                                    "now": view.get_now_fill()}.get(group), group))
         painter.drawEllipse(QRectF(r["dot"]).adjusted(0.5, 0.5, -0.5, -0.5))
 
         def text(rect, font, words, align):
@@ -1144,14 +1149,25 @@ class _Swatch(QWidget):
         p.drawRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5))
 
 
+def dot_brush(colour: QColor | None, group: str) -> QBrush:
+    """A card's dot, filled as the size strip fills the package's group."""
+    if colour is None:
+        return QBrush()
+    return QBrush(colour, SizeStrip.FILLS[group])
+
+
 def strip_legend(strip: SizeStrip) -> QWidget:
     """Each fill beside its word, so the strip never relies on its fills alone."""
     box = QWidget()
     lay = QHBoxLayout(box)
     lay.setContentsMargins(0, 0, 0, 0)
-    for group, word in (("done", QCoreApplication.translate("package_views", "done")),
-                        ("now", QCoreApplication.translate("package_views", "now")),
-                        ("togo", QCoreApplication.translate("package_views", "to go"))):
+    for group, word in (
+            ("done", QCoreApplication.translate(
+                "package_views", "done", "size-strip legend: packages already installed")),
+            ("now", QCoreApplication.translate(
+                "package_views", "now", "size-strip legend: the package installing now")),
+            ("togo", QCoreApplication.translate(
+                "package_views", "to go", "size-strip legend: packages not yet installed"))):
         lay.addWidget(_Swatch(strip, group))
         label = QLabel(word)
         label.setObjectName("Tagline")

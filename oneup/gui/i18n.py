@@ -104,6 +104,11 @@ class _Counted(QObject):
             "flatpak-updated": lambda: self.tr("%n Flatpak app(s) updated.", "", n),
             "leftovers-removed": lambda: self.tr("%n leftover package(s) removed.", "", n),
             "package-count": lambda: self.tr("%n update(s)", "", n),
+            # The size strip's counts (ONEUP-0427): "done" and "to go" agree in number
+            # with the count in many languages.
+            "count-done": lambda: self.tr("%n done", "", n),
+            "count-now": lambda: self.tr("%n now", "", n),
+            "count-to-go": lambda: self.tr("%n to go", "", n),
             "sources-set-aside": lambda: self.tr(" %n source(s) set aside: {names}.", "", n),
             "reboot-updates-installed": lambda: self.tr(
                 "⚠  %n update(s) installed — restart so everything uses the latest "

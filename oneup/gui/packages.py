@@ -45,11 +45,12 @@ class PackageModel:
 
     def add_check_item(self, parts: list[str]) -> None:
         """`key|name|from|to[|bytes|repo[|change]]`. Only key and name are required;
-        an absent change is an upgrade, and one not in `CHANGES` drops the row."""
+        an absent change is an upgrade, and one not in `CHANGES` drops the row. An
+        empty size or change is absent, as on `apply`."""
         if len(parts) < 2 or not parts[0] or not parts[1]:
             return
-        size = parts[4] if len(parts) > 4 else "0"
-        change = parts[6] if len(parts) > 6 else "upgrade"
+        size = parts[4] if len(parts) > 4 and parts[4] else "0"
+        change = parts[6] if len(parts) > 6 and parts[6] else "upgrade"
         if not size.isdecimal() or change not in CHANGES:
             return
         key, name = parts[0], parts[1]

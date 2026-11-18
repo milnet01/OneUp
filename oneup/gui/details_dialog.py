@@ -83,6 +83,7 @@ class DetailsStore(QObject):
         self._installed: dict[str, set[str]] = {}
         self._fp_based: set[str] = set()    # installed versions read since the last reset
         self._reading = False               # one catalogue read at a time
+        self._sizes: dict[str, int] = {}    # rows per step key at its last change
         self._catalogue_read.connect(self._catalogue_landed)
         self._callbacks: list[Callable[[], None]] = []
         self._proc: QProcess | None = None
@@ -165,6 +166,15 @@ class DetailsStore(QObject):
             self._based.clear()
             self._installed.clear()
             self._fp_based.clear()
+            self._sizes.clear()
+            return
+        # Restarted by each addition only (§4.2): restarted on every state line, a busy
+        # run kept pushing the fetch back until a package was installed and too late
+        # for its baseline (ONEUP-0427).
+        size = len(self._model.packages(key))
+        grew = size > self._sizes.get(key, 0)
+        self._sizes[key] = size
+        if not grew:
             return
         if key == SYSTEM and (self._wanting_baseline() or self._wanting_about()):
             self._timer.start()
@@ -186,7 +196,8 @@ class DetailsStore(QObject):
                     # A changelog is in whatever encoding its packager used, and a
                     # real one was not UTF-8 (ONEUP-0334): never let it raise here.
                     out = _run(argv, capture_output=True, text=True, errors="replace",
-                               timeout=package_details.RPM_TIMEOUT, env=_c_locale_env())
+                               timeout=package_details.RPM_TIMEOUT,
+                               env=package_details.c_locale_env())
                     self._baselines.update(package_details.parse_baseline(out.stdout, olds))
                 except (OSError, subprocess.SubprocessError):
                     pass
@@ -242,11 +253,11 @@ class DetailsStore(QObject):
             try:
                 out = _run(flatpak_details.build_installed_argv(), capture_output=True,
                            text=True, errors="replace",
-                           timeout=package_details.RPM_TIMEOUT, env=_c_locale_env())
+                           timeout=package_details.RPM_TIMEOUT, env=package_details.c_locale_env())
                 found = flatpak_details.parse_installed(out.stdout)
                 self._installed.update({p.name: found.get(p.name, set()) for p in wanting})
             except (OSError, subprocess.SubprocessError):
-                pass
+                pass        # no installed versions: What changed says it could not tell
         if self._reading:
             return                  # one read at a time; the rest wait for it
         rows = self._wanting_catalogue()
@@ -281,10 +292,6 @@ class DetailsStore(QObject):
             self._timer.start()
         if found:
             self._notify()
-
-
-def _c_locale_env() -> dict[str, str]:
-    return {**os.environ, "LC_ALL": "C"}
 
 
 # --- the dialog -----------------------------------------------------------------------
@@ -331,7 +338,10 @@ def details_text(about: package_details.About | None,
 
 
 def _release_lines(release: flatpak_details.Release) -> list[str]:
-    when = time.strftime("%Y-%m-%d", time.gmtime(release.time)) if release.time else ""
+    try:
+        when = time.strftime("%Y-%m-%d", time.gmtime(release.time)) if release.time else ""
+    except (OverflowError, OSError, ValueError):
+        when = ""       # a stamp from the remote's catalogue no clock can show
     return [package_views.join_parts(release.version, when), release.text]
 
 
