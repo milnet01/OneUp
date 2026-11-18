@@ -3689,6 +3689,10 @@ def main() -> int:
     # (g2) ONEUP-0403: a systemctl that does not answer is not a timer that is off. The
     # stand-down must still try to remove it, and a removal it cannot confirm leaves the
     # switch on with a warning, never "turned off" over a timer that may still fire.
+    # The unit file is there: without it no timer exists to fire (ONEUP-0427 08-M2).
+    _units_g2 = autostart._user_units_dir()
+    _units_g2.mkdir(parents=True, exist_ok=True)
+    (_units_g2 / "oneup-update.timer").write_text("[Timer]\n")
     w = window.Updater()
     warned_g2 = []
     _patch(auth, "_stand_down_autoupdate", _real_stand_down)
@@ -3702,6 +3706,7 @@ def main() -> int:
     check("a removal systemctl cannot confirm leaves the switch on (ONEUP-0403)",
           w.autoupdate_btn.isChecked())
     _unpatch_all()
+    (_units_g2 / "oneup-update.timer").unlink(missing_ok=True)
     # The same over the user's own click: switching off a timer that will not go off.
     w = window.Updater()
     warned_g3 = []
@@ -3739,6 +3744,111 @@ def main() -> int:
     check("ONEUP-0178: a probe dropped while one ran is asked again", reprobes == [1])
     auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|on\n"))    # the fresh answer
     check("ONEUP-0178: the fresh answer installs the update timer", bool(installed_h))
+    _unpatch_all()
+
+    # (h2) ONEUP-0427 08-M1: with Passwordless off, enabling automatic updates opens the
+    # consent box. A probe that started before it can land while the box is open, or
+    # while the grant runs; its "off" predates the grant and must not settle the enable.
+    w = window.Updater()
+    if getattr(w, "_authstat_proc", None) is not None:
+        w._authstat_proc.waitForFinished(5000)
+    installed_h2, grants_h2 = [], []
+    _patch(autostart, "_install_user_timer", lambda *a, **k: (installed_h2.append(a) or True))
+
+    def _consent_h2(win, lead=""):
+        auth._on_auth_status_finished(win, _StubProc("@@AUTH@@|off\n"))  # lands mid-box
+        return True
+
+    _patch(auth, "_confirm_passwordless", _consent_h2)
+    _patch(auth, "_run_auth",
+           lambda win, action, text, env=None: grants_h2.append(action) or object())
+    auth._set_auth_checked(w, False)
+    autostart.on_autoupdate_toggled(w, True)
+    check("08-M1: an old answer landing in the consent box leaves the enable pending",
+          w._pending_autoupdate is True and grants_h2 == ["--grant-auth"])
+    w._authchg_proc = _Running()                     # the grant is still running
+    auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|off\n"))
+    check("08-M1: an answer landing while the grant runs leaves the enable pending",
+          w._pending_autoupdate is True and not installed_h2)
+    w._authchg_proc = None
+    auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|on\n"))    # the grant's re-probe
+    check("08-M1: the answer after the grant installs the update timer",
+          bool(installed_h2) and w.autoupdate_btn.isChecked())
+    _unpatch_all()
+
+    # (h3) 08-L2: a grant asked for while another change runs used to return silently,
+    # leaving the switch greyed out and the enable pending with nothing to settle it.
+    w = window.Updater()
+    if getattr(w, "_authstat_proc", None) is not None:
+        w._authstat_proc.waitForFinished(5000)
+    told_h3 = []
+    _patch(auth, "_confirm_passwordless", lambda win, lead="": True)
+    _patch(QMessageBox, "information",
+           staticmethod(lambda *a, **k: told_h3.append(a[2]) or 0))
+    w._authchg_proc = _Running()
+    auth._set_auth_checked(w, False)
+    autostart.on_autoupdate_toggled(w, True)
+    check("08-L2: a grant refused because another change runs says so",
+          len(told_h3) == 1 and "still changing" in told_h3[0])
+    check("08-L2: and settles the enable as off",
+          w._pending_autoupdate is False and w.autoupdate_btn.isEnabled()
+          and not w.autoupdate_btn.isChecked())
+    w._authchg_proc = None
+    _unpatch_all()
+
+    # (h4) 08-M2: a systemctl that does not answer, with no timer file on disk, is a timer
+    # OneUp never installed. The start-up stand-down must not flip that switch on.
+    _units_h = autostart._user_units_dir()
+    _units_h.mkdir(parents=True, exist_ok=True)
+    (_units_h / "oneup-update.timer").unlink(missing_ok=True)
+    w = window.Updater()
+    warned_h4 = []
+    _patch(auth, "_stand_down_autoupdate", _real_stand_down)
+    _patch(autostart, "_systemctl_user", lambda *a: None)
+    _patch(QMessageBox, "warning", staticmethod(lambda *a, **k: warned_h4.append(a[1]) or 0))
+    autostart._set_autoupdate_checked(w, False)
+    auth._stand_down_autoupdate(w)
+    check("08-M2: no answer and no timer file leaves the switch off, with no warning",
+          not w.autoupdate_btn.isChecked() and not warned_h4)
+    _unpatch_all()
+
+    # (h5) 08-L1: with systemctl missing, revoking Passwordless must still start the
+    # revoke. The timer file is present, so the stand-down tries to remove it.
+    (_units_h / "oneup-update.timer").write_text("[Timer]\n")
+    w = window.Updater()
+    revokes_h5 = []
+
+    def _no_systemctl(*a):
+        raise FileNotFoundError(2, "No such file or directory", "systemctl")
+
+    _patch(auth, "_stand_down_autoupdate", _real_stand_down)
+    _patch(autostart, "_systemctl_user", _no_systemctl)
+    _patch(auth, "_run_auth",
+           lambda win, action, text, env=None: revokes_h5.append(action) or object())
+    auth._set_auth_checked(w, True)
+    try:
+        auth.on_auth_toggled(w, False)
+        _raised_h5 = False
+    except OSError:
+        _raised_h5 = True
+    check("08-L1: a missing systemctl still lets the revoke start",
+          not _raised_h5 and revokes_h5 == ["--revoke-auth"])
+    _unpatch_all()
+    (_units_h / "oneup-update.timer").unlink(missing_ok=True)
+
+    # (h6) 08-L10: a timer install that fails to write shows one warning, not two.
+    w = window.Updater()
+    warned_h6 = []
+
+    def _no_write(*a, **k):
+        raise PermissionError(13, "Permission denied")
+
+    _patch(paths, "write_whole", _no_write)
+    _patch(QMessageBox, "warning", staticmethod(lambda *a, **k: warned_h6.append(a[1]) or 0))
+    w._pending_autoupdate = True
+    auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|on\n"))
+    check("08-L10: a failed timer install warns once", len(warned_h6) == 1)
+    check("08-L10: and leaves automatic updates off", not w.autoupdate_btn.isChecked())
     _unpatch_all()
 
     # (i) ONEUP-0249 §4.10: on a service install the switch gives way to one line, and
@@ -3779,9 +3889,21 @@ def main() -> int:
     _offers, _revokes = [], []
     _orig_exec = QMessageBox.exec
     QMessageBox.exec = lambda self: _offers.append(self.text()) or QMessageBox.Ok
-    _patch(auth, "_run_auth", lambda win, action, text, env=None: _revokes.append((action, env)))
+    _patch(auth, "_run_auth",
+           lambda win, action, text, env=None: _revokes.append((action, env)) or object())
     try:
         Path(auth.OLD_GUARDS[1]).write_text("guard\n")
+        # 08-L2: a removal that could not start (another change running) is not the
+        # user's answer, so the offer must come again next time.
+        _patch(auth, "_run_auth", lambda win, action, text, env=None: None)
+        wS.settings.remove("old_dropin_offered")
+        auth.offer_old_dropin_removal(wS)
+        check("08-L2: a removal that never started leaves the offer open",
+              len(_offers) == 1
+              and not wS.settings.value("old_dropin_offered", False, type=bool))
+        _offers.clear()
+        _patch(auth, "_run_auth",
+               lambda win, action, text, env=None: _revokes.append((action, env)) or object())
         auth.offer_old_dropin_removal(wP)
         check("ONEUP-0249 the sudo route never offers to remove its own rule", not _offers)
         wS.settings.remove("old_dropin_offered")
@@ -3911,6 +4033,29 @@ def main() -> int:
     check("parse reads the enabled flag",
           parsed[0]["enabled"] is True and parsed[1]["enabled"] is False)
     check("parse reads the URL", parsed[0]["url"] == "http://d.o/oss/")
+    # 08-L5: a '|' inside a name used to shift every column after it.
+    _piped = repos._parse_repos(
+        " 1 | odd | Left | Right | Yes | (r ) Yes | Yes | http://o/\n")
+    check("08-L5: a '|' in a repository name leaves Enabled and the URL in place",
+          len(_piped) == 1 and _piped[0]["enabled"] is True
+          and _piped[0]["url"] == "http://o/" and "Right" in _piped[0]["name"])
+
+    # 08-L4: a name that is not valid UTF-8 used to raise out of read_repos.
+    with tempfile.TemporaryDirectory(dir=_SANDBOX) as _zd:
+        Path(_zd, "zypper").write_text(
+            "#!/bin/sh\n"
+            "printf ' 1 | caf | Caf\\351 | Yes | (r ) Yes | Yes | http://c/\\n'\n")
+        Path(_zd, "zypper").chmod(0o700)
+        _old_path = os.environ["PATH"]
+        os.environ["PATH"] = _zd + os.pathsep + _old_path
+        try:
+            _bad_utf8 = repos.read_repos()
+        except UnicodeDecodeError:
+            _bad_utf8 = None
+        finally:
+            os.environ["PATH"] = _old_path
+    check("08-L4: a repository name that is not UTF-8 still lists",
+          _bad_utf8 is not None and len(_bad_utf8) == 1 and _bad_utf8[0]["enabled"])
 
     # --- ONEUP-0034 INV-7: the locale pin read_repos has always carried ---------
     # _parse_repos decides enabled from the FIRST LETTER of a column, so a German
@@ -3975,6 +4120,13 @@ def main() -> int:
     dlg_bad._rows[0]["switch"].setChecked(True)
     check("an unsafe repo alias refuses to build a command",
           dlg_bad._build_apply_command() is None)
+    # 08-M3: zypper also reads a repository argument as its list NUMBER, so an alias
+    # spelled as a number could change a different repository.
+    dlg_num = repos.RepoManagerDialog(
+        None, [{"alias": "2", "name": "Two", "enabled": False, "url": "u"}])
+    dlg_num._rows[0]["switch"].setChecked(True)
+    check("08-M3: an all-digit repo alias refuses to build a command",
+          dlg_num._build_apply_command() is None)
 
     # ONEUP-0157: one copy of a duplicated URL always stays.
     dlg_f = repos.RepoManagerDialog(None, parsed)
@@ -4184,6 +4336,17 @@ def main() -> int:
     check("Exec escapes '$' as backslash-backslash-'$' (not $$ or bare $)",
           r"\\$" in line and "$$" not in line)
     check("Exec escapes '%' as '%%'", "%%up" in line)
+    # 08-L9: '"' and '`' get the same two backslashes on disk as '$' (Desktop Entry
+    # spec: the string unescape runs before the quoting rule).
+    autostart.sys.executable = '/opt/a"b`c/oneup'
+    autostart.shutil.which = lambda name: None
+    try:
+        line = autostart._autostart_exec()
+    finally:
+        autostart.sys.executable = _orig_exe
+        autostart.shutil.which = _orig_which
+    check("08-L9: Exec escapes '\"' and '`' with two backslashes on disk",
+          'a\\\\"b\\\\`c' in line)
 
     # (3) The tray icon renders in both states and is never null.
     w = window.Updater()
@@ -4856,6 +5019,12 @@ def main() -> int:
     _trim = _build("1", "x", [], "b.log", _big, "w", "", "")
     check("diagnostics: oversized log trimmed to its tail",
           "earlier output trimmed" in _trim and "H" * 20 not in _trim)
+    # 08-L6: the trim used to run before the scrub, so a cut just after "https://user"
+    # left ":secret@" with no scheme in front of it, and the scrub let it through.
+    _tail = ":s3cr3t@mirror.example/repo/\n"
+    _cut = "early line https://alice" + _tail + "T" * (diagnostics.DIAG_LOG_CAP - len(_tail))
+    check("08-L6: a trim that cuts through a URL login does not leak the password",
+          "s3cr3t" not in _build("1", "x", [], "c.log", _cut, "w", "", ""))
 
     # --- ONEUP-0082: old run logs are pruned, never the live run's or the newest -------
     # The log folder grows by one file per run, and the weekly timers write unattended,

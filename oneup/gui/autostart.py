@@ -70,8 +70,8 @@ def _autostart_exec() -> str:
     """Executable (same resolution as _headless_command) quoted for a freedesktop
     Desktop Entry Exec key, then ' --tray'. This is NOT the systemd escaping:
     per the Desktop Entry Spec, the string-value backslash-unescape runs before the
-    Exec quote-unescape, so a literal '$' in the file is '\\$', a literal backslash
-    is '\\\\', and a literal '%' (a field code) is '%%'."""
+    Exec quote-unescape, so a literal '$', '"' or '`' in the file is '\\$', '\\"' or
+    '\\`', a literal backslash is '\\\\', and a literal '%' (a field code) is '%%'."""
     def _arg(p) -> str:
         out = ['"']
         for ch in str(p):
@@ -82,9 +82,9 @@ def _autostart_exec() -> str:
             elif ch == "$":
                 out.append("\\\\$")      # \\$ on disk (freedesktop-unambiguous)
             elif ch == '"':
-                out.append('\\"')
+                out.append('\\\\"')      # \\" on disk, as '$'
             elif ch == "`":
-                out.append("\\`")
+                out.append("\\\\`")      # \\` on disk, as '$'
             else:
                 out.append(ch)
         out.append('"')
@@ -172,9 +172,18 @@ def _systemctl_user(*args: str) -> str | None:
         return None
 
 
+def _systemctl_quiet(*args: str) -> str | None:
+    """`_systemctl_user`, with a systemctl that cannot start read as no answer. For the
+    reads and removals, which have no box of their own to report it in."""
+    try:
+        return _systemctl_user(*args)
+    except OSError:
+        return None
+
+
 def _timer_state(timer: str) -> bool | None:
     """True if `timer` is enabled, False if not, None if systemctl did not answer."""
-    out = _systemctl_user("is-enabled", timer)
+    out = _systemctl_quiet("is-enabled", timer)
     return None if out is None else out.strip() == "enabled"
 
 
@@ -191,14 +200,21 @@ def _autoupdate_enabled() -> bool:
 
 
 def _autoupdate_may_be_enabled() -> bool:
-    """False only when systemctl says the weekly update timer is off. A timed-out answer
-    is not "off": the revoke path must still remove a timer it cannot see (ONEUP-0403)."""
-    return _timer_state("oneup-update.timer") is not False
+    """False when systemctl says the weekly update timer is off. A timed-out answer is
+    not "off": the revoke path must still remove a timer it cannot see (ONEUP-0403).
+    With no answer, the timer's unit file decides: OneUp writes it before enabling, so
+    without it there is no timer to remove (ONEUP-0427)."""
+    state = _timer_state("oneup-update.timer")
+    if state is None:
+        return (_user_units_dir() / "oneup-update.timer").exists()
+    return state
 
 
-def _install_user_timer(win, basename: str, description: str, exec_flag: str) -> bool:
-    """Write + enable a weekly systemd-user timer. Returns True iff it ends up
-    enabled (an OSError writing the unit, or a failed enable, returns False)."""
+def _install_user_timer(win, basename: str, description: str,
+                        exec_flag: str) -> bool | None:
+    """Write + enable a weekly systemd-user timer. True iff it ends up enabled; False
+    if the enable did not take; None if writing the unit failed, which this has
+    already told the user about, so the caller does not say it again."""
     units = _user_units_dir()
     try:
         units.mkdir(parents=True, exist_ok=True)
@@ -215,7 +231,7 @@ def _install_user_timer(win, basename: str, description: str, exec_flag: str) ->
         QMessageBox.warning(win, QCoreApplication.translate(
             "autostart",
             "Could not change the schedule"), str(exc))
-        return False
+        return None
     return _timer_enabled(f"{basename}.timer")
 
 
@@ -223,13 +239,13 @@ def _remove_user_timer(basename: str) -> bool:
     """Disable and delete a weekly timer. True iff systemctl then says it is off: a
     disable that timed out or failed must not read as done (ONEUP-0403)."""
     units = _user_units_dir()
-    _systemctl_user("disable", "--now", f"{basename}.timer")
+    _systemctl_quiet("disable", "--now", f"{basename}.timer")
     for name in (f"{basename}.timer", f"{basename}.service"):
         try:
             (units / name).unlink()
         except OSError:
             pass
-    _systemctl_user("daemon-reload")
+    _systemctl_quiet("daemon-reload")
     return _timer_state(f"{basename}.timer") is False
 
 
@@ -278,23 +294,25 @@ def on_autoupdate_toggled(win, on: bool):
         # the install itself always waits for a FRESH auth settle (never trusts the
         # possibly-stale switch). Disable the toggle for the async op (closes the
         # mirror race where the user un-clicks mid-probe); re-enabled in the settle.
-        win._pending_autoupdate = True
-        win.autoupdate_btn.setEnabled(False)
         if win.auth_btn.isChecked() or win._service_route:
             # Looks on — verify with a fresh probe; the settle installs iff truly on.
             # On the service route there is nothing OneUp can grant, so the probe is
             # the whole answer and the settle says why when it is no (ONEUP-0249 §4.10).
+            win._pending_autoupdate = True
+            win.autoupdate_btn.setEnabled(False)
             auth._query_auth_status(win)
         else:
-            # Offer to enable BOTH at once, with the shared consent caveat.
+            # Offer to enable BOTH at once, with the shared consent caveat. The latch
+            # is set only once the user agrees: a probe that started earlier can land
+            # while the box is open, and its "off" would settle it (ONEUP-0427).
             if auth._confirm_passwordless(win, lead=QCoreApplication.translate(
                     "autostart", "Automatic updates need OneUp to run without a password.\n\n")):
+                win._pending_autoupdate = True
+                win.autoupdate_btn.setEnabled(False)
                 auth._run_auth(win, "--grant-auth", QCoreApplication.translate(
                     "auth", "Setting up… (approve the password popup)"))
                 # _run_auth -> _on_auth_finished -> _query_auth_status -> settle installs.
             else:
-                win._pending_autoupdate = False
-                win.autoupdate_btn.setEnabled(True)
                 _set_autoupdate_checked(win, False)
     else:
         # User turns auto-update off: remove the timer, clear any stray latch. A timer

@@ -25,6 +25,16 @@ All notable changes to OneUp are documented here. The format follows
   longer stops the window opening, and the "Last run" day stays right after a time-zone
   change. A run started from a terminal still ends with its notification if the
   terminal is closed.
+  Switching on automatic updates together with the password setting no longer, now and
+  then, ends with the weekly update quietly not set up. A slow start no longer warns that
+  automatic updates could not be turned off, and turns them on, when you never set them
+  up. A weekly update that could not be set up shows one warning, not two, and asking
+  for a change while another is still running now says so. The repository manager no
+  longer changes a repository whose short name is a number, which could have hit a
+  different one, and lists a repository whose name holds a "|" or an unusual character
+  correctly. Copied diagnostics no longer let part of a password through when a long
+  log is cut short. Start at boot now works from a folder whose name holds a quote mark
+  or a backtick.
 
 - **Smaller fixes to OneUp's system service from the code review** (ONEUP-0426)
   A software source the service was still trying to switch back on could be switched on

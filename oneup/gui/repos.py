@@ -1,7 +1,7 @@
 """Reading and editing the machine's software sources.
 
 Listing is read-only; applying the changes needs one admin (pkexec) prompt, and
-`_ALIAS_RE` is the guard on the alias that reaches it — the guard and the
+`_alias_ok` is the guard on the alias that reaches it — the guard and the
 command it protects stay in one module on purpose
 (`docs/standards/security.md` §9.4).
 """
@@ -36,21 +36,33 @@ from .toggle_switch import ToggleSwitch
 # the rollback snapshot-id and service-name guards).
 _ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
 
+
+def _alias_ok(alias: str) -> bool:
+    """May `alias` reach the root zypper command? It must match `_ALIAS_RE` and not be
+    all digits: zypper also reads a repository argument as its list number, so "2"
+    could change a different repository (ONEUP-0427)."""
+    return bool(_ALIAS_RE.fullmatch(alias)) and not alias.isdecimal()
+
+
 def _parse_repos(text: str) -> list[dict]:
     """Parse `zypper lr -u` table output into [{alias, name, enabled, url}].
     Rows look like '# | Alias | Name | Enabled | GPG Check | Refresh | URI'; the
     header, separator, and the priority preamble are skipped (their first column
-    isn't a number)."""
+    isn't a number). The columns after Name are read from the right, so a '|' inside
+    a name stays in the name."""
     repos = []
     for line in text.splitlines():
-        cols = [c.strip() for c in line.split("|")]
-        if len(cols) < 7 or not cols[0].isdecimal():
+        if line.count("|") < 6:
+            continue
+        num, alias, rest = (c.strip() for c in line.split("|", 2))
+        name, enabled, _gpg, _refresh, url = (c.strip() for c in rest.rsplit("|", 4))
+        if not num.isdecimal():
             continue
         repos.append({
-            "alias": cols[1],
-            "name": cols[2] or cols[1],
-            "enabled": cols[3][:1].lower() == "y",
-            "url": cols[-1],
+            "alias": alias,
+            "name": name or alias,
+            "enabled": enabled[:1].lower() == "y",
+            "url": url,
         })
     return repos
 
@@ -98,7 +110,7 @@ def read_repos() -> list[dict]:
     try:
         out = subprocess.run(
             ["zypper", "--non-interactive", "lr", "-u"],  # noqa: S607 — fixed argv.
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, text=True, errors="replace", timeout=15,
             env={**os.environ, "LC_ALL": "C"},  # pin the 'Yes'/'No' + column text
         ).stdout
     except (OSError, subprocess.SubprocessError):
@@ -254,7 +266,7 @@ class RepoManagerDialog(QDialog):
         changes = enable + disable + remove
         if not changes:
             return []
-        if any(not _ALIAS_RE.fullmatch(a) for a in changes):
+        if not all(_alias_ok(a) for a in changes):
             return None
         parts = []
         if disable:

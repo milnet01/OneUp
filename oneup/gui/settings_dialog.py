@@ -40,8 +40,7 @@ class _RowsScroll(QScrollArea):
 
 
 class SettingsDialog(QDialog):
-    """Groups OneUp's three background-behaviour toggles (weekly check,
-    passwordless, automatic updates) behind one popup, modelled on
+    """Groups OneUp's settings in tabs behind one popup, modelled on
     RepoManagerDialog. The toggle buttons and their handlers stay owned by the
     Updater window; this dialog only lays them out. It is created once, so the
     buttons live here permanently after the first open."""

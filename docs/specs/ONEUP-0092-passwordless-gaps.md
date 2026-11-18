@@ -474,7 +474,8 @@ gains the three rows.
 
 `on_auth_toggled`'s off arm and `_on_auth_status_finished` need the same steps, so they get
 one helper rather than a second copy — `_stand_down_autoupdate`, holding the guard (now
-`_autoupdate_may_be_enabled()`, so a timed-out answer still tries, ONEUP-0403), the
+`_autoupdate_may_be_enabled()`, so a timed-out answer still tries while the timer's unit
+file exists, ONEUP-0403 and ONEUP-0427), the
 `_remove_user_timer("oneup-update")` call, the
 uncheck and the message box verbatim. The `self._pending_autoupdate = False` line stays at
 the `on_auth_toggled` call site: it is about a revoke racing an enable, not about standing
@@ -501,8 +502,8 @@ latch and clears it afterwards. Move the check inside and that click path inheri
 user who toggles automatic updates on and then, while the probe is still in flight, toggles
 Passwordless off would keep an enabled weekly timer across a revoke — exactly the coupling
 §2.5 describes as already correct, silently broken by a fix aimed elsewhere. So the helper
-stays the three existing statements behind their existing `_autoupdate_enabled()` guard,
-and the call site reads `if not is_on and not self._pending_autoupdate:`.
+stays the three existing statements behind its `_autoupdate_may_be_enabled()` guard,
+and the call site reads `if "@@AUTH@@|off" in out and not win._pending_autoupdate:`.
 
 The latch condition is needed on the discovery path because `_autoupdate_enabled()` shells
 out to `systemctl --user is-enabled` and so reports the machine, not the toggle: a timer
@@ -674,7 +675,7 @@ evidence is §4.2's measurement, recorded there because no test may reproduce it
 | …and does not appear later | some other package creates `/usr/libexec` after the grant | `GUARD_FILE` is recomputed per run, so it moves: `guard_current` reads a path that never existed and the toggle flips off. Revoke removes **both** candidate paths (§4.3) so the older one cannot be stranded |
 | `PATH` is the same at grant and at run | the grant runs from the desktop-launched GUI and the run from a terminal, with different `PATH`s | `command -v` could resolve a binary differently, changing the `# oneup-auth-scope:` line and mismatching the stamp. Fails safe — one labelled prompt, and re-toggling re-grants — but it is a false negative with no user-visible cause, which is why §4.2 records the resolution difference. Since ONEUP-0408 the Python engine, and since ONEUP-0417 the Bash fallback, resolve in the system's own directories, never `PATH`, so neither meets this now |
 | The guard survives as root-owned | someone chmods it writable | it stops matching only if its *content* changes; a writable guard is a machine already compromised at root level — the drop-in's `zypper` entry is the larger hole either way |
-| `_remove_user_timer` succeeds | no user bus, or `systemctl --user disable` fails or times out | It returns False unless `systemctl` then says the timer is off. Both paths leave the switch on and say the timer could not be switched off, with the command to do it by hand (ONEUP-0403). A timed-out `is-enabled` reads as "maybe on", so the stand-down still tries |
+| `_remove_user_timer` succeeds | no user bus, or `systemctl --user disable` fails or times out | It returns False unless `systemctl` then says the timer is off. Both paths leave the switch on and say the timer could not be switched off, with the command to do it by hand (ONEUP-0403). A timed-out `is-enabled` reads as "maybe on" while `~/.config/systemd/user/oneup-update.timer` exists, so the stand-down still tries; with no unit file there is no timer, and a never-enabled switch stays off (ONEUP-0427). A missing `systemctl` reads as no answer |
 | `sudo` honours `secure_path` | a site that disabled it | the bare `zypper` word in two entries could resolve elsewhere. Pre-existing (`env LC_ALL=C zypper *` has always relied on it) and recorded in `security.md` §5.2 rather than newly introduced |
 
 ## 7. Tests
@@ -824,6 +825,7 @@ invokes the engine outside `run_engine` repeats it by hand, like the other three
 
 | Loop | Date | Findings | Verified | Fixed | Notes |
 | --- | --- | --- | --- | --- | --- |
+| impl-0427 | 2026-11-18 | – | – | – | **No reviewer dispatched — an amendment.** ONEUP-0427 (review-code 2026-11-15, 08-M2 and 08-L1): a timed-out `is-enabled` at start-up flipped a never-enabled switch on. §4.7 and §6's `_remove_user_timer` row now say the unit file decides when systemctl does not answer. §4.7's quoted call site now tests the explicit off marker, as the paragraph above it requires and the code does. |
 | impl-0417 | 2026-11-15 | – | – | – | **No reviewer dispatched — an amendment.** ONEUP-0417 (review-code 2026-11-15): the Bash fallback now looks its binaries up in the system's own directories too, so §6's `PATH` row applies to neither engine. |
 | impl-0408 | 2026-11-15 | – | – | – | **No reviewer dispatched — an amendment.** ONEUP-0408 (review-code 2026-11-11): the rule's and the guard's binaries are now looked up in the system's own directories, so §6's `PATH` row applies to the Bash fallback only. |
 | impl-0403 | 2026-11-15 | – | – | – | **No reviewer dispatched — an amendment.** ONEUP-0403 (review-code 2026-11-11): a timed-out `is-enabled` read as off, so the stand-down skipped a timer it could not see, and a failed disable showed the switch off. §6's `_remove_user_timer` row now states the checked removal. |

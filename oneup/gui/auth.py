@@ -85,6 +85,11 @@ def _query_auth_status(win):
 
 def _probe_not_started(win):
     """No probe answer will come: settle a pending auto-update enable as off."""
+    _settle_pending_off(win)
+
+
+def _settle_pending_off(win):
+    """Settle a pending auto-update enable as off: nothing will answer it."""
     if win._pending_autoupdate:
         win._pending_autoupdate = False
         win.autoupdate_btn.setEnabled(True)
@@ -102,6 +107,11 @@ def _on_auth_status_finished(win, proc: QProcess):
         # pre-grant state and revert the toggle. Discard it and probe again.
         win._authstat_rerun = False
         _query_auth_status(win)
+        return
+    chg = getattr(win, "_authchg_proc", None)
+    if chg is not None and chg.state() != QProcess.NotRunning:
+        # A grant or revoke is running, so this answer is from before it. Its finish
+        # probes again (_on_auth_finished), and that answer settles (ONEUP-0427).
         return
     out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
     is_on = "@@AUTH@@|on" in out
@@ -129,8 +139,8 @@ def _on_auth_status_finished(win, proc: QProcess):
         if is_on:
             enabled = autostart._install_user_timer(
                 win, "oneup-update", *autostart.TIMERS["oneup-update"])
-            autostart._set_autoupdate_checked(win, enabled)
-            if not enabled:
+            autostart._set_autoupdate_checked(win, bool(enabled))
+            if enabled is False:      # None: the install has already said why
                 QMessageBox.warning(
                     win, QCoreApplication.translate("auth", "Could not enable automatic updates"),
                     QCoreApplication.translate(
@@ -243,19 +253,23 @@ def on_auth_toggled(win, on: bool):
 
 def _run_auth(win, action: str, status_text: str,
               env: dict[str, str] | None = None) -> QProcess | None:
-    """Start the engine on `action`; return its process, or None if none started."""
+    """Start the engine on `action`; return its process, or None if none started.
+    Every None has told the user why, and settled a pending auto-update enable."""
     p = getattr(win, "_authchg_proc", None)
     if p is not None and p.state() != QProcess.NotRunning:
+        # Another grant or revoke is still running (ONEUP-0427).
+        _settle_pending_off(win)
+        QMessageBox.information(
+            win, QCoreApplication.translate("auth", "Couldn't change the setting"),
+            QCoreApplication.translate(
+                "auth", "OneUp is still changing this setting. Try again when it finishes."))
         return None
     if not paths.log_dir_ready(win):
         # Nothing changed, so put both toggles back as they were (ONEUP-0184). On the
         # service route the switch shows polkit's answer, which a revoke never moved.
         if not win._service_route:
             _set_auth_checked(win, action == "--revoke-auth")
-        if win._pending_autoupdate:
-            win._pending_autoupdate = False
-            win.autoupdate_btn.setEnabled(True)
-            autostart._set_autoupdate_checked(win, False)
+        _settle_pending_off(win)
         return None
     win.auth_btn.setEnabled(False)
     win.status.setText(status_text)
@@ -330,13 +344,13 @@ def _old_dropin_present() -> bool:
 def offer_old_dropin_removal(win):
     """On a service install, offer once to remove the old Passwordless rule (§4.10).
 
-    Once means once: the answer is remembered whichever it was. Removing runs the
+    Once means once: the answer is remembered whichever it was, unless a removal the
+    user asked for could not start, which is no answer. Removing runs the
     sudo route's `--revoke-auth`, which asks for the administrator password once."""
     if not win._service_route or win.settings.value("old_dropin_offered", False, type=bool):
         return
     if not _old_dropin_present():
         return
-    win.settings.setValue("old_dropin_offered", True)
     box = QMessageBox(win)
     box.setIcon(QMessageBox.Question)
     box.setWindowTitle(QCoreApplication.translate(
@@ -361,6 +375,9 @@ def offer_old_dropin_removal(win):
         win._old_dropin_proc = _run_auth(win, "--revoke-auth", QCoreApplication.translate(
             "auth", "Removing the old password setting… (approve the password popup)"),
             env={"ONEUP_BACKEND": route.SUDO})
+        if win._old_dropin_proc is None:
+            return      # nothing started, and _run_auth said why: offer again next time
+    win.settings.setValue("old_dropin_offered", True)
 
 
 def _on_auth_not_started(win, proc: QProcess):

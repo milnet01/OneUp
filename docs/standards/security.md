@@ -136,7 +136,7 @@ update run:
 
 | Site | Command | Guard |
 | --- | --- | --- |
-| `RepoManagerDialog._build_apply_command` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must match `_ALIAS_RE`, else the whole command is `None` and nothing runs |
+| `RepoManagerDialog._build_apply_command` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must pass `_alias_ok` — match `_ALIAS_RE` and not be all digits — else the whole command is `None` and nothing runs |
 | `banners.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped; and every **session-critical** unit removed before the command is built (§4.6) |
 | `rollback.rollback` | `pkexec sh -c "snapper rollback <id> \|\| exit 3; systemctl reboot \|\| exit 4"` | `id` must satisfy `str.isdecimal()` — never `isdigit()`, which also accepts superscript digits such as `²` |
 
@@ -324,7 +324,9 @@ or an exact test, never a `search` — a `re.match` would accept trailing junk:
 # space, quote, ';', '&', '$' or backtick is permitted, so it cannot break out
 # of the sh -c string either.
 _ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
-# …used as: if not _ALIAS_RE.fullmatch(alias): return None
+# …used through _alias_ok, which also refuses an all-digit alias: zypper reads a
+# repository argument as its list number too, so "2" could change another repository.
+# if not all(_alias_ok(a) for a in changes): return None
 
 # rollback.rollback — the rollback target is interpolated into a root shell.
 if not target.isdecimal(): return        # isdecimal() also rejects empty
@@ -586,7 +588,8 @@ choice, not a reflex `echo "$captured"`.
 **7.4 — Anything leaving the machine is scrubbed.** The "Copy diagnostics" bundle
 (`build_diagnostics` in `oneup/gui/diagnostics.py`) replaces the home path with `~` and the hostname
 with `<host>` **across the whole payload, log body included**, and trims an oversized log to
-its last `DIAG_LOG_CAP` (200 KiB of text, tail-first, because errors sit at the end). A user pasting
+its last `DIAG_LOG_CAP` (200 KiB of text, tail-first, because errors sit at the end). The
+scrub runs before the trim, so a cut cannot split a login the scrub would catch. A user pasting
 that into a public issue tracker must not thereby publish their username and machine name.
 Any future "share this" feature inherits the rule.
 
@@ -772,7 +775,7 @@ CI build itself, before signing, is signed like any other build. The pinned buil
 | §2 no `sudo` inside a subshell | the same scenario, because a subshell **is** a second prompt. The rule and its symptom are the same thing, which is what makes this the strongest gate in the set. It does **not** see a re-entrant `sudo_init` inside one process — the mock keys on `$PPID`, so that shape belongs to *"a held run validates once and leaves nothing behind"*, which counts the validates (§9.2) |
 | §2.3 one runner object owns every privileged child (Python engine) | nothing automatic — and prompt counting cannot see it, because one Python process is one sudo parent |
 | §3 every prompt says who is asking | nothing automatic, except §3.1's terminal case: the ONEUP-0360 scenario in `tests/run-tests.sh` checks the validate keeps its label and drops `-A` only there |
-| §4 validate at the boundary, by shape — the alias guard | `tests/run-tests.sh` — an unsafe repo alias is refused and never reaches a privileged command, whether it arrives as `--skip-repo=` or in zypper's own repository list; `tests/gui-smoke.py` — an unsafe alias in a skip-repo remedy is not armed, so the window never forwards it. The list half was added 2026-09-18 (ONEUP-0144); until then only `disable_repo` checked, and the refresh took the list unchecked |
+| §4 validate at the boundary, by shape — the alias guard | `tests/run-tests.sh` — an unsafe repo alias is refused and never reaches a privileged command, whether it arrives as `--skip-repo=` or in zypper's own repository list; `tests/gui-smoke.py` — an unsafe alias in a skip-repo remedy is not armed, so the window never forwards it, and an unsafe or all-digit alias builds no repository-editor command. The list half was added 2026-09-18 (ONEUP-0144); until then only `disable_repo` checked, and the refresh took the list unchecked |
 | §4.6 no session-critical service is ever restarted | `tests/gui-smoke.py` — a mixed list restarts the safe units and **no** critical one, and an all-critical list restarts nothing; `tests/run-tests.sh` asserts the engine's printed advice splits them the same way |
 | §4.6 where the advice is a reboot, the reboot is offered | `tests/gui-smoke.py` — an all-critical list draws the reboot banner and not the services banner, a mixed list draws both, and the handler's all-critical path launches `systemctl reboot` rather than an information dialog; `tests/run-tests.sh` asserts the engine prints the same recommendation |
 | §4.6 the banner and the handler read the same filtered list | **nothing directly.** `_service_units` is the shared source, and the tests exercise both sides of it, but nothing fails if a future edit re-reads the raw payload in one of them — which is exactly how ONEUP-0110 hid |
@@ -787,7 +790,7 @@ CI build itself, before signing, is signed like any other build. The pinned buil
 | §5.7 the guard runs zypper and nothing else | `tests/run-tests.sh` — it refuses a non-zypper argv with exit 2, appends `--download-only`, TERMs its child on a stop request and reaps it. The stop scenario also runs over **both** wrappers, so the guard cannot silently drop the stop poll for the users who enabled passwordless |
 | §9.5 `--check` invokes `sudo` zero times | `tests/run-tests.sh` — *"`--check` performs NO privileged auth"*, backed by a mock that exits 99 if a transaction is attempted, plus the sentinel that counts `sudo` invocations. On the service route, *"INV-1 the service-route check reaches root without privilege's sudo paths"* (ONEUP-0329) fails if the check reaches `sudo_init`, `root` or `sudo`. **Invoking and authenticating are not the same test** — §5.6's `auth_current` probe (`sudo -k -n … --version`) is a `sudo` invocation that authenticates nothing |
 | §6 stopping is cooperative | `tests/run-tests.sh` |
-| §7.4 the diagnostics bundle carries no identifiers | `tests/gui-smoke.py` — the bundle has its hostname scrubbed |
+| §7.4 the diagnostics bundle carries no identifiers | `tests/gui-smoke.py` — the bundle has its hostname scrubbed, and a trim that cuts through a URL login leaks no password |
 | §7.3 captured privileged output is not echoed to the log | nothing automatic — the §10 checklist is the only gate |
 | §8 supply chain | nothing automatic |
 | nothing the engine spawns outlives it | `tests/run-tests.sh` — *"a run leaves no process behind when it ends"* and *"nothing the engine spawned survives a SIGKILL (INV-7)"* |

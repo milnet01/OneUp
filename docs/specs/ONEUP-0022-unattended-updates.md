@@ -138,21 +138,24 @@ summary):
     `on_auth_toggled`'s up-front guard). This matters because with the
     engine absent the async chain hits `_query_auth_status`'s early return
     and **no settle ever fires** — so if the toggle had already been disabled and latched, it
-    would be stuck disabled forever. With the engine present: set the one-shot
+    would be stuck disabled forever. With the engine present, each branch below starts its
+    async op by setting the one-shot
     `self._pending_autoupdate = True` latch (initialised to `False` in `Updater.__init__`, so
-    the first settle never hits an `AttributeError`), **disable the auto-update toggle for the duration
+    the first settle never hits an `AttributeError`) and **disabling the auto-update toggle for the duration
     of the async op** (as `_run_auth` disables `auth_btn` — this closes the
     mirror race where a user un-clicks mid-probe and the settle then forces the toggle back on;
-    it is re-enabled in the settle). Then branch on the reflected switch:
+    it is re-enabled in the settle). Branch on the reflected switch:
     - reflected **off** → show the combined-enable dialog. It **presents the same passwordless
       security caveat** ONEUP-0023 shows (the "effectively passwordless administrator access …
       only on a computer you trust" text), led by a line explaining
       automatic updates need it — the warning content is **factored so both call sites share
-      it**, never a shortened re-write that drops the consent text. On **cancel**, clear the
-      latch, re-enable and revert the auto-update toggle to off via a `blockSignals` set (as
-      `_set_auth_checked` does, so the revert doesn't re-fire
-      `on_autoupdate_toggled`). On **approval**, start the passwordless grant (`_run_auth`,
-      which re-probes on finish).
+      it**, never a shortened re-write that drops the consent text. The latch is set only
+      on **approval**: a probe started earlier can finish while the dialog is open, and its
+      answer predates the grant. On **cancel**, revert the auto-update toggle to off via a
+      `blockSignals` set (as `_set_auth_checked` does, so the revert doesn't re-fire
+      `on_autoupdate_toggled`). On **approval**, set the latch, disable the toggle and start
+      the passwordless grant (`_run_auth`, which re-probes on finish). A grant that cannot
+      start because another grant or revoke is running settles the latch as off and says so.
     - reflected **on** → start a fresh `--auth-status` probe (`_query_auth_status`) — **no**
       direct install — so a stale-on switch can't install a timer the drop-in won't back.
   - `on_autoupdate_toggled(on=False)` (user disables auto-update): remove the update timer
@@ -166,9 +169,9 @@ summary):
     that install reports the timer `enabled`** (the same success check the failure table's
     OSError / `systemctl enable` rows rely on); if passwordless came back off (popup cancelled,
     `visudo` rejected, grant/probe failed) **or** the install failed, leave auto-update off and
-    surface the grant's `@@HINT@@` / the install warning. The install gates on the **settled
-    real state**, so it is correct regardless of which probe the re-entry guard
-    let run.
+    surface the grant's `@@HINT@@` / the install warning, once. The install gates on the **settled
+    real state**. An answer that arrives while a grant or revoke is running predates it and
+    is discarded: that change's finish probes again, and its answer settles.
 - **Coupling (rule 3 — revoke).** Hooked to the revoke **action** (the `on=False` branch of
   `on_auth_toggled`), not to the toggle signal — the programmatic `blockSignals` set used to
   reflect probed state must not trip it. When the user revokes passwordless, if the

@@ -61,7 +61,8 @@ def build_diagnostics(version: str, os_pretty: str, enabled: list[str],
 
     Scrubs the home path (-> ~) and hostname (-> <host>) across the whole
     payload, log body included, so a public paste doesn't leak the username or
-    machine name. An oversized log is trimmed to its last DIAG_LOG_CAP chars.
+    machine name. An oversized log is trimmed to its last DIAG_LOG_CAP chars after it
+    is scrubbed, so the cut cannot split a login the scrub would have caught.
     """
     tasks = "  ".join(f"{key} {'✓' if key in enabled else '✗'}"
                       for key, _t, _d in steps.TASKS)
@@ -75,12 +76,18 @@ def build_diagnostics(version: str, os_pretty: str, enabled: list[str],
     ]
     if log_text is None:
         out.append("--- no update has been run yet ---")
-    else:
-        if len(log_text) > DIAG_LOG_CAP:
-            log_text = "[… earlier output trimmed …]\n" + log_text[-DIAG_LOG_CAP:]
-        out.append(f"--- latest run log ({log_name}) ---")
-        out.append(log_text)
-    report = "\n".join(out)
+        return _scrub("\n".join(out), home, host)
+    out.append(f"--- latest run log ({log_name}) ---")
+    # Scrubbed apart from the header so no text is scrubbed twice: a user called "user"
+    # would turn a "<user>" already written into "<<user>>".
+    log_text = _scrub(log_text, home, host)
+    if len(log_text) > DIAG_LOG_CAP:
+        log_text = "[… earlier output trimmed …]\n" + log_text[-DIAG_LOG_CAP:]
+    return _scrub("\n".join(out), home, host) + "\n" + log_text
+
+
+def _scrub(report: str, home: str, host: str) -> str:
+    """Take the home path, URL logins, the user name and the host name out of `report`."""
     if home:
         report = report.replace(home, "~")
     # The report is written to be pasted publicly (security.md §7.4). The home path
