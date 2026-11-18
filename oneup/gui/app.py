@@ -7,6 +7,7 @@ copy that is already running, tray or no tray (ONEUP-0084).
 from __future__ import annotations
 
 import contextlib
+import os
 import shutil
 import subprocess
 import sys
@@ -37,14 +38,29 @@ def _headless_engine(args: list[str], read) -> int:
         paths.engine_argv(*args, env={"ONEUP_NONINTERACTIVE": "1"}),
         stdout=subprocess.PIPE, text=True,
         errors="replace", bufsize=1)
+    echo = True
     for line in proc.stdout or ():
-        sys.stdout.write(line)
-        sys.stdout.flush()
+        if echo:
+            try:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+            except OSError:      # the terminal closed; the markers still matter (ONEUP-0427)
+                echo = False
+                _discard_stdout()
         if line.startswith("@@"):
             parsed = markers.split_marker(line.rstrip("\n"))
             if parsed:
                 read(parsed[0], parsed[1])
     return proc.wait()
+
+
+def _discard_stdout() -> None:
+    """Point stdout at /dev/null once its reader has gone, so the flush at exit
+    does not raise BrokenPipeError again (the recipe in Python's `signal` docs)."""
+    with contextlib.suppress(OSError, ValueError):
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        os.close(devnull)
 
 
 def _notify(title: str, body: str) -> None:
@@ -148,6 +164,25 @@ def _raise_existing_instance(intent: str) -> bool:
     return True
 
 
+def _build_window(argv: list[str]) -> Updater | None:
+    """Claim the single-instance socket, THEN build the window; None when another
+    copy owns the socket and has been told what this launch wanted.
+
+    The claim comes first because building the window is not free: it rewrites
+    launchers, asks GitHub for a newer version and runs the engine. Two copies
+    started together at login — KDE's autostart entry plus Plasma restoring the
+    window left open at logout (ONEUP-0084) — used to do all of that twice
+    before the loser found out (ONEUP-0427)."""
+    owned, server = tray._claim_single_instance(QApplication.instance())
+    if not owned:
+        _raise_existing_instance("tray" if "--tray" in argv else "show")
+        return None
+    win = Updater()
+    if server is not None:
+        tray._adopt_server(win, server)
+    return win
+
+
 def main():
     paths.restore_machine_library_path()
     if "--check" in sys.argv[1:]:
@@ -185,32 +220,21 @@ def main():
         pass
 
     argv = sys.argv[1:]
-    # Defer to a copy that is already running — ALWAYS, not only when the tray is on.
-    # At login KDE starts two (the autostart entry and Plasma's session restore of
-    # the window left open at logout); previously neither deferred and the user got
-    # two tray icons, two check timers, and two engines able to race for the zypper
-    # lock (ONEUP-0084).
-    if _raise_existing_instance("tray" if "--tray" in argv else "show"):
-        sys.exit(0)   # the running copy has been told; nothing left for us to do
-
     tray_wanted = (QSettings("OneUp", "OneUp").value("tray_enabled", False, type=bool)
                    and QSystemTrayIcon.isSystemTrayAvailable())
 
     icon = _app_icon()
     if not icon.isNull():
         app.setWindowIcon(icon)
-    win = Updater()
+    # Defer to a copy that is already running — ALWAYS, not only when the tray is on:
+    # two copies are two tray icons, two check timers and two engines able to race
+    # for the zypper lock (ONEUP-0084). The socket is held for the whole life of the
+    # process, so the NEXT launch has something to defer to.
+    win = _build_window(argv)
+    if win is None:
+        sys.exit(0)   # the running copy has been told; nothing left for us to do
     if not icon.isNull():
         win.setWindowIcon(icon)
-    # Claim the socket for the whole life of the process, tray or no tray, so the
-    # NEXT launch has something to defer to (ONEUP-0084). Idempotent — _ensure_tray
-    # calls it too, for a mid-session Settings enable.
-    # Honour the answer. The deferral above ran before this window existed, so a
-    # copy started at the same instant got past it; this is the point at which the
-    # loser finds out (ONEUP-0084's simultaneous case).
-    if not tray._arm_single_instance(win):
-        _raise_existing_instance("tray" if "--tray" in argv else "show")
-        sys.exit(0)
     if tray_wanted:
         tray._ensure_tray(win)                 # owns quit-behaviour, server, and the check timer
         if "--tray" not in argv:

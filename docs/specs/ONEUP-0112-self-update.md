@@ -75,7 +75,7 @@ build did.
   version zypper will install.
 - **Whether a run is in flight.** `Updater._run_active`, set in `run._reset_for_run` and
   cleared in `run.on_finished` and `run.on_error`; `Updater._confirm_quit` reads it.
-- **One instance per user.** `tray._arm_single_instance` holds a `QLocalServer`, and
+- **One instance per user.** `tray._claim_single_instance` holds a `QLocalServer`, and
   `app._raise_existing_instance` hands a second launch to the first and exits. A relaunch
   started before the old process has gone would be handed back to it and close.
 - **How it quits.** `Updater._quit_requested` saves geometry, stops the details fetch and

@@ -4,8 +4,8 @@ Construction and layout, attaching to a run another window started, quitting,
 the dialog openers, the run history, and the two accessibility settings.
 
 Every subsystem this window drives lives in its own module and is handed the
-window when it needs one; nothing under `oneup/gui/` imports this file
-(`docs/specs/ONEUP-0034-gui-modules.md` §4.3 rule 2). This module will not fit
+window when it needs one; only `app.py`, which builds the window, imports this
+file (`docs/specs/ONEUP-0034-gui-modules.md` §4.3 rule 2). This module will not fit
 `docs/standards/coding.md` §4.1's 600-line ceiling and the spec does not
 pretend it will — a window's construction and its layout are one
 responsibility that is simply large. ONEUP-0064 is where that is attempted.
@@ -1254,6 +1254,8 @@ class Updater(QMainWindow):
         try:
             data = json.loads(paths.HISTORY.read_text())
             when = datetime.fromisoformat(data["when"])
+            if when.tzinfo is not None:      # read in the zone in force now (ONEUP-0427)
+                when = when.astimezone().replace(tzinfo=None)
             days = (datetime.now().date() - when.date()).days
             relative = (QCoreApplication.translate("window", "today") if days <= 0 else
                         QCoreApplication.translate("window", "yesterday") if days == 1
@@ -1280,7 +1282,8 @@ class Updater(QMainWindow):
                     relative=relative,
                     value=_last_run_outcome(data['status']),
                     overdue=overdue))
-        except (OSError, ValueError, KeyError):
+        # TypeError: a file that parses but is not an object of strings (ONEUP-0427).
+        except (OSError, ValueError, KeyError, TypeError):
             self.last_run.setText(QCoreApplication.translate("window", "Last run: never"))
         # Amber the line once a run is overdue: flip the dynamic property and
         # repolish so the QLabel#LastRun[stale="true"] stylesheet rule re-evaluates.
@@ -1291,7 +1294,8 @@ class Updater(QMainWindow):
     def save_last_run(self, status: str):
         try:
             paths.write_whole(paths.HISTORY, json.dumps(
-                {"when": datetime.now().isoformat(timespec="seconds"), "status": status}))
+                {"when": datetime.now().astimezone().isoformat(timespec="seconds"),
+                 "status": status}))
         except OSError as exc:        # a full disk keeps the previous record (ONEUP-0184)
             print(f"OneUp: could not record the run in {paths.HISTORY}: {exc}", file=sys.stderr)
         self.refresh_last_run()

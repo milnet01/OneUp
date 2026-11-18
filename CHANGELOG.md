@@ -19,6 +19,12 @@ All notable changes to OneUp are documented here. The format follows
   Stopping an update part-way no longer hides the advice to restart when the steps that
   finished installed a new kernel or replaced libraries. Closing OneUp while it worked out
   the download size no longer cuts that check off before it could tidy up after itself.
+  OneUp no longer quietly fails to open when it cannot set up the check that stops a
+  second copy starting. Two copies started together at login no longer both start up
+  before one gives way, and no longer both stay running. A damaged run-history file no
+  longer stops the window opening, and the "Last run" day stays right after a time-zone
+  change. A run started from a terminal still ends with its notification if the
+  terminal is closed.
 
 - **Smaller fixes to OneUp's system service from the code review** (ONEUP-0426)
   A software source the service was still trying to switch back on could be switched on

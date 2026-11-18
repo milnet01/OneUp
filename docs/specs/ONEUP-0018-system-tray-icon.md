@@ -121,8 +121,8 @@ Follow the established `_set_*_checked` / `_refresh_*_label` / `on_*_toggled` sh
     `_remove_autostart()` and reflect `startboot_btn` off via a `blockSignals` set, mirroring
     `_set_autoupdate_checked`); then tear down everything `_ensure_tray()`
     set up (the reverse of §4): **stop `self._tray_timer`** (so the periodic check stops
-    shelling out once the feature is off), **close the single-instance `QLocalServer`**
-    (residency is ending), hide the tray icon (`self._tray.hide()`, drop the reference),
+    shelling out once the feature is off), leave the single-instance `QLocalServer` alone
+    (it belongs to the process, §8), hide the tray icon (`self._tray.hide()`, drop the reference),
     `setQuitOnLastWindowClosed(True)`, and if the **window is currently hidden, `show()` it**
     (never leave the app invisible with no tray and no way back).
 - **`on_startboot_toggled(on)`**
@@ -285,44 +285,45 @@ pattern's `except OSError`.) **Else** unchanged (save geometry +
 ### 7. `main()` wiring
 
 - Keep `--check` / `--update` dispatch first, unchanged.
-- After `QApplication([])`, decide tray intent: `tray_wanted = QSettings("OneUp","OneUp")
+- After `QApplication`, decide tray intent: `tray_wanted = QSettings("OneUp","OneUp")
   .value("tray_enabled", False, type=bool)` **and** `QSystemTrayIcon.isSystemTrayAvailable()`.
-- If `tray_wanted`: **first run the single-instance client check** (§8) — if another resident
-  copy answers, raise it and `sys.exit(0)`. Otherwise build the window and call
-  `win._ensure_tray()`, which owns the quit-behaviour, the single-instance server, and the
-  initial + periodic check (§4) — main() does **not** set `setQuitOnLastWindowClosed` or start
-  the timer separately. Then `show()` the window **only if `--tray` is not present** (autostart
-  starts hidden; a normal launch still shows it).
-- Else (no tray wanted/available): today's path — `win.show()`; if `--tray` was passed but no
-  tray is available, still `show()` the window (degrade, never a silent no-op).
+- **Claim the single-instance socket before building the window, on every launch** (§8),
+  through `app._build_window`. If another copy owns it, tell that copy and `sys.exit(0)`.
+- If `tray_wanted`: call `_ensure_tray(win)`, which owns the quit-behaviour and the initial +
+  periodic check (§4) — main() does **not** set `setQuitOnLastWindowClosed` or start the timer
+  separately. Then `show()` the window **only if `--tray` is not present** (autostart starts
+  hidden; a normal launch still shows it).
+- Else (no tray wanted/available): `win.show()`; if `--tray` was passed but no tray is
+  available, still `show()` the window (degrade, never a silent no-op).
 
-### 8. Single-instance guard (resident-app correctness)
+### 8. Single-instance guard
 
-A resident tray copy means a second launch (app-menu click) must **raise the existing copy**,
-not spawn a second icon + second check timer. Minimal `QLocalServer`/`QLocalSocket` guard, split
-across the two natural owners:
+A second launch raises the running copy instead of starting another, **tray or no tray**: two
+copies are two check timers and two engines racing for the zypper lock (ONEUP-0084). The guard
+is a `QLocalServer` in `oneup/gui/tray.py`:
 
-- **Server name** is per-user to avoid cross-user collisions: `f"OneUp-{os.getuid()}"`.
-- **Client check — in `main()`, for any tray-wanted launch (before building the window):**
-  `QLocalSocket().connectToServer(name)`; if it connects within a short timeout, a resident copy
-  already exists — write a one-byte token and `sys.exit(0)`. The resident instance, on
-  `newConnection`, calls `win._show_window()`.
-- **Server — armed by `_ensure_tray()` (§4, step 3), not by main():**
-  `QLocalServer.removeServer(name)` (clears a stale socket left by a crash), then `listen(name)`;
-  connect `newConnection` to raise the window. Arming it inside `_ensure_tray()` — the **single**
-  point where OneUp becomes resident — means it covers **both** an autostart/normal-enabled launch
-  **and** a mid-session Settings enable; there is no resident state without a live server (this
-  closes the "Settings-enabled tray has no server, so a second launch duplicates" gap).
-- Guard touches **only resident sessions** — a plain `oneup` with the tray off never calls
-  `_ensure_tray()`, so it starts no server and keeps today's multi-window behaviour. (A headless
-  `--check`/`--update` never reaches this code.)
-- **Accepted races:** (a) two near-simultaneous cold launches can both fail `connectToServer`
-  then both `listen()`; last writer wins, the loser keeps its own icon. (b) two processes each
-  started tray-off that both enable the tray mid-session will each try to `listen()` on the same
-  name; the second fails and simply keeps its own icon. Both are rare double-launch corners,
-  harmless at this scale, not worth a lock file.
-- **Server lifetime:** the server is closed in the `on_tray_toggled(on=False)` teardown (§2) and
-  otherwise dies with the process on quit — no single-instance lock outlives residency.
+- **Name:** per user, `f"OneUp-{os.getuid()}"`. `ONEUP_INSTANCE_NAME` overrides it, so the
+  suite never reaches the user's live copy.
+- **Claim — `_claim_single_instance`, before the window exists.** Building the window rewrites
+  launchers, asks GitHub for a newer version and runs the engine, so a copy that loses must
+  learn it first (ONEUP-0427). Under a `QLockFile` beside the socket file:
+  - `listen(name)`. Success: this copy owns it.
+  - Address in use, and a connect is answered: a live copy owns it. Write the `probe` intent
+    and hand over.
+  - Address in use, and nobody answers: a crashed copy's leftover. `removeServer`, then
+    `listen`. The lock is what stops two copies finding the same leftover and each removing
+    the other's live socket.
+  - Any other failure, such as an unwritable temporary folder: run without the guard and say
+    so on stderr. Never exit with no window and no message.
+  - A lock not taken within `CLAIM_LOCK_TIMEOUT_MS` is ignored, so a stuck lock cannot stop a
+    launch.
+- **Hand-over:** the losing launch connects and writes its intent. `show` raises the window;
+  `tray` (the autostart entry) and `probe` only learn that a copy is running (ONEUP-0403).
+- **Adoption:** `_adopt_server` gives the socket to the window and answers any launch that
+  arrived while the window was being built.
+- **Lifetime:** held until the process ends. Turning the tray off does not release it.
+  `_ensure_tray` calls `_arm_single_instance`, which claims only for a copy that ran without
+  the guard.
 
 ## Correctness invariants
 

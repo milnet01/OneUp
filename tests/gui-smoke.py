@@ -3280,7 +3280,7 @@ def main() -> int:
     def _mock_resolve():
         return [sys.executable, _mock_engine], ["the mock engine"]
 
-    def _headless(fn, lines, rc=0):
+    def _headless(fn, lines, rc=0, out=None):
         """Run one headless path against the mock; (exit, engine argv, stdout, notes)."""
         with open(_mock_env["ONEUP_MOCK_OUT"], "w") as f:
             f.write("".join(f"{ln}\n" for ln in lines))
@@ -3289,7 +3289,7 @@ def main() -> int:
         saved = {k: os.environ.get(k) for k in (*_mock_env, "ONEUP_MOCK_RC")}
         os.environ.update(_mock_env, ONEUP_MOCK_RC=str(rc))
         _patch(paths, "_resolve_engine", _mock_resolve)
-        out = io.StringIO()
+        out = io.StringIO() if out is None else out
         try:
             with contextlib.redirect_stdout(out):
                 code = fn()
@@ -3397,6 +3397,22 @@ def main() -> int:
         _c, _, _out, _ = _headless(_fn, _lines)
         check(f"INV-6 {_fn.__name__} writes every engine line back out, in order",
               _out.splitlines() == _lines)
+
+    # ONEUP-0427 06-L2: a manual `oneup --update` whose terminal closes. The echo's
+    # BrokenPipeError ended the marker loop, so the end-of-run notification was lost.
+    class _GoneTerminal(io.StringIO):
+        def write(self, s):
+            raise BrokenPipeError(32, "Broken pipe")
+
+    try:
+        _c, _, _, _notes = _headless(gui_app._headless_update,
+                                     ["@@INSTALLED@@|2|yes|no", "@@DONE@@|ok"],
+                                     out=_GoneTerminal())
+        check("a closed terminal still gets the end-of-run notification (ONEUP-0427)",
+              _c == 0 and len(_notes) == 1)
+    except OSError as exc:
+        check(f"a closed terminal still gets the end-of-run notification (ONEUP-0427): "
+              f"{exc!r}", False)
 
     # INV-4: no tray message on either path — only the notification service.
     _trays = []
@@ -4207,6 +4223,111 @@ def main() -> int:
           w_owner.last_run.accessibleName() == ""
           and w_owner.last_run.accessibleDescription() != "")
 
+    # (3a2) ONEUP-0427: the single-instance claim. Each case has a socket name of its own.
+    from PySide6.QtCore import QDir
+    from PySide6.QtNetwork import QLocalServer, QLocalSocket
+
+    # 06-M1: a listen() failing for any reason but a live owner used to return False, and
+    # main() then exited 0 with no window and no message. It now runs unguarded, and says so.
+    os.environ["ONEUP_INSTANCE_NAME"] = "/nonexistent-oneup-dir/sock"
+    _err = io.StringIO()
+    with contextlib.redirect_stderr(_err):
+        _owned, _server = tray._claim_single_instance(None)
+    check("a socket that cannot be made runs unguarded and says why (ONEUP-0427)",
+          _owned and _server is None and "single-instance" in _err.getvalue())
+
+    # 06-M2: the claim comes BEFORE the window, so a copy that loses builds none — the
+    # window's start-up writes files, asks GitHub and runs the engine.
+    os.environ["ONEUP_INSTANCE_NAME"] = f"{_saved_name}-m2"
+    _holder = QLocalServer()
+    _holder.listen(os.environ["ONEUP_INSTANCE_NAME"])
+    _built = []
+    _patch(gui_app, "Updater", lambda: _built.append(1) or window.Updater())
+    _patch(gui_app, "_raise_existing_instance", lambda intent: True)
+    check("a copy that loses the socket builds no window (ONEUP-0427)",
+          gui_app._build_window([]) is None and not _built)
+    _holder.close()
+    _w = gui_app._build_window([])
+    check("a copy that wins builds its window and keeps the socket (ONEUP-0427)",
+          _w is not None and _built == [1] and _w._local_server is not None)
+    if _w is not None and _w._local_server is not None:
+        _w._local_server.close()
+        _w._local_server = None
+    _unpatch_all()
+
+    # A launch that arrives while the window is still being built is not lost: nothing
+    # was listening for newConnection yet, and Qt does not signal it again.
+    os.environ["ONEUP_INSTANCE_NAME"] = f"{_saved_name}-early"
+    _owned, _server = tray._claim_single_instance(None)
+    _client = QLocalSocket()
+    _client.connectToServer(os.environ["ONEUP_INSTANCE_NAME"])
+    _client.waitForConnected(500)
+    _client.write(b"show")
+    _client.flush()
+    _client.waitForBytesWritten(500)
+    deadline = time.monotonic() + 0.3
+    while time.monotonic() < deadline:
+        QApplication.processEvents()
+    shown = []
+    _patch(tray, "_show_window", lambda win: shown.append(win))
+    _fake = types.SimpleNamespace(_local_server=None)
+    tray._adopt_server(_fake, _server)
+    check("a launch made while the window was being built still raises it (ONEUP-0427)",
+          shown == [_fake])
+    _client.disconnectFromServer()
+    _server.close()
+    _unpatch_all()
+
+    # 06-M3: two copies finding the same stale socket. Each probe fails, so each removed
+    # the file and listened — and the second removal deleted the first copy's LIVE socket,
+    # leaving two resident copies. A lock now serialises remove-and-listen. The children
+    # delay removeServer so the interleaving that loses is the one that happens.
+    _race = f"{_saved_name}-race"
+    _sock_path = os.path.join(QDir.tempPath(), _race)
+    import socket as _socket
+    _s = _socket.socket(_socket.AF_UNIX)
+    _s.bind(_sock_path)
+    _s.close()                                  # the file stays: a crashed copy's socket
+    _go = Path(tempfile.mkdtemp()) / "go"
+    _racer = (
+        "import os, sys, time\n"
+        f"sys.path.insert(0, {str(Path(__file__).resolve().parents[1])!r})\n"
+        "from PySide6.QtCore import QCoreApplication\n"
+        "from PySide6.QtNetwork import QLocalServer\n"
+        "app = QCoreApplication([])\n"
+        "from oneup.gui import tray\n"
+        "class Slow(QLocalServer):\n"
+        "    @staticmethod\n"
+        "    def removeServer(name):\n"
+        "        time.sleep(float(sys.argv[1]))\n"
+        "        return QLocalServer.removeServer(name)\n"
+        "tray.QLocalServer = Slow\n"
+        f"open({str(_go)!r} + f'.ready{os.getpid()}', 'w').close()\n"
+        f"while not os.path.exists({str(_go)!r}):\n"
+        "    time.sleep(0.005)\n"
+        "owned, server = tray._claim_single_instance(None)\n"
+        "print('OWNER' if server is not None else 'UNGUARDED' if owned else 'LOST',"
+        " flush=True)\n"
+        "time.sleep(2)\n")
+    _env = dict(os.environ, ONEUP_INSTANCE_NAME=_race)
+    # Both probes fail at once; the first removes and listens at 0.2 s, the second
+    # removes at 0.6 s — after the first is live, which is the order that lost.
+    _racers = [subprocess.Popen([sys.executable, "-c", _racer, _delay],  # noqa: S603
+                                env=_env, stdout=subprocess.PIPE, text=True)
+               for _delay in ("0.2", "0.6")]
+    deadline = time.monotonic() + 30            # both import Qt, then wait at the gate
+    while len(list(_go.parent.glob("go.ready*"))) < 2 and time.monotonic() < deadline:
+        time.sleep(0.05)
+    _go.touch()
+    _said = sorted((p.communicate(timeout=30)[0] or "").strip() for p in _racers)
+    check(f"two copies on a stale socket leave exactly one owner (ONEUP-0427): {_said}",
+          _said == ["LOST", "OWNER"])
+    shutil.rmtree(_go.parent, ignore_errors=True)
+    for _left in (_sock_path, _sock_path + ".lock"):
+        with contextlib.suppress(OSError):
+            os.unlink(_left)
+    os.environ["ONEUP_INSTANCE_NAME"] = _saved_name
+
     # (3b) ONEUP-0391: the tray's "Update now" starts nothing while the window is busy.
     # It used to call start_run unguarded, so a tray user whose run was still going
     # wiped its display and started a second engine. Busy is whatever disables the
@@ -4887,7 +5008,7 @@ def main() -> int:
     # --- ONEUP-0030: "last updated N days ago" nudge on the dashboard --------
     # refresh_last_run() derives a relative day-count from history.json and ambers
     # the line (dynamic stale property) once a run is STALE_AFTER_DAYS old.
-    from datetime import timedelta
+    from datetime import timedelta, timezone
     paths.STATE_DIR.mkdir(parents=True, exist_ok=True)
 
     # Both sides of the day-count read the clock independently: _seed_history stamps
@@ -4958,6 +5079,44 @@ def main() -> int:
     wN.refresh_last_run()
     check("no history shows 'Last run: never'", wN.last_run.text() == "Last run: never")
     check("the 'never' state is not flagged stale", wN.last_run.property("stale") == "false")
+
+    # ONEUP-0427 06-L1: a history.json that parses but is not an object of strings raised
+    # TypeError out of refresh_last_run, which runs while the window is being built — so
+    # the window never opened.
+    for _bad in ("[]", "null", '{"when": 5, "status": "OK"}'):
+        paths.HISTORY.write_text(_bad)
+        try:
+            wN.refresh_last_run()
+            check(f"a history.json of {_bad} reads as 'never' (ONEUP-0427)",
+                  wN.last_run.text() == "Last run: never")
+        except TypeError as exc:
+            check(f"a history.json of {_bad} reads as 'never' (ONEUP-0427): {exc!r}", False)
+
+    # ONEUP-0427 06-L3: the record carries its UTC offset, and is read in the zone in force
+    # now. Stored as naive local time, a timezone change moved "today" by a day. The real
+    # clock here: the frozen one ignores the zone it is asked for.
+    window.datetime = _real_datetime
+    _saved_tz = os.environ.get("TZ")
+    try:
+        os.environ["TZ"] = "Etc/GMT-14"          # POSIX sign: this is UTC+14
+        time.tzset()
+        _far = _real_datetime.now(timezone(timedelta(hours=-12)))   # 26 h behind
+        paths.HISTORY.write_text(window.json.dumps(
+            {"when": _far.isoformat(timespec="seconds"), "status": "OK"}))
+        wN.refresh_last_run()
+        check("a run stamped in another zone a moment ago reads 'today' (ONEUP-0427)",
+              "today" in wN.last_run.text())
+        wN.save_last_run("OK")
+        check("the run record carries its UTC offset (ONEUP-0427)",
+              _real_datetime.fromisoformat(
+                  window.json.loads(paths.HISTORY.read_text())["when"]).tzinfo is not None)
+    finally:
+        if _saved_tz is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = _saved_tz
+        time.tzset()
+        paths.HISTORY.unlink(missing_ok=True)
 
     window.datetime = _real_datetime
 

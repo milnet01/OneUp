@@ -160,7 +160,7 @@ is a dialog with a `showEvent`, not because it owns the settings.
    spec, and INV-3 is it. It is **vacuously true until `oneup/engine/` exists** — that is
    the point of writing it now, so it is already in place when ONEUP-0054 starts.
 2. **`window.py` may import any other `oneup/gui/` module; none of them imports
-   `window.py`.** A subsystem that needs the window is handed it, at construction, by the
+   `window.py` except `app.py`, which builds the window.** A subsystem that needs the window is handed it, at construction, by the
    window. This is the rule that keeps the split from becoming a ring of files that can only
    be read together.
 3. **`updater.py` imports from `oneup.gui.app` and nothing else, and nothing in `oneup/`
@@ -288,8 +288,8 @@ build steps out of specs.
   the pin prevents. The GUI has no locale coverage today while the engine does, so dropping
   the pin during the move would stay green in CI and break only for non-English users.
 
-- **INV-8** `_headless_update` invokes the engine with `--notify` and never forwards the
-  GUI-only `--update` token. *Test:* the existing regression check in `tests/gui-smoke.py`,
+- **INV-8** `_headless_update` invokes the engine without `--notify` (ONEUP-0077 INV-2) and
+  never forwards the GUI-only `--update` token. *Test:* the existing regression check in `tests/gui-smoke.py`,
   retargeted so the patch and the function are in the same module (§4.5).
 
 - **INV-9** The window handles every marker it handles today, with the same fields and the
@@ -450,6 +450,7 @@ argument is that each step is judged by assertions written before it.
 | 3 | 2026-07-27 | 1 medium, 2 low — **3 verified, 0 dismissed** | Converging: nothing structural, and nothing from earlier loops returned. Loop 2's fix to the §7 table had stranded a sibling — INV-6 and INV-9 got their own rows and INV-3/INV-4 stayed merged, so INV-4's two `gui-smoke.py` assertions appeared in no row. Audited all twelve rows against their `*Test:*` clauses rather than waiting for the next loop to find them one at a time; that was the only instance. §1 also promised modules "a reader can hold in their head one at a time" when §4.2 says plainly that `window.py` will not |
 | 4 | 2026-07-27 | 1 low — **1 verified, 0 dismissed** | **Converged.** Two lanes clean for the third loop running. The one finding was a convention slip: INV-4's new `gui-smoke.py` assertions were not marked "new" the way INV-6's and INV-7's are, so §5 alone read as though they existed. `Draft` → `Reviewed`; implementation of ONEUP-0034 is unblocked |
 | impl-0373 | 2026-11-06 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0373 (the user's order of 2026-11-06 to fix the G9 review's findings before the tag): §4.1's `sudo` clause now matches `docs/standards/security.md` §1.1, which allows the window one `sudo -n -l` listing; §4.6 points to `docs/standards/files-and-naming.md` §5.2 for when `XDG_STATE_HOME` is taken; §7 points to `docs/standards/testing.md` §2.2 for where the `HOME` redirect runs. An amendment, so no gate (`CLAUDE.md` rule 14). |
+| impl-0427 | 2026-11-18 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0427 (the 2026-11-15 code review, findings 06-L6): §4.3 rule 2 now names `app.py` as the one module that imports `window.py`, as §12 already recorded; INV-8 now says the engine runs without `--notify`, which ONEUP-0077 INV-2 removed. An amendment, so no gate (`CLAUDE.md` rule 14). |
 
 ## 12. What the implementation settled (2026-08-20, `v2` at `f0d13e7`)
 

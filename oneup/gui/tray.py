@@ -15,9 +15,9 @@ from datetime import datetime
 from functools import partial
 
 import shiboken6
-from PySide6.QtCore import QCoreApplication, QProcess, QRectF, Qt, QTimer
+from PySide6.QtCore import QCoreApplication, QDir, QLockFile, QProcess, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
-from PySide6.QtNetwork import QLocalServer, QLocalSocket
+from PySide6.QtNetwork import QAbstractSocket, QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .. import APP_ID, APP_NAME
@@ -28,6 +28,9 @@ from .theme import _app_icon
 # same machine, so this is generous; it only has to be long enough that a copy still
 # working through its own startup can still answer before we conclude it isn't there.
 SINGLE_INSTANCE_TIMEOUT_MS = 500
+# How long a launch waits for another one's claim (ONEUP-0427). A holder probes once and
+# writes once, each bounded by the timeout above, so this covers both with room over.
+CLAIM_LOCK_TIMEOUT_MS = 4 * SINGLE_INSTANCE_TIMEOUT_MS
 # What a copy that lost the socket writes to the winner before hanging up (ONEUP-0403).
 PROBE_INTENT = b"probe"
 
@@ -202,51 +205,93 @@ def _apply_tray_total(win, n: int, uncertain: bool = False, at_least: bool = Fal
     win._tray.setToolTip(_tooltip(n, uncertain, at_least))
 
 
+def _claim_single_instance(parent):
+    """Claim the per-user socket so a later launch defers to THIS copy.
+
+    Returns `(owned, server)`. `(False, None)`: a live copy answered, so this one
+    must hand over and exit. `(True, server)`: ours. `(True, None)`: the socket
+    could not be made for some other reason — a full or unwritable temporary
+    folder — so this copy runs unguarded and says why on stderr; exiting there
+    left the user with no window and no message (ONEUP-0427).
+
+    Listen first, and clear the address only once a connect has PROVEN nobody
+    answers it: removeServer() unlinks whatever socket is there, a LIVE one
+    included, and calling it up front made a second launch evict the first —
+    two copies at login, two tray icons (ONEUP-0084).
+
+    The lock serialises that remove-and-listen. Without it, two copies finding a
+    crashed copy's socket both proved it stale, and the second removal deleted
+    the first copy's live socket, leaving two resident copies (ONEUP-0427).
+    """
+    name = single_instance_name()
+    lock = QLockFile(_claim_lock_path(name))
+    locked = lock.tryLock(CLAIM_LOCK_TIMEOUT_MS)   # not in time: go on without it
+    try:
+        server = QLocalServer(parent)
+        if server.listen(name):
+            return True, server
+        if server.serverError() == QAbstractSocket.SocketError.AddressInUseError:
+            if _live_copy_answers(name):
+                server.deleteLater()
+                return False, None
+            QLocalServer.removeServer(name)  # proven stale (a crash left it)
+            if server.listen(name):
+                return True, server
+        print(f"OneUp: no single-instance guard, so a second launch will not find this "
+              f"copy ({server.errorString()})", file=sys.stderr)
+        server.deleteLater()
+        return True, None
+    finally:
+        if locked:
+            lock.unlock()
+
+
+def _claim_lock_path(name: str) -> str:
+    """Beside the socket file, where QLocalServer puts a name that is not a path."""
+    return (name if os.path.isabs(name) else os.path.join(QDir.tempPath(), name)) + ".lock"
+
+
+def _live_copy_answers(name: str) -> bool:
+    """Connect to `name`; True when a running copy answered.
+
+    The probe is itself a connection, so it says so: with no intent the winner
+    would read "a person launched OneUp" and throw its window up at login
+    (ONEUP-0403)."""
+    probe = QLocalSocket()
+    probe.connectToServer(name)
+    if not probe.waitForConnected(SINGLE_INSTANCE_TIMEOUT_MS):
+        return False
+    probe.write(PROBE_INTENT)
+    probe.flush()
+    probe.waitForBytesWritten(SINGLE_INSTANCE_TIMEOUT_MS)
+    probe.disconnectFromServer()
+    return True
+
+
+def _adopt_server(win, server):
+    """Hand a claimed socket to the window, and answer any launch that arrived
+    while the window was being built: Qt signals newConnection once per
+    connection, and nobody was listening for that one."""
+    server.newConnection.connect(partial(_on_single_instance_connection, win))
+    win._local_server = server
+    while server.hasPendingConnections():
+        _on_single_instance_connection(win)
+
+
 def _arm_single_instance(win):
-    """Listen so a later launch raises THIS copy instead of starting a second.
+    """Claim the socket for a window that does not hold it yet — `_ensure_tray`'s
+    call, for a copy that ran unguarded. True unless another live copy owns it.
 
     Armed on EVERY GUI launch, not only a resident one, and never torn down
     while the process lives: two copies are two check timers and two engines
     racing for the zypper lock whether or not a tray icon is involved.
-
-    The order below is the whole fix. removeServer() unlinks whatever socket is
-    there, including a LIVE one, so calling it up front made a second launch
-    evict the first instead of deferring to it — at login KDE starts two copies
-    (the autostart entry, plus Plasma restoring the window that was open at
-    logout) and both survived, which is the two-tray-icon bug (ONEUP-0084). So:
-    listen first, and clear the address only once a connect has PROVEN nobody
-    is answering it.
-
-    Returns True when THIS copy owns the socket, False when another live copy
-    does. The caller must honour a False: the check `main` makes before building
-    a window is a moment earlier than this one, so two copies started TOGETHER
-    at login — the very case ONEUP-0084 was fixed for — both find nobody
-    answering and both proceed. Only this call can tell them apart, and while it
-    returned nothing the loser carried on to a second tray icon, a second check
-    timer and a second engine able to race the zypper lock.
     """
     if win._local_server is not None:
         return True                          # already ours, from an earlier call
-    name = single_instance_name()
-    server = QLocalServer(win)
-    if not server.listen(name):
-        probe = QLocalSocket()
-        probe.connectToServer(name)
-        if probe.waitForConnected(SINGLE_INSTANCE_TIMEOUT_MS):
-            # A live copy owns it — leave it be. The probe is itself a connection, so
-            # it says so: with no intent the winner would read "a person launched
-            # OneUp" and throw its window up at login (ONEUP-0403).
-            probe.write(PROBE_INTENT)
-            probe.flush()
-            probe.waitForBytesWritten(SINGLE_INSTANCE_TIMEOUT_MS)
-            probe.disconnectFromServer()
-            return False
-        QLocalServer.removeServer(name)      # proven stale (a crash left it)
-        if not server.listen(name):
-            return False
-    server.newConnection.connect(partial(_on_single_instance_connection, win))
-    win._local_server = server
-    return True
+    owned, server = _claim_single_instance(win)
+    if server is not None:
+        _adopt_server(win, server)
+    return owned
 
 
 def _on_single_instance_connection(win):
@@ -334,8 +379,7 @@ def _teardown_tray(win):
 
     Deliberately does NOT release the single-instance server: that guard belongs
     to the process, not to residency (ONEUP-0084). Switching the tray off must
-    not make a second copy launchable. It is parented to the window, so it dies
-    with the process either way.
+    not make a second copy launchable. It dies with the process either way.
     """
     if win._tray_timer is not None:
         win._tray_timer.stop()
