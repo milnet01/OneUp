@@ -318,8 +318,9 @@ the code now depends on.
   constructors.
 - **The reboot reason arrives in its sentence-start form.** Each component is written
   out twice in `markers.REBOOT_COMPONENTS`, and the banner no longer upper-cases a
-  letter. `TaskRow`'s two screen-reader names are written out per step in
-  `steps.DETAIL_NAMES`. Those were §4.5's case-change worklist.
+  letter. `TaskRow`'s two screen-reader names were written out per step, until
+  ONEUP-0239's package views took their names from their callers. Those were §4.5's
+  case-change worklist.
 - **`pyside6-lrelease` keeps an unfinished message that has a translation** and drops
   one that has none — the second is what INV-8's measurement saw — so INV-8 writes the
   translation and leaves the state alone.
@@ -606,3 +607,4 @@ goes to is `docs/standards/workflow.md` §9's decision.
 | impl | 2026-10-11 | — | **Amendment, not a review — no reviewer was dispatched to produce this row.** Origin: ONEUP-0219. §4.2 said OneUp's catalogue directory is resolved from the package's own location and found by one relative path, citing `wording-and-translation.md` §7, which no longer says so. It now names what the built loader uses: `oneup/gui/paths.py`'s `TRANSLATIONS_DIR`, `HERE/oneup/translations/`, with each layout's placement left to `files-and-naming.md` §4 and the no-`__file__` rule tied to `tests/imports-test.py` INV-4. Records code that already exists, so the gate does not re-arm. |
 | impl-0373 | 2026-11-06 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0373 (the user's order of 2026-11-06 to fix the G9 review's findings before the tag): §4.5 no longer counts `wording-and-translation.md` §6.2's exceptions; §8 leaves where its documentation edits go to `docs/standards/workflow.md` §9; §10 names ONEUP-0077 as the owner of the `--notify` notification. An amendment, so no gate (`CLAUDE.md` rule 14). |
 | impl-0410 | 2026-11-15 | — | **Not a review; an amendment, no reviewer dispatched.** ONEUP-0410 (review-code 2026-11-11) asked whether `ElidedLabel`'s fixed height clips CJK text. Measured, it does not; §4.5 now exempts it with the measurement. |
+| impl-0431 | 2026-11-18 | — | **Not a review; an amendment, no reviewer dispatched.** ONEUP-0431 (review-code 2026-11-15, tool gaps): `steps.DETAIL_NAMES` had no reader since ONEUP-0239's package views took their screen-reader names from their callers, so it is deleted, and the stage-4 note that named it says so. |
