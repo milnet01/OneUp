@@ -12376,7 +12376,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0427] **Window findings from the 2026-11-15 review not in a theme.**
+- 🚧 [ONEUP-0427] **Window findings from the 2026-11-15 review not in a theme.**
   review-code 2026-11-15, lanes 05, 06 and 08-11. MEDIUM:
   - run.py release_engine and a held preview.
   - app.py builds Updater() before _arm_single_instance, so two copies
@@ -12405,6 +12405,11 @@ when complete (that document's §7).
   user (ONEUP-0076 4.2). Verdicts and the per-subject plan:
   /mnt/Emulators/.claude/Scratchpad/OneUp/close-0427/. Close one subject
   (lane) per run.
+  2026-11-18: lane 05 (run driver) closed in 19661f2 — 05-M3 and
+  05-L1..L4 fixed, each with a gui-smoke check seen red; 05-M1/M2
+  already fixed by ONEUP-0418. 05-L1 decided by the engine's own summary,
+  which prints the reboot advice after a stop: the window now shows the
+  restart banners on a stopped run too. Lanes 06, 08, 09, 10, 11 remain.
   **Layman:** Smaller problems in OneUp's window found by the code review.
   Kind: review-fix.
   Source: review-code-2026-11-15.
