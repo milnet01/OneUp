@@ -6246,6 +6246,10 @@ check "the unit starts the launcher the spec names" "ExecStart=/usr/libexec/oneu
 # trigger failed on a read-only /root and /run/user during a real kernel update.
 check_absent "the unit sets no ProtectHome=" "ProtectHome=" \
     "$(grep -vE '^[[:space:]]*#' "$unit" 2>/dev/null)"
+# Measured 2026-11-18: under SystemCallArchitectures=native, a 32-bit package's scriptlet
+# (glibc-32bit's /usr/sbin/iconvconfig-32) died with SIGSYS and rpm aborted the update.
+check_absent "the unit sets no SystemCallArchitectures=" "SystemCallArchitectures=" \
+    "$(grep -vE '^[[:space:]]*#' "$unit" 2>/dev/null)"
 # ONEUP-0406: the paused-sources record lives in /var/lib/oneup, which systemd makes.
 check "the unit gives the service /var/lib/oneup" "StateDirectory=oneup" \
     "$(grep -vE '^[[:space:]]*#' "$unit" 2>/dev/null)"

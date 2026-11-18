@@ -453,7 +453,7 @@ update that includes a kernel passes under it (§7):
 ```
 PrivateTmp=yes  ProtectClock=yes  ProtectHostname=yes
 ProtectKernelLogs=yes  ProtectControlGroups=yes  RestrictRealtime=yes
-LockPersonality=yes  SystemCallArchitectures=native
+LockPersonality=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 KillMode=process  TimeoutStopSec=30min
 RuntimeDirectory=oneup  RuntimeDirectoryPreserve=yes
@@ -465,7 +465,9 @@ These are left out on purpose, because each would break a package transaction:
 `ProtectKernelTunables=`. systemd.exec(5) itself excludes services "involved with system
 updates" from `ProtectSystem`. `ProtectHome=` was dropped under §4.12 item 2. In a real
 kernel update on 2026-10-16, systemd's `%transfiletriggerin` failed on a read-only
-`/root` and `/run/user` (ONEUP-0283).
+`/root` and `/run/user` (ONEUP-0283). `SystemCallArchitectures=native` was dropped the same
+way. In a real update on 2026-11-18, glibc-32bit's scriptlet runs the 32-bit
+`/usr/sbin/iconvconfig-32`, which died with `SIGSYS`, and rpm aborted the transaction.
 
 - **`KillMode=process`** means that if the service dies or is stopped, systemd does not
   kill the zypper it started, and the job file (§4.3) means the child has nothing that
@@ -851,3 +853,4 @@ Each of these is amended in the commit that lands the matching code:
 | impl-0373 | 2026-11-06 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0373 (the user's order of 2026-11-06 to fix the G9 review's findings before the tag): §10's `--check` line no longer says the check never needs root; it points to ONEUP-0329's `check-dry-run`. An amendment, so no gate (`CLAUDE.md` rule 14). |
 | impl-0393 | 2026-11-12 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0393 closed review theme 1 (2026-11-11 code review). §4.5 now says an alias already off is never recorded, and that a failed re-enable is retried every 5 seconds for up to 10 minutes. INV-6's statement and test clause say the same. §4.9 adds the retry's audit lines. §6's *service dies mid-job* row states the gap that remains: the record is in memory only, queued as ONEUP-0406. |
 | impl-0406 | 2026-11-15 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0406: §4.5's in-memory record of a session's switched-off sources is now also written to `/var/lib/oneup/paused-sources` and restored by the next service; the unit gains `StateDirectory=oneup` (§4.8). Locked by `tests/service-test.py`'s kill-and-restart scenario, red against HEAD. |
+| impl-0443 | 2026-11-18 | none: an amendment, no reviewer dispatched | – | – | – | – | **Not a review.** ONEUP-0443: §4.12's rule failed a second directive. In the user's update of 2026-11-18 (log `2026-11-18_085021`), glibc-32bit's scriptlet ran the 32-bit `iconvconfig-32`, which died with `SIGSYS` under `SystemCallArchitectures=native`, and rpm aborted the transaction. Changed: §4.8 moves the directive to the left-out list; the unit drops it in the same commit, and INV-13's scenario checks it stays out, red against HEAD. |

@@ -6,7 +6,8 @@
 # if a real Tumbleweed update including a kernel passes under it (§4.12). Left out on
 # purpose, because each breaks a package transaction: ProtectSystem=,
 # ProtectKernelModules=, RestrictSUIDSGID=, PrivateDevices=, ProtectKernelTunables=,
-# ProtectHome= (measured: systemd's own file trigger writes /root and /run/user).
+# ProtectHome= (measured: systemd's own file trigger writes /root and /run/user),
+# SystemCallArchitectures= (measured: a 32-bit package's scriptlet dies with SIGSYS).
 [Unit]
 Description=OneUp system service (runs OneUp's update commands as root)
 
@@ -28,5 +29,4 @@ ProtectKernelLogs=yes
 ProtectControlGroups=yes
 RestrictRealtime=yes
 LockPersonality=yes
-SystemCallArchitectures=native
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK

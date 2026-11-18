@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=442 -->
+<!-- ants-roadmap-id-high-water: ONEUP=443 -->
 
 # OneUp Roadmap
 
@@ -12579,3 +12579,22 @@ when complete (that document's §7).
   **Layman:** After an update fails, OneUp can spend minutes testing each software source while the window looks frozen.
   Kind: ux.
   Source: review-code-2026-11-15.
+
+- ✅ [ONEUP-0443] **An update with a 32-bit package fails on the service route: the unit's SystemCallArchitectures=native kills its scriptlet.**
+  The user's update of 2026-11-18 (log 2026-11-18_085021, service route,
+  OneUp 2.0.0 from OBS) aborted at 14/611: glibc-32bit's %post and
+  glibc-gconv-modules-extra-32bit's %preun run /usr/sbin/iconvconfig-32,
+  which died "Bad system call", exit 159 (128+SIGSYS). Measured the same
+  day: systemd-run --user -p SystemCallArchitectures=native
+  /usr/sbin/iconvconfig-32 --version ends status=31/SYS; with no property,
+  or with LockPersonality=yes alone, it prints its version. Fix: drop
+  the directive from data/oneup-service.service and ONEUP-0249 §4.8 (the
+  §4.12 rule: a directive stays only if a real update passes under it);
+  tests/run-tests.sh checks it stays out. Installed copies keep failing
+  until they get the new unit.
+  Shipped 2026-11-18: the unit and §4.8 drop the directive; INV-13's
+  scenario in tests/run-tests.sh checks it stays out (red against the
+  old unit, green after). A host gets it only from a new package.
+  **Layman:** An update that included 32-bit parts of the system stopped part-way, because OneUp's background helper was not allowed to run 32-bit programs.
+  Kind: fix.
+  Source: user-report-2026-11-18.

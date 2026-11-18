@@ -15,6 +15,10 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **An update that includes 32-bit packages no longer stops part-way when OneUp's system service runs it** (ONEUP-0443)
+  The service was not allowed to run 32-bit programs, so a package whose install
+  script runs one (glibc-32bit does) was killed and the update aborted.
+
 - **A package's name no longer decides which problem OneUp reports** (ONEUP-0422)
   An update that failed while installing a package with "timeout" in its name was
   told to check the internet connection, and a package named like a conflict could
