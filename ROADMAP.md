@@ -12449,6 +12449,13 @@ when complete (that document's §7).
   release.yml's workflow-wide contents: write (zizmor). Not gaps: the
   ruff BLE001/S110 tags, which do not fire on those shapes. Decide
   whether local-CI runs vulture and zizmor, then drop DETAIL_NAMES.
+  2026-11-18: DETAIL_NAMES dropped in f84ca05. Measured for the
+  decision: vulture at its default confidence reports 49 names, nearly
+  all Qt overrides and properties (paint, rowCount, QSS properties), so
+  it needs a whitelist to gate; zizmor's default persona does not report
+  release.yml's workflow-wide contents: write (only --persona=pedantic
+  does), so as a default gate it would not have caught this one. Waiting
+  on the user's decision.
   **Layman:** Two automatic checks would have caught problems the review had to find by hand.
   Kind: chore.
   Source: review-code-2026-11-15.
