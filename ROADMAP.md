@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=448 -->
+<!-- ants-roadmap-id-high-water: ONEUP=450 -->
 
 # OneUp Roadmap
 
@@ -12422,6 +12422,16 @@ when complete (that document's §7).
   corrected. 06-L4 shipped with ONEUP-0431. The lane's three open
   questions (Wayland activation token, the tray's couldn't-check icon,
   notification markup) went to the user. Lanes 08, 09, 10, 11 remain.
+  2026-11-18: lane 08 (settings) closed in c5de709. 08-M1: the
+  automatic-updates enable latch is set only after consent, and a probe
+  answer arriving while a grant or revoke runs is discarded. 08-M2: with
+  no answer from systemctl, the timer's unit file decides. 08-M3: the
+  repository editor refuses an all-digit alias; the skip-repo route's
+  same gap is ONEUP-0449. 08-L1, L2, L4, L5, L6, L9, L10, L11 fixed;
+  L3, L8 were already fixed (ONEUP-0420, ONEUP-0423). 08-L7 is a scope
+  decision, queued as ONEUP-0450. Each fix has a gui-smoke check seen
+  red on the unfixed tree. ONEUP-0092 §4.7's self-contradiction (the
+  lane's open question) corrected. Lanes 09, 10, 11 remain.
   **Layman:** Smaller problems in OneUp's window found by the code review.
   Kind: review-fix.
   Source: review-code-2026-11-15.
@@ -12726,3 +12736,33 @@ when complete (that document's §7).
   **Layman:** Two of OneUp's own rules disagree about whether error messages from updates may be written to the system log.
   Kind: review-fix.
   Source: close-findings-2026-11-18 (from ONEUP-0426).
+
+- 📋 [ONEUP-0449] **The skip-repo route still accepts a repository alias spelled as a number.**
+  Found by ONEUP-0427's lane 08 sweep (2026-11-18). zypper reads a
+  repository argument as an alias or as its list NUMBER (the review
+  checked `zypper lr 1`). The repository editor now refuses an all-digit
+  alias (repos._alias_ok). Two guards on the same path still use only the
+  character class: the window's REMEDY skip-repo check (run.py, through
+  repos._ALIAS_RE) and the engine's own repos._ALIAS, which guards
+  rootops' modifyrepo --disable/--enable. Not fixed in lane 08: the
+  engine is lane 02's subject, and ONEUP-0025 says the engine and window
+  share one character class, so the fix is both guards and that spec
+  together. Whether zypper tries the alias or the number first is not
+  verified; refusing is fail-closed either way.
+  **Layman:** A software source whose short name is a number could, in a rare case, make OneUp switch off the wrong source while it sets a broken one aside.
+  Kind: security.
+  Source: review-code-2026-11-15.
+  Lanes: engine, gui.
+
+- 📋 [ONEUP-0450] **Decide whether Copy diagnostics should scrub more than URL logins.**
+  review-code 2026-11-15, finding 08-L7. security.md 7.4 names what the
+  bundle scrubs: the home path, the user name, the host name and a
+  URL's login. Query-string tokens, `Bearer ...` headers and PRIVATE KEY
+  blocks pass through unchanged. No OneUp log is known to carry one, so
+  this is a scope decision for the user, not a defect: widen 7.4 and the
+  scrub together, or record that the list is complete. Queued, not
+  fixed, in ONEUP-0427's lane 08 run (2026-11-18).
+  **Layman:** The bug-report text OneUp copies hides your user name, computer name and passwords in web addresses; this decides whether it should hide other kinds of secret too.
+  Kind: security.
+  Source: review-code-2026-11-15.
+  Lanes: gui.
