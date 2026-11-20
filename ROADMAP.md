@@ -12376,7 +12376,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 🚧 [ONEUP-0427] **Window findings from the 2026-11-15 review not in a theme.**
+- ✅ [ONEUP-0427] **Window findings from the 2026-11-15 review not in a theme.**
   review-code 2026-11-15, lanes 05, 06 and 08-11. MEDIUM:
   - run.py release_engine and a held preview.
   - app.py builds Updater() before _arm_single_instance, so two copies
@@ -12458,6 +12458,20 @@ when complete (that document's §7).
   ONEUP-0076 §4.2 with the measurement (dark themes 1.31 to 1.86:1 on the
   row). L1, L3 and L4 each have a gui-smoke check seen red. Queued from
   the sweep: ONEUP-0451. Lane 11 remains.
+  2026-11-20: lane 11 (presentation) closed in fed3b9f; every lane is
+  now closed. 11-M1: Restart services restarts only units systemd reports
+  running; systemd-reboot, systemd-poweroff and rescue passed the name
+  check before. 11-M2, M3, L5 measured in a private KWin 6.8.3: a refused
+  script load answered int32 -1 with exit 0; 293 of 300 back-to-back
+  scripts ran; the window came back at its saved position 0 times in 10.
+  Now each script has its own name and stays loaded 3 s or until its
+  answer is read, placement waits 300 ms after the first Expose, and the
+  same probes give 300 of 300 and 10 in 10. A OneUp killed within those
+  3 s leaves one small script file in /tmp. 11-M4: the two catalogues
+  must be one language. 11-L1..L4, L6 fixed. 15 gui-smoke checks seen
+  red. Lane 06's question answered: aliases reach notification bodies
+  unescaped, but the engine records only aliases of letters, digits and
+  :@._+-, so no markup can arrive.
   **Layman:** Smaller problems in OneUp's window found by the code review.
   Kind: review-fix.
   Source: review-code-2026-11-15.
