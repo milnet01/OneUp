@@ -5978,6 +5978,18 @@ def main() -> int:
     check("cycling text size updates both the setting and the label",
           wA._text_scale_index() == 1 and "Large" in wA.textsize_btn.text())
     wA.settings.setValue("text_scale", 1.0)
+    # ONEUP-0427 10-L4: a stored size that is not one of the offered ones — a
+    # hand-edited 0, a negative, a word (Qt reads it as 0.0) — applies Normal, the
+    # size the button's label already shows for it.
+    theme.apply_app_theme(app_inst)
+    _normal_sheet = app_inst.styleSheet()
+    for _odd in (0, -2, 7.3, "abc"):
+        wA.settings.setValue("text_scale", _odd)
+        theme.apply_app_theme(app_inst)
+        check(f"a stored text size of {_odd!r} applies Normal (ONEUP-0427)",
+              app_inst.styleSheet() == _normal_sheet and wA._text_scale_index() == 0)
+    wA.settings.setValue("text_scale", 1.0)
+    theme.apply_app_theme(app_inst)
 
     # --- ONEUP-0027: the picker, the preference and the fallback ----------------
     _qs = wA.settings
@@ -6067,6 +6079,22 @@ def main() -> int:
               wA.theme_note.isVisible() and bool(wA.theme_note.text()))
         _d2.reject()
         QApplication.processEvents()
+        # ONEUP-0427 10-L3: the fallback failing to derive as well must not escape —
+        # "the app must not die of it" (ONEUP-0076 §6). The installed sheet stays.
+        _broken2 = theme.Theme("broken2", "Broken too", "dark", _bad)
+        _real_system_theme = theme.system_theme
+        _sheet_before = app_inst.styleSheet()
+        theme.system_theme = lambda _app: _broken2
+        try:
+            theme.apply_app_theme(app_inst)
+            _escaped = ""
+        except theme.FocusDerivationError as exc:
+            _escaped = repr(exc)[:60]
+        finally:
+            theme.system_theme = _real_system_theme
+        check(f"an underivable fallback keeps the installed sheet (ONEUP-0427) {_escaped}",
+              not _escaped and app_inst.styleSheet() == _sheet_before
+              and bool(theme.last_theme_error))
     finally:
         theme.THEMES.remove(_broken)
         del theme.BY_ID["broken"]
@@ -6876,6 +6904,16 @@ for th in theme.THEMES:
     except theme.FocusDerivationError:
         raised = True
     check("INV-5 an unsatisfiable surface set raises rather than guessing", raised)
+    # ONEUP-0427 10-L1: the fraction is tested on the pixels Qt PAINTS — the samples
+    # between the two blended stops — not on each rest sample blended alone. Rounding
+    # makes those differ by one per channel, and this pair landed at 2.99:1.
+    _g_stops = ("#93fc6d", "#acf834")
+    _g_fills, _ = theme.derive_focus_gradient(_g_stops)
+    _g_worst = min(theme.contrast(theme._hex(f), theme._hex(r))
+                   for r, f in zip(theme._samples(*_g_stops), theme._samples(*_g_fills),
+                                   strict=True))
+    check(f"a derived gradient clears 3:1 at every painted pixel (ONEUP-0427): "
+          f"{_g_worst:.3f}", _g_worst >= theme.FOCUS_MIN)
 
     # INV-1: every focusable widget, in the window AND in every dialog it can
     # open, is covered by a row of §4.2's mechanism table — by object name for a

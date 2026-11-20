@@ -175,14 +175,21 @@ def derive_focus_gradient(stops, *, label: str = "",
     Sampled at 101 points, since a gradient is governed by its worst pixel and not
     by its stops, and each focused sample is compared against the rest sample it
     replaces — SC 2.4.13 compares the same pixels, so the top of the button is not
-    held against the bottom of its own previous state.
+    held against the bottom of its own previous state. The focused samples are
+    taken BETWEEN THE BLENDED STOPS, which is what Qt paints and what
+    `focus_report` measures: blending each rest sample on its own rounds
+    differently, by up to one per channel, and accepted a fraction that painted
+    at 2.99:1 (ONEUP-0427).
     """
     rest = _samples(*stops)
+    ends = [_rgb(s) for s in stops]
     best = None
     for target in (_BLACK[0], _WHITE[0]):
         for step in range(1, 101):
             t = step / 100.0
-            if all(contrast(_blend(p, t, target), p) >= threshold for p in rest):
+            focused = _samples(*(_hex(_blend(e, t, target)) for e in ends))
+            if all(contrast(f, p) >= threshold
+                   for f, p in zip(focused, rest, strict=True)):
                 if best is None or t < best[0]:
                     best = (t, target)
                 break
@@ -248,6 +255,19 @@ DANGER_TINT_STOPS = (("dangertint", 0.22), ("dangertint", 0.05))
 # plus the two metrics that BOUND text (badge padding, progress-bar height) —
 # every other length is decoration that doesn't crowd at a larger size.
 TEXT_SCALES = [("Normal", 1.0), ("Large", 1.2), ("Larger", 1.45)]
+
+
+def text_scale_index(stored: float) -> int:
+    """Which TEXT_SCALES entry a stored value names; 0, Normal, when it names none.
+
+    The one reading of the setting, shared by the Settings button's label and the
+    sheet, so the two cannot disagree: a hand-edited 0 or a negative size would
+    otherwise reach the sheet as `0.0pt` or a negative point size, which Qt
+    discards (ONEUP-0427)."""
+    for i, (_label, mult) in enumerate(TEXT_SCALES):
+        if abs(mult - stored) < 0.01:
+            return i
+    return 0
 
 # Font sizes as multiples of the desktop's default point size. The ratios are the
 # app's original pixel sizes over a 10 pt (~13.3 px at 96 dpi) default, so
@@ -1480,7 +1500,8 @@ def apply_app_theme(app: QApplication):
     global _CURRENT_PALETTE, last_theme_error
     s = QSettings("OneUp", "OneUp")
     theme, _known = chosen_theme(app)
-    scale = float(s.value("text_scale", 1.0, type=float))
+    scale = TEXT_SCALES[text_scale_index(
+        float(s.value("text_scale", 1.0, type=float)))][1]
     high_contrast = bool(s.value("high_contrast", False, type=bool))
     try:
         qss = build_theme(theme, scale=scale, high_contrast=high_contrast)
@@ -1501,7 +1522,13 @@ def apply_app_theme(app: QApplication):
             # appearance mode that exists for low-vision users.
             return
         theme = fallback
-        qss = build_theme(theme, scale=scale, high_contrast=high_contrast)
+        try:
+            qss = build_theme(theme, scale=scale, high_contrast=high_contrast)
+        except FocusDerivationError as exc2:
+            # The fallback cannot be derived either. No built-in theme reaches
+            # this; the app must still not die of it, so the installed sheet stays.
+            print(f"OneUp: the fallback theme is unusable too — {exc2}")
+            return
     else:
         last_theme_error = ""
     base = dict(theme.palette)

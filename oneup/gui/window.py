@@ -98,7 +98,7 @@ from .packages import PackageModel
 from .settings_dialog import SettingsDialog
 from .size_link import SizeLink
 from .task_row import TaskRow
-from .theme import TEXT_SCALES, _app_icon, apply_app_theme
+from .theme import TEXT_SCALES, _app_icon, apply_app_theme, text_scale_index
 
 # The last-run line turns amber once the last run is this old, nudging the user
 # that an update is overdue (ONEUP-0030).
@@ -1165,11 +1165,8 @@ class Updater(QMainWindow):
         """Which TEXT_SCALES entry the saved setting corresponds to (0 if the
         stored value is absent or doesn't match one — a hand-edited config must
         never leave the button label disagreeing with the applied size)."""
-        current = float(self.settings.value("text_scale", 1.0, type=float))
-        for i, (_label, mult) in enumerate(TEXT_SCALES):
-            if abs(mult - current) < 0.01:
-                return i
-        return 0
+        return text_scale_index(
+            float(self.settings.value("text_scale", 1.0, type=float)))
 
     def _refresh_textsize_label(self):
         self.textsize_btn.setText(QCoreApplication.translate(

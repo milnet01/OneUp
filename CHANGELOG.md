@@ -39,6 +39,8 @@ All notable changes to OneUp are documented here. The format follows
   change notes are new. A Flatpak whose software source gives a release an impossible
   date now opens its details instead of nothing. In the card layout, the dot of the
   package installing now is hatched, as the size strip shows it.
+  A text size typed into the settings file that OneUp does not offer now shows as Normal
+  instead of leaving the window without its styling.
 
 - **Smaller fixes to OneUp's system service from the code review** (ONEUP-0426)
   A software source the service was still trying to switch back on could be switched on

@@ -102,6 +102,11 @@ def draw(painter: QPainter, shape: Callable[[QPainter], None], rect: QRectF, ink
 class SymbolButton(QPushButton):
     """A `#GhostBtn` whose symbol is drawn, in the colour its label would have.
 
+    ON THE CARD ONLY, and not checkable. The focus ink handed over is `$focusink`,
+    the card's pair; the sheet gives a ghost button in a row, a dialog's button
+    strip or a banner, or a checked one, a different label colour, and a symbol
+    placed there would keep the card's. Both of the app's are in the header.
+
     A stylesheet cannot reach an icon, so the sheet hands the ghost button's three
     label colours over as properties, as it does for `ToggleSwitch`, and the icon is
     redrawn when the button's state or the text size changes. Qt evaluates a

@@ -284,7 +284,8 @@ combo box the QSS doesn't style:
 TEXT_SCALES = [("Normal", 1.0), ("Large", 1.2), ("Larger", 1.45)]
 ```
 
-Persisted as `text_scale` in the existing `QSettings("OneUp", "OneUp")`.
+Persisted as `text_scale` in the existing `QSettings("OneUp", "OneUp")`. A stored value
+that is none of the three applies Normal (`text_scale_index`, ONEUP-0427).
 
 **The single theming entry point.** `main()`'s local `apply_theme` closure
 reads neither setting and is unreachable from a Settings handler or
