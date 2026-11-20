@@ -16,8 +16,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import i18n, steps
 from . import package_views as pv
-from . import steps
 from .elided_label import ElidedLabel
 from .layout_host import LayoutHost
 
@@ -38,7 +38,7 @@ _VERSION_CHARS = 28
 
 def _tab_text(word: str, count: int) -> str:
     return QCoreApplication.translate("layout_rows", "{tab} · {count}").format(
-        tab=word, count=count)
+        tab=word, count=i18n.number(count))
 
 
 class RowsLayout(LayoutHost):

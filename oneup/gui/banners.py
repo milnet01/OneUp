@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 
 import shiboken6
 from PySide6.QtCore import QCoreApplication, QProcess, Qt, QTimer
@@ -66,6 +67,28 @@ def _split_session_critical(svcs: list[str]) -> tuple[list[str], list[str]]:
         base = s[:-len(".service")] if s.endswith(".service") else s
         (risky if base in critical or _USER_MANAGER_RE.fullmatch(base) else safe).append(s)
     return safe, risky
+
+
+def _running(units: list[str]) -> list[str] | None:
+    """Those of `units` systemd reports running, or None when it cannot say.
+
+    `zypper ps` names a service because one of its processes still holds a replaced
+    library, so a unit it truthfully names is running. One that is not running is
+    data that did not come from there — and for `systemd-reboot.service`,
+    `systemd-poweroff.service` or `rescue.service`, starting the unit IS the action:
+    root's `systemctl restart` of it restarts or halts the machine (ONEUP-0427). A
+    list of such names would be a guard written against assumed names; asking
+    systemd is the mechanism. `is-active` needs no root and prints one state a unit,
+    in the order given; its exit status only says whether any was active."""
+    try:
+        states = subprocess.run(["systemctl", "is-active", "--", *units],  # noqa: S603, S607 — fixed argv, validated names.
+                                capture_output=True, text=True, timeout=5).stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if len(states) != len(units):
+        return None
+    return [u for u, state in zip(units, states, strict=True)
+            if state in ("active", "reloading")]
 
 
 def _make_banner(win, frame_obj: str, btn_obj: str, btn_text: str, slot,
@@ -326,6 +349,32 @@ def restart_services(win):
         return
     # Never restart a service that would end the session (ONEUP-0111).
     safe, critical = _split_session_critical(svcs)
+    # Nor one that is not running (ONEUP-0427): `_running` says why. Each name is a
+    # .service unit, written out: the name check also accepts "reboot.target", and
+    # `systemctl restart reboot.target` reboots the machine (ONEUP-0401).
+    # "reboot.target.service" names no unit.
+    units = {s: s if s.endswith(".service") else f"{s}.service" for s in safe}
+    running = _running(list(units.values())) if safe else []
+    if running is None:
+        QMessageBox.warning(
+            win, QCoreApplication.translate("banners", "Could not restart services"),
+            QCoreApplication.translate(
+                "banners",
+                "OneUp could not check which of these services are running, so it "
+                "restarted none of them. Restarting the computer picks up the new "
+                "libraries."))
+        return
+    safe = [s for s in safe if units[s] in running]
+    if not safe and not critical:
+        # Said, not silent: a button that does nothing is ONEUP-0110's shape.
+        QMessageBox.information(
+            win, QCoreApplication.translate("banners", "Nothing to restart"),
+            QCoreApplication.translate(
+                "banners",
+                "None of these services is running any more, so nothing needs "
+                "restarting."))
+        win.services_banner.setVisible(False)
+        return
     if not safe:
         # ONEUP-0115: where the advice is a reboot, OFFER the reboot. This used to be
         # an information dialog naming units this button refuses to touch, whose only
@@ -357,11 +406,8 @@ def restart_services(win):
     title = QCoreApplication.translate("banners", "Restart services?")
     if QMessageBox.question(win, title, body, QMessageBox.Yes | QMessageBox.No,
                             QMessageBox.No) == QMessageBox.Yes:   # Enter = No (ONEUP-0183)
-        # Each name goes to root's systemctl as a .service unit, written out: the name
-        # check also accepts "reboot.target", and `systemctl restart reboot.target`
-        # reboots the machine (ONEUP-0401). "reboot.target.service" names no unit.
-        units = [s if s.endswith(".service") else f"{s}.service" for s in safe]
-        _start_service_restart(win, "pkexec", ["systemctl", "restart", *units])
+        _start_service_restart(win, "pkexec",
+                               ["systemctl", "restart", *(units[s] for s in safe)])
         # Hidden while it runs, and shown again only if the restart fails, so a failed
         # one can be retried. Anything still needing a reboot is carried by the reboot
         # banner, which on_finished has already shown.

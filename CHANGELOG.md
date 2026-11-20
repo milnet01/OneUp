@@ -41,6 +41,13 @@ All notable changes to OneUp are documented here. The format follows
   package installing now is hatched, as the size strip shows it.
   A text size typed into the settings file that OneUp does not offer now shows as Normal
   instead of leaving the window without its styling.
+  The Restart services button now restarts only services that are running, so a wrong
+  name in an update's report can no longer restart or power off the computer. On KDE
+  Wayland, OneUp now waits a moment after its window appears before moving it back to
+  where you left it, because the desktop undid a move made sooner, and a request to the
+  desktop is no longer withdrawn before the desktop has acted on it. With only part of a
+  translation installed, OneUp no longer shows its own text in one language beside
+  buttons in another.
 
 - **Smaller fixes to OneUp's system service from the code review** (ONEUP-0426)
   A software source the service was still trying to switch back on could be switched on

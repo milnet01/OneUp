@@ -13,8 +13,8 @@ from __future__ import annotations
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
+from . import i18n, step_progress, steps
 from . import package_views as pv
-from . import step_progress, steps
 from .elided_label import ElidedLabel
 from .layout_host import LayoutHost
 from .markers import _format_size
@@ -28,7 +28,7 @@ def _of(part: str, whole: str) -> str:
 
 def _heading(word: str, count: int) -> str:
     return QCoreApplication.translate("layout_spotlight", "{list} · {count}").format(
-        list=word, count=count)
+        list=word, count=i18n.number(count))
 
 
 class SpotlightLayout(LayoutHost):
@@ -187,12 +187,12 @@ class SpotlightLayout(LayoutHost):
         unknown = QCoreApplication.translate("layout_spotlight", "not known")
         done, total = win._progress_count
         if total:
-            self.figures[0].setText(_of(str(done), str(total)))
+            self.figures[0].setText(_of(i18n.number(done), i18n.number(total)))
         elif done:
             # A total of 0 means not known, and renders as a running tally
             # (marker-protocol.md §4.3).
             self.figures[0].setText(QCoreApplication.translate(
-                "layout_spotlight", "{n} so far").format(n=done))
+                "layout_spotlight", "{n} so far").format(n=i18n.number(done)))
         else:
             self.figures[0].setText(unknown)
         self.figures[1].setText(_of(_format_size(win._dl_got), _format_size(win._dl_total))

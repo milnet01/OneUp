@@ -304,8 +304,7 @@ subprocess.run(  # noqa: S603,S607 — fixed argv, no shell.
 ```
 
 A bare `# noqa: S603` with no reason is a review comment. Some in `oneup/gui/` are exactly
-that today — the second and third calls in `run_kwin_script` among them — and they are the
-counterexample, not the pattern. Nothing checks for the reason; give one when you touch the
+that today, and they are the counterexample, not the pattern. Nothing checks for the reason; give one when you touch the
 line.
 
 ---
@@ -351,7 +350,7 @@ genuinely is the only option, a comment names the constraint so it reads as deli
 
 - **No bare `except:`.** There are none (measured). Catch what you can name:
   `except (OSError, subprocess.SubprocessError)` — the form already used in
-  `run_kwin_script` and `read_repos`.
+  `_start_kwin_script` and `read_repos`.
 - **No `except Exception: pass`.** An `except Exception` is the last resort, for a
   library that raises types it does not document. Each one, and each
   `contextlib.suppress(Exception)`, carries a comment naming why nothing narrower will do

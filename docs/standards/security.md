@@ -137,7 +137,7 @@ update run:
 | Site | Command | Guard |
 | --- | --- | --- |
 | `RepoManagerDialog._build_apply_command` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must pass `_alias_ok` — match `_ALIAS_RE` and not be all digits — else the whole command is `None` and nothing runs |
-| `banners.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped; and every **session-critical** unit removed before the command is built (§4.6) |
+| `banners.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped; every **session-critical** unit removed before the command is built, and only a unit systemd reports running kept (§4.6) |
 | `rollback.rollback` | `pkexec sh -c "snapper rollback <id> \|\| exit 3; systemctl reboot \|\| exit 4"` | `id` must satisfy `str.isdecimal()` — never `isdigit()`, which also accepts superscript digits such as `²` |
 
 One more privileged action does not go through `pkexec` at all and must not be forgotten
@@ -400,6 +400,13 @@ warning about them:
   kills OneUp while its own `startDetached` command is still running;
 - the system **`dbus`** and **`systemd-logind`**;
 - **`polkit`**, which is the agent that just authorised the `pkexec` carrying the command.
+
+**A unit that is not running is not restarted either** (ONEUP-0427). `zypper ps` names a
+service because one of its processes holds a replaced library, so a unit it truthfully names
+is running. For `systemd-reboot.service`, `systemd-poweroff.service` or `rescue.service`,
+starting the unit is the action, and each passes the name pattern. `banners._running` asks
+`systemctl is-active` rather than listing such names. When systemd gives no answer the
+window restarts nothing and says so.
 
 **They are not offered behind a confirmation.** A dialog cannot make losing unsaved work a
 reasonable thing to click, and the window already owns a reboot affordance, which is the

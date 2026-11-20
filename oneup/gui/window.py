@@ -1000,11 +1000,6 @@ class Updater(QMainWindow):
         except ValueError:                  # absent or corrupt: let KWin place it
             return None
 
-    # Measured by LocalWebServerManager on real KWin (its ADR-0007): a script run as the
-    # window shows is ignored, the first Expose alone is too early, and Expose plus one
-    # event-loop tick works; 50 ms is the fallback when no Expose arrives.
-    PLACEMENT_FALLBACK_MS = 50
-
     def showEvent(self, event):
         super().showEvent(event)
         handle = self.windowHandle()
@@ -1017,7 +1012,8 @@ class Updater(QMainWindow):
             handle = self.windowHandle()
             if handle is not None:
                 handle.installEventFilter(self)
-            QTimer.singleShot(self.PLACEMENT_FALLBACK_MS, self._restore_position)
+            # placement.PLACEMENT_SETTLE_MS says why the replay waits after the Expose.
+            QTimer.singleShot(placement.PLACEMENT_FALLBACK_MS, self._restore_position)
 
     def eventFilter(self, obj, event):
         if (event.type() in (QEvent.Type.StyleChange, QEvent.Type.FontChange)
@@ -1033,7 +1029,7 @@ class Updater(QMainWindow):
             self._defer_refit(self._remeasure_layout)
         if (self._placement_pending and event.type() == QEvent.Type.Expose
                 and obj is self.windowHandle()):
-            QTimer.singleShot(0, self._restore_position)
+            QTimer.singleShot(placement.PLACEMENT_SETTLE_MS, self._restore_position)
         return super().eventFilter(obj, event)
 
     def _defer_refit(self, slot):

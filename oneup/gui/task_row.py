@@ -229,7 +229,11 @@ class TaskRow(QFrame):
         # the row's own control so a screen-reader user can Tab to it and hear
         # "System packages … 3 installed · 42s" (ONEUP-0028).
         self.switch.setAccessibleDescription(
-            f"{self._description} {text}".strip() if text else self._description)
+            QCoreApplication.translate(
+                "task_row", "{description} {outcome}",
+                "a row's description, then its outcome and timing, read out together"
+            ).format(description=self._description, outcome=text).strip()
+            if text else self._description)
 
     def clear_badge(self):
         self._badge_text = ""

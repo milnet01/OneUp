@@ -145,7 +145,10 @@ Seven rules: six turn §2.2's measurements into code, and the last restates
 **The language comes from the system locale, and Qt does the matching.** Both catalogues
 load through `QTranslator.load(QLocale(), <prefix>, "_", <dir>)`, so Qt's own fallback chain
 applies — `de_AT` falls back to `de`, and the two catalogues count as a pair even when they
-match at different specificity. Nothing reads `LANG` or `LC_ALL` directly. §2.2's first row
+match at different specificity. They do not count as one when they match different
+**languages**: each load walks the user's language list on its own, so the loader compares
+the language of the two files it matched and installs neither when they differ
+(ONEUP-0427). Nothing reads `LANG` or `LC_ALL` directly. §2.2's first row
 measured that the locale does not set the *direction*; choosing the *language* is the one
 job it does keep.
 
@@ -608,3 +611,4 @@ goes to is `docs/standards/workflow.md` §9's decision.
 | impl-0373 | 2026-11-06 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0373 (the user's order of 2026-11-06 to fix the G9 review's findings before the tag): §4.5 no longer counts `wording-and-translation.md` §6.2's exceptions; §8 leaves where its documentation edits go to `docs/standards/workflow.md` §9; §10 names ONEUP-0077 as the owner of the `--notify` notification. An amendment, so no gate (`CLAUDE.md` rule 14). |
 | impl-0410 | 2026-11-15 | — | **Not a review; an amendment, no reviewer dispatched.** ONEUP-0410 (review-code 2026-11-11) asked whether `ElidedLabel`'s fixed height clips CJK text. Measured, it does not; §4.5 now exempts it with the measurement. |
 | impl-0431 | 2026-11-18 | — | **Not a review; an amendment, no reviewer dispatched.** ONEUP-0431 (review-code 2026-11-15, tool gaps): `steps.DETAIL_NAMES` had no reader since ONEUP-0239's package views took their screen-reader names from their callers, so it is deleted, and the stage-4 note that named it says so. |
+| impl-0427 | 2026-11-20 | — | **Not a review; an amendment, no reviewer dispatched.** ONEUP-0427 (review-code 2026-11-15, 11-M4): `i18n.load` could install OneUp's catalogue in one language beside Qt's in another. §4.2 now says a pair is two files of one language, which is built and has a tests/gui-smoke.py check seen red. No invariant added. |

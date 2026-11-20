@@ -193,6 +193,12 @@ from oneup.gui import (  # noqa: E402 — same reason.
     window,
 )
 
+# Which services are running is this machine's state, and no scenario may depend on
+# it (testing.md §2): every unit a scenario names counts as running unless the
+# scenario says otherwise. The real reader is kept for the one scenario that tests it.
+_REAL_RUNNING = banners._running
+banners._running = lambda units: list(units)
+
 # This platform's one screen is smaller than most windows here, and every scenario but
 # ONEUP-0358's is about a window whose screen has room for it.
 _real_screen_room = getattr(placement, "screen_room", None)
@@ -1332,7 +1338,8 @@ def main() -> int:
             placement.center_on_parent(hidden)
             hidden.hide()
             before = len(scripts)
-            deadline = time.monotonic() + 0.3
+            # Past the settle wait and the no-Expose fallback, or this proves nothing.
+            deadline = time.monotonic() + (placement.PLACEMENT_FALLBACK_MS + 300) / 1000
             while time.monotonic() < deadline:
                 QApplication.processEvents()
                 time.sleep(0.01)
@@ -1924,6 +1931,51 @@ def main() -> int:
     _wt, args_t = _run_restart("sshd reboot.target")
     check("ONEUP-0401 a unit-type suffix reaches systemctl only as a .service name",
           "reboot.target" not in args_t and "reboot.target.service" in args_t)
+    # ONEUP-0427 11-M1: a real .service whose START is the action — systemd-reboot,
+    # systemd-poweroff, rescue — passed the name check, and root's `systemctl restart`
+    # of it restarts or halts the machine. `zypper ps` can only truthfully name a
+    # service that is running, so only a unit systemd reports active is restarted.
+    _patch(banners, "_running", lambda units: [u for u in units if u == "sshd.service"])
+    _wr, args_r = _run_restart("sshd systemd-reboot systemd-poweroff rescue")
+    check("a unit that is not running never reaches root's systemctl (ONEUP-0427)",
+          "sshd.service" in args_r
+          and not any(n in a for a in args_r for n in ("reboot", "poweroff", "rescue")))
+    _unpatch_all()
+    _patch(banners, "_running", lambda units: [])
+    _wr3, args_r3 = _run_restart("systemd-reboot")
+    check("with nothing named still running, nothing is restarted and the banner goes "
+          "(ONEUP-0427)", "restart" not in args_r3 and _wr3.services_banner.isHidden())
+    _unpatch_all()
+    _said_w = []
+    _patch(banners, "_running", lambda units: None)
+    _patch(QMessageBox, "warning", staticmethod(lambda *a, **k: _said_w.append(a[2]) or 0))
+    _wr2, args_r2 = _run_restart("sshd cups")
+    check("when systemd cannot say what is running, nothing is restarted and the "
+          "window says so (ONEUP-0427)", "restart" not in args_r2 and len(_said_w) == 1)
+    _unpatch_all()
+    class _Ran:
+        def __init__(self, out):
+            self.stdout, self.returncode = out, 3
+    _asked_sc = []
+    _real_running = _REAL_RUNNING
+    _real_sub_run = banners.subprocess.run
+    try:
+        banners.subprocess.run = lambda argv, **k: (_asked_sc.append(argv),
+                                                    _Ran("active\ninactive\nreloading\n"))[1]
+        _got_r = _real_running(["a.service", "b.service", "c.service"])
+        banners.subprocess.run = lambda argv, **k: _Ran("active\n")
+        _short = _real_running(["a.service", "b.service"])
+        def _boom(argv, **k):
+            raise OSError("no systemctl")
+        banners.subprocess.run = _boom
+        _none = _real_running(["a.service"])
+    finally:
+        banners.subprocess.run = _real_sub_run
+    check("only an active or reloading unit counts as running (ONEUP-0427)",
+          _got_r == ["a.service", "c.service"]
+          and bool(_asked_sc) and _asked_sc[0][:3] == ["systemctl", "is-active", "--"])
+    check("an answer systemd did not give for every unit is no answer (ONEUP-0427)",
+          _short is None and _none is None)
 
     _w2, args2 = _run_restart(" ".join(CRITICAL))
     check("an all-critical list restarts no service at all",
@@ -3537,6 +3589,47 @@ def main() -> int:
             i18n.unload()
             QLocale.setDefault(_locale)
 
+        # ONEUP-0427 11-M4: each load walks the user's language list on its own, so
+        # with only a Hebrew OneUp catalogue and a French-first list the pair came out
+        # Hebrew text with French Qt, and the window stayed left-to-right. The stand-in
+        # translator loads those two files whatever the locale.
+        from PySide6.QtCore import QTranslator as _QTranslator
+        _mix = {"oneup": _qm("oneup_he", "I18nMix", "Hello", "Shalom"),
+                "qtbase": _qm("qtbase_fr", "I18nMixQt", "Yes", "Oui")}
+        class _MixedTranslator(_QTranslator):
+            def load(self, _locale, prefix, *_a):
+                return super().load(_mix[prefix])
+        _patch(i18n, "QTranslator", _MixedTranslator)
+        try:
+            _got_mix = i18n.load(_i18n_dir, _i18n_dir)
+            check("a OneUp catalogue and a Qt one in different languages are not "
+                  "installed together (ONEUP-0427)",
+                  _got_mix is False
+                  and QCoreApplication.translate("I18nMix", "Hello") == "Hello"
+                  and QCoreApplication.translate("I18nMixQt", "Yes") == "Yes")
+        finally:
+            i18n.unload()
+            _unpatch_all()
+
+    # ONEUP-0427 11-L2: a count is written in the locale's digits, with no grouping,
+    # so English reads as before.
+    from PySide6.QtCore import QLocale as _QLocale
+
+    from oneup.gui import layout_rows as _layout_rows
+    from oneup.gui import layout_spotlight as _layout_spotlight
+    _loc0 = _QLocale()
+    try:
+        _QLocale.setDefault(_QLocale("ar_EG"))
+        _twelve = _QLocale().toString(12)
+        check(f"a tab's count follows the locale's digits (ONEUP-0427): {_twelve}",
+              _twelve != "12" and _twelve in _layout_rows._tab_text("All", 12)
+              and _twelve in _layout_spotlight._heading("All", 12))
+        _QLocale.setDefault(_QLocale("en_US"))
+        check("an English count has no grouping mark (ONEUP-0427)",
+              "1234" in _layout_rows._tab_text("All", 1234))
+    finally:
+        _QLocale.setDefault(_loc0)
+
     # --- Settings popup groups the three background toggles --------------------
     w = window.Updater()
     check("Settings button exists in the header", hasattr(w, "settings_btn"))
@@ -4707,8 +4800,8 @@ def main() -> int:
     from PySide6.QtCore import QSettings
     _gs = QSettings("OneUp", "OneUp")
     def _pump(ms, until=lambda: False):
-        # Waits on the condition, not a fixed time: the replay is a 50 ms timer, and a
-        # loaded run reached it only after 200 ms.
+        # Waits on the condition, not a fixed time: the replay runs on a timer, and a
+        # loaded run reaches it late.
         end = time.monotonic() + ms / 1000
         while time.monotonic() < end and not until():
             QApplication.processEvents()
@@ -4786,6 +4879,141 @@ def main() -> int:
     check("ONEUP-0246: an answer that is not two numbers is no position",
           placement._frame_from_journal("oneup_frame_ab here there\n", "oneup_frame_ab")
           is None and placement._frame_from_journal("", "oneup_frame_ab") is None)
+    # ONEUP-0427 11-L3: KWin's geometry is fractional under display scaling.
+    check("a fractional frame position is rounded, not refused (ONEUP-0427)",
+          placement._frame_from_journal("oneup_frame_ab 640.6 20.25\n", "oneup_frame_ab")
+          == (641, 20))
+
+    # ONEUP-0427 11-M2, 11-M3. Scripting.start only QUEUES the script: KWin reads the
+    # file and runs it later, so unloading it and deleting the file straight away lost
+    # runs (measured in a private KWin 6.8.3: 7 of 300). And a load KWin refuses still
+    # exits 0, answering `int32 -1`. dbus-send and journalctl are replaced; nothing here
+    # reaches a real KWin.
+    import re as _re
+    class _Reply:
+        def __init__(self, out=""):
+            self.stdout, self.returncode = out, 0
+    _kcalls, _kstate = [], {"refuse": False, "marker": "", "files_at_unload": []}
+    def _fake_kwin(argv, **kw):
+        _kcalls.append(list(argv))
+        as_text = lambda t: t if kw.get("text") else t.encode()   # noqa: E731
+        if argv[0] == "journalctl":
+            return _Reply(f"kwin: {_kstate['marker']} 640.6 20.25\n")
+        if any(a.endswith("Scripting.loadScript") for a in argv):
+            _path = argv[-2].split(":", 1)[1]
+            _m = _re.search(r"oneup_frame_[0-9a-f]+", open(_path).read())
+            _kstate["marker"] = _m.group(0) if _m else ""
+            _kstate["path"] = _path
+            return _Reply(as_text("   int32 -1\n" if _kstate["refuse"] else "   int32 4\n"))
+        if any(a.endswith("Scripting.unloadScript") for a in argv):
+            _kstate["files_at_unload"].append(os.path.exists(_kstate.get("path", "")))
+        return _Reply(as_text("   boolean true\n"))
+    def _kinds():
+        return ["journal" if c[0] == "journalctl" else
+                next(k for k in ("loadScript", "start", "unloadScript")
+                     if any(a.endswith("Scripting." + k) for a in c)) for c in _kcalls]
+    _real_which, _real_prun = placement.shutil.which, placement.subprocess.run
+    _keep0 = getattr(placement, "KWIN_SCRIPT_KEEP_MS", None)
+    placement.shutil.which = lambda name: f"/usr/bin/{name}"
+    placement.subprocess.run = _fake_kwin
+    placement.KWIN_SCRIPT_KEEP_MS = 150
+    try:
+        _kstate["refuse"] = True
+        check("a script KWin refuses to load is not reported as accepted (ONEUP-0427)",
+              placement.run_kwin_script("print(1);") is False)
+        check("a refused script leaves no file behind (ONEUP-0427)",
+              not os.path.exists(_kstate["path"]))
+        _kstate["refuse"] = False
+        _kcalls.clear()
+        _ok1 = placement.run_kwin_script("print(1);")
+        _path1 = _kstate["path"]
+        _ok2 = placement.run_kwin_script("print(2);")
+        _names = [c[-1] for c in _kcalls
+                  if any(a.endswith("Scripting.loadScript") for a in c)]
+        check("each script is loaded under its own name (ONEUP-0427)",
+              _ok1 and _ok2 and len(set(_names)) == 2)
+        check("a script stays loaded, its file in place, after start (ONEUP-0427)",
+              "unloadScript" not in _kinds() and os.path.exists(_path1))
+        _pump(3000, until=lambda: _kinds().count("unloadScript") == 2)
+        check("a started script is unloaded and its file removed later (ONEUP-0427)",
+              _kinds().count("unloadScript") == 2 and not os.path.exists(_path1)
+              and not os.path.exists(_kstate["path"]))
+        _kcalls.clear()
+        _pos = placement.main_frame_position()
+        _order = _kinds()
+        check(f"the frame read rounds KWin's fractional answer (ONEUP-0427): {_pos}",
+              _pos == (641, 20))
+        check(f"the frame read unloads its script only after the answer (ONEUP-0427): {_order}",
+              "journal" in _order and "unloadScript" in _order
+              and _order.index("journal") < _order.index("unloadScript"))
+    finally:
+        placement.shutil.which, placement.subprocess.run = _real_which, _real_prun
+        if _keep0 is None:
+            del placement.KWIN_SCRIPT_KEEP_MS
+        else:
+            placement.KWIN_SCRIPT_KEEP_MS = _keep0
+
+    # ONEUP-0427 11-L4: off Wayland, a dialog whose parent is a child widget is centred
+    # on the WINDOW, as the Wayland branch does it — not on the child's own rectangle,
+    # which is in its parent's coordinates.
+    from PySide6.QtWidgets import QDialog as _QDialog
+    from PySide6.QtWidgets import QWidget as _QWidget
+    _patch(placement, "_platform_name", lambda: "xcb")
+    _host4 = _QWidget()
+    _host4.resize(600, 400)
+    _host4.move(100, 100)
+    _child4 = _QWidget(_host4)
+    _child4.setGeometry(420, 300, 100, 50)
+    _host4.show()
+    _dlg4 = _QDialog(_child4)
+    _dlg4.resize(200, 100)
+    placement.center_on_parent(_dlg4)
+    _c4, _h4 = _dlg4.frameGeometry().center(), _host4.frameGeometry().center()
+    check("off Wayland a dialog opened from a child widget is centred on the window "
+          f"(ONEUP-0427): {_c4.x()},{_c4.y()} vs {_h4.x()},{_h4.y()}",
+          abs(_c4.x() - _h4.x()) <= 2 and abs(_c4.y() - _h4.y()) <= 2)
+    _host4.hide()
+    _unpatch_all()
+
+    # ONEUP-0427 11-L5. A move made one tick after the first Expose is undone by KWin's
+    # own placement (measured in a private KWin 6.8.3: the window came back at its saved
+    # position 0 times in 10; 300 ms after it showed, 20 in 20). So placement waits
+    # after the Expose, and the no-Expose fallback must not fire before that wait ends.
+    _late = _QWidget()
+    _late.resize(120, 80)
+    _late.winId()                                   # a handle, not yet shown
+    _fired5 = []
+    _fb0 = placement.PLACEMENT_FALLBACK_MS
+    placement.PLACEMENT_FALLBACK_MS = 150
+    try:
+        _t5 = time.monotonic()
+        placement._ExposeOnce(_late.windowHandle(), lambda: _fired5.append(time.monotonic()))
+        _pump(100)
+        _late.show()                                # the Expose, later than a tick
+        _pump(3000, until=lambda: time.monotonic() - _t5 >= 0.25)
+        check("the fallback does not fire once an Expose has come (ONEUP-0427)",
+              not _fired5)
+        _pump(3000, until=lambda: bool(_fired5))
+        check("placement still happens, after the wait (ONEUP-0427)", len(_fired5) == 1)
+    finally:
+        placement.PLACEMENT_FALLBACK_MS = _fb0
+    _late.hide()
+    scripts = []
+    _patch(placement, "_platform_name", lambda: "wayland")
+    _patch(placement, "run_kwin_script", lambda js: scripts.append(js) or True)
+    _gs.setValue("frame_pos", "333,222")
+    w = window.Updater()
+    _t5 = time.monotonic()
+    w.show()
+    _pump(3000, until=lambda: bool(scripts) or time.monotonic() - _t5 >= 0.15)
+    check("the saved position is not replayed the moment the window shows (ONEUP-0427)",
+          not [js for js in scripts if "var x = 333" in js])
+    _pump(3000, until=lambda: not w._placement_pending)
+    check("the saved position is replayed after the wait (ONEUP-0427)",
+          len([js for js in scripts if "var x = 333" in js]) == 1)
+    w.hide()
+    _unpatch_all()
+    _gs.remove("frame_pos")
 
     # (12) on_finished refreshes the tray: a successful run -> neutral; a check -> the count.
     w = window.Updater()

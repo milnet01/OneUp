@@ -8,6 +8,7 @@ placement come through `run_kwin_script`.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -82,45 +83,92 @@ def _on_wayland() -> bool:
     return _platform_name().startswith("wayland")
 
 
+# `Scripting.start` only queues a script: KWin reads the file and runs it later. Unloaded
+# and deleted straight after, 7 runs in 300 never ran (a private KWin 6.8.3, 2026-11-20),
+# so a script stays loaded, its file in place, this long — or until its answer is read.
+KWIN_SCRIPT_KEEP_MS = 3000
+
+_KWIN = ["dbus-send", "--session", "--dest=org.kde.KWin", "--print-reply", "/Scripting"]
+_pending: dict[str, str] = {}       # name -> file, of scripts started and not yet dropped
+_quit_hooked = None                 # the application whose aboutToQuit drops them
+
+
+def _start_kwin_script(js: str) -> tuple[str, str] | None:
+    """Load and start a one-shot KWin script (Plasma 6): its (name, file), for
+    `_drop_kwin_script`, or None when KWin did not take it.
+
+    KWin answers a load it refuses with `int32 -1`, and `dbus-send` still exits 0, so
+    the reply is read. Each script has its own name: under a fixed one, a single
+    unload that failed would make KWin refuse every later load."""
+    if not shutil.which("dbus-send"):
+        return None
+    name = f"oneup_place_{uuid.uuid4().hex}"
+    path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".js",
+                                         prefix="oneup_place_", delete=False) as f:
+            path = f.name          # capture before write so a write error still cleans up
+            f.write(js)
+        loaded = subprocess.run([*_KWIN, "org.kde.kwin.Scripting.loadScript",  # noqa: S603 — fixed argv.
+                                 f"string:{path}", f"string:{name}"],
+                                capture_output=True, text=True, timeout=3)
+        taken = re.search(r"int32 (-?\d+)", loaded.stdout or "")
+        if loaded.returncode == 0 and taken and int(taken.group(1)) >= 0:
+            subprocess.run([*_KWIN, "org.kde.kwin.Scripting.start"],  # noqa: S603 — fixed argv.
+                           capture_output=True, timeout=3)
+            return name, path
+    except (OSError, subprocess.SubprocessError):
+        pass
+    _drop_kwin_script(name, path)
+    return None
+
+
+def _drop_kwin_script(name: str, path: str | None) -> None:
+    """Unload a script and delete its file. Safe on one KWin never loaded."""
+    _pending.pop(name, None)
+    try:
+        subprocess.run([*_KWIN, "org.kde.kwin.Scripting.unloadScript",  # noqa: S603 — fixed argv, our own name.
+                        f"string:{name}"],
+                       capture_output=True, timeout=3)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    if path:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def _drop_pending() -> None:
+    for name, path in list(_pending.items()):
+        _drop_kwin_script(name, path)
+
+
 def run_kwin_script(js: str) -> bool:
-    """Load, run and unload a one-shot KWin script (Plasma 5 & 6).
+    """Run a one-shot KWin script that sends no answer back (Plasma 6).
 
     On Wayland an application may not place its own windows — the compositor owns
     placement, so Qt's move() is accepted and silently ignored. Asking KWin is the only
     way to position anything, which is why both window recentring and dialog placement
     come through here.
 
-    True means KWin accepted the script, never that it did anything: `dbus-send` exits
-    non-zero only when the call did not land (no KWin on the bus), and says nothing
-    about the script itself."""
-    if not shutil.which("dbus-send"):
+    True means KWin took the script, never that it did anything. The script is dropped
+    KWIN_SCRIPT_KEEP_MS later, or as the application quits, whichever comes first."""
+    started = _start_kwin_script(js)
+    if started is None:
         return False
-    script_path = None
-    name = "oneup_place"
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".js",
-                                         prefix="oneup_place_", delete=False) as f:
-            script_path = f.name   # capture before write so a write error still cleans up
-            f.write(js)
-        base = ["dbus-send", "--session", "--dest=org.kde.KWin",
-                "--print-reply", "/Scripting"]
-        loaded = subprocess.run([*base, "org.kde.kwin.Scripting.loadScript",  # noqa: S603 — fixed argv.
-                                 f"string:{script_path}", f"string:{name}"],
-                                capture_output=True, timeout=3)
-        subprocess.run([*base, "org.kde.kwin.Scripting.start"],  # noqa: S603
-                       capture_output=True, timeout=3)
-        subprocess.run([*base, "org.kde.kwin.Scripting.unloadScript",  # noqa: S603
-                        f"string:{name}"],
-                       capture_output=True, timeout=3)
-        return loaded.returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        return False
-    finally:
-        if script_path:
-            try:
-                os.unlink(script_path)
-            except OSError:
-                pass
+    name, path = started
+    app = QApplication.instance()
+    if app is None:                 # no event loop to wait on
+        _drop_kwin_script(name, path)
+        return True
+    global _quit_hooked
+    if _quit_hooked is not app:
+        app.aboutToQuit.connect(_drop_pending)
+        _quit_hooked = app
+    _pending[name] = path
+    QTimer.singleShot(KWIN_SCRIPT_KEEP_MS, app, lambda: _drop_kwin_script(name, path))
+    return True
 
 
 def center_on_parent(widget) -> None:
@@ -134,7 +182,10 @@ def center_on_parent(widget) -> None:
     the message boxes that have no title of their own; `_centre_script` says how the
     widget is picked out."""
     if not _on_wayland():
-        parent = widget.parent()
+        # The window, as the Wayland branch takes it: a child widget's own rectangle is
+        # in its parent's coordinates, not the screen's.
+        parent = widget.parentWidget()
+        parent = parent.window() if parent is not None else None
         if parent is not None:
             fg = widget.frameGeometry()
             fg.moveCenter(parent.frameGeometry().center())
@@ -189,25 +240,35 @@ for (var i = wins.length - 1; i >= 0; i--) {{
 """
 
 
-# KWin can only move a window it already knows about. A script run as the window shows,
-# or one tick later, comes too early (ONEUP-0254 measured it); the first Expose plus one
-# tick works, and 50 ms is the fallback when no Expose arrives.
-PLACEMENT_FALLBACK_MS = 50
+# KWin can only move a window it already knows about, and its own placement of a new
+# window undoes a move made too soon. One tick after the first Expose the saved position
+# came back 0 times in 10; 100 ms after the window showed, 12 in 12, and 300 ms, 20 in 20
+# (a private KWin 6.8.3, 2026-11-20). So placement waits this long after the first
+# Expose, and the fallback is for a window no Expose arrives for.
+PLACEMENT_SETTLE_MS = 300
+PLACEMENT_FALLBACK_MS = 1000
 
 
 class _ExposeOnce(QObject):
-    """Runs `action` once: a tick after the window's first Expose, or at the fallback."""
+    """Runs `action` once: PLACEMENT_SETTLE_MS after the window's first Expose, or at
+    the fallback when no Expose has come by then."""
 
     def __init__(self, handle, action):
         super().__init__(handle)
         self._action = action
+        self._exposed = False
         handle.installEventFilter(self)
-        QTimer.singleShot(PLACEMENT_FALLBACK_MS, self, self._fire)
+        QTimer.singleShot(PLACEMENT_FALLBACK_MS, self, self._fall_back)
 
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.Expose and obj.isExposed():
-            QTimer.singleShot(0, self, self._fire)
+        if event.type() == QEvent.Expose and obj.isExposed() and not self._exposed:
+            self._exposed = True
+            QTimer.singleShot(PLACEMENT_SETTLE_MS, self, self._fire)
         return False
+
+    def _fall_back(self):
+        if not self._exposed:               # an Expose that came has its own timer
+            self._fire()
 
     def _fire(self):
         if self._action is None:            # the Expose path or the fallback got here first
@@ -224,7 +285,7 @@ def _when_exposed(widget, action) -> None:
     if handle is None:                      # not shown yet: no Expose to wait for
         QTimer.singleShot(PLACEMENT_FALLBACK_MS, widget, action)
     elif handle.isExposed():
-        QTimer.singleShot(0, widget, action)
+        QTimer.singleShot(PLACEMENT_SETTLE_MS, widget, action)
     else:
         _ExposeOnce(handle, action)
 
@@ -252,7 +313,7 @@ def install_message_box_centring(app) -> None:
 
 
 def kwin_recenter() -> None:
-    # Center via KWin scripting (Plasma 5 & 6). We match our own window by PID and use
+    # Center via KWin scripting (Plasma 6). We match our own window by PID and use
     # KWin.PlacementArea for the usable screen rectangle — the approach proven to
     # work on this machine's KDE Wayland session. Transients are skipped so this
     # always finds the main window, never a dialog that happens to come first;
@@ -281,13 +342,14 @@ FRAME_ANSWER_TIMEOUT = 1.5
 
 
 def _frame_from_journal(text: str, marker: str) -> tuple[int, int] | None:
-    """The x, y KWin printed after `marker`, or None if no line carries two integers."""
+    """The x, y KWin printed after `marker`, or None if no line carries two numbers.
+    Rounded: KWin's geometry is fractional under display scaling."""
     for line in text.splitlines():
         if marker in line:
             try:
                 x, y = line.split(marker, 1)[1].split()[:2]
-                return int(x), int(y)
-            except ValueError:
+                return round(float(x)), round(float(y))
+            except (ValueError, OverflowError):
                 return None
     return None
 
@@ -303,31 +365,37 @@ def main_frame_position() -> tuple[int, int] | None:
         return None
     marker = f"oneup_frame_{uuid.uuid4().hex}"
     since = f"@{int(time.time()) - 2}"
-    if not run_kwin_script(f"""\
+    started = _start_kwin_script(f"""\
 var wins = workspace.windowList();
 for (var i = 0; i < wins.length; i++) {{
     var c = wins[i];
     if (c.pid !== {os.getpid()} || c.transientFor) continue;
-    print("{marker}", c.frameGeometry.x, c.frameGeometry.y);
+    print("{marker}", Math.round(c.frameGeometry.x), Math.round(c.frameGeometry.y));
     break;
 }}
-"""):
+""")
+    if started is None:
         return None
-    deadline = time.monotonic() + FRAME_ANSWER_TIMEOUT
-    while True:
-        # Each read gets only what is left of the deadline, so the wait on the GUI
-        # thread stays FRAME_ANSWER_TIMEOUT rather than that plus a whole read (ONEUP-0399).
-        left = max(0.1, deadline - time.monotonic())
-        try:
-            out = subprocess.run(["journalctl", "--user", "-b", "--since", since,  # noqa: S603, S607
-                                  "-o", "cat"],
-                                 capture_output=True, text=True, timeout=left).stdout
-        except (OSError, subprocess.SubprocessError):
-            return None
-        pos = _frame_from_journal(out, marker)
-        if pos is not None or time.monotonic() >= deadline:
-            return pos
-        time.sleep(0.05)
+    # The script stays loaded until its answer is read: see KWIN_SCRIPT_KEEP_MS.
+    try:
+        deadline = time.monotonic() + FRAME_ANSWER_TIMEOUT
+        while True:
+            # Each read gets only what is left of the deadline, so the wait on the GUI
+            # thread stays FRAME_ANSWER_TIMEOUT rather than that plus a whole read
+            # (ONEUP-0399).
+            left = max(0.1, deadline - time.monotonic())
+            try:
+                out = subprocess.run(["journalctl", "--user", "-b", "--since", since,  # noqa: S603, S607
+                                      "-o", "cat"],
+                                     capture_output=True, text=True, timeout=left).stdout
+            except (OSError, subprocess.SubprocessError):
+                return None
+            pos = _frame_from_journal(out, marker)
+            if pos is not None or time.monotonic() >= deadline:
+                return pos
+            time.sleep(0.05)
+    finally:
+        _drop_kwin_script(*started)
 
 
 def kwin_restore_position(x: int, y: int) -> None:

@@ -48,6 +48,11 @@ def load(ours_dir: Path | str | None = None, qt_dir: Path | str | None = None) -
     if not (ours.load(QLocale(), "oneup", "_", ours_dir)
             and qt.load(QLocale(), "qtbase", "_", qt_dir)):
         return False
+    # Each load walks the user's language list on its own, so with one catalogue
+    # missing for the first language the two can match DIFFERENT ones: Hebrew text
+    # with French Qt, in a window Qt then lays out left to right (ONEUP-0427).
+    if _file_language(ours, "oneup") != _file_language(qt, "qtbase"):
+        return False
     unload()
     if not app.installTranslator(ours):
         return False
@@ -56,6 +61,20 @@ def load(ours_dir: Path | str | None = None, qt_dir: Path | str | None = None) -
         return False
     _installed[:] = [ours, qt]
     return True
+
+
+def _file_language(translator: QTranslator, prefix: str) -> QLocale.Language:
+    """The language of the catalogue file a translator matched, from its name."""
+    stem = Path(translator.filePath()).stem            # "oneup_pt_BR"
+    return QLocale(stem[len(prefix) + 1:]).language()
+
+
+def number(n: int) -> str:
+    """A count in the locale's own digits, with no grouping mark: English reads
+    "1234", as it always has (ONEUP-0427)."""
+    locale = QLocale()
+    locale.setNumberOptions(QLocale.NumberOption.OmitGroupSeparator)
+    return locale.toString(int(n))
 
 
 def unload() -> None:
