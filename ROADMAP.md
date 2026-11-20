@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=450 -->
+<!-- ants-roadmap-id-high-water: ONEUP=451 -->
 
 # OneUp Roadmap
 
@@ -12439,6 +12439,25 @@ when complete (that document's §7).
   LC_ALL=C environment, a reason on a bare except). 09-M1 was already
   fixed by ONEUP-0420. Each behavioural fix has a gui-smoke check seen
   red. Lanes 10 and 11 remain.
+  2026-11-20, for lane 11 (11-M2, 11-M3): claude-config relayed DeFragR's
+  measurement (KWin 6.8, 2026-11-19). Scripting.start only queues the
+  script; unloading it and deleting its file straight after lost about 1
+  run in 4, which is what placement.run_kwin_script does. DeFragR keeps
+  the script loaded and its file in place until its journal answer
+  arrives, or about 3 s for a move; a move one tick after the first
+  Expose was undone by KWin's own placement, and 300 ms held. Not
+  measured on OneUp: repeat-run it before changing it. See
+  ~/.claude/docs/kde-wayland-window-placement.md and DeFragR's
+  src/app/ui/Placement.cpp.
+  2026-11-20: lane 10 (theme) closed in ad3b8ba. 10-L1: the gradient
+  focus fraction is tested on the pixels Qt paints (a random gradient
+  painted at 2.99:1 before); no shipped fill moves. 10-L3: an underivable
+  fallback theme keeps the installed sheet. 10-L4: a stored text size not
+  on offer applies Normal. 10-L2: SymbolButton documented as card-only.
+  10-M1 dismissed on the user's decision of 2026-11-18, recorded in
+  ONEUP-0076 §4.2 with the measurement (dark themes 1.31 to 1.86:1 on the
+  row). L1, L3 and L4 each have a gui-smoke check seen red. Queued from
+  the sweep: ONEUP-0451. Lane 11 remains.
   **Layman:** Smaller problems in OneUp's window found by the code review.
   Kind: review-fix.
   Source: review-code-2026-11-15.
@@ -12773,3 +12792,17 @@ when complete (that document's §7).
   Kind: security.
   Source: review-code-2026-11-15.
   Lanes: gui.
+
+- 📋 [ONEUP-0451] **ONEUP-0076 §4.3 publishes Run-button colours the code no longer uses.**
+  Found beside ONEUP-0427 lane 10, not caused by it, so not fixed there:
+  a derived figure moves others. §4.3's Run / banner button row gives rest
+  #4aa3ff→#2f6fe0, focus #1c3e61→#122a55, worst pixel 3.00:1, and §4.1's
+  gradient paragraph repeats the 3.00:1. Measured 2026-11-20 on the tree:
+  btn_accent_stops are #3779bd→#2f6fe0 in all eight themes, the derived
+  fills #142d46→#112953, the worst pixel 3.03:1. Regenerate the row from
+  theme.focus_report and re-check the other §4.3 rows the same way; the
+  loop-4 row saying every figure was recomputed is a dated record and
+  stays.
+  **Layman:** A design document lists old colours for the Run button; the app itself is right.
+  Kind: doc-fix.
+  Source: close-findings-2026-11-20 (ONEUP-0427 lane 10 sweep).
