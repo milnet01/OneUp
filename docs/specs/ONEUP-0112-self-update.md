@@ -204,7 +204,9 @@ but the software source does not carry it yet, and the System update will offer 
 does; you are on the latest.
 
 **A release with no `.sig`** — every release before the one shipping this — is listed in
-the notes but never offered to an AppImage. A 2.0.0 AppImage has no updater; its users
+the notes but never offered to an AppImage. When the newest release is newer than this
+copy but none can be offered, a manual check says OneUp X is released but not ready to
+install from here yet, never that this copy is the latest. A 2.0.0 AppImage has no updater; its users
 download the first self-updating version by hand, once.
 
 ### 4.4 The pop-up
@@ -348,10 +350,10 @@ print(cryptography.__version__)'` → `47.0.0` on 2026-11-07).
   unset and `$APPIMAGE` naming a missing file → `checkout`.
   *Breaks when:* `$APPIMAGE` alone, without `sys.frozen`, is read as an AppImage.
 
-- **INV-2** `parse_version` accepts exactly `[vV]?D.D.D` with ASCII digits; anything else
-  is `None`. (§2 consequence 5.)
+- **INV-2** `parse_version` accepts exactly `[vV]?D.D.D` with ASCII digits; anything else,
+  and a part too long for `int()`, is `None`. (§2 consequence 5.)
   *Test:* `tests/self-update-test.py` — `2.1.0`, `v2.1.0` accepted; `2.1.0-rc1`, `2.1`,
-  `2.1.0.1`, `latest`, `2.¹.0`, `` rejected.
+  `2.1.0.1`, `latest`, `2.¹.0`, ``, a part of 5000 digits rejected.
   *Breaks when:* the digit test uses `isdigit()` without `isascii()` (`'¹'.isdigit()` is
   true), or a fourth part is allowed.
 
@@ -581,3 +583,4 @@ the restart banner appears; Restart OneUp reopens on N+1.
 | 2 | 2026-11-07 | Q2 2 · Q3 1 · Q4 1 — 4 verified, 0 dismissed | all 4 fixed; the cap for a spec, so these fixes are read by no lane, and implementation reads them. Two lanes, each holding every question. Both found `releases_from_json` turning a JSON object into an empty list, which a manual check would report as up to date; INV-6's "`install` called" in a suite where nothing calls `install`; and signing "after the OBS step" left open against `release.sh`'s exit-3 report. One lane found `workflow.md` §8's move-the-tag recovery leaving a `.sig` that no longer matches the rebuilt AppImage, so `release.sh --sign-only` now re-signs. Calm cap: 1 of 4 findings landed on text this run wrote (the signing order). The second share is unreadable, since the armed change was the whole document. Six open questions resolved clean, one by a PyInstaller build showing a function-level `cryptography` import is bundled. |
 | impl | 2026-11-08 | none: an implementation record, no reviewer dispatched | **Built as specified; five points the spec left open, settled in the build.** Each request runs on a `QNetworkAccessManager` of its own and connects only its own reply, so no reply reaches another request's handler. A manual check that finds a newer AppImage or checkout release opens the pop-up instead of a message box, as §4.3 already says for a package. `relaunch_env()` also drops the `<VAR>_ORIG` copies after restoring from them, as finbreak does. A run started while the AppImage downloads stops the swap, so §3 item 8 holds for the whole download, not only the press. `update_key.RELEASE_PUBLIC_KEY_B64` is empty until the user makes the key (§4.9); until then nothing verifies and `release.sh` exits 4. Every suite's new test was seen failing against a mutated rule first. Not yet run: §7's manual recipe, which needs a signed release. Rule 14: an implementation record; no gate. |
 | impl | 2026-11-11 | none: an amendment, no reviewer dispatched | **§4.9 gains a key check before each release, the user's decision of 2026-11-11.** `sign-release.py --check-key` compares the private key's public half with the committed one and prints only the answer. `release.sh` runs it before it changes anything, `--sign-only` included, and stops with exit 1 on a missing or mismatched key. INV-16's test clause gains the three `--check-key` cases; the two mismatch cases were seen failing against a `key_matches` forced true. Rule 14: an amendment; no gate. |
+| impl | 2026-11-21 | none: an amendment, no reviewer dispatched | **§4.3 names the AppImage's report for a newer release it cannot offer (ONEUP-0428).** A manual check found the newest release unsigned and said this copy was the latest; it now names that release and says it is not ready to install from here yet. The same pass made `parse_version` refuse a part too long for `int()` (INV-2, INV-3), `verify` fail closed on a backend without Ed25519 (INV-6), and `sign-release.py` sign over the normalised X.Y.Z and remove a key file whose write failed (INV-16). Rule 14: an amendment; no gate. |

@@ -609,6 +609,19 @@ def _self_update_scenarios():
         target.write_bytes(b"old AppImage")
         target.chmod(0o755)
         os.environ["APPIMAGE"] = str(target)
+        # ONEUP-0428: a newer release not yet signed is not offered, and a manual check
+        # must not call this copy the latest.
+        wNS = window.Updater()
+        boxes.clear()
+        lists(functools.partial(app_update._on_releases, wNS, True),
+              [_releases_json((v1, False, "unsigned"))])
+        texts = [t for _k, t in boxes]
+        check(f"ONEUP-0112 §4.3 an unsigned newer release is named, not 'latest' ({texts})",
+              wNS._update_release is None and len(texts) == 1 and v1 in texts[0]
+              and texts[0] != app_update.QCoreApplication.translate(
+                  "app_update", "You're on the latest version ({version}).").format(
+                      version=app_update.APP_VERSION))
+        wNS.close()
         wU = window.Updater()
         lists(functools.partial(app_update._on_releases, wU, False),
               [_releases_json((v2, False, "unsigned"), (v1, True, "signed"))])

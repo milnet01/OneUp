@@ -15,6 +15,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Checking for updates in the AppImage no longer says you have the latest version when a newer one is out** (ONEUP-0428)
+  Right after a release, before it is ready for the AppImage to install, "Check for
+  updates" said you were on the latest version. It now names the new version and says to
+  check again later. A malformed release on GitHub can no longer make the check fail.
+
 - **Smaller window fixes from the code review** (ONEUP-0427)
   Stopping an update part-way no longer hides the advice to restart when the steps that
   finished installed a new kernel or replaced libraries. Closing OneUp while it worked out

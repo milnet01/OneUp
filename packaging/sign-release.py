@@ -50,8 +50,13 @@ def generate(dest: Path) -> str:
     dest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     # O_EXCL refuses an existing key; 0600 from the start leaves no readable moment.
     fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "wb") as handle:
-        handle.write(pem)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(pem)
+    except BaseException:
+        # A truncated key would make every later --generate refuse to replace it.
+        dest.unlink(missing_ok=True)
+        raise
     raw = key.public_key().public_bytes(serialization.Encoding.Raw,
                                         serialization.PublicFormat.Raw)
     return base64.b64encode(raw).decode("ascii")
@@ -115,9 +120,10 @@ def main(argv: list[str] | None = None) -> int:
         if not args.key.is_file():
             print(f"error: signing key not found: {args.key}", file=sys.stderr)
             return 1
+        from cryptography.exceptions import UnsupportedAlgorithm
         try:
             match = key_matches(args.key)
-        except (OSError, ValueError, TypeError) as exc:
+        except (OSError, ValueError, TypeError, UnsupportedAlgorithm) as exc:
             print(f"error: could not compare the keys: {exc}", file=sys.stderr)
             return 1
         if not match:
@@ -128,24 +134,27 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{args.key} matches the committed public key.")
         return 0
 
-    if args.artifact is None or self_update.parse_version(args.version or "") is None:
+    parsed = self_update.parse_version(args.version or "")
+    if args.artifact is None or parsed is None:
         parser.error("an ARTIFACT and --version X.Y.Z are required")
+    # The app signs over X.Y.Z, so "v2.1.0" must not reach the message.
+    version = self_update.version_text(parsed)
     if not args.artifact.is_file():
         print(f"error: {args.artifact} not found", file=sys.stderr)
         return 1
     if args.verify:
         sig_path = args.artifact.with_name(args.artifact.name + ".sig")
         try:
-            self_update.verify(args.artifact.read_bytes(), sig_path.read_bytes(), args.version)
+            self_update.verify(args.artifact.read_bytes(), sig_path.read_bytes(), version)
         except (OSError, self_update.UpdateVerificationError) as exc:
             print(f"error: {sig_path} does not verify: {exc}", file=sys.stderr)
             return 1
-        print(f"{sig_path} verifies against the committed public key for {args.version}.")
+        print(f"{sig_path} verifies against the committed public key for {version}.")
         return 0
     if not args.key.is_file():
         print(f"error: signing key not found: {args.key}", file=sys.stderr)
         return 1
-    print(f"Wrote {sign(args.key, args.artifact, args.version)}")
+    print(f"Wrote {sign(args.key, args.artifact, version)}")
     return 0
 
 

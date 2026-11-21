@@ -54,6 +54,16 @@ def _raises(fn, exc) -> bool:
     return False
 
 
+def _raised(fn) -> str:
+    """The name of what `fn` raised, or "" — so an unexpected exception fails one check
+    instead of ending the suite."""
+    try:
+        fn()
+    except Exception as exc:  # noqa: BLE001 — any escape is what is being asked
+        return type(exc).__name__
+    return ""
+
+
 def _load_signer():
     spec = importlib.util.spec_from_file_location("sign_release",
                                                   REPO / "packaging" / "sign-release.py")
@@ -111,6 +121,15 @@ def test_parse_version():
     check("INV-2 a prerelease, a short, a long, a word, a superscript and empty are refused",
           all(p(t) is None for t in ("2.1.0-rc1", "2.1", "2.1.0.1", "latest", "2.¹.0", "")))
     check("INV-2 a non-string is refused", p(None) is None and p(210) is None)
+    # Python refuses int() on more than 4300 digits (ONEUP-0428).
+    huge = "2." + "1" * 5000 + ".0"
+    check(f"INV-2 a part too long for int() is refused, not raised ({_raised(lambda: p(huge))})",
+          not _raised(lambda: p(huge)) and p(huge) is None)
+    kept = []
+    entries = [_entry("v" + huge), _entry("v2.1.0")]
+    escaped = _raised(lambda: kept.extend(self_update.releases_from_json(entries)))
+    check(f"INV-3 a release with such a tag is dropped, and only it ({escaped or 'kept'})",
+          not escaped and [r.version for r in kept] == [(2, 1, 0)])
 
 
 def _entry(tag, *, draft=False, prerelease=False, assets=None, body="notes"):
@@ -194,6 +213,19 @@ def test_verify():
               _raises(lambda: self_update.verify(data, other_sig, "2.1.0"), bad))
     finally:
         update_key.RELEASE_PUBLIC_KEY_B64 = saved
+    # A backend without Ed25519 raises UnsupportedAlgorithm from the key (ONEUP-0428).
+    from cryptography.exceptions import UnsupportedAlgorithm
+    real_public_key = update_key.public_key
+
+    def _no_ed25519():
+        raise UnsupportedAlgorithm("no Ed25519 here")
+    update_key.public_key = _no_ed25519
+    try:
+        got = _raised(lambda: self_update.verify(data, sig, "2.1.0"))
+        check(f"INV-6 a backend without Ed25519 fails closed ({got or 'returned'})",
+              got == "UpdateVerificationError")
+    finally:
+        update_key.public_key = real_public_key
 
 
 def test_install(work: Path):
@@ -319,6 +351,29 @@ def test_signer(work: Path):
           ((work / "keys" / "signing.key").stat().st_mode & 0o777) == 0o600)
     check("INV-16 --generate refuses to overwrite",
           _raises(lambda: signer.generate(work / "keys" / "signing.key"), FileExistsError))
+    # A write that fails after the file is made (a full disk) must not leave a truncated
+    # key that every later --generate refuses to replace (ONEUP-0428).
+    real_fdopen = os.fdopen
+
+    class _FullDisk:
+        def __init__(self, fd, *_args):
+            os.close(fd)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+        def write(self, _data):
+            raise OSError(28, "No space left on device")
+    os.fdopen = _FullDisk
+    try:
+        got = _raised(lambda: signer.generate(work / "keys" / "full.key"))
+    finally:
+        os.fdopen = real_fdopen
+    check(f"INV-16 a failed key write raises and leaves no file ({got or 'returned'})",
+          got == "OSError" and not (work / "keys" / "full.key").exists())
     artifact = work / "OneUp-x86_64.AppImage"
     artifact.write_bytes(os.urandom(2048))
     sig = signer.sign(work / "keys" / "signing.key", artifact, "2.1.0").read_bytes()
@@ -331,6 +386,30 @@ def test_signer(work: Path):
               signer.key_matches(work / "keys" / "signing.key"))
         check("INV-16 --check-key exits 0 on a match",
               signer.main(["--check-key", "--key", str(work / "keys" / "signing.key")]) == 0)
+        # The app signs over "2.1.0", so a "v" given to the signer must not reach the
+        # message (ONEUP-0428).
+        signer.main([str(artifact), "--version", "v2.1.0",
+                     "--key", str(work / "keys" / "signing.key")])
+        sig_v = artifact.with_name(artifact.name + ".sig").read_bytes()
+        got = _raised(lambda: self_update.verify(artifact.read_bytes(), sig_v, "2.1.0"))
+        check(f"INV-16 --version v2.1.0 signs what the app checks for 2.1.0 ({got or 'verifies'})",
+              not got)
+        check("INV-16 --verify takes v2.1.0 as 2.1.0",
+              signer.main(["--verify", "--version", "v2.1.0", str(artifact)]) == 0)
+        from cryptography.exceptions import UnsupportedAlgorithm
+        real_public_key = update_key.public_key
+
+        def _no_ed25519():
+            raise UnsupportedAlgorithm("no Ed25519 here")
+        update_key.public_key = _no_ed25519
+        try:
+            codes = []
+            got = _raised(lambda: codes.append(signer.main(
+                ["--check-key", "--key", str(work / "keys" / "signing.key")])))
+            check(f"INV-16 --check-key exits 1 on a backend without Ed25519 ({got or codes})",
+                  not got and codes == [1])
+        finally:
+            update_key.public_key = real_public_key
         update_key.RELEASE_PUBLIC_KEY_B64 = _keypair()[1]
         check("INV-16 and fails against a second key",
               _raises(lambda: self_update.verify(artifact.read_bytes(), sig, "2.1.0"),

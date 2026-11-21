@@ -219,6 +219,13 @@ def _on_releases(win, manual: bool, fetch: _Fetch):
     _set_offer(win, release.version if release else None, ignore_skip=manual)
     if manual and release is not None:
         open_dialog(win)
+    elif manual and releases and releases[0].version > _installed():
+        # Newer but not offerable: an AppImage release not signed yet (§4.3).
+        QMessageBox.information(win, _title(), QCoreApplication.translate(
+            "app_update",
+            "OneUp {version} is released, but it isn't ready to install from here yet. "
+            "Check again later.").format(
+                version=self_update.version_text(releases[0].version)))
     elif manual:
         _say_latest(win)
 

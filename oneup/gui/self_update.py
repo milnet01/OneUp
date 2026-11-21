@@ -36,7 +36,8 @@ class UpdateInstallError(Exception):
 def parse_version(tag) -> tuple[int, int, int] | None:
     """'v2.1.0' / '2.1.0' -> (2, 1, 0). Anything else -> None: exactly three
     dot-separated parts, each ASCII digits, one leading v/V allowed (INV-2).
-    `'¹'.isdigit()` is true, hence the isascii()."""
+    `'¹'.isdigit()` is true, hence the isascii(). int() refuses a part longer
+    than Python's digit limit, which is a malformed tag like any other (INV-3)."""
     if not isinstance(tag, str):
         return None
     if tag.startswith(("v", "V")):
@@ -44,7 +45,10 @@ def parse_version(tag) -> tuple[int, int, int] | None:
     parts = tag.split(".")
     if len(parts) != 3 or not all(p.isascii() and p.isdigit() for p in parts):
         return None
-    return int(parts[0]), int(parts[1]), int(parts[2])
+    try:
+        return int(parts[0]), int(parts[1]), int(parts[2])
+    except ValueError:
+        return None
 
 
 def version_text(version: tuple[int, int, int]) -> str:
@@ -125,9 +129,12 @@ def verify(data: bytes, sig: bytes, version: str) -> None:
     if len(sig) != SIG_BYTES:
         raise UpdateVerificationError(f"the signature is {len(sig)} bytes, not {SIG_BYTES}")
     try:
-        from cryptography.exceptions import InvalidSignature
+        from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
+    except ImportError as exc:
+        raise UpdateVerificationError(str(exc)) from exc
+    try:
         key = update_key.public_key()
-    except (ImportError, ValueError, binascii.Error) as exc:
+    except (ValueError, binascii.Error, UnsupportedAlgorithm) as exc:
         raise UpdateVerificationError(str(exc)) from exc
     try:
         key.verify(sig, signed_message(data, version))
