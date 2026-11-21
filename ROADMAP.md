@@ -12476,7 +12476,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0428] **Self-update findings from the 2026-11-15 review.**
+- ✅ [ONEUP-0428] **Self-update findings from the 2026-11-15 review.**
   review-code 2026-11-15, lane 07. MEDIUM:
   - update_dialog.py _NotesBrowser.loadResource passes every
     non-image resource to the base class (a stylesheet? the Qt Markdown
@@ -12485,6 +12485,14 @@ when complete (that document's §7).
     anyway, or not, as the two branches disagree.
   Plus 5 LOW rows in lane-07-self-update.md. The double copy of the
   download is ONEUP-0415's.
+  Shipped 2026-11-21 in 3ecea8f. Fixed: M2 (a manual AppImage check now
+  names a newer unsigned release instead of saying latest; ONEUP-0112
+  §4.3), L1 (the signer uses X.Y.Z), L2 (a too-long version part is
+  None; INV-2), L3 (UnsupportedAlgorithm fails closed), L5 (a failed
+  key write leaves no file). Dismissed: M1, measured offscreen on Qt
+  6.12.0: setMarkdown requests no stylesheet with or without HTML, and
+  since ONEUP-0437 none is parsed; the INFO row, not a defect. The
+  double copy stays with ONEUP-0415.
   **Layman:** Smaller problems in how OneUp updates itself, found by the code review.
   Kind: review-fix.
   Source: review-code-2026-11-15.
