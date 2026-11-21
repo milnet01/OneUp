@@ -97,6 +97,11 @@ _RUN_STATE_OWNED = False
 _BEGAN = time.time()
 
 
+def owns_run_state() -> bool:
+    """Did this process write the run-state record? Stop can reach the run only if so."""
+    return _RUN_STATE_OWNED
+
+
 def clear_owned_state() -> None:
     """Delete this run's own state files, if this process wrote them."""
     if not _RUN_STATE_OWNED:

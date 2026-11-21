@@ -54,6 +54,11 @@ check_eq() {  # name, expected, actual
         echo "  FAIL - $name (want '$want', got '$got')"; FAIL=$((FAIL+1))
     fi
 }
+run_bash_engine() {  # run_engine on update_system.sh, kept out of the marker harvest:
+    # the Bash fallback's STEP_BEGIN has its own field layout.
+    local ENGINE_CMD=(bash "$ENGINE") HARVEST_DIR=
+    run_engine "$@"
+}
 check_re() {  # name, extended-regex, haystack
     local name="$1" re="$2" hay="$3"
     if grep -qE -- "$re" <<<"$hay"; then
@@ -413,6 +418,15 @@ out=$(run_engine "$d" --steps=cache)
 check        "a pending reboot is still advised on a run that installed nothing" \
              "@@REBOOT@@|yes" "$out"
 check_absent "...without claiming core packages were updated" "core-packages-updated" "$out"
+# The Bash fallback makes the same distinction, in its English reason (ONEUP-0429).
+rm -f "$d/run.log"      # the Python run's log is in the harvest; the Bash one must not be
+out=$(run_bash_engine "$d" --steps=cache)
+check        "Bash: a pending reboot is still advised on a run that installed nothing" \
+             "@@REBOOT@@|yes" "$out"
+check_absent "Bash: ...without claiming core packages were updated" \
+             "core system packages were updated" "$out"
+check        "Bash: the summary says an earlier update needs it" \
+             "A REBOOT is recommended — an earlier update still needs it." "$out"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -824,6 +838,24 @@ check        "system item carries size and source" "@@CHECK_ITEM@@|system|a|1|2|
 check        "flatpak item carries its remote"     "@@CHECK_ITEM@@|flatpak|org.x.App||1|0|flathub" "$out"
 rm -rf "$d"
 
+# ONEUP-0429: the Bash fallback joins its fields by hand, so it rewrites a `|` itself.
+echo "TEST: a | in a Flatpak version does not shift the Bash fallback's CHECK_ITEM fields"
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"
+cat > "$d/flatpak" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  remotes)   [[ "$*" == *--user* ]] && printf 'flathub\t\n'; exit 0 ;;
+  remote-ls) [[ "$*" == *--user* ]] && echo "org.x.App 1|beta"; exit 0 ;;
+esac
+exit 0
+EOF
+chmod +x "$d/zypper" "$d/flatpak"
+out=$(run_bash_engine "$d" --check --steps=flatpak)
+check_eq "the version's | becomes /" "@@CHECK_ITEM@@|flatpak|org.x.App||1/beta" \
+    "$(grep -F '@@CHECK_ITEM@@|flatpak|' <<<"$out")"
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 # A check that cannot READ a repository knows nothing about it — and "I don't
 # know" must never be rendered as "you're up to date". zypper exits 106
@@ -1147,6 +1179,12 @@ out=$(run_engine "$d" --steps=firmware)
 check "the firmware step flashed" "@@STEP_END@@|firmware|ok|updated" "$out"
 check "fwupdmgr update is told not to reboot" "--no-reboot-check" "$(cat "$d/update-args" 2>/dev/null)"
 check "the summary advises the restart instead" "@@REBOOT@@|yes|firmware-updated" "$out"
+# The Bash fallback flashes the same way (ONEUP-0429).
+: > "$d/update-args"
+rm -f "$d/run.log"      # the Python run's log is in the harvest; the Bash one must not be
+run_bash_engine "$d" --steps=firmware >/dev/null
+check "the Bash fallback's fwupdmgr update is told not to reboot" "--no-reboot-check" \
+    "$(cat "$d/update-args" 2>/dev/null)"
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -1762,6 +1800,31 @@ else
     fi
     rm -rf "$d"
 fi
+
+# ---------------------------------------------------------------------------
+# ONEUP-0429: a hold ended by a signal must not leave hold.state naming a dead pid, which
+# a window would then trust for as long as that pid stayed unused. The Python engine's
+# finally removes it; the Bash fallback's cleanup did not.
+echo "TEST: a TERM during a hold removes hold.state, in both engines (ONEUP-0429)"
+saved_engine_cmd=("${ENGINE_CMD[@]}")
+for eng in python bash; do
+    d=$(mktemp -d); setup_hold_dir "$d" refuse
+    [[ $eng == bash ]] && ENGINE_CMD=(bash "$ENGINE")
+    if start_held_engine "$d" ONEUP_HOLD_SECONDS=60; then
+        kill -TERM "$HELD_PID"
+        reap_held_engine
+        if [[ -f "$d/hold.state" ]]; then
+            echo "  FAIL - $eng: a TERM during the hold left hold.state behind"; FAIL=$((FAIL+1))
+        else
+            echo "  ok   - $eng: a TERM during the hold removes hold.state"; PASS=$((PASS+1))
+        fi
+    else
+        echo "  FAIL - $eng: could not stage the hold (the engine never reached it)"; FAIL=$((FAIL+1))
+        kill -9 "$HELD_PID" 2>/dev/null
+    fi
+    ENGINE_CMD=("${saved_engine_cmd[@]}")
+    rm -rf "$d"
+done
 
 # ---------------------------------------------------------------------------
 # ONEUP-0238. The real systemd-inhibit FORKS its command and waits for it; it does not
@@ -4032,11 +4095,6 @@ echo "TEST: a non-numeric keep-alive interval falls back to the default, never b
 # keep-alive into a tight loop of `sudo -n -v` for the whole run. Checked where it is read,
 # the loop validates once and sleeps. `0` passed the check and busy-spun the same way
 # (ONEUP-0419), in both engines.
-run_bash_engine() {  # run_engine on update_system.sh, kept out of the marker harvest:
-    # the Bash fallback's STEP_BEGIN has its own field layout.
-    local ENGINE_CMD=(bash "$ENGINE") HARVEST_DIR=
-    run_engine "$@"
-}
 for eng in python bash; do
   for bad in abc 0; do
     d=$(mktemp -d); setup_common "$d"
@@ -4956,6 +5014,28 @@ out=$(run_engine "$d" --steps=system)
 check_absent "non-numeric listing: no SNAPSHOT marker" "@@SNAPSHOT@@|" "$out"
 rm -rf "$d"
 
+# ONEUP-0429: the number `snapper create` itself prints is held to the same rule.
+echo "TEST: a create that prints no number reports no rollback point, in both engines"
+for eng in python bash; do
+    d=$(mktemp -d); setup_common "$d"
+    cat > "$d/snapper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$*" == *--print-number* ]] && { echo "Error: quota exceeded"; exit 0; }
+[[ "$1" == "--no-headers" ]] && { printf '39 | single\n'; exit 0; }
+exit 0
+EOF
+    printf '#!/usr/bin/env bash\ncase "$*" in *dup*|*update*) echo "Nothing to do."; exit 0;; *) exit 0;; esac\n' > "$d/zypper"
+    chmod +x "$d/snapper" "$d/zypper"
+    if [[ $eng == bash ]]; then
+        out=$(run_bash_engine "$d" --steps=system)
+    else
+        out=$(run_engine "$d" --steps=system)
+    fi
+    check_absent "$eng: a non-numeric create id gives no SNAPSHOT marker" "@@SNAPSHOT@@|" "$out"
+    check_absent "$eng: nor a rollback command" "snapper rollback" "$out"
+    rm -rf "$d"
+done
+
 # ---------------------------------------------------------------------------
 # ONEUP-0094 — a truncated download recovers itself instead of failing the update
 # ---------------------------------------------------------------------------
@@ -5669,6 +5749,94 @@ check_absent "and nothing from the user's PATH"           "$d/zypper"         "$
 check_absent "nor does the Bash guard"                    "$d/zypper" \
     "$(cat "$d/oneup-download-guard" 2>/dev/null)"
 rm -rf "$d" "$sysbin"
+
+echo "TEST: a run that cannot record itself says Stop cannot reach it, and goes ahead (ONEUP-0429)"
+# Stop is read against run.state, so a run with no record cannot be stopped. It used to go
+# ahead in silence; the user pressed Stop and nothing happened.
+for eng in python bash; do
+    d=$(mktemp -d); setup_common "$d"
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$d/zypper"; chmod +x "$d/zypper"
+    mkdir "$d/ro"; chmod 555 "$d/ro"      # the record's folder exists but takes no file
+    if [[ $eng == bash ]]; then
+        out=$(ONEUP_RUN_STATE="$d/ro/run.state" run_bash_engine "$d" --steps=cache)
+    else
+        out=$(ONEUP_RUN_STATE="$d/ro/run.state" run_engine "$d" --steps=cache)
+    fi
+    check "$eng: the run says Stop cannot reach it" "Stop button cannot reach it" "$out"
+    check "$eng: and still runs" "@@STEP_END@@|cache|ok" "$out"
+    chmod 755 "$d/ro"; rm -rf "$d"
+done
+
+echo "TEST: a signal to a root download wrapper takes its zypper down with it (ONEUP-0429)"
+# Ctrl-C or a closed terminal can reach the wrapper's pid alone. Without a trap the wrapper
+# died and left its zypper, which ignores SIGINT as a background job, downloading as root
+# with the lock held. Four texts carry the wrapper: each engine's guard and each engine's
+# inline route. Each is signalled on its own pid only, in a session of its own.
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == "--version" ]] && { echo v; exit 0; }
+echo $$ > "$(dirname "$0")/zypper.pid"
+exec sleep 37
+EOF
+chmod +x "$d/zypper"
+run_engine "$d" --emit-guard > "$d/guard-python"
+run_bash_engine "$d" --emit-guard > "$d/guard-bash"
+chmod +x "$d/guard-python" "$d/guard-bash"
+PYTHONPATH="$(dirname "$ENGINE")" python3 -c \
+    'from oneup.engine import steps; print(steps._STOP_WRAPPER, end="")' > "$d/inline-python"
+awk '/sudo env LC_ALL=C bash -c '"'"'$/ { on = 1; next }
+     on && /^    '"'"' _ / { exit }
+     on' "$ENGINE" > "$d/inline-bash"
+for text in guard-python guard-bash inline-python inline-bash; do
+    why=$(python3 - "$d" "$text" <<'PY' 2>&1
+import os, signal, subprocess, sys, time
+d, name = sys.argv[1], sys.argv[2]
+text = os.path.join(d, name)
+pidf = os.path.join(d, "zypper.pid")
+common = [os.path.join(d, "stop.request"), os.path.join(d, "run.state"), "0.2"]
+fails = []
+for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+    if os.path.exists(pidf):
+        os.unlink(pidf)
+    if name.startswith("guard"):
+        argv = [text, *common, "zypper", "dup"]
+    else:
+        argv = ["bash", "-c", open(text).read(), "_", *common, os.path.join(d, "zypper"), "dup"]
+    w = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    for _ in range(200):
+        if os.path.exists(pidf) and os.path.getsize(pidf):
+            break
+        time.sleep(0.05)
+    else:
+        fails.append(f"{sig.name}: zypper never started")
+        os.killpg(w.pid, signal.SIGKILL)
+        continue
+    z = int(open(pidf).read())
+    time.sleep(0.3)               # the wrapper is in its poll loop by now
+    os.kill(w.pid, sig)
+    try:
+        rc = w.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        rc = None
+    try:
+        os.kill(z, 0)
+        fails.append(f"{sig.name}: zypper left running (wrapper rc {rc})")
+        os.kill(z, signal.SIGKILL)
+    except ProcessLookupError:
+        if rc != 143:
+            fails.append(f"{sig.name}: wrapper exited {rc}, not 143")
+    try:
+        os.killpg(w.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+print("; ".join(fails), end="")
+PY
+)
+    check_eq "the $text wrapper reaps its zypper on INT, TERM and HUP" "" "$why"
+done
+rm -rf "$d"
 
 echo "TEST: a guard outside the system's paths is never named by a rule sudo reads (ONEUP-0419)"
 # ONEUP_GUARD_FILE is the suite's seam. Left exported by accident, it put a guard in a

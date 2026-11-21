@@ -373,10 +373,11 @@ def _pre_update_snapshot() -> None:
         _, listing = privilege.root("snapshot-list", {"csv": False})
         tail = listing.splitlines()
         snap_id = tail[-1].split()[0] if tail and tail[-1].split() else ""
-        # Only a number names a snapshot, as the picker's loop below requires.
-        # Anything else is an error or a heading (ONEUP-0188).
-        if not snap_id.isdecimal():
-            snap_id = ""
+    # Only a number names a snapshot, whether create printed it or the listing did,
+    # as the picker's loop below requires. Anything else is an error or a heading
+    # (ONEUP-0188, ONEUP-0429).
+    if not snap_id.isdecimal():
+        snap_id = ""
     if snap_id:
         markers.out(f"Pre-update snapshot #{snap_id} recorded  "
                     f"(roll back with: sudo snapper rollback {snap_id})")
@@ -706,6 +707,11 @@ def run(opts: Options, run_keys: list[str], log_file: str, held_auth: bool = Fal
             "finished.")
         markers.marker("DONE", "errors")
         return 1
+    if not runstate.owns_run_state():
+        # stop_pending reads the record as the run's start, so without one no Stop
+        # can land. The Bash engine says the same (ONEUP-0429).
+        markers.out("Couldn't record this run, so OneUp's Stop button cannot reach it. "
+                    "The update goes ahead anyway.")
     if needs_zypper:
         repos.restore_stranded()
 

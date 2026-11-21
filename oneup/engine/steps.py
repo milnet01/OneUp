@@ -771,6 +771,9 @@ _STOP_WRAPPER = '''
 stop_file="$1"; run_state="$2"; poll="$3"; shift 3
 "$@" --download-only &
 z=$!
+# A signal to this wrapper alone must not leave its zypper running (ONEUP-0429).
+reap() { kill -TERM "$z" 2>/dev/null; wait "$z"; exit 143; }
+trap reap INT TERM HUP
 while kill -0 "$z" 2>/dev/null; do
     # Same staleness rule as stop_pending: a request older than run.state is a
     # leftover. Re-implemented because a shell function cannot cross sudo.

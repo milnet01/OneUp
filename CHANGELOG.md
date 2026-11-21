@@ -15,6 +15,21 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Fixes to the update engine and its terminal fallback from the code review** (ONEUP-0429)
+  Pressing Ctrl-C or closing the terminal while packages download no longer leaves the
+  download running on its own with the package manager locked. **If you use the
+  password-free setting, it shows as off and needs switching on once more**: the fix
+  changes the small helper that setting installs, and OneUp only trusts the helper it
+  would install itself.
+  The terminal fallback no longer lets a firmware update restart the computer in the
+  middle of a run. It no longer says core packages were updated when a restart was left
+  over from an earlier update, and no longer leaves a stale record behind when it is
+  stopped while waiting for your go-ahead. A Flatpak version holding a "|" no longer
+  garbles the update list.
+  Neither engine now offers a rollback to a snapshot number that snapper did not really
+  print. When a run cannot record itself, it now says that Stop cannot reach it, instead
+  of going ahead in silence.
+
 - **Checking for updates in the AppImage no longer says you have the latest version when a newer one is out** (ONEUP-0428)
   Right after a release, before it is ready for the AppImage to install, "Check for
   updates" said you were on the latest version. It now names the new version and says to

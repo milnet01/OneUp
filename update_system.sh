@@ -614,8 +614,10 @@ run_check() {
             echo "  Flatpak apps: $n update(s)"
         fi
         emit_check flatpak "$n" "Flatpak app(s)" "$unreadable"
+        # A remote supplies both fields, so a `|` in either becomes `/`, as the Python
+        # engine's marker() does: the protocol has no escaping (ONEUP-0429).
         while read -r app ver _rest; do
-            [[ -n "$app" ]] && marker CHECK_ITEM "flatpak|$app||$ver"
+            [[ -n "$app" ]] && marker CHECK_ITEM "flatpak|${app//|//}||${ver//|//}"
         done <<<"$flatpaks"
         (( total += n ))
     fi
@@ -849,6 +851,7 @@ hold_for_go_ahead() {
         rm -f "$tmp"
         return 1
     fi
+    HOLDING=true        # cleanup removes the record if a signal ends the hold (ONEUP-0429)
     while (( SECONDS < deadline )); do
         # Staleness is decided the way stop_pending decides it, and for the same reason:
         # a request older than our own stamp is a leftover from an earlier session.
@@ -871,6 +874,7 @@ hold_for_go_ahead() {
         sleep "$step"
     done
     rm -f "$HOLD_STATE_FILE" "$GO_FILE"
+    HOLDING=false
     (( rc == 0 )) || return 1
     # A go-ahead that ARRIVED and is refused returns 2, never 1: reporting it as a
     # Cancel would leave a tampered or corrupted authorisation with no trace, and the
@@ -1043,6 +1047,7 @@ reap_orphaned_askpass() {
 }
 RUN_STATE_OWNED=false      # only the process that wrote the run-state file clears it,
                            # so a --check or --size run can't erase a real run's entry
+HOLDING=false              # set while hold.state is this run's own (hold_for_go_ahead)
 # Re-enable every repo we disabled BEFORE killing the keep-alive (sudo cred still
 # warm), non-interactively (-n) so a cold-credential exit logs the manual fix
 # instead of blocking on a ksshaskpass popup inside the trap.
@@ -1051,6 +1056,7 @@ RUN_STATE_OWNED=false      # only the process that wrote the run-state file clea
 cleanup() {
     local a
     $RUN_STATE_OWNED && rm -f "$RUN_STATE_FILE" "$STOP_FILE"
+    $HOLDING && rm -f "$HOLD_STATE_FILE" "$GO_FILE"
     reap_orphaned_askpass
     for a in "${DISABLED_REPOS[@]:-}"; do
         [[ -z "$a" ]] && continue
@@ -1244,6 +1250,9 @@ stop_file="\$1"; run_state="\$2"; poll="\$3"
 shift 4
 "$zypper" "\$@" --download-only &
 z=\$!
+# A signal to this wrapper alone must not leave its zypper running as root (ONEUP-0429).
+reap() { kill -TERM "\$z" 2>/dev/null; wait "\$z"; exit 143; }
+trap reap INT TERM HUP
 while kill -0 "\$z" 2>/dev/null; do
     # Same staleness rule as stop_pending: a request older than run.state is a leftover.
     # Re-implemented because a shell function cannot cross sudo.
@@ -1508,6 +1517,8 @@ if (( claim_rc == 1 )); then
     exit 1
 fi
 (( claim_rc == 0 )) && RUN_STATE_OWNED=true
+# stop_pending reads the record as the run's start, so without one no Stop can land.
+(( claim_rc == 2 )) && echo "Couldn't record this run, so OneUp's Stop button cannot reach it. The update goes ahead anyway."
 # A stop request older than the line above is a leftover and is ignored by stop_pending;
 # cleanup deletes it on the way out so it can't confuse anything later.
 
@@ -1537,10 +1548,11 @@ if step_selected system && command -v snapper &>/dev/null; then
     elif [[ -z "$SNAP_ID" ]]; then
         sudo_capture SNAP_LIST snapper --no-headers list
         SNAP_ID=$(tail -n1 <<<"$SNAP_LIST" | awk '{print $1}')
-        # Only a number names a snapshot. Anything else is an error or a heading, and
-        # reporting it would offer a rollback to nothing (ONEUP-0188).
-        [[ "$SNAP_ID" =~ ^[0-9]+$ ]] || SNAP_ID=""
     fi
+    # Only a number names a snapshot, whether create printed it or the listing did.
+    # Anything else is an error or a heading, and reporting it would offer a rollback to
+    # nothing (ONEUP-0188, ONEUP-0429).
+    [[ "$SNAP_ID" =~ ^[0-9]+$ ]] || SNAP_ID=""
     if [[ -n "$SNAP_ID" ]]; then
         echo "Pre-update snapshot #$SNAP_ID recorded  (roll back with: sudo snapper rollback $SNAP_ID)"
         marker SNAPSHOT "$SNAP_ID"
@@ -1877,6 +1889,9 @@ run_system_download() {
         stop_file="$1"; run_state="$2"; poll="$3"; shift 3
         "$@" --download-only &
         z=$!
+        # A signal to this wrapper alone must not leave its zypper running (ONEUP-0429).
+        reap() { kill -TERM "$z" 2>/dev/null; wait "$z"; exit 143; }
+        trap reap INT TERM HUP
         while kill -0 "$z" 2>/dev/null; do
             # Same staleness rule as stop_pending: a request older than run.state is a
             # leftover. Re-implemented because a shell function cannot cross sudo.
@@ -2298,7 +2313,9 @@ if step_selected firmware && ! stop_pending && ! $SYS_PARTIAL; then
         if (( FW_RC == 0 )); then
             # Only claim success (and later advise a reboot) if the flash actually
             # succeeded — a failed update must not report "applied" or force a reboot.
-            if fwupdmgr update -y </dev/null; then
+            # --no-reboot-check: -y may answer fwupd's own "Restart now?" with yes and
+            # reboot before the later steps and the summary (ONEUP-0391, ONEUP-0429).
+            if fwupdmgr update -y --no-reboot-check </dev/null; then
                 FW_CHANGED=true
                 end_step firmware ok "updates applied"
             else
@@ -2502,8 +2519,14 @@ if command -v zypper &>/dev/null && ! $SYS_PARTIAL; then
         REBOOT="yes"
         # Prefer the specific "a new kernel / your NVIDIA driver … was installed"
         # phrase gathered from this run's transaction log; fall back to a generic
-        # reason when the reboot is owed to core libraries we didn't name.
-        REBOOT_REASON="${SYS_REBOOT_DETAIL:-core system packages were updated}"
+        # reason when the reboot is owed to core libraries we didn't name. A run that
+        # changed nothing names no reason: an earlier update left the reboot pending
+        # (ONEUP-0425 in the Python engine, ONEUP-0429 here).
+        if [[ -n "$SYS_REBOOT_DETAIL" ]]; then
+            REBOOT_REASON="$SYS_REBOOT_DETAIL"
+        elif $SYS_CHANGED; then
+            REBOOT_REASON="core system packages were updated"
+        fi
     fi
 fi
 if [[ "$REBOOT" == "no" ]] && $FW_CHANGED; then
@@ -2605,7 +2628,7 @@ else
 fi
 if [[ "$REBOOT" == "yes" ]]; then
     echo
-    echo "  ! A REBOOT is recommended — $REBOOT_REASON."
+    echo "  ! A REBOOT is recommended — ${REBOOT_REASON:-an earlier update still needs it}."
 elif [[ -n "$SERVICES" ]]; then
     if [[ -n "$SERVICES_SAFE" ]]; then
         echo
