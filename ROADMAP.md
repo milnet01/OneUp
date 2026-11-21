@@ -12497,7 +12497,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0429] **Bash fallback findings from the 2026-11-15 review that a terminal run meets.**
+- ✅ [ONEUP-0429] **Bash fallback findings from the 2026-11-15 review that a terminal run meets.**
   review-code 2026-11-15, lane 12. The fallback is fixed only where a
   terminal run meets a defect (CLAUDE.md §4), so triage each first.
   MEDIUM:
@@ -12509,6 +12509,17 @@ when complete (that document's §7).
   - the per-repo probe and the skip-repo cleanup are in ONEUP-0424 and
     ONEUP-0421.
   Plus 9 LOW rows in lane-12-bash-fallback-engine.md.
+  Closed 2026-11-21. Seven fixed, each red then green: the four download
+  wrappers trap INT/TERM/HUP and reap zypper (guard text changed: a
+  re-grant, CHANGELOG says so); Bash fwupdmgr --no-reboot-check; snapper
+  create id validated in both engines; Bash pending-reboot reason
+  (mirrors ONEUP-0425); both engines say so when run.state cannot be
+  written; Bash removes hold.state on a signal; Bash rewrites | in
+  Flatpak CHECK_ITEM. Six already fixed by ONEUP-0408/0417, 0419, 0421,
+  0422, 0424 and the positive_seconds check. Three dismissed:
+  marker-protocol §7 drift (documented), grep-only coverage note, --size
+  failure with no DONE (§4.9 owes DONE only to a followed run or the
+  timer).
   **Layman:** Problems in the old backup update script that someone running it by hand could hit.
   Kind: review-fix.
   Source: review-code-2026-11-15.
