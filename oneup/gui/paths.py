@@ -260,6 +260,36 @@ def restore_machine_library_path() -> None:
         os.environ["LD_LIBRARY_PATH"] = orig
 
 
+_BUNDLE_QT_VARS = ("QT_PLUGIN_PATH", "QML2_IMPORT_PATH")
+
+
+def restore_machine_qt_paths(app) -> None:
+    """In the AppImage, keep the bundle's Qt plugin folders out of what OneUp opens.
+
+    PyInstaller's PySide6 hook sets `QT_PLUGIN_PATH` and `QML2_IMPORT_PATH` to the
+    bundle's folders, and `QDesktopServices.openUrl` passes them on: Okular then
+    loaded the bundle's platform plugins, aborted, and "Open log file" opened
+    nothing (ONEUP-0453, measured 2026-11-23). Call it once the QApplication exists:
+    its plugin folders are pinned first, so OneUp's own Qt keeps them. Only entries
+    inside the bundle are removed."""
+    if not getattr(sys, "frozen", False):
+        return
+    app.setLibraryPaths(app.libraryPaths())
+    bundle = getattr(sys, "_MEIPASS", None)
+    if not bundle:
+        return
+    for var in _BUNDLE_QT_VARS:
+        value = os.environ.get(var)
+        if value is None:
+            continue
+        kept = [p for p in value.split(os.pathsep)
+                if p and not (p == bundle or p.startswith(bundle.rstrip("/") + "/"))]
+        if kept:
+            os.environ[var] = os.pathsep.join(kept)
+        else:
+            os.environ.pop(var, None)
+
+
 def _machine_python() -> str | None:
     """The machine's python3, if it meets PYTHON_FLOOR. Asked once per process."""
     if "python3" not in _engine_cache:

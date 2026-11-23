@@ -3190,6 +3190,35 @@ def main() -> int:
                 os.environ.pop("LD_LIBRARY_PATH", None)
             else:
                 os.environ["LD_LIBRARY_PATH"] = _saved_ld
+        # The bundle's Qt paths reach what openUrl starts too: Okular loaded the
+        # bundle's platform plugins and aborted, so "Open log file" opened nothing
+        # (ONEUP-0453, measured in the clean VM 2026-11-23).
+        _qt_vars = ("QT_PLUGIN_PATH", "QML2_IMPORT_PATH")
+        _saved_qt = {v: os.environ.get(v) for v in _qt_vars}
+        _saved_mei = sys.__dict__.get("_MEIPASS")
+        _app = QApplication.instance()
+        _libpaths = _app.libraryPaths()
+        try:
+            sys._MEIPASS = "/bundle/_MEIx"
+            os.environ["QT_PLUGIN_PATH"] = "/bundle/_MEIx/PySide6/Qt/plugins:/home/me/plugins"
+            os.environ["QML2_IMPORT_PATH"] = "/bundle/_MEIx/PySide6/Qt/qml"
+            paths.restore_machine_qt_paths(_app)
+            check("startup drops the bundle's Qt plugin path for everything OneUp opens",
+                  os.environ.get("QT_PLUGIN_PATH") == "/home/me/plugins"
+                  and "QML2_IMPORT_PATH" not in os.environ)
+            check("and OneUp's own Qt keeps the plugin folders it started with",
+                  _app.libraryPaths() == _libpaths)
+        finally:
+            _app.setLibraryPaths(_libpaths)
+            if _saved_mei is None:
+                sys.__dict__.pop("_MEIPASS", None)
+            else:
+                sys._MEIPASS = _saved_mei
+            for _v, _val in _saved_qt.items():
+                if _val is None:
+                    os.environ.pop(_v, None)
+                else:
+                    os.environ[_v] = _val
         with (_src / "engine" / "markers.py").open("a") as _fh:
             _fh.write("\n# one more byte\n")
         paths.engine_argv()

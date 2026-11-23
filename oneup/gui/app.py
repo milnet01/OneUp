@@ -193,6 +193,7 @@ def main():
     # sys.argv, so Qt sees its own options — `-reverse` is how the right-to-left
     # test reaches the window (ONEUP-0032 §4.2). Qt leaves sys.argv as it found it.
     app = QApplication(sys.argv)
+    paths.restore_machine_qt_paths(app)
     i18n.load()
     app.setApplicationName(APP_NAME)
     app.setDesktopFileName(APP_ID)  # ties the window to its .desktop/icon
