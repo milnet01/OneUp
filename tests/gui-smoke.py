@@ -5897,6 +5897,19 @@ def main() -> int:
           "**" not in _udlg.notes.toPlainText())
     _udlg.deleteLater()
     shutil.rmtree(_img.parent, ignore_errors=True)
+    # ONEUP-0454: notes filled before the dialog shows (the usual path) opened at the
+    # bottom, since the browser scrolls to its cursor, which the fill left at the end.
+    _udlg = update_dialog.UpdateDialog(wA, "9.9.9", "appimage", lambda: None,
+                                       lambda: None, lambda: None)
+    _udlg.set_notes("## 9.9.9\n\n" + "\n".join(f"- **Change {_i}** a line of text"
+                                               for _i in range(80)))
+    _udlg.show()
+    QApplication.processEvents()
+    _sb = _udlg.notes.verticalScrollBar()
+    check("ONEUP-0454 What's new opens its notes at the top",
+          _sb.maximum() > 0 and _sb.value() == 0)
+    _udlg.close()
+    _udlg.deleteLater()
     # ONEUP-0403: Escape calls reject(), which never reaches closeEvent, so a download
     # left by Escape carried on hidden. Both ways out must cancel it, once each.
     for _how in ("Escape", "close"):

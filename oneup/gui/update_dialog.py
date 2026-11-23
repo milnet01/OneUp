@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import QCoreApplication
-from PySide6.QtGui import QTextDocument
+from PySide6.QtGui import QTextCursor, QTextDocument
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -136,6 +136,9 @@ class UpdateDialog(QDialog):
         features = (QTextDocument.MarkdownFeature.MarkdownDialectGitHub
                     | QTextDocument.MarkdownFeature.MarkdownNoHTML)
         self.notes.document().setMarkdown(markdown, features)
+        # The fill leaves the cursor at the end, and the browser scrolls to its cursor
+        # when shown: the notes opened at the bottom (ONEUP-0454).
+        self.notes.moveCursor(QTextCursor.MoveOperation.Start)
 
     def set_notes_unavailable(self) -> None:
         self.notes.setPlainText(QCoreApplication.translate(
