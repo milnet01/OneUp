@@ -15,6 +15,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Switching password-free updates off now asks for your password on every desktop** (ONEUP-0452)
+  On a desktop session without the older X display, turning the setting off from the
+  window failed with "Could not remove the authorization rule" instead of asking. It now
+  opens the password box, as it already did on a standard Plasma desktop.
+
 - **Fixes to the update engine and its terminal fallback from the code review** (ONEUP-0429)
   Pressing Ctrl-C or closing the terminal while packages download no longer leaves the
   download running on its own with the package manager locked. **If you use the

@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=451 -->
+<!-- ants-roadmap-id-high-water: ONEUP=452 -->
 
 # OneUp Roadmap
 
@@ -12170,6 +12170,9 @@ when complete (that document's §7).
   it says "a terminal is required". man sudo, ENVIRONMENT, agrees. So
   revoke and grant still ask, through the box, and consent can be
   withdrawn. What remains is the box's wording, filed as its own item.
+  Correction 2026-11-23 (VM, sudo 1.9.17p2): the dismissal holds only
+  while DISPLAY is set. With DISPLAY unset, sudo without -A says 'a
+  terminal is required' and the revoke fails. Fixed as ONEUP-0452.
   **Layman:** Switching off OneUp's password-free updates may fail from the window, because a step it needs is not covered by the password-free rule.
   Kind: security.
   Source: review-code-2026-11-15.
@@ -12676,6 +12679,14 @@ when complete (that document's §7).
   [Unreleased] holds ### Added (ONEUP-0112), and main is the only branch.
   Add to the run: an update whose transaction includes a 32-bit package
   with a scriptlet (glibc-32bit), on the service route.
+  Run 2026-11-23, Live ISO 20261014, RPM built from main (with ONEUP-0452). All other packages locked so the update was small.
+  PASS 32-bit on the service route (ONEUP-0443): glibc-32bit and glibc-gconv-modules-extra-32bit 2.44-3.1 to 4.1, system-commit status 0, no SIGSYS in the service journal.
+  PASS service killed mid-run (ONEUP-0406): SIGKILL after repo-disable left broken-src off and recorded in /var/lib/oneup/paused-sources; the next start logged the restore and re-enabled it.
+  PASS sudo engine SIGKILLed (ONEUP-0411): the next run said it switched broken-src back on.
+  PASS timestamp_timeout=0 with no terminal (ONEUP-0405): 14 box prompts, no 'a terminal is required', all steps ok.
+  PASS window position on KDE Wayland (ONEUP-0246): reopened at the saved 37,23; a window too tall to fit is clamped above the panel.
+  NEW ONEUP-0416's open question: sudo uses askpass with no terminal only while DISPLAY is set. Filed and fixed as ONEUP-0452, checked in the VM.
+  Not runnable here: ONEUP-0409 (unreachable by design, locked by a py_case). AppImage self-update (ONEUP-0112, 0383) needs a published newer release; check it against 2.1.0 once that is out.
   **Layman:** Test the fixes that need a real computer update on a clean virtual machine before releasing.
   Kind: chore.
   Source: verify-delivery-2026-11-15.
@@ -12839,3 +12850,19 @@ when complete (that document's §7).
   **Layman:** A design document lists old colours for the Run button; the app itself is right.
   Kind: doc-fix.
   Source: close-findings-2026-11-20 (ONEUP-0427 lane 10 sweep).
+
+- 🚧 [ONEUP-0452] **On a desktop with no DISPLAY, turning passwordless off from the window cannot ask for the password.**
+  Measured in the clean VM 2026-11-23 for ONEUP-0440 (sudo 1.9.17p2,
+  no terminal, SUDO_ASKPASS set, no -A): with DISPLAY=:0 sudo ran the
+  askpass helper; with DISPLAY unset it said "a terminal is required";
+  WAYLAND_DISPLAY alone did not help. ONEUP-0416's dismissal measured
+  only the first case. revoke_auth and a re-grant call sudo_init, which
+  returns at auth_current() before setting _REASK_WITH_BOX, so their
+  `sudo rm` carries no -A. Plasma sets DISPLAY, so the window works
+  there; a session without XWayland does not.
+  Fix: the auth_current() return sets _REASK_WITH_BOX as a box run
+  would (not for a timer, not for a terminal without a desktop). -A
+  asks only when a password is needed, so granted calls stay silent.
+  **Layman:** On a desktop without the older X display setting, switching off password-free updates could fail instead of asking for your password.
+  Kind: security.
+  Source: ONEUP-0440-vm-2026-11-23.

@@ -143,8 +143,9 @@ _PROMPT_MARKS = (
 # Set once sudo_init has asked through the password box. From then on a privileged call
 # carries `-A`, so a credential sudo has already forgotten (a timeout under the
 # keep-alive's interval, or 0) opens the box again instead of failing with "a terminal
-# is required" (ONEUP-0405). A warm credential asks nothing. Never on a passwordless or
-# terminal run: the first asks nobody, the second asks in the terminal.
+# is required" (ONEUP-0405). A warm credential asks nothing. A passwordless run sets it
+# too, for the calls its drop-in does not grant (ONEUP-0452). Never on a timer or a
+# terminal run: the first has nobody to ask, the second asks in the terminal.
 _REASK_WITH_BOX = False
 
 
@@ -183,7 +184,14 @@ def sudo_init() -> None:
     # `auth_current`, not a bare zypper probe: a drop-in from an older OneUp is
     # live and still leaves three calls prompting, and that is what turned into
     # a surprise dialog in the middle of step 1 (ONEUP-0092).
+    global _REASK_WITH_BOX
     if actions.auth_current():
+        # The drop-in grants no `rm`, and revoke and a re-grant still run one. With no
+        # terminal, sudo runs the box unasked only while DISPLAY is set (measured in a VM,
+        # ONEUP-0452), so say -A. It asks only where a password is needed: granted calls
+        # stay silent. Not for a timer, which has nobody to answer.
+        _REASK_WITH_BOX = (os.environ.get("ONEUP_NONINTERACTIVE") != "1"
+                           and not _terminal_without_desktop())
         return
     # Nobody is at the screen to answer a box, so a timer run stands down here, as it
     # does on the service route (ONEUP-0249 §4.7, INV-19). A computer without PackageKit
@@ -215,7 +223,6 @@ def sudo_init() -> None:
                     f"update in a terminal with: {command}")
         markers.err("Authentication failed or cancelled — aborting.")
         raise SystemExit(1)
-    global _REASK_WITH_BOX
     _REASK_WITH_BOX = use_box
     _start_keepalive()
 

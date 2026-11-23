@@ -3150,6 +3150,39 @@ else
 fi
 rm -rf "$d"
 
+echo "TEST: revoking a live drop-in asks in the box for the rm it does not grant (ONEUP-0452)"
+# sudo_init returns early when passwordless is current, and the drop-in grants no rm. With
+# no terminal and DISPLAY unset, real sudo runs the askpass helper only under -A (measured
+# in a VM, 2026-11-23). This mock is that sudo: granted calls pass, an rm needs -A.
+d=$(mktemp -d); setup_common "$d"
+printf '#!/usr/bin/env bash\n[[ "$1" == "--version" ]] && echo v\nexit 0\n' > "$d/zypper"
+cat > "$d/sudo" <<'EOF'
+#!/usr/bin/env bash
+box=false
+for a in "$@"; do [[ "$a" == "-A" ]] && box=true; done
+while [[ $# -gt 0 ]]; do case "$1" in -A|-n|-v|-k|-E) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
+[[ $# -eq 0 ]] && exit 0
+if [[ "$1" == "rm" ]]; then
+    $box || { echo "sudo: a terminal is required to read the password" >&2; exit 1; }
+    echo "BOX rm" >> "${ONEUP_TEST_SUDOLOG:?}"
+fi
+exec "$@"
+EOF
+chmod +x "$d/zypper" "$d/sudo"
+authfile="$d/oneup-sudoers"; printf 'placeholder\n' > "$authfile"
+: > "$d/sudolog"
+ONEUP_TEST_SUDOLOG="$d/sudolog" run_engine "$d" --emit-guard > "$d/oneup-download-guard"
+out=$(ONEUP_TEST_SUDOLOG="$d/sudolog" ONEUP_AUTH_FILE="$authfile" run_engine "$d" --revoke-auth 2>&1)
+check_absent "ONEUP-0452 the revoke's rm does not die on 'a terminal is required'" \
+    "a terminal is required" "$out"
+check "ONEUP-0452 the rm asks through the box" "BOX rm" "$(cat "$d/sudolog")"
+if [[ -e "$authfile" ]]; then
+    echo "  FAIL - ONEUP-0452 and the drop-in is gone"; FAIL=$((FAIL+1))
+else
+    echo "  ok   - ONEUP-0452 and the drop-in is gone"; PASS=$((PASS+1))
+fi
+rm -rf "$d"
+
 # ---------------------------------------------------------------------------
 echo "TEST: --auth-status reflects the drop-in and can't be fooled by a cached credential"
 d=$(mktemp -d); setup_common "$d"
@@ -3244,7 +3277,8 @@ chmod +x "$d/zypper"
 cat > "$d/sudo" <<'EOF'
 #!/usr/bin/env bash
 nonint=false
-for a in "$@"; do [[ "$a" == "-A" ]] && echo "BOOTSTRAP" >> "$ONEUP_TEST_SUDOLOG"; done
+# The validate, not any -A: a passwordless run passes -A too (ONEUP-0452), asking nothing.
+[[ " $* " == *" -A "* && " $* " == *" -v "* ]] && echo "BOOTSTRAP" >> "$ONEUP_TEST_SUDOLOG"
 while [[ $# -gt 0 ]]; do case "$1" in -n) nonint=true; shift;; -A|-v|-k|-E) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
 [[ $# -eq 0 ]] && exit 0
 if $nonint && [[ -n "${ONEUP_AUTH_FILE:-}" && ! -e "$ONEUP_AUTH_FILE" ]]; then
