@@ -6,6 +6,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-23
+
 ### Changed
 
 - **The "Last run" line now says how the run ended first, then when** (ONEUP-0351)
@@ -1609,7 +1611,8 @@ and firmware, plus leftover-package and cache cleanup.
   don't fail right after login.
 - Cache clean-up runs non-interactively (no more "bad stream or EOF").
 
-[Unreleased]: https://github.com/milnet01/OneUp/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/milnet01/OneUp/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/milnet01/OneUp/releases/tag/v2.1.0
 [2.0.0]: https://github.com/milnet01/OneUp/releases/tag/v2.0.0
 [1.4.12]: https://github.com/milnet01/OneUp/releases/tag/v1.4.12
 [1.4.11]: https://github.com/milnet01/OneUp/releases/tag/v1.4.11

@@ -1,7 +1,7 @@
 %define app_id za.co.antsprojectshub.OneUp
 
 Name:           oneup
-Version:        2.0.0
+Version:        2.1.0
 Release:        0
 Summary:        One-click openSUSE update dashboard
 License:        MIT
@@ -140,6 +140,58 @@ install -Dm0644 data/za.co.antsprojectshub.OneUp1.service \
 %{_datadir}/dbus-1/system-services/za.co.antsprojectshub.OneUp1.service
 
 %changelog
+* Mon Nov 23 2026 Anthony Schemel <aant.schemel@gmail.com> - 2.1.0-0
+- The "Last run" line now says how the run ended first, then when
+- Switching password-free updates off now asks for your password on every desktop
+- Fixes to the update engine and its terminal fallback from the code review
+- Checking for updates in the AppImage no longer says you have the latest version when a newer one is out
+- Smaller window fixes from the code review
+- Smaller fixes to OneUp's system service from the code review
+- Smaller engine fixes from the code review
+- Running an update again no longer wrongly asks you to report a progress problem
+- An update that includes 32-bit packages no longer stops part-way when OneUp's system service runs it
+- A package's name no longer decides which problem OneUp reports
+- A full disk no longer stops an update before OneUp can say why
+- Unattended updates and checks no longer wait for ever on a stuck system service
+- "Skip & update the rest" now says so when a source would not switch off
+- When a check fails, OneUp no longer carries on as if the answer were "none"
+- Update no longer stops responding, or starts twice, when OneUp cannot save its go-ahead note
+- A software source an interrupted update left off is switched back on by the next update
+- A software source OneUp paused is switched back on even if its background helper crashed
+- Stop works during a download even when OneUp's system service cannot be reached
+- On a computer set to forget the password quickly, an update from the window asks again instead of failing
+- Turning off automatic updates now says so if the weekly timer would not switch off
+- While OneUp works out the download size before an update, you can cancel the wait
+- Smaller window fixes
+- The window no longer reports results a run did not produce
+- OneUp no longer says "up to date" or "0 B" when it could not tell
+- A system service that stops answering can no longer freeze OneUp or hold its root helper open
+- When one of OneUp's helpers cannot start, the window no longer waits forever
+- One damaged download cache file no longer breaks an update, a check, or every Flatpak's details
+- On a computer that lets OneUp block shutdown but not sleep, updates run again
+- Pressing Stop while OneUp is still asking for the password, or waiting for another program to finish, now stops the update
+- After a power cut, OneUp no longer follows an update that is not running
+- Two updates starting at the same moment can no longer both think they own the run
+- Pressing Stop or closing the window again while OneUp tidies up no longer leaves a skipped software source switched off
+- Skipping a software source that was already switched off no longer switches it on at the end
+- When the system service cannot switch a skipped source back on straight away, it keeps trying for up to ten minutes
+- A long update started from the window no longer fails partway when sudo forgets the password
+- The tray's "Update now" no longer starts a second update over one already running
+- A check that fails no longer says "Everything is up to date"
+- Button text stays easy to read under the mouse pointer
+- A firmware update can no longer restart the computer partway through an update
+- In the AppImage, links and the log file now open
+- Checking for updates no longer hangs on a Flatpak source that stops answering
+- The weekly schedule settings can no longer freeze the window
+- Closing OneUp during an update no longer stops the update
+- OneUp shows what's new in every version since yours, inside OneUp
+- The AppImage updates itself
+- After the System update installs a new OneUp, a "Restart OneUp" button loads it
+- Settings read from the environment are checked before they reach root commands or timing loops
+- Password-free updates now name only the system's own programs
+- Tighter limits on what OneUp asks root to do, and a more private diagnostics report
+- Names and notes from outside OneUp are shown as plain text
+- The AppImage is built only from fixed, checked versions of its packing tools
 * Fri Nov 06 2026 Anthony Schemel <aant.schemel@gmail.com> - 2.0.0-0
 - Developers can build the RPM from a commit and look inside it with one command
 - Show an estimated time left while packages download.
