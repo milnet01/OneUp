@@ -6,6 +6,15 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **In the AppImage, "Open log file" opens the log again** (ONEUP-0453)
+  Where the desktop opens text files in a Qt program such as Okular, that program
+  crashed at start, so nothing opened.
+
+- **"What's new" shows the newest release notes from the top** (ONEUP-0454)
+  The notes used to open scrolled to the end.
+
 ## [2.1.0] - 2026-11-23
 
 ### Changed
