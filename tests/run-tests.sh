@@ -3155,7 +3155,11 @@ echo "TEST: revoking a live drop-in asks in the box for the rm it does not grant
 # no terminal and DISPLAY unset, real sudo runs the askpass helper only under -A (measured
 # in a VM, 2026-11-23). This mock is that sudo: granted calls pass, an rm needs -A.
 d=$(mktemp -d); setup_common "$d"
-printf '#!/usr/bin/env bash\n[[ "$1" == "--version" ]] && echo v\nexit 0\n' > "$d/zypper"
+cat > "$d/zypper" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == "--version" ]] && echo v
+exit 0
+EOF
 cat > "$d/sudo" <<'EOF'
 #!/usr/bin/env bash
 box=false
@@ -3406,10 +3410,11 @@ esac
 EOF
 chmod +x "$d/zypper"
 # Drop-in ACTIVE: the scoped `-n` probe succeeds, so the engine must NOT reach the
-# interactive `sudo -A … -v`. The mock aborts loudly (exit 99) if `-A` is ever passed.
+# interactive `sudo -A … -v`. The mock aborts loudly (exit 99) on that validate. A bare -A
+# on a granted call asks nothing, and a passwordless run passes it (ONEUP-0452).
 cat > "$d/sudo" <<'EOF'
 #!/usr/bin/env bash
-for a in "$@"; do [[ "$a" == "-A" ]] && { echo "BUG: interactive sudo -A invoked" >&2; exit 99; }; done
+[[ " $* " == *" -A "* && " $* " == *" -v "* ]] && { echo "BUG: interactive sudo -A invoked" >&2; exit 99; }
 while [[ $# -gt 0 ]]; do case "$1" in -n|-v|-k|-E) shift;; -p) shift 2;; --) shift; break;; -*) shift;; *) break;; esac; done
 [[ $# -eq 0 ]] && exit 0
 exec "$@"
