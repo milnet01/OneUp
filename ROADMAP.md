@@ -12851,7 +12851,7 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: close-findings-2026-11-20 (ONEUP-0427 lane 10 sweep).
 
-- 🚧 [ONEUP-0452] **On a desktop with no DISPLAY, turning passwordless off from the window cannot ask for the password.**
+- ✅ [ONEUP-0452] **On a desktop with no DISPLAY, turning passwordless off from the window cannot ask for the password.**
   Measured in the clean VM 2026-11-23 for ONEUP-0440 (sudo 1.9.17p2,
   no terminal, SUDO_ASKPASS set, no -A): with DISPLAY=:0 sudo ran the
   askpass helper; with DISPLAY unset it said "a terminal is required";
@@ -12863,6 +12863,8 @@ when complete (that document's §7).
   Fix: the auth_current() return sets _REASK_WITH_BOX as a box run
   would (not for a timer, not for a terminal without a desktop). -A
   asks only when a password is needed, so granted calls stay silent.
+  Shipped 2026-11-23 (6bf5d9f). Locked by an engine scenario (red
+  against HEAD) and checked in the VM with DISPLAY unset.
   **Layman:** On a desktop without the older X display setting, switching off password-free updates could fail instead of asking for your password.
   Kind: security.
   Source: ONEUP-0440-vm-2026-11-23.
