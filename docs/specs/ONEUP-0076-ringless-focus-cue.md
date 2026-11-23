@@ -251,7 +251,7 @@ stops: applying one fraction to both stops gives exactly the colour that fractio
 give at any point in between. (That holds for the white direction as much as the black one
 — toward black the blend is also a plain per-channel scale, but affinity is what the
 argument needs.) Taking the larger of the two stops' required fractions, the worst pixel
-anywhere down the Run button's gradient measures **3.00:1**. The fraction is tested on
+anywhere down the Run button's gradient measures **3.03:1**. The fraction is tested on
 the samples between the two blended stops, which are the pixels Qt paints and the ones
 `focus_report` measures; blending each rest sample alone rounds differently and accepted a
 fraction that painted at 2.99:1 (ONEUP-0427).
@@ -415,20 +415,19 @@ Computed, not chosen. Every figure is the output of the check in §4.4.
 
 | Control | Rest | Focus fill | Ratio | Ink |
 | --- | --- | --- | --- | --- |
-| Run / banner button | `#4aa3ff`→`#2f6fe0` | `#1c3e61`→`#122a55` | 3.00:1 (worst pixel) | `#ffffff` 10.99:1 |
-| Restart button | `#ef6a55`→`#d6412a` | `#5d2921`→`#531910` | 3.07:1 (worst pixel) | `#ffffff` 11.64:1 |
+| Run / banner button | `#3779bd`→`#2f6fe0` | `#142d46`→`#112953` | 3.03:1 (worst pixel) | `#ffffff` 14.01:1 |
+| Restart / Stop button | `#bf5544`→`#d6412a` | `#49201a`→`#511910` | 3.03:1 (worst pixel) | `#ffffff` 13.89:1 |
 | Ghost / link, dark | `#12161c` | `#606367` | 3.01:1 | `#ffffff` 6.04:1 |
 | Ghost / link, light | `#ffffff` | `#949494` | 3.03:1 | `#000000` 6.92:1 |
 | Disclosure **and a `SettingsDialog` row's `#GhostBtn`**, dark | `#1a1f27`/`#1e242e` | `#6a6d73` | 3.01:1 | `#ffffff` 5.19:1 |
 | Dialog *Close* / *Cancel* `#GhostBtn`, dark | `win` `#0f1216` | `#616365` | 3.11:1 | `#ffffff` 6.03:1 |
 | Disclosure **and a `SettingsDialog` row's `#GhostBtn`**, light | `#f4f6f9`/`#eaeef3` | `#868789` | 3.09:1 | `#000000` 5.84:1 |
 | Dialog *Close* / *Cancel* `#GhostBtn`, light | `win` `#eef1f5` | `#88898c` | 3.09:1 | `#000000` 6.00:1 |
-| Switch track on | `#2ecc71` | `#186c3c` | 3.08:1 | — |
+| Switch track on, dark | `#26a95e` | `#13532e` | 3.00:1 | — |
+| Switch track on, light | `#239b56` | `#104728` | 3.02:1 | — |
 | Switch track off | `#e74c3c` | `#66211a` | 3.06:1 | — |
 | Log / details / dialog-panel border, dark | `#262d38` | `#72767e` | 3.04:1 | — |
 | Log / details / dialog-panel border, light | `#d5dbe2` | `#777b7f` | 3.06:1 | — |
-| Stop button, light — ghost text and border on `card` | `#d6412a` at rest, 4.52:1 | `#949494` | 3.03:1 | `#000000` 6.92:1 |
-| Stop button, dark — ghost text and border on `card` | `#e0553f` at rest, 4.79:1 | `#606367` | 3.01:1 | `#ffffff` 6.04:1 |
 | Link button rest text, light (§2.3's failing pair — see below) | `#4aa3ff`, 2.63:1 on `card` | — | — | moves to `#326dab`: 5.37:1 on `card`, 4.96:1 on `rowcard`, **4.61:1** on `rowhov`, 4.75:1 on the banner tint |
 | High contrast, dark — primary buttons | `$btn` `#ffffff` | `#949494` | 3.03:1 | `#000000` 6.92:1 |
 | High contrast, light — primary buttons | `$btn` `#000000` | `#5c5c5c` | 3.14:1 | `#ffffff` 6.69:1 |
@@ -440,22 +439,17 @@ Computed, not chosen. Every figure is the output of the check in §4.4.
 | Ghost button `:hover` / `:checked` ink, light | `#4aa3ff` on `#ffffff`, **2.63:1** | — | — | moves to `#326dab`, the same ink as the link — `retry_btn` puts a ghost button on the banner tint too, so it takes the same worst surface. **The `border-color` in that same rule moves with it**: `QPushButton#GhostBtn:hover` sets both to one literal today, and moving the ink alone would leave a 2.63:1 border beside a 4.61:1 label — a meaningful border under the same 3:1 bar, left below it |
 | Ghost button `:hover` / `:checked` ink, dark | `#4aa3ff` on `#12161c`, **6.89:1** | — | — | unchanged — it already clears 4.5:1 |
 | `#LinkBtn` in the warning banner | the banner tint composited over `card` | derived from that composite | ≥3:1 | black or white |
-| `ghostbd` on `card` — the ghost button's rest border (`ONEUP-0027` §4.8 hands it here) | light `#c4ccd6` 1.62:1, dark `#38414f` 1.76:1 | moves to `#8f959c` / `#5e6570` | **3.02:1** / **3.09:1** | — |
+| `ghostbd` on `card` — the ghost button's rest border (`ONEUP-0027` §4.8 hands it here) | light `#c4ccd6` 1.62:1, dark `#38414f` 1.76:1 | moves to `#848990` / `#686e79` | **3.52:1** / **3.54:1** | — |
 
-*The Stop rows above measure the outline design. ONEUP-0239 §4.1.3 filled Stop, so its
-pair is now `#RestartBtn`'s, and with the overlay on it takes the primary buttons' (§4.2).*
+*Stop is filled (ONEUP-0239 §4.1.3), so it shares `#RestartBtn`'s row, and with the overlay
+on it takes the primary buttons' (§4.2).*
 
-Four of these are worth reading twice. The Run button's focused fill is a **dark navy**,
+Some of these are worth reading twice. The Run button's focused fill is a **dark navy**,
 which is the opposite of what the app does today and the whole point of §2.2. The switch's
 track darkens rather than changing hue, so the red/green distinction and the bar-and-circle
 shape both survive focus untouched — `ui-and-accessibility.md` §3 is not weakened by the cue
-landing on the same surface. **The Stop button's rest colour is per-palette, not one danger
-red**: `#d6412a` reads at 4.52:1 on the light card but only 4.02:1 on the dark one, so dark
-takes `#e0553f` at 4.79:1. **The danger colour is a rest-state affordance and does not
-survive focus** — on focus the border takes the ink like every other retained outline,
-because a border kept at its rest colour would sit at 1.49:1 against the fill and be
-invisible. A focused stop button therefore looks like any other focused button on `card`,
-and what identifies it is its **label**, which is where a control's identity belongs
+landing on the same surface. **The filled Stop button darkens like Restart and keeps its
+red hue** on focus, and what identifies it is still its **label**
 (`ui-and-accessibility.md` §3 — never colour alone). And the light **link button's rest text moves** from `#4aa3ff` to
 `#326dab`, which is what closes §2.3's 2.63:1 pair. **The light ink is one value for every
 surface rather than one per row**, chosen as the smallest blend toward black clearing 4.5:1
@@ -981,3 +975,4 @@ does.
 | impl-0305 | 2026-10-17 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0305 gave a switched-on ghost button, overlay on, the primary family's derived pair. §4.2 gained a row and §4.3's ghost-button note an exception. Both record built, verified code: tests/gui-smoke.py measures a focused Settings toggle's pixels in every theme, on and off. §4.1's rule is unchanged, so under the global rule 14's code-already-exists exception the amendment does not re-arm the gate. |
 | impl-0373 | 2026-11-06 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0373 (the user's order of 2026-11-06 to fix the G9 review's findings before the tag): §4.2's two `#StopBtn` rows follow the filled Stop (ONEUP-0239 §4.1.3), a row for the package-view tabs is added as ONEUP-0239 §8 asked, and the Settings-row cell says Recenter is back in the header; §4.3 notes that its Stop rows measure the outline design. All four record built code: `oneup/gui/theme.py`'s `#StopBtn` and `#PackageFilter` rules. An amendment, so no gate (`CLAUDE.md` rule 14). |
 | impl-0427 | 2026-11-20 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0427 (review-code 2026-11-15, lane 10). §4.2's `ToggleSwitch` row records the user's decision of 2026-11-18 on 10-M1: the focused track is not held to the row, because the dark themes cannot satisfy both; no code changed. §4.1's gradient paragraph says which pixels the fraction is tested on (10-L1), which is built and has a tests/gui-smoke.py check seen red. No invariant, published fill or rule moved, so the amendment does not re-arm the gate. |
+| impl-0451 | 2026-11-23 | — | **Not a review — no reviewer was dispatched to produce this row.** ONEUP-0451: §4.3's figures were regenerated from `theme.focus_report` over midnight and daylight on 2026-11-23. The Run, Restart / Stop, switch-on and `ghostbd` rows took the palettes' current colours; the outline Stop rows and the paragraph on Stop's per-palette rest red went, since Stop is filled; §4.1's worst-pixel figure follows the Run row. No rule changed. |
