@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=452 -->
+<!-- ants-roadmap-id-high-water: ONEUP=454 -->
 
 # OneUp Roadmap
 
@@ -12666,7 +12666,7 @@ when complete (that document's §7).
   Kind: test.
   Source: verify-delivery-2026-11-15.
 
-- 📋 [ONEUP-0440] **Before the next release, run the clean-VM kit for the promises no suite here can execute.**
+- ✅ [ONEUP-0440] **Before the next release, run the clean-VM kit for the promises no suite here can execute.**
   verify-delivery 2026-11-15 could not execute, without root, a real
   update or the service: ONEUP-0405, 0409, 0411 and 0392 on real sudo;
   the service route (ONEUP-0249, 0406, including a kill and restart);
@@ -12692,6 +12692,16 @@ when complete (that document's §7).
   removed (SystemCallArchitectures empty). Left: AppImage self-update
   (ONEUP-0112, 0383) in the VM, from a local build stamped older than
   2.1.0 against the real 2.1.0 release.
+  2026-11-23, AppImage self-update in the clean VM (Live ISO 20261014, 8
+  GB): a 2.0.99 AppImage built from main offered 2.1.0; What's new
+  showed the notes; Update now replaced the file in ~/Applications (mode
+  0755 kept), and its sha256 equals GitHub's 2.1.0 asset digest; OneUp
+  relaunched itself as 2.1.0 with no banner. PASS ONEUP-0112. 'View
+  release' no longer exists (ONEUP-0112 removed it, user decision
+  2026-11-07), so ONEUP-0383 was checked through Open log file: it
+  launched Okular, which crashed on the bundle's Qt plugin path. Filed
+  and fixed as ONEUP-0453, re-checked in the VM: PASS. Also found
+  ONEUP-0454 (notes opened at the bottom), fixed.
   **Layman:** Test the fixes that need a real computer update on a clean virtual machine before releasing.
   Kind: chore.
   Source: verify-delivery-2026-11-15.
@@ -12842,7 +12852,7 @@ when complete (that document's §7).
   Source: review-code-2026-11-15.
   Lanes: gui.
 
-- 📋 [ONEUP-0451] **ONEUP-0076 §4.3 publishes Run-button colours the code no longer uses.**
+- ✅ [ONEUP-0451] **ONEUP-0076 §4.3 publishes Run-button colours the code no longer uses.**
   Found beside ONEUP-0427 lane 10, not caused by it, so not fixed there:
   a derived figure moves others. §4.3's Run / banner button row gives rest
   #4aa3ff→#2f6fe0, focus #1c3e61→#122a55, worst pixel 3.00:1, and §4.1's
@@ -12852,6 +12862,10 @@ when complete (that document's §7).
   theme.focus_report and re-check the other §4.3 rows the same way; the
   loop-4 row saying every figure was recomputed is a dated record and
   stays.
+  2026-11-23, 5778b10: §4.3 regenerated from theme.focus_report. Beyond
+  the Run row, the Restart / Stop, switch-on and ghostbd rows were stale
+  too, as were the outline-Stop rows and their paragraph; all now match
+  the code.
   **Layman:** A design document lists old colours for the Run button; the app itself is right.
   Kind: doc-fix.
   Source: close-findings-2026-11-20 (ONEUP-0427 lane 10 sweep).
@@ -12873,3 +12887,32 @@ when complete (that document's §7).
   **Layman:** On a desktop without the older X display setting, switching off password-free updates could fail instead of asking for your password.
   Kind: security.
   Source: ONEUP-0440-vm-2026-11-23.
+
+- ✅ [ONEUP-0453] **In the AppImage, "Open log file" still opens nothing where the viewer is a Qt program.**
+  Found 2026-11-23 in the clean VM (ONEUP-0440), AppImage 2.1.0: Open
+  log file launched Okular, which aborted with "Could not load the Qt
+  platform plugin wayland ... even though it was found". A recording
+  opener showed it inherited QT_PLUGIN_PATH and QML2_IMPORT_PATH
+  pointing into the bundle (_MEI.../PySide6/Qt). ONEUP-0383 dropped
+  only LD_LIBRARY_PATH. Okular started by hand opened the same file.
+  Fix: after QApplication, pin the app's library paths and strip the
+  bundle's entries from both variables (paths.restore_machine_qt_paths).
+  2026-11-23, be608f9. Checked in the clean VM with an AppImage built
+  from the fix: Open log file opened the log in Okular, and the opener
+  saw no bundle path.
+  **Layman:** In the AppImage, the button that opens the log file started the viewer, but the viewer crashed straight away.
+  Kind: fix.
+  Source: verify-delivery-2026-11-23 (ONEUP-0440 VM run).
+
+- ✅ [ONEUP-0454] **What's new opens its release notes scrolled to the bottom.**
+  Seen 2026-11-23 in the clean VM (AppImage 2.0.99 offered 2.1.0).
+  Reproduced offscreen: notes set before show() leave the scrollbar at
+  its maximum, because the text cursor sits at the end and the browser
+  scrolls to it on show; set after show() they stay at the top. The
+  normal path fills them first (releases already fetched). Fix:
+  UpdateDialog.set_notes moves the cursor to the start.
+  2026-11-23, 91da1db. Checked offscreen (scroll 2118 of 2122 before, 0
+  after) and by a gui-smoke check; not re-run in the VM.
+  **Layman:** The window that shows what changed in a new OneUp opened at the end of the list instead of the start.
+  Kind: ux.
+  Source: verify-delivery-2026-11-23 (ONEUP-0440 VM run).
