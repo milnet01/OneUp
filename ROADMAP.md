@@ -12687,6 +12687,11 @@ when complete (that document's §7).
   PASS window position on KDE Wayland (ONEUP-0246): reopened at the saved 37,23; a window too tall to fit is clamped above the panel.
   NEW ONEUP-0416's open question: sudo uses askpass with no terminal only while DISPLAY is set. Filed and fixed as ONEUP-0452, checked in the VM.
   Not runnable here: ONEUP-0409 (unreachable by design, locked by a py_case). AppImage self-update (ONEUP-0112, 0383) needs a published newer release; check it against 2.1.0 once that is out.
+  2026-11-23: 2.1.0 released (GitHub with a signed AppImage, OBS built).
+  The host now runs 2.1.0 from OBS, and the allow-32bit.conf drop-in is
+  removed (SystemCallArchitectures empty). Left: AppImage self-update
+  (ONEUP-0112, 0383) in the VM, from a local build stamped older than
+  2.1.0 against the real 2.1.0 release.
   **Layman:** Test the fixes that need a real computer update on a clean virtual machine before releasing.
   Kind: chore.
   Source: verify-delivery-2026-11-15.
