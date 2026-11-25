@@ -17,7 +17,12 @@ set -euo pipefail
 
 here=$(cd "$(dirname "$0")/../.." && pwd)     # repo root
 app_id="za.co.antsprojectshub.OneUp"
-work=$(mktemp -d)
+# On a real disk: /tmp is RAM on the development machine, and this holds a PySide6
+# virtual environment and PyInstaller's output (ONEUP-0430). TMPDIR still wins, for a
+# caller that wants it elsewhere.
+scratch="${TMPDIR:-${XDG_CACHE_HOME:-$HOME/.cache}/oneup-appimage}"
+mkdir -p "$scratch"
+work=$(mktemp -d "$scratch/build.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 
 echo "==> Freezing OneUp with PyInstaller"

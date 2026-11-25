@@ -145,7 +145,9 @@ def main() -> int:
     # newer version would never be offered an update again (ONEUP-0160).
     current = re.search(r'APP_VERSION = "(\d+\.\d+\.\d+)"',
                         (ROOT / "oneup/__init__.py").read_text()).group(1)
-    for older in ("0.0.1", current):
+    # "9.9.09" is above any real version, so only the leading-zero rule refuses it
+    # (SemVer 2.0.0 §2; ONEUP-0430).
+    for older in ("0.0.1", current, "9.9.09"):
         with tempfile.TemporaryDirectory() as td:
             tmp = Path(td)
             for rel in REAL_FILES:
@@ -158,9 +160,34 @@ def main() -> int:
                 [sys.executable, str(tmp / "bump.py"), older],
                 capture_output=True, text=True)
             check(proc.returncode != 0,
-                  f"bump.py {older} (not above the current {current}) is refused")
+                  f"bump.py {older} (not above the current {current}, or not SemVer) is refused")
             check(all((tmp / rel).read_text() == text for rel, text in before.items()),
                   f"bump.py {older} leaves every file untouched")
+
+    # A rename that fails must not strand the temporary file beside the real one: the
+    # next ./release.sh would refuse it as an unclean tree (ONEUP-0430). The failure is
+    # forced in-process, on the temp tree's own copy of bump.py.
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        shutil.copy(ROOT / "bump.py", tmp / "bump.py")
+        (tmp / "f.txt").write_text("v1\n")
+        probe = (
+            "import os, sys\n"
+            f"sys.path.insert(0, {str(tmp)!r})\n"
+            "import bump\n"
+            "def boom(*a, **k): raise OSError('forced')\n"
+            "bump.os.replace = boom\n"
+            "try:\n"
+            "    bump.edit('f.txt', 'v1', 'v2')\n"
+            "except OSError:\n"
+            "    sys.exit(3)\n"
+        )
+        proc = subprocess.run(  # noqa: S603 — fixed argv, temp-tree paths.
+            [sys.executable, "-c", probe], capture_output=True, text=True)
+        check(proc.returncode == 3,
+              f"a forced rename failure reaches the caller (exit {proc.returncode})")
+        check(not list(tmp.rglob("*.bump-tmp")), "a failed rename leaves no temporary file")
+        check((tmp / "f.txt").read_text() == "v1\n", "a failed rename leaves the file as it was")
 
     print(f"\nPassed: {passed}   Failed: {failed}")
     return 1 if failed else 0

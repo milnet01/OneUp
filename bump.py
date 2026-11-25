@@ -36,10 +36,16 @@ def edit(rel_path: str, pattern: str, repl: str, count: int = 1, flags: int = 0)
         die(f"no match for {pattern!r} in {rel_path} — file drifted from the expected format")
     # Written beside the file and renamed over it, so an interruption leaves the old
     # file or the new one, never an empty or half-written one (ONEUP-0186).
+    # A failed write must not leave the temporary file: the next ./release.sh would refuse
+    # the untracked file as an unclean tree (ONEUP-0430).
     tmp = path.with_name(path.name + ".bump-tmp")
-    tmp.write_text(new)
-    shutil.copymode(path, tmp)
-    os.replace(tmp, path)
+    try:
+        tmp.write_text(new)
+        shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def xml_escape(s: str) -> str:
@@ -47,8 +53,11 @@ def xml_escape(s: str) -> str:
 
 
 def main():
-    if len(sys.argv) != 2 or not re.fullmatch(r"\d+\.\d+\.\d+", sys.argv[1]):
-        die("usage: ./bump.py X.Y.Z")
+    # No leading zeros (SemVer 2.0.0 §2): 2.0.01 would pass the "above current" check
+    # as (2, 0, 1) and ship a tag no later bump could follow (ONEUP-0430).
+    part = r"(0|[1-9]\d*)"
+    if len(sys.argv) != 2 or not re.fullmatch(rf"{part}\.{part}\.{part}", sys.argv[1]):
+        die("usage: ./bump.py X.Y.Z (no leading zeros)")
     ver = sys.argv[1]
     # Refuse anything not above the current version, before any file is touched: all six
     # sites would agree and the lockstep gate pass, while the release lists fall out of

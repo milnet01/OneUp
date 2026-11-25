@@ -771,7 +771,8 @@ user downloads one by hand.
 
 **13.6 — What is not defended.** This PC signs what GitHub's CI built. A compromise of the
 CI build itself, before signing, is signed like any other build. The pinned build set
-(ONEUP-0060) is the only defence there.
+(ONEUP-0060), with the sha256 of every file pip may install (ONEUP-0430), is the only
+defence there. The build job holds no write token; only the publish job does.
 
 ## What checks this
 
@@ -809,7 +810,7 @@ CI build itself, before signing, is signed like any other build. The pinned buil
 | §13.3 the self-update never asks for root | `tests/self-update-test.py` — an unwritable folder is refused before anything is written, and `self_update.py` names no privileged route |
 | §13.4 one module reaches the network, and nothing opens a browser | `tests/imports-test.py` (INV-15); `tests/gui-smoke.py` — activating a link in the notes opens nothing |
 | §13.5 no private key is tracked | `tests/self-update-test.py` — `git ls-files` holds no `*.key` and no private-key block. **Nothing checks that the key is backed up** |
-| §13.6 the CI build itself | nothing automatic |
+| §13.6 the CI build itself | `tests/run-tests.sh` — *"every package the AppImage installs carries a sha256 hash"*, and `local-CI.sh`'s zizmor gate for the job's permissions. Nothing checks the build's output |
 | §2.4 the keep-alive's refresh comes from the engine itself | `tests/run-tests.sh` — *"with no terminal, the keep-alive refreshes the engine's own credential (ONEUP-0392)"*, and under `script` for a real terminal, *"the keep-alive shares the engine's terminal session"*. Neither covers the frozen Bash fallback, which fails the first |
 
 **This is the best-gated standard in the set**, and the reason is worth copying rather than

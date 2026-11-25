@@ -6,12 +6,21 @@ on:
   push:
     tags: ['v*']
 
-permissions:
-  contents: write
+# Nothing by default: each job asks for what it needs. The build job runs both test suites
+# and two pip installs, so it reads only; the publish job alone writes (ONEUP-0430).
+permissions: {}
+
+# A moved tag (docs/standards/workflow.md §8) supersedes the run for its old commit.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  appimage:
+  build:
+    name: Test and build the AppImage
     runs-on: ubuntu-22.04   # build on an older glibc so the AppImage runs widely
+    permissions:
+      contents: read   # check out the tagged commit
     # A good run takes about 5 minutes. A stalled one otherwise sits until GitHub's 6-hour
     # default: apt at v1.4.5, the engine tests at v1.4.6. This makes it a red run a
     # re-run clears (ONEUP-0116).
@@ -43,7 +52,19 @@ jobs:
             exit 1
           }
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      # The tag must name the version the tree says it is. Every installed AppImage compares
+      # the release's tag with its own APP_VERSION (versioning-overrides.md §3), and the
+      # lockstep gate that would catch a mismatch runs only on a clone with the pre-push
+      # hook enabled (ONEUP-0430).
+      - name: Tag matches APP_VERSION
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          grep -qxF "APP_VERSION = \"$ver\"" oneup/__init__.py || {
+            echo "::error::tag $GITHUB_REF_NAME does not match APP_VERSION in oneup/__init__.py"
+            exit 1
+          }
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: '3.14'
           # No `cache: pip`, deliberately: this job publishes the release, and a
@@ -109,11 +130,16 @@ jobs:
           }
 
       # The system service against a private dbus-daemon (ONEUP-0249). Mirrors local-CI.sh.
-      # jeepney at the version docs/standards/dependencies.md records; exit 77 (dbus-daemon
-      # or jeepney unavailable) is a skip, as for the GUI suite.
+      # jeepney at the version docs/standards/dependencies.md records, with the sha256 of
+      # each file PyPI holds for it, so pip installs nothing else (ONEUP-0430); exit 77
+      # (dbus-daemon or jeepney unavailable) is a skip, as for the GUI suite.
       - name: System service suite
         run: |
-          python -m pip install --quiet jeepney==0.9.0
+          echo 'jeepney==0.9.0' \
+            '--hash=sha256:97e5714520c16fc0a45695e5365a2e11b81ea79bba796e26f9f1d178cb182683' \
+            '--hash=sha256:cf0e9e845622b81e4a28df94c40345400256ec608d0e55bb8a3feaa9163f5732' \
+            > "$RUNNER_TEMP/service-requirements.txt"
+          python -m pip install --quiet --require-hashes -r "$RUNNER_TEMP/service-requirements.txt"
           python tests/service-test.py || {
             rc=$?
             [ "$rc" -eq 77 ] && echo "dbus-daemon or jeepney unavailable — skipped"
@@ -123,8 +149,41 @@ jobs:
       - name: Build AppImage
         run: bash packaging/appimage/build-appimage.sh
 
-      - name: Attach AppImage to the release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3.0.3
+      # Handed to the publish job, which holds the only write grant.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
-          files: OneUp-x86_64.AppImage
-          body_path: release-notes.md
+          name: release
+          path: |
+            OneUp-x86_64.AppImage
+            release-notes.md
+          if-no-files-found: error
+          compression-level: 0   # the AppImage is already compressed
+          retention-days: 1
+
+  publish:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write   # create the release and attach the AppImage
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: release
+
+      # The runner's own gh, not a third-party action (ONEUP-0141). A moved tag finds its
+      # release already there, so that case replaces the notes and the AppImage instead.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file release-notes.md
+            gh release upload "$TAG" OneUp-x86_64.AppImage --clobber
+          else
+            gh release create "$TAG" OneUp-x86_64.AppImage \
+              --verify-tag --title "$TAG" --notes-file release-notes.md
+          fi

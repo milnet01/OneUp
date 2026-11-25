@@ -35,6 +35,11 @@ case "$action" in
     cat)  [[ $# -eq 2 ]] || die "$usage"; want=$2 ;;
     *)    die "$usage" ;;
 esac
+# cpio reads its argument as a pattern, so a PATH holding one of these would print other
+# members instead of the file asked for (ONEUP-0430).
+if [[ "$action" == cat && "$want" == *[][*?\\]* ]]; then
+    die "PATH may not contain [ ] * ? or \\ — cpio would read it as a pattern"
+fi
 
 for tool in git rpmbuild rpm rpm2cpio cpio; do
     command -v "$tool" >/dev/null 2>&1 || die "$tool is not installed"
@@ -73,5 +78,10 @@ case "$action" in
         # package first rather than reading silence as an empty file.
         rpm -qlp "${rpms[0]}" | grep -Fxq -- "$want" \
             || die "$want is not in the package (run 'list' to see what is)"
+        # A directory is in the package too, and cpio prints nothing for it — the same
+        # silence the check above guards against (ONEUP-0430).
+        kind=$(rpm -qp --qf '[%{FILEMODES:perms} %{FILENAMES}\n]' "${rpms[0]}" |
+               awk -v p="$want" 'substr($0, index($0, " ") + 1) == p { print substr($0, 1, 1); exit }')
+        [[ "$kind" == - ]] || die "$want is not a regular file in the package"
         rpm2cpio "${rpms[0]}" | cpio -i --quiet --to-stdout -- ".$want" ;;
 esac

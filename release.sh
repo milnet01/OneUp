@@ -30,8 +30,9 @@ if [[ "${1:-}" == --sign-only ]]; then
     shift
 fi
 ver=${1:-}
-[[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-    || die "usage: ./release.sh X.Y.Z [--no-obs]  or  ./release.sh --sign-only X.Y.Z"
+# No leading zeros, as bump.py refuses them (SemVer 2.0.0 §2; ONEUP-0430).
+[[ "$ver" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
+    || die "usage: ./release.sh X.Y.Z [--no-obs]  or  ./release.sh --sign-only X.Y.Z (no leading zeros)"
 do_obs=true
 for arg in "${@:2}"; do    # every option, not just the second word (ONEUP-0186)
     case "$arg" in
@@ -63,6 +64,10 @@ red() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 
 key="${ONEUP_SIGNING_KEY:-$HOME/.config/oneup-release/signing.key}"
 
+# Scratch folders go on a real disk: /tmp is RAM on the development machine, and its
+# siblings (local-CI.sh, pre-push, inspect-rpm.sh) moved off it already (ONEUP-0430).
+scratch="${XDG_CACHE_HOME:-$HOME/.cache}/oneup-release"
+
 # Before anything changes: is the signing key here, and is it the private half of the
 # public key every installed AppImage checks against? A missing or mismatched key
 # would otherwise surface only after the tag is pushed, as a release no AppImage is
@@ -87,18 +92,28 @@ sign_release() {
     fi
     command -v gh >/dev/null 2>&1 || { red "   gh is not installed."; return 1; }
     sha=$(git rev-parse "v$ver^{commit}") || return 1
-    # The run appears a few seconds after the push.
+    # The run appears a few seconds after the push. gh's own error is kept, so a lapsed
+    # login or a dead network is named, not reported as a missing run (ONEUP-0430).
+    local gh_err=""
     for _ in $(seq 1 30); do
-        run=$(gh run list --workflow release.yml --commit "$sha" --limit 1 \
-                  --json databaseId -q '.[0].databaseId' 2>/dev/null)
+        if run=$(gh run list --workflow release.yml --commit "$sha" --limit 1 \
+                     --json databaseId -q '.[0].databaseId' 2>&1); then
+            gh_err=""
+        else
+            gh_err=$run; run=""
+        fi
         [[ -n "$run" ]] && break
         sleep 10
     done
-    [[ -n "$run" ]] || { red "   No Release workflow run found for v$ver."; return 1; }
+    if [[ -z "$run" ]]; then
+        red "   No Release workflow run found for v$ver."
+        [[ -n "$gh_err" ]] && red "   gh said: $gh_err"
+        return 1
+    fi
     echo "   Waiting for GitHub to build the AppImage (run $run)…"
     gh run watch "$run" --exit-status >/dev/null \
         || { red "   The Release workflow failed, so there is no AppImage to sign."; return 1; }
-    sigdir=$(mktemp -d) || return 1
+    mkdir -p "$scratch" && sigdir=$(mktemp -d "$scratch/sign.XXXXXX") || return 1
     gh release download "v$ver" --pattern "$asset" --dir "$sigdir" \
         || { red "   Couldn't download $asset from the v$ver release."; return 1; }
     python3 packaging/sign-release.py --version "$ver" --key "$key" "$sigdir/$asset" \
@@ -169,8 +184,16 @@ if $do_obs; then
             continue
         fi
         cleanup
-        work=$(mktemp -d) || work=""
-        if ( cd "$work" && osc checkout "$proj" oneup >/dev/null 2>&1 ); then
+        # Checked: with work empty, `cd ""` succeeds without moving and the checkout lands
+        # in the repository, where it blocks the next release's clean-tree check (ONEUP-0430).
+        if ! { mkdir -p "$scratch" && work=$(mktemp -d "$scratch/obs.XXXXXX"); }; then
+            work=""
+            echo "   could not make a folder for the OBS checkout — re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
+            obs_updated=false
+            continue
+        fi
+        # osc's output is kept for the failure message, which otherwise could not say why.
+        if osc_out=$( cd "$work" && osc checkout "$proj" oneup 2>&1 ); then
             # Checked: a failed copy leaves the old files, and `osc commit` would then
             # report success for a commit that changed nothing (ONEUP-0420).
             if ! cp packaging/obs/_service packaging/rpm/oneup.spec "$work/$proj/oneup/"; then
@@ -191,6 +214,7 @@ if $do_obs; then
             fi
         else
             echo "   osc checkout failed — re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
+            printf '   osc said: %s\n' "$osc_out"
             obs_updated=false
         fi
     done

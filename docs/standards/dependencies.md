@@ -63,8 +63,13 @@ backlog item, not a ledger entry.
 Recorded so the next sweep has a baseline:
 
 - `actions/checkout` → **`3d3c42e5aac5ba805825da76410c181273ba90b1`** (`v7.0.1`) — current.
-- `actions/setup-python` → **`5fda3b95a4ea91299a34e894583c3862153e4b97`** (`v7.0.0`) — current.
-- `softprops/action-gh-release` → **`efb35369e0ad2afab669f228072c1b0d510eae64`** (`v3.0.3`) — current.
+- `actions/setup-python` → **`6d4fd22b20465ccc0f7354476588e8df7c9ca0e0`** (`v7.1.0`) — current (2026-11-25).
+- `actions/upload-artifact` → **`cf430e030ddbb5b0abf93d22962f4752f3646cd9`** (`v7.0.2`) — current (2026-11-25).
+- `actions/download-artifact` → **`9000827ccba6bdab643e8b6fd33ac0654aef8333`** (`v8.0.2`) — current (2026-11-25).
+
+The two artifact actions carry the AppImage from the build job to the publish job, the only
+one that can write (ONEUP-0430). The release itself is published with the runner's own `gh`
+(ONEUP-0141).
 
 **Why a SHA (rule 6).** A major tag is mutable — its publisher can repoint
 `v7` at any commit — so the tag says which release we *asked* for and not which
@@ -100,7 +105,9 @@ on, and the answer is unchanged.
   0.9.0 as the newest, and Tumbleweed's `python313-jeepney` is `0.9.0-1.4`). The D-Bus
   library on both sides of the system service (ONEUP-0249 §4.3). The RPM takes the
   distro's package. The engine imports it only inside functions, so the AppImage's
-  engine, which takes the sudo route, runs without it (INV-12).
+  engine, which takes the sudo route, runs without it (INV-12). The release workflow's
+  service suite installs it by the sha256 of each file PyPI holds for it, so a bump
+  changes those hashes in `release.yml` too (ONEUP-0430).
 - **appimagetool** → **`1.9.1`** and the AppImage **type2-runtime** → **`20251108`** — the
   newest tagged release of each (2026-11-11: `gh api repos/AppImage/<repo>/releases`).
   `packaging/appimage/build-appimage.sh` fetches each by tag and checks a sha256 written
@@ -116,7 +123,7 @@ on, and the answer is unchanged.
 ```bash
 # CI actions — latest release tag. Compare each against the `# vX.Y.Z` comment
 # beside its pin in .github/workflows/release.yml, never against the SHA.
-for r in actions/checkout actions/setup-python softprops/action-gh-release; do
+for r in actions/checkout actions/setup-python actions/upload-artifact actions/download-artifact; do
   echo "$r -> $(gh api repos/$r/releases/latest -q .tag_name)"
 done
 # …and the SHA a tag resolves to, when bumping a pin:
@@ -124,7 +131,8 @@ done
 # Python runtime — latest stable release; compare with python-version in release.yml:
 curl -s https://endoflife.date/api/python.json | python3 -c 'import json,sys; print("python ->", json.load(sys.stdin)[0]["latest"])'
 # AppImage build packages — latest on PyPI; compare with packaging/appimage/requirements.txt,
-# and on a bump replace the whole set with the resolution that file's header names:
+# and on a bump replace the whole set with the resolution that file's header names, then
+# run packaging/appimage/hash-requirements.py to write each pin's hashes:
 python3 -m pip index versions PySide6 | head -1; python3 -m pip index versions pyinstaller | head -1
 python3 -m pip index versions cryptography | head -1
 # AppImage tools — newest tagged release, and its sha256, against build-appimage.sh:

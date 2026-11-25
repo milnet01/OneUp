@@ -5635,6 +5635,24 @@ else
           (cd "$hookd" && GIT_DIR="$rend/.git" GIT_WORK_TREE="$hookd" ONEUP_PREPUSH_GATE="$hookd/gate" \
            ANTS_GLOBAL_HOOKS="$hookd/global" bash "$REPO/githooks/pre-push" origin 2>&1))
     check "a push renaming code to markdown runs the whole suite (ONEUP-0402)" "STUB-CI[]" "$out"
+    # The seam is a test hook, so a real checkout must ignore it: a leftover
+    # ONEUP_PREPUSH_GATE=true once skipped the whole gate (ONEUP-0430). A throwaway repo
+    # stands in for a real checkout — it has a githooks/pre-push of its own — and its
+    # local-CI.sh is a stub, so the gate that runs is never this suite's own.
+    seamd="$hookd/seam-repo"
+    mkdir -p "$seamd/githooks" && git -C "$seamd" init -q
+    printf '#!/usr/bin/env bash\n' > "$seamd/githooks/pre-push"
+    printf '#!/usr/bin/env bash\nprintf "REAL-GATE[%%s]\\n" "$*"\n' > "$seamd/local-CI.sh"
+    printf 'x = 1\n' > "$seamd/x.py"
+    git -C "$seamd" add . && git -C "$seamd" -c user.name=t -c user.email=t@t commit -q -m base
+    printf 'x = 2\n' > "$seamd/x.py"
+    git -C "$seamd" -c user.name=t -c user.email=t@t commit -q -am change
+    out=$(printf 'refs/heads/probe %s refs/heads/probe %s\n' \
+              "$(git -C "$seamd" rev-parse HEAD)" "$(git -C "$seamd" rev-parse HEAD~1)" |
+          (cd "$seamd" && XDG_CACHE_HOME="$hookd/cache" ONEUP_PREPUSH_GATE="$hookd/gate" \
+           ANTS_GLOBAL_HOOKS="$hookd/global" bash "$REPO/githooks/pre-push" origin 2>&1))
+    check_absent "a real checkout ignores the test seam (ONEUP-0430)" "STUB-CI[" "$out"
+    check "a real checkout runs its own gate with the seam set (ONEUP-0430)" "REAL-GATE[]" "$out"
     rm -rf "$hookd"
 fi
 
@@ -6568,6 +6586,15 @@ check_absent "every URL the AppImage build fetches carries a pinned sha256" "unp
        | grep -vE '^[[:space:]]*fetch_pinned "https://[^"]+" [0-9a-f]{64} ' \
        | sed 's/^/unpinned: /')"
 check "fetch_pinned verifies the checksum" "sha256sum -c" "$build"
+# The same for what pip installs. A pin with no hash takes any file published under that
+# version, and a file with no hashes at all turns pip's checking off without a word, so
+# every pin must carry its own (ONEUP-0430).
+reqs="$(grep -vE '^[[:space:]]*#' "$root_dir/packaging/appimage/requirements.txt")"
+check "the AppImage's pip set pins at least one package" "==" "$reqs"
+check_absent "every package the AppImage installs carries a sha256 hash" "unhashed" \
+    "$(awk '/==/ { if (pin != "" && !seen) print "unhashed: " pin; pin = $1; seen = 0; next }
+            /--hash=sha256:[0-9a-f]{64}/ { seen = 1 }
+            END { if (pin != "" && !seen) print "unhashed: " pin }' <<<"$reqs")"
 
 echo "TEST: the service ships no polkit file and its unit never kills a transaction (ONEUP-0249 INV-13)"
 # CVE-2018-1106's shape is a convenience .rules file shipped with the package; an

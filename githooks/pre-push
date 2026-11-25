@@ -44,7 +44,10 @@
 #
 # ONEUP_PREPUSH_GATE is a test seam: when set, it is run as `$ONEUP_PREPUSH_GATE <tip>
 # <mode>` in place of the checkout and local-CI.sh, so tests/run-tests.sh can see which
-# tips and which mode the hook chose without running the real gate.
+# tips and which mode the hook chose without running the real gate. It is honoured only
+# when the work tree has no githooks/pre-push of its own, as in the suite's probe. Every
+# real checkout of this repository has one, so a leftover variable cannot skip a real
+# push's gate (ONEUP-0430).
 #
 # Enable once per clone:  git config core.hooksPath githooks
 set -uo pipefail
@@ -104,10 +107,16 @@ worktree=""
 cleanup() { [[ -n "$worktree" ]] && git -C "$root" worktree remove --force "$worktree" 2>/dev/null; return 0; }
 trap cleanup EXIT
 
+seam="${ONEUP_PREPUSH_GATE:-}"
+if [[ -n "$seam" && -e "$root/githooks/pre-push" ]]; then
+    echo "pre-push: ignoring ONEUP_PREPUSH_GATE — it is a test seam, and this is a real checkout." >&2
+    seam=""
+fi
+
 head=$(git rev-parse --verify --quiet HEAD) || head=""
 for tip in "${tips[@]}"; do
-    if [[ -n "${ONEUP_PREPUSH_GATE:-}" ]]; then
-        "$ONEUP_PREPUSH_GATE" "$tip" "$mode" || exit 1
+    if [[ -n "$seam" ]]; then
+        "$seam" "$tip" "$mode" || exit 1
         continue
     fi
     if [[ "$tip" == "$head" && -z $(git -C "$root" status --porcelain --untracked-files=all) ]]; then

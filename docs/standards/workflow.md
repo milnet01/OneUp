@@ -214,13 +214,14 @@ pushed commits for secrets** by handing its stdin to the machine-wide hook's
 | `Engine test suite` | `tests/run-tests.sh` — the markers the engine prints; the `oneup.engine` package by default since ONEUP-0054 stage 9 |
 | `Engine parser unit tests` | `tests/parsers-test.py` — the pure half of the engine (`oneup/engine/parsers.py`): `to_bytes`, the two download-size wordings, the progress wordings, `zypper lr -u` output and the lock file's text, table-driven against real captured output |
 | `System service suite` | `tests/service-test.py` — the system service (ONEUP-0249) against a private `dbus-daemon` and a fake polkit authority, with mock binaries in place of the root tools; exit 77 = `dbus-daemon` or `jeepney` absent, a skip. Has a `release.yml` leg |
+| `Self-update suite` | `tests/self-update-test.py` — the self-update's Qt-free half (ONEUP-0112 §7): versions, the release list, the signature, the swap, the relaunch and the signing script, with a throwaway key and no network. Exit 77 = `cryptography` absent, a skip here; its `release.yml` leg fails on 77 |
 | `GUI smoke test (offscreen)` | `tests/gui-smoke.py` — the window's state after being fed those markers (exit 77 = PySide6 absent, a skip), plus its G3 pairing scenario, which launches the Python engine through the window's own code path and reads what came back, where every other scenario feeds the window lines the suite wrote itself. Gate G3 of ONEUP-0054, with a `release.yml` leg. Run a second time as `tests/gui-smoke.py -reverse`, mirrored right-to-left, in both gates (ONEUP-0032 INV-5) |
 | `Package structure (oneup/)` | `tests/imports-test.py` — the package rules a reader passes by eye: no path constant bound by name, no engine module importing `oneup/gui/`, no module building paths from its own `__file__`, the entry point never imported from inside the package, and every engine launch going through `paths.engine_argv` |
 | `Translation groundwork (oneup/)` | `tests/i18n-check.py` — ONEUP-0032's source rules: no translation machinery in the engine, no explicit layout direction, font fallback never switched off, no size cap a translation could outgrow |
 | `Python compile (updater.py, bump.py, oneup/)` | `py_compile updater.py bump.py` plus `compileall oneup` — `compileall` over the package rather than a file list, because a module nobody has imported yet is exactly the one a split leaves broken |
 | `bump.py functional test` | `tests/bump-test.py` — a real bump in a throwaway copy still parses the five real version sites, and rewrites the (synthetic) `CHANGELOG.md`'s heading and both links correctly |
-| `Lint` | `shellcheck`, then `ruff check .` with `pyproject.toml`'s rule set — best-effort |
-| `Packaging validation` | desktop file and AppStream metainfo |
+| `Lint` | `shellcheck`, then `ruff check .` with `pyproject.toml`'s rule set, then `zizmor --persona=pedantic` over `.github/workflows/` (ONEUP-0431) — best-effort. Then ONEUP-0027 INV-5, which never skips: no colour literal in `oneup/gui/` outside a theme palette |
+| `Packaging validation` | desktop file, AppStream metainfo and the D-Bus policy file |
 | `Version lockstep (six sites must agree)` | the **version numbers** at the six sites of §5.1 agree |
 | `Documentation` | `tests/docs-check.py` — the rules of `docs/standards/documentation.md` that a script can settle, the `CHANGELOG.md` links §5.1's site 6 depends on, and the marker table in `docs/reference/marker-protocol.md` §3 against both the engine's `marker NAME` call sites and the markers the engine suite asserts on |
 
@@ -251,8 +252,9 @@ itself is broken. A failing test is fixed, not bypassed.
 
 **The two gate sets are not identical, deliberately.** `release.yml` runs the test gates —
 the engine suite, the parser unit tests, the `bump.py` functional test, the package structure
-check, the translation groundwork check, the GUI smoke test and the system service suite — and the AppImage build, and nothing else. So **every other
-gate in the §6 table has never run in GitHub CI**: the compile check, lint, packaging validation, version lockstep and
+check, the translation groundwork check, the GUI smoke test, the self-update suite and the system service suite — plus a check that the tag matches
+`APP_VERSION`, and the AppImage build. So **every other
+gate in the §6 table has never run in GitHub CI**: the compile check, lint, the INV-5 colour check, packaging validation, version lockstep and
 documentation. Written as names rather than a count, because a count goes stale
 silently.
 
@@ -295,8 +297,9 @@ would quietly rewrite a claim it does not understand.
 is no reason to batch pushes. Push each commit as it lands, once local CI is green.
 
 The only workflow is `release.yml`, and it triggers on `push: tags: ['v*']` — an ordinary
-commit push runs no CI at all. A tag push runs the test gates §6 names, builds the AppImage and
-attaches it to the GitHub release.
+commit push runs no CI at all. A tag push runs the test gates §6 names, checks the tag matches
+`APP_VERSION` and builds the AppImage, in a job that can only read the repository. A second
+job, the only one allowed to write, attaches the AppImage to the GitHub release (ONEUP-0430).
 
 ## 8. Releasing
 
@@ -366,7 +369,7 @@ elsewhere. **Back the key up.** `docs/standards/security.md` §13.5 says why.
 **A release that fails to publish is fixed, never re-versioned.** The user's rule,
 2026-11-06: *"A new version means we added something which we haven't."* When the tag's
 workflow or an OBS build fails, fix it, move the tag onto the fix, push it again, and re-run
-both OBS packages from the moved tag, so every copy of that version is the same source.
+the OBS package from the moved tag, so every copy of that version is the same source.
 The moved tag rebuilds the AppImage, so its old `.sig` no longer matches: finish with
 `./release.sh --sign-only X.Y.Z`, which replaces it.
 2.0.0 was finished this way twice (ONEUP-0378, ONEUP-0379).

@@ -243,6 +243,16 @@ if command -v ruff >/dev/null 2>&1; then
     if ruff check . -q; then ok "ruff (pyproject.toml rule set)"
     else bad "ruff (pyproject.toml rule set)"; fi
 else skip "ruff" "not installed"; fi
+# The release workflow holds the only token that can publish, so it gets the strictest
+# audit zizmor has: its default persona did not report release.yml's workflow-wide
+# write grant, and pedantic did (ONEUP-0431). --offline: no push waits on GitHub's API.
+if command -v zizmor >/dev/null 2>&1; then
+    if zizmor --offline --persona=pedantic --quiet .github/workflows/ >"$LOGS/zizmor.log" 2>&1; then
+        ok "zizmor --persona=pedantic (.github/workflows/)"
+    else
+        bad "zizmor --persona=pedantic (.github/workflows/)"; cat "$LOGS/zizmor.log"
+    fi
+else skip "zizmor" "not installed"; fi
 
 # --- ONEUP-0027 INV-5: no colour literal outside a palette -------------------
 # A theme reaches only what the palettes hold, so a literal left in a painter or
@@ -335,7 +345,9 @@ v_py=$(grep -oP 'APP_VERSION = "\K[^"]+' oneup/__init__.py)
 v_spec=$(grep -oP '^Version:\s+\K\S+' packaging/rpm/oneup.spec)
 v_speclog=$(grep -oP '^\* .* - \K[0-9]+\.[0-9]+\.[0-9]+' packaging/rpm/oneup.spec | head -1)
 v_fmt=$(grep -oP 'versionformat">\K[^<]+' packaging/obs/_service)
-v_rev=$(grep -oP 'revision">v?\K[^<]+' packaging/obs/_service)
+# The revision is the git TAG, so it must carry its v: a bare 2.0.0 names no ref OBS can
+# clone, and read as nothing here it fails the gate below (ONEUP-0430).
+v_rev=$(grep -oP 'revision">v\K[^<]+' packaging/obs/_service)
 v_meta=$(grep -oP '<release version="\K[^"]+' data/za.co.antsprojectshub.OneUp.metainfo.xml | head -1)
 v_chg=$(grep -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | head -1)
 printf '  oneup/__init__.py=%s spec=%s spec%%changelog=%s _service.fmt=%s _service.rev=%s metainfo=%s CHANGELOG=%s\n' \
