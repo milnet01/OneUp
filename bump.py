@@ -77,6 +77,9 @@ def main():
     if not m or not m.group(1).strip():
         die("CHANGELOG.md has no non-empty '## [Unreleased]' section to release — "
             "add your changes there first.")
+    # Only the bold lead of each bullet is taken: the RPM changelog and AppStream notes
+    # want one short line per change, not the bullet's full prose. A bullet with no
+    # bold lead is left out; with none at all the notes read "Release X.Y.Z.".
     items = re.findall(r"^- \*\*(.+?)\*\*", m.group(1), re.M)
     if not items:
         items = [f"Release {ver}."]
@@ -92,6 +95,7 @@ def main():
 
     # 3. RPM spec %changelog — prepend a stanza
     # '%' is the spec file's macro sigil; a bare one breaks the OBS build (ONEUP-0160).
+    # The "-0" is the spec's `Release: 0`; change one and the other must follow.
     stanza = f"* {rpmdate} {AUTHOR} - {ver}-0\n" + "".join(
         f"- {it.replace('%', '%%')}\n" for it in plain)
     edit("packaging/rpm/oneup.spec", r'(%changelog\n)', lambda mo: mo.group(1) + stanza)

@@ -115,8 +115,10 @@ class UpdateDialog(QDialog):
             "update_dialog", "Cancel the download"))
         self.cancel_btn.clicked.connect(on_cancel)
         self.cancel_btn.setVisible(False)
-        self._actions = [b for b in (self.update_btn, self.skip_btn, self.close_btn)
-                         if not b.isHidden()]
+        # The buttons downloading() hides and download_ended() brings back.
+        self._actions = [self.skip_btn, self.close_btn]
+        if kind == "appimage":
+            self._actions.insert(0, self.update_btn)
 
         row = QHBoxLayout()
         row.addStretch(1)

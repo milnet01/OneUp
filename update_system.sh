@@ -239,6 +239,9 @@ Usage: $(basename "$0") [--steps=LIST] [--check] [--notify] [--log=FILE] [--help
   --size=system  Report the exact download size of the system update and exit.
                  Asks for your password: zypper works the size out only as root.
   --log=FILE     Write the run log here. Default: $LOG_DIR/<timestamp>.log
+  --hold         Internal (the window uses it): keep one authentication across the
+                 size preview and the run, and wait for its go-ahead.
+  --emit-guard   Internal (the window uses it): print the download-guard script.
   --help         Show this help.
 
 Examples:
@@ -509,7 +512,8 @@ end_step() {
 # of them beats knowing about none while a repository is broken.
 # zypper's INFORMATIONAL exits are not failures: 100-103 say an update, reboot or
 # restart is advised, and 106 says a repository was skipped. `run_size` and
-# `run_check` each already exempt their own subset; the transaction passes
+# `run_check` each already handle their own subset (`run_size` exempts 100-103;
+# `run_check` treats every non-zero exit as an unreadable source); the transaction passes
 # exempted none, so a `dup` that installed cleanly and exited 102 reported as a
 # failed step, suppressed the reboot advice for packages that really landed, and
 # made the cache step hoard the downloads for a retry nobody needed.
@@ -722,7 +726,7 @@ run_size() {
         marker SIZE "system|$size"
         echo "  Download size: $size"
         size_delivered "$size"
-    elif (( rc == 0 )) || (( rc >= 100 && rc <= 103 )); then
+    elif (( rc == 0 )) || (( rc >= 100 && rc <= 103 )); then   # not zypper_ok: 106 (a repository skipped) must NOT read as "0 B"
         # zypper ran fine and reported no size = nothing to fetch (up to date / all
         # cached). Report zero so the GUI shows a definitive answer. 100-103 are
         # zypper's INFORMATIONAL exits (update/reboot/restart needed) — a non-zero
@@ -1432,7 +1436,7 @@ if $THIN_SNAPSHOTS; then
 fi
 
 # --size=<step>: report the download size and exit, never falling through into a
-# real update. Placed here so run_size can reuse sudo_init/release_zypper_lock,
+# real update (--hold is the exception: a go-ahead there continues into the update). Placed here so run_size can reuse sudo_init/release_zypper_lock,
 # both of which are now defined.
 if [[ -n "$SIZE_STEP" ]]; then
     run_size "$SIZE_STEP"
@@ -1523,9 +1527,9 @@ fi
 # cleanup deletes it on the way out so it can't confuse anything later.
 
 # ---------------------------------------------------------------------------
-# Pre-update snapshot note (btrfs/snapper rollback point). Read-only: Tumbleweed
-# already auto-snapshots around zypper; we just surface the latest id so the log
-# records a rollback target.
+# Pre-update snapshot note (btrfs/snapper rollback point). Creates a labelled
+# snapshot (a privileged write); Tumbleweed also auto-snapshots around zypper. The
+# latest id is surfaced so the log records a rollback target.
 # ---------------------------------------------------------------------------
 if step_selected system && command -v snapper &>/dev/null; then
     # Create a clearly-labelled rollback point so the pre-update state is easy to
@@ -1593,7 +1597,7 @@ if step_selected system; then
     done
     # Btrfs snapshots: Tumbleweed takes a pre/post snapshot pair around every zypper
     # transaction, so restore points accumulate and can quietly fill the root
-    # filesystem. We're already root here, so count them and, when a lot have piled
+    # filesystem. The sudo credential is already warm here, so count them and, when a lot have piled
     # up, surface a dismissible heads-up + the one-click "thin them" remedy. Count is
     # the honest signal: Btrfs shares extents copy-on-write, so a byte figure would
     # overcount, and per-snapshot quota data is usually off on the root config.
@@ -1957,7 +1961,7 @@ rpm_changed() {   # transaction-log path
 # the caller reports the original failure (ONEUP-0094 §4.5).
 #
 # Only `baseurl=` lines are rewritten, and the `I` flags are the case-insensitivity the
-# probe above assumes. Rewriting the whole file would also rename the [alias] header, and
+# baseurl probe in _run_system_upgrade_inner assumes. Rewriting the whole file would also rename the [alias] header, and
 # libzypp keys /var/cache/zypp/packages by ALIAS — so a renamed repository throws away
 # every package already downloaded, which is exactly what ONEUP-0087 exists to keep.
 # metalink=/mirrorlist= are deliberately untouched: they ARE the mirror selection this is
@@ -2648,7 +2652,7 @@ elif [[ -n "$SERVICES" ]]; then
     fi
 fi
 
-# End-of-run desktop notification (full runs only; --check has its own at line ~229).
+# End-of-run desktop notification (full runs only; --check has its own in run_check).
 # Fires for the unattended weekly timer so a 2am run still reports its outcome.
 if $NOTIFY; then
     # Unattended auto-skip sets a source aside silently — the notification is the

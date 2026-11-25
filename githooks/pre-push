@@ -3,9 +3,8 @@
 # Pre-push hook: run the local CI gates before any push is allowed. A non-zero exit
 # aborts the push, so a failing test / lint / version-lockstep never reaches GitHub.
 #
-# It runs the FAST gates only (tests + lint + packaging validation + version
-# lockstep). The AppImage build is NOT run here: it downloads appimagetool
-# and its runtime from GitHub each time and can stall on a slow/filtered
+# It runs the FAST gates only (what ./local-CI.sh runs without --full). The AppImage
+# build is NOT run here: it downloads appimagetool and its runtime from GitHub each time and can stall on a slow/filtered
 # link, and GitHub CI builds + verifies the AppImage itself on every tag push. To
 # check the build locally when you have a good connection: ./local-CI.sh --full
 #
@@ -68,7 +67,7 @@ else
 fi
 
 docs_only=true
-saw_commits=false
+saw_changed_files=false
 tips=()
 for line in "${reflines[@]}"; do
     read -r _local_ref local_sha _remote_ref remote_sha <<< "$line"
@@ -87,13 +86,13 @@ for line in "${reflines[@]}"; do
         docs_only=false; continue                     # unresolvable range
     fi
     [[ -z "$changed" ]] && continue
-    saw_commits=true
+    saw_changed_files=true
     while IFS= read -r f; do
         [[ "$f" == *.md ]] && continue
         docs_only=false; break
     done <<< "$changed"
 done
-$saw_commits || docs_only=false                       # determined nothing — run everything
+$saw_changed_files || docs_only=false                       # determined nothing — run everything
 
 if $docs_only; then
     echo "pre-push: documentation-only push — running the markdown gates…"

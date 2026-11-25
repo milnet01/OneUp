@@ -32,7 +32,7 @@ APPIMAGE_CAP = 256 << 20    # three times the 2.0.0 AppImage (§4.5)
 SKIP_KEY = "app_update_skip"
 
 
-def _installed() -> tuple[int, int, int]:
+def _installed_version() -> tuple[int, int, int]:
     return self_update.parse_version(APP_VERSION) or (0, 0, 0)
 
 
@@ -191,7 +191,7 @@ def _check_app_update(win, manual: bool = False):
 def _offered_release(releases, kind: str):
     """The newest release newer than this one, and on an AppImage only a signed one."""
     for release in releases:
-        if release.version <= _installed():
+        if release.version <= _installed_version():
             return None
         if kind != "appimage" or (release.appimage_url and release.sig_url):
             return release
@@ -219,7 +219,7 @@ def _on_releases(win, manual: bool, fetch: _Fetch):
     _set_offer(win, release.version if release else None, ignore_skip=manual)
     if manual and release is not None:
         open_dialog(win)
-    elif manual and releases and releases[0].version > _installed():
+    elif manual and releases and releases[0].version > _installed_version():
         # Newer but not offerable: an AppImage release not signed yet (§4.3).
         QMessageBox.information(win, _title(), QCoreApplication.translate(
             "app_update",
@@ -239,7 +239,7 @@ def _report_package_check(win, releases):
             "app_update", "The software source offers OneUp {version}.").format(
                 version=self_update.version_text(offer)))
         open_dialog(win)
-    elif releases and releases[0].version > _installed():
+    elif releases and releases[0].version > _installed_version():
         QMessageBox.information(win, _title(), QCoreApplication.translate(
             "app_update",
             "OneUp {version} is released, but your software source doesn't carry it yet. "
@@ -259,7 +259,7 @@ def _package_offer(win) -> tuple[int, int, int] | None:
     for pkg in win.packages.packages("system"):
         if pkg.name == "oneup" and pkg.state != "installed":
             version = self_update.parse_version(pkg.edition.split("-", 1)[0])
-            if version is not None and version > _installed():
+            if version is not None and version > _installed_version():
                 return version
     return None
 
@@ -306,10 +306,11 @@ def refresh_restart(win) -> None:
     """Put the banner in its restart form when the OneUp on disk is newer than this
     window (§4.8, INV-13). Asked when a run ends and when the tray shows the window.
     Never on an AppImage, whose own swap relaunches it."""
+    # No _update_mode means attach() has not run: nothing is offered, so nothing to refresh.
     if not hasattr(win, "_update_mode") or self_update.install_kind() == "appimage":
         return
     on_disk = self_update.disk_version()
-    if on_disk is None or on_disk <= _installed():
+    if on_disk is None or on_disk <= _installed_version():
         return
     win._update_mode = "restart"
     win.appupdate_label.setText(QCoreApplication.translate(
@@ -323,6 +324,7 @@ def refresh_restart(win) -> None:
 def sync_run_state(win) -> None:
     """Update now and Restart OneUp wait for a run to finish (§3 item 8, INV-12).
     Called whenever the window's controls change with a run."""
+    # No _update_mode means attach() has not run: there is no offer to gate.
     if not hasattr(win, "_update_mode"):
         return
     active = win._run_active
@@ -352,6 +354,8 @@ def open_dialog(win) -> None:
     if win._update_releases is not None:
         _fill_notes(win)
     elif win.appcheck_btn.isChecked():
+        # The user's "New-version check" setting is their consent to contact GitHub;
+        # with it off the pop-up must not fetch the notes.
         _fetch_notes(win)
     else:
         dlg.set_notes_unavailable()
@@ -366,7 +370,7 @@ def _dialog_closed(win, dlg, *_args) -> None:
 
 def _fill_notes(win) -> None:
     releases = win._update_releases
-    installed = _installed()
+    installed = _installed_version()
     win._update_dialog.set_notes(notes_markdown(
         self_update.changelog(releases, installed, win._update_offer), installed,
         complete=any(r.version <= installed for r in releases)))
