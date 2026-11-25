@@ -46,7 +46,7 @@ FETCH_TIMEOUT = 60      # seconds; ONEUP_DETAILS_TIMEOUT overrides it in a test
 
 
 def _run(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
-    """Every synchronous rpm call goes through here, so a test can record it."""
+    """Every synchronous rpm and flatpak call goes through here, so a test can record it."""
     return subprocess.run(argv, **kwargs)  # noqa: S603 — a fixed list argv, no shell.
 
 
@@ -77,11 +77,11 @@ class DetailsStore(QObject):
         self._about: dict[str, package_details.About] = {}
         self._asked: set[str] = set()       # About asked for, answered or not
         self._baselines: dict[str, package_details.Entry] = {}
-        self._based: set[str] = set()       # baseline asked for since the last reset
+        self._baseline_asked: set[str] = set()  # baseline asked for since the last reset
         self._flatpaks: dict[str, list[flatpak_details.Component]] = {}
         self._fp_asked: set[str] = set()    # catalogue asked for, answered or not
         self._installed: dict[str, set[str]] = {}
-        self._fp_based: set[str] = set()    # installed versions read since the last reset
+        self._installed_read: set[str] = set()  # installed versions read since the last reset
         self._reading = False               # one catalogue read at a time
         self._sizes: dict[str, int] = {}    # rows per step key at its last change
         self._catalogue_read.connect(self._catalogue_landed)
@@ -115,7 +115,7 @@ class DetailsStore(QObject):
 
     def installed(self, name: str) -> set[str] | None:
         """The versions installed before this run, or None if never read for it."""
-        return self._installed.get(name) if name in self._fp_based else None
+        return self._installed.get(name) if name in self._installed_read else None
 
     def subscribe(self, callback: Callable[[], None]) -> None:
         """Called after a fetch lands; the model's own subscription does not fire then."""
@@ -142,7 +142,7 @@ class DetailsStore(QObject):
 
     def _wanting_baseline(self) -> list[Package]:
         """Only before the install: after it `rpm -q` answers the NEW version."""
-        return [p for p in self._system() if p.name not in self._based
+        return [p for p in self._system() if p.name not in self._baseline_asked
                 and p.state not in ("installed", "removed")]
 
     def _wanting_about(self) -> list[str]:
@@ -153,7 +153,7 @@ class DetailsStore(QObject):
 
     def _wanting_installed(self) -> list[Package]:
         """Only before the install, for the same reason as the system baseline."""
-        return [p for p in self._flatpak_rows() if p.name not in self._fp_based
+        return [p for p in self._flatpak_rows() if p.name not in self._installed_read
                 and p.state not in ("installed", "removed")]
 
     def _wanting_catalogue(self) -> list[Package]:
@@ -163,9 +163,9 @@ class DetailsStore(QObject):
         if key is None:
             # A baseline is true only until the next install; About does not change.
             self._baselines.clear()
-            self._based.clear()
+            self._baseline_asked.clear()
             self._installed.clear()
-            self._fp_based.clear()
+            self._installed_read.clear()
             self._sizes.clear()
             return
         # Restarted by each addition only (§4.2): restarted on every state line, a busy
@@ -189,7 +189,7 @@ class DetailsStore(QObject):
         wanting = self._wanting_baseline()
         if wanting:
             olds = {p.name: p.old for p in wanting}
-            self._based.update(olds)
+            self._baseline_asked.update(olds)
             argv = package_details.build_baseline_argv(sorted(olds))
             if argv is not None:
                 try:
@@ -249,11 +249,11 @@ class DetailsStore(QObject):
         catalogue on a worker thread, because parsing it takes most of a second."""
         wanting = self._wanting_installed()
         if wanting:
-            self._fp_based.update(p.name for p in wanting)
+            self._installed_read.update(p.name for p in wanting)
             try:
                 out = _run(flatpak_details.build_installed_argv(), capture_output=True,
                            text=True, errors="replace",
-                           timeout=package_details.RPM_TIMEOUT, env=package_details.c_locale_env())
+                           timeout=flatpak_details.LIST_TIMEOUT, env=package_details.c_locale_env())
                 found = flatpak_details.parse_installed(out.stdout)
                 self._installed.update({p.name: found.get(p.name, set()) for p in wanting})
             except (OSError, subprocess.SubprocessError):
@@ -331,7 +331,7 @@ def details_text(about: package_details.About | None,
     elif changed.kind == "removal":
         lines.append(QCoreApplication.translate(
             "details_dialog", "This update removes the package, so it has no new notes."))
-    else:
+    else:       # "not-yet", and the fallback for a kind added without a branch above
         lines.append(QCoreApplication.translate(
             "details_dialog", "The notes show once the new version has downloaded."))
     return "\n".join(lines).rstrip()

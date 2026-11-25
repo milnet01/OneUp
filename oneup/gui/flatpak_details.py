@@ -21,6 +21,7 @@ from pathlib import Path
 # ".", so neither can be read as an option or climb out of a directory.
 _ID_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._-]*")
 _FALLBACK = 5           # releases shown when OneUp cannot tell which are new
+LIST_TIMEOUT = 5        # seconds; `flatpak list` answers in well under one
 _LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 _ARCH = {"amd64": "x86_64", "arm64": "aarch64"}     # platform's names → Flatpak's
 
@@ -112,6 +113,7 @@ def _component(el: ET.Element) -> Component:
     releases = []
     for rel in el.findall("releases/release"):
         stamp = rel.get("timestamp") or ""
+        # isdecimal, not isdigit: isdigit passes "²", which int() refuses (ONEUP-0397).
         releases.append(Release(rel.get("version") or "", int(stamp) if stamp.isdecimal() else 0,
                                 _text(_untranslated(rel, "description"))))
     releases.sort(key=lambda r: r.time, reverse=True)   # stable: equal times keep file order
@@ -139,8 +141,7 @@ def read(files: list[str], ids: set[str]) -> dict[str, list[Component]]:
                     if found is not None and (comp := _component(el)) not in found:
                         found.append(comp)
                     el.clear()
-        # zlib.error is not an OSError: one corrupt catalogue lost every file's details
-        # (ONEUP-0397). isdecimal above, not isdigit, which passes "²" to int().
+        # zlib.error is not an OSError: one corrupt catalogue lost every file's details.
         except (OSError, EOFError, ET.ParseError, zlib.error):
             continue
     return out

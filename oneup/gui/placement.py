@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import textwrap
 import time
 import uuid
 
@@ -312,27 +313,38 @@ def install_message_box_centring(app) -> None:
 
 
 
-def kwin_recenter() -> None:
-    # Center via KWin scripting (Plasma 6). We match our own window by PID and use
-    # KWin.PlacementArea for the usable screen rectangle — the approach proven to
-    # work on this machine's KDE Wayland session. Transients are skipped so this
-    # always finds the main window, never a dialog that happens to come first;
-    # centring a dialog is center_on_parent's job.
-    run_kwin_script(f"""\
-var wins = workspace.windowList();
+def _main_window_script(body: str, before: str = "") -> str:
+    """A KWin script that runs `body` on OneUp's main window and stops there, with
+    `before` ahead of the loop. The window is found by PID, transients skipped: that
+    finds the main window and never a dialog that happens to come first (centring a
+    dialog is `center_on_parent`'s job). `body` sees `c`, the window. Every script
+    that works on the main window is built here, so how it is recognised is one rule."""
+    inner = textwrap.indent(body.strip("\n"), "    ")
+    return f"""\
+{before}var wins = workspace.windowList();
 for (var i = 0; i < wins.length; i++) {{
     var c = wins[i];
     if (c.pid !== {os.getpid()} || c.transientFor) continue;
-    var area = workspace.clientArea(KWin.PlacementArea, c);
-    c.frameGeometry = {{
-        x: area.x + Math.round((area.width - c.frameGeometry.width) / 2),
-        y: area.y + Math.round((area.height - c.frameGeometry.height) / 2),
-        width: c.frameGeometry.width,
-        height: c.frameGeometry.height
-    }};
+{inner}
     break;
 }}
-""")
+"""
+
+
+def kwin_recenter() -> None:
+    # Center via KWin scripting (Plasma 6), with KWin.PlacementArea for the usable
+    # screen rectangle — the approach proven to work on this machine's KDE Wayland
+    # session. Clamped to that rectangle, so a window larger than it starts at its
+    # corner rather than at a negative offset.
+    run_kwin_script(_main_window_script("""\
+var area = workspace.clientArea(KWin.PlacementArea, c);
+var g = c.frameGeometry;
+var x = area.x + Math.round((area.width - g.width) / 2);
+var y = area.y + Math.round((area.height - g.height) / 2);
+x = Math.max(area.x, Math.min(x, area.x + area.width - g.width));
+y = Math.max(area.y, Math.min(y, area.y + area.height - g.height));
+c.frameGeometry = { x: x, y: y, width: g.width, height: g.height };
+"""))
 
 
 # How long to wait for KWin's answer to reach the journal. Measured on Plasma 6.7.5: about
@@ -365,15 +377,8 @@ def main_frame_position() -> tuple[int, int] | None:
         return None
     marker = f"oneup_frame_{uuid.uuid4().hex}"
     since = f"@{int(time.time()) - 2}"
-    started = _start_kwin_script(f"""\
-var wins = workspace.windowList();
-for (var i = 0; i < wins.length; i++) {{
-    var c = wins[i];
-    if (c.pid !== {os.getpid()} || c.transientFor) continue;
-    print("{marker}", Math.round(c.frameGeometry.x), Math.round(c.frameGeometry.y));
-    break;
-}}
-""")
+    started = _start_kwin_script(_main_window_script(
+        f'print("{marker}", Math.round(c.frameGeometry.x), Math.round(c.frameGeometry.y));'))
     if started is None:
         return None
     # The script stays loaded until its answer is read: see KWIN_SCRIPT_KEEP_MS.
@@ -405,24 +410,16 @@ def kwin_restore_position(x: int, y: int) -> None:
     screen when that monitor is gone. The size is written too: KWin takes the whole
     rectangle as given. `KWin.PlacementArea`, not `workspace.PlacementArea`, which is
     undefined on Plasma 6 (measured 2026-10-10)."""
-    run_kwin_script(f"""\
-var x = {int(x)};
-var y = {int(y)};
-var wins = workspace.windowList();
-for (var i = 0; i < wins.length; i++) {{
-    var c = wins[i];
-    if (c.pid !== {os.getpid()} || c.transientFor) continue;
-    var g = c.frameGeometry, area = null;
-    for (var j = 0; j < workspace.screens.length; j++) {{
-        var s = workspace.screens[j].geometry;
-        if (x >= s.x && x < s.x + s.width && y >= s.y && y < s.y + s.height)
-            area = workspace.clientArea(KWin.PlacementArea, workspace.screens[j],
-                                        workspace.currentDesktop);
-    }}
-    if (area === null) area = workspace.clientArea(KWin.PlacementArea, c);
-    x = Math.max(area.x, Math.min(x, area.x + area.width - g.width));
-    y = Math.max(area.y, Math.min(y, area.y + area.height - g.height));
-    c.frameGeometry = {{ x: x, y: y, width: g.width, height: g.height }};
-    break;
-}}
-""")
+    run_kwin_script(_main_window_script("""\
+var g = c.frameGeometry, area = null;
+for (var j = 0; j < workspace.screens.length; j++) {
+    var s = workspace.screens[j].geometry;
+    if (x >= s.x && x < s.x + s.width && y >= s.y && y < s.y + s.height)
+        area = workspace.clientArea(KWin.PlacementArea, workspace.screens[j],
+                                    workspace.currentDesktop);
+}
+if (area === null) area = workspace.clientArea(KWin.PlacementArea, c);
+x = Math.max(area.x, Math.min(x, area.x + area.width - g.width));
+y = Math.max(area.y, Math.min(y, area.y + area.height - g.height));
+c.frameGeometry = { x: x, y: y, width: g.width, height: g.height };
+""", before=f"var x = {int(x)};\nvar y = {int(y)};\n"))

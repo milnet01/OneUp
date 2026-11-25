@@ -1121,7 +1121,7 @@ def handle_marker(win, line: str):
         elif phase == "remove":
             step_progress.remove(win, key, n, total)
         elif phase == "finish":
-            step_progress.finish(win, key)
+            step_progress.run_scripts(win, key)
         if announce:
             win._announce(_phase_announcement(said))
     elif tag == "REFRESH":

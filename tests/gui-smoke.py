@@ -808,6 +808,7 @@ def main() -> int:
     _real_stand_down = auth._stand_down_autoupdate
     auth._stand_down_autoupdate = lambda self, lead="": None
     # And the restart: a scenario answering Yes must never reboot this machine (ONEUP-0403).
+    _REAL_START_REBOOT = banners._start_reboot
     banners._start_reboot = lambda win: None
 
     # Likewise the single-instance socket: left alone, the guard would connect to the
@@ -1833,7 +1834,7 @@ def main() -> int:
     _orig_launch = banners._start_service_restart
     QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
     # The one launch seam (ONEUP-0229): replaced so no test starts a real pkexec.
-    banners._start_service_restart = lambda _w, prog, args: launched.append((prog, list(args)))
+    banners._start_service_restart = lambda _w, prog, args, _u: launched.append((prog, list(args)))
     try:
         banners.restart_services(w)
     finally:
@@ -1867,7 +1868,7 @@ def main() -> int:
             outcome[code] = shown[-1]
         # The wiring, not just the handler: a real child's exit status and output reach
         # the box. `sh` stands in for pkexec; nothing privileged runs.
-        banners._start_service_restart(w, "sh", ["-c", "echo boom; exit 3"])
+        banners._start_service_restart(w, "sh", ["-c", "echo boom; exit 3"], ["sshd"])
         w._restart_proc.waitForFinished(5000)
         wired = shown[-1]
     finally:
@@ -1921,7 +1922,7 @@ def main() -> int:
         QProcess.startDetached = staticmethod(
             lambda prog, args=None, *a, **k: (calls.append([prog, *(args or [])]), True)[1])
         _ls, _lr = banners._start_service_restart, banners._start_reboot
-        banners._start_service_restart = lambda _w, prog, args: calls.append([prog, *args])
+        banners._start_service_restart = lambda _w, prog, args, _u: calls.append([prog, *args])
         # The reboot's one starting place (ONEUP-0403), recorded as the command it runs.
         banners._start_reboot = lambda _w: calls.append(["systemctl", "reboot"])
         try:
@@ -4895,6 +4896,17 @@ def main() -> int:
     _place_src = (REPO / "oneup" / "gui" / "placement.py").read_text()
     check("ONEUP-0403 no KWin script asks for workspace.PlacementArea",
           "clientArea(workspace.PlacementArea" not in _place_src)
+    # ONEUP-0434: the recentre script clamps like the other two, and every main-window
+    # script is found by PID with transients skipped.
+    _recentre = []
+    _patch(placement, "run_kwin_script", lambda js: _recentre.append(js) or True)
+    placement.kwin_recenter()
+    _patch(placement, "run_kwin_script", lambda js: scripts.append(js) or True)
+    check("ONEUP-0434 recentring clamps to the usable area",
+          len(_recentre) == 1 and "Math.max(area.x, Math.min(x," in _recentre[0]
+          and "Math.max(area.y, Math.min(y," in _recentre[0])
+    check("ONEUP-0434 the main-window scripts share one way of finding the window",
+          _place_src.count("|| c.transientFor) continue;") == 1)
     w.hide()
     w.show()
     _pump(3000, until=lambda: not w._placement_pending)
@@ -6057,6 +6069,41 @@ def main() -> int:
         QMessageBox.warning = _orig_w
     check("ONEUP-0403 a refused restart says so, with systemctl's reason",
           len(_warned_r) == 1 and "inhibited" in _warned_r[0])
+    # ONEUP-0434: a systemctl that never starts is named, as the services path names pkexec.
+    # `_start_reboot` is stubbed suite-wide, so run the real one against a process that
+    # fails to start; nothing reboots.
+    class _Sig:
+        def __init__(self):
+            self.slots = []
+
+        def connect(self, slot):
+            self.slots.append(slot)
+
+    class _NeverStarts:
+        MergedChannels = QProcess.MergedChannels
+        FailedToStart = QProcess.FailedToStart
+
+        def __init__(self, _parent):
+            self.finished, self.errorOccurred = _Sig(), _Sig()
+
+        def setProcessChannelMode(self, _mode):
+            pass
+
+        def start(self, _prog, _args):
+            for slot in self.errorOccurred.slots:
+                slot(QProcess.FailedToStart)
+
+    _real_qp, _real_start_reboot = banners.QProcess, _REAL_START_REBOOT
+    banners.QProcess = _NeverStarts
+    _warned_r.clear()
+    QMessageBox.warning = staticmethod(lambda *a, **k: _warned_r.append(a[2]) or 0)
+    try:
+        _real_start_reboot(wT)
+    finally:
+        banners.QProcess = _real_qp
+        QMessageBox.warning = _orig_w
+    check("ONEUP-0434 a systemctl that cannot start is named, not given as exit code -1",
+          len(_warned_r) == 1 and "systemctl could not be started" in _warned_r[0])
     check("Enter on a restart question picks No, never Yes",
           len(asked_q) == 2
           and all(k.get("defaultButton", a[4] if len(a) > 4 else None)
@@ -9034,7 +9081,7 @@ for th in theme.THEMES:
     _start_run(wT)
     wT._liveness_active = True
     run._reset_activity(wT)
-    _left = wT.host.figures[2]
+    _left = wT.host.time_left_figure
     run.handle_line(wT, "@@STEP_BEGIN@@|system|1|5")
     run.handle_line(wT, "@@PROGRESS@@|system|1|4|download|100|1000")
     check(f"ONEUP-0318 no time left before there is a rate ({wT.status.text()!r}, "
@@ -9086,7 +9133,7 @@ for th in theme.THEMES:
     run.handle_line(wT, "@@STEP_BEGIN@@|system|1|5")
     run.handle_line(wT, "@@PROGRESS@@|system|37|0|download")
     check(f"ONEUP-0322 Spotlight's Packages box shows the running tally with no total "
-          f"({wT.host.figures[0].text()!r})", wT.host.figures[0].text() == "37 so far")
+          f"({wT.host.packages_figure.text()!r})", wT.host.packages_figure.text() == "37 so far")
     run.handle_line(wT, "@@STEP_BEGIN@@|system|1|5")
     run.handle_line(wT, "@@PROGRESS@@|system|1|4|download|100|0")
     _clock[0] += 10
@@ -9227,7 +9274,7 @@ for th in theme.THEMES:
     check(f"ONEUP-0334 a changelog that is not UTF-8 is read, not raised {_raised}",
           not _raised)
     _patch(details_dialog, "_run", _latin1_rpm)
-    wD.details._based.clear()
+    wD.details._baseline_asked.clear()
     _raised = _raises(wD.details._fetch)
     check(f"ONEUP-0334 the baseline read survives rpm output that is not UTF-8 {_raised}",
           not _raised)
@@ -9331,6 +9378,22 @@ for th in theme.THEMES:
                   for it in vars(wD.host).values()
                   if isinstance(it, package_views.PackageItems)
                   for r in range(it.rowCount()) for c in range(it.columnCount())))
+
+    # ONEUP-0434: a translation that loses the mark must not lose the drawn mark.
+    class _NoMark:
+        @staticmethod
+        def translate(_ctx, text, *_rest):
+            return text.replace(" \u2139", "")      # a translator who dropped it
+    _real_qca = package_views.QCoreApplication
+    package_views.QCoreApplication = _NoMark
+    try:
+        _marked = package_views.name_text(
+            types.SimpleNamespace(details=types.SimpleNamespace(has_details=lambda _p: True)),
+            types.SimpleNamespace(name="alpha"))
+    finally:
+        package_views.QCoreApplication = _real_qca
+    check("ONEUP-0434 a translation without the mark still marks a described package",
+          package_views.MARK in _marked)
 
     # ONEUP-0358: a screen too small for the window. The window takes what the screen
     # has and scrolls; the content keeps its full size, so the package list is never
