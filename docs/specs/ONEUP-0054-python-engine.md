@@ -328,7 +328,7 @@ split must obey. Paths are relative to `oneup/engine/`.
 | `parsers.py` | turn zypper's text into values — **pure functions, no I/O, no privilege** | `to_bytes`, `lock_holder`'s parsing, the progress and download-size wordings, `lr` output, and `reboot_reason_from_log`'s phrase-building (its log **read** is `steps.py`'s — see the split table) |
 | `repos.py` | refresh, skip and disable repositories | `refresh_repos`, `enabled_repo_aliases`, `find_failing_repos`, `disable_repo`, `release_zypper_lock`, `valid_alias`, `repo_scoped_failure`, `make_cdn_reposd` |
 | `steps.py` | run the five steps: `system, flatpak, firmware, orphans, cache` | `begin_step`, `end_step`, `run_system_upgrade`, `_run_system_upgrade_inner`, `run_system_download`, `run_system_commit`, `system_txn_argv`, the per-step bodies |
-| `actions.py` | the runs that are not an update: `--check`, `--size=`, the three auth actions, `--thin-snapshots`, and `--notify`'s `notify_send` (a desktop notification, not a marker) | `run_check`, `run_size`, `size_delivered`, `grant_auth`, `revoke_auth`, `auth_status`, `thin_snapshots`, `build_auth_rule`, `auth_cmnds`, `download_guard_src`, `guard_current`, `auth_current` |
+| `actions.py` | the runs that are not an update: `--check`, `--size=`, the three auth actions, `--thin-snapshots`, and `--notify`'s `notify_send` (a desktop notification, not a marker) | `check`, `run_size`, `size_delivered`, `grant_auth`, `revoke_auth`, `auth_status`, `thin_snapshots`, `build_auth_rule`, `auth_cmnds`, `download_guard_src`, `guard_current`, `auth_current` |
 
 The table places every function in `update_system.sh`; it is a map, not a sample. **Six
 splits cross a module boundary**, and each is deliberate:

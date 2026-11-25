@@ -7,7 +7,6 @@ command it protects stay in one module on purpose
 """
 from __future__ import annotations
 
-import os
 import re
 import shutil
 import subprocess
@@ -26,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import package_details
 from .placement import center_on_parent
 from .settings_dialog import button_strip
 from .theme import card_inside
@@ -112,7 +112,7 @@ def read_repos() -> list[dict]:
         out = subprocess.run(
             ["zypper", "--non-interactive", "lr", "-u"],  # noqa: S607 — fixed argv.
             capture_output=True, text=True, errors="replace", timeout=15,
-            env={**os.environ, "LC_ALL": "C"},  # pin the 'Yes'/'No' + column text
+            env=package_details.c_locale_env(),  # pin the 'Yes'/'No' + column text
         ).stdout
     except (OSError, subprocess.SubprocessError):
         return []

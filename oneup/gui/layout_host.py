@@ -12,7 +12,6 @@ Nothing here imports the window module (`docs/specs/ONEUP-0034-gui-modules.md`
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QBoxLayout, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from . import details_dialog, package_views, steps
@@ -48,8 +47,7 @@ class LayoutHost(QWidget):
     @staticmethod
     def step_title(key: str) -> str:
         """A step's title, translated; the key itself when the step is unknown."""
-        title = {k: t for k, t, _d in steps.TASKS}.get(key, key)
-        return QCoreApplication.translate("steps", title)
+        return steps.title(key)
 
     # --- the package model ------------------------------------------------------
 

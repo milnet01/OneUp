@@ -206,6 +206,7 @@ placement.screen_room = lambda _widget: QSize(100000, 100000)
 
 # The old Passwordless guard's two paths, in the sandbox: the window's offer to remove
 # one (ONEUP-0249 §4.10) must never read this machine's real guard.
+_REAL_OLD_GUARDS = auth.OLD_GUARDS
 auth.OLD_GUARDS = (os.path.join(_SANDBOX, "guard-libexec"), os.path.join(_SANDBOX, "guard-lib"))
 
 PASS = 0
@@ -4041,6 +4042,11 @@ def main() -> int:
           not _installed_i and not wS.autoupdate_btn.isChecked()
           and any("password" in str(i) for i in _infos))
     _unpatch_all()
+
+    # The window's list of old guard paths is a hand copy of the engine's: they must agree.
+    from oneup.engine import actions as _engine_actions
+    check("ONEUP-0434 the window's OLD_GUARDS are the engine's _SYSTEM_GUARDS",
+          tuple(_REAL_OLD_GUARDS) == tuple(_engine_actions._SYSTEM_GUARDS))
 
     # The old drop-in: offered once on a service install, never on the sudo route.
     _offers, _revokes = [], []

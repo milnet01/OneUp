@@ -6,7 +6,7 @@ errored — keep new steps tolerant of a missing binary.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QT_TRANSLATE_NOOP
+from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
 
 # key, title, short description (ONEUP-0239 §3 item 13). Order = run order. Marked
 # here and translated where shown, so the language can change without the table
@@ -25,6 +25,11 @@ TASKS = [
     ("cache", QT_TRANSLATE_NOOP("steps", "Package cache"),
      QT_TRANSLATE_NOOP("steps", "Free up disk space")),
 ]
+
+def title(key: str) -> str:
+    """A step's title, translated; the key itself when the step is unknown."""
+    return QCoreApplication.translate("steps", {k: t for k, t, _d in TASKS}.get(key, key))
+
 
 # What a Spotlight tile calls its step (ONEUP-0239 §4.3 Spotlight item 1). The full
 # title stays the switch's accessible name.

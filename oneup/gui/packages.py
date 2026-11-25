@@ -12,6 +12,8 @@ from dataclasses import dataclass
 
 # The order a package moves through. A state never moves backwards: the commit
 # pass reprints `Preloading: … [already in cache]` for packages already installed.
+# A state is also a key of `package_views.GROUP`, `steps.STATE_WORDS` and
+# `symbols.STATE_SHAPES`: a new state goes into all four.
 _ORDER = {"queued": 0, "downloading": 1, "downloaded": 2, "installed": 3, "removed": 3}
 STATES = tuple(_ORDER)
 # What a check's dry run says the update will do to a package (ONEUP-0329 §4.5).

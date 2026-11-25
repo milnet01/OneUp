@@ -21,6 +21,17 @@ def _link_text() -> str:
     return QCoreApplication.translate("size_link", "Show download size")
 
 
+def nothing_to_download() -> str:
+    """The figure shown when the check found no download. `run.py` shows it, and
+    `_pin_width` sizes the slot to it, so the two cannot drift."""
+    return QCoreApplication.translate("size_link", "Nothing to download")
+
+
+def to_download(size: str) -> str:
+    """The figure shown for the system step's download size (see nothing_to_download)."""
+    return QCoreApplication.translate("size_link", "↓ {size} to download").format(size=size)
+
+
 def _pending_text() -> str:
     # Name the expected wait. Getting the figure means asking zypper's solver to
     # work out the WHOLE transaction (a --dry-run), which takes tens of seconds on
@@ -68,13 +79,10 @@ class SizeLink(QWidget):
         self.size_btn.setText(shown)
         fm = self.size_result.fontMetrics()
         m = self.size_result.contentsMargins()
-        # Copies of the two sentences `run.py` shows through `set_size_result` ("Nothing
-        # to download", and "↓ {size} to download" for the system size): reword one
-        # there and reword it here. The figure is the engine's own `@@SIZE@@` text, not
+        # The two sentences `run.py` shows through `set_size_result`, from the same
+        # functions. The figure is the engine's own `@@SIZE@@` text, not
         # `markers.format_size`'s, so the sample is not `markers.WIDEST_SIZE`.
-        for sentence in (QCoreApplication.translate("run", "Nothing to download"),
-                         QCoreApplication.translate("run", "↓ {size} to download").format(
-                             size="9999.9 MiB")):
+        for sentence in (nothing_to_download(), to_download("9999.9 MiB")):
             widths.append(fm.horizontalAdvance(sentence) + m.left() + m.right())
         self.setMinimumWidth(max(widths))
 

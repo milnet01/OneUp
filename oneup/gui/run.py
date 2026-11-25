@@ -28,6 +28,7 @@ from . import (
     packages,
     paths,
     repos,
+    size_link,
     step_progress,
     steps,
     tray,
@@ -385,8 +386,7 @@ def _on_size_output(win, final: bool = False):
             parts = line[len("@@SIZE@@|"):].split("|")
             # Only the system step has a size to fetch (`request_size`).
             if len(parts) >= 2 and parts[0] == "system":
-                win.size_link.set_size_result(QCoreApplication.translate(
-                    "run", "↓ {size} to download").format(size=parts[1]))
+                win.size_link.set_size_result(size_link.to_download(parts[1]))
         elif getattr(win, "_size_unasked", False):
             continue
         elif line.startswith("@@HINT@@|"):
@@ -425,7 +425,7 @@ def _on_size_finished(win, exit_code: int, _status):
     # No SIZE marker arrived. Exit 0 = solver found nothing to fetch; non-zero
     # = auth cancelled or an error, so re-arm the link for a retry.
     if exit_code == 0:
-        link.set_size_result(QCoreApplication.translate("run", "Nothing to download"))
+        link.set_size_result(size_link.nothing_to_download())
     else:
         link.size_failed()
 
@@ -671,8 +671,7 @@ def _show_status(win):
     separator = QCoreApplication.translate(
         "run", " · ", "separator between the parts of the status line")
     if win.current_step and win._progress_phase and not win._stop_asked:
-        title = {k: t for k, t, _d in steps.TASKS}.get(win.current_step)
-        parts = (QCoreApplication.translate("steps", title) if title else win.current_step,
+        parts = (steps.title(win.current_step),
                  _phase_count(win), _byte_figure(win))
         win._status_base = separator.join(p for p in parts if p)
         tail = (win._status_stall or step_progress.time_left(win),)

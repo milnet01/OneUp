@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .. import APP_ID, APP_NAME
 from . import markers, parsers, privilege, proc, repos, steps
 
 if TYPE_CHECKING:  # the run-time import would be a cycle — `__main__` imports this module
@@ -211,13 +212,11 @@ def emit_guard() -> int:
 # it cannot refresh, which is why it has to be scrupulous about saying when the
 # metadata was not there to read (ONEUP-0056).
 
-APP_ID = "za.co.antsprojectshub.OneUp"
-
 
 def notify_send(title: str, body: str) -> None:
     """A desktop notification. Not a marker, and never fatal."""
     if shutil.which("notify-send"):
-        proc.run(["notify-send", "-a", "OneUp", "-i", APP_ID, title, body])
+        proc.run(["notify-send", "-a", APP_NAME, "-i", APP_ID, title, body])
 
 
 def _check_system(sizes: bool) -> tuple[int, bool, bool]:

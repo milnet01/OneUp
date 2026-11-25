@@ -328,8 +328,7 @@ class Updater(QMainWindow):
         self.settings_btn.setCursor(Qt.PointingHandCursor)
         self.settings_btn.setToolTip(QCoreApplication.translate(
             "window",
-            "Background behaviours: weekly check, passwordless, automatic "
-            "updates"))
+            "Automatic behaviour, appearance, repositories and diagnostics"))
         self.settings_btn.clicked.connect(self.open_settings)
 
         self.recenter_btn = symbols.SymbolButton(symbols.crosshair)
