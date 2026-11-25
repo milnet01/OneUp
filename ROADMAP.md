@@ -12597,7 +12597,7 @@ when complete (that document's §7).
   Kind: doc-fix.
   Source: review-readability-2026-11-15.
 
-- 📋 [ONEUP-0433] **Readability findings in the engine and the system service (2026-11-15).**
+- ✅ [ONEUP-0433] **Readability findings in the engine and the system service (2026-11-15).**
   review-readability 2026-11-15, lanes 01-04: MEDIUM and LOW rows,
   one line each with a premise mark, in message-1.md at
   /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-readability-2026-11-15/
@@ -12605,11 +12605,17 @@ when complete (that document's §7).
   by hand in several places, three copies of write-temp-then-rename,
   reason/why naming in _reboot_and_services, help text missing --hold
   and --emit-guard. Rows marked unchecked are verified before fixing.
+  Closed 2026-11-25 (4251b46): 46 fixed, 10 dismissed, 0 queued. Real
+  defect found: repos._ON lacked "+", so enabled=always read as off and
+  skip-repo did nothing on it (zypper measured). Dismissed: already
+  fixed by ONEUP-0419/0425/0432; E302 already clean; INV-n
+  comment_claims rows are tool misreads. Ledger: scratch
+  close-findings-2026-11-25/ledger-engine.md.
   **Layman:** Places in OneUp's engine where someone changing the code could easily go wrong.
   Kind: refactor.
   Source: review-readability-2026-11-15.
 
-- 📋 [ONEUP-0434] **Readability findings in the window (2026-11-15).**
+- ✅ [ONEUP-0434] **Readability findings in the window (2026-11-15).**
   review-readability 2026-11-15, lanes 05, 06 and 08-11: MEDIUM and
   LOW rows in message-1.md at
   /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-readability-2026-11-15/
@@ -12617,22 +12623,38 @@ when complete (that document's §7).
   modules (markers._format_size, banners._show_warning,
   tray._apply_tray_total and others; a tool-gap tag). Rows marked
   unchecked are verified before fixing.
+  Closed 2026-11-25 in two subject runs (afa21b1 run/shell/settings,
+  61aaa41 views/theme/layouts) and a cross-subject pass (2f447b0). Fixed
+  nearly every live row: 13 private names made public across code, tests
+  and specs; one button strip, notify helper, intent sender,
+  write_whole, step-title and size sentences each; settings and
+  on_finished split. Dismissed with reasons: rows fixed by
+  ONEUP-0427/0431/0432, frozen palette dedup, theme/contrast circular
+  import, flat marker dispatch. Merged local-CI green: gui-smoke 1351/0.
+  Not named by the review: about 30 more _-prefixed names still cross
+  modules in oneup/gui. Ledgers: scratch close-findings-2026-11-25/.
   **Layman:** Places in OneUp's window code where someone changing it could easily go wrong.
   Kind: refactor.
   Source: review-readability-2026-11-15.
 
-- 📋 [ONEUP-0435] **Readability findings in self-update, release tooling and the Bash fallback (2026-11-15).**
+- ✅ [ONEUP-0435] **Readability findings in self-update, release tooling and the Bash fallback (2026-11-15).**
   review-readability 2026-11-15, lanes 07, 12 and 13: rows in
   message-1.md at
   /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-readability-2026-11-15/.
   Lane 12's rows are refactors of the frozen fallback; per CLAUDE.md §4
   only what a terminal run meets is fixed, and the rest is dropped with
   that reason.
+  Closed 2026-11-25 (547398d): about 20 fixed, 10 dismissed, 0 queued.
+  Dismissed: sign-release v-prefix, mktemp and --sign-only leads (fixed
+  by ONEUP-0430); release.yml's three exit-77 blocks (a shared script
+  would add a file to the job holding the publish token); Bash-fallback
+  refactors (frozen, CLAUDE.md §4). update_system.sh --help now lists
+  --hold and --emit-guard as internal.
   **Layman:** Places in OneUp's release scripts and old backup script where someone changing them could go wrong.
   Kind: refactor.
   Source: review-readability-2026-11-15.
 
-- 📋 [ONEUP-0436] **Correctness leads from the 2026-11-15 readability review, most unchecked.**
+- ✅ [ONEUP-0436] **Correctness leads from the 2026-11-15 readability review, most unchecked.**
   review-readability 2026-11-15, synthesis part 3: 33 leads, two
   confirmed (the STOP_POLL raw argv, now in ONEUP-0419; DETAIL_NAMES,
   in the tool-gap item). The rest are unchecked. Among them: actions.py
@@ -12644,6 +12666,16 @@ when complete (that document's §7).
   message-2-synthesis.md at
   /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-readability-2026-11-15/.
   Verify each, then fix or drop it with the reason.
+  Closed 2026-11-25 with the three subject runs. Fixed: run.state
+  recorded unknown step keys; privilege._service_root dropped sudo flags
+  on fallback; four runners returned -N not 128+N; the service could
+  exit idle with a CanUpdate answer pending; the AppImage re-hashed the
+  engine on every check; diagnostics scrubbed the tester's own login;
+  banners said "exit code -1" for a reboot that could not start;
+  kwin_recenter did not clamp; a translation dropping the info mark lost
+  the drawn mark; an untranslated X of Y figure; theme fallback console
+  line. Dismissed with reasons in the ledgers (already fixed by
+  ONEUP-0419/0425/0427/0430/0432, harmless, or by design).
   **Layman:** Possible bugs the readability review noticed in passing, still to be confirmed.
   Kind: review-fix.
   Source: review-readability-2026-11-15.

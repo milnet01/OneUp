@@ -192,7 +192,8 @@ is what keeps a documentation push cheap.
 ends in `.md`, calls `./local-CI.sh --docs`: the version lockstep, `bump.py`'s functional
 test and `tests/docs-check.py`. That set is *"every gate that can read a markdown file"*
 rather than *"the documentation one"* — `CHANGELOG.md` is one of §5.1's six version sites,
-and `bump.py` rewrites its heading and both compare links, so a malformed `[Unreleased]`
+and `bump.py` rewrites its heading, adds the release link and advances the `[Unreleased]`
+compare link, so a malformed `[Unreleased]`
 fails there and nowhere else. The engine suite, the GUI smoke test, `py_compile`, lint and
 packaging validation cannot be reached by a `.md` edit.
 

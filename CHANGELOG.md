@@ -6,7 +6,29 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The terminal fallback's `--help` lists `--hold` and `--emit-guard` as internal options** (ONEUP-0435)
+
 ### Fixed
+
+- **"Skip this source" now works on a software source set to `enabled=always`; before, it silently did nothing** (ONEUP-0433)
+
+- **A run started with a mistyped step name no longer leaves a following window waiting for a step that will never run** (ONEUP-0436)
+
+- **On a packaged install, cleaning up after a run no longer stops to ask for a password when the system service falls back to sudo** (ONEUP-0436)
+
+- **The system service no longer shuts down for idleness while still answering whether you may update** (ONEUP-0436)
+
+- **If the restart command cannot start, the box now says "systemctl could not be started." instead of "exit code -1"** (ONEUP-0436)
+
+- **On KDE Wayland, Recenter keeps a window bigger than the screen on screen instead of pushing it off the top-left** (ONEUP-0436)
+
+- **A package keeps its details mark even when a translation drops it** (ONEUP-0436)
+
+- **The AppImage no longer re-reads its whole engine every time it checks the engine is there** (ONEUP-0436)
+
+- **The "X of Y" download figure is now translated** (ONEUP-0436)
 
 - **In the AppImage, "Open log file" opens the log again** (ONEUP-0453)
   Where the desktop opens text files in a Qt program such as Okular, that program
