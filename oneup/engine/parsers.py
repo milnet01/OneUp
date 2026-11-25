@@ -5,8 +5,10 @@ says why it is a module at all: as pure functions these become table-testable in
 isolation, which is what `tests/parsers-test.py` does. Importing them must never
 drag in the code that calls `sudo` — so nothing here imports a sibling.
 
-Every function reproduces a construct in `update_system.sh` exactly, including
-where two of them disagree. Where the Bash rounds, this rounds the same way.
+Each function above the package-model section, `nothing_to_fetch` excepted,
+reproduces a construct in `update_system.sh` exactly, including where two of
+them disagree. Where the Bash rounds, this rounds the same way. The package-model
+section and `nothing_to_fetch` (ONEUP-0400) have no Bash twin.
 """
 
 from __future__ import annotations
@@ -81,7 +83,10 @@ _SIZE_CACHED_BYTES = re.compile(r" *([0-9.]+) *([KMG]?i?B) *\|")
 
 
 # zypper's plan summary: "3 packages to upgrade, 2 new, 1 to remove." Read by the
-# system step's count and by `nothing_to_fetch` (ONEUP-0400).
+# system step's count and by `nothing_to_fetch` (ONEUP-0400). With no upgrades it
+# says "4 new packages to install." `INSTALL_COUNT` alone is case-sensitive, so the
+# list header "The following 4 NEW packages are going to be installed:" is not a
+# second match (ONEUP-0288).
 UPGRADE_COUNT = re.compile(r"([0-9]+) packages? to upgrade", re.IGNORECASE)
 INSTALL_COUNT = re.compile(r"([0-9]+) new(?: packages? to install)?[,.]")
 _REMOVE_COUNT = re.compile(r"([0-9]+) (?:packages? )?to remove", re.IGNORECASE)
@@ -476,7 +481,7 @@ def installed_packages(text: str) -> str:
     removed read as "a new kernel was installed" (ONEUP-0422).
     """
     lines = PackageLines()
-    return "\n".join(f"{row[1]}-{row[2]}" for line in text.splitlines()
+    return "\n".join(f"{row[1]}-{row[2]}" for line in text.split("\n")
                      for row in lines.feed(line) if row[0] == "installed")
 
 
@@ -516,7 +521,7 @@ def rpm_changed(text: str) -> bool:
     """
     lines = PackageLines()
     return any(row[0] in ("installed", "removed")
-               for line in text.splitlines() for row in lines.feed(line))
+               for line in text.split("\n") for row in lines.feed(line))
 
 
 class PackageLines:

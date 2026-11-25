@@ -226,7 +226,8 @@ def write_whole(path: Path, text: str) -> None:
 
     A truncate-then-write lets a reader land between the two and see an empty
     file — for `run.state` or `hold.state` that reads as "no run". A rename is
-    atomic, so a reader sees the old file or the new one, never neither.
+    atomic, so a reader sees the old file or the new one, never neither. The
+    window's twin is `gui/paths.py` `write_whole`; a change here belongs there too.
     """
     tmp = _temp_beside(path, text)
     try:
@@ -389,7 +390,6 @@ def stop_since_begun() -> bool:
     return _newer_than(STOP_REQUEST, _BEGAN)
 
 
-
 # How long a hold waits before ending by itself. Two minutes: long enough for a
 # user to read the quoted size and decide, short enough that a forgotten window
 # does not hold a warm credential open indefinitely. A value that is not a whole
@@ -424,7 +424,9 @@ def hold_for_go_ahead(log_file: str, size: str, launch_pid: int, window_pid: int
     for the whole hold and a Cancel wired through it would do nothing for the
     full ceiling. Our own stamp is the comparison instead.
 
-    Both files are deleted on EVERY exit.
+    `hold.state` and `go.request` are deleted on every exit once `hold.state` is
+    written. A Cancel's `stop.request` stays, as every stop request does: the next
+    run's newness test reads it as a leftover.
     """
     with contextlib.suppress(OSError):
         HOLD_STATE.parent.mkdir(parents=True, exist_ok=True)

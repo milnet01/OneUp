@@ -28,6 +28,21 @@ from pathlib import Path
 
 from . import markers, parsers, runstate
 
+# How every child's output is read. zypper's output carries repository and package
+# text, which security.md §4 classifies as untrusted: one undecodable byte under the
+# default strict errors would raise straight out of a transaction loop. Text mode
+# also ends a line at \n, \r or \r\n. `service_client.Job.lines` decodes the
+# service's output the same way.
+_DECODE = {"text": True, "encoding": "utf-8", "errors": "replace"}
+
+
+def _shell_status(rc: int) -> int:
+    """A child's status as a shell reports it: a signal N is 128+N, not -N.
+
+    Callers read 143 (128+SIGTERM) as a stop, as the Bash engine's `$?` gives it.
+    """
+    return 128 - rc if rc < 0 else rc
+
 
 def run(
     argv: Sequence[str],
@@ -61,8 +76,7 @@ def run(
 
     It is PUMPED rather than inherited, and that is load-bearing twice over. The
     log mirror replaces `sys.stdout`, not file descriptor 1, so an inheriting
-    child bypasses the log entirely — the opposite of what this docstring used to
-    claim. And CPython restores SIGPIPE to SIG_DFL in every child, so an
+    child bypasses the log entirely. And CPython restores SIGPIPE to SIG_DFL in every child, so an
     inheriting child holding the raw console pipe is KILLED when the window quits,
     which is the ONEUP-0042 failure `tee -a -p` exists to prevent, reappearing on
     the streaming path. Pumping keeps the console pipe in this process, where
@@ -87,16 +101,11 @@ def run(
         stdin=stdin,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT if merge_stderr else subprocess.DEVNULL,
-        text=True,
-        # zypper's output carries repository and package text, which security.md §4
-        # classifies as untrusted — one undecodable byte under the default strict
-        # errors would raise straight out of a transaction loop.
-        encoding="utf-8",
-        errors="replace",
+        **_DECODE,
         check=False,
         env=overlay,
     )
-    return completed.returncode, completed.stdout or ""
+    return _shell_status(completed.returncode), completed.stdout or ""
 
 
 def run_apart(argv: Sequence[str], *,
@@ -112,13 +121,11 @@ def run_apart(argv: Sequence[str], *,
         list(argv),
         stdin=subprocess.DEVNULL,
         capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        **_DECODE,
         check=False,
         env=overlay,
     )
-    return completed.returncode, completed.stdout or "", completed.stderr or ""
+    return _shell_status(completed.returncode), completed.stdout or "", completed.stderr or ""
 
 
 def _pump(argv: Sequence[str], *, env: Mapping[str, str] | None,
@@ -135,9 +142,7 @@ def _pump(argv: Sequence[str], *, env: Mapping[str, str] | None,
         stdin=stdin,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        **_DECODE,
         env=env,
     )
     if child.stdout is not None:
@@ -146,7 +151,7 @@ def _pump(argv: Sequence[str], *, env: Mapping[str, str] | None,
             print(line, flush=True)
             if on_line is not None:
                 on_line(line)
-    return child.wait()
+    return _shell_status(child.wait())
 
 
 def _run_bounded(argv: Sequence[str], deadline: float, *, merge_stderr: bool,
@@ -167,9 +172,7 @@ def _run_bounded(argv: Sequence[str], deadline: float, *, merge_stderr: bool,
         # `run`). Streamed output is relayed below once the child has exited.
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT if (stream or merge_stderr) else subprocess.DEVNULL,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        **_DECODE,
         env=env,
         start_new_session=True,
     )
@@ -177,8 +180,8 @@ def _run_bounded(argv: Sequence[str], deadline: float, *, merge_stderr: bool,
         out, _ = child.communicate(timeout=deadline)
         if stream and out:
             print(out, end="" if out.endswith("\n") else "\n", flush=True)
-            return child.returncode, ""
-        return child.returncode, out or ""
+            return _shell_status(child.returncode), ""
+        return _shell_status(child.returncode), out or ""
     except subprocess.TimeoutExpired:
         kill_group(child.pid)
         try:
@@ -240,18 +243,12 @@ _STOP_ANNOUNCED = False
 
 
 def stop_requested() -> bool:
-    """`stop_pending`'s three tests alone, announcing nothing.
+    """Has the user asked to stop this run? The decision alone, announcing nothing.
 
-    For the service route's Stop forwarder, which polls while the download's output
-    is still streaming (ONEUP-0249 §4.6): announcing from there would put the stop's
-    lines inside the transaction output, where the sudo route never prints them.
-    """
-    stop, started = runstate.stop_and_run_mtimes()
-    return not (stop is None or started is None or stop <= started)
-
-
-def stop_pending() -> bool:
-    """Is a stop pending at this boundary? `stop_pending`'s decision half.
+    Called alone by the service route's Stop forwarder, which polls while the
+    download's output is still streaming (ONEUP-0249 §4.6): announcing from there
+    would put the stop's lines inside the transaction output, where the sudo route
+    never prints them.
 
     Three tests, and the middle one is the one a natural translation drops.
     `stop.request` must exist; `run.state` must **also** exist; and the request
@@ -266,6 +263,13 @@ def stop_pending() -> bool:
     start stamp — deleting a leftover request at start-up instead would race,
     silently swallowing a stop clicked in the moment before the engine got there.
     """
+    stop, started = runstate.stop_and_run_mtimes()
+    return not (stop is None or started is None or stop <= started)
+
+
+def stop_pending() -> bool:
+    """Is a stop pending at this safe boundary? Decide (`stop_requested`), then
+    announce it once (`announce_stop`)."""
     if not stop_requested():
         return False
     announce_stop()
@@ -407,13 +411,10 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
         list(argv),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
-        # The transaction's own output, and the most important place not to raise:
-        # one undecodable byte from a repository or package name under the default
-        # strict errors would unwind the read loop mid-`zypper dup`. The WRITE side
-        # below is already `errors="replace"`; this is the read side.
-        encoding="utf-8",
-        errors="replace",
+        # The transaction's own output, and the most important place not to raise
+        # (`_DECODE`): an undecodable byte would unwind the read loop mid-`zypper dup`.
+        # The write side, the log `_filter_lines` opens, is `errors="replace"` too.
+        **_DECODE,
         bufsize=1,
         # Its own session only when there is a budget to enforce: expiry has to
         # reach a grandchild holding our read end, and a privileged transaction
@@ -464,11 +465,7 @@ def stream_filtered(argv: Sequence[str], *, step: str, phase: str, log: Path,
         settled = True
     if timer is not None:
         timer.cancel()
-    rc = child.wait()
-    if rc < 0:
-        # A child killed by a signal reports -N here where a shell reports
-        # 128+N, and 143 is what the caller reads a stop from.
-        rc = 128 - rc
+    rc = _shell_status(child.wait())
     if expired:
         # A flag set by the watchdog itself, never `timer.is_alive()`: a timer
         # that fires in the moment between the child exiting and the check is

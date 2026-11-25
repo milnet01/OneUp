@@ -211,16 +211,17 @@ def release_zypper_lock() -> None:
         privilege.root("release-lock")
 
 
-_ON = frozenset({"1", "yes", "true", "on", "+"})
+_ON = frozenset({"1", "yes", "true", "on", "always", "+"})
 
 
 def repo_switched_off(alias: str) -> bool:
     """Does a repository file define `alias` with zypper reading it as switched off?
 
     Read from the files, as zypper reads them — measured with `zypper
-    --reposd-dir … lr` (ONEUP-0393): no `enabled=` line is on; `1`, `yes`,
-    `true`, `on` and a non-zero number are on; `0`, `no`, `false`, `off`, an
-    empty value and anything else are off. An alias no file defines is not
+    --reposd-dir … lr` (ONEUP-0393; `always`, `+`, `never` and `-` on 2026-11-25):
+    no `enabled=` line is on; `1`, `yes`, `true`, `on`, `always`, `+` and a
+    non-zero number are on; `0`, `no`, `false`, `off`, `never`, `-`, an empty
+    value and anything else are off. An alias no file defines is not
     "off": False, so the caller acts as it did before this check.
     """
     for path in sorted(REPOS_DIR.glob("*.repo")):
@@ -291,9 +292,9 @@ def find_failing_repos() -> list[str]:
         # only after a failure, i.e. exactly when a source is broken or crawling,
         # and its output goes to a variable rather than the log pane — so unbounded
         # it hangs the run showing nothing, which is the ONEUP-0048 failure the
-        # bounded argv above exists to prevent. The `timeout <budget> zypper *`
-        # shape is already granted by security.md §5.2, so this needs no new
-        # auth_cmnds entry.
+        # `repo-refresh` row's `timeout <budget>` argv (rootops.py) exists to
+        # prevent. That shape is granted by security.md §5.2, as `refresh_repos`
+        # uses it too.
         rc, out = privilege.root(
             "repo-refresh", {"alias": alias, "import_keys": False, "budget": _BUDGET},
             merge_stderr=True,

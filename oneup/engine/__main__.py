@@ -4,7 +4,7 @@ The flag surface is frozen (`docs/design/oneup-2.0.md` §3): every flag
 `update_system.sh` accepts, with the same spelling and the same behaviour.
 
 `run` below reproduces the Bash engine's straight-line order, and the ORDER is
-the deliverable rather than the pieces: four points in it are load-bearing and
+the deliverable rather than the pieces: five points in it are load-bearing and
 the suite can only see them indirectly. They are named on `run` itself.
 """
 
@@ -108,7 +108,12 @@ Examples:
 
 
 def parse(argv: list[str]) -> tuple[Options | None, int]:
-    """Parse `argv`. Returns (options, exit-code); options is None when we should exit."""
+    """Parse `argv`. Returns (options, exit-code); options is None when we should exit.
+
+    `--hold` and `--emit-guard` are left out of the help on purpose, as the Bash
+    usage leaves them out: `--hold` is the window's, and `--emit-guard` is for the
+    suite and for checking a release's guard text, not for a user.
+    """
     opts = Options()
     for arg in argv:
         if arg.startswith("--steps="):
@@ -420,7 +425,7 @@ def _preflight() -> None:
             continue
         human = steps.human_bytes(avail)
         markers.out(f"  ! Low disk space on {mount}: only {human} free "
-                    f"(recommend at least 2 GiB).")
+                    f"(recommend at least {_LOW_DISK // 2**30} GiB).")
         markers.marker("DISK", "warn", mount, human)
     # Btrfs snapshots accumulate around every zypper transaction and can quietly
     # fill the root filesystem. Count is the honest signal: Btrfs shares extents
@@ -453,7 +458,8 @@ def _preflight() -> None:
 
 
 # Restarting one of these ends the user's graphical session, so a reboot is the
-# honest advice (ONEUP-0111). Kept in step with the window's own list by a test.
+# honest advice (ONEUP-0111). The window keeps its own copy (`gui/banners.py`); no test
+# compares the two, only sample names fed to each, so change both together.
 _SESSION_CRITICAL = re.compile(
     r"^(display-manager|sddm|gdm|gdm3|lightdm|xdm|kdm|lxdm|greetd|dbus|dbus-broker"
     r"|systemd-logind|polkit|polkitd|user@[0-9]+)$")
@@ -469,8 +475,8 @@ def _display_manager_unit() -> str:
     return base[:-len(".service")] if base.endswith(".service") else base
 
 
-def _reboot_and_services(opts: Options) -> tuple[str, str, str, str]:
-    """The reboot verdict, its reason, and the services split into safe and risky."""
+def _reboot_and_services() -> tuple[str, str, str, str]:
+    """The reboot verdict, its English `why`, and the services split into safe and risky."""
     # `reason` is the marker's: component codes space-separated, or one standalone
     # code (ONEUP-0072 §4.1). `why` is the same thing in English for the summary.
     reboot, reason, why = "no", "", ""
@@ -527,7 +533,7 @@ def _reboot_and_services(opts: Options) -> tuple[str, str, str, str]:
 _ICON = {"ok": "OK  ", "skip": "SKIP", "fail": "FAIL"}
 
 
-def _summary(opts: Options, run_keys: list[str], reboot: str, reason: str,
+def _summary(opts: Options, run_keys: list[str], reboot: str, why: str,
              safe: str, risky: str) -> None:
     """The closing block: per-step outcomes, what was installed, and `@@DONE@@`."""
     markers.out("")
@@ -572,7 +578,7 @@ def _summary(opts: Options, run_keys: list[str], reboot: str, reason: str,
         markers.marker("DONE", "ok")
     if reboot == "yes":
         markers.out("")
-        markers.out(f"  ! A REBOOT is recommended — {reason}." if reason
+        markers.out(f"  ! A REBOOT is recommended — {why}." if why
                     else "  ! A REBOOT is recommended — an earlier update still needs it.")
     elif safe or risky:
         if safe:
@@ -637,7 +643,7 @@ def _wait_for_lock() -> str | None:
 def run(opts: Options, run_keys: list[str], log_file: str, held_auth: bool = False) -> int:
     """One full run, in the Bash's order — which is itself the deliverable.
 
-    Four points where the order is load-bearing and the suite can only see it
+    Five points where the order is load-bearing and the suite can only see it
     indirectly: `sudo_init` before `release_zypper_lock`; `run.state` written
     only once the run is definitely going ahead, after the lock-holder check;
     the pre-update snapshot before the pre-flight warnings; the banner
@@ -693,18 +699,20 @@ def run(opts: Options, run_keys: list[str], log_file: str, held_auth: bool = Fal
     # From here the run is definitely going ahead, so record it: a window
     # starting up can then find a run already in flight and follow its log
     # rather than offering a Run button that could only fail on the lock.
-    holder = runstate.claim_run_state(log_file, opts.steps)
-    if holder is not None:
+    # The derived keys, not `opts.steps`: `--steps=` drops an unknown key, and the
+    # window counts and judges the run by this line.
+    other_engine = runstate.claim_run_state(log_file, ",".join(run_keys))
+    if other_engine is not None:
         # Another live engine owns the record (ONEUP-0145). Taking it over would
         # leave whichever run outlives the other with a Stop that can never fire.
-        markers.out(f"OneUp is already running an update (process {holder}).")
+        markers.out(f"OneUp is already running an update (process {other_engine}).")
         markers.out("Nothing has been changed. Follow that run in the OneUp window, "
                     "or wait for it to finish.")
         markers.hint(
-            "oneup-already-running", holder,
-            say=f"Another OneUp update is already running (process {holder}). Nothing was "
-            "changed. Open OneUp to follow it, or run the update again once it has "
-            "finished.")
+            "oneup-already-running", other_engine,
+            say=f"Another OneUp update is already running (process {other_engine}). "
+            "Nothing was changed. Open OneUp to follow it, or run the update again once "
+            "it has finished.")
         markers.marker("DONE", "errors")
         return 1
     if not runstate.owns_run_state():
@@ -736,8 +744,8 @@ def run(opts: Options, run_keys: list[str], log_file: str, held_auth: bool = Fal
             # undo, so no later step starts (`docs/standards/testing.md` §5 item 2).
             break
 
-    reboot, reason, safe, risky = _reboot_and_services(opts)
-    _summary(opts, run_keys, reboot, reason, safe, risky)
+    reboot, why, safe, risky = _reboot_and_services()
+    _summary(opts, run_keys, reboot, why, safe, risky)
     _notify(opts, log_file)
     markers.out(f"  Log saved: {log_file}")
     markers.out("==========================================")

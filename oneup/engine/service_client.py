@@ -75,10 +75,16 @@ def _router():
     return _ROUTER
 
 
-# Bounds on the calls that never prompt (ONEUP-0399). Run checks its arguments and
-# may stage the CDN repository copy before it replies, so it gets longer than Read.
-READ_SECONDS = 30
+# Bounds on the calls that never prompt (ONEUP-0399): `Read`, `Stop`, `CanUpdate` and
+# `CloseSession` share `CALL_SECONDS`, past which the service is taken as wedged. Run
+# checks its arguments and may stage the CDN repository copy before it replies, so it
+# gets longer.
+CALL_SECONDS = 30
 RUN_SECONDS = 120
+
+# `Read`'s status while there is more to come: the job still runs, or the reply
+# carries bytes. Any other status is the job's own, on a reply with none (§4.3).
+STILL_RUNNING = -1
 
 
 def _call(method: str, signature: str | None = None, body: tuple = (),
@@ -137,7 +143,8 @@ def open_session(*, interactive: bool, import_keys: bool) -> None:
 class _Pull(io.RawIOBase):
     """The job's output as a byte stream, pulled with `Read` (§4.3).
 
-    End of stream is the reply carrying the final status. A failed `Read` ends it too,
+    End of stream is the reply carrying the final status: no bytes and a status other
+    than `STILL_RUNNING`. A failed `Read` ends it too,
     with status 1: the client treats it as a failed job (§4.3, §6).
     """
 
@@ -153,15 +160,15 @@ class _Pull(io.RawIOBase):
     def readinto(self, buffer) -> int:
         while not self._pending and self.status is None:
             try:
-                # §4.3: Read answers within a second, so 30 s means a wedged
-                # service, which then reads as a failed Read (ONEUP-0399).
-                data, status = _call("Read", "t", (self.offset,), timeout=READ_SECONDS)
+                # §4.3: Read answers within a second, so `CALL_SECONDS` means a
+                # wedged service, which then reads as a failed Read (ONEUP-0399).
+                data, status = _call("Read", "t", (self.offset,), timeout=CALL_SECONDS)
             except (Unreachable, Refused):
                 self.status = 1
                 break
             self._pending = bytes(data)
             self.offset += len(data)
-            if not data and status != -1:
+            if not data and status != STILL_RUNNING:
                 self.status = status
         count = min(len(buffer), len(self._pending))
         buffer[:count] = self._pending[:count]
@@ -202,12 +209,12 @@ def run(op: str, args: Mapping[str, object], *, merge_stderr: bool) -> Job:
 
 def stop() -> None:
     """`Stop`: the user's Stop, forwarded to the one stoppable operation (§4.6)."""
-    _call("Stop", timeout=30)
+    _call("Stop", timeout=CALL_SECONDS)
 
 
 def can_update() -> str:
     """`CanUpdate`: "yes" or "no", never a prompt (§4.4)."""
-    return str(_call("CanUpdate", timeout=30)[0])
+    return str(_call("CanUpdate", timeout=CALL_SECONDS)[0])
 
 
 def close() -> None:
@@ -215,7 +222,7 @@ def close() -> None:
     global _CONN, _ROUTER, _SESSION
     if _SESSION:
         with contextlib.suppress(Unreachable, Refused):
-            _call("CloseSession", timeout=30)
+            _call("CloseSession", timeout=CALL_SECONDS)
         _SESSION = False
     if _ROUTER is not None:
         # Any exception: on the way out, a close that fails in any of jeepney's ways
