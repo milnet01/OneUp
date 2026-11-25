@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=454 -->
+<!-- ants-roadmap-id-high-water: ONEUP=457 -->
 
 # OneUp Roadmap
 
@@ -11245,6 +11245,10 @@ when complete (that document's §7).
   it.
   2026-11-11: the user ran `sign-release.py --check-key` against the
   real key, and it matches the committed public key.
+  Decided by the user 2026-11-25: relaunch_env (§4.7) also strips
+  LD_LIBRARY_PATH/LD_PRELOAD on a package or checkout restart, and
+  that stays. A restarted window starts clean; a user who set either
+  on purpose loses it in the restarted copy.
   **Layman:** OneUp will be able to update itself: it spots a new version, downloads it, closes, applies the update and reopens — instead of telling you a new version exists and leaving you to fetch it.
   Kind: feature.
   Source: user-request-2026-08-18.
@@ -12933,3 +12937,41 @@ when complete (that document's §7).
   **Layman:** The window that shows what changed in a new OneUp opened at the end of the list instead of the start.
   Kind: ux.
   Source: verify-delivery-2026-11-23 (ONEUP-0440 VM run).
+
+- 📋 [ONEUP-0455] **The download figure can read more than its total, e.g. 609.1 MiB of 609.0 MiB.**
+  Seen 2026-11-25 on a 128-package run. run._tick_activity takes the larger
+  of the summed per-package sizes (PROGRESS bytes, from proc.py's
+  Retrieving: sum) and the cache weight; the weight is capped at
+  bytes_total, the sum is not. zypper rounds each package size, so the sum
+  can pass its own total. Fix: cap the shown figure at the total, as
+  marker-protocol.md §4.3 already says of the weight; regression test
+  feeds bytes above the total.
+  **Layman:** While updates download, OneUp can say it has fetched slightly more than the total it announced.
+  Kind: fix.
+  Source: user-report-2026-11-25.
+  Lanes: gui.
+
+- 📋 [ONEUP-0456] **Show Flatpak download sizes: a running estimate against Flatpak's upper bound.**
+  User decision 2026-11-25: estimate progress, not just "up to". Flatpak's
+  table prints a size per ref as "< 391.7 MB", an UPPER bound (it often
+  fetches less through deltas). _flatpak_pass reads the table for the ref
+  name and drops the size; Flatpak passes send no bytes. Plan: parse the
+  bound, send a total and a running estimate from Flatpak's per-ref
+  percentage, label the total as an upper bound. Amends ONEUP-0239 §4.1.4
+  (a Flatpak pass moves neither half) and marker-protocol.md's PROGRESS
+  byte fields for the flatpak step.
+  **Layman:** During the Flatpak step, OneUp will show roughly how much has downloaded out of the most Flatpak says it might need.
+  Kind: feature.
+  Source: user-report-2026-11-25.
+  Lanes: engine, gui.
+
+- 📋 [ONEUP-0457] **Flatpak step: the headline named an app not being updated, and two counts disagreed.**
+  Seen 2026-11-25: Flatpak's table listed GNOME runtimes and Discord, but
+  Spotlight's headline read org.gimp.GIMP; the Packages box read 1 of 5
+  while the status line read "Updating your apps: 0 of 5". Unverified:
+  one count may mean started and the other finished (ONEUP-0364). Check
+  both against the code and fix or record why they are right.
+  **Layman:** During the Flatpak step the window named GIMP while Flatpak was updating other things, and showed both 1 of 5 and 0 of 5.
+  Kind: investigate.
+  Source: user-report-2026-11-25.
+  Lanes: gui, engine.
