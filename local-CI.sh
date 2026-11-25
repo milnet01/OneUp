@@ -16,8 +16,8 @@
 #   ./local-CI.sh --full   also run the AppImage build (wrapped in a 10-min timeout).
 #   ./local-CI.sh --docs   ONLY the gates that can read a markdown file — the version
 #                          lockstep (CHANGELOG.md is one of the six sites), bump.py's
-#                          functional test (bump rewrites the CHANGELOG heading and both
-#                          compare links) and tests/docs-check.py. Measured under a second
+#                          functional test (bump rewrites the CHANGELOG heading, adds the
+#                          release link and moves the [Unreleased] compare link) and tests/docs-check.py. Measured under a second
 #                          all together, against ~90 s for the full run.
 #
 # A pre-push hook (githooks/pre-push) runs the fast gates automatically before a push, and
@@ -74,6 +74,16 @@ show_failure() {  # $1 = the suite's log
         "$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null || echo unknown)"
 }
 
+# The "Passed: N   Failed: M" line every suite prints last (docs-check prints "Checked:").
+tally() { grep -oE '(Passed|Checked): [0-9]+   Failed: [0-9]+' "$1" | tail -1; }
+
+# --- how --docs splits this script -------------------------------------------
+# Two `if ! $DOCS` blocks hold the gates that cannot read a markdown file: the first
+# ends at "end of the first code-gate block", the second at "end of the code gates".
+# The bump test sits between them; the lockstep, documentation and --full steps
+# follow the second. Those always run. A new gate goes inside a block unless it reads
+# markdown; one placed outside both runs on a docs-only push.
+
 # --- engine test suite (same script CI should gate on) ----------------------
 # ONEUP_TEST_NETWORK=1 opts in to the network-dependent checks (ONEUP-0094 T-1: the
 # download-recovery host is still served). This is the run that owns them — the release
@@ -86,7 +96,7 @@ if ! $DOCS; then
 
 step "Engine test suite"
 if ONEUP_TEST_NETWORK="${ONEUP_TEST_NETWORK:-1}" bash tests/run-tests.sh >"$LOGS/tests.log" 2>&1; then
-    ok "tests/run-tests.sh — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/tests.log" | tail -1)"
+    ok "tests/run-tests.sh — $(tally "$LOGS/tests.log")"
 else
     bad "tests/run-tests.sh"; show_failure "$LOGS/tests.log"
 fi
@@ -98,7 +108,7 @@ fi
 # without a full engine run — docs/specs/ONEUP-0054-python-engine.md §4.3.4.
 step "Engine parser unit tests"
 if python3 tests/parsers-test.py >"$LOGS/parsers.log" 2>&1; then
-    ok "tests/parsers-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/parsers.log" | tail -1)"
+    ok "tests/parsers-test.py — $(tally "$LOGS/parsers.log")"
 else
     bad "tests/parsers-test.py"; show_failure "$LOGS/parsers.log"
 fi
@@ -112,7 +122,7 @@ step "System service suite"
 python3 tests/service-test.py >"$LOGS/service.log" 2>&1
 rc=$?
 if [[ $rc == 0 ]]; then
-    ok "tests/service-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/service.log" | tail -1)"
+    ok "tests/service-test.py — $(tally "$LOGS/service.log")"
 elif [[ $rc == 77 ]]; then
     skip "tests/service-test.py" "dbus-daemon or jeepney not installed"
 else
@@ -127,7 +137,7 @@ step "Self-update suite"
 python3 tests/self-update-test.py >"$LOGS/selfupdate.log" 2>&1
 rc=$?
 if [[ $rc == 0 ]]; then
-    ok "tests/self-update-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/selfupdate.log" | tail -1)"
+    ok "tests/self-update-test.py — $(tally "$LOGS/selfupdate.log")"
 elif [[ $rc == 77 ]]; then
     skip "tests/self-update-test.py" "cryptography not installed"
 else
@@ -139,14 +149,13 @@ fi
 # means PySide6 isn't installed here — a skip, not a failure (matches the
 # engine's skip-cleanly-for-absent-tools convention).
 # Its G3 scenario (ONEUP-0054) launches the real Python engine through the window's
-# own code path, so this one pass proves the pair as well as the window. It ran
-# twice while stage 7's ONEUP_ENGINE switch existed; stage 9 removed the switch.
+# own code path, so this one pass proves the pair as well as the window.
 # The two passes run side by side (ONEUP-0265): each is one single-threaded process
 # of about 640 MB in its own sandbox HOME, so together they take two of the machine's
-# cores rather than more, and the gate waits on the slower one instead of both in turn.
-# Nothing else runs beside them — the engine suite stays on its own (ONEUP-0263).
-# They became safe to overlap when ONEUP-0264 gave the ONEUP-0260 sleeper a duration
-# of its own; before that each pass counted the other's as a leak.
+# cores, and the gate waits on the slower one. Nothing else runs beside them — the
+# engine suite stays on its own (ONEUP-0263). Overlap is safe because the ONEUP-0260
+# sleeper has a duration of its own (ONEUP-0264): neither pass counts the other's
+# sleeper as a leak.
 gui_smoke_start() {  # $1 = label ('' for the default pass), $2.. = the suite's arguments
     local label="$1"; shift
     local log="$LOGS/gui${label:+-$label}.log"
@@ -159,7 +168,7 @@ gui_smoke_report() { # $1 = label, as given to gui_smoke_start
     local rc
     rc=$(cat "$log.rc" 2>/dev/null) || rc=""
     if [[ $rc == 0 ]]; then
-        ok "$name — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$log" | tail -1)"
+        ok "$name — $(tally "$log")"
     elif [[ $rc == 77 ]]; then
         skip "$name" "PySide6 not installed"
     else
@@ -187,9 +196,9 @@ gui_smoke_report "right-to-left"
 # through paths.engine_argv. Stdlib-only, so it never skips.
 step "Package structure (oneup/)"
 if python3 tests/imports-test.py >"$LOGS/imports.log" 2>&1; then
-    ok "tests/imports-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/imports.log" | tail -1)"
+    ok "tests/imports-test.py — $(tally "$LOGS/imports.log")"
 else
-    bad "tests/imports-test.py"; cat "$LOGS/imports.log"
+    bad "tests/imports-test.py"; show_failure "$LOGS/imports.log"
 fi
 
 # --- translation groundwork (docs/specs/ONEUP-0032-i18n.md §5) ---------------
@@ -198,9 +207,9 @@ fi
 # off, no size cap a translation could outgrow. Stdlib-only, so it never skips.
 step "Translation groundwork (oneup/)"
 if python3 tests/i18n-check.py >"$LOGS/i18n.log" 2>&1; then
-    ok "tests/i18n-check.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/i18n.log" | tail -1)"
+    ok "tests/i18n-check.py — $(tally "$LOGS/i18n.log")"
 else
-    bad "tests/i18n-check.py"; cat "$LOGS/i18n.log"
+    bad "tests/i18n-check.py"; show_failure "$LOGS/i18n.log"
 fi
 
 # --- Python syntax ----------------------------------------------------------
@@ -214,13 +223,13 @@ else bad "py_compile"; fi
 fi   # end of the first code-gate block skipped by --docs
 
 # --- bump.py functional test ------------------------------------------------
-# NOT skipped by --docs: bump.py rewrites the CHANGELOG heading and both compare links, so
-# a malformed [Unreleased] is a markdown edit that fails here and nowhere else.
+# NOT skipped by --docs: bump.py rewrites the CHANGELOG heading, adds its release link and moves the
+# [Unreleased] compare link, so a malformed [Unreleased] is a markdown edit that fails here and nowhere else.
 # Runs a real bump in a throwaway repo copy and asserts every version site
 # advances (incl. the CHANGELOG [Unreleased] compare base). Stdlib-only, exit 0/1.
 step "bump.py functional test"
 if python3 tests/bump-test.py >"$LOGS/bump.log" 2>&1; then
-    ok "tests/bump-test.py — $(grep -oE 'Passed: [0-9]+   Failed: [0-9]+' "$LOGS/bump.log" | tail -1)"
+    ok "tests/bump-test.py — $(tally "$LOGS/bump.log")"
 else
     bad "tests/bump-test.py"; show_failure "$LOGS/bump.log"
 fi
@@ -276,7 +285,7 @@ inv5_hits=$(
         # A dict that CLOSES on its own line opens nothing. `_FONT_SCALE` is one,
         # and it sits above the stylesheet templates — so the skip it opened ran
         # to the closing paren of the NEXT dict, and _QSS and _HC_QSS were
-        # never scanned at all. That, not the hex-only pattern, is how four rgba
+        # never scanned at all. With the hex-only pattern below, that is how four rgba
         # literals sat in the row-ring gradient with this gate green (ONEUP-0179).
         /^_[A-Z_]+ = dict\(/       { if ($0 !~ /\)[[:space:]]*$/) inpal = 1; next }
         inpal && /^\)/             { inpal = 0; next }
@@ -294,9 +303,8 @@ inv5_hits=$(
         incom                      { if (/\*\//) incom = 0; next }
         /^_BLACK = |^_WHITE = /    { next }
         /#[0-9a-fA-F]{6}/          { print FILENAME ":" FNR ": " $0; next }
-        # A DECIMAL rgba() triple is a colour literal too, and hex-only is how
-        # four of them sat in the row-ring gradient with the gate green
-        # (ONEUP-0179). `_rgba(` and the f-string that builds one are not
+        # A DECIMAL rgba() triple is a colour literal too: a hex-only pattern
+        # cannot see one (ONEUP-0179). `_rgba(` and the f-string that builds one are not
         # literals and do not match: a digit must follow the paren.
         /rgba\([0-9]/              { print FILENAME ":" FNR ": " $0; next }
         /QColor\(["'"'"']/          { print FILENAME ":" FNR ": " $0; next }
@@ -373,9 +381,9 @@ fi
 # the author decides what the right text is.
 step "Documentation"
 if python3 tests/docs-check.py >"$LOGS/docs.log" 2>&1; then
-    ok "tests/docs-check.py — $(grep -oE 'Checked: [0-9]+   Failed: [0-9]+' "$LOGS/docs.log" | tail -1)"
+    ok "tests/docs-check.py — $(tally "$LOGS/docs.log")"
 else
-    bad "tests/docs-check.py"; cat "$LOGS/docs.log"
+    bad "tests/docs-check.py"; show_failure "$LOGS/docs.log"
 fi
 
 # --- AppImage build (opt-in; also built + verified by GitHub CI on a tag push) ---

@@ -49,15 +49,17 @@ bumped=(oneup/__init__.py packaging/rpm/oneup.spec packaging/obs/_service
 # The OBS projects that carry the oneup package. The old location, home:milnet, had its
 # last update at 2.0.0 (packaging/obs/README.md).
 obs_projects=(home:milnet:oneup)
+# What to say whenever the OBS step cannot finish.
+obs_by_hand="re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
 
 # The OBS checkout is removed however the script ends, an interrupt included, and only
 # ever when it was actually made.
 work=""
-cleanup() { [[ -n "$work" && -d "$work" ]] && rm -rf -- "$work"; }
+remove_obs_checkout() { [[ -n "$work" && -d "$work" ]] && rm -rf -- "$work"; }
 # The download is signed in a folder of its own: the .sig is not git-ignored, and an
 # untracked file in the tree stops the next release's clean-tree check.
 sigdir=""
-trap 'cleanup; [[ -n "$sigdir" && -d "$sigdir" ]] && rm -rf -- "$sigdir"' EXIT
+trap 'remove_obs_checkout; [[ -n "$sigdir" && -d "$sigdir" ]] && rm -rf -- "$sigdir"' EXIT
 trap 'exit 130' INT TERM
 
 red() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
@@ -179,16 +181,16 @@ if $do_obs; then
     for proj in "${obs_projects[@]}"; do
         echo "==> Updating OBS package $proj/oneup"
         if ! command -v osc >/dev/null 2>&1; then
-            echo "   osc not installed — re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
+            echo "   osc not installed — $obs_by_hand"
             obs_updated=false
             continue
         fi
-        cleanup
+        remove_obs_checkout
         # Checked: with work empty, `cd ""` succeeds without moving and the checkout lands
         # in the repository, where it blocks the next release's clean-tree check (ONEUP-0430).
         if ! { mkdir -p "$scratch" && work=$(mktemp -d "$scratch/obs.XXXXXX"); }; then
             work=""
-            echo "   could not make a folder for the OBS checkout — re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
+            echo "   could not make a folder for the OBS checkout — $obs_by_hand"
             obs_updated=false
             continue
         fi
@@ -197,7 +199,7 @@ if $do_obs; then
             # Checked: a failed copy leaves the old files, and `osc commit` would then
             # report success for a commit that changed nothing (ONEUP-0420).
             if ! cp packaging/obs/_service packaging/rpm/oneup.spec "$work/$proj/oneup/"; then
-                echo "   copy into the OBS checkout failed — re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
+                echo "   copy into the OBS checkout failed — $obs_by_hand"
                 obs_updated=false
                 continue
             fi
@@ -209,11 +211,11 @@ if $do_obs; then
                  && osc commit -m "oneup $ver" ); then
                 echo "   OBS updated — rebuild triggered."
             else
-                echo "   osc commit failed — re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
+                echo "   osc commit failed — $obs_by_hand"
                 obs_updated=false
             fi
         else
-            echo "   osc checkout failed — re-upload _service + oneup.spec via the web UI (packaging/obs/README.md)."
+            echo "   osc checkout failed — $obs_by_hand"
             printf '   osc said: %s\n' "$osc_out"
             obs_updated=false
         fi
