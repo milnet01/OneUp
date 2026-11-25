@@ -5392,7 +5392,7 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   Kind: chore.
   Source: check-code --tree 2026-08-31 (yamllint).
 
-- 📋 [ONEUP-0141] **zizmor: `softprops/action-gh-release` duplicates functionality the runner already provides.**
+- ✅ [ONEUP-0141] **zizmor: `softprops/action-gh-release` duplicates functionality the runner already provides.**
   The `Attach AppImage to the release` step could use `gh release upload`
   directly, dropping a third-party dependency from the release path entirely —
   which also removes one of the three pins ONEUP-0137 just had to SHA-pin.
@@ -5409,6 +5409,10 @@ features: those wait for 2.0 (`docs/standards/workflow.md` §1).
   hold until then.
   User confirmed 2026-11-11: the hold stands. Do it in the first 2.0.x
   patch release, the same one as ONEUP-0112's first signed release.
+  Shipped 2026-11-25 in e77ff61, with ONEUP-0430's job split: the
+  publish job uses the runner's gh (create, or edit and upload --clobber
+  for a moved tag). The user's hold said the first patch release after
+  2.0.0; 2.1.0 came first without it. First real run: the next tag.
   **Layman:** The release step uses a third-party action for something the built-in tooling can already do.
   Kind: chore.
   Source: check-code --tree 2026-08-31 (zizmor superfluous-actions, Informational).
@@ -12527,7 +12531,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0430] **Release tooling findings from the 2026-11-15 review.**
+- ✅ [ONEUP-0430] **Release tooling findings from the 2026-11-15 review.**
   review-code 2026-11-15, lane 13. MEDIUM:
   - release.sh: the OBS cp is unchecked (in ONEUP-0420).
   - release.yml never checks the tag against APP_VERSION.
@@ -12535,11 +12539,21 @@ when complete (that document's §7).
     catch it; zizmor is not in local-CI).
   Plus 11 LOW rows in lane-13-release-tooling.md at
   /mnt/Emulators/.claude/Scratchpad/OneUp/reviews/review-code-2026-11-15/.
+  Shipped 2026-11-25 in e77ff61. Both MEDIUMs: the OBS cp was already
+  fixed by ONEUP-0420; release.yml now checks the tag against
+  APP_VERSION. All 11 LOWs fixed: release.yml split into a read-only
+  build job and a publish job that alone can write; leading zeros
+  refused; workflow.md §6 table completed; lockstep needs the v;
+  release.sh keeps gh/osc errors and checks mktemp; pre-push seam
+  ignored in a real checkout; bump.py cleans its temp file; inspect-rpm
+  refuses patterns and non-files; pip installs by hash (new
+  hash-requirements.py); scratch off /tmp. Not yet run for real: the new
+  release.yml runs first at the next tag.
   **Layman:** Smaller problems in the scripts that publish OneUp releases.
   Kind: review-fix.
   Source: review-code-2026-11-15.
 
-- 📋 [ONEUP-0431] **Two checks the code review found missing from local CI: vulture for unused names, zizmor for workflows.**
+- ✅ [ONEUP-0431] **Two checks the code review found missing from local CI: vulture for unused names, zizmor for workflows.**
   review-code and review-readability 2026-11-15, Tool gaps. Real
   gaps: oneup/gui/steps.py DETAIL_NAMES has no reader (vulture), and
   release.yml's workflow-wide contents: write (zizmor). Not gaps: the
@@ -12556,6 +12570,9 @@ when complete (that document's §7).
   strictest mode (--persona=pedantic) over .github/workflows/, after
   ONEUP-0430 fixes release.yml's workflow-wide contents: write. No
   vulture: its Qt false alarms would cost more than it finds.
+  Shipped 2026-11-25 in e77ff61. local-CI's Lint step runs zizmor
+  --offline --persona=pedantic over .github/workflows/. Proved: green on
+  the new release.yml, exit 14 on the old one.
   **Layman:** Two automatic checks would have caught problems the review had to find by hand.
   Kind: chore.
   Source: review-code-2026-11-15.
