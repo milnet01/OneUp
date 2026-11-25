@@ -267,8 +267,9 @@ DERIVED_FROM: dict[str, str] = {
     "rowring": "rowringtint", "rowringhov": "rowringhovtint",
 }
 
-# The font metrics are substituted into the same template and are not colours.
-NON_COLOUR = ("fs_header", "fs_med", "fs_body", "fs_small", "badgepad", "progmin")
+# Float slack on every floor comparison: a ratio that lands a rounding error under
+# its floor is not a failure. One value, so every check agrees.
+_SLACK = 1e-9
 
 
 def palette_for(dark: bool) -> dict:
@@ -298,7 +299,7 @@ def short(palette: dict) -> list[str]:
     """Every pair that fails its floor, rendered for a test's failure message."""
     return [f"{r['fg']} on {r['bg']} = {r['ratio']:.2f}:1 < {r['floor']}"
             for r in check_pairs(palette)
-            if r["floor"] is not None and r["ratio"] + 1e-9 < r["floor"]]
+            if r["floor"] is not None and r["ratio"] + _SLACK < r["floor"]]
 
 
 def bad_exceptions() -> list[str]:
@@ -323,8 +324,8 @@ def bad_exceptions() -> list[str]:
 
 def uncovered(palette: dict) -> list[str]:
     """Colour tokens the four coverage routes do not reach (INV-4)."""
-    named: set[str] = (set(MEASURED_ELSEWHERE) | set(NON_COLOUR)
-                       | set(DERIVED_FROM))
+    # The font metrics the sheet also substitutes are not in `palette_for`'s result.
+    named: set[str] = set(MEASURED_ELSEWHERE) | set(DERIVED_FROM)
     for fg, bgs, _floor in PAIRS:
         named.add(fg)
         named.update(bgs)
@@ -340,7 +341,7 @@ def uncovered(palette: dict) -> list[str]:
     # A derived key rides on its source, so a source that nothing checks leaves
     # BOTH uncovered — otherwise DERIVED_FROM would be a way to launder a token
     # into coverage it never earned.
-    checked = named - set(DERIVED_FROM) - set(MEASURED_ELSEWHERE) - set(NON_COLOUR)
+    checked = named - set(DERIVED_FROM) - set(MEASURED_ELSEWHERE)
     missing += [f"{k} (via {src}, which nothing checks)"
                 for k, src in DERIVED_FROM.items() if src not in checked]
     return sorted(missing)
@@ -378,7 +379,7 @@ def hc_short(theme) -> list[str]:
             ("infobd", ("win", "card"), MARK)):
         for bg in bgs:
             r = contrast(hc[fg], hc[bg])
-            if r + 1e-9 < floor:
+            if r + _SLACK < floor:
                 out.append(f"overlay {fg} on {bg} = {r:.2f}:1 < {floor}")
 
     # The progress caption is centred and the bar is FULL when it carries its final
@@ -388,7 +389,7 @@ def hc_short(theme) -> list[str]:
     for fg, bg, floor in (("text", "progchunk", TEXT),
                           ("progchunk", "card", MARK)):
         r = contrast(hc[fg], hc[bg])
-        if r + 1e-9 < floor:
+        if r + _SLACK < floor:
             out.append(f"overlay {fg} on {bg} = {r:.2f}:1 < {floor}")
 
     # The painted set, against the overlay's surfaces rather than the theme's.
@@ -399,7 +400,7 @@ def hc_short(theme) -> list[str]:
             ("trayidle", ("win", "card"), MARK)):
         for bg in bgs:
             r = contrast(base[fg], hc[bg])
-            if r + 1e-9 < floor:
+            if r + _SLACK < floor:
                 out.append(f"painted {fg} on overlay {bg} = {r:.2f}:1 < {floor}")
     # The switch's high-contrast rims exist only for this state, and they are
     # base tokens: the overlay cannot reach a widget that paints itself.
@@ -407,7 +408,7 @@ def hc_short(theme) -> list[str]:
                           ("switchtrackrim", "switchoff", MARK),
                           ("switchknobrim", "switchknob", MARK)):
         r = contrast(base[fg], base[bg])
-        if r + 1e-9 < floor:
+        if r + _SLACK < floor:
             out.append(f"painted {fg} on {bg} (overlay on) = {r:.2f}:1 < {floor}")
     return out
 

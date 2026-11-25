@@ -4,7 +4,8 @@ The reboot, info and warning banners, and the remedy actions their buttons run.
 `_split_session_critical` and `restart_services` stay in one module because a
 guard and the command it protects must not be separated
 (`docs/standards/security.md` §9.4, spec INV-11); the same is true of
-`_service_units` and both of its callers.
+`_service_units` and its callers here. `run.py` calls it too, to decide which
+banner to draw, so a change to its filter is a change to both.
 """
 from __future__ import annotations
 
@@ -33,7 +34,7 @@ from . import i18n, repos, rollback, run
 # breaks the authorisation agent carrying out the restart. `zypper ps -sss` reports
 # whatever holds a replaced library, so after a glibc, systemd, Qt or dbus update these
 # are exactly what it names — they are the longest-running processes on the box and they
-# link everything. `Updater.restart_services` restarts none of them on any path
+# link everything. `restart_services` (below) restarts none of them on any path
 # (ONEUP-0111); a reboot is the honest advice, and the window already has that button.
 #
 # NetworkManager and wickedd are deliberately absent: disruptive, recoverable, and a
@@ -250,12 +251,18 @@ def _confirm_key_import(win) -> bool:
     return box.exec() == QMessageBox.Ok
 
 
+def _steps_to_retry(win) -> list[str]:
+    """The steps a remedy re-runs. The `system` step is the one that reads signed
+    repositories and so the one a repository remedy is about, if none is recorded."""
+    return list(win._failed_steps) or ["system"]
+
+
 def _fix_keys_and_retry(win):
     """Re-run the failed update with signing-key import enabled, after the user
     confirms the trust decision."""
     if not _confirm_key_import(win):
         return
-    steps = list(win._failed_steps) or ["system"]
+    steps = _steps_to_retry(win)
     run._launch(win, steps, check=False, import_keys=True)
 
 
@@ -275,7 +282,7 @@ def _skip_repo_and_retry(win):
     aliases = list(win._remedy_skips)
     if not aliases:
         return
-    steps = list(win._failed_steps) or ["system"]
+    steps = _steps_to_retry(win)
     run._launch(win, steps, check=False, skip_repos=aliases)
 
 
@@ -308,6 +315,20 @@ def _confirm_reboot(win, title: str, body: str):
         _start_reboot(win)
 
 
+def _not_started(program: str) -> str:
+    """What a program that never started is reported as: it prints nothing, so the
+    words are ours."""
+    return QCoreApplication.translate(
+        "banners", "{program} could not be started.").format(program=program)
+
+
+def _failure_detail(output: str, code: int) -> str:
+    """Why a restart command failed, for the box: the tail of its own output, which
+    is data shown as it came, or its exit code when it printed nothing."""
+    return output.strip()[-600:] or QCoreApplication.translate(
+        "banners", "exit code {code}").format(code=code)
+
+
 def _start_reboot(win) -> None:
     """Run `systemctl reboot` attached, so a refusal is reported (ONEUP-0403). Started
     detached, a logind or polkit refusal left a user who said Yes with nothing — the
@@ -318,7 +339,7 @@ def _start_reboot(win) -> None:
     p.finished.connect(lambda code, _status, p=p: _on_reboot_finished(
         win, code, bytes(p.readAll()).decode(errors="replace")))
     p.errorOccurred.connect(lambda err: err == QProcess.FailedToStart
-                            and _on_reboot_finished(win, -1, ""))
+                            and _on_reboot_finished(win, -1, _not_started("systemctl")))
     win._reboot_proc = p
     p.start("systemctl", ["reboot"])
 
@@ -327,9 +348,7 @@ def _on_reboot_finished(win, code: int, output: str) -> None:
     """Say why a restart did not happen. A zero exit says nothing: the session is ending."""
     if code == 0:
         return
-    # The tool's own output is data, shown as it came; only the frame is worded.
-    detail = output.strip()[-600:] or QCoreApplication.translate(
-        "banners", "exit code {code}").format(code=code)
+    detail = _failure_detail(output, code)
     QMessageBox.warning(
         win, QCoreApplication.translate("banners", "Could not restart"),
         QCoreApplication.translate(
@@ -376,11 +395,8 @@ def restart_services(win):
         win.services_banner.setVisible(False)
         return
     if not safe:
-        # ONEUP-0115: where the advice is a reboot, OFFER the reboot. This used to be
-        # an information dialog naming units this button refuses to touch, whose only
-        # control was OK — a recommendation the user then had to go and act on
-        # somewhere else. on_finished now shows the reboot banner instead of this one
-        # in that state, so reaching here means something went round the banner.
+        # ONEUP-0115: where the advice is a reboot, OFFER the reboot. on_finished shows
+        # the reboot banner in this state, so reaching here means something went round it.
         _confirm_reboot(win,
             QCoreApplication.translate("banners", "Restart the computer?"),
             QCoreApplication.translate(
@@ -406,28 +422,26 @@ def restart_services(win):
     title = QCoreApplication.translate("banners", "Restart services?")
     if QMessageBox.question(win, title, body, QMessageBox.Yes | QMessageBox.No,
                             QMessageBox.No) == QMessageBox.Yes:   # Enter = No (ONEUP-0183)
-        _start_service_restart(win, "pkexec",
-                               ["systemctl", "restart", *(units[s] for s in safe)])
+        names = [units[s] for s in safe]
+        _start_service_restart(win, "pkexec", ["systemctl", "restart", *names], names)
         # Hidden while it runs, and shown again only if the restart fails, so a failed
         # one can be retried. Anything still needing a reboot is carried by the reboot
         # banner, which on_finished has already shown.
         win.services_banner.setVisible(False)
 
 
-def _start_service_restart(win, prog: str, args: list[str]) -> None:
-    """Run the restart attached, so its result can be reported (ONEUP-0229). It was
-    started detached, and the user was never told whether it worked. The one place it
-    starts: the suite replaces this, so no test launches a real pkexec."""
-    units = args[2:]
+def _start_service_restart(win, prog: str, args: list[str], units: list[str]) -> None:
+    """Run `prog args` attached, so its result can be reported (ONEUP-0229): started
+    detached, the user was never told whether it worked. `units` are the names the
+    report lists. The one place it starts: the suite replaces this, so no test
+    launches a real pkexec."""
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.finished.connect(lambda code, _status, p=p: _on_services_restarted(
         win, code, bytes(p.readAll()).decode(errors="replace"), units))
     p.errorOccurred.connect(lambda err: err == QProcess.FailedToStart
                             and _on_services_restarted(
-                                win, -1, QCoreApplication.translate(
-                                    "banners", "{program} could not be started.").format(
-                                        program=prog), units))
+                                win, -1, _not_started(prog), units))
     win._restart_proc = p
     p.start(prog, args)
 
@@ -451,11 +465,9 @@ def _on_services_restarted(win, code: int, output: str, units: list[str]) -> Non
         reason = QCoreApplication.translate(
             "banners", "Permission to restart them was refused, or could not be asked for.")
     else:
-        # The tool's own output is data, shown as it came; only the frame is worded.
-        detail = output.strip()[-600:] or QCoreApplication.translate(
-            "banners", "exit code {code}").format(code=code)
         reason = QCoreApplication.translate(
-            "banners", "The restart failed:\n\n{detail}").format(detail=detail)
+            "banners", "The restart failed:\n\n{detail}").format(
+                detail=_failure_detail(output, code))
     win.services_banner.setVisible(True)
     QMessageBox.warning(
         win, QCoreApplication.translate("banners", "Services not restarted"),

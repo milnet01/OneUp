@@ -42,6 +42,8 @@ class TaskRow(QFrame):
     them (ONEUP-0239 §4.1). The packages the step changes are shown by the
     layout's package page, not here."""
 
+    SPACING = 10    # between the parts of the row's top line; Rail's width counts it
+
     def __init__(self, key: str, title: str, description: str):
         super().__init__()
         self.key = key
@@ -104,7 +106,7 @@ class TaskRow(QFrame):
         lay.setContentsMargins(15, 12, 15, 10)
         lay.setSpacing(6)
         top = QHBoxLayout()
-        top.setSpacing(10)
+        top.setSpacing(self.SPACING)
         badge_policy = QSizePolicy.Policy.Fixed
         if form == "full":
             text = QVBoxLayout()
@@ -196,7 +198,7 @@ class TaskRow(QFrame):
 
     def set_progress(self, done: int, total: int) -> None:
         """`done` of `total`; a total of 0 says nothing about how far, so the bar
-        stays busy rather than divide by it."""
+        is left as it was rather than divide by it."""
         if total:
             self.progress.setRange(0, total)
             self.progress.setValue(min(done, total))

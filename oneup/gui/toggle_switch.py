@@ -32,7 +32,7 @@ class ToggleSwitch(QAbstractButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setCheckable(True)
-        self.setChecked(True)
+        self.setChecked(True)       # starts ON, unlike a check box
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedSize(56, 30)
         self._margin = 3

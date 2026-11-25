@@ -12,6 +12,7 @@ Nothing here imports the window module (`docs/specs/ONEUP-0034-gui-modules.md`
 """
 from __future__ import annotations
 
+from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QBoxLayout, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from . import details_dialog, package_views, steps
@@ -43,6 +44,12 @@ class LayoutHost(QWidget):
         self.bodies: list[package_views.EmptyOr] = []
         for key, _t, _d in steps.TASKS:
             win.rows[key].set_form(self.FORM)
+
+    @staticmethod
+    def step_title(key: str) -> str:
+        """A step's title, translated; the key itself when the step is unknown."""
+        title = {k: t for k, t, _d in steps.TASKS}.get(key, key)
+        return QCoreApplication.translate("steps", title)
 
     # --- the package model ------------------------------------------------------
 
@@ -106,10 +113,11 @@ class LayoutHost(QWidget):
 
     def footer(self, with_actions: bool = False) -> QBoxLayout:
         """The last run, Undo and the log button — Open log file beside it only while
-        the log is shown, on its leading side, so its kept slot leaves the log button
-        flush with the slot above (ONEUP-0355). Where the layout puts the action slot
-        here, the slot ends a second line with the log buttons, because one line leaves
-        the last run no room (ONEUP-0350)."""
+        the log is shown, so its kept slot leaves the log button flush with the slot
+        above (ONEUP-0355). On the one-line footer it sits on the log button's leading
+        side; on the two-line one, on its trailing side, which is the order `tail_chain`
+        tabs in. Where the layout puts the action slot here, the slot ends a second line
+        with the log buttons, because one line leaves the last run no room (ONEUP-0350)."""
         win = self.win
         row = QHBoxLayout()
         row.setSpacing(10)

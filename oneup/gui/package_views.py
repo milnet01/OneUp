@@ -54,6 +54,8 @@ from .packages import Package, PackageModel
 # The three groups every count and the size strip use, by the state a view shows.
 # "Now" is only what is downloading: a downloaded package waiting to install is still
 # to go (ONEUP-0239 §4.3.1, the user's decision of 2026-10-23).
+# A state is also a key of `packages._ORDER`, `steps.STATE_WORDS` and
+# `symbols.STATE_SHAPES`: a new state goes into all four.
 GROUP = {"queued": "togo", "downloading": "now", "downloaded": "togo",
          "installed": "done", "removed": "done", "unchanged": "done"}
 
@@ -64,8 +66,11 @@ _PARTS = "  ·  "
 # (ONEUP-0260 §4.4). The delegates take it out and draw `symbols.info` instead, because
 # Noto Sans's U+2139 reads as a stray letter (ONEUP-0357). The words a screen reader
 # hears replace it, and a tooltip drops it.
+# `name_text`'s translatable source text carries the same character.
 MARK = "\u2139"
 MARK_GAP = 4     # pixels between a name and its mark
+ROW_PAD = 8      # pixels added to a delegate's text height, and lost from a grid cell's width
+LABEL_PAD = 4    # pixels a source label's height has beyond its font's, in every view
 
 
 def state_word(model: PackageModel, package: Package) -> str:
@@ -96,9 +101,12 @@ def name_text(win, package: Package) -> str:
     """The package's name, marked when it has details to open (ONEUP-0260 §4.4)."""
     if not win.details.has_details(package):
         return package.name
-    return QCoreApplication.translate(
+    # The literal in the source text is `MARK`: translate cannot be handed the constant.
+    text = QCoreApplication.translate(
         "package_views", "{name} \u2139", "a package name, marked as having details"
     ).format(name=package.name)
+    # A translation that lost the mark would lose the drawn mark with it.
+    return text if MARK in text else f"{text} {MARK}"
 
 
 def drop_mark(text: str) -> str:
@@ -153,6 +161,14 @@ def total_phrase(packages: list[Package]) -> str:
     return _format_size(total)
 
 
+def download_sentence_sample(count: int, size: str) -> str:
+    """The "{count} · {size} to download" sentence for a given count and size text,
+    which `download_sentence` words from the packages. A layout sizes its label from it."""
+    return QCoreApplication.translate(
+        "package_views", "{count} · {size} to download").format(
+        count=i18n.counted("package-count", count), size=size)
+
+
 def download_sentence(packages: list[Package]) -> str:
     """How many, and what there is to download: "24 updates · 17.5 MiB to
     download" (§4.3 Rail). A total counts only known sizes, and says so."""
@@ -164,9 +180,7 @@ def download_sentence(packages: list[Package]) -> str:
             "package_views", "{count} · {size} to download, some sizes not known").format(
             count=count, size=_format_size(total))
     if total:
-        return QCoreApplication.translate(
-            "package_views", "{count} · {size} to download").format(
-            count=count, size=_format_size(total))
+        return download_sentence_sample(len(packages), _format_size(total))
     if unknown:
         return QCoreApplication.translate("package_views", "{count} · size not known").format(
             count=count)
@@ -322,7 +336,7 @@ class LinesDelegate(QStyledItemDelegate):
 
     def height(self, fm) -> int:
         """An item's height in the font `fm`."""
-        return self._lines * fm.lineSpacing() + 8
+        return self._lines * fm.lineSpacing() + ROW_PAD
 
     def sizeHint(self, option, index) -> QSize:
         base = super().sizeHint(option, index)
@@ -333,7 +347,7 @@ class LinesDelegate(QStyledItemDelegate):
         view = self.parent()
         grid = view.gridSize() if isinstance(view, QListView) else QSize()
         if grid.isValid():
-            width = grid.width() - 8
+            width = grid.width() - ROW_PAD
         else:
             width = 0 if isinstance(view, QListView) else base.width()
         return QSize(width, self.height(option.fontMetrics))
@@ -400,7 +414,7 @@ class LinesDelegate(QStyledItemDelegate):
             return
         name = drop_mark(text)
         name_rect, mark = mark_slots(rect, self._natural_width(opt, name), opt.fontMetrics,
-                                     opt.direction)
+                                     _direction())
         self._line(painter, opt, name, name_rect)
         symbols.draw(painter, symbols.info, QRectF(mark),
                      opt.palette.color(QPalette.ColorRole.Text))
@@ -419,6 +433,19 @@ def _direction() -> Qt.LayoutDirection:
     (`ui-and-accessibility.md` §8.3), never a widget's own."""
     return (Qt.LayoutDirection.RightToLeft if QApplication.isRightToLeft()
             else Qt.LayoutDirection.LeftToRight)
+
+
+def draw_source_label(painter, rect: QRect, font: QFont, text: str, fill, ink, rim) -> None:
+    """A source label: a rounded rectangle in `fill` ringed in `rim`, `text` in `ink`.
+    The caller holds the painter's state (`save`, antialiasing). Rows' table and the
+    Rail's card both draw it here, so a change of look is made once."""
+    painter.setPen(QPen(rim, 1))
+    painter.setBrush(fill)
+    radius = rect.height() / 3
+    painter.drawRoundedRect(QRectF(rect).adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+    painter.setFont(font)
+    painter.setPen(ink)
+    painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
 
 
 def _style(opt) -> QStyle:
@@ -444,7 +471,7 @@ class FixedPitchDelegate(LinesDelegate):
     def height(self, fm) -> int:
         view = self.parent()
         fixed = QFontMetrics(fixed_font(view.font())) if view else fm
-        return max(fm.lineSpacing(), fixed.lineSpacing()) + 8
+        return max(fm.lineSpacing(), fixed.lineSpacing()) + ROW_PAD
 
     def initStyleOption(self, option, index) -> None:
         super().initStyleOption(option, index)
@@ -478,15 +505,15 @@ class SourceDelegate(LinesDelegate):
                               lfm.averageCharWidth() * self.SOURCE_CHARS)
         pad = lfm.averageCharWidth()
         label_w = min(lfm.horizontalAdvance(text) + 2 * pad, rect.width() // 2)
-        label_h = lfm.height() + 4
+        label_h = lfm.height() + LABEL_PAD
         natural = self._natural_width(opt, drop_mark(name))
         if MARK in name:
             natural += opt.fontMetrics.ascent() + MARK_GAP
         name_w = min(natural, rect.width() - label_w - self.GAP)
         # Laid out in reading order, then mirrored when the view runs right to left.
-        name_rect = QStyle.visualRect(opt.direction, rect,
+        name_rect = QStyle.visualRect(_direction(), rect,
                                       QRect(rect.left(), rect.top(), name_w, rect.height()))
-        label = QStyle.visualRect(opt.direction, rect, QRect(
+        label = QStyle.visualRect(_direction(), rect, QRect(
             rect.left() + name_w + self.GAP, rect.top() + (rect.height() - label_h) // 2,
             label_w, label_h))
         self._name(painter, opt, name, name_rect)
@@ -494,13 +521,7 @@ class SourceDelegate(LinesDelegate):
         fill, ink, rim = view.get_label_fill(), view.get_label_ink(), view.get_label_rim()
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(QPen(rim, 1))
-        painter.setBrush(fill)
-        radius = label_h / 3
-        painter.drawRoundedRect(QRectF(label).adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
-        painter.setFont(font)
-        painter.setPen(ink)
-        painter.drawText(label, Qt.AlignmentFlag.AlignCenter, text)
+        draw_source_label(painter, label, font, text, fill, ink, rim)
         painter.restore()
 
 
@@ -515,6 +536,8 @@ class CardDelegate(LinesDelegate):
     PAD = 10    # inside the card's rim
     RIM = 2     # every card's rim, so the accent one moves nothing
     SPACE = 4   # between the card's lines
+    DOT_GAP = 6     # between the state dot and the name
+    SIZE_GAP = 8    # between the name and the size
     SIZE_TEXT = WIDEST_SIZE    # the widest size, which sets the size's place
 
     def __init__(self, parts: Callable[[Package], tuple[str, str, str, str, str, str]],
@@ -535,7 +558,7 @@ class CardDelegate(LinesDelegate):
         f = self.fonts(view)
         return (QFontMetrics(f["name"]).lineSpacing(),
                 QFontMetrics(f["versions"]).lineSpacing(),
-                max(QFontMetrics(f["label"]).height() + 4,
+                max(QFontMetrics(f["label"]).height() + LABEL_PAD,
                     QFontMetrics(f["body"]).lineSpacing()))
 
     def card_height(self, view) -> int:
@@ -567,7 +590,8 @@ class CardDelegate(LinesDelegate):
         rects = {
             "card": card,
             "dot": QRect(left, y1 + (one - dot) // 2, dot, dot),
-            "name": QRect(left + dot + 6, y1, width - dot - 6 - size_w - 8, one),
+            "name": QRect(left + dot + self.DOT_GAP, y1,
+                          width - dot - self.DOT_GAP - size_w - self.SIZE_GAP, one),
             "size": QRect(right - size_w + 1, y1, size_w, one),
             "versions": QRect(left, y2, width, two),
             "label": QRect(left, y3, max(label_w, 0), three),
@@ -640,18 +664,18 @@ class CardDelegate(LinesDelegate):
                                    max(r["label"].width() - 2 * pad, 0))
             tag = QRect(r["label"])
             tag.setWidth(min(lfm.horizontalAdvance(shown) + 2 * pad, r["label"].width()))
-            tag.setHeight(lfm.height() + 4)
+            tag.setHeight(lfm.height() + LABEL_PAD)
             tag.moveTop(r["label"].top() + (r["label"].height() - tag.height()) // 2)
             if QApplication.isRightToLeft():
                 tag.moveRight(r["label"].right())
-            # On the focus fill the label is ringed in its ink, as the overlay's is.
-            painter.setPen(QPen(ink if current else view.get_label_rim(), 1))
-            painter.setBrush(QBrush() if current else QBrush(view.get_label_fill()))
-            radius = tag.height() / 3
-            painter.drawRoundedRect(QRectF(tag).adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
-            painter.setPen(ink if current else view.get_label_ink())
-            painter.setFont(f["label"])
-            painter.drawText(tag, Qt.AlignmentFlag.AlignCenter, shown)
+            # On the focus fill the label is ringed in its ink, as the overlay's is;
+            # the table's rows have no such state, so only the card takes this branch.
+            if current:
+                draw_source_label(painter, tag, f["label"], shown, QBrush(), ink, ink)
+            else:
+                draw_source_label(painter, tag, f["label"], shown,
+                                  view.get_label_fill(), view.get_label_ink(),
+                                  view.get_label_rim())
         painter.restore()
 
 
@@ -733,44 +757,45 @@ class PackageTable(QTableView):
         super().__init__()
         # Set from the stylesheet; these defaults only show before the sheet arrives.
         p = theme.current_palette()
-        self._label = {"fill": QColor(p["badgebg"]), "ink": QColor(p["badgefg"]),
-                       "rim": QColor(p["badgebg"]), "nowfill": QColor(p["ghosthov"]),
-                       "nowink": QColor(p["tabink"])}
+        # Every colour the table paints, under the keys `PackageBoard._colour` uses.
+        self._colour = {"fill": QColor(p["badgebg"]), "ink": QColor(p["badgefg"]),
+                        "labelrim": QColor(p["badgebg"]), "nowfill": QColor(p["ghosthov"]),
+                        "nowink": QColor(p["tabink"])}
 
     def _set(self, part: str, colour) -> None:
-        self._label[part] = QColor(colour)
+        self._colour[part] = QColor(colour)
         self.viewport().update()
 
     def get_label_fill(self) -> QColor:
-        return self._label["fill"]
+        return self._colour["fill"]
 
     def set_label_fill(self, colour) -> None:
         self._set("fill", colour)
 
     def get_label_ink(self) -> QColor:
-        return self._label["ink"]
+        return self._colour["ink"]
 
     def set_label_ink(self, colour) -> None:
         self._set("ink", colour)
 
     def get_label_rim(self) -> QColor:
-        return self._label["rim"]
+        return self._colour["labelrim"]
 
     def set_label_rim(self, colour) -> None:
-        self._set("rim", colour)
+        self._set("labelrim", colour)
 
     labelFill = Property(QColor, get_label_fill, set_label_fill)
     labelInk = Property(QColor, get_label_ink, set_label_ink)
     labelRim = Property(QColor, get_label_rim, set_label_rim)
 
     def get_now_fill(self) -> QColor:
-        return self._label["nowfill"]
+        return self._colour["nowfill"]
 
     def set_now_fill(self, colour) -> None:
         self._set("nowfill", colour)
 
     def get_now_ink(self) -> QColor:
-        return self._label["nowink"]
+        return self._colour["nowink"]
 
     def set_now_ink(self, colour) -> None:
         self._set("nowink", colour)

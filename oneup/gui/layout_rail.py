@@ -10,7 +10,7 @@ from __future__ import annotations
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
-from . import i18n, markers, steps
+from . import markers, steps
 from . import package_views as pv
 from .elided_label import ElidedLabel
 from .layout_host import LayoutHost
@@ -95,8 +95,7 @@ class RailLayout(LayoutHost):
         model = self.win.packages
         key = self.win.current_step
         if key and model.packages(key):
-            title = {k: t for k, t, _d in steps.TASKS}.get(key, key)
-            return QCoreApplication.translate("steps", title), model.packages(key)
+            return self.step_title(key), model.packages(key)
         return QCoreApplication.translate("layout_rail", "All updates"), model.packages()
 
     def refresh(self) -> None:
@@ -119,20 +118,20 @@ class RailLayout(LayoutHost):
     def apply_metrics(self) -> None:
         super().apply_metrics()
         win = self.win
-        # The widest step title, plus the switch and the row's own padding. The
-        # switch is fixed-size with no size hint (-1), so take its real width.
+        # The widest step title, plus the switch and the row's own padding
+        # (`TaskRow.SPACING`). The switch is fixed-size with no size hint (-1), so
+        # take its real width.
         row = win.rows[steps.TASKS[0][0]]
         widest = max(row.name.whole_width(r.title) for r in win.rows.values())
         card = row.card.layout().contentsMargins()
         frame = row.layout().contentsMargins()
-        self.rail.setMinimumWidth(widest + row.switch.minimumWidth() + 10
+        self.rail.setMinimumWidth(widest + row.switch.minimumWidth() + row.SPACING
                                   + card.left() + card.right() + frame.left() + frame.right())
         # Both keep room for three-figure totals, and the window grows to hold them;
         # only the summary's "some sizes not known" may elide (ONEUP-0354).
         self.counts.setMinimumWidth(self.counts.whole_width(
             pv.counts_sentence({"done": 999, "now": 9, "togo": 999})))
-        self.summary.setMinimumWidth(self.summary.whole_width(QCoreApplication.translate(
-            "package_views", "{count} · {size} to download").format(
-            count=i18n.counted("package-count", 999), size=markers.WIDEST_SIZE)))
+        self.summary.setMinimumWidth(self.summary.whole_width(
+            pv.download_sentence_sample(999, markers.WIDEST_SIZE)))
         pv.fit_board(self.board)
         pv.hold_rows(self.board, self.PACKAGE_ROWS, self.board.gridSize().height())

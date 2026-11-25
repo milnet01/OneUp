@@ -81,10 +81,9 @@ class SpotlightLayout(LayoutHost):
             pl.addWidget(w)
         figures = QHBoxLayout()
         figures.setSpacing(12)
-        self.figures: list[ElidedLabel] = []
-        for label in (QCoreApplication.translate("layout_spotlight", "Packages"),
-                      QCoreApplication.translate("layout_spotlight", "Downloaded"),
-                      QCoreApplication.translate("layout_spotlight", "Time left")):
+
+        def figure(label: str) -> ElidedLabel:
+            """One labelled box of the row; the label under which its value is shown."""
             box = QFrame()
             box.setObjectName("FigureBox")
             bl = QVBoxLayout(box)
@@ -97,7 +96,14 @@ class SpotlightLayout(LayoutHost):
             bl.addWidget(name)
             bl.addWidget(value)
             figures.addWidget(box, 1)
-            self.figures.append(value)
+            return value
+
+        self.packages_figure = figure(
+            QCoreApplication.translate("layout_spotlight", "Packages"))
+        self.downloaded_figure = figure(
+            QCoreApplication.translate("layout_spotlight", "Downloaded"))
+        self.time_left_figure = figure(
+            QCoreApplication.translate("layout_spotlight", "Time left"))
         pl.addLayout(figures)
         v.addWidget(self.panel)
         v.addWidget(win.package_area, 1)
@@ -169,10 +175,9 @@ class SpotlightLayout(LayoutHost):
         and the three figures, from the running step's last PROGRESS (§4.3.1)."""
         win = self.win
         key = win.current_step
-        title = {k: t for k, t, _d in steps.TASKS}.get(key, key)
         self.now_heading.setText(QCoreApplication.translate(
             "layout_spotlight", "Now · {step}").format(
-            step=QCoreApplication.translate("steps", title)) if key else "")
+            step=self.step_title(key)) if key else "")
         self.headline.setText("")
         self.about.setText("")
         package = self._latest()
@@ -187,17 +192,17 @@ class SpotlightLayout(LayoutHost):
         unknown = QCoreApplication.translate("layout_spotlight", "not known")
         done, total = win._progress_count
         if total:
-            self.figures[0].setText(_of(i18n.number(done), i18n.number(total)))
+            self.packages_figure.setText(_of(i18n.number(done), i18n.number(total)))
         elif done:
             # A total of 0 means not known, and renders as a running tally
             # (marker-protocol.md §4.3).
-            self.figures[0].setText(QCoreApplication.translate(
+            self.packages_figure.setText(QCoreApplication.translate(
                 "layout_spotlight", "{n} so far").format(n=i18n.number(done)))
         else:
-            self.figures[0].setText(unknown)
-        self.figures[1].setText(_of(_format_size(win._dl_got), _format_size(win._dl_total))
+            self.packages_figure.setText(unknown)
+        self.downloaded_figure.setText(_of(_format_size(win._dl_got), _format_size(win._dl_total))
                                 if win._dl_total else unknown)
-        self.figures[2].setText(step_progress.time_left(win) or unknown)
+        self.time_left_figure.setText(step_progress.time_left(win) or unknown)
 
     def _latest(self):
         """The package the last PKG line named, or None while there is none."""

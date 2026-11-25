@@ -32,6 +32,8 @@ _FILTERS = (
 # A tab is as wide as its label with this count, so a count that grows moves no tab
 # (§4.2 item 3).
 _WIDEST_COUNT = 9999
+# The table's columns, in the order of the column list in `RowsLayout.__init__`.
+_COL_STATE, _COL_PACKAGE, _COL_VERSIONS = 0, 1, 2
 # The versions column holds this many fixed-pitch characters: "1.23.5-pm.21 → 1.23.5-pm.22".
 _VERSION_CHARS = 28
 
@@ -92,7 +94,7 @@ class RowsLayout(LayoutHost):
             QCoreApplication.translate("layout_rows", "Package"),
             QCoreApplication.translate("layout_rows", "Versions"),
             QCoreApplication.translate("layout_rows", "Size")],
-            has_details=win.details.has_details, mark_column=1,
+            has_details=win.details.has_details, mark_column=_COL_PACKAGE,
             now=lambda p: pv.downloading_now(win, p))
         self.table = pv.package_table(self.items, QCoreApplication.translate(
             "layout_rows", "Packages this update changes"), model.shown_state)
@@ -133,11 +135,11 @@ class RowsLayout(LayoutHost):
         # long version elides rather than moving the columns (§4.2).
         fixed = QFontMetrics(pv.fixed_font(self.table.font()))
         self.table.horizontalHeader().resizeSection(
-            2, fixed.horizontalAdvance("0" * _VERSION_CHARS) + 16)
+            _COL_VERSIONS, fixed.horizontalAdvance("0" * _VERSION_CHARS) + 16)
         # The state column holds a symbol, so its heading sets its width.
-        heading = self.items.headerData(0, Qt.Orientation.Horizontal)
+        heading = self.items.headerData(_COL_STATE, Qt.Orientation.Horizontal)
         self.table.horizontalHeader().resizeSection(
-            0, self.table.horizontalHeader().fontMetrics().horizontalAdvance(heading) + 24)
+            _COL_STATE, self.table.horizontalHeader().fontMetrics().horizontalAdvance(heading) + 24)
         for btn, (_k, word) in zip(self.filter_buttons, _FILTERS, strict=True):
             shown = btn.text()
             btn.setText(_tab_text(word(), _WIDEST_COUNT))

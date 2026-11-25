@@ -97,7 +97,7 @@ def _blend(c: tuple[int, int, int], t: float, target: int) -> tuple[int, int, in
 def composite(over: str, alpha: float, under: str) -> str:
     """`over` at `alpha` painted on `under` — a translucent rest colour resolved
     to the hex actually rendered, so the check stays a pure computation with no
-    screenshot. The warning banner's tint is the only rest surface that needs it."""
+    screenshot. The three banners' washes are the rest surfaces that need it."""
     o, u = _rgb(over), _rgb(under)
     return _hex(tuple(round(alpha * o[k] + (1 - alpha) * u[k]) for k in range(3)))
 
@@ -220,8 +220,9 @@ def derive_focus_gradient(stops, *, label: str = "",
 # ---------------------------------------------------------------------------
 # The two BUTTON gradient fills a focus cue is derived from are authored in each
 # palette as stop PAIRS rather than as sheet strings, so the derivation and the
-# sheet cannot drift apart (ONEUP-0027 §4.3). `accent` is the diagonal row-hover
-# gradient — different geometry, its own stops — and is authored whole.
+# sheet cannot drift apart (ONEUP-0027 §4.3). `accent` is the diagonal gradient
+# of the main card's frame ring (`#Frame`) — different geometry, its own stops —
+# and is authored whole.
 def _vgradient(stops) -> str:
     return ("qlineargradient(x1:0, y1:0, x2:0, y2:1, "
             f"stop:0 {stops[0]}, stop:1 {stops[1]})")
@@ -837,7 +838,7 @@ _DARK = dict(
     switchmark="#ffffff", switchknob="#ffffff",
     switchtrackrim="#ffffff", switchknobrim="#000000",
         trayidle="#888888",
-    # Darkened from #f5a623 (1.79:1 on a light window, and its white rim only
+    # Darkened from #f5a623 (1.79:1 on a light tray panel, and its white rim only
     # 2.03:1 on the badge). Decided with the user 2026-08-24 rather than
     # excepted, even though the badge is composited over the app icon in a
     # panel whose colour the app does not control.
@@ -846,14 +847,14 @@ _DARK = dict(
     btnfg="#ffffff", dangerbd="#e0553f", tipbd="#4aa3ff",
     # Gradients. The two BUTTON fills are authored as stop pairs and built by
     # _vgradient, so the sheet and the focus derivation cannot drift apart;
-    # `accent` is the diagonal row-hover gradient and is authored whole.
+    # `accent` is the diagonal gradient of the card's frame ring and is authored whole.
     # The row ring's four stops are hex here and composited by `derived_keys`,
     # the way the banner washes below are: the sheet held them as decimal rgba()
     # literals, which no theme could reach and the contrast check could not read
     # (it takes its colours from a token as hex). Values unchanged (ONEUP-0179).
     accent="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)",
     # `progfill` is the progress bar's fill, a token of its own so a theme can
-    # deepen it without moving the row-hover `accent`. The fill IS the progress,
+    # deepen it without moving the frame ring's `accent`. The fill IS the progress,
     # so it is held to 3:1 against its own trough, `progbg` (ONEUP-0198); the
     # dark themes reach that with the accent as it is.
     progfill="qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4aa3ff, stop:1 #22d3ee)",
@@ -895,7 +896,7 @@ _LIGHT = dict(
     switchmark="#ffffff", switchknob="#ffffff",
     switchtrackrim="#ffffff", switchknobrim="#000000",
         trayidle="#888888",
-    # Darkened from #f5a623 (1.79:1 on a light window, and its white rim only
+    # Darkened from #f5a623 (1.79:1 on a light tray panel, and its white rim only
     # 2.03:1 on the badge). Decided with the user 2026-08-24 rather than
     # excepted, even though the badge is composited over the app icon in a
     # panel whose colour the app does not control.
@@ -932,6 +933,11 @@ _LIGHT = dict(
 # no way to satisfy a 3:1 boundary except by luck, so it would need this same
 # check anyway. What makes freezing them safe is that INV-2 re-measures every
 # one of them on every run.
+#
+# Several keys hold the same value in all eight palettes: the button stop pairs,
+# `accent`, the row-ring and banner tints, `btnfg`, `dangerbd`, `tipbd`
+# and the switch whites. Change one in `_DARK` and `_LIGHT` and in every palette
+# below; the check only fails a pair that falls under its floor.
 
 _CARBON = dict(
     win='#121212', card='#171717', header='#f4f7fb', tag='#8b95a5', rowcard='#202020',
@@ -1149,39 +1155,49 @@ def danger_tint(palette: dict) -> tuple[str, str]:
     return tuple(composite(palette[k], a, palette["card"]) for k, a in DANGER_TINT_STOPS)
 
 
+# The surface families a focus fill is derived for, each as (key prefix, the name
+# `focus_report` shows, the palette tokens it rests on). The first token is what the
+# fill is derived from; the fill must clear 3:1 on every one. `"warn"` stands for the
+# warning banner's two composited ground colours. `focus_keys` and `focus_report`
+# both read this table, so a family added here is derived and measured.
+_FOCUS_FAMILIES = (
+    # The header and action-row ghost buttons and the three link buttons that sit
+    # directly on the card. (Stop takes the danger gradient's pair, not this one.)
+    ("focus", "ghost / link on the card", ("card",)),
+    # A row's two hover states: every SettingsDialog row's ghost button and the
+    # repository dialog's Remove link. A fill derived from `rowcard` alone measures
+    # 2.83:1 on `rowhov`.
+    ("rowfocus", "row buttons", ("rowcard", "rowhov")),
+    # A dialog's own Close / Cancel, in its button strip rather than a row.
+    ("winfocus", "dialog Close / Cancel, Settings tabs", ("win",)),
+    # The current package in a focused package view, drawn by its delegate
+    # (ONEUP-0260 §4.5). An item is not a widget, so the fill reaches the views as
+    # their selection colours.
+    ("logfocus", "current package", ("logbg",)),
+    # Inside the warning banner: `warn_copy_btn` and, since ONEUP-0064, `retry_btn`.
+    ("warnfocus", "warning-banner buttons", "warn"),
+    # The checked package tab, which rests on its own `ghosthov` fill (ONEUP-0239 §4.8).
+    ("tabfocus", "checked package tab", ("ghosthov",)),
+)
+
+
+def _family_surfaces(palette: dict, tokens) -> tuple[str, ...]:
+    return warn_tint(palette) if tokens == "warn" else tuple(palette[t] for t in tokens)
+
+
 def focus_keys(palette: dict) -> dict:
     """Every derived focus pair for one BASE palette.
 
     One entry per control family of `docs/specs/ONEUP-0076-ringless-focus-cue.md`
     §4.2, keyed by the surface the family rests on rather than by object name —
-    four object names share the `card` pair, and one object name (`#LinkBtn`)
+    three object names share the `card` pair, and one object name (`#LinkBtn`)
     spans three surfaces. The sheet resolves that with a qualified selector; this
     table resolves it by not caring what the control is called.
     """
-    tint = warn_tint(palette)
     keys: dict[str, str] = {}
-    for name, source, surfaces in (
-        # `card` — the header and action-row ghost buttons, Stop, and the three
-        # link buttons that sit directly on the card.
-        ("focus", palette["card"], (palette["card"],)),
-        # A row's two hover states: every SettingsDialog row's ghost button and
-        # the repository dialog's Remove link. One fill has to clear 3:1 on BOTH
-        # — a fill derived from `rowcard` alone measures 2.83:1 on `rowhov`.
-        ("rowfocus", palette["rowcard"], (palette["rowcard"], palette["rowhov"])),
-        # A dialog's own Close / Cancel, in its button strip rather than a row.
-        ("winfocus", palette["win"], (palette["win"],)),
-        # The current package in a focused package view, drawn by its delegate
-        # (ONEUP-0260 §4.5). An item is not a widget, so the fill reaches the
-        # views as their selection colours.
-        ("logfocus", palette["logbg"], (palette["logbg"],)),
-        # Inside the warning banner: `warn_copy_btn` and, since ONEUP-0064,
-        # `retry_btn`.
-        ("warnfocus", tint[0], tint),
-        # The checked package tab, which rests on its own `ghosthov` fill
-        # (ONEUP-0239 §4.8).
-        ("tabfocus", palette["ghosthov"], (palette["ghosthov"],)),
-    ):
-        fill, ink = derive_focus(source, surfaces, label=name)
+    for name, _control, tokens in _FOCUS_FAMILIES:
+        surfaces = _family_surfaces(palette, tokens)
+        fill, ink = derive_focus(surfaces[0], surfaces, label=name)
         keys[name + "fill"] = fill
         keys[name + "ink"] = ink
     # Mechanism B — the panels that hold their own scrolling content. Recolouring
@@ -1241,8 +1257,6 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
     gradient is sampled at 101 points down its length rather than at its two
     stops, because a gradient is governed by its worst pixel.
     """
-    if isinstance(theme, bool):
-        theme = BY_ID["midnight" if theme else "daylight"]
     rows: list[dict] = []
 
     def add(control, kind, value, against, floor):
@@ -1276,18 +1290,11 @@ def focus_report(theme, high_contrast: bool = False) -> list[dict]:
     palette.update(derived_keys(palette))
     keys = focus_keys(palette)
     tint = warn_tint(palette)
-    # Mechanism A, the four surface families. The fill is measured against EVERY
+    # Mechanism A, the surface families. The fill is measured against EVERY
     # surface the family rests on, which is the whole point of the rule: a fill
     # derived from `rowcard` alone measures 2.83:1 on `rowhov`.
-    for control, prefix, surfaces in (
-        ("ghost / link / stop on the card", "focus", (palette["card"],)),
-        ("row buttons", "rowfocus",
-         (palette["rowcard"], palette["rowhov"])),
-        ("dialog Close / Cancel, Settings tabs", "winfocus", (palette["win"],)),
-        ("warning-banner buttons", "warnfocus", tint),
-        ("current package", "logfocus", (palette["logbg"],)),
-        ("checked package tab", "tabfocus", (palette["ghosthov"],)),
-    ):
+    for prefix, control, tokens in _FOCUS_FAMILIES:
+        surfaces = _family_surfaces(palette, tokens)
         fill, ink = keys[prefix + "fill"], keys[prefix + "ink"]
         for s in surfaces:
             add(control, "fill", fill, s, FOCUS_MIN)
@@ -1514,13 +1521,14 @@ def apply_app_theme(app: QApplication):
         fallback = system_theme(app)
         last_theme_error = (
             f"{theme.label} could not be applied and was skipped: {exc}")
-        print(f"OneUp: unusable theme — {exc}; falling back to Follow system")
         if fallback.id == theme.id:
+            print(f"OneUp: unusable theme — {exc}; the installed style stays")
             # The fallback IS what failed. Apply nothing and keep the sheet
             # already installed, which preserves the user's text size and
             # high-contrast choice — dropping those would take away the one
             # appearance mode that exists for low-vision users.
             return
+        print(f"OneUp: unusable theme — {exc}; falling back to Follow system")
         theme = fallback
         try:
             qss = build_theme(theme, scale=scale, high_contrast=high_contrast)

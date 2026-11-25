@@ -88,9 +88,9 @@ def remove(win, key: str, done: int, total: int) -> None:
     _set(win, key, FULL * min(done, total) // total if total else None, "remove")
 
 
-def finish(win, key: str) -> None:
+def run_scripts(win, key: str) -> None:
     """The packages' own scripts after the last install: the bar stays where it is
-    and only the words change (ONEUP-0363)."""
+    and only the words change (ONEUP-0363). `end` is what fills the bar."""
     _set(win, key, None, "finish")
 
 
@@ -124,6 +124,7 @@ def _show(win, key: str, phase: str) -> None:
             row.progress_busy()
         else:
             row.set_progress(value, FULL)
+        # `end` passes no phase and a value: the outcome badge the run wrote stays.
         if phase or value is None:
             row.set_badge(badge(key, phase, value))
     if key == win.current_step or value == FULL:
